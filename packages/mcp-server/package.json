@@ -1,0 +1,24 @@
+{
+  "name": "@sie/mcp-server",
+  "version": "0.1.0",
+  "description": "MCP server for the Setup Intelligence Engine — search and build from a knowledge base of AI/automation setups",
+  "main": "dist/index.js",
+  "bin": {
+    "sie-mcp": "dist/bin/sie-mcp.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "@types/node": "^22.0.0"
+  },
+  "files": [
+    "dist"
+  ],
+  "license": "MIT"
+}

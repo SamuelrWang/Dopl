@@ -1,0 +1,79 @@
+import { claude } from "@/lib/ai";
+import { ExtractedSource } from "../types";
+
+const IMAGE_ANALYSIS_PROMPT = `Analyze this image from a post about an AI/automation setup.
+Determine what type of image this is:
+- Code screenshot: Extract ALL code exactly as written
+- Architecture diagram: Describe the full architecture, components, and data flow
+- Terminal/CLI output: Extract all commands and their output
+- UI screenshot: Describe the interface and its purpose
+- Configuration file: Extract the full configuration
+- Other: Describe what is shown
+
+Provide your analysis with the type classification and full extracted content.`;
+
+type ImageType =
+  | "code_screenshot"
+  | "architecture_diagram"
+  | "image"
+  | "other";
+
+export async function extractImage(
+  base64Image: string,
+  mimeType: string = "image/png"
+): Promise<ExtractedSource> {
+  const response = await claude.messages.create({
+    model: process.env.LLM_MODEL || "claude-sonnet-4-20250514",
+    max_tokens: 4096,
+    messages: [
+      {
+        role: "user",
+        content: [
+          {
+            type: "image",
+            source: {
+              type: "base64",
+              media_type: mimeType as "image/png" | "image/jpeg" | "image/gif" | "image/webp",
+              data: base64Image,
+            },
+          },
+          {
+            type: "text",
+            text: IMAGE_ANALYSIS_PROMPT,
+          },
+        ],
+      },
+    ],
+  });
+
+  const textBlock = response.content.find((b) => b.type === "text");
+  const extractedContent = textBlock?.text || "";
+
+  // Determine image type from analysis
+  const imageType = classifyImageType(extractedContent);
+
+  return {
+    sourceType: imageType,
+    rawContent: `[base64 image: ${mimeType}]`,
+    extractedContent,
+    contentMetadata: { mimeType, imageType },
+    depth: 0,
+  };
+}
+
+function classifyImageType(analysis: string): ImageType {
+  const lowerAnalysis = analysis.toLowerCase();
+  if (
+    lowerAnalysis.includes("code screenshot") ||
+    lowerAnalysis.includes("code snippet")
+  ) {
+    return "code_screenshot";
+  }
+  if (
+    lowerAnalysis.includes("architecture") ||
+    lowerAnalysis.includes("diagram")
+  ) {
+    return "architecture_diagram";
+  }
+  return "image";
+}

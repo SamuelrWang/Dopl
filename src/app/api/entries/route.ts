@@ -1,0 +1,34 @@
+import { NextRequest, NextResponse } from "next/server";
+import { supabase } from "@/lib/supabase";
+
+export async function GET(request: NextRequest) {
+  const searchParams = request.nextUrl.searchParams;
+  const status = searchParams.get("status");
+  const useCase = searchParams.get("use_case");
+  const complexity = searchParams.get("complexity");
+  const limit = parseInt(searchParams.get("limit") || "50", 10);
+  const offset = parseInt(searchParams.get("offset") || "0", 10);
+
+  let query = supabase
+    .from("entries")
+    .select("id, title, summary, use_case, complexity, status, source_url, source_platform, source_author, thumbnail_url, created_at, ingested_at", { count: "exact" })
+    .order("created_at", { ascending: false })
+    .range(offset, offset + limit - 1);
+
+  if (status) query = query.eq("status", status);
+  if (useCase) query = query.eq("use_case", useCase);
+  if (complexity) query = query.eq("complexity", complexity);
+
+  const { data, error, count } = await query;
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({
+    entries: data || [],
+    total: count || 0,
+    limit,
+    offset,
+  });
+}
