@@ -1,5 +1,6 @@
 import { generateEmbedding } from "@/lib/ai";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase";
+const supabase = supabaseAdmin();
 import { ChunkData } from "./types";
 
 const MIN_CHUNK_SIZE = 10;

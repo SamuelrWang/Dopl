@@ -174,6 +174,7 @@ const linkTypeToSourceType: Record<string, ExtractedSource["sourceType"]> = {
   video: "video_transcript",
   tweet: "tweet_text",
   instagram: "instagram_post",
+  reddit: "reddit_post",
 };
 
 export function linkResultToSource(

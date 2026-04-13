@@ -20,6 +20,7 @@ export interface ExtractedSource {
     | "github_file"
     | "video_transcript"
     | "instagram_post"
+    | "reddit_post"
     | "other";
   rawContent: string;
   extractedContent?: string;
@@ -31,7 +32,7 @@ export interface ExtractedSource {
 
 export interface LinkFollowResult {
   url: string;
-  type: "blog" | "github_repo" | "github_file" | "video" | "tweet" | "instagram" | "other";
+  type: "blog" | "github_repo" | "github_file" | "video" | "tweet" | "instagram" | "reddit" | "other";
   content: string;
   childLinks: string[];
   metadata: Record<string, unknown>;

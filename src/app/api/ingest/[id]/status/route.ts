@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase";
+const supabase = supabaseAdmin();
+import { withExternalAuth } from "@/lib/auth/with-auth";
 
-export async function GET(
+async function handleGet(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -35,3 +37,5 @@ export async function GET(
     steps: logs || [],
   });
 }
+
+export const GET = withExternalAuth(handleGet);

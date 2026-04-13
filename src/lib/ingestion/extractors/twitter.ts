@@ -117,12 +117,25 @@ export async function extractTweetContent(
     const tweet = data.tweet;
     const contentParts: string[] = [];
     const childLinks: string[] = [];
-    // Thumbnail: first photo, article cover, or author avatar as fallback
+
+    // Thumbnail priority — we want "the post itself", not the user's profile
+    // photo. Order:
+    //   1. First embedded photo (image tweet)
+    //   2. First video's poster frame (video tweet)
+    //   3. Article cover image (X Article / long-form post)
+    //   4. Quoted tweet's first photo (reply / QT without own media)
+    //   5. Server-rendered OG card of the tweet text — so text-only tweets
+    //      still get a real preview of the content, not a bare placeholder
+    //      or (worse) the author's avatar.
+    //
+    // NOTE: deliberately no fallback to `tweet.author.avatar_url` — the
+    // profile photo is misleading as a post thumbnail.
     const thumbnailUrl =
       tweet.media?.photos?.[0]?.url ||
+      tweet.media?.videos?.[0]?.thumbnail_url ||
       tweet.article?.cover_media?.media_info?.original_img_url ||
-      tweet.author.avatar_url ||
-      null;
+      tweet.quote?.media?.photos?.[0]?.url ||
+      buildTweetOgThumbnailUrl(tweet);
 
     const metadata: Record<string, unknown> = {
       platform: "x",
@@ -328,6 +341,36 @@ function parseArticleBlocks(
 }
 
 // -- Helpers --
+
+/**
+ * Build a relative URL to our own `/api/og/tweet` route, which renders a
+ * server-side OG card using the tweet's text + author metadata. Used as the
+ * thumbnail for text-only tweets so the browse card / entry panel shows the
+ * actual post content rather than the author's profile photo.
+ *
+ * Returns a RELATIVE URL — resolves against the current origin when the
+ * browser renders `<img src>`, which works on localhost, preview envs, and
+ * production without needing NEXT_PUBLIC_APP_URL to be set.
+ */
+function buildTweetOgThumbnailUrl(
+  tweet: NonNullable<FxTweetResponse["tweet"]>
+): string {
+  // Prefer article title + preview for long-form posts that have no cover
+  const textSource =
+    tweet.article?.title && tweet.article.preview_text
+      ? `${tweet.article.title}\n\n${tweet.article.preview_text}`
+      : tweet.text || tweet.article?.title || tweet.article?.preview_text || "";
+
+  // Trim very long text — the route caps at 320 chars anyway, but keeping
+  // the URL short avoids hitting length limits downstream.
+  const params = new URLSearchParams({
+    text: textSource.slice(0, 320),
+    author: tweet.author.name || "",
+    handle: tweet.author.screen_name || "",
+  });
+
+  return `/api/og/tweet?${params.toString()}`;
+}
 
 interface ParsedTweetUrl {
   username: string;

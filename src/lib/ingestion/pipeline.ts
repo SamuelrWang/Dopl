@@ -1,4 +1,5 @@
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase";
+const supabase = supabaseAdmin();
 import { IngestInput, ExtractedSource } from "./types";
 import { extractText } from "./extractors/text";
 import { extractImage } from "./extractors/image";
@@ -10,6 +11,10 @@ import {
   extractInstagramContent,
   isInstagramPostUrl,
 } from "./extractors/instagram";
+import {
+  extractRedditContent,
+  isRedditPostUrl,
+} from "./extractors/reddit";
 import { generateManifest } from "./generators/manifest";
 import { generateReadme } from "./generators/readme";
 import { generateAgentsMd } from "./generators/agents-md";
@@ -149,6 +154,34 @@ async function runPipeline(
       }
       await logStep(entryId, "instagram_fetch", "completed", undefined, Date.now() - stepStart);
       ingestionProgress.emit(entryId, "step_complete", "Instagram post fetched", { step: "instagram_fetch" });
+
+    } else if (isRedditPostUrl(input.url)) {
+      const stepStart = Date.now();
+      await logStep(entryId, "reddit_fetch", "started");
+      ingestionProgress.emit(entryId, "step_start", "Fetching Reddit post...", { step: "reddit_fetch" });
+
+      const redditResult = await extractRedditContent(input.url);
+      if (redditResult) {
+        input.content.text = redditResult.content;
+        const existingLinks = input.content.links || [];
+        input.content.links = [
+          ...new Set([...existingLinks, ...redditResult.childLinks]),
+        ];
+        const redditSource = linkResultToSource(redditResult, 0);
+        await storeSources(entryId, [redditSource]);
+        thumbnailUrl = (redditResult.metadata.thumbnail_url as string) || null;
+
+        const meta = redditResult.metadata;
+        const parts = [`Post from r/${meta.subreddit} by u/${meta.author}`];
+        if (typeof meta.ups === "number") parts.push(`${meta.ups} upvotes`);
+        if (typeof meta.num_comments === "number") parts.push(`${meta.num_comments} comments`);
+        if (redditResult.childLinks.length > 0) parts.push(`${redditResult.childLinks.length} link(s)`);
+        ingestionProgress.emit(entryId, "detail", `Found: ${parts.join(", ")}`);
+      } else {
+        ingestionProgress.emit(entryId, "detail", "Could not fetch Reddit post — will use provided content");
+      }
+      await logStep(entryId, "reddit_fetch", "completed", undefined, Date.now() - stepStart);
+      ingestionProgress.emit(entryId, "step_complete", "Reddit post fetched", { step: "reddit_fetch" });
     }
   }
 
@@ -484,6 +517,7 @@ async function followAndStore(
   let description = `Following: ${shortUrl}`;
   if (isTweetUrl(url)) description = `Following tweet: ${shortUrl}`;
   else if (isInstagramPostUrl(url)) description = `Following Instagram post: ${shortUrl}`;
+  else if (isRedditPostUrl(url)) description = `Following Reddit post: ${shortUrl}`;
   else if (url.includes("github.com")) description = `Following GitHub: ${shortUrl}`;
   else if (url.includes("youtube.com") || url.includes("youtu.be")) description = `Following YouTube: ${shortUrl}`;
 
@@ -495,6 +529,8 @@ async function followAndStore(
       result = await extractTweetContent(url, depth);
     } else if (isInstagramPostUrl(url)) {
       result = await extractInstagramContent(url, depth);
+    } else if (isRedditPostUrl(url)) {
+      result = await extractRedditContent(url, depth);
     } else if (url.includes("github.com")) {
       result = await extractGitHubContent(url, depth);
     } else if (url.includes("youtube.com") || url.includes("youtu.be")) {
@@ -585,6 +621,7 @@ async function gatherAllContent(entryId: string): Promise<string> {
 function detectPlatform(url: string): string {
   if (isTweetUrl(url)) return "x";
   if (isInstagramPostUrl(url)) return "instagram";
+  if (isRedditPostUrl(url)) return "reddit";
   if (url.includes("github.com")) return "github";
   if (url.includes("youtube.com") || url.includes("youtu.be")) return "youtube";
   return "web";

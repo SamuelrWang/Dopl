@@ -2,43 +2,92 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+@plugin "@tailwindcss/typography";
+
 @custom-variant dark (&:is(.dark *));
 
+/* ─────────────────────────────────────────────────────────────────────
+   Setup Intelligence Engine — Design Tokens
+   Dark-first aesthetic: deep black background with subtle grid overlay,
+   dark elevated surfaces with gradient borders, and cyan-blue accents.
+   ───────────────────────────────────────────────────────────────────── */
+
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
+  /* ── New design tokens ───────────────────────────────────────── */
+
+  /* Surfaces */
+  --color-bg-base: var(--bg-base);
+  --color-bg-elevated: var(--bg-elevated);
+  --color-bg-elevated-hover: var(--bg-elevated-hover);
+  --color-bg-inset: var(--bg-inset);
+  --color-bg-inset-hover: var(--bg-inset-hover);
+  --color-bg-overlay: var(--bg-overlay);
+
+  /* Borders */
+  --color-border-subtle: var(--border-subtle);
+  --color-border-default: var(--border-default);
+  --color-border-strong: var(--border-strong);
+  --color-border-highlight: var(--border-highlight);
+
+  /* Text */
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-text-disabled: var(--text-disabled);
+
+  /* Accent */
+  --color-accent-primary: var(--accent-primary);
+  --color-accent-glow: var(--accent-glow);
+  --color-accent-soft: var(--accent-soft);
+
+  /* Status */
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+
+  /* ── Shadcn aliases (backward compat) ─────────────────────────── */
+  --color-background: var(--bg-base);
+  --color-foreground: var(--text-primary);
+  --color-card: var(--bg-elevated);
+  --color-card-foreground: var(--text-primary);
+  --color-popover: var(--bg-overlay);
+  --color-popover-foreground: var(--text-primary);
+  --color-primary: var(--accent-primary);
+  --color-primary-foreground: var(--text-primary);
+  --color-secondary: var(--bg-inset);
+  --color-secondary-foreground: var(--text-primary);
+  --color-muted: var(--bg-inset);
+  --color-muted-foreground: var(--text-muted);
+  --color-accent: var(--bg-inset);
+  --color-accent-foreground: var(--text-primary);
+  --color-destructive: var(--danger);
+  --color-border: var(--border-default);
+  --color-input: var(--border-default);
+  --color-ring: var(--accent-primary);
+
+  /* Sidebar (alias for shadcn compat) */
+  --color-sidebar: var(--bg-elevated);
+  --color-sidebar-foreground: var(--text-primary);
+  --color-sidebar-primary: var(--accent-primary);
+  --color-sidebar-primary-foreground: var(--text-primary);
+  --color-sidebar-accent: var(--bg-inset);
+  --color-sidebar-accent-foreground: var(--text-primary);
+  --color-sidebar-border: var(--border-subtle);
+  --color-sidebar-ring: var(--accent-primary);
+
+  /* Charts */
+  --color-chart-1: var(--accent-primary);
+  --color-chart-2: var(--text-secondary);
+  --color-chart-3: var(--text-muted);
+  --color-chart-4: var(--success);
+  --color-chart-5: var(--warning);
+
+  /* Fonts */
+  --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
-  --color-card: var(--card);
+  --font-heading: var(--font-geist-sans);
+
+  /* Radius scale */
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -46,85 +95,354 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+  --radius-pill: 9999px;
 }
+
+/* ─────────────────────────────────────────────────────────────────────
+   Token values — single dark theme
+   ───────────────────────────────────────────────────────────────────── */
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  /* Surfaces — pure neutral charcoal (no hue) */
+  --bg-base: oklch(0.15 0 0);
+  --bg-elevated: oklch(0.18 0 0);
+  --bg-elevated-hover: oklch(0.21 0 0);
+  --bg-inset: oklch(0.13 0 0);
+  --bg-inset-hover: oklch(0.16 0 0);
+  --bg-overlay: oklch(0.14 0 0);
+
+  /* Borders (white at low alpha) */
+  --border-subtle: oklch(1 0 0 / 6%);
+  --border-default: oklch(1 0 0 / 10%);
+  --border-strong: oklch(1 0 0 / 16%);
+  --border-highlight: oklch(1 0 0 / 22%);
+
+  /* Text */
+  --text-primary: oklch(0.96 0 0);
+  --text-secondary: oklch(0.78 0 0);
+  --text-muted: oklch(0.58 0 0);
+  --text-disabled: oklch(0.38 0 0);
+
+  /* Accent — cyan/blue glow */
+  --accent-primary: oklch(0.78 0.16 240);
+  --accent-glow: oklch(0.68 0.22 250);
+  --accent-soft: oklch(0.45 0.12 245);
+
+  /* Status colors */
+  --success: oklch(0.72 0.16 155);
+  --warning: oklch(0.82 0.15 80);
+  --danger: oklch(0.65 0.22 25);
+
+  /* Radius base */
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+
+  /* ── Accent palette (neutralized — no blue tint) ─────────────── */
+  --paper: #1a1a1a;       /* main surface — true charcoal */
+  --forest: #e0e0e0;      /* primary text */
+  --grid-line: #a0a0a0;   /* secondary text */
+  --coral: #FF8C69;       /* alerts / errors */
+  --mint: #9EFFBF;        /* success */
+  --gold: #F4D35E;        /* warnings */
+
+  /* Body background — true charcoal (no hue) */
+  --body-bg: #141414;
+
+  /* Gradients — neutral charcoal */
+  --gradient-elevated: linear-gradient(
+    180deg,
+    oklch(0.21 0 0) 0%,
+    oklch(0.14 0 0) 100%
+  );
+  --gradient-orb: radial-gradient(
+    circle at 35% 30%,
+    oklch(0.95 0.05 230) 0%,
+    oklch(0.78 0.18 240) 25%,
+    oklch(0.45 0.22 250) 60%,
+    oklch(0.20 0.15 260) 100%
+  );
+
+  /* Shadows / glows */
+  --shadow-elevated: 0 8px 24px -8px oklch(0 0 0 / 60%),
+    0 2px 8px -2px oklch(0 0 0 / 40%);
+  --shadow-floating: 0 16px 48px -12px oklch(0 0 0 / 70%),
+    0 4px 16px -4px oklch(0 0 0 / 50%);
+  --glow-accent: 0 0 24px oklch(0.68 0.22 250 / 50%),
+    0 0 48px oklch(0.68 0.22 250 / 25%);
+  --glow-accent-strong: 0 0 32px oklch(0.68 0.22 250 / 70%),
+    0 0 64px oklch(0.68 0.22 250 / 40%),
+    0 0 96px oklch(0.68 0.22 250 / 20%);
+  --inset-highlight: inset 0 1px 0 0 oklch(1 0 0 / 14%);
+  --inset-highlight-strong: inset 0 1px 0 0 oklch(1 0 0 / 22%);
 }
 
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+/* Force dark mode always — the design is dark-first */
+html {
+  color-scheme: dark;
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
-    @apply bg-background text-foreground;
+    background-color: var(--body-bg);
+    color: var(--forest);
+    font-family: var(--font-geist-sans);
   }
+
   html {
     @apply font-sans;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────
+   Background grid pattern — subtle blueprint feel
+   Applied to body via class .design-grid
+   ───────────────────────────────────────────────────────────────────── */
+
+.design-grid {
+  background-color: var(--bg-base);
+  background-image:
+    linear-gradient(to right, oklch(1 0 0 / 3%) 1px, transparent 1px),
+    linear-gradient(to bottom, oklch(1 0 0 / 3%) 1px, transparent 1px);
+  background-size: 80px 80px;
+  position: relative;
+}
+
+.design-grid::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 0%,
+    oklch(0 0 0 / 60%) 100%
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   Mosaic background pattern (openclaw-cloud)
+   Subtle blueprint grid using inline SVG data URL.
+   Apply via class .mosaic-bg on body or a wrapper.
+   ───────────────────────────────────────────────────────────────────── */
+
+.mosaic-bg {
+  /* Base: deep charcoal (darker than before) */
+  background-color: #0b0b0b;
+  /* Organic gradient: more radial "blobs" at odd positions — mix of
+     lighter pools and darker shadow spots layered unpredictably for a
+     lava-lamp / organic feel. All hues are neutral gray. */
+  background-image:
+    /* lighter pools (darker than before) */
+    radial-gradient(ellipse 50% 38% at 18% 22%, #101010 0%, transparent 55%),
+    radial-gradient(ellipse 42% 55% at 82% 35%, #0c0c0c 0%, transparent 60%),
+    radial-gradient(ellipse 60% 34% at 50% 88%, #0e0e0e 0%, transparent 55%),
+    radial-gradient(ellipse 30% 48% at 12% 75%, #0b0b0b 0%, transparent 60%),
+    radial-gradient(ellipse 38% 30% at 72% 70%, #0d0d0d 0%, transparent 65%),
+    radial-gradient(ellipse 26% 34% at 40% 15%, #0a0a0a 0%, transparent 70%),
+    radial-gradient(ellipse 32% 28% at 90% 82%, #0c0c0c 0%, transparent 60%),
+    radial-gradient(ellipse 28% 40% at 5% 48%, #0b0b0b 0%, transparent 65%),
+    radial-gradient(ellipse 34% 26% at 58% 52%, #0f0f0f 0%, transparent 70%),
+    /* darker shadow spots (more of them) */
+    radial-gradient(ellipse 36% 30% at 28% 55%, #030303 0%, transparent 60%),
+    radial-gradient(ellipse 30% 42% at 65% 18%, #050505 0%, transparent 65%),
+    radial-gradient(ellipse 42% 28% at 92% 55%, #040404 0%, transparent 60%),
+    radial-gradient(ellipse 28% 38% at 22% 92%, #060606 0%, transparent 65%),
+    radial-gradient(ellipse 34% 26% at 48% 40%, #040404 0%, transparent 62%),
+    radial-gradient(ellipse 28% 34% at 8% 10%, #050505 0%, transparent 65%),
+    radial-gradient(ellipse 32% 26% at 78% 92%, #030303 0%, transparent 60%),
+    radial-gradient(ellipse 26% 38% at 95% 20%, #050505 0%, transparent 65%),
+    radial-gradient(ellipse 30% 28% at 38% 78%, #040404 0%, transparent 68%),
+    /* base diagonal */
+    linear-gradient(135deg, #070707 0%, #0c0c0c 50%, #080808 100%);
+  background-attachment: fixed;
+}
+
+/* Subtle noise overlay to break up banding in the gradients */
+.mosaic-bg::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  opacity: 0.4;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 120 120' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='2.4' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.08 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 120px 120px;
+}
+
+/* Grid overlay — evenly spaced lines that sit flush at every edge.
+   Cell size is a CSS variable set at runtime by <FlushGrid /> so the
+   viewport is divided into an exact integer number of cells in each
+   dimension. Anchored at 0 0 so there is always a line at the left
+   and top edges; because the size divides evenly there is also a line
+   at the right and bottom edges. */
+.mosaic-bg::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  background-image:
+    linear-gradient(to right, rgba(0, 0, 0, 0.7) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.7) 1px, transparent 1px);
+  background-size: var(--grid-cell-x, 160px) var(--grid-cell-y, 160px);
+  background-position: 0 0;
+}
+
+/* When the canvas page is active, hide the body grid — the Canvas
+   component paints its own grid that pans with the camera. Without this
+   suppression, two grids would render on top of each other (one static
+   from the body, one moving from the canvas). */
+.canvas-active.mosaic-bg::after {
+  display: none;
+}
+
+
+/* ─────────────────────────────────────────────────────────────────────
+   Hairline borders (openclaw-cloud convention)
+   ───────────────────────────────────────────────────────────────────── */
+
+.hairline {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.hairline-strong {
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   Canvas panel drag UX
+   ─────────────────────────────────────────────────────────────────────
+   Panels on the canvas are draggable from any non-interactive surface.
+   The JS handler in canvas-panel.tsx reads `getComputedStyle(target).cursor`
+   to decide whether to initiate a drag — so these rules do double duty:
+
+     1. Visual  — the cursor correctly reflects what the user can do
+                  (grab on empty space, text on prose, pointer on buttons).
+     2. Functional — any element whose computed cursor is not `grab` or
+                  `grabbing` is automatically excluded from drag.
+
+   Empty containers inherit `grab` from the panel root. Text elements
+   and interactive controls override with their own cursor, which both
+   shows the right icon AND blocks drag initiation.
+   ───────────────────────────────────────────────────────────────────── */
+
+[data-panel-id] {
+  cursor: grab;
+}
+
+[data-panel-id]:active {
+  cursor: grabbing;
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   Gesture performance — disable expensive filters during pan/zoom
+   ─────────────────────────────────────────────────────────────────────
+   backdrop-blur is the single most expensive CSS effect on the canvas.
+   During rapid pan/zoom the GPU must re-run the blur every frame because
+   the content behind each panel shifts. We disable it while a gesture is
+   active (class toggled by the wheel/pointer handlers in canvas.tsx) and
+   re-enable with a short transition so the blur fades back in smoothly. */
+
+.canvas-gesturing [data-panel-id],
+.canvas-gesturing .backdrop-blur-md,
+.canvas-gesturing .backdrop-blur-sm,
+.canvas-gesturing [class*="backdrop-blur"] {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Text content — selectable, not draggable. Covers prose, code blocks,
+   inline labels, tag chips, mono badges, list items, blockquotes. */
+[data-panel-id] h1,
+[data-panel-id] h2,
+[data-panel-id] h3,
+[data-panel-id] h4,
+[data-panel-id] h5,
+[data-panel-id] h6,
+[data-panel-id] p,
+[data-panel-id] pre,
+[data-panel-id] code,
+[data-panel-id] li,
+[data-panel-id] blockquote,
+[data-panel-id] time,
+[data-panel-id] label,
+[data-panel-id] span {
+  cursor: text;
+}
+
+/* Interactive controls — pointer cursor, click through. */
+[data-panel-id] button,
+[data-panel-id] a,
+[data-panel-id] [role="button"],
+[data-panel-id] [role="link"] {
+  cursor: pointer;
+}
+
+[data-panel-id] button:disabled {
+  cursor: not-allowed;
+}
+
+/* Form inputs — native text caret. */
+[data-panel-id] input,
+[data-panel-id] textarea,
+[data-panel-id] select,
+[data-panel-id] [contenteditable="true"] {
+  cursor: text;
+}
+
+/* Images and SVGs inherit from their parent so an <img> in an empty
+   container still drags, but an <svg> inside a button gets pointer. */
+[data-panel-id] img,
+[data-panel-id] svg {
+  cursor: inherit;
+}
+
+/* Explicit opt-out — any element marked `data-no-drag` (e.g. the chat
+   input wrapper) blocks drag even on its padding. `cursor: default`
+   communicates "nothing interactive here, but also can't drag". */
+[data-panel-id] [data-no-drag] {
+  cursor: default;
+}
+
+/* Inside an opt-out container, restore natural cursors for children. */
+[data-panel-id] [data-no-drag] button,
+[data-panel-id] [data-no-drag] a,
+[data-panel-id] [data-no-drag] [role="button"] {
+  cursor: pointer;
+}
+
+[data-panel-id] [data-no-drag] input,
+[data-panel-id] [data-no-drag] textarea {
+  cursor: text;
+}
+
+/* Global grabbing cursor during an active panel drag. The pointer may
+   move over text/buttons/off-panel while the pointer is captured —
+   forcing the cursor body-wide keeps the "closed hand" visual consistent
+   until the user releases. Toggled via body.panel-dragging from
+   canvas-panel.tsx's drag handlers. */
+body.panel-dragging,
+body.panel-dragging *,
+body.panel-dragging *::before,
+body.panel-dragging *::after {
+  cursor: grabbing !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   Login page fade-in animation
+   ───────────────────────────────────────────────────────────────────── */
+
+@keyframes loginFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+

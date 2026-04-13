@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase";
+const supabase = supabaseAdmin();
 import { EntryUpdateSchema } from "@/types/api";
+import { withExternalAuth } from "@/lib/auth/with-auth";
 
-export async function GET(
+async function handleGet(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -38,7 +40,7 @@ export async function GET(
   });
 }
 
-export async function PATCH(
+async function handlePatch(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -67,7 +69,7 @@ export async function PATCH(
   return NextResponse.json(data);
 }
 
-export async function DELETE(
+async function handleDelete(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -81,3 +83,7 @@ export async function DELETE(
 
   return NextResponse.json({ success: true });
 }
+
+export const GET = withExternalAuth(handleGet);
+export const PATCH = withExternalAuth(handlePatch);
+export const DELETE = withExternalAuth(handleDelete);

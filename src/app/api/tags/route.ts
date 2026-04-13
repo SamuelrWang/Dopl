@@ -1,7 +1,9 @@
-import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { NextRequest, NextResponse } from "next/server";
+import { supabaseAdmin } from "@/lib/supabase";
+const supabase = supabaseAdmin();
+import { withExternalAuth } from "@/lib/auth/with-auth";
 
-export async function GET() {
+async function handleGet(_request: NextRequest) {
   const { data, error } = await supabase
     .from("tags")
     .select("tag_type, tag_value");
@@ -34,3 +36,5 @@ export async function GET() {
 
   return NextResponse.json({ tags });
 }
+
+export const GET = withExternalAuth(handleGet);

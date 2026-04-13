@@ -1,19 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createServerClient } from "@supabase/ssr";
 import { validateApiKey, checkRateLimit, recordUsage } from "./api-keys";
 
 /**
- * Wraps an API route handler with external authentication.
+ * Wraps an API route handler with authentication.
  *
  * - If Authorization header with `sk-sie-` key is present → validate, rate limit, proceed
- * - If no header but request is same-origin (from our own frontend) → allow through
- * - If no header and not same-origin → 401
+ * - If no header → check Supabase session cookies → allow if authenticated
+ * - Otherwise → 401
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function withExternalAuth(
-  handler: (request: NextRequest, context?: unknown) => Promise<Response | NextResponse>
+  handler: (request: NextRequest, context?: any) => Promise<Response | NextResponse>
 ) {
   return async (
     request: NextRequest,
-    context?: unknown
+    context?: any // eslint-disable-line @typescript-eslint/no-explicit-any
   ): Promise<Response | NextResponse> => {
     const authHeader = request.headers.get("authorization");
 
@@ -59,17 +61,18 @@ export function withExternalAuth(
       return handler(request, context);
     }
 
-    // No auth header — check if same-origin (our own frontend)
-    if (isSameOrigin(request)) {
+    // No auth header — check Supabase session
+    const user = await getSessionUser(request);
+    if (user) {
       return handler(request, context);
     }
 
-    // External request without API key
+    // No valid auth
     return NextResponse.json(
       {
         error: "Authentication required",
         message:
-          "Provide an API key via Authorization: Bearer sk-sie-... header",
+          "Sign in or provide an API key via Authorization: Bearer sk-sie-... header",
       },
       { status: 401 }
     );
@@ -77,23 +80,111 @@ export function withExternalAuth(
 }
 
 /**
- * Check if a request originates from our own frontend.
- * This is a convenience check, not a security boundary.
+ * Like withExternalAuth, but injects the authenticated user's ID into the handler.
+ * Required for per-user resources (canvas panels, user-scoped clusters).
+ *
+ * - API key auth: uses user_id from the api_keys table. Returns 403 if key has no user_id.
+ * - Session auth: uses user.id from Supabase session.
  */
-function isSameOrigin(request: NextRequest): boolean {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
-  if (!appUrl) return true; // If not configured, assume same-origin (dev mode)
+export function withUserAuth(
+  handler: (
+    request: NextRequest,
+    context: { userId: string; params?: Record<string, string> }
+  ) => Promise<Response | NextResponse>
+) {
+  return async (
+    request: NextRequest,
+    routeContext?: { params?: Promise<Record<string, string>> }
+  ): Promise<Response | NextResponse> => {
+    const resolvedParams = routeContext?.params ? await routeContext.params : undefined;
+    const authHeader = request.headers.get("authorization");
 
-  const origin = request.headers.get("origin");
-  const referer = request.headers.get("referer");
+    if (authHeader) {
+      const key = authHeader.replace(/^Bearer\s+/i, "").trim();
 
-  if (origin && origin.startsWith(appUrl)) return true;
-  if (referer && referer.startsWith(appUrl)) return true;
+      if (!key.startsWith("sk-sie-")) {
+        return NextResponse.json(
+          { error: "Invalid API key format" },
+          { status: 401 }
+        );
+      }
 
-  // In development, also allow localhost
-  if (origin?.includes("localhost") || referer?.includes("localhost")) {
-    return true;
+      const keyRecord = await validateApiKey(key);
+      if (!keyRecord) {
+        return NextResponse.json(
+          { error: "Invalid or revoked API key" },
+          { status: 401 }
+        );
+      }
+
+      if (!keyRecord.user_id) {
+        return NextResponse.json(
+          {
+            error: "This API key is not linked to a user account",
+            message: "Canvas operations require a user-scoped API key. Generate one from Settings.",
+          },
+          { status: 403 }
+        );
+      }
+
+      const withinLimit = await checkRateLimit(
+        keyRecord.id,
+        keyRecord.rate_limit_rpm
+      );
+      if (!withinLimit) {
+        return NextResponse.json(
+          { error: "Rate limit exceeded", limit: keyRecord.rate_limit_rpm, window: "60 seconds" },
+          { status: 429 }
+        );
+      }
+
+      const endpoint = `${request.method} ${request.nextUrl.pathname}`;
+      recordUsage(keyRecord.id, endpoint).catch(console.error);
+
+      return handler(request, { userId: keyRecord.user_id, params: resolvedParams });
+    }
+
+    // No auth header — check Supabase session
+    const user = await getSessionUser(request);
+    if (user) {
+      return handler(request, { userId: user.id, params: resolvedParams });
+    }
+
+    return NextResponse.json(
+      {
+        error: "Authentication required",
+        message: "Sign in or provide an API key via Authorization: Bearer sk-sie-... header",
+      },
+      { status: 401 }
+    );
+  };
+}
+
+/**
+ * Extract the authenticated user from Supabase session cookies.
+ */
+async function getSessionUser(request: NextRequest) {
+  try {
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll();
+          },
+          setAll() {
+            // API routes don't need to set cookies — middleware handles refresh
+          },
+        },
+      }
+    );
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    return user;
+  } catch {
+    return null;
   }
-
-  return false;
 }

@@ -47,3 +47,52 @@ export interface ListResult {
   limit: number;
   offset: number;
 }
+
+// ── Cluster types ────────────────────────────────────────────────────
+
+export interface ClusterRow {
+  id: string;
+  slug: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+  panel_count: number;
+}
+
+export interface ClusterDetailEntry {
+  entry_id: string;
+  title: string | null;
+  summary: string | null;
+  readme: string | null;
+  agents_md: string | null;
+}
+
+export interface ClusterDetail extends ClusterRow {
+  entries: ClusterDetailEntry[];
+}
+
+// ── Canvas types ────────────────────────────────────────────────────
+
+export interface CanvasPanel {
+  id: string;
+  entry_id: string;
+  title: string | null;
+  summary: string | null;
+  source_url: string | null;
+  x: number;
+  y: number;
+  added_at: string;
+}
+
+export interface ClusterQueryResult {
+  cluster_slug: string;
+  results: {
+    entry_id: string;
+    title: string | null;
+    summary: string | null;
+    similarity: number;
+    readme: string | null;
+    agents_md: string | null;
+    manifest: Record<string, unknown> | null;
+  }[];
+}

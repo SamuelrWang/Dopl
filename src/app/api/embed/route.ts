@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateEmbedding } from "@/lib/ai";
+import { withExternalAuth } from "@/lib/auth/with-auth";
 import { z } from "zod";
 
 const EmbedSchema = z.object({
   text: z.string().min(1),
 });
 
-export async function POST(request: NextRequest) {
+async function handlePost(request: NextRequest) {
   try {
     const body = await request.json();
     const parsed = EmbedSchema.safeParse(body);
@@ -33,3 +34,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = withExternalAuth(handlePost);

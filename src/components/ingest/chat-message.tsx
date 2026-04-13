@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { cn } from "@/lib/utils";
+import { MarkdownMessage } from "@/components/design";
 import { ArtifactsPanel } from "./artifacts-panel";
 
 export interface ProgressEvent {
@@ -18,6 +20,33 @@ export interface ProgressEvent {
   timestamp: string;
 }
 
+/**
+ * EntryReference — shape used by the /api/chat streaming endpoint when
+ * it surfaces entry search results as inline tool output. Mirrors the
+ * builder-chat type so both chat flows share the same payload.
+ */
+export interface EntryReference {
+  entry_id: string;
+  title?: string;
+  summary?: string;
+  source_url?: string;
+  complexity?: string;
+}
+
+/**
+ * ChatMessage — unified message type used by ALL chat flows.
+ *
+ * The first four variants (text, user-text, progress, artifacts) are
+ * used by the original URL-ingestion chat panel.
+ *
+ * The last three (streaming, tool_activity, entry_cards) are used by
+ * the real conversational chat panel that talks to /api/chat. They're
+ * added to the shared union so the reducer's APPEND_MESSAGE action
+ * accepts them without any special-casing.
+ *
+ * The legacy ChatMessageBubble renderer below doesn't render the new
+ * variants — the new chat panel ships its own renderer that does.
+ */
 export type ChatMessage =
   | { role: "ai"; type: "text"; content: string }
   | { role: "user"; type: "text"; content: string }
@@ -36,17 +65,26 @@ export type ChatMessage =
       readme: string;
       agentsMd: string;
       manifest: Record<string, unknown>;
-    };
+    }
+  | { role: "ai"; type: "streaming"; content: string }
+  | {
+      role: "ai";
+      type: "tool_activity";
+      toolName: string;
+      status: "calling" | "done";
+      summary?: string;
+    }
+  | { role: "ai"; type: "entry_cards"; entries: EntryReference[] };
 
 const eventTypeConfig: Record<
   ProgressEvent["type"],
   { icon: string; className: string }
 > = {
-  info: { icon: "->", className: "text-muted-foreground" },
+  info: { icon: "->", className: "text-white/50" },
   step_start: { icon: ">>", className: "text-blue-400 font-medium" },
   step_complete: { icon: "OK", className: "text-green-400 font-medium" },
   step_error: { icon: "!!", className: "text-red-400 font-medium" },
-  detail: { icon: "  ", className: "text-muted-foreground pl-4" },
+  detail: { icon: "  ", className: "text-white/50 pl-4" },
   complete: { icon: "**", className: "text-green-400 font-bold" },
   error: { icon: "!!", className: "text-red-400 font-bold" },
 };
@@ -69,7 +107,7 @@ function ProgressLog({
   return (
     <div
       ref={scrollRef}
-      className="font-mono text-xs leading-relaxed max-h-[300px] overflow-y-auto bg-black/40 rounded-md p-3 space-y-0.5"
+      className="font-mono text-xs leading-relaxed max-h-[300px] overflow-y-auto bg-white/[0.04] border border-white/[0.08] rounded-lg p-3 space-y-0.5"
     >
       {events.map((event, i) => {
         const config = eventTypeConfig[event.type];
@@ -81,10 +119,8 @@ function ProgressLog({
         });
 
         return (
-          <div key={i} className={`flex gap-2 ${config.className}`}>
-            <span className="text-muted-foreground shrink-0 w-[60px]">
-              {time}
-            </span>
+          <div key={i} className={cn("flex gap-2", config.className)}>
+            <span className="text-white/40 shrink-0 w-[60px]">{time}</span>
             <span className="shrink-0 w-[20px] text-center">{config.icon}</span>
             <span className="break-all">{event.message}</span>
           </div>
@@ -92,7 +128,7 @@ function ProgressLog({
       })}
 
       {status === "streaming" && (
-        <div className="flex gap-2 text-muted-foreground animate-pulse">
+        <div className="flex gap-2 text-white/40 animate-pulse">
           <span className="shrink-0 w-[60px]" />
           <span className="shrink-0 w-[20px] text-center">..</span>
           <span>working...</span>
@@ -103,48 +139,40 @@ function ProgressLog({
 }
 
 export function ChatMessageBubble({ message }: { message: ChatMessage }) {
-  if (message.role === "user") {
-    return (
-      <div className="flex justify-end">
-        <div className="max-w-[80%] rounded-2xl rounded-br-sm bg-primary text-primary-foreground px-4 py-2.5 text-sm break-all">
-          {message.content}
-        </div>
-      </div>
-    );
-  }
-
-  // AI messages
   return (
-    <div className="flex justify-start">
-      <div className="max-w-[90%] space-y-2">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold">
-            AI
-          </span>
+    <div
+      className={cn(
+        "max-w-[90%] md:max-w-[80%]",
+        message.role === "user" ? "ml-auto" : "mr-auto group"
+      )}
+    >
+      {/* User text message — frosted glass bubble */}
+      {message.role === "user" && (
+        <div className="text-base leading-[24px] text-white/90 bg-white/[0.08] border border-white/[0.1] rounded py-2 px-4">
+          <p className="whitespace-pre-wrap break-words">{message.content}</p>
         </div>
+      )}
 
-        {message.type === "text" && (
-          <div className="rounded-2xl rounded-bl-sm bg-muted px-4 py-2.5 text-sm">
-            {message.content}
-          </div>
-        )}
+      {/* AI text message — no bubble, direct markdown */}
+      {message.role === "ai" && message.type === "text" && (
+        <MarkdownMessage content={message.content} />
+      )}
 
-        {message.type === "progress" && (
-          <div className="rounded-2xl rounded-bl-sm bg-muted px-4 py-3 space-y-2">
-            <ProgressLog events={message.events} status={message.status} />
-          </div>
-        )}
+      {/* AI progress log — kept as a subtle panel since it's a technical log */}
+      {message.role === "ai" && message.type === "progress" && (
+        <ProgressLog events={message.events} status={message.status} />
+      )}
 
-        {message.type === "artifacts" && (
-          <ArtifactsPanel
-            entryId={message.entryId}
-            title={message.title}
-            readme={message.readme}
-            agentsMd={message.agentsMd}
-            manifest={message.manifest}
-          />
-        )}
-      </div>
+      {/* AI artifacts — rendered inline, no outer bubble */}
+      {message.role === "ai" && message.type === "artifacts" && (
+        <ArtifactsPanel
+          entryId={message.entryId}
+          title={message.title}
+          readme={message.readme}
+          agentsMd={message.agentsMd}
+          manifest={message.manifest}
+        />
+      )}
     </div>
   );
 }

@@ -1,9 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { GlassCard, MonoLabel } from "@/components/design";
+import {
+  addEntryPanelToCanvas,
+  fetchFullEntry,
+} from "@/components/canvas/add-to-canvas";
 
 interface EntryCardProps {
   id: string;
@@ -18,43 +21,36 @@ interface EntryCardProps {
   createdAt: string;
 }
 
-const complexityColors: Record<string, string> = {
-  simple: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
-  moderate: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
-  complex: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400",
-  advanced: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+const complexityAccent: Record<string, string> = {
+  simple: "var(--mint)",
+  moderate: "var(--gold)",
+  complex: "var(--coral)",
+  advanced: "var(--coral)",
 };
 
 const platformLabels: Record<string, string> = {
   x: "X",
   instagram: "IG",
+  reddit: "Reddit",
   github: "GitHub",
   youtube: "YT",
   web: "Web",
 };
 
-const platformColors: Record<string, string> = {
-  x: "bg-black text-white",
-  instagram: "bg-gradient-to-r from-purple-500 to-pink-500 text-white",
-  github: "bg-gray-800 text-white",
-  youtube: "bg-red-600 text-white",
-  web: "bg-blue-600 text-white",
-};
-
 const placeholderGradients: Record<string, string> = {
-  x: "from-gray-800 to-gray-900",
-  instagram: "from-purple-600 via-pink-500 to-orange-400",
-  github: "from-gray-700 to-gray-800",
-  youtube: "from-red-700 to-red-900",
-  web: "from-blue-700 to-blue-900",
+  x: "from-neutral-900 to-black",
+  instagram: "from-fuchsia-900 via-pink-900 to-orange-900",
+  reddit: "from-orange-900 to-red-950",
+  github: "from-neutral-800 to-neutral-900",
+  youtube: "from-red-900 to-red-950",
+  web: "from-slate-900 to-black",
 };
 
 function truncateUrl(url: string): string {
   try {
     const u = new URL(url);
-    const path = u.pathname.length > 30
-      ? u.pathname.slice(0, 27) + "..."
-      : u.pathname;
+    const path =
+      u.pathname.length > 30 ? u.pathname.slice(0, 27) + "..." : u.pathname;
     return u.hostname.replace("www.", "") + path;
   } catch {
     return url.slice(0, 50);
@@ -75,6 +71,16 @@ export function EntryCard({
 }: EntryCardProps) {
   const platform = sourcePlatform || "web";
   const gradientClass = placeholderGradients[platform] || placeholderGradients.web;
+  const accentColor = complexity ? complexityAccent[complexity] : undefined;
+
+  // "Add to canvas" button state:
+  //  - idle   → "+" icon
+  //  - loading → small spinner/"..." while we fetch the full entry
+  //  - added  → checkmark-style confirmation for 1.5s, then back to idle
+  //  - error  → "!" briefly, then back to idle
+  const [addState, setAddState] = useState<
+    "idle" | "loading" | "added" | "error"
+  >("idle");
 
   function handleDownload(e: React.MouseEvent) {
     e.preventDefault();
@@ -88,19 +94,37 @@ export function EntryCard({
     window.open(sourceUrl, "_blank", "noopener");
   }
 
+  async function handleAddToCanvas(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (addState !== "idle") return;
+    setAddState("loading");
+    const entry = await fetchFullEntry(id);
+    if (!entry) {
+      setAddState("error");
+      setTimeout(() => setAddState("idle"), 1500);
+      return;
+    }
+    const ok = addEntryPanelToCanvas(entry);
+    setAddState(ok ? "added" : "error");
+    setTimeout(() => setAddState("idle"), 1500);
+  }
+
   return (
-    <Link href={`/entries/${id}`}>
-      <Card className="hover:shadow-md transition-shadow cursor-pointer h-full overflow-hidden group">
+    <Link href={`/entries/${id}`} className="group block h-full">
+      <GlassCard
+        variant="subtle"
+        className="h-full !p-0 overflow-hidden hover:bg-white/[0.10] transition-colors cursor-pointer"
+      >
         {/* Thumbnail */}
         <div className="relative aspect-video overflow-hidden">
           {thumbnailUrl ? (
             <img
               src={thumbnailUrl}
               alt={title || "Post thumbnail"}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+              className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300"
               loading="lazy"
               onError={(e) => {
-                // Fall back to gradient on image load error
                 const target = e.currentTarget;
                 target.style.display = "none";
                 const fallback = target.nextElementSibling as HTMLElement;
@@ -111,16 +135,14 @@ export function EntryCard({
           <div
             className={`w-full h-full bg-gradient-to-br ${gradientClass} flex items-center justify-center ${thumbnailUrl ? "hidden" : ""}`}
           >
-            <span className="text-3xl font-bold text-white/30">
+            <span className="font-mono text-2xl font-bold text-white/20 uppercase tracking-widest">
               {platformLabels[platform] || "SIE"}
             </span>
           </div>
 
-          {/* Platform badge */}
+          {/* Platform badge — sharp corners, mono label */}
           <div className="absolute top-2 left-2">
-            <span
-              className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${platformColors[platform] || platformColors.web}`}
-            >
+            <span className="font-mono text-[9px] uppercase tracking-wider px-1.5 py-0.5 bg-black/60 backdrop-blur-sm border border-white/10 text-white/80 rounded-[3px]">
               {platformLabels[platform] || "Web"}
             </span>
           </div>
@@ -128,58 +150,151 @@ export function EntryCard({
           {/* Status badge if not complete */}
           {status !== "complete" && (
             <div className="absolute top-2 right-2">
-              <Badge variant={status === "error" ? "destructive" : "secondary"}>
+              <span
+                className={`font-mono text-[9px] uppercase tracking-wider px-1.5 py-0.5 backdrop-blur-sm border rounded-[3px] ${
+                  status === "error"
+                    ? "bg-red-950/80 text-red-400 border-red-500/30"
+                    : "bg-amber-950/80 text-amber-400 border-amber-500/30"
+                }`}
+              >
                 {status}
-              </Badge>
+              </span>
             </div>
+          )}
+
+          {/* Add-to-canvas button — only on completed entries. Sits in the
+              top-right of the thumbnail with the same visual language as the
+              platform badge (dark glass, hairline border, sharp corners).
+              Uses e.preventDefault()+stopPropagation so clicks don't trigger
+              the outer <Link>. */}
+          {status === "complete" && (
+            <button
+              type="button"
+              onClick={handleAddToCanvas}
+              aria-label="Add to canvas"
+              title="Add to canvas"
+              className={`absolute top-2 right-2 w-6 h-6 flex items-center justify-center bg-black/60 hover:bg-black/80 backdrop-blur-sm border rounded-[3px] transition-colors ${
+                addState === "added"
+                  ? "border-[color:var(--mint)]/50 text-[color:var(--mint)]"
+                  : addState === "error"
+                    ? "border-[color:var(--coral)]/50 text-[color:var(--coral)]"
+                    : "border-white/10 text-white/70 hover:text-white"
+              }`}
+            >
+              {addState === "loading" ? (
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 12 12"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  className="animate-spin"
+                  aria-hidden
+                >
+                  <path d="M6 1.5 A4.5 4.5 0 0 1 10.5 6" />
+                </svg>
+              ) : addState === "added" ? (
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 12 12"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.75"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden
+                >
+                  <path d="M2.5 6 5 8.5 9.5 3.5" />
+                </svg>
+              ) : addState === "error" ? (
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 12 12"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.75"
+                  strokeLinecap="round"
+                  aria-hidden
+                >
+                  <path d="M6 2.5v4M6 8.75v0.25" />
+                </svg>
+              ) : (
+                // Plus-in-square icon — reads as "add to board"
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 12 12"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden
+                >
+                  <rect x="1.75" y="1.75" width="8.5" height="8.5" rx="1" />
+                  <path d="M6 4v4M4 6h4" />
+                </svg>
+              )}
+            </button>
           )}
         </div>
 
-        <CardContent className="p-3 space-y-2">
+        {/* Content */}
+        <div className="p-4 space-y-3">
           {/* Title */}
-          <h3 className="font-medium text-sm line-clamp-2 leading-tight">
+          <h3 className="font-medium text-sm line-clamp-2 leading-snug text-white/90 group-hover:text-white transition-colors">
             {title || "Untitled"}
           </h3>
+
+          {/* Summary */}
+          {summary && (
+            <p className="text-xs text-white/50 line-clamp-2 leading-relaxed">
+              {summary}
+            </p>
+          )}
 
           {/* Source URL */}
           <button
             onClick={handleSourceClick}
-            className="text-xs text-muted-foreground hover:text-foreground truncate block w-full text-left"
+            className="font-mono text-[10px] text-white/40 hover:text-white/70 truncate block w-full text-left uppercase tracking-wide transition-colors"
             title={sourceUrl}
           >
             {truncateUrl(sourceUrl)}
           </button>
 
-          {/* Badges + download */}
-          <div className="flex items-center gap-1.5 flex-wrap">
+          {/* Metadata row */}
+          <div className="flex items-center gap-3 pt-2 border-t border-white/[0.06]">
             {complexity && (
-              <Badge className={`text-[10px] px-1.5 py-0 ${complexityColors[complexity] || ""}`}>
+              <MonoLabel accentColor={accentColor} tone="muted">
                 {complexity}
-              </Badge>
+              </MonoLabel>
             )}
-            {useCase && (
-              <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                {useCase.replace(/_/g, " ")}
-              </Badge>
+            {useCase && !complexity && (
+              <MonoLabel tone="muted">{useCase.replace(/_/g, " ")}</MonoLabel>
             )}
-            <span className="text-[10px] text-muted-foreground ml-auto">
-              {new Date(createdAt).toLocaleDateString()}
+            <span className="font-mono text-[10px] text-white/30 ml-auto">
+              {new Date(createdAt).toLocaleDateString("en-US", {
+                month: "short",
+                day: "numeric",
+              })}
             </span>
           </div>
 
-          {/* Download button */}
+          {/* Download button — sharp corners */}
           {status === "complete" && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full h-7 text-xs"
+            <button
               onClick={handleDownload}
+              className="w-full h-8 font-mono text-[10px] uppercase tracking-wide bg-white/[0.05] hover:bg-white/[0.10] border border-white/[0.1] hover:border-white/[0.2] rounded-[3px] text-white/70 hover:text-white/90 transition-all"
             >
               Download agents.md
-            </Button>
+            </button>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </GlassCard>
     </Link>
   );
 }

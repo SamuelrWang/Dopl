@@ -1,12 +1,34 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { SIEClient } from "./api-client.js";
+import type { ClusterRow } from "./types.js";
+
+const CONTEXT_CHAR_BUDGET = 2000;
+const MAX_PROMPT_ENTRIES = 10;
+
+const SERVER_INSTRUCTIONS = `You are connected to the **Setup Intelligence Engine (SIE)** — a curated knowledge base of real-world AI and automation setups including agent workflows, n8n automations, Claude skills, API integrations, and more. Each setup includes full documentation (README), implementation instructions (agents.md), and structured metadata (manifest).
+
+## What you can help the user with
+
+- **Searching** — Find setups by natural language query (e.g. "cold email outreach", "n8n + Supabase automation")
+- **Browsing** — List all setups, filter by complexity or use case
+- **Deep dives** — Pull up the full README, agents.md, and manifest for any setup
+- **Building** — Compose a new solution by combining patterns from multiple setups
+- **Canvas management** — Add setups to the user's canvas workspace, organize them into clusters, or browse what's already there
+- **Cluster exploration** — Browse curated groupings of setups, or search within a specific cluster
+
+When the user asks about AI/automation setups, tools, or workflows, use the tools provided by this server to give them accurate, up-to-date answers from the knowledge base.`;
 
 export function createServer(client: SIEClient): McpServer {
-  const server = new McpServer({
-    name: "setup-intelligence-engine",
-    version: "0.1.0",
-  });
+  const server = new McpServer(
+    {
+      name: "setup-intelligence-engine",
+      version: "0.1.0",
+    },
+    {
+      instructions: SERVER_INSTRUCTIONS,
+    },
+  );
 
   // ── search_setups ──────────────────────────────────────────────────
   server.tool(
@@ -165,5 +187,302 @@ export function createServer(client: SIEClient): McpServer {
     }
   );
 
+  // ── list_clusters ──────────────────────────────────────────────────
+  server.tool(
+    "list_clusters",
+    "List all clusters (curated groupings of setups) available in the knowledge base.",
+    {},
+    async () => {
+      const { clusters } = await client.listClusters();
+      const lines = clusters.map(
+        (c) =>
+          `- **${c.name}** (slug: \`${c.slug}\`) — ${c.panel_count ?? 0} entries`
+      );
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: lines.join("\n") || "No clusters found.",
+          },
+        ],
+      };
+    }
+  );
+
+  // ── get_cluster ────────────────────────────────────────────────────
+  server.tool(
+    "get_cluster",
+    "Get details of a specific cluster including its member entries with summaries and READMEs.",
+    {
+      slug: z.string().describe("Cluster slug from list_clusters"),
+    },
+    async ({ slug }) => {
+      const cluster = await client.getCluster(slug);
+
+      const lines: string[] = [];
+      lines.push(`# Cluster: ${cluster.name}`);
+      lines.push(`Slug: \`${cluster.slug}\``);
+      lines.push(`Entries: ${cluster.entries.length}\n`);
+
+      for (const e of cluster.entries) {
+        lines.push(`### ${e.title || "Untitled"} (${e.entry_id})`);
+        if (e.summary) lines.push(e.summary);
+        if (e.readme) {
+          lines.push(`\nREADME:\n${e.readme.slice(0, CONTEXT_CHAR_BUDGET)}`);
+        }
+        if (e.agents_md) {
+          lines.push(
+            `\nagents.md:\n${e.agents_md.slice(0, CONTEXT_CHAR_BUDGET)}`
+          );
+        }
+        lines.push("");
+      }
+
+      return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+    }
+  );
+
+  // ── query_cluster ──────────────────────────────────────────────────
+  server.tool(
+    "query_cluster",
+    "Semantic search scoped to a specific cluster's entries only.",
+    {
+      cluster_slug: z.string().describe("Cluster slug"),
+      query: z.string().describe("Natural language search query"),
+      max_results: z
+        .number()
+        .optional()
+        .describe("Max results (default 5)"),
+    },
+    async ({ cluster_slug, query, max_results }) => {
+      const result = await client.queryCluster(
+        cluster_slug,
+        query,
+        max_results
+      );
+
+      const lines: string[] = [];
+      lines.push(
+        `## Cluster Search: "${query}" in ${result.cluster_slug} (${result.results.length} results)\n`
+      );
+
+      for (const r of result.results) {
+        lines.push(
+          `### ${r.title || "Untitled"} (${Math.round(r.similarity * 100)}% match)`
+        );
+        lines.push(`ID: ${r.entry_id}`);
+        if (r.summary) lines.push(r.summary);
+        lines.push("");
+      }
+
+      return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+    }
+  );
+
+  // ── canvas_list_panels ──────────────────────────────────────────────
+  server.tool(
+    "canvas_list_panels",
+    "List all knowledge base entries currently on your canvas workspace.",
+    {},
+    async () => {
+      const panels = await client.listCanvasPanels();
+
+      if (panels.length === 0) {
+        return {
+          content: [{ type: "text" as const, text: "Your canvas is empty. Use `canvas_add_entry` to add entries, or `search_setups` to find them first." }],
+        };
+      }
+
+      const lines: string[] = [];
+      lines.push(`## Your Canvas (${panels.length} entries)\n`);
+
+      for (const p of panels) {
+        lines.push(`- **${p.title || "Untitled"}** (entry: ${p.entry_id})`);
+        if (p.summary) lines.push(`  ${p.summary}`);
+        if (p.source_url) lines.push(`  Source: ${p.source_url}`);
+      }
+
+      return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+    }
+  );
+
+  // ── canvas_add_entry ──────────────────────────────────────────────
+  server.tool(
+    "canvas_add_entry",
+    "Add a knowledge base entry to your canvas. Use search_setups to find entries first.",
+    {
+      entry_id: z.string().describe("Entry ID (UUID) from search results or get_setup"),
+    },
+    async ({ entry_id }) => {
+      const { panel, created } = await client.addCanvasPanel(entry_id);
+      const verb = created ? "Added" : "Already on";
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `${verb} canvas: **${panel.title || "Untitled"}** (${panel.entry_id})`,
+          },
+        ],
+      };
+    }
+  );
+
+  // ── canvas_remove_entry ───────────────────────────────────────────
+  server.tool(
+    "canvas_remove_entry",
+    "Remove an entry from your canvas. Does not delete it from the knowledge base.",
+    {
+      entry_id: z.string().describe("Entry ID to remove from canvas"),
+    },
+    async ({ entry_id }) => {
+      await client.removeCanvasPanel(entry_id);
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `Removed entry ${entry_id} from your canvas.`,
+          },
+        ],
+      };
+    }
+  );
+
+  // ── canvas_create_cluster ─────────────────────────────────────────
+  server.tool(
+    "canvas_create_cluster",
+    "Group canvas entries into a named cluster for organized access via query_cluster.",
+    {
+      name: z.string().describe("Cluster name, e.g. 'AI Agent Stack'"),
+      entry_ids: z.array(z.string()).describe("Entry IDs to include (must be on your canvas)"),
+    },
+    async ({ name, entry_ids }) => {
+      const result = await client.createCluster(name, entry_ids);
+
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `Created cluster **${result.name}** (slug: \`${result.slug}\`) with ${result.panel_count ?? entry_ids.length} entries.`,
+          },
+        ],
+      };
+    }
+  );
+
   return server;
+}
+
+// ── Phase 3: Dynamic prompts ─────────────────────────────────────────
+
+/**
+ * Register one MCP prompt per cluster. Each prompt loads the cluster's
+ * entries as context and seeds a scoping instruction so Claude uses
+ * query_cluster instead of search_setups for the session.
+ */
+export async function registerClusterPrompts(
+  server: McpServer,
+  client: SIEClient
+): Promise<string[]> {
+  const { clusters } = await client.listClusters();
+  const slugs: string[] = [];
+
+  for (const cluster of clusters) {
+    slugs.push(cluster.slug);
+    server.prompt(
+      cluster.slug,
+      `Chat scoped to cluster: ${cluster.name}`,
+      {},
+      async () => {
+        const detail = await client.getCluster(cluster.slug);
+        const contextBlock = detail.entries
+          .slice(0, MAX_PROMPT_ENTRIES)
+          .map((e) => {
+            const parts = [`### ${e.title || "Untitled"} (${e.entry_id})`];
+            if (e.summary) parts.push(e.summary);
+            if (e.readme) {
+              parts.push(
+                `README:\n${e.readme.slice(0, CONTEXT_CHAR_BUDGET)}`
+              );
+            }
+            if (e.agents_md) {
+              parts.push(
+                `agents.md:\n${e.agents_md.slice(0, CONTEXT_CHAR_BUDGET)}`
+              );
+            }
+            return parts.join("\n");
+          })
+          .join("\n\n---\n\n");
+
+        return {
+          messages: [
+            {
+              role: "user" as const,
+              content: {
+                type: "text" as const,
+                text: `Load cluster "${detail.name}" as the active scope.\n\n${contextBlock}`,
+              },
+            },
+            {
+              role: "assistant" as const,
+              content: {
+                type: "text" as const,
+                text: `Cluster "${detail.name}" (slug: \`${detail.slug}\`) is now my active scope with ${detail.entries.length} entries loaded. For any retrieval in this session, I will call \`query_cluster\` with \`cluster_slug="${detail.slug}"\` instead of \`search_setups\`. I won't search the broader knowledge base unless you explicitly ask.`,
+              },
+            },
+          ],
+        };
+      }
+    );
+  }
+
+  return slugs;
+}
+
+// ── Phase 4: Polling sync ────────────────────────────────────────────
+
+/**
+ * Poll for cluster changes and re-register prompts when the set changes.
+ * Emits `notifications/prompts/list_changed` so Claude Code refreshes
+ * its slash-command palette.
+ */
+export function startPromptSync(
+  server: McpServer,
+  client: SIEClient,
+  intervalMs = 30_000
+): NodeJS.Timeout {
+  let knownSlugs: Set<string> = new Set();
+
+  async function sync() {
+    try {
+      const { clusters } = await client.listClusters();
+      const currentSlugs = new Set(clusters.map((c: ClusterRow) => c.slug));
+
+      // Check if the set changed
+      const changed =
+        currentSlugs.size !== knownSlugs.size ||
+        [...currentSlugs].some((s) => !knownSlugs.has(s));
+
+      if (changed) {
+        // Re-register all cluster prompts
+        const newSlugs = await registerClusterPrompts(server, client);
+        knownSlugs = new Set(newSlugs);
+
+        // Notify connected clients
+        try {
+          await server.server.notification({
+            method: "notifications/prompts/list_changed",
+          });
+        } catch {
+          // Notification may fail if no client is connected yet
+        }
+      }
+    } catch {
+      // Swallow errors — polling is best-effort
+    }
+  }
+
+  // Initial sync
+  sync();
+
+  return setInterval(sync, intervalMs);
 }

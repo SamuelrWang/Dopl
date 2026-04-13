@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "crypto";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase";
+const supabase = supabaseAdmin();
 
 const KEY_PREFIX = "sk-sie-";
 
@@ -23,20 +24,30 @@ export function hashApiKey(key: string): string {
  */
 export async function validateApiKey(
   key: string
-): Promise<{ id: string; name: string; rate_limit_rpm: number } | null> {
+): Promise<{
+  id: string;
+  name: string;
+  rate_limit_rpm: number;
+  user_id: string | null;
+} | null> {
   if (!key.startsWith(KEY_PREFIX)) return null;
 
   const hash = hashApiKey(key);
   const { data, error } = await supabase
     .from("api_keys")
-    .select("id, name, rate_limit_rpm, revoked_at")
+    .select("id, name, rate_limit_rpm, revoked_at, user_id")
     .eq("key_hash", hash)
     .single();
 
   if (error || !data) return null;
   if (data.revoked_at) return null;
 
-  return { id: data.id, name: data.name, rate_limit_rpm: data.rate_limit_rpm };
+  return {
+    id: data.id,
+    name: data.name,
+    rate_limit_rpm: data.rate_limit_rpm,
+    user_id: data.user_id,
+  };
 }
 
 /**
@@ -85,17 +96,21 @@ export async function recordUsage(
  * Create a new API key. Returns the plaintext key (shown ONCE).
  */
 export async function createApiKey(
-  name: string
+  name: string,
+  userId?: string
 ): Promise<{ key: string; id: string; name: string; prefix: string }> {
   const { key, hash, prefix } = generateApiKey();
 
+  const row: Record<string, unknown> = {
+    key_hash: hash,
+    key_prefix: prefix,
+    name,
+  };
+  if (userId) row.user_id = userId;
+
   const { data, error } = await supabase
     .from("api_keys")
-    .insert({
-      key_hash: hash,
-      key_prefix: prefix,
-      name,
-    })
+    .insert(row)
     .select("id")
     .single();
 
@@ -107,23 +122,36 @@ export async function createApiKey(
 }
 
 /**
- * Revoke an API key.
+ * Revoke an API key. If userId is provided, ensures the key belongs to that user.
  */
-export async function revokeApiKey(id: string): Promise<void> {
-  const { error } = await supabase
+export async function revokeApiKey(id: string, userId?: string): Promise<void> {
+  let query = supabase
     .from("api_keys")
     .update({ revoked_at: new Date().toISOString() })
     .eq("id", id);
 
+  if (userId) {
+    query = query.eq("user_id", userId);
+  }
+
+  const { error, count } = await query.select("id").then((res) => ({
+    error: res.error,
+    count: res.data?.length ?? 0,
+  }));
+
   if (error) {
     throw new Error(`Failed to revoke API key: ${error.message}`);
+  }
+
+  if (userId && count === 0) {
+    throw new Error("API key not found or not owned by you");
   }
 }
 
 /**
- * List all API keys (never returns hashes).
+ * List API keys (never returns hashes). Optionally filter by user.
  */
-export async function listApiKeys(): Promise<
+export async function listApiKeys(opts?: { userId?: string }): Promise<
   {
     id: string;
     key_prefix: string;
@@ -134,12 +162,18 @@ export async function listApiKeys(): Promise<
     revoked_at: string | null;
   }[]
 > {
-  const { data, error } = await supabase
+  let query = supabase
     .from("api_keys")
     .select(
       "id, key_prefix, name, rate_limit_rpm, created_at, last_used_at, revoked_at"
     )
     .order("created_at", { ascending: false });
+
+  if (opts?.userId) {
+    query = query.eq("user_id", opts.userId);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     throw new Error(`Failed to list API keys: ${error.message}`);

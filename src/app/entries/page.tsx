@@ -1,13 +1,10 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import { EntryGrid } from "@/components/entries/entry-grid";
 import { FilterSidebar } from "@/components/entries/filter-sidebar";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import Link from "next/link";
+import { GlassCard, MonoLabel } from "@/components/design";
 
 interface EntryListItem {
   id: string;
@@ -116,78 +113,112 @@ export default function EntriesPage() {
   const isShowingSearch = searchResults !== null;
 
   return (
-    <div>
-      {/* Search bar */}
-      <div className="mb-6">
-        <div className="flex gap-2">
-          <Input
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <MonoLabel tone="muted">Knowledge Base</MonoLabel>
+          <h1 className="text-2xl font-semibold text-white/90 mt-1">
+            Browse Setups
+          </h1>
+        </div>
+      </div>
+
+      {/* Search bar — sharp corners, glass-aesthetic */}
+      <div className="flex gap-2">
+        <div className="flex-1 relative">
+          <input
+            type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Search setups... e.g. 'AI agent for cold outreach' or 'n8n automation with Supabase'"
-            className="flex-1"
+            className="w-full h-11 px-4 bg-black/[0.2] backdrop-blur-[10px] border border-white/10 rounded-[3px] text-sm text-white/90 placeholder:text-white/30 focus:outline-none focus:border-white/20 transition-colors"
           />
-          {isShowingSearch ? (
-            <Button variant="outline" onClick={clearSearch}>
-              Clear
-            </Button>
-          ) : (
-            <Button onClick={handleSearch} disabled={searching || !query.trim()}>
-              {searching ? "Searching..." : "Search"}
-            </Button>
-          )}
         </div>
+        {isShowingSearch ? (
+          <button
+            onClick={clearSearch}
+            className="h-11 px-5 font-mono text-[10px] uppercase tracking-wide bg-white/[0.05] hover:bg-white/[0.10] border border-white/[0.1] hover:border-white/[0.2] rounded-[3px] text-white/70 hover:text-white/90 transition-all"
+          >
+            Clear
+          </button>
+        ) : (
+          <button
+            onClick={handleSearch}
+            disabled={searching || !query.trim()}
+            className="h-11 px-5 font-mono text-[10px] uppercase tracking-wide bg-white/[0.08] hover:bg-white/[0.12] border border-white/[0.15] hover:border-white/[0.25] rounded-[3px] text-white/90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {searching ? "Searching..." : "Search"}
+          </button>
+        )}
       </div>
 
       {/* Search results mode */}
       {isShowingSearch && (
         <div className="space-y-4">
           {synthesis && (
-            <Card className="border-primary/30">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">AI Recommendation</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <p className="text-sm">{synthesis.recommendation}</p>
-                {synthesis.composite_approach && (
-                  <p className="text-sm text-muted-foreground">
-                    {synthesis.composite_approach}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
+            <GlassCard
+              label="AI Recommendation"
+              accentColor="var(--mint)"
+              labelDivider
+            >
+              <p className="text-sm text-white/80 leading-relaxed">
+                {synthesis.recommendation}
+              </p>
+              {synthesis.composite_approach && (
+                <p className="text-xs text-white/50 mt-3 leading-relaxed">
+                  <span className="font-mono uppercase tracking-wide text-white/40 mr-2">
+                    Approach:
+                  </span>
+                  {synthesis.composite_approach}
+                </p>
+              )}
+            </GlassCard>
           )}
 
           {searchResults!.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              No matching entries found. Try a different query.
-            </div>
+            <GlassCard variant="subtle" className="text-center py-12">
+              <p className="text-sm text-white/40 font-mono uppercase tracking-wide">
+                No matching entries found
+              </p>
+              <p className="text-xs text-white/30 mt-2">
+                Try a different query or clear the search
+              </p>
+            </GlassCard>
           ) : (
             <div className="space-y-3">
               {searchResults!.map((entry) => (
-                <Link key={entry.entry_id} href={`/entries/${entry.entry_id}`}>
-                  <Card className="hover:shadow-md transition-shadow cursor-pointer">
-                    <CardContent className="py-4">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <h3 className="font-medium text-sm">
-                            {entry.title || "Untitled"}
-                          </h3>
-                          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                            {entry.summary || "No summary"}
+                <Link
+                  key={entry.entry_id}
+                  href={`/entries/${entry.entry_id}`}
+                  className="block group"
+                >
+                  <GlassCard
+                    variant="subtle"
+                    className="hover:bg-white/[0.10] transition-colors cursor-pointer"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-medium text-sm text-white/90 group-hover:text-white transition-colors">
+                          {entry.title || "Untitled"}
+                        </h3>
+                        <p className="text-xs text-white/50 mt-1 line-clamp-2 leading-relaxed">
+                          {entry.summary || "No summary"}
+                        </p>
+                        {entry.relevance_explanation && (
+                          <p className="text-xs text-mint mt-2 leading-relaxed" style={{ color: "var(--mint)" }}>
+                            {entry.relevance_explanation}
                           </p>
-                          {entry.relevance_explanation && (
-                            <p className="text-xs text-blue-500 mt-1">
-                              {entry.relevance_explanation}
-                            </p>
-                          )}
-                        </div>
-                        <Badge variant="secondary" className="ml-3 shrink-0 text-xs">
-                          {(entry.similarity * 100).toFixed(0)}%
-                        </Badge>
+                        )}
                       </div>
-                    </CardContent>
-                  </Card>
+                      <div className="shrink-0 flex flex-col items-end gap-1">
+                        <span className="font-mono text-[10px] uppercase tracking-wide text-white/60 px-2 py-0.5 bg-white/[0.05] border border-white/[0.1] rounded-[3px]">
+                          {(entry.similarity * 100).toFixed(0)}%
+                        </span>
+                      </div>
+                    </div>
+                  </GlassCard>
                 </Link>
               ))}
             </div>
@@ -198,7 +229,7 @@ export default function EntriesPage() {
       {/* Browse mode */}
       {!isShowingSearch && (
         <div className="flex gap-6">
-          <div className="w-56 shrink-0 hidden md:block">
+          <aside className="w-56 shrink-0 hidden md:block">
             <FilterSidebar
               useCase={useCase}
               complexity={complexity}
@@ -209,13 +240,15 @@ export default function EntriesPage() {
                 setComplexity("all");
               }}
             />
-          </div>
+          </aside>
 
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             {loading ? (
-              <div className="flex items-center justify-center h-64">
-                <p className="text-muted-foreground">Loading entries...</p>
-              </div>
+              <GlassCard variant="subtle" className="flex items-center justify-center h-64">
+                <p className="font-mono text-[10px] uppercase tracking-wide text-white/40">
+                  Loading entries...
+                </p>
+              </GlassCard>
             ) : (
               <EntryGrid entries={entries} />
             )}

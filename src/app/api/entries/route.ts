@@ -1,23 +1,37 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase";
+const supabase = supabaseAdmin();
+import { withExternalAuth } from "@/lib/auth/with-auth";
 
-export async function GET(request: NextRequest) {
+async function handleGet(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const status = searchParams.get("status");
   const useCase = searchParams.get("use_case");
   const complexity = searchParams.get("complexity");
+  const sourcePlatform = searchParams.get("source_platform");
+  const sort = searchParams.get("sort") || "newest";
   const limit = parseInt(searchParams.get("limit") || "50", 10);
   const offset = parseInt(searchParams.get("offset") || "0", 10);
 
   let query = supabase
     .from("entries")
-    .select("id, title, summary, use_case, complexity, status, source_url, source_platform, source_author, thumbnail_url, created_at, ingested_at", { count: "exact" })
-    .order("created_at", { ascending: false })
-    .range(offset, offset + limit - 1);
+    .select("id, title, summary, use_case, complexity, status, source_url, source_platform, source_author, thumbnail_url, created_at, ingested_at", { count: "exact" });
+
+  if (sort === "oldest") {
+    query = query.order("created_at", { ascending: true });
+  } else if (sort === "alpha") {
+    query = query.order("title", { ascending: true, nullsFirst: false });
+  } else {
+    // "newest" and unknown values fall through to the default
+    query = query.order("created_at", { ascending: false });
+  }
+
+  query = query.range(offset, offset + limit - 1);
 
   if (status) query = query.eq("status", status);
   if (useCase) query = query.eq("use_case", useCase);
   if (complexity) query = query.eq("complexity", complexity);
+  if (sourcePlatform) query = query.eq("source_platform", sourcePlatform);
 
   const { data, error, count } = await query;
 
@@ -32,3 +46,5 @@ export async function GET(request: NextRequest) {
     offset,
   });
 }
+
+export const GET = withExternalAuth(handleGet);

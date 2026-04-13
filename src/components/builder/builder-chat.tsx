@@ -277,7 +277,7 @@ export function BuilderChat() {
       {/* Messages area */}
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto px-4 py-6 space-y-4"
+        className="flex-1 overflow-y-auto p-6 space-y-4 min-h-0 relative"
       >
         {messages.map((msg, i) => (
           <BuilderMessageBubble key={i} message={msg} />

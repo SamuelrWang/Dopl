@@ -1,10 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { RepoFileBrowser } from "./repo-file-browser";
+import { GlassCard, GlassDivider, MonoLabel } from "@/components/design";
 
 interface EntryTabsProps {
   readme: string | null;
@@ -20,6 +18,32 @@ interface EntryTabsProps {
   githubRepoUrl: string | null;
 }
 
+type TabId = "readme" | "agents" | "manifest" | "repo" | "raw";
+
+function SharpButton({
+  children,
+  onClick,
+  variant = "default",
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  variant?: "default" | "ghost";
+}) {
+  const base =
+    "inline-flex h-7 items-center px-3 font-mono text-[10px] uppercase tracking-wide rounded-[3px] transition-all";
+  const variants = {
+    default:
+      "bg-white/[0.05] hover:bg-white/[0.10] border border-white/[0.1] hover:border-white/[0.2] text-white/70 hover:text-white/90",
+    ghost:
+      "hover:bg-white/[0.05] border border-transparent hover:border-white/[0.1] text-white/50 hover:text-white/80",
+  };
+  return (
+    <button onClick={onClick} className={`${base} ${variants[variant]}`}>
+      {children}
+    </button>
+  );
+}
+
 export function EntryTabs({
   readme,
   agentsMd,
@@ -29,6 +53,7 @@ export function EntryTabs({
   githubRepoUrl,
 }: EntryTabsProps) {
   const [copied, setCopied] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<TabId>("readme");
   const hasRepo = !!githubRepoUrl;
 
   async function copyToClipboard(text: string, label: string) {
@@ -37,125 +62,146 @@ export function EntryTabs({
     setTimeout(() => setCopied(null), 2000);
   }
 
+  const tabs: { id: TabId; label: string; show: boolean }[] = [
+    { id: "readme", label: "README", show: true },
+    { id: "agents", label: "agents.md", show: true },
+    { id: "manifest", label: "Manifest", show: true },
+    { id: "repo", label: "Repository", show: hasRepo },
+    { id: "raw", label: "Raw Data", show: true },
+  ];
+
   return (
-    <Tabs defaultValue="readme">
-      <TabsList className={`grid w-full ${hasRepo ? "grid-cols-5" : "grid-cols-4"}`}>
-        <TabsTrigger value="readme">README</TabsTrigger>
-        <TabsTrigger value="agents">agents.md</TabsTrigger>
-        <TabsTrigger value="manifest">Manifest</TabsTrigger>
-        {hasRepo && <TabsTrigger value="repo">Repository</TabsTrigger>}
-        <TabsTrigger value="raw">Raw Data</TabsTrigger>
-      </TabsList>
-
-      <TabsContent value="readme">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex justify-end mb-4">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => copyToClipboard(readme || "", "readme")}
+    <div className="space-y-4">
+      {/* Tab bar — sharp corners, like openclaw nav */}
+      <div className="flex items-center gap-1 p-1 bg-black/[0.2] backdrop-blur-[10px] border border-white/[0.08] rounded-[3px] overflow-x-auto">
+        {tabs
+          .filter((t) => t.show)
+          .map((tab) => {
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`shrink-0 h-8 px-4 font-mono text-[10px] uppercase tracking-wide rounded-[3px] transition-all ${
+                  isActive
+                    ? "bg-white/[0.08] text-white/90 border border-white/[0.15]"
+                    : "text-white/50 hover:text-white/80 border border-transparent"
+                }`}
               >
-                {copied === "readme" ? "Copied!" : "Copy"}
-              </Button>
-            </div>
-            <div className="prose prose-sm max-w-none dark:prose-invert whitespace-pre-wrap">
-              {readme || "No README generated yet."}
-            </div>
-          </CardContent>
-        </Card>
-      </TabsContent>
+                {tab.label}
+              </button>
+            );
+          })}
+      </div>
 
-      <TabsContent value="agents">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex justify-end gap-2 mb-4">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => copyToClipboard(agentsMd || "", "agents")}
-              >
-                {copied === "agents" ? "Copied!" : "Copy"}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  const blob = new Blob([agentsMd || ""], {
-                    type: "text/markdown",
-                  });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement("a");
-                  a.href = url;
-                  a.download = "agents.md";
-                  a.click();
-                  URL.revokeObjectURL(url);
-                }}
-              >
-                Download
-              </Button>
-            </div>
-            <div className="prose prose-sm max-w-none dark:prose-invert whitespace-pre-wrap">
-              {agentsMd || "No agents.md generated yet."}
-            </div>
-          </CardContent>
-        </Card>
-      </TabsContent>
-
-      <TabsContent value="manifest">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex justify-end mb-4">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  copyToClipboard(
-                    JSON.stringify(manifest, null, 2),
-                    "manifest"
-                  )
-                }
-              >
-                {copied === "manifest" ? "Copied!" : "Copy"}
-              </Button>
-            </div>
-            <pre className="bg-muted p-4 rounded-lg overflow-auto text-sm">
-              {manifest
-                ? JSON.stringify(manifest, null, 2)
-                : "No manifest generated yet."}
-            </pre>
-          </CardContent>
-        </Card>
-      </TabsContent>
-
-      {hasRepo && (
-        <TabsContent value="repo">
-          <RepoFileBrowser repoUrl={githubRepoUrl!} />
-        </TabsContent>
+      {/* README */}
+      {activeTab === "readme" && (
+        <GlassCard
+          label="README.md"
+          labelDivider
+          accentColor="var(--mint)"
+        >
+          <div className="flex justify-end mb-4">
+            <SharpButton onClick={() => copyToClipboard(readme || "", "readme")}>
+              {copied === "readme" ? "Copied" : "Copy"}
+            </SharpButton>
+          </div>
+          <div className="prose prose-sm prose-invert max-w-none whitespace-pre-wrap text-white/80 leading-relaxed">
+            {readme || "No README generated yet."}
+          </div>
+        </GlassCard>
       )}
 
-      <TabsContent value="raw">
-        <Card>
-          <CardContent className="pt-6 space-y-4">
-            <h3 className="font-semibold">Sources ({sources.length})</h3>
+      {/* agents.md */}
+      {activeTab === "agents" && (
+        <GlassCard
+          label="agents.md"
+          labelDivider
+          accentColor="var(--coral)"
+        >
+          <div className="flex justify-end gap-2 mb-4">
+            <SharpButton
+              onClick={() => copyToClipboard(agentsMd || "", "agents")}
+            >
+              {copied === "agents" ? "Copied" : "Copy"}
+            </SharpButton>
+            <SharpButton
+              onClick={() => {
+                const blob = new Blob([agentsMd || ""], {
+                  type: "text/markdown",
+                });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = "agents.md";
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+            >
+              Download
+            </SharpButton>
+          </div>
+          <div className="prose prose-sm prose-invert max-w-none whitespace-pre-wrap text-white/80 leading-relaxed">
+            {agentsMd || "No agents.md generated yet."}
+          </div>
+        </GlassCard>
+      )}
+
+      {/* Manifest */}
+      {activeTab === "manifest" && (
+        <GlassCard
+          label="manifest.json"
+          labelDivider
+          accentColor="var(--gold)"
+        >
+          <div className="flex justify-end mb-4">
+            <SharpButton
+              onClick={() =>
+                copyToClipboard(
+                  JSON.stringify(manifest, null, 2),
+                  "manifest"
+                )
+              }
+            >
+              {copied === "manifest" ? "Copied" : "Copy"}
+            </SharpButton>
+          </div>
+          <pre className="bg-black/[0.3] border border-white/[0.05] rounded-[3px] p-4 overflow-auto text-xs font-mono text-white/80 leading-relaxed">
+            {manifest
+              ? JSON.stringify(manifest, null, 2)
+              : "No manifest generated yet."}
+          </pre>
+        </GlassCard>
+      )}
+
+      {/* Repository */}
+      {activeTab === "repo" && hasRepo && (
+        <RepoFileBrowser repoUrl={githubRepoUrl!} />
+      )}
+
+      {/* Raw Data */}
+      {activeTab === "raw" && (
+        <GlassCard label={`Sources (${sources.length})`} labelDivider>
+          <div className="space-y-4">
             {sources.map((source, i) => (
-              <div key={i} className="border rounded-lg p-4">
+              <div
+                key={i}
+                className="border border-white/[0.08] rounded-[3px] p-4 bg-black/[0.15]"
+              >
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="font-medium text-sm">
-                    {source.source_type}
-                  </span>
+                  <MonoLabel tone="strong">{source.source_type}</MonoLabel>
                   {source.url && (
                     <a
                       href={source.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-xs text-blue-600 hover:underline"
+                      className="font-mono text-[10px] uppercase tracking-wide text-white/40 hover:text-white/70 transition-colors truncate"
                     >
                       {source.url}
                     </a>
                   )}
                 </div>
-                <pre className="bg-muted p-3 rounded text-xs overflow-auto max-h-64">
+                <pre className="bg-black/[0.3] border border-white/[0.05] rounded-[3px] p-3 text-xs font-mono text-white/70 overflow-auto max-h-64 whitespace-pre-wrap break-words">
                   {source.extracted_content ||
                     source.raw_content ||
                     "No content"}
@@ -163,16 +209,19 @@ export function EntryTabs({
               </div>
             ))}
             {rawContent && (
-              <div>
-                <h3 className="font-semibold mt-4">Full Raw Content</h3>
-                <pre className="bg-muted p-4 rounded-lg overflow-auto text-xs max-h-96">
-                  {JSON.stringify(rawContent, null, 2)}
-                </pre>
-              </div>
+              <>
+                <GlassDivider />
+                <div>
+                  <MonoLabel tone="strong">Full Raw Content</MonoLabel>
+                  <pre className="mt-2 bg-black/[0.3] border border-white/[0.05] rounded-[3px] p-4 text-xs font-mono text-white/70 overflow-auto max-h-96 whitespace-pre-wrap break-words">
+                    {JSON.stringify(rawContent, null, 2)}
+                  </pre>
+                </div>
+              </>
             )}
-          </CardContent>
-        </Card>
-      </TabsContent>
-    </Tabs>
+          </div>
+        </GlassCard>
+      )}
+    </div>
   );
 }

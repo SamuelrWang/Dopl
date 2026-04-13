@@ -1,4 +1,13 @@
-import type { SearchResult, BuildResult, ListResult, SIEEntry } from "./types.js";
+import type {
+  SearchResult,
+  BuildResult,
+  ListResult,
+  SIEEntry,
+  ClusterRow,
+  ClusterDetail,
+  ClusterQueryResult,
+  CanvasPanel,
+} from "./types.js";
 
 export class SIEClient {
   private baseUrl: string;
@@ -90,5 +99,65 @@ export class SIEClient {
     if (params?.offset) query.set("offset", String(params.offset));
 
     return this.request<ListResult>(`/api/entries?${query.toString()}`);
+  }
+
+  // ── Canvas methods ───────────────────────────────────────────────────
+
+  async listCanvasPanels(): Promise<CanvasPanel[]> {
+    const res = await this.request<{ panels: CanvasPanel[] }>("/api/canvas/panels");
+    return res.panels;
+  }
+
+  async addCanvasPanel(entryId: string): Promise<{ panel: CanvasPanel; created: boolean }> {
+    return this.request<{ panel: CanvasPanel; created: boolean }>("/api/canvas/panels", {
+      method: "POST",
+      body: { entry_id: entryId },
+    });
+  }
+
+  async removeCanvasPanel(entryId: string): Promise<void> {
+    const res = await fetch(`${this.baseUrl}/api/canvas/panels/${encodeURIComponent(entryId)}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${this.apiKey}`,
+      },
+    });
+    if (!res.ok && res.status !== 204) {
+      const text = await res.text();
+      throw new Error(`SIE API error ${res.status}: ${text}`);
+    }
+  }
+
+  async createCluster(name: string, entryIds: string[]): Promise<ClusterRow> {
+    return this.request<ClusterRow>("/api/clusters", {
+      method: "POST",
+      body: { name, entry_ids: entryIds },
+    });
+  }
+
+  // ── Cluster methods ──────────────────────────────────────────────────
+
+  async listClusters(): Promise<{ clusters: ClusterRow[] }> {
+    return this.request<{ clusters: ClusterRow[] }>("/api/clusters");
+  }
+
+  async getCluster(slug: string): Promise<ClusterDetail> {
+    return this.request<ClusterDetail>(
+      `/api/clusters/${encodeURIComponent(slug)}`
+    );
+  }
+
+  async queryCluster(
+    slug: string,
+    query: string,
+    maxResults?: number
+  ): Promise<ClusterQueryResult> {
+    return this.request<ClusterQueryResult>(
+      `/api/clusters/${encodeURIComponent(slug)}/query`,
+      {
+        method: "POST",
+        body: { query, max_results: maxResults ?? 5 },
+      }
+    );
   }
 }

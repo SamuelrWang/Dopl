@@ -60,6 +60,8 @@ export interface QueryResponse {
     readme: string | null;
     agents_md: string | null;
     manifest: Record<string, unknown> | null;
+    source_platform: string | null;
+    created_at: string | null;
     relevance_explanation?: string;
   }[];
   synthesis?: {

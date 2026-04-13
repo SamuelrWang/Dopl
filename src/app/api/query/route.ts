@@ -35,6 +35,8 @@ async function handlePost(request: NextRequest) {
       readme: r.readme,
       agents_md: r.agents_md,
       manifest: r.manifest,
+      source_platform: r.source_platform,
+      created_at: r.created_at,
     }));
 
     // Optional LLM synthesis

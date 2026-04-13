@@ -1,8 +1,10 @@
 import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { searchEntries } from "@/lib/retrieval/search";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase";
+const supabase = supabaseAdmin();
 import { BUILDER_CHAT_SYSTEM_PROMPT } from "@/lib/prompts/chat-system";
+import { withExternalAuth } from "@/lib/auth/with-auth";
 import { config } from "dotenv";
 import { resolve } from "path";
 
@@ -145,10 +147,92 @@ async function executeTool(
   }
 }
 
-export async function POST(request: NextRequest) {
+/**
+ * Canvas context types — mirrors the CanvasContextPayload / ContextPanelDTO
+ * from cluster-context.ts on the client side. Defined here independently
+ * to keep the API route free of client-component imports.
+ */
+interface CanvasContextEntry {
+  kind: "entry";
+  entryId: string;
+  title?: string;
+  summary?: string | null;
+  readme?: string;
+  agentsMd?: string;
+}
+interface CanvasContextChat {
+  kind: "chat";
+  panelId: string;
+  title?: string;
+  messages: Array<{ role: string; content: string }>;
+}
+interface CanvasContextIngestion {
+  kind: "ingestion";
+  panelId: string;
+  url: string;
+  status: string;
+}
+type ContextPanelDTO = CanvasContextEntry | CanvasContextChat | CanvasContextIngestion;
+
+interface CanvasContextPayload {
+  scope: "cluster";
+  clusterName?: string;
+  panels: ContextPanelDTO[];
+}
+
+/**
+ * Build a system-prompt prefix that primes Claude with the panels
+ * loaded in the user's cluster. Handles entry, chat, and ingestion
+ * panel types. Runs BEFORE the tool-based flow so the model has
+ * cluster context inline.
+ */
+function buildCanvasContextPrefix(ctx: CanvasContextPayload): string {
+  if (!ctx.panels || ctx.panels.length === 0) return "";
+
+  const header = ctx.clusterName
+    ? `You are currently chatting inside a cluster named "${ctx.clusterName}". The cluster contains the following panels — treat them as loaded context the user has already pulled into this conversation:\n`
+    : `You are currently chatting inside a cluster. The cluster contains the following panels — treat them as loaded context the user has already pulled into this conversation:\n`;
+
+  const blocks: string[] = [header];
+
+  for (const p of ctx.panels) {
+    const parts: string[] = [];
+    switch (p.kind) {
+      case "entry":
+        parts.push(`── Entry: ${p.title || "Untitled"} (entry_id: ${p.entryId})`);
+        if (p.summary) parts.push(`Summary: ${p.summary}`);
+        if (p.readme) parts.push(`README:\n${p.readme}`);
+        if (p.agentsMd) parts.push(`agents.md:\n${p.agentsMd}`);
+        break;
+      case "chat":
+        parts.push(`── Chat: ${p.title || "Untitled Chat"}`);
+        if (p.messages.length > 0) {
+          parts.push("Recent messages:");
+          for (const m of p.messages) {
+            parts.push(`  ${m.role}: ${m.content}`);
+          }
+        } else {
+          parts.push("(no messages yet)");
+        }
+        break;
+      case "ingestion":
+        parts.push(`── Ingestion: ${p.url || "(no URL)"} (status: ${p.status})`);
+        break;
+    }
+    blocks.push(parts.join("\n"));
+  }
+
+  blocks.push(
+    "When the user asks about things in the cluster, prefer answering from the context above. You can still call search_knowledge_base and get_entry_details for entries OUTSIDE the cluster when relevant."
+  );
+  return blocks.join("\n\n") + "\n\n";
+}
+
+async function handlePost(request: NextRequest) {
   try {
     const body = await request.json();
     const messages: Anthropic.MessageParam[] = body.messages || [];
+    const canvasContext: CanvasContextPayload | undefined = body.canvasContext;
 
     if (messages.length === 0) {
       return new Response(
@@ -168,6 +252,11 @@ export async function POST(request: NextRequest) {
     const client = new Anthropic({ apiKey: key });
     const encoder = new TextEncoder();
 
+    // Compose system prompt: canvas context (if any) + builder prompt.
+    const systemPrompt = canvasContext
+      ? buildCanvasContextPrefix(canvasContext) + BUILDER_CHAT_SYSTEM_PROMPT
+      : BUILDER_CHAT_SYSTEM_PROMPT;
+
     const stream = new ReadableStream({
       async start(controller) {
         function send(event: Record<string, unknown>) {
@@ -181,7 +270,11 @@ export async function POST(request: NextRequest) {
         }
 
         try {
-          // Claude conversation loop — handle tool calls
+          // Claude conversation loop — handle tool calls across rounds.
+          // Each round opens a real streaming response (client.messages.stream)
+          // so text_delta events flow to the browser as Claude emits them,
+          // giving a genuine typewriter effect instead of the entire message
+          // landing at once.
           let currentMessages = [...messages];
           let iterations = 0;
           const MAX_ITERATIONS = 5; // Prevent infinite tool loops
@@ -189,82 +282,90 @@ export async function POST(request: NextRequest) {
           while (iterations < MAX_ITERATIONS) {
             iterations++;
 
-            const response = await client.messages.create({
+            const modelStream = client.messages.stream({
               model: process.env.LLM_MODEL || "claude-sonnet-4-20250514",
               max_tokens: 8192,
-              system: BUILDER_CHAT_SYSTEM_PROMPT,
+              system: systemPrompt,
               tools: TOOLS,
               messages: currentMessages,
             });
 
-            let hasToolUse = false;
-            const toolResults: Anthropic.ToolResultBlockParam[] = [];
-
-            for (const block of response.content) {
-              if (block.type === "text") {
-                // Stream text in chunks for a streaming feel
-                const words = block.text.split(" ");
-                let chunk = "";
-                for (let i = 0; i < words.length; i++) {
-                  chunk += (i === 0 ? "" : " ") + words[i];
-                  if (chunk.length > 20 || i === words.length - 1) {
-                    send({ type: "text_delta", content: chunk });
-                    chunk = "";
-                  }
-                }
-              } else if (block.type === "tool_use") {
-                hasToolUse = true;
-
-                // Notify client about tool call
-                send({
-                  type: "tool_call",
-                  name: block.name,
-                  input: block.input,
-                });
-
-                // Execute tool
-                const toolOutput = await executeTool(
-                  block.name,
-                  block.input as Record<string, unknown>
-                );
-
-                // Send entry references to client for inline rendering
-                if (toolOutput.entries) {
-                  for (const entry of toolOutput.entries) {
-                    send({ type: "entry_reference", entry });
-                  }
-                }
-
-                // Notify client about tool result
-                const summary =
-                  block.name === "search_knowledge_base"
-                    ? `Found ${(toolOutput.entries || []).length} relevant setup(s)`
-                    : `Loaded entry details`;
-                send({
-                  type: "tool_result",
-                  name: block.name,
-                  summary,
-                });
-
-                toolResults.push({
-                  type: "tool_result",
-                  tool_use_id: block.id,
-                  content: toolOutput.result,
-                });
+            // Iterate the raw event stream. We care about two things:
+            //   1. text_delta events → forward to the browser immediately
+            //      so each token shows up in the UI as it arrives.
+            //   2. the final message — needed AFTER the stream ends to
+            //      pull out tool_use blocks and decide whether to loop.
+            for await (const event of modelStream) {
+              if (
+                event.type === "content_block_delta" &&
+                event.delta.type === "text_delta"
+              ) {
+                send({ type: "text_delta", content: event.delta.text });
               }
             }
 
-            // If there were tool calls, feed results back and continue loop
+            // Now that the stream is exhausted we can ask for the final,
+            // fully-assembled message — this is cheap because the SDK has
+            // been accumulating blocks internally as events flowed.
+            const finalMessage = await modelStream.finalMessage();
+
+            // Handle any tool_use blocks AFTER the text has already streamed
+            // out. Tool calls happen at the end of a turn, so the user has
+            // already seen any accompanying commentary by the time we get
+            // here.
+            let hasToolUse = false;
+            const toolResults: Anthropic.ToolResultBlockParam[] = [];
+
+            for (const block of finalMessage.content) {
+              if (block.type !== "tool_use") continue;
+              hasToolUse = true;
+
+              send({
+                type: "tool_call",
+                name: block.name,
+                input: block.input,
+              });
+
+              const toolOutput = await executeTool(
+                block.name,
+                block.input as Record<string, unknown>
+              );
+
+              if (toolOutput.entries) {
+                for (const entry of toolOutput.entries) {
+                  send({ type: "entry_reference", entry });
+                }
+              }
+
+              const summary =
+                block.name === "search_knowledge_base"
+                  ? `Found ${(toolOutput.entries || []).length} relevant setup(s)`
+                  : `Loaded entry details`;
+              send({
+                type: "tool_result",
+                name: block.name,
+                summary,
+              });
+
+              toolResults.push({
+                type: "tool_result",
+                tool_use_id: block.id,
+                content: toolOutput.result,
+              });
+            }
+
+            // If there were tool calls, feed results back into the next
+            // round so Claude can respond with the tool output in context.
             if (hasToolUse) {
               currentMessages = [
                 ...currentMessages,
-                { role: "assistant", content: response.content },
+                { role: "assistant", content: finalMessage.content },
                 { role: "user", content: toolResults },
               ];
               continue;
             }
 
-            // No tool calls — we're done
+            // No tool calls — we're done.
             break;
           }
 
@@ -294,3 +395,5 @@ export async function POST(request: NextRequest) {
     });
   }
 }
+
+export const POST = withExternalAuth(handlePost);

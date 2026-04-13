@@ -5,6 +5,7 @@ import {
   getFileContent,
   getRepoMeta,
 } from "@/lib/github";
+import { withExternalAuth } from "@/lib/auth/with-auth";
 
 /**
  * GET /api/github/contents?repo=owner/repo&path=&type=dir|file&ref=
@@ -12,7 +13,7 @@ import {
  * Public endpoint for browsing GitHub repo files.
  * Uses server-side GITHUB_TOKEN for higher rate limits.
  */
-export async function GET(request: NextRequest) {
+async function handleGet(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const repoParam = searchParams.get("repo") || "";
   const path = searchParams.get("path") || "";
@@ -80,3 +81,5 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+
+export const GET = withExternalAuth(handleGet);

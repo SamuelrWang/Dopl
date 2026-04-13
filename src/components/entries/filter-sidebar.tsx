@@ -1,14 +1,6 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { GlassCard, GlassDivider, MonoLabel } from "@/components/design";
 
 interface FilterSidebarProps {
   useCase: string;
@@ -35,6 +27,18 @@ const useCases = [
 
 const complexities = ["all", "simple", "moderate", "complex", "advanced"];
 
+const complexityAccent: Record<string, string> = {
+  simple: "var(--mint)",
+  moderate: "var(--gold)",
+  complex: "var(--coral)",
+  advanced: "var(--coral)",
+};
+
+function formatLabel(value: string): string {
+  if (value === "all") return "All";
+  return value.replace(/_/g, " ");
+}
+
 export function FilterSidebar({
   useCase,
   complexity,
@@ -42,45 +46,77 @@ export function FilterSidebar({
   onComplexityChange,
   onReset,
 }: FilterSidebarProps) {
+  const hasActiveFilters = useCase !== "all" || complexity !== "all";
+
   return (
-    <div className="space-y-4 p-4 border rounded-lg">
-      <h3 className="font-semibold">Filters</h3>
-
-      <div>
-        <Label>Use Case</Label>
-        <Select value={useCase} onValueChange={onUseCaseChange}>
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {useCases.map((uc) => (
-              <SelectItem key={uc} value={uc}>
-                {uc === "all" ? "All" : uc.replace(/_/g, " ")}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+    <GlassCard variant="subtle" label="Filters" labelDivider>
+      {/* Use Case filter */}
+      <div className="space-y-2">
+        <MonoLabel tone="muted">Use Case</MonoLabel>
+        <div className="space-y-0.5">
+          {useCases.map((uc) => {
+            const isActive = uc === useCase;
+            return (
+              <button
+                key={uc}
+                onClick={() => onUseCaseChange(uc)}
+                className={`w-full text-left px-2 py-1.5 font-mono text-[10px] uppercase tracking-wide rounded-[3px] transition-colors ${
+                  isActive
+                    ? "bg-white/[0.08] text-white/90 border border-white/[0.15]"
+                    : "text-white/40 hover:text-white/70 hover:bg-white/[0.04] border border-transparent"
+                }`}
+              >
+                {formatLabel(uc)}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      <div>
-        <Label>Complexity</Label>
-        <Select value={complexity} onValueChange={onComplexityChange}>
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {complexities.map((c) => (
-              <SelectItem key={c} value={c}>
-                {c === "all" ? "All" : c}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <GlassDivider className="my-4" />
+
+      {/* Complexity filter */}
+      <div className="space-y-2">
+        <MonoLabel tone="muted">Complexity</MonoLabel>
+        <div className="space-y-0.5">
+          {complexities.map((c) => {
+            const isActive = c === complexity;
+            const accent = c !== "all" ? complexityAccent[c] : undefined;
+            return (
+              <button
+                key={c}
+                onClick={() => onComplexityChange(c)}
+                className={`w-full flex items-center gap-2 text-left px-2 py-1.5 font-mono text-[10px] uppercase tracking-wide rounded-[3px] transition-colors ${
+                  isActive
+                    ? "bg-white/[0.08] text-white/90 border border-white/[0.15]"
+                    : "text-white/40 hover:text-white/70 hover:bg-white/[0.04] border border-transparent"
+                }`}
+              >
+                {accent && (
+                  <span
+                    className="w-0.5 h-3 rounded-full shrink-0"
+                    style={{ backgroundColor: accent }}
+                    aria-hidden
+                  />
+                )}
+                <span>{formatLabel(c)}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      <Button variant="ghost" size="sm" onClick={onReset} className="w-full">
-        Reset Filters
-      </Button>
-    </div>
+      {hasActiveFilters && (
+        <>
+          <GlassDivider className="my-4" />
+          <button
+            onClick={onReset}
+            className="w-full h-8 font-mono text-[10px] uppercase tracking-wide bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.08] hover:border-white/[0.15] rounded-[3px] text-white/60 hover:text-white/90 transition-all"
+          >
+            Reset Filters
+          </button>
+        </>
+      )}
+    </GlassCard>
   );
 }

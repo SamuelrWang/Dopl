@@ -187,6 +187,109 @@ The `packages/mcp-server/` directory contains an MCP server that wraps the SIE A
 
 Tools: `search_setups`, `get_setup`, `build_solution`, `list_setups`.
 
+## Design System
+
+The app uses a **liquid glass** design system ported from openclaw-cloud. The aesthetic: deep black body (`#0a0a0f`) with a mosaic SVG grid overlay, frosted translucent panels with backdrop blur, sharp-cornered navigation (`rounded-[3px]`), and meticulously tuned hairline borders (`white/10`).
+
+### Canonical primitives (in `src/components/design/`)
+
+Use these first when building any new page:
+
+- **`GlassCard`** — Frosted translucent panel with three variants:
+  - `default`: `backdrop-blur-[20px]` / `bg-white/[0.12]` / `border-white/[0.2]`
+  - `elevated`: `backdrop-blur-[30px]` / `bg-white/[0.16]` / `border-white/[0.28]` (for modals)
+  - `subtle`: `backdrop-blur-[12px]` / `bg-white/[0.08]` / `border-white/[0.12]` (for nested use)
+  - All use `rounded-2xl` and have a top-edge specular highlight gradient
+  - Optional `label` prop renders a `MonoLabel` at the top, with optional `accentColor` bar
+- **`GlassNavbar`** — Sharp-cornered navigation bar (`rounded-[3px]`, not `rounded-full`). Fixed heights: 48px mobile, 56px desktop. Takes `leading`, `children`, `trailing` slots.
+- **`GlassNavLink`** — Nav link with active/inactive states. Active: `text-white/90 font-semibold`. Inactive: `text-white/50 hover:text-white/80`.
+- **`StatusDot`** — Square (`rounded-none`) 2x2 status indicator. States: `online` (emerald), `connecting` (amber pulsing), `offline` (red), `neutral` (white/40). Includes optional mono uppercase label.
+- **`MonoLabel`** — The repeating label pattern: `font-mono text-[10px] uppercase tracking-wide`. Supports `tone` (default/strong/muted) and optional `accentColor` bar.
+- **`GlassDivider`** — Soft gradient horizontal separator for use inside GlassCards.
+
+### Complementary primitives
+
+Use sparingly for hero/brand moments — the glass language is primary:
+
+- **`Orb`** — Glowing cyan logo orb (sm/md/lg/xl, subtle/default/strong glow)
+- **`GlowText`** — Heading text with accent glow halo
+- **`Surface`** / **`Pill`** / **`PillBar`** — Alternative shape language (rounded-pill)
+- **`BackgroundGrid`** — Blueprint-style background (alternative to `.mosaic-bg`)
+
+### Color tokens
+
+**openclaw palette** (exact values in `globals.css`):
+- `--paper: #0d0d12` — main surface
+- `--forest: #e0e0e0` — primary text
+- `--grid-line: #a0a0a0` — secondary text
+- `--coral: #FF8C69` — alerts/errors
+- `--mint: #9EFFBF` — success
+- `--gold: #F4D35E` — warnings
+- `--body-bg: #0a0a0f` — body background
+
+Applied to body via `.mosaic-bg` class (in `layout.tsx`), which renders the exact SVG grid pattern from openclaw.
+
+### Typography
+
+- **Display** — Space Grotesk (`var(--font-display)`) — for headings and branding
+- **Body** — Geist Sans (`var(--font-geist-sans)`) — default body text
+- **Mono** — JetBrains Mono (`var(--font-mono)`) — for labels, status text, code
+
+### UI/UX Pro Max guardrails
+
+The design system is informed by the `ui-ux-pro-max` skill. Key principles enforced:
+
+**Accessibility & Touch (CRITICAL):**
+- Touch targets ≥44×44px, 8px+ spacing
+- Text contrast ≥4.5:1 (AA); large text ≥3:1
+- Visible focus rings, aria-labels on icon-only buttons
+- Never convey information with color alone
+- Respect `prefers-reduced-motion`
+
+**Motion (MEDIUM):**
+- Micro-interactions: 150-300ms
+- Complex transitions: ≤400ms
+- Exit animations ~60-70% of enter duration
+- Only animate `transform` and `opacity`
+- `ease-out` for entering, `ease-in` for exiting
+
+**Sharp Edges Discipline:**
+- Default: `rounded-none` (especially status dots)
+- Navbars, small panels: `rounded-[3px]`
+- GlassCards: `rounded-2xl` (the only component with significant rounding)
+- Icons: SVG only, never emoji
+- Hairline borders: 1px `white/10` standard
+
+### Reference
+
+Visit **`/design`** for the full showcase: all primitives, variants, the exact openclaw palette, and UI/UX Pro Max guardrails documented inline.
+
+**Backward compat:** The shadcn `ui/` components in `src/components/ui/` still work — they're aliased to the design tokens via shadcn variable names. Migrate existing pages to GlassCard incrementally.
+
+## Canvas + Panels (Ingest Page)
+
+The `/ingest` page is now a draggable infinite canvas where each ingestion conversation lives in its own movable panel.
+
+**Files** (all in `src/components/canvas/`):
+- `types.ts` — `Panel` discriminated union (currently only `ChatPanelData`), `CanvasState`, action types
+- `canvas-store.tsx` — `CanvasProvider` (Context + reducer), `useCanvas` hook, debounced localStorage persistence (key `sie:canvas:state`), helpers `computeNewPanelPosition` / `nextPanelIdString`
+- `canvas-grid-sync.tsx` — writes `--canvas-offset-x/y` CSS variables on `<body>` so the body's grid background pans with the camera
+- `canvas.tsx` — pannable viewport, pointer-driven camera; renders panels inside a transformed "world" div
+- `canvas-panel.tsx` — generic draggable wrapper with header drag handle + close button; routes to per-type body components
+- `panels/chat-panel.tsx` — chat conversation body with its own message list + textarea
+- `use-panel-ingestion.ts` — `usePanelIngestion(panel)` hook + standalone `startPanelIngestion()` function. Handles SSE lifecycle and reattachment after page reload via the server's event buffer
+- `fixed-input-bar.tsx` — bottom-fixed dark glass textarea that spawns a new ChatPanel for each URL
+
+**Coordinate system:** panels store `{ x, y }` in **world coordinates**. The canvas viewport translates the world by `camera.{x, y}` to render. New panels spawn at the camera viewport center.
+
+**Persistence:** The full canvas state (camera, panels, messages) saves to localStorage on every dispatch (debounced 500ms). On reload, panels reappear at their world positions and any in-flight ingestion reconnects to its SSE stream — the server-side `ingestionProgress.subscribe(id)` buffer in `src/lib/ingestion/progress.ts` replays missed events so the panel catches up automatically.
+
+**Adding a new panel type:**
+1. Add the type's data interface to `src/components/canvas/types.ts` and add it to the `Panel` union
+2. Add a corresponding `CREATE_*_PANEL` reducer case in `canvas-store.tsx`
+3. Create `src/components/canvas/panels/<name>-panel.tsx` for the body component
+4. Add a `panel.type === "<name>"` branch in `canvas-panel.tsx`'s body section
+
 ## Common Tasks
 
 **Add a new social media platform extractor:**

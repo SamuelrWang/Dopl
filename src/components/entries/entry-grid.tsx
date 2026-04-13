@@ -1,6 +1,7 @@
 "use client";
 
 import { EntryCard } from "./entry-card";
+import { GlassCard } from "@/components/design";
 
 interface EntryGridEntry {
   id: string;
@@ -22,12 +23,14 @@ interface EntryGridProps {
 export function EntryGrid({ entries }: EntryGridProps) {
   if (entries.length === 0) {
     return (
-      <div className="text-center py-12 text-muted-foreground">
-        <p className="text-lg">No entries yet</p>
-        <p className="text-sm mt-1">
+      <GlassCard variant="subtle" className="text-center py-16">
+        <p className="font-mono text-[10px] uppercase tracking-wide text-white/40">
+          No entries yet
+        </p>
+        <p className="text-xs text-white/30 mt-2">
           Start by ingesting your first setup post
         </p>
-      </div>
+      </GlassCard>
     );
   }
 

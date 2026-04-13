@@ -1,9 +1,10 @@
 import { NextRequest } from "next/server";
 import { ingestionProgress } from "@/lib/ingestion/progress";
+import { withExternalAuth } from "@/lib/auth/with-auth";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(
+async function handleGet(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -19,3 +20,5 @@ export async function GET(
     },
   });
 }
+
+export const GET = withExternalAuth(handleGet);
