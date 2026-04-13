@@ -61,7 +61,10 @@ export async function middleware(request: NextRequest) {
 
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    url.searchParams.set("redirectTo", pathname);
+    // Only add redirectTo if it's not the default landing page
+    if (pathname !== "/canvas") {
+      url.searchParams.set("redirectTo", pathname);
+    }
     return NextResponse.redirect(url);
   }
 

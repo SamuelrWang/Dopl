@@ -44,8 +44,16 @@ import type {
 } from "@/components/ingest/chat-message";
 import { useCanvasSync } from "./use-canvas-sync";
 
-const STORAGE_KEY = "sie:canvas:state";
+const STORAGE_KEY_PREFIX = "sie:canvas:state";
+const ACTIVE_USER_KEY = "sie:canvas:active-user";
 const SAVE_DEBOUNCE_MS = 500;
+
+/** Build the user-scoped localStorage key for canvas state. */
+function getStorageKey(userId?: string): string {
+  const uid = userId || (typeof window !== "undefined" ? localStorage.getItem(ACTIVE_USER_KEY) : null);
+  return uid ? `${STORAGE_KEY_PREFIX}:${uid}` : STORAGE_KEY_PREFIX;
+}
+
 
 // ── Cluster helpers ────────────────────────────────────────────────
 
@@ -677,12 +685,31 @@ function migrateAddClusters(state: CanvasState): CanvasState {
   };
 }
 
-function loadInitialState(): CanvasState {
+function loadInitialState(userId?: string): CanvasState {
   if (typeof window === "undefined") {
     return ensureConnectionPanel(INITIAL_CANVAS_STATE);
   }
+
+  // Track the active user so add-to-canvas.ts can find the right key
+  if (userId) {
+    localStorage.setItem(ACTIVE_USER_KEY, userId);
+  }
+
+  // Migrate: if a user-scoped key doesn't exist but the old unscoped key does,
+  // move the data over (one-time migration for existing users).
+  const storageKey = getStorageKey(userId);
+  let raw = localStorage.getItem(storageKey);
+  if (!raw && userId) {
+    const legacyRaw = localStorage.getItem(STORAGE_KEY_PREFIX);
+    if (legacyRaw) {
+      // Migrate legacy unscoped state to the user-scoped key
+      localStorage.setItem(storageKey, legacyRaw);
+      localStorage.removeItem(STORAGE_KEY_PREFIX);
+      raw = legacyRaw;
+    }
+  }
+
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return ensureConnectionPanel(INITIAL_CANVAS_STATE);
     // Parse loosely — the TS CanvasState type is narrow (version: 2) but
     // localStorage can still hold a pre-migration v1 blob. Omit the
@@ -705,11 +732,16 @@ function loadInitialState(): CanvasState {
 
 interface CanvasProviderProps {
   children: ReactNode;
+  userId?: string;
 }
 
-export function CanvasProvider({ children }: CanvasProviderProps) {
+export function CanvasProvider({ children, userId }: CanvasProviderProps) {
   // useReducer with lazy initializer for SSR-safe hydration on first client mount
-  const [state, dispatch] = useReducer(reducer, undefined, loadInitialState);
+  const [state, dispatch] = useReducer(
+    reducer,
+    userId,
+    (uid) => loadInitialState(uid)
+  );
 
   // Stable ref that always points to the latest state. Provided via
   // CanvasStateRefContext so memoised children (e.g. CanvasPanel) can read
@@ -720,13 +752,14 @@ export function CanvasProvider({ children }: CanvasProviderProps) {
   }, [state]);
 
   // Debounced persistence on every state change
+  const storageKey = getStorageKey(userId);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        localStorage.setItem(storageKey, JSON.stringify(state));
       } catch {
         // localStorage may be full or unavailable; ignore
       }
@@ -734,7 +767,7 @@ export function CanvasProvider({ children }: CanvasProviderProps) {
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
-  }, [state]);
+  }, [state, storageKey]);
 
   return (
     <CanvasContext.Provider value={{ state, dispatch }}>

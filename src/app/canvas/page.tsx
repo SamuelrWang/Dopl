@@ -6,6 +6,7 @@ import { CanvasProvider } from "@/components/canvas/canvas-store";
 import { CanvasGridSync } from "@/components/canvas/canvas-grid-sync";
 import { Canvas } from "@/components/canvas/canvas";
 import { FixedInputBar } from "@/components/canvas/fixed-input-bar";
+import { getSupabaseBrowser } from "@/lib/supabase-browser";
 
 /**
  * The canvas renders via a portal to document.body so it escapes the root
@@ -26,9 +27,19 @@ function CanvasPortal() {
   );
 }
 
-export default function IngestPage() {
+export default function CanvasPage() {
+  const [userId, setUserId] = useState<string | undefined>();
+
+  useEffect(() => {
+    getSupabaseBrowser()
+      .auth.getUser()
+      .then(({ data }: { data: { user: { id: string } | null } }) => {
+        if (data.user) setUserId(data.user.id);
+      });
+  }, []);
+
   return (
-    <CanvasProvider>
+    <CanvasProvider userId={userId}>
       <CanvasGridSync />
       <CanvasPortal />
       <FixedInputBar />

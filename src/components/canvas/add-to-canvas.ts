@@ -5,7 +5,7 @@
  * Used by the browse page's EntryCard "add to canvas" button. Because the
  * browse page isn't wrapped in <CanvasProvider>, we can't use useCanvas()
  * here — so we read/write the same localStorage key the provider hydrates
- * from. On the user's next visit to /ingest, the panel will be there.
+ * from. On the user's next visit to /canvas, the panel will be there.
  *
  * Two functions:
  *  - fetchFullEntry(entryId): loads the full entry from /api/entries/{id},
@@ -21,7 +21,15 @@ import {
   INITIAL_CANVAS_STATE,
 } from "./types";
 
-const STORAGE_KEY = "sie:canvas:state";
+const ACTIVE_USER_KEY = "sie:canvas:active-user";
+const STORAGE_KEY_PREFIX = "sie:canvas:state";
+
+/** Get the user-scoped storage key, matching canvas-store.tsx logic. */
+function getStorageKey(): string {
+  if (typeof window === "undefined") return STORAGE_KEY_PREFIX;
+  const uid = localStorage.getItem(ACTIVE_USER_KEY);
+  return uid ? `${STORAGE_KEY_PREFIX}:${uid}` : STORAGE_KEY_PREFIX;
+}
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -97,7 +105,7 @@ function computeSpawnPosition(
 function loadCanvasState(): CanvasState {
   if (typeof window === "undefined") return INITIAL_CANVAS_STATE;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(getStorageKey());
     if (!raw) return INITIAL_CANVAS_STATE;
     // Parse as unknown first — the TS CanvasState type is narrow
     // (version: 2) but localStorage can still hold a pre-migration v1 blob.
@@ -118,7 +126,7 @@ function loadCanvasState(): CanvasState {
 function saveCanvasState(state: CanvasState): void {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    localStorage.setItem(getStorageKey(), JSON.stringify(state));
   } catch {
     // Storage quota exceeded or unavailable — swallow
   }
@@ -149,7 +157,7 @@ export async function fetchFullEntry(
  * (user may want multiple copies of the same entry).
  *
  * Since this runs outside the React provider, changes won't be visible until
- * the /ingest page hydrates from localStorage on its next mount.
+ * the /canvas page hydrates from localStorage on its next mount.
  */
 export function addEntryPanelToCanvas(entry: FullEntryResponse): boolean {
   if (typeof window === "undefined") return false;

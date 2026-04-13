@@ -156,7 +156,7 @@ export default function DesignSystemPage() {
             trailing={<StatusDot state="online" label="Live" />}
           >
             <GlassNavLink href="/design">Design</GlassNavLink>
-            <GlassNavLink href="/ingest">Ingest</GlassNavLink>
+            <GlassNavLink href="/canvas">Canvas</GlassNavLink>
             <GlassNavLink href="/entries">Browse</GlassNavLink>
             <GlassNavLink href="/build">Builder</GlassNavLink>
           </GlassNavbar>

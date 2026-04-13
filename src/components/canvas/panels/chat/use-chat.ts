@@ -99,7 +99,7 @@ export function useChat({ panel }: UseChatOptions) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             messages: history,
-            ...(canvasContext ? { canvasContext } : {}),
+            canvasContext,
           }),
           signal: controller.signal,
         });

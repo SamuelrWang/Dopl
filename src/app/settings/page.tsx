@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getUser } from "@/lib/supabase-server";
 import { supabaseAdmin as getAdmin } from "@/lib/supabase";
 import Link from "next/link";
+import { DeleteAccount } from "./delete-account";
 
 export default async function SettingsPage() {
   const user = await getUser();
@@ -50,6 +51,8 @@ export default async function SettingsPage() {
           </Link>
         </div>
       </div>
+
+      <DeleteAccount />
     </div>
   );
 }

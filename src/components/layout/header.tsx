@@ -39,7 +39,7 @@ function BuilderIcon() {
 }
 
 const navItems: { href: string; label: string; icon: React.ReactNode }[] = [
-  { href: "/ingest", label: "Ingest", icon: <InboxIcon /> },
+  { href: "/canvas", label: "Canvas", icon: <InboxIcon /> },
   { href: "/entries", label: "Browse", icon: <BrowseIcon /> },
   { href: "/build", label: "Builder", icon: <BuilderIcon /> },
 ];
@@ -61,7 +61,7 @@ export function Header() {
       <PillBar
         className="!bg-black/[0.25] !border-white/[0.1] !shadow-[0_4px_16px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-saturate-[1.4] !backdrop-blur-[12px]"
         leading={
-          <Link href="/entries" aria-label="Setup Intelligence Engine">
+          <Link href="/canvas" aria-label="Setup Intelligence Engine">
             <Orb size="md" glow="strong" />
           </Link>
         }

@@ -31,6 +31,13 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "Setup Intelligence Engine",
   description: "AI-powered knowledge base for automation setups",
+  icons: {
+    icon: [
+      { url: "/favicons/favicon.ico" },
+      { url: "/favicons/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+    ],
+    apple: "/favicons/apple-touch-icon.png",
+  },
 };
 
 export default function RootLayout({

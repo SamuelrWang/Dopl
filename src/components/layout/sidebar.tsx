@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 const sidebarItems = [
-  { href: "/ingest", label: "Ingest", icon: "📥" },
+  { href: "/canvas", label: "Canvas", icon: "📥" },
   { href: "/entries", label: "Browse", icon: "📚" },
   { href: "/build", label: "Builder", icon: "🔨" },
 ];

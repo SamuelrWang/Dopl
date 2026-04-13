@@ -55,8 +55,8 @@ export type ContextPanelDTO =
     };
 
 export interface CanvasContextPayload {
-  scope: "cluster";
-  clusterName: string;
+  scope: "cluster" | "canvas";
+  clusterName?: string;
   panels: ContextPanelDTO[];
 }
 
@@ -156,22 +156,27 @@ function estimateDTOChars(dto: ContextPanelDTO): number {
 // ── Public API ───────────────────────────────────────────────────────
 
 /**
- * Build the context payload for a chat panel. Returns null when the
- * panel is not inside any cluster (unclustered chats send no context).
+ * Build the context payload for a chat panel.
+ *
+ * - If the panel lives inside a cluster → scope "cluster", include only
+ *   sibling panels in that cluster (existing behavior).
+ * - If the panel is NOT in a cluster → scope "canvas", include ALL
+ *   panels on the canvas so the AI has full awareness of the workspace.
  */
 export function buildCanvasContext(
   panelId: string,
   state: CanvasState
-): CanvasContextPayload | null {
+): CanvasContextPayload {
   const cluster = state.clusters.find((c) => c.panelIds.includes(panelId));
-  if (!cluster) return null;
 
-  const memberIds = new Set(cluster.panelIds);
+  const candidatePanels = cluster
+    ? state.panels.filter((p) => new Set(cluster.panelIds).has(p.id))
+    : state.panels;
+
   const panels: ContextPanelDTO[] = [];
   let totalChars = 0;
 
-  for (const p of state.panels) {
-    if (!memberIds.has(p.id)) continue;
+  for (const p of candidatePanels) {
     const dto = serializePanel(p, panelId);
     if (!dto) continue;
 
@@ -182,9 +187,16 @@ export function buildCanvasContext(
     totalChars += chars;
   }
 
+  if (cluster) {
+    return {
+      scope: "cluster",
+      clusterName: cluster.name,
+      panels,
+    };
+  }
+
   return {
-    scope: "cluster",
-    clusterName: cluster.name,
+    scope: "canvas",
     panels,
   };
 }

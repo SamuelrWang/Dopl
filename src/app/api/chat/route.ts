@@ -175,7 +175,7 @@ interface CanvasContextIngestion {
 type ContextPanelDTO = CanvasContextEntry | CanvasContextChat | CanvasContextIngestion;
 
 interface CanvasContextPayload {
-  scope: "cluster";
+  scope: "cluster" | "canvas";
   clusterName?: string;
   panels: ContextPanelDTO[];
 }
@@ -189,9 +189,14 @@ interface CanvasContextPayload {
 function buildCanvasContextPrefix(ctx: CanvasContextPayload): string {
   if (!ctx.panels || ctx.panels.length === 0) return "";
 
-  const header = ctx.clusterName
-    ? `You are currently chatting inside a cluster named "${ctx.clusterName}". The cluster contains the following panels — treat them as loaded context the user has already pulled into this conversation:\n`
-    : `You are currently chatting inside a cluster. The cluster contains the following panels — treat them as loaded context the user has already pulled into this conversation:\n`;
+  let header: string;
+  if (ctx.scope === "canvas") {
+    header = `The user's canvas currently contains the following panels. You can see everything on their canvas — use this context to answer questions about what they're looking at, reference specific entries, and help them build on what they have:\n`;
+  } else if (ctx.clusterName) {
+    header = `You are currently chatting inside a cluster named "${ctx.clusterName}". The cluster contains the following panels — treat them as loaded context the user has already pulled into this conversation:\n`;
+  } else {
+    header = `You are currently chatting inside a cluster. The cluster contains the following panels — treat them as loaded context the user has already pulled into this conversation:\n`;
+  }
 
   const blocks: string[] = [header];
 
@@ -223,7 +228,9 @@ function buildCanvasContextPrefix(ctx: CanvasContextPayload): string {
   }
 
   blocks.push(
-    "When the user asks about things in the cluster, prefer answering from the context above. You can still call search_knowledge_base and get_entry_details for entries OUTSIDE the cluster when relevant."
+    ctx.scope === "canvas"
+      ? "When the user asks about what's on their canvas or references panels they can see, answer from the context above. You can still call search_knowledge_base and get_entry_details for entries NOT on the canvas when relevant."
+      : "When the user asks about things in the cluster, prefer answering from the context above. You can still call search_knowledge_base and get_entry_details for entries OUTSIDE the cluster when relevant."
   );
   return blocks.join("\n\n") + "\n\n";
 }
