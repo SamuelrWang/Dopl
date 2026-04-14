@@ -74,14 +74,14 @@ export default function ApiKeysPage() {
   const effectiveKey = newKeyPlaintext || (activeKeys[0] ? `${activeKeys[0].key_prefix}...` : "YOUR_API_KEY");
   const hasKey = activeKeys.length > 0 || !!newKeyPlaintext;
 
-  const cliCommand = `claude mcp add setup-intelligence --scope user --transport stdio -e SIE_BASE_URL=${baseUrl} -- npx @sie/mcp-server --api-key ${effectiveKey}`;
+  const cliCommand = `claude mcp add setup-intelligence --scope user --transport stdio -e SIE_BASE_URL=${baseUrl} -- npx @dopl/mcp-server --api-key ${effectiveKey}`;
 
   const desktopConfig = JSON.stringify(
     {
       mcpServers: {
         "setup-intelligence": {
           command: "npx",
-          args: ["@sie/mcp-server", "--api-key", effectiveKey],
+          args: ["@dopl/mcp-server", "--api-key", effectiveKey],
           env: { SIE_BASE_URL: baseUrl },
         },
       },

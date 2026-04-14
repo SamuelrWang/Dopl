@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { CommunityCard } from "@/components/community/community-card";
+import type { PublishedClusterSummary } from "@/lib/community/types";
 import {
   Monitor,
   Settings,
@@ -20,11 +22,12 @@ import {
 /*  Reusable prompt input (hero + final CTA)                          */
 /* ──────────────────────────────────────────────────────────────────── */
 const ROTATING_PROMPTS = [
-  "Paste a link to an X post...",
-  "Describe your automation workflow...",
-  "Connect my CRM to Slack...",
-  "Build an AI agent that monitors...",
-  "Set up a webhook pipeline...",
+  "Paste an X post to ingest it...",
+  "Build me an automation for LinkedIn lead gen...",
+  "What Claude Code configs exist for deep research?",
+  "Compose a marketing automation with Supabase...",
+  "Ingest this GitHub repo: github.com/...",
+  "Search for MCP server setups...",
 ];
 
 function useTypingAnimation() {
@@ -90,7 +93,7 @@ function PromptInput() {
         <div className="relative p-4 pb-2 min-h-[100px]">
           {showPlaceholder && (
             <div className="absolute inset-0 p-4 pb-2 pointer-events-none text-left">
-              <span className="text-white/30 text-[15px] italic font-serif">
+              <span className="text-white/30 text-[15px]">
                 {animatedPlaceholder}
                 <span className="inline-block w-[2px] h-[16px] bg-white/40 ml-[1px] align-middle animate-pulse" />
               </span>
@@ -214,57 +217,69 @@ export default function Home() {
   }, []);
 
   const logos = [
-    "GlydeXP",
-    "RevivalBio",
-    "Stacker",
-    "NUROTEK",
-    "ASIA",
-    "Collab Creative",
-    "AI Enthusiasts",
-    "Feedoor",
+    "Claude Code",
+    "n8n",
+    "Cursor",
+    "Windsurf",
+    "OpenAI",
+    "Supabase",
+    "MCP",
+    "LangChain",
   ];
 
-  const showcaseProjects = [
-    { title: "Cinematic Cyber Warfare Visualizer", author: "samuel rondot", forks: "2" },
-    { title: "Earth Explorer Three D", author: "Baboo" },
-    { title: "Three Dimensional Street Fighter", author: "Baboo" },
-    { title: "Ai Virtual Employee Marketplace", author: "Baboo" },
-    { title: "Hr Payroll Management Platform", author: "Baboo" },
-    { title: "Dark Payments Dashboard Showcase", author: "samuel rondot" },
-    { title: "Stunning Content Platform Alternative", author: "samuel rondot" },
-    { title: "Ultra Luxury Yacht Experience", author: "samuel rondot" },
+  // Fetch community showcase data
+  const [communityItems, setCommunityItems] = useState<PublishedClusterSummary[]>([]);
+  useEffect(() => {
+    fetch("/api/community?limit=8&sort=popular")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.items?.length) setCommunityItems(data.items);
+      })
+      .catch(() => {});
+  }, []);
+
+  // Fallback placeholder data when no community posts exist yet
+  const showcaseEntries = [
+    { title: "Claude Code Deep Research Agent", author: "open source" },
+    { title: "n8n AI Marketing Automation", author: "community" },
+    { title: "Supabase + Stripe SaaS Starter", author: "open source" },
+    { title: "Multi-Agent Orchestration with MCP", author: "community" },
+    { title: "AI Cold Outreach Pipeline", author: "open source" },
+    { title: "Automated Content Repurposer", author: "community" },
+    { title: "RAG Pipeline with Pinecone", author: "open source" },
+    { title: "Claude Code Skill: Git Workflow", author: "community" },
   ];
 
   const faqItems = [
     {
-      question: "What is Capacity?",
+      question: "What is Dopl?",
       answer:
-        "Capacity is an AI-powered platform that helps you build full-stack web and mobile applications through natural conversation. Just describe what you want to build, and our AI Co-founder will help you create it.",
+        "Dopl is an intelligence layer that ingests, indexes, and composes the most cutting-edge AI setups, automations, and configurations from across the internet. It makes this knowledge accessible to your AI agents via MCP, chat, or direct search.",
     },
     {
-      question: "Do I need coding experience?",
+      question: "What can I ingest?",
       answer:
-        "No! Capacity is designed for everyone. Our AI handles all the technical complexity, so you can focus on describing your vision.",
+        "Anything \u2014 X posts, GitHub repos, YouTube videos, blog posts, Reddit threads, and more. Dopl automatically extracts structured knowledge, generates AI-ready instructions, and indexes everything for semantic search.",
     },
     {
-      question: "What technologies does Capacity use?",
+      question: "How does it connect to my AI tools?",
       answer:
-        "We generate production-ready full-stack applications using React, TypeScript, and Tailwind CSS for web, and React Native for mobile. Each app gets an Express backend and SQLite database. You own all the code \u2014 no vendor lock-in.",
+        "Dopl exposes an MCP server that connects directly to Claude Code, Claude Desktop, or any MCP-compatible agent. Once connected, your AI can search, retrieve, and compose solutions from the entire knowledge base without leaving your workflow.",
     },
     {
-      question: "Can I export my code?",
+      question: "What makes this different from bookmarks or notes?",
       answer:
-        "Yes! You own 100% of the code you create. Export to GitHub or download directly anytime.",
+        "Bookmarks are dead links. Dopl extracts the actual knowledge, preserves executable code verbatim, generates AI-optimized instructions, and makes it all semantically searchable. It\u2019s a living knowledge base, not a link dump.",
     },
     {
-      question: "How does pricing work?",
+      question: "Can I use it with tools other than Claude?",
       answer:
-        "We use a credit-based system. You pay for what you use, and credits never expire. Start free and upgrade when ready.",
+        "Yes. While MCP integration is optimized for Claude, Dopl\u2019s API and knowledge base work with any AI tool. The search, ingestion, and composition features are model-agnostic.",
     },
     {
-      question: "What's the difference between Vibe and Spec modes?",
+      question: "Is the knowledge base open?",
       answer:
-        "Vibe mode is for quick prototyping - just describe and build. Spec mode helps you plan first with detailed specifications before coding.",
+        "The core knowledge base is shared and community-maintained. You can also ingest private sources that only you can access. Think of it as a public library with a private shelf.",
     },
   ];
 
@@ -358,37 +373,37 @@ export default function Home() {
           {/* Pill */}
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/[0.12] bg-white/[0.04] mb-8">
             <span className="text-white/70 text-[13px] font-mono tracking-wide">
-              Introducing Capacity 3.0
+              Introducing Dopl
             </span>
             <ArrowRight size={14} className="text-white/50" />
           </div>
 
           {/* Main heading */}
           <h1 className="mb-6 font-serif font-normal text-[clamp(48px,6vw,60px)] leading-[0.9] tracking-tighter text-white">
-            Cutting-edge AI
+            Frontier AI,
             <br />
-            <span className="italic">ingested into one intelligence layer.</span>
+            <span className="italic">in a unified layer.</span>
           </h1>
 
           {/* Subtext */}
           <p className="text-white/60 text-[18px] mb-12 tracking-wide font-mono">
-            Bridging the frontier with your AI. Seamlessly connected.
+            Bridging the cutting edge with your agent. Seamlessly connected.
           </p>
 
           {/* Prompt Input */}
           <PromptInput />
 
-          {/* Product Hunt Badge */}
+          {/* Open source badge */}
           <div className="mt-8 inline-flex items-center gap-3 px-4 py-2 rounded-xl bg-white/[0.04] border border-white/[0.08]">
-            <div className="w-8 h-8 rounded-full bg-amber-600 flex items-center justify-center text-white font-bold text-[12px]">
-              3
+            <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white text-[14px]">
+              &#9679;
             </div>
             <div className="text-left">
               <div className="text-white/40 text-[10px] font-semibold uppercase tracking-wider">
-                Product Hunt
+                MCP Native
               </div>
               <div className="text-white font-semibold text-[14px]">
-                #3 Product of the Day
+                Connect in seconds
               </div>
             </div>
           </div>
@@ -422,10 +437,10 @@ export default function Home() {
               Built by the community
             </h2>
             <p className="text-white/40 text-[16px] mb-6">
-              Explore what others are building with Capacity
+              Explore what others are building with Dopl
             </p>
             <Link
-              href="#"
+              href="/community"
               className="inline-flex items-center gap-2 text-white/60 text-[15px] hover:text-white transition-colors"
             >
               View all <ArrowRight size={16} />
@@ -433,33 +448,24 @@ export default function Home() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {showcaseProjects.map((project, i) => (
-              <div key={i} className="group cursor-pointer">
-                {/* Image placeholder */}
-                <div className="aspect-[16/10] bg-neutral-900 rounded-xl mb-3 border border-white/[0.06] overflow-hidden group-hover:border-white/[0.12] transition-colors" />
-                <h3 className="text-white text-[14px] font-medium mb-1.5">
-                  {project.title}
-                </h3>
-                <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 rounded-full bg-neutral-700" />
-                  <span className="text-white/40 text-[13px]">
-                    {project.author}
-                  </span>
-                  {project.forks && (
-                    <span className="text-white/30 text-[13px] ml-auto flex items-center gap-1">
-                      <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                        <circle cx={12} cy={18} r={3} />
-                        <circle cx={6} cy={6} r={3} />
-                        <circle cx={18} cy={6} r={3} />
-                        <path d="M18 9v2c0 .6-.4 1-1 1H7c-.6 0-1-.4-1-1V9" />
-                        <path d="M12 12v3" />
-                      </svg>
-                      {project.forks}
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
+            {communityItems.length > 0
+              ? communityItems.map((item) => (
+                  <CommunityCard key={item.id} cluster={item} />
+                ))
+              : showcaseEntries.map((entry, i) => (
+                  <div key={i} className="group cursor-pointer">
+                    <div className="aspect-[16/10] bg-neutral-900 rounded-xl mb-3 border border-white/[0.06] overflow-hidden group-hover:border-white/[0.12] transition-colors" />
+                    <h3 className="text-white text-[14px] font-medium mb-1.5">
+                      {entry.title}
+                    </h3>
+                    <div className="flex items-center gap-2">
+                      <div className="w-5 h-5 rounded-full bg-neutral-700" />
+                      <span className="text-white/40 text-[13px]">
+                        {entry.author}
+                      </span>
+                    </div>
+                  </div>
+                ))}
           </div>
         </div>
       </section>
@@ -472,11 +478,11 @@ export default function Home() {
             <div className="relative lg:sticky lg:top-32 lg:self-start">
               <SnowflakeGrid />
               <h2 className="relative text-[clamp(30px,4.5vw,48px)] font-normal leading-tight">
-                Your app ideas
+                Your AI deserves
                 <br />
-                deserve to
+                better
                 <br />
-                exist.{" "}
+                context.{" "}
                 <span className="inline-block text-amber-500">
                   <svg width={28} height={28} viewBox="0 0 24 24" fill="currentColor">
                     <rect x={2} y={2} width={9} height={9} rx={1} />
@@ -492,37 +498,37 @@ export default function Home() {
             <div className="space-y-0">
               {[
                 {
-                  title: "Build apps using words",
-                  desc: "Just describe what you want in plain English. No coding skills needed. Watch your web or mobile app appear before your eyes.",
+                  title: "Ingest from anywhere",
+                  desc: "Paste an X post, a GitHub repo, a YouTube video, a blog. Dopl extracts structured, AI-ready knowledge automatically \u2014 no manual formatting.",
                 },
                 {
-                  title: "Refine your vision, then build",
-                  desc: "Not sure exactly what you need? We help you clarify your ideas step by step. Once your vision is clear, we turn it into reality.",
+                  title: "Search, don\u2019t browse",
+                  desc: "Semantic search across the entire knowledge base. Find proven setups by describing what you need in plain English. Results are ranked and synthesized.",
                 },
                 {
-                  title: "Real backend, real database",
-                  desc: "Every full-stack app gets its own Express server and SQLite database. No Supabase, no third-party glue. You own the code and the infra.",
+                  title: "Compose, don\u2019t copy",
+                  desc: "Dopl doesn\u2019t just retrieve \u2014 it synthesizes new implementation plans by blending patterns from multiple sources. Novel solutions from proven parts.",
                 },
                 {
-                  title: "Go live in one click",
-                  desc: "When you're happy with your app, publish it to the world instantly. No technical setup, no waiting. Just click and you're live.",
+                  title: "Connect via MCP",
+                  desc: "One connection and your Claude Code, Claude Desktop, or any MCP-compatible agent has the entire knowledge base at its disposal. No context-switching.",
                 },
               ].map((feature, i) => (
                 <div
                   key={i}
-                  className="py-12 border-t border-white/[0.06] first:border-t-0"
+                  className="border-b border-white/10 py-12 md:py-16 px-0 md:px-0 first:pt-0"
                 >
-                  <h3 className="text-white text-[22px] font-semibold mb-4">
+                  <h3 className="text-white text-2xl md:text-3xl font-normal mb-6">
                     {feature.title}
                   </h3>
-                  <div className="flex gap-4">
+                  <div className="flex gap-4 items-start">
                     <div className="mt-1 shrink-0">
                       <ArrowRight
-                        size={18}
-                        className="text-amber-500"
+                        size={16}
+                        className="text-orange-500"
                       />
                     </div>
-                    <p className="text-white/50 text-[16px] leading-relaxed">
+                    <p className="text-gray-600 dark:text-white/60 text-base md:text-lg leading-relaxed">
                       {feature.desc}
                     </p>
                   </div>
@@ -533,104 +539,48 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ──── Build apps. Your way. ──── */}
-      <section className="py-12 px-4">
-        <div className="max-w-[1200px] mx-auto text-center">
-          <p className="text-white/20 text-[14px] tracking-wide mb-2">
-            Build apps. Your way.
-          </p>
-        </div>
-      </section>
-
-      {/* ──── Why builders choose Capacity ──── */}
-      <section className="py-24 px-4">
-        <div className="max-w-[1200px] mx-auto text-center">
-          <h2 className="text-white/30 text-[clamp(28px,4vw,48px)] font-normal mb-3">
-            Why builders choose Capacity
-          </h2>
-          <p className="text-white/20 text-[16px] mb-16">
-            Join thousands of makers shipping faster than ever before
-          </p>
-
-          {/* Stats + cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-3xl mx-auto mb-16">
-            <div className="bg-[#111] rounded-2xl p-8 border border-white/[0.06] text-left">
-              <div className="text-white/80 text-[14px] mb-2">+13k</div>
-              <h3 className="text-white font-semibold text-[16px] mb-2">
-                Never build alone
-              </h3>
-              <p className="text-white/40 text-[14px] leading-relaxed">
-                Your AI Co-founder works alongside you 24/7. Get instant help,
-                suggestions, and code whenever you need it.
-              </p>
-            </div>
-            <div className="bg-[#111] rounded-2xl p-8 border border-white/[0.06] text-left">
-              <h3 className="text-white font-semibold text-[16px] mb-2">
-                Make beautiful apps
-              </h3>
-              <p className="text-white/40 text-[14px] leading-relaxed">
-                Create stunning web and mobile apps without any design skills.
-                Just describe your vision and watch it come to life.
-              </p>
-            </div>
-            <div className="bg-[#111] rounded-2xl p-8 border border-white/[0.06] text-left">
-              <h3 className="text-white font-semibold text-[16px] mb-2">
-                No technical skills needed
-              </h3>
-              <p className="text-white/40 text-[14px] leading-relaxed">
-                No coding, no design experience required. Just describe what you
-                want in plain English and we handle the rest.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ──── Meet Your AI Co-Founder ──── */}
+      {/* ──── Connect via MCP ──── */}
       <section className="py-24 px-4">
         <div className="max-w-[1200px] mx-auto">
           <div className="relative rounded-3xl overflow-hidden bg-[#1a0f08] min-h-[500px] grid grid-cols-1 lg:grid-cols-2">
             {/* Left text */}
             <div className="p-12 lg:p-16 flex flex-col justify-center">
               <h2 className="text-[clamp(28px,3.5vw,40px)] font-normal mb-4">
-                <em className="font-serif italic">Meet</em>{" "}
-                Your AI Co-Founder
+                <em className="font-serif italic">Lives</em>{" "}
+                inside your AI
               </h2>
               <p className="text-white/50 text-[16px] leading-relaxed mb-6 max-w-md">
-                A human-AI partnership, orders of magnitude more effective than
-                any developer alone.
+                Connect via MCP and the entire knowledge base becomes part of
+                your agent&apos;s toolkit. Search, retrieve, and compose &mdash;
+                without leaving your workflow.
               </p>
               <Link
-                href="#"
+                href="/canvas"
                 className="inline-flex items-center gap-2 text-white/70 text-[15px] hover:text-white transition-colors"
               >
-                Learn about Co-Founder{" "}
+                Get connected{" "}
                 <span className="text-amber-500">&#10095;</span>
               </Link>
             </div>
 
-            {/* Right — chat mockup over Mars background */}
+            {/* Right — terminal mockup */}
             <div className="relative min-h-[400px]">
-              {/* Mars landscape placeholder */}
               <div className="absolute inset-0 bg-gradient-to-br from-[#8b5e3c] via-[#6b3a1f] to-[#3d1f0e]" />
-              {/* Chat window */}
-              <div className="absolute inset-8 lg:inset-12 bg-[#0a0a0a] rounded-2xl border border-white/[0.08] flex flex-col">
-                <div className="flex items-center gap-3 px-5 py-4 border-b border-white/[0.06]">
-                  <div className="w-8 h-8 rounded-full bg-neutral-700" />
-                  <span className="text-white text-[14px] font-medium">
-                    Co-founder
-                  </span>
+              <div className="absolute inset-8 lg:inset-12 bg-[#0a0a0a] rounded-2xl border border-white/[0.08] flex flex-col overflow-hidden">
+                <div className="flex items-center gap-1.5 px-4 py-3 border-b border-white/[0.06]">
+                  <div className="w-3 h-3 rounded-full bg-[#ff5f57]" />
+                  <div className="w-3 h-3 rounded-full bg-[#febc2e]" />
+                  <div className="w-3 h-3 rounded-full bg-[#28c840]" />
+                  <span className="ml-3 text-white/30 text-[11px]">Claude Code</span>
                 </div>
-                <div className="flex-1" />
-                <div className="px-4 pb-4">
-                  <div className="bg-[#1a1a1a] rounded-xl px-4 py-3 flex items-center gap-2">
-                    <span className="text-white/40 text-[14px] flex-1">
-                      What should I do next?
-                    </span>
-                    <button className="text-white/30">
-                      <ArrowUp size={16} />
-                    </button>
-                  </div>
+                <div className="flex-1 p-4 font-mono text-[12px] leading-relaxed">
+                  <div className="text-white/40">$ claude</div>
+                  <div className="text-white/60 mt-2">&gt; Find me a marketing automation with n8n</div>
+                  <div className="text-green-400/70 mt-2">&#9654; Searching Dopl knowledge base...</div>
+                  <div className="text-white/50 mt-1">Found 4 relevant setups. Top match:</div>
+                  <div className="text-amber-400/70 mt-1">&nbsp;&nbsp;n8n AI Marketing Pipeline (complexity: moderate)</div>
+                  <div className="text-white/50 mt-1">&nbsp;&nbsp;Tools: n8n, Claude, Airtable</div>
+                  <div className="text-white/30 mt-3">&gt; <span className="animate-pulse">|</span></div>
                 </div>
               </div>
             </div>
@@ -643,19 +593,19 @@ export default function Home() {
         <div className="max-w-[1200px] mx-auto grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-12 items-center">
           <div>
             <p className="text-white text-[clamp(24px,3vw,36px)] font-normal leading-snug mb-8">
-              &ldquo;I built a new project for Poppins from scratch thanks to
-              capacity and I&apos;ve been kind of blown away&rdquo;
+              &ldquo;I used to spend hours searching for the right Claude config
+              or n8n workflow. Now I just ask my agent and Dopl finds it
+              instantly.&rdquo;
             </p>
             <div className="flex items-center gap-4">
               <div className="w-10 h-[2px] bg-white/20" />
               <div>
                 <div className="text-white font-semibold text-[15px]">
-                  Fran&ccedil;ois Vonthron
+                  Early Adopter
                 </div>
-                <div className="text-white/40 text-[13px]">CEO</div>
+                <div className="text-white/40 text-[13px]">AI Engineer</div>
               </div>
             </div>
-            {/* Pagination dots */}
             <div className="flex gap-2 mt-8">
               <div className="w-2 h-2 rounded-full bg-white/60" />
               <div className="w-2 h-2 rounded-full bg-white/20" />
@@ -666,69 +616,57 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ──── Build faster and better with Specs ──── */}
+      {/* ──── Ingest anything ──── */}
       <section className="py-24 px-4">
         <div className="max-w-[1200px] mx-auto grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-          {/* Left — app screenshot */}
+          {/* Left — ingestion mockup */}
           <div className="relative rounded-3xl overflow-hidden min-h-[450px]">
-            {/* Mars background */}
             <div className="absolute inset-0 bg-gradient-to-br from-[#5a3520] via-[#3d1f0e] to-[#1a0f08]" />
-            {/* App window mockup */}
             <div className="absolute inset-6 lg:inset-8 bg-[#0a0a0a] rounded-xl border border-white/[0.08] overflow-hidden">
-              {/* Window chrome */}
               <div className="flex items-center gap-1.5 px-3 py-2.5 border-b border-white/[0.06]">
                 <div className="w-3 h-3 rounded-full bg-[#ff5f57]" />
                 <div className="w-3 h-3 rounded-full bg-[#febc2e]" />
                 <div className="w-3 h-3 rounded-full bg-[#28c840]" />
-                <span className="ml-4 text-white/30 text-[11px]">
-                  Capacity
-                </span>
+                <span className="ml-4 text-white/30 text-[11px]">Dopl</span>
               </div>
-              {/* Sidebar + content */}
-              <div className="flex h-full">
-                <div className="w-[180px] border-r border-white/[0.06] p-3">
-                  <div className="text-white/30 text-[10px] uppercase tracking-wider mb-3">
-                    Specifications
-                  </div>
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2 px-2 py-1.5 rounded bg-white/[0.04]">
-                      <div className="w-4 h-4 rounded bg-green-500/20 flex items-center justify-center">
-                        <svg width={8} height={8} viewBox="0 0 10 10" fill="none">
-                          <path d="M2 5l2 2 4-4" stroke="#4ade80" strokeWidth={1.5} />
-                        </svg>
-                      </div>
-                      <span className="text-white text-[12px]">
-                        Project Brief
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 px-2 py-1.5 rounded">
-                      <div className="w-4 h-4 rounded bg-white/[0.06]" />
-                      <span className="text-white/40 text-[12px]">
-                        User Experience
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 px-2 py-1.5 rounded">
-                      <div className="w-4 h-4 rounded bg-white/[0.06]" />
-                      <span className="text-white/40 text-[12px]">
-                        Design
-                      </span>
-                    </div>
-                  </div>
+              <div className="p-4 space-y-3">
+                <div className="text-white/30 text-[10px] uppercase tracking-wider">
+                  Ingestion Pipeline
                 </div>
-                <div className="flex-1 p-4">
-                  <div className="text-white text-[13px] font-medium mb-3">
-                    Project Brief
+                <div className="bg-white/[0.04] rounded-lg px-3 py-2 border border-white/[0.06]">
+                  <span className="text-white/50 text-[12px]">https://x.com/user/status/18372...</span>
+                </div>
+                <div className="space-y-2 mt-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 rounded bg-green-500/20 flex items-center justify-center">
+                      <svg width={8} height={8} viewBox="0 0 10 10" fill="none">
+                        <path d="M2 5l2 2 4-4" stroke="#4ade80" strokeWidth={1.5} />
+                      </svg>
+                    </div>
+                    <span className="text-white/60 text-[12px]">Content extracted</span>
                   </div>
-                  <div className="bg-green-500/10 border border-green-500/20 rounded-lg px-3 py-2 mb-3">
-                    <span className="text-green-400 text-[12px]">
-                      &#9989; Project Brief Successfully Generated!
-                    </span>
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 rounded bg-green-500/20 flex items-center justify-center">
+                      <svg width={8} height={8} viewBox="0 0 10 10" fill="none">
+                        <path d="M2 5l2 2 4-4" stroke="#4ade80" strokeWidth={1.5} />
+                      </svg>
+                    </div>
+                    <span className="text-white/60 text-[12px]">README generated</span>
                   </div>
-                  <p className="text-white/40 text-[11px] leading-relaxed">
-                    Your comprehensive project brief has been created and saved.
-                    This document now serves as the foundation for all subsequent
-                    product development work.
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 rounded bg-green-500/20 flex items-center justify-center">
+                      <svg width={8} height={8} viewBox="0 0 10 10" fill="none">
+                        <path d="M2 5l2 2 4-4" stroke="#4ade80" strokeWidth={1.5} />
+                      </svg>
+                    </div>
+                    <span className="text-white/60 text-[12px]">agents.md created</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 rounded bg-amber-500/20 animate-pulse flex items-center justify-center">
+                      <div className="w-2 h-2 rounded-full bg-amber-500/60" />
+                    </div>
+                    <span className="text-white/40 text-[12px]">Indexing for search...</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -737,56 +675,56 @@ export default function Home() {
           {/* Right — text */}
           <div>
             <h2 className="text-[clamp(28px,3.5vw,40px)] font-normal mb-4">
-              Build{" "}
-              <em className="font-serif italic">faster</em> and{" "}
-              <em className="font-serif italic">better</em>
+              <em className="font-serif italic">Ingest</em> anything.
               <br />
-              with Specs
+              Instantly indexed.
             </h2>
             <p className="text-white/50 text-[16px] leading-relaxed mb-6 max-w-md">
-              Plan before you code. With Spec, define your vision in natural
-              language and get a detailed implementation plan.
+              Paste a link from X, GitHub, YouTube, or any blog. Dopl extracts
+              the knowledge, generates AI-ready instructions, and makes it
+              searchable in seconds.
             </p>
             <Link
-              href="#"
+              href="/canvas"
               className="inline-flex items-center gap-2 text-white/70 text-[15px] hover:text-white transition-colors"
             >
-              Learn about Spec <ArrowRight size={16} />
+              Try ingesting <ArrowRight size={16} />
             </Link>
           </div>
         </div>
       </section>
 
-      {/* ──── From website to real business ──── */}
+      {/* ──── From chaos to clarity ──── */}
       <section className="py-24 px-4">
         <div className="max-w-[1200px] mx-auto bg-[#0a0a0a] rounded-3xl p-12 lg:p-16 border border-white/[0.06]">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-16">
             <div>
               <h2 className="text-[clamp(28px,3.5vw,40px)] font-normal mb-4">
-                <em className="font-serif italic">From website</em>{" "}
-                to real business
+                <em className="font-serif italic">From scattered links</em>{" "}
+                to organized intelligence
               </h2>
               <p className="text-white/40 text-[16px] leading-relaxed mb-10 max-w-md">
-                Start with a website, then add a mobile app to reach every
-                customer. Build a complete business &mdash; not just a project.
+                Stop losing the best AI setups to browser tabs and bookmarks.
+                Ingest, organize into clusters, and let the brain synthesize
+                what matters.
               </p>
 
               <div className="space-y-8">
                 {[
                   {
                     num: "1",
-                    title: "Start with a website",
-                    desc: "Build your fullstack web app with AI. Real backend, real database, production-ready.",
+                    title: "Ingest your sources",
+                    desc: "Paste any link \u2014 X posts, GitHub repos, YouTube, blogs. Dopl extracts and structures the knowledge automatically.",
                   },
                   {
                     num: "2",
-                    title: "Add a mobile app",
-                    desc: "Expand to iOS and Android with React Native. Same backend, same database, one codebase.",
+                    title: "Organize into clusters",
+                    desc: "Group related setups on the infinite canvas. Each cluster gets its own synthesized brain \u2014 evolving institutional knowledge.",
                   },
                   {
                     num: "3",
-                    title: "Grow your business",
-                    desc: "Web + mobile = complete reach. Your customers find you everywhere.",
+                    title: "Let your AI use it",
+                    desc: "Connect via MCP or export as Claude Code skills. Your agent now has context it never had before.",
                   },
                 ].map((step) => (
                   <div key={step.num} className="flex gap-4">
@@ -806,55 +744,47 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Right — web + mobile wireframes */}
-            <div className="flex items-center justify-center gap-6 relative">
-              {/* Web app wireframe */}
-              <div className="w-[280px] bg-[#111] rounded-xl border border-white/[0.08] p-4">
+            {/* Right — canvas wireframe mockup */}
+            <div className="flex items-center justify-center relative">
+              <div className="w-full max-w-[400px] bg-[#111] rounded-xl border border-white/[0.08] p-4">
                 <div className="flex items-center gap-1.5 mb-4">
                   <div className="w-2.5 h-2.5 rounded-full bg-[#ff5f57]" />
                   <div className="w-2.5 h-2.5 rounded-full bg-[#febc2e]" />
                   <div className="w-2.5 h-2.5 rounded-full bg-[#28c840]" />
-                  <div className="ml-3 flex-1 h-6 rounded bg-white/[0.04] flex items-center justify-center">
-                    <span className="text-white/20 text-[10px]">
-                      myapp.capacity.studio
-                    </span>
+                  <span className="ml-3 text-white/20 text-[10px]">
+                    Canvas
+                  </span>
+                </div>
+                {/* Mini panel mockups */}
+                <div className="relative h-[280px]">
+                  {/* Panel 1 */}
+                  <div className="absolute top-0 left-0 w-[160px] bg-[#0a0a0a] rounded-lg border border-white/[0.08] p-3">
+                    <div className="h-2 bg-white/[0.08] rounded w-3/4 mb-2" />
+                    <div className="h-2 bg-white/[0.04] rounded w-full mb-1" />
+                    <div className="h-2 bg-white/[0.04] rounded w-2/3" />
+                    <div className="flex items-center gap-1 mt-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                      <span className="text-[8px] text-white/30">Entry</span>
+                    </div>
                   </div>
-                </div>
-                <div className="space-y-3">
-                  <div className="h-3 bg-white/[0.06] rounded w-3/4" />
-                  <div className="h-3 bg-white/[0.06] rounded w-1/2" />
-                  <div className="flex gap-3 mt-2">
-                    <div className="h-20 flex-1 bg-white/[0.04] rounded-lg" />
-                    <div className="h-20 flex-1 bg-white/[0.04] rounded-lg" />
+                  {/* Panel 2 */}
+                  <div className="absolute top-4 right-0 w-[160px] bg-[#0a0a0a] rounded-lg border border-white/[0.08] p-3">
+                    <div className="h-2 bg-white/[0.08] rounded w-1/2 mb-2" />
+                    <div className="h-2 bg-white/[0.04] rounded w-full mb-1" />
+                    <div className="h-2 bg-white/[0.04] rounded w-3/4" />
+                    <div className="flex items-center gap-1 mt-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                      <span className="text-[8px] text-white/30">Chat</span>
+                    </div>
                   </div>
-                  <div className="h-10 bg-white/90 rounded-lg" />
-                </div>
-                <div className="flex items-center gap-1.5 mt-4">
-                  <div className="w-2 h-2 rounded-full bg-green-500" />
-                  <span className="text-white/40 text-[11px]">Web App</span>
-                </div>
-              </div>
-
-              {/* Shared backend connector */}
-              <div className="absolute left-1/2 -translate-x-1/2 bottom-4 bg-[#1a1a1a] border border-white/[0.08] rounded-full px-3 py-1 flex items-center gap-1.5 z-10">
-                <div className="w-2 h-2 rounded-full bg-green-500" />
-                <span className="text-white/50 text-[10px]">
-                  Shared Backend
-                </span>
-              </div>
-
-              {/* Mobile app wireframe */}
-              <div className="w-[160px] bg-[#111] rounded-2xl border border-white/[0.08] p-4">
-                <div className="space-y-3">
-                  <div className="h-3 bg-white/[0.06] rounded w-3/4 mx-auto" />
-                  <div className="h-3 bg-white/[0.06] rounded w-1/2 mx-auto" />
-                  <div className="h-24 bg-white/[0.04] rounded-lg" />
-                  <div className="h-10 bg-white/90 rounded-lg" />
-                  <div className="h-3 bg-white/[0.06] rounded w-2/3 mx-auto" />
-                </div>
-                <div className="flex items-center gap-1.5 mt-4 justify-center">
-                  <div className="w-2 h-2 rounded-full bg-blue-500" />
-                  <span className="text-white/40 text-[11px]">Mobile App</span>
+                  {/* Cluster outline */}
+                  <div className="absolute bottom-0 left-2 right-2 h-[120px] border border-dashed border-amber-500/30 rounded-xl flex items-center justify-center">
+                    <div className="bg-[#0a0a0a] rounded-lg border border-white/[0.08] p-3 w-[200px]">
+                      <div className="text-[9px] text-amber-400/60 uppercase tracking-wider mb-1">Cluster Brain</div>
+                      <div className="h-2 bg-white/[0.04] rounded w-full mb-1" />
+                      <div className="h-2 bg-white/[0.04] rounded w-4/5" />
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -881,11 +811,11 @@ export default function Home() {
       <section className="py-24 px-4">
         <div className="max-w-[740px] mx-auto text-center">
           <h2 className="text-[clamp(32px,5vw,56px)] font-normal mb-4">
-            Start building
+            Start exploring
           </h2>
           <p className="text-white/40 text-[16px] mb-10">
-            Join thousands of makers who are building beautiful web and mobile
-            apps with Capacity.
+            The cutting-edge AI knowledge base. Ingest anything. Search
+            everything. Connect seamlessly.
           </p>
           <PromptInput />
         </div>
@@ -898,11 +828,21 @@ export default function Home() {
             {/* Logo + language */}
             <div>
               <div className="flex items-center gap-2 mb-6">
-                <svg width={24} height={24} viewBox="0 0 24 24" fill="white">
-                  <path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z" />
-                </svg>
-                <span className="text-white font-semibold text-[16px]">
-                  Capacity
+                <Image
+                  src="/favicons/favicon-32x32.png"
+                  alt="Dopl"
+                  width={20}
+                  height={20}
+                  className="rounded-md"
+                />
+                <span
+                  className="text-white text-[16px]"
+                  style={{
+                    fontFamily: "var(--font-playfair), 'Playfair Display', Georgia, serif",
+                    fontStyle: "italic",
+                  }}
+                >
+                  Dopl
                 </span>
               </div>
               <button className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.08] text-white/60 text-[13px]">
@@ -919,40 +859,38 @@ export default function Home() {
               </h4>
               <ul className="space-y-3">
                 {[
-                  "Changelog",
-                  "Roadmap",
-                  "Pricing",
-                  "Support",
-                  "Tools",
-                  "Learn",
-                  "Use Cases",
+                  { label: "Canvas", href: "/canvas" },
+                  { label: "Browse", href: "/entries" },
+                  { label: "Builder", href: "/build" },
+                  { label: "Pricing", href: "/pricing" },
+                  { label: "Settings", href: "/settings" },
                 ].map((item) => (
-                  <li key={item}>
+                  <li key={item.label}>
                     <Link
-                      href="#"
+                      href={item.href}
                       className="text-white/40 text-[14px] hover:text-white/70 transition-colors"
                     >
-                      {item}
+                      {item.label}
                     </Link>
                   </li>
                 ))}
               </ul>
             </div>
 
-            {/* Resources */}
+            {/* Features */}
             <div>
               <h4 className="text-white font-semibold text-[14px] mb-4">
-                Resources
+                Features
               </h4>
               <ul className="space-y-3">
                 {[
-                  "AI Landing Page Builder",
-                  "Custom Web App Development",
-                  "React Boilerplate Generator",
-                  "AI MVP Builder",
-                  "AI Mobile App Builder",
-                  "Wedding Website Builder",
-                  "Alternatives",
+                  "Ingestion Engine",
+                  "Semantic Search",
+                  "Solution Composer",
+                  "MCP Server",
+                  "Cluster Brains",
+                  "Skill Export",
+                  "Infinite Canvas",
                 ].map((item) => (
                   <li key={item}>
                     <Link
@@ -973,10 +911,8 @@ export default function Home() {
               </h4>
               <ul className="space-y-3">
                 {[
-                  "Blog",
-                  "Contact",
                   "About",
-                  "Affiliate Program",
+                  "Contact",
                   "Discord",
                 ].map((item) => (
                   <li key={item}>
@@ -997,18 +933,19 @@ export default function Home() {
                 Legal
               </h4>
               <ul className="space-y-3">
-                {["Privacy", "Terms of Service", "Report Abuse"].map(
-                  (item) => (
-                    <li key={item}>
-                      <Link
-                        href="#"
-                        className="text-white/40 text-[14px] hover:text-white/70 transition-colors"
-                      >
-                        {item}
-                      </Link>
-                    </li>
-                  )
-                )}
+                {[
+                  { label: "Privacy", href: "/privacy" },
+                  { label: "Terms of Service", href: "/terms" },
+                ].map((item) => (
+                  <li key={item.label}>
+                    <Link
+                      href={item.href}
+                      className="text-white/40 text-[14px] hover:text-white/70 transition-colors"
+                    >
+                      {item.label}
+                    </Link>
+                  </li>
+                ))}
               </ul>
             </div>
           </div>
@@ -1016,7 +953,7 @@ export default function Home() {
           {/* Bottom bar */}
           <div className="flex items-center justify-between border-t border-white/[0.06] pt-6">
             <span className="text-white/30 text-[13px]">
-              &copy; 2026 Capacity.so, All rights reserved
+              &copy; 2026 Dopl. All rights reserved.
             </span>
             <div className="flex items-center gap-4">
               {/* Theme toggle */}

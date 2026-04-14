@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { slugifyClusterName } from "@/lib/clusters/slug";
 import { CONTEXT_CHAR_BUDGET_PER_FIELD } from "@/lib/config";
+import { generateEmbedding } from "@/lib/ai";
 import type {
   PublishedClusterSummary,
   PublishedClusterDetail,
@@ -163,6 +164,9 @@ export async function publishCluster(
     if (brainError) throw brainError;
   }
 
+  // Generate embedding for semantic search (fire-and-forget)
+  generateClusterEmbedding(published.id, req.title, req.description || "", entryIds, db).catch(() => {});
+
   // Fetch author info for return value
   const { data: profile } = await db
     .from("profiles")
@@ -172,7 +176,6 @@ export async function publishCluster(
 
   return {
     ...published,
-    cluster_id: clusterId,
     author: {
       id: userId,
       display_name: profile?.display_name || null,
@@ -224,7 +227,6 @@ export async function listMyPublishedClusters(
 
   return rows.map((r) => ({
     ...r,
-    cluster_id: "", // not needed for listing
     author: {
       id: userId,
       display_name: profile?.display_name || null,
@@ -462,7 +464,6 @@ export async function updatePublishedCluster(
 
   return {
     ...updated,
-    cluster_id: "",
     author: {
       id: userId,
       display_name: profile?.display_name || null,
@@ -526,4 +527,261 @@ export async function updatePanelPositions(
 
     if (error) throw error;
   }
+}
+
+// ── Fork / Import ───────────────────────────────────────────────────
+
+export async function forkPublishedCluster(
+  slug: string,
+  userId: string
+): Promise<{ clusterSlug: string; entryIds: string[] }> {
+  const db = supabaseAdmin();
+
+  // Load the published cluster
+  const { data: pc, error: pcError } = await db
+    .from("published_clusters")
+    .select("id, cluster_id, title, slug, user_id")
+    .eq("slug", slug)
+    .eq("status", "published")
+    .single();
+
+  if (pcError || !pc) throw new Error(`Published cluster not found: ${slug}`);
+
+  // Prevent self-fork
+  if (pc.user_id === userId) throw new Error("Cannot import your own cluster");
+
+  // Check for existing fork (UNIQUE constraint)
+  const { data: existingFork } = await db
+    .from("cluster_forks")
+    .select("id")
+    .eq("source_published_cluster_id", pc.id)
+    .eq("forked_by_user_id", userId)
+    .single();
+
+  if (existingFork) throw new Error("You have already imported this cluster");
+
+  // Load published panels
+  const { data: panels } = await db
+    .from("published_cluster_panels")
+    .select("entry_id, title, summary, source_url, x, y")
+    .eq("published_cluster_id", pc.id);
+
+  const entryIds = (panels || []).map((p) => p.entry_id);
+
+  // Load brain
+  const { data: brain } = await db
+    .from("published_cluster_brains")
+    .select("instructions")
+    .eq("published_cluster_id", pc.id)
+    .single();
+
+  // Create a new cluster for the user
+  const { data: existingSlugs } = await db
+    .from("clusters")
+    .select("slug")
+    .eq("user_id", userId);
+  const slugList = (existingSlugs || []).map((r) => r.slug);
+  const newSlug = slugifyClusterName(pc.title, slugList);
+
+  const { data: newCluster, error: clusterError } = await db
+    .from("clusters")
+    .insert({
+      name: pc.title,
+      slug: newSlug,
+      user_id: userId,
+      forked_from_slug: pc.slug,
+      forked_from_title: pc.title,
+    })
+    .select("id, slug")
+    .single();
+
+  if (clusterError || !newCluster) throw clusterError || new Error("Failed to create cluster");
+
+  // Add entries to the new cluster
+  if (entryIds.length > 0) {
+    const clusterPanelRows = entryIds.map((eid) => ({
+      cluster_id: newCluster.id,
+      entry_id: eid,
+    }));
+    await db.from("cluster_panels").insert(clusterPanelRows);
+
+    // Add entries to user's canvas
+    for (const panel of panels || []) {
+      await db
+        .from("canvas_panels")
+        .upsert(
+          {
+            user_id: userId,
+            entry_id: panel.entry_id,
+            title: panel.title,
+            summary: panel.summary,
+            source_url: panel.source_url,
+            x: panel.x,
+            y: panel.y,
+          },
+          { onConflict: "user_id,entry_id" }
+        );
+    }
+  }
+
+  // Copy brain instructions
+  if (brain?.instructions) {
+    await db.from("cluster_brains").insert({
+      cluster_id: newCluster.id,
+      instructions: brain.instructions,
+    });
+  }
+
+  // Record the fork
+  await db.from("cluster_forks").insert({
+    source_published_cluster_id: pc.id,
+    forked_by_user_id: userId,
+    created_cluster_id: newCluster.id,
+  });
+
+  // Atomic increment fork count via RPC, fallback to manual update
+  const { error: rpcError } = await db.rpc("increment_fork_count", { pc_id: pc.id });
+  if (rpcError) {
+    // Fallback: read current count and increment
+    const { data: current } = await db
+      .from("published_clusters")
+      .select("fork_count")
+      .eq("id", pc.id)
+      .single();
+    if (current) {
+      await db
+        .from("published_clusters")
+        .update({ fork_count: (current.fork_count || 0) + 1 })
+        .eq("id", pc.id);
+    }
+  }
+
+  return {
+    clusterSlug: newCluster.slug,
+    entryIds,
+  };
+}
+
+// ── Embedding helper ────────────────────────────────────────────────
+
+async function generateClusterEmbedding(
+  publishedClusterId: string,
+  title: string,
+  description: string,
+  entryIds: string[],
+  db: ReturnType<typeof supabaseAdmin>
+): Promise<void> {
+  // Build text to embed: title + description + entry summaries
+  let text = `${title}. ${description}`;
+
+  if (entryIds.length > 0) {
+    const { data: entries } = await db
+      .from("entries")
+      .select("title, summary")
+      .in("id", entryIds);
+
+    if (entries) {
+      const summaries = entries
+        .map((e) => [e.title, e.summary].filter(Boolean).join(": "))
+        .join(". ");
+      text += `. Contains: ${summaries}`;
+    }
+  }
+
+  // Truncate to ~8000 chars (embedding model limit is generous but no point sending excess)
+  text = text.slice(0, 8000);
+
+  const embedding = await generateEmbedding(text);
+
+  await db
+    .from("published_clusters")
+    .update({ embedding: JSON.stringify(embedding) })
+    .eq("id", publishedClusterId);
+}
+
+// ── Semantic search ─────────────────────────────────────────────────
+
+export async function searchPublishedClusters(opts: {
+  query: string;
+  category?: string;
+  limit?: number;
+}): Promise<PublishedClusterSummary[]> {
+  const db = supabaseAdmin();
+  const limit = opts.limit || 20;
+
+  // Generate embedding for the search query
+  const embedding = await generateEmbedding(opts.query);
+
+  // Call the RPC function
+  const { data, error } = await db.rpc("search_published_clusters", {
+    query_embedding: JSON.stringify(embedding),
+    match_threshold: 0.4,
+    match_count: limit,
+    filter_category: opts.category || null,
+  });
+
+  if (error) throw error;
+
+  const rows = data || [];
+  if (rows.length === 0) return [];
+
+  // Get panel counts
+  const ids = rows.map((r: { id: string }) => r.id);
+  const { data: panelCounts } = await db
+    .from("published_cluster_panels")
+    .select("published_cluster_id")
+    .in("published_cluster_id", ids);
+
+  const countMap = new Map<string, number>();
+  for (const row of panelCounts || []) {
+    countMap.set(
+      row.published_cluster_id,
+      (countMap.get(row.published_cluster_id) || 0) + 1
+    );
+  }
+
+  // Get author profiles
+  const authorIds = [...new Set(rows.map((r: { user_id: string }) => r.user_id))];
+  const { data: profiles } = await db
+    .from("profiles")
+    .select("id, display_name, avatar_url")
+    .in("id", authorIds);
+
+  const profileMap = new Map(
+    (profiles || []).map((p: { id: string; display_name: string | null; avatar_url: string | null }) => [p.id, p])
+  );
+
+  return rows.map((r: {
+    id: string;
+    slug: string;
+    title: string;
+    description: string;
+    category: string | null;
+    thumbnail_url: string | null;
+    fork_count: number;
+    user_id: string;
+    created_at: string;
+    updated_at: string;
+    similarity: number;
+  }) => {
+    const profile = profileMap.get(r.user_id);
+    return {
+      id: r.id,
+      slug: r.slug,
+      title: r.title,
+      description: r.description || "",
+      category: r.category,
+      thumbnail_url: r.thumbnail_url,
+      fork_count: r.fork_count,
+      status: "published" as const,
+      created_at: r.created_at,
+      updated_at: r.updated_at,
+      author: {
+        id: r.user_id,
+        display_name: profile?.display_name || null,
+        avatar_url: profile?.avatar_url || null,
+      },
+      panel_count: countMap.get(r.id) || 0,
+    };
+  });
 }

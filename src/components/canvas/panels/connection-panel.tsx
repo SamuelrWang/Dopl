@@ -105,7 +105,7 @@ export function ConnectionPanelBody({ panel }: ConnectionPanelBodyProps) {
         {
           "setup-intelligence": {
             command: "npx",
-            args: ["@sie/mcp-server", "--api-key", apiKey],
+            args: ["@dopl/mcp-server", "--api-key", apiKey],
             env: { SIE_BASE_URL: url },
           },
         },
@@ -128,7 +128,7 @@ Add this MCP server to your configuration. This is a standard MCP stdio server.
 {
   "setup-intelligence": {
     "command": "npx",
-    "args": ["@sie/mcp-server", "--api-key", "${apiKey}"],
+    "args": ["@dopl/mcp-server", "--api-key", "${apiKey}"],
     "env": {
       "SIE_BASE_URL": "${url}"
     }
@@ -137,7 +137,7 @@ Add this MCP server to your configuration. This is a standard MCP stdio server.
 \`\`\`
 
 Where to put this depends on your platform:
-- Claude Code CLI: run \`claude mcp add setup-intelligence --scope user --transport stdio -e SIE_BASE_URL=${url} -- npx @sie/mcp-server --api-key ${apiKey}\`
+- Claude Code CLI: run \`claude mcp add setup-intelligence --scope user --transport stdio -e SIE_BASE_URL=${url} -- npx @dopl/mcp-server --api-key ${apiKey}\`
 - Claude Desktop (macOS): add to ~/Library/Application Support/Claude/claude_desktop_config.json under "mcpServers"
 - Claude Desktop (Windows): add to %APPDATA%\\Claude\\claude_desktop_config.json under "mcpServers"
 - VS Code / Cursor / Windsurf: add to .mcp.json in project root under "mcpServers"

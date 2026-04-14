@@ -178,7 +178,7 @@ The `packages/mcp-server/` directory contains an MCP server that wraps the SIE A
   "mcpServers": {
     "setup-intelligence": {
       "command": "npx",
-      "args": ["@sie/mcp-server", "--api-key", "sk-sie-xxxxx"],
+      "args": ["@dopl/mcp-server", "--api-key", "sk-sie-xxxxx"],
       "env": { "SIE_BASE_URL": "https://your-site.vercel.app" }
     }
   }

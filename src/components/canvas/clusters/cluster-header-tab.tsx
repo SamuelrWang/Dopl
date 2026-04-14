@@ -21,6 +21,7 @@ import { useEffect, useRef, useState } from "react";
 import { useCanvas } from "../canvas-store";
 import type { Cluster } from "../types";
 import { isPanelDeletable } from "../types";
+import { PublishDialog } from "@/components/community/publish-dialog";
 
 interface ClusterHeaderTabProps {
   cluster: Cluster;
@@ -42,6 +43,7 @@ export function ClusterHeaderTab({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(cluster.name);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [publishOpen, setPublishOpen] = useState(false);
   const tabRef = useRef<HTMLDivElement>(null);
 
   // Reset draft when the authoritative name changes (e.g. AI name arrived).
@@ -120,6 +122,11 @@ export function ClusterHeaderTab({
     }
   }
 
+  function handlePublishClick() {
+    setMenuOpen(false);
+    setPublishOpen(true);
+  }
+
   return (
     <div
       ref={tabRef}
@@ -193,6 +200,16 @@ export function ClusterHeaderTab({
           className="absolute left-1/2 -translate-x-1/2 mt-1 min-w-[120px] bg-black/[0.7] backdrop-blur-md border border-white/[0.12] rounded-[4px] shadow-[0_4px_16px_rgba(0,0,0,0.4)] overflow-hidden"
           role="menu"
         >
+          {cluster.dbId && (
+            <button
+              type="button"
+              onClick={handlePublishClick}
+              role="menuitem"
+              className="w-full text-left px-3 h-8 font-mono text-[10px] uppercase tracking-wider text-white/80 hover:text-white hover:bg-white/[0.06] transition-colors"
+            >
+              Publish
+            </button>
+          )}
           <button
             type="button"
             onClick={handleUncluster}
@@ -210,6 +227,19 @@ export function ClusterHeaderTab({
             Delete All
           </button>
         </div>
+      )}
+
+      {cluster.dbId && (
+        <PublishDialog
+          open={publishOpen}
+          onOpenChange={setPublishOpen}
+          clusterName={cluster.name}
+          clusterDbId={cluster.dbId}
+          onPublished={(slug) => {
+            // Could navigate to the published page or show a toast
+            window.open(`/community/${slug}`, "_blank");
+          }}
+        />
       )}
     </div>
   );

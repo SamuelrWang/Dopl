@@ -1,5 +1,5 @@
 {
-  "name": "@sie/chrome-extension",
+  "name": "@dopl/chrome-extension",
   "version": "0.1.0",
   "private": true,
   "description": "SIE Debugger — Chrome extension for the Setup Intelligence Engine",

@@ -74,6 +74,13 @@ function LoginForm() {
 
   return (
     <div className="fixed inset-0 z-50">
+      {/* Background image — same as landing hero */}
+      <div
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+        style={{ backgroundImage: "url('/img/background_image.png')" }}
+      />
+      {/* Dark overlay */}
+      <div className="absolute inset-0 bg-black/30" />
       {/* Content */}
       <div
         className="min-h-screen flex flex-col items-center justify-center px-6 relative z-10"
@@ -98,14 +105,10 @@ function LoginForm() {
 
         {/* Glass panel */}
         <div
-          className="w-full max-w-sm relative z-10 p-6"
+          className="w-full max-w-sm relative z-10 p-6 rounded-2xl backdrop-blur-[30px] backdrop-saturate-[2.0] bg-white/[0.12] border border-white/[0.2] shadow-[0_8px_32px_rgba(0,0,0,0.08),inset_0_1px_0_rgba(255,255,255,0.15)]"
           style={{
             animation: "loginFadeIn 0.6s ease-out both",
             animationDelay: "0.1s",
-            background: "rgba(255,255,255,0.05)",
-            backdropFilter: "blur(40px) saturate(120%)",
-            WebkitBackdropFilter: "blur(40px) saturate(120%)",
-            border: "1px solid rgba(255,255,255,0.25)",
           }}
         >
           {/* OAuth buttons */}

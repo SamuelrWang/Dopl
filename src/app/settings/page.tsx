@@ -43,6 +43,13 @@ export default async function SettingsPage() {
 
         <div className="border-t border-white/[0.06] pt-4 space-y-3">
           <Link
+            href="/settings/profile"
+            className="flex items-center justify-between text-sm text-text-secondary hover:text-text-primary transition-colors"
+          >
+            <span>Profile</span>
+            <span className="text-text-tertiary">&rarr;</span>
+          </Link>
+          <Link
             href="/settings/billing"
             className="flex items-center justify-between text-sm text-text-secondary hover:text-text-primary transition-colors"
           >

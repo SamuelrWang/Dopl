@@ -1,19 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
-import { listPublishedClusters } from "@/lib/community/service";
+import { listPublishedClusters, searchPublishedClusters } from "@/lib/community/service";
 
 /**
- * GET /api/community — Public gallery listing.
- * No auth required. Returns published clusters with author info.
+ * GET /api/community — Public gallery listing + search.
+ * No auth required.
  *
- * Query params: page, limit, sort (popular|newest), category
+ * Query params:
+ *   - q: search query (triggers semantic search when present)
+ *   - page, limit, sort (popular|newest), category: for listing mode
  */
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = request.nextUrl;
-    const page = parseInt(searchParams.get("page") || "1", 10);
+    const query = searchParams.get("q")?.trim() || "";
     const limit = Math.min(parseInt(searchParams.get("limit") || "20", 10), 50);
-    const sort = (searchParams.get("sort") as "popular" | "newest") || "newest";
     const category = searchParams.get("category") || undefined;
+
+    // Semantic search mode
+    if (query) {
+      const items = await searchPublishedClusters({
+        query,
+        category,
+        limit,
+      });
+      return NextResponse.json({ items, total: items.length });
+    }
+
+    // Listing mode
+    const page = parseInt(searchParams.get("page") || "1", 10);
+    const sort = (searchParams.get("sort") as "popular" | "newest") || "newest";
 
     const result = await listPublishedClusters({ page, limit, sort, category });
 

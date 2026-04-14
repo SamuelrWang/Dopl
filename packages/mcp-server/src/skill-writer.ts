@@ -14,15 +14,15 @@ const CLAUDE_DIR = join(homedir(), ".claude");
 const SKILLS_DIR = join(CLAUDE_DIR, "skills");
 const CLAUDE_MD_PATH = join(CLAUDE_DIR, "CLAUDE.md");
 
-const SIE_START = "<!-- SIE:START -->";
-const SIE_END = "<!-- SIE:END -->";
+const SIE_START = "<!-- DOPL:START -->";
+const SIE_END = "<!-- DOPL:END -->";
 
 /**
  * Check if a cluster skill directory already exists on disk.
  */
 export async function skillExists(slug: string): Promise<boolean> {
   try {
-    await access(join(SKILLS_DIR, `sie-${slug}`, "SKILL.md"));
+    await access(join(SKILLS_DIR, `dopl-${slug}`, "SKILL.md"));
     return true;
   } catch {
     return false;
@@ -38,7 +38,7 @@ export async function writeClusterSkill(
   brain: BrainData,
   entries: ClusterDetailEntry[],
 ): Promise<void> {
-  const skillDir = join(SKILLS_DIR, `sie-${slug}`);
+  const skillDir = join(SKILLS_DIR, `dopl-${slug}`);
   const refsDir = join(skillDir, "references");
 
   await mkdir(refsDir, { recursive: true });
@@ -69,7 +69,7 @@ export async function writeClusterSkill(
 export async function writeGlobalCanvasSkill(
   clusters: ClusterSummary[],
 ): Promise<void> {
-  const skillDir = join(SKILLS_DIR, "sie-canvas");
+  const skillDir = join(SKILLS_DIR, "dopl-canvas");
   await mkdir(skillDir, { recursive: true });
 
   const content = renderGlobalCanvasSkillMd(clusters);
@@ -134,7 +134,7 @@ export async function appendMemoryToSkill(
   slug: string,
   memory: string,
 ): Promise<void> {
-  const skillPath = join(SKILLS_DIR, `sie-${slug}`, "SKILL.md");
+  const skillPath = join(SKILLS_DIR, `dopl-${slug}`, "SKILL.md");
 
   let content: string;
   try {
@@ -200,7 +200,7 @@ export async function appendMemoryToSkill(
  * Remove a cluster skill directory from disk.
  */
 export async function removeClusterSkill(slug: string): Promise<void> {
-  const skillDir = join(SKILLS_DIR, `sie-${slug}`);
+  const skillDir = join(SKILLS_DIR, `dopl-${slug}`);
   try {
     await rm(skillDir, { recursive: true, force: true });
   } catch {
