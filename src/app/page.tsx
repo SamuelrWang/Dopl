@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import {
   Monitor,
   Settings,
@@ -18,14 +19,94 @@ import {
 /* ──────────────────────────────────────────────────────────────────── */
 /*  Reusable prompt input (hero + final CTA)                          */
 /* ──────────────────────────────────────────────────────────────────── */
+const ROTATING_PROMPTS = [
+  "Paste a link to an X post...",
+  "Describe your automation workflow...",
+  "Connect my CRM to Slack...",
+  "Build an AI agent that monitors...",
+  "Set up a webhook pipeline...",
+];
+
+function useTypingAnimation() {
+  const [display, setDisplay] = useState("");
+  const [promptIdx, setPromptIdx] = useState(0);
+
+  useEffect(() => {
+    let timeout: ReturnType<typeof setTimeout>;
+    const prompt = ROTATING_PROMPTS[promptIdx];
+    let charIdx = 0;
+    let deleting = false;
+
+    function tick() {
+      if (!deleting) {
+        // Typing forward
+        charIdx++;
+        setDisplay(prompt.slice(0, charIdx));
+        if (charIdx === prompt.length) {
+          // Pause at full text
+          timeout = setTimeout(() => {
+            deleting = true;
+            tick();
+          }, 2000);
+          return;
+        }
+        timeout = setTimeout(tick, 50 + Math.random() * 40);
+      } else {
+        // Deleting
+        charIdx--;
+        setDisplay(prompt.slice(0, charIdx));
+        if (charIdx === 0) {
+          // Move to next prompt
+          timeout = setTimeout(() => {
+            setPromptIdx((prev) => (prev + 1) % ROTATING_PROMPTS.length);
+          }, 400);
+          return;
+        }
+        timeout = setTimeout(tick, 25);
+      }
+    }
+
+    tick();
+    return () => clearTimeout(timeout);
+  }, [promptIdx]);
+
+  return display;
+}
+
+function handleLandingSend(message: string) {
+  if (!message.trim()) return;
+  localStorage.setItem("dopl-landing-message", message.trim());
+  window.location.href = "/login?redirectTo=/canvas";
+}
+
 function PromptInput() {
+  const [value, setValue] = useState("");
+  const animatedPlaceholder = useTypingAnimation();
+  const showPlaceholder = !value;
+
   return (
     <div className="w-full max-w-[740px] mx-auto">
       <div className="bg-[#141414] border border-white/[0.08] rounded-2xl overflow-hidden">
-        <div className="p-4 pb-2 min-h-[100px]">
-          <p className="text-white/30 text-[15px]">
-            Describe your idea, &apos;/&apos; for integrations...
-          </p>
+        <div className="relative p-4 pb-2 min-h-[100px]">
+          {showPlaceholder && (
+            <div className="absolute inset-0 p-4 pb-2 pointer-events-none text-left">
+              <span className="text-white/30 text-[15px] italic font-serif">
+                {animatedPlaceholder}
+                <span className="inline-block w-[2px] h-[16px] bg-white/40 ml-[1px] align-middle animate-pulse" />
+              </span>
+            </div>
+          )}
+          <textarea
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleLandingSend(value);
+              }
+            }}
+            className="w-full h-full min-h-[80px] bg-transparent text-white text-[15px] resize-none outline-none placeholder-transparent text-left"
+          />
         </div>
         <div className="flex items-center justify-between px-4 pb-3">
           <div className="flex items-center gap-1">
@@ -44,19 +125,25 @@ function PromptInput() {
               <Paperclip size={14} />
             </button>
           </div>
-          <div className="flex items-center gap-1">
-            <button className="flex items-center gap-1.5 px-3 py-1.5 text-white/50 text-[13px] hover:text-white/70 transition-colors">
-              <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                <path d="M21 12a9 9 0 1 1-9-9" />
-                <path d="M21 3v9h-9" />
-              </svg>
-              <span>Auto</span>
-              <ChevronDown size={12} />
-            </button>
-            <button className="w-8 h-8 rounded-full bg-white flex items-center justify-center hover:bg-white/90 transition-colors">
-              <ArrowUp size={16} className="text-black" />
-            </button>
-          </div>
+          <button
+            onClick={() => handleLandingSend(value)}
+            aria-label="Send"
+            className="w-7 h-7 flex items-center justify-center text-white/50 hover:text-white/90 border border-white/[0.12] hover:border-white/[0.22] rounded-[3px] transition-colors bg-white/[0.04] hover:bg-white/[0.08]"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 14 14"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M7 11V3" />
+              <path d="M3 7l4-4 4 4" />
+            </svg>
+          </button>
         </div>
       </div>
     </div>
@@ -117,6 +204,15 @@ function SnowflakeGrid() {
 /*  Main Landing Page                                                  */
 /* ──────────────────────────────────────────────────────────────────── */
 export default function Home() {
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 50);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   const logos = [
     "GlydeXP",
     "RevivalBio",
@@ -179,52 +275,68 @@ export default function Home() {
     >
       {/* ──── Navbar ──── */}
       <nav className="fixed top-0 left-0 right-0 z-50 px-4 sm:px-8 py-3">
-        <div className="max-w-[1200px] mx-auto flex items-center justify-between bg-black/40 backdrop-blur-xl border border-white/[0.08] rounded-full px-5 py-2.5">
+        <div
+          className={`mx-auto flex items-center justify-between rounded-full px-5 py-2.5 transition-all duration-700 ease-in-out ${
+            scrolled
+              ? "max-w-[1200px] bg-black/40 backdrop-blur-xl border border-white/[0.08] shadow-[0_4px_16px_rgba(0,0,0,0.3)]"
+              : "max-w-[1600px] bg-transparent border border-transparent"
+          }`}
+        >
           <div className="flex items-center gap-8">
             <Link href="/" className="flex items-center gap-2">
-              <svg width={24} height={24} viewBox="0 0 24 24" fill="white">
-                <path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z" />
-              </svg>
-              <span className="text-white font-semibold text-[16px]">
-                Capacity
+              <Image
+                src="/favicons/favicon-32x32.png"
+                alt="Dopl"
+                width={20}
+                height={20}
+                className="rounded-md"
+              />
+              <span
+                className="text-white text-[18px]"
+                style={{
+                  fontFamily: "var(--font-playfair), 'Playfair Display', Georgia, serif",
+                  fontStyle: "italic",
+                }}
+              >
+                Dopl
               </span>
             </Link>
             <div className="hidden md:flex items-center gap-6">
               <Link
-                href="#"
+                href="/canvas"
+                className="text-white/60 text-[14px] hover:text-white transition-colors"
+              >
+                Canvas
+              </Link>
+              <Link
+                href="/entries"
+                className="text-white/60 text-[14px] hover:text-white transition-colors"
+              >
+                Browse
+              </Link>
+              <Link
+                href="/build"
+                className="text-white/60 text-[14px] hover:text-white transition-colors"
+              >
+                Builder
+              </Link>
+              <Link
+                href="/pricing"
                 className="text-white/60 text-[14px] hover:text-white transition-colors"
               >
                 Pricing
-              </Link>
-              <Link
-                href="#"
-                className="text-white/60 text-[14px] hover:text-white transition-colors"
-              >
-                Affiliate Program
-              </Link>
-              <Link
-                href="#"
-                className="text-white/60 text-[14px] hover:text-white transition-colors"
-              >
-                Discord
               </Link>
             </div>
           </div>
           <div className="flex items-center gap-4">
             <Link
-              href="#"
-              className="hidden sm:block text-white/60 text-[14px] hover:text-white transition-colors"
-            >
-              Try the demo
-            </Link>
-            <Link
-              href="#"
+              href="/login"
               className="hidden sm:block text-white/60 text-[14px] hover:text-white transition-colors"
             >
               Sign in
             </Link>
             <Link
-              href="#"
+              href="/login"
               className="bg-white/[0.08] border border-white/[0.12] text-white text-[14px] px-4 py-1.5 rounded-full hover:bg-white/[0.12] transition-colors"
             >
               Sign up
@@ -253,14 +365,14 @@ export default function Home() {
 
           {/* Main heading */}
           <h1 className="mb-6 font-serif font-normal text-[clamp(48px,6vw,60px)] leading-[0.9] tracking-tighter text-white">
-            Build anything
+            Cutting-edge AI
             <br />
-            <span className="italic">Web apps. Mobile apps.</span>
+            <span className="italic">ingested into one intelligence layer.</span>
           </h1>
 
           {/* Subtext */}
           <p className="text-white/60 text-[18px] mb-12 tracking-wide font-mono">
-            Fullstack. Production-ready. Your code.
+            Bridging the frontier with your AI. Seamlessly connected.
           </p>
 
           {/* Prompt Input */}
@@ -743,268 +855,6 @@ export default function Home() {
                 <div className="flex items-center gap-1.5 mt-4 justify-center">
                   <div className="w-2 h-2 rounded-full bg-blue-500" />
                   <span className="text-white/40 text-[11px]">Mobile App</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ──── Everything you need to ship ──── */}
-      <section className="py-24 px-4">
-        <div className="max-w-[1200px] mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-[clamp(28px,4vw,48px)] font-normal mb-3">
-              <em className="font-serif italic">Everything</em>{" "}
-              you need to ship
-            </h2>
-            <p className="text-white/40 text-[16px]">
-              A complete toolkit for building production-ready web and mobile
-              applications
-            </p>
-          </div>
-
-          {/* Bento Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Card 1: Full-Stack — spans 1 col, tall */}
-            <div className="bg-[#0a0a0a] rounded-2xl border border-white/[0.06] p-6 row-span-2">
-              <div className="flex items-center justify-between mb-1">
-                <h3 className="text-white font-semibold text-[15px]">
-                  Full-Stack Web & Mobile Apps
-                </h3>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-full bg-white/20 animate-pulse" />
-                  <span className="text-white/30 text-[11px]">Building</span>
-                </div>
-              </div>
-              <p className="text-white/30 text-[12px] mb-4">
-                Frontend + Backend + Database + Mobile
-              </p>
-
-              {/* Code editor mockup */}
-              <div className="bg-[#111] rounded-xl border border-white/[0.06] overflow-hidden mb-4">
-                <div className="flex items-center gap-1.5 px-3 py-2 border-b border-white/[0.06]">
-                  <div className="w-2.5 h-2.5 rounded-full bg-[#ff5f57]" />
-                  <div className="w-2.5 h-2.5 rounded-full bg-[#febc2e]" />
-                  <div className="w-2.5 h-2.5 rounded-full bg-[#28c840]" />
-                  <div className="ml-2 flex gap-2">
-                    <span className="text-[10px] px-2 py-0.5 rounded bg-white/[0.06] text-white/60">
-                      Dashboard.tsx
-                    </span>
-                    <span className="text-[10px] text-white/30">api.ts</span>
-                  </div>
-                </div>
-                <div className="p-3 font-mono text-[11px] leading-relaxed">
-                  <div>
-                    <span className="text-white/30">1</span>{" "}
-                    <span className="text-purple-400">import</span>
-                    {"  { "}
-                    <span className="text-cyan-400">trpc</span>
-                    {" } "}
-                    <span className="text-purple-400">from</span>{" "}
-                    <span className="text-green-400">&apos;@/lib&apos;</span>
-                  </div>
-                  <div>
-                    <span className="text-white/30">2</span>
-                  </div>
-                  <div>
-                    <span className="text-white/30">3</span>{" "}
-                    <span className="text-purple-400">export function</span>{" "}
-                    <span className="text-yellow-300">Dashboard</span>
-                    {"() {"}
-                  </div>
-                  <div>
-                    <span className="text-white/30">4</span>
-                    {"   "}
-                    <span className="text-purple-400">const</span>{" "}
-                    <span className="text-white">data</span>
-                    {" = "}
-                    <span className="text-cyan-400">trpc</span>
-                    <span className="text-white">.query()</span>
-                  </div>
-                  <div>
-                    <span className="text-white/30">5</span>
-                  </div>
-                  <div>
-                    <span className="text-white/30">6</span>
-                    {"   "}
-                    <span className="text-purple-400">return</span>{" "}
-                    <span className="text-white">&lt;</span>
-                    <span className="text-green-400">Card</span>
-                    <span className="text-white">&gt;</span>
-                    <span className="animate-pulse text-white">|</span>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between px-3 py-1.5 border-t border-white/[0.06]">
-                  <span className="text-white/20 text-[10px]">
-                    TypeScript React
-                  </span>
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                    <span className="text-white/30 text-[10px]">Ready</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-1">
-                {["blue", "yellow", "cyan"].map((c, i) => (
-                  <div
-                    key={i}
-                    className="w-6 h-6 rounded-full bg-white/[0.06] border border-white/[0.08] -ml-1 first:ml-0"
-                  />
-                ))}
-                <span className="text-white/30 text-[11px] ml-2">
-                  + 4 more
-                </span>
-              </div>
-            </div>
-
-            {/* Card 2: 0 coding skills */}
-            <div className="bg-[#0a0a0a] rounded-2xl border border-white/[0.06] p-8 flex flex-col items-center justify-center text-center">
-              <div className="text-[64px] font-bold text-white/80 mb-2">0</div>
-              <p className="text-white/40 text-[15px]">
-                coding skills required
-              </p>
-            </div>
-
-            {/* Card 3: Your Own Backend */}
-            <div className="bg-[#0a0a0a] rounded-2xl border border-white/[0.06] p-6">
-              <h3 className="text-white font-semibold text-[15px] mb-1">
-                Your Own Backend
-              </h3>
-              <p className="text-white/30 text-[12px] mb-4">
-                Zero vendor lock-in
-              </p>
-              <div className="bg-[#111] rounded-xl border border-white/[0.06] p-4 space-y-3">
-                <div className="flex items-center gap-2 text-white/50 text-[12px] border-b border-white/[0.04] pb-2">
-                  <span className="flex-1">Full-Stack Web & Mobile Apps</span>
-                </div>
-                {["Real Backend", "Dedicated Database", "Your Code"].map(
-                  (item) => (
-                    <div
-                      key={item}
-                      className="flex items-center justify-between"
-                    >
-                      <span className="text-white/40 text-[13px]">
-                        {item}
-                      </span>
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-2 h-2 rounded-full bg-green-500" />
-                        <span className="text-green-400 text-[12px]">
-                          Included
-                        </span>
-                      </div>
-                    </div>
-                  )
-                )}
-              </div>
-            </div>
-
-            {/* Card 4: Apps that scale */}
-            <div className="bg-[#0a0a0a] rounded-2xl border border-white/[0.06] p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="text-white font-semibold text-[15px]">
-                    Apps that scale
-                  </h3>
-                  <p className="text-white/30 text-[12px]">
-                    Built on modern infrastructure
-                  </p>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-full bg-green-500" />
-                  <span className="text-green-400 text-[12px]">Live</span>
-                </div>
-              </div>
-              {/* Chart placeholder */}
-              <div className="h-28 flex items-end gap-1">
-                {[20, 30, 25, 40, 35, 50, 45, 60, 55, 70, 75, 85, 90].map(
-                  (h, i) => (
-                    <div
-                      key={i}
-                      className="flex-1 rounded-t bg-emerald-500/60"
-                      style={{ height: `${h}%` }}
-                    />
-                  )
-                )}
-              </div>
-            </div>
-
-            {/* Card 5: AI Co-founder */}
-            <div className="bg-[#0a0a0a] rounded-2xl border border-white/[0.06] p-6">
-              <h3 className="text-white font-semibold text-[15px] mb-1">
-                AI Co-founder
-              </h3>
-              <p className="text-white/30 text-[12px] mb-4">
-                Your strategic partner
-              </p>
-              <div className="bg-[#111] rounded-xl border border-white/[0.06] p-4 h-24 flex items-end">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded bg-white/[0.06]" />
-                  <div className="text-white/30 text-[11px]">
-                    Ready
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Card 6: Spec Mode */}
-            <div className="bg-[#0a0a0a] rounded-2xl border border-white/[0.06] p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="text-white font-semibold text-[15px]">
-                    Spec Mode
-                  </h3>
-                  <p className="text-white/30 text-[12px]">
-                    Think first, build right
-                  </p>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-full bg-white/20 animate-pulse" />
-                  <span className="text-white/30 text-[11px]">Planning</span>
-                </div>
-              </div>
-              <div className="bg-[#111] rounded-xl border border-white/[0.06] p-3 font-mono text-[11px] space-y-2">
-                <div className="text-white/30">project-spec.md</div>
-                <div className="text-white/50"># User Authentication</div>
-                <div className="flex gap-1">
-                  <div className="h-1.5 bg-amber-500/40 rounded flex-1" />
-                  <div className="h-1.5 bg-amber-500/40 rounded w-2/3" />
-                </div>
-                <div className="text-white/50">
-                  # Data Model{" "}
-                  <span className="animate-pulse text-white">|</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Card 7: Powered by best AI models */}
-            <div className="bg-[#0a0a0a] rounded-2xl border border-white/[0.06] p-6 md:col-span-2">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-white font-semibold text-[15px]">
-                    Powered by the best AI models
-                  </h3>
-                  <p className="text-white/30 text-[13px]">
-                    Switch between Claude, GPT-4, Gemini, and more
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  {[
-                    "bg-orange-600",
-                    "bg-emerald-700",
-                    "bg-blue-600",
-                    "bg-purple-600",
-                    "bg-neutral-600",
-                  ].map((bg, i) => (
-                    <div
-                      key={i}
-                      className={`w-10 h-10 rounded-full ${bg} border-2 border-black`}
-                    />
-                  ))}
-                  <span className="text-white/30 text-[13px] ml-1">
-                    +5 more
-                  </span>
                 </div>
               </div>
             </div>

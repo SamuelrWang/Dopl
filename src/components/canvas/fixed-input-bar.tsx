@@ -37,6 +37,26 @@ export function FixedInputBar() {
     el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
   }, [input]);
 
+  // Pick up a pending message from the landing page (stored before login redirect)
+  const landingMessageHandled = useRef(false);
+  useEffect(() => {
+    if (landingMessageHandled.current) return;
+    const pending = localStorage.getItem("dopl-landing-message");
+    if (!pending) return;
+    landingMessageHandled.current = true;
+    localStorage.removeItem("dopl-landing-message");
+    // Delay briefly so the canvas store is fully initialized
+    setTimeout(() => {
+      if (isUrlOnlyMessage(pending)) {
+        const id = spawnChatPanel();
+        startPanelIngestion(dispatch, id, extractUrl(pending));
+      } else {
+        spawnChatPanel(pending);
+      }
+    }, 500);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   /**
    * Spawn a ChatPanel at the camera viewport center. If `pendingInput` is
    * provided, the panel consumes it on mount and fires a normal chat (or
