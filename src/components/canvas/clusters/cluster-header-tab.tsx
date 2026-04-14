@@ -142,7 +142,7 @@ export function ClusterHeaderTab({
           <input
             ref={(el) => el?.focus({ preventScroll: true })}
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={(e) => setDraft(e.target.value.replace(/\s/g, "_"))}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();

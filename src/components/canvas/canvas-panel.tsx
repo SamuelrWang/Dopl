@@ -28,8 +28,18 @@ import { ChatPanelBody } from "./panels/chat/chat-panel";
 import { ConnectionPanelBody } from "./panels/connection-panel";
 import { EntryPanelBody } from "./panels/entry-panel";
 import { BrowsePanelBody } from "./panels/browse/browse-panel";
-import { IngestionPanelBody } from "./panels/ingestion/ingestion-panel";
-import { BROWSE_PANEL_MIN_SIZE, isPanelClusterable, isPanelDeletable, type CanvasAction, type Panel } from "./types";
+import { ClusterBrainPanel } from "./panels/cluster-brain/cluster-brain-panel";
+import { useOnboardingContext } from "@/components/onboarding/onboarding-provider";
+import { BROWSE_PANEL_MIN_SIZE, isPanelClusterable, isPanelDeletable, type CanvasAction, type ChatPanelData, type Panel } from "./types";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 interface CanvasPanelProps {
   panel: Panel;
@@ -95,6 +105,10 @@ function hasDirectTextContent(el: Element): boolean {
 }
 
 function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
+  // Onboarding highlight — pulse glow if this panel type is the current target
+  const { highlightPanelType } = useOnboardingContext();
+  const isHighlighted = highlightPanelType === panel.type;
+
   // Stable ref to the latest canvas state — used for imperative drag
   // logic without subscribing to re-renders.
   const canvasStateRef = useCanvasStateRef();
@@ -429,8 +443,30 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
     };
   }, []);
 
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+
   const handleClose = useCallback(() => {
+    // Pinned chat panels with messages get a confirmation dialog
+    if (panel.type === "chat" && panel.messages.length > 0 && panel.pinned) {
+      setShowCloseConfirm(true);
+      return;
+    }
+    // Unpinned chats or empty chats close immediately (auto-delete handles cleanup)
+    if (panel.type === "chat") {
+      fetch(`/api/conversations/${encodeURIComponent(panel.id)}`, {
+        method: "DELETE",
+      }).catch(() => {});
+    }
     dispatch({ type: "CLOSE_PANEL", id: panel.id });
+  }, [dispatch, panel]);
+
+  const handleConfirmClose = useCallback(() => {
+    // Delete conversation from server (best-effort)
+    fetch(`/api/conversations/${encodeURIComponent(panel.id)}`, {
+      method: "DELETE",
+    }).catch(() => {});
+    dispatch({ type: "CLOSE_PANEL", id: panel.id });
+    setShowCloseConfirm(false);
   }, [dispatch, panel.id]);
 
   const deletable = isPanelDeletable(panel);
@@ -441,15 +477,14 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
         ? "API & MCP Connection"
         : panel.type === "entry"
           ? `Entry · ${panel.title}`
-          : panel.type === "ingestion"
-            ? "Ingest URL"
-            : panel.type === "browse"
-              ? "Browse Entries"
-              : "Panel";
+          : panel.type === "browse"
+            ? "Browse Entries"
+            : "Panel";
 
   return (
     <div
       data-panel-id={panel.id}
+      data-panel-type={panel.type}
       data-panel-selected={isSelected || undefined}
       style={{
         position: "absolute",
@@ -500,7 +535,8 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
         "relative rounded-2xl overflow-hidden backdrop-blur-[12px] backdrop-saturate-[1.4] bg-black/[0.25] border border-white/[0.1] flex flex-col select-text transition-[box-shadow] duration-150 " +
         (isSelected
           ? "shadow-[0_0_0_2px_rgba(255,255,255,0.5),0_4px_16px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.08)] !border-white/30"
-          : "shadow-[0_4px_16px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.08)]")
+          : "shadow-[0_4px_16px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.08)]") +
+        (isHighlighted ? " onboarding-highlight" : "")
       }
     >
       {/* Top specular highlight */}
@@ -591,14 +627,41 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
         )}
       </div>
 
+      {/* Timer / pin bar for chat panels */}
+      {panel.type === "chat" && panel.messages.length > 0 && (
+        <ChatExpiryBar panel={panel} dispatch={dispatch} />
+      )}
+
       {/* Body — routes by panel type */}
       <div className="flex-1 min-h-0 flex flex-col">
         {panel.type === "chat" && <ChatPanelBody panel={panel} />}
         {panel.type === "connection" && <ConnectionPanelBody panel={panel} />}
         {panel.type === "entry" && <EntryPanelBody panel={panel} />}
-        {panel.type === "ingestion" && <IngestionPanelBody panel={panel} />}
         {panel.type === "browse" && <BrowsePanelBody panel={panel} />}
+        {panel.type === "cluster-brain" && <ClusterBrainPanel panel={panel} />}
       </div>
+
+      {/* Confirmation dialog for closing chat panels with messages */}
+      {showCloseConfirm && (
+        <Dialog open onOpenChange={(open) => { if (!open) setShowCloseConfirm(false); }}>
+          <DialogContent showCloseButton={false}>
+            <DialogHeader>
+              <DialogTitle>Delete chat history?</DialogTitle>
+              <DialogDescription>
+                By closing this, you will delete this entire chat history. This action cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowCloseConfirm(false)}>
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={handleConfirmClose}>
+                Delete
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* Resize edges & corners — browse panels only */}
       {panel.type === "browse" && (
@@ -624,3 +687,67 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
 }
 
 export const CanvasPanel = React.memo(CanvasPanelInner);
+
+// ── Chat expiry bar ──────────────────────────────────────────────────
+
+function formatTimeRemaining(expiresAt: string): string {
+  const diff = new Date(expiresAt).getTime() - Date.now();
+  if (diff <= 0) return "Expiring soon";
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+  if (days > 0) return `Expires in ${days}d ${hours}h`;
+  return `Expires in ${hours}h`;
+}
+
+function ChatExpiryBar({
+  panel,
+  dispatch,
+}: {
+  panel: ChatPanelData;
+  dispatch: React.Dispatch<CanvasAction>;
+}) {
+  const isPinned = panel.pinned ?? false;
+
+  const handleTogglePin = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      dispatch({
+        type: "SET_CHAT_PINNED",
+        panelId: panel.id,
+        pinned: !isPinned,
+      });
+    },
+    [dispatch, panel.id, isPinned]
+  );
+
+  return (
+    <div className="shrink-0 flex items-center justify-between px-4 h-6 border-b border-white/[0.04] bg-white/[0.02]">
+      <span className="font-mono text-[9px] uppercase tracking-wider text-white/30">
+        {isPinned
+          ? "Pinned"
+          : panel.expiresAt
+            ? formatTimeRemaining(panel.expiresAt)
+            : "Expires in 7d 0h"}
+      </span>
+      <button
+        onClick={handleTogglePin}
+        aria-label={isPinned ? "Unpin chat" : "Pin chat"}
+        title={isPinned ? "Unpin — will auto-delete after 7 days" : "Pin — keep forever"}
+        className="w-5 h-5 flex items-center justify-center rounded-[2px] text-white/30 hover:text-white/70 transition-colors"
+      >
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 10 10"
+          fill={isPinned ? "currentColor" : "none"}
+          stroke="currentColor"
+          strokeWidth="1.2"
+          strokeLinecap="round"
+          aria-hidden
+        >
+          <path d="M5 1v6M3 3l2-2 2 2M2 7h6M5 7v2" />
+        </svg>
+      </button>
+    </div>
+  );
+}

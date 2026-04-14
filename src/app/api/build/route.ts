@@ -1,9 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { BuildRequestSchema } from "@/types/api";
 import { buildComposite } from "@/lib/retrieval/builder";
-import { withExternalAuth } from "@/lib/auth/with-auth";
+import { withSubscriptionAuth } from "@/lib/auth/with-auth";
+import type { SubscriptionTier } from "@/lib/billing/subscriptions";
 
-async function handlePost(request: NextRequest) {
+async function handlePost(
+  request: NextRequest,
+  { tier }: { userId: string; tier: SubscriptionTier }
+) {
+  // Build Solution is pro-only
+  if (tier === "free") {
+    return NextResponse.json(
+      {
+        error: "pro_required",
+        message:
+          "Build Solution is a Pro feature. Upgrade to compose custom solutions from the knowledge base.",
+        upgrade_url: "/settings/billing",
+      },
+      { status: 402 }
+    );
+  }
+
   try {
     const body = await request.json();
     const parsed = BuildRequestSchema.safeParse(body);
@@ -15,7 +32,10 @@ async function handlePost(request: NextRequest) {
       );
     }
 
-    const result = await buildComposite(parsed.data.brief, parsed.data.constraints);
+    const result = await buildComposite(
+      parsed.data.brief,
+      parsed.data.constraints
+    );
 
     return NextResponse.json(result);
   } catch (error) {
@@ -27,4 +47,4 @@ async function handlePost(request: NextRequest) {
   }
 }
 
-export const POST = withExternalAuth(handlePost);
+export const POST = withSubscriptionAuth(handlePost);

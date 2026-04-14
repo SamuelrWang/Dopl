@@ -37,7 +37,7 @@ import {
   ClusterWorldLayer,
 } from "./clusters/cluster-layer";
 import { clusterBounds, isPointInClusterShape } from "./clusters/cluster-geometry";
-// SelectionMenu removed — actions moved to cluster header tab three-dot menu.
+import { SelectionMenu } from "./selection/selection-menu";
 
 /**
  * Apply camera transform directly to DOM elements, bypassing React.
@@ -189,6 +189,7 @@ export function Canvas() {
   const viewportRef = useRef<HTMLDivElement>(null);
   const worldRef = useRef<HTMLDivElement>(null);
   const [marquee, setMarquee] = useState<MarqueeState | null>(null);
+  const [cursorPos, setCursorPos] = useState<{ x: number; y: number } | null>(null);
   const marqueeRef = useRef<MarqueeState | null>(null);
   // Keep ref in sync with state so handlers always see latest value.
   marqueeRef.current = marquee;
@@ -291,6 +292,11 @@ export function Canvas() {
   useEffect(() => {
     clustersRef.current = state.clusters;
   }, [state.clusters]);
+
+  // Clear the selection menu when selection drops below 2 panels.
+  useEffect(() => {
+    if (state.selectedPanelIds.length < 2) setCursorPos(null);
+  }, [state.selectedPanelIds]);
 
   // ── Background pointerdown (cluster drag OR marquee) ──────────────
 
@@ -460,6 +466,10 @@ export function Canvas() {
         !currentMarquee.additive
       ) {
         dispatch({ type: "SET_SELECTION", panelIds: [] });
+        setCursorPos(null);
+      } else {
+        // Marquee ended — show selection menu at cursor if 2+ panels selected.
+        setCursorPos({ x: e.clientX, y: e.clientY });
       }
       setMarquee(null);
     },
@@ -684,6 +694,7 @@ export function Canvas() {
   return (
     <div
       ref={viewportRef}
+      data-canvas-viewport
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
@@ -735,8 +746,10 @@ export function Canvas() {
 
       {/* Cluster header tabs now rendered inside ClusterWorldLayer. */}
 
-      {/* Selection context menu — removed; actions moved to cluster
-          header tab three-dot menu. */}
+      {/* Floating selection menu — follows cursor when 2+ panels selected */}
+      {cursorPos && state.selectedPanelIds.length >= 2 && (
+        <SelectionMenu cursorPos={cursorPos} />
+      )}
 
       {/* Marquee selection overlay — uses fixed positioning to escape the
           GPU-composited world layer (will-change:transform creates its own

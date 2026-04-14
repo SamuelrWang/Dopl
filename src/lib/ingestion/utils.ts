@@ -6,8 +6,9 @@
  * - truncateContent: enforce content budget before Claude calls
  */
 
+import { MAX_IMAGE_SIZE_BYTES } from "@/lib/config";
+
 const DEFAULT_FETCH_TIMEOUT_MS = 30_000; // 30 seconds
-const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
 const MAX_RETRY_ATTEMPTS = 3;
 const RETRY_BASE_DELAY_MS = 1_000; // 1 second
 
@@ -75,6 +76,13 @@ export async function retryWithBackoff<T>(
 
 function isTransientError(error: Error): boolean {
   const msg = error.message.toLowerCase();
+
+  // Check for HTTP status code in error object (Anthropic/OpenAI SDKs set .status)
+  const status = (error as unknown as Record<string, unknown>).status;
+  if (typeof status === "number" && (status === 429 || status === 529 || status === 502 || status === 503)) {
+    return true;
+  }
+
   return (
     msg.includes("timed out") ||
     msg.includes("timeout") ||
@@ -85,7 +93,9 @@ function isTransientError(error: Error): boolean {
     msg.includes("503") ||
     msg.includes("502") ||
     msg.includes("429") ||
-    msg.includes("rate limit")
+    msg.includes("529") ||
+    msg.includes("rate limit") ||
+    msg.includes("overloaded")
   );
 }
 

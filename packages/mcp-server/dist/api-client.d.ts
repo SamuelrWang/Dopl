@@ -36,4 +36,65 @@ export declare class SIEClient {
     }>;
     getCluster(slug: string): Promise<ClusterDetail>;
     queryCluster(slug: string, query: string, maxResults?: number): Promise<ClusterQueryResult>;
+    pingMcpStatus(): Promise<void>;
+    getClusterBrain(slug: string): Promise<{
+        instructions: string;
+        memories: {
+            id: string;
+            content: string;
+        }[];
+    }>;
+    saveClusterMemory(slug: string, content: string): Promise<{
+        id: string;
+        content: string;
+    }>;
+    synthesizeBrain(entries: Array<{
+        title: string;
+        agents_md: string;
+        readme: string;
+    }>): Promise<{
+        instructions: string;
+    }>;
+    updateClusterBrain(slug: string, instructions: string): Promise<void>;
+    ingestUrl(url: string, content?: {
+        text?: string;
+        images?: string[];
+        links?: string[];
+    }): Promise<{
+        entry_id: string;
+        status: string;
+        stream_url?: string;
+        title?: string | null;
+    }>;
+    updateCluster(slug: string, updates: {
+        name?: string;
+        entry_ids?: string[];
+    }): Promise<ClusterRow>;
+    deleteCluster(slug: string): Promise<void>;
+    deleteClusterMemory(slug: string, memoryId: string): Promise<void>;
+    updateEntry(id: string, updates: {
+        title?: string;
+        summary?: string;
+        use_case?: string;
+        complexity?: string;
+    }): Promise<SIEEntry>;
+    checkEntryUpdates(id: string): Promise<{
+        entry_id: string;
+        title: string | null;
+        has_updates: boolean | null;
+        reason?: string;
+        ingested_at?: string;
+        last_pushed_at?: string;
+        days_since_ingestion?: number;
+        days_since_push?: number;
+        repo?: string;
+    }>;
+    synthesizeIncremental(existingInstructions: string, newEntry: {
+        title: string;
+        agents_md: string;
+        readme: string;
+    }): Promise<{
+        instructions: string;
+    }>;
+    deleteEntry(id: string): Promise<void>;
 }

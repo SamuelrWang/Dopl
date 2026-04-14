@@ -3,7 +3,7 @@
  *
  * Renders an elevated Surface with horizontal flex layout. Has subtle internal
  * padding so the inner pills are spaced from the edges. Optionally renders a
- * leading element (like an Orb logo).
+ * leading element (like a logo image).
  */
 
 import * as React from "react";

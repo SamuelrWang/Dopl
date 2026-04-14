@@ -8,12 +8,13 @@ import {
   type BuilderMessage,
   type EntryReference,
 } from "./builder-message";
+import { CitationPanel, type CitationDetails } from "./citation-panel";
 
 const WELCOME_MESSAGE: BuilderMessage = {
   role: "ai",
   type: "text",
   content:
-    "I can help you find and build AI/automation setups from the knowledge base. Describe what you want to build — I'll search for relevant setups and help you put together a plan.",
+    "I can help you design and build AI/automation systems. Describe what you want to build — I'll put together a concrete implementation plan with tool recommendations, architecture decisions, and setup steps.",
 };
 
 interface ChatHistoryMessage {
@@ -29,6 +30,11 @@ export function BuilderChat() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Citation panel state
+  const [selectedCitation, setSelectedCitation] = useState<EntryReference | null>(null);
+  const [citationDetails, setCitationDetails] = useState<CitationDetails | null>(null);
+  const [citationLoading, setCitationLoading] = useState(false);
+
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -37,6 +43,42 @@ export function BuilderChat() {
 
   useEffect(() => {
     inputRef.current?.focus();
+  }, []);
+
+  // Fetch full entry details when a citation is clicked
+  const handleCitationClick = useCallback(async (entry: EntryReference) => {
+    setSelectedCitation(entry);
+    setCitationDetails(null);
+    setCitationLoading(true);
+
+    try {
+      const res = await fetch(`/api/entries/${entry.entry_id}`);
+      if (!res.ok) throw new Error("Failed to fetch");
+      const data = await res.json();
+
+      setCitationDetails({
+        id: data.id,
+        title: data.title,
+        summary: data.summary,
+        source_url: data.source_url,
+        source_platform: data.source_platform,
+        complexity: data.complexity,
+        use_case: data.use_case,
+        readme: data.readme,
+        agents_md: data.agents_md,
+        manifest: data.manifest,
+        tags: data.tags || [],
+      });
+    } catch {
+      setCitationDetails(null);
+    } finally {
+      setCitationLoading(false);
+    }
+  }, []);
+
+  const handleCloseCitation = useCallback(() => {
+    setSelectedCitation(null);
+    setCitationDetails(null);
   }, []);
 
   const handleSend = useCallback(async () => {
@@ -54,6 +96,9 @@ export function BuilderChat() {
       ...chatHistory,
       { role: "user" as const, content: text },
     ];
+
+    // Track all entry references across this turn for citations
+    const turnCitations = new Map<string, EntryReference>();
 
     try {
       const response = await fetch("/api/chat", {
@@ -78,7 +123,6 @@ export function BuilderChat() {
       const decoder = new TextDecoder();
       let streamingText = "";
       let streamingMsgIndex: number | null = null;
-      const pendingEntries: EntryReference[] = [];
 
       // Add initial streaming message
       setMessages((prev) => {
@@ -122,14 +166,16 @@ export function BuilderChat() {
               }
 
               case "tool_call": {
-                // If we were streaming text, finalize it
+                // If we were streaming text, finalize it with citations
                 if (streamingText && streamingMsgIndex !== null) {
+                  const citationsSnapshot = new Map(turnCitations);
                   setMessages((prev) => {
                     const updated = [...prev];
                     updated[streamingMsgIndex!] = {
                       role: "ai",
                       type: "text",
                       content: streamingText,
+                      citations: citationsSnapshot.size > 0 ? citationsSnapshot : undefined,
                     };
                     return updated;
                   });
@@ -151,7 +197,11 @@ export function BuilderChat() {
               }
 
               case "entry_reference": {
-                pendingEntries.push(event.entry as EntryReference);
+                // Accumulate into citation map — don't render as cards
+                const ref = event.entry as EntryReference;
+                if (ref.entry_id) {
+                  turnCitations.set(ref.entry_id, ref);
+                }
                 break;
               }
 
@@ -178,19 +228,6 @@ export function BuilderChat() {
                   return updated;
                 });
 
-                // Show entry cards if any
-                if (pendingEntries.length > 0) {
-                  setMessages((prev) => [
-                    ...prev,
-                    {
-                      role: "ai",
-                      type: "entry_cards",
-                      entries: [...pendingEntries],
-                    },
-                  ]);
-                  pendingEntries.length = 0;
-                }
-
                 // Start new streaming message for post-tool response
                 streamingText = "";
                 setMessages((prev) => {
@@ -204,8 +241,9 @@ export function BuilderChat() {
               }
 
               case "done": {
-                // Finalize any streaming text
+                // Finalize any streaming text — attach all accumulated citations
                 if (streamingMsgIndex !== null) {
+                  const finalCitations = new Map(turnCitations);
                   setMessages((prev) => {
                     const updated = [...prev];
                     if (streamingText) {
@@ -213,6 +251,7 @@ export function BuilderChat() {
                         role: "ai",
                         type: "text",
                         content: streamingText,
+                        citations: finalCitations.size > 0 ? finalCitations : undefined,
                       };
                     } else {
                       // Remove empty streaming message
@@ -280,7 +319,11 @@ export function BuilderChat() {
         className="flex-1 overflow-y-auto p-6 space-y-4 min-h-0 relative"
       >
         {messages.map((msg, i) => (
-          <BuilderMessageBubble key={i} message={msg} />
+          <BuilderMessageBubble
+            key={i}
+            message={msg}
+            onCitationClick={handleCitationClick}
+          />
         ))}
       </div>
 
@@ -308,6 +351,14 @@ export function BuilderChat() {
           </Button>
         </div>
       </div>
+
+      {/* Citation side panel */}
+      <CitationPanel
+        entry={selectedCitation}
+        details={citationDetails}
+        loading={citationLoading}
+        onClose={handleCloseCitation}
+      />
     </div>
   );
 }

@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { config } from "dotenv";
 import { resolve } from "path";
+import { retryWithBackoff } from "@/lib/ingestion/utils";
 
 // Force-load .env.local with override.
 // Next.js doesn't override shell env vars (even empty ones) with .env.local values.
@@ -42,10 +43,14 @@ export const claude = new Proxy({} as Anthropic, {
 
 export async function generateEmbedding(text: string): Promise<number[]> {
   const client = getOpenAIClient();
-  const response = await client.embeddings.create({
-    model: process.env.EMBEDDING_MODEL || "text-embedding-3-small",
-    input: text,
-  });
+  const response = await retryWithBackoff(
+    () =>
+      client.embeddings.create({
+        model: process.env.EMBEDDING_MODEL || "text-embedding-3-small",
+        input: text,
+      }),
+    { label: "generateEmbedding" }
+  );
   return response.data[0].embedding;
 }
 
@@ -56,18 +61,16 @@ export async function callClaude(
 ): Promise<string> {
   const client = getClaudeClient();
 
-  const messages: Anthropic.MessageCreateParams["messages"] = [
-    {
-      role: "user",
-      content: systemPrompt ? `${systemPrompt}\n\n${userContent}` : userContent,
-    },
-  ];
-
-  const response = await client.messages.create({
-    model: process.env.LLM_MODEL || "claude-sonnet-4-20250514",
-    max_tokens: options?.maxTokens || 8192,
-    messages,
-  });
+  const response = await retryWithBackoff(
+    () =>
+      client.messages.create({
+        model: process.env.LLM_MODEL || "claude-sonnet-4-20250514",
+        max_tokens: options?.maxTokens || 8192,
+        ...(systemPrompt ? { system: systemPrompt } : {}),
+        messages: [{ role: "user" as const, content: userContent }],
+      }),
+    { label: "callClaude" }
+  );
 
   const textBlock = response.content.find((b) => b.type === "text");
   return textBlock?.text || "";

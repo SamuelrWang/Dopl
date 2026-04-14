@@ -18,7 +18,7 @@ import { useEffect } from "react";
 import { useCanvas } from "../canvas-store";
 import type { Cluster, Panel } from "../types";
 
-const PLACEHOLDER_PATTERN = /^Cluster\s+\d+$/i;
+const PLACEHOLDER_PATTERN = /^Cluster[_\s]+\d+$/i;
 
 /** Shape sent to /api/cluster/name — mirrors the route's expectations. */
 interface PanelSummary {
@@ -43,9 +43,6 @@ function summarisePanel(panel: Panel): PanelSummary {
       break;
     case "connection":
       base.title = "API & MCP Connection";
-      break;
-    case "ingestion":
-      base.title = panel.url || "Ingestion";
       break;
   }
   return base;

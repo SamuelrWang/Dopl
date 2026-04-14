@@ -24,16 +24,16 @@ import type {
   CanvasState,
   ChatPanelData,
   Cluster,
+  ClusterBrainPanelData,
   ConnectionPanelData,
   EntryPanelData,
-  IngestionPanelData,
   Panel,
 } from "./types";
 import {
   BROWSE_PANEL_SIZE,
+  CLUSTER_BRAIN_PANEL_SIZE,
   CONNECTION_PANEL_SIZE,
   ENTRY_PANEL_SIZE,
-  INGESTION_PANEL_SIZE,
   INITIAL_CANVAS_STATE,
   MIN_CLUSTER_SIZE,
   isPanelDeletable,
@@ -43,15 +43,15 @@ import type {
   ProgressEvent,
 } from "@/components/ingest/chat-message";
 import { useCanvasSync } from "./use-canvas-sync";
+import { useConversationSync } from "./use-conversation-sync";
 
-const STORAGE_KEY_PREFIX = "sie:canvas:state";
-const ACTIVE_USER_KEY = "sie:canvas:active-user";
+import { CANVAS_STORAGE_KEY_PREFIX, CANVAS_ACTIVE_USER_KEY } from "@/lib/config";
 const SAVE_DEBOUNCE_MS = 500;
 
 /** Build the user-scoped localStorage key for canvas state. */
 function getStorageKey(userId?: string): string {
-  const uid = userId || (typeof window !== "undefined" ? localStorage.getItem(ACTIVE_USER_KEY) : null);
-  return uid ? `${STORAGE_KEY_PREFIX}:${uid}` : STORAGE_KEY_PREFIX;
+  const uid = userId || (typeof window !== "undefined" ? localStorage.getItem(CANVAS_ACTIVE_USER_KEY) : null);
+  return uid ? `${CANVAS_STORAGE_KEY_PREFIX}:${uid}` : CANVAS_STORAGE_KEY_PREFIX;
 }
 
 
@@ -196,6 +196,40 @@ function reducer(state: CanvasState, action: CanvasAction): CanvasState {
         clusters: stripFromClusters(state.clusters, new Set([action.id])),
       };
     }
+
+    case "HYDRATE_CHAT_MESSAGES": {
+      return {
+        ...state,
+        panels: state.panels.map((p) =>
+          p.id === action.panelId && p.type === "chat"
+            ? { ...p, messages: action.messages, conversationId: action.conversationId }
+            : p
+        ),
+      };
+    }
+
+    case "UPDATE_CHAT_TITLE":
+      return {
+        ...state,
+        panels: state.panels.map((p) =>
+          p.id === action.panelId && p.type === "chat"
+            ? { ...p, title: action.title }
+            : p
+        ),
+      };
+
+    case "SET_CHAT_PINNED":
+      return {
+        ...state,
+        panels: state.panels.map((p) =>
+          p.id === action.panelId && p.type === "chat"
+            ? { ...p, pinned: action.pinned }
+            : p
+        ),
+      };
+
+    case "TOGGLE_SIDEBAR":
+      return { ...state, sidebarOpen: !state.sidebarOpen };
 
     case "SET_SELECTION": {
       // Bail on no-op updates so React doesn't re-render every panel when
@@ -498,27 +532,6 @@ function reducer(state: CanvasState, action: CanvasAction): CanvasState {
         ),
       };
 
-    case "CREATE_INGESTION_PANEL": {
-      const newPanel: IngestionPanelData = {
-        id: action.id,
-        type: "ingestion",
-        x: action.x,
-        y: action.y,
-        width: INGESTION_PANEL_SIZE.width,
-        height: INGESTION_PANEL_SIZE.height,
-        url: "",
-        status: "idle",
-        logs: [],
-        entryId: null,
-        errorMessage: null,
-      };
-      return {
-        ...state,
-        panels: [...state.panels, newPanel],
-        nextPanelId: state.nextPanelId + 1,
-      };
-    }
-
     case "CREATE_BROWSE_PANEL": {
       const newPanel: BrowsePanelData = {
         id: action.id,
@@ -535,12 +548,83 @@ function reducer(state: CanvasState, action: CanvasAction): CanvasState {
       };
     }
 
-    case "UPDATE_INGESTION_STATE":
+    // ── Cluster brain panel actions ─────────────────────────────────
+
+    case "CREATE_CLUSTER_BRAIN_PANEL": {
+      const newPanel: ClusterBrainPanelData = {
+        id: action.id,
+        type: "cluster-brain",
+        clusterId: action.clusterId,
+        clusterName: action.clusterName,
+        x: action.x,
+        y: action.y,
+        width: CLUSTER_BRAIN_PANEL_SIZE.width,
+        height: CLUSTER_BRAIN_PANEL_SIZE.height,
+        instructions: "",
+        memories: [],
+        status: "generating",
+        errorMessage: null,
+      };
+      // Auto-join the brain panel to its cluster
+      const updatedClusters = state.clusters.map((c) =>
+        c.id === action.clusterId
+          ? { ...c, panelIds: [...c.panelIds, action.id] }
+          : c
+      );
+      return {
+        ...state,
+        panels: [...state.panels, newPanel],
+        clusters: updatedClusters,
+        nextPanelId: state.nextPanelId + 1,
+      };
+    }
+
+    case "UPDATE_CLUSTER_BRAIN_INSTRUCTIONS":
       return {
         ...state,
         panels: state.panels.map((p) =>
-          p.id === action.panelId && p.type === "ingestion"
-            ? { ...p, ...action.patch }
+          p.id === action.panelId && p.type === "cluster-brain"
+            ? { ...p, instructions: action.instructions, status: "ready" as const, errorMessage: null }
+            : p
+        ),
+      };
+
+    case "UPDATE_CLUSTER_BRAIN_INSTRUCTIONS_TEXT":
+      return {
+        ...state,
+        panels: state.panels.map((p) =>
+          p.id === action.panelId && p.type === "cluster-brain"
+            ? { ...p, instructions: action.instructions }
+            : p
+        ),
+      };
+
+    case "ADD_CLUSTER_BRAIN_MEMORY":
+      return {
+        ...state,
+        panels: state.panels.map((p) =>
+          p.id === action.panelId && p.type === "cluster-brain"
+            ? { ...p, memories: [...p.memories, action.memory] }
+            : p
+        ),
+      };
+
+    case "REMOVE_CLUSTER_BRAIN_MEMORY":
+      return {
+        ...state,
+        panels: state.panels.map((p) =>
+          p.id === action.panelId && p.type === "cluster-brain"
+            ? { ...p, memories: p.memories.filter((_, i) => i !== action.index) }
+            : p
+        ),
+      };
+
+    case "SET_CLUSTER_BRAIN_ERROR":
+      return {
+        ...state,
+        panels: state.panels.map((p) =>
+          p.id === action.panelId && p.type === "cluster-brain"
+            ? { ...p, status: "error" as const, errorMessage: action.errorMessage }
             : p
         ),
       };
@@ -603,8 +687,6 @@ function buildDefaultConnectionPanel(id: string): ConnectionPanelData {
   return {
     id,
     type: "connection",
-    // Default position: top-left of the world, with a small inset so it
-    // doesn't sit flush against the navbar.
     x: 40,
     y: 40,
     width: CONNECTION_PANEL_SIZE.width,
@@ -614,19 +696,54 @@ function buildDefaultConnectionPanel(id: string): ConnectionPanelData {
 }
 
 /**
- * Ensure exactly one connection panel exists. If none, append one with a
- * fresh id and bump nextPanelId. This makes the connection panel a hard
- * singleton — auto-spawned on first load and re-injected for any existing
- * saved canvas that pre-dates this feature.
+ * Ensure the two default panels exist: connection and browse.
+ * Missing panels are auto-spawned with sensible positions so they don't
+ * overlap. Existing saved canvases that already have some of these panels
+ * only get the missing ones injected.
  */
-function ensureConnectionPanel(state: CanvasState): CanvasState {
-  if (state.panels.some((p) => p.type === "connection")) return state;
-  const id = `connection-${state.nextPanelId}`;
-  return {
-    ...state,
-    panels: [...state.panels, buildDefaultConnectionPanel(id)],
-    nextPanelId: state.nextPanelId + 1,
-  };
+function ensureDefaultPanels(state: CanvasState): CanvasState {
+  let s = state;
+
+  // Strip any leftover ingestion panels from persisted state (localStorage
+  // may still contain them after this panel type was removed).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const hadIngestion = s.panels.some((p) => (p as any).type === "ingestion");
+  if (hadIngestion) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    s = { ...s, panels: s.panels.filter((p) => (p as any).type !== "ingestion") };
+  }
+
+  // Connection panel (always present — hard singleton)
+  if (!s.panels.some((p) => p.type === "connection")) {
+    const id = `connection-${s.nextPanelId}`;
+    s = {
+      ...s,
+      panels: [...s.panels, buildDefaultConnectionPanel(id)],
+      nextPanelId: s.nextPanelId + 1,
+    };
+  }
+
+  // Browse panel
+  if (!s.panels.some((p) => p.type === "browse")) {
+    const id = `browse-${s.nextPanelId}`;
+    s = {
+      ...s,
+      panels: [
+        ...s.panels,
+        {
+          id,
+          type: "browse" as const,
+          x: 40 + CONNECTION_PANEL_SIZE.width + 32,
+          y: 40,
+          width: BROWSE_PANEL_SIZE.width,
+          height: BROWSE_PANEL_SIZE.height,
+        },
+      ],
+      nextPanelId: s.nextPanelId + 1,
+    };
+  }
+
+  return s;
 }
 
 /**
@@ -687,12 +804,12 @@ function migrateAddClusters(state: CanvasState): CanvasState {
 
 function loadInitialState(userId?: string): CanvasState {
   if (typeof window === "undefined") {
-    return ensureConnectionPanel(INITIAL_CANVAS_STATE);
+    return ensureDefaultPanels(INITIAL_CANVAS_STATE);
   }
 
   // Track the active user so add-to-canvas.ts can find the right key
   if (userId) {
-    localStorage.setItem(ACTIVE_USER_KEY, userId);
+    localStorage.setItem(CANVAS_ACTIVE_USER_KEY, userId);
   }
 
   // Migrate: if a user-scoped key doesn't exist but the old unscoped key does,
@@ -700,17 +817,17 @@ function loadInitialState(userId?: string): CanvasState {
   const storageKey = getStorageKey(userId);
   let raw = localStorage.getItem(storageKey);
   if (!raw && userId) {
-    const legacyRaw = localStorage.getItem(STORAGE_KEY_PREFIX);
+    const legacyRaw = localStorage.getItem(CANVAS_STORAGE_KEY_PREFIX);
     if (legacyRaw) {
       // Migrate legacy unscoped state to the user-scoped key
       localStorage.setItem(storageKey, legacyRaw);
-      localStorage.removeItem(STORAGE_KEY_PREFIX);
+      localStorage.removeItem(CANVAS_STORAGE_KEY_PREFIX);
       raw = legacyRaw;
     }
   }
 
   try {
-    if (!raw) return ensureConnectionPanel(INITIAL_CANVAS_STATE);
+    if (!raw) return ensureDefaultPanels(INITIAL_CANVAS_STATE);
     // Parse loosely — the TS CanvasState type is narrow (version: 2) but
     // localStorage can still hold a pre-migration v1 blob. Omit the
     // version field from CanvasState so TS doesn't collapse back to 2.
@@ -718,15 +835,15 @@ function loadInitialState(userId?: string): CanvasState {
       version: number;
     };
     if (parsed.version !== 1 && parsed.version !== 2) {
-      return ensureConnectionPanel(INITIAL_CANVAS_STATE);
+      return ensureDefaultPanels(INITIAL_CANVAS_STATE);
     }
-    return ensureConnectionPanel(
+    return ensureDefaultPanels(
       migrateAddClusters(
         migrateMissingSelection(migratePreZoomCamera(parsed as CanvasState))
       )
     );
   } catch {
-    return ensureConnectionPanel(INITIAL_CANVAS_STATE);
+    return ensureDefaultPanels(INITIAL_CANVAS_STATE);
   }
 }
 
@@ -773,6 +890,7 @@ export function CanvasProvider({ children, userId }: CanvasProviderProps) {
     <CanvasContext.Provider value={{ state, dispatch }}>
       <CanvasStateRefContext.Provider value={stateRef}>
         <CanvasSyncBridge />
+        <ConversationSyncBridge />
         {children}
       </CanvasStateRefContext.Provider>
     </CanvasContext.Provider>
@@ -782,6 +900,12 @@ export function CanvasProvider({ children, userId }: CanvasProviderProps) {
 /** Tiny bridge component so useCanvasSync can call useCanvas() inside the provider. */
 function CanvasSyncBridge() {
   useCanvasSync();
+  return null;
+}
+
+/** Bridge for conversation persistence — saves/loads chat messages to Supabase. */
+function ConversationSyncBridge() {
+  useConversationSync();
   return null;
 }
 

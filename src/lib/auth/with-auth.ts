@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { API_KEY_PREFIX } from "@/lib/config";
 import { createServerClient } from "@supabase/ssr";
 import { validateApiKey, checkRateLimit, recordUsage } from "./api-keys";
+import { getUserSubscription, type SubscriptionTier } from "@/lib/billing/subscriptions";
 
 /**
  * Wraps an API route handler with authentication.
@@ -23,7 +25,7 @@ export function withExternalAuth(
       // External API call with key
       const key = authHeader.replace(/^Bearer\s+/i, "").trim();
 
-      if (!key.startsWith("sk-sie-")) {
+      if (!key.startsWith(API_KEY_PREFIX)) {
         return NextResponse.json(
           { error: "Invalid API key format" },
           { status: 401 }
@@ -102,7 +104,7 @@ export function withUserAuth(
     if (authHeader) {
       const key = authHeader.replace(/^Bearer\s+/i, "").trim();
 
-      if (!key.startsWith("sk-sie-")) {
+      if (!key.startsWith(API_KEY_PREFIX)) {
         return NextResponse.json(
           { error: "Invalid API key format" },
           { status: 401 }
@@ -158,6 +160,24 @@ export function withUserAuth(
       { status: 401 }
     );
   };
+}
+
+/**
+ * Like withUserAuth, but also resolves the user's subscription tier.
+ * Use for routes that need tier-based gating (ingestion, entry details, build).
+ */
+export function withSubscriptionAuth(
+  handler: (
+    request: NextRequest,
+    context: { userId: string; tier: SubscriptionTier; params?: Record<string, string> }
+  ) => Promise<Response | NextResponse>
+) {
+  return withUserAuth(async (request, ctx) => {
+    const sub = await getUserSubscription(ctx.userId);
+    const tier: SubscriptionTier =
+      sub.tier === "pro" && sub.status === "active" ? "pro" : "free";
+    return handler(request, { userId: ctx.userId, tier, params: ctx.params });
+  });
 }
 
 /**

@@ -1,15 +1,14 @@
 import { createHash, randomBytes } from "crypto";
 import { supabaseAdmin } from "@/lib/supabase";
+import { API_KEY_PREFIX } from "@/lib/config";
 const supabase = supabaseAdmin();
-
-const KEY_PREFIX = "sk-sie-";
 
 /**
  * Generate a new API key. Returns the plaintext key (shown once) and its hash.
  */
 export function generateApiKey(): { key: string; hash: string; prefix: string } {
   const random = randomBytes(20).toString("hex"); // 40 hex chars
-  const key = `${KEY_PREFIX}${random}`;
+  const key = `${API_KEY_PREFIX}${random}`;
   const hash = hashApiKey(key);
   const prefix = key.substring(0, 12);
   return { key, hash, prefix };
@@ -30,7 +29,7 @@ export async function validateApiKey(
   rate_limit_rpm: number;
   user_id: string | null;
 } | null> {
-  if (!key.startsWith(KEY_PREFIX)) return null;
+  if (!key.startsWith(API_KEY_PREFIX)) return null;
 
   const hash = hashApiKey(key);
   const { data, error } = await supabase
@@ -52,6 +51,11 @@ export async function validateApiKey(
 
 /**
  * Check rate limit for a key. Returns true if within limit, false if exceeded.
+ * Fails closed — if the DB check fails, the request is rejected.
+ *
+ * NOTE: This check is not fully atomic — concurrent requests may both pass
+ * the count check before either records usage. For stronger guarantees at
+ * scale, move to a Postgres function that checks + inserts in one transaction.
  */
 export async function checkRateLimit(
   keyId: string,
@@ -67,7 +71,7 @@ export async function checkRateLimit(
 
   if (error) {
     console.error("[auth] Rate limit check failed:", error);
-    return true; // Fail open — don't block on DB errors
+    return false; // Fail closed — reject request on DB errors
   }
 
   return (count || 0) < rpm;
@@ -90,6 +94,18 @@ export async function recordUsage(
     .from("api_keys")
     .update({ last_used_at: new Date().toISOString() })
     .eq("id", keyId);
+
+  // Periodically prune old usage records (1 in 100 chance per request)
+  if (Math.random() < 0.01) {
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    supabase
+      .from("api_key_usage")
+      .delete()
+      .lt("requested_at", oneDayAgo)
+      .then(({ error }) => {
+        if (error) console.error("[auth] Usage cleanup failed:", error);
+      });
+  }
 }
 
 /**

@@ -6,6 +6,7 @@ export interface SIEEntry {
   source_platform: string | null;
   use_case: string | null;
   complexity: string | null;
+  status: "pending" | "processing" | "complete" | "error";
   readme: string | null;
   agents_md: string | null;
   manifest: Record<string, unknown> | null;
@@ -95,4 +96,30 @@ export interface ClusterQueryResult {
     agents_md: string | null;
     manifest: Record<string, unknown> | null;
   }[];
+}
+
+// ── Skill generation types ─────────────────────────────────────────
+
+export interface BrainMemory {
+  id: string;
+  content: string;
+}
+
+export interface BrainData {
+  instructions: string;
+  memories: BrainMemory[];
+}
+
+export interface ClusterSkillParams {
+  slug: string;
+  name: string;
+  brain: BrainData;
+  entries: ClusterDetailEntry[];
+}
+
+export interface ClusterSummary {
+  slug: string;
+  name: string;
+  oneLiner: string;
+  tools: string[];
 }

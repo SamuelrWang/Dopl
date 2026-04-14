@@ -1,14 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
-const supabase = supabaseAdmin();
 import { EntryUpdateSchema } from "@/types/api";
-import { withExternalAuth } from "@/lib/auth/with-auth";
+import { withExternalAuth, withSubscriptionAuth } from "@/lib/auth/with-auth";
+import { CONTENT_PREVIEW_LENGTH } from "@/lib/config";
+import type { SubscriptionTier } from "@/lib/billing/subscriptions";
+
+const supabase = supabaseAdmin();
 
 async function handleGet(
   _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { tier, params }: { userId: string; tier: SubscriptionTier; params?: Record<string, string> }
 ) {
-  const { id } = await params;
+  const id = params?.id;
+  if (!id) {
+    return NextResponse.json({ error: "Missing entry ID" }, { status: 400 });
+  }
 
   const { data: entry, error } = await supabase
     .from("entries")
@@ -33,10 +39,21 @@ async function handleGet(
     .select("tag_type, tag_value")
     .eq("entry_id", id);
 
+  // Content depth gate for free users
+  if (tier === "free") {
+    if (entry.readme) {
+      entry.readme =
+        entry.readme.slice(0, CONTENT_PREVIEW_LENGTH) +
+        "\n\n---\n*Upgrade to Pro to see the full implementation details.*";
+    }
+    entry.agents_md = null;
+  }
+
   return NextResponse.json({
     ...entry,
     sources: sources || [],
     tags: tags || [],
+    _tier: tier,
   });
 }
 
@@ -84,6 +101,6 @@ async function handleDelete(
   return NextResponse.json({ success: true });
 }
 
-export const GET = withExternalAuth(handleGet);
+export const GET = withSubscriptionAuth(handleGet);
 export const PATCH = withExternalAuth(handlePatch);
 export const DELETE = withExternalAuth(handleDelete);

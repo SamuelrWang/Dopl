@@ -22,7 +22,7 @@ import {
   isUrlOnlyMessage,
 } from "./panels/chat/url-detection";
 import { startPanelIngestion } from "./use-panel-ingestion";
-import { BROWSE_PANEL_SIZE, DEFAULT_PANEL_SIZE, INGESTION_PANEL_SIZE } from "./types";
+import { BROWSE_PANEL_SIZE, DEFAULT_PANEL_SIZE } from "./types";
 
 export function FixedInputBar() {
   const { state, dispatch } = useCanvas();
@@ -91,21 +91,6 @@ export function FixedInputBar() {
     spawnChatPanel();
   }
 
-  /** Spawn a new empty ingestion panel at the camera viewport center. */
-  function handleSpawnIngest() {
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const { x, y } = computeNewPanelPosition(
-      state,
-      vw,
-      vh,
-      INGESTION_PANEL_SIZE.width,
-      INGESTION_PANEL_SIZE.height
-    );
-    const id = `ingestion-${state.nextPanelId}`;
-    dispatch({ type: "CREATE_INGESTION_PANEL", id, x, y });
-  }
-
   /** Spawn a new browse panel at the camera viewport center. */
   function handleSpawnBrowse() {
     const vw = window.innerWidth;
@@ -131,9 +116,16 @@ export function FixedInputBar() {
   const canSend = input.trim().length > 0;
 
   return (
-    <div className="fixed bottom-4 left-0 right-0 z-30 flex justify-center px-4 pointer-events-none">
+    <div
+      className="fixed bottom-4 left-0 right-0 z-30 flex justify-center px-4 pointer-events-none"
+      style={{
+        transform: "translateX(calc(var(--sidebar-right-inset, 0px) / -2))",
+        transition: "transform 200ms cubic-bezier(0.4, 0, 0.2, 1)",
+        willChange: "transform",
+      }}
+    >
       <div className="w-[95%] md:w-3/4 max-w-3xl pointer-events-auto">
-        <div className="relative rounded-2xl overflow-hidden backdrop-blur-[12px] backdrop-saturate-[1.4] bg-black/[0.25] border border-white/[0.1] shadow-[0_4px_16px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.08)] transition-all duration-200 focus-within:bg-black/[0.3] focus-within:border-white/[0.18]">
+        <div className="relative rounded-2xl overflow-hidden backdrop-blur-[12px] backdrop-saturate-[1.4] bg-black/[0.25] border border-white/[0.1] shadow-[0_4px_16px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.08)] transition-colors duration-200 focus-within:bg-black/[0.3] focus-within:border-white/[0.18]">
           <div
             className="pointer-events-none absolute inset-x-0 top-0 h-px"
             style={{
@@ -151,7 +143,7 @@ export function FixedInputBar() {
             className="w-full bg-transparent px-4 pt-4 pb-2 text-base leading-[24px] text-white/90 outline-none resize-none placeholder:text-white/30 disabled:opacity-50 min-h-[48px] max-h-[200px]"
           />
           <div className="flex items-center justify-between px-3 pb-3">
-            {/* Left pill group — Chat + Ingest */}
+            {/* Left pill group — Chat + Browse */}
             <div className="inline-flex items-center gap-2">
               {/* CHAT pill — spawns an empty chat panel on the canvas */}
               <button
@@ -160,14 +152,6 @@ export function FixedInputBar() {
                 className="inline-flex items-center h-7 px-3 font-mono text-[10px] uppercase tracking-wider text-white/60 hover:text-white/95 bg-white/[0.04] hover:bg-white/[0.09] border border-white/[0.12] hover:border-white/[0.22] rounded-full transition-colors"
               >
                 Chat
-              </button>
-              {/* INGEST pill — spawns a dedicated ingestion panel */}
-              <button
-                onClick={handleSpawnIngest}
-                aria-label="Spawn ingestion panel"
-                className="inline-flex items-center h-7 px-3 font-mono text-[10px] uppercase tracking-wider text-white/60 hover:text-white/95 bg-white/[0.04] hover:bg-white/[0.09] border border-white/[0.12] hover:border-white/[0.22] rounded-full transition-colors"
-              >
-                Ingest
               </button>
               {/* BROWSE pill — spawns a browse/search panel */}
               <button

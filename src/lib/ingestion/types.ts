@@ -1,3 +1,5 @@
+export type ContentType = "setup" | "knowledge" | "resource";
+
 export interface IngestInput {
   url: string;
   content: {

@@ -3,7 +3,6 @@
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getSupabaseBrowser } from "@/lib/supabase-browser";
-import { Orb } from "@/components/design";
 
 export default function LoginPage() {
   return (
@@ -75,18 +74,6 @@ function LoginForm() {
 
   return (
     <div className="fixed inset-0 z-50">
-      {/* Background image */}
-      <div
-        className="absolute inset-0 z-0"
-        style={{
-          backgroundImage: "url('/img/landing_background.jpg')",
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-        }}
-      />
-      {/* Dark overlay — heavy to push the image way back */}
-      <div className="absolute inset-0 z-[1] bg-black/70" />
-
       {/* Content */}
       <div
         className="min-h-screen flex flex-col items-center justify-center px-6 relative z-10"
@@ -94,26 +81,31 @@ function LoginForm() {
       >
         {/* Title */}
         <div
-          className="text-center mb-6"
+          className="text-center mb-6 relative z-10"
           style={{ animation: "loginFadeIn 0.6s ease-out both" }}
         >
-          <div className="flex justify-center mb-3">
-            <Orb size="lg" glow="strong" />
-          </div>
-          <h1 className="font-mono text-[11px] uppercase tracking-[0.2em] text-white/70">
-            Setup Intelligence Engine
+          <h1
+            className="text-xl font-bold mb-2"
+            style={{
+              fontFamily: "var(--font-playfair), 'Playfair Display', serif",
+              fontStyle: "italic",
+              color: "white",
+            }}
+          >
+            Dopl
           </h1>
         </div>
 
-        {/* Glass panel — matches Surface elevated + card shape */}
+        {/* Glass panel */}
         <div
-          className="w-full max-w-sm relative z-10 p-6 rounded-2xl border border-[var(--border-default)] backdrop-blur-xl backdrop-saturate-[1.4]"
+          className="w-full max-w-sm relative z-10 p-6"
           style={{
             animation: "loginFadeIn 0.6s ease-out both",
             animationDelay: "0.1s",
-            background: "var(--gradient-elevated)",
-            boxShadow:
-              "var(--shadow-elevated), var(--inset-highlight)",
+            background: "rgba(255,255,255,0.05)",
+            backdropFilter: "blur(40px) saturate(120%)",
+            WebkitBackdropFilter: "blur(40px) saturate(120%)",
+            border: "1px solid rgba(255,255,255,0.25)",
           }}
         >
           {/* OAuth buttons */}
@@ -121,14 +113,14 @@ function LoginForm() {
             <button
               type="button"
               onClick={handleGoogleLogin}
-              className="w-full flex items-center justify-center gap-3 px-4 py-2.5 rounded-lg
-                border border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.08] transition-colors cursor-pointer"
+              className="w-full flex items-center justify-center gap-3 px-4 py-2.5
+                border border-white/20 bg-white/10 hover:bg-white/20 transition-colors cursor-pointer disabled:opacity-50"
             >
-              <svg className="w-4 h-4" viewBox="0 0 24 24">
-                <path fill="white" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" />
-                <path fill="white" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                <path fill="white" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-                <path fill="white" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+              <svg className="w-[17px] h-[17px]" viewBox="0 0 18 18" fill="none">
+                <path d="M17.64 9.2045c0-.638-.0573-1.2518-.1636-1.8409H9v3.4814h4.8436c-.2086 1.125-.8427 2.0782-1.7959 2.7164v2.2581h2.9086c1.7018-1.5668 2.6836-3.874 2.6836-6.615z" fill="#4285F4" />
+                <path d="M9 18c2.43 0 4.4673-.8059 5.9564-2.1805l-2.9086-2.2581c-.8059.54-1.8368.8591-3.0477.8591-2.3441 0-4.3282-1.5832-5.036-3.7104H.9574v2.3318C2.4382 15.9832 5.4818 18 9 18z" fill="#34A853" />
+                <path d="M3.964 10.71c-.18-.54-.2822-1.1168-.2822-1.71s.1022-1.17.2822-1.71V4.9582H.9573A8.9961 8.9961 0 0 0 0 9c0 1.4523.3477 2.8268.9573 4.0418L3.964 10.71z" fill="#FBBC05" />
+                <path d="M9 3.5795c1.3214 0 2.5077.4541 3.4405 1.346l2.5813-2.5813C13.4632.8918 11.4259 0 9 0 5.4818 0 2.4382 2.0168.9573 4.9582L3.964 7.29C4.6718 5.1627 6.6559 3.5795 9 3.5795z" fill="#EA4335" />
               </svg>
               <span className="font-mono text-[11px] text-white">
                 {mode === "signup" ? "Sign up with Google" : "Sign in with Google"}
@@ -138,68 +130,88 @@ function LoginForm() {
 
           {/* Divider */}
           <div className="flex items-center gap-3 mb-4">
-            <div className="flex-1 h-px bg-white/[0.08]" />
-            <span className="font-mono text-[10px] text-white/40 uppercase tracking-wide">
+            <div className="flex-1 h-px bg-white/20" />
+            <span className="font-mono text-[10px] text-white/50 uppercase tracking-wide">
               or
             </span>
-            <div className="flex-1 h-px bg-white/[0.08]" />
+            <div className="flex-1 h-px bg-white/20" />
           </div>
 
           {/* Error */}
           {error && (
-            <div className="mb-4 p-3 rounded-lg border border-red-400/20 bg-red-400/[0.06]">
+            <div className="mb-4 p-3 border border-red-400/20 bg-red-400/[0.06]">
               <p className="font-mono text-[10px] text-red-300">{error}</p>
             </div>
           )}
 
           {/* Success */}
           {message && (
-            <div className="mb-4 p-3 rounded-lg border border-accent-primary/20 bg-accent-primary/[0.06]">
+            <div className="mb-4 p-3 border border-accent-primary/20 bg-accent-primary/[0.06]">
               <p className="font-mono text-[10px] text-accent-primary">{message}</p>
             </div>
           )}
 
-          {/* Email/Password Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="font-mono text-[9px] text-white/40 uppercase tracking-wide block mb-1.5">
-                Email
-              </label>
+          {/* Email/Password Form — floating labels (FennaHub style) */}
+          <form onSubmit={handleSubmit} className="space-y-2">
+            <div className="relative mt-4 w-full">
               <input
                 type="email"
+                id="login-email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="w-full px-3 py-2.5 rounded-lg text-sm
-                  bg-black/[0.3] border border-white/[0.08] text-white/90
-                  placeholder:text-white/30
-                  focus:outline-none focus:border-white/[0.18]
-                  transition-all"
+                placeholder=" "
+                className="peer w-full bg-transparent border-0 border-b border-white/20
+                  px-0 py-3 text-sm text-white/90
+                  placeholder:text-transparent
+                  focus:outline-none focus:border-white/60 focus:ring-0
+                  transition-colors"
               />
-            </div>
-            <div>
-              <label className="font-mono text-[9px] text-white/40 uppercase tracking-wide block mb-1.5">
-                Password
+              <label
+                htmlFor="login-email"
+                className={`pointer-events-none absolute left-0 font-mono uppercase tracking-[0.1em] transition-all duration-300 ${
+                  email.length > 0
+                    ? "-top-[10px] text-[9px] text-white/80"
+                    : "top-[12px] text-[11px] text-white/40"
+                } peer-focus:-top-[10px] peer-focus:text-[9px] peer-focus:text-accent-primary`}
+              >
+                Email
               </label>
+            </div>
+            <div className="relative mt-4 w-full">
               <input
                 type="password"
+                id="login-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 minLength={6}
-                className="w-full px-3 py-2.5 rounded-lg text-sm
-                  bg-black/[0.3] border border-white/[0.08] text-white/90
-                  placeholder:text-white/30
-                  focus:outline-none focus:border-white/[0.18]
-                  transition-all"
+                placeholder=" "
+                className="peer w-full bg-transparent border-0 border-b border-white/20
+                  px-0 py-3 text-sm text-white/90
+                  placeholder:text-transparent
+                  focus:outline-none focus:border-white/60 focus:ring-0
+                  transition-colors"
               />
+              <label
+                htmlFor="login-password"
+                className={`pointer-events-none absolute left-0 font-mono uppercase tracking-[0.1em] transition-all duration-300 ${
+                  password.length > 0
+                    ? "-top-[10px] text-[9px] text-white/80"
+                    : "top-[12px] text-[11px] text-white/40"
+                } peer-focus:-top-[10px] peer-focus:text-[9px] peer-focus:text-accent-primary`}
+              >
+                Password
+              </label>
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full px-4 py-2.5 rounded-full bg-accent-primary text-black font-mono text-[11px] uppercase tracking-wide
-                hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              className="w-full mt-2 px-4 py-2.5 rounded-full font-mono text-[11px] uppercase tracking-wider
+                bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.15] hover:border-white/[0.3]
+                text-white/70 hover:text-white/95
+                transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
               {loading
                 ? "Loading..."
@@ -224,9 +236,17 @@ function LoginForm() {
             </button>
           </div>
         </div>
-      </div>
 
-      {/* loginFadeIn keyframe defined in globals.css */}
+        {/* Footer links */}
+        <p
+          className="w-full max-w-sm relative z-10 font-mono text-[9px] text-white/40 text-center mt-4 uppercase tracking-wide"
+          style={{ animation: "loginFadeIn 0.6s ease-out both", animationDelay: "0.3s" }}
+        >
+          <a href="/terms" className="underline hover:text-white transition-colors">Terms of Service</a>
+          <span style={{ margin: "0 4px" }}>&middot;</span>
+          <a href="/privacy" className="underline hover:text-white transition-colors">Privacy Policy</a>
+        </p>
+      </div>
     </div>
   );
 }

@@ -4,7 +4,7 @@
  * Two complementary layers:
  *  - Liquid glass primitives (GlassCard, GlassNavbar, StatusDot, MonoLabel)
  *    — the canonical aesthetic, ported from openclaw-cloud. Use these first.
- *  - Accent primitives (Orb, GlowText, Pill, PillBar, Surface, BackgroundGrid)
+ *  - Accent primitives (GlowText, Pill, PillBar, Surface, BackgroundGrid)
  *    — complementary components for glow/hero elements.
  *
  * See `/design` for the full showcase and reference implementations.
@@ -20,7 +20,7 @@ export { FlushGrid } from "./flush-grid";
 
 // ── Accent primitives (complementary) ──────────────────────────────
 export { Surface, surfaceVariants, type SurfaceProps } from "./surface";
-export { Orb, orbVariants, type OrbProps } from "./orb";
+
 export { Pill, pillVariants, type PillProps } from "./pill";
 export { PillBar } from "./pill-bar";
 export { GlowText, glowTextVariants } from "./glow-text";

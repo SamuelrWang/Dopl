@@ -34,6 +34,12 @@ export interface ChatPanelData extends BasePanelData {
    * boundaries.
    */
   pendingInput?: string;
+  /** Supabase row ID once the conversation has been persisted. */
+  conversationId?: string;
+  /** When true, conversation persists indefinitely (no auto-delete). */
+  pinned?: boolean;
+  /** ISO timestamp when the conversation will auto-delete (if not pinned). */
+  expiresAt?: string;
 }
 
 /**
@@ -76,27 +82,30 @@ export interface EntryPanelData extends BasePanelData {
   createdAt: string;
 }
 
-/**
- * IngestionPanelData — dedicated panel for ingesting a single URL. Spawned
- * via the INGEST pill in FixedInputBar. Shows a URL input, an Ingest button,
- * and a streaming log area. On successful completion, the panel deletes
- * itself and an EntryPanel is spawned in the same position with the
- * generated entry snapshot.
- */
-export interface IngestionPanelData extends BasePanelData {
-  type: "ingestion";
-  /** Draft URL text — persisted so the field survives panel drag / reload */
-  url: string;
-  status: "idle" | "streaming" | "complete" | "error";
-  logs: ProgressEvent[];
-  /** Entry id assigned by /api/ingest once the POST returns */
-  entryId: string | null;
-  /** Error message shown in the log when status === "error" */
-  errorMessage: string | null;
-}
-
 export interface BrowsePanelData extends BasePanelData {
   type: "browse";
+}
+
+/**
+ * ClusterBrainPanelData — the persistent "brain" of a cluster. Auto-spawned
+ * when a cluster is created. Contains synthesized instructions (merged from
+ * entry agents.mds) and user memories (corrections/overrides that persist
+ * across sessions). The AI reads this instead of raw entry agents.mds.
+ */
+export interface ClusterBrainPanelData extends BasePanelData {
+  type: "cluster-brain";
+  /** Which cluster this brain belongs to */
+  clusterId: string;
+  /** Display name (mirrors cluster name) */
+  clusterName: string;
+  /** Synthesized agents.md — merged from all entry agents.mds in the cluster */
+  instructions: string;
+  /** User corrections/overrides that supplement or override instructions */
+  memories: string[];
+  /** Generation status */
+  status: "generating" | "ready" | "error";
+  /** Error message if synthesis failed */
+  errorMessage: string | null;
 }
 
 /** Discriminated union — add more panel types here later */
@@ -104,8 +113,8 @@ export type Panel =
   | ChatPanelData
   | ConnectionPanelData
   | EntryPanelData
-  | IngestionPanelData
-  | BrowsePanelData;
+  | BrowsePanelData
+  | ClusterBrainPanelData;
 
 /** Returns true if the user is allowed to close this panel. */
 export function isPanelDeletable(panel: Panel): boolean {
@@ -151,13 +160,13 @@ export const ENTRY_PANEL_SIZE = {
   height: 700,
 } as const;
 
-export const INGESTION_PANEL_SIZE = {
-  width: 460,
-  height: 520,
-} as const;
-
 export const BROWSE_PANEL_SIZE = {
   width: 1200,
+  height: 700,
+} as const;
+
+export const CLUSTER_BRAIN_PANEL_SIZE = {
+  width: 520,
   height: 700,
 } as const;
 
@@ -321,6 +330,15 @@ export type CanvasAction =
       panelId: string;
     }
   | { type: "CLOSE_PANEL"; id: string }
+  | { type: "UPDATE_CHAT_TITLE"; panelId: string; title: string }
+  | { type: "SET_CHAT_PINNED"; panelId: string; pinned: boolean }
+  | {
+      /** Replace a chat panel's messages wholesale with server-loaded data. */
+      type: "HYDRATE_CHAT_MESSAGES";
+      panelId: string;
+      messages: ChatMessage[];
+      conversationId: string;
+    }
   | { type: "APPEND_MESSAGE"; panelId: string; message: ChatMessage }
   | {
       /**
@@ -452,29 +470,6 @@ export type CanvasAction =
       panelId: string;
     }
   | {
-      /** Spawn an empty ingestion panel at (x, y). */
-      type: "CREATE_INGESTION_PANEL";
-      id: string;
-      x: number;
-      y: number;
-    }
-  | {
-      /**
-       * Shallow-merge a partial update into an ingestion panel's transient
-       * state (url text, status, logs, etc.). The `logs` array is REPLACED
-       * by the patch value if present — callers append then pass the full
-       * new array to keep the reducer semantics simple.
-       */
-      type: "UPDATE_INGESTION_STATE";
-      panelId: string;
-      patch: Partial<
-        Pick<
-          IngestionPanelData,
-          "url" | "status" | "logs" | "entryId" | "errorMessage"
-        >
-      >;
-    }
-  | {
       /** Spawn an empty browse panel at (x, y). */
       type: "CREATE_BROWSE_PANEL";
       id: string;
@@ -487,5 +482,44 @@ export type CanvasAction =
       clusterId: string;
       dbId: string;
       slug: string;
+    }
+  | {
+      /** Spawn a cluster brain panel with initial "generating" status. */
+      type: "CREATE_CLUSTER_BRAIN_PANEL";
+      id: string;
+      clusterId: string;
+      clusterName: string;
+      x: number;
+      y: number;
+    }
+  | {
+      /** Set synthesized instructions and mark the brain as ready. */
+      type: "UPDATE_CLUSTER_BRAIN_INSTRUCTIONS";
+      panelId: string;
+      instructions: string;
+    }
+  | {
+      /** Manually edit the instructions text. */
+      type: "UPDATE_CLUSTER_BRAIN_INSTRUCTIONS_TEXT";
+      panelId: string;
+      instructions: string;
+    }
+  | {
+      /** Append a memory to the cluster brain. */
+      type: "ADD_CLUSTER_BRAIN_MEMORY";
+      panelId: string;
+      memory: string;
+    }
+  | {
+      /** Remove a memory by index. */
+      type: "REMOVE_CLUSTER_BRAIN_MEMORY";
+      panelId: string;
+      index: number;
+    }
+  | {
+      /** Mark the brain as errored. */
+      type: "SET_CLUSTER_BRAIN_ERROR";
+      panelId: string;
+      errorMessage: string;
     }
   | { type: "HYDRATE"; state: CanvasState };

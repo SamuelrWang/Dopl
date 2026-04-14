@@ -20,25 +20,38 @@ export class SIEClient {
 
   private async request<T>(
     path: string,
-    options: { method?: string; body?: unknown } = {}
+    options: { method?: string; body?: unknown; timeoutMs?: number } = {}
   ): Promise<T> {
-    const { method = "GET", body } = options;
+    const { method = "GET", body, timeoutMs = 30_000 } = options;
 
-    const res = await fetch(`${this.baseUrl}${path}`, {
-      method,
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${this.apiKey}`,
-      },
-      body: body ? JSON.stringify(body) : undefined,
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`SIE API error ${res.status}: ${text}`);
+    try {
+      const res = await fetch(`${this.baseUrl}${path}`, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+        body: body ? JSON.stringify(body) : undefined,
+        signal: controller.signal,
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`SIE API error ${res.status}: ${text}`);
+      }
+
+      return res.json() as Promise<T>;
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        throw new Error(`SIE API request timed out after ${timeoutMs}ms: ${method} ${path}`);
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
     }
-
-    return res.json() as Promise<T>;
   }
 
   async searchSetups(params: {
@@ -116,15 +129,23 @@ export class SIEClient {
   }
 
   async removeCanvasPanel(entryId: string): Promise<void> {
-    const res = await fetch(`${this.baseUrl}/api/canvas/panels/${encodeURIComponent(entryId)}`, {
-      method: "DELETE",
-      headers: {
-        Authorization: `Bearer ${this.apiKey}`,
-      },
-    });
-    if (!res.ok && res.status !== 204) {
-      const text = await res.text();
-      throw new Error(`SIE API error ${res.status}: ${text}`);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30_000);
+
+    try {
+      const res = await fetch(`${this.baseUrl}/api/canvas/panels/${encodeURIComponent(entryId)}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+        signal: controller.signal,
+      });
+      if (!res.ok && res.status !== 204) {
+        const text = await res.text();
+        throw new Error(`SIE API error ${res.status}: ${text}`);
+      }
+    } finally {
+      clearTimeout(timeout);
     }
   }
 
@@ -159,5 +180,194 @@ export class SIEClient {
         body: { query, max_results: maxResults ?? 5 },
       }
     );
+  }
+
+  // ── MCP status ping ────────────────────────────────────────────────
+
+  async pingMcpStatus(): Promise<void> {
+    await this.request<{ ok: boolean }>("/api/user/mcp-status", {
+      method: "POST",
+      body: {},
+    });
+  }
+
+  // ── Cluster brain methods ─────────────────────────────────────────
+
+  async getClusterBrain(slug: string): Promise<{ instructions: string; memories: { id: string; content: string }[] }> {
+    return this.request<{ instructions: string; memories: { id: string; content: string }[] }>(
+      `/api/clusters/${encodeURIComponent(slug)}/brain`
+    );
+  }
+
+  async saveClusterMemory(slug: string, content: string): Promise<{ id: string; content: string }> {
+    return this.request<{ id: string; content: string }>(
+      `/api/clusters/${encodeURIComponent(slug)}/brain/memories`,
+      {
+        method: "POST",
+        body: { content },
+      }
+    );
+  }
+
+  async synthesizeBrain(
+    entries: Array<{ title: string; agents_md: string; readme: string }>
+  ): Promise<{ instructions: string }> {
+    return this.request<{ instructions: string }>("/api/cluster/synthesize", {
+      method: "POST",
+      body: { entries },
+      timeoutMs: 120_000, // Synthesis can take a while
+    });
+  }
+
+  async updateClusterBrain(slug: string, instructions: string): Promise<void> {
+    await this.request<unknown>(
+      `/api/clusters/${encodeURIComponent(slug)}/brain`,
+      {
+        method: "PATCH",
+        body: { instructions },
+      }
+    );
+  }
+
+  // ── Ingestion ─────────────────────────────────────────────────────
+
+  async ingestUrl(
+    url: string,
+    content?: { text?: string; images?: string[]; links?: string[] }
+  ): Promise<{ entry_id: string; status: string; stream_url?: string; title?: string | null }> {
+    return this.request<{ entry_id: string; status: string; stream_url?: string; title?: string | null }>(
+      "/api/ingest",
+      {
+        method: "POST",
+        body: { url, content: content || {} },
+        timeoutMs: 60_000,
+      }
+    );
+  }
+
+  // ── Cluster mutations ─────────────────────────────────────────────
+
+  async updateCluster(
+    slug: string,
+    updates: { name?: string; entry_ids?: string[] }
+  ): Promise<ClusterRow> {
+    return this.request<ClusterRow>(
+      `/api/clusters/${encodeURIComponent(slug)}`,
+      {
+        method: "PATCH",
+        body: updates,
+      }
+    );
+  }
+
+  async deleteCluster(slug: string): Promise<void> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30_000);
+
+    try {
+      const res = await fetch(
+        `${this.baseUrl}/api/clusters/${encodeURIComponent(slug)}`,
+        {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${this.apiKey}` },
+          signal: controller.signal,
+        }
+      );
+      if (!res.ok && res.status !== 204) {
+        const text = await res.text();
+        throw new Error(`SIE API error ${res.status}: ${text}`);
+      }
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  // ── Brain read + memory delete ────────────────────────────────────
+
+  async deleteClusterMemory(slug: string, memoryId: string): Promise<void> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30_000);
+
+    try {
+      const res = await fetch(
+        `${this.baseUrl}/api/clusters/${encodeURIComponent(slug)}/brain/memories`,
+        {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${this.apiKey}`,
+          },
+          body: JSON.stringify({ memory_id: memoryId }),
+          signal: controller.signal,
+        }
+      );
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`SIE API error ${res.status}: ${text}`);
+      }
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  // ── Entry mutations ───────────────────────────────────────────────
+
+  async updateEntry(
+    id: string,
+    updates: { title?: string; summary?: string; use_case?: string; complexity?: string }
+  ): Promise<SIEEntry> {
+    return this.request<SIEEntry>(`/api/entries/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: updates,
+    });
+  }
+
+  async checkEntryUpdates(id: string): Promise<{
+    entry_id: string;
+    title: string | null;
+    has_updates: boolean | null;
+    reason?: string;
+    ingested_at?: string;
+    last_pushed_at?: string;
+    days_since_ingestion?: number;
+    days_since_push?: number;
+    repo?: string;
+  }> {
+    return this.request(`/api/entries/${encodeURIComponent(id)}/check-updates`);
+  }
+
+  // ── Incremental synthesis ─────────────────────────────────────────
+
+  async synthesizeIncremental(
+    existingInstructions: string,
+    newEntry: { title: string; agents_md: string; readme: string }
+  ): Promise<{ instructions: string }> {
+    return this.request<{ instructions: string }>("/api/cluster/synthesize-incremental", {
+      method: "POST",
+      body: { existing_instructions: existingInstructions, new_entry: newEntry },
+      timeoutMs: 120_000,
+    });
+  }
+
+  async deleteEntry(id: string): Promise<void> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30_000);
+
+    try {
+      const res = await fetch(
+        `${this.baseUrl}/api/entries/${encodeURIComponent(id)}`,
+        {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${this.apiKey}` },
+          signal: controller.signal,
+        }
+      );
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`SIE API error ${res.status}: ${text}`);
+      }
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 }

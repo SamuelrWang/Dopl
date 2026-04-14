@@ -2,7 +2,7 @@
 
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { SIEClient } from "./api-client.js";
-import { createServer, registerClusterPrompts, startPromptSync } from "./server.js";
+import { createServer } from "./server.js";
 
 function parseArgs(): { apiKey: string; baseUrl: string } {
   const args = process.argv.slice(2);
@@ -56,14 +56,11 @@ async function main() {
   const client = new SIEClient(baseUrl, apiKey);
   const server = createServer(client);
 
-  // Register cluster prompts (Phase 3) — best-effort, don't block startup
-  registerClusterPrompts(server, client).catch(() => {});
-
   const transport = new StdioServerTransport();
   await server.connect(transport);
 
-  // Start polling for cluster changes (Phase 4)
-  startPromptSync(server, client, 30_000);
+  // Signal to the web app that an MCP connection is live (best-effort).
+  client.pingMcpStatus().catch(() => {});
 }
 
 main().catch((error) => {

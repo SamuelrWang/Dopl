@@ -18,8 +18,7 @@ import type { CanvasState, Panel } from "../../types";
 
 // ── Constants ────────────────────────────────────────────────────────
 
-/** Max chars per readme / agentsMd field in an entry panel context. */
-const CONTEXT_CHAR_BUDGET_PER_FIELD = 2000;
+import { CONTEXT_CHAR_BUDGET_PER_FIELD } from "@/lib/config";
 
 /** Max total chars across all serialized panels in one context payload. */
 const TOTAL_CONTEXT_CHAR_BUDGET = 30_000;
@@ -47,12 +46,7 @@ export type ContextPanelDTO =
       title: string;
       messages: Array<{ role: string; content: string }>;
     }
-  | {
-      kind: "ingestion";
-      panelId: string;
-      url: string;
-      status: string;
-    };
+;
 
 export interface CanvasContextPayload {
   scope: "cluster" | "canvas";
@@ -114,15 +108,7 @@ function serializePanel(panel: Panel, selfId: string): ContextPanelDTO | null {
       };
     }
 
-    case "ingestion":
-      return {
-        kind: "ingestion",
-        panelId: panel.id,
-        url: panel.url,
-        status: panel.status,
-      };
-
-    // Connection and browse panels are not knowledge content.
+    // Connection, browse panels are not knowledge content.
     case "connection":
     case "browse":
       return null;
@@ -148,8 +134,6 @@ function estimateDTOChars(dto: ContextPanelDTO): number {
         dto.messages.reduce((n, m) => n + m.content.length + 15, 0) +
         30
       );
-    case "ingestion":
-      return dto.url.length + dto.status.length + 30;
   }
 }
 

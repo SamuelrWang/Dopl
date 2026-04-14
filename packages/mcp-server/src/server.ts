@@ -1,23 +1,38 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { SIEClient } from "./api-client.js";
-import type { ClusterRow } from "./types.js";
+import type { ClusterSummary, BrainData } from "./types.js";
+import {
+  writeClusterSkill,
+  writeGlobalCanvasSkill,
+  writeGlobalClaudemd,
+  appendMemoryToSkill,
+  skillExists,
+  removeClusterSkill,
+} from "./skill-writer.js";
 
 const CONTEXT_CHAR_BUDGET = 2000;
-const MAX_PROMPT_ENTRIES = 10;
 
-const SERVER_INSTRUCTIONS = `You are connected to the **Setup Intelligence Engine (SIE)** — a curated knowledge base of real-world AI and automation setups including agent workflows, n8n automations, Claude skills, API integrations, and more. Each setup includes full documentation (README), implementation instructions (agents.md), and structured metadata (manifest).
+const SERVER_INSTRUCTIONS = `You are connected to the **Setup Intelligence Engine (SIE)** — a knowledge base of proven AI and automation implementations including agent workflows, n8n automations, Claude skills, API integrations, and more.
 
-## What you can help the user with
+## How to use this
 
-- **Searching** — Find setups by natural language query (e.g. "cold email outreach", "n8n + Supabase automation")
-- **Browsing** — List all setups, filter by complexity or use case
-- **Deep dives** — Pull up the full README, agents.md, and manifest for any setup
-- **Building** — Compose a new solution by combining patterns from multiple setups
-- **Canvas management** — Add setups to the user's canvas workspace, organize them into clusters, or browse what's already there
-- **Cluster exploration** — Browse curated groupings of setups, or search within a specific cluster
+You are an expert architect. Use the SIE tools as your reference library — search for proven patterns, retrieve implementation details, and synthesize custom solutions. Your job is to **compose original recommendations** by combining knowledge from multiple sources, not to list or recommend individual entries.
 
-When the user asks about AI/automation setups, tools, or workflows, use the tools provided by this server to give them accurate, up-to-date answers from the knowledge base.`;
+## What you can do
+
+- **Search** — Find relevant implementations by natural language query
+- **Deep dive** — Pull full implementation details (README, setup instructions, metadata) for any entry
+- **Build** — Compose a complete solution by combining patterns from multiple implementations
+- **Canvas** — Manage the user's workspace: add entries, organize into clusters, browse saved items
+- **Skills** — Cluster knowledge is automatically available through Claude Code skills at ~/.claude/skills/sie-*/. Run \`sync_skills\` to seed or refresh them
+
+## Behavior
+
+- When the user describes what they want to build, search first, then synthesize a concrete plan
+- Focus on actionable guidance: tool recommendations with rationale, architecture decisions, integration patterns, setup steps
+- Reference specific tools, repos, and patterns — not the database entries they came from
+- Cluster skills are living documents — update them when you learn new patterns or receive user corrections`;
 
 export function createServer(client: SIEClient): McpServer {
   const server = new McpServer(
@@ -82,7 +97,8 @@ export function createServer(client: SIEClient): McpServer {
       const lines: string[] = [];
       lines.push(`# ${entry.title || "Untitled"}`);
       if (entry.summary) lines.push(`\n${entry.summary}`);
-      lines.push(`\nSource: ${entry.source_url}`);
+      lines.push(`\nStatus: ${entry.status}`);
+      lines.push(`Source: ${entry.source_url}`);
       lines.push(`Platform: ${entry.source_platform || "unknown"}`);
       lines.push(`Complexity: ${entry.complexity || "unknown"}`);
       lines.push(`Use case: ${entry.use_case || "unknown"}`);
@@ -279,6 +295,484 @@ export function createServer(client: SIEClient): McpServer {
     }
   );
 
+  // ── sync_skills ─────────────────────────────────────────────────────
+  server.tool(
+    "sync_skills",
+    "Write Claude Code skill files for all SIE clusters to ~/.claude/skills/. Creates per-cluster SKILL.md files with synthesized instructions, a global canvas skill for routing, and updates ~/.claude/CLAUDE.md with a cluster index. Run this once to seed skills, then they evolve as living documents.",
+    {
+      force: z.boolean().optional().describe("Overwrite existing skill files (default: false, skips existing)"),
+    },
+    async ({ force }) => {
+      const { clusters } = await client.listClusters();
+      const results: string[] = [];
+      const clusterSummaries: ClusterSummary[] = [];
+
+      for (const cluster of clusters) {
+        try {
+          // Check if skill already exists
+          if (!force && await skillExists(cluster.slug)) {
+            results.push(`- **${cluster.name}** — skipped (already exists)`);
+            // Still collect summary for global files
+            const detail = await client.getCluster(cluster.slug);
+            clusterSummaries.push(buildClusterSummary(cluster.slug, cluster.name, detail.entries));
+            continue;
+          }
+
+          const detail = await client.getCluster(cluster.slug);
+
+          // Get or synthesize brain
+          let brain: BrainData = { instructions: "", memories: [] };
+          try {
+            brain = await client.getClusterBrain(cluster.slug);
+          } catch {
+            // Brain doesn't exist — synthesize it
+            const entriesToSynthesize = detail.entries
+              .filter((e) => e.agents_md)
+              .map((e) => ({
+                title: e.title || "Untitled",
+                agents_md: e.agents_md || "",
+                readme: e.readme || "",
+              }));
+
+            if (entriesToSynthesize.length > 0) {
+              const synthesis = await client.synthesizeBrain(entriesToSynthesize);
+              brain.instructions = synthesis.instructions;
+              await client.updateClusterBrain(cluster.slug, brain.instructions);
+            }
+          }
+
+          await writeClusterSkill(cluster.slug, cluster.name, brain, detail.entries);
+          results.push(`- **${cluster.name}** — wrote skill with ${detail.entries.length} entries`);
+
+          clusterSummaries.push(buildClusterSummary(cluster.slug, cluster.name, detail.entries));
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          results.push(`- **${cluster.name}** — ERROR: ${msg}`);
+        }
+      }
+
+      // Write global files (always overwrite these)
+      try {
+        await writeGlobalCanvasSkill(clusterSummaries);
+        results.push(`\nGlobal canvas skill: wrote ~/.claude/skills/sie-canvas/SKILL.md`);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        results.push(`\nGlobal canvas skill: ERROR — ${msg}`);
+      }
+
+      try {
+        await writeGlobalClaudemd(clusterSummaries);
+        results.push(`Global CLAUDE.md: updated ~/.claude/CLAUDE.md`);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        results.push(`Global CLAUDE.md: ERROR — ${msg}`);
+      }
+
+      return {
+        content: [{
+          type: "text" as const,
+          text: `## Skills Synced\n\n${results.join("\n")}`,
+        }],
+      };
+    }
+  );
+
+  // ── save_cluster_memory ───────────────────────────────────────────
+  server.tool(
+    "save_cluster_memory",
+    "Save a user preference or correction as a persistent memory for a cluster. Memories override the cluster's base instructions in future sessions. Use this when the user tells you to change how something works, skip a step, or prefer a specific tool.",
+    {
+      slug: z.string().describe("Cluster slug"),
+      memory: z.string().describe("The preference or correction to remember, e.g. 'User prefers Resend over SendGrid for email' or 'Skip the Slack notification step'"),
+    },
+    async ({ slug, memory }) => {
+      const result = await client.saveClusterMemory(slug, memory);
+
+      // Also append to on-disk SKILL.md (non-fatal)
+      let diskNote = "";
+      try {
+        await appendMemoryToSkill(slug, memory);
+        diskNote = `\n(Also updated ~/.claude/skills/sie-${slug}/SKILL.md)`;
+      } catch (err) {
+        console.error(`[SIE] Failed to update skill file for ${slug}:`, err);
+      }
+
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `Saved memory for cluster "${slug}": "${result.content}"${diskNote}`,
+          },
+        ],
+      };
+    }
+  );
+
+  // ── ingest_url ──────────────────────────────────────────────────────
+  server.tool(
+    "ingest_url",
+    "Ingest a URL into the knowledge base. Extracts content, generates README, agents.md, and manifest. Returns the entry ID for tracking. The entry processes in the background (30-120s). Use get_setup to poll — check the status field: 'processing' means still working, 'complete' means done, 'error' means failed.",
+    {
+      url: z.string().describe("URL to ingest (blog post, GitHub repo, tweet, etc.)"),
+      text: z.string().optional().describe("Optional additional text content to include"),
+      links: z.array(z.string()).optional().describe("Optional additional URLs to follow and include"),
+    },
+    async ({ url, text, links }) => {
+      const content: { text?: string; links?: string[] } = {};
+      if (text) content.text = text;
+      if (links) content.links = links;
+
+      const result = await client.ingestUrl(url, Object.keys(content).length > 0 ? content : undefined);
+
+      if (result.status === "already_exists") {
+        return {
+          content: [{
+            type: "text" as const,
+            text: `Entry already exists: **${result.title || "Untitled"}** (${result.entry_id})\nUse \`get_setup("${result.entry_id}")\` to view it.`,
+          }],
+        };
+      }
+
+      return {
+        content: [{
+          type: "text" as const,
+          text: `Ingestion started for ${url}\nEntry ID: ${result.entry_id}\nStatus: ${result.status}\n\nThe entry is processing in the background. Use \`get_setup("${result.entry_id}")\` to check when it's complete.`,
+        }],
+      };
+    }
+  );
+
+  // ── update_cluster ─────────────────────────────────────────────────
+  server.tool(
+    "update_cluster",
+    "Rename a cluster or modify its entry membership. Provide name, entry_ids, or both.",
+    {
+      slug: z.string().describe("Cluster slug from list_clusters"),
+      name: z.string().optional().describe("New cluster name"),
+      entry_ids: z.array(z.string()).optional().describe("New set of entry IDs (replaces existing membership)"),
+    },
+    async ({ slug, name, entry_ids }) => {
+      const updates: { name?: string; entry_ids?: string[] } = {};
+      if (name) updates.name = name;
+      if (entry_ids) updates.entry_ids = entry_ids;
+
+      const result = await client.updateCluster(slug, updates);
+
+      // If the slug changed (due to rename), clean up old skill dir
+      if (result.slug !== slug) {
+        try {
+          await removeClusterSkill(slug);
+        } catch (err) {
+          console.error(`[SIE] Failed to remove old skill dir for ${slug}:`, err);
+        }
+      }
+
+      return {
+        content: [{
+          type: "text" as const,
+          text: `Updated cluster **${result.name}** (slug: \`${result.slug}\`) — ${result.panel_count ?? 0} entries.`,
+        }],
+      };
+    }
+  );
+
+  // ── delete_cluster ─────────────────────────────────────────────────
+  server.tool(
+    "delete_cluster",
+    "Delete a cluster. This removes the cluster grouping but does NOT delete the individual entries.",
+    {
+      slug: z.string().describe("Cluster slug from list_clusters"),
+    },
+    async ({ slug }) => {
+      await client.deleteCluster(slug);
+      return {
+        content: [{
+          type: "text" as const,
+          text: `Deleted cluster \`${slug}\`. Entries remain in the knowledge base.`,
+        }],
+      };
+    }
+  );
+
+  // ── get_cluster_brain ──────────────────────────────────────────────
+  server.tool(
+    "get_cluster_brain",
+    "Get the current brain state for a cluster — its synthesized instructions and user memories.",
+    {
+      slug: z.string().describe("Cluster slug from list_clusters"),
+    },
+    async ({ slug }) => {
+      const brain = await client.getClusterBrain(slug);
+
+      const sections: string[] = [];
+      sections.push(`# Cluster Brain: ${slug}`);
+      sections.push("");
+
+      if (brain.instructions) {
+        sections.push("## Instructions");
+        sections.push("");
+        sections.push(brain.instructions);
+        sections.push("");
+      } else {
+        sections.push("_No instructions synthesized yet._");
+        sections.push("");
+      }
+
+      if (brain.memories.length > 0) {
+        sections.push("## Memories");
+        sections.push("");
+        for (let i = 0; i < brain.memories.length; i++) {
+          sections.push(`${i + 1}. ${brain.memories[i].content} (id: \`${brain.memories[i].id}\`)`);
+        }
+      } else {
+        sections.push("_No memories saved yet._");
+      }
+
+      return { content: [{ type: "text" as const, text: sections.join("\n") }] };
+    }
+  );
+
+  // ── delete_cluster_memory ──────────────────────────────────────────
+  server.tool(
+    "delete_cluster_memory",
+    "Remove a specific memory from a cluster's brain. Use get_cluster_brain first to see memory IDs.",
+    {
+      slug: z.string().describe("Cluster slug"),
+      memory_id: z.string().describe("Memory ID to delete"),
+    },
+    async ({ slug, memory_id }) => {
+      await client.deleteClusterMemory(slug, memory_id);
+      return {
+        content: [{
+          type: "text" as const,
+          text: `Deleted memory ${memory_id} from cluster "${slug}".`,
+        }],
+      };
+    }
+  );
+
+  // ── update_entry ───────────────────────────────────────────────────
+  server.tool(
+    "update_entry",
+    "Update metadata for a knowledge base entry (title, summary, use_case, complexity).",
+    {
+      id: z.string().describe("Entry ID (UUID)"),
+      title: z.string().optional().describe("New title"),
+      summary: z.string().optional().describe("New summary"),
+      use_case: z.string().optional().describe("New use case category"),
+      complexity: z.enum(["simple", "moderate", "complex", "advanced"]).optional().describe("New complexity level"),
+    },
+    async ({ id, title, summary, use_case, complexity }) => {
+      const updates: { title?: string; summary?: string; use_case?: string; complexity?: string } = {};
+      if (title) updates.title = title;
+      if (summary) updates.summary = summary;
+      if (use_case) updates.use_case = use_case;
+      if (complexity) updates.complexity = complexity;
+
+      const entry = await client.updateEntry(id, updates);
+      return {
+        content: [{
+          type: "text" as const,
+          text: `Updated entry **${entry.title || "Untitled"}** (${id}).`,
+        }],
+      };
+    }
+  );
+
+  // ── delete_entry ───────────────────────────────────────────────────
+  server.tool(
+    "delete_entry",
+    "Delete an entry from the knowledge base. This is permanent and cannot be undone.",
+    {
+      id: z.string().describe("Entry ID (UUID) to delete"),
+    },
+    async ({ id }) => {
+      await client.deleteEntry(id);
+      return {
+        content: [{
+          type: "text" as const,
+          text: `Deleted entry ${id} from the knowledge base.`,
+        }],
+      };
+    }
+  );
+
+  // ── check_entry_updates ─────────────────────────────────────────────
+  server.tool(
+    "check_entry_updates",
+    "Check if a GitHub-sourced entry has been updated since ingestion. Returns update status for GitHub repos; non-GitHub entries are skipped.",
+    {
+      entry_id: z.string().describe("Entry ID (UUID) to check"),
+    },
+    async ({ entry_id }) => {
+      const result = await client.checkEntryUpdates(entry_id);
+
+      if (result.has_updates === null) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: `**${result.title || "Untitled"}**: ${result.reason || "Update checking not available."}`,
+          }],
+        };
+      }
+
+      if (result.has_updates) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: `**${result.title || "Untitled"}** (${result.repo}): Updates available.\nRepo last pushed ${result.days_since_push} day(s) ago. You ingested it ${result.days_since_ingestion} day(s) ago.\nConsider re-ingesting with \`ingest_url\`.`,
+          }],
+        };
+      }
+
+      return {
+        content: [{
+          type: "text" as const,
+          text: `**${result.title || "Untitled"}** (${result.repo}): No updates since ingestion (${result.days_since_ingestion} day(s) ago).`,
+        }],
+      };
+    }
+  );
+
+  // ── check_cluster_updates ──────────────────────────────────────────
+  server.tool(
+    "check_cluster_updates",
+    "Check all entries in a cluster for GitHub repo updates. Returns a summary of which entries have updates available.",
+    {
+      slug: z.string().describe("Cluster slug from list_clusters"),
+    },
+    async ({ slug }) => {
+      const detail = await client.getCluster(slug);
+
+      const updated: string[] = [];
+      const current: string[] = [];
+      const skipped: string[] = [];
+
+      for (const entry of detail.entries) {
+        try {
+          const result = await client.checkEntryUpdates(entry.entry_id);
+          if (result.has_updates === true) {
+            updated.push(`- **${result.title || "Untitled"}** (${result.repo}) — updated ${result.days_since_push}d ago, ingested ${result.days_since_ingestion}d ago`);
+          } else if (result.has_updates === false) {
+            current.push(`- ${result.title || "Untitled"}`);
+          } else {
+            skipped.push(`- ${result.title || "Untitled"} — ${result.reason || "not GitHub"}`);
+          }
+        } catch {
+          skipped.push(`- ${entry.title || "Untitled"} — check failed`);
+        }
+      }
+
+      const lines: string[] = [];
+      lines.push(`## Cluster: ${detail.name} — Update Check\n`);
+
+      if (updated.length > 0) {
+        lines.push(`### Updates available (${updated.length})\n`);
+        lines.push(...updated);
+        lines.push("");
+      }
+      if (current.length > 0) {
+        lines.push(`### Up to date (${current.length})\n`);
+        lines.push(...current);
+        lines.push("");
+      }
+      if (skipped.length > 0) {
+        lines.push(`### Skipped (${skipped.length})\n`);
+        lines.push(...skipped);
+      }
+
+      return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+    }
+  );
+
+  // ── add_entry_to_cluster ───────────────────────────────────────────
+  server.tool(
+    "add_entry_to_cluster",
+    "Add an entry to an existing cluster and incrementally update the cluster's brain. More useful than raw update_cluster because it handles brain merging automatically.",
+    {
+      slug: z.string().describe("Cluster slug"),
+      entry_id: z.string().describe("Entry ID to add to the cluster"),
+    },
+    async ({ slug, entry_id }) => {
+      // Get current cluster to build updated entry list
+      const detail = await client.getCluster(slug);
+      const existingIds = detail.entries.map((e) => e.entry_id);
+
+      if (existingIds.includes(entry_id)) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: `Entry ${entry_id} is already in cluster "${slug}".`,
+          }],
+        };
+      }
+
+      // Validate entry exists
+      const newEntry = await client.getSetup(entry_id);
+
+      // Add entry to cluster membership
+      const updatedIds = [...existingIds, entry_id];
+      await client.updateCluster(slug, { entry_ids: updatedIds });
+
+      // Incrementally update brain if possible
+      let brainNote = "";
+      try {
+        const brain = await client.getClusterBrain(slug);
+
+        if (brain.instructions && newEntry.agents_md) {
+          // Incremental synthesis — merge new entry into existing brain
+          const synthesis = await client.synthesizeIncremental(
+            brain.instructions,
+            {
+              title: newEntry.title || "Untitled",
+              agents_md: newEntry.agents_md,
+              readme: newEntry.readme || "",
+            }
+          );
+          await client.updateClusterBrain(slug, synthesis.instructions);
+          brainNote = "\nBrain updated incrementally with new entry.";
+        } else if (!brain.instructions && newEntry.agents_md) {
+          // No brain yet — do full synthesis
+          const allEntries = [...detail.entries, {
+            entry_id,
+            title: newEntry.title,
+            summary: newEntry.summary,
+            readme: newEntry.readme,
+            agents_md: newEntry.agents_md,
+          }].filter((e) => e.agents_md).map((e) => ({
+            title: e.title || "Untitled",
+            agents_md: e.agents_md || "",
+            readme: e.readme || "",
+          }));
+
+          if (allEntries.length > 0) {
+            const synthesis = await client.synthesizeBrain(allEntries);
+            await client.updateClusterBrain(slug, synthesis.instructions);
+            brainNote = "\nBrain synthesized from all entries.";
+          }
+        } else {
+          brainNote = "\nNew entry has no agents.md — brain unchanged.";
+        }
+
+        // Update skill file
+        const updatedDetail = await client.getCluster(slug);
+        const updatedBrain = await client.getClusterBrain(slug);
+        await writeClusterSkill(slug, detail.name, updatedBrain, updatedDetail.entries);
+        brainNote += " Skill file updated.";
+      } catch (err) {
+        console.error(`[SIE] Brain update failed for ${slug}:`, err);
+        brainNote = "\n(Brain update failed — run `sync_skills` to fix)";
+      }
+
+      return {
+        content: [{
+          type: "text" as const,
+          text: `Added **${newEntry.title || "Untitled"}** to cluster "${slug}" (now ${updatedIds.length} entries).${brainNote}`,
+        }],
+      };
+    }
+  );
+
   // ── canvas_list_panels ──────────────────────────────────────────────
   server.tool(
     "canvas_list_panels",
@@ -347,22 +841,135 @@ export function createServer(client: SIEClient): McpServer {
     }
   );
 
+  // ── canvas_search_and_add ──────────────────────────────────────────
+  server.tool(
+    "canvas_search_and_add",
+    "Search the knowledge base and add the top results to your canvas in one step. Useful for quickly building a canvas around a topic.",
+    {
+      query: z.string().describe("Natural language search query, e.g. 'marketing automations' or 'n8n workflows'"),
+      max_results: z.number().optional().describe("Number of results to add (default 5, max 10)"),
+    },
+    async ({ query, max_results }) => {
+      const limit = Math.min(max_results ?? 5, 10);
+      const searchResult = await client.searchSetups({
+        query,
+        max_results: limit,
+        include_synthesis: false,
+      });
+
+      if (searchResult.entries.length === 0) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: `No results found for "${query}".`,
+          }],
+        };
+      }
+
+      const added: string[] = [];
+      const skipped: string[] = [];
+
+      for (const entry of searchResult.entries) {
+        try {
+          const { created } = await client.addCanvasPanel(entry.entry_id);
+          if (created) {
+            added.push(`- **${entry.title || "Untitled"}** (${Math.round(entry.similarity * 100)}% match)`);
+          } else {
+            skipped.push(`- ${entry.title || "Untitled"} (already on canvas)`);
+          }
+        } catch {
+          skipped.push(`- ${entry.title || "Untitled"} (failed to add)`);
+        }
+      }
+
+      const lines: string[] = [];
+      if (added.length > 0) {
+        lines.push(`## Added to canvas (${added.length})\n`);
+        lines.push(...added);
+      }
+      if (skipped.length > 0) {
+        lines.push(`\n## Skipped (${skipped.length})\n`);
+        lines.push(...skipped);
+      }
+
+      return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+    }
+  );
+
   // ── canvas_create_cluster ─────────────────────────────────────────
   server.tool(
     "canvas_create_cluster",
-    "Group canvas entries into a named cluster for organized access via query_cluster.",
+    "Group canvas entries into a named cluster for organized access via query_cluster. Brain synthesis and skill file generation happen in the background — run sync_skills to check status.",
     {
-      name: z.string().describe("Cluster name, e.g. 'AI Agent Stack'"),
-      entry_ids: z.array(z.string()).describe("Entry IDs to include (must be on your canvas)"),
+      name: z.string().min(1, "Cluster name cannot be empty").describe("Cluster name, e.g. 'AI Agent Stack'"),
+      entry_ids: z.array(z.string()).min(1, "Must provide at least one entry ID").describe("Entry IDs to include (must be on your canvas)"),
     },
     async ({ name, entry_ids }) => {
+      // Validate entry IDs exist before creating cluster
+      const validationErrors: string[] = [];
+      for (const id of entry_ids) {
+        try {
+          await client.getSetup(id);
+        } catch {
+          validationErrors.push(id);
+        }
+      }
+      if (validationErrors.length > 0) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: `Entry IDs not found: ${validationErrors.join(", ")}. Use \`search_setups\` to find valid entry IDs.`,
+          }],
+        };
+      }
+
       const result = await client.createCluster(name, entry_ids);
+
+      // Fire-and-forget: brain synthesis + skill file generation
+      // This can take 30-120s so we don't block the tool response
+      (async () => {
+        try {
+          const detail = await client.getCluster(result.slug);
+
+          const entriesToSynthesize = detail.entries
+            .filter((e) => e.agents_md)
+            .map((e) => ({
+              title: e.title || "Untitled",
+              agents_md: e.agents_md || "",
+              readme: e.readme || "",
+            }));
+
+          let brain: BrainData = { instructions: "", memories: [] };
+          if (entriesToSynthesize.length > 0) {
+            const synthesis = await client.synthesizeBrain(entriesToSynthesize);
+            brain.instructions = synthesis.instructions;
+            await client.updateClusterBrain(result.slug, brain.instructions);
+          }
+
+          await writeClusterSkill(result.slug, result.name, brain, detail.entries);
+
+          const { clusters } = await client.listClusters();
+          const summaries: ClusterSummary[] = [];
+          for (const c of clusters) {
+            try {
+              const d = await client.getCluster(c.slug);
+              summaries.push(buildClusterSummary(c.slug, c.name, d.entries));
+            } catch {
+              summaries.push({ slug: c.slug, name: c.name, oneLiner: "", tools: [] });
+            }
+          }
+          await writeGlobalCanvasSkill(summaries);
+          await writeGlobalClaudemd(summaries);
+        } catch (err) {
+          console.error(`[SIE] Auto-sync failed for ${result.slug}:`, err);
+        }
+      })();
 
       return {
         content: [
           {
             type: "text" as const,
-            text: `Created cluster **${result.name}** (slug: \`${result.slug}\`) with ${result.panel_count ?? entry_ids.length} entries.`,
+            text: `Created cluster **${result.name}** (slug: \`${result.slug}\`) with ${result.panel_count ?? entry_ids.length} entries.\nBrain synthesis running in background (~30s). Use \`get_cluster_brain("${result.slug}")\` to check when ready.`,
           },
         ],
       };
@@ -372,117 +979,40 @@ export function createServer(client: SIEClient): McpServer {
   return server;
 }
 
-// ── Phase 3: Dynamic prompts ─────────────────────────────────────────
-
 /**
- * Register one MCP prompt per cluster. Each prompt loads the cluster's
- * entries as context and seeds a scoping instruction so Claude uses
- * query_cluster instead of search_setups for the session.
+ * Build a ClusterSummary from entry data for use in global skill/CLAUDE.md files.
  */
-export async function registerClusterPrompts(
-  server: McpServer,
-  client: SIEClient
-): Promise<string[]> {
-  const { clusters } = await client.listClusters();
-  const slugs: string[] = [];
+function buildClusterSummary(
+  slug: string,
+  name: string,
+  entries: Array<{ title: string | null; summary: string | null }>,
+): ClusterSummary {
+  const tools: string[] = [];
+  const summaryParts: string[] = [];
 
-  for (const cluster of clusters) {
-    slugs.push(cluster.slug);
-    server.prompt(
-      cluster.slug,
-      `Chat scoped to cluster: ${cluster.name}`,
-      {},
-      async () => {
-        const detail = await client.getCluster(cluster.slug);
-        const contextBlock = detail.entries
-          .slice(0, MAX_PROMPT_ENTRIES)
-          .map((e) => {
-            const parts = [`### ${e.title || "Untitled"} (${e.entry_id})`];
-            if (e.summary) parts.push(e.summary);
-            if (e.readme) {
-              parts.push(
-                `README:\n${e.readme.slice(0, CONTEXT_CHAR_BUDGET)}`
-              );
-            }
-            if (e.agents_md) {
-              parts.push(
-                `agents.md:\n${e.agents_md.slice(0, CONTEXT_CHAR_BUDGET)}`
-              );
-            }
-            return parts.join("\n");
-          })
-          .join("\n\n---\n\n");
-
-        return {
-          messages: [
-            {
-              role: "user" as const,
-              content: {
-                type: "text" as const,
-                text: `Load cluster "${detail.name}" as the active scope.\n\n${contextBlock}`,
-              },
-            },
-            {
-              role: "assistant" as const,
-              content: {
-                type: "text" as const,
-                text: `Cluster "${detail.name}" (slug: \`${detail.slug}\`) is now my active scope with ${detail.entries.length} entries loaded. For any retrieval in this session, I will call \`query_cluster\` with \`cluster_slug="${detail.slug}"\` instead of \`search_setups\`. I won't search the broader knowledge base unless you explicitly ask.`,
-              },
-            },
-          ],
-        };
-      }
-    );
-  }
-
-  return slugs;
-}
-
-// ── Phase 4: Polling sync ────────────────────────────────────────────
-
-/**
- * Poll for cluster changes and re-register prompts when the set changes.
- * Emits `notifications/prompts/list_changed` so Claude Code refreshes
- * its slash-command palette.
- */
-export function startPromptSync(
-  server: McpServer,
-  client: SIEClient,
-  intervalMs = 30_000
-): NodeJS.Timeout {
-  let knownSlugs: Set<string> = new Set();
-
-  async function sync() {
-    try {
-      const { clusters } = await client.listClusters();
-      const currentSlugs = new Set(clusters.map((c: ClusterRow) => c.slug));
-
-      // Check if the set changed
-      const changed =
-        currentSlugs.size !== knownSlugs.size ||
-        [...currentSlugs].some((s) => !knownSlugs.has(s));
-
-      if (changed) {
-        // Re-register all cluster prompts
-        const newSlugs = await registerClusterPrompts(server, client);
-        knownSlugs = new Set(newSlugs);
-
-        // Notify connected clients
-        try {
-          await server.server.notification({
-            method: "notifications/prompts/list_changed",
-          });
-        } catch {
-          // Notification may fail if no client is connected yet
+  for (const entry of entries) {
+    if (entry.title) {
+      // Extract tool-like words from titles
+      for (const word of entry.title.split(/[\s:—–\-|/,]+/)) {
+        const clean = word.trim();
+        if (clean.length > 2 && /^[A-Z]/.test(clean)) {
+          tools.push(clean);
         }
       }
-    } catch {
-      // Swallow errors — polling is best-effort
+    }
+    if (entry.summary) {
+      summaryParts.push(entry.summary.split(/[.!?]/)[0] || "");
     }
   }
 
-  // Initial sync
-  sync();
+  const oneLiner = summaryParts.slice(0, 2).join("; ").slice(0, 120) ||
+    `${entries.length} entries`;
 
-  return setInterval(sync, intervalMs);
+  return {
+    slug,
+    name,
+    oneLiner,
+    tools: [...new Set(tools)].slice(0, 10),
+  };
 }
+

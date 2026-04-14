@@ -51,12 +51,10 @@ async function main() {
     const { apiKey, baseUrl } = parseArgs();
     const client = new api_client_js_1.SIEClient(baseUrl, apiKey);
     const server = (0, server_js_1.createServer)(client);
-    // Register cluster prompts (Phase 3) — best-effort, don't block startup
-    (0, server_js_1.registerClusterPrompts)(server, client).catch(() => { });
     const transport = new stdio_js_1.StdioServerTransport();
     await server.connect(transport);
-    // Start polling for cluster changes (Phase 4)
-    (0, server_js_1.startPromptSync)(server, client, 30_000);
+    // Signal to the web app that an MCP connection is live (best-effort).
+    client.pingMcpStatus().catch(() => { });
 }
 main().catch((error) => {
     console.error("Fatal error:", error);

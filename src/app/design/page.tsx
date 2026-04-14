@@ -6,9 +6,9 @@
  * system matches the reference before overhauling actual product pages.
  */
 
+import Image from "next/image";
 import {
   Surface,
-  Orb,
   Pill,
   PillBar,
   GlowText,
@@ -112,7 +112,7 @@ export default function DesignSystemPage() {
         </div>
 
         {/* Reproduction of the screenshot navbar */}
-        <PillBar leading={<Orb size="md" glow="strong" />}>
+        <PillBar leading={<Image src="/favicons/favicon-32x32.png" alt="Logo" width={24} height={24} className="rounded-md" />}>
           <Pill icon={<HomeIcon />} variant="active">
             Home
           </Pill>
@@ -437,37 +437,24 @@ export default function DesignSystemPage() {
           </div>
         </TokenSection>
 
-        {/* Orb sizes */}
-        <TokenSection title="Orb" subtitle="The glowing logo orb at every size and intensity">
+        {/* Logo sizes */}
+        <TokenSection title="Logo" subtitle="The brand logo at different sizes">
           <div className="flex items-center gap-12 flex-wrap">
             <div className="flex flex-col items-center gap-3">
-              <Orb size="sm" />
-              <code className="text-[10px] text-[var(--text-muted)]">sm</code>
+              <Image src="/favicons/favicon-32x32.png" alt="Logo" width={24} height={24} className="rounded-md" />
+              <code className="text-[10px] text-[var(--text-muted)]">24px</code>
             </div>
             <div className="flex flex-col items-center gap-3">
-              <Orb size="md" />
-              <code className="text-[10px] text-[var(--text-muted)]">md</code>
+              <Image src="/favicons/favicon-32x32.png" alt="Logo" width={32} height={32} className="rounded-lg" />
+              <code className="text-[10px] text-[var(--text-muted)]">32px</code>
             </div>
             <div className="flex flex-col items-center gap-3">
-              <Orb size="lg" />
-              <code className="text-[10px] text-[var(--text-muted)]">lg</code>
+              <Image src="/favicons/android-chrome-192x192.png" alt="Logo" width={56} height={56} className="rounded-xl" />
+              <code className="text-[10px] text-[var(--text-muted)]">56px</code>
             </div>
             <div className="flex flex-col items-center gap-3">
-              <Orb size="xl" />
-              <code className="text-[10px] text-[var(--text-muted)]">xl</code>
-            </div>
-            <div className="w-px h-16 bg-[var(--border-default)]" />
-            <div className="flex flex-col items-center gap-3">
-              <Orb size="lg" glow="subtle" />
-              <code className="text-[10px] text-[var(--text-muted)]">subtle</code>
-            </div>
-            <div className="flex flex-col items-center gap-3">
-              <Orb size="lg" glow="default" />
-              <code className="text-[10px] text-[var(--text-muted)]">default</code>
-            </div>
-            <div className="flex flex-col items-center gap-3">
-              <Orb size="lg" glow="strong" />
-              <code className="text-[10px] text-[var(--text-muted)]">strong</code>
+              <Image src="/favicons/android-chrome-192x192.png" alt="Logo" width={80} height={80} className="rounded-2xl" />
+              <code className="text-[10px] text-[var(--text-muted)]">80px</code>
             </div>
           </div>
         </TokenSection>
@@ -496,7 +483,7 @@ export default function DesignSystemPage() {
               <Pill icon={<InboxIcon />}>Inbox</Pill>
               <Pill icon={<SearchIcon />}>Search</Pill>
             </PillBar>
-            <PillBar leading={<Orb size="md" />}>
+            <PillBar leading={<Image src="/favicons/favicon-32x32.png" alt="Logo" width={24} height={24} className="rounded-md" />}>
               <Pill icon={<HomeIcon />} variant="active">Home</Pill>
               <Pill icon={<BuilderIcon />}>Builder</Pill>
             </PillBar>

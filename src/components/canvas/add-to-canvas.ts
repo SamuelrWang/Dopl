@@ -21,14 +21,13 @@ import {
   INITIAL_CANVAS_STATE,
 } from "./types";
 
-const ACTIVE_USER_KEY = "sie:canvas:active-user";
-const STORAGE_KEY_PREFIX = "sie:canvas:state";
+import { CANVAS_ACTIVE_USER_KEY, CANVAS_STORAGE_KEY_PREFIX } from "@/lib/config";
 
 /** Get the user-scoped storage key, matching canvas-store.tsx logic. */
 function getStorageKey(): string {
-  if (typeof window === "undefined") return STORAGE_KEY_PREFIX;
-  const uid = localStorage.getItem(ACTIVE_USER_KEY);
-  return uid ? `${STORAGE_KEY_PREFIX}:${uid}` : STORAGE_KEY_PREFIX;
+  if (typeof window === "undefined") return CANVAS_STORAGE_KEY_PREFIX;
+  const uid = localStorage.getItem(CANVAS_ACTIVE_USER_KEY);
+  return uid ? `${CANVAS_STORAGE_KEY_PREFIX}:${uid}` : CANVAS_STORAGE_KEY_PREFIX;
 }
 
 // ── Types ──────────────────────────────────────────────────────────

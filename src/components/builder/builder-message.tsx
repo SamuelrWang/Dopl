@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { MarkdownMessage } from "@/components/design";
 
@@ -14,7 +13,7 @@ export interface EntryReference {
 }
 
 export type BuilderMessage =
-  | { role: "ai"; type: "text"; content: string }
+  | { role: "ai"; type: "text"; content: string; citations?: Map<string, EntryReference> }
   | { role: "user"; type: "text"; content: string }
   | {
       role: "ai";
@@ -23,10 +22,88 @@ export type BuilderMessage =
       status: "calling" | "done";
       summary?: string;
     }
-  | { role: "ai"; type: "entry_cards"; entries: EntryReference[] }
   | { role: "ai"; type: "streaming"; content: string };
 
-export function BuilderMessageBubble({ message }: { message: BuilderMessage }) {
+/** Regex to match [cite:UUID] markers in text */
+const CITE_REGEX = /\[cite:([a-f0-9-]+)\]/gi;
+
+/**
+ * Renders markdown content with citation markers replaced by clickable pills.
+ * During streaming, markers show as raw text. On finalized messages, they
+ * become interactive pills.
+ */
+function CitedMarkdown({
+  content,
+  citations,
+  onCitationClick,
+}: {
+  content: string;
+  citations?: Map<string, EntryReference>;
+  onCitationClick?: (entry: EntryReference) => void;
+}) {
+  if (!citations || citations.size === 0) {
+    // No citations — strip any [cite:...] markers and render plain markdown
+    const cleaned = content.replace(CITE_REGEX, "");
+    return <MarkdownMessage content={cleaned} />;
+  }
+
+  // Split content into text segments and citation markers
+  const parts: Array<{ type: "text"; value: string } | { type: "cite"; entryId: string; index: number }> = [];
+  let lastIndex = 0;
+  let citeIndex = 0;
+  const citeNumbers = new Map<string, number>();
+  let match: RegExpExecArray | null;
+
+  // Reset regex state
+  CITE_REGEX.lastIndex = 0;
+  while ((match = CITE_REGEX.exec(content)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push({ type: "text", value: content.slice(lastIndex, match.index) });
+    }
+    const entryId = match[1];
+    if (!citeNumbers.has(entryId)) {
+      citeNumbers.set(entryId, ++citeIndex);
+    }
+    parts.push({ type: "cite", entryId, index: citeNumbers.get(entryId)! });
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < content.length) {
+    parts.push({ type: "text", value: content.slice(lastIndex) });
+  }
+
+  return (
+    <div className="relative">
+      {parts.map((part, i) => {
+        if (part.type === "text") {
+          return <MarkdownMessage key={i} content={part.value} />;
+        }
+        const entry = citations.get(part.entryId);
+        if (!entry) {
+          // Unknown citation — skip
+          return null;
+        }
+        return (
+          <button
+            key={i}
+            onClick={() => onCitationClick?.(entry)}
+            className="inline-flex items-center gap-0.5 mx-0.5 px-1.5 py-0.5 rounded-full bg-white/[0.08] border border-white/[0.12] text-white/60 text-[10px] font-mono hover:bg-white/[0.14] hover:text-white/80 hover:border-white/[0.2] transition-all duration-150 cursor-pointer align-baseline translate-y-[-1px]"
+            title={entry.title || "Source"}
+          >
+            <span className="text-blue-400/80">{part.index}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+export function BuilderMessageBubble({
+  message,
+  onCitationClick,
+}: {
+  message: BuilderMessage;
+  onCitationClick?: (entry: EntryReference) => void;
+}) {
   return (
     <div
       className={cn(
@@ -41,15 +118,19 @@ export function BuilderMessageBubble({ message }: { message: BuilderMessage }) {
         </div>
       )}
 
-      {/* AI text — no bubble, markdown on the page */}
+      {/* AI text — with citation pills */}
       {message.role === "ai" && message.type === "text" && (
-        <MarkdownMessage content={message.content} />
+        <CitedMarkdown
+          content={message.content}
+          citations={message.citations}
+          onCitationClick={onCitationClick}
+        />
       )}
 
       {/* AI streaming — no bubble, streaming markdown with cursor */}
       {message.role === "ai" && message.type === "streaming" && (
         <div className="relative">
-          <MarkdownMessage content={message.content} />
+          <MarkdownMessage content={message.content.replace(CITE_REGEX, "")} />
           <span
             className="inline-block w-1.5 h-4 bg-white/50 animate-pulse ml-0.5 align-text-bottom"
             aria-hidden
@@ -68,8 +149,8 @@ export function BuilderMessageBubble({ message }: { message: BuilderMessage }) {
               />
               <span>
                 {message.toolName === "search_knowledge_base"
-                  ? "Searching knowledge base..."
-                  : "Loading entry details..."}
+                  ? "Researching..."
+                  : "Diving deeper..."}
               </span>
             </>
           ) : (
@@ -80,52 +161,6 @@ export function BuilderMessageBubble({ message }: { message: BuilderMessage }) {
               </span>
             </>
           )}
-        </div>
-      )}
-
-      {/* AI entry references — inline glass cards */}
-      {message.role === "ai" && message.type === "entry_cards" && (
-        <div className="space-y-2">
-          {message.entries.map((entry) => (
-            <Link
-              key={entry.entry_id}
-              href={`/entries/${entry.entry_id}`}
-              target="_blank"
-              className="block group/card"
-            >
-              <div className="relative rounded-xl overflow-hidden backdrop-blur-[12px] backdrop-saturate-[1.4] bg-white/[0.05] border border-white/[0.1] hover:bg-white/[0.08] hover:border-white/[0.18] transition-all duration-200 py-3 px-4">
-                <div
-                  className="pointer-events-none absolute inset-x-0 top-0 h-px"
-                  style={{
-                    background:
-                      "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.25) 30%, rgba(255,255,255,0.35) 50%, rgba(255,255,255,0.25) 70%, transparent 100%)",
-                  }}
-                />
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <h4 className="font-medium text-sm text-white/90 truncate">
-                      {entry.title || "Untitled"}
-                    </h4>
-                    <p className="text-xs text-white/50 mt-0.5 line-clamp-2 leading-relaxed">
-                      {entry.summary || "No summary"}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    {entry.complexity && (
-                      <span className="font-mono text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-[3px] bg-white/[0.04] border border-white/[0.1] text-white/60">
-                        {entry.complexity}
-                      </span>
-                    )}
-                    {entry.similarity !== undefined && (
-                      <span className="font-mono text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-[3px] bg-white/[0.08] border border-white/[0.15] text-white/80">
-                        {(entry.similarity * 100).toFixed(0)}%
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </Link>
-          ))}
         </div>
       )}
     </div>

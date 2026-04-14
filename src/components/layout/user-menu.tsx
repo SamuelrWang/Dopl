@@ -53,7 +53,7 @@ export function UserMenu() {
         onClick={() => setOpen(!open)}
         className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium
           border border-white/[0.1] bg-white/[0.06] hover:bg-white/[0.1]
-          transition-all cursor-pointer overflow-hidden"
+          transition-colors cursor-pointer overflow-hidden"
         aria-label="User menu"
       >
         {avatarUrl ? (
@@ -75,6 +75,14 @@ export function UserMenu() {
           </div>
 
           <div className="py-1">
+            <MenuButton
+              onClick={() => {
+                setOpen(false);
+                router.push("/settings/billing");
+              }}
+            >
+              Billing
+            </MenuButton>
             <MenuButton
               onClick={() => {
                 setOpen(false);

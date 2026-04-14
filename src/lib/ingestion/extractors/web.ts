@@ -1,14 +1,13 @@
 import { ExtractedSource, LinkFollowResult } from "../types";
 import { fetchWithTimeout, retryWithBackoff } from "../utils";
-
-const MAX_DEPTH = parseInt(process.env.MAX_LINK_DEPTH || "3", 10);
+import { MAX_LINK_DEPTH } from "@/lib/config";
 const MAX_CONTENT_LENGTH = 50_000; // 50K chars max per page
 
 export async function extractWebContent(
   url: string,
   depth: number = 0
 ): Promise<LinkFollowResult | null> {
-  if (depth > MAX_DEPTH) return null;
+  if (depth > MAX_LINK_DEPTH) return null;
 
   try {
     let content: string;
@@ -29,6 +28,7 @@ export async function extractWebContent(
       content = result.content;
       metadata = result.metadata;
     } else {
+      console.warn(`[web] No FIRECRAWL_API_KEY or JINA_API_KEY set — using basic HTML fallback for ${url}. Content quality may be degraded.`);
       const result = await fetchSimple(url);
       content = result.content;
       metadata = result.metadata;
@@ -134,12 +134,26 @@ async function fetchSimple(
 
   const html = await response.text();
 
-  // Extract OG image before stripping HTML
+  // Extract OG metadata before stripping HTML
   const ogImage = extractOgImage(html);
+  const ogTitle = extractMetaContent(html, "og:title");
+  const ogDescription = extractMetaContent(html, "og:description");
 
-  const text = html
+  // Strip non-content elements first (nav, header, footer, aside, script, style)
+  let cleaned = html
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+    .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, "")
+    .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, "")
+    .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, "")
+    .replace(/<aside[^>]*>[\s\S]*?<\/aside>/gi, "");
+
+  // Try to extract content from <main> or <article> tags first
+  const mainMatch = cleaned.match(/<main[^>]*>([\s\S]*?)<\/main>/i);
+  const articleMatch = cleaned.match(/<article[^>]*>([\s\S]*?)<\/article>/i);
+  const contentHtml = mainMatch?.[1] || articleMatch?.[1] || cleaned;
+
+  const text = contentHtml
     .replace(/<[^>]+>/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -148,8 +162,19 @@ async function fetchSimple(
     content: text.slice(0, MAX_CONTENT_LENGTH),
     metadata: {
       thumbnail_url: ogImage,
+      title: ogTitle,
+      description: ogDescription,
     },
   };
+}
+
+function extractMetaContent(html: string, property: string): string | null {
+  const match = html.match(
+    new RegExp(`<meta[^>]*property=["']${property}["'][^>]*content=["']([^"']+)["']`, "i")
+  ) || html.match(
+    new RegExp(`<meta[^>]*content=["']([^"']+)["'][^>]*property=["']${property}["']`, "i")
+  );
+  return match?.[1] || null;
 }
 
 function extractUrls(text: string): string[] {

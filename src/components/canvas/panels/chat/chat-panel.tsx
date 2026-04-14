@@ -30,6 +30,7 @@ import { usePanelIngestion } from "../../use-panel-ingestion";
 import { useChat } from "./use-chat";
 import { isUrlOnlyMessage, extractUrl } from "./url-detection";
 import { findEnclosingClusterName } from "./cluster-context";
+import { useChatName } from "./use-chat-name";
 
 interface ChatPanelBodyProps {
   panel: ChatPanelData;
@@ -45,6 +46,9 @@ export function ChatPanelBody({ panel }: ChatPanelBodyProps) {
   // on URL detection.
   const { send: sendChat, isStreaming: chatStreaming } = useChat({ panel });
   const { startIngestion } = usePanelIngestion(panel);
+
+  // Auto-generate a topic name for the chat after the first AI response.
+  useChatName(panel);
 
   // Current cluster name (for the "in cluster: X" badge at the top).
   const clusterName = findEnclosingClusterName(panel.id, state);
@@ -146,7 +150,7 @@ export function ChatPanelBody({ panel }: ChatPanelBodyProps) {
 
       {/* Input bar */}
       <div data-no-drag className="shrink-0 p-3">
-        <div className="relative rounded-xl overflow-hidden backdrop-blur-[12px] backdrop-saturate-[1.4] bg-black/[0.35] border border-white/[0.1] shadow-[0_2px_8px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.06)] transition-all duration-200 focus-within:bg-black/[0.4] focus-within:border-white/[0.18]">
+        <div className="relative rounded-xl overflow-hidden backdrop-blur-[12px] backdrop-saturate-[1.4] bg-black/[0.35] border border-white/[0.1] shadow-[0_2px_8px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.06)] transition-colors duration-200 focus-within:bg-black/[0.4] focus-within:border-white/[0.18]">
           <div
             className="pointer-events-none absolute inset-x-0 top-0 h-px"
             style={{

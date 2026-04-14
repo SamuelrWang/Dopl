@@ -35,8 +35,20 @@ export function FlushGrid() {
     }
 
     recompute();
-    window.addEventListener("resize", recompute);
-    return () => window.removeEventListener("resize", recompute);
+
+    // Debounce resize to avoid thrashing CSS variables during rapid
+    // browser zoom (which fires many resize events in quick succession).
+    let timer: ReturnType<typeof setTimeout>;
+    const onResize = () => {
+      clearTimeout(timer);
+      timer = setTimeout(recompute, 100);
+    };
+
+    window.addEventListener("resize", onResize);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("resize", onResize);
+    };
   }, []);
 
   return null;

@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
-const PUBLIC_ROUTES = ["/login", "/auth/callback", "/api/og/tweet"];
+const PUBLIC_ROUTES = ["/login", "/auth/callback", "/api/og/tweet", "/api/billing/webhook", "/terms", "/privacy", "/pricing"];
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -62,7 +62,7 @@ export async function middleware(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     // Only add redirectTo if it's not the default landing page
-    if (pathname !== "/canvas") {
+    if (pathname !== "/" && pathname !== "/canvas") {
       url.searchParams.set("redirectTo", pathname);
     }
     return NextResponse.redirect(url);

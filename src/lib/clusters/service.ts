@@ -36,7 +36,7 @@ export interface ClusterUpdateRequest {
 
 // ── CRUD ─────────────────────────────────────────────────────────────
 
-const CONTEXT_CHAR_BUDGET = 2000;
+import { CONTEXT_CHAR_BUDGET_PER_FIELD } from "@/lib/config";
 
 export async function listClusters(opts?: { userId?: string }): Promise<ClusterRow[]> {
   const db = supabaseAdmin();
@@ -113,10 +113,10 @@ export async function getCluster(slug: string): Promise<ClusterDetail> {
       title: e.title,
       summary: e.summary,
       readme: e.readme
-        ? e.readme.slice(0, CONTEXT_CHAR_BUDGET)
+        ? e.readme.slice(0, CONTEXT_CHAR_BUDGET_PER_FIELD)
         : null,
       agents_md: e.agents_md
-        ? e.agents_md.slice(0, CONTEXT_CHAR_BUDGET)
+        ? e.agents_md.slice(0, CONTEXT_CHAR_BUDGET_PER_FIELD)
         : null,
     }));
   }

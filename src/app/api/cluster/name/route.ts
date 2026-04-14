@@ -39,10 +39,11 @@ const SYSTEM_PROMPT = `You name clusters of AI/automation setup panels. Generate
 
 RULES:
 - 2–4 words only
-- Title Case
+- Title_Case with underscores between words (e.g. "Email_Automation", "RAG_Research", "Lead_Gen_Stack")
+- Use underscores instead of spaces — NEVER use spaces
 - No quotes, no trailing punctuation, no explanations
 - No generic filler like "Cluster" / "Group" / "Panels"
-- Describe the shared theme (e.g. "Email Automation", "RAG Research", "Lead Gen Stack")
+- Describe the shared theme
 - If the panels are clearly unrelated, pick the most prominent theme
 
 Return ONLY the name. Nothing else.`;
@@ -63,13 +64,15 @@ function summarisePanels(panels: ClusterNamePanel[]): string {
   return lines.join("\n");
 }
 
-/** Trim quotes, trailing punctuation, and enforce a short length. */
+/** Trim quotes, trailing punctuation, enforce underscores, and cap length. */
 function sanitiseName(raw: string): string {
   let name = raw.trim();
   // Strip wrapping quotes (single or double) if Claude used them.
   name = name.replace(/^["'`]+|["'`]+$/g, "").trim();
   // Drop trailing punctuation.
   name = name.replace(/[.!?,;:]+$/, "").trim();
+  // Replace any remaining spaces with underscores (safety net).
+  name = name.replace(/\s+/g, "_");
   // Hard cap — 40 chars is plenty for a 2-4 word name.
   if (name.length > 40) name = name.slice(0, 40).trim();
   return name;

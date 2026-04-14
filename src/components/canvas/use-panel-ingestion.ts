@@ -243,6 +243,56 @@ export function usePanelIngestion(panel: ChatPanelData) {
           throw new Error(data.message || data.error || "Ingestion failed");
         }
 
+        // If already ingested, skip SSE — fetch and spawn immediately
+        if (data.status === "already_exists") {
+          dispatch({
+            type: "APPEND_MESSAGE",
+            panelId: panel.id,
+            message: {
+              role: "ai",
+              type: "text",
+              content: "Already ingested — loading it now.",
+            },
+          });
+          const entry: EntryFetchResponse | null = await fetch(
+            `/api/entries/${data.entry_id}`
+          ).then((r) => (r.ok ? r.json() : null));
+          if (entry) {
+            const payload = buildEntryActionPayload(
+              entry,
+              panel.id,
+              data.entry_id
+            );
+            dispatch({
+              type: "ADD_ARTIFACTS",
+              panelId: payload.panelId,
+              entryId: payload.entryId,
+              title: payload.title,
+              readme: payload.readme,
+              agentsMd: payload.agentsMd,
+              manifest: payload.manifest,
+            });
+            dispatch({
+              type: "SPAWN_ENTRY_PANEL",
+              sourcePanelId: payload.panelId,
+              entryId: payload.entryId,
+              title: payload.title,
+              summary: payload.summary,
+              sourceUrl: payload.sourceUrl,
+              sourcePlatform: payload.sourcePlatform,
+              sourceAuthor: payload.sourceAuthor,
+              thumbnailUrl: payload.thumbnailUrl,
+              useCase: payload.useCase,
+              complexity: payload.complexity,
+              tags: payload.tags,
+              readme: payload.readme,
+              agentsMd: payload.agentsMd,
+              manifest: payload.manifest,
+            });
+          }
+          return;
+        }
+
         // 2. Add empty progress message tied to the new entry id
         const progressMessage: ChatMessage = {
           role: "ai",
@@ -374,11 +424,58 @@ export async function startPanelIngestion(
 
     const data = (await response.json()) as {
       entry_id: string;
+      status?: string;
       error?: string;
       message?: string;
     };
     if (!response.ok) {
       throw new Error(data.message || data.error || "Ingestion failed");
+    }
+
+    // If already ingested, skip SSE — fetch and spawn immediately
+    if (data.status === "already_exists") {
+      dispatch({
+        type: "APPEND_MESSAGE",
+        panelId,
+        message: {
+          role: "ai",
+          type: "text",
+          content: "Already ingested — loading it now.",
+        },
+      });
+      const entry: EntryFetchResponse | null = await fetch(
+        `/api/entries/${data.entry_id}`
+      ).then((r) => (r.ok ? r.json() : null));
+      if (entry) {
+        const payload = buildEntryActionPayload(entry, panelId, data.entry_id);
+        dispatch({
+          type: "ADD_ARTIFACTS",
+          panelId: payload.panelId,
+          entryId: payload.entryId,
+          title: payload.title,
+          readme: payload.readme,
+          agentsMd: payload.agentsMd,
+          manifest: payload.manifest,
+        });
+        dispatch({
+          type: "SPAWN_ENTRY_PANEL",
+          sourcePanelId: payload.panelId,
+          entryId: payload.entryId,
+          title: payload.title,
+          summary: payload.summary,
+          sourceUrl: payload.sourceUrl,
+          sourcePlatform: payload.sourcePlatform,
+          sourceAuthor: payload.sourceAuthor,
+          thumbnailUrl: payload.thumbnailUrl,
+          useCase: payload.useCase,
+          complexity: payload.complexity,
+          tags: payload.tags,
+          readme: payload.readme,
+          agentsMd: payload.agentsMd,
+          manifest: payload.manifest,
+        });
+      }
+      return;
     }
 
     // 2. Empty progress message

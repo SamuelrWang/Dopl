@@ -90,7 +90,7 @@ export function GlassCard({
         !borderless && v.border,
         v.shadow,
         // Transition for interactive states
-        "transition-all duration-200",
+        "transition-colors duration-200",
         className
       )}
       {...props}

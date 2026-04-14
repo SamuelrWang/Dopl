@@ -2,9 +2,10 @@ import { callClaude } from "@/lib/ai";
 import { buildManifestPrompt } from "@/lib/prompts/manifest";
 
 export async function generateManifest(
-  allRawContent: string
+  allRawContent: string,
+  contentType: string = "setup"
 ): Promise<Record<string, unknown>> {
-  const prompt = buildManifestPrompt(allRawContent);
+  const prompt = buildManifestPrompt(allRawContent, contentType);
   const response = await callClaude("", prompt, { maxTokens: 4096 });
 
   // Extract JSON from response (handle cases where LLM wraps in markdown code block)
