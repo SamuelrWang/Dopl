@@ -1,17 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { IngestRequestSchema } from "@/types/api";
 import { ingestEntry } from "@/lib/ingestion/pipeline";
-import { withSubscriptionAuth } from "@/lib/auth/with-auth";
+import { withUserAuth } from "@/lib/auth/with-auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { MAX_CONTENT_FOR_CLAUDE, MAX_IMAGES_PER_ENTRY, MAX_IMAGE_SIZE_BYTES } from "@/lib/config";
-import { canIngest, incrementIngestionCount } from "@/lib/billing/subscriptions";
 
 const MAX_LINKS = 50;
 const MAX_URL_LENGTH = 2_048;
 
 async function handlePost(
   request: NextRequest,
-  { userId }: { userId: string; tier: string }
+  { userId }: { userId: string }
 ) {
   try {
     const body = await request.json();
@@ -64,21 +63,6 @@ async function handlePost(
       );
     }
 
-    // ── Subscription gate: check ingestion limit ────────────────
-    const usage = await canIngest(userId);
-    if (!usage.allowed) {
-      return NextResponse.json(
-        {
-          error: "ingestion_limit_reached",
-          message: "You've used all your free ingestions. Upgrade to Pro for unlimited ingestions.",
-          used: usage.used,
-          limit: usage.limit,
-          upgrade_url: "/settings/billing",
-        },
-        { status: 402 }
-      );
-    }
-
     // ── Dedup check: has this URL already been ingested? ──────────
     const normalizedUrl = normalizeUrl(parsed.data.url);
     const supabase = supabaseAdmin();
@@ -119,9 +103,6 @@ async function handlePost(
       },
     });
 
-    // Increment usage count after successful start
-    await incrementIngestionCount(userId);
-
     return NextResponse.json(
       {
         entry_id: entryId,
@@ -139,7 +120,7 @@ async function handlePost(
   }
 }
 
-export const POST = withSubscriptionAuth(handlePost);
+export const POST = withUserAuth(handlePost);
 
 /**
  * Normalize a URL for dedup comparison.

@@ -55,15 +55,20 @@ export function EntryPanelBody({ panel }: EntryPanelBodyProps) {
 
   const githubRepoUrl = extractGitHubRepoUrl(panel.sourceUrl);
 
-  // Build artifacts array from available files
+  // Build artifacts array — include tabs in loading state even without content
   const artifacts = useMemo(() => {
-    const items: { label: string; filename: string; content: string; accentColor: string }[] = [];
-    if (panel.readme) items.push({ label: "README.md", filename: "README.md", content: panel.readme, accentColor: "var(--mint)" });
-    if (panel.agentsMd) items.push({ label: "agents.md", filename: "agents.md", content: panel.agentsMd, accentColor: "var(--coral)" });
-    if (panel.manifest && Object.keys(panel.manifest).length > 0)
-      items.push({ label: "manifest.json", filename: "manifest.json", content: JSON.stringify(panel.manifest, null, 2), accentColor: "var(--gold)" });
+    const items: { label: string; filename: string; content: string; accentColor: string; loading: boolean }[] = [];
+    if (panel.readme || panel.readmeLoading) {
+      items.push({ label: "README.md", filename: "README.md", content: panel.readme, accentColor: "var(--mint)", loading: !!panel.readmeLoading });
+    }
+    if (panel.agentsMd || panel.agentsMdLoading) {
+      items.push({ label: "agents.md", filename: "agents.md", content: panel.agentsMd, accentColor: "var(--coral)", loading: !!panel.agentsMdLoading });
+    }
+    if (panel.manifest && Object.keys(panel.manifest).length > 0) {
+      items.push({ label: "manifest.json", filename: "manifest.json", content: JSON.stringify(panel.manifest, null, 2), accentColor: "var(--gold)", loading: false });
+    }
     return items;
-  }, [panel.readme, panel.agentsMd, panel.manifest]);
+  }, [panel.readme, panel.agentsMd, panel.manifest, panel.readmeLoading, panel.agentsMdLoading]);
 
   const [activeTab, setActiveTab] = useState(0);
   const [copied, setCopied] = useState(false);
@@ -173,26 +178,35 @@ export function EntryPanelBody({ panel }: EntryPanelBodyProps) {
       {/* ── File viewport (scrolls independently) ─────────────────── */}
       {active && (
         <div className="flex-1 min-h-0 px-5 pb-4 pt-1 relative">
-          {/* Inline icon actions — top right of viewport */}
-          <div className="absolute top-3 right-7 z-10 flex items-center gap-2">
-            <button
-              onClick={handleCopy}
-              className="text-white/30 hover:text-white/70 transition-colors"
-              title="Copy"
-            >
-              {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-            </button>
-            <button
-              onClick={handleDownload}
-              className="text-white/30 hover:text-white/70 transition-colors"
-              title="Download"
-            >
-              <Download className="w-3.5 h-3.5" />
-            </button>
-          </div>
-          <pre className="h-full overflow-y-auto text-[10px] font-mono bg-black/[0.3] border border-white/[0.08] rounded-[3px] p-3 pt-4 text-white/70 leading-relaxed whitespace-pre-wrap break-words">
-            {active.content}
-          </pre>
+          {active.loading ? (
+            <div className="h-full flex flex-col items-center justify-center gap-3 bg-black/[0.3] border border-white/[0.08] rounded-[3px]">
+              <div className="w-5 h-5 border-2 border-white/20 border-t-white/60 rounded-full animate-spin" />
+              <span className="text-xs font-mono text-white/40">Generating...</span>
+            </div>
+          ) : (
+            <>
+              {/* Inline icon actions — top right of viewport */}
+              <div className="absolute top-3 right-7 z-10 flex items-center gap-2">
+                <button
+                  onClick={handleCopy}
+                  className="text-white/30 hover:text-white/70 transition-colors"
+                  title="Copy"
+                >
+                  {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                </button>
+                <button
+                  onClick={handleDownload}
+                  className="text-white/30 hover:text-white/70 transition-colors"
+                  title="Download"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <pre className="h-full overflow-y-auto text-[10px] font-mono bg-black/[0.3] border border-white/[0.08] rounded-[3px] p-3 pt-4 text-white/70 leading-relaxed whitespace-pre-wrap break-words">
+                {active.content}
+              </pre>
+            </>
+          )}
         </div>
       )}
     </div>

@@ -100,6 +100,10 @@ export function ConnectionPanelBody({ panel }: ConnectionPanelBodyProps) {
 
   const url = baseUrl || "https://your-deployment.example";
 
+  const cliCommand = apiKey
+    ? `claude mcp add setup-intelligence --scope user --transport stdio -e SIE_BASE_URL=${url} -- npx @dopl/mcp-server --api-key ${apiKey}`
+    : null;
+
   const mcpConfig = apiKey
     ? JSON.stringify(
         {
@@ -158,6 +162,29 @@ Once connected, explain to the user that they are now connected to the **Setup I
         </div>
       ) : apiKey && agentsMd && mcpConfig ? (
         <>
+          {/* CLI one-liner */}
+          <section className="space-y-1.5">
+            <MonoLabel tone="muted">Claude Code — run this command</MonoLabel>
+            <div className="relative">
+              <button
+                onClick={() => copy(cliCommand!, "cli")}
+                className="absolute top-2 right-2 z-10 text-white/30 hover:text-white/70 transition-colors"
+                title="Copy command"
+              >
+                {copiedSection === "cli" ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+              </button>
+              <pre className="text-[10px] font-mono bg-black/[0.3] border border-white/[0.08] rounded-[3px] p-3 pr-8 overflow-auto text-white/80 leading-relaxed whitespace-pre-wrap break-all">
+                {cliCommand}
+              </pre>
+            </div>
+          </section>
+
+          <div className="flex items-center gap-2">
+            <div className="flex-1 h-px bg-white/[0.06]" />
+            <span className="text-[9px] font-mono text-white/25 uppercase tracking-widest">or</span>
+            <div className="flex-1 h-px bg-white/[0.06]" />
+          </div>
+
           {/* Header */}
           <p className="text-xs text-white/70 leading-relaxed">
             Copy this and give it to any MCP-compatible AI tool. It&apos;ll set up the connection.

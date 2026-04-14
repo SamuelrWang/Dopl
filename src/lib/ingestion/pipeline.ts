@@ -128,7 +128,7 @@ async function runPipeline(
     // Knowledge branch — no content classification, no agents.md
     ingestionProgress.emit(entryId, "detail", "Knowledge content detected — using knowledge-optimized pipeline");
 
-    ({ manifest } = await stepGenerateManifest(entryId, contentForClaude, contentType));
+    ({ manifest } = await stepGenerateManifest(entryId, contentForClaude, contentType, { thumbnailUrl, sourceUrl: input.url }));
     [{ readme }, { tags }] = await Promise.all([
       stepGenerateReadme(entryId, contentForClaude, manifest, contentType),
       stepGenerateTags(entryId, manifest),
@@ -138,7 +138,7 @@ async function runPipeline(
     // Setup / Resource branch — full pipeline
     const [classificationResult, manifestResult] = await Promise.all([
       stepClassifyContent(entryId, contentForClaude),
-      stepGenerateManifest(entryId, contentForClaude, contentType),
+      stepGenerateManifest(entryId, contentForClaude, contentType, { thumbnailUrl, sourceUrl: input.url }),
     ]);
     manifest = manifestResult.manifest;
     const classification = classificationResult.classification;
@@ -498,7 +498,8 @@ async function stepClassifyContent(
 async function stepGenerateManifest(
   entryId: string,
   contentForClaude: string,
-  contentType: ContentType = "setup"
+  contentType: ContentType = "setup",
+  meta?: { thumbnailUrl: string | null; sourceUrl: string }
 ): Promise<{ manifest: Record<string, unknown> }> {
   const s = Date.now();
   await logStep(entryId, "manifest_generation", "started");
@@ -518,7 +519,20 @@ async function stepGenerateManifest(
   parts.push(`complexity: ${m.complexity || "unknown"}`);
 
   await logStep(entryId, "manifest_generation", "completed", undefined, Date.now() - s);
-  ingestionProgress.emit(entryId, "step_complete", `Manifest generated — ${parts.join(", ")}`, { step: "manifest_generation" });
+  ingestionProgress.emit(entryId, "step_complete", `Manifest generated — ${parts.join(", ")}`, {
+    step: "manifest_generation",
+    details: {
+      manifest,
+      title: (m.title as string) || "Untitled",
+      summary: (m.description as string) || "",
+      useCase: ((m.use_case as Record<string, string>)?.primary as string) || "other",
+      complexity: (m.complexity as string) || "moderate",
+      contentType,
+      thumbnailUrl: meta?.thumbnailUrl ?? null,
+      sourceUrl: meta?.sourceUrl ?? "",
+      sourcePlatform: meta?.sourceUrl ? detectPlatform(meta.sourceUrl) : null,
+    },
+  });
 
   return { manifest };
 }
@@ -537,7 +551,10 @@ async function stepGenerateReadme(
   const readme = await generateReadme(contentForClaude, manifest, contentType);
 
   await logStep(entryId, "readme_generation", "completed", undefined, Date.now() - s);
-  ingestionProgress.emit(entryId, "step_complete", `README generated (${Math.round(readme.length / 1000)}K chars)`, { step: "readme_generation" });
+  ingestionProgress.emit(entryId, "step_complete", `README generated (${Math.round(readme.length / 1000)}K chars)`, {
+    step: "readme_generation",
+    details: { readme },
+  });
 
   return { readme };
 }
@@ -557,7 +574,10 @@ async function stepGenerateAgentsMd(
   const agentsMd = await generateAgentsMd(contentForClaude, manifest, readme, classification);
 
   await logStep(entryId, "agents_md_generation", "completed", undefined, Date.now() - s);
-  ingestionProgress.emit(entryId, "step_complete", `agents.md generated (${Math.round(agentsMd.length / 1000)}K chars)`, { step: "agents_md_generation" });
+  ingestionProgress.emit(entryId, "step_complete", `agents.md generated (${Math.round(agentsMd.length / 1000)}K chars)`, {
+    step: "agents_md_generation",
+    details: { agentsMd },
+  });
 
   return { agentsMd };
 }
@@ -576,9 +596,15 @@ async function stepGenerateTags(
   await logStep(entryId, "tag_generation", "completed", undefined, Date.now() - s);
   if (tags.length > 0) {
     const tagSummary = tags.slice(0, 8).map((t) => t.tag_value).join(", ");
-    ingestionProgress.emit(entryId, "step_complete", `Generated ${tags.length} tag(s): ${tagSummary}`, { step: "tag_generation" });
+    ingestionProgress.emit(entryId, "step_complete", `Generated ${tags.length} tag(s): ${tagSummary}`, {
+      step: "tag_generation",
+      details: { tags },
+    });
   } else {
-    ingestionProgress.emit(entryId, "step_complete", "No tags generated", { step: "tag_generation" });
+    ingestionProgress.emit(entryId, "step_complete", "No tags generated", {
+      step: "tag_generation",
+      details: { tags: [] },
+    });
   }
 
   return { tags };
