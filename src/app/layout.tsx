@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Space_Grotesk, JetBrains_Mono, Playfair_Display } from "next/font/google";
+import { Geist, Geist_Mono, Space_Grotesk, JetBrains_Mono, Playfair_Display, Inter } from "next/font/google";
 import "./globals.css";
 import { Header } from "@/components/layout/header";
 import { FlushGrid } from "@/components/design";
+import { LayoutShell } from "@/components/layout/layout-shell";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -35,6 +36,13 @@ const playfairDisplay = Playfair_Display({
   style: ["normal", "italic"],
 });
 
+// Inter — used for landing page body text
+const inter = Inter({
+  variable: "--font-inter",
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
+});
+
 export const metadata: Metadata = {
   title: "Setup Intelligence Engine",
   description: "AI-powered knowledge base for automation setups",
@@ -55,13 +63,9 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} ${playfairDisplay.variable} antialiased mosaic-bg min-h-screen`}
+        className={`${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} ${playfairDisplay.variable} ${inter.variable} antialiased mosaic-bg min-h-screen`}
       >
-        <FlushGrid />
-        <div className="relative z-[2] pointer-events-none">
-          <Header />
-          <main className="container mx-auto px-4 py-8 pointer-events-auto">{children}</main>
-        </div>
+        <LayoutShell>{children}</LayoutShell>
       </body>
     </html>
   );

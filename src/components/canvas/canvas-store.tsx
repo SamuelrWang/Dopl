@@ -228,9 +228,6 @@ function reducer(state: CanvasState, action: CanvasAction): CanvasState {
         ),
       };
 
-    case "TOGGLE_SIDEBAR":
-      return { ...state, sidebarOpen: !state.sidebarOpen };
-
     case "SET_SELECTION": {
       // Bail on no-op updates so React doesn't re-render every panel when
       // the marquee drags across empty space and hands us the same array.

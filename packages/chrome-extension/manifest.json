@@ -1,0 +1,61 @@
+{
+  "manifest_version": 3,
+  "name": "SIE Debugger",
+  "description": "Setup Intelligence Engine — ingest pages, chat with AI, and manage your knowledge base from any tab",
+  "version": "0.1.0",
+  "icons": {
+    "16": "public/icons/icon-16.png",
+    "32": "public/icons/icon-32.png",
+    "48": "public/icons/icon-48.png",
+    "128": "public/icons/icon-128.png"
+  },
+  "action": {
+    "default_title": "Open SIE Debugger"
+  },
+  "side_panel": {
+    "default_path": "src/panel/index.html"
+  },
+  "background": {
+    "service_worker": "src/background/service-worker.ts",
+    "type": "module"
+  },
+  "permissions": [
+    "sidePanel",
+    "activeTab",
+    "scripting",
+    "storage",
+    "contextMenus",
+    "notifications",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://*/*",
+    "http://*/*"
+  ],
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+S",
+        "mac": "Command+Shift+S"
+      },
+      "description": "Toggle SIE Debugger side panel"
+    },
+    "quick-ingest": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+I",
+        "mac": "Command+Shift+I"
+      },
+      "description": "Quick ingest current page"
+    },
+    "quick-search": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+K",
+        "mac": "Command+Shift+K"
+      },
+      "description": "Quick search knowledge base"
+    }
+  },
+  "omnibox": {
+    "keyword": "sie"
+  }
+}

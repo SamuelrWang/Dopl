@@ -1,0 +1,145 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── SIE Design Tokens (matching openclaw-cloud dark theme) ──────── */
+
+:root {
+  /* Surfaces */
+  --bg-base: oklch(0.15 0 0);
+  --bg-elevated: oklch(0.18 0 0);
+  --bg-elevated-hover: oklch(0.21 0 0);
+  --bg-inset: oklch(0.13 0 0);
+  --bg-inset-hover: oklch(0.16 0 0);
+  --bg-overlay: oklch(0.14 0 0);
+
+  /* Borders */
+  --border-subtle: oklch(1 0 0 / 6%);
+  --border-default: oklch(1 0 0 / 10%);
+  --border-strong: oklch(1 0 0 / 16%);
+  --border-highlight: oklch(1 0 0 / 22%);
+
+  /* Text */
+  --text-primary: oklch(0.96 0 0);
+  --text-secondary: oklch(0.78 0 0);
+  --text-muted: oklch(0.58 0 0);
+  --text-disabled: oklch(0.38 0 0);
+
+  /* Accent — cyan/blue glow */
+  --accent-primary: oklch(0.78 0.16 240);
+  --accent-glow: oklch(0.68 0.22 250);
+  --accent-soft: oklch(0.45 0.12 245);
+
+  /* Status */
+  --success: oklch(0.72 0.16 155);
+  --warning: oklch(0.82 0.15 80);
+  --danger: oklch(0.65 0.22 25);
+
+  /* Named palette */
+  --paper: #1a1a1a;
+  --coral: #FF8C69;
+  --mint: #9EFFBF;
+  --gold: #F4D35E;
+
+  /* Glows */
+  --glow-accent: 0 0 24px oklch(0.68 0.22 250 / 50%), 0 0 48px oklch(0.68 0.22 250 / 25%);
+  --shadow-elevated: 0 8px 24px -8px oklch(0 0 0 / 60%), 0 2px 8px -2px oklch(0 0 0 / 40%);
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: oklch(1 0 0 / 12%);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: oklch(1 0 0 / 20%);
+}
+
+/* Glass card effect */
+.glass-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  box-shadow: var(--shadow-elevated);
+}
+
+.glass-card:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-elevated-hover);
+}
+
+/* Accent glow on focus */
+.glow-focus:focus-within {
+  box-shadow: var(--glow-accent);
+  border-color: var(--accent-primary);
+}
+
+/* Mono label (complexity, status) */
+.mono-label {
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: oklch(1 0 0 / 5%);
+  border: 1px solid oklch(1 0 0 / 8%);
+}
+
+/* Status dot */
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.status-dot.processing {
+  background: var(--accent-primary);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.status-dot.complete {
+  background: var(--mint);
+}
+
+.status-dot.error {
+  background: var(--coral);
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* Fade in animation */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s ease-out;
+}
