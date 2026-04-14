@@ -1,11 +1,20 @@
 "use client";
 
+import { Suspense } from "react";
 import { useSubscription } from "@/components/billing/use-subscription";
 import { Button } from "@/components/ui/button";
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 export default function BillingPage() {
+  return (
+    <Suspense>
+      <BillingPageInner />
+    </Suspense>
+  );
+}
+
+function BillingPageInner() {
   const sub = useSubscription();
   const searchParams = useSearchParams();
   const [portalLoading, setPortalLoading] = useState(false);
