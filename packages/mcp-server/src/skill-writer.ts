@@ -77,8 +77,8 @@ export async function writeGlobalCanvasSkill(
 }
 
 /**
- * Update the SIE section in ~/.claude/CLAUDE.md.
- * Uses sentinel markers to replace only the SIE section, preserving user content.
+ * Update the Dopl section in ~/.claude/CLAUDE.md.
+ * Uses sentinel markers to replace only the Dopl section, preserving user content.
  */
 export async function writeGlobalClaudemd(
   clusters: ClusterSummary[],
@@ -98,7 +98,7 @@ export async function writeGlobalClaudemd(
   const endIdx = existing.indexOf(SIE_END);
 
   if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
-    // Valid markers — replace existing SIE section
+    // Valid markers — replace existing Dopl section
     const before = existing.slice(0, startIdx);
     const after = existing.slice(endIdx + SIE_END.length);
     await writeFile(CLAUDE_MD_PATH, before + sieSection + after, "utf-8");
@@ -114,7 +114,7 @@ export async function writeGlobalClaudemd(
       "utf-8",
     );
   } else if (existing) {
-    // Append SIE section
+    // Append Dopl section
     await writeFile(
       CLAUDE_MD_PATH,
       existing.trimEnd() + "\n\n" + sieSection + "\n",

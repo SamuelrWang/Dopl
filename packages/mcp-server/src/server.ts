@@ -25,7 +25,7 @@ You are an expert architect. Use the SIE tools as your reference library — sea
 - **Deep dive** — Pull full implementation details (README, setup instructions, metadata) for any entry
 - **Build** — Compose a complete solution by combining patterns from multiple implementations
 - **Canvas** — Manage the user's workspace: add entries, organize into clusters, browse saved items
-- **Skills** — Cluster knowledge is automatically available through Claude Code skills at ~/.claude/skills/sie-*/. Run \`sync_skills\` to seed or refresh them
+- **Skills** — Cluster knowledge is automatically available through Claude Code skills at ~/.claude/skills/dopl-*/. Run \`sync_skills\` to seed or refresh them
 
 ## Behavior
 
@@ -354,7 +354,7 @@ export function createServer(client: SIEClient): McpServer {
       // Write global files (always overwrite these)
       try {
         await writeGlobalCanvasSkill(clusterSummaries);
-        results.push(`\nGlobal canvas skill: wrote ~/.claude/skills/sie-canvas/SKILL.md`);
+        results.push(`\nGlobal canvas skill: wrote ~/.claude/skills/dopl-canvas/SKILL.md`);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         results.push(`\nGlobal canvas skill: ERROR — ${msg}`);
@@ -392,9 +392,9 @@ export function createServer(client: SIEClient): McpServer {
       let diskNote = "";
       try {
         await appendMemoryToSkill(slug, memory);
-        diskNote = `\n(Also updated ~/.claude/skills/sie-${slug}/SKILL.md)`;
+        diskNote = `\n(Also updated ~/.claude/skills/dopl-${slug}/SKILL.md)`;
       } catch (err) {
-        console.error(`[SIE] Failed to update skill file for ${slug}:`, err);
+        console.error(`[Dopl] Failed to update skill file for ${slug}:`, err);
       }
 
       return {
@@ -463,7 +463,7 @@ export function createServer(client: SIEClient): McpServer {
         try {
           await removeClusterSkill(slug);
         } catch (err) {
-          console.error(`[SIE] Failed to remove old skill dir for ${slug}:`, err);
+          console.error(`[Dopl] Failed to remove old skill dir for ${slug}:`, err);
         }
       }
 
@@ -760,7 +760,7 @@ export function createServer(client: SIEClient): McpServer {
         await writeClusterSkill(slug, detail.name, updatedBrain, updatedDetail.entries);
         brainNote += " Skill file updated.";
       } catch (err) {
-        console.error(`[SIE] Brain update failed for ${slug}:`, err);
+        console.error(`[Dopl] Brain update failed for ${slug}:`, err);
         brainNote = "\n(Brain update failed — run `sync_skills` to fix)";
       }
 
@@ -961,7 +961,7 @@ export function createServer(client: SIEClient): McpServer {
           await writeGlobalCanvasSkill(summaries);
           await writeGlobalClaudemd(summaries);
         } catch (err) {
-          console.error(`[SIE] Auto-sync failed for ${result.slug}:`, err);
+          console.error(`[Dopl] Auto-sync failed for ${result.slug}:`, err);
         }
       })();
 

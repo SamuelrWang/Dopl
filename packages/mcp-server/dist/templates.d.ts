@@ -16,6 +16,6 @@ export declare function renderEntryReferenceMd(entry: ClusterDetailEntry): strin
  */
 export declare function renderGlobalCanvasSkillMd(clusters: ClusterSummary[]): string;
 /**
- * Render the SIE section for ~/.claude/CLAUDE.md.
+ * Render the Dopl section for ~/.claude/CLAUDE.md.
  */
 export declare function renderGlobalClaudeMdSection(clusters: ClusterSummary[]): string;

@@ -19,7 +19,7 @@ function parseArgs() {
             console.error(`
 Setup Intelligence Engine MCP Server
 
-Usage: sie-mcp --api-key <key> [--base-url <url>]
+Usage: dopl-mcp --api-key <key> [--base-url <url>]
 
 Options:
   --api-key <key>    SIE API key (or set SIE_API_KEY env var)
@@ -31,7 +31,7 @@ Claude Code config example:
     "mcpServers": {
       "setup-intelligence": {
         "command": "npx",
-        "args": ["@sie/mcp-server", "--api-key", "sk-sie-xxxxx"],
+        "args": ["@dopl/mcp-server", "--api-key", "sk-sie-xxxxx"],
         "env": { "SIE_BASE_URL": "https://your-site.vercel.app" }
       }
     }

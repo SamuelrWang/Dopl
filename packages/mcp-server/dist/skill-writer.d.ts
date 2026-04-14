@@ -12,8 +12,8 @@ export declare function writeClusterSkill(slug: string, name: string, brain: Bra
  */
 export declare function writeGlobalCanvasSkill(clusters: ClusterSummary[]): Promise<void>;
 /**
- * Update the SIE section in ~/.claude/CLAUDE.md.
- * Uses sentinel markers to replace only the SIE section, preserving user content.
+ * Update the Dopl section in ~/.claude/CLAUDE.md.
+ * Uses sentinel markers to replace only the Dopl section, preserving user content.
  */
 export declare function writeGlobalClaudemd(clusters: ClusterSummary[]): Promise<void>;
 /**

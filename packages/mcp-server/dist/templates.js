@@ -69,7 +69,7 @@ function renderClusterSkillMd(params) {
     const sections = [];
     // Frontmatter
     sections.push(`---`);
-    sections.push(`name: sie-${slug}`);
+    sections.push(`name: dopl-${slug}`);
     sections.push(`description: >-`);
     sections.push(`  ${description}`);
     sections.push(`version: 0.1.0`);
@@ -197,7 +197,7 @@ function renderGlobalCanvasSkillMd(clusters) {
     const sections = [];
     const allTools = clusters.flatMap((c) => c.tools).slice(0, 20).join(", ");
     sections.push(`---`);
-    sections.push(`name: sie-canvas`);
+    sections.push(`name: dopl-canvas`);
     sections.push(`description: >-`);
     sections.push(`  Use when the user asks about their AI/automation setup collection,`);
     sections.push(`  wants to compare approaches across clusters, or needs routing guidance`);
@@ -205,16 +205,16 @@ function renderGlobalCanvasSkillMd(clusters) {
     sections.push(`version: 0.1.0`);
     sections.push(`---`);
     sections.push("");
-    sections.push(`# SIE Canvas — Cross-Cluster Routing & Orchestration`);
+    sections.push(`# Dopl Canvas — Cross-Cluster Routing & Orchestration`);
     sections.push("");
     sections.push(`## Available Clusters`);
     sections.push("");
     if (clusters.length === 0) {
-        sections.push(`_No clusters yet. Create clusters in the SIE canvas to populate this section._`);
+        sections.push(`_No clusters yet. Create clusters in the Dopl canvas to populate this section._`);
     }
     else {
         for (const cluster of clusters) {
-            sections.push(`### ${cluster.name} (\`sie-${cluster.slug}\`)`);
+            sections.push(`### ${cluster.name} (\`dopl-${cluster.slug}\`)`);
             sections.push("");
             if (cluster.tools.length > 0) {
                 sections.push(`**Tools**: ${cluster.tools.join(", ")}`);
@@ -229,10 +229,10 @@ function renderGlobalCanvasSkillMd(clusters) {
     sections.push("");
     for (const cluster of clusters) {
         if (cluster.tools.length > 0) {
-            sections.push(`- **${cluster.tools.slice(0, 5).join(", ")}** → Use \`sie-${cluster.slug}\` skill`);
+            sections.push(`- **${cluster.tools.slice(0, 5).join(", ")}** → Use \`dopl-${cluster.slug}\` skill`);
         }
         else {
-            sections.push(`- **${cluster.name}** → Use \`sie-${cluster.slug}\` skill`);
+            sections.push(`- **${cluster.name}** → Use \`dopl-${cluster.slug}\` skill`);
         }
     }
     sections.push("");
@@ -250,14 +250,14 @@ function renderGlobalCanvasSkillMd(clusters) {
     return sections.join("\n");
 }
 /**
- * Render the SIE section for ~/.claude/CLAUDE.md.
+ * Render the Dopl section for ~/.claude/CLAUDE.md.
  */
 function renderGlobalClaudeMdSection(clusters) {
     const lines = [];
     lines.push(`## Setup Intelligence Engine — Cluster Index`);
     lines.push("");
-    lines.push(`You have SIE skills installed for the following clusters. Each has a dedicated`);
-    lines.push(`skill at \`~/.claude/skills/sie-{slug}/SKILL.md\` that loads automatically when relevant.`);
+    lines.push(`You have Dopl skills installed for the following clusters. Each has a dedicated`);
+    lines.push(`skill at \`~/.claude/skills/dopl-{slug}/SKILL.md\` that loads automatically when relevant.`);
     lines.push("");
     if (clusters.length === 0) {
         lines.push(`_No clusters yet._`);
@@ -266,10 +266,10 @@ function renderGlobalClaudeMdSection(clusters) {
         lines.push(`| Cluster | Skill | Covers |`);
         lines.push(`|---------|-------|--------|`);
         for (const cluster of clusters) {
-            lines.push(`| ${cluster.name} | sie-${cluster.slug} | ${cluster.oneLiner} |`);
+            lines.push(`| ${cluster.name} | dopl-${cluster.slug} | ${cluster.oneLiner} |`);
         }
     }
     lines.push("");
-    lines.push(`For cross-cluster workflows or routing questions, the \`sie-canvas\` skill has detailed guidance.`);
+    lines.push(`For cross-cluster workflows or routing questions, the \`dopl-canvas\` skill has detailed guidance.`);
     return lines.join("\n");
 }
