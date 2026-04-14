@@ -5,27 +5,32 @@ import { supabaseAdmin } from "@/lib/supabase";
 const supabase = supabaseAdmin();
 
 /**
- * PATCH /api/canvas/panels/batch — batch update panel positions.
- * Body: { updates: [{ panel_id, x, y }] }
+ * PATCH /api/canvas/panels/batch — batch update panel fields.
+ * Body: { updates: [{ panel_id, x?, y?, title? }] }
  */
 export const PATCH = withUserAuth(async (request, { userId }) => {
   const body = await request.json();
-  const updates: Array<{ panel_id: string; x: number; y: number }> =
+  const updates: Array<{ panel_id: string; x?: number; y?: number; title?: string }> =
     Array.isArray(body.updates) ? body.updates : [];
 
   if (updates.length === 0) {
     return NextResponse.json({ error: "No updates provided" }, { status: 400 });
   }
 
-  // Update each panel position (parallel, best-effort)
+  // Update each panel (parallel, best-effort)
   const results = await Promise.allSettled(
-    updates.map((u) =>
-      supabase
+    updates.map((u) => {
+      const fields: Record<string, unknown> = {};
+      if (u.x !== undefined) fields.x = u.x;
+      if (u.y !== undefined) fields.y = u.y;
+      if (u.title !== undefined) fields.title = u.title;
+      if (Object.keys(fields).length === 0) return Promise.resolve();
+      return supabase
         .from("canvas_panels")
-        .update({ x: u.x, y: u.y })
+        .update(fields)
         .eq("user_id", userId)
-        .eq("panel_id", u.panel_id)
-    )
+        .eq("panel_id", u.panel_id);
+    })
   );
 
   const failCount = results.filter((r) => r.status === "rejected").length;

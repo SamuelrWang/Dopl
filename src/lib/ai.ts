@@ -59,6 +59,10 @@ export async function callClaude(
   userContent: string,
   options?: { maxTokens?: number }
 ): Promise<string> {
+  if (!userContent || userContent.trim().length === 0) {
+    return "";
+  }
+
   const client = getClaudeClient();
 
   const response = await retryWithBackoff(

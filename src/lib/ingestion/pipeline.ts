@@ -147,7 +147,7 @@ async function runPipeline(
       stepGenerateReadme(entryId, contentForClaude, manifest, contentType),
       stepGenerateTags(entryId, manifest),
     ]);
-    ({ agentsMd } = await stepGenerateAgentsMd(entryId, contentForClaude, manifest, readme, classification));
+    ({ agentsMd } = await stepGenerateAgentsMd(entryId, contentForClaude, manifest, readme, classification, input.url));
   }
 
   // ── Persist ──
@@ -280,6 +280,31 @@ async function stepPlatformFetch(
     await logStep(entryId, "reddit_fetch", "completed", undefined, Date.now() - stepStart);
     ingestionProgress.emit(entryId, "step_complete", "Reddit post fetched", { step: "reddit_fetch" });
     return { thumbnailUrl, updatedText, updatedLinks };
+
+  } else if (input.url.includes("github.com")) {
+    const stepStart = Date.now();
+    await logStep(entryId, "github_fetch", "started");
+    ingestionProgress.emit(entryId, "step_start", "Fetching GitHub content...", { step: "github_fetch" });
+
+    const ghResult = await extractGitHubContent(input.url, 0);
+    let updatedText: string | undefined;
+
+    if (ghResult) {
+      updatedText = ghResult.content;
+      const ghSource = linkResultToSource(ghResult, 0);
+      await storeSources(entryId, [ghSource]);
+      thumbnailUrl = (ghResult.metadata.thumbnail_url as string) || null;
+
+      const parts = [`GitHub repo: ${input.url}`];
+      if (ghResult.metadata.stars) parts.push(`${ghResult.metadata.stars} stars`);
+      if (ghResult.metadata.language) parts.push(`${ghResult.metadata.language}`);
+      ingestionProgress.emit(entryId, "detail", `Found: ${parts.join(", ")}`);
+    } else {
+      ingestionProgress.emit(entryId, "detail", "Could not fetch GitHub content — will use provided content");
+    }
+    await logStep(entryId, "github_fetch", "completed", undefined, Date.now() - stepStart);
+    ingestionProgress.emit(entryId, "step_complete", "GitHub content fetched", { step: "github_fetch" });
+    return { thumbnailUrl, updatedText };
   }
 
   return { thumbnailUrl };
@@ -571,13 +596,14 @@ async function stepGenerateAgentsMd(
   contentForClaude: string,
   manifest: Record<string, unknown>,
   readme: string,
-  classification: ContentClassification
+  classification: ContentClassification,
+  sourceUrl?: string
 ): Promise<{ agentsMd: string }> {
   const s = Date.now();
   await logStep(entryId, "agents_md_generation", "started");
   ingestionProgress.emit(entryId, "step_start", "Generating agents.md (AI setup instructions)...", { step: "agents_md_generation" });
 
-  const agentsMd = await generateAgentsMd(contentForClaude, manifest, readme, classification);
+  const agentsMd = await generateAgentsMd(contentForClaude, manifest, readme, classification, sourceUrl);
 
   await logStep(entryId, "agents_md_generation", "completed", undefined, Date.now() - s);
   ingestionProgress.emit(entryId, "step_complete", `agents.md generated (${Math.round(agentsMd.length / 1000)}K chars)`, {

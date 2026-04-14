@@ -89,7 +89,7 @@ export function ClusterHeaderTab({
               });
             }
           })
-          .catch(() => {});
+          .catch((err) => console.error("[cluster-header] sync failed:", err));
       }
     } else {
       setDraft(cluster.name);
@@ -107,7 +107,7 @@ export function ClusterHeaderTab({
     if (cluster.slug) {
       fetch(`/api/clusters/${encodeURIComponent(cluster.slug)}`, {
         method: "DELETE",
-      }).catch(() => {});
+      }).catch((err) => console.error("[cluster-header] sync failed:", err));
     }
     dispatch({ type: "DELETE_CLUSTER", clusterId: cluster.id });
   }

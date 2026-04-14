@@ -52,6 +52,7 @@ export const PATCH = withUserAuth(async (request, { userId }) => {
   if (body.next_panel_id !== undefined) update.next_panel_id = body.next_panel_id;
   if (body.next_cluster_id !== undefined) update.next_cluster_id = body.next_cluster_id;
   if (body.sidebar_open !== undefined) update.sidebar_open = body.sidebar_open;
+  if (body.clusters !== undefined) update.clusters = body.clusters;
 
   const { error } = await supabase
     .from("canvas_state")

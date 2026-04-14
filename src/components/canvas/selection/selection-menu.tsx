@@ -140,7 +140,7 @@ export function SelectionMenu({ cursorPos }: SelectionMenuProps) {
           });
         }
       })
-      .catch(() => {});
+      .catch((err) => console.error("[selection-menu] cluster creation failed:", err));
   }
 
   function handleDelete() {

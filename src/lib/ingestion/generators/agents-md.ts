@@ -6,13 +6,15 @@ export async function generateAgentsMd(
   allRawContent: string,
   manifest: Record<string, unknown>,
   readme: string,
-  classification?: ContentClassification
+  classification?: ContentClassification,
+  sourceUrl?: string
 ): Promise<string> {
   // Build the base prompt
   let prompt = buildAgentsMdPrompt(
     allRawContent,
     JSON.stringify(manifest, null, 2),
-    readme
+    readme,
+    sourceUrl || ""
   );
 
   // If we have classification data, inject preservation guidance
@@ -33,7 +35,7 @@ ${classification.sections
   .map((s) => `- MUST PRESERVE: "${s.title}" — ${s.reason}`)
   .join("\n")}
 
-DO NOT summarize any section marked EXECUTABLE above. Include it word-for-word in the agents.md.`;
+DO NOT summarize any section marked EXECUTABLE above. Include it word-for-word in the agents.md — but if it is source code from a cloneable repo, reference it by file path instead of reproducing it inline.`;
 
     prompt = prompt + preservationBlock;
   }

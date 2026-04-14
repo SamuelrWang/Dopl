@@ -232,8 +232,8 @@ export function useConversationSync() {
                 });
               }
             }
-          } catch {
-            // Best-effort — URLs will be empty, thumbnails won't show
+          } catch (err) {
+            console.error("[conversation-sync] attachment URL signing failed:", err);
           }
         }
 
@@ -251,7 +251,7 @@ export function useConversationSync() {
                   messages: persistMessages,
                   pinned: panel.pinned ?? false,
                 }),
-              }).catch(() => {});
+              }).catch((err) => console.error("[conversation-sync] push local conversation failed:", err));
             }
           }
         }
@@ -262,8 +262,8 @@ export function useConversationSync() {
           snapshots.set(panel.id, panelSnapshotKey(panel));
         }
         prevSnapshotsRef.current = snapshots;
-      } catch {
-        // Sync is best-effort
+      } catch (err) {
+        console.error("[conversation-sync] Failed to load conversations:", err);
       }
     }
 
@@ -309,7 +309,7 @@ export function useConversationSync() {
                 messages,
                 pinned,
               }),
-            }).catch(() => {});
+            }).catch((err) => console.error("[conversation-sync] save failed for panel:", panelId, err));
             debounceTimers.current.delete(panelId);
           }, SAVE_DEBOUNCE_MS);
 

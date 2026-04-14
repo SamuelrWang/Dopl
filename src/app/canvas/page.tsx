@@ -31,14 +31,27 @@ function CanvasPortal() {
 
 export default function CanvasPage() {
   const [userId, setUserId] = useState<string | undefined>();
+  const [authReady, setAuthReady] = useState(false);
 
   useEffect(() => {
     getSupabaseBrowser()
       .auth.getUser()
       .then(({ data }: { data: { user: { id: string } | null } }) => {
         if (data.user) setUserId(data.user.id);
-      });
+      })
+      .finally(() => setAuthReady(true));
   }, []);
+
+  // Don't render CanvasProvider until auth resolves — otherwise useReducer
+  // initializes with userId=undefined, loads from the wrong localStorage key,
+  // and never re-initializes when userId arrives, causing data loss on reload.
+  if (!authReady) {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center bg-background">
+        <div className="animate-pulse text-muted-foreground text-sm">Loading canvas...</div>
+      </div>
+    );
+  }
 
   return (
     <CanvasProvider userId={userId}>

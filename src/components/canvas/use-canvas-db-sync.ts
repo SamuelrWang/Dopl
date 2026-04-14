@@ -218,8 +218,12 @@ export function useCanvasDbSync() {
   const prevPanelIdsRef = useRef<Set<string>>(new Set());
   const prevPositionsRef = useRef("");
   const prevCountersRef = useRef("");
+  const prevTitlesRef = useRef<Map<string, string>>(new Map());
+  const prevClustersRef = useRef("");
   const cameraTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const positionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const titleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clusterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Mount: load from DB and reconcile ──────────────────────────────
   useEffect(() => {
@@ -261,6 +265,16 @@ export function useCanvasDbSync() {
           if (panel) panels.push(panel);
         }
 
+        // Reconstruct clusters from DB (JSONB array on canvas_state)
+        const dbClusters: Cluster[] = Array.isArray(cs.clusters) ? cs.clusters : [];
+        // Merge: prefer DB clusters, but keep any local-only clusters
+        // (e.g. just created this session before sync completed)
+        const dbClusterIds = new Set(dbClusters.map((c: Cluster) => c.id));
+        const mergedClusters = [
+          ...dbClusters,
+          ...state.clusters.filter((c) => !dbClusterIds.has(c.id)),
+        ];
+
         // Dispatch HYDRATE_FROM_DB — merges with local transient state
         dispatch({
           type: "HYDRATE_FROM_DB",
@@ -270,7 +284,7 @@ export function useCanvasDbSync() {
             zoom: cs.camera_zoom,
           },
           panels,
-          clusters: state.clusters, // Keep local clusters (already synced via cluster API)
+          clusters: mergedClusters,
           nextPanelId: cs.next_panel_id,
           nextClusterId: cs.next_cluster_id,
         });
@@ -282,8 +296,8 @@ export function useCanvasDbSync() {
           nextPanelId: cs.next_panel_id,
           nextClusterId: cs.next_cluster_id,
         });
-      } catch {
-        // Best-effort — canvas works from localStorage cache
+      } catch (err) {
+        console.error("[canvas-sync] Failed to load from DB:", err);
       }
     }
 
@@ -292,6 +306,14 @@ export function useCanvasDbSync() {
       prevPanelIdsRef.current = panelIdSet(s.panels);
       prevPositionsRef.current = panelPositionKey(s.panels);
       prevCountersRef.current = `${s.nextPanelId}|${s.nextClusterId}`;
+      const titles = new Map<string, string>();
+      for (const p of s.panels) {
+        if ("title" in p && typeof p.title === "string") {
+          titles.set(p.id, p.title);
+        }
+      }
+      prevTitlesRef.current = titles;
+      prevClustersRef.current = JSON.stringify(s.clusters);
     }
 
     loadFromDb();
@@ -321,7 +343,7 @@ export function useCanvasDbSync() {
             next_panel_id: state.nextPanelId,
             next_cluster_id: state.nextClusterId,
           }),
-        }).then(() => setLocalSaveTimestamp()).catch(() => {});
+        }).then(() => setLocalSaveTimestamp()).catch((err) => console.error("[canvas-sync] camera save failed:", err));
         cameraTimerRef.current = null;
       }, 1000);
       prevCameraRef.current = currentCamera;
@@ -337,7 +359,7 @@ export function useCanvasDbSync() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(row),
-        }).then(() => setLocalSaveTimestamp()).catch(() => {});
+        }).then(() => setLocalSaveTimestamp()).catch((err) => console.error("[canvas-sync] panel create failed:", err));
       }
     }
 
@@ -346,7 +368,7 @@ export function useCanvasDbSync() {
       if (!currentPanelIds.has(prevId)) {
         fetch(`/api/canvas/panels/${encodeURIComponent(prevId)}`, {
           method: "DELETE",
-        }).catch(() => {});
+        }).catch((err) => console.error("[canvas-sync] panel delete failed:", err));
       }
     }
 
@@ -363,13 +385,54 @@ export function useCanvasDbSync() {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ updates }),
-        }).catch(() => {});
+        }).catch((err) => console.error("[canvas-sync] position batch update failed:", err));
         positionTimerRef.current = null;
       }, 500);
     }
 
+    // Panel titles changed → debounced batch update (1000ms)
+    const currentTitles = new Map<string, string>();
+    const changedTitles: { panel_id: string; title: string }[] = [];
+    for (const p of state.panels) {
+      if ("title" in p && typeof p.title === "string") {
+        currentTitles.set(p.id, p.title);
+        const prev = prevTitlesRef.current.get(p.id);
+        if (prev !== undefined && prev !== p.title) {
+          changedTitles.push({ panel_id: p.id, title: p.title });
+        }
+      }
+    }
+    if (changedTitles.length > 0) {
+      if (titleTimerRef.current) clearTimeout(titleTimerRef.current);
+      titleTimerRef.current = setTimeout(() => {
+        fetch("/api/canvas/panels/batch", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ updates: changedTitles }),
+        }).catch((err) => console.error("[canvas-sync] title batch update failed:", err));
+        titleTimerRef.current = null;
+      }, 1000);
+    }
+
+    // Clusters changed → debounced save (1000ms)
+    const currentClustersKey = JSON.stringify(state.clusters);
+    if (currentClustersKey !== prevClustersRef.current) {
+      if (clusterTimerRef.current) clearTimeout(clusterTimerRef.current);
+      clusterTimerRef.current = setTimeout(() => {
+        fetch("/api/canvas/state", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ clusters: state.clusters }),
+        }).then(() => setLocalSaveTimestamp())
+          .catch((err) => console.error("[canvas-sync] cluster save failed:", err));
+        clusterTimerRef.current = null;
+      }, 1000);
+    }
+
     prevPanelIdsRef.current = currentPanelIds;
     prevPositionsRef.current = currentPositions;
+    prevTitlesRef.current = currentTitles;
+    prevClustersRef.current = currentClustersKey;
   }, [state]);
 
   // Cleanup timers on unmount
@@ -377,6 +440,8 @@ export function useCanvasDbSync() {
     return () => {
       if (cameraTimerRef.current) clearTimeout(cameraTimerRef.current);
       if (positionTimerRef.current) clearTimeout(positionTimerRef.current);
+      if (titleTimerRef.current) clearTimeout(titleTimerRef.current);
+      if (clusterTimerRef.current) clearTimeout(clusterTimerRef.current);
     };
   }, []);
 }
@@ -386,6 +451,7 @@ export function useCanvasDbSync() {
 async function migrateToDb(state: {
   camera: { x: number; y: number; zoom: number };
   panels: Panel[];
+  clusters: Cluster[];
   nextPanelId: number;
   nextClusterId: number;
 }) {
@@ -401,6 +467,7 @@ async function migrateToDb(state: {
       next_panel_id: state.nextPanelId,
       next_cluster_id: state.nextClusterId,
       sidebar_open: false,
+      clusters: state.clusters,
       panels,
     }),
   });

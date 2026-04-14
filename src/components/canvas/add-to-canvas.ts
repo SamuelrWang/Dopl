@@ -155,7 +155,7 @@ export async function addEntryPanelToCanvas(
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ next_panel_id: state.nextPanelId + 1 }),
-  }).catch(() => {});
+  }).catch((err) => console.error("[add-to-canvas] counter sync failed:", err));
 
   // 3. Also update localStorage cache (visible on next /canvas mount)
   const newPanel: EntryPanelData = {
