@@ -9,7 +9,6 @@ const platformLabels: Record<string, string> = {
   instagram: "IG",
   reddit: "Reddit",
   github: "GitHub",
-  youtube: "YT",
   web: "Web",
 };
 

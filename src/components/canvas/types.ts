@@ -293,6 +293,18 @@ export function computePanelsBounds(panels: ReadonlyArray<BasePanelData>): {
 // ── Action types ────────────────────────────────────────────────────
 
 export type CanvasAction =
+  | {
+      /**
+       * Replace canvas state with DB-loaded data. Preserves ephemeral local
+       * state (selectedPanelIds, isProcessing, streaming messages).
+       */
+      type: "HYDRATE_FROM_DB";
+      camera: { x: number; y: number; zoom: number };
+      panels: Panel[];
+      clusters: Cluster[];
+      nextPanelId: number;
+      nextClusterId: number;
+    }
   | { type: "SET_CAMERA"; camera: { x: number; y: number; zoom: number } }
   | { type: "PAN_CAMERA"; dx: number; dy: number }
   /**

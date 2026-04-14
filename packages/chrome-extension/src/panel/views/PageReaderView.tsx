@@ -16,7 +16,6 @@ const contentTypeLabels: Record<string, string> = {
   article: "Article",
   tweet: "Tweet/Post",
   github: "GitHub",
-  youtube: "YouTube",
   reddit: "Reddit",
   generic: "Web Page",
 };

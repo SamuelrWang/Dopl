@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A knowledge base that ingests AI/automation setup posts from social media (Twitter/X, Instagram), follows all linked resources (GitHub repos, blogs, YouTube videos, other posts), and generates structured, searchable documentation. Users can then semantically search the knowledge base or compose new solutions from existing setups.
+A knowledge base that ingests AI/automation setup posts from social media (Twitter/X, Instagram), follows all linked resources (GitHub repos, blogs, other posts), and generates structured, searchable documentation. Users can then semantically search the knowledge base or compose new solutions from existing setups.
 
 **Core loop:** Paste a URL -> auto-extract everything -> generate artifacts -> make it searchable.
 
@@ -13,7 +13,7 @@ A knowledge base that ingests AI/automation setup posts from social media (Twitt
 - **AI:** Anthropic Claude (text generation, vision analysis) + OpenAI (embeddings via text-embedding-3-small, 1536 dimensions)
 - **UI:** Tailwind CSS 4 + shadcn/ui components
 - **Validation:** Zod 4
-- **Content extraction:** FxTwitter API (tweets), Apify (Instagram), Octokit (GitHub), Firecrawl/Jina (web pages), YouTube transcript parsing
+- **Content extraction:** FxTwitter API (tweets), Apify (Instagram), Octokit (GitHub), Firecrawl/Jina (web pages)
 
 ## Project Structure
 
@@ -56,7 +56,6 @@ src/
         twitter.ts              # FxTwitter API (no auth needed)
         instagram.ts            # Apify instagram-post-scraper (needs APIFY_API_KEY)
         github.ts               # Octokit REST API (needs GITHUB_TOKEN)
-        youtube.ts              # YouTube transcript via page scraping
         web.ts                  # Firecrawl -> Jina -> basic fetch fallback chain
         text.ts                 # Claude text analysis
         image.ts                # Claude Vision image analysis
@@ -106,7 +105,6 @@ supabase/
    - Tweet URLs -> FxTwitter
    - Instagram URLs -> Apify
    - GitHub URLs -> Octokit (README, configs, file tree)
-   - YouTube URLs -> transcript extraction
    - Other URLs -> Firecrawl/Jina/fetch
 6. **Gather all content** — Concatenate sources (capped at 100K chars for Claude)
 7. **Content classification** — Label sections as EXECUTABLE/TACTICAL/CONTEXT

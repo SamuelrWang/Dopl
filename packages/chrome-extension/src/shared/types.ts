@@ -132,6 +132,6 @@ export interface ExtractedPage {
   url: string;
   siteName?: string;
   byline?: string;
-  contentType: "article" | "tweet" | "github" | "youtube" | "reddit" | "generic";
+  contentType: "article" | "tweet" | "github" | "reddit" | "generic";
   wordCount: number;
 }

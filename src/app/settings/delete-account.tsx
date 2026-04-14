@@ -24,18 +24,22 @@ export function DeleteAccount() {
         return;
       }
 
-      // Clear all canvas-related localStorage before signing out
+      // Clear all app-related localStorage before signing out
       try {
         const keysToRemove: string[] = [];
         for (let i = 0; i < localStorage.length; i++) {
           const key = localStorage.key(i);
-          if (key && key.startsWith(CANVAS_STORAGE_KEY_PREFIX)) {
+          if (key && (
+            key.startsWith(CANVAS_STORAGE_KEY_PREFIX) ||
+            key.startsWith("sie:onboarding:") ||
+            key === "sie:bookmarks" ||
+            key === "sie-sidebar-open" ||
+            key === CANVAS_ACTIVE_USER_KEY
+          )) {
             keysToRemove.push(key);
           }
         }
         keysToRemove.forEach((k) => localStorage.removeItem(k));
-        localStorage.removeItem(CANVAS_ACTIVE_USER_KEY);
-        localStorage.removeItem("sie-sidebar-open");
       } catch {
         // localStorage may not be available
       }

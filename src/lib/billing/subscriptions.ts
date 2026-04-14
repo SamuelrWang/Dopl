@@ -1,5 +1,4 @@
 import { supabaseAdmin } from "@/lib/supabase";
-import { FREE_INGESTION_LIMIT } from "@/lib/config";
 
 export type SubscriptionTier = "free" | "pro";
 
@@ -31,28 +30,6 @@ export async function getUserSubscription(
     stripe_subscription_id: data?.stripe_subscription_id || null,
     subscription_period_end: data?.subscription_period_end || null,
   };
-}
-
-export async function canIngest(
-  userId: string
-): Promise<{ allowed: boolean; used: number; limit: number }> {
-  const sub = await getUserSubscription(userId);
-
-  if (sub.tier === "pro" && sub.status === "active") {
-    return { allowed: true, used: sub.ingestion_count, limit: Infinity };
-  }
-
-  return {
-    allowed: sub.ingestion_count < FREE_INGESTION_LIMIT,
-    used: sub.ingestion_count,
-    limit: FREE_INGESTION_LIMIT,
-  };
-}
-
-export async function incrementIngestionCount(userId: string): Promise<void> {
-  await supabaseAdmin().rpc("increment_ingestion_count", {
-    user_id_input: userId,
-  });
 }
 
 export async function isProUser(userId: string): Promise<boolean> {

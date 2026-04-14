@@ -259,7 +259,7 @@ export default function Home() {
     {
       question: "What can I ingest?",
       answer:
-        "Anything \u2014 X posts, GitHub repos, YouTube videos, blog posts, Reddit threads, and more. Dopl automatically extracts structured knowledge, generates AI-ready instructions, and indexes everything for semantic search.",
+        "Anything \u2014 X posts, GitHub repos, blog posts, and more. Dopl automatically extracts structured knowledge, generates AI-ready instructions, and indexes everything for semantic search.",
     },
     {
       question: "How does it connect to my AI tools?",
@@ -499,7 +499,7 @@ export default function Home() {
               {[
                 {
                   title: "Ingest from anywhere",
-                  desc: "Paste an X post, a GitHub repo, a YouTube video, a blog. Dopl extracts structured, AI-ready knowledge automatically \u2014 no manual formatting.",
+                  desc: "Paste an X post, a GitHub repo, a blog post. Dopl extracts structured, AI-ready knowledge automatically \u2014 no manual formatting.",
                 },
                 {
                   title: "Search, don\u2019t browse",
@@ -680,7 +680,7 @@ export default function Home() {
               Instantly indexed.
             </h2>
             <p className="text-white/50 text-[16px] leading-relaxed mb-6 max-w-md">
-              Paste a link from X, GitHub, YouTube, or any blog. Dopl extracts
+              Paste a link from X, GitHub, or any blog. Dopl extracts
               the knowledge, generates AI-ready instructions, and makes it
               searchable in seconds.
             </p>
@@ -714,7 +714,7 @@ export default function Home() {
                   {
                     num: "1",
                     title: "Ingest your sources",
-                    desc: "Paste any link \u2014 X posts, GitHub repos, YouTube, blogs. Dopl extracts and structures the knowledge automatically.",
+                    desc: "Paste any link \u2014 X posts, GitHub repos, blogs. Dopl extracts and structures the knowledge automatically.",
                   },
                   {
                     num: "2",
@@ -953,7 +953,7 @@ export default function Home() {
           {/* Bottom bar */}
           <div className="flex items-center justify-between border-t border-white/[0.06] pt-6">
             <span className="text-white/30 text-[13px]">
-              &copy; 2026 Dopl. All rights reserved.
+              &copy; 2026 Dopl Intelligence. All rights reserved.
             </span>
             <div className="flex items-center gap-4">
               {/* Theme toggle */}

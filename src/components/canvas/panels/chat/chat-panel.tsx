@@ -13,17 +13,21 @@
  *   - When the panel lives inside a cluster, `useChat` automatically
  *     gathers sibling EntryPanels and includes them as `clusterContext`
  *     in every API call — see `cluster-context.ts`.
+ *   - Users can attach files and images via the paperclip button, drag
+ *     & drop, or paste from clipboard. Attachments are uploaded to
+ *     Supabase Storage on send and included as multimodal content blocks
+ *     for Anthropic vision/document support.
  *
  * Rendering is done by a local `<RenderedMessage>` that handles the
  * full shared `ChatMessage` union: text, user-text, streaming, progress,
  * artifacts, tool_activity, and entry_cards.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { MarkdownMessage } from "@/components/design";
 import { ArtifactsPanel } from "@/components/ingest/artifacts-panel";
-import type { ChatMessage } from "@/components/ingest/chat-message";
+import type { ChatMessage, ChatAttachment } from "@/components/ingest/chat-message";
 import type { ChatPanelData } from "../../types";
 import { useCanvas } from "../../canvas-store";
 import { usePanelIngestion } from "../../use-panel-ingestion";
@@ -31,6 +35,15 @@ import { useChat } from "./use-chat";
 import { isUrlOnlyMessage, extractUrl } from "./url-detection";
 import { findEnclosingClusterName } from "./cluster-context";
 import { useChatName } from "./use-chat-name";
+import {
+  type PendingAttachment,
+  validateFiles,
+  fileToPending,
+  revokePendingUrl,
+  AttachButton,
+  AttachmentPreviewStrip,
+  SentAttachmentPreview,
+} from "./chat-attachments";
 
 interface ChatPanelBodyProps {
   panel: ChatPanelData;
@@ -39,8 +52,15 @@ interface ChatPanelBodyProps {
 export function ChatPanelBody({ panel }: ChatPanelBodyProps) {
   const { state, dispatch } = useCanvas();
   const [input, setInput] = useState("");
+  const [pendingAttachments, setPendingAttachments] = useState<
+    PendingAttachment[]
+  >([]);
+  const [attachError, setAttachError] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const dragCounter = useRef(0);
 
   // Chat + ingestion hooks — we pick which one to use per message based
   // on URL detection.
@@ -53,7 +73,7 @@ export function ChatPanelBody({ panel }: ChatPanelBodyProps) {
   // Current cluster name (for the "in cluster: X" badge at the top).
   const clusterName = findEnclosingClusterName(panel.id, state);
 
-  const isProcessing = chatStreaming || panel.isProcessing;
+  const isProcessing = chatStreaming || panel.isProcessing || isUploading;
 
   // Auto-scroll to bottom on new messages / streaming updates.
   useEffect(() => {
@@ -88,18 +108,111 @@ export function ChatPanelBody({ panel }: ChatPanelBodyProps) {
     el.style.height = `${Math.min(el.scrollHeight, 140)}px`;
   }, [input]);
 
-  function handleSend() {
-    const text = input.trim();
-    if (!text || isProcessing) return;
-    setInput("");
-    if (isUrlOnlyMessage(text)) {
-      // URL-only shortcut → kick off ingestion (same path as the old
-      // chat panel). Progress and artifacts flow into the chat log.
-      startIngestion(extractUrl(text));
-    } else {
-      sendChat(text);
+  // Clean up blob URLs on unmount
+  useEffect(() => {
+    return () => {
+      pendingAttachments.forEach(revokePendingUrl);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Auto-dismiss attachment error after 4 seconds
+  useEffect(() => {
+    if (!attachError) return;
+    const timer = setTimeout(() => setAttachError(null), 4000);
+    return () => clearTimeout(timer);
+  }, [attachError]);
+
+  // ── File handling ──────────────────────────────────────────────────
+
+  const addFiles = useCallback(
+    (files: File[]) => {
+      const { valid, error } = validateFiles(files, pendingAttachments.length);
+      if (error) {
+        setAttachError(error);
+        return;
+      }
+      setAttachError(null);
+      setPendingAttachments((prev) => [
+        ...prev,
+        ...valid.map(fileToPending),
+      ]);
+    },
+    [pendingAttachments.length]
+  );
+
+  const removeAttachment = useCallback((id: string) => {
+    setPendingAttachments((prev) => {
+      const item = prev.find((a) => a.id === id);
+      if (item) revokePendingUrl(item);
+      return prev.filter((a) => a.id !== id);
+    });
+  }, []);
+
+  // ── Upload + send ──────────────────────────────────────────────────
+
+  async function uploadAttachments(): Promise<ChatAttachment[] | null> {
+    if (pendingAttachments.length === 0) return [];
+
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("panel_id", panel.id);
+      for (const a of pendingAttachments) {
+        formData.append("files", a.file);
+      }
+
+      const res = await fetch("/api/chat/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setAttachError(err.error || `Upload failed (${res.status})`);
+        return null;
+      }
+
+      const { attachments } = await res.json();
+      return attachments as ChatAttachment[];
+    } catch (err) {
+      setAttachError(
+        `Upload failed: ${err instanceof Error ? err.message : "Unknown error"}`
+      );
+      return null;
+    } finally {
+      setIsUploading(false);
     }
   }
+
+  async function handleSend() {
+    const text = input.trim();
+    const hasAttachments = pendingAttachments.length > 0;
+    if ((!text && !hasAttachments) || isProcessing) return;
+
+    // URL-only shortcut (no attachments)
+    if (text && !hasAttachments && isUrlOnlyMessage(text)) {
+      setInput("");
+      startIngestion(extractUrl(text));
+      return;
+    }
+
+    // Upload attachments first if any
+    let uploadedAttachments: ChatAttachment[] | undefined;
+    if (hasAttachments) {
+      const result = await uploadAttachments();
+      if (!result) return; // upload failed, error already shown
+      uploadedAttachments = result.length > 0 ? result : undefined;
+      // Clear pending attachments
+      pendingAttachments.forEach(revokePendingUrl);
+      setPendingAttachments([]);
+    }
+
+    setInput("");
+    sendChat(text || " ", uploadedAttachments);
+  }
+
+  // ── Event handlers ─────────────────────────────────────────────────
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -108,7 +221,51 @@ export function ChatPanelBody({ panel }: ChatPanelBodyProps) {
     }
   }
 
-  const canSend = !isProcessing && input.trim().length > 0;
+  function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
+    const files = Array.from(e.clipboardData.files);
+    if (files.length > 0) {
+      e.preventDefault();
+      addFiles(files);
+    }
+  }
+
+  function handleDragEnter(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current++;
+    if (e.dataTransfer.types.includes("Files")) {
+      setIsDragOver(true);
+    }
+  }
+
+  function handleDragLeave(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current--;
+    if (dragCounter.current === 0) {
+      setIsDragOver(false);
+    }
+  }
+
+  function handleDragOver(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current = 0;
+    setIsDragOver(false);
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) {
+      addFiles(files);
+    }
+  }
+
+  const canSend =
+    !isProcessing &&
+    (input.trim().length > 0 || pendingAttachments.length > 0);
   const hasMessages = panel.messages.length > 0;
 
   return (
@@ -129,24 +286,47 @@ export function ChatPanelBody({ panel }: ChatPanelBodyProps) {
         </div>
       )}
 
-      {/* Messages — scrollable region. Empty padding between messages is
-          draggable (inherits grab cursor); text inside bubbles has its
-          own cursor and blocks drag via globals.css. */}
+      {/* Messages — scrollable region with drag & drop support */}
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0"
+        className={`flex-1 overflow-y-auto p-4 space-y-3 min-h-0 transition-colors duration-150 ${
+          isDragOver
+            ? "bg-white/[0.04] ring-1 ring-inset ring-white/[0.15] rounded-lg"
+            : ""
+        }`}
+        onDragEnter={handleDragEnter}
+        onDragLeave={handleDragLeave}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
       >
-        {!hasMessages && (
+        {isDragOver && (
+          <div className="flex items-center justify-center py-6">
+            <span className="font-mono text-xs uppercase tracking-wider text-white/40">
+              Drop files to attach
+            </span>
+          </div>
+        )}
+        {!hasMessages && !isDragOver && (
           <p className="text-xs text-white/30 italic font-mono uppercase tracking-wide">
             {clusterName
               ? "Ask a question about this cluster. You can also paste a URL to ingest."
-              : "Start a conversation. You can also paste a URL to ingest a post."}
+              : "Start a conversation. You can also paste a URL or drop files."}
           </p>
         )}
         {panel.messages.map((msg, i) => (
           <RenderedMessage key={i} message={msg} />
         ))}
       </div>
+
+      {/* Attachment error toast */}
+      {attachError && (
+        <div
+          data-no-drag
+          className="shrink-0 mx-3 mb-1 px-3 py-1.5 rounded-[4px] bg-red-500/20 border border-red-500/30 text-red-300 text-[11px] font-mono"
+        >
+          {attachError}
+        </div>
+      )}
 
       {/* Input bar */}
       <div data-no-drag className="shrink-0 p-3">
@@ -158,29 +338,46 @@ export function ChatPanelBody({ panel }: ChatPanelBodyProps) {
                 "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.25) 30%, rgba(255,255,255,0.35) 50%, rgba(255,255,255,0.25) 70%, transparent 100%)",
             }}
           />
+          {/* Pending attachment previews */}
+          <AttachmentPreviewStrip
+            attachments={pendingAttachments}
+            onRemove={removeAttachment}
+          />
           <textarea
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
             onFocus={() =>
               dispatch({ type: "SET_SELECTION", panelIds: [panel.id] })
             }
             placeholder={
-              isProcessing
-                ? "Thinking..."
-                : clusterName
-                  ? `Message in ${clusterName}...`
-                  : "Send a message or paste a URL..."
+              isUploading
+                ? "Uploading..."
+                : isProcessing
+                  ? "Thinking..."
+                  : clusterName
+                    ? `Message in ${clusterName}...`
+                    : "Send a message, paste a URL, or drop files..."
             }
             disabled={isProcessing}
             rows={1}
             className="w-full bg-transparent px-3 pt-3 pb-1.5 text-sm leading-[20px] text-white/90 outline-none resize-none placeholder:text-white/30 disabled:opacity-50 min-h-[40px] max-h-[140px]"
           />
           <div className="flex items-center justify-between px-2 pb-2">
-            <span className="font-mono text-[9px] uppercase tracking-wide text-white/30">
-              {isProcessing ? "Streaming" : "Enter to send"}
-            </span>
+            <div className="flex items-center gap-1.5">
+              <AttachButton onFiles={addFiles} disabled={isProcessing} />
+              <span className="font-mono text-[9px] uppercase tracking-wide text-white/30">
+                {isUploading
+                  ? "Uploading"
+                  : isProcessing
+                    ? "Streaming"
+                    : pendingAttachments.length > 0
+                      ? `${pendingAttachments.length} file${pendingAttachments.length > 1 ? "s" : ""}`
+                      : "Enter to send"}
+              </span>
+            </div>
             <button
               onClick={handleSend}
               disabled={!canSend}
@@ -218,6 +415,9 @@ function RenderedMessage({ message }: { message: ChatMessage }) {
       <div className="max-w-[90%] md:max-w-[80%] ml-auto">
         <div className="text-sm leading-[22px] text-white/90 bg-white/[0.08] border border-white/[0.1] rounded py-2 px-3">
           <p className="whitespace-pre-wrap break-words">{message.content}</p>
+          {message.attachments && message.attachments.length > 0 && (
+            <SentAttachmentPreview attachments={message.attachments} />
+          )}
         </div>
       </div>
     );

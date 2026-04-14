@@ -34,6 +34,24 @@ export interface EntryReference {
 }
 
 /**
+ * ChatAttachment — metadata for a file or image attached to a chat message.
+ *
+ * `base64` and `textContent` are ephemeral fields used only during the
+ * current session to send content to the Anthropic API. They are NOT
+ * persisted in conversation sync — only the metadata fields are stored.
+ */
+export interface ChatAttachment {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  fileSize: number;
+  storagePath: string;
+  url: string;
+  base64?: string;
+  textContent?: string;
+}
+
+/**
  * ChatMessage — unified message type used by ALL chat flows.
  *
  * The first four variants (text, user-text, progress, artifacts) are
@@ -49,7 +67,7 @@ export interface EntryReference {
  */
 export type ChatMessage =
   | { role: "ai"; type: "text"; content: string }
-  | { role: "user"; type: "text"; content: string }
+  | { role: "user"; type: "text"; content: string; attachments?: ChatAttachment[] }
   | {
       role: "ai";
       type: "progress";

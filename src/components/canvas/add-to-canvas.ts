@@ -1,29 +1,15 @@
 /**
  * add-to-canvas.ts — standalone utility for injecting an EntryPanel into the
- * canvas's persisted state from *outside* the CanvasProvider.
+ * canvas from *outside* the CanvasProvider (e.g. browse page).
  *
- * Used by the browse page's EntryCard "add to canvas" button. Because the
- * browse page isn't wrapped in <CanvasProvider>, we can't use useCanvas()
- * here — so we read/write the same localStorage key the provider hydrates
- * from. On the user's next visit to /canvas, the panel will be there.
- *
- * Two functions:
- *  - fetchFullEntry(entryId): loads the full entry from /api/entries/{id},
- *    which includes readme / agents_md / manifest / tags (the browse list
- *    endpoint returns only lightweight fields).
- *  - addEntryPanelToCanvas(entry): constructs an EntryPanelData and appends
- *    it to the canvas state in localStorage.
+ * Writes to both DB (durable) and localStorage cache (instant). The canvas
+ * page will pick up the panel from DB on next load via HYDRATE_FROM_DB.
  */
 
 import type { CanvasState, EntryPanelData } from "./types";
-import {
-  ENTRY_PANEL_SIZE,
-  INITIAL_CANVAS_STATE,
-} from "./types";
-
+import { ENTRY_PANEL_SIZE, INITIAL_CANVAS_STATE } from "./types";
 import { CANVAS_ACTIVE_USER_KEY, CANVAS_STORAGE_KEY_PREFIX } from "@/lib/config";
 
-/** Get the user-scoped storage key, matching canvas-store.tsx logic. */
 function getStorageKey(): string {
   if (typeof window === "undefined") return CANVAS_STORAGE_KEY_PREFIX;
   const uid = localStorage.getItem(CANVAS_ACTIVE_USER_KEY);
@@ -32,7 +18,6 @@ function getStorageKey(): string {
 
 // ── Types ──────────────────────────────────────────────────────────
 
-/** Raw shape returned by GET /api/entries/{id}. Mirrors what we use in use-panel-ingestion.ts. */
 export interface FullEntryResponse {
   id: string;
   title?: string | null;
@@ -49,40 +34,8 @@ export interface FullEntryResponse {
   tags?: Array<{ tag_type: string; tag_value: string }>;
 }
 
-// ── Helpers (mirrored from canvas-store.tsx) ───────────────────────
+// ── Helpers ────────────────────────────────────────────────────────
 
-/** Pre-zoom canvases persisted `camera: { x, y }` without zoom. Inject zoom=1. */
-function migratePreZoomCamera(state: CanvasState): CanvasState {
-  if (typeof state.camera.zoom === "number") return state;
-  return {
-    ...state,
-    camera: { ...state.camera, zoom: 1 },
-  };
-}
-
-/**
- * Schema v1 → v2 migration: inject an empty clusters array + nextClusterId.
- * Mirrors `migrateAddClusters` in canvas-store.tsx. We duplicate rather than
- * import to keep this utility dependency-free from the provider.
- */
-function migrateAddClusters(state: CanvasState): CanvasState {
-  const s = state as Partial<CanvasState>;
-  if (Array.isArray(s.clusters) && typeof s.nextClusterId === "number") {
-    return { ...state, version: 2 };
-  }
-  return {
-    ...state,
-    version: 2,
-    clusters: Array.isArray(s.clusters) ? s.clusters : [],
-    nextClusterId:
-      typeof s.nextClusterId === "number" ? s.nextClusterId : 1,
-  };
-}
-
-/**
- * Camera-viewport-center spawn. Duplicated from canvas-store.tsx so this file
- * stays a standalone utility with no circular imports into the provider.
- */
 function computeSpawnPosition(
   state: CanvasState,
   viewportWidth: number,
@@ -100,23 +53,17 @@ function computeSpawnPosition(
   };
 }
 
-/** Read + migrate the saved canvas state. Returns a fresh initial state if nothing exists. */
 function loadCanvasState(): CanvasState {
   if (typeof window === "undefined") return INITIAL_CANVAS_STATE;
   try {
     const raw = localStorage.getItem(getStorageKey());
     if (!raw) return INITIAL_CANVAS_STATE;
-    // Parse as unknown first — the TS CanvasState type is narrow
-    // (version: 2) but localStorage can still hold a pre-migration v1 blob.
-    // We Omit the version field from CanvasState so the unknown parse
-    // doesn't collapse back to the literal 2.
-    const parsed = JSON.parse(raw) as unknown as Omit<CanvasState, "version"> & {
-      version: number;
-    };
-    if (parsed.version !== 1 && parsed.version !== 2) {
-      return INITIAL_CANVAS_STATE;
+    const parsed = JSON.parse(raw) as CanvasState;
+    if (!parsed.camera || !Array.isArray(parsed.panels)) return INITIAL_CANVAS_STATE;
+    if (typeof parsed.camera.zoom !== "number") {
+      parsed.camera = { ...parsed.camera, zoom: 1 };
     }
-    return migrateAddClusters(migratePreZoomCamera(parsed as CanvasState));
+    return parsed;
   } catch {
     return INITIAL_CANVAS_STATE;
   }
@@ -127,17 +74,12 @@ function saveCanvasState(state: CanvasState): void {
   try {
     localStorage.setItem(getStorageKey(), JSON.stringify(state));
   } catch {
-    // Storage quota exceeded or unavailable — swallow
+    // Storage quota exceeded
   }
 }
 
 // ── Public API ─────────────────────────────────────────────────────
 
-/**
- * Fetch the full entry (including readme / agents_md / manifest / tags) from
- * the server. The browse list endpoint returns a lightweight subset, so we
- * need this round-trip to produce a complete EntryPanelData.
- */
 export async function fetchFullEntry(
   entryId: string
 ): Promise<FullEntryResponse | null> {
@@ -151,18 +93,15 @@ export async function fetchFullEntry(
 }
 
 /**
- * Inject an EntryPanel into the persisted canvas state. Returns true on
- * success, false on failure. Idempotent-ish: does NOT dedupe by entryId
- * (user may want multiple copies of the same entry).
- *
- * Since this runs outside the React provider, changes won't be visible until
- * the /canvas page hydrates from localStorage on its next mount.
+ * Inject an EntryPanel into the canvas. Writes to both DB (durable) and
+ * localStorage (cache). Returns true on success.
  */
-export function addEntryPanelToCanvas(entry: FullEntryResponse): boolean {
+export async function addEntryPanelToCanvas(
+  entry: FullEntryResponse
+): Promise<boolean> {
   if (typeof window === "undefined") return false;
 
   const state = loadCanvasState();
-
   const pos = computeSpawnPosition(
     state,
     window.innerWidth,
@@ -171,8 +110,56 @@ export function addEntryPanelToCanvas(entry: FullEntryResponse): boolean {
     ENTRY_PANEL_SIZE.height
   );
 
+  const panelId = `entry-${state.nextPanelId}`;
+  const tags = (entry.tags ?? []).map((t) => ({
+    type: t.tag_type,
+    value: t.tag_value,
+  }));
+
+  // 1. Write to DB (durable path)
+  try {
+    await fetch("/api/canvas/panels", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        panel_id: panelId,
+        panel_type: "entry",
+        entry_id: entry.id,
+        x: pos.x,
+        y: pos.y,
+        width: ENTRY_PANEL_SIZE.width,
+        height: ENTRY_PANEL_SIZE.height,
+        title: entry.title || "Untitled Setup",
+        summary: entry.summary || null,
+        source_url: entry.source_url || "",
+        panel_data: {
+          sourcePlatform: entry.source_platform || null,
+          sourceAuthor: entry.source_author || null,
+          thumbnailUrl: entry.thumbnail_url || null,
+          useCase: entry.use_case || null,
+          complexity: entry.complexity || null,
+          tags,
+          readme: entry.readme || "",
+          agentsMd: entry.agents_md || "",
+          manifest: entry.manifest || {},
+          createdAt: new Date().toISOString(),
+        },
+      }),
+    });
+  } catch {
+    // Fall through to localStorage-only
+  }
+
+  // 2. Bump counter in DB
+  fetch("/api/canvas/state", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ next_panel_id: state.nextPanelId + 1 }),
+  }).catch(() => {});
+
+  // 3. Also update localStorage cache (visible on next /canvas mount)
   const newPanel: EntryPanelData = {
-    id: `entry-${state.nextPanelId}`,
+    id: panelId,
     type: "entry",
     x: pos.x,
     y: pos.y,
@@ -187,22 +174,18 @@ export function addEntryPanelToCanvas(entry: FullEntryResponse): boolean {
     thumbnailUrl: entry.thumbnail_url ?? null,
     useCase: entry.use_case ?? null,
     complexity: entry.complexity ?? null,
-    tags: (entry.tags ?? []).map((t) => ({
-      type: t.tag_type,
-      value: t.tag_value,
-    })),
+    tags,
     readme: entry.readme || "",
     agentsMd: entry.agents_md || "",
     manifest: entry.manifest || {},
     createdAt: new Date().toISOString(),
   };
 
-  const nextState: CanvasState = {
+  saveCanvasState({
     ...state,
     panels: [...state.panels, newPanel],
     nextPanelId: state.nextPanelId + 1,
-  };
+  });
 
-  saveCanvasState(nextState);
   return true;
 }

@@ -10,7 +10,6 @@ const platformLabels: Record<string, string> = {
   instagram: "IG",
   reddit: "Reddit",
   github: "GitHub",
-  youtube: "YT",
   web: "Web",
 };
 
@@ -19,7 +18,6 @@ const placeholderGradients: Record<string, string> = {
   instagram: "from-fuchsia-900 via-pink-900 to-orange-900",
   reddit: "from-orange-900 to-red-950",
   github: "from-neutral-800 to-neutral-900",
-  youtube: "from-red-900 to-red-950",
   web: "from-slate-900 to-black",
 };
 

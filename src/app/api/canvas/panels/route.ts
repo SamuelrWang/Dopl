@@ -5,12 +5,12 @@ import { supabaseAdmin } from "@/lib/supabase";
 const supabase = supabaseAdmin();
 
 /**
- * GET /api/canvas/panels — list all entry panels on the user's canvas.
+ * GET /api/canvas/panels — list all panels on the user's canvas.
  */
 export const GET = withUserAuth(async (_request, { userId }) => {
   const { data, error } = await supabase
     .from("canvas_panels")
-    .select("id, entry_id, title, summary, source_url, x, y, added_at")
+    .select("*")
     .eq("user_id", userId)
     .order("added_at", { ascending: false });
 
@@ -22,80 +22,72 @@ export const GET = withUserAuth(async (_request, { userId }) => {
 });
 
 /**
- * POST /api/canvas/panels — add an entry to the user's canvas.
- * Body: { entry_id: string }
+ * POST /api/canvas/panels — add a panel to the user's canvas.
+ * Supports all panel types: entry, chat, connection, browse, cluster-brain.
+ * Body: { panel_id, panel_type, entry_id?, x, y, width?, height?, title?, summary?, source_url?, panel_data? }
  */
 export const POST = withUserAuth(async (request, { userId }) => {
   const body = await request.json();
-  const entryId = body.entry_id;
+  const { panel_id, panel_type, entry_id, x, y, width, height, title, summary, source_url, panel_data } = body;
 
-  if (!entryId || typeof entryId !== "string") {
+  if (!panel_id || typeof panel_id !== "string") {
+    return NextResponse.json({ error: "panel_id is required" }, { status: 400 });
+  }
+
+  const VALID_PANEL_TYPES = ["entry", "chat", "connection", "browse", "cluster-brain"];
+  if (panel_type && !VALID_PANEL_TYPES.includes(panel_type)) {
     return NextResponse.json(
-      { error: "entry_id is required" },
+      { error: `Invalid panel_type. Must be one of: ${VALID_PANEL_TYPES.join(", ")}` },
       { status: 400 }
     );
   }
 
-  // Validate entry exists and is complete
-  const { data: entry, error: entryError } = await supabase
-    .from("entries")
-    .select("id, title, summary, source_url, status")
-    .eq("id", entryId)
-    .single();
+  // For entry panels, validate entry exists
+  if (panel_type === "entry" && entry_id) {
+    const { data: entry, error: entryError } = await supabase
+      .from("entries")
+      .select("id, status")
+      .eq("id", entry_id)
+      .single();
 
-  if (entryError || !entry) {
-    return NextResponse.json({ error: "Entry not found" }, { status: 404 });
+    if (entryError || !entry) {
+      return NextResponse.json({ error: "Entry not found" }, { status: 404 });
+    }
   }
 
-  if (entry.status !== "complete") {
-    return NextResponse.json(
-      { error: "Entry is not yet complete", status: entry.status },
-      { status: 422 }
-    );
-  }
-
-  // Compute position: place to the right of the rightmost existing panel
-  const { data: existing } = await supabase
-    .from("canvas_panels")
-    .select("x")
-    .eq("user_id", userId)
-    .order("x", { ascending: false })
-    .limit(1);
-
-  const PANEL_WIDTH = 420;
-  const GAP = 40;
-  const x = existing && existing.length > 0 ? existing[0].x + PANEL_WIDTH + GAP : 0;
-  const y = 0;
-
-  // Insert (idempotent — ON CONFLICT DO NOTHING)
   const { data: panel, error: insertError } = await supabase
     .from("canvas_panels")
     .upsert(
       {
         user_id: userId,
-        entry_id: entryId,
-        title: entry.title,
-        summary: entry.summary,
-        source_url: entry.source_url,
-        x,
-        y,
+        panel_id,
+        panel_type: panel_type || "entry",
+        entry_id: entry_id || null,
+        x: x ?? 0,
+        y: y ?? 0,
+        width: width ?? null,
+        height: height ?? null,
+        title: title || null,
+        summary: summary || null,
+        source_url: source_url || null,
+        panel_data: panel_data || {},
       },
-      { onConflict: "user_id,entry_id", ignoreDuplicates: true }
+      { onConflict: "user_id,panel_id", ignoreDuplicates: true }
     )
     .select()
-    .single();
+    .maybeSingle();
 
   if (insertError) {
-    // If ignoreDuplicates caused no row returned, fetch the existing one
-    const { data: existingPanel } = await supabase
+    // If ignoreDuplicates caused no row returned, fetch existing
+    const { data: existing } = await supabase
       .from("canvas_panels")
-      .select("id, entry_id, title, summary, source_url, x, y, added_at")
+      .select("*")
       .eq("user_id", userId)
-      .eq("entry_id", entryId)
+      .eq("panel_id", panel_id)
       .single();
 
-    if (existingPanel) {
-      return NextResponse.json({ panel: existingPanel, created: false });
+    if (existing) {
+      return NextResponse.json({ panel: existing, created: false });
     }
 
     return NextResponse.json({ error: insertError.message }, { status: 500 });

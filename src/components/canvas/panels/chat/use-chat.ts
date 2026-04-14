@@ -18,7 +18,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { useCanvas } from "../../canvas-store";
-import type { ChatMessage } from "@/components/ingest/chat-message";
+import type { ChatMessage, ChatAttachment } from "@/components/ingest/chat-message";
 import type { ChatPanelData } from "../../types";
 import { buildCanvasContext } from "./cluster-context";
 import { messagesToApiHistory } from "./chat-message-types";
@@ -37,16 +37,18 @@ export function useChat({ panel }: UseChatOptions) {
   stateRef.current = state;
 
   const send = useCallback(
-    async (input: string) => {
+    async (input: string, attachments?: ChatAttachment[]) => {
       const text = input.trim();
-      if (!text || isStreaming) return;
+      if ((!text && (!attachments || attachments.length === 0)) || isStreaming)
+        return;
 
       // 1. Append the user message synchronously so the UI reflects it
       //    immediately (before network).
       const userMessage: ChatMessage = {
         role: "user",
         type: "text",
-        content: text,
+        content: text || " ",
+        ...(attachments && attachments.length > 0 ? { attachments } : {}),
       };
       dispatch({
         type: "APPEND_MESSAGE",

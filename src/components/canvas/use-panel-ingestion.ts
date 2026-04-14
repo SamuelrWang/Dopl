@@ -330,8 +330,8 @@ export function usePanelIngestion(panel: ChatPanelData) {
             es.close();
             eventSourceRef.current = null;
 
-            // Don't reconnect if we already have a terminal state
-            if (pstateRef.current.panelSpawned && !panel.isProcessing) return;
+            // Don't reconnect if the entry panel was already spawned
+            if (pstateRef.current.panelSpawned) return;
 
             if (reconnectAttempts < MAX_RECONNECT) {
               reconnectAttempts++;
@@ -346,7 +346,7 @@ export function usePanelIngestion(panel: ChatPanelData) {
 
       connect();
     },
-    [dispatch, panel.id, panel.isProcessing]
+    [dispatch, panel.id]
   );
 
   const startIngestion = useCallback(

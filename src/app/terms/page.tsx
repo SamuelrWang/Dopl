@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 export const metadata = {
-  title: "Terms of Service — Dopl Automation Engine",
+  title: "Terms of Service — Dopl Intelligence",
 };
 
 export default function TermsPage() {
@@ -38,7 +38,7 @@ export default function TermsPage() {
               1. Acceptance of Terms
             </h2>
             <p>
-              By accessing or using Dopl Automation Engine (&quot;the Service&quot;), operated by Dopl
+              By accessing or using Dopl Intelligence (&quot;the Service&quot;), operated by Dopl
               (&quot;we,&quot; &quot;us,&quot; or &quot;our&quot;), you agree to be bound by these Terms of Service.
               If you do not agree, do not use the Service. You must be at least 18 years of age to use
               the Service.
@@ -50,7 +50,7 @@ export default function TermsPage() {
               2. Description of Service
             </h2>
             <p>
-              Dopl Automation Engine is a platform for discovering, organizing, and composing AI and
+              Dopl Intelligence is a platform for discovering, organizing, and composing AI and
               automation setups. The Service provides a knowledge base of proven implementations, a
               visual canvas workspace, and AI-assisted solution building tools.
             </p>

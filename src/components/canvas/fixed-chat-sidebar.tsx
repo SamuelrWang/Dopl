@@ -77,6 +77,12 @@ export function FixedChatSidebar() {
       next ? `${SIDEBAR_WIDTH}px` : "0px"
     );
     localStorage.setItem(SIDEBAR_STORAGE_KEY, next ? "1" : "0");
+    // Sync to DB (fire-and-forget)
+    fetch("/api/canvas/state", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sidebar_open: next }),
+    }).catch(() => {});
   }, []);
 
   const chatPanels = useMemo(
@@ -281,6 +287,15 @@ export function FixedChatSidebar() {
                           ) : (
                             <div className="text-[12px] text-white/70 leading-relaxed whitespace-pre-wrap">
                               {msg.type === "text" ? msg.content : ""}
+                              {msg.role === "user" &&
+                                msg.type === "text" &&
+                                msg.attachments &&
+                                msg.attachments.length > 0 && (
+                                  <span className="block mt-1 font-mono text-[9px] text-white/30 uppercase">
+                                    [{msg.attachments.length} attachment
+                                    {msg.attachments.length > 1 ? "s" : ""}]
+                                  </span>
+                                )}
                             </div>
                           )}
                         </div>

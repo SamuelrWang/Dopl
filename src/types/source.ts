@@ -7,7 +7,6 @@ export type SourceType =
   | "blog_post"
   | "github_repo"
   | "github_file"
-  | "video_transcript"
   | "other";
 
 export interface Source {

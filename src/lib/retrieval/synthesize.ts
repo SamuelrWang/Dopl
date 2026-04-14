@@ -19,10 +19,39 @@ export async function synthesizeResults(
   results: SearchResult[]
 ): Promise<SynthesisResult> {
   const entriesStr = results
-    .map(
-      (r) =>
-        `Entry ID: ${r.entry_id}\nTitle: ${r.title}\nSummary: ${r.summary}\nSimilarity: ${r.similarity}\nREADME:\n${r.readme?.slice(0, 2000) || "N/A"}\nManifest:\n${JSON.stringify(r.manifest, null, 2)}`
-    )
+    .map((r) => {
+      const manifest = r.manifest as Record<string, unknown> | null;
+      const parts = [
+        `Entry ID: ${r.entry_id}`,
+        `Title: ${r.title}`,
+        `Summary: ${r.summary}`,
+        `Similarity: ${r.similarity}`,
+      ];
+
+      // Include structured metadata from manifest for better relevance judgment
+      if (manifest) {
+        const tools = manifest.tools as Array<{ name: string; role: string }> | undefined;
+        if (tools?.length) {
+          parts.push(`Tools: ${tools.map((t) => `${t.name} (${t.role})`).join(", ")}`);
+        }
+        const integrations = manifest.integrations as Array<{ from: string; to: string; description: string }> | undefined;
+        if (integrations?.length) {
+          parts.push(`Integrations: ${integrations.map((i) => `${i.from} → ${i.to}: ${i.description}`).join("; ")}`);
+        }
+        const patterns = manifest.patterns as string[] | undefined;
+        if (patterns?.length) {
+          parts.push(`Patterns: ${patterns.join(", ")}`);
+        }
+        const useCase = manifest.use_case as { primary?: string; secondary?: string[] } | undefined;
+        if (useCase) {
+          parts.push(`Use case: ${useCase.primary}${useCase.secondary?.length ? ` (also: ${useCase.secondary.join(", ")})` : ""}`);
+        }
+      }
+
+      parts.push(`README:\n${r.readme?.slice(0, 4000) || "N/A"}`);
+
+      return parts.join("\n");
+    })
     .join("\n\n---\n\n");
 
   const prompt = buildQuerySynthesisPrompt(query, entriesStr);

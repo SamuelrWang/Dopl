@@ -11,7 +11,6 @@ function detectContentType(url: string): ExtractedPage["contentType"] {
 
   if (hostname.includes("twitter.com") || hostname.includes("x.com")) return "tweet";
   if (hostname.includes("github.com")) return "github";
-  if (hostname.includes("youtube.com") || hostname.includes("youtu.be")) return "youtube";
   if (hostname.includes("reddit.com")) return "reddit";
 
   return "article";

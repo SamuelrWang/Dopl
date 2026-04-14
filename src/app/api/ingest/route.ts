@@ -71,7 +71,7 @@ async function handlePost(
     if (parsed.data.url !== normalizedUrl) urlsToCheck.push(parsed.data.url);
     const { data: existing } = await supabase
       .from("entries")
-      .select("id, title, status")
+      .select("id, title, status, updated_at")
       .in("source_url", urlsToCheck)
       .in("status", ["complete", "processing"])
       .order("created_at", { ascending: false })
@@ -79,18 +79,40 @@ async function handlePost(
       .maybeSingle();
 
     if (existing) {
-      // URL already ingested — return the existing entry directly
-      return NextResponse.json(
-        {
-          entry_id: existing.id,
-          status: existing.status === "complete" ? "already_exists" : "processing",
-          title: existing.title,
-          stream_url: existing.status === "processing"
-            ? `/api/ingest/${existing.id}/stream`
-            : undefined,
-        },
-        { status: 200 }
-      );
+      if (existing.status === "processing") {
+        // Check if this processing entry is stale (zombie)
+        const updatedAt = new Date(existing.updated_at).getTime();
+        const oneHourAgo = Date.now() - 60 * 60 * 1000;
+        if (updatedAt < oneHourAgo) {
+          // Reset zombie entry to error state and allow re-ingestion
+          await supabase
+            .from("entries")
+            .update({ status: "error", updated_at: new Date().toISOString() })
+            .eq("id", existing.id);
+          // Fall through to new ingestion below
+        } else {
+          // Still actively processing — return stream URL
+          return NextResponse.json(
+            {
+              entry_id: existing.id,
+              status: "processing",
+              title: existing.title,
+              stream_url: `/api/ingest/${existing.id}/stream`,
+            },
+            { status: 200 }
+          );
+        }
+      } else {
+        // Already complete
+        return NextResponse.json(
+          {
+            entry_id: existing.id,
+            status: "already_exists",
+            title: existing.title,
+          },
+          { status: 200 }
+        );
+      }
     }
 
     // ── New ingestion ───────────────────────────────────────────

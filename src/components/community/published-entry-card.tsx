@@ -14,7 +14,6 @@ interface PublishedEntryCardProps {
 const platformFromUrl = (url: string | null): string => {
   if (!url) return "web";
   if (url.includes("github.com")) return "github";
-  if (url.includes("youtube.com") || url.includes("youtu.be")) return "youtube";
   if (url.includes("twitter.com") || url.includes("x.com")) return "x";
   if (url.includes("reddit.com")) return "reddit";
   if (url.includes("instagram.com")) return "instagram";
@@ -23,7 +22,6 @@ const platformFromUrl = (url: string | null): string => {
 
 const platformColors: Record<string, string> = {
   github: "from-neutral-800 to-neutral-900",
-  youtube: "from-red-900/60 to-red-950/60",
   x: "from-neutral-900 to-black",
   reddit: "from-orange-900/40 to-red-950/40",
   instagram: "from-fuchsia-900/40 via-pink-900/40 to-orange-900/40",
@@ -32,7 +30,6 @@ const platformColors: Record<string, string> = {
 
 const platformLabels: Record<string, string> = {
   github: "GitHub",
-  youtube: "YouTube",
   x: "X",
   reddit: "Reddit",
   instagram: "Instagram",

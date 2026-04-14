@@ -5,7 +5,7 @@ import { extractText } from "./extractors/text";
 import { extractImage } from "./extractors/image";
 import { extractWebContent, linkResultToSource } from "./extractors/web";
 import { extractGitHubContent } from "./extractors/github";
-import { extractYouTubeTranscript } from "./extractors/youtube";
+
 import { extractTweetContent, isTweetUrl } from "./extractors/twitter";
 import {
   extractInstagramContent,
@@ -153,6 +153,12 @@ async function runPipeline(
   // ── Persist ──
   await stepPersistEntry(entryId, input, manifest, readme, agentsMd, tags, allContent, thumbnailUrl, contentType);
   await stepChunkAndEmbed(entryId, readme, agentsMd, allContent);
+
+  // Mark complete only after ALL steps succeed (including embeddings)
+  await supabase
+    .from("entries")
+    .update({ status: "complete", updated_at: new Date().toISOString() })
+    .eq("id", entryId);
 
   // ── Done ──
   await logStep(entryId, "pipeline_complete", "completed");
@@ -648,7 +654,7 @@ async function stepPersistEntry(
       agents_md: agentsMd || null,
       manifest,
       raw_content: { gathered: allContent },
-      status: "complete",
+      status: "processing",
       ingested_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
@@ -667,6 +673,10 @@ async function stepPersistEntry(
     const { error: tagError } = await supabase.from("tags").insert(tagRows);
     if (tagError) {
       console.error("[pipeline] Failed to store tags:", tagError);
+      ingestionProgress.emit(entryId, "step_error", `Tag insertion failed: ${tagError.message}`, {
+        step: "tag_insertion",
+        details: { error: tagError.message },
+      });
     }
   }
 }
@@ -718,7 +728,6 @@ async function followAndStore(
   else if (isInstagramPostUrl(url)) description = `Following Instagram post: ${shortUrl}`;
   else if (isRedditPostUrl(url)) description = `Following Reddit post: ${shortUrl}`;
   else if (url.includes("github.com")) description = `Following GitHub: ${shortUrl}`;
-  else if (url.includes("youtube.com") || url.includes("youtu.be")) description = `Following YouTube: ${shortUrl}`;
 
   ingestionProgress.emit(entryId, "detail", description);
 
@@ -732,8 +741,6 @@ async function followAndStore(
       result = await extractRedditContent(url, depth);
     } else if (url.includes("github.com")) {
       result = await extractGitHubContent(url, depth);
-    } else if (url.includes("youtube.com") || url.includes("youtu.be")) {
-      result = await extractYouTubeTranscript(url, depth);
     } else {
       result = await extractWebContent(url, depth);
     }
@@ -823,7 +830,7 @@ function detectPlatform(url: string): string {
   if (isInstagramPostUrl(url)) return "instagram";
   if (isRedditPostUrl(url)) return "reddit";
   if (url.includes("github.com")) return "github";
-  if (url.includes("youtube.com") || url.includes("youtu.be")) return "youtube";
+
   return "web";
 }
 

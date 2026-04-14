@@ -11,6 +11,22 @@ export const MAX_CONTENT_FOR_CLAUDE = 100_000;
 export const MAX_IMAGES_PER_ENTRY = 20;
 export const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
 
+// ── Chat attachment limits ──────────────────────────────────────────
+export const MAX_CHAT_ATTACHMENT_SIZE = 10 * 1024 * 1024; // 10MB per file
+export const MAX_CHAT_ATTACHMENTS_PER_MESSAGE = 5;
+export const MAX_CHAT_MESSAGE_SIZE = 25 * 1024 * 1024; // 25MB total per send
+export const ALLOWED_CHAT_ATTACHMENT_TYPES = [
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/gif",
+  "application/pdf",
+  "text/plain",
+  "text/markdown",
+  "text/csv",
+  "application/json",
+] as const;
+
 // ── Auth ────────────────────────────────────────────────────────────
 export const API_KEY_PREFIX = "sk-sie-";
 

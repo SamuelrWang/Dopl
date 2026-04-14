@@ -42,7 +42,7 @@ import type {
   ChatMessage,
   ProgressEvent,
 } from "@/components/ingest/chat-message";
-import { useCanvasSync } from "./use-canvas-sync";
+import { useCanvasDbSync } from "./use-canvas-db-sync";
 import { useConversationSync } from "./use-conversation-sync";
 
 import { CANVAS_STORAGE_KEY_PREFIX, CANVAS_ACTIVE_USER_KEY } from "@/lib/config";
@@ -86,6 +86,42 @@ function reducer(state: CanvasState, action: CanvasAction): CanvasState {
   switch (action.type) {
     case "HYDRATE":
       return action.state;
+
+    case "HYDRATE_FROM_DB": {
+      // Merge DB state with local ephemeral state.
+      // DB panels replace local panels, but we preserve transient fields
+      // (isProcessing, activeEntryId, streaming messages, pendingInput, loading flags)
+      // on chat panels that are currently active.
+      const dbPanelIds = new Set(action.panels.map((p) => p.id));
+      const mergedPanels = action.panels.map((dbPanel) => {
+        // Find matching local panel to preserve transient state
+        const local = state.panels.find((p) => p.id === dbPanel.id);
+        if (!local || local.type !== "chat" || dbPanel.type !== "chat") return dbPanel;
+        // Preserve chat transient state
+        return {
+          ...dbPanel,
+          messages: local.messages.length > 0 ? local.messages : dbPanel.messages,
+          isProcessing: local.isProcessing,
+          activeEntryId: local.activeEntryId,
+          pendingInput: local.pendingInput,
+        };
+      });
+      // Keep any local-only panels that are actively processing (transient)
+      for (const local of state.panels) {
+        if (!dbPanelIds.has(local.id) && local.type === "chat" && local.isProcessing) {
+          mergedPanels.push(local);
+        }
+      }
+      return {
+        ...state,
+        camera: action.camera,
+        panels: mergedPanels,
+        clusters: action.clusters,
+        nextPanelId: Math.max(state.nextPanelId, action.nextPanelId),
+        nextClusterId: Math.max(state.nextClusterId, action.nextClusterId),
+        // selectedPanelIds stays local (ephemeral)
+      };
+    }
 
     case "SET_CAMERA":
       return { ...state, camera: action.camera };
@@ -908,7 +944,7 @@ export function CanvasProvider({ children, userId }: CanvasProviderProps) {
   return (
     <CanvasContext.Provider value={{ state, dispatch }}>
       <CanvasStateRefContext.Provider value={stateRef}>
-        <CanvasSyncBridge />
+        <CanvasDbSyncBridge />
         <ConversationSyncBridge />
         {children}
       </CanvasStateRefContext.Provider>
@@ -916,9 +952,9 @@ export function CanvasProvider({ children, userId }: CanvasProviderProps) {
   );
 }
 
-/** Tiny bridge component so useCanvasSync can call useCanvas() inside the provider. */
-function CanvasSyncBridge() {
-  useCanvasSync();
+/** Bridge for DB-backed canvas state sync. */
+function CanvasDbSyncBridge() {
+  useCanvasDbSync();
   return null;
 }
 

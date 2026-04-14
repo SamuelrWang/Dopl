@@ -196,7 +196,6 @@ const linkTypeToSourceType: Record<string, ExtractedSource["sourceType"]> = {
   blog: "blog_post",
   github_repo: "github_repo",
   github_file: "github_file",
-  video: "video_transcript",
   tweet: "tweet_text",
   instagram: "instagram_post",
   reddit: "reddit_post",

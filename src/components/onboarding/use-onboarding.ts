@@ -91,13 +91,25 @@ function loadState(userId: string): OnboardingState {
   }
 }
 
+let dbTimer: ReturnType<typeof setTimeout> | null = null;
+
 function persistState(userId: string, state: OnboardingState) {
   if (typeof window === "undefined") return;
+  // localStorage (instant)
   try {
     localStorage.setItem(STORAGE_PREFIX + userId, JSON.stringify(state));
   } catch {
     // quota exceeded
   }
+  // DB (debounced)
+  if (dbTimer) clearTimeout(dbTimer);
+  dbTimer = setTimeout(() => {
+    fetch("/api/user/preferences/onboarding", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ value: state }),
+    }).catch(() => {});
+  }, 1000);
 }
 
 /* ------------------------------------------------------------------ */
@@ -111,7 +123,26 @@ export function useOnboarding(userId?: string) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    // Load from localStorage first (instant)
     setState(loadState(id));
+    // Then fetch from DB and merge
+    fetch("/api/user/preferences/onboarding")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.value && typeof data.value === "object") {
+          setState((prev) => {
+            const dbState = { ...defaultState(), ...data.value } as OnboardingState;
+            // DB wins if it shows more progress
+            if (dbState.dismissed || dbState.currentStep > prev.currentStep) {
+              // Also update localStorage cache
+              try { localStorage.setItem(STORAGE_PREFIX + id, JSON.stringify(dbState)); } catch {}
+              return dbState;
+            }
+            return prev;
+          });
+        }
+      })
+      .catch(() => {});
   }, [id]);
 
   const isActive =

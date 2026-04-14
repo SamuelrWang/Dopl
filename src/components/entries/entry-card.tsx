@@ -33,7 +33,6 @@ const platformLabels: Record<string, string> = {
   instagram: "IG",
   reddit: "Reddit",
   github: "GitHub",
-  youtube: "YT",
   web: "Web",
 };
 
@@ -42,7 +41,6 @@ const placeholderGradients: Record<string, string> = {
   instagram: "from-fuchsia-900 via-pink-900 to-orange-900",
   reddit: "from-orange-900 to-red-950",
   github: "from-neutral-800 to-neutral-900",
-  youtube: "from-red-900 to-red-950",
   web: "from-slate-900 to-black",
 };
 
@@ -105,9 +103,10 @@ export function EntryCard({
       setTimeout(() => setAddState("idle"), 1500);
       return;
     }
-    const ok = addEntryPanelToCanvas(entry);
-    setAddState(ok ? "added" : "error");
-    setTimeout(() => setAddState("idle"), 1500);
+    addEntryPanelToCanvas(entry)
+      .then((ok) => setAddState(ok ? "added" : "error"))
+      .catch(() => setAddState("error"))
+      .finally(() => setTimeout(() => setAddState("idle"), 1500));
   }
 
   return (

@@ -6,17 +6,47 @@ const supabase = supabaseAdmin();
 
 /**
  * GET /api/conversations — list all conversations for the authenticated user.
- * Also cleans up expired unpinned conversations on each fetch.
+ * Also cleans up expired unpinned conversations and their attachments on each fetch.
  */
 export const GET = withUserAuth(async (_request, { userId }) => {
-  // Clean up expired unpinned conversations (best-effort)
-  await supabase
+  // Find expired unpinned conversations before deleting (need panel_ids for attachment cleanup)
+  const { data: expiring } = await supabase
     .from("conversations")
-    .delete()
+    .select("id, panel_id")
     .eq("user_id", userId)
     .eq("pinned", false)
-    .lt("expires_at", new Date().toISOString())
-    .then(() => {});
+    .lt("expires_at", new Date().toISOString());
+
+  if (expiring && expiring.length > 0) {
+    const panelIds = expiring.map((c: { panel_id: string }) => c.panel_id);
+
+    // Clean up storage objects for attachments of expiring conversations
+    const { data: attachments } = await supabase
+      .from("chat_attachments")
+      .select("storage_path")
+      .eq("user_id", userId)
+      .in("panel_id", panelIds);
+
+    if (attachments && attachments.length > 0) {
+      const paths = attachments.map(
+        (a: { storage_path: string }) => a.storage_path
+      );
+      await supabase.storage.from("chat-attachments").remove(paths);
+      await supabase
+        .from("chat_attachments")
+        .delete()
+        .eq("user_id", userId)
+        .in("panel_id", panelIds);
+    }
+
+    // Delete expired conversations
+    await supabase
+      .from("conversations")
+      .delete()
+      .eq("user_id", userId)
+      .eq("pinned", false)
+      .lt("expires_at", new Date().toISOString());
+  }
 
   const { data, error } = await supabase
     .from("conversations")

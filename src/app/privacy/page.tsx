@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 export const metadata = {
-  title: "Privacy Policy — Dopl Automation Engine",
+  title: "Privacy Policy — Dopl Intelligence",
 };
 
 export default function PrivacyPage() {
@@ -38,7 +38,7 @@ export default function PrivacyPage() {
               1. Introduction
             </h2>
             <p>
-              Dopl (&quot;we,&quot; &quot;us,&quot; or &quot;our&quot;) operates Dopl Automation Engine
+              Dopl (&quot;we,&quot; &quot;us,&quot; or &quot;our&quot;) operates Dopl Intelligence
               (&quot;the Service&quot;). This Privacy Policy explains how we collect, use, store, and
               protect your information when you use the Service.
             </p>
