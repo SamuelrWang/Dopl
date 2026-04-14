@@ -4,18 +4,20 @@
  * use-canvas-sync.ts — Syncs entry panels between the client-side canvas
  * (localStorage/reducer) and the server-side canvas_panels table.
  *
- * Merge-on-load strategy:
- *   - Server entries not in local → fetch full entry data → dispatch SPAWN_ENTRY_PANEL
- *   - Local entry panels not on server → POST to /api/canvas/panels (one-time migration)
+ * Merge-on-load:
+ *   - Server entries not in local → fetch full entry data → spawn panel
+ *   - If entry fetch 404s → delete orphaned canvas_panels row (cleanup)
+ *   - Local entry panels not on server → push to server
  *   - Both have same entryId → keep local version (richer snapshot)
  *
- * Also syncs on local panel creation/deletion by listening to state changes.
+ * Change tracking:
+ *   - New local entries → POST to server
+ *   - Removed local entries → DELETE from server
  */
 
 import { useEffect, useRef } from "react";
 import { useCanvas } from "./canvas-store";
-import type { CanvasState, EntryPanelData } from "./types";
-import { ENTRY_PANEL_SIZE } from "./types";
+import type { EntryPanelData } from "./types";
 import type { FullEntryResponse } from "./add-to-canvas";
 
 interface ServerPanel {
@@ -29,10 +31,6 @@ interface ServerPanel {
   added_at: string;
 }
 
-/**
- * Mount this hook inside CanvasProvider. It reconciles server canvas state
- * with the local reducer on load, and pushes local changes to the server.
- */
 export function useCanvasSync() {
   const { state, dispatch } = useCanvas();
   const syncedRef = useRef(false);
@@ -67,7 +65,14 @@ export function useCanvasSync() {
         for (const sp of toFetch) {
           try {
             const entryRes = await fetch(`/api/entries/${sp.entry_id}`);
-            if (!entryRes.ok) continue;
+            if (!entryRes.ok) {
+              // Entry no longer exists — clean up the orphaned canvas_panels row
+              fetch(`/api/canvas/panels/${sp.entry_id}`, {
+                method: "DELETE",
+              }).catch(() => {});
+              serverEntryIds.delete(sp.entry_id);
+              continue;
+            }
             const entry: FullEntryResponse = await entryRes.json();
 
             dispatch({
@@ -92,16 +97,15 @@ export function useCanvasSync() {
               position: { x: sp.x, y: sp.y },
             });
           } catch {
-            // Skip entries that fail to fetch
+            // Network error — skip but don't delete (might be transient)
           }
         }
 
         // Local entry panels not on server → push to server
-        const toPush = state.panels
-          .filter(
-            (p): p is EntryPanelData =>
-              p.type === "entry" && !serverEntryIds.has(p.entryId)
-          );
+        const toPush = state.panels.filter(
+          (p): p is EntryPanelData =>
+            p.type === "entry" && !serverEntryIds.has(p.entryId)
+        );
 
         for (const lp of toPush) {
           try {
@@ -121,17 +125,17 @@ export function useCanvasSync() {
           ...serverEntryIds,
         ]);
       } catch {
-        // Sync is best-effort — canvas works fine without it
+        // Sync is best-effort
       }
     }
 
     mergeOnLoad();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // intentionally empty — run once on mount
+  }, []);
 
   // ── Track local changes → push to server ─────────────────────────
   useEffect(() => {
-    if (!syncedRef.current) return; // wait for initial sync
+    if (!syncedRef.current) return;
 
     const currentEntryIds = new Set(
       state.panels
