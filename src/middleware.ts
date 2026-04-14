@@ -34,6 +34,13 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
+  // If authenticated, redirect landing page and login to /canvas
+  if (user && (pathname === "/" || pathname === "/login")) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/canvas";
+    return NextResponse.redirect(url);
+  }
+
   // Allow the landing page (exact match)
   if (pathname === "/") {
     return supabaseResponse;
