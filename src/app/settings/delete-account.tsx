@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseBrowser } from "@/lib/supabase-browser";
+import { CANVAS_STORAGE_KEY_PREFIX, CANVAS_ACTIVE_USER_KEY } from "@/lib/config";
 
 export function DeleteAccount() {
   const router = useRouter();
@@ -21,6 +22,22 @@ export function DeleteAccount() {
         setError(data.error || "Failed to delete account");
         setDeleting(false);
         return;
+      }
+
+      // Clear all canvas-related localStorage before signing out
+      try {
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith(CANVAS_STORAGE_KEY_PREFIX)) {
+            keysToRemove.push(key);
+          }
+        }
+        keysToRemove.forEach((k) => localStorage.removeItem(k));
+        localStorage.removeItem(CANVAS_ACTIVE_USER_KEY);
+        localStorage.removeItem("sie-sidebar-open");
+      } catch {
+        // localStorage may not be available
       }
 
       // Sign out client-side and redirect
