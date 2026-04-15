@@ -17,10 +17,11 @@
  * badges, mono labels) and the canvas's liquid-glass aesthetic.
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import Link from "next/link";
 import { Copy, Check, Download } from "lucide-react";
 import type { EntryPanelData } from "../types";
+import type { ProgressEvent } from "@/components/ingest/chat-message";
 
 interface EntryPanelBodyProps {
   panel: EntryPanelData;
@@ -91,8 +92,40 @@ export function EntryPanelBody({ panel }: EntryPanelBodyProps) {
     URL.revokeObjectURL(url);
   }
 
+  const isIngesting = !!panel.isIngesting;
+  const isSkeleton = isIngesting && (!panel.title || panel.title === "Ingesting...");
+
   return (
-    <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+    <div
+      className="flex-1 min-h-0 flex flex-col overflow-hidden"
+      style={isIngesting ? { animation: "ingest-glow 2s ease-in-out infinite" } : undefined}
+    >
+      {/* ── Ingestion log header (attached on top while generating) ── */}
+      {isIngesting && panel.ingestionLogs && panel.ingestionLogs.length > 0 && (
+        <IngestionLogHeader logs={panel.ingestionLogs} />
+      )}
+
+      {/* ── Skeleton state ───────────────────────────────────────── */}
+      {isSkeleton ? (
+        <div className="flex-1 flex flex-col gap-4 p-5">
+          {/* Thumbnail skeleton */}
+          <div className="aspect-video w-full rounded-[3px] bg-purple-500/10 animate-pulse" />
+          {/* Title skeleton */}
+          <div className="space-y-2">
+            <div className="h-5 w-3/4 rounded bg-purple-500/10 animate-pulse" />
+            <div className="h-3 w-1/2 rounded bg-purple-500/10 animate-pulse" />
+          </div>
+          {/* Tab bar skeleton */}
+          <div className="flex gap-2 pt-2 border-t border-purple-500/10">
+            <div className="h-7 w-20 rounded-[3px] bg-purple-500/10 animate-pulse" />
+            <div className="h-7 w-20 rounded-[3px] bg-purple-500/10 animate-pulse" />
+            <div className="h-7 w-24 rounded-[3px] bg-purple-500/10 animate-pulse" />
+          </div>
+          {/* Content skeleton */}
+          <div className="flex-1 rounded-[3px] bg-purple-500/10 animate-pulse" />
+        </div>
+      ) : (
+      <>
       {/* ── Thumbnail strip ───────────────────────────────────────── */}
       <div className="relative aspect-video overflow-hidden group/thumb shrink-0">
         {panel.thumbnailUrl ? (
@@ -207,6 +240,45 @@ export function EntryPanelBody({ panel }: EntryPanelBodyProps) {
           )}
         </div>
       )}
+      </>
+      )}
+    </div>
+  );
+}
+
+// ── Ingestion log header ──────────────────────────────────────────
+
+function IngestionLogHeader({ logs }: { logs: ProgressEvent[] }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [logs.length]);
+
+  const iconFor = (type: string) => {
+    switch (type) {
+      case "step_start": return ">>";
+      case "step_complete": return "OK";
+      case "error":
+      case "step_error": return "!!";
+      case "complete": return "**";
+      default: return "->";
+    }
+  };
+
+  return (
+    <div
+      ref={scrollRef}
+      className="max-h-[80px] overflow-y-auto border-b border-purple-500/20 bg-purple-950/20 px-3 py-2 shrink-0"
+    >
+      {logs.map((log, i) => (
+        <div key={i} className="flex items-start gap-1.5 text-[9px] font-mono leading-tight">
+          <span className="text-purple-400/60 shrink-0 w-4 text-right">{iconFor(log.type)}</span>
+          <span className="text-white/50 truncate">{log.message}</span>
+        </div>
+      ))}
     </div>
   );
 }

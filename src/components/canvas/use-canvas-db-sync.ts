@@ -235,13 +235,28 @@ export function useCanvasDbSync() {
         const res = await fetch("/api/canvas/state");
 
         if (res.status === 404) {
-          // First-time migration: push current state to DB
-          await migrateToDb(state);
+          // First-time migration: only push to DB if localStorage actually
+          // has panels. Otherwise this is a fresh device / new domain (e.g.
+          // localhost) with no local data — just create an empty DB row so
+          // subsequent saves work, but don't overwrite anything.
+          if (state.panels.filter((p) => p.type === "entry" || p.type === "chat").length > 0) {
+            await migrateToDb(state);
+          } else {
+            // Create an empty canvas_state row so future PATCHes have a target
+            await fetch("/api/canvas/state", {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ camera_x: 0, camera_y: 0, camera_zoom: 1 }),
+            });
+          }
           initTracking(state);
           return;
         }
 
-        if (!res.ok) return;
+        if (!res.ok) {
+          console.error("[canvas-sync] Failed to load canvas state:", res.status, res.statusText);
+          return;
+        }
 
         const { canvas_state: cs, panels: dbPanels } = await res.json();
 

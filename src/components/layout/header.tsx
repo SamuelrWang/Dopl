@@ -25,11 +25,6 @@ export function Header() {
   return (
     <div
       className="fixed top-0 left-0 right-0 z-20 flex justify-center px-4 pt-3 pointer-events-none"
-      style={{
-        transform: "translateX(calc(var(--sidebar-right-inset, 0px) / -2))",
-        transition: "transform 200ms cubic-bezier(0.4, 0, 0.2, 1)",
-        willChange: "transform",
-      }}
     >
       <nav className="pointer-events-auto inline-flex items-center gap-1 px-1.5 py-1 rounded-full bg-[var(--panel-surface)] border border-white/[0.1] shadow-[0_4px_16px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.08)]">
         {/* Logo */}

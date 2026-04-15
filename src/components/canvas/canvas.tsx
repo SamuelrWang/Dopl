@@ -38,6 +38,7 @@ import {
 } from "./clusters/cluster-layer";
 import { clusterBounds, isPointInClusterShape } from "./clusters/cluster-geometry";
 import { SelectionMenu } from "./selection/selection-menu";
+import { useEdgeScroll } from "./use-edge-scroll";
 
 /**
  * Apply camera transform directly to DOM elements, bypassing React.
@@ -47,7 +48,7 @@ import { SelectionMenu } from "./selection/selection-menu";
  * Apply camera transform directly to the world DOM element, bypassing React.
  * The grid lives inside the world div so it transforms automatically.
  */
-function applyCameraDirect(
+export function applyCameraDirect(
   viewportEl: HTMLElement,
   worldEl: HTMLElement,
   cam: { x: number; y: number; zoom: number },
@@ -285,6 +286,17 @@ export function Canvas() {
   useEffect(() => {
     if (state.selectedPanelIds.length < 2) setCursorPos(null);
   }, [state.selectedPanelIds]);
+
+  // ── Edge-scroll: auto-pan when cursor hits window edge ────────────
+  useEdgeScroll({
+    viewportRef,
+    worldRef,
+    cameraRef,
+    pendingCameraRef,
+    gestureFlushRef,
+    gridCellRef,
+    dispatch,
+  });
 
   // ── Background pointerdown (cluster drag OR marquee) ──────────────
 
@@ -665,6 +677,35 @@ export function Canvas() {
       el.removeEventListener("gestureend", preventGesture);
     };
   }, [dispatch]);
+
+  // ── Keyboard shortcuts: Delete selected panels + Undo ──────────
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      // Don't intercept when user is typing in an input
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if ((e.target as HTMLElement).isContentEditable) return;
+
+      // Backspace / Delete → delete selected panels
+      if (e.key === "Backspace" || e.key === "Delete") {
+        if (state.selectedPanelIds.length > 0) {
+          e.preventDefault();
+          dispatch({ type: "DELETE_SELECTED_PANELS" });
+        }
+        return;
+      }
+
+      // Cmd+Z (Mac) / Ctrl+Z (Win) → undo delete
+      if (e.key === "z" && (e.metaKey || e.ctrlKey) && !e.shiftKey) {
+        e.preventDefault();
+        dispatch({ type: "UNDO_DELETE" });
+        return;
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [dispatch, state.selectedPanelIds]);
 
   const { x: camX, y: camY, zoom } = state.camera;
 

@@ -663,7 +663,8 @@ async function stepPersistEntry(
   if (!thumbnailUrl && input.url.includes("github.com")) {
     const ghMatch = input.url.match(/github\.com\/([^/]+)\/([^/]+)/);
     if (ghMatch) {
-      thumbnailUrl = `https://opengraph.githubassets.com/1/${ghMatch[1]}/${ghMatch[2]}`;
+      const params = new URLSearchParams({ owner: ghMatch[1], repo: ghMatch[2] });
+      thumbnailUrl = `/api/og/github?${params.toString()}`;
     }
   }
 

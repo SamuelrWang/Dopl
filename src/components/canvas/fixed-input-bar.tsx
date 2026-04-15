@@ -11,23 +11,51 @@
  *  3. Calls startPanelIngestion(dispatch, panelId, url) to begin the ingestion
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import {
   computeNewPanelPosition,
   nextPanelIdString,
   useCanvas,
 } from "./canvas-store";
-import {
-  extractUrl,
-  isUrlOnlyMessage,
-} from "./panels/chat/url-detection";
-import { startPanelIngestion } from "./use-panel-ingestion";
 import { BROWSE_PANEL_SIZE, DEFAULT_PANEL_SIZE } from "./types";
+import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 
 export function FixedInputBar() {
   const { state, dispatch } = useCanvas();
   const [input, setInput] = useState("");
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  const {
+    isListening,
+    fullText,
+    isSupported: voiceSupported,
+    startListening,
+    stopListening,
+    clearTranscript,
+    error: voiceError,
+  } = useSpeechRecognition();
+
+  const prevFullTextRef = useRef("");
+
+  // Live-sync voice transcript into the textarea
+  useEffect(() => {
+    if (isListening && fullText !== prevFullTextRef.current) {
+      prevFullTextRef.current = fullText;
+      setInput(fullText);
+    }
+  }, [isListening, fullText]);
+
+  const handleVoiceToggle = useCallback(() => {
+    if (isListening) {
+      stopListening();
+      // final text is already in input via the live-sync effect
+      prevFullTextRef.current = "";
+    } else {
+      clearTranscript();
+      prevFullTextRef.current = "";
+      startListening();
+    }
+  }, [isListening, stopListening, clearTranscript, startListening]);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -47,12 +75,7 @@ export function FixedInputBar() {
     localStorage.removeItem("dopl-landing-message");
     // Delay briefly so the canvas store is fully initialized
     setTimeout(() => {
-      if (isUrlOnlyMessage(pending)) {
-        const id = spawnChatPanel();
-        startPanelIngestion(dispatch, id, extractUrl(pending));
-      } else {
-        spawnChatPanel(pending);
-      }
+      spawnChatPanel(pending);
     }, 500);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -97,13 +120,13 @@ export function FixedInputBar() {
   function handleSend() {
     const text = input.trim();
     if (!text) return;
-    setInput("");
-    if (isUrlOnlyMessage(text)) {
-      const id = spawnChatPanel();
-      startPanelIngestion(dispatch, id, extractUrl(text));
-    } else {
-      spawnChatPanel(text);
+    if (isListening) {
+      stopListening();
+      clearTranscript();
+      prevFullTextRef.current = "";
     }
+    setInput("");
+    spawnChatPanel(text);
   }
 
   /** Spawn a new empty chat panel without sending anything. */
@@ -138,11 +161,6 @@ export function FixedInputBar() {
   return (
     <div
       className="fixed bottom-4 left-0 right-0 z-30 flex justify-center px-4 pointer-events-none"
-      style={{
-        transform: "translateX(calc(var(--sidebar-right-inset, 0px) / -2))",
-        transition: "transform 200ms cubic-bezier(0.4, 0, 0.2, 1)",
-        willChange: "transform",
-      }}
     >
       <div className="w-[95%] md:w-3/4 max-w-3xl pointer-events-auto">
         <div className="relative rounded-2xl overflow-hidden bg-[var(--panel-surface)] border border-white/[0.1] shadow-[0_4px_16px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.08)] transition-colors duration-200 focus-within:bg-[var(--panel-surface-focus)] focus-within:border-white/[0.18]">
@@ -182,30 +200,88 @@ export function FixedInputBar() {
                 Browse
               </button>
             </div>
-            <button
-              onClick={handleSend}
-              disabled={!canSend}
-              aria-label="Send"
-              className="w-7 h-7 flex items-center justify-center text-white/50 hover:text-white/90 border border-white/[0.12] hover:border-white/[0.22] rounded-[3px] transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-white/[0.04] hover:bg-white/[0.08]"
-            >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 14 14"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden
+            <div className="flex items-center gap-2">
+              {/* Voice input — bare icon, no button chrome */}
+              {voiceSupported && (
+                <button
+                  type="button"
+                  onClick={handleVoiceToggle}
+                  aria-label={isListening ? "Stop recording" : "Start voice input"}
+                  title={
+                    voiceError
+                      ? voiceError
+                      : isListening
+                      ? "Recording... click to stop"
+                      : "Voice input"
+                  }
+                  className="flex items-center justify-center w-7 h-7 transition-colors"
+                >
+                  {isListening ? (
+                    <span className="flex items-end gap-[2px] h-4">
+                      {[1, 2, 3, 4, 3].map((h, i) => (
+                        <span
+                          key={i}
+                          className="w-[2px] rounded-full bg-red-400"
+                          style={{
+                            height: `${h * 3}px`,
+                            animation: `voiceBar 0.8s ease-in-out ${i * 0.1}s infinite alternate`,
+                          }}
+                        />
+                      ))}
+                    </span>
+                  ) : (
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={1.8}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="w-4 h-4 text-white/40 hover:text-white/70 transition-colors"
+                    >
+                      <rect x="9" y="2" width="6" height="12" rx="3" />
+                      <path d="M5 10a7 7 0 0 0 14 0" />
+                      <line x1="12" y1="19" x2="12" y2="22" />
+                      <line x1="8" y1="22" x2="16" y2="22" />
+                    </svg>
+                  )}
+                </button>
+              )}
+              {/* Send — circular */}
+              <button
+                onClick={handleSend}
+                disabled={!canSend}
+                aria-label="Send"
+                className="w-7 h-7 flex items-center justify-center text-white/50 hover:text-white/90 border border-white/[0.12] hover:border-white/[0.22] rounded-full transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-white/[0.04] hover:bg-white/[0.08]"
               >
-                <path d="M7 11V3" />
-                <path d="M3 7l4-4 4 4" />
-              </svg>
-            </button>
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 14 14"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden
+                >
+                  <path d="M7 11V3" />
+                  <path d="M3 7l4-4 4 4" />
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
       </div>
+      {isListening && (
+        <style>{`
+          @keyframes voiceBar {
+            from { transform: scaleY(0.5); }
+            to   { transform: scaleY(1.5); }
+          }
+        `}</style>
+      )}
     </div>
   );
 }

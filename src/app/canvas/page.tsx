@@ -6,7 +6,6 @@ import { CanvasProvider } from "@/components/canvas/canvas-store";
 import { CanvasGridSync } from "@/components/canvas/canvas-grid-sync";
 import { Canvas } from "@/components/canvas/canvas";
 import { FixedInputBar } from "@/components/canvas/fixed-input-bar";
-import { FixedChatSidebar } from "@/components/canvas/fixed-chat-sidebar";
 import { OnboardingProvider } from "@/components/onboarding/onboarding-provider";
 import { getSupabaseBrowser } from "@/lib/supabase-browser";
 
@@ -59,7 +58,6 @@ export default function CanvasPage() {
         <CanvasGridSync />
         <CanvasPortal />
         <FixedInputBar />
-        <FixedChatSidebar />
       </OnboardingProvider>
     </CanvasProvider>
   );

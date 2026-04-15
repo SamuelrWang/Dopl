@@ -5,6 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 const supabase = supabaseAdmin();
 import { BUILDER_CHAT_SYSTEM_PROMPT } from "@/lib/prompts/chat-system";
 import { withExternalAuth } from "@/lib/auth/with-auth";
+import { ingestEntry } from "@/lib/ingestion/pipeline";
 import { config } from "dotenv";
 import { resolve } from "path";
 
@@ -46,6 +47,21 @@ const TOOLS: Anthropic.Tool[] = [
         },
       },
       required: ["entry_id"],
+    },
+  },
+  {
+    name: "ingest_url",
+    description:
+      "Ingest a URL into the knowledge base. Use this when a user shares a link they want to add — a blog post, GitHub repo, tweet, etc. Starts background processing that extracts content and generates README, agents.md, and manifest.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        url: {
+          type: "string",
+          description: "The URL to ingest",
+        },
+      },
+      required: ["url"],
     },
   },
 ];
@@ -153,8 +169,95 @@ async function executeTool(
       };
     }
 
+    case "ingest_url": {
+      const rawUrl = input.url as string;
+      const normalizedUrl = normalizeUrl(rawUrl);
+
+      // Dedup check — same logic as /api/ingest
+      const urlsToCheck = [normalizedUrl];
+      if (rawUrl !== normalizedUrl) urlsToCheck.push(rawUrl);
+      const { data: existing } = await supabase
+        .from("entries")
+        .select("id, title, status, updated_at")
+        .in("source_url", urlsToCheck)
+        .in("status", ["complete", "processing"])
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (existing) {
+        if (existing.status === "processing") {
+          const updatedAt = new Date(existing.updated_at).getTime();
+          const oneHourAgo = Date.now() - 60 * 60 * 1000;
+          if (updatedAt >= oneHourAgo) {
+            // Still actively processing
+            return {
+              result: JSON.stringify({
+                entry_id: existing.id,
+                status: "processing",
+                title: existing.title,
+                stream_url: `/api/ingest/${existing.id}/stream`,
+              }),
+            };
+          }
+          // Zombie — reset and fall through to new ingestion
+          await supabase
+            .from("entries")
+            .update({ status: "error", updated_at: new Date().toISOString() })
+            .eq("id", existing.id);
+        } else {
+          // Already complete
+          return {
+            result: JSON.stringify({
+              entry_id: existing.id,
+              status: "already_exists",
+              title: existing.title,
+            }),
+          };
+        }
+      }
+
+      // New ingestion
+      const entryId = await ingestEntry({
+        url: normalizedUrl,
+        content: { text: "" },
+      });
+
+      return {
+        result: JSON.stringify({
+          entry_id: entryId,
+          status: "processing",
+          stream_url: `/api/ingest/${entryId}/stream`,
+        }),
+      };
+    }
+
     default:
       return { result: `Unknown tool: ${name}` };
+  }
+}
+
+/**
+ * Normalize a URL for dedup comparison.
+ * Strips trailing slashes, query params like utm_*, and lowercases the host.
+ */
+function normalizeUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    u.hostname = u.hostname.toLowerCase();
+    const trackingPrefixes = ["utm_", "ref", "source", "fbclid", "gclid"];
+    for (const key of [...u.searchParams.keys()]) {
+      if (trackingPrefixes.some((p) => key.startsWith(p))) {
+        u.searchParams.delete(key);
+      }
+    }
+    let result = u.toString();
+    if (result.endsWith("/") && u.pathname !== "/") {
+      result = result.slice(0, -1);
+    }
+    return result;
+  } catch {
+    return url;
   }
 }
 
@@ -343,6 +446,23 @@ async function handlePost(request: NextRequest) {
                 block.input as Record<string, unknown>
               );
 
+              // Emit ingest_started for ingest_url tool so the frontend
+              // can spawn an entry panel and connect to the progress stream.
+              if (block.name === "ingest_url") {
+                try {
+                  const parsed = JSON.parse(toolOutput.result);
+                  send({
+                    type: "ingest_started",
+                    entry_id: parsed.entry_id,
+                    stream_url: parsed.stream_url,
+                    status: parsed.status,
+                    title: parsed.title,
+                  });
+                } catch {
+                  // Failed to parse — skip the event
+                }
+              }
+
               if (toolOutput.entries) {
                 for (const entry of toolOutput.entries) {
                   send({ type: "entry_reference", entry });
@@ -352,6 +472,8 @@ async function handlePost(request: NextRequest) {
               const summary =
                 block.name === "search_knowledge_base"
                   ? `Found ${(toolOutput.entries || []).length} relevant source(s)`
+                  : block.name === "ingest_url"
+                  ? `Started ingestion`
                   : `Retrieved implementation details`;
               send({
                 type: "tool_result",

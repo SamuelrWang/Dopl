@@ -137,6 +137,10 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
   // stays as `grabbing` for the entire drag, even as the pointer moves
   // over elements that would normally have their own cursor.
   const [isDragging, setIsDragging] = useState(false);
+  // Track whether the pointer actually moved during this gesture so we
+  // can distinguish "click on a multi-selected panel" (collapse selection)
+  // from "drag a multi-selected group" (keep selection).
+  const didDragRef = useRef(false);
 
   const handleRootPointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
@@ -145,25 +149,24 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
       e.stopPropagation();
 
       // ── Selection update ─────────────────────────────────────────
-      // Selection is now purely visual — it does NOT drive drag scope
-      // (drag always moves just the clicked panel). So we can replace
-      // with `[panel.id]` on a plain click and toggle membership on a
-      // shift-click, with no regard for "what was the group before".
       const currentSelection = canvasStateRef.current.selectedPanelIds;
       const alreadySelected = currentSelection.includes(panel.id);
-      let nextSelection: string[];
+
       if (e.shiftKey) {
-        nextSelection = alreadySelected
+        // Shift-click toggles membership — never starts a drag.
+        const nextSelection = alreadySelected
           ? currentSelection.filter((id) => id !== panel.id)
           : [...currentSelection, panel.id];
-      } else {
-        nextSelection = [panel.id];
+        dispatch({ type: "SET_SELECTION", panelIds: nextSelection });
+        return;
       }
-      dispatch({ type: "SET_SELECTION", panelIds: nextSelection });
 
-      // Shift-clicks only adjust selection — never start a drag. That
-      // way building up a selection set never accidentally moves a panel.
-      if (e.shiftKey) return;
+      // Plain click on a panel that's part of a multi-selection: keep
+      // the selection intact so the user can drag the group. We'll
+      // collapse to [panel.id] on pointerup if no drag occurred.
+      if (!(currentSelection.length > 1 && alreadySelected)) {
+        dispatch({ type: "SET_SELECTION", panelIds: [panel.id] });
+      }
 
       if (e.button !== 0) return;
       const targetEl = e.target as HTMLElement;
@@ -207,28 +210,36 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
         const target = evt.currentTarget;
         target.setPointerCapture(evt.pointerId);
 
-        // Always SOLO drag — clicking a panel (even one that's part of
-        // a cluster or multi-selection) moves only that panel. To drag
-        // a whole cluster, the user clicks the gray cluster outline or
-        // its header tab (handled by canvas.tsx → handlePointerDown's
-        // cluster hit-test, which spins up its own clusterDragRef).
-        //
-        // This makes the mental model simple:
-        //   panel click  → one panel moves
-        //   cluster area → all cluster members move together
+        // If this panel is part of a multi-selection, drag ALL selected
+        // panels together. Otherwise solo-drag just this panel.
+        const sel = canvasStateRef.current.selectedPanelIds;
+        const isPartOfMultiSelect = sel.length > 1 && sel.includes(panel.id);
+        const panelsToCapture = isPartOfMultiSelect
+          ? canvasStateRef.current.panels
+              .filter((p) => sel.includes(p.id))
+              .map((p) => ({
+                id: p.id,
+                x: p.x,
+                y: p.y,
+                width: p.width,
+                height: p.height,
+              }))
+          : [
+              {
+                id: panel.id,
+                x: panel.x,
+                y: panel.y,
+                width: panel.width,
+                height: panel.height,
+              },
+            ];
+
         dragOriginRef.current = {
           mouseX: evt.clientX,
           mouseY: evt.clientY,
-          panels: [
-            {
-              id: panel.id,
-              x: panel.x,
-              y: panel.y,
-              width: panel.width,
-              height: panel.height,
-            },
-          ],
+          panels: panelsToCapture,
         };
+        didDragRef.current = false;
         setIsDragging(true);
         // Body-wide grabbing cursor — works even when the pointer strays
         // over text children or off the panel mid-drag (pointer capture
@@ -246,6 +257,7 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
     (e: React.PointerEvent<HTMLDivElement>) => {
       const origin = dragOriginRef.current;
       if (!origin) return;
+      didDragRef.current = true;
       // Cursor deltas are in screen pixels; panel positions are in world
       // coords. Divide by zoom so panels track the cursor 1:1 visually
       // at any zoom level.
@@ -340,13 +352,22 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
       if (target.hasPointerCapture(e.pointerId)) {
         target.releasePointerCapture(e.pointerId);
       }
+      // If the user clicked (not dragged) a panel that was part of a
+      // multi-selection, collapse the selection down to just this panel.
+      if (!didDragRef.current) {
+        const sel = canvasStateRef.current.selectedPanelIds;
+        if (sel.length > 1 && sel.includes(panel.id)) {
+          dispatch({ type: "SET_SELECTION", panelIds: [panel.id] });
+        }
+      }
       dragOriginRef.current = null;
+      didDragRef.current = false;
       setIsDragging(false);
       if (typeof document !== "undefined") {
         document.body.classList.remove("panel-dragging");
       }
     },
-    []
+    [dispatch, panel.id, canvasStateRef]
   );
 
   // ── Resize logic (browse panels only) ────────────────────────────

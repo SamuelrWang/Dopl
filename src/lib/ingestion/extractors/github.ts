@@ -140,9 +140,20 @@ async function extractRepoContent(
       .map((item) => `${item.type === "tree" ? "d" : "f"} ${item.path}`)
       .join("\n");
     contentParts.push(`\n## File Structure\n\`\`\`\n${fileList}\n\`\`\`\n`);
+    metadata.file_tree = fileList;
   } catch (err) {
     console.warn(`[github] Failed to get file tree for ${owner}/${repo}:`, err);
   }
+
+  // Build thumbnail URL using our own OG image endpoint
+  const params = new URLSearchParams({
+    owner,
+    repo,
+    ...(metadata.description ? { desc: String(metadata.description).slice(0, 120) } : {}),
+    ...(metadata.language ? { lang: String(metadata.language) } : {}),
+    ...(metadata.file_tree ? { files: String(metadata.file_tree).slice(0, 1500) } : {}),
+  });
+  metadata.thumbnail_url = `/api/og/github?${params.toString()}`;
 
   return {
     url,

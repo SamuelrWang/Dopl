@@ -86,6 +86,10 @@ export interface EntryPanelData extends BasePanelData {
   agentsMdLoading?: boolean;
   /** True while tags are still being generated */
   tagsLoading?: boolean;
+  /** True while the entry is being ingested (skeleton/generating state) */
+  isIngesting?: boolean;
+  /** Live ingestion log events for the attached log header */
+  ingestionLogs?: ProgressEvent[];
 }
 
 export interface BrowsePanelData extends BasePanelData {
@@ -232,6 +236,12 @@ export interface CanvasState {
    * is treated as the "primary" selection for focus affordances.
    */
   selectedPanelIds: string[];
+  /**
+   * Undo stack for deleted panels. Each entry is a batch of panels + any
+   * clusters that dissolved as a result. Session-only — NOT persisted to
+   * localStorage or DB.
+   */
+  deletedPanelsStack: Array<{ panels: Panel[]; clusters: Cluster[] }>;
 }
 
 /** Zoom bounds. Going below 0.25 or above 4 gets confusing / unreadable. */
@@ -246,6 +256,7 @@ export const INITIAL_CANVAS_STATE: CanvasState = {
   nextPanelId: 1,
   nextClusterId: 1,
   selectedPanelIds: [],
+  deletedPanelsStack: [],
 };
 
 export const DEFAULT_PANEL_SIZE = {
@@ -452,6 +463,7 @@ export type CanvasAction =
       readmeLoading?: boolean;
       agentsMdLoading?: boolean;
       tagsLoading?: boolean;
+      isIngesting?: boolean;
     }
   | {
       /** Progressively update an entry panel's artifacts as pipeline steps complete. */
@@ -460,6 +472,31 @@ export type CanvasAction =
       readme?: string;
       agentsMd?: string;
       tags?: Array<{ type: string; value: string }>;
+    }
+  | {
+      /** Update title/summary/metadata on an entry panel during ingestion (manifest step). */
+      type: "UPDATE_ENTRY_METADATA";
+      entryId: string;
+      title?: string;
+      summary?: string | null;
+      sourceUrl?: string;
+      sourcePlatform?: string | null;
+      sourceAuthor?: string | null;
+      thumbnailUrl?: string | null;
+      useCase?: string | null;
+      complexity?: string | null;
+    }
+  | {
+      /** Append a progress event to an entry panel's ingestion logs. */
+      type: "APPEND_INGESTION_LOG";
+      entryId: string;
+      event: ProgressEvent;
+    }
+  | {
+      /** Toggle the isIngesting flag on an entry panel. */
+      type: "SET_ENTRY_INGESTING";
+      entryId: string;
+      isIngesting: boolean;
     }
   | {
       /**
@@ -551,4 +588,19 @@ export type CanvasAction =
       panelId: string;
       errorMessage: string;
     }
-  | { type: "HYDRATE"; state: CanvasState };
+  | { type: "HYDRATE"; state: CanvasState }
+  | {
+      /**
+       * Delete all selected panels (that are deletable). Snapshots the
+       * removed panels + dissolved clusters onto the undo stack.
+       */
+      type: "DELETE_SELECTED_PANELS";
+    }
+  | {
+      /**
+       * Restore the most recently deleted batch from the undo stack.
+       * Re-adds panels and restores cluster memberships. Sets selection
+       * to the restored panel ids.
+       */
+      type: "UNDO_DELETE";
+    };

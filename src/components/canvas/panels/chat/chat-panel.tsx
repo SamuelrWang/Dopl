@@ -30,9 +30,7 @@ import { ArtifactsPanel } from "@/components/ingest/artifacts-panel";
 import type { ChatMessage, ChatAttachment } from "@/components/ingest/chat-message";
 import type { ChatPanelData } from "../../types";
 import { useCanvas } from "../../canvas-store";
-import { usePanelIngestion } from "../../use-panel-ingestion";
 import { useChat } from "./use-chat";
-import { isUrlOnlyMessage, extractUrl } from "./url-detection";
 import { findEnclosingClusterName } from "./cluster-context";
 import { useChatName } from "./use-chat-name";
 import {
@@ -65,7 +63,6 @@ export function ChatPanelBody({ panel }: ChatPanelBodyProps) {
   // Chat + ingestion hooks — we pick which one to use per message based
   // on URL detection.
   const { send: sendChat, isStreaming: chatStreaming } = useChat({ panel });
-  const { startIngestion } = usePanelIngestion(panel);
 
   // Auto-generate a topic name for the chat after the first AI response.
   useChatName(panel);
@@ -90,12 +87,8 @@ export function ChatPanelBody({ panel }: ChatPanelBodyProps) {
     const pending = panel.pendingInput;
     if (!pending) return;
     dispatch({ type: "CLEAR_PENDING_INPUT", panelId: panel.id });
-    if (isUrlOnlyMessage(pending)) {
-      startIngestion(extractUrl(pending));
-    } else {
-      sendChat(pending);
-    }
-    // sendChat / startIngestion refs are stable via useCallback, so
+    sendChat(pending);
+    // sendChat ref is stable via useCallback, so
     // depending on panel.pendingInput alone is enough.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [panel.pendingInput]);
@@ -189,13 +182,6 @@ export function ChatPanelBody({ panel }: ChatPanelBodyProps) {
     const text = input.trim();
     const hasAttachments = pendingAttachments.length > 0;
     if ((!text && !hasAttachments) || isProcessing) return;
-
-    // URL-only shortcut (no attachments)
-    if (text && !hasAttachments && isUrlOnlyMessage(text)) {
-      setInput("");
-      startIngestion(extractUrl(text));
-      return;
-    }
 
     // Upload attachments first if any
     let uploadedAttachments: ChatAttachment[] | undefined;
@@ -454,7 +440,9 @@ function RenderedMessage({ message }: { message: ChatMessage }) {
         ? "Searching knowledge base"
         : message.toolName === "get_entry_details"
           ? "Loading entry details"
-          : message.toolName;
+          : message.toolName === "ingest_url"
+            ? "Ingesting URL"
+            : message.toolName;
     return (
       <div className="max-w-[90%] md:max-w-[80%] mr-auto">
         <div className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-white/50 bg-white/[0.04] border border-white/[0.08] rounded-[3px] px-2 h-6">

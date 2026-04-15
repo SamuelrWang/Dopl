@@ -233,6 +233,63 @@ function reducer(state: CanvasState, action: CanvasAction): CanvasState {
       };
     }
 
+    case "DELETE_SELECTED_PANELS": {
+      const selectedIds = new Set(state.selectedPanelIds);
+      if (selectedIds.size === 0) return state;
+
+      const toDelete = state.panels.filter(
+        (p) => selectedIds.has(p.id) && isPanelDeletable(p)
+      );
+      if (toDelete.length === 0) return state;
+
+      const deleteIds = new Set(toDelete.map((p) => p.id));
+
+      // Snapshot clusters that will dissolve so undo can restore them
+      const newClusters = stripFromClusters(state.clusters, deleteIds);
+      const dissolvedClusters = state.clusters.filter(
+        (c) => !newClusters.some((nc) => nc.id === c.id)
+      );
+
+      return {
+        ...state,
+        panels: state.panels.filter((p) => !deleteIds.has(p.id)),
+        selectedPanelIds: [],
+        clusters: newClusters,
+        deletedPanelsStack: [
+          ...state.deletedPanelsStack.slice(-19), // cap at 20
+          { panels: toDelete, clusters: dissolvedClusters },
+        ],
+      };
+    }
+
+    case "UNDO_DELETE": {
+      const stack = state.deletedPanelsStack;
+      if (stack.length === 0) return state;
+
+      const last = stack[stack.length - 1];
+      const restoredIds = last.panels.map((p) => p.id);
+
+      // Restore dissolved clusters by merging them back
+      const mergedClusters = [...state.clusters];
+      for (const c of last.clusters) {
+        const existing = mergedClusters.find((mc) => mc.id === c.id);
+        if (existing) {
+          // Cluster still exists but shrank — restore its member list
+          existing.panelIds = c.panelIds;
+        } else {
+          mergedClusters.push(c);
+        }
+      }
+
+      return {
+        ...state,
+        panels: [...state.panels, ...last.panels],
+        selectedPanelIds: restoredIds,
+        clusters: mergedClusters,
+        deletedPanelsStack: stack.slice(0, -1),
+      };
+    }
+
     case "HYDRATE_CHAT_MESSAGES": {
       return {
         ...state,
@@ -465,6 +522,7 @@ function reducer(state: CanvasState, action: CanvasAction): CanvasState {
         readmeLoading: action.readmeLoading,
         agentsMdLoading: action.agentsMdLoading,
         tagsLoading: action.tagsLoading,
+        isIngesting: action.isIngesting,
       };
 
       // Cluster auto-join: if the source panel was in a cluster, the new
@@ -499,6 +557,54 @@ function reducer(state: CanvasState, action: CanvasAction): CanvasState {
             ...(action.readme !== undefined && { readme: action.readme, readmeLoading: false }),
             ...(action.agentsMd !== undefined && { agentsMd: action.agentsMd, agentsMdLoading: false }),
             ...(action.tags !== undefined && { tags: action.tags, tagsLoading: false }),
+          };
+        }),
+      };
+    }
+
+    case "UPDATE_ENTRY_METADATA": {
+      return {
+        ...state,
+        panels: state.panels.map((p) => {
+          if (p.type !== "entry" || p.entryId !== action.entryId) return p;
+          return {
+            ...p,
+            ...(action.title !== undefined && { title: action.title }),
+            ...(action.summary !== undefined && { summary: action.summary }),
+            ...(action.sourceUrl !== undefined && { sourceUrl: action.sourceUrl }),
+            ...(action.sourcePlatform !== undefined && { sourcePlatform: action.sourcePlatform }),
+            ...(action.sourceAuthor !== undefined && { sourceAuthor: action.sourceAuthor }),
+            ...(action.thumbnailUrl !== undefined && { thumbnailUrl: action.thumbnailUrl }),
+            ...(action.useCase !== undefined && { useCase: action.useCase }),
+            ...(action.complexity !== undefined && { complexity: action.complexity }),
+          };
+        }),
+      };
+    }
+
+    case "APPEND_INGESTION_LOG": {
+      return {
+        ...state,
+        panels: state.panels.map((p) => {
+          if (p.type !== "entry" || p.entryId !== action.entryId) return p;
+          return {
+            ...p,
+            ingestionLogs: [...(p.ingestionLogs || []), action.event],
+          };
+        }),
+      };
+    }
+
+    case "SET_ENTRY_INGESTING": {
+      return {
+        ...state,
+        panels: state.panels.map((p) => {
+          if (p.type !== "entry" || p.entryId !== action.entryId) return p;
+          return {
+            ...p,
+            isIngesting: action.isIngesting,
+            // Clear logs when ingestion ends
+            ...(!action.isIngesting && { ingestionLogs: [] }),
           };
         }),
       };
@@ -892,9 +998,14 @@ function loadInitialState(userId?: string): CanvasState {
     if (parsed.version !== 1 && parsed.version !== 2) {
       return ensureDefaultPanels(INITIAL_CANVAS_STATE);
     }
+    // Ensure ephemeral fields have defaults when loading from storage
+    const withDefaults = {
+      ...parsed,
+      deletedPanelsStack: [],
+    } as CanvasState;
     return ensureDefaultPanels(
       migrateAddClusters(
-        migrateMissingSelection(migratePreZoomCamera(parsed as CanvasState))
+        migrateMissingSelection(migratePreZoomCamera(withDefaults))
       )
     );
   } catch {
@@ -931,7 +1042,9 @@ export function CanvasProvider({ children, userId }: CanvasProviderProps) {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
       try {
-        localStorage.setItem(storageKey, JSON.stringify(state));
+        // Strip ephemeral fields before persisting
+        const { deletedPanelsStack: _, ...persistable } = state;
+        localStorage.setItem(storageKey, JSON.stringify(persistable));
       } catch {
         // localStorage may be full or unavailable; ignore
       }

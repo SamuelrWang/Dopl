@@ -17,11 +17,13 @@
  */
 
 import { useCallback, useRef, useState } from "react";
-import { useCanvas } from "../../canvas-store";
+import { useCanvas, computeNewPanelPosition } from "../../canvas-store";
 import type { ChatMessage, ChatAttachment } from "@/components/ingest/chat-message";
 import type { ChatPanelData } from "../../types";
+import { ENTRY_PANEL_SIZE } from "../../types";
 import { buildCanvasContext } from "./cluster-context";
 import { messagesToApiHistory } from "./chat-message-types";
+import { connectToIngestionStream } from "../../use-panel-ingestion";
 
 interface UseChatOptions {
   panel: ChatPanelData;
@@ -141,6 +143,11 @@ export function useChat({ panel }: UseChatOptions) {
                 complexity?: string;
               };
               message?: string;
+              // ingest_started fields
+              entry_id?: string;
+              stream_url?: string;
+              status?: string;
+              title?: string;
             };
             try {
               event = JSON.parse(jsonStr);
@@ -195,6 +202,76 @@ export function useChat({ panel }: UseChatOptions) {
                 });
                 // A fresh streaming bubble will be created lazily on the
                 // next text_delta — no need to prep it empty.
+                break;
+              }
+              case "ingest_started": {
+                const entryId = event.entry_id;
+                const streamUrl = event.stream_url;
+                const ingestStatus = event.status;
+                const ingestTitle = event.title;
+
+                if (!entryId) break;
+
+                if (ingestStatus === "already_exists") {
+                  // Fetch full entry and spawn a completed panel
+                  fetch(`/api/entries/${entryId}`)
+                    .then((r) => (r.ok ? r.json() : null))
+                    .then((entry) => {
+                      if (!entry) return;
+                      const tags = (entry.tags ?? []).map((t: { tag_type: string; tag_value: string }) => ({
+                        type: t.tag_type,
+                        value: t.tag_value,
+                      }));
+                      dispatch({
+                        type: "SPAWN_ENTRY_PANEL",
+                        sourcePanelId: panel.id,
+                        entryId,
+                        title: entry.title || "Untitled Setup",
+                        summary: entry.summary ?? null,
+                        sourceUrl: entry.source_url ?? "",
+                        sourcePlatform: entry.source_platform ?? null,
+                        sourceAuthor: entry.source_author ?? null,
+                        thumbnailUrl: entry.thumbnail_url ?? null,
+                        useCase: entry.use_case ?? null,
+                        complexity: entry.complexity ?? null,
+                        tags,
+                        readme: entry.readme || "",
+                        agentsMd: entry.agents_md || "",
+                        manifest: entry.manifest || {},
+                      });
+                    })
+                    .catch(() => {});
+                } else if (streamUrl) {
+                  // Spawn a skeleton entry panel and connect to stream
+                  dispatch({
+                    type: "SPAWN_ENTRY_PANEL",
+                    sourcePanelId: panel.id,
+                    entryId,
+                    title: ingestTitle || "Ingesting...",
+                    summary: null,
+                    sourceUrl: "",
+                    sourcePlatform: null,
+                    sourceAuthor: null,
+                    thumbnailUrl: null,
+                    useCase: null,
+                    complexity: null,
+                    tags: [],
+                    readme: "",
+                    agentsMd: "",
+                    manifest: {},
+                    readmeLoading: true,
+                    agentsMdLoading: true,
+                    tagsLoading: true,
+                    isIngesting: true,
+                  });
+
+                  connectToIngestionStream(
+                    entryId,
+                    streamUrl,
+                    panel.id,
+                    dispatch
+                  );
+                }
                 break;
               }
               case "done": {

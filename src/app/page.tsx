@@ -293,7 +293,7 @@ export default function Home() {
         <div
           className={`mx-auto flex items-center justify-between rounded-full px-5 py-2.5 transition-all duration-700 ease-in-out ${
             scrolled
-              ? "max-w-[1200px] bg-[oklch(0.10_0_0)] border border-white/[0.08] shadow-[0_4px_16px_rgba(0,0,0,0.3)]"
+              ? "max-w-[1200px] bg-black/40 backdrop-blur-xl border border-white/[0.08] shadow-[0_4px_16px_rgba(0,0,0,0.3)]"
               : "max-w-[1600px] bg-transparent border border-transparent"
           }`}
         >
@@ -302,12 +302,12 @@ export default function Home() {
               <Image
                 src="/favicons/favicon-32x32.png"
                 alt="Dopl"
-                width={20}
-                height={20}
-                className="rounded-md"
+                width={26}
+                height={26}
+                className="rounded-xl border-[3px] border-black"
               />
               <span
-                className="text-white text-[18px]"
+                className="text-white text-[22px]"
                 style={{
                   fontFamily: "var(--font-playfair), 'Playfair Display', Georgia, serif",
                   fontStyle: "italic",
@@ -318,26 +318,20 @@ export default function Home() {
             </Link>
             <div className="hidden md:flex items-center gap-6">
               <Link
-                href="/canvas"
-                className="text-white/60 text-[14px] hover:text-white transition-colors"
+                href="/about"
+                className="text-white/60 text-[13px] hover:text-white transition-colors"
               >
-                Canvas
+                About
               </Link>
               <Link
-                href="/entries"
-                className="text-white/60 text-[14px] hover:text-white transition-colors"
+                href="/community"
+                className="text-white/60 text-[13px] hover:text-white transition-colors"
               >
-                Browse
-              </Link>
-              <Link
-                href="/build"
-                className="text-white/60 text-[14px] hover:text-white transition-colors"
-              >
-                Builder
+                Community
               </Link>
               <Link
                 href="/pricing"
-                className="text-white/60 text-[14px] hover:text-white transition-colors"
+                className="text-white/60 text-[13px] hover:text-white transition-colors"
               >
                 Pricing
               </Link>
@@ -346,13 +340,7 @@ export default function Home() {
           <div className="flex items-center gap-4">
             <Link
               href="/login"
-              className="hidden sm:block text-white/60 text-[14px] hover:text-white transition-colors"
-            >
-              Sign in
-            </Link>
-            <Link
-              href="/login"
-              className="bg-white/[0.08] border border-white/[0.12] text-white text-[14px] px-4 py-1.5 rounded-full hover:bg-white/[0.12] transition-colors"
+              className="bg-white/[0.08] border border-white/[0.12] text-white text-[13px] px-4 py-1.5 rounded-full hover:bg-white/[0.12] transition-colors"
             >
               Sign up
             </Link>
@@ -382,12 +370,12 @@ export default function Home() {
           <h1 className="mb-6 font-serif font-normal text-[clamp(48px,6vw,60px)] leading-[0.9] tracking-tighter text-white">
             Frontier AI,
             <br />
-            <span className="italic">in a unified layer.</span>
+            <span className="italic">in one unified layer.</span>
           </h1>
 
           {/* Subtext */}
           <p className="text-white/60 text-[18px] mb-12 tracking-wide font-mono">
-            Bridging the cutting edge with your agent. Seamlessly connected.
+            Equip your agent with supercharged capabilities, connected seamlessly.
           </p>
 
           {/* Prompt Input */}

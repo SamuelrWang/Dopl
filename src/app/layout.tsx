@@ -44,7 +44,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Dopl",
+  title: "Dopl: Supercharge Your Agents",
   description: "AI-powered knowledge base for automation setups",
   icons: {
     icon: [

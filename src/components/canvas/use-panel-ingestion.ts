@@ -468,6 +468,199 @@ export function usePanelIngestion(panel: ChatPanelData) {
   return { startIngestion };
 }
 
+// ── Entry-panel-targeted ingestion stream ────────────────────────────
+// Used by the AI-driven ingestion flow: the entry panel is already
+// spawned in skeleton state, and this function connects to the SSE
+// stream to progressively fill it in.
+
+export function connectToIngestionStream(
+  entryId: string,
+  streamUrl: string,
+  sourcePanelId: string,
+  dispatch: Dispatch<CanvasAction>
+): () => void {
+  let reconnectAttempts = 0;
+  const MAX_RECONNECT = 5;
+  let currentEs: EventSource | null = null;
+  let metadataApplied = false;
+
+  function connect() {
+    const es = new EventSource(streamUrl);
+    currentEs = es;
+
+    es.onmessage = (e) => {
+      try {
+        const data: ProgressEvent = JSON.parse(e.data);
+
+        // Log every event to the entry panel's ingestion log header
+        dispatch({ type: "APPEND_INGESTION_LOG", entryId, event: data });
+
+        // Progressive artifact handling
+        if (data.type === "step_complete" && data.details) {
+          const step = data.step;
+          const details = data.details as Record<string, unknown>;
+
+          if (step === "manifest_generation" && !metadataApplied) {
+            metadataApplied = true;
+            dispatch({
+              type: "UPDATE_ENTRY_METADATA",
+              entryId,
+              title: (details.title as string) || "Untitled Setup",
+              summary: (details.summary as string) || null,
+              sourceUrl: (details.sourceUrl as string) || "",
+              sourcePlatform: (details.sourcePlatform as string) || null,
+              sourceAuthor: null,
+              thumbnailUrl: (details.thumbnailUrl as string) || null,
+              useCase: (details.useCase as string) || null,
+              complexity: (details.complexity as string) || null,
+            });
+          }
+
+          if (step === "readme_generation" && details.readme) {
+            dispatch({
+              type: "UPDATE_ENTRY_ARTIFACT",
+              entryId,
+              readme: details.readme as string,
+            });
+          }
+
+          if (step === "agents_md_generation" && details.agentsMd !== undefined) {
+            dispatch({
+              type: "UPDATE_ENTRY_ARTIFACT",
+              entryId,
+              agentsMd: details.agentsMd as string,
+            });
+          }
+
+          if (step === "tag_generation" && details.tags) {
+            const rawTags = details.tags as Array<{ tag_type: string; tag_value: string }>;
+            dispatch({
+              type: "UPDATE_ENTRY_ARTIFACT",
+              entryId,
+              tags: rawTags.map((t) => ({ type: t.tag_type, value: t.tag_value })),
+            });
+          }
+        }
+
+        if (data.type === "complete") {
+          dispatch({ type: "SET_ENTRY_INGESTING", entryId, isIngesting: false });
+
+          // If metadata was never applied (edge case), fetch the entry
+          if (!metadataApplied) {
+            fetch(`/api/entries/${entryId}`)
+              .then((r) => (r.ok ? r.json() : null))
+              .then((entry: EntryFetchResponse | null) => {
+                if (!entry) return;
+                dispatch({
+                  type: "UPDATE_ENTRY_METADATA",
+                  entryId,
+                  title: entry.title || "Untitled Setup",
+                  summary: entry.summary ?? null,
+                  sourceUrl: entry.source_url ?? "",
+                  sourcePlatform: entry.source_platform ?? null,
+                  sourceAuthor: entry.source_author ?? null,
+                  thumbnailUrl: entry.thumbnail_url ?? null,
+                  useCase: entry.use_case ?? null,
+                  complexity: entry.complexity ?? null,
+                });
+                dispatch({
+                  type: "UPDATE_ENTRY_ARTIFACT",
+                  entryId,
+                  readme: entry.readme || "",
+                  agentsMd: entry.agents_md || "",
+                  tags: (entry.tags ?? []).map((t) => ({
+                    type: t.tag_type,
+                    value: t.tag_value,
+                  })),
+                });
+              })
+              .catch(() => {});
+          }
+
+          es.close();
+          currentEs = null;
+          return;
+        }
+
+        if (data.type === "error") {
+          dispatch({ type: "SET_ENTRY_INGESTING", entryId, isIngesting: false });
+          es.close();
+          currentEs = null;
+          return;
+        }
+      } catch {
+        // Skip malformed SSE messages
+      }
+    };
+
+    es.onerror = () => {
+      if (es.readyState === EventSource.CLOSED) {
+        es.close();
+        currentEs = null;
+
+        if (reconnectAttempts < MAX_RECONNECT) {
+          reconnectAttempts++;
+          const delay = Math.min(1000 * Math.pow(2, reconnectAttempts - 1), 10000);
+          setTimeout(connect, delay);
+        } else {
+          // Polling fallback for entry panel
+          const poll = async () => {
+            try {
+              const res = await fetch(`/api/ingest/${entryId}/status`);
+              if (!res.ok) return;
+              const status = await res.json();
+              if (status.status === "complete" || status.status === "error") {
+                dispatch({ type: "SET_ENTRY_INGESTING", entryId, isIngesting: false });
+                if (status.status === "complete" && !metadataApplied) {
+                  const entry: EntryFetchResponse | null = await fetch(
+                    `/api/entries/${entryId}`
+                  ).then((r) => (r.ok ? r.json() : null));
+                  if (entry) {
+                    const payload = buildEntryActionPayload(entry, sourcePanelId, entryId);
+                    dispatch({
+                      type: "UPDATE_ENTRY_METADATA",
+                      entryId,
+                      title: payload.title,
+                      summary: payload.summary,
+                      sourceUrl: payload.sourceUrl,
+                      sourcePlatform: payload.sourcePlatform,
+                      thumbnailUrl: payload.thumbnailUrl,
+                      useCase: payload.useCase,
+                      complexity: payload.complexity,
+                    });
+                    dispatch({
+                      type: "UPDATE_ENTRY_ARTIFACT",
+                      entryId,
+                      readme: payload.readme,
+                      agentsMd: payload.agentsMd,
+                      tags: payload.tags,
+                    });
+                  }
+                }
+                return;
+              }
+              setTimeout(poll, 5000);
+            } catch {
+              setTimeout(poll, 5000);
+            }
+          };
+          poll();
+        }
+      }
+    };
+  }
+
+  connect();
+
+  // Return cleanup function
+  return () => {
+    if (currentEs) {
+      currentEs.close();
+      currentEs = null;
+    }
+  };
+}
+
 // ── Standalone (no hook) — used by FixedInputBar ───────────────────
 
 export async function startPanelIngestion(
