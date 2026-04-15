@@ -48,7 +48,6 @@ export function EntryGrid({ entries }: EntryGridProps) {
           thumbnailUrl={entry.thumbnail_url}
           useCase={entry.use_case}
           complexity={entry.complexity}
-          contentType={entry.content_type}
           status={entry.status}
           createdAt={entry.created_at}
         />

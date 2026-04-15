@@ -1,10 +1,10 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useSubscription } from "@/components/billing/use-subscription";
 import { Button } from "@/components/ui/button";
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { EmbeddedCheckoutForm } from "@/components/billing/embedded-checkout";
 
 export default function BillingPage() {
   return (
@@ -18,15 +18,22 @@ function BillingPageInner() {
   const sub = useSubscription();
   const searchParams = useSearchParams();
   const [portalLoading, setPortalLoading] = useState(false);
+  const [showCheckout, setShowCheckout] = useState(false);
 
-  const justUpgraded = searchParams.get("success") === "true";
+  const sessionId = searchParams.get("session_id");
   const canceled = searchParams.get("canceled") === "true";
 
-  async function handleUpgrade() {
-    const res = await fetch("/api/billing/checkout", { method: "POST" });
-    const data = await res.json();
-    if (data.url) window.location.href = data.url;
-  }
+  // If we have a session_id, check payment status
+  const [paymentStatus, setPaymentStatus] = useState<"loading" | "complete" | "open" | null>(null);
+
+  useEffect(() => {
+    if (!sessionId) return;
+    setPaymentStatus("loading");
+    fetch(`/api/billing/checkout/status?session_id=${sessionId}`)
+      .then((r) => r.json())
+      .then((data) => setPaymentStatus(data.status === "complete" ? "complete" : "open"))
+      .catch(() => setPaymentStatus(null));
+  }, [sessionId]);
 
   async function handleManage() {
     setPortalLoading(true);
@@ -50,11 +57,29 @@ function BillingPageInner() {
     );
   }
 
+  // Show checkout form
+  if (showCheckout && !sub.isPro) {
+    return (
+      <div className="container mx-auto px-4 py-8 max-w-lg">
+        <button
+          onClick={() => setShowCheckout(false)}
+          className="text-sm text-text-tertiary hover:text-text-secondary transition-colors mb-4 font-mono text-[10px] uppercase tracking-wider"
+        >
+          &larr; Back to billing
+        </button>
+        <h1 className="text-xl font-medium text-text-primary mb-6">
+          Upgrade to Pro
+        </h1>
+        <EmbeddedCheckoutForm />
+      </div>
+    );
+  }
+
   return (
     <div className="container mx-auto px-4 py-8 max-w-lg">
       <h1 className="text-xl font-medium text-text-primary mb-6">Billing</h1>
 
-      {justUpgraded && (
+      {paymentStatus === "complete" && (
         <div className="mb-4 rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-4 py-3 text-sm text-emerald-400">
           Welcome to Pro! Your subscription is now active.
         </div>
@@ -144,7 +169,7 @@ function BillingPageInner() {
                 </span>
                 <span className="text-sm text-text-tertiary">/month</span>
               </div>
-              <Button onClick={handleUpgrade} className="w-full">
+              <Button onClick={() => setShowCheckout(true)} className="w-full">
                 Upgrade to Pro
               </Button>
               <a

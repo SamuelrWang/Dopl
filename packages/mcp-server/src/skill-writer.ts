@@ -10,9 +10,35 @@ import {
   slugifyTitle,
 } from "./templates.js";
 
-const CLAUDE_DIR = join(homedir(), ".claude");
-const SKILLS_DIR = join(CLAUDE_DIR, "skills");
-const CLAUDE_MD_PATH = join(CLAUDE_DIR, "CLAUDE.md");
+// ── Target platform resolution ───────────────────────────────────
+// DOPL_SKILL_TARGET=openclaw writes to ~/.openclaw/workspace/data/dopl/
+// Default (unset or "claude") writes to ~/.claude/skills/
+
+export type SkillTarget = "claude" | "openclaw";
+
+function resolveTarget(): SkillTarget {
+  const env = process.env.DOPL_SKILL_TARGET?.toLowerCase();
+  if (env === "openclaw") return "openclaw";
+  return "claude";
+}
+
+function resolvePaths(target?: SkillTarget) {
+  const t = target ?? resolveTarget();
+  if (t === "openclaw") {
+    const baseDir = join(homedir(), ".openclaw", "workspace", "data", "dopl");
+    return {
+      skillsDir: baseDir,
+      indexPath: join(baseDir, "INDEX.md"),
+      target: t as SkillTarget,
+    };
+  }
+  const claudeDir = join(homedir(), ".claude");
+  return {
+    skillsDir: join(claudeDir, "skills"),
+    indexPath: join(claudeDir, "CLAUDE.md"),
+    target: t as SkillTarget,
+  };
+}
 
 const DOPL_START = "<!-- DOPL:START -->";
 const DOPL_END = "<!-- DOPL:END -->";
@@ -20,9 +46,10 @@ const DOPL_END = "<!-- DOPL:END -->";
 /**
  * Check if a cluster skill directory already exists on disk.
  */
-export async function skillExists(slug: string): Promise<boolean> {
+export async function skillExists(slug: string, target?: SkillTarget): Promise<boolean> {
+  const { skillsDir } = resolvePaths(target);
   try {
-    await access(join(SKILLS_DIR, `dopl-${slug}`, "SKILL.md"));
+    await access(join(skillsDir, `dopl-${slug}`, "SKILL.md"));
     return true;
   } catch {
     return false;
@@ -37,8 +64,10 @@ export async function writeClusterSkill(
   name: string,
   brain: BrainData,
   entries: ClusterDetailEntry[],
+  target?: SkillTarget,
 ): Promise<void> {
-  const skillDir = join(SKILLS_DIR, `dopl-${slug}`);
+  const { skillsDir } = resolvePaths(target);
+  const skillDir = join(skillsDir, `dopl-${slug}`);
   const refsDir = join(skillDir, "references");
 
   await mkdir(refsDir, { recursive: true });
@@ -68,8 +97,10 @@ export async function writeClusterSkill(
  */
 export async function writeGlobalCanvasSkill(
   clusters: ClusterSummary[],
+  target?: SkillTarget,
 ): Promise<void> {
-  const skillDir = join(SKILLS_DIR, "dopl-canvas");
+  const { skillsDir } = resolvePaths(target);
+  const skillDir = join(skillsDir, "dopl-canvas");
   await mkdir(skillDir, { recursive: true });
 
   const content = renderGlobalCanvasSkillMd(clusters);
@@ -82,14 +113,17 @@ export async function writeGlobalCanvasSkill(
  */
 export async function writeGlobalClaudemd(
   clusters: ClusterSummary[],
+  target?: SkillTarget,
 ): Promise<void> {
-  await mkdir(CLAUDE_DIR, { recursive: true });
+  const { indexPath } = resolvePaths(target);
+  const indexDir = join(indexPath, "..");
+  await mkdir(indexDir, { recursive: true });
 
   const sieSection = `${DOPL_START}\n${renderGlobalClaudeMdSection(clusters)}\n${DOPL_END}`;
 
   let existing = "";
   try {
-    existing = await readFile(CLAUDE_MD_PATH, "utf-8");
+    existing = await readFile(indexPath, "utf-8");
   } catch {
     // File doesn't exist yet
   }
@@ -98,31 +132,27 @@ export async function writeGlobalClaudemd(
   const endIdx = existing.indexOf(DOPL_END);
 
   if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
-    // Valid markers — replace existing Dopl section
     const before = existing.slice(0, startIdx);
     const after = existing.slice(endIdx + DOPL_END.length);
-    await writeFile(CLAUDE_MD_PATH, before + sieSection + after, "utf-8");
+    await writeFile(indexPath, before + sieSection + after, "utf-8");
   } else if (startIdx !== -1 || endIdx !== -1) {
-    // Corrupted markers (one missing, or wrong order) — strip both and re-append
     const cleaned = existing
       .replace(DOPL_START, "")
       .replace(DOPL_END, "")
       .trimEnd();
     await writeFile(
-      CLAUDE_MD_PATH,
+      indexPath,
       cleaned + "\n\n" + sieSection + "\n",
       "utf-8",
     );
   } else if (existing) {
-    // Append Dopl section
     await writeFile(
-      CLAUDE_MD_PATH,
+      indexPath,
       existing.trimEnd() + "\n\n" + sieSection + "\n",
       "utf-8",
     );
   } else {
-    // Create new file
-    await writeFile(CLAUDE_MD_PATH, sieSection + "\n", "utf-8");
+    await writeFile(indexPath, sieSection + "\n", "utf-8");
   }
 }
 
@@ -133,8 +163,10 @@ export async function writeGlobalClaudemd(
 export async function appendMemoryToSkill(
   slug: string,
   memory: string,
+  target?: SkillTarget,
 ): Promise<void> {
-  const skillPath = join(SKILLS_DIR, `dopl-${slug}`, "SKILL.md");
+  const { skillsDir } = resolvePaths(target);
+  const skillPath = join(skillsDir, `dopl-${slug}`, "SKILL.md");
 
   let content: string;
   try {
@@ -199,8 +231,9 @@ export async function appendMemoryToSkill(
 /**
  * Remove a cluster skill directory from disk.
  */
-export async function removeClusterSkill(slug: string): Promise<void> {
-  const skillDir = join(SKILLS_DIR, `dopl-${slug}`);
+export async function removeClusterSkill(slug: string, target?: SkillTarget): Promise<void> {
+  const { skillsDir } = resolvePaths(target);
+  const skillDir = join(skillsDir, `dopl-${slug}`);
   try {
     await rm(skillDir, { recursive: true, force: true });
   } catch {

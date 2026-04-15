@@ -9,6 +9,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { EmbeddedCheckoutForm } from "./embedded-checkout";
 
 interface UpgradeModalProps {
   open: boolean;
@@ -47,56 +48,62 @@ const PRO_FEATURES = [
 ];
 
 export function UpgradeModal({ open, onOpenChange, reason = "generic" }: UpgradeModalProps) {
-  const [loading, setLoading] = useState(false);
+  const [showCheckout, setShowCheckout] = useState(false);
   const text = REASON_TEXT[reason] || REASON_TEXT.generic;
 
-  async function handleUpgrade() {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/billing/checkout", { method: "POST" });
-      const data = await res.json();
-      if (data.url) {
-        window.location.href = data.url;
-      }
-    } catch {
-      setLoading(false);
-    }
+  function handleClose(open: boolean) {
+    if (!open) setShowCheckout(false);
+    onOpenChange(open);
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>{text.title}</DialogTitle>
-          <DialogDescription>{text.description}</DialogDescription>
-        </DialogHeader>
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className={showCheckout ? "sm:max-w-xl" : "sm:max-w-md"}>
+        {showCheckout ? (
+          <>
+            <DialogHeader>
+              <DialogTitle>Complete your upgrade</DialogTitle>
+              <DialogDescription>
+                Secure payment powered by Stripe
+              </DialogDescription>
+            </DialogHeader>
+            <EmbeddedCheckoutForm />
+          </>
+        ) : (
+          <>
+            <DialogHeader>
+              <DialogTitle>{text.title}</DialogTitle>
+              <DialogDescription>{text.description}</DialogDescription>
+            </DialogHeader>
 
-        <div className="space-y-3 py-2">
-          <p className="text-xs font-medium text-text-secondary uppercase tracking-wider">
-            What you get with Pro
-          </p>
-          <ul className="space-y-2">
-            {PRO_FEATURES.map((feature) => (
-              <li
-                key={feature}
-                className="flex items-center gap-2 text-sm text-text-primary"
-              >
-                <span className="text-emerald-400 text-xs">&#10003;</span>
-                {feature}
-              </li>
-            ))}
-          </ul>
-        </div>
+            <div className="space-y-3 py-2">
+              <p className="text-xs font-medium text-text-secondary uppercase tracking-wider">
+                What you get with Pro
+              </p>
+              <ul className="space-y-2">
+                {PRO_FEATURES.map((feature) => (
+                  <li
+                    key={feature}
+                    className="flex items-center gap-2 text-sm text-text-primary"
+                  >
+                    <span className="text-emerald-400 text-xs">&#10003;</span>
+                    {feature}
+                  </li>
+                ))}
+              </ul>
+            </div>
 
-        <div className="flex items-center justify-between pt-2 border-t border-white/[0.06]">
-          <div>
-            <span className="text-lg font-semibold text-text-primary">$20</span>
-            <span className="text-sm text-text-tertiary">/month</span>
-          </div>
-          <Button onClick={handleUpgrade} disabled={loading}>
-            {loading ? "Redirecting..." : "Upgrade to Pro"}
-          </Button>
-        </div>
+            <div className="flex items-center justify-between pt-2 border-t border-white/[0.06]">
+              <div>
+                <span className="text-lg font-semibold text-text-primary">$20</span>
+                <span className="text-sm text-text-tertiary">/month</span>
+              </div>
+              <Button onClick={() => setShowCheckout(true)}>
+                Upgrade to Pro
+              </Button>
+            </div>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );

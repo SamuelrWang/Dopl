@@ -480,12 +480,18 @@ export function connectToIngestionStream(
   entryId: string,
   streamUrl: string,
   sourcePanelId: string,
-  dispatch: Dispatch<CanvasAction>
+  dispatch: Dispatch<CanvasAction>,
+  onError?: (reason: string) => void
 ): () => void {
   let reconnectAttempts = 0;
   const MAX_RECONNECT = 5;
   let currentEs: EventSource | null = null;
   let metadataApplied = false;
+
+  // Track seen events by timestamp to deduplicate on reconnect.
+  // The SSE endpoint replays buffered events on every new connection,
+  // so without this, reconnects duplicate every prior message.
+  const seenTimestamps = new Set<string>();
 
   function connect() {
     const es = new EventSource(streamUrl);
@@ -494,6 +500,11 @@ export function connectToIngestionStream(
     es.onmessage = (e) => {
       try {
         const data: ProgressEvent = JSON.parse(e.data);
+
+        // Deduplicate: skip events we've already processed
+        const eventKey = `${data.type}:${data.timestamp}:${data.step || ""}`;
+        if (seenTimestamps.has(eventKey)) return;
+        seenTimestamps.add(eventKey);
 
         // Log every event to the entry panel's ingestion log header
         dispatch({ type: "APPEND_INGESTION_LOG", entryId, event: data });
@@ -586,7 +597,17 @@ export function connectToIngestionStream(
         }
 
         if (data.type === "error") {
-          dispatch({ type: "SET_ENTRY_INGESTING", entryId, isIngesting: false });
+          // Close the skeleton panel — don't leave empty panels on canvas.
+          // Panel ID isn't `entry-${entryId}`, it's `entry-${nextPanelId}`,
+          // so use the CLOSE_ENTRY_BY_ID action that matches by entryId.
+          dispatch({ type: "CLOSE_ENTRY_BY_ENTRY_ID", entryId });
+
+          // Delete the failed entry from DB (fire-and-forget)
+          fetch(`/api/entries/${entryId}`, { method: "DELETE" }).catch(() => {});
+
+          // Notify the chat panel so the AI can explain the failure
+          onError?.(data.message || "Ingestion failed");
+
           es.close();
           currentEs = null;
           return;

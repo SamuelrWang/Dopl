@@ -6,6 +6,7 @@ import Image from "next/image";
 import { GlassCard, GlassDivider, GlowText } from "@/components/design";
 import { Button } from "@/components/ui/button";
 import { getSupabaseBrowser } from "@/lib/supabase-browser";
+import { EmbeddedCheckoutForm } from "@/components/billing/embedded-checkout";
 import type { User } from "@supabase/supabase-js";
 
 // ── Feature definitions ────────────────────────────────────────────
@@ -40,8 +41,8 @@ export default function PricingPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [tier, setTier] = useState<"free" | "pro">("free");
-  const [loading, setLoading] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
+  const [showCheckout, setShowCheckout] = useState(false);
 
   useEffect(() => {
     const supabase = getSupabaseBrowser();
@@ -62,19 +63,12 @@ export default function PricingPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
-  async function handleUpgrade() {
+  function handleUpgrade() {
     if (!user) {
       router.push("/login?redirect=/pricing");
       return;
     }
-    setLoading(true);
-    try {
-      const res = await fetch("/api/billing/checkout", { method: "POST" });
-      const data = await res.json();
-      if (data.url) window.location.href = data.url;
-    } catch {
-      setLoading(false);
-    }
+    setShowCheckout(true);
   }
 
   function handleGetStarted() {
@@ -86,6 +80,28 @@ export default function PricingPage() {
   }
 
   const isPro = tier === "pro" && !!user;
+
+  if (showCheckout) {
+    return (
+      <div className="min-h-screen flex flex-col items-center pt-24 px-4">
+        <div className="w-full max-w-lg">
+          <button
+            onClick={() => setShowCheckout(false)}
+            className="text-sm text-text-tertiary hover:text-text-secondary transition-colors mb-4 font-mono text-[10px] uppercase tracking-wider"
+          >
+            &larr; Back to pricing
+          </button>
+          <h1 className="text-2xl font-semibold text-text-primary mb-2">
+            Upgrade to Pro
+          </h1>
+          <p className="text-sm text-text-secondary mb-6">
+            $20/month &middot; Unlimited access to the full Dopl platform
+          </p>
+          <EmbeddedCheckoutForm />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -204,13 +220,9 @@ export default function PricingPage() {
                 size="lg"
                 className="w-full mt-4"
                 onClick={handleUpgrade}
-                disabled={loading || !authChecked}
+                disabled={!authChecked}
               >
-                {loading
-                  ? "Redirecting..."
-                  : user
-                  ? "Upgrade to Pro"
-                  : "Get Started with Pro"}
+                {user ? "Upgrade to Pro" : "Get Started with Pro"}
               </Button>
             )}
           </GlassCard>

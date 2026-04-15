@@ -213,7 +213,7 @@ function panelIdSet(panels: Panel[]): Set<string> {
 
 // ── The hook ──────────────────────────────────────────────────────────
 
-export function useCanvasDbSync() {
+export function useCanvasDbSync(onReady?: () => void) {
   const { state, dispatch } = useCanvas();
   const syncedRef = useRef(false);
   const prevCameraRef = useRef("");
@@ -239,43 +239,24 @@ export function useCanvasDbSync() {
         const res = await fetch("/api/canvas/state");
 
         if (res.status === 404) {
-          // First-time migration: only push to DB if localStorage actually
-          // has panels. Otherwise this is a fresh device / new domain (e.g.
-          // localhost) with no local data — just create an empty DB row so
-          // subsequent saves work, but don't overwrite anything.
-          if (state.panels.filter((p) => p.type === "entry" || p.type === "chat").length > 0) {
-            await migrateToDb(state);
-          } else {
-            // Create an empty canvas_state row so future PATCHes have a target
-            await fetch("/api/canvas/state", {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ camera_x: 0, camera_y: 0, camera_zoom: 1 }),
-            });
-          }
+          // First time: no DB row yet. Create an empty one.
+          await fetch("/api/canvas/state", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ camera_x: 0, camera_y: 0, camera_zoom: 1 }),
+          });
           initTracking(state);
+          onReady?.();
           return;
         }
 
         if (!res.ok) {
           console.error("[canvas-sync] Failed to load canvas state:", res.status, res.statusText);
+          onReady?.();
           return;
         }
 
         const { canvas_state: cs, panels: dbPanels } = await res.json();
-
-        // Safeguard: if localStorage is newer than DB, push local to DB
-        // instead of overwriting local with stale DB data. This handles
-        // the case where a previous DB write failed silently.
-        const localSavedAt = getLocalSaveTimestamp();
-        const dbUpdatedAt = cs.updated_at ? new Date(cs.updated_at).getTime() : 0;
-
-        if (localSavedAt > 0 && localSavedAt > dbUpdatedAt + 5000) {
-          // localStorage is significantly newer — push local state to DB
-          await migrateToDb(state);
-          initTracking(state);
-          return;
-        }
 
         // Reconstruct panels from DB rows
         const panels: Panel[] = [];
@@ -315,8 +296,10 @@ export function useCanvasDbSync() {
           nextPanelId: cs.next_panel_id,
           nextClusterId: cs.next_cluster_id,
         });
+        onReady?.();
       } catch (err) {
         console.error("[canvas-sync] Failed to load from DB:", err);
+        onReady?.();
       }
     }
 

@@ -2,12 +2,13 @@
 
 import { createPortal } from "react-dom";
 import { useEffect, useState } from "react";
-import { CanvasProvider } from "@/components/canvas/canvas-store";
+import { CanvasProvider, useCanvas } from "@/components/canvas/canvas-store";
 import { CanvasGridSync } from "@/components/canvas/canvas-grid-sync";
 import { Canvas } from "@/components/canvas/canvas";
 import { FixedInputBar } from "@/components/canvas/fixed-input-bar";
 import { FixedChatPanel } from "@/components/canvas/fixed-chat-panel";
-import { ChatDrawerProvider } from "@/components/canvas/chat-drawer-context";
+import { FixedBrainPanel } from "@/components/canvas/fixed-brain-panel";
+import { DrawerProvider } from "@/components/canvas/chat-drawer-context";
 import { OnboardingProvider } from "@/components/onboarding/onboarding-provider";
 import { getSupabaseBrowser } from "@/lib/supabase-browser";
 
@@ -56,14 +57,32 @@ export default function CanvasPage() {
 
   return (
     <CanvasProvider userId={userId}>
-      <ChatDrawerProvider>
-        <OnboardingProvider userId={userId}>
-          <CanvasGridSync />
-          <CanvasPortal />
-          <FixedInputBar />
-          <FixedChatPanel />
-        </OnboardingProvider>
-      </ChatDrawerProvider>
+      <CanvasReady userId={userId} />
     </CanvasProvider>
+  );
+}
+
+/** Renders canvas content only after DB state is hydrated. */
+function CanvasReady({ userId }: { userId?: string }) {
+  const { dbReady } = useCanvas();
+
+  if (!dbReady) {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center bg-background">
+        <div className="animate-pulse text-muted-foreground text-sm">Loading canvas...</div>
+      </div>
+    );
+  }
+
+  return (
+    <DrawerProvider>
+      <OnboardingProvider userId={userId}>
+        <CanvasGridSync />
+        <CanvasPortal />
+        <FixedInputBar />
+        <FixedChatPanel />
+        <FixedBrainPanel />
+      </OnboardingProvider>
+    </DrawerProvider>
   );
 }

@@ -53,7 +53,8 @@ export function OnboardingProvider({
     <OnboardingContext.Provider value={{ completeStep, highlightPanelType }}>
       {children}
 
-      {isActive && currentStepDef && (
+      {/* Old popup onboarding disabled — replaced by chat-based onboarding */}
+      {false && isActive && currentStepDef && (
         <OnboardingCoachCard
           step={currentStepDef}
           stepIndex={currentStep}

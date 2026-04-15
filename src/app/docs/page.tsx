@@ -4,23 +4,27 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { DocsSidebar, DOC_SECTIONS } from "./docs-sidebar";
 import { DocsToc } from "./docs-toc";
-import { DocsContent, TOC_ENTRIES } from "./docs-content";
-
-// Flatten all item ids from sidebar sections for scroll-spy
-const ALL_IDS = DOC_SECTIONS.flatMap((s) => s.items.map((i) => i.id));
+import { SECTIONS } from "./docs-content";
 
 export default function DocsPage() {
-  const [activeId, setActiveId] = useState(ALL_IDS[0] || "");
+  const [activeSection, setActiveSection] = useState(DOC_SECTIONS[0].id);
+  const [activeHeading, setActiveHeading] = useState("");
   const contentRef = useRef<HTMLDivElement>(null);
 
-  // Scroll-spy: observe which section heading is in view
+  const section = SECTIONS[activeSection];
+  const SectionComponent = section?.component;
+  const sectionToc = section?.toc ?? [];
+
+  // Scroll-spy within the active section
   useEffect(() => {
+    if (sectionToc.length === 0) return;
+    setActiveHeading(sectionToc[0].id);
+
     const observer = new IntersectionObserver(
       (entries) => {
-        // Pick the first visible heading (top-most on screen)
         for (const entry of entries) {
           if (entry.isIntersecting) {
-            setActiveId(entry.target.id);
+            setActiveHeading(entry.target.id);
             break;
           }
         }
@@ -28,24 +32,33 @@ export default function DocsPage() {
       { rootMargin: "-80px 0px -60% 0px", threshold: 0.1 }
     );
 
-    // Observe all headings that match sidebar/TOC ids
-    const allIds = new Set([
-      ...ALL_IDS,
-      ...TOC_ENTRIES.map((t) => t.id),
-    ]);
-    for (const id of allIds) {
-      const el = document.getElementById(id);
-      if (el) observer.observe(el);
-    }
+    // Small delay so the DOM has rendered the new section
+    const timer = setTimeout(() => {
+      for (const item of sectionToc) {
+        const el = document.getElementById(item.id);
+        if (el) observer.observe(el);
+      }
+    }, 50);
 
-    return () => observer.disconnect();
+    return () => {
+      clearTimeout(timer);
+      observer.disconnect();
+    };
+  }, [activeSection, sectionToc]);
+
+  const handleSectionChange = useCallback((sectionId: string) => {
+    setActiveSection(sectionId);
+    // Scroll content to top when switching sections
+    if (contentRef.current) {
+      contentRef.current.scrollTop = 0;
+    }
   }, []);
 
-  const handleNavigate = useCallback((id: string) => {
-    const el = document.getElementById(id);
+  const handleHeadingClick = useCallback((headingId: string) => {
+    const el = document.getElementById(headingId);
     if (el) {
       el.scrollIntoView({ behavior: "smooth" });
-      setActiveId(id);
+      setActiveHeading(headingId);
     }
   }, []);
 
@@ -86,35 +99,24 @@ export default function DocsPage() {
       {/* Three-column layout */}
       <div className="flex h-[calc(100vh-56px)]">
         {/* Left sidebar */}
-        <DocsSidebar activeId={activeId} onNavigate={handleNavigate} />
+        <DocsSidebar
+          activeSection={activeSection}
+          activeHeading={activeHeading}
+          onSectionChange={handleSectionChange}
+          onHeadingClick={handleHeadingClick}
+        />
 
         {/* Main content */}
         <main
           ref={contentRef}
           className="flex-1 overflow-y-auto px-12 py-8 scrollbar-discreet"
         >
-          {/* Hero */}
-          <div className="mb-10">
-            <p className="font-mono text-[11px] uppercase tracking-widest text-white/30 mb-2">
-              Documentation
-            </p>
-            <h1 className="text-[32px] font-bold text-white/95 leading-tight mb-3">
-              Dopl Documentation
-            </h1>
-            <p className="text-[16px] text-white/50 leading-relaxed max-w-[560px]">
-              Everything you need to use Dopl. From canvas basics to MCP server
-              setup, cluster workflows, and the Chrome extension.
-            </p>
-          </div>
-
-          <DocsContent />
-
-          {/* Footer spacer */}
+          {SectionComponent && <SectionComponent />}
           <div className="h-32" />
         </main>
 
         {/* Right TOC */}
-        <DocsToc items={TOC_ENTRIES} activeId={activeId} />
+        <DocsToc items={sectionToc} activeId={activeHeading} />
       </div>
     </div>
   );

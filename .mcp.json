@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "dopl": {
+      "command": "npx",
+      "args": [
+        "@dopl/mcp-server",
+        "--api-key",
+        "sk-dopl-7aec146a5d4b723b02703110d79d4c98b621715b"
+      ]
+    }
+  }
+}

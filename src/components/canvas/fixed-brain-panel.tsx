@@ -1,90 +1,45 @@
 "use client";
 
 /**
- * FixedChatPanel — supplementary fixed right-side drawer that lists all
- * canvas chat conversations and lets the user interact with the selected
- * one. Canvas chat panels remain independently usable; this is an add-on
- * for consolidated viewing.
+ * FixedBrainPanel — fixed right-side drawer that lists all cluster brains
+ * and lets the user view/edit the selected one. Mirrors FixedChatPanel layout.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { usePanelsContext } from "./canvas-store";
-import { useChatDrawer } from "./chat-drawer-context";
-import { ChatPanelBody } from "./panels/chat/chat-panel";
-import { createWelcomeMessages } from "./onboarding-welcome";
-import type { ChatPanelData } from "./types";
+import { useBrainDrawer } from "./chat-drawer-context";
+import { ClusterBrainPanel } from "./panels/cluster-brain/cluster-brain-panel";
+import type { ClusterBrainPanelData } from "./types";
 
 const PANEL_WIDTH = 520;
 const LIST_WIDTH = 180;
 const EDGE_GAP = 16;
 
-function formatTimeShort(expiresAt: string): string {
-  const diff = new Date(expiresAt).getTime() - Date.now();
-  if (diff <= 0) return "Expiring";
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-  if (days > 0) return `${days}d`;
-  return `${hours}h`;
-}
-
-const ONBOARDING_KEY = "dopl-onboarding-chat-done";
-
-export function FixedChatPanel() {
-  const { isOpen, close, open } = useChatDrawer();
-  const { panels, dispatch } = usePanelsContext();
+export function FixedBrainPanel() {
+  const { isOpen, close } = useBrainDrawer();
+  const { panels, clusters } = usePanelsContext();
   const [selectedPanelId, setSelectedPanelId] = useState<string | null>(null);
   const [listOpen, setListOpen] = useState(true);
-  const onboardingRan = useRef(false);
 
-  // First-load onboarding: create welcome conversation and open drawer
-  useEffect(() => {
-    if (onboardingRan.current) return;
-    if (typeof window === "undefined") return;
-    if (localStorage.getItem(ONBOARDING_KEY) === "1") return;
-    onboardingRan.current = true;
-
-    // Create the welcome chat panel (off-screen, user interacts via drawer)
-    const panelId = `chat-welcome-${Date.now()}`;
-    dispatch({
-      type: "CREATE_CHAT_PANEL",
-      id: panelId,
-      x: -9999,
-      y: -9999,
-      title: "Welcome to Dopl!",
-    });
-
-    // Hydrate with welcome messages
-    const messages = createWelcomeMessages();
-    // Small delay so the panel exists in state before hydrating
-    setTimeout(() => {
-      for (const msg of messages) {
-        dispatch({ type: "APPEND_MESSAGE", panelId, message: msg });
-      }
-      setSelectedPanelId(panelId);
-      open();
-    }, 100);
-
-    localStorage.setItem(ONBOARDING_KEY, "1");
-  }, [dispatch, open]);
-
-  const chatPanels = useMemo(
-    () =>
-      panels
-        .filter((p): p is ChatPanelData => p.type === "chat")
-        .sort((a, b) => {
-          if (a.pinned && !b.pinned) return -1;
-          if (!a.pinned && b.pinned) return 1;
-          return 0;
-        }),
-    [panels]
-  );
+  // Build brain panel list with live cluster names from the clusters array
+  const brainPanels = useMemo(() => {
+    const clusterMap = new Map(clusters.map((c) => [c.id, c.name]));
+    return panels
+      .filter((p): p is ClusterBrainPanelData => p.type === "cluster-brain")
+      .map((p) => ({
+        ...p,
+        // Prefer the live cluster name, fall back to the panel's stored name
+        displayName: clusterMap.get(p.clusterId) ?? p.clusterName,
+      }))
+      .sort((a, b) => a.displayName.localeCompare(b.displayName));
+  }, [panels, clusters]);
 
   const selectedPanel = useMemo(
-    () => chatPanels.find((p) => p.id === selectedPanelId) ?? null,
-    [chatPanels, selectedPanelId]
+    () => brainPanels.find((p) => p.id === selectedPanelId) ?? null,
+    [brainPanels, selectedPanelId],
   );
 
-  const effectivePanel = selectedPanel ?? chatPanels[0] ?? null;
+  const effectivePanel = selectedPanel ?? brainPanels[0] ?? null;
 
   if (!isOpen) return null;
 
@@ -107,11 +62,11 @@ export function FixedChatPanel() {
         style={{ boxShadow: "inset 0 -1px 0 rgba(255,255,255,0.06)" }}
       >
         <span className="font-mono text-[10px] uppercase tracking-wider text-white/50 truncate min-w-0">
-          {effectivePanel?.title || "Chat"}
+          {effectivePanel ? `Brain: ${effectivePanel.displayName}` : "Brain"}
         </span>
         <button
           onClick={close}
-          aria-label="Close chat panel"
+          aria-label="Close brain panel"
           className="w-6 h-6 shrink-0 flex items-center justify-center rounded-[3px] text-white/40 hover:text-white/80 hover:bg-white/[0.08] transition-colors"
         >
           <svg
@@ -129,23 +84,21 @@ export function FixedChatPanel() {
         </button>
       </div>
 
-      {/* ── Body: conversation list + divider toggle + active chat ── */}
+      {/* ── Body: brain list + divider toggle + active brain ── */}
       <div className="relative flex flex-1 min-h-0">
-        {/* Left: conversation list (toggleable) */}
+        {/* Left: brain list (toggleable) */}
         {listOpen && (
           <div
             className="shrink-0 flex flex-col overflow-hidden"
-            style={{
-              width: LIST_WIDTH,
-            }}
+            style={{ width: LIST_WIDTH }}
           >
             <div className="flex-1 overflow-y-auto">
-              {chatPanels.length === 0 ? (
+              {brainPanels.length === 0 ? (
                 <div className="px-3 py-4 text-[11px] text-white/25 font-mono">
-                  No chats yet
+                  No cluster brains yet. Create a cluster to get started.
                 </div>
               ) : (
-                chatPanels.map((panel) => (
+                brainPanels.map((panel) => (
                   <button
                     key={panel.id}
                     onClick={() => setSelectedPanelId(panel.id)}
@@ -159,22 +112,19 @@ export function FixedChatPanel() {
                     }}
                   >
                     <div className="font-mono text-[11px] text-white/70 truncate leading-tight">
-                      {panel.title}
+                      {panel.displayName}
                     </div>
                     <div className="flex items-center gap-2 mt-1">
                       <span className="font-mono text-[9px] text-white/25">
-                        {panel.messages.filter((m) => m.type === "text").length}{" "}
-                        msgs
+                        {panel.memories.length} memories
                       </span>
-                      {panel.pinned ? (
-                        <span className="font-mono text-[9px] text-white/30">
-                          Pinned
-                        </span>
-                      ) : panel.expiresAt ? (
-                        <span className="font-mono text-[9px] text-white/20">
-                          {formatTimeShort(panel.expiresAt)}
-                        </span>
-                      ) : null}
+                      <span className="font-mono text-[9px] text-white/20">
+                        {panel.status === "ready"
+                          ? "Ready"
+                          : panel.status === "generating"
+                          ? "Generating..."
+                          : "Error"}
+                      </span>
                     </div>
                   </button>
                 ))
@@ -187,7 +137,7 @@ export function FixedChatPanel() {
         <div className="relative shrink-0 w-px bg-white/[0.06]">
           <button
             onClick={() => setListOpen((v) => !v)}
-            aria-label={listOpen ? "Hide conversations" : "Show conversations"}
+            aria-label={listOpen ? "Hide brain list" : "Show brain list"}
             className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 left-0 z-10 w-4 h-8 flex items-center justify-center rounded-full bg-[var(--panel-surface)] border border-white/[0.1] text-white/30 hover:text-white/70 hover:bg-white/[0.06] transition-colors"
           >
             <svg
@@ -210,14 +160,14 @@ export function FixedChatPanel() {
           </button>
         </div>
 
-        {/* Right: active chat */}
+        {/* Right: active brain */}
         <div className="flex-1 flex flex-col min-h-0 min-w-0">
           {effectivePanel ? (
-            <ChatPanelBody panel={effectivePanel} />
+            <ClusterBrainPanel panel={effectivePanel} />
           ) : (
             <div className="flex-1 flex items-center justify-center">
               <span className="font-mono text-[11px] text-white/20">
-                No conversation selected
+                No brain selected
               </span>
             </div>
           )}

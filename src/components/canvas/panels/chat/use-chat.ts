@@ -270,7 +270,19 @@ export function useChat({ panel }: UseChatOptions) {
                     entryId,
                     streamUrl,
                     panel.id,
-                    dispatch
+                    dispatch,
+                    (reason) => {
+                      // Ingestion failed — add a message to the chat explaining why
+                      dispatch({
+                        type: "APPEND_MESSAGE",
+                        panelId: panel.id,
+                        message: {
+                          role: "assistant",
+                          type: "text",
+                          content: `Ingestion failed: ${reason}\n\nThis usually happens with paywalled sites, bot-protected pages, or content that requires login. You can try using the Dopl Chrome Extension to ingest the page directly from your browser, which bypasses these restrictions since it reads the page as you see it.`,
+                        },
+                      });
+                    }
                   );
                 }
                 break;

@@ -35,10 +35,6 @@ CONDENSE: anecdotes, marketing, repeated points, filler.
 {MANIFEST_JSON}
 </manifest>
 
-<readme>
-{GENERATED_README}
-</readme>
-
 Generate agents.md using this structure (omit any section that would be empty or generic):
 
 \`\`\`
@@ -185,12 +181,16 @@ export function buildSecondaryArtifactPrompt(
     .replace("{SOURCE_URL}", sourceUrl || "Not available");
 }
 
-// Keep backward-compatible export
+// Backward-compatible export. readme param kept in signature for
+// callers that still pass it, but agents.md prompt no longer uses it.
 export function buildAgentsMdPrompt(
   rawContent: string,
   manifestJson: string,
-  readme: string,
+  _readme: string,
   sourceUrl: string
 ): string {
-  return buildSecondaryArtifactPrompt(rawContent, manifestJson, readme, "setup", sourceUrl);
+  return AGENTS_MD_PROMPT
+    .replace("{ALL_RAW_CONTENT}", rawContent)
+    .replace("{MANIFEST_JSON}", manifestJson)
+    .replace("{SOURCE_URL}", sourceUrl || "Not available");
 }

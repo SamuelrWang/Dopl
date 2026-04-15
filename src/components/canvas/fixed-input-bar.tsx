@@ -19,11 +19,12 @@ import {
 } from "./canvas-store";
 import { BROWSE_PANEL_SIZE, DEFAULT_PANEL_SIZE } from "./types";
 import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
-import { useChatDrawer } from "./chat-drawer-context";
+import { useChatDrawer, useBrainDrawer } from "./chat-drawer-context";
 
 export function FixedInputBar() {
   const { state, dispatch } = useCanvas();
-  const { toggle: toggleChatDrawer } = useChatDrawer();
+  const { isOpen: chatOpen, toggle: toggleChatDrawer } = useChatDrawer();
+  const { isOpen: brainOpen, toggle: toggleBrainDrawer } = useBrainDrawer();
   const [input, setInput] = useState("");
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -170,7 +171,10 @@ export function FixedInputBar() {
       }}
     >
       <div className="w-[95%] md:w-3/4 max-w-3xl pointer-events-auto">
-        <div className="relative rounded-2xl overflow-hidden bg-[var(--panel-surface)] border border-white/[0.1] shadow-[0_4px_16px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.08)] transition-colors duration-200 focus-within:bg-[var(--panel-surface-focus)] focus-within:border-white/[0.18]">
+        <div
+          className="relative rounded-2xl overflow-hidden backdrop-blur-xl border border-white/[0.1] shadow-[0_4px_16px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.08)] transition-colors duration-200 focus-within:border-white/[0.18]"
+          style={{ backgroundColor: "oklch(0.13 0 0 / 0.5)" }}
+        >
           <div
             className="pointer-events-none absolute inset-x-0 top-0 h-px"
             style={{
@@ -194,7 +198,11 @@ export function FixedInputBar() {
               <button
                 onClick={toggleChatDrawer}
                 aria-label="Toggle chat panel"
-                className="inline-flex items-center h-7 px-3 font-mono text-[10px] uppercase tracking-wider text-white/60 hover:text-white/95 bg-white/[0.04] hover:bg-white/[0.09] border border-white/[0.12] hover:border-white/[0.22] rounded-full transition-colors"
+                className={`inline-flex items-center h-7 px-3 font-mono text-[10px] uppercase tracking-wider rounded-full transition-colors border ${
+                  chatOpen
+                    ? "text-white/90 bg-white/[0.12] border-white/[0.25]"
+                    : "text-white/60 hover:text-white/95 bg-white/[0.04] hover:bg-white/[0.09] border-white/[0.12] hover:border-white/[0.22]"
+                }`}
               >
                 Chat
               </button>
@@ -205,6 +213,18 @@ export function FixedInputBar() {
                 className="inline-flex items-center h-7 px-3 font-mono text-[10px] uppercase tracking-wider text-white/60 hover:text-white/95 bg-white/[0.04] hover:bg-white/[0.09] border border-white/[0.12] hover:border-white/[0.22] rounded-full transition-colors"
               >
                 Browse
+              </button>
+              {/* BRAIN pill — opens the fixed brain drawer */}
+              <button
+                onClick={toggleBrainDrawer}
+                aria-label="Toggle brain panel"
+                className={`inline-flex items-center h-7 px-3 font-mono text-[10px] uppercase tracking-wider rounded-full transition-colors border ${
+                  brainOpen
+                    ? "text-white/90 bg-white/[0.12] border-white/[0.25]"
+                    : "text-white/60 hover:text-white/95 bg-white/[0.04] hover:bg-white/[0.09] border-white/[0.12] hover:border-white/[0.22]"
+                }`}
+              >
+                Brain
               </button>
             </div>
             <div className="flex items-center gap-2">

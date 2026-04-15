@@ -30,7 +30,10 @@ export function Header() {
         willChange: "transform",
       }}
     >
-      <nav className="pointer-events-auto inline-flex items-center gap-1 px-1.5 py-1 rounded-full bg-[var(--panel-surface)] border border-white/[0.1] shadow-[0_4px_16px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.08)]">
+      <nav
+        className="pointer-events-auto inline-flex items-center gap-1 px-1.5 py-1 rounded-full backdrop-blur-xl border border-white/[0.1] shadow-[0_4px_16px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.08)]"
+        style={{ backgroundColor: "oklch(0.13 0 0 / 0.5)" }}
+      >
         {/* Logo */}
         <Link
           href="/canvas"

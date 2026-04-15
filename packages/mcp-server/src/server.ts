@@ -9,6 +9,7 @@ import {
   appendMemoryToSkill,
   skillExists,
   removeClusterSkill,
+  type SkillTarget,
 } from "./skill-writer.js";
 
 const CONTEXT_CHAR_BUDGET = 2000;
@@ -25,7 +26,7 @@ You are an expert architect. Use the Dopl tools as your reference library — se
 - **Deep dive** — Pull full implementation details (README, setup instructions, metadata) for any entry
 - **Build** — Compose a complete solution by combining patterns from multiple implementations
 - **Canvas** — Manage the user's workspace: add entries, organize into clusters, browse saved items
-- **Skills** — Cluster knowledge is automatically available through Claude Code skills at ~/.claude/skills/dopl-*/. Run \`sync_skills\` to seed or refresh them
+- **Skills** — Cluster knowledge can be synced as skill files. Run \`sync_skills\` to write them to ~/.claude/skills/ (Claude Code) or pass target='openclaw' to write to ~/.openclaw/workspace/data/dopl/
 
 ## Behavior
 
@@ -298,11 +299,13 @@ export function createServer(client: DoplClient): McpServer {
   // ── sync_skills ─────────────────────────────────────────────────────
   server.tool(
     "sync_skills",
-    "Write Claude Code skill files for all Dopl clusters to ~/.claude/skills/. Creates per-cluster SKILL.md files with synthesized instructions, a global canvas skill for routing, and updates ~/.claude/CLAUDE.md with a cluster index. Run this once to seed skills, then they evolve as living documents.",
+    "Write skill files for all Dopl clusters. Default target is Claude Code (~/.claude/skills/). Set target to 'openclaw' to write to ~/.openclaw/workspace/data/dopl/ instead. Creates per-cluster SKILL.md files with synthesized instructions, a global canvas skill for routing, and updates the index file. Run this once to seed skills, then they evolve as living documents.",
     {
       force: z.boolean().optional().describe("Overwrite existing skill files (default: false, skips existing)"),
+      target: z.enum(["claude", "openclaw"]).optional().describe("Target platform: 'claude' (default) writes to ~/.claude/skills/, 'openclaw' writes to ~/.openclaw/workspace/data/dopl/"),
     },
-    async ({ force }) => {
+    async ({ force, target }) => {
+      const skillTarget = target as SkillTarget | undefined;
       const { clusters } = await client.listClusters();
       const results: string[] = [];
       const clusterSummaries: ClusterSummary[] = [];
@@ -310,7 +313,7 @@ export function createServer(client: DoplClient): McpServer {
       for (const cluster of clusters) {
         try {
           // Check if skill already exists
-          if (!force && await skillExists(cluster.slug)) {
+          if (!force && await skillExists(cluster.slug, skillTarget)) {
             results.push(`- **${cluster.name}** — skipped (already exists)`);
             // Still collect summary for global files
             const detail = await client.getCluster(cluster.slug);
@@ -341,7 +344,7 @@ export function createServer(client: DoplClient): McpServer {
             }
           }
 
-          await writeClusterSkill(cluster.slug, cluster.name, brain, detail.entries);
+          await writeClusterSkill(cluster.slug, cluster.name, brain, detail.entries, skillTarget);
           results.push(`- **${cluster.name}** — wrote skill with ${detail.entries.length} entries`);
 
           clusterSummaries.push(buildClusterSummary(cluster.slug, cluster.name, detail.entries));
@@ -353,16 +356,18 @@ export function createServer(client: DoplClient): McpServer {
 
       // Write global files (always overwrite these)
       try {
-        await writeGlobalCanvasSkill(clusterSummaries);
-        results.push(`\nGlobal canvas skill: wrote ~/.claude/skills/dopl-canvas/SKILL.md`);
+        await writeGlobalCanvasSkill(clusterSummaries, skillTarget);
+        const targetLabel = skillTarget === "openclaw" ? "~/.openclaw/workspace/data/dopl" : "~/.claude/skills";
+        results.push(`\nGlobal canvas skill: wrote ${targetLabel}/dopl-canvas/SKILL.md`);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         results.push(`\nGlobal canvas skill: ERROR — ${msg}`);
       }
 
       try {
-        await writeGlobalClaudemd(clusterSummaries);
-        results.push(`Global CLAUDE.md: updated ~/.claude/CLAUDE.md`);
+        await writeGlobalClaudemd(clusterSummaries, skillTarget);
+        const indexLabel = skillTarget === "openclaw" ? "~/.openclaw/workspace/data/dopl/INDEX.md" : "~/.claude/CLAUDE.md";
+        results.push(`Index: updated ${indexLabel}`);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         results.push(`Global CLAUDE.md: ERROR — ${msg}`);

@@ -246,7 +246,7 @@ export interface CanvasState {
 }
 
 /** Zoom bounds. Going below 0.25 or above 4 gets confusing / unreadable. */
-export const MIN_ZOOM = 0.5;
+export const MIN_ZOOM = 0.25;
 export const MAX_ZOOM = 4.0;
 
 export const INITIAL_CANVAS_STATE: CanvasState = {
@@ -360,6 +360,12 @@ export type CanvasAction =
       panelId: string;
     }
   | { type: "CLOSE_PANEL"; id: string }
+  | {
+      /** Close an entry panel by its entryId (not panel id). Used when
+       *  ingestion fails and we need to remove the skeleton panel. */
+      type: "CLOSE_ENTRY_BY_ENTRY_ID";
+      entryId: string;
+    }
   | { type: "UPDATE_CHAT_TITLE"; panelId: string; title: string }
   | { type: "SET_CHAT_PINNED"; panelId: string; pinned: boolean }
   | {

@@ -31,13 +31,13 @@ async function handlePost(
     );
   }
 
-  const checkoutUrl = await createCheckoutSession(
+  const clientSecret = await createCheckoutSession(
     userId,
     profile.email,
     sub.stripe_customer_id
   );
 
-  return NextResponse.json({ url: checkoutUrl });
+  return NextResponse.json({ clientSecret });
 }
 
 export const POST = withUserAuth(handlePost);

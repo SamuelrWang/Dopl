@@ -1,35 +1,94 @@
 "use client";
 
-import { createContext, useCallback, useContext, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
-interface ChatDrawerContextValue {
-  isOpen: boolean;
-  open: () => void;
+type DrawerType = "chat" | "brain" | null;
+
+const PANEL_WIDTH = 520;
+const EDGE_GAP = 16;
+
+interface DrawerContextValue {
+  activeDrawer: DrawerType;
+  openChat: () => void;
+  openBrain: () => void;
   close: () => void;
-  toggle: () => void;
+  toggleChat: () => void;
+  toggleBrain: () => void;
 }
 
-const ChatDrawerContext = createContext<ChatDrawerContextValue>({
-  isOpen: false,
-  open: () => {},
+const DrawerContext = createContext<DrawerContextValue>({
+  activeDrawer: null,
+  openChat: () => {},
+  openBrain: () => {},
   close: () => {},
-  toggle: () => {},
+  toggleChat: () => {},
+  toggleBrain: () => {},
 });
 
-export function ChatDrawerProvider({ children }: { children: React.ReactNode }) {
-  const [isOpen, setIsOpen] = useState(false);
+export function DrawerProvider({ children }: { children: React.ReactNode }) {
+  const [activeDrawer, setActiveDrawer] = useState<DrawerType>("chat");
 
-  const open = useCallback(() => setIsOpen(true), []);
-  const close = useCallback(() => setIsOpen(false), []);
-  const toggle = useCallback(() => setIsOpen((v) => !v), []);
+  const openChat = useCallback(() => setActiveDrawer("chat"), []);
+  const openBrain = useCallback(() => setActiveDrawer("brain"), []);
+  const close = useCallback(() => setActiveDrawer(null), []);
+  const toggleChat = useCallback(
+    () => setActiveDrawer((v) => (v === "chat" ? null : "chat")),
+    [],
+  );
+  const toggleBrain = useCallback(
+    () => setActiveDrawer((v) => (v === "brain" ? null : "brain")),
+    [],
+  );
+
+  // Centralized CSS variable — one source of truth so switching drawers
+  // doesn't momentarily flash 0px between cleanup and re-set.
+  useEffect(() => {
+    const insetPx = activeDrawer ? PANEL_WIDTH + EDGE_GAP * 2 : 0;
+    document.documentElement.style.setProperty(
+      "--chat-drawer-inset",
+      `${insetPx}px`,
+    );
+    return () => {
+      document.documentElement.style.removeProperty("--chat-drawer-inset");
+    };
+  }, [activeDrawer]);
 
   return (
-    <ChatDrawerContext.Provider value={{ isOpen, open, close, toggle }}>
+    <DrawerContext.Provider
+      value={{ activeDrawer, openChat, openBrain, close, toggleChat, toggleBrain }}
+    >
       {children}
-    </ChatDrawerContext.Provider>
+    </DrawerContext.Provider>
   );
 }
 
+/** Backward-compatible hook for the chat drawer. */
 export function useChatDrawer() {
-  return useContext(ChatDrawerContext);
+  const { activeDrawer, openChat, close, toggleChat } = useContext(DrawerContext);
+  return useMemo(
+    () => ({
+      isOpen: activeDrawer === "chat",
+      open: openChat,
+      close,
+      toggle: toggleChat,
+    }),
+    [activeDrawer, openChat, close, toggleChat],
+  );
 }
+
+/** Hook for the brain drawer. */
+export function useBrainDrawer() {
+  const { activeDrawer, openBrain, close, toggleBrain } = useContext(DrawerContext);
+  return useMemo(
+    () => ({
+      isOpen: activeDrawer === "brain",
+      open: openBrain,
+      close,
+      toggle: toggleBrain,
+    }),
+    [activeDrawer, openBrain, close, toggleBrain],
+  );
+}
+
+// Re-export for backward compat
+export const ChatDrawerProvider = DrawerProvider;

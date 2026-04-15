@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { GlassCard, MonoLabel } from "@/components/design";
 import {
   addEntryPanelToCanvas,
@@ -17,24 +16,10 @@ interface EntryCardProps {
   thumbnailUrl: string | null;
   useCase: string | null;
   complexity: string | null;
-  contentType: string | null;
   status: string;
   createdAt: string;
 }
 
-function getDownloadLabel(contentType: string | null): string {
-  switch (contentType) {
-    case "knowledge":
-    case "article":
-      return "Download Insights";
-    case "reference":
-      return "Download Reference";
-    case "resource":
-      return "";
-    default:
-      return "Download agents.md";
-  }
-}
 
 const complexityAccent: Record<string, string> = {
   simple: "var(--mint)",
@@ -86,12 +71,10 @@ export function EntryCard({
   thumbnailUrl,
   useCase,
   complexity,
-  contentType,
   status,
   createdAt,
 }: EntryCardProps) {
   const platform = sourcePlatform || "web";
-  const downloadLabel = getDownloadLabel(contentType);
   const gradientClass = placeholderGradients[platform] || placeholderGradients.web;
   const accentColor = complexity ? complexityAccent[complexity] : undefined;
 
@@ -103,12 +86,6 @@ export function EntryCard({
   const [addState, setAddState] = useState<
     "idle" | "loading" | "added" | "error"
   >("idle");
-
-  function handleDownload(e: React.MouseEvent) {
-    e.preventDefault();
-    e.stopPropagation();
-    window.open(`/api/entries/${id}/download?file=agents_md`, "_blank");
-  }
 
   function handleSourceClick(e: React.MouseEvent) {
     e.preventDefault();
@@ -134,7 +111,7 @@ export function EntryCard({
   }
 
   return (
-    <Link href={`/entries/${id}`} className="group block h-full">
+    <a href={`/entries/${id}`} target="_blank" rel="noopener" className="group block h-full">
       <GlassCard
         variant="subtle"
         className="h-full !p-0 overflow-hidden hover:bg-white/[0.10] transition-colors cursor-pointer"
@@ -185,85 +162,6 @@ export function EntryCard({
             </div>
           )}
 
-          {/* Add-to-canvas button — only on completed entries. Sits in the
-              top-right of the thumbnail with the same visual language as the
-              platform badge (dark glass, hairline border, sharp corners).
-              Uses e.preventDefault()+stopPropagation so clicks don't trigger
-              the outer <Link>. */}
-          {status === "complete" && (
-            <button
-              type="button"
-              onClick={handleAddToCanvas}
-              aria-label="Add to canvas"
-              title="Add to canvas"
-              className={`absolute top-2 right-2 w-6 h-6 flex items-center justify-center bg-[oklch(0.07_0_0)] hover:bg-[oklch(0.05_0_0)] border rounded-[3px] transition-colors ${
-                addState === "added"
-                  ? "border-[color:var(--mint)]/50 text-[color:var(--mint)]"
-                  : addState === "error"
-                    ? "border-[color:var(--coral)]/50 text-[color:var(--coral)]"
-                    : "border-white/10 text-white/70 hover:text-white"
-              }`}
-            >
-              {addState === "loading" ? (
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 12 12"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  className="animate-spin"
-                  aria-hidden
-                >
-                  <path d="M6 1.5 A4.5 4.5 0 0 1 10.5 6" />
-                </svg>
-              ) : addState === "added" ? (
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 12 12"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.75"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden
-                >
-                  <path d="M2.5 6 5 8.5 9.5 3.5" />
-                </svg>
-              ) : addState === "error" ? (
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 12 12"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.75"
-                  strokeLinecap="round"
-                  aria-hidden
-                >
-                  <path d="M6 2.5v4M6 8.75v0.25" />
-                </svg>
-              ) : (
-                // Plus-in-square icon — reads as "add to board"
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 12 12"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden
-                >
-                  <rect x="1.75" y="1.75" width="8.5" height="8.5" rx="1" />
-                  <path d="M6 4v4M4 6h4" />
-                </svg>
-              )}
-            </button>
-          )}
         </div>
 
         {/* Content */}
@@ -307,17 +205,25 @@ export function EntryCard({
             </span>
           </div>
 
-          {/* Download button — sharp corners */}
-          {status === "complete" && downloadLabel && (
+          {/* Add to canvas button */}
+          {status === "complete" && (
             <button
-              onClick={handleDownload}
-              className="w-full h-8 font-mono text-[10px] uppercase tracking-wide bg-white/[0.05] hover:bg-white/[0.10] border border-white/[0.1] hover:border-white/[0.2] rounded-[3px] text-white/70 hover:text-white/90 transition-all"
+              onClick={handleAddToCanvas}
+              className={`w-full h-8 font-mono text-[10px] uppercase tracking-wide border rounded-[3px] transition-all ${
+                addState === "added"
+                  ? "bg-emerald-500/[0.1] border-emerald-500/30 text-emerald-400"
+                  : addState === "error"
+                    ? "bg-red-500/[0.1] border-red-500/30 text-red-400"
+                    : addState === "loading"
+                      ? "bg-white/[0.05] border-white/[0.1] text-white/50"
+                      : "bg-white/[0.05] hover:bg-white/[0.10] border-white/[0.1] hover:border-white/[0.2] text-white/70 hover:text-white/90"
+              }`}
             >
-              {downloadLabel}
+              {addState === "loading" ? "Adding..." : addState === "added" ? "Added" : addState === "error" ? "Failed" : "Add to Canvas"}
             </button>
           )}
         </div>
       </GlassCard>
-    </Link>
+    </a>
   );
 }

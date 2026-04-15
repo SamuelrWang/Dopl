@@ -23,7 +23,9 @@ export async function extractImage(
   mimeType: string = "image/png"
 ): Promise<ExtractedSource> {
   const response = await claude.messages.create({
-    model: process.env.LLM_MODEL || "claude-sonnet-4-20250514",
+    // Use Haiku for image analysis — cheaper (~5x) and fast enough
+    // for code screenshot extraction and basic classification.
+    model: "claude-haiku-4-5-20251001",
     max_tokens: 4096,
     messages: [
       {

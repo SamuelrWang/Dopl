@@ -20,6 +20,7 @@ export async function createCheckoutSession(
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.usedopl.com";
 
   const sessionParams: Stripe.Checkout.SessionCreateParams = {
+    ui_mode: "embedded_page",
     mode: "subscription",
     line_items: [
       {
@@ -27,8 +28,7 @@ export async function createCheckoutSession(
         quantity: 1,
       },
     ],
-    success_url: `${appUrl}/settings/billing?success=true`,
-    cancel_url: `${appUrl}/settings/billing?canceled=true`,
+    return_url: `${appUrl}/settings/billing?session_id={CHECKOUT_SESSION_ID}`,
     metadata: { userId },
   };
 
@@ -39,7 +39,16 @@ export async function createCheckoutSession(
   }
 
   const session = await stripe.checkout.sessions.create(sessionParams);
-  return session.url!;
+  return session.client_secret!;
+}
+
+export async function getCheckoutSessionStatus(sessionId: string) {
+  const stripe = getStripe();
+  const session = await stripe.checkout.sessions.retrieve(sessionId);
+  return {
+    status: session.status,
+    customer_email: session.customer_details?.email || null,
+  };
 }
 
 export async function createPortalSession(

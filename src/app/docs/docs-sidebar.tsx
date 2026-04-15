@@ -1,7 +1,5 @@
 "use client";
 
-import { useState } from "react";
-
 export interface DocSection {
   id: string;
   title: string;
@@ -83,31 +81,31 @@ export const DOC_SECTIONS: DocSection[] = [
 ];
 
 interface DocsSidebarProps {
-  activeId: string;
-  onNavigate: (id: string) => void;
+  activeSection: string;
+  activeHeading: string;
+  onSectionChange: (sectionId: string) => void;
+  onHeadingClick: (headingId: string) => void;
 }
 
-export function DocsSidebar({ activeId, onNavigate }: DocsSidebarProps) {
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-
-  function toggle(sectionId: string) {
-    setCollapsed((prev) => ({ ...prev, [sectionId]: !prev[sectionId] }));
-  }
-
+export function DocsSidebar({
+  activeSection,
+  activeHeading,
+  onSectionChange,
+  onHeadingClick,
+}: DocsSidebarProps) {
   return (
     <nav className="w-[240px] shrink-0 h-full overflow-y-auto py-8 pr-4 pl-6 border-r border-white/[0.06] scrollbar-discreet">
       <div className="space-y-1">
         {DOC_SECTIONS.map((section) => {
-          const isCollapsed = collapsed[section.id];
-          const hasActiveChild = section.items.some((item) => item.id === activeId);
+          const isActive = section.id === activeSection;
 
           return (
             <div key={section.id} className="mb-1">
               <button
                 type="button"
-                onClick={() => toggle(section.id)}
+                onClick={() => onSectionChange(section.id)}
                 className={`w-full flex items-center justify-between py-1.5 text-[13px] font-semibold tracking-wide transition-colors ${
-                  hasActiveChild ? "text-white" : "text-white/60 hover:text-white/80"
+                  isActive ? "text-white" : "text-white/50 hover:text-white/70"
                 }`}
               >
                 {section.title}
@@ -119,25 +117,25 @@ export function DocsSidebar({ activeId, onNavigate }: DocsSidebarProps) {
                   stroke="currentColor"
                   strokeWidth="1.5"
                   strokeLinecap="round"
-                  className={`transition-transform ${isCollapsed ? "-rotate-90" : ""}`}
+                  className={`transition-transform ${!isActive ? "-rotate-90" : ""}`}
                 >
                   <path d="M3 4.5L6 7.5L9 4.5" />
                 </svg>
               </button>
 
-              {!isCollapsed && (
+              {isActive && (
                 <ul className="ml-2 border-l border-white/[0.06] space-y-0.5 pb-2">
                   {section.items.map((item) => {
-                    const isActive = item.id === activeId;
+                    const isItemActive = item.id === activeHeading;
                     return (
                       <li key={item.id}>
                         <button
                           type="button"
-                          onClick={() => onNavigate(item.id)}
+                          onClick={() => onHeadingClick(item.id)}
                           className={`block w-full text-left pl-3 py-1 text-[13px] transition-colors rounded-r-sm ${
-                            isActive
+                            isItemActive
                               ? "text-white bg-white/[0.06] border-l border-white/40 -ml-px"
-                              : "text-white/45 hover:text-white/70"
+                              : "text-white/40 hover:text-white/60"
                           }`}
                         >
                           {item.title}

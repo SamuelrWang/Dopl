@@ -393,6 +393,9 @@ async function handlePost(request: NextRequest) {
           let currentMessages = [...messages];
           let iterations = 0;
           const MAX_ITERATIONS = 5; // Prevent infinite tool loops
+          // Track URLs already ingested in this session to prevent the LLM
+          // from calling ingest_url twice for the same link across tool rounds.
+          const ingestedUrls = new Set<string>();
 
           while (iterations < MAX_ITERATIONS) {
             iterations++;
@@ -448,16 +451,23 @@ async function handlePost(request: NextRequest) {
 
               // Emit ingest_started for ingest_url tool so the frontend
               // can spawn an entry panel and connect to the progress stream.
+              // Skip if we already ingested this URL in this session (dedup).
               if (block.name === "ingest_url") {
+                const urlArg = (block.input as Record<string, unknown>).url as string;
                 try {
                   const parsed = JSON.parse(toolOutput.result);
-                  send({
-                    type: "ingest_started",
-                    entry_id: parsed.entry_id,
-                    stream_url: parsed.stream_url,
-                    status: parsed.status,
-                    title: parsed.title,
-                  });
+                  if (urlArg && ingestedUrls.has(urlArg)) {
+                    // Already ingested this URL in this chat turn — skip
+                  } else {
+                    if (urlArg) ingestedUrls.add(urlArg);
+                    send({
+                      type: "ingest_started",
+                      entry_id: parsed.entry_id,
+                      stream_url: parsed.stream_url,
+                      status: parsed.status,
+                      title: parsed.title,
+                    });
+                  }
                 } catch {
                   // Failed to parse — skip the event
                 }

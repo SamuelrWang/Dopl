@@ -734,6 +734,25 @@ export function Canvas() {
         dispatch({ type: "UNDO_DELETE" });
         return;
       }
+
+      // WASD + Arrow keys → pan camera
+      const PAN_STEP = 80;
+      const panMap: Record<string, { dx: number; dy: number }> = {
+        ArrowLeft: { dx: PAN_STEP, dy: 0 },
+        ArrowRight: { dx: -PAN_STEP, dy: 0 },
+        ArrowUp: { dx: 0, dy: PAN_STEP },
+        ArrowDown: { dx: 0, dy: -PAN_STEP },
+        a: { dx: PAN_STEP, dy: 0 },
+        d: { dx: -PAN_STEP, dy: 0 },
+        w: { dx: 0, dy: PAN_STEP },
+        s: { dx: 0, dy: -PAN_STEP },
+      };
+      const pan = panMap[e.key];
+      if (pan) {
+        e.preventDefault();
+        dispatch({ type: "PAN_CAMERA", ...pan });
+        return;
+      }
     }
 
     document.addEventListener("keydown", handleKeyDown);

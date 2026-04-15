@@ -15,6 +15,7 @@ import {
   useMemo,
   useReducer,
   useRef,
+  useState,
   type Dispatch,
   type MutableRefObject,
   type ReactNode,
@@ -223,14 +224,23 @@ function reducer(state: CanvasState, action: CanvasAction): CanvasState {
       return {
         ...state,
         panels: state.panels.filter((p) => p.id !== action.id),
-        // Drop the closed panel from the selection so we don't leave a
-        // dangling id pointing at a panel that no longer exists.
         selectedPanelIds: state.selectedPanelIds.filter(
           (id) => id !== action.id
         ),
-        // Same for clusters: strip the id and auto-dissolve any cluster
-        // that drops below MIN_CLUSTER_SIZE.
         clusters: stripFromClusters(state.clusters, new Set([action.id])),
+      };
+    }
+
+    case "CLOSE_ENTRY_BY_ENTRY_ID": {
+      const target = state.panels.find(
+        (p) => p.type === "entry" && (p as EntryPanelData).entryId === action.entryId
+      );
+      if (!target) return state;
+      return {
+        ...state,
+        panels: state.panels.filter((p) => p.id !== target.id),
+        selectedPanelIds: state.selectedPanelIds.filter((id) => id !== target.id),
+        clusters: stripFromClusters(state.clusters, new Set([target.id])),
       };
     }
 
@@ -810,6 +820,8 @@ function findLastIndex<T>(arr: T[], pred: (item: T) => boolean): number {
 interface CanvasContextValue {
   state: CanvasState;
   dispatch: Dispatch<CanvasAction>;
+  /** True once the DB has been fetched and state hydrated. */
+  dbReady: boolean;
 }
 
 const CanvasContext = createContext<CanvasContextValue | null>(null);
@@ -989,54 +1001,18 @@ function migrateAddClusters(state: CanvasState): CanvasState {
   };
 }
 
+/**
+ * Initial state is always empty. The real state comes from the DB via
+ * useCanvasDbSync, which dispatches HYDRATE_FROM_DB once the fetch
+ * completes. This eliminates the flash of stale localStorage data.
+ */
 function loadInitialState(userId?: string): CanvasState {
-  if (typeof window === "undefined") {
-    return ensureDefaultPanels(INITIAL_CANVAS_STATE);
-  }
-
-  // Track the active user so add-to-canvas.ts can find the right key
-  if (userId) {
+  // Track the active user so add-to-canvas.ts (outside the canvas)
+  // can find the right localStorage key for its write-through cache.
+  if (typeof window !== "undefined" && userId) {
     localStorage.setItem(CANVAS_ACTIVE_USER_KEY, userId);
   }
-
-  // Migrate: if a user-scoped key doesn't exist but the old unscoped key does,
-  // move the data over (one-time migration for existing users).
-  const storageKey = getStorageKey(userId);
-  let raw = localStorage.getItem(storageKey);
-  if (!raw && userId) {
-    const legacyRaw = localStorage.getItem(CANVAS_STORAGE_KEY_PREFIX);
-    if (legacyRaw) {
-      // Migrate legacy unscoped state to the user-scoped key
-      localStorage.setItem(storageKey, legacyRaw);
-      localStorage.removeItem(CANVAS_STORAGE_KEY_PREFIX);
-      raw = legacyRaw;
-    }
-  }
-
-  try {
-    if (!raw) return ensureDefaultPanels(INITIAL_CANVAS_STATE);
-    // Parse loosely — the TS CanvasState type is narrow (version: 2) but
-    // localStorage can still hold a pre-migration v1 blob. Omit the
-    // version field from CanvasState so TS doesn't collapse back to 2.
-    const parsed = JSON.parse(raw) as unknown as Omit<CanvasState, "version"> & {
-      version: number;
-    };
-    if (parsed.version !== 1 && parsed.version !== 2) {
-      return ensureDefaultPanels(INITIAL_CANVAS_STATE);
-    }
-    // Ensure ephemeral fields have defaults when loading from storage
-    const withDefaults = {
-      ...parsed,
-      deletedPanelsStack: [],
-    } as CanvasState;
-    return ensureDefaultPanels(
-      migrateAddClusters(
-        migrateMissingSelection(migratePreZoomCamera(withDefaults))
-      )
-    );
-  } catch {
-    return ensureDefaultPanels(INITIAL_CANVAS_STATE);
-  }
+  return ensureDefaultPanels(INITIAL_CANVAS_STATE);
 }
 
 interface CanvasProviderProps {
@@ -1045,30 +1021,33 @@ interface CanvasProviderProps {
 }
 
 export function CanvasProvider({ children, userId }: CanvasProviderProps) {
-  // useReducer with lazy initializer for SSR-safe hydration on first client mount
   const [state, dispatch] = useReducer(
     reducer,
     userId,
     (uid) => loadInitialState(uid)
   );
 
-  // Stable ref that always points to the latest state. Provided via
-  // CanvasStateRefContext so memoised children (e.g. CanvasPanel) can read
-  // the latest state in event handlers without subscribing to re-renders.
+  // DB readiness: starts false, set to true by CanvasDbSyncBridge
+  // after the first fetch completes (or fails).
+  const [dbReady, setDbReady] = useState(false);
+
   const stateRef = useRef<CanvasState>(state);
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
 
-  // Debounced persistence on every state change
+  // Debounced write-through cache to localStorage. Still useful for
+  // add-to-canvas.ts (operates outside the canvas page) and as a
+  // backup, but never read on mount.
   const storageKey = getStorageKey(userId);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (typeof window === "undefined") return;
+    // Don't cache the empty initial state before DB has loaded
+    if (!dbReady) return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
       try {
-        // Strip ephemeral fields before persisting
         const { deletedPanelsStack: _, ...persistable } = state;
         localStorage.setItem(storageKey, JSON.stringify(persistable));
       } catch {
@@ -1078,20 +1057,18 @@ export function CanvasProvider({ children, userId }: CanvasProviderProps) {
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
-  }, [state, storageKey]);
+  }, [state, storageKey, dbReady]);
 
-  // Memoize panels context so it only changes when panels/clusters change,
-  // not on camera moves. This prevents fixed UI from re-rendering on zoom.
   const panelsCtx = useMemo(
     () => ({ panels: state.panels, clusters: state.clusters, dispatch }),
     [state.panels, state.clusters, dispatch]
   );
 
   return (
-    <CanvasContext.Provider value={{ state, dispatch }}>
+    <CanvasContext.Provider value={{ state, dispatch, dbReady }}>
       <PanelsContext.Provider value={panelsCtx}>
         <CanvasStateRefContext.Provider value={stateRef}>
-          <CanvasDbSyncBridge />
+          <CanvasDbSyncBridge onReady={() => setDbReady(true)} />
           <ConversationSyncBridge />
           {children}
         </CanvasStateRefContext.Provider>
@@ -1101,8 +1078,8 @@ export function CanvasProvider({ children, userId }: CanvasProviderProps) {
 }
 
 /** Bridge for DB-backed canvas state sync. */
-function CanvasDbSyncBridge() {
-  useCanvasDbSync();
+function CanvasDbSyncBridge({ onReady }: { onReady: () => void }) {
+  useCanvasDbSync(onReady);
   return null;
 }
 

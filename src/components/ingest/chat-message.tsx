@@ -92,7 +92,8 @@ export type ChatMessage =
       status: "calling" | "done";
       summary?: string;
     }
-  | { role: "ai"; type: "entry_cards"; entries: EntryReference[] };
+  | { role: "ai"; type: "entry_cards"; entries: EntryReference[] }
+  | { role: "ai"; type: "onboarding_card"; cardType: "mcp_setup" | "chrome_extension" };
 
 const eventTypeConfig: Record<
   ProgressEvent["type"],

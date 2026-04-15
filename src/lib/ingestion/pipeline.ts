@@ -165,6 +165,21 @@ async function runPipeline(
   // ── Gather content ──
   const { allContent, contentForClaude } = await stepGatherContent(entryId);
 
+  // ── Check for empty content (paywall, bot block, empty page) ──
+  const MIN_CONTENT_LENGTH = 100; // Less than this = nothing useful was extracted
+  if (contentForClaude.trim().length < MIN_CONTENT_LENGTH) {
+    const reason = "Content appears empty or inaccessible. The source may be behind a paywall, require authentication, or block automated access.";
+    ingestionProgress.emit(entryId, "error", reason, { step: "content_check" });
+
+    // Mark entry as error and stop — don't generate artifacts from empty content
+    await supabase
+      .from("entries")
+      .update({ status: "error", updated_at: new Date().toISOString() })
+      .eq("id", entryId);
+
+    return;
+  }
+
   // ── Generate artifacts (strategy-driven) ──
   let manifest: Record<string, unknown>;
   let readme: string;
@@ -186,17 +201,34 @@ async function runPipeline(
     ({ manifest } = await stepGenerateManifest(entryId, contentForClaude, contentType, sourceType, strategy.models.manifest, { thumbnailUrl, sourceUrl: input.url }));
   }
 
-  // README + tags in parallel
-  [{ readme }, { tags }] = await Promise.all([
-    stepGenerateReadme(entryId, contentForClaude, manifest, contentType, strategy.models.readme),
-    stepGenerateTags(entryId, manifest, strategy.models.tags),
-  ]);
+  // For setup/tutorial: agents.md no longer depends on readme, so run
+  // all three generators in parallel after manifest.
+  // For knowledge/article: agents.md (insights) still needs readme, so
+  // run readme+tags first, then secondary artifact.
+  const isSetupType = contentType === "setup" || contentType === "tutorial";
 
-  // Secondary artifact (agents.md / insights / reference guide)
-  if (strategy.generateSecondaryArtifact) {
-    ({ agentsMd } = await stepGenerateSecondaryArtifact(entryId, contentForClaude, manifest, readme, classification, input.url, contentType, strategy.models.secondary));
+  if (isSetupType && strategy.generateSecondaryArtifact) {
+    // README + tags + agents.md all in parallel
+    const [readmeResult, tagsResult, agentsMdResult] = await Promise.all([
+      stepGenerateReadme(entryId, contentForClaude, manifest, contentType, strategy.models.readme),
+      stepGenerateTags(entryId, manifest, strategy.models.tags),
+      stepGenerateSecondaryArtifact(entryId, contentForClaude, manifest, "", classification, input.url, contentType, strategy.models.secondary),
+    ]);
+    readme = readmeResult.readme;
+    tags = tagsResult.tags;
+    agentsMd = agentsMdResult.agentsMd;
   } else {
-    agentsMd = "";
+    // README + tags in parallel, then secondary artifact (needs readme)
+    [{ readme }, { tags }] = await Promise.all([
+      stepGenerateReadme(entryId, contentForClaude, manifest, contentType, strategy.models.readme),
+      stepGenerateTags(entryId, manifest, strategy.models.tags),
+    ]);
+
+    if (strategy.generateSecondaryArtifact) {
+      ({ agentsMd } = await stepGenerateSecondaryArtifact(entryId, contentForClaude, manifest, readme, classification, input.url, contentType, strategy.models.secondary));
+    } else {
+      agentsMd = "";
+    }
   }
 
   // ── Persist ──
@@ -749,6 +781,13 @@ async function stepPersistEntry(
       const params = new URLSearchParams({ owner: ghMatch[1], repo: ghMatch[2] });
       thumbnailUrl = `/api/og/github?${params.toString()}`;
     }
+  }
+
+  // Universal fallback: use thum.io to generate a screenshot of the source page.
+  // This is a free service that renders the URL on-demand when the image loads.
+  // No API call during ingestion, zero latency added.
+  if (!thumbnailUrl && input.url) {
+    thumbnailUrl = `https://image.thum.io/get/${encodeURI(input.url)}`;
   }
 
   const { error: updateError } = await supabase
