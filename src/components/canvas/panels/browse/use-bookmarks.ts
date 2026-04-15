@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 
-const STORAGE_KEY = "sie:bookmarks";
+const STORAGE_KEY = "dopl:bookmarks";
 const DB_DEBOUNCE_MS = 1000;
 
 function loadBookmarks(): Set<string> {

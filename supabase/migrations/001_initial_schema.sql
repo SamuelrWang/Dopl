@@ -1,4 +1,4 @@
--- Setup Intelligence Engine - Initial Schema
+-- Dopl - Initial Schema
 -- Enable pgvector extension
 CREATE EXTENSION IF NOT EXISTS vector;
 

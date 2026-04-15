@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { SIEClient } from "./api-client.js";
+import { DoplClient } from "./api-client.js";
 import type { ClusterSummary, BrainData } from "./types.js";
 import {
   writeClusterSkill,
@@ -13,11 +13,11 @@ import {
 
 const CONTEXT_CHAR_BUDGET = 2000;
 
-const SERVER_INSTRUCTIONS = `You are connected to the **Setup Intelligence Engine (SIE)** — a knowledge base of proven AI and automation implementations including agent workflows, n8n automations, Claude skills, API integrations, and more.
+const SERVER_INSTRUCTIONS = `You are connected to **Dopl** — a knowledge base of proven AI and automation implementations including agent workflows, n8n automations, Claude skills, API integrations, and more.
 
 ## How to use this
 
-You are an expert architect. Use the SIE tools as your reference library — search for proven patterns, retrieve implementation details, and synthesize custom solutions. Your job is to **compose original recommendations** by combining knowledge from multiple sources, not to list or recommend individual entries.
+You are an expert architect. Use the Dopl tools as your reference library — search for proven patterns, retrieve implementation details, and synthesize custom solutions. Your job is to **compose original recommendations** by combining knowledge from multiple sources, not to list or recommend individual entries.
 
 ## What you can do
 
@@ -34,10 +34,10 @@ You are an expert architect. Use the SIE tools as your reference library — sea
 - Reference specific tools, repos, and patterns — not the database entries they came from
 - Cluster skills are living documents — update them when you learn new patterns or receive user corrections`;
 
-export function createServer(client: SIEClient): McpServer {
+export function createServer(client: DoplClient): McpServer {
   const server = new McpServer(
     {
-      name: "setup-intelligence-engine",
+      name: "dopl",
       version: "0.1.0",
     },
     {
@@ -48,7 +48,7 @@ export function createServer(client: SIEClient): McpServer {
   // ── search_setups ──────────────────────────────────────────────────
   server.tool(
     "search_setups",
-    "Search the Setup Intelligence Engine knowledge base for AI/automation setups matching a query. Returns ranked results with summaries and an AI synthesis recommendation.",
+    "Search the Dopl knowledge base for AI/automation setups matching a query. Returns ranked results with summaries and an AI synthesis recommendation.",
     {
       query: z.string().describe("Natural language search query, e.g. 'AI agent for job applications' or 'n8n automation with Supabase'"),
       tags: z.array(z.string()).optional().describe("Filter by tags, e.g. ['claude', 'playwright']"),
@@ -298,7 +298,7 @@ export function createServer(client: SIEClient): McpServer {
   // ── sync_skills ─────────────────────────────────────────────────────
   server.tool(
     "sync_skills",
-    "Write Claude Code skill files for all SIE clusters to ~/.claude/skills/. Creates per-cluster SKILL.md files with synthesized instructions, a global canvas skill for routing, and updates ~/.claude/CLAUDE.md with a cluster index. Run this once to seed skills, then they evolve as living documents.",
+    "Write Claude Code skill files for all Dopl clusters to ~/.claude/skills/. Creates per-cluster SKILL.md files with synthesized instructions, a global canvas skill for routing, and updates ~/.claude/CLAUDE.md with a cluster index. Run this once to seed skills, then they evolve as living documents.",
     {
       force: z.boolean().optional().describe("Overwrite existing skill files (default: false, skips existing)"),
     },
@@ -386,7 +386,21 @@ export function createServer(client: SIEClient): McpServer {
       memory: z.string().describe("The preference or correction to remember, e.g. 'User prefers Resend over SendGrid for email' or 'Skip the Slack notification step'"),
     },
     async ({ slug, memory }) => {
-      const result = await client.saveClusterMemory(slug, memory);
+      let result: { id: string; content: string };
+      try {
+        result = await client.saveClusterMemory(slug, memory);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Failed to save memory for cluster "${slug}": ${msg}`,
+            },
+          ],
+          isError: true,
+        };
+      }
 
       // Also append to on-disk SKILL.md (non-fatal)
       let diskNote = "";

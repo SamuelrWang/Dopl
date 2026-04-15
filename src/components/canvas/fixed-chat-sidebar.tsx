@@ -24,7 +24,7 @@ function formatTimeShort(expiresAt: string): string {
   return `${hours}h`;
 }
 
-const SIDEBAR_STORAGE_KEY = "sie-sidebar-open";
+const SIDEBAR_STORAGE_KEY = "dopl-sidebar-open";
 const SIDEBAR_WIDTH = 480;
 
 export function FixedChatSidebar() {

@@ -7,7 +7,7 @@ import { getUserSubscription, type SubscriptionTier } from "@/lib/billing/subscr
 /**
  * Wraps an API route handler with authentication.
  *
- * - If Authorization header with `sk-sie-` key is present → validate, rate limit, proceed
+ * - If Authorization header with `sk-dopl-` key is present → validate, rate limit, proceed
  * - If no header → check Supabase session cookies → allow if authenticated
  * - Otherwise → 401
  */
@@ -74,7 +74,7 @@ export function withExternalAuth(
       {
         error: "Authentication required",
         message:
-          "Sign in or provide an API key via Authorization: Bearer sk-sie-... header",
+          "Sign in or provide an API key via Authorization: Bearer sk-dopl-... header",
       },
       { status: 401 }
     );
@@ -155,7 +155,7 @@ export function withUserAuth(
     return NextResponse.json(
       {
         error: "Authentication required",
-        message: "Sign in or provide an API key via Authorization: Bearer sk-sie-... header",
+        message: "Sign in or provide an API key via Authorization: Bearer sk-dopl-... header",
       },
       { status: 401 }
     );

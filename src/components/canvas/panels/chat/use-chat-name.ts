@@ -10,7 +10,7 @@ import { useEffect, useRef } from "react";
 import { useCanvas } from "../../canvas-store";
 import type { ChatPanelData } from "../../types";
 
-const PLACEHOLDER_PATTERN = /^Chat\s*#\d+$/i;
+const PLACEHOLDER_PATTERN = /^(Chat\s*#\d+|New Chat)$/i;
 
 export function useChatName(panel: ChatPanelData) {
   const { dispatch } = useCanvas();

@@ -1,6 +1,6 @@
-# Content Seeding Playbook for Setup Intelligence Engine
+# Content Seeding Playbook for Dopl
 
-> **Purpose:** This playbook is designed to be handed to an AI agent that will systematically discover and submit hundreds of high-quality URLs to seed the SIE knowledge base. The agent calls `ingest_url(url)` for each URL found. The SIE pipeline handles all extraction, classification, README generation, and embedding automatically.
+> **Purpose:** This playbook is designed to be handed to an AI agent that will systematically discover and submit hundreds of high-quality URLs to seed the Dopl knowledge base. The agent calls `ingest_url(url)` for each URL found. The Dopl pipeline handles all extraction, classification, README generation, and embedding automatically.
 >
 > **Scope:** ONLY content relevant to **Claude Code** users and **general AI agent setups** that are compatible with Claude. No n8n, Make.com, Zapier, or other no-code/low-code automation platforms. Everything ingested should be something a Claude Code user would find useful.
 
@@ -13,7 +13,7 @@
 - Duplicate URLs are rejected with `"already_exists"` — no harm in re-submitting.
 - Processing takes 30-120 seconds per URL (async). Poll `get_setup(entry_id)` to check status.
 
-## What Makes Good Content for SIE
+## What Makes Good Content for Dopl
 
 Posts that describe **replicable AI agent setups, Claude Code workflows, MCP servers, or coding-with-AI patterns**. The content must be relevant to someone who uses Claude Code as their primary AI development tool.
 
@@ -384,7 +384,7 @@ Keep a local set of `(author, primary_tool)` tuples. If the same author posts ab
 
 ### Cross-Platform Deduplication
 
-The SIE pipeline follows links recursively, so prefer ingesting the "root" source:
+The Dopl pipeline follows links recursively, so prefer ingesting the "root" source:
 1. Tweet links to blog post → ingest the tweet (it follows the link)
 2. Blog post links to GitHub repo → ingest the blog post
 3. GitHub repo is standalone → ingest the repo directly

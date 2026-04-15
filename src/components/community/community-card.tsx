@@ -30,7 +30,7 @@ export function CommunityCard({ cluster }: CommunityCardProps) {
         )}
         {/* Category pill */}
         {cluster.category && (
-          <span className="absolute top-2 right-2 px-2 py-0.5 rounded-full text-[10px] font-mono uppercase tracking-wider bg-black/60 backdrop-blur-sm text-white/50 border border-white/[0.08]">
+          <span className="absolute top-2 right-2 px-2 py-0.5 rounded-full text-[10px] font-mono uppercase tracking-wider bg-[oklch(0.07_0_0)] text-white/50 border border-white/[0.08]">
             {cluster.category}
           </span>
         )}

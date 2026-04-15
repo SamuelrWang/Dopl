@@ -1,5 +1,5 @@
 /**
- * App — Root component for the SIE Debugger side panel.
+ * App — Root component for the Dopl side panel.
  *
  * Manages view routing, auth gating, and cross-view communication.
  * Listens for context menu actions and keyboard shortcuts from the service worker.
@@ -93,18 +93,18 @@ export function App() {
           <div className="w-5 h-5 rounded bg-[var(--accent-primary)]/20 flex items-center justify-center">
             <span className="text-[10px] font-bold text-[var(--accent-primary)]">S</span>
           </div>
-          <span className="text-xs font-semibold text-[var(--text-primary)]">SIE Debugger</span>
+          <span className="text-xs font-semibold text-[var(--text-primary)]">Dopl</span>
         </div>
 
         <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
           <div className="w-12 h-12 rounded-xl bg-[var(--accent-primary)]/10 flex items-center justify-center mb-4">
-            <span className="text-lg font-bold text-[var(--accent-primary)]">SIE</span>
+            <span className="text-lg font-bold text-[var(--accent-primary)]">Dopl</span>
           </div>
           <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-1">
-            Connect to SIE
+            Connect to Dopl
           </h2>
           <p className="text-xs text-[var(--text-muted)] mb-4">
-            Enter your API key to connect to your Setup Intelligence Engine account.
+            Enter your API key to connect to your Dopl account.
           </p>
         </div>
 
@@ -124,7 +124,7 @@ export function App() {
         <div className="w-4 h-4 rounded bg-[var(--accent-primary)]/20 flex items-center justify-center">
           <span className="text-[8px] font-bold text-[var(--accent-primary)]">S</span>
         </div>
-        <span className="text-[10px] font-semibold text-[var(--text-secondary)]">SIE Debugger</span>
+        <span className="text-[10px] font-semibold text-[var(--text-secondary)]">Dopl</span>
         <span className="flex-1" />
         <div className="flex items-center gap-1">
           <span className="status-dot complete" />

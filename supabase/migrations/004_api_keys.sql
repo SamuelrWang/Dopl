@@ -4,7 +4,7 @@
 CREATE TABLE api_keys (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   key_hash TEXT NOT NULL UNIQUE,
-  key_prefix TEXT NOT NULL,       -- e.g. "sk-sie-a1b2c3" for display
+  key_prefix TEXT NOT NULL,       -- e.g. "sk-dopl-a1b2c3" for display
   name TEXT NOT NULL,             -- human label
   rate_limit_rpm INTEGER DEFAULT 60,
   created_at TIMESTAMPTZ DEFAULT NOW(),

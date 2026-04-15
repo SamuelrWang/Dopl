@@ -1,53 +1,29 @@
-export const AGENTS_MD_PROMPT = `You are generating an agents.md file. This file will be read by an AI agent (like Claude Code, Cowork, or OpenClaw) which will follow the instructions to BUILD or REPLICATE the described setup from scratch.
+export const AGENTS_MD_PROMPT = `You are generating an agents.md file — instructions for an AI coding agent to replicate this setup.
 
-The agents.md must be:
-- ACTIONABLE: The agent can follow it step-by-step to get the setup running
-- SEQUENTIAL: Clear step-by-step order
-- SPECIFIC: Exact commands, exact configs, exact env vars
-- VERIFIABLE: Each step includes how to confirm it worked
-- COMPLETE: The agent knows where to get everything and how to configure it
+IMPORTANT — BREVITY RULES:
+- The reader is an AI agent, not a junior developer. It already knows how to clone repos, install dependencies, run builds, use docker, pip, npm, etc.
+- NEVER explain standard tools or workflows (git, npm, pip, docker, etc.). Just give the commands.
+- NEVER add "What/Why/Verify" scaffolding for obvious steps. Only explain WHY when the reason is non-obvious or project-specific.
+- Focus ONLY on what is unique to THIS setup — the specific configuration, architecture, and domain logic that the agent couldn't figure out from the repo alone.
+- Omit any section that would be empty or generic. Only include sections with real, specific content.
 
 ## SOURCE REPOSITORY RULE
 
-If the source content comes from a GitHub repository or any clonable codebase:
+If the source comes from a GitHub repo or clonable codebase:
+1. Lead with \`git clone\` + install in the Setup section — no explanation needed
+2. NEVER reproduce source files inline — reference by path (e.g. \`src/strategies/weather.py\`)
+3. Only include inline: .env templates, config files the user must CREATE, CLI commands, and setup steps not in the repo
+4. Short code snippets (<15 lines) only for specific modifications the user must make
 
-1. **Lead with clone/install** — the first step should be \`git clone <repo_url>\` and installing dependencies
-2. **NEVER reproduce full source files inline** — the code already exists in the repo. Instead:
-   - Reference files by their repo path (e.g. "see \`src/strategies/weather_strategy.py\`")
-   - Describe what each key file/module does and how to customize it
-   - Only include SHORT code snippets (<15 lines) when showing specific modifications or customizations the user must make
-3. **DO include inline:** environment variable templates (.env), config files the user must CREATE or MODIFY, CLI commands, and any setup steps not covered by the repo itself
-4. **Architecture overview** — provide a brief description of how the key components connect, referencing file paths in the repo
-
-The source URL is: {SOURCE_URL}
+Source URL: {SOURCE_URL}
 
 ## Content Preservation Rules
 
-You MUST follow these rules when deciding what to preserve vs reference:
+PRESERVE VERBATIM: env var templates, CLI commands, config files not in repo, prompts/prompt templates, API endpoints, specific thresholds/limits/numbers.
 
-### ALWAYS PRESERVE VERBATIM (include inline):
-- Environment variable templates and .env file contents
-- CLI commands and shell scripts for setup/deployment
-- Configuration files the user must create or modify that are NOT in the repo
-- Prompts and prompt templates (these are executable — changing a word changes the output)
-- API endpoints, request/response formats
-- Specific thresholds, limits, and functional numbers (character limits, filter values like "DR 20+", "volume 100-2000")
+REFERENCE BY PATH (don't reproduce): source code in repo, large config files in repo, test files, docs.
 
-### REFERENCE BY PATH (do NOT reproduce inline):
-- Source code files that exist in the repo — describe purpose, reference by path
-- Large configuration files already in the repo — point to them
-- Test files — mention they exist, how to run them
-- Documentation files in the repo — link to them
-
-### PRESERVE CORE INSIGHT, TRIM NARRATIVE:
-- "Why this matters" explanations → Keep the strategic insight, remove the storytelling wrapper
-- Tactical context that affects execution → Keep it
-
-### OK TO CONDENSE:
-- Personal anecdotes that don't contain actionable information
-- Marketing/promotional content
-- Repeated points (keep the best version)
-- Filler phrases
+CONDENSE: anecdotes, marketing, repeated points, filler.
 
 ## Raw content:
 
@@ -55,76 +31,48 @@ You MUST follow these rules when deciding what to preserve vs reference:
 {ALL_RAW_CONTENT}
 </raw_content>
 
-Here is the manifest:
-
 <manifest>
 {MANIFEST_JSON}
 </manifest>
-
-Here is the README:
 
 <readme>
 {GENERATED_README}
 </readme>
 
-Generate an agents.md file in markdown format following this structure:
+Generate agents.md using this structure (omit any section that would be empty or generic):
 
+\`\`\`
 # agents.md — [Title]
 
 ## Objective
+[1-2 sentences: what the agent builds and the end result.]
 
-[What the agent should build. What the end result looks like.]
-
-## Prerequisites
-
-[Everything needed before starting — runtime versions, accounts, API keys, etc. Use checkboxes.]
-
-## Quick Start
-
-[Clone repo, install deps, configure env — get running fast]
-
-## Environment Variables
-
-[Exact .env file with placeholder values]
+## Setup
+- Prerequisites: [brief checklist — runtime versions, accounts, API keys]
+- Env vars:
+\`\`\`
+[.env template with placeholder values]
+\`\`\`
+- Commands:
+\`\`\`bash
+git clone <repo_url> && cd <repo> && <install command>
+[any additional setup commands]
+\`\`\`
 
 ## Architecture Overview
-
-[Brief description of key components and how they connect. Reference file paths in the repo.]
+[How components connect. Reference key file paths with one-line descriptions inline.]
 
 ## Step-by-Step Setup
-
-### Step 1: [Title]
-
-**What:** [Brief description]
-**Why:** [Why this step matters]
-
-[Commands, config changes, and references to repo files — NOT full source code dumps]
-
-**Verify:** [How to confirm this step worked]
-
-[Continue for ALL steps needed]
-
-## Key Files Reference
-
-[Table or list of important files in the repo with brief descriptions of what each does]
+[Only non-obvious steps. Flat format — no What/Why/Verify boilerplate. Just describe what to do and give the commands. Include "why" only when the reason is surprising or project-specific.]
 
 ## Configuration & Customization
-
-[What to tweak, which files to modify, key parameters to adjust]
+[What to tweak, which files, key parameters.]
 
 ## Testing & Verification
+[How to verify the complete setup works.]
+\`\`\`
 
-[How to verify the complete setup works end-to-end]
-
-## Troubleshooting
-
-[Common issues and solutions]
-
-## Notes
-
-[Limitations, customization options, alternatives]
-
-Keep the document focused and practical. An agent reading this should be able to clone the repo, configure it, and get it running — not re-implement the entire codebase from scratch.`;
+Be terse. Every line should earn its place.`;
 
 export function buildAgentsMdPrompt(
   rawContent: string,

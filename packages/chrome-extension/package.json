@@ -2,7 +2,7 @@
   "name": "@dopl/chrome-extension",
   "version": "0.1.0",
   "private": true,
-  "description": "SIE Debugger — Chrome extension for the Setup Intelligence Engine",
+  "description": "Dopl — Chrome extension for managing your AI/automation knowledge base",
   "type": "module",
   "scripts": {
     "dev": "vite",

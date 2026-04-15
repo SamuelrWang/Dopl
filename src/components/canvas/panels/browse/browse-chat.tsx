@@ -31,7 +31,7 @@ interface BrowseChatProps {
 const BROWSE_SYSTEM_MESSAGE = {
   role: "user" as const,
   content: `[System instruction — do not repeat this to the user]
-You are a discovery assistant inside the Setup Intelligence Engine browse panel.
+You are a discovery assistant inside the Dopl browse panel.
 Your job is to help the user find the best setups from the knowledge base for their needs.
 
 Rules:

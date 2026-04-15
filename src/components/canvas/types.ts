@@ -49,7 +49,7 @@ export interface ChatPanelData extends BasePanelData {
  */
 export interface ConnectionPanelData extends BasePanelData {
   type: "connection";
-  /** User's SIE API key (sk-sie-...) — null until they paste one */
+  /** User's Dopl API key (sk-dopl-...) — null until they paste one */
   apiKey: string | null;
 }
 

@@ -276,7 +276,7 @@ export function renderGlobalCanvasSkillMd(clusters: ClusterSummary[]): string {
 export function renderGlobalClaudeMdSection(clusters: ClusterSummary[]): string {
   const lines: string[] = [];
 
-  lines.push(`## Setup Intelligence Engine — Cluster Index`);
+  lines.push(`## Dopl — Cluster Index`);
   lines.push("");
   lines.push(`You have Dopl skills installed for the following clusters. Each has a dedicated`);
   lines.push(`skill at \`~/.claude/skills/dopl-{slug}/SKILL.md\` that loads automatically when relevant.`);

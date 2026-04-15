@@ -19,7 +19,7 @@ export interface OnboardingStep {
 export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     key: "welcome",
-    title: "Welcome to the Setup Intelligence Engine",
+    title: "Welcome to Dopl",
     body: "This is your workspace for discovering, organizing, and building on real-world AI and automation implementations. I'll walk you through the key features \u2014 each step takes about 10 seconds.",
     highlight: null,
     autoAdvance: false,
@@ -74,7 +74,7 @@ export interface OnboardingState {
   dismissed: boolean;
 }
 
-const STORAGE_PREFIX = "sie:onboarding:";
+const STORAGE_PREFIX = "dopl:onboarding:";
 
 function defaultState(): OnboardingState {
   return { currentStep: 0, completedSteps: {}, dismissed: false };

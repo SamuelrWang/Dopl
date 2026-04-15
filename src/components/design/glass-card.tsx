@@ -1,16 +1,13 @@
 /**
- * GlassCard — Liquid glass foundational panel.
+ * GlassCard — Opaque surface panel with luminous border and highlights.
  *
- * Frosted translucent card with backdrop blur, subtle refraction,
- * and luminous border. Designed to float over rich backgrounds.
+ * Uses opaque CSS-variable-driven surface colors with subtle border
+ * and top highlight. Designed to float over dark backgrounds.
  *
  * Variants:
- *  - "default"  — standard frosted panel
- *  - "elevated" — stronger blur + brighter border (for modals, dropdowns)
- *  - "subtle"   — lighter frost, lower contrast (for inline/nested use)
- *
- * Ported directly from openclaw-cloud with exact class strings preserved.
- * Works best over dark backgrounds, gradients, or images.
+ *  - "default"  — standard panel (--card-surface)
+ *  - "elevated" — brighter surface + border (for modals, dropdowns)
+ *  - "subtle"   — darker, lower contrast (for inline/nested use)
  */
 
 import { cn } from "@/lib/utils";
@@ -36,29 +33,25 @@ interface GlassCardProps extends HTMLAttributes<HTMLDivElement> {
 const variantStyles: Record<
   GlassVariant,
   {
-    backdrop: string;
     bg: string;
     border: string;
     shadow: string;
   }
 > = {
   default: {
-    backdrop: "backdrop-blur-[20px] backdrop-saturate-[1.8]",
-    bg: "bg-white/[0.12]",
+    bg: "bg-[var(--card-surface)]",
     border: "border border-white/[0.2]",
     shadow:
       "shadow-[0_8px_32px_rgba(0,0,0,0.08),inset_0_1px_0_rgba(255,255,255,0.15)]",
   },
   elevated: {
-    backdrop: "backdrop-blur-[30px] backdrop-saturate-[2.0]",
-    bg: "bg-white/[0.16]",
+    bg: "bg-[var(--card-surface-elevated)]",
     border: "border border-white/[0.28]",
     shadow:
       "shadow-[0_12px_48px_rgba(0,0,0,0.12),inset_0_1px_0_rgba(255,255,255,0.2)]",
   },
   subtle: {
-    backdrop: "backdrop-blur-[12px] backdrop-saturate-[1.4]",
-    bg: "bg-white/[0.08]",
+    bg: "bg-[var(--card-surface-subtle)]",
     border: "border border-white/[0.12]",
     shadow:
       "shadow-[0_4px_16px_rgba(0,0,0,0.05),inset_0_1px_0_rgba(255,255,255,0.1)]",
@@ -84,8 +77,7 @@ export function GlassCard({
       className={cn(
         // Layout
         "relative rounded-2xl p-6 overflow-hidden",
-        // Glass effect
-        v.backdrop,
+        // Surface
         v.bg,
         !borderless && v.border,
         v.shadow,

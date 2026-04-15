@@ -23,7 +23,7 @@ const surfaceVariants = cva("relative", {
   variants: {
     variant: {
       elevated:
-        "bg-[var(--gradient-elevated)] border border-[var(--border-default)] shadow-[var(--shadow-elevated),var(--inset-highlight)] backdrop-blur-md",
+        "bg-[var(--gradient-elevated)] border border-[var(--border-default)] shadow-[var(--shadow-elevated),var(--inset-highlight)]",
       inset:
         "bg-[var(--bg-inset)] border border-[var(--border-subtle)]",
       flat: "bg-[var(--bg-elevated)] border border-[var(--border-subtle)]",

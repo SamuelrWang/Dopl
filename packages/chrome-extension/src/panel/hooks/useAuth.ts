@@ -1,5 +1,5 @@
 /**
- * Auth state hook — manages connection to SIE backend.
+ * Auth state hook — manages connection to Dopl backend.
  */
 
 import { useState, useEffect, useCallback } from "react";

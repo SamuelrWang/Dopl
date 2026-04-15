@@ -151,7 +151,7 @@ export default function PricingPage() {
           <GlassCard variant="elevated" className="flex flex-col h-full relative">
             {/* Popular badge */}
             <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-medium bg-[oklch(0.78_0.16_240/15%)] text-[oklch(0.78_0.16_240)] border border-[oklch(0.78_0.16_240/25%)] backdrop-blur-sm">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-medium bg-[oklch(0.78_0.16_240/15%)] text-[oklch(0.78_0.16_240)] border border-[oklch(0.78_0.16_240/25%)]">
                 <SparkleIcon />
                 Most popular
               </span>

@@ -1,7 +1,7 @@
 {
   "name": "@dopl/mcp-server",
   "version": "0.1.0",
-  "description": "MCP server for the Setup Intelligence Engine — search and build from a knowledge base of AI/automation setups",
+  "description": "MCP server for Dopl — search and build from a knowledge base of AI/automation setups",
   "main": "dist/index.js",
   "bin": {
     "dopl-mcp": "dist/bin/dopl-mcp.js"

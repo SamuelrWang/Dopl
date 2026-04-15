@@ -1,7 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.SIEClient = void 0;
-class SIEClient {
+exports.DoplClient = void 0;
+class DoplClient {
     baseUrl;
     apiKey;
     constructor(baseUrl, apiKey) {
@@ -24,13 +24,13 @@ class SIEClient {
             });
             if (!res.ok) {
                 const text = await res.text();
-                throw new Error(`SIE API error ${res.status}: ${text}`);
+                throw new Error(`Dopl API error ${res.status}: ${text}`);
             }
             return res.json();
         }
         catch (error) {
             if (error instanceof DOMException && error.name === "AbortError") {
-                throw new Error(`SIE API request timed out after ${timeoutMs}ms: ${method} ${path}`);
+                throw new Error(`Dopl API request timed out after ${timeoutMs}ms: ${method} ${path}`);
             }
             throw error;
         }
@@ -105,7 +105,7 @@ class SIEClient {
             });
             if (!res.ok && res.status !== 204) {
                 const text = await res.text();
-                throw new Error(`SIE API error ${res.status}: ${text}`);
+                throw new Error(`Dopl API error ${res.status}: ${text}`);
             }
         }
         finally {
@@ -187,7 +187,7 @@ class SIEClient {
             });
             if (!res.ok && res.status !== 204) {
                 const text = await res.text();
-                throw new Error(`SIE API error ${res.status}: ${text}`);
+                throw new Error(`Dopl API error ${res.status}: ${text}`);
             }
         }
         finally {
@@ -210,7 +210,7 @@ class SIEClient {
             });
             if (!res.ok) {
                 const text = await res.text();
-                throw new Error(`SIE API error ${res.status}: ${text}`);
+                throw new Error(`Dopl API error ${res.status}: ${text}`);
             }
         }
         finally {
@@ -246,7 +246,7 @@ class SIEClient {
             });
             if (!res.ok) {
                 const text = await res.text();
-                throw new Error(`SIE API error ${res.status}: ${text}`);
+                throw new Error(`Dopl API error ${res.status}: ${text}`);
             }
         }
         finally {
@@ -254,4 +254,4 @@ class SIEClient {
         }
     }
 }
-exports.SIEClient = SIEClient;
+exports.DoplClient = DoplClient;

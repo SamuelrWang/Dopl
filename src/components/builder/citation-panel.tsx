@@ -90,7 +90,7 @@ export function CitationPanel({ entry, details, loading, onClose }: CitationPane
         ref={panelRef}
         className={cn(
           "fixed top-0 right-0 h-full w-[420px] max-w-[90vw] z-50",
-          "bg-[#0a0a0f]/95 backdrop-blur-[30px] backdrop-saturate-[1.8]",
+          "bg-[#0a0a0f]",
           "border-l border-white/[0.12]",
           "shadow-[-8px_0_32px_rgba(0,0,0,0.3)]",
           "flex flex-col",

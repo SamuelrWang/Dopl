@@ -28,7 +28,7 @@ export const ALLOWED_CHAT_ATTACHMENT_TYPES = [
 ] as const;
 
 // ── Auth ────────────────────────────────────────────────────────────
-export const API_KEY_PREFIX = "sk-sie-";
+export const API_KEY_PREFIX = "sk-dopl-";
 
 // ── Context budgets ─────────────────────────────────────────────────
 export const CONTEXT_CHAR_BUDGET_PER_FIELD = 2000;
@@ -38,5 +38,5 @@ export const FREE_INGESTION_LIMIT = 5;
 export const CONTENT_PREVIEW_LENGTH = 500;
 
 // ── Canvas storage keys ─────────────────────────────────────────────
-export const CANVAS_STORAGE_KEY_PREFIX = "sie:canvas:state";
-export const CANVAS_ACTIVE_USER_KEY = "sie:canvas:active-user";
+export const CANVAS_STORAGE_KEY_PREFIX = "dopl:canvas:state";
+export const CANVAS_ACTIVE_USER_KEY = "dopl:canvas:active-user";

@@ -293,7 +293,7 @@ export default function Home() {
         <div
           className={`mx-auto flex items-center justify-between rounded-full px-5 py-2.5 transition-all duration-700 ease-in-out ${
             scrolled
-              ? "max-w-[1200px] bg-black/40 backdrop-blur-xl border border-white/[0.08] shadow-[0_4px_16px_rgba(0,0,0,0.3)]"
+              ? "max-w-[1200px] bg-[oklch(0.10_0_0)] border border-white/[0.08] shadow-[0_4px_16px_rgba(0,0,0,0.3)]"
               : "max-w-[1600px] bg-transparent border border-transparent"
           }`}
         >

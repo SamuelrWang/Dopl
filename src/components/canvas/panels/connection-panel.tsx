@@ -101,16 +101,16 @@ export function ConnectionPanelBody({ panel }: ConnectionPanelBodyProps) {
   const url = baseUrl || "https://your-deployment.example";
 
   const cliCommand = apiKey
-    ? `claude mcp add setup-intelligence --scope user --transport stdio -e SIE_BASE_URL=${url} -- npx @dopl/mcp-server --api-key ${apiKey}`
+    ? `claude mcp add dopl --scope user --transport stdio -e DOPL_BASE_URL=${url} -- npx @dopl/mcp-server --api-key ${apiKey}`
     : null;
 
   const mcpConfig = apiKey
     ? JSON.stringify(
         {
-          "setup-intelligence": {
+          "dopl": {
             command: "npx",
             args: ["@dopl/mcp-server", "--api-key", apiKey],
-            env: { SIE_BASE_URL: url },
+            env: { DOPL_BASE_URL: url },
           },
         },
         null,
@@ -119,9 +119,9 @@ export function ConnectionPanelBody({ panel }: ConnectionPanelBodyProps) {
     : null;
 
   const agentsMd = apiKey
-    ? `# Setup Intelligence Engine — MCP Connection
+    ? `# Dopl — MCP Connection
 
-You are being given credentials to connect to the Setup Intelligence Engine.
+You are being given credentials to connect to Dopl.
 Connect to this MCP server, then explain to the user what you just connected to.
 
 ## Connect
@@ -130,18 +130,18 @@ Add this MCP server to your configuration. This is a standard MCP stdio server.
 
 \`\`\`json
 {
-  "setup-intelligence": {
+  "dopl": {
     "command": "npx",
     "args": ["@dopl/mcp-server", "--api-key", "${apiKey}"],
     "env": {
-      "SIE_BASE_URL": "${url}"
+      "DOPL_BASE_URL": "${url}"
     }
   }
 }
 \`\`\`
 
 Where to put this depends on your platform:
-- Claude Code CLI: run \`claude mcp add setup-intelligence --scope user --transport stdio -e SIE_BASE_URL=${url} -- npx @dopl/mcp-server --api-key ${apiKey}\`
+- Claude Code CLI: run \`claude mcp add dopl --scope user --transport stdio -e DOPL_BASE_URL=${url} -- npx @dopl/mcp-server --api-key ${apiKey}\`
 - Claude Desktop (macOS): add to ~/Library/Application Support/Claude/claude_desktop_config.json under "mcpServers"
 - Claude Desktop (Windows): add to %APPDATA%\\Claude\\claude_desktop_config.json under "mcpServers"
 - VS Code / Cursor / Windsurf: add to .mcp.json in project root under "mcpServers"
@@ -149,7 +149,7 @@ Where to put this depends on your platform:
 
 ## After connecting
 
-Once connected, explain to the user that they are now connected to the **Setup Intelligence Engine** — a curated knowledge base of real-world AI and automation setups. The server provides its own context about available capabilities and tools, so you'll automatically know what you can do.
+Once connected, explain to the user that they are now connected to **Dopl** — a curated knowledge base of real-world AI and automation setups. The server provides its own context about available capabilities and tools, so you'll automatically know what you can do.
 `
     : null;
 

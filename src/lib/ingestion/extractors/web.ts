@@ -123,7 +123,7 @@ async function fetchSimple(
   const response = await fetchWithTimeout(url, {
     headers: {
       "User-Agent":
-        "Mozilla/5.0 (compatible; SIEBot/1.0; +https://example.com/bot)",
+        "Mozilla/5.0 (compatible; DoplBot/1.0; +https://example.com/bot)",
     },
     timeoutMs: 15_000,
   });

@@ -135,13 +135,13 @@ export function EntryCard({
             className={`w-full h-full bg-gradient-to-br ${gradientClass} flex items-center justify-center ${thumbnailUrl ? "hidden" : ""}`}
           >
             <span className="font-mono text-2xl font-bold text-white/20 uppercase tracking-widest">
-              {platformLabels[platform] || "SIE"}
+              {platformLabels[platform] || "Dopl"}
             </span>
           </div>
 
           {/* Platform badge — sharp corners, mono label */}
           <div className="absolute top-2 left-2">
-            <span className="font-mono text-[9px] uppercase tracking-wider px-1.5 py-0.5 bg-black/60 backdrop-blur-sm border border-white/10 text-white/80 rounded-[3px]">
+            <span className="font-mono text-[9px] uppercase tracking-wider px-1.5 py-0.5 bg-[oklch(0.07_0_0)] border border-white/10 text-white/80 rounded-[3px]">
               {platformLabels[platform] || "Web"}
             </span>
           </div>
@@ -150,7 +150,7 @@ export function EntryCard({
           {status !== "complete" && (
             <div className="absolute top-2 right-2">
               <span
-                className={`font-mono text-[9px] uppercase tracking-wider px-1.5 py-0.5 backdrop-blur-sm border rounded-[3px] ${
+                className={`font-mono text-[9px] uppercase tracking-wider px-1.5 py-0.5 border rounded-[3px] ${
                   status === "error"
                     ? "bg-red-950/80 text-red-400 border-red-500/30"
                     : "bg-amber-950/80 text-amber-400 border-amber-500/30"
@@ -172,7 +172,7 @@ export function EntryCard({
               onClick={handleAddToCanvas}
               aria-label="Add to canvas"
               title="Add to canvas"
-              className={`absolute top-2 right-2 w-6 h-6 flex items-center justify-center bg-black/60 hover:bg-black/80 backdrop-blur-sm border rounded-[3px] transition-colors ${
+              className={`absolute top-2 right-2 w-6 h-6 flex items-center justify-center bg-[oklch(0.07_0_0)] hover:bg-[oklch(0.05_0_0)] border rounded-[3px] transition-colors ${
                 addState === "added"
                   ? "border-[color:var(--mint)]/50 text-[color:var(--mint)]"
                   : addState === "error"

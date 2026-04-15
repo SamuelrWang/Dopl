@@ -75,7 +75,7 @@ export function FixedInputBar() {
       DEFAULT_PANEL_SIZE.height
     );
     const id = nextPanelIdString(state);
-    const title = `Chat #${state.nextPanelId}`;
+    const title = "New Chat";
     dispatch({
       type: "CREATE_CHAT_PANEL",
       id,
@@ -145,7 +145,7 @@ export function FixedInputBar() {
       }}
     >
       <div className="w-[95%] md:w-3/4 max-w-3xl pointer-events-auto">
-        <div className="relative rounded-2xl overflow-hidden backdrop-blur-[12px] backdrop-saturate-[1.4] bg-black/[0.25] border border-white/[0.1] shadow-[0_4px_16px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.08)] transition-colors duration-200 focus-within:bg-black/[0.3] focus-within:border-white/[0.18]">
+        <div className="relative rounded-2xl overflow-hidden bg-[var(--panel-surface)] border border-white/[0.1] shadow-[0_4px_16px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.08)] transition-colors duration-200 focus-within:bg-[var(--panel-surface-focus)] focus-within:border-white/[0.18]">
           <div
             className="pointer-events-none absolute inset-x-0 top-0 h-px"
             style={{

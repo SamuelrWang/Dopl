@@ -4,7 +4,7 @@
  * Signature details (ported from openclaw-cloud):
  *  - Height: 48px mobile, 56px desktop (fixed — do not change)
  *  - Corner radius: 3px (sharp, intentional — NOT rounded-full)
- *  - Background: bg-black/[0.07] with backdrop-blur-[10px]
+ *  - Background: var(--navbar-surface) — opaque charcoal
  *  - Border: hairline white/10
  *  - Layout: flex items-center px-3 md:px-6
  *
@@ -37,7 +37,7 @@ export function GlassNavbar({
       data-slot="glass-navbar"
       className={cn(
         "shrink-0 h-[48px] md:h-[56px]",
-        "bg-black/[0.07] backdrop-blur-[10px]",
+        "bg-[var(--navbar-surface)]",
         "rounded-[3px] border border-white/10",
         "overflow-visible flex items-center px-3 md:px-6 relative",
         className

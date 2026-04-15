@@ -47,9 +47,6 @@ import { SelectionMenu } from "./selection/selection-menu";
  * Apply camera transform directly to the world DOM element, bypassing React.
  * The grid lives inside the world div so it transforms automatically.
  */
-/** Timer for removing the gesture performance class after gestures end. */
-let gestureClassTimer: ReturnType<typeof setTimeout> | null = null;
-
 function applyCameraDirect(
   viewportEl: HTMLElement,
   worldEl: HTMLElement,
@@ -59,15 +56,6 @@ function applyCameraDirect(
   const z = cam.zoom;
   worldEl.style.transform = `matrix3d(${z},0,0,0, 0,${z},0,0, 0,0,1,0, ${cam.x},${cam.y},0,1)`;
   worldEl.style.setProperty("--canvas-inv-zoom", String(1 / cam.zoom));
-
-  // Add gesture class to disable backdrop-blur during active pan/zoom.
-  // Remove it 150ms after the last gesture tick so the blur fades back in.
-  viewportEl.classList.add("canvas-gesturing");
-  if (gestureClassTimer) clearTimeout(gestureClassTimer);
-  gestureClassTimer = setTimeout(() => {
-    viewportEl.classList.remove("canvas-gesturing");
-    gestureClassTimer = null;
-  }, 150);
 }
 
 /** Below this total pointer movement we treat a drag as a "click". */
@@ -711,10 +699,10 @@ export function Canvas() {
           IMPORTANT: use `translate3d` + `scale3d` (not the 2D variants).
           The 3D versions force the browser to promote this subtree to a
           dedicated GPU compositing layer, which is the difference between
-          smooth zoom and the "glitchy" stutter you get when the CPU has
-          to re-rasterize every panel (including its backdrop-blur filter)
-          on every wheel tick. `backfaceVisibility: hidden` is a belt-and-
-          suspenders hint for the same promotion. */}
+          smooth zoom and the stutter you get when the CPU has to
+          re-rasterize every panel on every wheel tick.
+          `backfaceVisibility: hidden` is a belt-and-suspenders hint for
+          the same promotion. */}
       <div
         ref={worldRef}
         className="absolute inset-0"

@@ -13,8 +13,8 @@ const templates_js_1 = require("./templates.js");
 const CLAUDE_DIR = (0, path_1.join)((0, os_1.homedir)(), ".claude");
 const SKILLS_DIR = (0, path_1.join)(CLAUDE_DIR, "skills");
 const CLAUDE_MD_PATH = (0, path_1.join)(CLAUDE_DIR, "CLAUDE.md");
-const SIE_START = "<!-- DOPL:START -->";
-const SIE_END = "<!-- DOPL:END -->";
+const DOPL_START = "<!-- DOPL:START -->";
+const DOPL_END = "<!-- DOPL:END -->";
 /**
  * Check if a cluster skill directory already exists on disk.
  */
@@ -66,7 +66,7 @@ async function writeGlobalCanvasSkill(clusters) {
  */
 async function writeGlobalClaudemd(clusters) {
     await (0, promises_1.mkdir)(CLAUDE_DIR, { recursive: true });
-    const sieSection = `${SIE_START}\n${(0, templates_js_1.renderGlobalClaudeMdSection)(clusters)}\n${SIE_END}`;
+    const sieSection = `${DOPL_START}\n${(0, templates_js_1.renderGlobalClaudeMdSection)(clusters)}\n${DOPL_END}`;
     let existing = "";
     try {
         existing = await (0, promises_1.readFile)(CLAUDE_MD_PATH, "utf-8");
@@ -74,19 +74,19 @@ async function writeGlobalClaudemd(clusters) {
     catch {
         // File doesn't exist yet
     }
-    const startIdx = existing.indexOf(SIE_START);
-    const endIdx = existing.indexOf(SIE_END);
+    const startIdx = existing.indexOf(DOPL_START);
+    const endIdx = existing.indexOf(DOPL_END);
     if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
         // Valid markers — replace existing Dopl section
         const before = existing.slice(0, startIdx);
-        const after = existing.slice(endIdx + SIE_END.length);
+        const after = existing.slice(endIdx + DOPL_END.length);
         await (0, promises_1.writeFile)(CLAUDE_MD_PATH, before + sieSection + after, "utf-8");
     }
     else if (startIdx !== -1 || endIdx !== -1) {
         // Corrupted markers (one missing, or wrong order) — strip both and re-append
         const cleaned = existing
-            .replace(SIE_START, "")
-            .replace(SIE_END, "")
+            .replace(DOPL_START, "")
+            .replace(DOPL_END, "")
             .trimEnd();
         await (0, promises_1.writeFile)(CLAUDE_MD_PATH, cleaned + "\n\n" + sieSection + "\n", "utf-8");
     }

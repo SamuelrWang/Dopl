@@ -506,8 +506,8 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
         zIndex: isSelected ? 10 : 0,
         // Promote each panel to its own GPU compositing layer. Without
         // this, fast pinch-zoom looks glitchy because the ancestor's
-        // scale transform forces the CPU to re-rasterize every panel's
-        // backdrop-blur filter on each wheel tick. With translateZ(0)
+        // scale transform forces the CPU to re-rasterize every panel
+        // on each wheel tick. With translateZ(0)
         // + will-change: transform, the panel lives on a pre-composited
         // texture and the ancestor's scale just re-samples it — no
         // filter re-run per frame.
@@ -532,7 +532,7 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
       // is a shadow, it doesn't affect layout and follows the panel's
       // rounded corners automatically.
       className={
-        "relative rounded-2xl overflow-hidden backdrop-blur-[12px] backdrop-saturate-[1.4] bg-black/[0.25] border border-white/[0.1] flex flex-col select-text transition-[box-shadow] duration-150 " +
+        "relative rounded-2xl overflow-hidden bg-[var(--panel-surface)] border border-white/[0.1] flex flex-col select-text transition-[box-shadow] duration-150 " +
         (isSelected
           ? "shadow-[0_0_0_2px_rgba(255,255,255,0.5),0_4px_16px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.08)] !border-white/30"
           : "shadow-[0_4px_16px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.08)]") +

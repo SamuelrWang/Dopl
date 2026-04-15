@@ -17,7 +17,7 @@ export async function createCheckoutSession(
   stripeCustomerId?: string | null
 ): Promise<string> {
   const stripe = getStripe();
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.usedopl.com";
 
   const sessionParams: Stripe.Checkout.SessionCreateParams = {
     mode: "subscription",
@@ -46,7 +46,7 @@ export async function createPortalSession(
   stripeCustomerId: string
 ): Promise<string> {
   const stripe = getStripe();
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.usedopl.com";
 
   const session = await stripe.billingPortal.sessions.create({
     customer: stripeCustomerId,

@@ -105,7 +105,7 @@ function LoginForm() {
 
         {/* Glass panel */}
         <div
-          className="w-full max-w-sm relative z-10 p-6 rounded-2xl backdrop-blur-[30px] backdrop-saturate-[2.0] bg-white/[0.12] border border-white/[0.2] shadow-[0_8px_32px_rgba(0,0,0,0.08),inset_0_1px_0_rgba(255,255,255,0.15)]"
+          className="w-full max-w-sm relative z-10 p-6 rounded-2xl bg-[var(--card-surface-elevated)] border border-white/[0.2] shadow-[0_8px_32px_rgba(0,0,0,0.08),inset_0_1px_0_rgba(255,255,255,0.15)]"
           style={{
             animation: "loginFadeIn 0.6s ease-out both",
             animationDelay: "0.1s",

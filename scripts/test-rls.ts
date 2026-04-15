@@ -112,7 +112,7 @@ async function main() {
     const keyHash1 = `test-hash-${Date.now()}-1`;
     const { error: keyErr1 } = await admin.from("api_keys").insert({
       key_hash: keyHash1,
-      key_prefix: "sk-sie-test1",
+      key_prefix: "sk-dopl-test1",
       name: "Test Key 1",
       user_id: user1Id,
     });
@@ -121,7 +121,7 @@ async function main() {
     const keyHash2 = `test-hash-${Date.now()}-2`;
     await admin.from("api_keys").insert({
       key_hash: keyHash2,
-      key_prefix: "sk-sie-test2",
+      key_prefix: "sk-dopl-test2",
       name: "Test Key 2",
       user_id: user2Id,
     });

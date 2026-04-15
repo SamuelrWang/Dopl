@@ -120,17 +120,17 @@ export function McpConnectStep({ onConnected }: McpConnectStepProps) {
 
   // Claude Code CLI command (easiest for most users)
   const cliCommand = apiKey
-    ? `claude mcp add setup-intelligence --scope user --transport stdio -e SIE_BASE_URL=${url} -- npx @dopl/mcp-server --api-key ${apiKey}`
+    ? `claude mcp add dopl --scope user --transport stdio -e DOPL_BASE_URL=${url} -- npx @dopl/mcp-server --api-key ${apiKey}`
     : null;
 
   // JSON config for manual setup
   const jsonConfig = apiKey
     ? JSON.stringify(
         {
-          "setup-intelligence": {
+          "dopl": {
             command: "npx",
             args: ["@dopl/mcp-server", "--api-key", apiKey],
-            env: { SIE_BASE_URL: url },
+            env: { DOPL_BASE_URL: url },
           },
         },
         null,

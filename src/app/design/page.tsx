@@ -101,7 +101,7 @@ export default function DesignSystemPage() {
       <section className="min-h-[60vh] flex flex-col items-center justify-center px-8 py-24 relative">
         <div className="text-center mb-12 space-y-3">
           <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">
-            Setup Intelligence Engine
+            Dopl
           </p>
           <h1 className="text-5xl font-bold text-[var(--text-primary)]">
             <GlowText>Design System</GlowText>
@@ -150,7 +150,7 @@ export default function DesignSystemPage() {
           <GlassNavbar
             leading={
               <span className="font-mono text-[10px] uppercase tracking-wide text-white/80">
-                SIE
+                Dopl
               </span>
             }
             trailing={<StatusDot state="online" label="Live" />}
@@ -173,27 +173,27 @@ export default function DesignSystemPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <GlassCard variant="default" label="Default" labelDivider>
               <p className="text-sm text-white/80 leading-relaxed">
-                backdrop-blur-[20px]
+                --card-surface
                 <br />
-                bg-white/[0.12]
+                oklch(0.21 0 0)
                 <br />
                 border-white/[0.2]
               </p>
             </GlassCard>
             <GlassCard variant="elevated" label="Elevated" labelDivider>
               <p className="text-sm text-white/80 leading-relaxed">
-                backdrop-blur-[30px]
+                --card-surface-elevated
                 <br />
-                bg-white/[0.16]
+                oklch(0.24 0 0)
                 <br />
                 border-white/[0.28]
               </p>
             </GlassCard>
             <GlassCard variant="subtle" label="Subtle" labelDivider>
               <p className="text-sm text-white/80 leading-relaxed">
-                backdrop-blur-[12px]
+                --card-surface-subtle
                 <br />
-                bg-white/[0.08]
+                oklch(0.19 0 0)
                 <br />
                 border-white/[0.12]
               </p>

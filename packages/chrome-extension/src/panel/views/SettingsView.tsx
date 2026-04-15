@@ -72,7 +72,7 @@ export function SettingsView({ onBack }: SettingsViewProps) {
             <div className="space-y-2">
               <div className="text-[10px] text-[var(--text-muted)]">
                 <span className="font-mono">
-                  {auth.mode === "api_key" ? `sk-sie-...${auth.apiKey?.slice(-4) || ""}` : "Session"}
+                  {auth.mode === "api_key" ? `sk-dopl-...${auth.apiKey?.slice(-4) || ""}` : "Session"}
                 </span>
               </div>
               <div className="text-[10px] text-[var(--text-muted)]">
@@ -104,7 +104,7 @@ export function SettingsView({ onBack }: SettingsViewProps) {
                   type="password"
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
-                  placeholder="sk-sie-..."
+                  placeholder="sk-dopl-..."
                   className="w-full bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-lg
                     pl-9 pr-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-disabled)]
                     font-mono focus:outline-none focus:border-[var(--accent-primary)] glow-focus transition-all"
@@ -162,10 +162,10 @@ export function SettingsView({ onBack }: SettingsViewProps) {
             About
           </p>
           <p className="text-xs text-[var(--text-secondary)]">
-            SIE Debugger v0.1.0
+            Dopl v0.1.0
           </p>
           <p className="text-[10px] text-[var(--text-muted)]">
-            Setup Intelligence Engine Chrome Extension.
+            Dopl Chrome Extension.
             Ingest pages, search your knowledge base, and chat with AI — all from any tab.
           </p>
         </div>

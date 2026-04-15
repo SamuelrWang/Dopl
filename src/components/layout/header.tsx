@@ -31,16 +31,16 @@ export function Header() {
         willChange: "transform",
       }}
     >
-      <nav className="pointer-events-auto inline-flex items-center gap-1 px-1.5 py-1 rounded-full bg-black/[0.25] backdrop-blur-[12px] backdrop-saturate-[1.4] border border-white/[0.1] shadow-[0_4px_16px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.08)]">
+      <nav className="pointer-events-auto inline-flex items-center gap-1 px-1.5 py-1 rounded-full bg-[var(--panel-surface)] border border-white/[0.1] shadow-[0_4px_16px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.08)]">
         {/* Logo */}
         <Link
           href="/canvas"
-          aria-label="Setup Intelligence Engine"
+          aria-label="Dopl"
           className="shrink-0 flex items-center justify-center w-7 h-7 rounded-lg overflow-hidden ml-1"
         >
           <Image
             src="/favicons/favicon-32x32.png"
-            alt="SIE"
+            alt="Dopl"
             width={20}
             height={20}
             className="rounded-md"

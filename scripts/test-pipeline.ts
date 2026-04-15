@@ -8,7 +8,7 @@ import { resolve } from "path";
 
 dotenv.config({ path: resolve(__dirname, "../.env.local") });
 
-const BASE_URL = "http://localhost:3000";
+const BASE_URL = process.env.DOPL_BASE_URL || "https://www.usedopl.com";
 const ADMIN_SECRET = process.env.ADMIN_SECRET!;
 
 // A small, fast-to-ingest GitHub repo

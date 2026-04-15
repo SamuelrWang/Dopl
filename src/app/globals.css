@@ -7,7 +7,7 @@
 @custom-variant dark (&:is(.dark *));
 
 /* ─────────────────────────────────────────────────────────────────────
-   Setup Intelligence Engine — Design Tokens
+   Dopl — Design Tokens
    Dark-first aesthetic: deep black background with subtle grid overlay,
    dark elevated surfaces with gradient borders, and cyan-blue accents.
    ───────────────────────────────────────────────────────────────────── */
@@ -110,6 +110,19 @@
   --bg-inset: oklch(0.13 0 0);
   --bg-inset-hover: oklch(0.16 0 0);
   --bg-overlay: oklch(0.14 0 0);
+
+  /* Opaque panel surfaces (replace glass/blur composites) */
+  --panel-surface: oklch(0.13 0 0);
+  --panel-surface-focus: oklch(0.12 0 0);
+  --input-surface: oklch(0.11 0 0);
+  --input-surface-focus: oklch(0.10 0 0);
+  --card-surface: oklch(0.21 0 0);
+  --card-surface-elevated: oklch(0.24 0 0);
+  --card-surface-subtle: oklch(0.19 0 0);
+  --navbar-surface: oklch(0.145 0 0);
+  --cluster-tab-surface: oklch(0.08 0 0);
+  --cluster-menu-surface: oklch(0.06 0 0);
+  --tabs-surface: oklch(0.135 0 0);
 
   /* Borders (white at low alpha) */
   --border-subtle: oklch(1 0 0 / 6%);
@@ -347,22 +360,6 @@ html {
   cursor: grabbing;
 }
 
-/* ─────────────────────────────────────────────────────────────────────
-   Gesture performance — disable expensive filters during pan/zoom
-   ─────────────────────────────────────────────────────────────────────
-   backdrop-blur is the single most expensive CSS effect on the canvas.
-   During rapid pan/zoom the GPU must re-run the blur every frame because
-   the content behind each panel shifts. We disable it while a gesture is
-   active (class toggled by the wheel/pointer handlers in canvas.tsx) and
-   re-enable with a short transition so the blur fades back in smoothly. */
-
-.canvas-gesturing [data-panel-id],
-.canvas-gesturing .backdrop-blur-md,
-.canvas-gesturing .backdrop-blur-sm,
-.canvas-gesturing [class*="backdrop-blur"] {
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-}
 
 /* Text content — selectable, not draggable. Covers prose, code blocks,
    inline labels, tag chips, mono badges, list items, blockquotes. */

@@ -50,7 +50,7 @@ export function PublishedEntryCard({
       <div
         className={`h-32 bg-gradient-to-br ${gradient} relative flex-shrink-0`}
       >
-        <span className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider bg-black/50 text-white/70 backdrop-blur-sm border border-white/[0.08]">
+        <span className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider bg-[oklch(0.07_0_0)] text-white/70 border border-white/[0.08]">
           {platformLabels[platform]}
         </span>
       </div>

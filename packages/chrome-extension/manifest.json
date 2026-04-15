@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "SIE Debugger",
-  "description": "Setup Intelligence Engine — ingest pages, chat with AI, and manage your knowledge base from any tab",
+  "name": "Dopl",
+  "description": "Dopl — ingest pages, chat with AI, and manage your knowledge base from any tab",
   "version": "0.1.0",
   "icons": {
     "16": "public/icons/icon-16.png",
@@ -10,7 +10,7 @@
     "128": "public/icons/icon-128.png"
   },
   "action": {
-    "default_title": "Open SIE Debugger"
+    "default_title": "Open Dopl"
   },
   "side_panel": {
     "default_path": "src/panel/index.html"
@@ -38,7 +38,7 @@
         "default": "Ctrl+Shift+S",
         "mac": "Command+Shift+S"
       },
-      "description": "Toggle SIE Debugger side panel"
+      "description": "Toggle Dopl side panel"
     },
     "quick-ingest": {
       "suggested_key": {
@@ -56,6 +56,6 @@
     }
   },
   "omnibox": {
-    "keyword": "sie"
+    "keyword": "dopl"
   }
 }

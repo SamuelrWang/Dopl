@@ -58,7 +58,7 @@ export const DragGhost = forwardRef<DragGhostHandle>(function DragGhost(_, ref) 
         zIndex: 99999,
         pointerEvents: "none",
       }}
-      className="flex items-center gap-2 px-3 py-2 rounded-[6px] bg-black/80 backdrop-blur-md border border-white/[0.15] shadow-xl max-w-[200px]"
+      className="flex items-center gap-2 px-3 py-2 rounded-[6px] bg-[oklch(0.05_0_0)] border border-white/[0.15] shadow-xl max-w-[200px]"
     >
       <div ref={contentRef} className="flex items-center gap-2 min-w-0" />
     </div>,

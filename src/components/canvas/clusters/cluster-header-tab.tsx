@@ -144,7 +144,7 @@ export function ClusterHeaderTab({
       }}
       className="z-20"
     >
-      <div className="inline-flex items-center h-6 px-2 gap-1.5 rounded-[4px] bg-black/[0.55] backdrop-blur-md border border-white/[0.12] shadow-[0_2px_8px_rgba(0,0,0,0.35)]">
+      <div className="inline-flex items-center h-6 px-2 gap-1.5 rounded-[4px] bg-[var(--cluster-tab-surface)] border border-white/[0.12] shadow-[0_2px_8px_rgba(0,0,0,0.35)]">
         {editing ? (
           <input
             ref={(el) => el?.focus({ preventScroll: true })}
@@ -197,7 +197,7 @@ export function ClusterHeaderTab({
 
       {menuOpen && (
         <div
-          className="absolute left-1/2 -translate-x-1/2 mt-1 min-w-[120px] bg-black/[0.7] backdrop-blur-md border border-white/[0.12] rounded-[4px] shadow-[0_4px_16px_rgba(0,0,0,0.4)] overflow-hidden"
+          className="absolute left-1/2 -translate-x-1/2 mt-1 min-w-[120px] bg-[var(--cluster-menu-surface)] border border-white/[0.12] rounded-[4px] shadow-[0_4px_16px_rgba(0,0,0,0.4)] overflow-hidden"
           role="menu"
         >
           {cluster.dbId && (

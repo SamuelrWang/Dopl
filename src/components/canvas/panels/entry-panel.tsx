@@ -114,7 +114,7 @@ export function EntryPanelBody({ panel }: EntryPanelBodyProps) {
           className={`w-full h-full bg-gradient-to-br ${gradientClass} flex items-center justify-center ${panel.thumbnailUrl ? "hidden" : ""}`}
         >
           <span className="font-mono text-3xl font-bold text-white/20 uppercase tracking-widest">
-            {platformLabels[platform] || "SIE"}
+            {platformLabels[platform] || "Dopl"}
           </span>
         </div>
 
@@ -123,7 +123,7 @@ export function EntryPanelBody({ panel }: EntryPanelBodyProps) {
           href={panel.sourceUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="absolute top-2 left-2 flex items-center justify-center w-7 h-7 bg-black/60 backdrop-blur-sm border border-white/10 rounded-[3px] text-white/80 hover:text-white hover:bg-black/80 transition-colors"
+          className="absolute top-2 left-2 flex items-center justify-center w-7 h-7 bg-[oklch(0.07_0_0)] border border-white/10 rounded-[3px] text-white/80 hover:text-white hover:bg-black/80 transition-colors"
           title={`Open on ${platformLabels[platform] || "Web"}`}
         >
           <PlatformIcon platform={platform} />

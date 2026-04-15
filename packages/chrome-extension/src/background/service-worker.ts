@@ -1,5 +1,5 @@
 /**
- * SIE Debugger — Service Worker (Manifest V3)
+ * Dopl — Service Worker (Manifest V3)
  *
  * Central hub for:
  * - Message routing between panel and content scripts

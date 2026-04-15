@@ -74,15 +74,15 @@ export default function ApiKeysPage() {
   const effectiveKey = newKeyPlaintext || (activeKeys[0] ? `${activeKeys[0].key_prefix}...` : "YOUR_API_KEY");
   const hasKey = activeKeys.length > 0 || !!newKeyPlaintext;
 
-  const cliCommand = `claude mcp add setup-intelligence --scope user --transport stdio -e SIE_BASE_URL=${baseUrl} -- npx @dopl/mcp-server --api-key ${effectiveKey}`;
+  const cliCommand = `claude mcp add dopl --scope user --transport stdio -e DOPL_BASE_URL=${baseUrl} -- npx @dopl/mcp-server --api-key ${effectiveKey}`;
 
   const desktopConfig = JSON.stringify(
     {
       mcpServers: {
-        "setup-intelligence": {
+        "dopl": {
           command: "npx",
           args: ["@dopl/mcp-server", "--api-key", effectiveKey],
-          env: { SIE_BASE_URL: baseUrl },
+          env: { DOPL_BASE_URL: baseUrl },
         },
       },
     },
@@ -96,7 +96,7 @@ export default function ApiKeysPage() {
         Connect to Claude
       </h1>
       <p className="text-sm text-text-tertiary mb-6">
-        Connect your Claude to Setup Intelligence in one step.
+        Connect your Claude to Dopl in one step.
       </p>
 
       {/* Step 1: Generate key */}

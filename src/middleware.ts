@@ -53,7 +53,7 @@ export async function middleware(request: NextRequest) {
 
   // Allow API routes with API key auth (external/MCP access)
   const authHeader = request.headers.get("authorization");
-  if (pathname.startsWith("/api/") && authHeader?.includes("sk-sie-")) {
+  if (pathname.startsWith("/api/") && authHeader?.includes("sk-dopl-")) {
     return supabaseResponse;
   }
 

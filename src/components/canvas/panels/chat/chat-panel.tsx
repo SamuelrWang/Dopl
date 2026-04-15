@@ -330,7 +330,7 @@ export function ChatPanelBody({ panel }: ChatPanelBodyProps) {
 
       {/* Input bar */}
       <div data-no-drag className="shrink-0 p-3">
-        <div className="relative rounded-xl overflow-hidden backdrop-blur-[12px] backdrop-saturate-[1.4] bg-black/[0.35] border border-white/[0.1] shadow-[0_2px_8px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.06)] transition-colors duration-200 focus-within:bg-black/[0.4] focus-within:border-white/[0.18]">
+        <div className="relative rounded-xl overflow-hidden bg-[var(--input-surface)] border border-white/[0.1] shadow-[0_2px_8px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.06)] transition-colors duration-200 focus-within:bg-[var(--input-surface-focus)] focus-within:border-white/[0.18]">
           <div
             className="pointer-events-none absolute inset-x-0 top-0 h-px"
             style={{

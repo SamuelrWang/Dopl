@@ -133,7 +133,7 @@ export default function EntriesPage() {
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Search setups... e.g. 'AI agent for cold outreach' or 'n8n automation with Supabase'"
-            className="w-full h-11 px-4 bg-black/[0.2] backdrop-blur-[10px] border border-white/10 rounded-[3px] text-sm text-white/90 placeholder:text-white/30 focus:outline-none focus:border-white/20 transition-colors"
+            className="w-full h-11 px-4 bg-[var(--tabs-surface)] border border-white/10 rounded-[3px] text-sm text-white/90 placeholder:text-white/30 focus:outline-none focus:border-white/20 transition-colors"
           />
         </div>
         {isShowingSearch ? (

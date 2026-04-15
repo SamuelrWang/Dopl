@@ -89,6 +89,7 @@ async function handlePost(
 
     return NextResponse.json(memory, { status: 201 });
   } catch (error) {
+    console.error("[memories POST] Error saving cluster memory:", error);
     const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
   }

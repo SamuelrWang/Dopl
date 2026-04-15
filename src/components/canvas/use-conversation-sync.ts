@@ -162,7 +162,7 @@ export function useConversationSync() {
             });
 
             // Update title if server has a non-placeholder name
-            if (conv.title && !/^Chat\s*#\d+$/i.test(conv.title)) {
+            if (conv.title && !/^(Chat\s*#\d+|New Chat)$/i.test(conv.title)) {
               dispatch({
                 type: "UPDATE_CHAT_TITLE",
                 panelId: conv.panel_id,

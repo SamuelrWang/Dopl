@@ -137,7 +137,7 @@ export function BrowseEntryCard({
 
         {/* Platform badge */}
         <div className="absolute top-1.5 left-1.5">
-          <span className="inline-block font-mono text-[8px] uppercase tracking-wider text-white/80 bg-black/40 backdrop-blur-sm px-1.5 py-0.5 rounded-[2px]">
+          <span className="inline-block font-mono text-[8px] uppercase tracking-wider text-white/80 bg-[oklch(0.10_0_0)] px-1.5 py-0.5 rounded-[2px]">
             {label}
           </span>
         </div>
@@ -152,7 +152,7 @@ export function BrowseEntryCard({
               onToggleBookmark(entry.id);
             }}
             onPointerDown={(e) => e.stopPropagation()}
-            className={`absolute top-1.5 right-1.5 w-5 h-5 flex items-center justify-center rounded-[2px] backdrop-blur-sm transition-colors ${
+            className={`absolute top-1.5 right-1.5 w-5 h-5 flex items-center justify-center rounded-[2px] transition-colors ${
               isBookmarked
                 ? "bg-white/20 text-white/90"
                 : "bg-black/40 text-white/40 opacity-0 group-hover:opacity-100"
@@ -170,7 +170,7 @@ export function BrowseEntryCard({
         {/* Similarity badge (search mode) */}
         {entry.similarity != null && (
           <div className="absolute bottom-1.5 right-1.5">
-            <span className="inline-block font-mono text-[9px] tracking-wide text-white/90 bg-black/40 backdrop-blur-sm px-1.5 py-0.5 rounded-[2px]">
+            <span className="inline-block font-mono text-[9px] tracking-wide text-white/90 bg-[oklch(0.10_0_0)] px-1.5 py-0.5 rounded-[2px]">
               {Math.round(entry.similarity * 100)}%
             </span>
           </div>

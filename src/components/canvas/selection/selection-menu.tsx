@@ -165,7 +165,7 @@ export function SelectionMenu({ cursorPos }: SelectionMenuProps) {
       }}
       className="z-30"
     >
-      <div className="inline-flex items-center gap-1 px-1 h-8 rounded-[4px] bg-black/[0.6] backdrop-blur-md border border-white/[0.12] shadow-[0_4px_16px_rgba(0,0,0,0.4)]">
+      <div className="inline-flex items-center gap-1 px-1 h-8 rounded-[4px] bg-[oklch(0.07_0_0)] border border-white/[0.12] shadow-[0_4px_16px_rgba(0,0,0,0.4)]">
         <MenuButton label="Cluster" onClick={handleCluster} />
         <div className="w-px h-4 bg-white/[0.12]" aria-hidden />
         <MenuButton label="Delete" tone="danger" onClick={handleDelete} />

@@ -52,7 +52,7 @@ export function OnboardingCoachCard({
       className="fixed top-20 right-4 z-[9990] w-[340px]"
       style={{ animation: "coachCardIn 0.3s ease-out both" }}
     >
-      <div className="bg-black/[0.6] backdrop-blur-xl backdrop-saturate-[1.4] border border-white/[0.12] rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)] overflow-hidden">
+      <div className="bg-[oklch(0.07_0_0)] border border-white/[0.12] rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)] overflow-hidden">
         {/* Progress bar */}
         <div className="h-[2px] bg-white/[0.06]">
           <div

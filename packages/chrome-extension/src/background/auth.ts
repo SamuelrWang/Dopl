@@ -1,8 +1,8 @@
 /**
  * Auth state management for the extension.
  * Supports two modes:
- *   1. API key mode — user provides sk-sie-* key, stored in chrome.storage.sync
- *   2. Session mode — reuse Supabase session from the SIE web app (cookie-based)
+ *   1. API key mode — user provides sk-dopl-* key, stored in chrome.storage.sync
+ *   2. Session mode — reuse Supabase session from the Dopl web app (cookie-based)
  */
 
 import { STORAGE_KEYS, DEFAULT_API_URL } from "@/shared/constants";

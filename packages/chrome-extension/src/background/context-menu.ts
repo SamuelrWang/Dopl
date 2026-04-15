@@ -9,25 +9,25 @@ export function setupContextMenus(): void {
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({
       id: CONTEXT_MENU.INGEST_PAGE,
-      title: "Ingest this page into SIE",
+      title: "Ingest this page into Dopl",
       contexts: ["page"],
     });
 
     chrome.contextMenus.create({
       id: CONTEXT_MENU.INGEST_LINK,
-      title: "Ingest linked page into SIE",
+      title: "Ingest linked page into Dopl",
       contexts: ["link"],
     });
 
     chrome.contextMenus.create({
       id: CONTEXT_MENU.SEARCH_SELECTION,
-      title: 'Search SIE for "%s"',
+      title: 'Search Dopl for "%s"',
       contexts: ["selection"],
     });
 
     chrome.contextMenus.create({
       id: CONTEXT_MENU.SAVE_SNIPPET,
-      title: "Save snippet to SIE chat",
+      title: "Save snippet to Dopl chat",
       contexts: ["selection"],
     });
   });

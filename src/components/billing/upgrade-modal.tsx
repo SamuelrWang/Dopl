@@ -34,7 +34,7 @@ const REASON_TEXT: Record<string, { title: string; description: string }> = {
   },
   generic: {
     title: "Upgrade to Pro",
-    description: "Get unlimited access to the full Setup Intelligence Engine.",
+    description: "Get unlimited access to the full Dopl platform.",
   },
 };
 

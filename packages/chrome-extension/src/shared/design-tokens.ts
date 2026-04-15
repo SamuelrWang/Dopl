@@ -1,4 +1,4 @@
-/** Design tokens matching the SIE openclaw-cloud dark theme */
+/** Design tokens matching the Dopl openclaw-cloud dark theme */
 export const tokens = {
   // Surfaces
   bgBase: "oklch(0.15 0 0)",

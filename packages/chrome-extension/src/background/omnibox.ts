@@ -1,12 +1,12 @@
 /**
- * Omnibox integration — type "sie <query>" in the address bar to search.
+ * Omnibox integration — type "dopl <query>" in the address bar to search.
  */
 
 import { getAuthState, getAuthHeaders } from "./auth";
 
 export function setupOmnibox(): void {
   chrome.omnibox.setDefaultSuggestion({
-    description: "Search SIE knowledge base: %s",
+    description: "Search Dopl knowledge base: %s",
   });
 
   chrome.omnibox.onInputChanged.addListener(async (text, suggest) => {

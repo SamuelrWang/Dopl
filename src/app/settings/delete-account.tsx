@@ -31,9 +31,9 @@ export function DeleteAccount() {
           const key = localStorage.key(i);
           if (key && (
             key.startsWith(CANVAS_STORAGE_KEY_PREFIX) ||
-            key.startsWith("sie:onboarding:") ||
-            key === "sie:bookmarks" ||
-            key === "sie-sidebar-open" ||
+            key.startsWith("dopl:onboarding:") ||
+            key === "dopl:bookmarks" ||
+            key === "dopl-sidebar-open" ||
             key === CANVAS_ACTIVE_USER_KEY
           )) {
             keysToRemove.push(key);

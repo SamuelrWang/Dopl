@@ -1,4 +1,4 @@
-# Setup Intelligence Engine
+# Dopl
 
 ## What This Is
 
@@ -151,8 +151,8 @@ Progress is streamed live to the frontend via SSE at `/api/ingest/{id}/stream`.
 ## API Authentication
 
 External API consumers (MCP clients, third-party apps) authenticate with API keys:
-- Keys are prefixed with `sk-sie-` and stored as SHA-256 hashes in the `api_keys` table
-- Pass via `Authorization: Bearer sk-sie-...` header
+- Keys are prefixed with `sk-dopl-` and stored as SHA-256 hashes in the `api_keys` table
+- Pass via `Authorization: Bearer sk-dopl-...` header
 - Rate limited per key (default 60 req/min)
 - The web frontend's own requests (same-origin) pass through without auth
 
@@ -169,15 +169,15 @@ External API consumers (MCP clients, third-party apps) authenticate with API key
 
 ## MCP Server
 
-The `packages/mcp-server/` directory contains an MCP server that wraps the SIE API. Install it in Claude Code:
+The `packages/mcp-server/` directory contains an MCP server that wraps the Dopl API. Install it in Claude Code:
 
 ```json
 {
   "mcpServers": {
-    "setup-intelligence": {
+    "dopl": {
       "command": "npx",
-      "args": ["@dopl/mcp-server", "--api-key", "sk-sie-xxxxx"],
-      "env": { "SIE_BASE_URL": "https://your-site.vercel.app" }
+      "args": ["@dopl/mcp-server", "--api-key", "sk-dopl-xxxxx"],
+      "env": { "DOPL_BASE_URL": "https://your-site.vercel.app" }
     }
   }
 }
@@ -270,7 +270,7 @@ The `/ingest` page is now a draggable infinite canvas where each ingestion conve
 
 **Files** (all in `src/components/canvas/`):
 - `types.ts` — `Panel` discriminated union (currently only `ChatPanelData`), `CanvasState`, action types
-- `canvas-store.tsx` — `CanvasProvider` (Context + reducer), `useCanvas` hook, debounced localStorage persistence (key `sie:canvas:state`), helpers `computeNewPanelPosition` / `nextPanelIdString`
+- `canvas-store.tsx` — `CanvasProvider` (Context + reducer), `useCanvas` hook, debounced localStorage persistence (key `dopl:canvas:state`), helpers `computeNewPanelPosition` / `nextPanelIdString`
 - `canvas-grid-sync.tsx` — writes `--canvas-offset-x/y` CSS variables on `<body>` so the body's grid background pans with the camera
 - `canvas.tsx` — pannable viewport, pointer-driven camera; renders panels inside a transformed "world" div
 - `canvas-panel.tsx` — generic draggable wrapper with header drag handle + close button; routes to per-type body components

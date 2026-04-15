@@ -1,11 +1,11 @@
-/** Base URL for the SIE API — configurable per environment */
+/** Base URL for the Dopl API — configurable per environment */
 export const DEFAULT_API_URL = "https://setupintelligence.com";
 
 /** Storage keys */
 export const STORAGE_KEYS = {
-  API_KEY: "sie_api_key",
-  API_URL: "sie_api_url",
-  AUTH_MODE: "sie_auth_mode",
+  API_KEY: "dopl_api_key",
+  API_URL: "dopl_api_url",
+  AUTH_MODE: "dopl_auth_mode",
 } as const;
 
 /** Session storage key prefix for tab-scoped chats */
@@ -25,8 +25,8 @@ export type ViewName = "chat" | "canvas" | "search" | "ingest" | "reader" | "set
 
 /** Context menu IDs */
 export const CONTEXT_MENU = {
-  INGEST_PAGE: "sie-ingest-page",
-  INGEST_LINK: "sie-ingest-link",
-  SEARCH_SELECTION: "sie-search-selection",
-  SAVE_SNIPPET: "sie-save-snippet",
+  INGEST_PAGE: "dopl-ingest-page",
+  INGEST_LINK: "dopl-ingest-link",
+  SEARCH_SELECTION: "dopl-search-selection",
+  SAVE_SNIPPET: "dopl-save-snippet",
 } as const;

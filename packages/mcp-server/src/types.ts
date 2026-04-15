@@ -1,4 +1,4 @@
-export interface SIEEntry {
+export interface DoplEntry {
   id: string;
   title: string | null;
   summary: string | null;
@@ -43,7 +43,7 @@ export interface BuildResult {
 }
 
 export interface ListResult {
-  entries: SIEEntry[];
+  entries: DoplEntry[];
   total: number;
   limit: number;
   offset: number;

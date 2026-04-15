@@ -44,7 +44,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Setup Intelligence Engine",
+  title: "Dopl",
   description: "AI-powered knowledge base for automation setups",
   icons: {
     icon: [

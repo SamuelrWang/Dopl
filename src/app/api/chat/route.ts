@@ -17,7 +17,7 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "search_knowledge_base",
     description:
-      "Search the Setup Intelligence Engine knowledge base for AI/automation setups matching a query. Returns ranked results with titles, summaries, and similarity scores.",
+      "Search the Dopl knowledge base for AI/automation setups matching a query. Returns ranked results with titles, summaries, and similarity scores.",
     input_schema: {
       type: "object" as const,
       properties: {

@@ -10,11 +10,14 @@
  * Once the user edits the name manually, it no longer matches the
  * placeholder pattern and this hook will not overwrite it.
  *
+ * After the AI name is generated, a second effect syncs it to the backend
+ * so the MCP server sees a meaningful name/slug instead of "Cluster_1".
+ *
  * Designed to be invoked once per cluster creation. The useEffect's empty
  * deps list ensures we don't re-fetch on every rerender.
  */
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useCanvas } from "../canvas-store";
 import type { Cluster, Panel } from "../types";
 
@@ -50,15 +53,14 @@ function summarisePanel(panel: Panel): PanelSummary {
 
 export function useClusterName(cluster: Cluster): void {
   const { state, dispatch } = useCanvas();
+  const syncedRef = useRef(false);
 
+  // Effect 1: Generate AI name (runs once on mount)
   useEffect(() => {
     if (!PLACEHOLDER_PATTERN.test(cluster.name)) {
-      // Either already generated or user-edited — leave it alone.
       return;
     }
 
-    // Gather panel snapshots ONCE at effect start; don't follow state.panels
-    // changes mid-request.
     const panels = state.panels
       .filter((p) => cluster.panelIds.includes(p.id))
       .map(summarisePanel);
@@ -89,8 +91,37 @@ export function useClusterName(cluster: Cluster): void {
     return () => {
       cancelled = true;
     };
-    // Intentionally run once per cluster — we don't want to re-fetch on
-    // every state change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cluster.id]);
+
+  // Effect 2: Sync AI-generated name to backend once slug is available.
+  // Runs when cluster.name or cluster.slug changes. The ref ensures we
+  // only sync once per cluster lifecycle.
+  useEffect(() => {
+    if (syncedRef.current) return;
+    if (!cluster.slug) return;
+    if (PLACEHOLDER_PATTERN.test(cluster.name)) return;
+
+    syncedRef.current = true;
+
+    fetch(`/api/clusters/${encodeURIComponent(cluster.slug)}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: cluster.name }),
+    })
+      .then((res) => res.json())
+      .then((updated) => {
+        if (updated.slug && updated.slug !== cluster.slug) {
+          dispatch({
+            type: "UPDATE_CLUSTER_DB_INFO",
+            clusterId: cluster.id,
+            dbId: updated.id,
+            slug: updated.slug,
+          });
+        }
+      })
+      .catch(() => {
+        // Silent — name is correct in UI, backend sync is best-effort
+      });
+  }, [cluster.slug, cluster.name, cluster.id, dispatch]);
 }

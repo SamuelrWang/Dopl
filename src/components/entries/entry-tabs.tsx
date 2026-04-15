@@ -73,7 +73,7 @@ export function EntryTabs({
   return (
     <div className="space-y-4">
       {/* Tab bar — sharp corners, like openclaw nav */}
-      <div className="flex items-center gap-1 p-1 bg-black/[0.2] backdrop-blur-[10px] border border-white/[0.08] rounded-[3px] overflow-x-auto">
+      <div className="flex items-center gap-1 p-1 bg-[var(--tabs-surface)] border border-white/[0.08] rounded-[3px] overflow-x-auto">
         {tabs
           .filter((t) => t.show)
           .map((tab) => {

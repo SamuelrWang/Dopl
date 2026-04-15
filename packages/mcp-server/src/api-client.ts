@@ -2,14 +2,14 @@ import type {
   SearchResult,
   BuildResult,
   ListResult,
-  SIEEntry,
+  DoplEntry,
   ClusterRow,
   ClusterDetail,
   ClusterQueryResult,
   CanvasPanel,
 } from "./types.js";
 
-export class SIEClient {
+export class DoplClient {
   private baseUrl: string;
   private apiKey: string;
 
@@ -40,13 +40,13 @@ export class SIEClient {
 
       if (!res.ok) {
         const text = await res.text();
-        throw new Error(`SIE API error ${res.status}: ${text}`);
+        throw new Error(`Dopl API error ${res.status}: ${text}`);
       }
 
       return res.json() as Promise<T>;
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
-        throw new Error(`SIE API request timed out after ${timeoutMs}ms: ${method} ${path}`);
+        throw new Error(`Dopl API request timed out after ${timeoutMs}ms: ${method} ${path}`);
       }
       throw error;
     } finally {
@@ -75,8 +75,8 @@ export class SIEClient {
     });
   }
 
-  async getSetup(id: string): Promise<SIEEntry> {
-    return this.request<SIEEntry>(`/api/entries/${id}`);
+  async getSetup(id: string): Promise<DoplEntry> {
+    return this.request<DoplEntry>(`/api/entries/${id}`);
   }
 
   async buildSolution(params: {
@@ -142,7 +142,7 @@ export class SIEClient {
       });
       if (!res.ok && res.status !== 204) {
         const text = await res.text();
-        throw new Error(`SIE API error ${res.status}: ${text}`);
+        throw new Error(`Dopl API error ${res.status}: ${text}`);
       }
     } finally {
       clearTimeout(timeout);
@@ -275,7 +275,7 @@ export class SIEClient {
       );
       if (!res.ok && res.status !== 204) {
         const text = await res.text();
-        throw new Error(`SIE API error ${res.status}: ${text}`);
+        throw new Error(`Dopl API error ${res.status}: ${text}`);
       }
     } finally {
       clearTimeout(timeout);
@@ -303,7 +303,7 @@ export class SIEClient {
       );
       if (!res.ok) {
         const text = await res.text();
-        throw new Error(`SIE API error ${res.status}: ${text}`);
+        throw new Error(`Dopl API error ${res.status}: ${text}`);
       }
     } finally {
       clearTimeout(timeout);
@@ -315,8 +315,8 @@ export class SIEClient {
   async updateEntry(
     id: string,
     updates: { title?: string; summary?: string; use_case?: string; complexity?: string }
-  ): Promise<SIEEntry> {
-    return this.request<SIEEntry>(`/api/entries/${encodeURIComponent(id)}`, {
+  ): Promise<DoplEntry> {
+    return this.request<DoplEntry>(`/api/entries/${encodeURIComponent(id)}`, {
       method: "PATCH",
       body: updates,
     });
@@ -364,7 +364,7 @@ export class SIEClient {
       );
       if (!res.ok) {
         const text = await res.text();
-        throw new Error(`SIE API error ${res.status}: ${text}`);
+        throw new Error(`Dopl API error ${res.status}: ${text}`);
       }
     } finally {
       clearTimeout(timeout);

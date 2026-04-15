@@ -1,5 +1,5 @@
-import type { SearchResult, BuildResult, ListResult, SIEEntry, ClusterRow, ClusterDetail, ClusterQueryResult, CanvasPanel } from "./types.js";
-export declare class SIEClient {
+import type { SearchResult, BuildResult, ListResult, DoplEntry, ClusterRow, ClusterDetail, ClusterQueryResult, CanvasPanel } from "./types.js";
+export declare class DoplClient {
     private baseUrl;
     private apiKey;
     constructor(baseUrl: string, apiKey: string);
@@ -11,7 +11,7 @@ export declare class SIEClient {
         max_results?: number;
         include_synthesis?: boolean;
     }): Promise<SearchResult>;
-    getSetup(id: string): Promise<SIEEntry>;
+    getSetup(id: string): Promise<DoplEntry>;
     buildSolution(params: {
         brief: string;
         preferred_tools?: string[];
@@ -77,7 +77,7 @@ export declare class SIEClient {
         summary?: string;
         use_case?: string;
         complexity?: string;
-    }): Promise<SIEEntry>;
+    }): Promise<DoplEntry>;
     checkEntryUpdates(id: string): Promise<{
         entry_id: string;
         title: string | null;

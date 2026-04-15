@@ -1,5 +1,5 @@
 /**
- * SIE API client for the Chrome extension.
+ * Dopl API client for the Chrome extension.
  * Adapted from packages/mcp-server/src/api-client.ts for browser environment.
  * All API calls route through this module for consistent auth & error handling.
  */
@@ -41,7 +41,7 @@ async function request<T>(
 
     if (!res.ok) {
       const text = await res.text();
-      throw new Error(`SIE API error ${res.status}: ${text}`);
+      throw new Error(`Dopl API error ${res.status}: ${text}`);
     }
 
     return res.json() as Promise<T>;
@@ -102,7 +102,7 @@ export async function removeCanvasPanel(entryId: string): Promise<void> {
     });
     if (!res.ok && res.status !== 204) {
       const text = await res.text();
-      throw new Error(`SIE API error ${res.status}: ${text}`);
+      throw new Error(`Dopl API error ${res.status}: ${text}`);
     }
   } finally {
     clearTimeout(timeout);

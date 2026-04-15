@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── SIE Design Tokens (matching openclaw-cloud dark theme) ──────── */
+/* ── Dopl Design Tokens (matching openclaw-cloud dark theme) ──────── */
 
 :root {
   /* Surfaces */

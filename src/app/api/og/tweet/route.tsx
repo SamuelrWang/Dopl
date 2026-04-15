@@ -144,7 +144,7 @@ export async function GET(request: Request) {
             marginTop: 32,
           }}
         >
-          Setup Intelligence Engine
+          Dopl
         </div>
       </div>
     ),
