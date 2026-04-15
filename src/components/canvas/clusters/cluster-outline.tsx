@@ -14,6 +14,7 @@
  * input.
  */
 
+import React from "react";
 import type { Panel } from "../types";
 import { CLUSTER_PADDING } from "../types";
 import {
@@ -28,7 +29,7 @@ interface ClusterOutlineProps {
   emphasised?: boolean;
 }
 
-export function ClusterOutline({ panels, emphasised = false }: ClusterOutlineProps) {
+export const ClusterOutline = React.memo(function ClusterOutline({ panels, emphasised = false }: ClusterOutlineProps) {
   if (panels.length === 0) return null;
 
   // Multiple polygons when the cluster's padded rects form more than one
@@ -97,7 +98,7 @@ export function ClusterOutline({ panels, emphasised = false }: ClusterOutlinePro
       />
     </svg>
   );
-}
+});
 
 /**
  * Re-export for test / hit-test callers who need the bounds without

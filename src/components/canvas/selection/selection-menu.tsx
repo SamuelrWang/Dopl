@@ -58,16 +58,38 @@ export function SelectionMenu({ cursorPos }: SelectionMenuProps) {
     // Clear the selection so the outline is the only visible affordance.
     dispatch({ type: "SET_SELECTION", panelIds: [] });
 
+    // Compute laid-out positions once (used for both chat and brain spawning)
+    const laidOutPanels = clusterCandidates.map((p) => {
+      const move = moves.find((m) => m.id === p.id);
+      return move ? { ...p, x: move.x, y: move.y } : p;
+    });
+    const rightmostX = Math.max(...laidOutPanels.map((p) => p.x + p.width));
+    const leftmostX = Math.min(...laidOutPanels.map((p) => p.x));
+    const topY = Math.min(...laidOutPanels.map((p) => p.y));
+
+    // ── Auto-spawn a chat panel if the cluster has none ──
+    const hasChat = clusterCandidates.some((p) => p.type === "chat");
+    if (!hasChat) {
+      const chatPanelId = `panel-${state.nextPanelId}`;
+
+      dispatch({
+        type: "CREATE_CHAT_PANEL",
+        id: chatPanelId,
+        x: leftmostX - 480 - 40,
+        y: topY,
+        title: "New Chat",
+      });
+      dispatch({
+        type: "ADD_PANEL_TO_CLUSTER",
+        panelId: chatPanelId,
+        clusterId: cluster.id,
+      });
+    }
+
     // ── Auto-spawn a cluster brain panel to the right of the cluster ──
+    // Uses brain- prefix so it never collides with panel- IDs above.
     const brainPanelId = `brain-${state.nextPanelId}`;
     {
-      // Find the rightmost edge of the laid-out cluster panels.
-      const laidOutPanels = clusterCandidates.map((p) => {
-        const move = moves.find((m) => m.id === p.id);
-        return move ? { ...p, x: move.x, y: move.y } : p;
-      });
-      const rightmostX = Math.max(...laidOutPanels.map((p) => p.x + p.width));
-      const topY = Math.min(...laidOutPanels.map((p) => p.y));
 
       dispatch({
         type: "CREATE_CLUSTER_BRAIN_PANEL",

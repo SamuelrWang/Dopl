@@ -28,7 +28,7 @@
  *     { passive: false }.
  */
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useCanvas } from "./canvas-store";
 import { CanvasPanel } from "./canvas-panel";
 import { MAX_ZOOM, MIN_ZOOM, computePanelsBounds, type Cluster, type Panel } from "./types";
@@ -101,6 +101,39 @@ function CanvasGrid({ zoom }: { zoom: number }) {
     />
   );
 }
+
+/**
+ * WorldContents — memoized children of the world div. During a pure pan
+ * (no zoom change), none of the props change, so React skips the entire
+ * subtree reconciliation. This eliminates the 80ms-debounce re-render stutter
+ * that was the main source of panning flicker.
+ */
+const WorldContents = React.memo(function WorldContents({
+  zoom,
+  panels,
+  selectedPanelIds,
+  dispatch,
+}: {
+  zoom: number;
+  panels: Panel[];
+  selectedPanelIds: string[];
+  dispatch: React.Dispatch<import("./types").CanvasAction>;
+}) {
+  return (
+    <>
+      <CanvasGrid zoom={zoom} />
+      <ClusterWorldLayer />
+      {panels.map((panel) => (
+        <CanvasPanel
+          key={panel.id}
+          panel={panel}
+          isSelected={selectedPanelIds.includes(panel.id)}
+          dispatch={dispatch}
+        />
+      ))}
+    </>
+  );
+});
 
 /**
  * Find the topmost cluster (by z-order — later in the array wins) whose
@@ -761,16 +794,12 @@ export function Canvas() {
             the screen-pixel spacing stays ≥80px. This keeps the line count
             manageable and prevents GPU rasterization stutter during fast
             pan/zoom at low zoom levels. */}
-        <CanvasGrid zoom={zoom} />
-        <ClusterWorldLayer />
-        {state.panels.map((panel) => (
-          <CanvasPanel
-            key={panel.id}
-            panel={panel}
-            isSelected={state.selectedPanelIds.includes(panel.id)}
-            dispatch={dispatch}
-          />
-        ))}
+        <WorldContents
+          zoom={zoom}
+          panels={state.panels}
+          selectedPanelIds={state.selectedPanelIds}
+          dispatch={dispatch}
+        />
       </div>
 
       {/* Cluster header tabs now rendered inside ClusterWorldLayer. */}

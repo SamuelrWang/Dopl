@@ -18,7 +18,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { useCanvas } from "../canvas-store";
+import { usePanelsContext } from "../canvas-store";
 import type { Cluster } from "../types";
 import { isPanelDeletable } from "../types";
 import { PublishDialog } from "@/components/community/publish-dialog";
@@ -29,17 +29,14 @@ interface ClusterHeaderTabProps {
   worldX: number;
   /** World-space y at the cluster's bottom edge. */
   worldY: number;
-  /** Current camera zoom — used for inverse scale. */
-  zoom: number;
 }
 
 export function ClusterHeaderTab({
   cluster,
   worldX,
   worldY,
-  zoom,
 }: ClusterHeaderTabProps) {
-  const { state, dispatch } = useCanvas();
+  const { panels, dispatch } = usePanelsContext();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(cluster.name);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -114,7 +111,7 @@ export function ClusterHeaderTab({
 
   function handleDeleteMembers() {
     setMenuOpen(false);
-    const deletable = state.panels.filter(
+    const deletable = panels.filter(
       (p) => cluster.panelIds.includes(p.id) && isPanelDeletable(p)
     );
     for (const p of deletable) {
@@ -138,7 +135,7 @@ export function ClusterHeaderTab({
         // Inverse-scale using --canvas-inv-zoom (set on the world div).
         // Updated in real-time during gestures via applyCameraDirect,
         // so there's zero lag — no waiting for the React state flush.
-        transform: `translateX(-50%) scale(var(--canvas-inv-zoom, ${1 / zoom}))`,
+        transform: `translateX(-50%) scale(var(--canvas-inv-zoom, 1))`,
         transformOrigin: "center top",
         pointerEvents: "auto",
       }}

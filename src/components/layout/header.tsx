@@ -8,7 +8,6 @@ import { UserMenu } from "./user-menu";
 const navItems: { href: string; label: string }[] = [
   { href: "/canvas", label: "Canvas" },
   { href: "/entries", label: "Browse" },
-  { href: "/build", label: "Builder" },
   { href: "/pricing", label: "Pricing" },
 ];
 

@@ -725,7 +725,7 @@ function reducer(state: CanvasState, action: CanvasAction): CanvasState {
         height: CLUSTER_BRAIN_PANEL_SIZE.height,
         instructions: "",
         memories: [],
-        status: "generating",
+        status: action.initialStatus ?? "generating",
         errorMessage: null,
       };
       // Auto-join the brain panel to its cluster

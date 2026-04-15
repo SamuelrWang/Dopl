@@ -559,6 +559,9 @@ export type CanvasAction =
       clusterName: string;
       x: number;
       y: number;
+      /** Override the initial status. Defaults to "generating" for canvas,
+       *  but the builder passes "ready" so the brain starts idle. */
+      initialStatus?: "generating" | "ready";
     }
   | {
       /** Set synthesized instructions and mark the brain as ready. */

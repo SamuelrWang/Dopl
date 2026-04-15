@@ -9,7 +9,7 @@
  * the cluster's bottom-center in world coordinates.
  */
 
-import { useCanvas } from "../canvas-store";
+import { usePanelsContext } from "../canvas-store";
 import type { Cluster, Panel } from "../types";
 import { ClusterOutline } from "./cluster-outline";
 import { ClusterHeaderTab } from "./cluster-header-tab";
@@ -30,20 +30,18 @@ function getClusterPanels(cluster: Cluster, allPanels: Panel[]): Panel[] {
 // ── World-space layer (outlines + header tabs) ───────────────────
 
 export function ClusterWorldLayer() {
-  const { state } = useCanvas();
-  const zoom = state.camera.zoom;
+  const { panels: allPanels, clusters } = usePanelsContext();
 
   return (
     <>
-      {state.clusters.map((cluster) => {
-        const panels = getClusterPanels(cluster, state.panels);
+      {clusters.map((cluster) => {
+        const panels = getClusterPanels(cluster, allPanels);
         if (panels.length === 0) return null;
         return (
           <ClusterWithHeader
             key={cluster.id}
             cluster={cluster}
             panels={panels}
-            zoom={zoom}
           />
         );
       })}
@@ -58,11 +56,9 @@ export function ClusterWorldLayer() {
 function ClusterWithHeader({
   cluster,
   panels,
-  zoom,
 }: {
   cluster: Cluster;
   panels: Panel[];
-  zoom: number;
 }) {
   useClusterName(cluster);
 
@@ -77,7 +73,6 @@ function ClusterWithHeader({
         cluster={cluster}
         worldX={worldCenterX}
         worldY={worldBottomY}
-        zoom={zoom}
       />
     </>
   );
