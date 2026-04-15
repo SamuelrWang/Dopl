@@ -15,7 +15,7 @@ async function handleGet(request: NextRequest) {
 
   let query = supabase
     .from("entries")
-    .select("id, title, summary, use_case, complexity, status, source_url, source_platform, source_author, thumbnail_url, created_at, ingested_at", { count: "exact" });
+    .select("id, title, summary, use_case, complexity, content_type, status, source_url, source_platform, source_author, thumbnail_url, created_at, ingested_at", { count: "exact" });
 
   if (sort === "oldest") {
     query = query.order("created_at", { ascending: true });

@@ -6,28 +6,92 @@
  *
  * No bubble wrapper: text reads as if it's directly on the page,
  * not inside a speech balloon. Use for assistant/AI messages.
+ *
+ * Supports citation markers: [cite:ENTRY_ID] are rendered as small
+ * inline pills showing the entry name when an `entryNames` map is provided.
  */
 
+import React, { useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import { cn } from "@/lib/utils";
 
 interface MarkdownMessageProps {
   content: string;
   className?: string;
+  /** Map of entry ID → display name for rendering citation pills */
+  entryNames?: Record<string, string>;
 }
 
-export function MarkdownMessage({ content, className }: MarkdownMessageProps) {
+const CITE_REGEX = /\[cite:([a-f0-9-]+)\]/gi;
+
+/**
+ * Replace [cite:UUID] markers with placeholder tokens that survive
+ * markdown parsing, then swap them for React elements after render.
+ */
+function processCitations(
+  content: string,
+  entryNames: Record<string, string>
+): React.ReactNode {
+  // Split on citation markers
+  const parts = content.split(CITE_REGEX);
+  if (parts.length === 1) {
+    // No citations
+    return <ReactMarkdown>{content}</ReactMarkdown>;
+  }
+
+  // Rebuild: even indices are text, odd indices are entry IDs
+  const segments: Array<{ type: "text"; value: string } | { type: "cite"; entryId: string }> = [];
+  for (let i = 0; i < parts.length; i++) {
+    if (i % 2 === 0) {
+      if (parts[i]) segments.push({ type: "text", value: parts[i] });
+    } else {
+      segments.push({ type: "cite", entryId: parts[i] });
+    }
+  }
+
+  // Merge consecutive text segments and render
+  return (
+    <>
+      {segments.map((seg, i) => {
+        if (seg.type === "cite") {
+          const name = entryNames[seg.entryId] || "Source";
+          return (
+            <span
+              key={i}
+              className="inline-flex items-center h-[18px] max-w-[100px] px-1.5 mx-0.5 text-[9px] font-mono uppercase tracking-wide text-purple-300/80 bg-purple-500/10 border border-purple-500/20 rounded-full align-middle cursor-default overflow-hidden text-ellipsis whitespace-nowrap"
+              title={seg.entryId}
+            >
+              {name}
+            </span>
+          );
+        }
+        return <ReactMarkdown key={i}>{seg.value}</ReactMarkdown>;
+      })}
+    </>
+  );
+}
+
+export function MarkdownMessage({ content, className, entryNames }: MarkdownMessageProps) {
+  const rendered = useMemo(() => {
+    if (entryNames && CITE_REGEX.test(content)) {
+      // Reset lastIndex since we used the `g` flag
+      CITE_REGEX.lastIndex = 0;
+      return processCitations(content, entryNames);
+    }
+    return <ReactMarkdown>{content}</ReactMarkdown>;
+  }, [content, entryNames]);
+
   return (
     <div
       className={cn(
         // Base prose scaffolding + base text color
-        "prose prose-base max-w-none text-white/[0.88]",
-        // Paragraphs: no top margin, tight bottom margin, 26px line-height
-        "prose-p:my-0 prose-p:mb-3 prose-p:leading-[26px]",
+        "prose prose-sm max-w-none text-white/[0.88]",
+        // Paragraphs: no top margin, tight bottom margin
+        "prose-p:my-0 prose-p:mb-2 prose-p:leading-[20px] prose-p:text-xs",
         // Headings: unified style, small, semibold/bold, tight top margins
         "prose-headings:font-semibold prose-headings:text-white/90",
-        "prose-h1:text-[13px] prose-h2:text-[13px] prose-h3:text-[13px]",
-        "prose-h4:text-[13px] prose-h5:text-[13px] prose-h6:text-[13px]",
+        "prose-h1:text-xs prose-h2:text-xs prose-h3:text-xs",
+        "prose-h4:text-xs prose-h5:text-xs prose-h6:text-xs",
         "prose-h1:font-bold prose-h2:font-bold",
         "prose-h3:font-semibold prose-h4:font-semibold",
         "prose-h5:font-semibold prose-h6:font-semibold",
@@ -35,16 +99,16 @@ export function MarkdownMessage({ content, className }: MarkdownMessageProps) {
         // Bold text
         "prose-strong:text-white/90 prose-strong:font-semibold",
         // Inline code
-        "prose-code:text-sm prose-code:bg-white/[0.08]",
+        "prose-code:text-xs prose-code:bg-white/[0.08]",
         "prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded",
         // Code blocks
         "prose-pre:bg-white/[0.06] prose-pre:rounded-lg",
         // Lists
-        "prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5",
+        "prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0 prose-li:text-xs prose-li:leading-[20px]",
         className
       )}
     >
-      <ReactMarkdown>{content}</ReactMarkdown>
+      {rendered}
     </div>
   );
 }

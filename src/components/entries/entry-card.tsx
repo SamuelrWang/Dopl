@@ -17,8 +17,23 @@ interface EntryCardProps {
   thumbnailUrl: string | null;
   useCase: string | null;
   complexity: string | null;
+  contentType: string | null;
   status: string;
   createdAt: string;
+}
+
+function getDownloadLabel(contentType: string | null): string {
+  switch (contentType) {
+    case "knowledge":
+    case "article":
+      return "Download Insights";
+    case "reference":
+      return "Download Reference";
+    case "resource":
+      return "";
+    default:
+      return "Download agents.md";
+  }
 }
 
 const complexityAccent: Record<string, string> = {
@@ -33,6 +48,13 @@ const platformLabels: Record<string, string> = {
   instagram: "IG",
   reddit: "Reddit",
   github: "GitHub",
+  youtube: "YouTube",
+  hackernews: "HN",
+  stackoverflow: "SO",
+  medium: "Medium",
+  substack: "Substack",
+  devto: "Dev.to",
+  arxiv: "arXiv",
   web: "Web",
 };
 
@@ -64,10 +86,12 @@ export function EntryCard({
   thumbnailUrl,
   useCase,
   complexity,
+  contentType,
   status,
   createdAt,
 }: EntryCardProps) {
   const platform = sourcePlatform || "web";
+  const downloadLabel = getDownloadLabel(contentType);
   const gradientClass = placeholderGradients[platform] || placeholderGradients.web;
   const accentColor = complexity ? complexityAccent[complexity] : undefined;
 
@@ -284,12 +308,12 @@ export function EntryCard({
           </div>
 
           {/* Download button — sharp corners */}
-          {status === "complete" && (
+          {status === "complete" && downloadLabel && (
             <button
               onClick={handleDownload}
               className="w-full h-8 font-mono text-[10px] uppercase tracking-wide bg-white/[0.05] hover:bg-white/[0.10] border border-white/[0.1] hover:border-white/[0.2] rounded-[3px] text-white/70 hover:text-white/90 transition-all"
             >
-              Download agents.md
+              {downloadLabel}
             </button>
           )}
         </div>

@@ -54,26 +54,36 @@ export async function generateEmbedding(text: string): Promise<number[]> {
   return response.data[0].embedding;
 }
 
+export type ModelTier = "haiku" | "sonnet";
+
+const MODEL_IDS: Record<ModelTier, string> = {
+  haiku: "claude-haiku-4-5-20251001",
+  sonnet: "claude-sonnet-4-20250514",
+};
+
 export async function callClaude(
   systemPrompt: string,
   userContent: string,
-  options?: { maxTokens?: number }
+  options?: { maxTokens?: number; model?: ModelTier }
 ): Promise<string> {
   if (!userContent || userContent.trim().length === 0) {
     return "";
   }
 
   const client = getClaudeClient();
+  const modelId = options?.model
+    ? MODEL_IDS[options.model]
+    : (process.env.LLM_MODEL || MODEL_IDS.sonnet);
 
   const response = await retryWithBackoff(
     () =>
       client.messages.create({
-        model: process.env.LLM_MODEL || "claude-sonnet-4-20250514",
+        model: modelId,
         max_tokens: options?.maxTokens || 8192,
         ...(systemPrompt ? { system: systemPrompt } : {}),
         messages: [{ role: "user" as const, content: userContent }],
       }),
-    { label: "callClaude" }
+    { label: `callClaude[${options?.model || "default"}]` }
   );
 
   const textBlock = response.content.find((b) => b.type === "text");

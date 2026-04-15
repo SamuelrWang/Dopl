@@ -1,5 +1,5 @@
-import { callClaude } from "@/lib/ai";
-import { buildAgentsMdPrompt } from "@/lib/prompts/agents-md";
+import { callClaude, ModelTier } from "@/lib/ai";
+import { buildSecondaryArtifactPrompt } from "@/lib/prompts/agents-md";
 import { ContentClassification } from "./content-classifier";
 
 export async function generateAgentsMd(
@@ -7,18 +7,28 @@ export async function generateAgentsMd(
   manifest: Record<string, unknown>,
   readme: string,
   classification?: ContentClassification,
-  sourceUrl?: string
+  sourceUrl?: string,
+  contentType?: string,
+  model?: ModelTier
 ): Promise<string> {
-  // Build the base prompt
-  let prompt = buildAgentsMdPrompt(
+  const effectiveType = contentType || "setup";
+
+  // Resource type gets no secondary artifact
+  if (effectiveType === "resource") {
+    return "";
+  }
+
+  // Build the prompt based on content type
+  let prompt = buildSecondaryArtifactPrompt(
     allRawContent,
     JSON.stringify(manifest, null, 2),
     readme,
+    effectiveType,
     sourceUrl || ""
   );
 
-  // If we have classification data, inject preservation guidance
-  if (classification && classification.preservation_notes.length > 0) {
+  // For setup/tutorial types, inject preservation guidance from content classification
+  if ((effectiveType === "setup" || effectiveType === "tutorial") && classification && classification.preservation_notes.length > 0) {
     const preservationBlock = `
 
 ## CONTENT CLASSIFICATION RESULTS (from pre-analysis)
@@ -40,7 +50,9 @@ DO NOT summarize any section marked EXECUTABLE above. Include it word-for-word i
     prompt = prompt + preservationBlock;
   }
 
-  // agents.md is the most important artifact — give it max tokens
-  const agentsMd = await callClaude("", prompt, { maxTokens: 16384 });
-  return agentsMd.trim();
+  // Max tokens: agents.md (setup) gets most, insights/reference get less
+  const maxTokens = (effectiveType === "setup" || effectiveType === "tutorial") ? 16384 : 8192;
+
+  const result = await callClaude("", prompt, { maxTokens, model });
+  return result.trim();
 }

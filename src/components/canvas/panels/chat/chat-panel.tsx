@@ -23,15 +23,14 @@
  * artifacts, tool_activity, and entry_cards.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { MarkdownMessage } from "@/components/design";
 import { ArtifactsPanel } from "@/components/ingest/artifacts-panel";
 import type { ChatMessage, ChatAttachment } from "@/components/ingest/chat-message";
 import type { ChatPanelData } from "../../types";
-import { useCanvas } from "../../canvas-store";
+import { usePanelsContext } from "../../canvas-store";
 import { useChat } from "./use-chat";
-import { findEnclosingClusterName } from "./cluster-context";
 import { useChatName } from "./use-chat-name";
 import {
   type PendingAttachment,
@@ -42,13 +41,14 @@ import {
   AttachmentPreviewStrip,
   SentAttachmentPreview,
 } from "./chat-attachments";
+import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 
 interface ChatPanelBodyProps {
   panel: ChatPanelData;
 }
 
 export function ChatPanelBody({ panel }: ChatPanelBodyProps) {
-  const { state, dispatch } = useCanvas();
+  const { panels, clusters, dispatch } = usePanelsContext();
   const [input, setInput] = useState("");
   const [pendingAttachments, setPendingAttachments] = useState<
     PendingAttachment[]
@@ -60,17 +60,60 @@ export function ChatPanelBody({ panel }: ChatPanelBodyProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const dragCounter = useRef(0);
 
-  // Chat + ingestion hooks — we pick which one to use per message based
-  // on URL detection.
   const { send: sendChat, isStreaming: chatStreaming } = useChat({ panel });
+
+  // Voice input
+  const {
+    isListening,
+    fullText,
+    isSupported: voiceSupported,
+    startListening,
+    stopListening,
+    clearTranscript,
+    error: voiceError,
+  } = useSpeechRecognition();
+  const prevFullTextRef = useRef("");
+
+  // Live-sync voice transcript into the textarea
+  useEffect(() => {
+    if (isListening && fullText !== prevFullTextRef.current) {
+      prevFullTextRef.current = fullText;
+      setInput(fullText);
+    }
+  }, [isListening, fullText]);
+
+  const handleVoiceToggle = useCallback(() => {
+    if (isListening) {
+      stopListening();
+      prevFullTextRef.current = "";
+    } else {
+      clearTranscript();
+      prevFullTextRef.current = "";
+      startListening();
+    }
+  }, [isListening, stopListening, clearTranscript, startListening]);
 
   // Auto-generate a topic name for the chat after the first AI response.
   useChatName(panel);
 
   // Current cluster name (for the "in cluster: X" badge at the top).
-  const clusterName = findEnclosingClusterName(panel.id, state);
+  const clusterName = useMemo(() => {
+    const cluster = clusters.find((c) => c.panelIds.includes(panel.id));
+    return cluster?.name ?? null;
+  }, [clusters, panel.id]);
 
   const isProcessing = chatStreaming || panel.isProcessing || isUploading;
+
+  // Build entry name lookup for citation pills
+  const entryNames = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const p of panels) {
+      if (p.type === "entry") {
+        map[p.entryId] = p.title;
+      }
+    }
+    return map;
+  }, [panels]);
 
   // Auto-scroll to bottom on new messages / streaming updates.
   useEffect(() => {
@@ -182,6 +225,12 @@ export function ChatPanelBody({ panel }: ChatPanelBodyProps) {
     const text = input.trim();
     const hasAttachments = pendingAttachments.length > 0;
     if ((!text && !hasAttachments) || isProcessing) return;
+
+    if (isListening) {
+      stopListening();
+      clearTranscript();
+      prevFullTextRef.current = "";
+    }
 
     // Upload attachments first if any
     let uploadedAttachments: ChatAttachment[] | undefined;
@@ -300,7 +349,7 @@ export function ChatPanelBody({ panel }: ChatPanelBodyProps) {
           </p>
         )}
         {panel.messages.map((msg, i) => (
-          <RenderedMessage key={i} message={msg} />
+          <RenderedMessage key={i} message={msg} entryNames={entryNames} />
         ))}
       </div>
 
@@ -349,57 +398,104 @@ export function ChatPanelBody({ panel }: ChatPanelBodyProps) {
             }
             disabled={isProcessing}
             rows={1}
-            className="w-full bg-transparent px-3 pt-3 pb-1.5 text-sm leading-[20px] text-white/90 outline-none resize-none placeholder:text-white/30 disabled:opacity-50 min-h-[40px] max-h-[140px]"
+            className="w-full bg-transparent px-3 pt-3 pb-1.5 text-xs leading-[18px] text-white/90 outline-none resize-none placeholder:text-white/30 disabled:opacity-50 min-h-[36px] max-h-[120px]"
           />
           <div className="flex items-center justify-between px-2 pb-2">
-            <div className="flex items-center gap-1.5">
-              <AttachButton onFiles={addFiles} disabled={isProcessing} />
-              <span className="font-mono text-[9px] uppercase tracking-wide text-white/30">
-                {isUploading
-                  ? "Uploading"
-                  : isProcessing
-                    ? "Streaming"
-                    : pendingAttachments.length > 0
-                      ? `${pendingAttachments.length} file${pendingAttachments.length > 1 ? "s" : ""}`
-                      : "Enter to send"}
-              </span>
-            </div>
-            <button
-              onClick={handleSend}
-              disabled={!canSend}
-              aria-label={isProcessing ? "Processing" : "Send"}
-              className="w-6 h-6 flex items-center justify-center text-white/50 hover:text-white/90 border border-white/[0.12] hover:border-white/[0.22] rounded-[3px] transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-white/[0.04] hover:bg-white/[0.08]"
-            >
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 14 14"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden
+            <AttachButton onFiles={addFiles} disabled={isProcessing} />
+            <div className="flex items-center gap-2">
+              {/* Voice input */}
+              {voiceSupported && (
+                <button
+                  type="button"
+                  onClick={handleVoiceToggle}
+                  aria-label={isListening ? "Stop recording" : "Start voice input"}
+                  title={
+                    voiceError
+                      ? voiceError
+                      : isListening
+                      ? "Recording... click to stop"
+                      : "Voice input"
+                  }
+                  className="flex items-center justify-center w-7 h-7 transition-colors"
+                >
+                  {isListening ? (
+                    <span className="flex items-end gap-[2px] h-4">
+                      {[1, 2, 3, 4, 3].map((h, i) => (
+                        <span
+                          key={i}
+                          className="w-[2px] rounded-full bg-red-400"
+                          style={{
+                            height: `${h * 3}px`,
+                            animation: `voiceBar 0.8s ease-in-out ${i * 0.1}s infinite alternate`,
+                          }}
+                        />
+                      ))}
+                    </span>
+                  ) : (
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={1.8}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="w-4 h-4 text-white/40 hover:text-white/70 transition-colors"
+                    >
+                      <rect x="9" y="2" width="6" height="12" rx="3" />
+                      <path d="M5 10a7 7 0 0 0 14 0" />
+                      <line x1="12" y1="19" x2="12" y2="22" />
+                      <line x1="8" y1="22" x2="16" y2="22" />
+                    </svg>
+                  )}
+                </button>
+              )}
+              {/* Send — circular */}
+              <button
+                onClick={handleSend}
+                disabled={!canSend}
+                aria-label={isProcessing ? "Processing" : "Send"}
+                className="w-7 h-7 flex items-center justify-center text-white/50 hover:text-white/90 border border-white/[0.12] hover:border-white/[0.22] rounded-full transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-white/[0.04] hover:bg-white/[0.08]"
               >
-                <path d="M7 11V3" />
-                <path d="M3 7l4-4 4 4" />
-              </svg>
-            </button>
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 14 14"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden
+                >
+                  <path d="M7 11V3" />
+                  <path d="M3 7l4-4 4 4" />
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
       </div>
+      {isListening && (
+        <style>{`
+          @keyframes voiceBar {
+            from { transform: scaleY(0.5); }
+            to   { transform: scaleY(1.5); }
+          }
+        `}</style>
+      )}
     </>
   );
 }
 
 // ── Message renderer ───────────────────────────────────────────────
 
-function RenderedMessage({ message }: { message: ChatMessage }) {
+function RenderedMessage({ message, entryNames }: { message: ChatMessage; entryNames?: Record<string, string> }) {
   // User text bubble — frosted glass, right-aligned.
   if (message.role === "user" && message.type === "text") {
     return (
       <div className="max-w-[90%] md:max-w-[80%] ml-auto">
-        <div className="text-sm leading-[22px] text-white/90 bg-white/[0.08] border border-white/[0.1] rounded py-2 px-3">
+        <div className="text-xs leading-[20px] text-white/90 bg-white/[0.08] border border-white/[0.1] rounded py-2 px-3">
           <p className="whitespace-pre-wrap break-words">{message.content}</p>
           {message.attachments && message.attachments.length > 0 && (
             <SentAttachmentPreview attachments={message.attachments} />
@@ -413,7 +509,7 @@ function RenderedMessage({ message }: { message: ChatMessage }) {
   if (message.role === "ai" && message.type === "text") {
     return (
       <div className="max-w-[90%] md:max-w-[80%] mr-auto">
-        <MarkdownMessage content={message.content} />
+        <MarkdownMessage content={message.content} entryNames={entryNames} />
       </div>
     );
   }
@@ -423,7 +519,7 @@ function RenderedMessage({ message }: { message: ChatMessage }) {
     return (
       <div className="max-w-[90%] md:max-w-[80%] mr-auto">
         {message.content.length > 0 ? (
-          <MarkdownMessage content={message.content + " ▍"} />
+          <MarkdownMessage content={message.content + " ▍"} entryNames={entryNames} />
         ) : (
           <p className="text-xs text-white/40 italic font-mono uppercase tracking-wide animate-pulse">
             Thinking...

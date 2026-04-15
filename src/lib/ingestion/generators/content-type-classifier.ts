@@ -1,18 +1,22 @@
-import { callClaude } from "@/lib/ai";
+import { callClaude, ModelTier } from "@/lib/ai";
 import { buildContentTypeClassifierPrompt } from "@/lib/prompts/content-type-classifier";
 import { ContentType } from "../types";
 
+const VALID_CONTENT_TYPES: ContentType[] = ["setup", "knowledge", "resource", "article", "tutorial", "reference"];
+
 export interface ContentTypeResult {
   content_type: ContentType;
+  source_type: string;
   confidence: number;
   reasoning: string;
 }
 
 export async function classifyContentType(
-  postText: string
+  postText: string,
+  model?: ModelTier
 ): Promise<ContentTypeResult> {
   const prompt = buildContentTypeClassifierPrompt(postText);
-  const response = await callClaude("", prompt, { maxTokens: 256 });
+  const response = await callClaude("", prompt, { maxTokens: 256, model });
 
   const jsonStr = response
     .replace(/^```json\s*/m, "")
@@ -24,21 +28,24 @@ export async function classifyContentType(
     const parsed = JSON.parse(jsonStr) as ContentTypeResult;
 
     // Validate content_type
-    if (!["setup", "knowledge", "resource"].includes(parsed.content_type)) {
+    if (!VALID_CONTENT_TYPES.includes(parsed.content_type)) {
       console.warn(
-        `[content-type] Invalid type "${parsed.content_type}", defaulting to "setup"`
+        `[content-type] Invalid type "${parsed.content_type}", defaulting to "knowledge"`
       );
-      return { content_type: "setup", confidence: 0.5, reasoning: "Invalid classification — defaulting to setup" };
+      return { content_type: "knowledge", source_type: parsed.source_type || "other", confidence: 0.5, reasoning: "Invalid classification — defaulting to knowledge" };
     }
 
-    return parsed;
+    return {
+      ...parsed,
+      source_type: parsed.source_type || "other",
+    };
   } catch (error) {
     console.error("[content-type] Failed to parse classification:", error);
-    // Default to setup (most thorough pipeline)
     return {
-      content_type: "setup",
+      content_type: "knowledge",
+      source_type: "other",
       confidence: 0.5,
-      reasoning: "Classification parse failed — defaulting to setup",
+      reasoning: "Classification parse failed — defaulting to knowledge",
     };
   }
 }

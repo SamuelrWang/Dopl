@@ -1,4 +1,4 @@
-export type ContentType = "setup" | "knowledge" | "resource";
+export type ContentType = "setup" | "knowledge" | "resource" | "article" | "tutorial" | "reference";
 
 export interface IngestInput {
   url: string;

@@ -48,6 +48,7 @@ export function BrowsePanelBody({ panel }: BrowsePanelBodyProps) {
           thumbnailUrl: entry.thumbnail_url ?? null,
           useCase: entry.use_case ?? null,
           complexity: entry.complexity ?? null,
+          contentType: entry.content_type ?? null,
           tags: (entry.tags ?? []).map((t) => ({
             type: t.tag_type,
             value: t.tag_value,
@@ -108,6 +109,7 @@ export function BrowsePanelBody({ panel }: BrowsePanelBodyProps) {
           thumbnailUrl: entry.thumbnail_url ?? null,
           useCase: entry.use_case ?? null,
           complexity: entry.complexity ?? null,
+          contentType: entry.content_type ?? null,
           tags: (entry.tags ?? []).map((t) => ({
             type: t.tag_type,
             value: t.tag_value,

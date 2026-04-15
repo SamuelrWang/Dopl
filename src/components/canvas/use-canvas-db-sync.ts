@@ -60,6 +60,7 @@ function panelToDbRow(panel: Panel) {
         thumbnailUrl: panel.thumbnailUrl,
         useCase: panel.useCase,
         complexity: panel.complexity,
+        contentType: panel.contentType,
         tags: panel.tags,
         readme: panel.readme,
         agentsMd: panel.agentsMd,
@@ -121,6 +122,7 @@ function dbRowToPanel(row: Record<string, unknown>): Panel | null {
         thumbnailUrl: (data.thumbnailUrl as string) || null,
         useCase: (data.useCase as string) || null,
         complexity: (data.complexity as string) || null,
+        contentType: (data.contentType as string) || null,
         tags: (data.tags as Array<{ type: string; value: string }>) || [],
         readme: (data.readme as string) || "",
         agentsMd: (data.agentsMd as string) || "",
@@ -220,10 +222,12 @@ export function useCanvasDbSync() {
   const prevCountersRef = useRef("");
   const prevTitlesRef = useRef<Map<string, string>>(new Map());
   const prevClustersRef = useRef("");
+  const prevPanelDataRef = useRef<Map<string, string>>(new Map());
   const cameraTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const positionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const titleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const clusterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const panelDataTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Mount: load from DB and reconcile ──────────────────────────────
   useEffect(() => {
@@ -329,6 +333,12 @@ export function useCanvasDbSync() {
       }
       prevTitlesRef.current = titles;
       prevClustersRef.current = JSON.stringify(s.clusters);
+      const dataMap = new Map<string, string>();
+      for (const p of s.panels) {
+        const row = panelToDbRow(p);
+        dataMap.set(p.id, JSON.stringify(row.panel_data));
+      }
+      prevPanelDataRef.current = dataMap;
     }
 
     loadFromDb();
@@ -444,10 +454,36 @@ export function useCanvasDbSync() {
       }, 1000);
     }
 
+    // Panel data changed → debounced batch update (2000ms)
+    const panelDataUpdates: { panel_id: string; panel_data: Record<string, unknown> }[] = [];
+    const currentPanelData = new Map<string, string>();
+    for (const panel of state.panels) {
+      const row = panelToDbRow(panel);
+      const dataKey = JSON.stringify(row.panel_data);
+      currentPanelData.set(panel.id, dataKey);
+      const prevData = prevPanelDataRef.current.get(panel.id);
+      if (prevData !== undefined && prevData !== dataKey) {
+        panelDataUpdates.push({ panel_id: panel.id, panel_data: row.panel_data });
+      }
+    }
+    if (panelDataUpdates.length > 0) {
+      if (panelDataTimerRef.current) clearTimeout(panelDataTimerRef.current);
+      panelDataTimerRef.current = setTimeout(() => {
+        fetch("/api/canvas/panels/batch", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ updates: panelDataUpdates }),
+        }).then(() => setLocalSaveTimestamp())
+          .catch((err) => console.error("[canvas-sync] panel_data batch update failed:", err));
+        panelDataTimerRef.current = null;
+      }, 2000);
+    }
+
     prevPanelIdsRef.current = currentPanelIds;
     prevPositionsRef.current = currentPositions;
     prevTitlesRef.current = currentTitles;
     prevClustersRef.current = currentClustersKey;
+    prevPanelDataRef.current = currentPanelData;
   }, [state]);
 
   // Cleanup timers on unmount
@@ -457,6 +493,7 @@ export function useCanvasDbSync() {
       if (positionTimerRef.current) clearTimeout(positionTimerRef.current);
       if (titleTimerRef.current) clearTimeout(titleTimerRef.current);
       if (clusterTimerRef.current) clearTimeout(clusterTimerRef.current);
+      if (panelDataTimerRef.current) clearTimeout(panelDataTimerRef.current);
     };
   }, []);
 }

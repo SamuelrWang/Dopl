@@ -34,8 +34,27 @@ const platformLabels: Record<string, string> = {
   instagram: "IG",
   reddit: "Reddit",
   github: "GitHub",
+  youtube: "YouTube",
+  hackernews: "HN",
+  stackoverflow: "SO",
+  medium: "Medium",
+  substack: "Substack",
+  devto: "Dev.to",
+  arxiv: "arXiv",
   web: "Web",
 };
+
+function getSecondaryLabel(contentType: string | null | undefined): { label: string; filename: string } {
+  switch (contentType) {
+    case "knowledge":
+    case "article":
+      return { label: "Key Insights", filename: "key-insights.md" };
+    case "reference":
+      return { label: "Reference Guide", filename: "reference-guide.md" };
+    default:
+      return { label: "agents.md", filename: "agents.md" };
+  }
+}
 
 const placeholderGradients: Record<string, string> = {
   x: "from-neutral-900 to-black",
@@ -61,7 +80,8 @@ export function EntryPanelBody({ panel }: EntryPanelBodyProps) {
       items.push({ label: "README.md", filename: "README.md", content: panel.readme, accentColor: "var(--mint)", loading: !!panel.readmeLoading });
     }
     if (panel.agentsMd || panel.agentsMdLoading) {
-      items.push({ label: "agents.md", filename: "agents.md", content: panel.agentsMd, accentColor: "var(--coral)", loading: !!panel.agentsMdLoading });
+      const secondary = getSecondaryLabel(panel.contentType);
+      items.push({ label: secondary.label, filename: secondary.filename, content: panel.agentsMd, accentColor: "var(--coral)", loading: !!panel.agentsMdLoading });
     }
     if (panel.manifest && Object.keys(panel.manifest).length > 0) {
       items.push({ label: "manifest.json", filename: "manifest.json", content: JSON.stringify(panel.manifest, null, 2), accentColor: "var(--gold)", loading: false });

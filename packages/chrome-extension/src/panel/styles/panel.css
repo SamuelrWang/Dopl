@@ -143,3 +143,17 @@ body {
 .animate-fade-in {
   animation: fadeIn 0.2s ease-out;
 }
+
+/* Voice input animation */
+@keyframes voiceBar {
+  from { transform: scaleY(0.5); }
+  to   { transform: scaleY(1.5); }
+}
+
+/* Opaque panel surface tokens (matching main site) */
+:root {
+  --panel-surface: oklch(0.13 0 0);
+  --panel-surface-focus: oklch(0.12 0 0);
+  --input-surface: oklch(0.11 0 0);
+  --card-surface: oklch(0.21 0 0);
+}

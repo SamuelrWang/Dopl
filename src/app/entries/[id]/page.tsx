@@ -17,6 +17,7 @@ interface FullEntry {
   status: string;
   readme: string | null;
   agents_md: string | null;
+  content_type: string | null;
   manifest: Record<string, unknown> | null;
   raw_content: Record<string, unknown> | null;
   created_at: string;

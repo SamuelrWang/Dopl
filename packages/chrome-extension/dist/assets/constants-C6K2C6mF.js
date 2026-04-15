@@ -1,1 +1,0 @@
-const s="https://setupintelligence.com",e={API_KEY:"sie_api_key",API_URL:"sie_api_url",AUTH_MODE:"sie_auth_mode"},_="tab-chat-",t=3e4,E=3e4,T=12e4,a={INGEST_PAGE:"sie-ingest-page",INGEST_LINK:"sie-ingest-link",SEARCH_SELECTION:"sie-search-selection",SAVE_SNIPPET:"sie-save-snippet"};export{E as A,t as C,s as D,T as L,e as S,_ as T,a};

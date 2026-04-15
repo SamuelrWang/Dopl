@@ -12,7 +12,7 @@ async function handleGet(
 
   const { data: entry, error } = await supabase
     .from("entries")
-    .select("title, readme, agents_md, manifest")
+    .select("title, readme, agents_md, manifest, content_type")
     .eq("id", id)
     .single();
 
@@ -36,11 +36,19 @@ async function handleGet(
       contentType = "application/json";
       break;
     case "agents_md":
-    default:
+    default: {
       content = entry.agents_md || "";
-      filename = "agents.md";
+      const ct = entry.content_type;
+      if (ct === "knowledge" || ct === "article") {
+        filename = "key-insights.md";
+      } else if (ct === "reference") {
+        filename = "reference-guide.md";
+      } else {
+        filename = "agents.md";
+      }
       contentType = "text/markdown";
       break;
+    }
   }
 
   return new Response(content, {

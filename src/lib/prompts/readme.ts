@@ -1,4 +1,4 @@
-export const SETUP_README_PROMPT = `You are generating a README for a knowledge base entry. This README is the human-readable summary of an AI/automation setup that was shared on social media.
+export const SETUP_README_PROMPT = `You are generating a README for a knowledge base entry. This README is the human-readable summary of an implementation or setup.
 
 ## Content Preservation Rules
 
@@ -29,8 +29,8 @@ Generate a README in markdown format following this structure:
 > [One-line description]
 
 **Source:** [Original URL]
-**Author:** [@handle]
-**Date:** [Date]
+**Author:** [Author if available]
+**Date:** [Date if available]
 **Complexity:** [From manifest]
 
 ## What This Does
@@ -59,7 +59,7 @@ Generate a README in markdown format following this structure:
 
 IMPORTANT: Be thorough and specific. This is a reference document. Include ALL technical details from the raw content. Do not summarize away important information — the goal is to preserve the full knowledge while making it readable.`;
 
-export const KNOWLEDGE_README_PROMPT = `You are generating a README for a knowledge base entry. This README summarizes AI/automation knowledge, insights, or educational content that was shared on social media.
+export const KNOWLEDGE_README_PROMPT = `You are generating a README for a knowledge base entry. This README summarizes knowledge, insights, or educational content.
 
 ## Content Preservation Rules
 
@@ -90,8 +90,8 @@ Generate a README in markdown format following this structure:
 > [One-line description of the key insight or topic]
 
 **Source:** [Original URL]
-**Author:** [@handle]
-**Date:** [Date]
+**Author:** [Author if available]
+**Date:** [Date if available]
 **Type:** Knowledge / Insight
 
 ## What This Covers
@@ -118,14 +118,140 @@ Generate a README in markdown format following this structure:
 
 [From manifest]
 
-IMPORTANT: Focus on preserving the KNOWLEDGE and INSIGHTS. The goal is to capture what makes this content valuable as a reference for someone working in AI/automation.`;
+IMPORTANT: Focus on preserving the KNOWLEDGE and INSIGHTS. The goal is to capture what makes this content valuable as a reference.`;
+
+export const ARTICLE_README_PROMPT = `You are generating a README for a knowledge base entry. This README captures the key content from a news article, opinion piece, or published analysis.
+
+## Content Extraction Rules
+
+Your job is to FAITHFULLY CAPTURE AND ORGANIZE the content, not to analyze or editorialize it. Preserve the author's claims, data points, and arguments as stated in the source.
+
+- DO preserve all factual claims, statistics, and data points exactly as stated
+- DO preserve direct quotes and attributions
+- DO preserve the logical structure of the author's argument
+- DO NOT add your own analysis, opinions, or editorial commentary
+- DO NOT reframe the author's claims — present them as they are
+- DO condense only redundant passages and filler — not substance
+
+Here is the raw content:
+
+<raw_content>
+{ALL_RAW_CONTENT}
+</raw_content>
+
+Here is the structured manifest already generated:
+
+<manifest>
+{MANIFEST_JSON}
+</manifest>
+
+Generate a README in markdown format following this structure:
+
+# [Title from manifest]
+
+> [One-line summary of the article's main point]
+
+**Source:** [Original URL]
+**Author:** [Author/Publication if available]
+**Date:** [Date if available]
+**Type:** Article
+
+## What This Reports
+
+[2-3 paragraphs summarizing the article's main subject and context]
+
+## Key Claims & Evidence
+
+[The specific claims, findings, or arguments made in the article. Use bullet points or numbered lists. Include supporting evidence, data, or quotes where provided.]
+
+## Context & Background
+
+[Background information that helps readers understand the claims — industry context, prior events, related developments]
+
+## Implications
+
+[What the article suggests will happen, what it means for practitioners, or what actions it recommends — as stated by the author, NOT your interpretation]
+
+## Tags
+
+[From manifest]
+
+IMPORTANT: This is extraction, not analysis. Faithfully capture what the source says. Your value is in organizing the content clearly, not in interpreting it.`;
+
+export const REFERENCE_README_PROMPT = `You are generating a README for a knowledge base entry. This README captures the key content from documentation, API references, or technical reference material.
+
+## Content Extraction Rules
+
+Your job is to extract the key technical details into a scannable reference. Focus on what a developer would need to look up repeatedly.
+
+- DO preserve all API signatures, parameter names, types, and defaults
+- DO preserve all configuration options and their effects
+- DO preserve all warnings, gotchas, and important notes
+- DO structure information for quick lookup, not narrative reading
+- DO NOT add explanations beyond what the source provides
+
+Here is the raw content:
+
+<raw_content>
+{ALL_RAW_CONTENT}
+</raw_content>
+
+Here is the structured manifest already generated:
+
+<manifest>
+{MANIFEST_JSON}
+</manifest>
+
+Generate a README in markdown format following this structure:
+
+# [Title from manifest]
+
+> [One-line description of what this reference covers]
+
+**Source:** [Original URL]
+**Type:** Reference / Documentation
+
+## What This Covers
+
+[1-2 paragraphs describing the scope of this reference]
+
+## Key Concepts
+
+[Core concepts, types, or abstractions that the reader needs to understand]
+
+## API / Interface Summary
+
+[Key functions, endpoints, methods, or interfaces. Use code blocks and tables where appropriate.]
+
+## Configuration & Parameters
+
+[Key configuration options, parameters, and their effects. Use tables for option lists.]
+
+## Important Notes & Gotchas
+
+[Warnings, common pitfalls, edge cases, and important caveats from the documentation]
+
+## Tags
+
+[From manifest]
+
+IMPORTANT: This is structured extraction. Organize the content for quick lookup. Every parameter, option, and gotcha mentioned in the source should be captured.`;
+
+const README_PROMPTS: Record<string, string> = {
+  setup: SETUP_README_PROMPT,
+  tutorial: SETUP_README_PROMPT,
+  knowledge: KNOWLEDGE_README_PROMPT,
+  article: ARTICLE_README_PROMPT,
+  reference: REFERENCE_README_PROMPT,
+  resource: KNOWLEDGE_README_PROMPT,
+};
 
 export function buildReadmePrompt(
   rawContent: string,
   manifestJson: string,
   contentType: string = "setup"
 ): string {
-  const template = contentType === "knowledge" ? KNOWLEDGE_README_PROMPT : SETUP_README_PROMPT;
+  const template = README_PROMPTS[contentType] || KNOWLEDGE_README_PROMPT;
   return template.replace("{ALL_RAW_CONTENT}", rawContent).replace(
     "{MANIFEST_JSON}",
     manifestJson

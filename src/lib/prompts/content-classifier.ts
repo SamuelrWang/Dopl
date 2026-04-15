@@ -1,4 +1,4 @@
-export const CONTENT_CLASSIFIER_PROMPT = `Analyze the following raw content from a social media post about an AI/automation setup. Your job is to classify each distinct section of content by how it should be treated in documentation.
+export const CONTENT_CLASSIFIER_PROMPT = `Analyze the following raw content. Your job is to classify each distinct section of content by how it should be treated in documentation.
 
 <raw_content>
 {ALL_RAW_CONTENT}

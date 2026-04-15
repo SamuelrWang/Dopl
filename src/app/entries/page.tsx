@@ -15,6 +15,7 @@ interface EntryListItem {
   thumbnail_url: string | null;
   use_case: string | null;
   complexity: string | null;
+  content_type: string | null;
   status: string;
   created_at: string;
 }

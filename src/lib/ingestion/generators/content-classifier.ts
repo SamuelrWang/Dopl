@@ -1,4 +1,4 @@
-import { callClaude } from "@/lib/ai";
+import { callClaude, ModelTier } from "@/lib/ai";
 import { buildContentClassifierPrompt } from "@/lib/prompts/content-classifier";
 
 export interface ContentClassification {
@@ -19,10 +19,11 @@ export interface ContentClassification {
 }
 
 export async function classifyContent(
-  allRawContent: string
+  allRawContent: string,
+  model?: ModelTier
 ): Promise<ContentClassification> {
   const prompt = buildContentClassifierPrompt(allRawContent);
-  const response = await callClaude("", prompt, { maxTokens: 4096 });
+  const response = await callClaude("", prompt, { maxTokens: 4096, model });
 
   const jsonStr = response
     .replace(/^```json\s*/m, "")

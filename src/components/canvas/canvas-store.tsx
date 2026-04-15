@@ -12,6 +12,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useMemo,
   useReducer,
   useRef,
   type Dispatch,
@@ -513,6 +514,7 @@ function reducer(state: CanvasState, action: CanvasAction): CanvasState {
         thumbnailUrl: action.thumbnailUrl,
         useCase: action.useCase,
         complexity: action.complexity,
+        contentType: action.contentType || null,
         tags: action.tags,
         readme: action.readme,
         agentsMd: action.agentsMd,
@@ -813,6 +815,18 @@ interface CanvasContextValue {
 const CanvasContext = createContext<CanvasContextValue | null>(null);
 
 /**
+ * Separate context carrying only panels + clusters + dispatch.
+ * Components that don't need camera can subscribe to this instead of
+ * CanvasContext, avoiding re-renders on camera/zoom changes.
+ */
+interface PanelsContextValue {
+  panels: Panel[];
+  clusters: Cluster[];
+  dispatch: Dispatch<CanvasAction>;
+}
+const PanelsContext = createContext<PanelsContextValue | null>(null);
+
+/**
  * Ref-based context for non-rendering reads of canvas state.
  * The ref object identity never changes, so consumers subscribing to this
  * context never re-render from it. Use this for imperative code (drag
@@ -825,6 +839,18 @@ export function useCanvas(): CanvasContextValue {
   const ctx = useContext(CanvasContext);
   if (!ctx) {
     throw new Error("useCanvas must be used inside <CanvasProvider>");
+  }
+  return ctx;
+}
+
+/**
+ * Subscribe to panels + clusters without re-rendering on camera changes.
+ * Use this in fixed UI (e.g. FixedChatPanel) that doesn't need camera.
+ */
+export function usePanelsContext(): PanelsContextValue {
+  const ctx = useContext(PanelsContext);
+  if (!ctx) {
+    throw new Error("usePanelsContext must be used inside <CanvasProvider>");
   }
   return ctx;
 }
@@ -1054,13 +1080,22 @@ export function CanvasProvider({ children, userId }: CanvasProviderProps) {
     };
   }, [state, storageKey]);
 
+  // Memoize panels context so it only changes when panels/clusters change,
+  // not on camera moves. This prevents fixed UI from re-rendering on zoom.
+  const panelsCtx = useMemo(
+    () => ({ panels: state.panels, clusters: state.clusters, dispatch }),
+    [state.panels, state.clusters, dispatch]
+  );
+
   return (
     <CanvasContext.Provider value={{ state, dispatch }}>
-      <CanvasStateRefContext.Provider value={stateRef}>
-        <CanvasDbSyncBridge />
-        <ConversationSyncBridge />
-        {children}
-      </CanvasStateRefContext.Provider>
+      <PanelsContext.Provider value={panelsCtx}>
+        <CanvasStateRefContext.Provider value={stateRef}>
+          <CanvasDbSyncBridge />
+          <ConversationSyncBridge />
+          {children}
+        </CanvasStateRefContext.Provider>
+      </PanelsContext.Provider>
     </CanvasContext.Provider>
   );
 }

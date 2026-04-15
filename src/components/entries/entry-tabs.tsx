@@ -16,6 +16,33 @@ interface EntryTabsProps {
     extracted_content: string | null;
   }[];
   githubRepoUrl: string | null;
+  contentType?: string;
+}
+
+function getSecondaryLabel(contentType?: string): string {
+  switch (contentType) {
+    case "knowledge":
+    case "article":
+      return "Key Insights";
+    case "reference":
+      return "Reference Guide";
+    case "setup":
+    case "tutorial":
+    default:
+      return "agents.md";
+  }
+}
+
+function getSecondaryFilename(contentType?: string): string {
+  switch (contentType) {
+    case "knowledge":
+    case "article":
+      return "key-insights.md";
+    case "reference":
+      return "reference-guide.md";
+    default:
+      return "agents.md";
+  }
 }
 
 type TabId = "readme" | "agents" | "manifest" | "repo" | "raw";
@@ -51,10 +78,14 @@ export function EntryTabs({
   rawContent,
   sources,
   githubRepoUrl,
+  contentType,
 }: EntryTabsProps) {
   const [copied, setCopied] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>("readme");
   const hasRepo = !!githubRepoUrl;
+  const secondaryLabel = getSecondaryLabel(contentType);
+  const secondaryFilename = getSecondaryFilename(contentType);
+  const showSecondaryTab = contentType !== "resource";
 
   async function copyToClipboard(text: string, label: string) {
     await navigator.clipboard.writeText(text);
@@ -64,7 +95,7 @@ export function EntryTabs({
 
   const tabs: { id: TabId; label: string; show: boolean }[] = [
     { id: "readme", label: "README", show: true },
-    { id: "agents", label: "agents.md", show: true },
+    { id: "agents", label: secondaryLabel, show: showSecondaryTab },
     { id: "manifest", label: "Manifest", show: true },
     { id: "repo", label: "Repository", show: hasRepo },
     { id: "raw", label: "Raw Data", show: true },
@@ -112,10 +143,10 @@ export function EntryTabs({
         </GlassCard>
       )}
 
-      {/* agents.md */}
+      {/* Secondary artifact (agents.md / Key Insights / Reference Guide) */}
       {activeTab === "agents" && (
         <GlassCard
-          label="agents.md"
+          label={secondaryFilename}
           labelDivider
           accentColor="var(--coral)"
         >
@@ -133,7 +164,7 @@ export function EntryTabs({
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement("a");
                 a.href = url;
-                a.download = "agents.md";
+                a.download = secondaryFilename;
                 a.click();
                 URL.revokeObjectURL(url);
               }}
@@ -142,7 +173,7 @@ export function EntryTabs({
             </SharpButton>
           </div>
           <div className="prose prose-sm prose-invert max-w-none whitespace-pre-wrap text-white/80 leading-relaxed">
-            {agentsMd || "No agents.md generated yet."}
+            {agentsMd || `No ${secondaryLabel.toLowerCase()} generated yet.`}
           </div>
         </GlassCard>
       )}

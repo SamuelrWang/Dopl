@@ -234,6 +234,7 @@ export function useChat({ panel }: UseChatOptions) {
                         thumbnailUrl: entry.thumbnail_url ?? null,
                         useCase: entry.use_case ?? null,
                         complexity: entry.complexity ?? null,
+                        contentType: entry.content_type ?? null,
                         tags,
                         readme: entry.readme || "",
                         agentsMd: entry.agents_md || "",

@@ -71,6 +71,7 @@ export interface EntryPanelData extends BasePanelData {
   thumbnailUrl: string | null;
   useCase: string | null;
   complexity: string | null;
+  contentType: string | null;
   /** Tags as typed key/value pairs (same shape the /api/entries/[id] returns) */
   tags: Array<{ type: string; value: string }>;
   /** Artifacts snapshotted at spawn time */
@@ -245,7 +246,7 @@ export interface CanvasState {
 }
 
 /** Zoom bounds. Going below 0.25 or above 4 gets confusing / unreadable. */
-export const MIN_ZOOM = 0.25;
+export const MIN_ZOOM = 0.5;
 export const MAX_ZOOM = 4.0;
 
 export const INITIAL_CANVAS_STATE: CanvasState = {
@@ -455,6 +456,7 @@ export type CanvasAction =
       thumbnailUrl: string | null;
       useCase: string | null;
       complexity: string | null;
+      contentType?: string | null;
       tags: Array<{ type: string; value: string }>;
       readme: string;
       agentsMd: string;

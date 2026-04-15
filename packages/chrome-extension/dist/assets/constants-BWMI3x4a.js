@@ -1,0 +1,1 @@
+const _="https://setupintelligence.com",s={API_KEY:"dopl_api_key",API_URL:"dopl_api_url",AUTH_MODE:"dopl_auth_mode"},t="tab-chat-",E=3e4,e=3e4,o=12e4,T={INGEST_PAGE:"dopl-ingest-page",INGEST_LINK:"dopl-ingest-link",SEARCH_SELECTION:"dopl-search-selection",SAVE_SNIPPET:"dopl-save-snippet"};export{e as A,E as C,_ as D,o as L,s as S,t as T,T as a};

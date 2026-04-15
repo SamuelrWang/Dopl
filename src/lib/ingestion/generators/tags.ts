@@ -1,4 +1,4 @@
-import { callClaude } from "@/lib/ai";
+import { callClaude, ModelTier } from "@/lib/ai";
 import { buildTagsPrompt } from "@/lib/prompts/tags";
 
 interface GeneratedTag {
@@ -7,10 +7,11 @@ interface GeneratedTag {
 }
 
 export async function generateTags(
-  manifest: Record<string, unknown>
+  manifest: Record<string, unknown>,
+  model?: ModelTier
 ): Promise<GeneratedTag[]> {
   const prompt = buildTagsPrompt(JSON.stringify(manifest, null, 2));
-  const response = await callClaude("", prompt, { maxTokens: 2048 });
+  const response = await callClaude("", prompt, { maxTokens: 2048, model });
 
   // Extract JSON array from response
   const jsonStr = response

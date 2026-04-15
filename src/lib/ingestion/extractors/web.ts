@@ -84,6 +84,7 @@ async function fetchWithFirecrawl(
     metadata: {
       title: data.data?.metadata?.title,
       description: data.data?.metadata?.description,
+      thumbnail_url: data.data?.metadata?.ogImage || data.data?.metadata?.["og:image"] || null,
     },
   };
 }
@@ -113,6 +114,7 @@ async function fetchWithJina(
     content,
     metadata: {
       title: data.title,
+      thumbnail_url: data.image || data.data?.image || null,
     },
   };
 }

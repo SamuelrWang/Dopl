@@ -40,6 +40,7 @@ interface EntryFetchResponse {
   thumbnail_url?: string | null;
   use_case?: string | null;
   complexity?: string | null;
+  content_type?: string | null;
   readme?: string | null;
   agents_md?: string | null;
   manifest?: Record<string, unknown> | null;
@@ -62,6 +63,7 @@ function buildEntryActionPayload(
     thumbnailUrl: entry.thumbnail_url ?? null,
     useCase: entry.use_case ?? null,
     complexity: entry.complexity ?? null,
+    contentType: entry.content_type ?? null,
     tags: (entry.tags ?? []).map((t) => ({
       type: t.tag_type,
       value: t.tag_value,
@@ -122,12 +124,13 @@ function handleProgressEvent(
         thumbnailUrl: (details.thumbnailUrl as string) || null,
         useCase: (details.useCase as string) || null,
         complexity: (details.complexity as string) || null,
+        contentType,
         tags: [],
         readme: "",
         agentsMd: "",
         manifest: pstate.manifest,
         readmeLoading: true,
-        agentsMdLoading: contentType !== "knowledge",
+        agentsMdLoading: contentType !== "resource",
         tagsLoading: true,
       });
     }

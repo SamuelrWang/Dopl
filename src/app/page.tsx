@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { CommunityCard } from "@/components/community/community-card";
@@ -17,16 +17,17 @@ import {
   Globe,
   Mic,
 } from "lucide-react";
+import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 
 /* ──────────────────────────────────────────────────────────────────── */
 /*  Reusable prompt input (hero + final CTA)                          */
 /* ──────────────────────────────────────────────────────────────────── */
 const ROTATING_PROMPTS = [
-  "Paste an X post to ingest it...",
+  "Extract these X posts and convert them into one Claude Code skill...",
   "Build me an automation for LinkedIn lead gen...",
   "What Claude Code configs exist for deep research?",
   "Compose a marketing automation with Supabase...",
-  "Ingest this GitHub repo: github.com/...",
+  "Find the best open source Github repos and create a digital brain...",
   "Search for MCP server setups...",
 ];
 
@@ -86,6 +87,49 @@ function PromptInput() {
   const [value, setValue] = useState("");
   const animatedPlaceholder = useTypingAnimation();
   const showPlaceholder = !value;
+  const prevFullTextRef = useRef("");
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
+  const {
+    isListening,
+    fullText,
+    isSupported: voiceSupported,
+    startListening,
+    stopListening,
+    clearTranscript,
+    error: voiceError,
+  } = useSpeechRecognition();
+
+  // Live-sync voice transcript into the textarea
+  useEffect(() => {
+    if (isListening && fullText !== prevFullTextRef.current) {
+      prevFullTextRef.current = fullText;
+      setValue(fullText);
+    }
+  }, [isListening, fullText]);
+
+  const handleVoiceToggle = useCallback(() => {
+    if (isListening) {
+      stopListening();
+      prevFullTextRef.current = "";
+    } else {
+      clearTranscript();
+      prevFullTextRef.current = "";
+      startListening();
+    }
+  }, [isListening, stopListening, clearTranscript, startListening]);
+
+  function handleSend() {
+    if (isListening) {
+      stopListening();
+      clearTranscript();
+      prevFullTextRef.current = "";
+    }
+    handleLandingSend(value);
+  }
+
+  const canSend = value.trim().length > 0;
 
   return (
     <div className="w-full max-w-[740px] mx-auto">
@@ -105,7 +149,7 @@ function PromptInput() {
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
-                handleLandingSend(value);
+                handleSend();
               }
             }}
             className="w-full h-full min-h-[80px] bg-transparent text-white text-[15px] resize-none outline-none placeholder-transparent text-left"
@@ -128,27 +172,87 @@ function PromptInput() {
               <Paperclip size={14} />
             </button>
           </div>
-          <button
-            onClick={() => handleLandingSend(value)}
-            aria-label="Send"
-            className="w-7 h-7 flex items-center justify-center text-white/50 hover:text-white/90 border border-white/[0.12] hover:border-white/[0.22] rounded-[3px] transition-colors bg-white/[0.04] hover:bg-white/[0.08]"
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 14 14"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+          <div className="flex items-center gap-2">
+            {/* Voice input */}
+            {mounted && voiceSupported && (
+              <button
+                type="button"
+                onClick={handleVoiceToggle}
+                aria-label={isListening ? "Stop recording" : "Start voice input"}
+                title={
+                  voiceError
+                    ? voiceError
+                    : isListening
+                    ? "Recording... click to stop"
+                    : "Voice input"
+                }
+                className="flex items-center justify-center w-7 h-7 transition-colors"
+              >
+                {isListening ? (
+                  <span className="flex items-end gap-[2px] h-4">
+                    {[1, 2, 3, 4, 3].map((h, i) => (
+                      <span
+                        key={i}
+                        className="w-[2px] rounded-full bg-red-400"
+                        style={{
+                          height: `${h * 3}px`,
+                          animation: `voiceBar 0.8s ease-in-out ${i * 0.1}s infinite alternate`,
+                        }}
+                      />
+                    ))}
+                  </span>
+                ) : (
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={1.8}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="w-4 h-4 text-white/40 hover:text-white/70 transition-colors"
+                  >
+                    <rect x="9" y="2" width="6" height="12" rx="3" />
+                    <path d="M5 10a7 7 0 0 0 14 0" />
+                    <line x1="12" y1="19" x2="12" y2="22" />
+                    <line x1="8" y1="22" x2="16" y2="22" />
+                  </svg>
+                )}
+              </button>
+            )}
+            {/* Send — circular */}
+            <button
+              onClick={handleSend}
+              disabled={!canSend}
+              aria-label="Send"
+              className="w-7 h-7 flex items-center justify-center text-white/50 hover:text-white/90 border border-white/[0.12] hover:border-white/[0.22] rounded-full transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-white/[0.04] hover:bg-white/[0.08]"
             >
-              <path d="M7 11V3" />
-              <path d="M3 7l4-4 4 4" />
-            </svg>
-          </button>
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 14 14"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden
+              >
+                <path d="M7 11V3" />
+                <path d="M3 7l4-4 4 4" />
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
+      {isListening && (
+        <style>{`
+          @keyframes voiceBar {
+            from { transform: scaleY(0.5); }
+            to   { transform: scaleY(1.5); }
+          }
+        `}</style>
+      )}
     </div>
   );
 }
@@ -302,9 +406,9 @@ export default function Home() {
               <Image
                 src="/favicons/favicon-32x32.png"
                 alt="Dopl"
-                width={26}
-                height={26}
-                className="rounded-xl border-[3px] border-black"
+                width={34}
+                height={34}
+                className="rounded-lg border-[3px] border-black"
               />
               <span
                 className="text-white text-[22px]"
@@ -318,10 +422,10 @@ export default function Home() {
             </Link>
             <div className="hidden md:flex items-center gap-6">
               <Link
-                href="/about"
+                href="/docs"
                 className="text-white/60 text-[13px] hover:text-white transition-colors"
               >
-                About
+                Docs
               </Link>
               <Link
                 href="/community"
@@ -338,6 +442,12 @@ export default function Home() {
             </div>
           </div>
           <div className="flex items-center gap-4">
+            <Link
+              href="/login"
+              className="text-white/60 text-[13px] hover:text-white transition-colors"
+            >
+              Sign in
+            </Link>
             <Link
               href="/login"
               className="bg-white/[0.08] border border-white/[0.12] text-white text-[13px] px-4 py-1.5 rounded-full hover:bg-white/[0.12] transition-colors"
@@ -899,16 +1009,16 @@ export default function Home() {
               </h4>
               <ul className="space-y-3">
                 {[
-                  "About",
-                  "Contact",
-                  "Discord",
+                  { label: "Docs", href: "/docs" },
+                  { label: "Contact", href: "#" },
+                  { label: "Discord", href: "#" },
                 ].map((item) => (
-                  <li key={item}>
+                  <li key={item.label}>
                     <Link
-                      href="#"
+                      href={item.href}
                       className="text-white/40 text-[14px] hover:text-white/70 transition-colors"
                     >
-                      {item}
+                      {item.label}
                     </Link>
                   </li>
                 ))}

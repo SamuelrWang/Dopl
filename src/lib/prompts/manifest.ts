@@ -1,27 +1,38 @@
-export const SETUP_MANIFEST_PROMPT = `You are analyzing content from a social media post about an AI/automation setup. Your job is to extract structured metadata into a manifest.json format.
+export const UNIFIED_MANIFEST_PROMPT = `You are analyzing content to extract structured metadata into a manifest.json format.
 
-Here is ALL the raw content collected from this post and its linked resources:
+Content type: {CONTENT_TYPE}
+Source type: {SOURCE_TYPE}
+
+Here is ALL the raw content collected from the source and its linked resources:
 
 <raw_content>
 {ALL_RAW_CONTENT}
 </raw_content>
 
-Generate a manifest.json with this exact structure:
+Generate a manifest.json. Include ALL fields that are relevant to this content. Omit fields that don't apply.
+
+## Always include these fields:
 
 {
   "version": "1.0",
-  "content_type": "setup",
-  "title": "[Descriptive title for this setup]",
+  "content_type": "{CONTENT_TYPE}",
+  "source_type": "{SOURCE_TYPE}",
+  "title": "[Descriptive title]",
   "description": "[One paragraph description]",
   "use_case": {
-    "primary": "[main category: cold_outbound, lead_gen, content_creation, data_pipeline, monitoring, automation, agent_system, dev_tooling, customer_support, research, other]",
+    "primary": "[main category — can be any descriptive category like: cold_outbound, lead_gen, content_creation, data_pipeline, monitoring, automation, agent_system, dev_tooling, customer_support, research, education, news, analysis, opinion, comparison, tutorial, reference, other]",
     "secondary": ["[additional categories]"]
   },
   "complexity": "[simple|moderate|complex|advanced]",
+  "tags": ["[searchable tags — lowercase, hyphen-separated]"]
+}
+
+## Include these fields when tools/tech are involved (setup, tutorial, reference):
+
   "tools": [
     {
       "name": "[Tool name]",
-      "role": "[What it does in this setup]",
+      "role": "[What it does in this context]",
       "required": true/false,
       "alternatives": ["[Alternative tools]"]
     }
@@ -37,47 +48,24 @@ Generate a manifest.json with this exact structure:
   "languages": ["[Programming languages used]"],
   "frameworks": ["[Frameworks used]"],
   "patterns": ["[Architecture patterns: mcp_server, agent_loop, rag, cron_job, webhook, event_driven, pipeline, etc.]"],
-  "estimated_setup_time": "[Time estimate]",
-  "tags": ["[searchable tags]"]
-}
+  "estimated_setup_time": "[Time estimate]"
 
-Be thorough. Extract EVERY tool, service, and integration mentioned.
-If something is implied but not stated, include it with a note.
-Respond with ONLY the JSON, no other text.`;
+## Include these fields for knowledge/article/opinion content:
 
-export const KNOWLEDGE_MANIFEST_PROMPT = `You are analyzing content from a social media post that shares AI/automation knowledge, insights, or educational content. Your job is to extract structured metadata into a manifest.json format.
-
-Here is ALL the raw content collected from this post and its linked resources:
-
-<raw_content>
-{ALL_RAW_CONTENT}
-</raw_content>
-
-Generate a manifest.json with this exact structure:
-
-{
-  "version": "1.0",
-  "content_type": "knowledge",
-  "title": "[Descriptive title capturing the key insight or topic]",
-  "description": "[One paragraph description of what this content teaches or explains]",
-  "use_case": {
-    "primary": "[main category: knowledge, tutorial, comparison, best_practices, technique, concept, analysis, opinion, news, other]",
-    "secondary": ["[additional categories]"]
-  },
-  "complexity": "[simple|moderate|complex|advanced]",
   "key_topics": ["[Main concepts, techniques, or ideas discussed]"],
+  "thesis": "[The main argument, claim, or point — if there is one]",
+  "key_claims": ["[Specific factual claims or arguments made]"],
   "tools_mentioned": ["[Any tools or services mentioned, even if not the focus]"],
-  "languages": ["[Programming languages discussed, if any]"],
-  "frameworks": ["[Frameworks discussed, if any]"],
-  "patterns": ["[Concepts or patterns discussed: rag, fine_tuning, prompt_engineering, embeddings, agent_design, etc.]"],
-  "tags": ["[searchable tags]"]
-}
+  "evidence_type": "[empirical|anecdotal|theoretical|mixed|none]"
 
-Focus on capturing the KNOWLEDGE and INSIGHTS, not implementation details.
-Extract the core concepts and topics being discussed.
+Be thorough. Extract everything relevant to the content type.
+For setup/tutorial content: extract EVERY tool, service, and integration mentioned.
+For article/knowledge content: extract the key topics, claims, and insights.
 Respond with ONLY the JSON, no other text.`;
 
-export function buildManifestPrompt(rawContent: string, contentType: string = "setup"): string {
-  const template = contentType === "knowledge" ? KNOWLEDGE_MANIFEST_PROMPT : SETUP_MANIFEST_PROMPT;
-  return template.replace("{ALL_RAW_CONTENT}", rawContent);
+export function buildManifestPrompt(rawContent: string, contentType: string = "setup", sourceType: string = "other"): string {
+  return UNIFIED_MANIFEST_PROMPT
+    .replace(/\{CONTENT_TYPE\}/g, contentType)
+    .replace(/\{SOURCE_TYPE\}/g, sourceType)
+    .replace("{ALL_RAW_CONTENT}", rawContent);
 }

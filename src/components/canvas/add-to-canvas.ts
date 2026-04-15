@@ -28,6 +28,7 @@ export interface FullEntryResponse {
   thumbnail_url?: string | null;
   use_case?: string | null;
   complexity?: string | null;
+  content_type?: string | null;
   readme?: string | null;
   agents_md?: string | null;
   manifest?: Record<string, unknown> | null;
@@ -174,6 +175,7 @@ export async function addEntryPanelToCanvas(
     thumbnailUrl: entry.thumbnail_url ?? null,
     useCase: entry.use_case ?? null,
     complexity: entry.complexity ?? null,
+    contentType: entry.content_type ?? null,
     tags,
     readme: entry.readme || "",
     agentsMd: entry.agents_md || "",

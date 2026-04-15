@@ -16,6 +16,7 @@ interface EntryDetailProps {
     status: string;
     readme: string | null;
     agents_md: string | null;
+    content_type: string | null;
     manifest: Record<string, unknown> | null;
     raw_content: Record<string, unknown> | null;
     created_at: string;
@@ -99,7 +100,7 @@ export function EntryDetail({ entry }: EntryDetailProps) {
       <div className="space-y-4">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
-            <MonoLabel tone="muted">Setup Entry</MonoLabel>
+            <MonoLabel tone="muted">{(entry.content_type || "setup").replace(/_/g, " ")} Entry</MonoLabel>
             <h1 className="text-2xl font-semibold text-white/95 mt-1 leading-tight">
               {entry.title || "Untitled"}
             </h1>
@@ -167,6 +168,7 @@ export function EntryDetail({ entry }: EntryDetailProps) {
         rawContent={entry.raw_content}
         sources={entry.sources}
         githubRepoUrl={githubRepoUrl}
+        contentType={entry.content_type || undefined}
       />
     </div>
   );

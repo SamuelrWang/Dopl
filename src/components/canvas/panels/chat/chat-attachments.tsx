@@ -119,7 +119,7 @@ export function AttachButton({ onFiles, disabled }: AttachButtonProps) {
         onClick={() => inputRef.current?.click()}
         disabled={disabled}
         aria-label="Attach files"
-        className="w-6 h-6 flex items-center justify-center text-white/40 hover:text-white/70 border border-white/[0.08] hover:border-white/[0.18] rounded-[3px] transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-white/[0.04] hover:bg-white/[0.08]"
+        className="w-6 h-6 flex items-center justify-center text-white/40 hover:text-white/70 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
       >
         <svg
           width="12"

@@ -6,11 +6,11 @@ const supabase = supabaseAdmin();
 
 /**
  * PATCH /api/canvas/panels/batch — batch update panel fields.
- * Body: { updates: [{ panel_id, x?, y?, title? }] }
+ * Body: { updates: [{ panel_id, x?, y?, title?, panel_data? }] }
  */
 export const PATCH = withUserAuth(async (request, { userId }) => {
   const body = await request.json();
-  const updates: Array<{ panel_id: string; x?: number; y?: number; title?: string }> =
+  const updates: Array<{ panel_id: string; x?: number; y?: number; title?: string; panel_data?: Record<string, unknown> }> =
     Array.isArray(body.updates) ? body.updates : [];
 
   if (updates.length === 0) {
@@ -24,6 +24,7 @@ export const PATCH = withUserAuth(async (request, { userId }) => {
       if (u.x !== undefined) fields.x = u.x;
       if (u.y !== undefined) fields.y = u.y;
       if (u.title !== undefined) fields.title = u.title;
+      if (u.panel_data !== undefined) fields.panel_data = u.panel_data;
       if (Object.keys(fields).length === 0) return Promise.resolve();
       return supabase
         .from("canvas_panels")

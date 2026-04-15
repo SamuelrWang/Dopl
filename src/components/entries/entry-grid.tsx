@@ -12,6 +12,7 @@ interface EntryGridEntry {
   thumbnail_url: string | null;
   use_case: string | null;
   complexity: string | null;
+  content_type: string | null;
   status: string;
   created_at: string;
 }
@@ -47,6 +48,7 @@ export function EntryGrid({ entries }: EntryGridProps) {
           thumbnailUrl={entry.thumbnail_url}
           useCase={entry.use_case}
           complexity={entry.complexity}
+          contentType={entry.content_type}
           status={entry.status}
           createdAt={entry.created_at}
         />

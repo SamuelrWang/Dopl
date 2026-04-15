@@ -19,9 +19,11 @@ import {
 } from "./canvas-store";
 import { BROWSE_PANEL_SIZE, DEFAULT_PANEL_SIZE } from "./types";
 import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
+import { useChatDrawer } from "./chat-drawer-context";
 
 export function FixedInputBar() {
   const { state, dispatch } = useCanvas();
+  const { toggle: toggleChatDrawer } = useChatDrawer();
   const [input, setInput] = useState("");
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -161,6 +163,11 @@ export function FixedInputBar() {
   return (
     <div
       className="fixed bottom-4 left-0 right-0 z-30 flex justify-center px-4 pointer-events-none"
+      style={{
+        transform: "translateX(calc(var(--chat-drawer-inset, 0px) / -2))",
+        transition: "transform 250ms cubic-bezier(0.16, 1, 0.3, 1)",
+        willChange: "transform",
+      }}
     >
       <div className="w-[95%] md:w-3/4 max-w-3xl pointer-events-auto">
         <div className="relative rounded-2xl overflow-hidden bg-[var(--panel-surface)] border border-white/[0.1] shadow-[0_4px_16px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.08)] transition-colors duration-200 focus-within:bg-[var(--panel-surface-focus)] focus-within:border-white/[0.18]">
@@ -183,10 +190,10 @@ export function FixedInputBar() {
           <div className="flex items-center justify-between px-3 pb-3">
             {/* Left pill group — Chat + Browse */}
             <div className="inline-flex items-center gap-2">
-              {/* CHAT pill — spawns an empty chat panel on the canvas */}
+              {/* CHAT pill — opens the fixed chat drawer */}
               <button
-                onClick={handleSpawnChat}
-                aria-label="Spawn chat panel"
+                onClick={toggleChatDrawer}
+                aria-label="Toggle chat panel"
                 className="inline-flex items-center h-7 px-3 font-mono text-[10px] uppercase tracking-wider text-white/60 hover:text-white/95 bg-white/[0.04] hover:bg-white/[0.09] border border-white/[0.12] hover:border-white/[0.22] rounded-full transition-colors"
               >
                 Chat

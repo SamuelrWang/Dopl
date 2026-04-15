@@ -21,6 +21,8 @@ export interface Entry {
 
 export interface ManifestJson {
   version: string;
+  content_type?: string;
+  source_type?: string;
   title: string;
   description: string;
   use_case: {
@@ -28,13 +30,22 @@ export interface ManifestJson {
     secondary: string[];
   };
   complexity: string;
-  tools: ManifestTool[];
-  integrations: ManifestIntegration[];
-  languages: string[];
-  frameworks: string[];
-  patterns: string[];
-  estimated_setup_time: string;
   tags: string[];
+
+  // Present for setup/tutorial/reference content
+  tools?: ManifestTool[];
+  integrations?: ManifestIntegration[];
+  languages?: string[];
+  frameworks?: string[];
+  patterns?: string[];
+  estimated_setup_time?: string;
+
+  // Present for knowledge/article content
+  key_topics?: string[];
+  key_claims?: string[];
+  tools_mentioned?: string[];
+  thesis?: string;
+  evidence_type?: string;
 }
 
 export interface ManifestTool {

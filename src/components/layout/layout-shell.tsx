@@ -8,12 +8,13 @@ import { FlushGrid } from "@/components/design";
 export function LayoutShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isLanding = pathname === "/";
+  const isDocs = pathname.startsWith("/docs");
   // Community detail pages use their own full-screen layout
   const isCommunityDetail = pathname.startsWith("/community/") && !pathname.endsWith("/posts");
 
   // Toggle mosaic-bg on body: remove for landing, ensure present elsewhere
   useEffect(() => {
-    if (isLanding || isCommunityDetail) {
+    if (isLanding || isCommunityDetail || isDocs) {
       document.body.classList.remove("mosaic-bg");
       document.body.classList.add("landing-active");
       document.body.style.backgroundColor = "#000";
@@ -27,9 +28,9 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
       document.body.classList.add("mosaic-bg");
       document.body.style.backgroundColor = "";
     };
-  }, [isLanding]);
+  }, [isLanding, isDocs]);
 
-  if (isLanding || isCommunityDetail) {
+  if (isLanding || isCommunityDetail || isDocs) {
     return <>{children}</>;
   }
 

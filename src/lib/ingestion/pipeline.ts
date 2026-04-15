@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase";
 const supabase = supabaseAdmin();
 import { IngestInput, ExtractedSource, ContentType } from "./types";
+import { ModelTier } from "@/lib/ai";
 import { extractText } from "./extractors/text";
 import { extractImage } from "./extractors/image";
 import { extractWebContent, linkResultToSource } from "./extractors/web";
@@ -26,10 +27,53 @@ import { truncateContent } from "./utils";
 import { ingestionProgress } from "./progress";
 import { MAX_LINK_DEPTH, MAX_CONTENT_FOR_CLAUDE, MAX_IMAGES_PER_ENTRY } from "@/lib/config";
 
-const MAX_LINKS_PER_ENTRY = 30;
-const KNOWLEDGE_MAX_LINKS = 10;
-const KNOWLEDGE_MAX_LINK_DEPTH = 1;
 const PIPELINE_TIMEOUT_MS = 10 * 60 * 1000;
+
+// ════════════════════════════════════════════════════════════════════
+// Pipeline strategy — per-content-type behavior
+// ════════════════════════════════════════════════════════════════════
+
+interface PipelineStrategy {
+  classifyContent: boolean;
+  linkDepth: number;
+  maxLinks: number;
+  generateSecondaryArtifact: boolean;
+  models: {
+    classifier: ModelTier;
+    contentClassifier: ModelTier;
+    manifest: ModelTier;
+    readme: ModelTier;
+    secondary: ModelTier;
+    tags: ModelTier;
+  };
+}
+
+const PIPELINE_STRATEGIES: Record<ContentType, PipelineStrategy> = {
+  setup: {
+    classifyContent: true, linkDepth: MAX_LINK_DEPTH, maxLinks: 30, generateSecondaryArtifact: true,
+    models: { classifier: "haiku", contentClassifier: "sonnet", manifest: "sonnet", readme: "sonnet", secondary: "sonnet", tags: "haiku" },
+  },
+  tutorial: {
+    classifyContent: true, linkDepth: MAX_LINK_DEPTH, maxLinks: 30, generateSecondaryArtifact: true,
+    models: { classifier: "haiku", contentClassifier: "sonnet", manifest: "sonnet", readme: "sonnet", secondary: "sonnet", tags: "haiku" },
+  },
+  knowledge: {
+    classifyContent: false, linkDepth: 1, maxLinks: 10, generateSecondaryArtifact: true,
+    models: { classifier: "haiku", contentClassifier: "haiku", manifest: "haiku", readme: "haiku", secondary: "haiku", tags: "haiku" },
+  },
+  article: {
+    classifyContent: false, linkDepth: 1, maxLinks: 10, generateSecondaryArtifact: true,
+    models: { classifier: "haiku", contentClassifier: "haiku", manifest: "haiku", readme: "haiku", secondary: "haiku", tags: "haiku" },
+  },
+  resource: {
+    classifyContent: false, linkDepth: MAX_LINK_DEPTH, maxLinks: 30, generateSecondaryArtifact: false,
+    models: { classifier: "haiku", contentClassifier: "haiku", manifest: "haiku", readme: "haiku", secondary: "haiku", tags: "haiku" },
+  },
+  reference: {
+    classifyContent: false, linkDepth: 2, maxLinks: 15, generateSecondaryArtifact: true,
+    models: { classifier: "haiku", contentClassifier: "haiku", manifest: "haiku", readme: "haiku", secondary: "haiku", tags: "haiku" },
+  },
+};
 
 // ════════════════════════════════════════════════════════════════════
 // Public entry point
@@ -107,47 +151,52 @@ async function runPipeline(
 
   const { textSources } = await stepTextExtraction(entryId, input.content.text || "");
 
-  // ── Detect content type (setup / knowledge / resource) ──
-  const contentType = await stepDetectContentType(entryId, input.content.text || "");
+  // ── Detect content type ──
+  const { contentType, sourceType } = await stepDetectContentType(entryId, input.content.text || "");
+  const strategy = PIPELINE_STRATEGIES[contentType];
+
+  ingestionProgress.emit(entryId, "detail", `Using ${contentType} pipeline (models: manifest=${strategy.models.manifest}, readme=${strategy.models.readme})`);
 
   await stepImageProcessing(entryId, input.content.images);
 
-  const linkResult = await stepLinkFollowing(entryId, input, textSources, thumbnailUrl, contentType);
+  const linkResult = await stepLinkFollowing(entryId, input, textSources, thumbnailUrl, strategy);
   thumbnailUrl = linkResult.thumbnailUrl;
 
   // ── Gather content ──
   const { allContent, contentForClaude } = await stepGatherContent(entryId);
 
-  // ── Branch generation based on content type ──
+  // ── Generate artifacts (strategy-driven) ──
   let manifest: Record<string, unknown>;
   let readme: string;
   let agentsMd: string;
   let tags: Array<{ tag_type: string; tag_value: string }>;
+  let classification: ContentClassification | undefined;
 
-  if (contentType === "knowledge") {
-    // Knowledge branch — no content classification, no agents.md
-    ingestionProgress.emit(entryId, "detail", "Knowledge content detected — using knowledge-optimized pipeline");
-
-    ({ manifest } = await stepGenerateManifest(entryId, contentForClaude, contentType, { thumbnailUrl, sourceUrl: input.url }));
-    [{ readme }, { tags }] = await Promise.all([
-      stepGenerateReadme(entryId, contentForClaude, manifest, contentType),
-      stepGenerateTags(entryId, manifest),
-    ]);
-    agentsMd = "";
-  } else {
-    // Setup / Resource branch — full pipeline
+  if (strategy.classifyContent) {
+    // Setup/tutorial: classify content + generate manifest in parallel
     const [classificationResult, manifestResult] = await Promise.all([
-      stepClassifyContent(entryId, contentForClaude),
-      stepGenerateManifest(entryId, contentForClaude, contentType, { thumbnailUrl, sourceUrl: input.url }),
+      stepClassifyContent(entryId, contentForClaude, strategy.models.contentClassifier),
+      stepGenerateManifest(entryId, contentForClaude, contentType, sourceType, strategy.models.manifest, { thumbnailUrl, sourceUrl: input.url }),
     ]);
     manifest = manifestResult.manifest;
-    const classification = classificationResult.classification;
+    classification = classificationResult.classification;
+  } else {
+    // Knowledge/article/reference/resource: just manifest
+    ingestionProgress.emit(entryId, "detail", `${contentType} content — skipping content classification`);
+    ({ manifest } = await stepGenerateManifest(entryId, contentForClaude, contentType, sourceType, strategy.models.manifest, { thumbnailUrl, sourceUrl: input.url }));
+  }
 
-    [{ readme }, { tags }] = await Promise.all([
-      stepGenerateReadme(entryId, contentForClaude, manifest, contentType),
-      stepGenerateTags(entryId, manifest),
-    ]);
-    ({ agentsMd } = await stepGenerateAgentsMd(entryId, contentForClaude, manifest, readme, classification, input.url));
+  // README + tags in parallel
+  [{ readme }, { tags }] = await Promise.all([
+    stepGenerateReadme(entryId, contentForClaude, manifest, contentType, strategy.models.readme),
+    stepGenerateTags(entryId, manifest, strategy.models.tags),
+  ]);
+
+  // Secondary artifact (agents.md / insights / reference guide)
+  if (strategy.generateSecondaryArtifact) {
+    ({ agentsMd } = await stepGenerateSecondaryArtifact(entryId, contentForClaude, manifest, readme, classification, input.url, contentType, strategy.models.secondary));
+  } else {
+    agentsMd = "";
   }
 
   // ── Persist ──
@@ -307,7 +356,33 @@ async function stepPlatformFetch(
     return { thumbnailUrl, updatedText };
   }
 
-  return { thumbnailUrl };
+  // Generic URL — fetch OG thumbnail via web extractor
+  const stepStart = Date.now();
+  await logStep(entryId, "web_fetch", "started");
+  ingestionProgress.emit(entryId, "step_start", "Fetching web content...", { step: "web_fetch" });
+
+  const webResult = await extractWebContent(input.url, 0);
+  let updatedText: string | undefined;
+  let updatedLinks: string[] | undefined;
+
+  if (webResult) {
+    updatedText = webResult.content;
+    const existingLinks = input.content.links || [];
+    updatedLinks = [...new Set([...existingLinks, ...webResult.childLinks])];
+    const webSource = linkResultToSource(webResult, 0);
+    await storeSources(entryId, [webSource]);
+    thumbnailUrl = (webResult.metadata.thumbnail_url as string) || null;
+
+    const parts = [`Web page: ${input.url}`];
+    if (webResult.metadata.title) parts.push(`"${webResult.metadata.title}"`);
+    ingestionProgress.emit(entryId, "detail", `Found: ${parts.join(", ")}`);
+  } else {
+    ingestionProgress.emit(entryId, "detail", "Could not fetch web content — will use provided content");
+  }
+
+  await logStep(entryId, "web_fetch", "completed", undefined, Date.now() - stepStart);
+  ingestionProgress.emit(entryId, "step_complete", "Web content fetched", { step: "web_fetch" });
+  return { thumbnailUrl, updatedText, updatedLinks };
 }
 
 /** Step 2: Extract text content and store sources. */
@@ -317,7 +392,7 @@ async function stepTextExtraction(
 ): Promise<{ textSources: ExtractedSource[] }> {
   const stepStart = Date.now();
   await logStep(entryId, "text_extraction", "started");
-  ingestionProgress.emit(entryId, "step_start", "Analyzing post text with Claude...", { step: "text_extraction" });
+  ingestionProgress.emit(entryId, "step_start", "Analyzing text with Claude...", { step: "text_extraction" });
 
   const textSources = await extractText(text);
   await storeSources(entryId, textSources);
@@ -333,32 +408,33 @@ async function stepTextExtraction(
   return { textSources };
 }
 
-/** Step 2.5: Detect content type (setup / knowledge / resource). */
+/** Step 2.5: Detect content type. */
 async function stepDetectContentType(
   entryId: string,
   text: string
-): Promise<ContentType> {
-  if (!text || text.trim().length === 0) return "setup";
+): Promise<{ contentType: ContentType; sourceType: string }> {
+  if (!text || text.trim().length === 0) return { contentType: "knowledge", sourceType: "other" };
 
   const stepStart = Date.now();
   await logStep(entryId, "content_type_detection", "started");
   ingestionProgress.emit(entryId, "step_start", "Detecting content type...", { step: "content_type_detection" });
 
-  const result = await classifyContentType(text);
+  const result = await classifyContentType(text, "haiku");
 
   await logStep(entryId, "content_type_detection", "completed", {
     content_type: result.content_type,
+    source_type: result.source_type,
     confidence: result.confidence,
     reasoning: result.reasoning,
   }, Date.now() - stepStart);
   ingestionProgress.emit(
     entryId,
     "step_complete",
-    `Content type: ${result.content_type} (confidence: ${(result.confidence * 100).toFixed(0)}% — ${result.reasoning})`,
+    `Content type: ${result.content_type} / ${result.source_type} (confidence: ${(result.confidence * 100).toFixed(0)}% — ${result.reasoning})`,
     { step: "content_type_detection" }
   );
 
-  return result.content_type;
+  return { contentType: result.content_type, sourceType: result.source_type };
 }
 
 /** Step 3: Process images in parallel with Claude Vision. */
@@ -420,7 +496,7 @@ async function stepLinkFollowing(
   input: IngestInput,
   textSources: ExtractedSource[],
   thumbnailUrl: string | null,
-  contentType: ContentType = "setup"
+  strategy: PipelineStrategy
 ): Promise<{ thumbnailUrl: string | null }> {
   const allLinks = [
     ...(input.content.links || []),
@@ -430,14 +506,14 @@ async function stepLinkFollowing(
 
   if (uniqueLinks.length === 0) return { thumbnailUrl };
 
-  const maxLinks = contentType === "knowledge" ? KNOWLEDGE_MAX_LINKS : MAX_LINKS_PER_ENTRY;
+  const { maxLinks, linkDepth } = strategy;
 
   const stepStart = Date.now();
   await logStep(entryId, "link_following", "started");
   ingestionProgress.emit(
     entryId,
     "step_start",
-    `Following ${Math.min(uniqueLinks.length, maxLinks)} link(s)${contentType === "knowledge" ? " (knowledge mode — reduced)" : ""}...`,
+    `Following ${Math.min(uniqueLinks.length, maxLinks)} link(s) (depth: ${linkDepth})...`,
     { step: "link_following" }
   );
 
@@ -454,11 +530,10 @@ async function stepLinkFollowing(
       );
       break;
     }
-    const maxDepth = contentType === "knowledge" ? KNOWLEDGE_MAX_LINK_DEPTH : MAX_LINK_DEPTH;
     const batch = uniqueLinks.slice(i, i + LINK_CONCURRENCY);
     await Promise.allSettled(
       batch.map((link) =>
-        followAndStore(entryId, link, 1, visitedUrls, linksFollowed, maxDepth)
+        followAndStore(entryId, link, 1, visitedUrls, linksFollowed, linkDepth, maxLinks)
       )
     );
   }
@@ -508,13 +583,14 @@ async function stepGatherContent(
 /** Step 5.5: Classify content sections with Claude. */
 async function stepClassifyContent(
   entryId: string,
-  contentForClaude: string
+  contentForClaude: string,
+  model?: ModelTier
 ): Promise<{ classification: ContentClassification }> {
   const stepStart = Date.now();
   await logStep(entryId, "content_classification", "started");
   ingestionProgress.emit(entryId, "step_start", "Classifying content sections...", { step: "content_classification" });
 
-  const classification = await classifyContent(contentForClaude);
+  const classification = await classifyContent(contentForClaude, model);
 
   await logStep(entryId, "content_classification", "completed", {
     stats: classification.stats,
@@ -530,13 +606,15 @@ async function stepGenerateManifest(
   entryId: string,
   contentForClaude: string,
   contentType: ContentType = "setup",
+  sourceType: string = "other",
+  model?: ModelTier,
   meta?: { thumbnailUrl: string | null; sourceUrl: string }
 ): Promise<{ manifest: Record<string, unknown> }> {
   const s = Date.now();
   await logStep(entryId, "manifest_generation", "started");
   ingestionProgress.emit(entryId, "step_start", `Generating manifest (${contentType})...`, { step: "manifest_generation" });
 
-  const manifest = await generateManifest(contentForClaude, contentType);
+  const manifest = await generateManifest(contentForClaude, contentType, sourceType, model);
 
   const m = manifest as Record<string, unknown>;
   const tools = (Array.isArray(m.tools) ? m.tools : []) as { name?: string }[];
@@ -573,13 +651,14 @@ async function stepGenerateReadme(
   entryId: string,
   contentForClaude: string,
   manifest: Record<string, unknown>,
-  contentType: ContentType = "setup"
+  contentType: ContentType = "setup",
+  model?: ModelTier
 ): Promise<{ readme: string }> {
   const s = Date.now();
   await logStep(entryId, "readme_generation", "started");
   ingestionProgress.emit(entryId, "step_start", `Generating README (${contentType})...`, { step: "readme_generation" });
 
-  const readme = await generateReadme(contentForClaude, manifest, contentType);
+  const readme = await generateReadme(contentForClaude, manifest, contentType, model);
 
   await logStep(entryId, "readme_generation", "completed", undefined, Date.now() - s);
   ingestionProgress.emit(entryId, "step_complete", `README generated (${Math.round(readme.length / 1000)}K chars)`, {
@@ -590,23 +669,26 @@ async function stepGenerateReadme(
   return { readme };
 }
 
-/** Step 8: Generate agents.md (AI setup instructions). */
-async function stepGenerateAgentsMd(
+/** Step 8: Generate secondary artifact (agents.md / insights / reference guide). */
+async function stepGenerateSecondaryArtifact(
   entryId: string,
   contentForClaude: string,
   manifest: Record<string, unknown>,
   readme: string,
-  classification: ContentClassification,
-  sourceUrl?: string
+  classification: ContentClassification | undefined,
+  sourceUrl: string | undefined,
+  contentType: ContentType = "setup",
+  model?: ModelTier
 ): Promise<{ agentsMd: string }> {
+  const artifactLabel = getSecondaryArtifactLabel(contentType);
   const s = Date.now();
   await logStep(entryId, "agents_md_generation", "started");
-  ingestionProgress.emit(entryId, "step_start", "Generating agents.md (AI setup instructions)...", { step: "agents_md_generation" });
+  ingestionProgress.emit(entryId, "step_start", `Generating ${artifactLabel}...`, { step: "agents_md_generation" });
 
-  const agentsMd = await generateAgentsMd(contentForClaude, manifest, readme, classification, sourceUrl);
+  const agentsMd = await generateAgentsMd(contentForClaude, manifest, readme, classification, sourceUrl, contentType, model);
 
   await logStep(entryId, "agents_md_generation", "completed", undefined, Date.now() - s);
-  ingestionProgress.emit(entryId, "step_complete", `agents.md generated (${Math.round(agentsMd.length / 1000)}K chars)`, {
+  ingestionProgress.emit(entryId, "step_complete", `${artifactLabel} generated (${Math.round(agentsMd.length / 1000)}K chars)`, {
     step: "agents_md_generation",
     details: { agentsMd },
   });
@@ -617,13 +699,14 @@ async function stepGenerateAgentsMd(
 /** Step 9: Generate searchable tags from manifest. */
 async function stepGenerateTags(
   entryId: string,
-  manifest: Record<string, unknown>
+  manifest: Record<string, unknown>,
+  model?: ModelTier
 ): Promise<{ tags: Array<{ tag_type: string; tag_value: string }> }> {
   const s = Date.now();
   await logStep(entryId, "tag_generation", "started");
   ingestionProgress.emit(entryId, "step_start", "Generating searchable tags...", { step: "tag_generation" });
 
-  const tags = await generateTags(manifest);
+  const tags = await generateTags(manifest, model);
 
   await logStep(entryId, "tag_generation", "completed", undefined, Date.now() - s);
   if (tags.length > 0) {
@@ -735,12 +818,13 @@ async function followAndStore(
   depth: number,
   visitedUrls: Set<string>,
   linksFollowed: { count: number },
-  maxDepth: number = MAX_LINK_DEPTH
+  maxDepth: number = MAX_LINK_DEPTH,
+  maxLinks: number = 30
 ): Promise<void> {
   if (
     depth > maxDepth ||
     visitedUrls.has(url) ||
-    linksFollowed.count >= MAX_LINKS_PER_ENTRY
+    linksFollowed.count >= maxLinks
   ) {
     return;
   }
@@ -794,14 +878,15 @@ async function followAndStore(
 
   // Recursively follow child links
   for (const childLink of result.childLinks.slice(0, 5)) {
-    if (linksFollowed.count >= MAX_LINKS_PER_ENTRY) break;
+    if (linksFollowed.count >= maxLinks) break;
     await followAndStore(
       entryId,
       childLink,
       depth + 1,
       visitedUrls,
       linksFollowed,
-      maxDepth
+      maxDepth,
+      maxLinks
     );
   }
 }
@@ -857,8 +942,47 @@ function detectPlatform(url: string): string {
   if (isInstagramPostUrl(url)) return "instagram";
   if (isRedditPostUrl(url)) return "reddit";
   if (url.includes("github.com")) return "github";
+  if (url.includes("youtube.com") || url.includes("youtu.be")) return "youtube";
+  if (url.includes("news.ycombinator.com")) return "hackernews";
+  if (url.includes("stackoverflow.com")) return "stackoverflow";
+  if (url.includes("medium.com")) return "medium";
+  if (url.includes("substack.com") || url.includes(".substack.")) return "substack";
+  if (url.includes("dev.to")) return "devto";
+  if (url.includes("arxiv.org")) return "arxiv";
 
   return "web";
+}
+
+/** Get the human-readable label for the secondary artifact based on content type. */
+export function getSecondaryArtifactLabel(contentType: string): string {
+  switch (contentType) {
+    case "setup":
+    case "tutorial":
+      return "agents.md";
+    case "knowledge":
+    case "article":
+      return "Key Insights";
+    case "reference":
+      return "Reference Guide";
+    default:
+      return "agents.md";
+  }
+}
+
+/** Get the download filename for the secondary artifact. */
+export function getSecondaryArtifactFilename(contentType: string): string {
+  switch (contentType) {
+    case "setup":
+    case "tutorial":
+      return "agents.md";
+    case "knowledge":
+    case "article":
+      return "key-insights.md";
+    case "reference":
+      return "reference-guide.md";
+    default:
+      return "agents.md";
+  }
 }
 
 async function logStep(
