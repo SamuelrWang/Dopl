@@ -16,6 +16,7 @@ import {
   type SubscriptionTier,
 } from "@/lib/credits";
 import { getUserSubscription } from "@/lib/billing/subscriptions";
+import { logSystemEvent } from "@/lib/analytics/system-events";
 import { config } from "dotenv";
 import { resolve } from "path";
 
@@ -457,7 +458,17 @@ async function executeTool(
           grantCredits(userId, CREDIT_COSTS.ingestion, "ingestion_sync_refund", {
             source: "chat_tool",
             url: normalizedUrl,
-          }).catch(() => {});
+          }).catch((refundErr) => {
+            logSystemEvent({
+              severity: "error",
+              category: "other",
+              source: "chat.ingestion_refund",
+              message: `Credit refund failed after chat-tool ingest error: ${refundErr instanceof Error ? refundErr.message : String(refundErr)}`,
+              fingerprintKeys: ["refund_failed", "chat_ingest_sync"],
+              metadata: { user_id: userId, url: normalizedUrl },
+              userId,
+            }).catch(() => {});
+          });
         }
         const msg = err instanceof Error ? err.message : String(err);
         return {
@@ -1083,17 +1094,37 @@ async function handlePost(
           // difference so users only pay for what they actually used.
           if (!hadToolCalls) {
             const refund = CREDIT_COSTS.chat_tool_call - CREDIT_COSTS.chat_message;
-            grantCredits(userId, refund, "chat_message_refund").catch(() => {});
+            grantCredits(userId, refund, "chat_message_refund").catch((refundErr) => {
+              logSystemEvent({
+                severity: "error",
+                category: "other",
+                source: "chat.message_refund",
+                message: `Chat downgrade refund failed: ${refundErr instanceof Error ? refundErr.message : String(refundErr)}`,
+                fingerprintKeys: ["refund_failed", "chat_message"],
+                metadata: { user_id: userId },
+                userId,
+              }).catch(() => {});
+            });
           }
 
           send({ type: "done" });
           controller.close();
         } catch (error) {
-          // Full refund on error — we pre-deducted chat_tool_call (5) but
-          // the user didn't get a complete response.
+          // Full refund on error — we pre-deducted chat_tool_call but the
+          // user didn't get a complete response.
           grantCredits(userId, CREDIT_COSTS.chat_tool_call, "chat_error_refund", {
             error: error instanceof Error ? error.message : String(error),
-          }).catch(() => {});
+          }).catch((refundErr) => {
+            logSystemEvent({
+              severity: "error",
+              category: "other",
+              source: "chat.error_refund",
+              message: `Chat error refund failed: ${refundErr instanceof Error ? refundErr.message : String(refundErr)}`,
+              fingerprintKeys: ["refund_failed", "chat_error"],
+              metadata: { user_id: userId },
+              userId,
+            }).catch(() => {});
+          });
           const message =
             error instanceof Error ? error.message : "Unknown error";
           send({ type: "error", message });

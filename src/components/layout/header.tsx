@@ -91,12 +91,27 @@ function CreditBadge() {
   useEffect(() => {
     // Only show on canvas
     if (!pathname.startsWith("/canvas")) return;
-    fetch("/api/user/credits")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (data?.balance != null) setBalance(data.balance);
-      })
-      .catch(() => {});
+
+    const fetchBalance = () => {
+      fetch("/api/user/credits")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (data?.balance != null) setBalance(data.balance);
+        })
+        .catch(() => {});
+    };
+
+    fetchBalance();
+
+    // Refetch whenever the tab becomes visible again — catches the common
+    // case where the user leaves the canvas, does work elsewhere that
+    // changes the balance (ingest / chat), and returns expecting the badge
+    // to reflect current state.
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") fetchBalance();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
   }, [pathname]);
 
   if (balance === null || !pathname.startsWith("/canvas")) return null;

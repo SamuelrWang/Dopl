@@ -13,10 +13,10 @@ export const CREDIT_COSTS = {
   mcp_build: 5,
   mcp_synthesize: 10,
   // Chat (in-app)
-  chat_message: 3,
-  chat_tool_call: 5,
+  chat_message: 2,
+  chat_tool_call: 3,
   // Ingestion
-  ingestion: 20,
+  ingestion: 7,
 } as const;
 
 export type CreditAction = keyof typeof CREDIT_COSTS;
@@ -123,27 +123,24 @@ export async function grantCredits(
 ): Promise<void> {
   const supabase = supabaseAdmin();
 
-  // Increment balance
-  const { data: current } = await supabase
-    .from("user_credits")
-    .select("balance")
-    .eq("user_id", userId)
-    .single();
-
-  const newBalance = (current?.balance ?? 0) + amount;
-
-  await supabase.from("user_credits").upsert({
-    user_id: userId,
-    balance: newBalance,
-    updated_at: new Date().toISOString(),
+  // Atomic RPC: SELECT FOR UPDATE → increment → ledger insert, all in one
+  // transaction. Mirrors deduct_credits_atomic so two concurrent refunds
+  // can't read the same balance and overwrite each other.
+  const { data, error } = await supabase.rpc("grant_credits_atomic", {
+    p_user_id: userId,
+    p_amount: amount,
+    p_action: action,
+    p_metadata: metadata ?? {},
   });
 
-  await supabase.from("credit_ledger").insert({
-    user_id: userId,
-    amount,
-    action,
-    metadata: metadata ?? {},
-  });
+  if (error) {
+    throw new Error(`grant_credits_atomic failed: ${error.message}`);
+  }
+
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row?.success) {
+    throw new Error("grant_credits_atomic returned success=false");
+  }
 }
 
 // ── Daily bonus ──────────────────────────────────────────────────────

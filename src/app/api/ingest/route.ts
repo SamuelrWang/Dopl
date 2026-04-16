@@ -221,7 +221,17 @@ async function handlePost(
     if (creditsDeducted) {
       grantCredits(userId, CREDIT_COSTS.ingestion, "ingestion_error_refund", {
         error: error instanceof Error ? error.message : String(error),
-      }).catch(() => {});
+      }).catch((refundErr) => {
+        logSystemEvent({
+          severity: "error",
+          category: "other",
+          source: "ingest.refund",
+          message: `Credit refund failed after endpoint error: ${refundErr instanceof Error ? refundErr.message : String(refundErr)}`,
+          fingerprintKeys: ["refund_failed", "ingest_endpoint"],
+          metadata: { user_id: userId },
+          userId,
+        }).catch(() => {});
+      });
     }
     const message = error instanceof Error ? error.message : "Unknown error";
     const name = error instanceof Error ? error.name : "UnknownError";

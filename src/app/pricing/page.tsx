@@ -18,6 +18,7 @@ interface Tier {
   name: string;
   tagline: string;
   monthly: number; // dollars/month
+  credits: number; // credits/month (mirrors TIER_CREDITS in src/lib/credits.ts)
   annualTotal?: number; // dollars/year when billed annually
   annualSavings?: number; // dollars saved
   features: string[];
@@ -31,11 +32,10 @@ const TIERS: Tier[] = [
     name: "Free",
     tagline: "Start here — all features, baseline credits.",
     monthly: 0,
+    credits: 100,
     features: [
-      "~30 chat messages / month",
-      "~5 ingestions / month",
-      "5 daily credit bonus",
       "All features included",
+      "Daily credit bonus",
       "No credit card needed",
     ],
   },
@@ -44,10 +44,10 @@ const TIERS: Tier[] = [
     name: "Pro",
     tagline: "For regular users who want room to build and iterate.",
     monthly: 20,
+    credits: 500,
     annualTotal: 200,
     annualSavings: 40,
     features: [
-      "5× more usage (~150 chats / ~25 ingestions)",
       "Credit rollover",
       "Priority support",
     ],
@@ -59,11 +59,11 @@ const TIERS: Tier[] = [
     name: "Power",
     tagline: "For heavy users building serious workflows.",
     monthly: 50,
+    credits: 2000,
     annualTotal: 500,
     annualSavings: 100,
     features: [
-      "20× more usage (~600 chats / ~100 ingestions)",
-      "Larger daily bonus (10/day)",
+      "Larger daily bonus",
       "Priority support",
     ],
     inheritFrom: "Pro",
@@ -185,9 +185,37 @@ export default function PricingPage() {
         </p>
       </section>
 
+      {/* Global billing-interval toggle (lifted out of the cards so every
+          card has the same vertical rhythm). */}
+      <section className="px-4 pt-8">
+        <div className="max-w-5xl mx-auto flex justify-center">
+          <div className="inline-flex items-center gap-3 rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={interval === "year"}
+              onClick={() =>
+                setInterval(interval === "year" ? "month" : "year")
+              }
+              className={`relative inline-flex h-[18px] w-[32px] shrink-0 cursor-pointer rounded-full transition-colors ${
+                interval === "year" ? "bg-white/60" : "bg-white/[0.15]"
+              }`}
+            >
+              <span
+                className={`inline-block h-[14px] w-[14px] rounded-full bg-white shadow-sm transition-transform ${
+                  interval === "year" ? "translate-x-[16px]" : "translate-x-[2px]"
+                } translate-y-[2px]`}
+              />
+            </button>
+            <span className="text-sm text-white/80">Annual billing</span>
+            <span className="text-xs text-emerald-400/90">Save up to $100/yr</span>
+          </div>
+        </div>
+      </section>
+
       {/* Tier cards */}
-      <section className="flex-1 px-4 pt-8 pb-16">
-        <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
+      <section className="flex-1 px-4 pt-6 pb-16">
+        <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-4 items-stretch">
           {TIERS.map((t) => {
             const isCurrent = tier === t.key && !!user;
             const isPaid = t.key !== "free";
@@ -201,7 +229,7 @@ export default function PricingPage() {
             return (
               <div
                 key={t.key}
-                className={`flex flex-col rounded-xl p-6 ${
+                className={`flex flex-col h-full rounded-xl p-6 ${
                   t.highlight
                     ? "border border-white/[0.15] bg-white/[0.04]"
                     : "border border-white/[0.08] bg-white/[0.02]"
@@ -234,38 +262,15 @@ export default function PricingPage() {
                       : "Billed monthly"}
                 </p>
 
-                {/* Annual toggle (paid tiers only) */}
-                {isPaid && (
-                  <div className="mb-5 flex items-center justify-between rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2">
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-checked={isAnnual}
-                        onClick={() =>
-                          setInterval(interval === "year" ? "month" : "year")
-                        }
-                        className={`relative inline-flex h-[18px] w-[32px] shrink-0 cursor-pointer rounded-full transition-colors ${
-                          isAnnual ? "bg-white/60" : "bg-white/[0.15]"
-                        }`}
-                      >
-                        <span
-                          className={`inline-block h-[14px] w-[14px] rounded-full bg-white shadow-sm transition-transform ${
-                            isAnnual ? "translate-x-[16px]" : "translate-x-[2px]"
-                          } translate-y-[2px]`}
-                        />
-                      </button>
-                      <span className="text-sm text-white/80">Annual</span>
-                    </div>
-                    {isAnnual && t.annualSavings && (
-                      <span className="text-xs text-emerald-400/90">
-                        Save ${t.annualSavings}
-                      </span>
-                    )}
+                {/* Credits per month — same row across all cards */}
+                <div className="mb-5 rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2.5">
+                  <div className="text-lg font-semibold text-white leading-tight">
+                    {t.credits.toLocaleString()} credits
                   </div>
-                )}
+                  <div className="text-xs text-white/50 mt-0.5">per month</div>
+                </div>
 
-                {/* Upgrade button */}
+                {/* Primary button */}
                 {isCurrent ? (
                   <Button variant="outline" size="lg" className="w-full mb-6" disabled>
                     Current plan
@@ -274,7 +279,7 @@ export default function PricingPage() {
                   <Button
                     size="lg"
                     variant={t.highlight ? "default" : "outline"}
-                    className="w-full mb-6"
+                    className="w-full mb-6 cursor-pointer"
                     onClick={() => handleUpgrade(t.key)}
                     disabled={!authChecked}
                   >
@@ -284,7 +289,7 @@ export default function PricingPage() {
                   <Button
                     variant="outline"
                     size="lg"
-                    className="w-full mb-6"
+                    className="w-full mb-6 cursor-pointer"
                     onClick={handleGetStarted}
                   >
                     {user ? "Go to Canvas" : "Get started"}

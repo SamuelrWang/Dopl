@@ -405,6 +405,33 @@ async function runPipeline(
 // Step functions
 // ════════════════════════════════════════════════════════════════════
 
+/**
+ * Bail early when the initial extractor can't reach the source. Emits a
+ * terminal "error" event (so the client's existing error path fires:
+ * closes the skeleton entry panel, deletes the row, and posts an AI
+ * chat message pointing the user at the Chrome extension) and throws
+ * so the pipeline stops instead of silently continuing with empty
+ * content for 30–120s before MIN_CONTENT_LENGTH finally catches it.
+ *
+ * Only called when `input.content.text` is empty — when the Chrome
+ * extension already provided the page's text client-side, the pipeline
+ * falls through to use that instead.
+ */
+function failUnreachable(
+  entryId: string,
+  url: string,
+  platform: string
+): never {
+  const reason =
+    `Couldn't fetch ${platform} content from ${url}. ` +
+    `This usually means the link is paywalled, bot-blocked, deleted, ` +
+    `or otherwise inaccessible from the server.`;
+  ingestionProgress.emit(entryId, "error", reason, {
+    details: { unreachable: true, platform, url },
+  });
+  throw new Error(reason);
+}
+
 /** Step 1.5: Auto-fetch from source platform (tweet/instagram/reddit). */
 async function stepPlatformFetch(
   entryId: string,
@@ -440,6 +467,11 @@ async function stepPlatformFetch(
       if (meta.has_video) parts.push("video attached");
       ingestionProgress.emit(entryId, "detail", `Found: ${parts.join(", ")}`);
     } else {
+      // No Chrome-extension fallback and the remote fetch failed — bail
+      // now so the user sees a useful error instead of a hung panel.
+      if (!input.content.text) {
+        failUnreachable(entryId, input.url, "tweet");
+      }
       ingestionProgress.emit(entryId, "detail", "Could not fetch tweet — will use provided content");
     }
     await logStep(entryId, "tweet_fetch", "completed", undefined, Date.now() - stepStart);
@@ -476,6 +508,9 @@ async function stepPlatformFetch(
       if (igResult.childLinks.length > 0) parts.push(`${igResult.childLinks.length} link(s) in caption`);
       ingestionProgress.emit(entryId, "detail", `Found: ${parts.join(", ")}`);
     } else {
+      if (!input.content.text) {
+        failUnreachable(entryId, input.url, "Instagram post");
+      }
       ingestionProgress.emit(entryId, "detail", "Could not fetch Instagram post — will use provided content");
     }
     await logStep(entryId, "instagram_fetch", "completed", undefined, Date.now() - stepStart);
@@ -506,6 +541,9 @@ async function stepPlatformFetch(
       if (redditResult.childLinks.length > 0) parts.push(`${redditResult.childLinks.length} link(s)`);
       ingestionProgress.emit(entryId, "detail", `Found: ${parts.join(", ")}`);
     } else {
+      if (!input.content.text) {
+        failUnreachable(entryId, input.url, "Reddit post");
+      }
       ingestionProgress.emit(entryId, "detail", "Could not fetch Reddit post — will use provided content");
     }
     await logStep(entryId, "reddit_fetch", "completed", undefined, Date.now() - stepStart);
@@ -531,6 +569,9 @@ async function stepPlatformFetch(
       if (ghResult.metadata.language) parts.push(`${ghResult.metadata.language}`);
       ingestionProgress.emit(entryId, "detail", `Found: ${parts.join(", ")}`);
     } else {
+      if (!input.content.text) {
+        failUnreachable(entryId, input.url, "GitHub");
+      }
       ingestionProgress.emit(entryId, "detail", "Could not fetch GitHub content — will use provided content");
     }
     await logStep(entryId, "github_fetch", "completed", undefined, Date.now() - stepStart);
@@ -559,6 +600,9 @@ async function stepPlatformFetch(
     if (webResult.metadata.title) parts.push(`"${webResult.metadata.title}"`);
     ingestionProgress.emit(entryId, "detail", `Found: ${parts.join(", ")}`);
   } else {
+    if (!input.content.text) {
+      failUnreachable(entryId, input.url, "web page");
+    }
     ingestionProgress.emit(entryId, "detail", "Could not fetch web content — will use provided content");
   }
 
