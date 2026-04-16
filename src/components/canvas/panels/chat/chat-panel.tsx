@@ -818,17 +818,16 @@ function ChromeExtensionCard() {
         </p>
         <div className="flex items-center gap-2">
           <a
-            href="https://chromewebstore.google.com"
-            target="_blank"
-            rel="noopener noreferrer"
+            href="/downloads/dopl-extension.zip"
+            download="dopl-extension.zip"
             className="inline-flex items-center gap-1.5 px-3 py-1.5 font-mono text-[10px] uppercase tracking-wide text-blue-200/90 bg-blue-500/15 border border-blue-500/25 rounded-[3px] hover:bg-blue-500/25 transition-colors"
           >
-            Install Extension
+            Download Extension
             <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7L7 3" /><path d="M4 3H7V6" /></svg>
           </a>
         </div>
         <div className="font-mono text-[9px] text-white/25 leading-relaxed">
-          After installing, click the Dopl icon in your browser toolbar, then enter your API key to connect.
+          Unzip the download, open chrome://extensions, enable Developer mode, click "Load unpacked", and select the unzipped folder. Then click the Dopl icon in your toolbar and enter your API key to connect.
         </div>
       </div>
     </div>

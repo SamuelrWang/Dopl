@@ -42,9 +42,12 @@ export function ChromeExtensionSection() {
 
       <H2 id="extension-install">Installation</H2>
       <P>
-        Install the Dopl Chrome Extension from the Chrome Web Store (or load it unpacked
-        from <Code>packages/chrome-extension/</Code> for development). The extension adds a
-        side panel, omnibox search, and right-click context menu actions.
+        Download the extension from the onboarding card (or grab{" "}
+        <Code>public/downloads/dopl-extension.zip</Code> directly), unzip it, then open{" "}
+        <Code>chrome://extensions</Code>, enable Developer mode, and click "Load unpacked" —
+        point it at the unzipped folder. For active development, you can also load{" "}
+        <Code>packages/chrome-extension/dist/</Code> unpacked. The extension adds a side
+        panel, omnibox search, and right-click context menu actions.
       </P>
 
       <H2 id="omnibox">Omnibox search</H2>
