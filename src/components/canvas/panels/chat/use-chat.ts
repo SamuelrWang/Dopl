@@ -111,9 +111,20 @@ export function useChat({ panel }: UseChatOptions) {
         if (!response.ok) {
           const err = await response.json().catch(() => ({}));
           if (response.status === 402 && err.error === "insufficient_credits") {
-            throw new Error(
-              "You've used all your credits for this cycle. Visit the Pricing page to upgrade, or wait for your daily bonus tomorrow."
-            );
+            // Show a real card with current balance + upgrade CTA, not an
+            // anonymous text error. setIsStreaming(false) below in finally
+            // resets input.
+            dispatch({
+              type: "APPEND_MESSAGE",
+              panelId: panel.id,
+              message: {
+                role: "ai",
+                type: "insufficient_credits",
+                balance: typeof err.balance === "number" ? err.balance : 0,
+                cost: typeof err.cost === "number" ? err.cost : 0,
+              },
+            });
+            return;
           }
           throw new Error(err.error || `HTTP ${response.status}`);
         }
@@ -218,9 +229,19 @@ export function useChat({ panel }: UseChatOptions) {
                 if (!entryId) break;
 
                 if (ingestStatus === "already_exists") {
-                  // Fetch full entry and spawn a completed panel
+                  // Fetch full entry and spawn a completed panel. If the
+                  // fetch fails the user sees chat success but no panel —
+                  // surface that so they can retry / realize something's
+                  // wrong.
                   fetch(`/api/entries/${entryId}`)
-                    .then((r) => (r.ok ? r.json() : null))
+                    .then(async (r) => {
+                      if (!r.ok) {
+                        throw new Error(
+                          `Couldn't load existing entry (HTTP ${r.status})`
+                        );
+                      }
+                      return r.json();
+                    })
                     .then((entry) => {
                       if (!entry) return;
                       const tags = (entry.tags ?? []).map((t: { tag_type: string; tag_value: string }) => ({
@@ -246,7 +267,19 @@ export function useChat({ panel }: UseChatOptions) {
                         manifest: entry.manifest || {},
                       });
                     })
-                    .catch(() => {});
+                    .catch((err) => {
+                      console.error("[useChat] already_exists fetch failed:", err);
+                      dispatch({
+                        type: "APPEND_MESSAGE",
+                        panelId: panel.id,
+                        message: {
+                          role: "ai",
+                          type: "text",
+                          content:
+                            "I found an existing entry for that URL but couldn't load it. You can try searching for it directly or refreshing.",
+                        },
+                      });
+                    });
                 } else if (streamUrl) {
                   // Spawn a skeleton entry panel and connect to stream
                   dispatch({

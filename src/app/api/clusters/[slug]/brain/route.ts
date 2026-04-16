@@ -5,18 +5,22 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
-import { withExternalAuth } from "@/lib/auth/with-auth";
+import { withUserAuth } from "@/lib/auth/with-auth";
 
 export const dynamic = "force-dynamic";
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
-async function getClusterBySlug(slug: string) {
+// Look up a cluster by slug, scoped to the owning user. Returns null
+// if the cluster doesn't exist OR the user doesn't own it — either way
+// the caller returns 404 so we don't leak existence across users.
+async function getClusterBySlugForUser(slug: string, userId: string) {
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("clusters")
     .select("id, slug, name")
     .eq("slug", slug)
+    .eq("user_id", userId)
     .single();
 
   if (error || !data) {
@@ -29,11 +33,14 @@ async function getClusterBySlug(slug: string) {
 
 async function handleGet(
   _request: NextRequest,
-  context: { params: Promise<{ slug: string }> }
+  { userId, params }: { userId: string; params?: Record<string, string> }
 ) {
   try {
-    const { slug } = await context.params;
-    const cluster = await getClusterBySlug(slug);
+    const slug = params?.slug;
+    if (!slug) {
+      return NextResponse.json({ error: "slug required" }, { status: 400 });
+    }
+    const cluster = await getClusterBySlugForUser(slug, userId);
     if (!cluster) {
       return NextResponse.json(
         { error: `Cluster not found: ${slug}` },
@@ -77,11 +84,14 @@ async function handleGet(
 
 async function handlePatch(
   request: NextRequest,
-  context: { params: Promise<{ slug: string }> }
+  { userId, params }: { userId: string; params?: Record<string, string> }
 ) {
   try {
-    const { slug } = await context.params;
-    const cluster = await getClusterBySlug(slug);
+    const slug = params?.slug;
+    if (!slug) {
+      return NextResponse.json({ error: "slug required" }, { status: 400 });
+    }
+    const cluster = await getClusterBySlugForUser(slug, userId);
     if (!cluster) {
       return NextResponse.json(
         { error: `Cluster not found: ${slug}` },
@@ -143,5 +153,5 @@ async function handlePatch(
   }
 }
 
-export const GET = withExternalAuth(handleGet);
-export const PATCH = withExternalAuth(handlePatch);
+export const GET = withUserAuth(handleGet);
+export const PATCH = withUserAuth(handlePatch);

@@ -20,6 +20,7 @@
     "apify-client": "^2.22.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "file-type": "^22.0.1",
     "html2canvas-pro": "^2.0.2",
     "lucide-react": "^1.7.0",
     "next": "16.2.2",

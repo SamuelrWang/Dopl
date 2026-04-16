@@ -1,5 +1,6 @@
 export interface DoplEntry {
   id: string;
+  slug: string | null;
   title: string | null;
   summary: string | null;
   source_url: string;
@@ -17,6 +18,7 @@ export interface DoplEntry {
 export interface SearchResult {
   entries: {
     entry_id: string;
+    slug: string | null;
     title: string | null;
     summary: string | null;
     similarity: number;
@@ -34,7 +36,7 @@ export interface SearchResult {
 export interface BuildResult {
   composite_readme: string;
   composite_agents_md: string;
-  source_entries: { entry_id: string; title: string; how_used: string }[];
+  source_entries: { entry_id: string; slug: string | null; title: string; how_used: string }[];
   confidence: {
     score: number;
     gaps: string[];
@@ -62,6 +64,7 @@ export interface ClusterRow {
 
 export interface ClusterDetailEntry {
   entry_id: string;
+  slug: string | null;
   title: string | null;
   summary: string | null;
   readme: string | null;
@@ -77,6 +80,7 @@ export interface ClusterDetail extends ClusterRow {
 export interface CanvasPanel {
   id: string;
   entry_id: string;
+  slug: string | null;
   title: string | null;
   summary: string | null;
   source_url: string | null;
@@ -89,6 +93,7 @@ export interface ClusterQueryResult {
   cluster_slug: string;
   results: {
     entry_id: string;
+    slug: string | null;
     title: string | null;
     summary: string | null;
     similarity: number;

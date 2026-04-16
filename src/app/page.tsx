@@ -640,48 +640,51 @@ export default function Home() {
       {/* ──── Connect via MCP ──── */}
       <section className="py-24 px-4">
         <div className="max-w-[1200px] mx-auto">
-          <div className="relative rounded-3xl overflow-hidden bg-[#1a0f08] min-h-[500px] grid grid-cols-1 lg:grid-cols-2">
-            {/* Left text */}
-            <div className="p-12 lg:p-16 flex flex-col justify-center">
-              <h2 className="text-[clamp(28px,3.5vw,40px)] font-normal mb-4">
-                <em className="font-serif italic">Lives</em>{" "}
+          {/* Sharp-cornered split panel — dark gray left, cropped desert image right */}
+          <div className="relative overflow-hidden bg-[#1a1a1a] min-h-[500px] grid grid-cols-1 lg:grid-cols-2 border border-white/[0.08]">
+            {/* Left — copy block */}
+            <div className="p-12 lg:p-20 flex flex-col justify-center">
+              <h2 className="text-white font-normal leading-[1.05] tracking-tight mb-6 text-[clamp(36px,4.5vw,56px)]">
+                <em
+                  className="italic"
+                  style={{
+                    fontFamily:
+                      "var(--font-playfair), 'Playfair Display', Georgia, serif",
+                  }}
+                >
+                  Lives
+                </em>{" "}
                 inside your AI
               </h2>
-              <p className="text-white/50 text-[16px] leading-relaxed mb-6 max-w-md">
+              <p className="text-white/60 text-[18px] leading-[1.55] mb-8 max-w-[480px]">
                 Connect via MCP and the entire knowledge base becomes part of
                 your agent&apos;s toolkit. Search, retrieve, and compose &mdash;
                 without leaving your workflow.
               </p>
               <Link
                 href="/canvas"
-                className="inline-flex items-center gap-2 text-white/70 text-[15px] hover:text-white transition-colors"
+                className="inline-flex items-center gap-2 text-white text-[16px] font-medium hover:text-white/80 transition-colors w-fit"
               >
-                Get connected{" "}
-                <span className="text-amber-500">&#10095;</span>
+                Get connected
+                <span className="text-amber-500 text-[18px] leading-none">
+                  &#10148;
+                </span>
               </Link>
             </div>
 
-            {/* Right — terminal mockup */}
-            <div className="relative min-h-[400px]">
-              <div className="absolute inset-0 bg-gradient-to-br from-[#8b5e3c] via-[#6b3a1f] to-[#3d1f0e]" />
-              <div className="absolute inset-8 lg:inset-12 bg-[#0a0a0a] rounded-2xl border border-white/[0.08] flex flex-col overflow-hidden">
-                <div className="flex items-center gap-1.5 px-4 py-3 border-b border-white/[0.06]">
-                  <div className="w-3 h-3 rounded-full bg-[#ff5f57]" />
-                  <div className="w-3 h-3 rounded-full bg-[#febc2e]" />
-                  <div className="w-3 h-3 rounded-full bg-[#28c840]" />
-                  <span className="ml-3 text-white/30 text-[11px]">Claude Code</span>
-                </div>
-                <div className="flex-1 p-4 font-mono text-[12px] leading-relaxed">
-                  <div className="text-white/40">$ claude</div>
-                  <div className="text-white/60 mt-2">&gt; Find me a marketing automation with n8n</div>
-                  <div className="text-green-400/70 mt-2">&#9654; Searching Dopl knowledge base...</div>
-                  <div className="text-white/50 mt-1">Found 4 relevant setups. Top match:</div>
-                  <div className="text-amber-400/70 mt-1">&nbsp;&nbsp;n8n AI Marketing Pipeline (complexity: moderate)</div>
-                  <div className="text-white/50 mt-1">&nbsp;&nbsp;Tools: n8n, Claude, Airtable</div>
-                  <div className="text-white/30 mt-3">&gt; <span className="animate-pulse">|</span></div>
-                </div>
-              </div>
-            </div>
+            {/* Right — cropped bottom-left of the landing background image.
+                Using background-size: 200% + position bottom-left gives the
+                "zoomed in on the dunes" framing from the reference. */}
+            <div
+              className="relative min-h-[400px] lg:min-h-full"
+              style={{
+                backgroundImage: "url('/img/background_image.png')",
+                backgroundSize: "350% auto",
+                backgroundPosition: "left bottom",
+                backgroundRepeat: "no-repeat",
+              }}
+              aria-hidden
+            />
           </div>
         </div>
       </section>

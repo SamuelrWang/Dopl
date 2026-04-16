@@ -18,11 +18,41 @@ export class DoplClient {
     this.apiKey = apiKey;
   }
 
+  /**
+   * Public URL for an entry. The server hands this to AI clients instead of
+   * leaking the internal UUID — the AI hyperlinks this in prose, and the
+   * user sees a clean /e/<slug> URL.
+   *
+   * Returns null if no slug is available (extremely rare — the schema
+   * guarantees every row has a slug, but MCP is called against older
+   * backends during the cutover).
+   */
+  entryUrl(slug: string | null | undefined): string | null {
+    if (!slug) return null;
+    return `${this.baseUrl}/e/${encodeURIComponent(slug)}`;
+  }
+
+  /**
+   * Build request headers, including the X-MCP-Tool header when a tool name
+   * is provided. The API layer (`withMcpCredits` in src/lib/auth/with-auth.ts)
+   * reads this header to record the MCP tool name in the `mcp_events`
+   * analytics table. Without it, analytics would only see the HTTP endpoint,
+   * which doesn't always map 1:1 to a tool name.
+   */
+  private buildHeaders(toolName?: string, withJsonBody = true): Record<string, string> {
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${this.apiKey}`,
+    };
+    if (withJsonBody) headers["Content-Type"] = "application/json";
+    if (toolName) headers["X-MCP-Tool"] = toolName;
+    return headers;
+  }
+
   private async request<T>(
     path: string,
-    options: { method?: string; body?: unknown; timeoutMs?: number } = {}
+    options: { method?: string; body?: unknown; timeoutMs?: number; toolName?: string } = {}
   ): Promise<T> {
-    const { method = "GET", body, timeoutMs = 30_000 } = options;
+    const { method = "GET", body, timeoutMs = 30_000, toolName } = options;
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -30,10 +60,7 @@ export class DoplClient {
     try {
       const res = await fetch(`${this.baseUrl}${path}`, {
         method,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${this.apiKey}`,
-        },
+        headers: this.buildHeaders(toolName),
         body: body ? JSON.stringify(body) : undefined,
         signal: controller.signal,
       });
@@ -63,6 +90,7 @@ export class DoplClient {
   }): Promise<SearchResult> {
     return this.request<SearchResult>("/api/query", {
       method: "POST",
+      toolName: "search_setups",
       body: {
         query: params.query,
         filters: {
@@ -76,7 +104,7 @@ export class DoplClient {
   }
 
   async getSetup(id: string): Promise<DoplEntry> {
-    return this.request<DoplEntry>(`/api/entries/${id}`);
+    return this.request<DoplEntry>(`/api/entries/${id}`, { toolName: "get_setup" });
   }
 
   async buildSolution(params: {
@@ -87,6 +115,7 @@ export class DoplClient {
   }): Promise<BuildResult> {
     return this.request<BuildResult>("/api/build", {
       method: "POST",
+      toolName: "build_solution",
       body: {
         brief: params.brief,
         constraints: {
@@ -111,19 +140,24 @@ export class DoplClient {
     if (params?.limit) query.set("limit", String(params.limit));
     if (params?.offset) query.set("offset", String(params.offset));
 
-    return this.request<ListResult>(`/api/entries?${query.toString()}`);
+    return this.request<ListResult>(`/api/entries?${query.toString()}`, {
+      toolName: "list_setups",
+    });
   }
 
   // ── Canvas methods ───────────────────────────────────────────────────
 
   async listCanvasPanels(): Promise<CanvasPanel[]> {
-    const res = await this.request<{ panels: CanvasPanel[] }>("/api/canvas/panels");
+    const res = await this.request<{ panels: CanvasPanel[] }>("/api/canvas/panels", {
+      toolName: "canvas_list_panels",
+    });
     return res.panels;
   }
 
   async addCanvasPanel(entryId: string): Promise<{ panel: CanvasPanel; created: boolean }> {
     return this.request<{ panel: CanvasPanel; created: boolean }>("/api/canvas/panels", {
       method: "POST",
+      toolName: "canvas_add_entry",
       body: { entry_id: entryId },
     });
   }
@@ -135,9 +169,7 @@ export class DoplClient {
     try {
       const res = await fetch(`${this.baseUrl}/api/canvas/panels/${encodeURIComponent(entryId)}`, {
         method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-        },
+        headers: this.buildHeaders("canvas_remove_entry", false),
         signal: controller.signal,
       });
       if (!res.ok && res.status !== 204) {
@@ -152,6 +184,7 @@ export class DoplClient {
   async createCluster(name: string, entryIds: string[]): Promise<ClusterRow> {
     return this.request<ClusterRow>("/api/clusters", {
       method: "POST",
+      toolName: "canvas_create_cluster",
       body: { name, entry_ids: entryIds },
     });
   }
@@ -159,12 +192,15 @@ export class DoplClient {
   // ── Cluster methods ──────────────────────────────────────────────────
 
   async listClusters(): Promise<{ clusters: ClusterRow[] }> {
-    return this.request<{ clusters: ClusterRow[] }>("/api/clusters");
+    return this.request<{ clusters: ClusterRow[] }>("/api/clusters", {
+      toolName: "list_clusters",
+    });
   }
 
   async getCluster(slug: string): Promise<ClusterDetail> {
     return this.request<ClusterDetail>(
-      `/api/clusters/${encodeURIComponent(slug)}`
+      `/api/clusters/${encodeURIComponent(slug)}`,
+      { toolName: "get_cluster" }
     );
   }
 
@@ -177,6 +213,7 @@ export class DoplClient {
       `/api/clusters/${encodeURIComponent(slug)}/query`,
       {
         method: "POST",
+        toolName: "query_cluster",
         body: { query, max_results: maxResults ?? 5 },
       }
     );
@@ -187,6 +224,7 @@ export class DoplClient {
   async pingMcpStatus(): Promise<void> {
     await this.request<{ ok: boolean }>("/api/user/mcp-status", {
       method: "POST",
+      toolName: "_mcp_status_ping",
       body: {},
     });
   }
@@ -195,7 +233,8 @@ export class DoplClient {
 
   async getClusterBrain(slug: string): Promise<{ instructions: string; memories: { id: string; content: string }[] }> {
     return this.request<{ instructions: string; memories: { id: string; content: string }[] }>(
-      `/api/clusters/${encodeURIComponent(slug)}/brain`
+      `/api/clusters/${encodeURIComponent(slug)}/brain`,
+      { toolName: "get_cluster_brain" }
     );
   }
 
@@ -204,6 +243,7 @@ export class DoplClient {
       `/api/clusters/${encodeURIComponent(slug)}/brain/memories`,
       {
         method: "POST",
+        toolName: "save_cluster_memory",
         body: { content },
       }
     );
@@ -214,6 +254,7 @@ export class DoplClient {
   ): Promise<{ instructions: string }> {
     return this.request<{ instructions: string }>("/api/cluster/synthesize", {
       method: "POST",
+      toolName: "_cluster_synthesize",
       body: { entries },
       timeoutMs: 120_000, // Synthesis can take a while
     });
@@ -224,6 +265,7 @@ export class DoplClient {
       `/api/clusters/${encodeURIComponent(slug)}/brain`,
       {
         method: "PATCH",
+        toolName: "_update_cluster_brain",
         body: { instructions },
       }
     );
@@ -234,11 +276,12 @@ export class DoplClient {
   async ingestUrl(
     url: string,
     content?: { text?: string; images?: string[]; links?: string[] }
-  ): Promise<{ entry_id: string; status: string; stream_url?: string; title?: string | null }> {
-    return this.request<{ entry_id: string; status: string; stream_url?: string; title?: string | null }>(
+  ): Promise<{ entry_id: string; slug: string | null; status: string; stream_url?: string; title?: string | null }> {
+    return this.request<{ entry_id: string; slug: string | null; status: string; stream_url?: string; title?: string | null }>(
       "/api/ingest",
       {
         method: "POST",
+        toolName: "ingest_url",
         body: { url, content: content || {} },
         timeoutMs: 60_000,
       }
@@ -255,6 +298,7 @@ export class DoplClient {
       `/api/clusters/${encodeURIComponent(slug)}`,
       {
         method: "PATCH",
+        toolName: "update_cluster",
         body: updates,
       }
     );
@@ -269,7 +313,7 @@ export class DoplClient {
         `${this.baseUrl}/api/clusters/${encodeURIComponent(slug)}`,
         {
           method: "DELETE",
-          headers: { Authorization: `Bearer ${this.apiKey}` },
+          headers: this.buildHeaders("delete_cluster", false),
           signal: controller.signal,
         }
       );
@@ -282,7 +326,22 @@ export class DoplClient {
     }
   }
 
-  // ── Brain read + memory delete ────────────────────────────────────
+  // ── Brain read + memory delete/edit ───────────────────────────────
+
+  async updateClusterMemory(
+    slug: string,
+    memoryId: string,
+    content: string
+  ): Promise<{ id: string; content: string }> {
+    return this.request<{ id: string; content: string }>(
+      `/api/clusters/${encodeURIComponent(slug)}/brain/memories`,
+      {
+        method: "PATCH",
+        toolName: "update_cluster_memory",
+        body: { memory_id: memoryId, content },
+      }
+    );
+  }
 
   async deleteClusterMemory(slug: string, memoryId: string): Promise<void> {
     const controller = new AbortController();
@@ -293,10 +352,7 @@ export class DoplClient {
         `${this.baseUrl}/api/clusters/${encodeURIComponent(slug)}/brain/memories`,
         {
           method: "DELETE",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${this.apiKey}`,
-          },
+          headers: this.buildHeaders("delete_cluster_memory"),
           body: JSON.stringify({ memory_id: memoryId }),
           signal: controller.signal,
         }
@@ -318,6 +374,7 @@ export class DoplClient {
   ): Promise<DoplEntry> {
     return this.request<DoplEntry>(`/api/entries/${encodeURIComponent(id)}`, {
       method: "PATCH",
+      toolName: "update_entry",
       body: updates,
     });
   }
@@ -333,7 +390,9 @@ export class DoplClient {
     days_since_push?: number;
     repo?: string;
   }> {
-    return this.request(`/api/entries/${encodeURIComponent(id)}/check-updates`);
+    return this.request(`/api/entries/${encodeURIComponent(id)}/check-updates`, {
+      toolName: "check_entry_updates",
+    });
   }
 
   // ── Incremental synthesis ─────────────────────────────────────────
@@ -344,6 +403,7 @@ export class DoplClient {
   ): Promise<{ instructions: string }> {
     return this.request<{ instructions: string }>("/api/cluster/synthesize-incremental", {
       method: "POST",
+      toolName: "_cluster_synthesize_incremental",
       body: { existing_instructions: existingInstructions, new_entry: newEntry },
       timeoutMs: 120_000,
     });
@@ -358,7 +418,7 @@ export class DoplClient {
         `${this.baseUrl}/api/entries/${encodeURIComponent(id)}`,
         {
           method: "DELETE",
-          headers: { Authorization: `Bearer ${this.apiKey}` },
+          headers: this.buildHeaders("delete_entry", false),
           signal: controller.signal,
         }
       );

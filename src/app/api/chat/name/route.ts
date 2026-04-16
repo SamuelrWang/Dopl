@@ -10,7 +10,7 @@
 
 import { NextRequest } from "next/server";
 import { callClaude } from "@/lib/ai";
-import { withExternalAuth } from "@/lib/auth/with-auth";
+import { withMcpCredits } from "@/lib/auth/with-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -73,4 +73,5 @@ async function handlePost(request: NextRequest) {
   }
 }
 
-export const POST = withExternalAuth(handlePost);
+// UI (session) auth skips credit charges; API-key callers are charged.
+export const POST = withMcpCredits("mcp_list", handlePost);

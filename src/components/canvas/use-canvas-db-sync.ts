@@ -166,21 +166,12 @@ function dbRowToPanel(row: Record<string, unknown>): Panel | null {
 }
 
 // ── localStorage timestamp tracking ──────────────────────────────────
+// Lightweight write-breadcrumb used to debug stale local state. The
+// companion read helper was removed — we don't actually consult this
+// for conflict resolution anywhere (the audit found it was dead code),
+// and real conflict resolution needs a different approach anyway.
 
 const LAST_SAVED_KEY_SUFFIX = ":lastSavedAt";
-
-function getLocalSaveTimestamp(): number {
-  try {
-    const uid = localStorage.getItem(CANVAS_ACTIVE_USER_KEY);
-    const key = uid
-      ? `${CANVAS_STORAGE_KEY_PREFIX}:${uid}${LAST_SAVED_KEY_SUFFIX}`
-      : `${CANVAS_STORAGE_KEY_PREFIX}${LAST_SAVED_KEY_SUFFIX}`;
-    const val = localStorage.getItem(key);
-    return val ? parseInt(val, 10) : 0;
-  } catch {
-    return 0;
-  }
-}
 
 function setLocalSaveTimestamp() {
   try {
@@ -493,6 +484,130 @@ export function useCanvasDbSync(onReady?: () => void) {
       if (titleTimerRef.current) clearTimeout(titleTimerRef.current);
       if (clusterTimerRef.current) clearTimeout(clusterTimerRef.current);
       if (panelDataTimerRef.current) clearTimeout(panelDataTimerRef.current);
+    };
+  }, []);
+
+  // ── Flush-on-unload ──────────────────────────────────────────────
+  // If the user reloads or closes the tab while a debounced save is
+  // pending (camera moved, panel dragged, title edited…), the timer
+  // never fires and the change is lost. Fix: on pagehide / beforeunload,
+  // fire any pending save immediately with `keepalive: true` so the
+  // browser delivers it even as the page unloads. We always send the
+  // latest state — cheaper than tracking per-category dirty flags, and
+  // the DB accepts idempotent writes here.
+  //
+  // We keep a ref to the latest state so the unload handler isn't
+  // reading stale closure values.
+  const latestStateRef = useRef(state);
+  latestStateRef.current = state;
+
+  useEffect(() => {
+    function flushPendingSaves() {
+      if (!syncedRef.current) return;
+      const s = latestStateRef.current;
+      const anyPending =
+        cameraTimerRef.current !== null ||
+        positionTimerRef.current !== null ||
+        titleTimerRef.current !== null ||
+        clusterTimerRef.current !== null ||
+        panelDataTimerRef.current !== null;
+      if (!anyPending) return;
+
+      // Camera + counters
+      if (cameraTimerRef.current) {
+        clearTimeout(cameraTimerRef.current);
+        cameraTimerRef.current = null;
+        fetch("/api/canvas/state", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          keepalive: true,
+          body: JSON.stringify({
+            camera_x: s.camera.x,
+            camera_y: s.camera.y,
+            camera_zoom: s.camera.zoom,
+            next_panel_id: s.nextPanelId,
+            next_cluster_id: s.nextClusterId,
+          }),
+        }).catch(() => {});
+      }
+
+      // Positions + panel_data (all panel batches flushed together)
+      if (positionTimerRef.current || panelDataTimerRef.current) {
+        if (positionTimerRef.current) clearTimeout(positionTimerRef.current);
+        if (panelDataTimerRef.current) clearTimeout(panelDataTimerRef.current);
+        positionTimerRef.current = null;
+        panelDataTimerRef.current = null;
+        const updates = s.panels.map((p) => {
+          const row = panelToDbRow(p);
+          return {
+            panel_id: p.id,
+            x: p.x,
+            y: p.y,
+            panel_data: row.panel_data,
+          };
+        });
+        fetch("/api/canvas/panels/batch", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          keepalive: true,
+          body: JSON.stringify({ updates }),
+        }).catch(() => {});
+      }
+
+      // Titles
+      if (titleTimerRef.current) {
+        clearTimeout(titleTimerRef.current);
+        titleTimerRef.current = null;
+        const titleUpdates: { panel_id: string; title: string }[] = [];
+        for (const p of s.panels) {
+          if ("title" in p && typeof (p as { title?: unknown }).title === "string") {
+            titleUpdates.push({
+              panel_id: p.id,
+              title: (p as { title: string }).title,
+            });
+          }
+        }
+        if (titleUpdates.length > 0) {
+          fetch("/api/canvas/panels/batch", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            keepalive: true,
+            body: JSON.stringify({ updates: titleUpdates }),
+          }).catch(() => {});
+        }
+      }
+
+      // Clusters
+      if (clusterTimerRef.current) {
+        clearTimeout(clusterTimerRef.current);
+        clusterTimerRef.current = null;
+        fetch("/api/canvas/state", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          keepalive: true,
+          body: JSON.stringify({ clusters: s.clusters }),
+        }).catch(() => {});
+      }
+    }
+
+    // `pagehide` is more reliable than `beforeunload` on mobile Safari
+    // and persists through bfcache (if the page is eventually unloaded).
+    // Listening to both covers all desktop + mobile cases.
+    window.addEventListener("pagehide", flushPendingSaves);
+    window.addEventListener("beforeunload", flushPendingSaves);
+    // Also flush when the tab goes hidden for an extended period — some
+    // browsers unload background tabs to free memory.
+    function onVisibilityChange() {
+      if (document.visibilityState === "hidden") {
+        flushPendingSaves();
+      }
+    }
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      window.removeEventListener("pagehide", flushPendingSaves);
+      window.removeEventListener("beforeunload", flushPendingSaves);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, []);
 }

@@ -26,7 +26,21 @@ You are an expert architect. Use the Dopl tools as your reference library — se
 - **Deep dive** — Pull full implementation details (README, setup instructions, metadata) for any entry
 - **Build** — Compose a complete solution by combining patterns from multiple implementations
 - **Canvas** — Manage the user's workspace: add entries, organize into clusters, browse saved items
+- **Brain** — Read and edit cluster brains (synthesized instructions + memories) to capture durable preferences and corrections
 - **Skills** — Cluster knowledge can be synced as skill files. Run \`sync_skills\` to write them to ~/.claude/skills/ (Claude Code) or pass target='openclaw' to write to ~/.openclaw/workspace/data/dopl/
+
+## Linking entries
+
+Every entry has a public URL of the form \`<host>/e/<slug>\`. Tool responses include this URL alongside each entry. **Whenever you mention a specific entry in your reply to the user, render it as a markdown link using that URL** — e.g. \`[Claude Agents in Production](https://www.usedopl.com/e/claude-agents-in-production)\`. **Never surface entry IDs, UUIDs, or raw slugs in prose** — they are internal handles used only for follow-up tool calls.
+
+When a tool accepts an \`entry\` parameter, you may pass either the entry's slug or its UUID — the server resolves either.
+
+## Editing cluster brains
+
+Cluster brains are **user-crafted knowledge**. An initial synthesis runs once when a cluster is created; after that, the brain is edited by you or the user, never automatically regenerated. When you learn something durable about how to apply a cluster:
+- Use \`update_cluster_brain\` to edit the synthesized instructions in place. Prefer surgical edits (add a section, correct a detail) over full rewrites so you never wipe work the user has already done.
+- Use \`save_cluster_memory\` for short preferences/corrections that augment the main instructions.
+- Use \`update_cluster_memory\` to revise an existing memory rather than accumulating near-duplicates.
 
 ## Behavior
 
@@ -74,8 +88,10 @@ export function createServer(client: DoplClient): McpServer {
 
       lines.push(`## Results (${result.entries.length} found)\n`);
       for (const entry of result.entries) {
-        lines.push(`### ${entry.title || "Untitled"} (${Math.round(entry.similarity * 100)}% match)`);
-        lines.push(`ID: ${entry.entry_id}`);
+        const title = entry.title || "Untitled";
+        const url = client.entryUrl(entry.slug);
+        const heading = url ? `[${title}](${url})` : title;
+        lines.push(`### ${heading} (${Math.round(entry.similarity * 100)}% match)`);
         if (entry.summary) lines.push(entry.summary);
         if (entry.relevance_explanation) lines.push(`Relevance: ${entry.relevance_explanation}`);
         lines.push("");
@@ -90,13 +106,15 @@ export function createServer(client: DoplClient): McpServer {
     "get_setup",
     "Get full details of a specific setup from the knowledge base, including README, agents.md (AI setup instructions), and manifest.",
     {
-      id: z.string().describe("Entry ID (UUID) from search results"),
+      entry: z.string().describe("Entry slug or UUID (from search_setups or a prior tool response)"),
     },
-    async ({ id }) => {
-      const entry = await client.getSetup(id);
+    async ({ entry: entryRef }) => {
+      const entry = await client.getSetup(entryRef);
 
       const lines: string[] = [];
-      lines.push(`# ${entry.title || "Untitled"}`);
+      const title = entry.title || "Untitled";
+      const url = client.entryUrl(entry.slug);
+      lines.push(`# ${url ? `[${title}](${url})` : title}`);
       if (entry.summary) lines.push(`\n${entry.summary}`);
       lines.push(`\nStatus: ${entry.status}`);
       lines.push(`Source: ${entry.source_url}`);
@@ -152,7 +170,9 @@ export function createServer(client: DoplClient): McpServer {
 
       lines.push("\n### Source Setups Used:");
       for (const src of result.source_entries) {
-        lines.push(`- **${src.title}** (${src.entry_id}): ${src.how_used}`);
+        const url = client.entryUrl(src.slug);
+        const label = url ? `[${src.title}](${url})` : src.title;
+        lines.push(`- **${label}**: ${src.how_used}`);
       }
 
       lines.push("\n---\n### README\n");
@@ -192,8 +212,11 @@ export function createServer(client: DoplClient): McpServer {
       lines.push(`## Setups (${result.total} total, showing ${result.entries.length})\n`);
 
       for (const entry of result.entries) {
-        lines.push(`- **${entry.title || "Untitled"}** [${entry.complexity || "?"}] — ${entry.summary || "No summary"}`);
-        lines.push(`  ID: ${entry.id} | Source: ${entry.source_url}`);
+        const title = entry.title || "Untitled";
+        const url = client.entryUrl(entry.slug);
+        const label = url ? `[${title}](${url})` : title;
+        lines.push(`- **${label}** [${entry.complexity || "?"}] — ${entry.summary || "No summary"}`);
+        lines.push(`  Source: ${entry.source_url}`);
       }
 
       if (result.total > result.offset + result.entries.length) {
@@ -242,7 +265,10 @@ export function createServer(client: DoplClient): McpServer {
       lines.push(`Entries: ${cluster.entries.length}\n`);
 
       for (const e of cluster.entries) {
-        lines.push(`### ${e.title || "Untitled"} (${e.entry_id})`);
+        const title = e.title || "Untitled";
+        const url = client.entryUrl(e.slug);
+        const heading = url ? `[${title}](${url})` : title;
+        lines.push(`### ${heading}`);
         if (e.summary) lines.push(e.summary);
         if (e.readme) {
           lines.push(`\nREADME:\n${e.readme.slice(0, CONTEXT_CHAR_BUDGET)}`);
@@ -284,10 +310,12 @@ export function createServer(client: DoplClient): McpServer {
       );
 
       for (const r of result.results) {
+        const title = r.title || "Untitled";
+        const url = client.entryUrl(r.slug);
+        const heading = url ? `[${title}](${url})` : title;
         lines.push(
-          `### ${r.title || "Untitled"} (${Math.round(r.similarity * 100)}% match)`
+          `### ${heading} (${Math.round(r.similarity * 100)}% match)`
         );
-        lines.push(`ID: ${r.entry_id}`);
         if (r.summary) lines.push(r.summary);
         lines.push("");
       }
@@ -443,11 +471,16 @@ export function createServer(client: DoplClient): McpServer {
 
       const result = await client.ingestUrl(url, Object.keys(content).length > 0 ? content : undefined);
 
+      const title = result.title || "Untitled";
+      const entryUrl = client.entryUrl(result.slug);
+      const label = entryUrl ? `[${title}](${entryUrl})` : title;
+      const ref = result.slug ?? result.entry_id;
+
       if (result.status === "already_exists") {
         return {
           content: [{
             type: "text" as const,
-            text: `Entry already exists: **${result.title || "Untitled"}** (${result.entry_id})\nUse \`get_setup("${result.entry_id}")\` to view it.`,
+            text: `Entry already exists: **${label}**\nUse \`get_setup("${ref}")\` to view it.`,
           }],
         };
       }
@@ -455,7 +488,7 @@ export function createServer(client: DoplClient): McpServer {
       return {
         content: [{
           type: "text" as const,
-          text: `Ingestion started for ${url}\nEntry ID: ${result.entry_id}\nStatus: ${result.status}\n\nThe entry is processing in the background. Use \`get_setup("${result.entry_id}")\` to check when it's complete.`,
+          text: `Ingestion started for ${url}\nEntry: **${label}**\nStatus: ${result.status}\n\nThe entry is processing in the background. Use \`get_setup("${ref}")\` to check when it's complete.`,
         }],
       };
     }
@@ -570,29 +603,85 @@ export function createServer(client: DoplClient): McpServer {
     }
   );
 
+  // ── update_cluster_brain ───────────────────────────────────────────
+  server.tool(
+    "update_cluster_brain",
+    "Overwrite the cluster's synthesized brain instructions with new text. Use this to integrate new patterns, correct drift, or record durable knowledge you've learned while helping the user. Prefer surgical edits (read the brain first, then replace with a modified version) over full rewrites — the brain often contains user edits that should be preserved. Auto-synthesis does NOT run after cluster creation, so the brain only changes when you or the user change it.",
+    {
+      slug: z.string().describe("Cluster slug"),
+      instructions: z
+        .string()
+        .describe("New brain instructions (markdown). This REPLACES the previous instructions — include everything you want kept."),
+    },
+    async ({ slug, instructions }) => {
+      await client.updateClusterBrain(slug, instructions);
+
+      // Keep the on-disk skill file in sync with the new brain.
+      let diskNote = "";
+      try {
+        const detail = await client.getCluster(slug);
+        const brain = await client.getClusterBrain(slug);
+        await writeClusterSkill(slug, detail.name, brain, detail.entries);
+        diskNote = `\n(Also updated ~/.claude/skills/dopl-${slug}/SKILL.md)`;
+      } catch (err) {
+        console.error(`[Dopl] Failed to sync skill for ${slug}:`, err);
+      }
+
+      return {
+        content: [{
+          type: "text" as const,
+          text: `Updated brain for cluster "${slug}" (${instructions.length} chars).${diskNote}`,
+        }],
+      };
+    }
+  );
+
+  // ── update_cluster_memory ──────────────────────────────────────────
+  server.tool(
+    "update_cluster_memory",
+    "Revise the content of an existing memory in place rather than adding a near-duplicate. Use get_cluster_brain first to see memory IDs and current text.",
+    {
+      slug: z.string().describe("Cluster slug"),
+      memory_id: z.string().describe("Memory ID to update"),
+      content: z.string().describe("New memory content (fully replaces the prior text)"),
+    },
+    async ({ slug, memory_id, content }) => {
+      const updated = await client.updateClusterMemory(slug, memory_id, content);
+      return {
+        content: [{
+          type: "text" as const,
+          text: `Updated memory for cluster "${slug}": "${updated.content}"`,
+        }],
+      };
+    }
+  );
+
   // ── update_entry ───────────────────────────────────────────────────
   server.tool(
     "update_entry",
     "Update metadata for a knowledge base entry (title, summary, use_case, complexity).",
     {
-      id: z.string().describe("Entry ID (UUID)"),
+      entry: z.string().describe("Entry slug or UUID"),
       title: z.string().optional().describe("New title"),
       summary: z.string().optional().describe("New summary"),
       use_case: z.string().optional().describe("New use case category"),
       complexity: z.enum(["simple", "moderate", "complex", "advanced"]).optional().describe("New complexity level"),
     },
-    async ({ id, title, summary, use_case, complexity }) => {
+    async ({ entry, title, summary, use_case, complexity }) => {
       const updates: { title?: string; summary?: string; use_case?: string; complexity?: string } = {};
       if (title) updates.title = title;
       if (summary) updates.summary = summary;
       if (use_case) updates.use_case = use_case;
       if (complexity) updates.complexity = complexity;
 
-      const entry = await client.updateEntry(id, updates);
+      const updated = await client.updateEntry(entry, updates);
+      const t = updated.title || "Untitled";
+      const url = client.entryUrl(updated.slug);
+      const label = url ? `[${t}](${url})` : t;
       return {
         content: [{
           type: "text" as const,
-          text: `Updated entry **${entry.title || "Untitled"}** (${id}).`,
+          text: `Updated entry **${label}**.`,
         }],
       };
     }
@@ -603,14 +692,14 @@ export function createServer(client: DoplClient): McpServer {
     "delete_entry",
     "Delete an entry from the knowledge base. This is permanent and cannot be undone.",
     {
-      id: z.string().describe("Entry ID (UUID) to delete"),
+      entry: z.string().describe("Entry slug or UUID to delete"),
     },
-    async ({ id }) => {
-      await client.deleteEntry(id);
+    async ({ entry }) => {
+      await client.deleteEntry(entry);
       return {
         content: [{
           type: "text" as const,
-          text: `Deleted entry ${id} from the knowledge base.`,
+          text: `Deleted entry from the knowledge base.`,
         }],
       };
     }
@@ -621,16 +710,28 @@ export function createServer(client: DoplClient): McpServer {
     "check_entry_updates",
     "Check if a GitHub-sourced entry has been updated since ingestion. Returns update status for GitHub repos; non-GitHub entries are skipped.",
     {
-      entry_id: z.string().describe("Entry ID (UUID) to check"),
+      entry: z.string().describe("Entry slug or UUID to check"),
     },
-    async ({ entry_id }) => {
-      const result = await client.checkEntryUpdates(entry_id);
+    async ({ entry }) => {
+      const result = await client.checkEntryUpdates(entry);
+
+      // The check-updates endpoint echoes back entry_id (UUID). We fetch the
+      // entry metadata so we can render a proper hyperlink via slug.
+      let url: string | null = null;
+      try {
+        const e = await client.getSetup(result.entry_id);
+        url = client.entryUrl(e.slug);
+      } catch {
+        // Non-fatal; fall back to plain title.
+      }
+      const title = result.title || "Untitled";
+      const label = url ? `[${title}](${url})` : title;
 
       if (result.has_updates === null) {
         return {
           content: [{
             type: "text" as const,
-            text: `**${result.title || "Untitled"}**: ${result.reason || "Update checking not available."}`,
+            text: `**${label}**: ${result.reason || "Update checking not available."}`,
           }],
         };
       }
@@ -639,7 +740,7 @@ export function createServer(client: DoplClient): McpServer {
         return {
           content: [{
             type: "text" as const,
-            text: `**${result.title || "Untitled"}** (${result.repo}): Updates available.\nRepo last pushed ${result.days_since_push} day(s) ago. You ingested it ${result.days_since_ingestion} day(s) ago.\nConsider re-ingesting with \`ingest_url\`.`,
+            text: `**${label}** (${result.repo}): Updates available.\nRepo last pushed ${result.days_since_push} day(s) ago. You ingested it ${result.days_since_ingestion} day(s) ago.\nConsider re-ingesting with \`ingest_url\`.`,
           }],
         };
       }
@@ -647,7 +748,7 @@ export function createServer(client: DoplClient): McpServer {
       return {
         content: [{
           type: "text" as const,
-          text: `**${result.title || "Untitled"}** (${result.repo}): No updates since ingestion (${result.days_since_ingestion} day(s) ago).`,
+          text: `**${label}** (${result.repo}): No updates since ingestion (${result.days_since_ingestion} day(s) ago).`,
         }],
       };
     }
@@ -668,17 +769,22 @@ export function createServer(client: DoplClient): McpServer {
       const skipped: string[] = [];
 
       for (const entry of detail.entries) {
+        const url = client.entryUrl(entry.slug);
+        const mkLabel = (title: string | null) => {
+          const t = title || entry.title || "Untitled";
+          return url ? `[${t}](${url})` : t;
+        };
         try {
           const result = await client.checkEntryUpdates(entry.entry_id);
           if (result.has_updates === true) {
-            updated.push(`- **${result.title || "Untitled"}** (${result.repo}) — updated ${result.days_since_push}d ago, ingested ${result.days_since_ingestion}d ago`);
+            updated.push(`- **${mkLabel(result.title)}** (${result.repo}) — updated ${result.days_since_push}d ago, ingested ${result.days_since_ingestion}d ago`);
           } else if (result.has_updates === false) {
-            current.push(`- ${result.title || "Untitled"}`);
+            current.push(`- ${mkLabel(result.title)}`);
           } else {
-            skipped.push(`- ${result.title || "Untitled"} — ${result.reason || "not GitHub"}`);
+            skipped.push(`- ${mkLabel(result.title)} — ${result.reason || "not GitHub"}`);
           }
         } catch {
-          skipped.push(`- ${entry.title || "Untitled"} — check failed`);
+          skipped.push(`- ${mkLabel(null)} — check failed`);
         }
       }
 
@@ -707,86 +813,54 @@ export function createServer(client: DoplClient): McpServer {
   // ── add_entry_to_cluster ───────────────────────────────────────────
   server.tool(
     "add_entry_to_cluster",
-    "Add an entry to an existing cluster and incrementally update the cluster's brain. More useful than raw update_cluster because it handles brain merging automatically.",
+    "Add an entry to an existing cluster. The brain is NOT auto-updated — initial synthesis happens only at cluster creation; subsequent changes are your job via update_cluster_brain. This preserves any edits the user or you have made to the brain.",
     {
       slug: z.string().describe("Cluster slug"),
-      entry_id: z.string().describe("Entry ID to add to the cluster"),
+      entry: z.string().describe("Entry slug or UUID to add to the cluster"),
     },
-    async ({ slug, entry_id }) => {
+    async ({ slug, entry: entryRef }) => {
       // Get current cluster to build updated entry list
       const detail = await client.getCluster(slug);
       const existingIds = detail.entries.map((e) => e.entry_id);
 
-      if (existingIds.includes(entry_id)) {
+      // Validate entry exists and resolve slug → UUID for cluster membership.
+      const newEntry = await client.getSetup(entryRef);
+      const newEntryId = newEntry.id;
+      const title = newEntry.title || "Untitled";
+      const url = client.entryUrl(newEntry.slug);
+      const label = url ? `[${title}](${url})` : title;
+
+      if (existingIds.includes(newEntryId)) {
         return {
           content: [{
             type: "text" as const,
-            text: `Entry ${entry_id} is already in cluster "${slug}".`,
+            text: `**${label}** is already in cluster "${slug}".`,
           }],
         };
       }
 
-      // Validate entry exists
-      const newEntry = await client.getSetup(entry_id);
-
-      // Add entry to cluster membership
-      const updatedIds = [...existingIds, entry_id];
+      // Add entry to cluster membership.
+      const updatedIds = [...existingIds, newEntryId];
       await client.updateCluster(slug, { entry_ids: updatedIds });
 
-      // Incrementally update brain if possible
-      let brainNote = "";
+      // Refresh the on-disk skill file so the entry list stays in sync, but
+      // leave brain.instructions ALONE — auto-synthesis after initial creation
+      // risks wiping edits the user has made.
+      let skillNote = "";
       try {
-        const brain = await client.getClusterBrain(slug);
-
-        if (brain.instructions && newEntry.agents_md) {
-          // Incremental synthesis — merge new entry into existing brain
-          const synthesis = await client.synthesizeIncremental(
-            brain.instructions,
-            {
-              title: newEntry.title || "Untitled",
-              agents_md: newEntry.agents_md,
-              readme: newEntry.readme || "",
-            }
-          );
-          await client.updateClusterBrain(slug, synthesis.instructions);
-          brainNote = "\nBrain updated incrementally with new entry.";
-        } else if (!brain.instructions && newEntry.agents_md) {
-          // No brain yet — do full synthesis
-          const allEntries = [...detail.entries, {
-            entry_id,
-            title: newEntry.title,
-            summary: newEntry.summary,
-            readme: newEntry.readme,
-            agents_md: newEntry.agents_md,
-          }].filter((e) => e.agents_md).map((e) => ({
-            title: e.title || "Untitled",
-            agents_md: e.agents_md || "",
-            readme: e.readme || "",
-          }));
-
-          if (allEntries.length > 0) {
-            const synthesis = await client.synthesizeBrain(allEntries);
-            await client.updateClusterBrain(slug, synthesis.instructions);
-            brainNote = "\nBrain synthesized from all entries.";
-          }
-        } else {
-          brainNote = "\nNew entry has no agents.md — brain unchanged.";
-        }
-
-        // Update skill file
         const updatedDetail = await client.getCluster(slug);
-        const updatedBrain = await client.getClusterBrain(slug);
-        await writeClusterSkill(slug, detail.name, updatedBrain, updatedDetail.entries);
-        brainNote += " Skill file updated.";
+        const currentBrain = await client.getClusterBrain(slug);
+        await writeClusterSkill(slug, detail.name, currentBrain, updatedDetail.entries);
+        skillNote = " Skill file updated with the new entry list.";
       } catch (err) {
-        console.error(`[Dopl] Brain update failed for ${slug}:`, err);
-        brainNote = "\n(Brain update failed — run `sync_skills` to fix)";
+        console.error(`[Dopl] Skill sync failed for ${slug}:`, err);
+        skillNote = " (Skill file not refreshed — run `sync_skills` to fix.)";
       }
 
       return {
         content: [{
           type: "text" as const,
-          text: `Added **${newEntry.title || "Untitled"}** to cluster "${slug}" (now ${updatedIds.length} entries).${brainNote}`,
+          text: `Added **${label}** to cluster "${slug}" (now ${updatedIds.length} entries). Brain unchanged — if this entry introduces new patterns you want reflected in the cluster brain, edit it with \`update_cluster_brain\`.${skillNote}`,
         }],
       };
     }
@@ -810,7 +884,10 @@ export function createServer(client: DoplClient): McpServer {
       lines.push(`## Your Canvas (${panels.length} entries)\n`);
 
       for (const p of panels) {
-        lines.push(`- **${p.title || "Untitled"}** (entry: ${p.entry_id})`);
+        const title = p.title || "Untitled";
+        const url = client.entryUrl(p.slug);
+        const label = url ? `[${title}](${url})` : title;
+        lines.push(`- **${label}**`);
         if (p.summary) lines.push(`  ${p.summary}`);
         if (p.source_url) lines.push(`  Source: ${p.source_url}`);
       }
@@ -824,16 +901,19 @@ export function createServer(client: DoplClient): McpServer {
     "canvas_add_entry",
     "Add a knowledge base entry to your canvas. Use search_setups to find entries first.",
     {
-      entry_id: z.string().describe("Entry ID (UUID) from search results or get_setup"),
+      entry: z.string().describe("Entry slug or UUID from search results or get_setup"),
     },
-    async ({ entry_id }) => {
-      const { panel, created } = await client.addCanvasPanel(entry_id);
+    async ({ entry }) => {
+      const { panel, created } = await client.addCanvasPanel(entry);
       const verb = created ? "Added" : "Already on";
+      const title = panel.title || "Untitled";
+      const url = client.entryUrl(panel.slug);
+      const label = url ? `[${title}](${url})` : title;
       return {
         content: [
           {
             type: "text" as const,
-            text: `${verb} canvas: **${panel.title || "Untitled"}** (${panel.entry_id})`,
+            text: `${verb} canvas: **${label}**`,
           },
         ],
       };
@@ -845,15 +925,15 @@ export function createServer(client: DoplClient): McpServer {
     "canvas_remove_entry",
     "Remove an entry from your canvas. Does not delete it from the knowledge base.",
     {
-      entry_id: z.string().describe("Entry ID to remove from canvas"),
+      entry: z.string().describe("Entry slug or UUID to remove from canvas"),
     },
-    async ({ entry_id }) => {
-      await client.removeCanvasPanel(entry_id);
+    async ({ entry }) => {
+      await client.removeCanvasPanel(entry);
       return {
         content: [
           {
             type: "text" as const,
-            text: `Removed entry ${entry_id} from your canvas.`,
+            text: `Removed entry from your canvas.`,
           },
         ],
       };
@@ -889,15 +969,18 @@ export function createServer(client: DoplClient): McpServer {
       const skipped: string[] = [];
 
       for (const entry of searchResult.entries) {
+        const title = entry.title || "Untitled";
+        const url = client.entryUrl(entry.slug);
+        const label = url ? `[${title}](${url})` : title;
         try {
           const { created } = await client.addCanvasPanel(entry.entry_id);
           if (created) {
-            added.push(`- **${entry.title || "Untitled"}** (${Math.round(entry.similarity * 100)}% match)`);
+            added.push(`- **${label}** (${Math.round(entry.similarity * 100)}% match)`);
           } else {
-            skipped.push(`- ${entry.title || "Untitled"} (already on canvas)`);
+            skipped.push(`- ${label} (already on canvas)`);
           }
         } catch {
-          skipped.push(`- ${entry.title || "Untitled"} (failed to add)`);
+          skipped.push(`- ${label} (failed to add)`);
         }
       }
 
@@ -918,31 +1001,36 @@ export function createServer(client: DoplClient): McpServer {
   // ── canvas_create_cluster ─────────────────────────────────────────
   server.tool(
     "canvas_create_cluster",
-    "Group canvas entries into a named cluster for organized access via query_cluster. Brain synthesis and skill file generation happen in the background — run sync_skills to check status.",
+    "Group canvas entries into a named cluster for organized access via query_cluster. An initial brain synthesis runs in the background — after that, edit the brain directly with update_cluster_brain instead of relying on automatic resynthesis (auto-synthesis only happens once, at cluster creation).",
     {
       name: z.string().min(1, "Cluster name cannot be empty").describe("Cluster name, e.g. 'AI Agent Stack'"),
-      entry_ids: z.array(z.string()).min(1, "Must provide at least one entry ID").describe("Entry IDs to include (must be on your canvas)"),
+      entries: z
+        .array(z.string())
+        .min(1, "Must provide at least one entry")
+        .describe("Entry slugs or UUIDs to include (must be on your canvas)"),
     },
-    async ({ name, entry_ids }) => {
-      // Validate entry IDs exist before creating cluster
+    async ({ name, entries }) => {
+      // Validate entries exist (and resolve slug → UUID where needed) before creating cluster.
       const validationErrors: string[] = [];
-      for (const id of entry_ids) {
+      const resolvedIds: string[] = [];
+      for (const ref of entries) {
         try {
-          await client.getSetup(id);
+          const entry = await client.getSetup(ref);
+          resolvedIds.push(entry.id);
         } catch {
-          validationErrors.push(id);
+          validationErrors.push(ref);
         }
       }
       if (validationErrors.length > 0) {
         return {
           content: [{
             type: "text" as const,
-            text: `Entry IDs not found: ${validationErrors.join(", ")}. Use \`search_setups\` to find valid entry IDs.`,
+            text: `Entries not found: ${validationErrors.join(", ")}. Use \`search_setups\` to find valid entries.`,
           }],
         };
       }
 
-      const result = await client.createCluster(name, entry_ids);
+      const result = await client.createCluster(name, resolvedIds);
 
       // Fire-and-forget: brain synthesis + skill file generation
       // This can take 30-120s so we don't block the tool response
@@ -988,7 +1076,7 @@ export function createServer(client: DoplClient): McpServer {
         content: [
           {
             type: "text" as const,
-            text: `Created cluster **${result.name}** (slug: \`${result.slug}\`) with ${result.panel_count ?? entry_ids.length} entries.\nBrain synthesis running in background (~30s). Use \`get_cluster_brain("${result.slug}")\` to check when ready.`,
+            text: `Created cluster **${result.name}** (slug: \`${result.slug}\`) with ${result.panel_count ?? resolvedIds.length} entries.\nInitial brain synthesis running in background (~30s). After this one-time pass, the brain is yours to edit — use \`get_cluster_brain("${result.slug}")\` to read it and \`update_cluster_brain\` to modify it.`,
           },
         ],
       };

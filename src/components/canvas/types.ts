@@ -245,8 +245,8 @@ export interface CanvasState {
   deletedPanelsStack: Array<{ panels: Panel[]; clusters: Cluster[] }>;
 }
 
-/** Zoom bounds. Going below 0.25 or above 4 gets confusing / unreadable. */
-export const MIN_ZOOM = 0.25;
+/** Zoom bounds. Going below 0.5 or above 4 gets confusing / unreadable. */
+export const MIN_ZOOM = 0.5;
 export const MAX_ZOOM = 4.0;
 
 export const INITIAL_CANVAS_STATE: CanvasState = {

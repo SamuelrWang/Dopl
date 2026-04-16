@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withExternalAuth } from "@/lib/auth/with-auth";
+import { withUserAuth } from "@/lib/auth/with-auth";
 import { getCluster, updateCluster, deleteCluster } from "@/lib/clusters/service";
 
 async function handleGet(
   _request: NextRequest,
-  context: { params: Promise<{ slug: string }> }
+  { userId, params }: { userId: string; params?: Record<string, string> }
 ) {
   try {
-    const { slug } = await context.params;
-    const cluster = await getCluster(slug);
+    const slug = params?.slug;
+    if (!slug) {
+      return NextResponse.json({ error: "slug required" }, { status: 400 });
+    }
+    const cluster = await getCluster(slug, { userId });
     return NextResponse.json(cluster);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
@@ -19,15 +22,22 @@ async function handleGet(
 
 async function handlePatch(
   request: NextRequest,
-  context: { params: Promise<{ slug: string }> }
+  { userId, params }: { userId: string; params?: Record<string, string> }
 ) {
   try {
-    const { slug } = await context.params;
+    const slug = params?.slug;
+    if (!slug) {
+      return NextResponse.json({ error: "slug required" }, { status: 400 });
+    }
     const body = await request.json();
-    const cluster = await updateCluster(slug, {
-      name: body.name,
-      entry_ids: body.entry_ids,
-    });
+    const cluster = await updateCluster(
+      slug,
+      {
+        name: body.name,
+        entry_ids: body.entry_ids,
+      },
+      { userId }
+    );
     return NextResponse.json(cluster);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
@@ -38,11 +48,14 @@ async function handlePatch(
 
 async function handleDelete(
   _request: NextRequest,
-  context: { params: Promise<{ slug: string }> }
+  { userId, params }: { userId: string; params?: Record<string, string> }
 ) {
   try {
-    const { slug } = await context.params;
-    await deleteCluster(slug);
+    const slug = params?.slug;
+    if (!slug) {
+      return NextResponse.json({ error: "slug required" }, { status: 400 });
+    }
+    await deleteCluster(slug, { userId });
     return new NextResponse(null, { status: 204 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
@@ -50,6 +63,6 @@ async function handleDelete(
   }
 }
 
-export const GET = withExternalAuth(handleGet);
-export const PATCH = withExternalAuth(handlePatch);
-export const DELETE = withExternalAuth(handleDelete);
+export const GET = withUserAuth(handleGet);
+export const PATCH = withUserAuth(handlePatch);
+export const DELETE = withUserAuth(handleDelete);

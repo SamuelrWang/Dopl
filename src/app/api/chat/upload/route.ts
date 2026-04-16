@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { fileTypeFromBuffer } from "file-type";
 import { withUserAuth } from "@/lib/auth/with-auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import {
@@ -7,6 +8,70 @@ import {
   MAX_CHAT_MESSAGE_SIZE,
   ALLOWED_CHAT_ATTACHMENT_TYPES,
 } from "@/lib/config";
+
+// MIME types that file-type can detect via magic bytes. Text-like formats
+// (txt, md, csv, json) are plain text and need a different validation path.
+const BINARY_MIMES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/gif",
+  "application/pdf",
+]);
+
+const TEXT_MIMES = new Set([
+  "text/plain",
+  "text/markdown",
+  "text/csv",
+  "application/json",
+]);
+
+/**
+ * Validate that a file's actual content matches its claimed MIME type.
+ * Binary types are checked via magic bytes; text types are checked for
+ * valid UTF-8 and absence of NUL bytes (which indicate binary content).
+ * Returns null if valid, or an error message string.
+ */
+async function validateFileContent(
+  buf: Buffer,
+  claimedMime: string
+): Promise<string | null> {
+  if (BINARY_MIMES.has(claimedMime)) {
+    const detected = await fileTypeFromBuffer(buf);
+    if (!detected) {
+      return `File appears empty or has no recognizable format`;
+    }
+    if (detected.mime !== claimedMime) {
+      return `Content type "${detected.mime}" does not match claimed "${claimedMime}"`;
+    }
+    return null;
+  }
+
+  if (TEXT_MIMES.has(claimedMime)) {
+    // NUL bytes are a strong signal of binary content smuggled as text.
+    if (buf.includes(0)) {
+      return `Text file contains binary data`;
+    }
+    // Check valid UTF-8 by decoding with the strict flag.
+    try {
+      new TextDecoder("utf-8", { fatal: true }).decode(buf);
+    } catch {
+      return `File is not valid UTF-8 text`;
+    }
+    // For JSON, additionally verify it parses.
+    if (claimedMime === "application/json") {
+      try {
+        JSON.parse(buf.toString("utf-8"));
+      } catch {
+        return `File is not valid JSON`;
+      }
+    }
+    return null;
+  }
+
+  // Unknown type — refuse.
+  return `Unsupported MIME type: ${claimedMime}`;
+}
 
 const supabase = supabaseAdmin();
 
@@ -101,6 +166,17 @@ export const POST = withUserAuth(async (request: NextRequest, { userId }) => {
     const ext = extFromMime(file.type);
     const storagePath = `${userId}/${panelId}/${id}.${ext}`;
     const buffer = Buffer.from(await file.arrayBuffer());
+
+    // Magic-byte / content validation to catch spoofed MIME headers.
+    // Without this, an attacker could upload `malware.exe` labeled as
+    // `application/pdf` and have it stored / served.
+    const contentError = await validateFileContent(buffer, file.type);
+    if (contentError) {
+      return NextResponse.json(
+        { error: `File "${file.name}" rejected: ${contentError}` },
+        { status: 400 }
+      );
+    }
 
     // Upload to Supabase Storage
     const { error: uploadError } = await supabase.storage

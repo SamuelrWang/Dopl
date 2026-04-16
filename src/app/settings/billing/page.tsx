@@ -26,6 +26,7 @@ function BillingPageInner() {
   const sub = useSubscription();
   const searchParams = useSearchParams();
   const [portalLoading, setPortalLoading] = useState(false);
+  const [portalError, setPortalError] = useState<string | null>(null);
   const [showCheckout, setShowCheckout] = useState(false);
   const [credits, setCredits] = useState<CreditInfo | null>(null);
 
@@ -60,10 +61,24 @@ function BillingPageInner() {
 
   async function handleManage() {
     setPortalLoading(true);
+    setPortalError(null);
     try {
       const res = await fetch("/api/billing/portal", { method: "POST" });
-      const data = await res.json();
-      if (data.url) window.location.href = data.url;
+      // Check status BEFORE parsing — `data.url` could be undefined on error
+      // and `window.location.href = undefined` silently does nothing,
+      // leaving the button stuck in its loading state.
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setPortalError(data.error || `Failed to open billing portal (HTTP ${res.status})`);
+        return;
+      }
+      if (!data.url) {
+        setPortalError("Billing portal returned no URL — please try again.");
+        return;
+      }
+      window.location.href = data.url;
+    } catch (err) {
+      setPortalError(err instanceof Error ? err.message : "Failed to open billing portal");
     } finally {
       setPortalLoading(false);
     }
@@ -182,6 +197,11 @@ function BillingPageInner() {
 
         {/* Actions */}
         <div className="border-t border-white/[0.06] pt-4">
+          {portalError && (
+            <div className="mb-3 rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2 text-xs text-red-400">
+              {portalError}
+            </div>
+          )}
           {sub.isPaid ? (
             <Button
               variant="outline"

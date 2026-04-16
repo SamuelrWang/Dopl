@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { QueryRequestSchema } from "@/types/api";
 import { searchEntries } from "@/lib/retrieval/search";
 import { synthesizeResults } from "@/lib/retrieval/synthesize";
-import { withSubscriptionAuth } from "@/lib/auth/with-auth";
+import { withMcpCredits } from "@/lib/auth/with-auth";
 import { CONTENT_PREVIEW_LENGTH } from "@/lib/config";
 import type { SubscriptionTier } from "@/lib/billing/subscriptions";
 
@@ -34,6 +34,7 @@ async function handlePost(
     // Format response — gate content depth for free users
     const entries = results.map((r) => ({
       entry_id: r.entry_id,
+      slug: r.slug,
       title: r.title,
       summary: r.summary,
       similarity: r.similarity,
@@ -74,7 +75,10 @@ async function handlePost(
       }
     }
 
-    return NextResponse.json({ entries, synthesis, _tier: tier });
+    // Note: subscription tier is deliberately NOT returned — clients should
+    // never need to know the caller's tier, and leaking it lets an attacker
+    // enumerate user plans.
+    return NextResponse.json({ entries, synthesis });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
@@ -84,4 +88,4 @@ async function handlePost(
   }
 }
 
-export const POST = withSubscriptionAuth(handlePost);
+export const POST = withMcpCredits("mcp_search", handlePost);

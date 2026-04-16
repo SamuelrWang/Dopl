@@ -12,6 +12,7 @@ export default function CommunityPage() {
   const [items, setItems] = useState<PublishedClusterSummary[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [sort, setSort] = useState<SortOption>("popular");
   const [category, setCategory] = useState<string>("");
   const [page, setPage] = useState(1);
@@ -46,6 +47,7 @@ export default function CommunityPage() {
 
   async function fetchClusters() {
     setLoading(true);
+    setLoadError(null);
     try {
       const params = new URLSearchParams({ limit: String(limit) });
 
@@ -61,12 +63,19 @@ export default function CommunityPage() {
       }
 
       const res = await fetch(`/api/community?${params}`);
-      if (!res.ok) throw new Error("Failed to fetch");
+      if (!res.ok) {
+        throw new Error(`Failed to load community (HTTP ${res.status})`);
+      }
       const data = await res.json();
-      setItems(data.items || []);
-      setTotal(data.total || 0);
-    } catch {
+      setItems(Array.isArray(data.items) ? data.items : []);
+      setTotal(typeof data.total === "number" ? data.total : 0);
+    } catch (err) {
+      console.error("[community] fetch failed:", err);
+      setLoadError(
+        err instanceof Error ? err.message : "Failed to load community"
+      );
       setItems([]);
+      setTotal(0);
     } finally {
       setLoading(false);
     }
@@ -206,6 +215,16 @@ export default function CommunityPage() {
               <div className="h-3 w-1/2 bg-white/[0.04] rounded" />
             </div>
           ))}
+        </div>
+      ) : loadError ? (
+        <div className="text-center py-20 border border-red-500/20 bg-red-500/5 rounded-xl">
+          <p className="text-sm text-red-400 mb-3">{loadError}</p>
+          <button
+            onClick={fetchClusters}
+            className="font-mono text-[10px] uppercase tracking-wide text-white/60 hover:text-white/90 border border-white/[0.15] rounded-[3px] px-3 py-1.5"
+          >
+            Retry
+          </button>
         </div>
       ) : items.length === 0 ? (
         <div className="text-center py-20 border border-white/[0.06] rounded-xl">

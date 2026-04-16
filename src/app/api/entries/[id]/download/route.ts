@@ -1,23 +1,40 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 const supabase = supabaseAdmin();
-import { withExternalAuth } from "@/lib/auth/with-auth";
+import { withUserAuth, isAdmin } from "@/lib/auth/with-auth";
+import { resolveEntryId } from "@/lib/entries/resolver";
 
 async function handleGet(
   request: NextRequest,
-  context: unknown
+  { userId, params }: { userId: string; params?: Record<string, string> }
 ) {
-  const { id } = await (context as { params: Promise<{ id: string }> }).params;
+  const input = params?.id;
+  if (!input) {
+    return NextResponse.json({ error: "Missing entry ID" }, { status: 400 });
+  }
+  const id = await resolveEntryId(input);
+  if (!id) {
+    return NextResponse.json({ error: "Entry not found" }, { status: 404 });
+  }
   const file = request.nextUrl.searchParams.get("file") || "agents_md";
 
   const { data: entry, error } = await supabase
     .from("entries")
-    .select("title, readme, agents_md, manifest, content_type")
+    .select("title, readme, agents_md, manifest, content_type, moderation_status, ingested_by")
     .eq("id", id)
     .single();
 
   if (error || !entry) {
     return NextResponse.json({ error: "Entry not found" }, { status: 404 });
+  }
+
+  // Moderation gate: only approved entries are downloadable by the public.
+  // Owner and admin can always download.
+  if (entry.moderation_status !== "approved") {
+    const isOwner = entry.ingested_by && entry.ingested_by === userId;
+    if (!isOwner && !isAdmin(userId)) {
+      return NextResponse.json({ error: "Entry not found" }, { status: 404 });
+    }
   }
 
   let content: string;
@@ -59,4 +76,4 @@ async function handleGet(
   });
 }
 
-export const GET = withExternalAuth(handleGet);
+export const GET = withUserAuth(handleGet);

@@ -4,9 +4,12 @@ const supabase = supabaseAdmin();
 import { withExternalAuth } from "@/lib/auth/with-auth";
 
 async function handleGet(_request: NextRequest) {
+  // Only aggregate tags from approved entries so the public tag cloud
+  // doesn't leak pending/denied submissions.
   const { data, error } = await supabase
     .from("tags")
-    .select("tag_type, tag_value");
+    .select("tag_type, tag_value, entries!inner(moderation_status)")
+    .eq("entries.moderation_status", "approved");
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

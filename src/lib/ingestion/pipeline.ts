@@ -26,6 +26,9 @@ import { chunkAndEmbed } from "./embedder";
 import { truncateContent } from "./utils";
 import { ingestionProgress } from "./progress";
 import { MAX_LINK_DEPTH, MAX_CONTENT_FOR_CLAUDE, MAX_IMAGES_PER_ENTRY } from "@/lib/config";
+import { slugifyEntryTitle, fallbackSlugFromId } from "@/lib/entries/slug";
+import { logSystemEvent } from "@/lib/analytics/system-events";
+import { grantCredits, CREDIT_COSTS } from "@/lib/credits";
 
 const PIPELINE_TIMEOUT_MS = 10 * 60 * 1000;
 
@@ -91,6 +94,8 @@ export async function ingestEntry(input: IngestInput): Promise<string> {
       source_url: input.url,
       source_platform: detectPlatform(input.url),
       status: "processing",
+      ingested_by: input.userId ?? null,
+      // moderation_status defaults to 'pending' via the DB default.
     })
     .select("id")
     .single();
@@ -100,6 +105,14 @@ export async function ingestEntry(input: IngestInput): Promise<string> {
   }
 
   const entryId = entry.id;
+
+  // slug is NOT NULL on the entries table (see migration 033). Set a
+  // deterministic UUID-derived slug now so this row is valid before the
+  // pipeline lands a real title-based one in stepPersistEntry.
+  await supabase
+    .from("entries")
+    .update({ slug: fallbackSlugFromId(entryId) })
+    .eq("id", entryId);
 
   // Run pipeline in the background — don't await
   const timeoutPromise = new Promise<never>((_, reject) =>
@@ -113,23 +126,92 @@ export async function ingestEntry(input: IngestInput): Promise<string> {
     async (error) => {
       const errorMessage =
         error instanceof Error ? error.message : "Unknown error";
-      await supabase
-        .from("entries")
-        .update({ status: "error", updated_at: new Date().toISOString() })
-        .eq("id", entryId);
-      await logStep(entryId, "pipeline_error", "error", {
-        error: errorMessage,
-      });
+      const errorName = error instanceof Error ? error.name : "UnknownError";
+      const isTimeout = errorMessage.includes("timed out");
+      // Emit the error event so the client knows BEFORE we nuke the
+      // entry row (the stream endpoint reads back from the DB on
+      // reconnect, but active subscribers get the event in-flight).
       ingestionProgress.emit(
         entryId,
         "error",
         `Ingestion failed: ${errorMessage}`
       );
       console.error(`[pipeline] Entry ${entryId} failed:`, errorMessage);
+      // Log the failure into system_events BEFORE deleting the row so
+      // the health dashboard can attribute and count it. Downstream
+      // external-API failures (anthropic/openai/etc.) are logged
+      // separately by callExternal — this entry captures the pipeline-
+      // level outcome (e.g. timeout, aggregate failure).
+      void logSystemEvent({
+        severity: isTimeout ? "critical" : "error",
+        category: "ingestion",
+        source: "pipeline.runPipeline",
+        message: `Ingestion failed: ${errorMessage}`,
+        fingerprintKeys: ["ingestion", isTimeout ? "timeout" : errorName],
+        metadata: {
+          entry_id: entryId,
+          source_url: input.url,
+          timed_out: isTimeout,
+        },
+        userId: input.userId ?? null,
+      });
+      // Delete any partial data from the common DB — no half-ingested
+      // entries are ever allowed to persist.
+      await deleteFailedEntry(entryId);
+
+      // Refund the 20 credits we deducted upfront at the HTTP boundary.
+      // The user got nothing (no entry, no readme, no agents.md), so
+      // charging them would be punitive. This covers pipeline timeouts,
+      // LLM outages, fetch failures, paywalls, and empty-extraction
+      // cases alike — from the user's POV they all look the same.
+      // We don't refund on moderation denial because in that case the
+      // entry WAS produced, it just isn't public.
+      if (input.userId) {
+        grantCredits(
+          input.userId,
+          CREDIT_COSTS.ingestion,
+          "ingestion_pipeline_refund",
+          {
+            entry_id: entryId,
+            source_url: input.url,
+            reason: isTimeout ? "timeout" : errorName,
+          }
+        ).catch((refundErr) => {
+          logSystemEvent({
+            severity: "error",
+            category: "other",
+            source: "pipeline.refund",
+            message: `Credit refund failed after pipeline error: ${refundErr instanceof Error ? refundErr.message : String(refundErr)}`,
+            fingerprintKeys: ["refund_failed", "pipeline"],
+            metadata: { entry_id: entryId, user_id: input.userId },
+            userId: input.userId,
+          }).catch(() => {});
+        });
+      }
     }
   );
 
   return entryId;
+}
+
+/**
+ * Remove a failed/partial entry from the common DB. Deletes child rows
+ * explicitly in case FK cascades aren't fully wired up — so no orphaned
+ * sources/tags/chunks/logs are left behind.
+ */
+export async function deleteFailedEntry(entryId: string): Promise<void> {
+  try {
+    // Children first (no-op if ON DELETE CASCADE is configured)
+    await Promise.all([
+      supabase.from("chunks").delete().eq("entry_id", entryId),
+      supabase.from("sources").delete().eq("entry_id", entryId),
+      supabase.from("tags").delete().eq("entry_id", entryId),
+      supabase.from("ingestion_logs").delete().eq("entry_id", entryId),
+    ]);
+    await supabase.from("entries").delete().eq("id", entryId);
+  } catch (err) {
+    console.error(`[pipeline] Failed to delete partial entry ${entryId}:`, err);
+  }
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -171,12 +253,21 @@ async function runPipeline(
     const reason = "Content appears empty or inaccessible. The source may be behind a paywall, require authentication, or block automated access.";
     ingestionProgress.emit(entryId, "error", reason, { step: "content_check" });
 
-    // Mark entry as error and stop — don't generate artifacts from empty content
-    await supabase
-      .from("entries")
-      .update({ status: "error", updated_at: new Date().toISOString() })
-      .eq("id", entryId);
-
+    // Log as a warn (not error) — this is usually a property of the
+    // source URL (paywall/bot-block), not a bug. A sudden spike still
+    // shows up on the health dashboard as abnormal.
+    void logSystemEvent({
+      severity: "warn",
+      category: "ingestion",
+      source: "pipeline.contentCheck",
+      message: "Empty/inaccessible content rejected",
+      fingerprintKeys: ["ingestion", "empty_content"],
+      metadata: { entry_id: entryId, source_url: input.url, length: contentForClaude.trim().length },
+      userId: input.userId ?? null,
+    });
+    // No useful content extracted — delete the entry so nothing
+    // partial ends up in the common DB.
+    await deleteFailedEntry(entryId);
     return;
   }
 
@@ -502,7 +593,22 @@ async function stepImageProcessing(
     if (result.status === "fulfilled") {
       successfulSources.push(result.value);
     } else {
-      console.error("[pipeline] Image extraction failed:", result.reason);
+      const reason =
+        result.reason instanceof Error
+          ? result.reason.message
+          : String(result.reason);
+      console.error("[pipeline] Image extraction failed:", reason);
+      // Surface to the health dashboard so chronic image-extractor
+      // failures (vision API outages, quota exhaustion) are visible
+      // instead of silently dropping user data.
+      void logSystemEvent({
+        severity: "warn",
+        category: "ingestion",
+        source: "pipeline.image_extract",
+        message: `Image extraction failed: ${reason}`,
+        fingerprintKeys: ["image_extract_fail"],
+        metadata: { entry_id: entryId, reason },
+      });
     }
   }
   if (successfulSources.length > 0) {
@@ -790,28 +896,54 @@ async function stepPersistEntry(
     thumbnailUrl = `https://image.thum.io/get/${encodeURI(input.url)}`;
   }
 
-  const { error: updateError } = await supabase
-    .from("entries")
-    .update({
-      title,
-      summary,
-      use_case: useCase,
-      complexity,
-      content_type: contentType,
-      thumbnail_url: thumbnailUrl,
-      readme,
-      agents_md: agentsMd || null,
-      manifest,
-      raw_content: { gathered: allContent },
-      status: "processing",
-      ingested_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", entryId);
+  // Generate a public slug from the title and persist the row. Two
+  // concurrent ingestions with the same title can race through
+  // generateEntrySlug (both see the same "existing slugs" snapshot and
+  // pick the same candidate), so the UPDATE wins only once. On
+  // unique-violation (Postgres 23505), retry with a random suffix —
+  // faster than another round-trip query, and guarantees termination.
+  async function persistWithSlugRetry(initialSlug: string): Promise<void> {
+    const maxAttempts = 5;
+    let candidate = initialSlug;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const { error } = await supabase
+        .from("entries")
+        .update({
+          title,
+          summary,
+          use_case: useCase,
+          complexity,
+          content_type: contentType,
+          thumbnail_url: thumbnailUrl,
+          readme,
+          agents_md: agentsMd || null,
+          manifest,
+          raw_content: { gathered: allContent },
+          slug: candidate,
+          status: "processing",
+          ingested_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", entryId);
 
-  if (updateError) {
-    throw new Error(`Failed to update entry: ${updateError.message}`);
+      if (!error) return;
+
+      // 23505 = unique violation — collision on slug column.
+      if ((error as { code?: string }).code === "23505") {
+        const suffix = Math.random().toString(36).slice(2, 6);
+        candidate = `${initialSlug}-${suffix}`;
+        continue;
+      }
+
+      throw new Error(`Failed to update entry: ${error.message}`);
+    }
+    throw new Error(
+      `Failed to assign a unique slug for entry ${entryId} after ${maxAttempts} attempts`
+    );
   }
+
+  const slug = await generateEntrySlug(entryId, title);
+  await persistWithSlugRetry(slug);
 
   if (tags.length > 0) {
     const tagRows = tags.map((t) => ({
@@ -955,6 +1087,38 @@ async function storeSources(
     );
     throw new Error(`Database write failed for sources: ${error.message}`);
   }
+}
+
+/**
+ * Generate a URL-safe slug for an entry.
+ * - Slugifies the title and resolves collisions against the existing slugs
+ *   in the `entries` table (excluding the current row, so re-ingestion of
+ *   an existing entry keeps its slug if possible).
+ * - Falls back to entry-<short uuid> when the title is empty/missing.
+ */
+async function generateEntrySlug(
+  entryId: string,
+  title: string
+): Promise<string> {
+  const { data: existing } = await supabase
+    .from("entries")
+    .select("slug")
+    .neq("id", entryId);
+
+  const existingSlugs = (existing || [])
+    .map((r) => (r as { slug: string | null }).slug)
+    .filter((s): s is string => typeof s === "string" && s.length > 0);
+
+  if (!title || title.trim() === "" || title === "Untitled") {
+    const fallback = fallbackSlugFromId(entryId);
+    // The UUID-derived fallback is deterministic; collisions only happen if
+    // a previous row shared the exact same 8-char prefix, which is astronomically
+    // unlikely but handle it anyway.
+    if (!existingSlugs.includes(fallback)) return fallback;
+    return slugifyEntryTitle(fallback, existingSlugs);
+  }
+
+  return slugifyEntryTitle(title, existingSlugs);
 }
 
 async function gatherAllContent(entryId: string): Promise<string> {

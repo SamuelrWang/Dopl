@@ -13,7 +13,7 @@
 
 import { NextRequest } from "next/server";
 import { callClaude } from "@/lib/ai";
-import { withExternalAuth } from "@/lib/auth/with-auth";
+import { withMcpCredits } from "@/lib/auth/with-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -63,4 +63,4 @@ async function handlePost(request: NextRequest) {
   }
 }
 
-export const POST = withExternalAuth(handlePost);
+export const POST = withMcpCredits("mcp_synthesize", handlePost);

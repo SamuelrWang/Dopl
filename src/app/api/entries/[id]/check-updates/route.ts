@@ -5,7 +5,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
-import { withExternalAuth } from "@/lib/auth/with-auth";
+import { withUserAuth, isAdmin } from "@/lib/auth/with-auth";
+import { resolveEntryId } from "@/lib/entries/resolver";
 import { Octokit } from "@octokit/rest";
 
 export const dynamic = "force-dynamic";
@@ -20,22 +21,36 @@ function parseGitHubUrl(url: string): { owner: string; repo: string } | null {
 
 async function handleGet(
   _request: NextRequest,
-  { params }: { userId: string; params?: Record<string, string> }
+  { userId, params }: { userId: string; params?: Record<string, string> }
 ) {
-  const id = params?.id;
-  if (!id) {
+  const input = params?.id;
+  if (!input) {
     return NextResponse.json({ error: "Missing entry ID" }, { status: 400 });
+  }
+
+  const id = await resolveEntryId(input);
+  if (!id) {
+    return NextResponse.json({ error: "Entry not found" }, { status: 404 });
   }
 
   const db = supabaseAdmin();
   const { data: entry, error } = await db
     .from("entries")
-    .select("id, source_url, ingested_at, created_at, title")
+    .select("id, source_url, ingested_at, created_at, title, moderation_status, ingested_by")
     .eq("id", id)
     .single();
 
   if (error || !entry) {
     return NextResponse.json({ error: "Entry not found" }, { status: 404 });
+  }
+
+  // Moderation gate: only approved entries visible to the public.
+  // Owner and admin can always check updates.
+  if (entry.moderation_status !== "approved") {
+    const isOwner = entry.ingested_by && entry.ingested_by === userId;
+    if (!isOwner && !isAdmin(userId)) {
+      return NextResponse.json({ error: "Entry not found" }, { status: 404 });
+    }
   }
 
   const parsed = parseGitHubUrl(entry.source_url || "");
@@ -88,4 +103,4 @@ async function handleGet(
   }
 }
 
-export const GET = withExternalAuth(handleGet);
+export const GET = withUserAuth(handleGet);

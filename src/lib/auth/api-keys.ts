@@ -50,50 +50,46 @@ export async function validateApiKey(
 }
 
 /**
- * Check rate limit for a key. Returns true if within limit, false if exceeded.
- * Fails closed — if the DB check fails, the request is rejected.
+ * Atomic rate-limit check + usage record. Returns true if within limit and
+ * the usage was recorded, false if the limit would be exceeded.
  *
- * NOTE: This check is not fully atomic — concurrent requests may both pass
- * the count check before either records usage. For stronger guarantees at
- * scale, move to a Postgres function that checks + inserts in one transaction.
+ * Backed by `check_and_record_rate_limit` RPC (migration 034), which uses
+ * a Postgres advisory lock keyed on the api_key_id so concurrent requests
+ * for the same key serialize without blocking other keys.
+ *
+ * Fails closed — if the DB call errors, the request is rejected.
  */
-export async function checkRateLimit(
+export async function checkAndRecordRateLimit(
   keyId: string,
-  rpm: number
+  rpm: number,
+  endpoint: string
 ): Promise<boolean> {
-  const oneMinuteAgo = new Date(Date.now() - 60_000).toISOString();
-
-  const { count, error } = await supabase
-    .from("api_key_usage")
-    .select("*", { count: "exact", head: true })
-    .eq("api_key_id", keyId)
-    .gte("requested_at", oneMinuteAgo);
+  const { data, error } = await supabase.rpc("check_and_record_rate_limit", {
+    p_api_key_id: keyId,
+    p_rpm: rpm,
+    p_endpoint: endpoint,
+  });
 
   if (error) {
-    console.error("[auth] Rate limit check failed:", error);
-    return false; // Fail closed — reject request on DB errors
+    console.error("[auth] Rate limit RPC failed:", error);
+    return false; // Fail closed
   }
 
-  return (count || 0) < rpm;
+  return data === true;
 }
 
 /**
- * Record a usage event for a key.
+ * Refresh last_used_at on the api_keys row and opportunistically prune
+ * old usage records. Fire-and-forget — never blocks the caller.
  */
-export async function recordUsage(
-  keyId: string,
-  endpoint: string
-): Promise<void> {
-  await supabase.from("api_key_usage").insert({
-    api_key_id: keyId,
-    endpoint,
-  });
-
-  // Update last_used_at (fire-and-forget)
-  await supabase
+export function touchApiKey(keyId: string): void {
+  supabase
     .from("api_keys")
     .update({ last_used_at: new Date().toISOString() })
-    .eq("id", keyId);
+    .eq("id", keyId)
+    .then(({ error }) => {
+      if (error) console.error("[auth] touchApiKey failed:", error);
+    });
 
   // Periodically prune old usage records (1 in 100 chance per request)
   if (Math.random() < 0.01) {

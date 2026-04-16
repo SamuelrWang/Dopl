@@ -1,26 +1,35 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 const supabase = supabaseAdmin();
-import { withExternalAuth } from "@/lib/auth/with-auth";
+import { withUserAuth, isAdmin } from "@/lib/auth/with-auth";
 
 async function handleGet(
   _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { userId, params }: { userId: string; params?: Record<string, string> }
 ) {
-  const { id } = await params;
+  const id = params?.id;
+  if (!id) {
+    return NextResponse.json({ error: "id required" }, { status: 400 });
+  }
 
-  // Get entry status
-  const { data: entry, error: entryError } = await supabase
+  // Scope the lookup to the ingester (or admin) so we don't leak details
+  // of other users' ingestions. Return 404 on mismatch to avoid hinting
+  // at existence.
+  let query = supabase
     .from("entries")
-    .select("id, status, title, created_at, updated_at, ingested_at")
-    .eq("id", id)
-    .single();
+    .select("id, status, title, created_at, updated_at, ingested_at, ingested_by")
+    .eq("id", id);
+
+  if (!isAdmin(userId)) {
+    query = query.eq("ingested_by", userId);
+  }
+
+  const { data: entry, error: entryError } = await query.single();
 
   if (entryError || !entry) {
     return NextResponse.json({ error: "Entry not found" }, { status: 404 });
   }
 
-  // Get ingestion logs
   const { data: logs } = await supabase
     .from("ingestion_logs")
     .select("step, status, details, created_at")
@@ -38,4 +47,4 @@ async function handleGet(
   });
 }
 
-export const GET = withExternalAuth(handleGet);
+export const GET = withUserAuth(handleGet);

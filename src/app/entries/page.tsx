@@ -36,17 +36,20 @@ interface Synthesis {
 export default function EntriesPage() {
   const [entries, setEntries] = useState<EntryListItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [useCase, setUseCase] = useState("all");
   const [complexity, setComplexity] = useState("all");
 
   // Search state
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [searchResults, setSearchResults] = useState<SearchResultEntry[] | null>(null);
   const [synthesis, setSynthesis] = useState<Synthesis | null>(null);
 
   const fetchEntries = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const params = new URLSearchParams();
       params.set("status", "complete");
@@ -54,10 +57,17 @@ export default function EntriesPage() {
       if (complexity !== "all") params.set("complexity", complexity);
 
       const res = await fetch(`/api/entries?${params}`);
+      if (!res.ok) {
+        throw new Error(`Failed to load entries (HTTP ${res.status})`);
+      }
       const data = await res.json();
-      setEntries(data.entries || []);
+      setEntries(Array.isArray(data.entries) ? data.entries : []);
     } catch (err) {
       console.error("Failed to fetch entries:", err);
+      setLoadError(
+        err instanceof Error ? err.message : "Failed to load entries"
+      );
+      setEntries([]);
     } finally {
       setLoading(false);
     }
@@ -75,6 +85,7 @@ export default function EntriesPage() {
     }
 
     setSearching(true);
+    setSearchError(null);
     try {
       const res = await fetch("/api/query", {
         method: "POST",
@@ -85,11 +96,17 @@ export default function EntriesPage() {
           max_results: 10,
         }),
       });
+      if (!res.ok) {
+        throw new Error(`Search failed (HTTP ${res.status})`);
+      }
       const data = await res.json();
-      setSearchResults(data.entries || []);
+      setSearchResults(Array.isArray(data.entries) ? data.entries : []);
       setSynthesis(data.synthesis || null);
     } catch (err) {
       console.error("Search failed:", err);
+      setSearchError(err instanceof Error ? err.message : "Search failed");
+      setSearchResults(null);
+      setSynthesis(null);
     } finally {
       setSearching(false);
     }
@@ -158,6 +175,17 @@ export default function EntriesPage() {
       {/* Search results mode */}
       {isShowingSearch && (
         <div className="space-y-4">
+          {searchError && (
+            <GlassCard variant="subtle" className="py-4">
+              <p className="text-sm text-red-400">{searchError}</p>
+              <button
+                onClick={handleSearch}
+                className="mt-2 font-mono text-[10px] uppercase tracking-wide text-white/60 hover:text-white/90 border border-white/[0.15] rounded-[3px] px-3 py-1.5"
+              >
+                Retry search
+              </button>
+            </GlassCard>
+          )}
           {synthesis && (
             <GlassCard
               label="AI Recommendation"
@@ -249,6 +277,19 @@ export default function EntriesPage() {
                 <p className="font-mono text-[10px] uppercase tracking-wide text-white/40">
                   Loading entries...
                 </p>
+              </GlassCard>
+            ) : loadError ? (
+              <GlassCard
+                variant="subtle"
+                className="flex flex-col items-center justify-center h-64 gap-3"
+              >
+                <p className="text-sm text-red-400">{loadError}</p>
+                <button
+                  onClick={fetchEntries}
+                  className="font-mono text-[10px] uppercase tracking-wide text-white/60 hover:text-white/90 border border-white/[0.15] rounded-[3px] px-3 py-1.5"
+                >
+                  Retry
+                </button>
               </GlassCard>
             ) : (
               <EntryGrid entries={entries} />

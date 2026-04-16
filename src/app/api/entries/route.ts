@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 const supabase = supabaseAdmin();
-import { withExternalAuth } from "@/lib/auth/with-auth";
+import { withMcpCredits } from "@/lib/auth/with-auth";
 
 async function handleGet(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -15,7 +15,7 @@ async function handleGet(request: NextRequest) {
 
   let query = supabase
     .from("entries")
-    .select("id, title, summary, use_case, complexity, content_type, status, source_url, source_platform, source_author, thumbnail_url, created_at, ingested_at", { count: "exact" });
+    .select("id, slug, title, summary, use_case, complexity, content_type, status, source_url, source_platform, source_author, thumbnail_url, created_at, ingested_at", { count: "exact" });
 
   if (sort === "oldest") {
     query = query.order("created_at", { ascending: true });
@@ -28,7 +28,10 @@ async function handleGet(request: NextRequest) {
 
   query = query.range(offset, offset + limit - 1);
 
-  if (status) query = query.eq("status", status);
+  // Only expose fully-ingested, admin-approved entries by default.
+  // Callers can pass ?status=<anything> to override (e.g. admin/debug).
+  query = query.eq("status", status || "complete");
+  query = query.eq("moderation_status", "approved");
   if (useCase) query = query.eq("use_case", useCase);
   if (complexity) query = query.eq("complexity", complexity);
   if (sourcePlatform) query = query.eq("source_platform", sourcePlatform);
@@ -47,4 +50,4 @@ async function handleGet(request: NextRequest) {
   });
 }
 
-export const GET = withExternalAuth(handleGet);
+export const GET = withMcpCredits("mcp_list", handleGet);

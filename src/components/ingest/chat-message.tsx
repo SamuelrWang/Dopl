@@ -93,7 +93,13 @@ export type ChatMessage =
       summary?: string;
     }
   | { role: "ai"; type: "entry_cards"; entries: EntryReference[] }
-  | { role: "ai"; type: "onboarding_card"; cardType: "mcp_setup" | "chrome_extension" };
+  | { role: "ai"; type: "onboarding_card"; cardType: "mcp_setup" | "chrome_extension" }
+  | {
+      role: "ai";
+      type: "insufficient_credits";
+      balance: number;
+      cost: number;
+    };
 
 const eventTypeConfig: Record<
   ProgressEvent["type"],

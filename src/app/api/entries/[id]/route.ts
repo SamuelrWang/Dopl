@@ -1,19 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { EntryUpdateSchema } from "@/types/api";
-import { withExternalAuth, withSubscriptionAuth } from "@/lib/auth/with-auth";
+import { withUserAuth, withMcpCredits, isAdmin } from "@/lib/auth/with-auth";
 import { CONTENT_PREVIEW_LENGTH } from "@/lib/config";
 import type { SubscriptionTier } from "@/lib/billing/subscriptions";
+import { resolveEntryId } from "@/lib/entries/resolver";
 
 const supabase = supabaseAdmin();
 
 async function handleGet(
   _request: NextRequest,
-  { tier, params }: { userId: string; tier: SubscriptionTier; params?: Record<string, string> }
+  { userId, tier, params }: { userId: string; tier: SubscriptionTier; params?: Record<string, string> }
 ) {
-  const id = params?.id;
-  if (!id) {
+  const input = params?.id;
+  if (!input) {
     return NextResponse.json({ error: "Missing entry ID" }, { status: 400 });
+  }
+
+  const id = await resolveEntryId(input);
+  if (!id) {
+    return NextResponse.json({ error: "Entry not found" }, { status: 404 });
   }
 
   const { data: entry, error } = await supabase
@@ -24,6 +30,15 @@ async function handleGet(
 
   if (error || !entry) {
     return NextResponse.json({ error: "Entry not found" }, { status: 404 });
+  }
+
+  // Moderation gate: only approved entries are visible to the public.
+  // Owner (ingester) and admin see their entries regardless of moderation state.
+  if (entry.moderation_status !== "approved") {
+    const isOwner = entry.ingested_by && entry.ingested_by === userId;
+    if (!isOwner && !isAdmin(userId)) {
+      return NextResponse.json({ error: "Entry not found" }, { status: 404 });
+    }
   }
 
   // Get sources
@@ -49,19 +64,42 @@ async function handleGet(
     entry.agents_md = null;
   }
 
+  // Strip admin/moderation fields from the response. The owner-bypass above
+  // lets the ingester fetch their own pending/denied entry so their canvas
+  // works, but the RESPONSE must not hint that moderation exists (silent
+  // moderation). Also prevents MCP clients from learning about admin state
+  // via their own entries. Admins must use /api/admin/entries for this data.
+  const {
+    moderation_status: _ms,
+    moderated_at: _mat,
+    moderated_by: _mby,
+    ingested_by: _iby,
+    ...publicEntry
+  } = entry;
+  void _ms; void _mat; void _mby; void _iby;
+
+  // Do not leak the caller's subscription tier in the response body.
+  void tier;
   return NextResponse.json({
-    ...entry,
+    ...publicEntry,
     sources: sources || [],
     tags: tags || [],
-    _tier: tier,
   });
 }
 
 async function handlePatch(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { userId, params }: { userId: string; params?: Record<string, string> }
 ) {
-  const { id } = await params;
+  const input = params?.id;
+  if (!input) {
+    return NextResponse.json({ error: "id required" }, { status: 400 });
+  }
+  const id = await resolveEntryId(input);
+  if (!id) {
+    return NextResponse.json({ error: "Entry not found" }, { status: 404 });
+  }
+
   const body = await request.json();
   const parsed = EntryUpdateSchema.safeParse(body);
 
@@ -72,15 +110,22 @@ async function handlePatch(
     );
   }
 
-  const { data, error } = await supabase
+  // Ownership / admin check: only the ingester or an admin may modify.
+  // Scope the UPDATE itself so a race can't let someone else sneak through
+  // between the read and the write.
+  let query = supabase
     .from("entries")
     .update({ ...parsed.data, updated_at: new Date().toISOString() })
-    .eq("id", id)
-    .select()
-    .single();
+    .eq("id", id);
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!isAdmin(userId)) {
+    query = query.eq("ingested_by", userId);
+  }
+
+  const { data, error } = await query.select().single();
+
+  if (error || !data) {
+    return NextResponse.json({ error: "Entry not found" }, { status: 404 });
   }
 
   return NextResponse.json(data);
@@ -88,19 +133,37 @@ async function handlePatch(
 
 async function handleDelete(
   _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { userId, params }: { userId: string; params?: Record<string, string> }
 ) {
-  const { id } = await params;
+  const input = params?.id;
+  if (!input) {
+    return NextResponse.json({ error: "id required" }, { status: 400 });
+  }
+  const id = await resolveEntryId(input);
+  if (!id) {
+    return NextResponse.json({ error: "Entry not found" }, { status: 404 });
+  }
 
-  const { error } = await supabase.from("entries").delete().eq("id", id);
+  // Scope DELETE to owner or allow admin everywhere. Ask Postgres to
+  // RETURN the deleted ids so we can detect "nothing deleted" → 404.
+  let query = supabase.from("entries").delete().eq("id", id);
+  if (!isAdmin(userId)) {
+    query = query.eq("ingested_by", userId);
+  }
+
+  const { data, error } = await query.select("id");
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  if (!data || data.length === 0) {
+    // Nothing deleted — either not found or not owned. Don't distinguish.
+    return NextResponse.json({ error: "Entry not found" }, { status: 404 });
   }
 
   return NextResponse.json({ success: true });
 }
 
-export const GET = withSubscriptionAuth(handleGet);
-export const PATCH = withExternalAuth(handlePatch);
-export const DELETE = withExternalAuth(handleDelete);
+export const GET = withMcpCredits("mcp_get_entry", handleGet);
+export const PATCH = withUserAuth(handlePatch);
+export const DELETE = withUserAuth(handleDelete);

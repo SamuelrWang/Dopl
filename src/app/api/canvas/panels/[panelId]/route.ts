@@ -1,8 +1,42 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withUserAuth } from "@/lib/auth/with-auth";
 import { supabaseAdmin } from "@/lib/supabase";
+import { deleteFailedEntry } from "@/lib/ingestion/pipeline";
 
 const supabase = supabaseAdmin();
+
+/**
+ * After a canvas panel referencing an entry is deleted, check whether any
+ * other canvas_panels row (across all users) still references the entry.
+ * If not AND the entry is denied, hard-delete it — there's no reader left
+ * and denied entries aren't allowed to persist without an owner's canvas
+ * keeping them alive.
+ *
+ * Fire-and-forget from the DELETE handler — any failure is logged but
+ * doesn't block the user's response.
+ */
+async function cleanupOrphanDeniedEntry(entryId: string): Promise<void> {
+  try {
+    const { count: refCount } = await supabase
+      .from("canvas_panels")
+      .select("id", { count: "exact", head: true })
+      .eq("entry_id", entryId);
+
+    if ((refCount ?? 0) > 0) return;
+
+    const { data: entry } = await supabase
+      .from("entries")
+      .select("moderation_status")
+      .eq("id", entryId)
+      .single();
+
+    if (entry?.moderation_status === "denied") {
+      await deleteFailedEntry(entryId);
+    }
+  } catch (err) {
+    console.error("[canvas-panels] orphan cleanup failed:", err);
+  }
+}
 
 /**
  * PATCH /api/canvas/panels/[panelId] — update a panel's position, size, or data.
@@ -51,19 +85,23 @@ export const DELETE = withUserAuth(async (_request, { userId, params }) => {
     return NextResponse.json({ error: "panelId is required" }, { status: 400 });
   }
 
-  // Try deleting by panel_id first (new callers: use-canvas-db-sync)
+  // Try deleting by panel_id first (new callers: use-canvas-db-sync).
+  // Select entry_id so we can cleanup orphan denied entries afterwards.
   const { data: byPanelId, error: err1 } = await supabase
     .from("canvas_panels")
     .delete()
     .eq("user_id", userId)
     .eq("panel_id", panelId)
-    .select("id");
+    .select("id, entry_id");
 
   if (err1) {
     return NextResponse.json({ error: err1.message }, { status: 500 });
   }
 
   if (byPanelId && byPanelId.length > 0) {
+    for (const row of byPanelId) {
+      if (row.entry_id) void cleanupOrphanDeniedEntry(row.entry_id);
+    }
     return new NextResponse(null, { status: 204 });
   }
 
@@ -73,13 +111,16 @@ export const DELETE = withUserAuth(async (_request, { userId, params }) => {
     .delete()
     .eq("user_id", userId)
     .eq("entry_id", panelId)
-    .select("id");
+    .select("id, entry_id");
 
   if (err2) {
     return NextResponse.json({ error: err2.message }, { status: 500 });
   }
 
   if (byEntryId && byEntryId.length > 0) {
+    for (const row of byEntryId) {
+      if (row.entry_id) void cleanupOrphanDeniedEntry(row.entry_id);
+    }
     return new NextResponse(null, { status: 204 });
   }
 

@@ -6,9 +6,10 @@ const supabase = supabaseAdmin();
 import { BUILDER_CHAT_SYSTEM_PROMPT } from "@/lib/prompts/chat-system";
 import { withUserAuth } from "@/lib/auth/with-auth";
 import { ingestEntry } from "@/lib/ingestion/pipeline";
+import { assertPublicHttpUrl, UnsafeUrlError } from "@/lib/ingestion/url-safety";
 import {
   deductCredits,
-  getBalance,
+  grantCredits,
   grantDailyBonus,
   checkAndResetCycle,
   CREDIT_COSTS,
@@ -73,12 +74,143 @@ const TOOLS: Anthropic.Tool[] = [
       required: ["url"],
     },
   },
+  // ── Cluster brain editing ────────────────────────────────────────
+  // When the chat is inside a cluster, `cluster_slug` must match the
+  // enclosing cluster's slug — enforced server-side. When the chat is
+  // on the open canvas, the user can target any cluster they own.
+  {
+    name: "list_user_clusters",
+    description:
+      "List the clusters the user owns, with names, slugs, and panel counts. Use this when the user asks you to edit a cluster by name and you need to look up the slug. If the chat is already inside a cluster, you already know the target — no need to call this.",
+    input_schema: {
+      type: "object" as const,
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: "list_cluster_brain_memories",
+    description:
+      "Fetch a cluster's current brain — instructions text and the list of memories with their IDs. Call this before updating or removing specific memories so you know their IDs, or before rewriting instructions so you can preserve useful context.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        cluster_slug: { type: "string", description: "The cluster's slug." },
+      },
+      required: ["cluster_slug"],
+    },
+  },
+  {
+    name: "add_cluster_brain_memory",
+    description:
+      "Append a new memory to a cluster's brain. Use for preferences/corrections the user tells you to remember about this cluster's domain (e.g., 'prefer Resend over SendGrid', 'always ask before scraping'). Keep the memory short and imperative.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        cluster_slug: { type: "string", description: "The cluster's slug." },
+        content: { type: "string", description: "The memory text. Short, imperative." },
+      },
+      required: ["cluster_slug", "content"],
+    },
+  },
+  {
+    name: "update_cluster_brain_memory",
+    description:
+      "Update the text of an existing memory. Call list_cluster_brain_memories first to find the memory_id. The memory must belong to the named cluster.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        cluster_slug: { type: "string", description: "The cluster's slug." },
+        memory_id: { type: "string", description: "UUID of the memory to update." },
+        content: { type: "string", description: "New memory text." },
+      },
+      required: ["cluster_slug", "memory_id", "content"],
+    },
+  },
+  {
+    name: "remove_cluster_brain_memory",
+    description:
+      "Permanently delete a memory from a cluster's brain. Call list_cluster_brain_memories first to find the memory_id. The memory must belong to the named cluster.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        cluster_slug: { type: "string", description: "The cluster's slug." },
+        memory_id: { type: "string", description: "UUID of the memory to delete." },
+      },
+      required: ["cluster_slug", "memory_id"],
+    },
+  },
+  {
+    name: "rewrite_cluster_brain_instructions",
+    description:
+      "Replace the cluster brain's instructions text wholesale. Destructive — you are overwriting the entire instructions body. Prefer add_cluster_brain_memory for incremental changes; only use rewrite for major restructuring. Call list_cluster_brain_memories first to read the current instructions so you can preserve what matters.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        cluster_slug: { type: "string", description: "The cluster's slug." },
+        instructions: { type: "string", description: "New instructions body (replaces existing)." },
+      },
+      required: ["cluster_slug", "instructions"],
+    },
+  },
 ];
+
+/**
+ * Enforce cluster-brain edit scope. Called by all brain-editing tools.
+ *
+ * Rules (per the user's "bigger umbrella" model):
+ *   - If the chat is cluster-scoped, the AI can only edit THAT cluster.
+ *     The tool's cluster_slug argument must match canvasContext.clusterSlug.
+ *   - If the chat is canvas-scoped (or context is missing), the AI can
+ *     edit any cluster the user owns. Ownership is enforced inside each
+ *     brain endpoint via cluster.user_id checks.
+ *
+ * Returns a string error message if the call should be rejected, or null
+ * if it's allowed to proceed.
+ */
+function enforceClusterEditScope(
+  targetSlug: string,
+  canvasContext: CanvasContextPayload | undefined
+): string | null {
+  if (!targetSlug || typeof targetSlug !== "string") {
+    return "cluster_slug is required.";
+  }
+  if (canvasContext?.scope === "cluster") {
+    if (!canvasContext.clusterSlug) {
+      return "This chat is inside a cluster that hasn't finished syncing yet. Try again in a moment.";
+    }
+    if (targetSlug !== canvasContext.clusterSlug) {
+      return `This chat is scoped to cluster "${canvasContext.clusterName || canvasContext.clusterSlug}" and can only edit that cluster's brain. To edit "${targetSlug}", use a chat panel outside any cluster.`;
+    }
+  }
+  return null;
+}
+
+/**
+ * Fetch the cluster (scoped to user) or return an error string.
+ */
+async function getClusterForUser(
+  slug: string,
+  userId: string
+): Promise<
+  | { ok: true; cluster: { id: string; slug: string; name: string } }
+  | { ok: false; error: string }
+> {
+  const { data, error } = await supabase
+    .from("clusters")
+    .select("id, slug, name")
+    .eq("slug", slug)
+    .eq("user_id", userId)
+    .single();
+  if (error || !data) return { ok: false, error: `Cluster "${slug}" not found.` };
+  return { ok: true, cluster: data };
+}
 
 async function executeTool(
   name: string,
   input: Record<string, unknown>,
-  userId?: string
+  userId?: string,
+  canvasContext?: CanvasContextPayload
 ): Promise<{ result: string; entries?: unknown[] }> {
   switch (name) {
     case "search_knowledge_base": {
@@ -181,16 +313,74 @@ async function executeTool(
 
     case "ingest_url": {
       const rawUrl = input.url as string;
+
+      // Validate the URL before any DB lookups / ingestion work. Keeps
+      // malformed or oversized URLs out of the pipeline.
+      if (!rawUrl || typeof rawUrl !== "string") {
+        return {
+          result: JSON.stringify({ status: "error", message: "url is required" }),
+        };
+      }
+      if (rawUrl.length > 2048) {
+        return {
+          result: JSON.stringify({
+            status: "error",
+            message: "URL too long (max 2048 chars)",
+          }),
+        };
+      }
+      try {
+        const u = new URL(rawUrl);
+        if (u.protocol !== "http:" && u.protocol !== "https:") {
+          return {
+            result: JSON.stringify({
+              status: "error",
+              message: `Unsupported URL scheme: ${u.protocol}`,
+            }),
+          };
+        }
+      } catch {
+        return {
+          result: JSON.stringify({ status: "error", message: "Invalid URL" }),
+        };
+      }
+
+      // SSRF guard: refuse private / metadata / loopback URLs before we
+      // burn credits or create DB rows.
+      try {
+        await assertPublicHttpUrl(rawUrl);
+      } catch (err) {
+        if (err instanceof UnsafeUrlError) {
+          return {
+            result: JSON.stringify({ status: "error", message: err.message }),
+          };
+        }
+        throw err;
+      }
+
       const normalizedUrl = normalizeUrl(rawUrl);
 
-      // Dedup check — same logic as /api/ingest
+      // Dedup check — mirrors /api/ingest/route.ts so chat and direct
+      // ingestion behave the same. Only match (a) approved public entries
+      // OR (b) the calling user's own pending/processing entries.
+      // Without the scoping, User B sees "already exists" for User A's
+      // unapproved submission — cross-user leak.
       const urlsToCheck = [normalizedUrl];
       if (rawUrl !== normalizedUrl) urlsToCheck.push(rawUrl);
-      const { data: existing } = await supabase
+      let existingQuery = supabase
         .from("entries")
         .select("id, title, status, updated_at")
         .in("source_url", urlsToCheck)
-        .in("status", ["complete", "processing"])
+        .in("status", ["complete", "processing"]);
+      if (userId) {
+        existingQuery = existingQuery.or(
+          `moderation_status.eq.approved,and(ingested_by.eq.${userId},moderation_status.neq.denied)`
+        );
+      } else {
+        // No userId context — only reuse publicly approved entries.
+        existingQuery = existingQuery.eq("moderation_status", "approved");
+      }
+      const { data: existing } = await existingQuery
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -244,17 +434,302 @@ async function executeTool(
         }
       }
 
-      // New ingestion
-      const entryId = await ingestEntry({
-        url: normalizedUrl,
-        content: { text: "" },
-      });
+      // New ingestion. Pass userId so the async pipeline can refund
+      // credits on failure; also refund here if ingestEntry itself
+      // throws synchronously (e.g. DB down) so we don't leave the user
+      // charged for work that never happened.
+      try {
+        const entryId = await ingestEntry({
+          url: normalizedUrl,
+          content: { text: "" },
+          userId,
+        });
+
+        return {
+          result: JSON.stringify({
+            entry_id: entryId,
+            status: "processing",
+            stream_url: `/api/ingest/${entryId}/stream`,
+          }),
+        };
+      } catch (err) {
+        if (userId) {
+          grantCredits(userId, CREDIT_COSTS.ingestion, "ingestion_sync_refund", {
+            source: "chat_tool",
+            url: normalizedUrl,
+          }).catch(() => {});
+        }
+        const msg = err instanceof Error ? err.message : String(err);
+        return {
+          result: JSON.stringify({
+            status: "error",
+            message: `Failed to start ingestion: ${msg}`,
+          }),
+        };
+      }
+    }
+
+    // ── Cluster brain editing ────────────────────────────────────
+    case "list_user_clusters": {
+      if (!userId) return { result: JSON.stringify({ error: "Not authenticated." }) };
+      const { data, error } = await supabase
+        .from("clusters")
+        .select("id, slug, name, panel_ids")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false });
+      if (error) {
+        return { result: JSON.stringify({ error: error.message }) };
+      }
+      const clusters = (data || []).map((c) => ({
+        slug: c.slug,
+        name: c.name,
+        panel_count: Array.isArray(c.panel_ids) ? c.panel_ids.length : 0,
+      }));
+      return { result: JSON.stringify({ clusters }) };
+    }
+
+    case "list_cluster_brain_memories": {
+      if (!userId) return { result: JSON.stringify({ error: "Not authenticated." }) };
+      const clusterSlug = input.cluster_slug as string;
+      const scopeError = enforceClusterEditScope(clusterSlug, canvasContext);
+      if (scopeError) return { result: JSON.stringify({ error: scopeError }) };
+
+      const clusterRes = await getClusterForUser(clusterSlug, userId);
+      if (!clusterRes.ok) return { result: JSON.stringify({ error: clusterRes.error }) };
+
+      const { data: brain } = await supabase
+        .from("cluster_brains")
+        .select("id, instructions")
+        .eq("cluster_id", clusterRes.cluster.id)
+        .single();
+
+      if (!brain) {
+        return {
+          result: JSON.stringify({
+            cluster: { slug: clusterRes.cluster.slug, name: clusterRes.cluster.name },
+            instructions: "",
+            memories: [],
+          }),
+        };
+      }
+
+      const { data: memories } = await supabase
+        .from("cluster_brain_memories")
+        .select("id, content, created_at")
+        .eq("cluster_brain_id", brain.id)
+        .order("created_at", { ascending: true });
 
       return {
         result: JSON.stringify({
-          entry_id: entryId,
-          status: "processing",
-          stream_url: `/api/ingest/${entryId}/stream`,
+          cluster: { slug: clusterRes.cluster.slug, name: clusterRes.cluster.name },
+          instructions: brain.instructions || "",
+          memories: (memories || []).map((m) => ({ id: m.id, content: m.content })),
+        }),
+      };
+    }
+
+    case "add_cluster_brain_memory": {
+      if (!userId) return { result: JSON.stringify({ error: "Not authenticated." }) };
+      const clusterSlug = input.cluster_slug as string;
+      const content = input.content as string;
+      if (!content || typeof content !== "string") {
+        return { result: JSON.stringify({ error: "content (string) is required" }) };
+      }
+      const scopeError = enforceClusterEditScope(clusterSlug, canvasContext);
+      if (scopeError) return { result: JSON.stringify({ error: scopeError }) };
+
+      const clusterRes = await getClusterForUser(clusterSlug, userId);
+      if (!clusterRes.ok) return { result: JSON.stringify({ error: clusterRes.error }) };
+
+      // Get-or-create the brain row.
+      const { data: upserted, error: brainErr } = await supabase
+        .from("cluster_brains")
+        .upsert(
+          { cluster_id: clusterRes.cluster.id, instructions: "" },
+          { onConflict: "cluster_id", ignoreDuplicates: true }
+        )
+        .select("id")
+        .single();
+      let brainId: string | undefined = upserted?.id;
+      if (!brainId) {
+        // ignoreDuplicates returns no row when the brain already existed;
+        // fetch it explicitly.
+        const { data: existing } = await supabase
+          .from("cluster_brains")
+          .select("id")
+          .eq("cluster_id", clusterRes.cluster.id)
+          .single();
+        brainId = existing?.id;
+      }
+      if (!brainId) {
+        return {
+          result: JSON.stringify({
+            error: `Failed to initialize cluster brain: ${brainErr?.message || "unknown"}`,
+          }),
+        };
+      }
+
+      const { data: memory, error } = await supabase
+        .from("cluster_brain_memories")
+        .insert({ cluster_brain_id: brainId, content })
+        .select("id, content")
+        .single();
+      if (error || !memory) {
+        return { result: JSON.stringify({ error: error?.message || "Failed to save memory" }) };
+      }
+      return {
+        result: JSON.stringify({
+          status: "ok",
+          cluster_slug: clusterRes.cluster.slug,
+          memory: { id: memory.id, content: memory.content },
+        }),
+      };
+    }
+
+    case "update_cluster_brain_memory": {
+      if (!userId) return { result: JSON.stringify({ error: "Not authenticated." }) };
+      const clusterSlug = input.cluster_slug as string;
+      const memoryId = input.memory_id as string;
+      const content = input.content as string;
+      if (!memoryId || typeof memoryId !== "string") {
+        return { result: JSON.stringify({ error: "memory_id is required" }) };
+      }
+      if (!content || typeof content !== "string") {
+        return { result: JSON.stringify({ error: "content is required" }) };
+      }
+      const scopeError = enforceClusterEditScope(clusterSlug, canvasContext);
+      if (scopeError) return { result: JSON.stringify({ error: scopeError }) };
+
+      const clusterRes = await getClusterForUser(clusterSlug, userId);
+      if (!clusterRes.ok) return { result: JSON.stringify({ error: clusterRes.error }) };
+
+      // Verify the memory actually belongs to this cluster's brain —
+      // prevents cross-cluster edits when scope is "canvas".
+      const { data: memRow } = await supabase
+        .from("cluster_brain_memories")
+        .select("id, cluster_brains!inner(cluster_id)")
+        .eq("id", memoryId)
+        .single();
+      const ownedClusterId = (memRow as unknown as {
+        cluster_brains?: { cluster_id?: string };
+      } | null)?.cluster_brains?.cluster_id;
+      if (!ownedClusterId || ownedClusterId !== clusterRes.cluster.id) {
+        return {
+          result: JSON.stringify({
+            error: `Memory ${memoryId} does not belong to cluster ${clusterSlug}.`,
+          }),
+        };
+      }
+
+      const { data: updated, error } = await supabase
+        .from("cluster_brain_memories")
+        .update({ content })
+        .eq("id", memoryId)
+        .select("id, content")
+        .single();
+      if (error || !updated) {
+        return { result: JSON.stringify({ error: error?.message || "Update failed" }) };
+      }
+      return {
+        result: JSON.stringify({
+          status: "ok",
+          cluster_slug: clusterRes.cluster.slug,
+          memory: { id: updated.id, content: updated.content },
+        }),
+      };
+    }
+
+    case "remove_cluster_brain_memory": {
+      if (!userId) return { result: JSON.stringify({ error: "Not authenticated." }) };
+      const clusterSlug = input.cluster_slug as string;
+      const memoryId = input.memory_id as string;
+      if (!memoryId || typeof memoryId !== "string") {
+        return { result: JSON.stringify({ error: "memory_id is required" }) };
+      }
+      const scopeError = enforceClusterEditScope(clusterSlug, canvasContext);
+      if (scopeError) return { result: JSON.stringify({ error: scopeError }) };
+
+      const clusterRes = await getClusterForUser(clusterSlug, userId);
+      if (!clusterRes.ok) return { result: JSON.stringify({ error: clusterRes.error }) };
+
+      const { data: memRow } = await supabase
+        .from("cluster_brain_memories")
+        .select("id, cluster_brains!inner(cluster_id)")
+        .eq("id", memoryId)
+        .single();
+      const ownedClusterId = (memRow as unknown as {
+        cluster_brains?: { cluster_id?: string };
+      } | null)?.cluster_brains?.cluster_id;
+      if (!ownedClusterId || ownedClusterId !== clusterRes.cluster.id) {
+        return {
+          result: JSON.stringify({
+            error: `Memory ${memoryId} does not belong to cluster ${clusterSlug}.`,
+          }),
+        };
+      }
+
+      const { error } = await supabase
+        .from("cluster_brain_memories")
+        .delete()
+        .eq("id", memoryId);
+      if (error) {
+        return { result: JSON.stringify({ error: error.message }) };
+      }
+      return {
+        result: JSON.stringify({
+          status: "ok",
+          cluster_slug: clusterRes.cluster.slug,
+          removed_memory_id: memoryId,
+        }),
+      };
+    }
+
+    case "rewrite_cluster_brain_instructions": {
+      if (!userId) return { result: JSON.stringify({ error: "Not authenticated." }) };
+      const clusterSlug = input.cluster_slug as string;
+      const instructions = input.instructions as string;
+      if (typeof instructions !== "string") {
+        return { result: JSON.stringify({ error: "instructions (string) is required" }) };
+      }
+      const scopeError = enforceClusterEditScope(clusterSlug, canvasContext);
+      if (scopeError) return { result: JSON.stringify({ error: scopeError }) };
+
+      const clusterRes = await getClusterForUser(clusterSlug, userId);
+      if (!clusterRes.ok) return { result: JSON.stringify({ error: clusterRes.error }) };
+
+      const now = new Date().toISOString();
+      const { data: existing } = await supabase
+        .from("cluster_brains")
+        .select("id")
+        .eq("cluster_id", clusterRes.cluster.id)
+        .single();
+
+      if (existing) {
+        const { error } = await supabase
+          .from("cluster_brains")
+          .update({ instructions, updated_at: now })
+          .eq("id", existing.id);
+        if (error) {
+          return { result: JSON.stringify({ error: error.message }) };
+        }
+      } else {
+        const { error } = await supabase
+          .from("cluster_brains")
+          .insert({
+            cluster_id: clusterRes.cluster.id,
+            instructions,
+            updated_at: now,
+          });
+        if (error) {
+          return { result: JSON.stringify({ error: error.message }) };
+        }
+      }
+
+      return {
+        result: JSON.stringify({
+          status: "ok",
+          cluster_slug: clusterRes.cluster.slug,
+          instructions_length: instructions.length,
         }),
       };
     }
@@ -312,6 +787,10 @@ type ContextPanelDTO = CanvasContextEntry | CanvasContextChat;
 interface CanvasContextPayload {
   scope: "cluster" | "canvas";
   clusterName?: string;
+  /** Enclosing cluster's slug — used to enforce "cluster-scoped chat
+   * can only edit its own cluster's brain". Absent when the chat is
+   * on the open canvas or the cluster hasn't been synced yet. */
+  clusterSlug?: string;
   panels: ContextPanelDTO[];
 }
 
@@ -367,6 +846,26 @@ function buildCanvasContextPrefix(ctx: CanvasContextPayload): string {
       ? "When the user asks about what's on their canvas or references panels they can see, answer from the context above. You can still call search_knowledge_base and get_entry_details for entries NOT on the canvas when relevant."
       : "When the user asks about things in the cluster, prefer answering from the context above. You can still call search_knowledge_base and get_entry_details for entries OUTSIDE the cluster when relevant."
   );
+
+  // Brain-editing guidance. The tools themselves enforce scope — this
+  // just tells the model what's reachable so it doesn't refuse valid
+  // requests or try calls it can't make.
+  if (ctx.scope === "cluster") {
+    if (ctx.clusterSlug) {
+      blocks.push(
+        `You can edit this cluster's brain directly via the cluster-brain tools (add_cluster_brain_memory, update_cluster_brain_memory, remove_cluster_brain_memory, rewrite_cluster_brain_instructions, list_cluster_brain_memories). The cluster_slug argument MUST be "${ctx.clusterSlug}" — you cannot edit any other cluster from here. Before calling update/remove tools, use list_cluster_brain_memories to learn memory IDs. When the user asks you to "remember" something for this cluster, use add_cluster_brain_memory. Prefer add over rewrite — rewriting replaces everything and is rarely the right move.`
+      );
+    } else {
+      blocks.push(
+        "This cluster hasn't finished syncing to the server yet, so brain-editing tools aren't available in this chat. If the user asks you to edit the brain, let them know it will be ready momentarily."
+      );
+    }
+  } else {
+    blocks.push(
+      "You can edit any of the user's clusters' brains via the cluster-brain tools. Call list_user_clusters to see available cluster slugs. Before calling update/remove tools, use list_cluster_brain_memories to learn memory IDs. When the user asks you to 'remember' something for a specific cluster, use add_cluster_brain_memory. Prefer add over rewrite — rewriting replaces everything and is rarely the right move."
+    );
+  }
+
   return blocks.join("\n\n") + "\n\n";
 }
 
@@ -392,14 +891,17 @@ async function handlePost(
     await checkAndResetCycle(userId, userTier, sub.subscription_period_end);
     await grantDailyBonus(userId, userTier);
 
-    // Credit check — reserve minimum cost (may end up being chat_tool_call = 5)
-    const balance = await getBalance(userId);
-    if (balance.balance < CREDIT_COSTS.chat_message) {
+    // Reserve the worst-case cost UPFRONT (chat with tool calls = 5). If the
+    // response ends up text-only (3), we refund the difference at the end.
+    // Atomic RPC — this closes the race where parallel requests both pass
+    // a check-then-update and burn our Anthropic budget for free.
+    const initialDeduct = await deductCredits(userId, "chat_tool_call");
+    if (!initialDeduct.success) {
       return new Response(
         JSON.stringify({
           error: "insufficient_credits",
-          balance: balance.balance,
-          cost: CREDIT_COSTS.chat_message,
+          balance: initialDeduct.newBalance,
+          cost: CREDIT_COSTS.chat_tool_call,
         }),
         { status: 402, headers: { "Content-Type": "application/json" } }
       );
@@ -496,7 +998,8 @@ async function handlePost(
               const toolOutput = await executeTool(
                 block.name,
                 block.input as Record<string, unknown>,
-                userId
+                userId,
+                canvasContext
               );
 
               // Emit ingest_started for ingest_url tool so the frontend
@@ -534,6 +1037,18 @@ async function handlePost(
                   ? `Found ${(toolOutput.entries || []).length} relevant source(s)`
                   : block.name === "ingest_url"
                   ? `Started ingestion`
+                  : block.name === "list_user_clusters"
+                  ? `Listed clusters`
+                  : block.name === "list_cluster_brain_memories"
+                  ? `Read cluster brain`
+                  : block.name === "add_cluster_brain_memory"
+                  ? `Added memory to cluster brain`
+                  : block.name === "update_cluster_brain_memory"
+                  ? `Updated cluster brain memory`
+                  : block.name === "remove_cluster_brain_memory"
+                  ? `Removed cluster brain memory`
+                  : block.name === "rewrite_cluster_brain_instructions"
+                  ? `Rewrote cluster brain instructions`
                   : `Retrieved implementation details`;
               send({
                 type: "tool_result",
@@ -563,13 +1078,22 @@ async function handlePost(
             break;
           }
 
-          // Deduct credits based on actual usage
-          const creditAction = hadToolCalls ? "chat_tool_call" : "chat_message";
-          await deductCredits(userId, creditAction).catch(() => {});
+          // We charged the worst case (chat_tool_call = 5) upfront. If the
+          // conversation ended up text-only (chat_message = 3), refund the
+          // difference so users only pay for what they actually used.
+          if (!hadToolCalls) {
+            const refund = CREDIT_COSTS.chat_tool_call - CREDIT_COSTS.chat_message;
+            grantCredits(userId, refund, "chat_message_refund").catch(() => {});
+          }
 
           send({ type: "done" });
           controller.close();
         } catch (error) {
+          // Full refund on error — we pre-deducted chat_tool_call (5) but
+          // the user didn't get a complete response.
+          grantCredits(userId, CREDIT_COSTS.chat_tool_call, "chat_error_refund", {
+            error: error instanceof Error ? error.message : String(error),
+          }).catch(() => {});
           const message =
             error instanceof Error ? error.message : "Unknown error";
           send({ type: "error", message });

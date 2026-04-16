@@ -51,6 +51,11 @@ export type ContextPanelDTO =
 export interface CanvasContextPayload {
   scope: "cluster" | "canvas";
   clusterName?: string;
+  /** Slug of the enclosing cluster, when scope is "cluster" AND the
+   * cluster has been synced to the DB. Required server-side for the
+   * brain-editing tools to enforce scope (cluster-scoped chat can only
+   * edit its own cluster's brain). */
+  clusterSlug?: string;
   panels: ContextPanelDTO[];
 }
 
@@ -175,6 +180,7 @@ export function buildCanvasContext(
     return {
       scope: "cluster",
       clusterName: cluster.name,
+      clusterSlug: cluster.slug,
       panels,
     };
   }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateEmbedding } from "@/lib/ai";
-import { withExternalAuth } from "@/lib/auth/with-auth";
+import { withMcpCredits } from "@/lib/auth/with-auth";
 import { z } from "zod";
 
 const EmbedSchema = z.object({
@@ -35,4 +35,4 @@ async function handlePost(request: NextRequest) {
   }
 }
 
-export const POST = withExternalAuth(handlePost);
+export const POST = withMcpCredits("mcp_list", handlePost);

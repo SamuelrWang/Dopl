@@ -54,6 +54,11 @@ export async function buildComposite(
     .replace(/```\s*$/m, "")
     .trim();
 
+  // Build a lookup from entry_id → slug so we can hydrate Claude's output
+  // (which only echoes entry_ids) with public slugs for hyperlinking.
+  const slugByEntryId = new Map<string, string | null>();
+  for (const r of results) slugByEntryId.set(r.entry_id, r.slug);
+
   try {
     const parsed = JSON.parse(jsonStr);
     return {
@@ -62,6 +67,7 @@ export async function buildComposite(
       source_entries: (parsed.source_attribution || []).map(
         (a: { entry_id: string; title: string; how_used: string }) => ({
           entry_id: a.entry_id,
+          slug: slugByEntryId.get(a.entry_id) ?? null,
           title: a.title,
           how_used: a.how_used,
         })
@@ -75,6 +81,7 @@ export async function buildComposite(
       composite_agents_md: extractSection(response, "composite_agents_md") || "",
       source_entries: results.map((r) => ({
         entry_id: r.entry_id,
+        slug: r.slug,
         title: r.title || "Unknown",
         how_used: "Referenced in composite solution",
       })),

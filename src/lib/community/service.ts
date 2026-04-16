@@ -366,10 +366,13 @@ export async function getPublishedCluster(
   let entries: PublishedClusterDetail["entries"] = [];
 
   if (entryIds.length > 0) {
+    // Only surface approved entries — pending/denied entries referenced
+    // by a published cluster should not leak into the public chat context.
     const { data: entryRows } = await db
       .from("entries")
       .select("id, title, summary, source_url, source_platform, readme, agents_md")
-      .in("id", entryIds);
+      .in("id", entryIds)
+      .eq("moderation_status", "approved");
 
     entries = (entryRows || []).map((e) => ({
       entry_id: e.id,

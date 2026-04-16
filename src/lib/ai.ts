@@ -3,6 +3,7 @@ import OpenAI from "openai";
 import { config } from "dotenv";
 import { resolve } from "path";
 import { retryWithBackoff } from "@/lib/ingestion/utils";
+import { callExternal } from "@/lib/analytics/call-external";
 
 // Force-load .env.local with override.
 // Next.js doesn't override shell env vars (even empty ones) with .env.local values.
@@ -43,13 +44,18 @@ export const claude = new Proxy({} as Anthropic, {
 
 export async function generateEmbedding(text: string): Promise<number[]> {
   const client = getOpenAIClient();
-  const response = await retryWithBackoff(
+  const response = await callExternal(
+    "openai.embeddings",
     () =>
-      client.embeddings.create({
-        model: process.env.EMBEDDING_MODEL || "text-embedding-3-small",
-        input: text,
-      }),
-    { label: "generateEmbedding" }
+      retryWithBackoff(
+        () =>
+          client.embeddings.create({
+            model: process.env.EMBEDDING_MODEL || "text-embedding-3-small",
+            input: text,
+          }),
+        { label: "generateEmbedding" }
+      ),
+    { slowMs: 10_000 }
   );
   return response.data[0].embedding;
 }
@@ -75,15 +81,20 @@ export async function callClaude(
     ? MODEL_IDS[options.model]
     : (process.env.LLM_MODEL || MODEL_IDS.sonnet);
 
-  const response = await retryWithBackoff(
+  const response = await callExternal(
+    `anthropic.messages[${options?.model || "default"}]`,
     () =>
-      client.messages.create({
-        model: modelId,
-        max_tokens: options?.maxTokens || 8192,
-        ...(systemPrompt ? { system: systemPrompt } : {}),
-        messages: [{ role: "user" as const, content: userContent }],
-      }),
-    { label: `callClaude[${options?.model || "default"}]` }
+      retryWithBackoff(
+        () =>
+          client.messages.create({
+            model: modelId,
+            max_tokens: options?.maxTokens || 8192,
+            ...(systemPrompt ? { system: systemPrompt } : {}),
+            messages: [{ role: "user" as const, content: userContent }],
+          }),
+        { label: `callClaude[${options?.model || "default"}]` }
+      ),
+    { slowMs: 60_000, metadata: { model: modelId } }
   );
 
   const textBlock = response.content.find((b) => b.type === "text");

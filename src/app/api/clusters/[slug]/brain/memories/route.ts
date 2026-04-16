@@ -1,34 +1,53 @@
 /**
  * POST   /api/clusters/[slug]/brain/memories — add a memory to the cluster brain
+ * PATCH  /api/clusters/[slug]/brain/memories — update a memory's content by id
  * DELETE /api/clusters/[slug]/brain/memories — remove a memory by id
+ *
+ * All operations require the authenticated user to own the target cluster.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
-import { withExternalAuth } from "@/lib/auth/with-auth";
+import { withUserAuth } from "@/lib/auth/with-auth";
 
 export const dynamic = "force-dynamic";
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
-async function getClusterBySlug(slug: string) {
+// Scoped cluster lookup: returns null if the user doesn't own it.
+async function getClusterBySlugForUser(slug: string, userId: string) {
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("clusters")
     .select("id, slug, name")
     .eq("slug", slug)
+    .eq("user_id", userId)
     .single();
 
-  if (error || !data) {
-    return null;
-  }
+  if (error || !data) return null;
   return data;
 }
 
-/**
- * Get or create the cluster brain row. Returns the brain id.
- * Uses upsert to avoid race conditions on concurrent requests.
- */
+// Verify a memory belongs to a cluster owned by the given user.
+async function memoryBelongsToUser(
+  memoryId: string,
+  userId: string
+): Promise<boolean> {
+  const db = supabaseAdmin();
+  // Join: memory → brain → cluster; filter by cluster.user_id.
+  const { data, error } = await db
+    .from("cluster_brain_memories")
+    .select("id, cluster_brains!inner(cluster_id, clusters!inner(user_id))")
+    .eq("id", memoryId)
+    .single();
+  if (error || !data) return false;
+  // Supabase typings aren't precise for nested inner joins; cast defensively.
+  const brains = (data as unknown as {
+    cluster_brains?: { clusters?: { user_id?: string } };
+  }).cluster_brains;
+  return brains?.clusters?.user_id === userId;
+}
+
 async function getOrCreateBrain(clusterId: string): Promise<string> {
   const db = supabaseAdmin();
 
@@ -52,11 +71,14 @@ async function getOrCreateBrain(clusterId: string): Promise<string> {
 
 async function handlePost(
   request: NextRequest,
-  context: { params: Promise<{ slug: string }> }
+  { userId, params }: { userId: string; params?: Record<string, string> }
 ) {
   try {
-    const { slug } = await context.params;
-    const cluster = await getClusterBySlug(slug);
+    const slug = params?.slug;
+    if (!slug) {
+      return NextResponse.json({ error: "slug required" }, { status: 400 });
+    }
+    const cluster = await getClusterBySlugForUser(slug, userId);
     if (!cluster) {
       return NextResponse.json(
         { error: `Cluster not found: ${slug}` },
@@ -95,9 +117,61 @@ async function handlePost(
   }
 }
 
+// ── PATCH ────────────────────────────────────────────────────────────
+
+async function handlePatch(
+  request: NextRequest,
+  { userId }: { userId: string }
+) {
+  try {
+    const body = await request.json();
+    const { memory_id, content } = body;
+
+    if (!memory_id || typeof memory_id !== "string") {
+      return NextResponse.json(
+        { error: "memory_id (string) is required" },
+        { status: 400 }
+      );
+    }
+    if (!content || typeof content !== "string") {
+      return NextResponse.json(
+        { error: "content (string) is required" },
+        { status: 400 }
+      );
+    }
+
+    if (!(await memoryBelongsToUser(memory_id, userId))) {
+      return NextResponse.json({ error: "Memory not found" }, { status: 404 });
+    }
+
+    const db = supabaseAdmin();
+    const { data: updated, error } = await db
+      .from("cluster_brain_memories")
+      .update({ content })
+      .eq("id", memory_id)
+      .select("id, content")
+      .single();
+
+    if (error || !updated) {
+      return NextResponse.json(
+        { error: error?.message || "Memory not found" },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json(updated);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
 // ── DELETE ───────────────────────────────────────────────────────────
 
-async function handleDelete(request: NextRequest) {
+async function handleDelete(
+  request: NextRequest,
+  { userId }: { userId: string }
+) {
   try {
     const body = await request.json();
     const { memory_id } = body;
@@ -107,6 +181,10 @@ async function handleDelete(request: NextRequest) {
         { error: "memory_id (string) is required" },
         { status: 400 }
       );
+    }
+
+    if (!(await memoryBelongsToUser(memory_id, userId))) {
+      return NextResponse.json({ error: "Memory not found" }, { status: 404 });
     }
 
     const db = supabaseAdmin();
@@ -124,5 +202,6 @@ async function handleDelete(request: NextRequest) {
   }
 }
 
-export const POST = withExternalAuth(handlePost);
-export const DELETE = withExternalAuth(handleDelete);
+export const POST = withUserAuth(handlePost);
+export const PATCH = withUserAuth(handlePatch);
+export const DELETE = withUserAuth(handleDelete);

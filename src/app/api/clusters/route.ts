@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withExternalAuth } from "@/lib/auth/with-auth";
+import { withUserAuth } from "@/lib/auth/with-auth";
 import { listClusters, createCluster } from "@/lib/clusters/service";
 
-async function handleGet() {
+async function handleGet(
+  _request: NextRequest,
+  { userId }: { userId: string }
+) {
   try {
-    const clusters = await listClusters();
+    const clusters = await listClusters({ userId });
     return NextResponse.json({ clusters });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
@@ -12,7 +15,10 @@ async function handleGet() {
   }
 }
 
-async function handlePost(request: NextRequest) {
+async function handlePost(
+  request: NextRequest,
+  { userId }: { userId: string }
+) {
   try {
     const body = await request.json();
     const { name, entry_ids } = body;
@@ -24,10 +30,13 @@ async function handlePost(request: NextRequest) {
       );
     }
 
-    const cluster = await createCluster({
-      name,
-      entry_ids: Array.isArray(entry_ids) ? entry_ids : [],
-    });
+    const cluster = await createCluster(
+      {
+        name,
+        entry_ids: Array.isArray(entry_ids) ? entry_ids : [],
+      },
+      { userId }
+    );
 
     return NextResponse.json(cluster, { status: 201 });
   } catch (error) {
@@ -36,5 +45,5 @@ async function handlePost(request: NextRequest) {
   }
 }
 
-export const GET = withExternalAuth(handleGet);
-export const POST = withExternalAuth(handlePost);
+export const GET = withUserAuth(handleGet);
+export const POST = withUserAuth(handlePost);

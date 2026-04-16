@@ -115,11 +115,42 @@ export function EntryPanelBody({ panel }: EntryPanelBodyProps) {
   const isIngesting = !!panel.isIngesting;
   const isSkeleton = isIngesting && (!panel.title || panel.title === "Ingesting...");
 
+  // Stall detection: if we've been loading for 90s without any new
+  // ingestion log arriving, something's wrong (server restarted, pipeline
+  // wedged, SSE dropped). Surface this to the user so they're not staring
+  // at a frozen skeleton forever.
+  const [isStalled, setIsStalled] = useState(false);
+  const lastLogCountRef = useRef(0);
+  useEffect(() => {
+    if (!isIngesting) {
+      setIsStalled(false);
+      return;
+    }
+    const logCount = panel.ingestionLogs?.length ?? 0;
+    // If a new log arrived, reset stall timer
+    if (logCount !== lastLogCountRef.current) {
+      lastLogCountRef.current = logCount;
+      setIsStalled(false);
+    }
+    const stallTimer = setTimeout(() => setIsStalled(true), 90_000);
+    return () => clearTimeout(stallTimer);
+  }, [isIngesting, panel.ingestionLogs?.length]);
+
   return (
     <div
       className="flex-1 min-h-0 flex flex-col overflow-hidden"
       style={isIngesting ? { animation: "ingest-glow 2s ease-in-out infinite" } : undefined}
     >
+      {/* ── Stall warning ───────────────────────────────────────── */}
+      {isStalled && (
+        <div className="shrink-0 bg-amber-500/10 border-b border-amber-500/20 px-3 py-2">
+          <p className="text-[11px] text-amber-300/90">
+            Ingestion has been running for a while with no updates. It may be
+            stuck — try closing this panel and re-ingesting the URL.
+          </p>
+        </div>
+      )}
+
       {/* ── Ingestion log header (attached on top while generating) ── */}
       {isIngesting && panel.ingestionLogs && panel.ingestionLogs.length > 0 && (
         <IngestionLogHeader logs={panel.ingestionLogs} />

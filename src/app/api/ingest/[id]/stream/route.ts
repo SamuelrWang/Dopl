@@ -1,14 +1,36 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { ingestionProgress } from "@/lib/ingestion/progress";
-import { withExternalAuth } from "@/lib/auth/with-auth";
+import { withUserAuth, isAdmin } from "@/lib/auth/with-auth";
+import { supabaseAdmin } from "@/lib/supabase";
+
+const supabase = supabaseAdmin();
 
 export const dynamic = "force-dynamic";
 
 async function handleGet(
   _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { userId, params }: { userId: string; params?: Record<string, string> }
 ) {
-  const { id } = await params;
+  const id = params?.id;
+  if (!id) {
+    return NextResponse.json({ error: "id required" }, { status: 400 });
+  }
+
+  // Ownership / admin gate. Returning 404 (not 403) avoids leaking
+  // entry existence across users.
+  const { data: entry } = await supabase
+    .from("entries")
+    .select("ingested_by, moderation_status")
+    .eq("id", id)
+    .single();
+  if (!entry) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  const isOwner = entry.ingested_by === userId;
+  const isPublic = entry.moderation_status === "approved";
+  if (!isOwner && !isPublic && !isAdmin(userId)) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
 
   const stream = ingestionProgress.subscribe(id);
 
@@ -21,4 +43,4 @@ async function handleGet(
   });
 }
 
-export const GET = withExternalAuth(handleGet);
+export const GET = withUserAuth(handleGet);

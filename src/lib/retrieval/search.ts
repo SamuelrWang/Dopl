@@ -4,6 +4,7 @@ import { generateEmbedding } from "@/lib/ai";
 
 export interface SearchResult {
   entry_id: string;
+  slug: string | null;
   title: string | null;
   summary: string | null;
   use_case: string | null;
@@ -44,18 +45,18 @@ export async function searchEntries(
     throw error;
   }
 
-  const rpcRows = (data || []) as Omit<SearchResult, "source_platform" | "created_at">[];
+  const rpcRows = (data || []) as Omit<SearchResult, "source_platform" | "created_at" | "slug">[];
 
   if (rpcRows.length === 0) {
     return [];
   }
 
-  // Hydrate source_platform and created_at via a follow-up select.
+  // Hydrate slug, source_platform, and created_at via a follow-up select.
   // The RPC (search_entries) does not return these columns.
   const ids = rpcRows.map((r) => r.entry_id);
   const { data: hydrated, error: hydrateError } = await supabase
     .from("entries")
-    .select("id, source_platform, created_at")
+    .select("id, slug, source_platform, created_at")
     .in("id", ids);
 
   if (hydrateError) {
@@ -63,9 +64,13 @@ export async function searchEntries(
     throw hydrateError;
   }
 
-  const byId = new Map<string, { source_platform: string | null; created_at: string | null }>();
+  const byId = new Map<
+    string,
+    { slug: string | null; source_platform: string | null; created_at: string | null }
+  >();
   for (const row of hydrated || []) {
     byId.set(row.id, {
+      slug: row.slug ?? null,
       source_platform: row.source_platform ?? null,
       created_at: row.created_at ?? null,
     });
@@ -73,6 +78,7 @@ export async function searchEntries(
 
   return rpcRows.map((r) => ({
     ...r,
+    slug: byId.get(r.entry_id)?.slug ?? null,
     source_platform: byId.get(r.entry_id)?.source_platform ?? null,
     created_at: byId.get(r.entry_id)?.created_at ?? null,
   }));

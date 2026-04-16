@@ -3,10 +3,19 @@ import { supabaseAdmin } from "@/lib/supabase";
 // ── Credit costs per action ──────────────────────────────────────────
 
 export const CREDIT_COSTS = {
+  // MCP / data access
   mcp_search: 1,
   mcp_get_entry: 1,
+  mcp_list: 1,
+  mcp_cluster_query: 1,
+  mcp_cluster_read: 1,
+  // AI-heavy operations
+  mcp_build: 5,
+  mcp_synthesize: 10,
+  // Chat (in-app)
   chat_message: 3,
   chat_tool_call: 5,
+  // Ingestion
   ingestion: 20,
 } as const;
 
@@ -82,34 +91,26 @@ export async function deductCredits(
   const cost = CREDIT_COSTS[action as CreditAction] ?? 1;
   const supabase = supabaseAdmin();
 
-  // Check balance first
-  const { data: current } = await supabase
-    .from("user_credits")
-    .select("balance")
-    .eq("user_id", userId)
-    .single();
-
-  if (!current || current.balance < cost) {
-    return { success: false, newBalance: current?.balance ?? 0 };
-  }
-
-  const newBalance = current.balance - cost;
-
-  // Update balance
-  await supabase
-    .from("user_credits")
-    .update({ balance: newBalance, updated_at: new Date().toISOString() })
-    .eq("user_id", userId);
-
-  // Log to ledger
-  await supabase.from("credit_ledger").insert({
-    user_id: userId,
-    amount: -cost,
-    action,
-    metadata: metadata ?? {},
+  // Single atomic RPC: SELECT FOR UPDATE, balance check, UPDATE, ledger insert.
+  // Prevents the race where two concurrent requests both pass a non-atomic check.
+  const { data, error } = await supabase.rpc("deduct_credits_atomic", {
+    p_user_id: userId,
+    p_amount: cost,
+    p_action: action,
+    p_metadata: metadata ?? {},
   });
 
-  return { success: true, newBalance };
+  if (error) {
+    // Fail closed on DB errors — don't silently grant a free action.
+    return { success: false, newBalance: 0 };
+  }
+
+  // RPC returns a set (RETURN QUERY), so data is an array of one row.
+  const row = Array.isArray(data) ? data[0] : data;
+  return {
+    success: !!row?.success,
+    newBalance: row?.new_balance ?? 0,
+  };
 }
 
 // ── Grant credits ────────────────────────────────────────────────────

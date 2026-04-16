@@ -54,6 +54,7 @@ export type EntryUpdate = z.infer<typeof EntryUpdateSchema>;
 export interface QueryResponse {
   entries: {
     entry_id: string;
+    slug: string | null;
     title: string | null;
     summary: string | null;
     similarity: number;
@@ -75,6 +76,7 @@ export interface BuildResponse {
   composite_agents_md: string;
   source_entries: {
     entry_id: string;
+    slug: string | null;
     title: string;
     how_used: string;
   }[];

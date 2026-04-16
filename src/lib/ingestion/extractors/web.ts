@@ -1,5 +1,6 @@
 import { ExtractedSource, LinkFollowResult } from "../types";
 import { fetchWithTimeout, retryWithBackoff } from "../utils";
+import { assertPublicHttpUrl } from "../url-safety";
 import { MAX_LINK_DEPTH } from "@/lib/config";
 const MAX_CONTENT_LENGTH = 50_000; // 50K chars max per page
 
@@ -122,6 +123,11 @@ async function fetchWithJina(
 async function fetchSimple(
   url: string
 ): Promise<{ content: string; metadata: Record<string, unknown> }> {
+  // SSRF guard — refuse to fetch private / loopback / metadata URLs
+  // even if the user tries to sneak them through via redirect-chasing
+  // or hand-crafted inputs.
+  await assertPublicHttpUrl(url);
+
   const response = await fetchWithTimeout(url, {
     headers: {
       "User-Agent":

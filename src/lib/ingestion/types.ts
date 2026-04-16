@@ -7,6 +7,10 @@ export interface IngestInput {
     images?: string[]; // base64 encoded
     links?: string[];
   };
+  /** Supabase auth UUID of the user initiating the ingestion. Stored as
+   * entries.ingested_by so admins can attribute entries and the owner
+   * can later bypass the moderation filter on their own entries. */
+  userId?: string;
 }
 
 export interface ExtractedSource {

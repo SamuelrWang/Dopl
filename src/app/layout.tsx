@@ -43,15 +43,47 @@ const inter = Inter({
   weight: ["300", "400", "500", "600", "700"],
 });
 
+// Canonical site URL — used by metadataBase so relative image paths in
+// OpenGraph/Twitter tags resolve to absolute URLs (required for link previews
+// in iMessage, Slack, Twitter, etc.).
+const SITE_URL =
+  process.env.NEXT_PUBLIC_APP_URL || "https://usedopl.com";
+
+const SITE_TITLE = "Dopl: Supercharge Your Agent's Capabilities";
+const SITE_DESCRIPTION =
+  "AI-powered knowledge base of proven agent setups, automations, and integrations. Compose and ship agent stacks faster.";
+
 export const metadata: Metadata = {
-  title: "Dopl: Supercharge Your Agents",
-  description: "AI-powered knowledge base for automation setups",
+  metadataBase: new URL(SITE_URL),
+  title: SITE_TITLE,
+  description: SITE_DESCRIPTION,
   icons: {
     icon: [
       { url: "/favicons/favicon.ico" },
       { url: "/favicons/favicon-32x32.png", sizes: "32x32", type: "image/png" },
     ],
     apple: "/favicons/apple-touch-icon.png",
+  },
+  openGraph: {
+    type: "website",
+    siteName: "Dopl",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    url: SITE_URL,
+    images: [
+      {
+        url: "/img/site_thumbnail.png",
+        width: 1200,
+        height: 630,
+        alt: SITE_TITLE,
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    images: ["/img/site_thumbnail.png"],
   },
 };
 

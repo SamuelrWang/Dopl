@@ -18,7 +18,37 @@ export const GET = withUserAuth(async (_request, { userId }) => {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ panels: data || [] });
+  const panels = data || [];
+
+  // Hydrate entry slugs for entry-typed panels so MCP consumers can hyperlink
+  // without ever learning the internal UUID.
+  const entryIds = panels
+    .map((p) => (p as { entry_id: string | null }).entry_id)
+    .filter((id): id is string => typeof id === "string" && id.length > 0);
+
+  let slugByEntryId = new Map<string, string | null>();
+  if (entryIds.length > 0) {
+    const { data: entries } = await supabase
+      .from("entries")
+      .select("id, slug")
+      .in("id", entryIds);
+    for (const e of entries || []) {
+      slugByEntryId.set(
+        (e as { id: string }).id,
+        (e as { slug: string | null }).slug ?? null
+      );
+    }
+  }
+
+  const hydrated = panels.map((p) => {
+    const entryId = (p as { entry_id: string | null }).entry_id;
+    return {
+      ...p,
+      slug: entryId ? slugByEntryId.get(entryId) ?? null : null,
+    };
+  });
+
+  return NextResponse.json({ panels: hydrated });
 });
 
 /**

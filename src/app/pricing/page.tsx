@@ -89,14 +89,27 @@ export default function PricingPage() {
     });
 
     if (user) {
+      // Check response.ok before parsing so a 500 from /api/billing/status
+      // doesn't silently keep the user on "free" and show a misleading
+      // "Upgrade to Pro" button to an actual Pro user.
       fetch("/api/billing/status")
-        .then((r) => r.json())
+        .then(async (r) => {
+          if (!r.ok) {
+            console.error(
+              `[pricing] /api/billing/status returned ${r.status} — tier unknown, defaulting to free`
+            );
+            return null;
+          }
+          return r.json();
+        })
         .then((data) => {
-          if (data.status === "active" && data.tier) {
+          if (data && data.status === "active" && data.tier) {
             setTier(data.tier as TierKey);
           }
         })
-        .catch(() => {});
+        .catch((err) => {
+          console.error("[pricing] tier fetch failed:", err);
+        });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);

@@ -596,6 +596,16 @@ function RenderedMessage({ message, entryNames }: { message: ChatMessage; entryN
     );
   }
 
+  // Insufficient credits — inline upgrade card so the user can act
+  // without leaving the chat.
+  if (message.role === "ai" && message.type === "insufficient_credits") {
+    return (
+      <div className="max-w-[95%] mr-auto">
+        <InsufficientCreditsCard balance={message.balance} cost={message.cost} />
+      </div>
+    );
+  }
+
   // Legacy progress log from URL-ingestion shortcut.
   if (message.role === "ai" && message.type === "progress") {
     return <ProgressInline events={message.events} status={message.status} />;
@@ -819,6 +829,68 @@ function ChromeExtensionCard() {
         </div>
         <div className="font-mono text-[9px] text-white/25 leading-relaxed">
           After installing, click the Dopl icon in your browser toolbar, then enter your API key to connect.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InsufficientCreditsCard({ balance, cost }: { balance: number; cost: number }) {
+  return (
+    <div className="rounded-lg border border-amber-500/25 bg-amber-500/[0.04] overflow-hidden">
+      <div className="px-3 py-2 flex items-center gap-2 border-b border-amber-500/10">
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="text-amber-400/80"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="8" x2="12" y2="12" />
+          <line x1="12" y1="16" x2="12.01" y2="16" />
+        </svg>
+        <span className="font-mono text-[10px] uppercase tracking-wider text-amber-300/80">
+          Out of credits
+        </span>
+      </div>
+      <div className="p-3 space-y-2">
+        <p className="text-[11px] text-white/75 leading-relaxed">
+          You have <span className="font-mono text-amber-300/80">{balance}</span>{" "}
+          credits left, but this action needs{" "}
+          <span className="font-mono text-amber-300/80">{cost}</span>. Upgrade
+          for more credits, or come back tomorrow for your daily bonus.
+        </p>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/pricing"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 font-mono text-[10px] uppercase tracking-wide text-amber-100/95 bg-amber-500/20 border border-amber-500/30 rounded-[3px] hover:bg-amber-500/30 transition-colors"
+          >
+            Upgrade
+            <svg
+              width="10"
+              height="10"
+              viewBox="0 0 10 10"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M3 7L7 3" />
+              <path d="M4 3H7V6" />
+            </svg>
+          </Link>
+          <Link
+            href="/settings/billing"
+            className="inline-flex items-center px-3 py-1.5 font-mono text-[10px] uppercase tracking-wide text-white/50 hover:text-white/80 transition-colors"
+          >
+            View balance
+          </Link>
         </div>
       </div>
     </div>
