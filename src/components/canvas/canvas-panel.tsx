@@ -467,25 +467,18 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
 
   const handleClose = useCallback(() => {
-    // Pinned chat panels with messages get a confirmation dialog
-    if (panel.type === "chat" && panel.messages.length > 0 && panel.pinned) {
-      setShowCloseConfirm(true);
-      return;
-    }
-    // Unpinned chats or empty chats close immediately (auto-delete handles cleanup)
-    if (panel.type === "chat") {
-      fetch(`/api/conversations/${encodeURIComponent(panel.id)}`, {
-        method: "DELETE",
-      }).catch(() => {});
-    }
+    // Chat panels: close is now non-destructive. The conversation stays
+    // in the DB (on its 7-day timer for unpinned chats, indefinite for
+    // pinned), and the user can re-open it from the chat drawer. We
+    // simply remove the canvas panel; the sync layer DELETEs the
+    // canvas_panels row, leaving the conversations row untouched.
     dispatch({ type: "CLOSE_PANEL", id: panel.id });
   }, [dispatch, panel]);
 
   const handleConfirmClose = useCallback(() => {
-    // Delete conversation from server (best-effort)
-    fetch(`/api/conversations/${encodeURIComponent(panel.id)}`, {
-      method: "DELETE",
-    }).catch(() => {});
+    // Legacy path — close is now non-destructive, so this just closes
+    // the canvas panel. The dialog is no longer wired up for chats, but
+    // we keep the handler in case it's reached via another path.
     dispatch({ type: "CLOSE_PANEL", id: panel.id });
     setShowCloseConfirm(false);
   }, [dispatch, panel.id]);

@@ -1,17 +1,19 @@
 /**
  * Canvas context builder for the chat panel.
  *
- * When a chat panel lives inside a cluster, every message sent to
- * /api/chat includes snapshots of ALL sibling panels in the same
- * cluster so Claude has them as loaded context:
- *   - Entry panels: title, summary, readme, agentsMd
- *   - Chat panels: title + last N messages (role + content)
- *   - Ingestion panels: url + status
- *   - Connection / browse panels: excluded (not knowledge content)
+ * Scope rules (see `serializePanel` for the gate):
+ *   - cluster scope → sibling chat panels' messages ARE included so a
+ *     cluster behaves like a shared workspace. Entry panels included too.
+ *   - canvas scope (panel not in a cluster) → sibling chat panels are
+ *     EXCLUDED. Each standalone chat is its own session. Entry panels are
+ *     still included — they're knowledge artifacts the AI can reference.
  *
- * Returns null when the chat panel is not inside a cluster. When it IS
- * in a cluster but has no serializable siblings, returns a payload with
- * an empty panels array so the API knows the chat is cluster-scoped.
+ * When a chat panel lives inside a cluster, every message sent to
+ * /api/chat includes snapshots of sibling panels in the same cluster
+ * so Claude has them as loaded context:
+ *   - Entry panels: title, summary, readme, agentsMd
+ *   - Chat panels: title + last N messages (role + content) — cluster only
+ *   - Connection / browse panels: excluded (not knowledge content)
  */
 
 import type { CanvasState, Panel } from "../../types";
@@ -61,7 +63,11 @@ export interface CanvasContextPayload {
 
 // ── Serializers ──────────────────────────────────────────────────────
 
-function serializePanel(panel: Panel, selfId: string): ContextPanelDTO | null {
+function serializePanel(
+  panel: Panel,
+  selfId: string,
+  scope: "cluster" | "canvas"
+): ContextPanelDTO | null {
   if (panel.id === selfId) return null;
 
   switch (panel.type) {
@@ -76,6 +82,11 @@ function serializePanel(panel: Panel, selfId: string): ContextPanelDTO | null {
       };
 
     case "chat": {
+      // Isolation rule: standalone (canvas-scope) chats don't see each
+      // other's messages — each is its own session. Cluster-scope chats
+      // still share so a cluster acts as a shared workspace.
+      if (scope === "canvas") return null;
+
       // Extract last N text messages (user + finalized AI text only).
       const textMessages: Array<{ role: string; content: string }> = [];
       for (const m of panel.messages) {
@@ -157,6 +168,7 @@ export function buildCanvasContext(
   state: CanvasState
 ): CanvasContextPayload {
   const cluster = state.clusters.find((c) => c.panelIds.includes(panelId));
+  const scope: "cluster" | "canvas" = cluster ? "cluster" : "canvas";
 
   const candidatePanels = cluster
     ? state.panels.filter((p) => new Set(cluster.panelIds).has(p.id))
@@ -166,7 +178,7 @@ export function buildCanvasContext(
   let totalChars = 0;
 
   for (const p of candidatePanels) {
-    const dto = serializePanel(p, panelId);
+    const dto = serializePanel(p, panelId, scope);
     if (!dto) continue;
 
     const chars = estimateDTOChars(dto);

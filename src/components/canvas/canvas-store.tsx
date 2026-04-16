@@ -45,7 +45,7 @@ import type {
   ProgressEvent,
 } from "@/components/ingest/chat-message";
 import { useCanvasDbSync } from "./use-canvas-db-sync";
-import { useConversationSync } from "./use-conversation-sync";
+import { useConversationSync, ChatConversationsProvider } from "./use-conversation-sync";
 
 import { CANVAS_STORAGE_KEY_PREFIX, CANVAS_ACTIVE_USER_KEY } from "@/lib/config";
 const SAVE_DEBOUNCE_MS = 500;
@@ -114,7 +114,7 @@ function reducer(state: CanvasState, action: CanvasAction): CanvasState {
           mergedPanels.push(local);
         }
       }
-      return {
+      const hydrated: CanvasState = {
         ...state,
         camera: action.camera,
         panels: mergedPanels,
@@ -123,6 +123,10 @@ function reducer(state: CanvasState, action: CanvasAction): CanvasState {
         nextClusterId: Math.max(state.nextClusterId, action.nextClusterId),
         // selectedPanelIds stays local (ephemeral)
       };
+      // Dedup BEFORE ensureDefaults so we don't inject a brand-new browse
+      // panel when the DB already has one (or several — in which case we
+      // collapse them and let the sync layer DELETE the extras).
+      return ensureDefaultPanels(dedupSingletonPanels(hydrated));
     }
 
     case "SET_CAMERA":
@@ -900,6 +904,46 @@ function buildDefaultConnectionPanel(id: string): ConnectionPanelData {
  * overlap. Existing saved canvases that already have some of these panels
  * only get the missing ones injected.
  */
+/**
+ * Collapse duplicates of singleton panel types (connection, browse) to a
+ * single instance each. Historical bug: a race between the pre-hydration
+ * default-panel injection and the DB sync layer could leave ghost rows in
+ * the DB, causing N browse panels to accumulate across reloads. This
+ * helper runs inside HYDRATE_FROM_DB so existing accounts self-heal on
+ * next load — the sync layer's add/remove effect then DELETEs the extras
+ * from the DB on its next tick.
+ *
+ * Preserves the first occurrence in panel-order (matches DB insertion
+ * order via added_at). Also strips dropped ids from any cluster that
+ * referenced them so cluster invariants aren't violated.
+ */
+function dedupSingletonPanels(state: CanvasState): CanvasState {
+  const SINGLETON_TYPES = new Set(["connection", "browse"]);
+  const seen = new Set<string>();
+  const dropped = new Set<string>();
+  const kept: Panel[] = [];
+
+  for (const p of state.panels) {
+    if (SINGLETON_TYPES.has(p.type)) {
+      if (seen.has(p.type)) {
+        dropped.add(p.id);
+        continue;
+      }
+      seen.add(p.type);
+    }
+    kept.push(p);
+  }
+
+  if (dropped.size === 0) return state;
+
+  return {
+    ...state,
+    panels: kept,
+    clusters: stripFromClusters(state.clusters, dropped),
+    selectedPanelIds: state.selectedPanelIds.filter((id) => !dropped.has(id)),
+  };
+}
+
 function ensureDefaultPanels(state: CanvasState): CanvasState {
   let s = state;
 
@@ -1004,7 +1048,11 @@ function migrateAddClusters(state: CanvasState): CanvasState {
 /**
  * Initial state is always empty. The real state comes from the DB via
  * useCanvasDbSync, which dispatches HYDRATE_FROM_DB once the fetch
- * completes. This eliminates the flash of stale localStorage data.
+ * completes. HYDRATE_FROM_DB is also where default panels (connection,
+ * browse) get injected if the DB doesn't have them — doing it here would
+ * race with the sync layer and cause duplicate-browse-panel accumulation:
+ * the pre-hydration browse-2 gets POSTed to the DB before the GET returns
+ * the real state, leaving a ghost row that compounds across reloads.
  */
 function loadInitialState(userId?: string): CanvasState {
   // Track the active user so add-to-canvas.ts (outside the canvas)
@@ -1012,7 +1060,7 @@ function loadInitialState(userId?: string): CanvasState {
   if (typeof window !== "undefined" && userId) {
     localStorage.setItem(CANVAS_ACTIVE_USER_KEY, userId);
   }
-  return ensureDefaultPanels(INITIAL_CANVAS_STATE);
+  return INITIAL_CANVAS_STATE;
 }
 
 interface CanvasProviderProps {
@@ -1068,9 +1116,11 @@ export function CanvasProvider({ children, userId }: CanvasProviderProps) {
     <CanvasContext.Provider value={{ state, dispatch, dbReady }}>
       <PanelsContext.Provider value={panelsCtx}>
         <CanvasStateRefContext.Provider value={stateRef}>
-          <CanvasDbSyncBridge onReady={() => setDbReady(true)} />
-          <ConversationSyncBridge />
-          {children}
+          <ChatConversationsProvider>
+            <CanvasDbSyncBridge onReady={() => setDbReady(true)} />
+            <ConversationSyncBridge />
+            {children}
+          </ChatConversationsProvider>
         </CanvasStateRefContext.Provider>
       </PanelsContext.Provider>
     </CanvasContext.Provider>

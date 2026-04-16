@@ -310,14 +310,21 @@ export function useChat({ panel }: UseChatOptions) {
                     panel.id,
                     dispatch,
                     (reason) => {
-                      // Ingestion failed — add a message to the chat explaining why
+                      // Ingestion failed — add a message to the chat explaining why.
+                      // If the reason names a DB constraint (code=... / constraint=...),
+                      // it's not a paywall — surface the specific error and skip the
+                      // Chrome-extension boilerplate so the underlying bug stays visible.
+                      const isDbError = /code=|constraint/i.test(reason);
+                      const content = isDbError
+                        ? `Ingestion failed with a database error: ${reason}`
+                        : `Ingestion failed: ${reason}\n\nThis usually happens with paywalled sites, bot-protected pages, or content that requires login. You can try using the Dopl Chrome Extension to ingest the page directly from your browser, which bypasses these restrictions since it reads the page as you see it.`;
                       dispatch({
                         type: "APPEND_MESSAGE",
                         panelId: panel.id,
                         message: {
                           role: "ai",
                           type: "text",
-                          content: `Ingestion failed: ${reason}\n\nThis usually happens with paywalled sites, bot-protected pages, or content that requires login. You can try using the Dopl Chrome Extension to ingest the page directly from your browser, which bypasses these restrictions since it reads the page as you see it.`,
+                          content,
                         },
                       });
                     }

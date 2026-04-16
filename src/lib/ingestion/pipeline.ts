@@ -88,31 +88,27 @@ const PIPELINE_STRATEGIES: Record<ContentType, PipelineStrategy> = {
  * to the SSE stream at /api/ingest/{id}/stream to watch progress.
  */
 export async function ingestEntry(input: IngestInput): Promise<string> {
-  const { data: entry, error: createError } = await supabase
-    .from("entries")
-    .insert({
-      source_url: input.url,
-      source_platform: detectPlatform(input.url),
-      status: "processing",
-      ingested_by: input.userId ?? null,
-      // moderation_status defaults to 'pending' via the DB default.
-    })
-    .select("id")
-    .single();
+  // Generate the entry id client-side so we can supply both `id` and the
+  // derived `slug` in a single INSERT. `slug` is NOT NULL on the entries
+  // table (see migration 033) and has no DB default, so inserting without
+  // it fails with 23502 — which took down ALL ingestion earlier today.
+  // The pipeline's stepPersistEntry later replaces this fallback with a
+  // real title-based slug.
+  const entryId = crypto.randomUUID();
 
-  if (createError || !entry) {
-    throw new Error(`Failed to create entry: ${createError?.message}`);
+  const { error: createError } = await supabase.from("entries").insert({
+    id: entryId,
+    source_url: input.url,
+    source_platform: detectPlatform(input.url),
+    status: "processing",
+    ingested_by: input.userId ?? null,
+    slug: fallbackSlugFromId(entryId),
+    // moderation_status defaults to 'pending' via the DB default.
+  });
+
+  if (createError) {
+    throw new Error(`Failed to create entry: ${createError.message}`);
   }
-
-  const entryId = entry.id;
-
-  // slug is NOT NULL on the entries table (see migration 033). Set a
-  // deterministic UUID-derived slug now so this row is valid before the
-  // pipeline lands a real title-based one in stepPersistEntry.
-  await supabase
-    .from("entries")
-    .update({ slug: fallbackSlugFromId(entryId) })
-    .eq("id", entryId);
 
   // Run pipeline in the background — don't await
   const timeoutPromise = new Promise<never>((_, reject) =>
@@ -128,15 +124,26 @@ export async function ingestEntry(input: IngestInput): Promise<string> {
         error instanceof Error ? error.message : "Unknown error";
       const errorName = error instanceof Error ? error.name : "UnknownError";
       const isTimeout = errorMessage.includes("timed out");
+      // If the root cause was a Postgres/Supabase error, pull out the
+      // structured fields so logs + the client stream + system_events
+      // all name the exact constraint instead of swallowing it behind
+      // a generic "database error" message. Structural check keeps us
+      // from depending on PostgrestError types inside the pipeline.
+      const pgFields = extractPgErrorFields(error);
       // Emit the error event so the client knows BEFORE we nuke the
       // entry row (the stream endpoint reads back from the DB on
       // reconnect, but active subscribers get the event in-flight).
       ingestionProgress.emit(
         entryId,
         "error",
-        `Ingestion failed: ${errorMessage}`
+        `Ingestion failed: ${errorMessage}`,
+        pgFields ? { details: { pg: pgFields } } : undefined
       );
-      console.error(`[pipeline] Entry ${entryId} failed:`, errorMessage);
+      console.error(
+        `[pipeline] Entry ${entryId} failed:`,
+        errorMessage,
+        pgFields ? { pg: pgFields } : ""
+      );
       // Log the failure into system_events BEFORE deleting the row so
       // the health dashboard can attribute and count it. Downstream
       // external-API failures (anthropic/openai/etc.) are logged
@@ -152,6 +159,12 @@ export async function ingestEntry(input: IngestInput): Promise<string> {
           entry_id: entryId,
           source_url: input.url,
           timed_out: isTimeout,
+          ...(pgFields && {
+            pg_code: pgFields.code,
+            pg_details: pgFields.details,
+            pg_hint: pgFields.hint,
+            pg_constraint: pgFields.constraint,
+          }),
         },
         userId: input.userId ?? null,
       });
@@ -192,6 +205,52 @@ export async function ingestEntry(input: IngestInput): Promise<string> {
   );
 
   return entryId;
+}
+
+/**
+ * If the error (or its `cause`) is a PostgrestError / Postgres error,
+ * return its structured fields. Lets the pipeline bubble the exact
+ * constraint / column up to logs + the client stream without importing
+ * Supabase types. Also tries to parse a constraint name out of the
+ * message when the raw field isn't present (Supabase sometimes only
+ * includes the constraint in the message text).
+ */
+function extractPgErrorFields(err: unknown): {
+  code?: string;
+  details?: string;
+  hint?: string;
+  constraint?: string;
+} | null {
+  const seen = new Set<unknown>();
+  let cursor: unknown = err;
+  while (cursor && typeof cursor === "object" && !seen.has(cursor)) {
+    seen.add(cursor);
+    const obj = cursor as Record<string, unknown>;
+    const hasPgShape =
+      typeof obj.code === "string" ||
+      typeof obj.details === "string" ||
+      typeof obj.hint === "string" ||
+      typeof obj.constraint === "string";
+    if (hasPgShape) {
+      const fields: {
+        code?: string;
+        details?: string;
+        hint?: string;
+        constraint?: string;
+      } = {};
+      if (typeof obj.code === "string") fields.code = obj.code;
+      if (typeof obj.details === "string") fields.details = obj.details;
+      if (typeof obj.hint === "string") fields.hint = obj.hint;
+      if (typeof obj.constraint === "string") fields.constraint = obj.constraint;
+      if (!fields.constraint && typeof obj.message === "string") {
+        const m = obj.message.match(/constraint "([^"]+)"/);
+        if (m) fields.constraint = m[1];
+      }
+      return fields;
+    }
+    cursor = obj.cause;
+  }
+  return null;
 }
 
 /**
@@ -1081,11 +1140,41 @@ async function storeSources(
   const { error } = await supabase.from("sources").insert(rows);
 
   if (error) {
+    // PostgrestError has code / details / hint in addition to message.
+    // The previous bubble only included `.message`, which drops the
+    // constraint name and the column/value that caused the violation —
+    // exactly the info you need to fix it. Surface all four fields in
+    // logs and in the thrown error's message.
+    const shapeSummary = sources.map((s) => ({
+      url: s.url,
+      source_type: s.sourceType,
+      raw_content_len: s.rawContent?.length ?? null,
+      extracted_content_len: s.extractedContent?.length ?? null,
+      content_metadata_len: s.contentMetadata
+        ? JSON.stringify(s.contentMetadata).length
+        : null,
+    }));
     console.error(
       `[pipeline] Failed to store ${sources.length} source(s) for entry ${entryId}:`,
-      error
+      {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        rows: shapeSummary,
+      }
     );
-    throw new Error(`Database write failed for sources: ${error.message}`);
+    const detail = [
+      error.code ? `code=${error.code}` : null,
+      error.details ? `details=${error.details}` : null,
+      error.hint ? `hint=${error.hint}` : null,
+    ]
+      .filter(Boolean)
+      .join(" | ");
+    const suffix = detail ? ` (${detail})` : "";
+    throw new Error(
+      `Database write failed for sources: ${error.message}${suffix}`
+    );
   }
 }
 

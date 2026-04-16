@@ -13,9 +13,14 @@
  * Save-on-change (debounced per panel):
  *   - Watch for chat panels whose messages or title changed
  *   - POST to /api/conversations with filtered text messages + pinned state
+ *
+ * Also exposes the full conversation list via <ChatConversationsProvider>
+ * + useChatConversations(). The FixedChatPanel drawer reads this so it can
+ * display closed-but-still-persisted chats (conversations whose matching
+ * canvas panel has been closed) and re-open them on click.
  */
 
-import { useEffect, useRef } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useCanvas } from "./canvas-store";
 import type { ChatPanelData } from "./types";
 import { messagesToApiHistory } from "./panels/chat/chat-message-types";
@@ -36,7 +41,7 @@ interface ServerMessage {
   attachments?: PersistedAttachment[];
 }
 
-interface ServerConversation {
+export interface ServerConversation {
   id: string;
   panel_id: string;
   title: string;
@@ -45,6 +50,40 @@ interface ServerConversation {
   expires_at: string;
   created_at: string;
   updated_at: string;
+}
+
+// ── Conversations context ─────────────────────────────────────────────
+
+interface ChatConversationsContextValue {
+  /** Every conversation the server has for this user. Closed chats
+   * (conversations whose panel_id isn't in state.panels) are surfaced
+   * in the drawer from this list. */
+  conversations: ServerConversation[];
+  /** Replace the conversation list in memory. Used by both the mount
+   * fetch inside useConversationSync and any mutation the drawer makes
+   * (e.g. removing a conversation on permanent delete). */
+  setConversations: React.Dispatch<React.SetStateAction<ServerConversation[]>>;
+}
+
+const ChatConversationsContext = createContext<ChatConversationsContextValue | null>(null);
+
+export function ChatConversationsProvider({ children }: { children: ReactNode }) {
+  const [conversations, setConversations] = useState<ServerConversation[]>([]);
+  return (
+    <ChatConversationsContext.Provider value={{ conversations, setConversations }}>
+      {children}
+    </ChatConversationsContext.Provider>
+  );
+}
+
+export function useChatConversations(): ChatConversationsContextValue {
+  const ctx = useContext(ChatConversationsContext);
+  if (!ctx) {
+    throw new Error(
+      "useChatConversations must be used inside <ChatConversationsProvider>"
+    );
+  }
+  return ctx;
 }
 
 /**
@@ -91,15 +130,22 @@ function panelSnapshotKey(panel: ChatPanelData): string {
 }
 
 export function useConversationSync() {
-  const { state, dispatch } = useCanvas();
+  const { state, dispatch, dbReady } = useCanvas();
+  const { setConversations } = useChatConversations();
   const syncedRef = useRef(false);
   const debounceTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(
     new Map()
   );
   const prevSnapshotsRef = useRef<Map<string, string>>(new Map());
 
-  // ── Load on mount (runs once) ─────────────────────────────────────
+  // ── Load on mount (runs once, after canvas hydration) ─────────────
+  // Gated on dbReady so state.panels already contains the hydrated chat
+  // panels by the time we read from it. Without this gate, the async
+  // callback captures the initial empty state closure, `localPanelIds`
+  // is empty, and HYDRATE_CHAT_MESSAGES never dispatches — the user
+  // sees chat panels with no messages after every reload.
   useEffect(() => {
+    if (!dbReady) return;
     if (syncedRef.current) return;
     syncedRef.current = true;
 
@@ -110,6 +156,9 @@ export function useConversationSync() {
 
         const { conversations }: { conversations: ServerConversation[] } =
           await res.json();
+
+        // Expose to the drawer via context so it can render closed chats.
+        setConversations(conversations);
 
         const localChatPanels = state.panels.filter(
           (p): p is ChatPanelData => p.type === "chat"
@@ -256,10 +305,31 @@ export function useConversationSync() {
           }
         }
 
-        // Initialize tracking
+        // Initialize tracking based on what we JUST hydrated — not the
+        // pre-hydration snapshot of panels. If we used the stale panel
+        // snapshots ({messages:0, title:..., pinned:false}), the save
+        // effect would immediately fire right after HYDRATE_CHAT_MESSAGES
+        // (panel state now differs from the stale snapshot) and re-POST
+        // every conversation back to the server unnecessarily.
+        //
+        // ServerMessage is already filtered to the same text-only set
+        // that the save effect serializes, so conv.messages.length is
+        // the exact panel.messages.length after hydration.
         const snapshots = new Map<string, string>();
+        for (const conv of conversations) {
+          if (localPanelIds.has(conv.panel_id)) {
+            snapshots.set(
+              conv.panel_id,
+              `${conv.messages.length}|${conv.title}|${conv.pinned ?? false}`
+            );
+          }
+        }
+        // Also seed panels that WEREN'T on the server (freshly created,
+        // not yet pushed) so we don't trigger false positives.
         for (const panel of localChatPanels) {
-          snapshots.set(panel.id, panelSnapshotKey(panel));
+          if (!serverPanelIds.has(panel.id)) {
+            snapshots.set(panel.id, panelSnapshotKey(panel));
+          }
         }
         prevSnapshotsRef.current = snapshots;
       } catch (err) {
@@ -269,7 +339,7 @@ export function useConversationSync() {
 
     loadConversations();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [dbReady]);
 
   // ── Save on change (debounced per panel) ──────────────────────────
   // Build a cheap composite key of only chat-relevant data so we can
@@ -322,7 +392,33 @@ export function useConversationSync() {
                 messages,
                 pinned,
               }),
-            }).catch((err) => console.error("[conversation-sync] save failed for panel:", panelId, err));
+            })
+              .then(async (res) => {
+                if (!res.ok) return;
+                // Reflect the save in our context so the drawer can
+                // show this conversation later if the canvas panel is
+                // closed. Update-or-insert by panel_id.
+                try {
+                  const { conversation } = await res.json();
+                  if (conversation && conversation.panel_id) {
+                    setConversations((prevList) => {
+                      const without = prevList.filter(
+                        (c) => c.panel_id !== conversation.panel_id
+                      );
+                      return [conversation, ...without];
+                    });
+                  }
+                } catch {
+                  // Non-JSON or unexpected shape — skip context update.
+                }
+              })
+              .catch((err) =>
+                console.error(
+                  "[conversation-sync] save failed for panel:",
+                  panelId,
+                  err
+                )
+              );
             debounceTimers.current.delete(panelId);
           }, SAVE_DEBOUNCE_MS);
 
