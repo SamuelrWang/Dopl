@@ -55,6 +55,20 @@ async function request<T>(
   }
 }
 
+// ── Credits ─────────────────────────────────────────────────────────
+
+export interface CreditsSnapshot {
+  balance: number;
+  tier: "free" | "pro" | "power";
+  monthlyCredits: number;
+  cycleStart: string;
+  cycleEnd: string;
+}
+
+export async function getCredits(): Promise<CreditsSnapshot> {
+  return request<CreditsSnapshot>("/api/user/credits");
+}
+
 // ── Search ──────────────────────────────────────────────────────────
 
 export async function searchSetups(query: string, maxResults = 5): Promise<SearchResult> {

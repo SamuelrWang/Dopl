@@ -1,5 +1,5 @@
 /** Base URL for the Dopl API — configurable per environment */
-export const DEFAULT_API_URL = "https://setupintelligence.com";
+export const DEFAULT_API_URL = "https://usedopl.com";
 
 /** Storage keys */
 export const STORAGE_KEYS = {

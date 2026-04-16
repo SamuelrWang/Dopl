@@ -1,182 +1,148 @@
 /**
- * App — Root component for the Dopl side panel.
+ * App — root of the Dopl side panel.
  *
- * Manages view routing, auth gating, and cross-view communication.
- * Listens for context menu actions and keyboard shortcuts from the service worker.
+ * Post-connect the panel is a single chat surface (the main-site canvas
+ * chat, but purpose-built for a narrow sidebar). Settings are reachable
+ * via the gear icon as a back-able overlay view. Context-menu and
+ * keyboard-shortcut actions fired by the service worker are turned into
+ * trigger counters that ChatView consumes via useEffect.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { Settings as SettingsIcon } from "lucide-react";
+import { AuthProvider } from "./providers/AuthProvider";
 import { useAuth } from "./hooks/useAuth";
 import { useCanvas } from "./hooks/useCanvas";
-import { PanelTabs } from "./components/PanelTabs";
 import { ChatView } from "./views/ChatView";
-import { CanvasView } from "./views/CanvasView";
-import { SearchView } from "./views/SearchView";
-import { IngestView } from "./views/IngestView";
-import { PageReaderView } from "./views/PageReaderView";
+import { ConnectView } from "./views/ConnectView";
 import { SettingsView } from "./views/SettingsView";
-import type { ViewName } from "@/shared/constants";
+import { CreditBadge } from "./components/CreditBadge";
 import type { ContextMenuAction } from "@/background/messages";
 
 export function App() {
-  const { auth, loading: authLoading } = useAuth();
-  const { addToCanvas } = useCanvas(auth.authenticated);
-  const [view, setView] = useState<ViewName>("chat");
-  const [searchQuery, setSearchQuery] = useState<string | undefined>();
-  const [ingestUrl, setIngestUrl] = useState<string | undefined>();
+  return (
+    <AuthProvider>
+      <AppInner />
+    </AuthProvider>
+  );
+}
 
-  // Listen for context menu / keyboard shortcut actions from service worker
+function AppInner() {
+  const { auth, loading } = useAuth();
+  const { addToCanvas } = useCanvas(auth.authenticated);
+  const [showSettings, setShowSettings] = useState(false);
+
+  // ChatView listens for these "trigger counter" props. Each time a
+  // context-menu or keyboard-shortcut fires, we increment the counter,
+  // ChatView's useEffect notices the change and runs the corresponding
+  // action. Counters (vs booleans) let the same action fire twice in a row.
+  const [extractTrigger, setExtractTrigger] = useState(0);
+  const [focusTrigger, setFocusTrigger] = useState(0);
+  const [prefill, setPrefill] = useState<string | null>(null);
+
+  // Service-worker-dispatched actions (context menu, keyboard shortcuts).
   useEffect(() => {
     const handler = (message: ContextMenuAction) => {
       if (message.type !== "CONTEXT_MENU_ACTION") return;
 
+      // Any action implicitly leaves the settings overlay.
+      setShowSettings(false);
+
       switch (message.action) {
         case "ingest_page":
         case "ingest_link":
-          setIngestUrl(message.data || "");
-          setView("ingest");
+          setExtractTrigger((n) => n + 1);
           break;
         case "search_selection":
-          setSearchQuery(message.data || "");
-          setView("search");
+          // Wrap the selection in a natural-language search prompt so the
+          // chat model treats it as a query rather than a bare fragment.
+          if (message.data) {
+            setPrefill(`Search my canvas for: ${message.data}`);
+          }
+          setFocusTrigger((n) => n + 1);
           break;
         case "save_snippet":
-          // Navigate to chat and pre-fill with snippet context
-          setView("chat");
+          // Paste the snippet as a quote so the user can add their own
+          // question around it before sending.
+          if (message.data) {
+            setPrefill(`> ${message.data}\n\n`);
+          }
+          setFocusTrigger((n) => n + 1);
           break;
       }
     };
-
     chrome.runtime.onMessage.addListener(handler);
     return () => chrome.runtime.onMessage.removeListener(handler);
   }, []);
 
   const handleAddToCanvas = useCallback(
     async (entryId: string) => {
-      const success = await addToCanvas(entryId);
-      if (success) {
-        // Brief visual feedback could be added here
-      }
+      await addToCanvas(entryId);
     },
     [addToCanvas]
   );
 
-  const handleNavigateToIngest = useCallback((url: string) => {
-    setIngestUrl(url);
-    setView("ingest");
+  const handlePrefillConsumed = useCallback(() => {
+    setPrefill(null);
   }, []);
 
-  const handleNavigateToSearch = useCallback((query: string) => {
-    setSearchQuery(query);
-    setView("search");
-  }, []);
-
-  // Auth loading state
-  if (authLoading) {
+  // ── Loading ────────────────────────────────────────────────────────
+  if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen">
+      <div className="flex items-center justify-center h-screen bg-[var(--bg-base)]">
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-[var(--accent-primary)]/20 flex items-center justify-center">
             <div className="w-3 h-3 rounded-full bg-[var(--accent-primary)] animate-pulse" />
           </div>
-          <p className="text-xs text-[var(--text-muted)]">Loading...</p>
+          <p className="text-xs text-[var(--text-muted)]">Loading…</p>
         </div>
       </div>
     );
   }
 
-  // Not authenticated — show settings
+  // ── Pre-auth ───────────────────────────────────────────────────────
   if (!auth.authenticated) {
-    return (
-      <div className="h-screen flex flex-col">
-        <div className="flex items-center gap-2 px-3 py-2.5 border-b border-[var(--border-default)] bg-[var(--bg-inset)]">
-          <div className="w-5 h-5 rounded bg-[var(--accent-primary)]/20 flex items-center justify-center">
-            <span className="text-[10px] font-bold text-[var(--accent-primary)]">S</span>
-          </div>
-          <span className="text-xs font-semibold text-[var(--text-primary)]">Dopl</span>
-        </div>
-
-        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
-          <div className="w-12 h-12 rounded-xl bg-[var(--accent-primary)]/10 flex items-center justify-center mb-4">
-            <span className="text-lg font-bold text-[var(--accent-primary)]">Dopl</span>
-          </div>
-          <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-1">
-            Connect to Dopl
-          </h2>
-          <p className="text-xs text-[var(--text-muted)] mb-4">
-            Enter your API key to connect to your Dopl account.
-          </p>
-        </div>
-
-        <SettingsView />
-      </div>
-    );
+    return <ConnectView />;
   }
 
-  // Authenticated — main app
-  const isSubView = view === "ingest" || view === "reader" || view === "settings";
-  const activeTab = isSubView ? "chat" : view;
+  // ── Settings overlay (back-able sub-view) ─────────────────────────
+  if (showSettings) {
+    return <SettingsView onBack={() => setShowSettings(false)} />;
+  }
 
+  // ── Main chat surface ──────────────────────────────────────────────
   return (
-    <div className="h-screen flex flex-col">
-      {/* Header */}
-      <div className="flex items-center gap-2 px-3 py-1.5 bg-[var(--bg-inset)] border-b border-[var(--border-subtle)]">
-        <div className="w-4 h-4 rounded bg-[var(--accent-primary)]/20 flex items-center justify-center">
-          <span className="text-[8px] font-bold text-[var(--accent-primary)]">S</span>
-        </div>
-        <span className="text-[10px] font-semibold text-[var(--text-secondary)]">Dopl</span>
-        <span className="flex-1" />
-        <div className="flex items-center gap-1">
-          <span className="status-dot complete" />
-          <span className="text-[9px] text-[var(--text-muted)]">Connected</span>
-        </div>
-      </div>
-
-      {/* Tab bar (hidden for sub-views) */}
-      {!isSubView && (
-        <PanelTabs
-          active={activeTab as ViewName}
-          onChange={setView}
-          onSettingsClick={() => setView("settings")}
+    <div className="h-screen flex flex-col bg-[var(--bg-base)]">
+      <header className="flex items-center gap-2 px-3 py-2 bg-[var(--bg-inset)] border-b border-[var(--border-subtle)]">
+        <img
+          src={chrome.runtime.getURL("icons/icon-128.png")}
+          alt="Dopl"
+          className="w-4 h-4 rounded"
         />
-      )}
+        <span className="text-[11px] font-semibold text-[var(--text-secondary)] tracking-tight">
+          Dopl
+        </span>
+        <span className="flex-1" />
+        <CreditBadge />
+        <button
+          type="button"
+          onClick={() => setShowSettings(true)}
+          aria-label="Settings"
+          className="p-1 rounded-md text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] transition-colors cursor-pointer"
+        >
+          <SettingsIcon size={14} />
+        </button>
+      </header>
 
-      {/* View content */}
-      <div className="flex-1 overflow-hidden">
-        {view === "chat" && (
-          <ChatView
-            onAddToCanvas={handleAddToCanvas}
-            onNavigateToIngest={handleNavigateToIngest}
-          />
-        )}
-        {view === "canvas" && <CanvasView />}
-        {view === "search" && (
-          <SearchView
-            initialQuery={searchQuery}
-            onAddToCanvas={handleAddToCanvas}
-          />
-        )}
-        {view === "ingest" && (
-          <IngestView
-            initialUrl={ingestUrl}
-            onAddToCanvas={handleAddToCanvas}
-            onBack={() => { setView("chat"); setIngestUrl(undefined); }}
-          />
-        )}
-        {view === "reader" && (
-          <PageReaderView
-            onIngest={(url, text) => {
-              setIngestUrl(url);
-              setView("ingest");
-            }}
-            onSendToChat={() => setView("chat")}
-            onBack={() => setView("chat")}
-          />
-        )}
-        {view === "settings" && (
-          <SettingsView onBack={() => setView("chat")} />
-        )}
-      </div>
+      <main className="flex-1 overflow-hidden">
+        <ChatView
+          onAddToCanvas={handleAddToCanvas}
+          extractTrigger={extractTrigger}
+          focusTrigger={focusTrigger}
+          prefill={prefill}
+          onPrefillConsumed={handlePrefillConsumed}
+        />
+      </main>
     </div>
   );
 }

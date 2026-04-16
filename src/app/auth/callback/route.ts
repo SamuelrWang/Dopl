@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase";
 import { cookies } from "next/headers";
+import { tryClaimEarlySupporterGrant } from "@/lib/billing/early-supporter";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -13,6 +14,18 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error) {
+      // Best-effort: try to claim the early-supporter grant. The RPC is
+      // idempotent and capped at 100 slots, so calling on every sign-in is
+      // safe. Wrapped in try/catch so a grant failure can never block the
+      // redirect.
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user?.id) {
+          await tryClaimEarlySupporterGrant(user.id);
+        }
+      } catch {
+        // Swallow — grant failures must not break sign-in.
+      }
       return NextResponse.redirect(new URL(redirectTo, request.url));
     }
   }

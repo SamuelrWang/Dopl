@@ -18,6 +18,7 @@ export type PanelMessage =
   | { type: "ADD_CANVAS_PANEL"; entryId: string }
   | { type: "REMOVE_CANVAS_PANEL"; entryId: string }
   | { type: "GET_CLUSTERS" }
+  | { type: "GET_CREDITS" }
   | { type: "GET_TAB_CHAT" }
   | { type: "SAVE_TAB_CHAT"; messages: ChatMessage[] }
   | { type: "CLEAR_TAB_CHAT" }

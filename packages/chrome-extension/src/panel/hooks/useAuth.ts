@@ -1,49 +1,20 @@
 /**
- * Auth state hook — manages connection to Dopl backend.
+ * Auth state hook — reads from the shared AuthProvider context so every
+ * consumer in the panel tree sees the same state. Throws if used outside
+ * the provider so the bug that caused the original state-isolation issue
+ * (two independent useState copies) surfaces loudly in dev.
  */
 
-import { useState, useEffect, useCallback } from "react";
-import { useBgMessage } from "./useBgMessage";
-import type { AuthState } from "@/background/messages";
+import { useContext } from "react";
+import {
+  AuthContext,
+  type AuthContextValue,
+} from "../providers/AuthProvider";
 
-const INITIAL_STATE: AuthState = {
-  mode: "none",
-  apiUrl: "",
-  authenticated: false,
-};
-
-export function useAuth() {
-  const { send } = useBgMessage();
-  const [auth, setAuth] = useState<AuthState>(INITIAL_STATE);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    send<AuthState>({ type: "GET_AUTH_STATE" })
-      .then(setAuth)
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [send]);
-
-  const connect = useCallback(
-    async (apiKey: string, apiUrl: string) => {
-      setLoading(true);
-      try {
-        const state = await send<AuthState>({ type: "SET_API_KEY", apiKey, apiUrl });
-        setAuth(state);
-        return state.authenticated;
-      } catch {
-        return false;
-      } finally {
-        setLoading(false);
-      }
-    },
-    [send]
-  );
-
-  const disconnect = useCallback(async () => {
-    await send({ type: "CLEAR_AUTH" });
-    setAuth(INITIAL_STATE);
-  }, [send]);
-
-  return { auth, loading, connect, disconnect };
+export function useAuth(): AuthContextValue {
+  const ctx = useContext(AuthContext);
+  if (!ctx) {
+    throw new Error("useAuth must be used inside <AuthProvider>");
+  }
+  return ctx;
 }

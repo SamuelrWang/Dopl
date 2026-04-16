@@ -10,6 +10,7 @@ import { FixedChatPanel } from "@/components/canvas/fixed-chat-panel";
 import { FixedBrainPanel } from "@/components/canvas/fixed-brain-panel";
 import { DrawerProvider } from "@/components/canvas/chat-drawer-context";
 import { OnboardingProvider } from "@/components/onboarding/onboarding-provider";
+import { EarlySupporterModal } from "@/components/billing/early-supporter-modal";
 import { getSupabaseBrowser } from "@/lib/supabase-browser";
 
 /**
@@ -82,6 +83,7 @@ function CanvasReady({ userId }: { userId?: string }) {
         <FixedInputBar />
         <FixedChatPanel />
         <FixedBrainPanel />
+        <EarlySupporterModal />
       </OnboardingProvider>
     </DrawerProvider>
   );

@@ -144,6 +144,12 @@ async function handleMessage(
       return { ok: true, data: clusters };
     }
 
+    // ── Credits ─────────────────────────────────────────────────────
+    case "GET_CREDITS": {
+      const credits = await api.getCredits();
+      return { ok: true, data: credits };
+    }
+
     // ── Ingestion ───────────────────────────────────────────────────
     case "INGEST_URL": {
       const ingestResult = await api.ingestUrl(message.url, message.text);

@@ -14,15 +14,28 @@ import { usePageContent } from "../hooks/usePageContent";
 import { useBgMessage } from "../hooks/useBgMessage";
 import { useSpeechRecognition } from "../hooks/useSpeechRecognition";
 import { ChatMessageBubble } from "../components/ChatMessage";
-import { Send, Square, Trash2, Globe, Loader2 } from "lucide-react";
+import { Square, Trash2, Globe, Loader2 } from "lucide-react";
 import type { ChatMessage, IngestResponse } from "@/shared/types";
 
 interface ChatViewProps {
   onAddToCanvas?: (entryId: string) => void;
-  onNavigateToIngest?: (url: string) => void;
+  /** Counter prop — each increment triggers an Extract Page action. */
+  extractTrigger?: number;
+  /** Counter prop — each increment focuses the input. */
+  focusTrigger?: number;
+  /** When non-null, pre-fills the input textarea. Consumed once. */
+  prefill?: string | null;
+  /** Called after the prefill has been read into the input. */
+  onPrefillConsumed?: () => void;
 }
 
-export function ChatView({ onAddToCanvas, onNavigateToIngest }: ChatViewProps) {
+export function ChatView({
+  onAddToCanvas,
+  extractTrigger = 0,
+  focusTrigger = 0,
+  prefill = null,
+  onPrefillConsumed,
+}: ChatViewProps) {
   const { messages, isStreaming, sendMessage, cancel, clearChat } = useTabChat();
   const { page, loading: readingPage, extract } = usePageContent();
   const { send } = useBgMessage();
@@ -175,10 +188,11 @@ export function ChatView({ onAddToCanvas, onNavigateToIngest }: ChatViewProps) {
       prevFullTextRef.current = "";
     }
 
-    // Check if input is a bare URL — offer to ingest
+    // Bare URL? Ingest it directly instead of sending as a chat message.
     const urlPattern = /^https?:\/\/\S+$/;
-    if (urlPattern.test(input.trim()) && onNavigateToIngest) {
-      onNavigateToIngest(input.trim());
+    const trimmed = input.trim();
+    if (urlPattern.test(trimmed)) {
+      void ingestUrl(trimmed);
       setInput("");
       return;
     }
@@ -186,6 +200,39 @@ export function ChatView({ onAddToCanvas, onNavigateToIngest }: ChatViewProps) {
     sendMessage(input, page?.content);
     setInput("");
   };
+
+  // ── Trigger-counter side effects from App ───────────────────────────
+  //
+  // App bumps these counters when the service worker dispatches a
+  // context-menu or keyboard-shortcut event. The first render (counter=0)
+  // is a no-op because we only act on increments.
+  const prevExtractRef = useRef(0);
+  useEffect(() => {
+    if (extractTrigger > prevExtractRef.current) {
+      prevExtractRef.current = extractTrigger;
+      void handleExtractPage();
+    }
+  }, [extractTrigger, handleExtractPage]);
+
+  const prevFocusRef = useRef(0);
+  useEffect(() => {
+    if (focusTrigger > prevFocusRef.current) {
+      prevFocusRef.current = focusTrigger;
+      inputRef.current?.focus();
+    }
+  }, [focusTrigger]);
+
+  useEffect(() => {
+    if (prefill != null) {
+      // Overwriting any in-flight draft here is intentional — prefill only
+      // arrives after an explicit context-menu action, and the user's
+      // expectation is that the selection they right-clicked ends up in
+      // the input.
+      setInput(prefill);
+      inputRef.current?.focus();
+      onPrefillConsumed?.();
+    }
+  }, [prefill, onPrefillConsumed]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -196,22 +243,62 @@ export function ChatView({ onAddToCanvas, onNavigateToIngest }: ChatViewProps) {
 
   const canSend = input.trim().length > 0;
 
+  // Empty-state suggestion chips. Click runs the corresponding action and
+  // makes the chat feel like "what do you want to do" instead of a blank
+  // input waiting for instructions.
+  const suggestions = [
+    {
+      label: "Extract this page",
+      onClick: () => void handleExtractPage(),
+    },
+    {
+      label: "Search my canvas",
+      onClick: () => {
+        setInput("Search my canvas for ");
+        inputRef.current?.focus();
+      },
+    },
+    {
+      label: "What can you do?",
+      onClick: () => {
+        sendMessage("What can you help me with here?");
+      },
+    },
+  ];
+
   return (
     <div className="flex flex-col h-full">
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-3 space-y-3">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center px-4">
-            <div className="text-2xl mb-2 opacity-30">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-              </svg>
-            </div>
-            <p className="text-xs text-[var(--text-muted)] mb-1">Tab-scoped AI chat</p>
-            <p className="text-[10px] text-[var(--text-disabled)]">
-              Click "Extract Page" to ingest the current page into your canvas.
-              Or paste a URL to ingest it directly.
+            <img
+              src={chrome.runtime.getURL("icons/icon-128.png")}
+              alt=""
+              className="w-10 h-10 rounded-xl mb-3 opacity-60"
+            />
+            <p className="text-[13px] text-[var(--text-secondary)] mb-1">
+              Chat with your Dopl canvas
             </p>
+            <p className="text-[11px] text-[var(--text-muted)] mb-5 max-w-[240px] leading-relaxed">
+              Ingest the current page, search your knowledge base, or ask anything.
+            </p>
+            <div className="flex flex-col gap-1.5 w-full max-w-[240px]">
+              {suggestions.map((s) => (
+                <button
+                  key={s.label}
+                  onClick={s.onClick}
+                  className="px-3 py-2 text-[12px] text-left rounded-lg
+                    bg-[var(--bg-elevated)] border border-[var(--border-default)]
+                    text-[var(--text-secondary)]
+                    hover:bg-[var(--bg-elevated-hover)] hover:border-[var(--border-strong)]
+                    hover:text-[var(--text-primary)]
+                    transition-colors cursor-pointer"
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
           </div>
         )}
         {messages.map((msg, i) => (
@@ -262,10 +349,10 @@ export function ChatView({ onAddToCanvas, onNavigateToIngest }: ChatViewProps) {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Ask about your knowledge base..."
+              placeholder="Ask anything, or paste a URL to ingest…"
               rows={1}
-              className="w-full bg-transparent text-sm text-[var(--text-primary)] placeholder-[var(--text-disabled)]
-                resize-none focus:outline-none"
+              className="w-full bg-transparent text-[13px] text-[var(--text-primary)] placeholder-[var(--text-disabled)]
+                resize-none focus:outline-none leading-relaxed"
               style={{ minHeight: "36px", maxHeight: "120px" }}
               onInput={(e) => {
                 const el = e.target as HTMLTextAreaElement;

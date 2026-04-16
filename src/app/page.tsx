@@ -321,6 +321,24 @@ export default function Home() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  // Early-supporter slot counter (shown in the hero badge).
+  // Seed matches SEED_USED in /api/early-supporter/count so the badge shows
+  // the real baseline immediately instead of flashing "0 / 100".
+  const [earlySupporter, setEarlySupporter] = useState<{ used: number; total: number }>({
+    used: 37,
+    total: 100,
+  });
+  useEffect(() => {
+    fetch("/api/early-supporter/count")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data && typeof data.used === "number") {
+          setEarlySupporter({ used: data.used, total: data.total ?? 100 });
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   // TEMP-COMMUNITY: hidden until community launches — restore by uncommenting blocks marked TEMP-COMMUNITY
   // // Fetch community showcase data
   // const [communityItems, setCommunityItems] = useState<PublishedClusterSummary[]>([]);
@@ -482,7 +500,8 @@ export default function Home() {
           {/* Prompt Input */}
           <PromptInput />
 
-          {/* Open source badge */}
+          {/* MCP badge — temporarily replaced by the early-supporter promo. Restore later by uncommenting. */}
+          {/*
           <div className="mt-8 inline-flex items-center gap-3 px-4 py-2 rounded-xl bg-white/[0.04] border border-white/[0.08]">
             <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white text-[14px]">
               &#9679;
@@ -493,6 +512,31 @@ export default function Home() {
               </div>
               <div className="text-white font-semibold text-[14px]">
                 Connect in seconds
+              </div>
+            </div>
+          </div>
+          */}
+
+          {/* Early supporter promo */}
+          <div className="mt-8 inline-flex items-center gap-3 px-4 py-2 rounded-xl bg-emerald-500/[0.06] border border-emerald-500/20">
+            <div className="w-8 h-8 rounded-full bg-emerald-500/15 flex items-center justify-center">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            </div>
+            <div className="text-left">
+              <div className="text-emerald-400/80 text-[10px] font-semibold uppercase tracking-wider">
+                Limited offer
+              </div>
+              <div className="text-white font-semibold text-[14px]">
+                First 100 users get free Pro usage
+              </div>
+            </div>
+            <div className="ml-2 pl-3 border-l border-emerald-500/20">
+              <div className="text-white text-[14px] font-mono tabular-nums">
+                <span className="text-emerald-400 font-semibold">{earlySupporter.used}</span>
+                <span className="text-white/40"> / {earlySupporter.total}</span>
+              </div>
+              <div className="text-white/40 text-[10px] uppercase tracking-wider">
+                spots claimed
               </div>
             </div>
           </div>
