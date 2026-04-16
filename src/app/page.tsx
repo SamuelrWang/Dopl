@@ -518,21 +518,21 @@ export default function Home() {
           */}
 
           {/* Early supporter promo */}
-          <div className="mt-8 inline-flex items-center gap-3 px-4 py-2 rounded-xl bg-emerald-500/[0.06] border border-emerald-500/20">
-            <div className="w-8 h-8 rounded-full bg-emerald-500/15 flex items-center justify-center">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          <div className="mt-8 inline-flex items-center gap-3 px-4 py-2 rounded-xl bg-white/[0.04] border border-white/[0.10]">
+            <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
+              <span className="w-2 h-2 rounded-full bg-white/80 animate-pulse" />
             </div>
             <div className="text-left">
-              <div className="text-emerald-400/80 text-[10px] font-semibold uppercase tracking-wider">
+              <div className="text-white/50 text-[10px] font-semibold uppercase tracking-wider">
                 Limited offer
               </div>
               <div className="text-white font-semibold text-[14px]">
                 First 100 users get free Pro usage
               </div>
             </div>
-            <div className="ml-2 pl-3 border-l border-emerald-500/20">
+            <div className="ml-2 pl-3 border-l border-white/10">
               <div className="text-white text-[14px] font-mono tabular-nums">
-                <span className="text-emerald-400 font-semibold">{earlySupporter.used}</span>
+                <span className="text-white font-semibold">{earlySupporter.used}</span>
                 <span className="text-white/40"> / {earlySupporter.total}</span>
               </div>
               <div className="text-white/40 text-[10px] uppercase tracking-wider">
