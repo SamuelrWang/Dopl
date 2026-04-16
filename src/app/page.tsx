@@ -19,6 +19,7 @@ import {
   Mic,
 } from "lucide-react";
 import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
+import { EARLY_SUPPORTER_ENABLED } from "@/lib/billing/early-supporter-flag";
 
 /* ──────────────────────────────────────────────────────────────────── */
 /*  Reusable prompt input (hero + final CTA)                          */
@@ -517,7 +518,8 @@ export default function Home() {
           </div>
           */}
 
-          {/* Early supporter promo */}
+          {/* Early supporter promo — gated by flag (hidden during beta, on for PH launch) */}
+          {EARLY_SUPPORTER_ENABLED && (
           <div className="mt-8 inline-flex items-center gap-3 px-4 py-2 rounded-xl bg-white/[0.04] border border-white/[0.10]">
             <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
               <span className="w-2 h-2 rounded-full bg-white/80 animate-pulse" />
@@ -540,6 +542,7 @@ export default function Home() {
               </div>
             </div>
           </div>
+          )}
         </div>
 
         {/* Fade to black at bottom */}

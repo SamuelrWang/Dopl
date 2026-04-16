@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { EARLY_SUPPORTER_ENABLED } from "@/lib/billing/early-supporter-flag";
 
 const SEEN_KEY = "dopl:early-supporter-seen";
 
@@ -8,8 +9,9 @@ const SEEN_KEY = "dopl:early-supporter-seen";
  * Returns whether to show the early-supporter congrats modal.
  *
  * Open iff:
- *   1. /api/user/credits says we received the grant (earlySupporterGrantedAt set)
- *   2. localStorage doesn't yet record that the user has dismissed it
+ *   1. The promo is enabled (early-supporter-flag.ts)
+ *   2. /api/user/credits says we received the grant (earlySupporterGrantedAt set)
+ *   3. localStorage doesn't yet record that the user has dismissed it
  *
  * `markSeen()` flips the localStorage flag and closes the modal — never
  * reopens for this browser.
@@ -23,6 +25,7 @@ export function useEarlySupporterModal(): {
   useEffect(() => {
     let cancelled = false;
 
+    if (!EARLY_SUPPORTER_ENABLED) return;
     if (typeof window === "undefined") return;
     if (localStorage.getItem(SEEN_KEY)) return;
 
