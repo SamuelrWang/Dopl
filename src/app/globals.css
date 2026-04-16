@@ -207,6 +207,14 @@ html {
   html {
     @apply font-sans;
   }
+
+  /* Block the browser's two-finger swipe-to-navigate gesture. Without this,
+     horizontal trackpad pans on the canvas trigger Back/Forward navigation
+     whenever the pan reaches what the browser considers "overscroll." */
+  html,
+  body {
+    overscroll-behavior: none;
+  }
 }
 
 /* ─────────────────────────────────────────────────────────────────────

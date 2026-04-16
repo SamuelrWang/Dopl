@@ -80,9 +80,12 @@ export async function createPortalSession(
   const stripe = getStripe();
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.usedopl.com";
 
+  // `?portal=return` lets the billing page detect portal exits so it can
+  // poll /api/billing/status until the webhook-driven tier change lands,
+  // instead of showing stale state until the user reloads.
   const session = await stripe.billingPortal.sessions.create({
     customer: stripeCustomerId,
-    return_url: `${appUrl}/settings/billing`,
+    return_url: `${appUrl}/settings/billing?portal=return`,
   });
 
   return session.url;

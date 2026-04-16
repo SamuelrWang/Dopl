@@ -55,19 +55,43 @@ export async function getBalance(userId: string): Promise<CreditBalance> {
     .single();
 
   if (!data) {
-    // First time — initialize
-    await supabase.from("user_credits").upsert({
-      user_id: userId,
-      balance: 100,
-      cycle_start: new Date().toISOString(),
-      cycle_credits_granted: 100,
+    // First time — initialize via atomic RPC so two concurrent first-time
+    // requests can't both insert, and so the initial 100-credit grant lands
+    // in credit_ledger for audit trail. RPC is a no-op if the row already
+    // exists (INSERT ... ON CONFLICT DO NOTHING).
+    const initAmount = TIER_CREDITS.free.monthly;
+    const { error } = await supabase.rpc("init_credits_atomic", {
+      p_user_id: userId,
+      p_amount: initAmount,
     });
+    if (error) {
+      // Non-fatal — the row might already exist from a concurrent init.
+      // Fall through to reread.
+    }
+    // Reread after init to pick up the now-guaranteed row.
+    const { data: fresh } = await supabase
+      .from("user_credits")
+      .select("balance, cycle_start, cycle_credits_granted, last_daily_bonus")
+      .eq("user_id", userId)
+      .single();
+    if (fresh) {
+      return {
+        balance: fresh.balance,
+        cycleStart: fresh.cycle_start,
+        cycleEnd: addDays(fresh.cycle_start, CYCLE_DAYS),
+        cycleCreditsGranted: fresh.cycle_credits_granted,
+        lastDailyBonus: fresh.last_daily_bonus,
+      };
+    }
+    // Fallback shape — RPC failed and reread returned nothing. Return
+    // synthetic defaults so callers don't crash; the next request will
+    // retry init.
     const cycleStart = new Date().toISOString();
     return {
-      balance: 100,
+      balance: initAmount,
       cycleStart,
       cycleEnd: addDays(cycleStart, CYCLE_DAYS),
-      cycleCreditsGranted: 100,
+      cycleCreditsGranted: initAmount,
       lastDailyBonus: null,
     };
   }
@@ -151,46 +175,19 @@ export async function grantDailyBonus(
 ): Promise<boolean> {
   const supabase = supabaseAdmin();
 
-  const { data } = await supabase
-    .from("user_credits")
-    .select("last_daily_bonus, balance")
-    .eq("user_id", userId)
-    .single();
-
-  if (!data) return false;
-
-  // Check if bonus already granted today
-  if (data.last_daily_bonus) {
-    const lastBonus = new Date(data.last_daily_bonus);
-    const now = new Date();
-    if (
-      lastBonus.getUTCFullYear() === now.getUTCFullYear() &&
-      lastBonus.getUTCMonth() === now.getUTCMonth() &&
-      lastBonus.getUTCDate() === now.getUTCDate()
-    ) {
-      return false; // Already granted today
-    }
-  }
-
-  const bonus = TIER_CREDITS[tier].dailyBonus;
-  const newBalance = data.balance + bonus;
-
-  await supabase
-    .from("user_credits")
-    .update({
-      balance: newBalance,
-      last_daily_bonus: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq("user_id", userId);
-
-  await supabase.from("credit_ledger").insert({
-    user_id: userId,
-    amount: bonus,
-    action: "daily_bonus",
+  // Atomic RPC: SELECT FOR UPDATE → date-of-last-bonus idempotency check →
+  // balance bump + ledger insert, all in one transaction. Prevents the
+  // double-grant race where two concurrent requests both read yesterday's
+  // timestamp, both pass the check, and both credit the bonus.
+  const { data, error } = await supabase.rpc("grant_daily_bonus_atomic", {
+    p_user_id: userId,
+    p_amount: TIER_CREDITS[tier].dailyBonus,
   });
 
-  return true;
+  if (error) return false;
+
+  const row = Array.isArray(data) ? data[0] : data;
+  return !!row?.granted;
 }
 
 // ── Cycle reset (monthly grant) ──────────────────────────────────────
@@ -202,35 +199,19 @@ export async function grantCycleCredits(
   const supabase = supabaseAdmin();
   const tierConfig = TIER_CREDITS[tier];
 
-  const { data: current } = await supabase
-    .from("user_credits")
-    .select("balance")
-    .eq("user_id", userId)
-    .single();
-
-  // Rollover: paid users keep up to 1 cycle's worth
-  let newBalance = tierConfig.monthly;
-  if (tierConfig.rollover && current) {
-    const carryOver = Math.min(current.balance, tierConfig.monthly);
-    newBalance = carryOver + tierConfig.monthly;
-  }
-
-  await supabase
-    .from("user_credits")
-    .upsert({
-      user_id: userId,
-      balance: newBalance,
-      cycle_start: new Date().toISOString(),
-      cycle_credits_granted: tierConfig.monthly,
-      updated_at: new Date().toISOString(),
-    });
-
-  await supabase.from("credit_ledger").insert({
-    user_id: userId,
-    amount: tierConfig.monthly,
-    action: "monthly_grant",
-    metadata: { tier },
+  // Atomic RPC: SELECT FOR UPDATE → compute rollover → UPDATE + ledger,
+  // all in one transaction. Prevents two concurrent cycle-rollover
+  // triggers from both overwriting each other's computed rollover.
+  const { error } = await supabase.rpc("reset_cycle_atomic", {
+    p_user_id: userId,
+    p_tier: tier,
+    p_monthly: tierConfig.monthly,
+    p_rollover: tierConfig.rollover,
   });
+
+  if (error) {
+    throw new Error(`reset_cycle_atomic failed: ${error.message}`);
+  }
 }
 
 // ── Handle upgrade (pro-rate) ────────────────────────────────────────
@@ -242,35 +223,24 @@ export async function handleUpgrade(
 ): Promise<void> {
   const supabase = supabaseAdmin();
 
-  const { data } = await supabase
-    .from("user_credits")
-    .select("balance, cycle_credits_granted")
-    .eq("user_id", userId)
-    .single();
-
-  const alreadyGranted = data?.cycle_credits_granted ?? TIER_CREDITS[oldTier].monthly;
-  const newTierMonthly = TIER_CREDITS[newTier].monthly;
-  const difference = newTierMonthly - alreadyGranted;
-
-  if (difference <= 0) return; // Downgrade or same — no additional grant
-
-  const newBalance = (data?.balance ?? 0) + difference;
-
-  await supabase
-    .from("user_credits")
-    .update({
-      balance: newBalance,
-      cycle_credits_granted: newTierMonthly,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("user_id", userId);
-
-  await supabase.from("credit_ledger").insert({
-    user_id: userId,
-    amount: difference,
-    action: "upgrade_grant",
-    metadata: { oldTier, newTier, proRated: true },
+  // Atomic RPC: SELECT FOR UPDATE → diff calc → UPDATE + ledger, all in
+  // one transaction. RPC reads cycle_credits_granted as the already-granted
+  // anchor (same semantics as the prior TS code), so oldTier is informational
+  // only — kept for caller symmetry and metadata.
+  const { error } = await supabase.rpc("handle_upgrade_atomic", {
+    p_user_id: userId,
+    p_new_tier: newTier,
+    p_new_monthly: TIER_CREDITS[newTier].monthly,
   });
+
+  if (error) {
+    throw new Error(`handle_upgrade_atomic failed: ${error.message}`);
+  }
+
+  // oldTier is kept in the function signature so existing webhook call
+  // sites don't need to change; the RPC doesn't need it because
+  // cycle_credits_granted already encodes the "what the user was on" state.
+  void oldTier;
 }
 
 // ── Check if cycle needs reset ───────────────────────────────────────

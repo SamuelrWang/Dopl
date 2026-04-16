@@ -32,6 +32,7 @@ function BillingPageInner() {
 
   const sessionId = searchParams.get("session_id");
   const canceled = searchParams.get("canceled") === "true";
+  const fromPortal = searchParams.get("portal") === "return";
 
   // Check payment status after checkout return
   const [paymentStatus, setPaymentStatus] = useState<
@@ -48,6 +49,32 @@ function BillingPageInner() {
       )
       .catch(() => setPaymentStatus(null));
   }, [sessionId]);
+
+  // Webhook-driven tier change can lag the user's return by a few seconds.
+  // After checkout completes OR after returning from the Stripe portal,
+  // refetch /api/billing/status once per second for up to 10 seconds so the
+  // "Welcome to X" banner (for checkout) and the Current plan display (for
+  // portal) converge to the post-webhook state without requiring a manual
+  // reload. We don't early-exit on tier change — the additional refreshes
+  // are cheap and also catch subscription_period_end / status updates that
+  // the first-delivered webhook might have skipped.
+  useEffect(() => {
+    const shouldPoll =
+      fromPortal || (sessionId && paymentStatus === "complete");
+    if (!shouldPoll) return;
+
+    let attempts = 0;
+    const interval = window.setInterval(() => {
+      attempts += 1;
+      sub.refresh();
+      if (attempts >= 10) window.clearInterval(interval);
+    }, 1000);
+
+    return () => window.clearInterval(interval);
+    // Intentionally depend on the trigger inputs only — including sub in
+    // deps would restart the timer on every refresh and never converge.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fromPortal, sessionId, paymentStatus]);
 
   // Fetch credits
   useEffect(() => {
@@ -118,7 +145,13 @@ function BillingPageInner() {
     <div className="container mx-auto px-4 py-8 max-w-lg">
       <h1 className="text-xl font-medium text-white mb-6">Billing</h1>
 
-      {paymentStatus === "complete" && (
+      {paymentStatus === "complete" && !sub.isPaid && (
+        <div className="mb-4 rounded-lg bg-white/[0.04] border border-white/[0.08] px-4 py-3 text-sm text-white/70">
+          Finalizing your subscription… this usually takes a few seconds.
+        </div>
+      )}
+
+      {paymentStatus === "complete" && sub.isPaid && (
         <div className="mb-4 rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-4 py-3 text-sm text-emerald-400">
           Welcome to {tierLabel}! Your subscription is now active.
         </div>

@@ -3,8 +3,9 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { CommunityCard } from "@/components/community/community-card";
-import type { PublishedClusterSummary } from "@/lib/community/types";
+// TEMP-COMMUNITY: hidden until community launches — restore by uncommenting blocks marked TEMP-COMMUNITY
+// import { CommunityCard } from "@/components/community/community-card";
+// import type { PublishedClusterSummary } from "@/lib/community/types";
 import {
   Monitor,
   Settings,
@@ -320,39 +321,29 @@ export default function Home() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  const logos = [
-    "Claude Code",
-    "n8n",
-    "Cursor",
-    "Windsurf",
-    "OpenAI",
-    "Supabase",
-    "MCP",
-    "LangChain",
-  ];
-
-  // Fetch community showcase data
-  const [communityItems, setCommunityItems] = useState<PublishedClusterSummary[]>([]);
-  useEffect(() => {
-    fetch("/api/community?limit=8&sort=popular")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (data?.items?.length) setCommunityItems(data.items);
-      })
-      .catch(() => {});
-  }, []);
-
-  // Fallback placeholder data when no community posts exist yet
-  const showcaseEntries = [
-    { title: "Claude Code Deep Research Agent", author: "open source" },
-    { title: "n8n AI Marketing Automation", author: "community" },
-    { title: "Supabase + Stripe SaaS Starter", author: "open source" },
-    { title: "Multi-Agent Orchestration with MCP", author: "community" },
-    { title: "AI Cold Outreach Pipeline", author: "open source" },
-    { title: "Automated Content Repurposer", author: "community" },
-    { title: "RAG Pipeline with Pinecone", author: "open source" },
-    { title: "Claude Code Skill: Git Workflow", author: "community" },
-  ];
+  // TEMP-COMMUNITY: hidden until community launches — restore by uncommenting blocks marked TEMP-COMMUNITY
+  // // Fetch community showcase data
+  // const [communityItems, setCommunityItems] = useState<PublishedClusterSummary[]>([]);
+  // useEffect(() => {
+  //   fetch("/api/community?limit=8&sort=popular")
+  //     .then((r) => (r.ok ? r.json() : null))
+  //     .then((data) => {
+  //       if (data?.items?.length) setCommunityItems(data.items);
+  //     })
+  //     .catch(() => {});
+  // }, []);
+  //
+  // // Fallback placeholder data when no community posts exist yet
+  // const showcaseEntries = [
+  //   { title: "Claude Code Deep Research Agent", author: "open source" },
+  //   { title: "n8n AI Marketing Automation", author: "community" },
+  //   { title: "Supabase + Stripe SaaS Starter", author: "open source" },
+  //   { title: "Multi-Agent Orchestration with MCP", author: "community" },
+  //   { title: "AI Cold Outreach Pipeline", author: "open source" },
+  //   { title: "Automated Content Repurposer", author: "community" },
+  //   { title: "RAG Pipeline with Pinecone", author: "open source" },
+  //   { title: "Claude Code Skill: Git Workflow", author: "community" },
+  // ];
 
   const faqItems = [
     {
@@ -511,23 +502,8 @@ export default function Home() {
         <div className="absolute bottom-0 left-0 right-0 h-48 bg-gradient-to-t from-black to-transparent z-10" />
       </section>
 
-      {/* ──── Logo Bar ──── */}
-      <section className="py-8 border-t border-white/[0.04] overflow-hidden">
-        <div className="relative">
-          <div className="flex logo-carousel whitespace-nowrap">
-            {[...logos, ...logos].map((logo, i) => (
-              <div
-                key={i}
-                className="flex-shrink-0 px-10 text-white/30 text-[18px] font-bold tracking-wider uppercase"
-              >
-                {logo}
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ──── Built by the community ──── */}
+      {/* TEMP-COMMUNITY: hidden until community launches — restore by uncommenting blocks marked TEMP-COMMUNITY */}
+      {/*
       <section className="py-24 px-4">
         <div className="max-w-[1200px] mx-auto">
           <div className="text-center mb-12">
@@ -567,6 +543,7 @@ export default function Home() {
           </div>
         </div>
       </section>
+      */}
 
       {/* ──── Features section (sticky left, scrolling right) ──── */}
       <section className="py-24 px-4">
