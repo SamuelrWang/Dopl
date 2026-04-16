@@ -14,22 +14,45 @@ export function getStripe(): Stripe {
 export async function createCheckoutSession(
   userId: string,
   email: string,
-  stripeCustomerId?: string | null
+  stripeCustomerId?: string | null,
+  tier: "pro" | "power" = "pro",
+  interval: "month" | "year" = "month"
 ): Promise<string> {
   const stripe = getStripe();
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.usedopl.com";
 
+  // Price ID is tier + interval specific. Annual prices live in
+  // STRIPE_<TIER>_ANNUAL_PRICE_ID, monthly in STRIPE_<TIER>_PRICE_ID.
+  const priceId =
+    interval === "year"
+      ? tier === "power"
+        ? process.env.STRIPE_POWER_ANNUAL_PRICE_ID
+        : process.env.STRIPE_PRO_ANNUAL_PRICE_ID
+      : tier === "power"
+        ? process.env.STRIPE_POWER_PRICE_ID
+        : process.env.STRIPE_PRO_PRICE_ID;
+
+  if (!priceId) {
+    const envVar =
+      interval === "year"
+        ? `STRIPE_${tier.toUpperCase()}_ANNUAL_PRICE_ID`
+        : `STRIPE_${tier.toUpperCase()}_PRICE_ID`;
+    throw new Error(
+      `Stripe price ID not configured for tier "${tier}" (${interval}). Set ${envVar} in env.`
+    );
+  }
+
   const sessionParams: Stripe.Checkout.SessionCreateParams = {
     ui_mode: "embedded_page",
     mode: "subscription",
-    line_items: [
-      {
-        price: process.env.STRIPE_PRO_PRICE_ID!,
-        quantity: 1,
-      },
-    ],
+    line_items: [{ price: priceId, quantity: 1 }],
     return_url: `${appUrl}/settings/billing?session_id={CHECKOUT_SESSION_ID}`,
-    metadata: { userId },
+    // Put tier + interval in both checkout and subscription metadata so
+    // webhooks can read them on initial checkout AND on subsequent updates.
+    metadata: { userId, tier, interval },
+    subscription_data: {
+      metadata: { userId, tier, interval },
+    },
   };
 
   if (stripeCustomerId) {

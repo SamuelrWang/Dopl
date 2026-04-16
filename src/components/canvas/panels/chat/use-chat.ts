@@ -110,6 +110,11 @@ export function useChat({ panel }: UseChatOptions) {
 
         if (!response.ok) {
           const err = await response.json().catch(() => ({}));
+          if (response.status === 402 && err.error === "insufficient_credits") {
+            throw new Error(
+              "You've used all your credits for this cycle. Visit the Pricing page to upgrade, or wait for your daily bonus tomorrow."
+            );
+          }
           throw new Error(err.error || `HTTP ${response.status}`);
         }
 
@@ -277,7 +282,7 @@ export function useChat({ panel }: UseChatOptions) {
                         type: "APPEND_MESSAGE",
                         panelId: panel.id,
                         message: {
-                          role: "assistant",
+                          role: "ai",
                           type: "text",
                           content: `Ingestion failed: ${reason}\n\nThis usually happens with paywalled sites, bot-protected pages, or content that requires login. You can try using the Dopl Chrome Extension to ingest the page directly from your browser, which bypasses these restrictions since it reads the page as you see it.`,
                         },

@@ -13,7 +13,8 @@ async function handleGet(
     tier: sub.tier,
     status: sub.status,
     ingestion_count: sub.ingestion_count,
-    ingestion_limit: sub.tier === "pro" ? null : FREE_INGESTION_LIMIT,
+    ingestion_limit:
+      sub.tier === "pro" || sub.tier === "power" ? null : FREE_INGESTION_LIMIT,
     subscription_period_end: sub.subscription_period_end,
     has_stripe_customer: !!sub.stripe_customer_id,
   });

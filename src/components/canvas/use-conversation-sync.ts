@@ -272,12 +272,25 @@ export function useConversationSync() {
   }, []);
 
   // ── Save on change (debounced per panel) ──────────────────────────
+  // Build a cheap composite key of only chat-relevant data so we can
+  // skip the more expensive per-panel diffing when nothing chat-related
+  // changed (e.g. a panel was just moved/resized).
+  const chatSnapshotKeyRef = useRef("");
+
   useEffect(() => {
     if (!syncedRef.current) return;
 
     const chatPanels = state.panels.filter(
       (p): p is ChatPanelData => p.type === "chat"
     );
+
+    // Quick bail: build a composite key from chat-specific fields only.
+    // If it hasn't changed, skip all the per-panel diff work.
+    const compositeKey = chatPanels
+      .map((p) => `${p.id}:${p.messages.length}:${p.title}:${p.pinned ?? false}`)
+      .join("|");
+    if (compositeKey === chatSnapshotKeyRef.current) return;
+    chatSnapshotKeyRef.current = compositeKey;
 
     const prev = prevSnapshotsRef.current;
     const next = new Map<string, string>();

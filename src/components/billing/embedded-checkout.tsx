@@ -11,13 +11,25 @@ const stripePromise = loadStripe(
   process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!
 );
 
-export function EmbeddedCheckoutForm() {
+interface EmbeddedCheckoutFormProps {
+  tier?: "pro" | "power";
+  interval?: "month" | "year";
+}
+
+export function EmbeddedCheckoutForm({
+  tier = "pro",
+  interval = "month",
+}: EmbeddedCheckoutFormProps = {}) {
   const fetchClientSecret = useCallback(async () => {
-    const res = await fetch("/api/billing/checkout", { method: "POST" });
+    const res = await fetch("/api/billing/checkout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tier, interval }),
+    });
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     return data.clientSecret;
-  }, []);
+  }, [tier, interval]);
 
   return (
     <div id="checkout">

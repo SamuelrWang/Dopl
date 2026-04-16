@@ -328,16 +328,13 @@ export function useCanvasDbSync(onReady?: () => void) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Track changes and sync to DB ──────────────────────────────────
+  // ── Track changes and sync to DB (split into focused effects) ─────
+
+  // Camera + counters → debounced save (1000ms idle)
   useEffect(() => {
     if (!syncedRef.current) return;
-
     const currentCamera = cameraKey(state.camera);
-    const currentPanelIds = panelIdSet(state.panels);
-    const currentPositions = panelPositionKey(state.panels);
     const currentCounters = `${state.nextPanelId}|${state.nextClusterId}`;
-
-    // Camera changed → debounced save (1000ms idle)
     if (currentCamera !== prevCameraRef.current || currentCounters !== prevCountersRef.current) {
       if (cameraTimerRef.current) clearTimeout(cameraTimerRef.current);
       cameraTimerRef.current = setTimeout(() => {
@@ -357,9 +354,15 @@ export function useCanvasDbSync(onReady?: () => void) {
       prevCameraRef.current = currentCamera;
       prevCountersRef.current = currentCounters;
     }
+  }, [state.camera, state.nextPanelId, state.nextClusterId]);
+
+  // Panel add/remove → immediate POST/DELETE
+  useEffect(() => {
+    if (!syncedRef.current) return;
+    const currentPanelIds = panelIdSet(state.panels);
+    const prevIds = prevPanelIdsRef.current;
 
     // Panel added → POST to DB (immediate)
-    const prevIds = prevPanelIdsRef.current;
     for (const panel of state.panels) {
       if (!prevIds.has(panel.id)) {
         const row = panelToDbRow(panel);
@@ -380,7 +383,13 @@ export function useCanvasDbSync(onReady?: () => void) {
       }
     }
 
-    // Panel positions changed → debounced batch update (500ms)
+    prevPanelIdsRef.current = currentPanelIds;
+  }, [state.panels]);
+
+  // Panel positions → debounced batch update (500ms)
+  useEffect(() => {
+    if (!syncedRef.current) return;
+    const currentPositions = panelPositionKey(state.panels);
     if (currentPositions !== prevPositionsRef.current) {
       if (positionTimerRef.current) clearTimeout(positionTimerRef.current);
       positionTimerRef.current = setTimeout(() => {
@@ -396,9 +405,13 @@ export function useCanvasDbSync(onReady?: () => void) {
         }).catch((err) => console.error("[canvas-sync] position batch update failed:", err));
         positionTimerRef.current = null;
       }, 500);
+      prevPositionsRef.current = currentPositions;
     }
+  }, [state.panels]);
 
-    // Panel titles changed → debounced batch update (1000ms)
+  // Panel titles → debounced batch update (1000ms)
+  useEffect(() => {
+    if (!syncedRef.current) return;
     const currentTitles = new Map<string, string>();
     const changedTitles: { panel_id: string; title: string }[] = [];
     for (const p of state.panels) {
@@ -421,8 +434,12 @@ export function useCanvasDbSync(onReady?: () => void) {
         titleTimerRef.current = null;
       }, 1000);
     }
+    prevTitlesRef.current = currentTitles;
+  }, [state.panels]);
 
-    // Clusters changed → debounced save (1000ms)
+  // Clusters → debounced save (1000ms)
+  useEffect(() => {
+    if (!syncedRef.current) return;
     const currentClustersKey = JSON.stringify(state.clusters);
     if (currentClustersKey !== prevClustersRef.current) {
       if (clusterTimerRef.current) clearTimeout(clusterTimerRef.current);
@@ -435,9 +452,13 @@ export function useCanvasDbSync(onReady?: () => void) {
           .catch((err) => console.error("[canvas-sync] cluster save failed:", err));
         clusterTimerRef.current = null;
       }, 1000);
+      prevClustersRef.current = currentClustersKey;
     }
+  }, [state.clusters]);
 
-    // Panel data changed → debounced batch update (2000ms)
+  // Panel data → debounced batch update (2000ms)
+  useEffect(() => {
+    if (!syncedRef.current) return;
     const panelDataUpdates: { panel_id: string; panel_data: Record<string, unknown> }[] = [];
     const currentPanelData = new Map<string, string>();
     for (const panel of state.panels) {
@@ -461,13 +482,8 @@ export function useCanvasDbSync(onReady?: () => void) {
         panelDataTimerRef.current = null;
       }, 2000);
     }
-
-    prevPanelIdsRef.current = currentPanelIds;
-    prevPositionsRef.current = currentPositions;
-    prevTitlesRef.current = currentTitles;
-    prevClustersRef.current = currentClustersKey;
     prevPanelDataRef.current = currentPanelData;
-  }, [state]);
+  }, [state.panels]);
 
   // Cleanup timers on unmount
   useEffect(() => {

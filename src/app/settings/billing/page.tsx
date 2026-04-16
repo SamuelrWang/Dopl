@@ -6,6 +6,14 @@ import { Button } from "@/components/ui/button";
 import { useSearchParams } from "next/navigation";
 import { EmbeddedCheckoutForm } from "@/components/billing/embedded-checkout";
 
+interface CreditInfo {
+  balance: number;
+  tier: string;
+  monthlyCredits: number;
+  cycleStart: string;
+  cycleEnd: string;
+}
+
 export default function BillingPage() {
   return (
     <Suspense>
@@ -19,21 +27,36 @@ function BillingPageInner() {
   const searchParams = useSearchParams();
   const [portalLoading, setPortalLoading] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
+  const [credits, setCredits] = useState<CreditInfo | null>(null);
 
   const sessionId = searchParams.get("session_id");
   const canceled = searchParams.get("canceled") === "true";
 
-  // If we have a session_id, check payment status
-  const [paymentStatus, setPaymentStatus] = useState<"loading" | "complete" | "open" | null>(null);
+  // Check payment status after checkout return
+  const [paymentStatus, setPaymentStatus] = useState<
+    "loading" | "complete" | "open" | null
+  >(null);
 
   useEffect(() => {
     if (!sessionId) return;
     setPaymentStatus("loading");
     fetch(`/api/billing/checkout/status?session_id=${sessionId}`)
       .then((r) => r.json())
-      .then((data) => setPaymentStatus(data.status === "complete" ? "complete" : "open"))
+      .then((data) =>
+        setPaymentStatus(data.status === "complete" ? "complete" : "open")
+      )
       .catch(() => setPaymentStatus(null));
   }, [sessionId]);
+
+  // Fetch credits
+  useEffect(() => {
+    fetch("/api/user/credits")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data) setCredits(data);
+      })
+      .catch(() => {});
+  }, []);
 
   async function handleManage() {
     setPortalLoading(true);
@@ -49,7 +72,7 @@ function BillingPageInner() {
   if (sub.loading) {
     return (
       <div className="container mx-auto px-4 py-8 max-w-lg">
-        <h1 className="text-xl font-medium text-text-primary mb-6">Billing</h1>
+        <h1 className="text-xl font-medium text-white mb-6">Billing</h1>
         <div className="rounded-xl bg-white/[0.03] border border-white/[0.08] p-5">
           <div className="h-20 animate-pulse bg-white/[0.04] rounded-lg" />
         </div>
@@ -57,31 +80,32 @@ function BillingPageInner() {
     );
   }
 
-  // Show checkout form
-  if (showCheckout && !sub.isPro) {
+  // Checkout form for free users
+  if (showCheckout && !sub.isPaid) {
     return (
       <div className="container mx-auto px-4 py-8 max-w-lg">
         <button
           onClick={() => setShowCheckout(false)}
-          className="text-sm text-text-tertiary hover:text-text-secondary transition-colors mb-4 font-mono text-[10px] uppercase tracking-wider"
+          className="text-sm text-white/50 hover:text-white/80 transition-colors mb-4"
         >
           &larr; Back to billing
         </button>
-        <h1 className="text-xl font-medium text-text-primary mb-6">
-          Upgrade to Pro
-        </h1>
+        <h1 className="text-xl font-medium text-white mb-6">Upgrade</h1>
         <EmbeddedCheckoutForm />
       </div>
     );
   }
 
+  const tierLabel =
+    sub.tier === "power" ? "Power" : sub.tier === "pro" ? "Pro" : "Free";
+
   return (
     <div className="container mx-auto px-4 py-8 max-w-lg">
-      <h1 className="text-xl font-medium text-text-primary mb-6">Billing</h1>
+      <h1 className="text-xl font-medium text-white mb-6">Billing</h1>
 
       {paymentStatus === "complete" && (
         <div className="mb-4 rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-4 py-3 text-sm text-emerald-400">
-          Welcome to Pro! Your subscription is now active.
+          Welcome to {tierLabel}! Your subscription is now active.
         </div>
       )}
 
@@ -91,68 +115,74 @@ function BillingPageInner() {
         </div>
       )}
 
+      {sub.status === "past_due" && (
+        <div className="mb-4 rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">
+          Your payment failed. Please update your payment method to keep your{" "}
+          {tierLabel} plan active.
+          <button
+            onClick={handleManage}
+            className="underline underline-offset-2 ml-1 hover:text-red-300 transition-colors"
+          >
+            Update payment
+          </button>
+        </div>
+      )}
+
       <div className="rounded-xl bg-white/[0.03] border border-white/[0.08] p-5 space-y-5">
         {/* Current Plan */}
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm text-text-secondary">Current plan</p>
-            <p className="text-lg font-medium text-text-primary">
-              {sub.isPro ? (
-                <>
-                  Pro{" "}
-                  <span className="text-xs px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-normal">
-                    Active
-                  </span>
-                </>
-              ) : (
-                "Free"
+            <p className="text-sm text-white/60">Current plan</p>
+            <p className="text-lg font-medium text-white">
+              {tierLabel}
+              {sub.isPaid && sub.status === "active" && (
+                <span className="ml-2 text-xs px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-normal">
+                  Active
+                </span>
               )}
             </p>
           </div>
-          {sub.isPro && sub.subscription_period_end && (
-            <p className="text-xs text-text-tertiary">
+          {sub.isPaid && sub.subscription_period_end && (
+            <p className="text-xs text-white/40">
               Renews{" "}
               {new Date(sub.subscription_period_end).toLocaleDateString()}
             </p>
           )}
         </div>
 
-        {/* Usage */}
-        <div className="border-t border-white/[0.06] pt-4">
-          <p className="text-sm text-text-secondary mb-2">Ingestion usage</p>
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-semibold text-text-primary">
-              {sub.ingestion_count}
-            </span>
-            {sub.ingestion_limit && (
-              <span className="text-sm text-text-tertiary">
-                / {sub.ingestion_limit} free ingestions
+        {/* Credits */}
+        {credits && (
+          <div className="border-t border-white/[0.06] pt-4">
+            <p className="text-sm text-white/60 mb-2">Credits</p>
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl font-semibold text-white">
+                {credits.balance}
               </span>
-            )}
-            {sub.isPro && (
-              <span className="text-sm text-text-tertiary">
-                ingestions (unlimited)
+              <span className="text-sm text-white/40">
+                / {credits.monthlyCredits} this cycle
               </span>
-            )}
-          </div>
-          {!sub.isPro && sub.ingestion_limit && (
+            </div>
             <div className="mt-2 h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
               <div
-                className="h-full rounded-full bg-emerald-500 transition-all"
+                className="h-full rounded-full bg-white/30 transition-all"
                 style={{
                   width: `${Math.min(
                     100,
-                    (sub.ingestion_count / sub.ingestion_limit) * 100
+                    (credits.balance / credits.monthlyCredits) * 100
                   )}%`,
                 }}
               />
             </div>
-          )}
-        </div>
+            <p className="text-xs text-white/30 mt-1.5">
+              Resets{" "}
+              {new Date(credits.cycleEnd).toLocaleDateString()}
+            </p>
+          </div>
+        )}
 
         {/* Actions */}
         <div className="border-t border-white/[0.06] pt-4">
-          {sub.isPro ? (
+          {sub.isPaid ? (
             <Button
               variant="outline"
               onClick={handleManage}
@@ -163,18 +193,12 @@ function BillingPageInner() {
             </Button>
           ) : (
             <div className="space-y-3">
-              <div className="text-center">
-                <span className="text-lg font-semibold text-text-primary">
-                  $20
-                </span>
-                <span className="text-sm text-text-tertiary">/month</span>
-              </div>
               <Button onClick={() => setShowCheckout(true)} className="w-full">
-                Upgrade to Pro
+                Upgrade
               </Button>
               <a
                 href="/pricing"
-                className="block text-xs text-text-tertiary text-center hover:text-text-secondary transition-colors underline underline-offset-2"
+                className="block text-xs text-white/40 text-center hover:text-white/60 transition-colors underline underline-offset-2"
               >
                 Compare plans in detail
               </a>

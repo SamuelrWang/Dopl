@@ -4,6 +4,15 @@ import { ingestEntry } from "@/lib/ingestion/pipeline";
 import { withUserAuth } from "@/lib/auth/with-auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { MAX_CONTENT_FOR_CLAUDE, MAX_IMAGES_PER_ENTRY, MAX_IMAGE_SIZE_BYTES } from "@/lib/config";
+import {
+  deductCredits,
+  getBalance,
+  grantDailyBonus,
+  checkAndResetCycle,
+  CREDIT_COSTS,
+  type SubscriptionTier,
+} from "@/lib/credits";
+import { getUserSubscription } from "@/lib/billing/subscriptions";
 
 const MAX_LINKS = 50;
 const MAX_URL_LENGTH = 2_048;
@@ -114,6 +123,26 @@ async function handlePost(
         );
       }
     }
+
+    // ── Cycle reset + daily bonus ───────────────────────────────
+    const sub = await getUserSubscription(userId);
+    const userTier = (sub.tier as SubscriptionTier) || "free";
+    await checkAndResetCycle(userId, userTier, sub.subscription_period_end);
+    await grantDailyBonus(userId, userTier);
+
+    // ── Credit check ────────────────────────────────────────────
+    const balance = await getBalance(userId);
+    if (balance.balance < CREDIT_COSTS.ingestion) {
+      return NextResponse.json(
+        {
+          error: "insufficient_credits",
+          balance: balance.balance,
+          cost: CREDIT_COSTS.ingestion,
+        },
+        { status: 402 }
+      );
+    }
+    await deductCredits(userId, "ingestion", { url: normalizedUrl });
 
     // ── New ingestion ───────────────────────────────────────────
     const entryId = await ingestEntry({

@@ -56,7 +56,7 @@ export function OnboardingProvider({
       {/* Old popup onboarding disabled — replaced by chat-based onboarding */}
       {false && isActive && currentStepDef && (
         <OnboardingCoachCard
-          step={currentStepDef}
+          step={currentStepDef!}
           stepIndex={currentStep}
           totalSteps={totalSteps}
           justCompleted={justCompleted}

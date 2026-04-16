@@ -4,8 +4,17 @@ import { searchEntries } from "@/lib/retrieval/search";
 import { supabaseAdmin } from "@/lib/supabase";
 const supabase = supabaseAdmin();
 import { BUILDER_CHAT_SYSTEM_PROMPT } from "@/lib/prompts/chat-system";
-import { withExternalAuth } from "@/lib/auth/with-auth";
+import { withUserAuth } from "@/lib/auth/with-auth";
 import { ingestEntry } from "@/lib/ingestion/pipeline";
+import {
+  deductCredits,
+  getBalance,
+  grantDailyBonus,
+  checkAndResetCycle,
+  CREDIT_COSTS,
+  type SubscriptionTier,
+} from "@/lib/credits";
+import { getUserSubscription } from "@/lib/billing/subscriptions";
 import { config } from "dotenv";
 import { resolve } from "path";
 
@@ -68,7 +77,8 @@ const TOOLS: Anthropic.Tool[] = [
 
 async function executeTool(
   name: string,
-  input: Record<string, unknown>
+  input: Record<string, unknown>,
+  userId?: string
 ): Promise<{ result: string; entries?: unknown[] }> {
   switch (name) {
     case "search_knowledge_base": {
@@ -217,6 +227,23 @@ async function executeTool(
         }
       }
 
+      // Charge ingestion credits separately (chat_tool_call only covers the
+      // chat round — ingestion itself is an expensive pipeline).
+      if (userId) {
+        const result = await deductCredits(userId, "ingestion", {
+          url: normalizedUrl,
+          source: "chat_tool",
+        });
+        if (!result.success) {
+          return {
+            result: JSON.stringify({
+              status: "insufficient_credits",
+              message: `Not enough credits to ingest this URL. Ingestion costs ${CREDIT_COSTS.ingestion} credits, you have ${result.newBalance}.`,
+            }),
+          };
+        }
+      }
+
       // New ingestion
       const entryId = await ingestEntry({
         url: normalizedUrl,
@@ -343,7 +370,10 @@ function buildCanvasContextPrefix(ctx: CanvasContextPayload): string {
   return blocks.join("\n\n") + "\n\n";
 }
 
-async function handlePost(request: NextRequest) {
+async function handlePost(
+  request: NextRequest,
+  { userId }: { userId: string }
+) {
   try {
     const body = await request.json();
     const messages: Anthropic.MessageParam[] = body.messages || [];
@@ -353,6 +383,25 @@ async function handlePost(request: NextRequest) {
       return new Response(
         JSON.stringify({ error: "Messages array is required" }),
         { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    // Ensure cycle is fresh + daily bonus is granted (covers MCP-only users)
+    const sub = await getUserSubscription(userId);
+    const userTier = (sub.tier as SubscriptionTier) || "free";
+    await checkAndResetCycle(userId, userTier, sub.subscription_period_end);
+    await grantDailyBonus(userId, userTier);
+
+    // Credit check — reserve minimum cost (may end up being chat_tool_call = 5)
+    const balance = await getBalance(userId);
+    if (balance.balance < CREDIT_COSTS.chat_message) {
+      return new Response(
+        JSON.stringify({
+          error: "insufficient_credits",
+          balance: balance.balance,
+          cost: CREDIT_COSTS.chat_message,
+        }),
+        { status: 402, headers: { "Content-Type": "application/json" } }
       );
     }
 
@@ -392,10 +441,9 @@ async function handlePost(request: NextRequest) {
           // landing at once.
           let currentMessages = [...messages];
           let iterations = 0;
-          const MAX_ITERATIONS = 5; // Prevent infinite tool loops
-          // Track URLs already ingested in this session to prevent the LLM
-          // from calling ingest_url twice for the same link across tool rounds.
+          const MAX_ITERATIONS = 5;
           const ingestedUrls = new Set<string>();
+          let hadToolCalls = false;
 
           while (iterations < MAX_ITERATIONS) {
             iterations++;
@@ -437,6 +485,7 @@ async function handlePost(request: NextRequest) {
             for (const block of finalMessage.content) {
               if (block.type !== "tool_use") continue;
               hasToolUse = true;
+              hadToolCalls = true;
 
               send({
                 type: "tool_call",
@@ -446,7 +495,8 @@ async function handlePost(request: NextRequest) {
 
               const toolOutput = await executeTool(
                 block.name,
-                block.input as Record<string, unknown>
+                block.input as Record<string, unknown>,
+                userId
               );
 
               // Emit ingest_started for ingest_url tool so the frontend
@@ -513,6 +563,10 @@ async function handlePost(request: NextRequest) {
             break;
           }
 
+          // Deduct credits based on actual usage
+          const creditAction = hadToolCalls ? "chat_tool_call" : "chat_message";
+          await deductCredits(userId, creditAction).catch(() => {});
+
           send({ type: "done" });
           controller.close();
         } catch (error) {
@@ -540,4 +594,4 @@ async function handlePost(request: NextRequest) {
   }
 }
 
-export const POST = withExternalAuth(handlePost);
+export const POST = withUserAuth(handlePost);

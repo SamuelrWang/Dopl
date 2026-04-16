@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { UserMenu } from "./user-menu";
@@ -71,11 +72,52 @@ export function Header() {
           })}
         </div>
 
+        {/* Credit balance */}
+        <CreditBadge />
+
         {/* User menu */}
         <div className="shrink-0 ml-1">
           <UserMenu />
         </div>
       </nav>
     </div>
+  );
+}
+
+function CreditBadge() {
+  const [balance, setBalance] = useState<number | null>(null);
+  const pathname = usePathname();
+
+  useEffect(() => {
+    // Only show on canvas
+    if (!pathname.startsWith("/canvas")) return;
+    fetch("/api/user/credits")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.balance != null) setBalance(data.balance);
+      })
+      .catch(() => {});
+  }, [pathname]);
+
+  if (balance === null || !pathname.startsWith("/canvas")) return null;
+
+  return (
+    <Link
+      href="/pricing"
+      className="flex items-center gap-1 px-2 py-1 rounded-full font-mono text-[10px] uppercase tracking-wide text-white/40 hover:text-white/60 transition-colors"
+      title="Credits remaining this cycle"
+    >
+      <svg
+        width="10"
+        height="10"
+        viewBox="0 0 16 16"
+        fill="currentColor"
+        aria-hidden
+      >
+        <circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" strokeWidth="1.5" />
+        <text x="8" y="11" textAnchor="middle" fontSize="9" fontWeight="bold" fill="currentColor">C</text>
+      </svg>
+      {balance}
+    </Link>
   );
 }

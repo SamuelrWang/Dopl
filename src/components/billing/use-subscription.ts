@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 
 interface SubscriptionStatus {
-  tier: "free" | "pro";
+  tier: "free" | "pro" | "power";
   status: string;
   ingestion_count: number;
   ingestion_limit: number | null;
@@ -41,7 +41,10 @@ export function useSubscription() {
     refresh();
   }, [refresh]);
 
-  const isPro = sub.tier === "pro" && sub.status === "active";
+  const isPaid =
+    (sub.tier === "pro" || sub.tier === "power") && sub.status === "active";
+  // Keep isPro for backward compat (true for any paid tier)
+  const isPro = isPaid;
 
-  return { ...sub, isPro, loading, refresh };
+  return { ...sub, isPro, isPaid, loading, refresh };
 }

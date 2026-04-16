@@ -3,7 +3,7 @@ import { createServerClient } from "@supabase/ssr";
 
 const PUBLIC_ROUTES = ["/login", "/auth/callback", "/api/og/tweet", "/api/og/github", "/api/billing/webhook", "/terms", "/privacy", "/pricing", "/docs"];
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(

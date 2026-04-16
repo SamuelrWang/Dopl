@@ -8,11 +8,23 @@ async function handlePost(
   request: NextRequest,
   { userId }: { userId: string }
 ) {
+  // Target tier + billing interval from body. Default to Pro monthly
+  // for backward compat.
+  let tier: "pro" | "power" = "pro";
+  let interval: "month" | "year" = "month";
+  try {
+    const body = await request.json().catch(() => ({}));
+    if (body?.tier === "power") tier = "power";
+    if (body?.interval === "year") interval = "year";
+  } catch {
+    // empty body is fine
+  }
+
   const sub = await getUserSubscription(userId);
 
-  if (sub.tier === "pro" && sub.status === "active") {
+  if (sub.tier === tier && sub.status === "active") {
     return NextResponse.json(
-      { error: "Already subscribed to Pro" },
+      { error: `Already subscribed to ${tier}` },
       { status: 400 }
     );
   }
@@ -34,7 +46,9 @@ async function handlePost(
   const clientSecret = await createCheckoutSession(
     userId,
     profile.email,
-    sub.stripe_customer_id
+    sub.stripe_customer_id,
+    tier,
+    interval
   );
 
   return NextResponse.json({ clientSecret });

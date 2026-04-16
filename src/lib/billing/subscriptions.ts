@@ -1,6 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase";
 
-export type SubscriptionTier = "free" | "pro";
+export type SubscriptionTier = "free" | "pro" | "power";
 
 export interface UserSubscription {
   tier: SubscriptionTier;
@@ -33,8 +33,15 @@ export async function getUserSubscription(
 }
 
 export async function isProUser(userId: string): Promise<boolean> {
+  // Kept for backward compat — returns true for any paid tier.
+  return isPaidUser(userId);
+}
+
+export async function isPaidUser(userId: string): Promise<boolean> {
   const sub = await getUserSubscription(userId);
-  return sub.tier === "pro" && sub.status === "active";
+  return (
+    (sub.tier === "pro" || sub.tier === "power") && sub.status === "active"
+  );
 }
 
 export async function updateSubscription(

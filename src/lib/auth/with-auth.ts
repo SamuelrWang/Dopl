@@ -175,7 +175,9 @@ export function withSubscriptionAuth(
   return withUserAuth(async (request, ctx) => {
     const sub = await getUserSubscription(ctx.userId);
     const tier: SubscriptionTier =
-      sub.tier === "pro" && sub.status === "active" ? "pro" : "free";
+      (sub.tier === "pro" || sub.tier === "power") && sub.status === "active"
+        ? sub.tier
+        : "free";
     return handler(request, { userId: ctx.userId, tier, params: ctx.params });
   });
 }
