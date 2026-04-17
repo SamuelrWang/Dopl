@@ -67,6 +67,20 @@ export function PublishDialog({
       }
 
       const data = await res.json();
+
+      // Best-effort clipboard copy — the X-comment workflow is "publish,
+      // paste into X", so saving the extra manual-copy step is the
+      // whole point. Failures (insecure context, permission denied) are
+      // non-fatal; the caller's toast still surfaces the URL and an
+      // "Open" action.
+      const shareUrl = `${window.location.origin}/community/${data.slug}`;
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+      } catch {
+        // Clipboard API is unavailable on http:// origins and in some
+        // embedded contexts. Silently fall through.
+      }
+
       onOpenChange(false);
       onPublished?.(data.slug);
     } catch (err) {

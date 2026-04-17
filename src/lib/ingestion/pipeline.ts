@@ -3,7 +3,6 @@ const supabase = supabaseAdmin();
 import { IngestInput, ExtractedSource, ContentType } from "./types";
 import { ModelTier } from "@/lib/ai";
 import { extractText } from "./extractors/text";
-import { extractImage } from "./extractors/image";
 import { extractWebContent, linkResultToSource } from "./extractors/web";
 import { extractGitHubContent } from "./extractors/github";
 
@@ -16,19 +15,20 @@ import {
   extractRedditContent,
   isRedditPostUrl,
 } from "./extractors/reddit";
-import { generateManifest } from "./generators/manifest";
-import { generateReadme } from "./generators/readme";
-import { generateAgentsMd } from "./generators/agents-md";
-import { generateTags } from "./generators/tags";
-import { classifyContent, ContentClassification } from "./generators/content-classifier";
-import { classifyContentType } from "./generators/content-type-classifier";
+// NOTE: the legacy generators (generators/manifest, generators/readme,
+// generators/agents-md, generators/tags, generators/content-classifier,
+// generators/content-type-classifier) have been deleted as part of the
+// pivot to client-side synthesis. No code in this file or in the
+// ingestion flow calls Claude on the server anymore — the agent runs
+// prompts via prepare_ingest + submit_ingested_entry and POSTs artifacts
+// back to us for embedding + persistence.
 import { chunkAndEmbed } from "./embedder";
 import { truncateContent } from "./utils";
 import { ingestionProgress } from "./progress";
-import { MAX_LINK_DEPTH, MAX_CONTENT_FOR_CLAUDE, MAX_IMAGES_PER_ENTRY } from "@/lib/config";
+import { MAX_LINK_DEPTH, MAX_CONTENT_FOR_CLAUDE } from "@/lib/config";
 import { slugifyEntryTitle, fallbackSlugFromId } from "@/lib/entries/slug";
-import { logSystemEvent } from "@/lib/analytics/system-events";
-import { grantCredits, CREDIT_COSTS } from "@/lib/credits";
+// Credits removed — access is gated at the HTTP boundary via
+// hasActiveAccess(), not via credit math. No refunds needed here.
 
 const PIPELINE_TIMEOUT_MS = 10 * 60 * 1000;
 
@@ -79,179 +79,15 @@ const PIPELINE_STRATEGIES: Record<ContentType, PipelineStrategy> = {
 };
 
 // ════════════════════════════════════════════════════════════════════
-// Public entry point
+// Legacy ingestEntry / runPipeline / step* generators — REMOVED.
+//
+// This file previously exported `ingestEntry()` which kicked off a full
+// server-side Claude pipeline. That path has been retired in favour of
+// the agent-driven prepare_ingest + submit_ingested_entry flow. The
+// surviving exports below (extractForAgent, persistAgentArtifacts,
+// finalizeAgentEntry, plus the step* helpers they share with the old
+// flow) are the complete server-side surface now.
 // ════════════════════════════════════════════════════════════════════
-
-/**
- * Start the ingestion pipeline. Creates the entry record and returns the ID
- * immediately. The pipeline runs in the background — clients should connect
- * to the SSE stream at /api/ingest/{id}/stream to watch progress.
- */
-export async function ingestEntry(input: IngestInput): Promise<string> {
-  // Generate the entry id client-side so we can supply both `id` and the
-  // derived `slug` in a single INSERT. `slug` is NOT NULL on the entries
-  // table (see migration 033) and has no DB default, so inserting without
-  // it fails with 23502 — which took down ALL ingestion earlier today.
-  // The pipeline's stepPersistEntry later replaces this fallback with a
-  // real title-based slug.
-  const entryId = crypto.randomUUID();
-
-  const { error: createError } = await supabase.from("entries").insert({
-    id: entryId,
-    source_url: input.url,
-    source_platform: detectPlatform(input.url),
-    status: "processing",
-    ingested_by: input.userId ?? null,
-    slug: fallbackSlugFromId(entryId),
-    // moderation_status defaults to 'pending' via the DB default.
-  });
-
-  if (createError) {
-    throw new Error(`Failed to create entry: ${createError.message}`);
-  }
-
-  // Run pipeline in the background — don't await
-  const timeoutPromise = new Promise<never>((_, reject) =>
-    setTimeout(
-      () => reject(new Error(`Pipeline timed out after ${PIPELINE_TIMEOUT_MS}ms`)),
-      PIPELINE_TIMEOUT_MS
-    )
-  );
-
-  Promise.race([runPipeline(entryId, input), timeoutPromise]).catch(
-    async (error) => {
-      const errorMessage =
-        error instanceof Error ? error.message : "Unknown error";
-      const errorName = error instanceof Error ? error.name : "UnknownError";
-      const isTimeout = errorMessage.includes("timed out");
-      // If the root cause was a Postgres/Supabase error, pull out the
-      // structured fields so logs + the client stream + system_events
-      // all name the exact constraint instead of swallowing it behind
-      // a generic "database error" message. Structural check keeps us
-      // from depending on PostgrestError types inside the pipeline.
-      const pgFields = extractPgErrorFields(error);
-      // Emit the error event so the client knows BEFORE we nuke the
-      // entry row (the stream endpoint reads back from the DB on
-      // reconnect, but active subscribers get the event in-flight).
-      ingestionProgress.emit(
-        entryId,
-        "error",
-        `Ingestion failed: ${errorMessage}`,
-        pgFields ? { details: { pg: pgFields } } : undefined
-      );
-      console.error(
-        `[pipeline] Entry ${entryId} failed:`,
-        errorMessage,
-        pgFields ? { pg: pgFields } : ""
-      );
-      // Log the failure into system_events BEFORE deleting the row so
-      // the health dashboard can attribute and count it. Downstream
-      // external-API failures (anthropic/openai/etc.) are logged
-      // separately by callExternal — this entry captures the pipeline-
-      // level outcome (e.g. timeout, aggregate failure).
-      void logSystemEvent({
-        severity: isTimeout ? "critical" : "error",
-        category: "ingestion",
-        source: "pipeline.runPipeline",
-        message: `Ingestion failed: ${errorMessage}`,
-        fingerprintKeys: ["ingestion", isTimeout ? "timeout" : errorName],
-        metadata: {
-          entry_id: entryId,
-          source_url: input.url,
-          timed_out: isTimeout,
-          ...(pgFields && {
-            pg_code: pgFields.code,
-            pg_details: pgFields.details,
-            pg_hint: pgFields.hint,
-            pg_constraint: pgFields.constraint,
-          }),
-        },
-        userId: input.userId ?? null,
-      });
-      // Delete any partial data from the common DB — no half-ingested
-      // entries are ever allowed to persist.
-      await deleteFailedEntry(entryId);
-
-      // Refund the 20 credits we deducted upfront at the HTTP boundary.
-      // The user got nothing (no entry, no readme, no agents.md), so
-      // charging them would be punitive. This covers pipeline timeouts,
-      // LLM outages, fetch failures, paywalls, and empty-extraction
-      // cases alike — from the user's POV they all look the same.
-      // We don't refund on moderation denial because in that case the
-      // entry WAS produced, it just isn't public.
-      if (input.userId) {
-        grantCredits(
-          input.userId,
-          CREDIT_COSTS.ingestion,
-          "ingestion_pipeline_refund",
-          {
-            entry_id: entryId,
-            source_url: input.url,
-            reason: isTimeout ? "timeout" : errorName,
-          }
-        ).catch((refundErr) => {
-          logSystemEvent({
-            severity: "error",
-            category: "other",
-            source: "pipeline.refund",
-            message: `Credit refund failed after pipeline error: ${refundErr instanceof Error ? refundErr.message : String(refundErr)}`,
-            fingerprintKeys: ["refund_failed", "pipeline"],
-            metadata: { entry_id: entryId, user_id: input.userId },
-            userId: input.userId,
-          }).catch(() => {});
-        });
-      }
-    }
-  );
-
-  return entryId;
-}
-
-/**
- * If the error (or its `cause`) is a PostgrestError / Postgres error,
- * return its structured fields. Lets the pipeline bubble the exact
- * constraint / column up to logs + the client stream without importing
- * Supabase types. Also tries to parse a constraint name out of the
- * message when the raw field isn't present (Supabase sometimes only
- * includes the constraint in the message text).
- */
-function extractPgErrorFields(err: unknown): {
-  code?: string;
-  details?: string;
-  hint?: string;
-  constraint?: string;
-} | null {
-  const seen = new Set<unknown>();
-  let cursor: unknown = err;
-  while (cursor && typeof cursor === "object" && !seen.has(cursor)) {
-    seen.add(cursor);
-    const obj = cursor as Record<string, unknown>;
-    const hasPgShape =
-      typeof obj.code === "string" ||
-      typeof obj.details === "string" ||
-      typeof obj.hint === "string" ||
-      typeof obj.constraint === "string";
-    if (hasPgShape) {
-      const fields: {
-        code?: string;
-        details?: string;
-        hint?: string;
-        constraint?: string;
-      } = {};
-      if (typeof obj.code === "string") fields.code = obj.code;
-      if (typeof obj.details === "string") fields.details = obj.details;
-      if (typeof obj.hint === "string") fields.hint = obj.hint;
-      if (typeof obj.constraint === "string") fields.constraint = obj.constraint;
-      if (!fields.constraint && typeof obj.message === "string") {
-        const m = obj.message.match(/constraint "([^"]+)"/);
-        if (m) fields.constraint = m[1];
-      }
-      return fields;
-    }
-    cursor = obj.cause;
-  }
-  return null;
-}
 
 /**
  * Remove a failed/partial entry from the common DB. Deletes child rows
@@ -274,135 +110,13 @@ export async function deleteFailedEntry(entryId: string): Promise<void> {
 }
 
 // ════════════════════════════════════════════════════════════════════
-// Pipeline orchestrator
-// ════════════════════════════════════════════════════════════════════
-
-async function runPipeline(
-  entryId: string,
-  input: IngestInput
-): Promise<void> {
-  await logStep(entryId, "pipeline_start", "started");
-  ingestionProgress.emit(entryId, "info", `Starting ingestion for ${input.url}`);
-
-  // ── Extract content from source ──
-  const fetchResult = await stepPlatformFetch(entryId, input);
-  let thumbnailUrl = fetchResult.thumbnailUrl;
-  if (fetchResult.updatedText !== undefined) input.content.text = fetchResult.updatedText;
-  if (fetchResult.updatedLinks !== undefined) input.content.links = fetchResult.updatedLinks;
-
-  const { textSources } = await stepTextExtraction(entryId, input.content.text || "");
-
-  // ── Detect content type ──
-  const { contentType, sourceType } = await stepDetectContentType(entryId, input.content.text || "");
-  const strategy = PIPELINE_STRATEGIES[contentType];
-
-  ingestionProgress.emit(entryId, "detail", `Using ${contentType} pipeline (models: manifest=${strategy.models.manifest}, readme=${strategy.models.readme})`);
-
-  await stepImageProcessing(entryId, input.content.images);
-
-  const linkResult = await stepLinkFollowing(entryId, input, textSources, thumbnailUrl, strategy);
-  thumbnailUrl = linkResult.thumbnailUrl;
-
-  // ── Gather content ──
-  const { allContent, contentForClaude } = await stepGatherContent(entryId);
-
-  // ── Check for empty content (paywall, bot block, empty page) ──
-  const MIN_CONTENT_LENGTH = 100; // Less than this = nothing useful was extracted
-  if (contentForClaude.trim().length < MIN_CONTENT_LENGTH) {
-    const reason = "Content appears empty or inaccessible. The source may be behind a paywall, require authentication, or block automated access.";
-    ingestionProgress.emit(entryId, "error", reason, { step: "content_check" });
-
-    // Log as a warn (not error) — this is usually a property of the
-    // source URL (paywall/bot-block), not a bug. A sudden spike still
-    // shows up on the health dashboard as abnormal.
-    void logSystemEvent({
-      severity: "warn",
-      category: "ingestion",
-      source: "pipeline.contentCheck",
-      message: "Empty/inaccessible content rejected",
-      fingerprintKeys: ["ingestion", "empty_content"],
-      metadata: { entry_id: entryId, source_url: input.url, length: contentForClaude.trim().length },
-      userId: input.userId ?? null,
-    });
-    // No useful content extracted — delete the entry so nothing
-    // partial ends up in the common DB.
-    await deleteFailedEntry(entryId);
-    return;
-  }
-
-  // ── Generate artifacts (strategy-driven) ──
-  let manifest: Record<string, unknown>;
-  let readme: string;
-  let agentsMd: string;
-  let tags: Array<{ tag_type: string; tag_value: string }>;
-  let classification: ContentClassification | undefined;
-
-  if (strategy.classifyContent) {
-    // Setup/tutorial: classify content + generate manifest in parallel
-    const [classificationResult, manifestResult] = await Promise.all([
-      stepClassifyContent(entryId, contentForClaude, strategy.models.contentClassifier),
-      stepGenerateManifest(entryId, contentForClaude, contentType, sourceType, strategy.models.manifest, { thumbnailUrl, sourceUrl: input.url }),
-    ]);
-    manifest = manifestResult.manifest;
-    classification = classificationResult.classification;
-  } else {
-    // Knowledge/article/reference/resource: just manifest
-    ingestionProgress.emit(entryId, "detail", `${contentType} content — skipping content classification`);
-    ({ manifest } = await stepGenerateManifest(entryId, contentForClaude, contentType, sourceType, strategy.models.manifest, { thumbnailUrl, sourceUrl: input.url }));
-  }
-
-  // For setup/tutorial: agents.md no longer depends on readme, so run
-  // all three generators in parallel after manifest.
-  // For knowledge/article: agents.md (insights) still needs readme, so
-  // run readme+tags first, then secondary artifact.
-  const isSetupType = contentType === "setup" || contentType === "tutorial";
-
-  if (isSetupType && strategy.generateSecondaryArtifact) {
-    // README + tags + agents.md all in parallel
-    const [readmeResult, tagsResult, agentsMdResult] = await Promise.all([
-      stepGenerateReadme(entryId, contentForClaude, manifest, contentType, strategy.models.readme),
-      stepGenerateTags(entryId, manifest, strategy.models.tags),
-      stepGenerateSecondaryArtifact(entryId, contentForClaude, manifest, "", classification, input.url, contentType, strategy.models.secondary),
-    ]);
-    readme = readmeResult.readme;
-    tags = tagsResult.tags;
-    agentsMd = agentsMdResult.agentsMd;
-  } else {
-    // README + tags in parallel, then secondary artifact (needs readme)
-    [{ readme }, { tags }] = await Promise.all([
-      stepGenerateReadme(entryId, contentForClaude, manifest, contentType, strategy.models.readme),
-      stepGenerateTags(entryId, manifest, strategy.models.tags),
-    ]);
-
-    if (strategy.generateSecondaryArtifact) {
-      ({ agentsMd } = await stepGenerateSecondaryArtifact(entryId, contentForClaude, manifest, readme, classification, input.url, contentType, strategy.models.secondary));
-    } else {
-      agentsMd = "";
-    }
-  }
-
-  // ── Persist ──
-  await stepPersistEntry(entryId, input, manifest, readme, agentsMd, tags, allContent, thumbnailUrl, contentType);
-  await stepChunkAndEmbed(entryId, readme, agentsMd, allContent);
-
-  // Mark complete only after ALL steps succeed (including embeddings)
-  await supabase
-    .from("entries")
-    .update({ status: "complete", updated_at: new Date().toISOString() })
-    .eq("id", entryId);
-
-  // ── Done ──
-  await logStep(entryId, "pipeline_complete", "completed");
-  const title = (manifest as Record<string, string>).title || "Untitled";
-  const useCase = ((manifest as Record<string, Record<string, string>>).use_case?.primary as string) || "other";
-  const complexity = (manifest as Record<string, string>).complexity || "moderate";
-  ingestionProgress.emit(entryId, "complete", `Ingestion complete — "${title}" [${contentType}]`, {
-    details: { entry_id: entryId, title, use_case: useCase, complexity, content_type: contentType },
-  });
-}
-
-// ════════════════════════════════════════════════════════════════════
 // Step functions
+//
+// NOTE: the legacy `runPipeline()` orchestrator was removed when we
+// pivoted ingestion to the client-driven flow. The step functions below
+// are still used — extractForAgent() runs fetch/extract/link-following
+// during prepare_ingest, and stepGatherContent + storeSources are used
+// during submit_ingested_entry to assemble + persist artifacts.
 // ════════════════════════════════════════════════════════════════════
 
 /**
@@ -433,7 +147,7 @@ function failUnreachable(
 }
 
 /** Step 1.5: Auto-fetch from source platform (tweet/instagram/reddit). */
-async function stepPlatformFetch(
+export async function stepPlatformFetch(
   entryId: string,
   input: IngestInput
 ): Promise<{ thumbnailUrl: string | null; updatedText?: string; updatedLinks?: string[] }> {
@@ -612,7 +326,7 @@ async function stepPlatformFetch(
 }
 
 /** Step 2: Extract text content and store sources. */
-async function stepTextExtraction(
+export async function stepTextExtraction(
   entryId: string,
   text: string
 ): Promise<{ textSources: ExtractedSource[] }> {
@@ -634,105 +348,13 @@ async function stepTextExtraction(
   return { textSources };
 }
 
-/** Step 2.5: Detect content type. */
-async function stepDetectContentType(
-  entryId: string,
-  text: string
-): Promise<{ contentType: ContentType; sourceType: string }> {
-  if (!text || text.trim().length === 0) return { contentType: "knowledge", sourceType: "other" };
-
-  const stepStart = Date.now();
-  await logStep(entryId, "content_type_detection", "started");
-  ingestionProgress.emit(entryId, "step_start", "Detecting content type...", { step: "content_type_detection" });
-
-  const result = await classifyContentType(text, "haiku");
-
-  await logStep(entryId, "content_type_detection", "completed", {
-    content_type: result.content_type,
-    source_type: result.source_type,
-    confidence: result.confidence,
-    reasoning: result.reasoning,
-  }, Date.now() - stepStart);
-  ingestionProgress.emit(
-    entryId,
-    "step_complete",
-    `Content type: ${result.content_type} / ${result.source_type} (confidence: ${(result.confidence * 100).toFixed(0)}% — ${result.reasoning})`,
-    { step: "content_type_detection" }
-  );
-
-  return { contentType: result.content_type, sourceType: result.source_type };
-}
-
-/** Step 3: Process images in parallel with Claude Vision. */
-async function stepImageProcessing(
-  entryId: string,
-  images: string[] | undefined
-): Promise<void> {
-  if (!images || images.length === 0) return;
-
-  const stepStart = Date.now();
-  await logStep(entryId, "image_extraction", "started");
-
-  const limitedImages = images.slice(0, MAX_IMAGES_PER_ENTRY);
-  ingestionProgress.emit(
-    entryId,
-    "step_start",
-    `Processing ${limitedImages.length} image(s) with Claude Vision...`,
-    { step: "image_extraction" }
-  );
-
-  const imageResults = await Promise.allSettled(
-    limitedImages.map(async (imageBase64, idx) => {
-      ingestionProgress.emit(entryId, "detail", `Analyzing image ${idx + 1}/${limitedImages.length}...`);
-      const result = await extractImage(imageBase64);
-      const imageType = result.contentMetadata?.imageType || "image";
-      ingestionProgress.emit(entryId, "detail", `Image ${idx + 1}: detected ${imageType}`);
-      return result;
-    })
-  );
-
-  const successfulSources: ExtractedSource[] = [];
-  for (const result of imageResults) {
-    if (result.status === "fulfilled") {
-      successfulSources.push(result.value);
-    } else {
-      const reason =
-        result.reason instanceof Error
-          ? result.reason.message
-          : String(result.reason);
-      console.error("[pipeline] Image extraction failed:", reason);
-      // Surface to the health dashboard so chronic image-extractor
-      // failures (vision API outages, quota exhaustion) are visible
-      // instead of silently dropping user data.
-      void logSystemEvent({
-        severity: "warn",
-        category: "ingestion",
-        source: "pipeline.image_extract",
-        message: `Image extraction failed: ${reason}`,
-        fingerprintKeys: ["image_extract_fail"],
-        metadata: { entry_id: entryId, reason },
-      });
-    }
-  }
-  if (successfulSources.length > 0) {
-    await storeSources(entryId, successfulSources);
-  }
-
-  const failed = imageResults.length - successfulSources.length;
-  const msg = failed > 0
-    ? `Processed ${successfulSources.length} image(s), ${failed} failed`
-    : `All ${successfulSources.length} image(s) processed`;
-
-  await logStep(entryId, "image_extraction", "completed", {
-    processed: imageResults.length,
-    succeeded: successfulSources.length,
-    failed,
-  }, Date.now() - stepStart);
-  ingestionProgress.emit(entryId, "step_complete", msg, { step: "image_extraction" });
-}
+// stepDetectContentType and stepImageProcessing removed — both were
+// internal to the deleted runPipeline. The agent now runs content-type
+// classification and image vision prompts in its own context during the
+// prepare_ingest → submit_ingested_entry flow.
 
 /** Step 4: Follow links recursively and extract content. */
-async function stepLinkFollowing(
+export async function stepLinkFollowing(
   entryId: string,
   input: IngestInput,
   textSources: ExtractedSource[],
@@ -806,7 +428,7 @@ async function stepLinkFollowing(
 }
 
 /** Step 5: Gather all content from DB (no Claude call). */
-async function stepGatherContent(
+export async function stepGatherContent(
   entryId: string
 ): Promise<{ allContent: string; contentForClaude: string }> {
   const allContent = await gatherAllContent(entryId);
@@ -821,266 +443,18 @@ async function stepGatherContent(
   return { allContent, contentForClaude };
 }
 
-/** Step 5.5: Classify content sections with Claude. */
-async function stepClassifyContent(
-  entryId: string,
-  contentForClaude: string,
-  model?: ModelTier
-): Promise<{ classification: ContentClassification }> {
-  const stepStart = Date.now();
-  await logStep(entryId, "content_classification", "started");
-  ingestionProgress.emit(entryId, "step_start", "Classifying content sections...", { step: "content_classification" });
-
-  const classification = await classifyContent(contentForClaude, model);
-
-  await logStep(entryId, "content_classification", "completed", {
-    stats: classification.stats,
-    preservation_notes: classification.preservation_notes,
-  }, Date.now() - stepStart);
-  ingestionProgress.emit(entryId, "step_complete", "Content classified", { step: "content_classification" });
-
-  return { classification };
-}
-
-/** Step 6: Generate structured manifest from content. */
-async function stepGenerateManifest(
-  entryId: string,
-  contentForClaude: string,
-  contentType: ContentType = "setup",
-  sourceType: string = "other",
-  model?: ModelTier,
-  meta?: { thumbnailUrl: string | null; sourceUrl: string }
-): Promise<{ manifest: Record<string, unknown> }> {
-  const s = Date.now();
-  await logStep(entryId, "manifest_generation", "started");
-  ingestionProgress.emit(entryId, "step_start", `Generating manifest (${contentType})...`, { step: "manifest_generation" });
-
-  const manifest = await generateManifest(contentForClaude, contentType, sourceType, model);
-
-  const m = manifest as Record<string, unknown>;
-  const tools = (Array.isArray(m.tools) ? m.tools : []) as { name?: string }[];
-  const integrations = Array.isArray(m.integrations) ? m.integrations : [];
-  const parts: string[] = [];
-  if (tools.length > 0) {
-    const toolNames = tools.map((t) => (typeof t === "string" ? t : t.name || "unknown")).slice(0, 5);
-    parts.push(`${tools.length} tool(s): ${toolNames.join(", ")}`);
-  }
-  if (integrations.length > 0) parts.push(`${integrations.length} integration(s)`);
-  parts.push(`complexity: ${m.complexity || "unknown"}`);
-
-  await logStep(entryId, "manifest_generation", "completed", undefined, Date.now() - s);
-  ingestionProgress.emit(entryId, "step_complete", `Manifest generated — ${parts.join(", ")}`, {
-    step: "manifest_generation",
-    details: {
-      manifest,
-      title: (m.title as string) || "Untitled",
-      summary: (m.description as string) || "",
-      useCase: ((m.use_case as Record<string, string>)?.primary as string) || "other",
-      complexity: (m.complexity as string) || "moderate",
-      contentType,
-      thumbnailUrl: meta?.thumbnailUrl ?? null,
-      sourceUrl: meta?.sourceUrl ?? "",
-      sourcePlatform: meta?.sourceUrl ? detectPlatform(meta.sourceUrl) : null,
-    },
-  });
-
-  return { manifest };
-}
-
-/** Step 7: Generate human-readable README. */
-async function stepGenerateReadme(
-  entryId: string,
-  contentForClaude: string,
-  manifest: Record<string, unknown>,
-  contentType: ContentType = "setup",
-  model?: ModelTier
-): Promise<{ readme: string }> {
-  const s = Date.now();
-  await logStep(entryId, "readme_generation", "started");
-  ingestionProgress.emit(entryId, "step_start", `Generating README (${contentType})...`, { step: "readme_generation" });
-
-  const readme = await generateReadme(contentForClaude, manifest, contentType, model);
-
-  await logStep(entryId, "readme_generation", "completed", undefined, Date.now() - s);
-  ingestionProgress.emit(entryId, "step_complete", `README generated (${Math.round(readme.length / 1000)}K chars)`, {
-    step: "readme_generation",
-    details: { readme },
-  });
-
-  return { readme };
-}
-
-/** Step 8: Generate secondary artifact (agents.md / insights / reference guide). */
-async function stepGenerateSecondaryArtifact(
-  entryId: string,
-  contentForClaude: string,
-  manifest: Record<string, unknown>,
-  readme: string,
-  classification: ContentClassification | undefined,
-  sourceUrl: string | undefined,
-  contentType: ContentType = "setup",
-  model?: ModelTier
-): Promise<{ agentsMd: string }> {
-  const artifactLabel = getSecondaryArtifactLabel(contentType);
-  const s = Date.now();
-  await logStep(entryId, "agents_md_generation", "started");
-  ingestionProgress.emit(entryId, "step_start", `Generating ${artifactLabel}...`, { step: "agents_md_generation" });
-
-  const agentsMd = await generateAgentsMd(contentForClaude, manifest, readme, classification, sourceUrl, contentType, model);
-
-  await logStep(entryId, "agents_md_generation", "completed", undefined, Date.now() - s);
-  ingestionProgress.emit(entryId, "step_complete", `${artifactLabel} generated (${Math.round(agentsMd.length / 1000)}K chars)`, {
-    step: "agents_md_generation",
-    details: { agentsMd },
-  });
-
-  return { agentsMd };
-}
-
-/** Step 9: Generate searchable tags from manifest. */
-async function stepGenerateTags(
-  entryId: string,
-  manifest: Record<string, unknown>,
-  model?: ModelTier
-): Promise<{ tags: Array<{ tag_type: string; tag_value: string }> }> {
-  const s = Date.now();
-  await logStep(entryId, "tag_generation", "started");
-  ingestionProgress.emit(entryId, "step_start", "Generating searchable tags...", { step: "tag_generation" });
-
-  const tags = await generateTags(manifest, model);
-
-  await logStep(entryId, "tag_generation", "completed", undefined, Date.now() - s);
-  if (tags.length > 0) {
-    const tagSummary = tags.slice(0, 8).map((t) => t.tag_value).join(", ");
-    ingestionProgress.emit(entryId, "step_complete", `Generated ${tags.length} tag(s): ${tagSummary}`, {
-      step: "tag_generation",
-      details: { tags },
-    });
-  } else {
-    ingestionProgress.emit(entryId, "step_complete", "No tags generated", {
-      step: "tag_generation",
-      details: { tags: [] },
-    });
-  }
-
-  return { tags };
-}
-
-/** Steps 10 + 11: Update entry record and store tags. */
-async function stepPersistEntry(
-  entryId: string,
-  input: IngestInput,
-  manifest: Record<string, unknown>,
-  readme: string,
-  agentsMd: string,
-  tags: Array<{ tag_type: string; tag_value: string }>,
-  allContent: string,
-  thumbnailUrl: string | null,
-  contentType: ContentType = "setup"
-): Promise<void> {
-  const title = (manifest as Record<string, string>).title || "Untitled";
-  const summary = (manifest as Record<string, string>).description || "";
-  const useCase = ((manifest as Record<string, Record<string, string>>).use_case?.primary as string) || "other";
-  const complexity = (manifest as Record<string, string>).complexity || "moderate";
-
-  // Generate GitHub OG thumbnail if source is GitHub and no thumbnail yet
-  if (!thumbnailUrl && input.url.includes("github.com")) {
-    const ghMatch = input.url.match(/github\.com\/([^/]+)\/([^/]+)/);
-    if (ghMatch) {
-      const params = new URLSearchParams({ owner: ghMatch[1], repo: ghMatch[2] });
-      thumbnailUrl = `/api/og/github?${params.toString()}`;
-    }
-  }
-
-  // Universal fallback: use thum.io to generate a screenshot of the source page.
-  // This is a free service that renders the URL on-demand when the image loads.
-  // No API call during ingestion, zero latency added.
-  if (!thumbnailUrl && input.url) {
-    thumbnailUrl = `https://image.thum.io/get/${encodeURI(input.url)}`;
-  }
-
-  // Generate a public slug from the title and persist the row. Two
-  // concurrent ingestions with the same title can race through
-  // generateEntrySlug (both see the same "existing slugs" snapshot and
-  // pick the same candidate), so the UPDATE wins only once. On
-  // unique-violation (Postgres 23505), retry with a random suffix —
-  // faster than another round-trip query, and guarantees termination.
-  async function persistWithSlugRetry(initialSlug: string): Promise<void> {
-    const maxAttempts = 5;
-    let candidate = initialSlug;
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      const { error } = await supabase
-        .from("entries")
-        .update({
-          title,
-          summary,
-          use_case: useCase,
-          complexity,
-          content_type: contentType,
-          thumbnail_url: thumbnailUrl,
-          readme,
-          agents_md: agentsMd || null,
-          manifest,
-          raw_content: { gathered: allContent },
-          slug: candidate,
-          status: "processing",
-          ingested_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", entryId);
-
-      if (!error) return;
-
-      // 23505 = unique violation — collision on slug column.
-      if ((error as { code?: string }).code === "23505") {
-        const suffix = Math.random().toString(36).slice(2, 6);
-        candidate = `${initialSlug}-${suffix}`;
-        continue;
-      }
-
-      throw new Error(`Failed to update entry: ${error.message}`);
-    }
-    throw new Error(
-      `Failed to assign a unique slug for entry ${entryId} after ${maxAttempts} attempts`
-    );
-  }
-
-  const slug = await generateEntrySlug(entryId, title);
-  await persistWithSlugRetry(slug);
-
-  if (tags.length > 0) {
-    const tagRows = tags.map((t) => ({
-      entry_id: entryId,
-      tag_type: t.tag_type,
-      tag_value: t.tag_value,
-    }));
-    const { error: tagError } = await supabase.from("tags").insert(tagRows);
-    if (tagError) {
-      console.error("[pipeline] Failed to store tags:", tagError);
-      ingestionProgress.emit(entryId, "step_error", `Tag insertion failed: ${tagError.message}`, {
-        step: "tag_insertion",
-        details: { error: tagError.message },
-      });
-    }
-  }
-}
-
-/** Step 12: Chunk content and generate vector embeddings. */
-async function stepChunkAndEmbed(
-  entryId: string,
-  readme: string,
-  agentsMd: string,
-  allContent: string
-): Promise<void> {
-  const stepStart = Date.now();
-  await logStep(entryId, "embedding", "started");
-  ingestionProgress.emit(entryId, "step_start", "Chunking content and generating embeddings...", { step: "embedding" });
-
-  await chunkAndEmbed(entryId, { readme, agentsMd, rawContent: allContent });
-
-  await logStep(entryId, "embedding", "completed", undefined, Date.now() - stepStart);
-  ingestionProgress.emit(entryId, "step_complete", "Embeddings generated", { step: "embedding" });
-}
+// ════════════════════════════════════════════════════════════════════
+// Legacy per-step Claude generators — REMOVED.
+//
+// stepClassifyContent, stepGenerateManifest, stepGenerateReadme,
+// stepGenerateSecondaryArtifact, stepGenerateTags, stepPersistEntry,
+// and stepChunkAndEmbed were all stages of the old runPipeline flow
+// that ran Claude / persisted artifacts server-side. They've been
+// replaced by the agent-driven prepare_ingest → submit_ingested_entry
+// pair: the agent runs every LLM prompt in its own context, then
+// POSTs the finished artifacts to /api/ingest/submit which persists
+// them (via persistAgentArtifacts) and embeds the chunks.
+// ════════════════════════════════════════════════════════════════════
 
 // ════════════════════════════════════════════════════════════════════
 // Helper functions
@@ -1165,7 +539,7 @@ async function followAndStore(
   }
 }
 
-async function storeSources(
+export async function storeSources(
   entryId: string,
   sources: ExtractedSource[]
 ): Promise<void> {
@@ -1273,7 +647,7 @@ async function gatherAllContent(entryId: string): Promise<string> {
   return parts.join("\n\n");
 }
 
-function detectPlatform(url: string): string {
+export function detectPlatform(url: string): string {
   if (isTweetUrl(url)) return "x";
   if (isInstagramPostUrl(url)) return "instagram";
   if (isRedditPostUrl(url)) return "reddit";
@@ -1289,39 +663,11 @@ function detectPlatform(url: string): string {
   return "web";
 }
 
-/** Get the human-readable label for the secondary artifact based on content type. */
-export function getSecondaryArtifactLabel(contentType: string): string {
-  switch (contentType) {
-    case "setup":
-    case "tutorial":
-      return "agents.md";
-    case "knowledge":
-    case "article":
-      return "Key Insights";
-    case "reference":
-      return "Reference Guide";
-    default:
-      return "agents.md";
-  }
-}
+// NOTE: getSecondaryArtifactLabel + getSecondaryArtifactFilename were
+// helpers for the removed stepGenerateSecondaryArtifact. Deleted — no
+// live callers.
 
-/** Get the download filename for the secondary artifact. */
-export function getSecondaryArtifactFilename(contentType: string): string {
-  switch (contentType) {
-    case "setup":
-    case "tutorial":
-      return "agents.md";
-    case "knowledge":
-    case "article":
-      return "key-insights.md";
-    case "reference":
-      return "reference-guide.md";
-    default:
-      return "agents.md";
-  }
-}
-
-async function logStep(
+export async function logStep(
   entryId: string,
   step: string,
   status: "started" | "completed" | "error",
@@ -1335,4 +681,242 @@ async function logStep(
     details: details || null,
     duration_ms: durationMs || null,
   });
+}
+
+// ════════════════════════════════════════════════════════════════════
+// Agent-driven ingest — exposed helpers for /api/ingest/prepare and
+// /api/ingest/submit. Fetching stays on the server; AI generation runs
+// in the user's Claude Code. See docs in src/lib/ingestion/agent-bundle.ts
+// and the plan file for the full contract.
+// ════════════════════════════════════════════════════════════════════
+
+/**
+ * Run the fetch + link-follow + gather phases of the pipeline without
+ * touching Claude/OpenAI. Called by /api/ingest/prepare.
+ *
+ * Preserves every source-table write the legacy pipeline performs, so a
+ * later submit_ingested_entry call lands in an entry row that is
+ * indistinguishable from one produced by `ingestEntry` except that the
+ * AI-generated columns come from the agent's output instead of ours.
+ *
+ * Uses the "setup" pipeline strategy for link-following (max 30 links,
+ * max depth = MAX_LINK_DEPTH) because content type isn't classified until
+ * the agent runs its own prompt — using the most generous strategy means
+ * we don't under-fetch content the agent might later want.
+ */
+export async function extractForAgent(
+  entryId: string,
+  input: IngestInput
+): Promise<{
+  gatheredContent: string;
+  thumbnailUrl: string | null;
+  sourcePlatform: string;
+}> {
+  const sourcePlatform = detectPlatform(input.url);
+
+  const fetchResult = await stepPlatformFetch(entryId, input);
+  let thumbnailUrl = fetchResult.thumbnailUrl;
+  if (fetchResult.updatedText !== undefined) {
+    input.content.text = fetchResult.updatedText;
+  }
+  if (fetchResult.updatedLinks !== undefined) {
+    input.content.links = fetchResult.updatedLinks;
+  }
+
+  const { textSources } = await stepTextExtraction(
+    entryId,
+    input.content.text || ""
+  );
+
+  // Use setup-tier link-following aggressiveness. The agent can ignore
+  // content it doesn't need, but we can't re-fetch after the fact.
+  const strategy = PIPELINE_STRATEGIES.setup;
+  const linkResult = await stepLinkFollowing(
+    entryId,
+    input,
+    textSources,
+    thumbnailUrl,
+    strategy
+  );
+  thumbnailUrl = linkResult.thumbnailUrl;
+
+  const { allContent } = await stepGatherContent(entryId);
+
+  return {
+    gatheredContent: allContent,
+    thumbnailUrl,
+    sourcePlatform,
+  };
+}
+
+/**
+ * Persist an entry's agent-generated artifacts. Called by /api/ingest/submit.
+ *
+ * Mirrors the column set written by `stepPersistEntry` exactly:
+ *   - UPDATE entries with title, summary, use_case, complexity, content_type,
+ *     thumbnail_url, readme, agents_md, manifest, raw_content, slug,
+ *     ingested_at, updated_at.
+ *   - INSERT tags rows ({entry_id, tag_type, tag_value}) for every tag.
+ *   - Slug collision retry loop, same 5-attempt strategy + random suffix.
+ *
+ * Leaves `status` as "processing" — caller flips it to "complete" after
+ * embeddings finish (same split the legacy pipeline uses).
+ *
+ * Throws on DB failure so the caller can refund credits + delete the entry.
+ */
+export async function persistAgentArtifacts(args: {
+  entryId: string;
+  sourceUrl: string;
+  manifest: Record<string, unknown>;
+  readme: string;
+  agentsMd: string;
+  tags: Array<{ tag_type: string; tag_value: string }>;
+  gatheredContent: string;
+  thumbnailUrl: string | null;
+  contentType: ContentType;
+}): Promise<{ slug: string }> {
+  const {
+    entryId,
+    sourceUrl,
+    manifest,
+    readme,
+    agentsMd,
+    tags,
+    gatheredContent,
+    thumbnailUrl: initialThumbnail,
+    contentType,
+  } = args;
+
+  const title = (manifest as Record<string, string>).title || "Untitled";
+  const summary = (manifest as Record<string, string>).description || "";
+  const useCase =
+    ((manifest as Record<string, Record<string, string>>).use_case
+      ?.primary as string) || "other";
+  const complexity =
+    (manifest as Record<string, string>).complexity || "moderate";
+
+  // Same thumbnail-fallback ladder as the legacy path.
+  let thumbnailUrl = initialThumbnail;
+  if (!thumbnailUrl && sourceUrl.includes("github.com")) {
+    const ghMatch = sourceUrl.match(/github\.com\/([^/]+)\/([^/]+)/);
+    if (ghMatch) {
+      const params = new URLSearchParams({
+        owner: ghMatch[1],
+        repo: ghMatch[2],
+      });
+      thumbnailUrl = `/api/og/github?${params.toString()}`;
+    }
+  }
+  if (!thumbnailUrl && sourceUrl) {
+    thumbnailUrl = `https://image.thum.io/get/${encodeURI(sourceUrl)}`;
+  }
+
+  // Same slug retry loop as legacy stepPersistEntry.
+  const initialSlug = await generateEntrySlug(entryId, title);
+  const maxAttempts = 5;
+  let candidate = initialSlug;
+  let finalSlug: string | null = null;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const { error } = await supabase
+      .from("entries")
+      .update({
+        title,
+        summary,
+        use_case: useCase,
+        complexity,
+        content_type: contentType,
+        thumbnail_url: thumbnailUrl,
+        readme,
+        agents_md: agentsMd || null,
+        manifest,
+        raw_content: { gathered: gatheredContent },
+        slug: candidate,
+        status: "processing",
+        ingested_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", entryId);
+
+    if (!error) {
+      finalSlug = candidate;
+      break;
+    }
+
+    // 23505 = unique_violation on slug. Retry with a random suffix.
+    if ((error as { code?: string }).code === "23505") {
+      const suffix = Math.random().toString(36).slice(2, 6);
+      candidate = `${initialSlug}-${suffix}`;
+      continue;
+    }
+
+    throw new Error(`Failed to update entry: ${error.message}`);
+  }
+
+  if (!finalSlug) {
+    throw new Error(
+      `Failed to assign a unique slug for entry ${entryId} after ${maxAttempts} attempts`
+    );
+  }
+
+  if (tags.length > 0) {
+    const tagRows = tags.map((t) => ({
+      entry_id: entryId,
+      tag_type: t.tag_type,
+      tag_value: t.tag_value,
+    }));
+    const { error: tagError } = await supabase.from("tags").insert(tagRows);
+    if (tagError) {
+      // Legacy pipeline treats tag insert failure as non-fatal; match that so
+      // a bad tag row doesn't poison an otherwise-good ingest.
+      console.error("[pipeline] Failed to store tags:", tagError);
+    }
+  }
+
+  return { slug: finalSlug };
+}
+
+/**
+ * Flip an entry's status to "complete" and write the final pipeline_complete
+ * log. Called by /api/ingest/submit after embeddings land.
+ *
+ * Also fires the first_ingest_completed conversion event the first time
+ * a given user reaches completion (for the launch-metrics funnel).
+ */
+export async function finalizeAgentEntry(entryId: string): Promise<void> {
+  await supabase
+    .from("entries")
+    .update({
+      status: "complete",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", entryId);
+
+  await logStep(entryId, "pipeline_complete", "completed");
+
+  // Fire first_ingest_completed event. Best-effort — lookup the owner
+  // and skip silently if we can't resolve it.
+  try {
+    const { data: entry } = await supabase
+      .from("entries")
+      .select("ingested_by")
+      .eq("id", entryId)
+      .single();
+    const userId = entry?.ingested_by as string | null;
+    if (userId) {
+      const { logConversionEvent, hasFiredEvent } = await import(
+        "@/lib/analytics/conversion-events"
+      );
+      const already = await hasFiredEvent(userId, "first_ingest_completed");
+      if (!already) {
+        await logConversionEvent({
+          userId,
+          eventType: "first_ingest_completed",
+          metadata: { entry_id: entryId },
+        });
+      }
+    }
+  } catch {
+    // Never block pipeline completion on event logging.
+  }
 }

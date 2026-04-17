@@ -1,161 +1,135 @@
-"use client";
+/**
+ * Server component for `/community/<slug>`. Fetches the published
+ * cluster once, emits rich Open Graph / Twitter Card metadata (so X
+ * comments unfurl with a preview card), and hands the snapshot to
+ * `CommunityDetailClient` to render — avoiding the "fetch on mount
+ * with spinner" round-trip the old client-only page had.
+ *
+ * The Dopl viral flow is: publish cluster → paste URL under viral
+ * post → viewer clicks. The OG tags here determine the card that
+ * appears in the X / Slack / Discord preview — without them, every
+ * cluster shows the generic site card.
+ */
 
-import { useEffect, useState, useCallback, useRef, use } from "react";
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
-import { PublishedCanvas } from "@/components/community/published-canvas";
-import { DetailPanel } from "@/components/community/detail-panel";
-import { getSupabaseBrowser } from "@/lib/supabase-browser";
-import { captureAndUploadThumbnail } from "@/lib/community/capture-thumbnail";
-import type { PublishedClusterDetail } from "@/lib/community/types";
+import { cache } from "react";
+import type { Metadata } from "next";
+import { notFound } from "next/navigation";
+import { getPublishedCluster } from "@/lib/community/service";
+import CommunityDetailClient from "./community-detail-client";
 
-export default function CommunityDetailPage({
-  params,
-}: {
+// Keep crawlers (X, Slack, Discord) from hammering the DB on every
+// link-preview request. 60s is fine for viral-post timing — the first
+// crawl fills the cache, subsequent crawls hit it.
+export const revalidate = 60;
+
+/**
+ * Per-request memoized fetch for the published cluster. Both
+ * generateMetadata and the default export call this on every cold
+ * request; without the React cache() wrapper that's two round trips +
+ * five Supabase queries each. cache() is request-scoped — it doesn't
+ * bleed between requests — so combined with `revalidate = 60` we get:
+ *   - 1 DB fetch per cold request (instead of 2)
+ *   - 0 DB fetches for repeat hits within the revalidate window.
+ */
+const getPublishedClusterOnce = cache(getPublishedCluster);
+
+type PageProps = {
   params: Promise<{ slug: string }>;
-}) {
-  const { slug } = use(params);
-  const [cluster, setCluster] = useState<PublishedClusterDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const canvasContainerRef = useRef<HTMLDivElement>(null);
-  const thumbnailCapturedRef = useRef(false);
+};
 
-  // Auto-capture thumbnail when owner visits a post with no thumbnail
-  useEffect(() => {
-    if (
-      !cluster ||
-      !currentUserId ||
-      cluster.author.id !== currentUserId ||
-      cluster.thumbnail_url ||
-      thumbnailCapturedRef.current
-    ) return;
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { slug } = await params;
 
-    // Wait for canvas to render
-    const timer = setTimeout(() => {
-      const el = canvasContainerRef.current;
-      if (!el) return;
-      thumbnailCapturedRef.current = true;
-      captureAndUploadThumbnail(el, cluster.slug).then((url) => {
-        if (url) {
-          setCluster((prev) => prev ? { ...prev, thumbnail_url: url } : prev);
-        }
-      });
-    }, 2000); // Give canvas 2s to render
+  let cluster;
+  try {
+    cluster = await getPublishedClusterOnce(slug);
+  } catch {
+    // Missing row — return generic metadata so the 404 page still gets
+    // reasonable social preview behavior.
+    return {
+      title: "Cluster not found · Dopl",
+    };
+  }
 
-    return () => clearTimeout(timer);
-  }, [cluster, currentUserId]);
+  // `getPublishedCluster` doesn't filter by status (it's also used by
+  // the owner-editing flow), so enforce public visibility here. Matches
+  // the check the legacy /api/community/[slug] route performed —
+  // without this, archived / draft clusters would leak via the URL.
+  if (cluster.status !== "published") {
+    return {
+      title: "Cluster not found · Dopl",
+    };
+  }
 
-  // Get current user ID (if logged in)
-  useEffect(() => {
-    getSupabaseBrowser()
-      .auth.getUser()
-      .then(({ data }: { data: { user: { id: string } | null } }) => {
-        setCurrentUserId(data.user?.id || null);
-      })
-      .catch(() => {});
-  }, []);
+  const title = `${cluster.title} · Dopl`;
+  const rawDescription = cluster.description?.trim() || "";
+  const description =
+    rawDescription.length > 0
+      ? rawDescription.slice(0, 200)
+      : `${cluster.panel_count} AI & automation setup${cluster.panel_count === 1 ? "" : "s"} from ${cluster.author.display_name || "Anonymous"} on Dopl.`;
 
-  // Fetch published cluster
-  useEffect(() => {
-    async function fetchCluster() {
-      try {
-        const res = await fetch(`/api/community/${encodeURIComponent(slug)}`);
-        if (!res.ok) {
-          if (res.status === 404) {
-            setError("This cluster doesn't exist or has been archived.");
-          } else {
-            throw new Error("Failed to load");
-          }
-          return;
-        }
-        const data = await res.json();
-        setCluster(data);
-      } catch {
-        setError("Failed to load this cluster.");
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchCluster();
-  }, [slug]);
+  // OG image priority:
+  //   1. Auto-captured canvas thumbnail (filled in by the owner's
+  //      first visit — see capture-thumbnail.ts).
+  //   2. thum.io universal fallback rendering the community page
+  //      itself — same trick pipeline.ts uses for entries.
+  // metadataBase from root layout.tsx turns relative paths absolute.
+  const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "https://usedopl.com";
+  const ogImage =
+    cluster.thumbnail_url ||
+    `https://image.thum.io/get/${encodeURI(`${siteUrl}/community/${slug}`)}`;
 
-  // Handle panel position updates (creator only)
-  const handlePanelsMove = useCallback(
-    (moves: Array<{ id: string; x: number; y: number }>) => {
-      if (!cluster) return;
-      fetch(`/api/community/${encodeURIComponent(cluster.slug)}/panels`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ panels: moves }),
-      }).catch(() => {});
+  const pageUrl = `${siteUrl}/community/${slug}`;
+
+  return {
+    title,
+    description,
+    openGraph: {
+      type: "article",
+      siteName: "Dopl",
+      title,
+      description,
+      url: pageUrl,
+      images: [
+        {
+          url: ogImage,
+          width: 1200,
+          height: 630,
+          alt: cluster.title,
+        },
+      ],
     },
-    [cluster]
-  );
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: [ogImage],
+      creator: cluster.author.twitter_handle
+        ? `@${cluster.author.twitter_handle.replace(/^@/, "")}`
+        : undefined,
+    },
+    alternates: {
+      canonical: pageUrl,
+    },
+  };
+}
 
-  if (loading) {
-    return (
-      <div className="fixed inset-0 bg-[#0c0c0c] flex items-center justify-center">
-        <div className="text-white/30 text-sm">Loading...</div>
-      </div>
-    );
+export default async function CommunityDetailPage({ params }: PageProps) {
+  const { slug } = await params;
+
+  let cluster;
+  try {
+    cluster = await getPublishedClusterOnce(slug);
+  } catch {
+    notFound();
   }
 
-  if (error || !cluster) {
-    return (
-      <div className="fixed inset-0 bg-[#0c0c0c] flex flex-col items-center justify-center gap-4">
-        <p className="text-white/40">{error || "Not found"}</p>
-        <Link
-          href="/community"
-          className="text-sm text-white/30 hover:text-white/60 inline-flex items-center gap-1.5 transition-colors"
-        >
-          <ArrowLeft size={14} /> Back to Community
-        </Link>
-      </div>
-    );
+  // Same public-visibility guard as generateMetadata — do not render
+  // non-published rows. `getPublishedCluster` itself is status-agnostic
+  // because it's also reused by admin / owner tooling.
+  if (cluster.status !== "published") {
+    notFound();
   }
 
-  const isOwner = currentUserId === cluster.author.id;
-
-  return (
-    <div className="fixed inset-0 bg-[#0c0c0c] flex flex-col">
-      {/* Top bar */}
-      <div className="h-12 flex-shrink-0 border-b border-white/[0.06] bg-[#0a0a0a] flex items-center px-4 gap-4 z-10">
-        <Link
-          href="/community"
-          className="text-white/30 hover:text-white/60 transition-colors"
-        >
-          <ArrowLeft size={16} />
-        </Link>
-        <span className="text-sm text-white/60 font-medium truncate">
-          {cluster.title}
-        </span>
-        {isOwner && (
-          <span className="ml-2 text-[10px] uppercase tracking-wider text-amber-400/60 bg-amber-400/[0.08] border border-amber-400/[0.15] px-1.5 py-0.5 rounded">
-            Editing
-          </span>
-        )}
-        <div className="flex-1" />
-        <span className="text-xs text-white/20">
-          by {cluster.author.display_name || "Anonymous"}
-        </span>
-      </div>
-
-      {/* Main content */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Canvas area */}
-        <div className="flex-1 relative" ref={canvasContainerRef}>
-          <PublishedCanvas
-            panels={cluster.panels}
-            readOnly={!isOwner}
-            onPanelsMove={isOwner ? handlePanelsMove : undefined}
-          />
-        </div>
-
-        {/* Detail panel */}
-        <DetailPanel cluster={cluster} isOwner={isOwner} />
-      </div>
-    </div>
-  );
+  return <CommunityDetailClient cluster={cluster} />;
 }

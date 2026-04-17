@@ -7,11 +7,26 @@ import type {
   ClusterDetail,
   ClusterQueryResult,
   CanvasPanel,
+  PrepareIngestResult,
+  SubmitIngestedEntryInput,
+  SubmitIngestedEntryResult,
+  PendingStatus,
 } from "./types.js";
+
+/**
+ * How long a successful pending-status fetch is reused without hitting the
+ * backend. The MCP server appends `_dopl_status` to every tool response,
+ * so a chatty agent firing 5+ tools in a turn coalesces down to ~1 call.
+ * `invalidatePendingCache()` is called by `prepareIngest` so the moment
+ * an agent claims a pending row, the footer is up-to-date on the next
+ * tool response.
+ */
+const PENDING_CACHE_TTL_MS = 5_000;
 
 export class DoplClient {
   private baseUrl: string;
   private apiKey: string;
+  private pendingCache: { ts: number; data: PendingStatus } | null = null;
 
   constructor(baseUrl: string, apiKey: string) {
     this.baseUrl = baseUrl.replace(/\/$/, "");
@@ -86,7 +101,6 @@ export class DoplClient {
     tags?: string[];
     use_case?: string;
     max_results?: number;
-    include_synthesis?: boolean;
   }): Promise<SearchResult> {
     return this.request<SearchResult>("/api/query", {
       method: "POST",
@@ -98,7 +112,6 @@ export class DoplClient {
           use_case: params.use_case,
         },
         max_results: params.max_results ?? 5,
-        include_synthesis: params.include_synthesis ?? true,
       },
     });
   }
@@ -249,19 +262,50 @@ export class DoplClient {
     );
   }
 
-  async synthesizeBrain(
-    entries: Array<{ title: string; agents_md: string; readme: string }>
-  ): Promise<{ instructions: string }> {
-    return this.request<{ instructions: string }>("/api/cluster/synthesize", {
-      method: "POST",
-      toolName: "_cluster_synthesize",
-      body: { entries },
-      timeoutMs: 120_000, // Synthesis can take a while
-    });
+  /**
+   * Fetch the canonical skill synthesis prompt + body template. Replaces
+   * the old synthesizeBrain() method — all brain generation now happens
+   * in the user's Claude Code (not on our server), so the client's job
+   * is to grab the prompt and run synthesis locally.
+   */
+  async getSkillTemplate(): Promise<{
+    version: string;
+    prompt: string;
+    template: string;
+    payload: string;
+  }> {
+    return this.request<{ version: string; prompt: string; template: string; payload: string }>(
+      "/api/cluster/synthesize",
+      {
+        method: "GET",
+        toolName: "get_skill_template",
+      }
+    );
   }
 
-  async updateClusterBrain(slug: string, instructions: string): Promise<void> {
-    await this.request<unknown>(
+  async updateClusterBrain(
+    slug: string,
+    instructions: string
+  ): Promise<{
+    id?: string;
+    cluster_id?: string;
+    instructions?: string;
+    structure_warning?: {
+      message: string;
+      missing_sections: string[];
+      suggestion: string;
+    } | null;
+  }> {
+    return this.request<{
+      id?: string;
+      cluster_id?: string;
+      instructions?: string;
+      structure_warning?: {
+        message: string;
+        missing_sections: string[];
+        suggestion: string;
+      } | null;
+    }>(
       `/api/clusters/${encodeURIComponent(slug)}/brain`,
       {
         method: "PATCH",
@@ -272,17 +316,103 @@ export class DoplClient {
   }
 
   // ── Ingestion ─────────────────────────────────────────────────────
+  //
+  // The legacy `ingestUrl()` method (POST /api/ingest) has been removed.
+  // All regular ingestion goes through `prepareIngest()` + `submitIngestedEntry()`
+  // — no server-side Claude. Admin skeleton ingest uses `skeletonIngest()`.
 
-  async ingestUrl(
+  /**
+   * Agent-driven ingest, step 1/2. Server fetches + extracts; we get back
+   * the raw content and the prompts to run locally. Pair with
+   * `submitIngestedEntry` once the agent has generated the artifacts.
+   * Longer timeout because link-following can fetch many pages.
+   */
+  async prepareIngest(
     url: string,
     content?: { text?: string; images?: string[]; links?: string[] }
-  ): Promise<{ entry_id: string; slug: string | null; status: string; stream_url?: string; title?: string | null }> {
-    return this.request<{ entry_id: string; slug: string | null; status: string; stream_url?: string; title?: string | null }>(
-      "/api/ingest",
+  ): Promise<PrepareIngestResult> {
+    const result = await this.request<PrepareIngestResult>("/api/ingest/prepare", {
+      method: "POST",
+      toolName: "prepare_ingest",
+      body: { url, content: content || {} },
+      timeoutMs: 120_000,
+    });
+    // If this prepare just claimed a pending skeleton (or created a new
+    // processing row), the pending count is now stale. Bust the cache so
+    // the next tool response's footer reflects reality.
+    this.invalidatePendingCache();
+    return result;
+  }
+
+  // ── Pending-ingestion status ──────────────────────────────────────
+  //
+  // Read by the `withDoplStatus` wrapper in server.ts — it appends a
+  // `_dopl_status` footer to every tool response so the connected agent
+  // notices queued URLs on its next tool call.
+
+  async getPendingStatus(): Promise<PendingStatus> {
+    const now = Date.now();
+    if (
+      this.pendingCache &&
+      now - this.pendingCache.ts < PENDING_CACHE_TTL_MS
+    ) {
+      return this.pendingCache.data;
+    }
+    try {
+      const data = await this.request<PendingStatus>("/api/ingest/pending", {
+        toolName: "_pending_status",
+      });
+      this.pendingCache = { ts: now, data };
+      return data;
+    } catch {
+      // Never block a tool call on the status fetch failing. If the
+      // endpoint is down or the user has no pending entries, just
+      // return an empty snapshot so the wrapper omits the footer.
+      const empty: PendingStatus = { pending_ingestions: 0, recent: [] };
+      this.pendingCache = { ts: now, data: empty };
+      return empty;
+    }
+  }
+
+  invalidatePendingCache(): void {
+    this.pendingCache = null;
+  }
+
+  /**
+   * Agent-driven ingest, step 2/2. Submits the artifacts the agent generated;
+   * server embeds + persists. Synchronous — returns once the entry is
+   * status="complete".
+   */
+  async submitIngestedEntry(
+    input: SubmitIngestedEntryInput
+  ): Promise<SubmitIngestedEntryResult> {
+    return this.request<SubmitIngestedEntryResult>("/api/ingest/submit", {
+      method: "POST",
+      toolName: "submit_ingested_entry",
+      body: input,
+      // Embeddings + DB writes can take 30–60s for large entries (50 chunks
+      // × 10-batch through OpenAI + tag inserts + slug retry loop).
+      // 120s leaves headroom for the worst case.
+      timeoutMs: 120_000,
+    });
+  }
+
+  /**
+   * Admin-only skeleton ingestion — runs the cheap descriptor pipeline
+   * against a public GitHub repo. Non-admin API keys get 404 from the
+   * backend (admin surfaces are non-enumerable). Uses the existing
+   * withAdminAuth gate in src/lib/auth/with-auth.ts, which reads
+   * ADMIN_USER_ID.
+   */
+  async skeletonIngest(
+    url: string
+  ): Promise<{ entry_id: string; slug: string | null; status: string; tier?: string; title?: string | null }> {
+    return this.request<{ entry_id: string; slug: string | null; status: string; tier?: string; title?: string | null }>(
+      "/api/admin/skeleton-ingest",
       {
         method: "POST",
-        toolName: "ingest_url",
-        body: { url, content: content || {} },
+        toolName: "skeleton_ingest",
+        body: { url },
         timeoutMs: 60_000,
       }
     );
@@ -300,6 +430,21 @@ export class DoplClient {
         method: "PATCH",
         toolName: "update_cluster",
         body: updates,
+      }
+    );
+  }
+
+  /**
+   * Rename a chat panel on the user's canvas. Wraps the generic panels
+   * PATCH endpoint so the agent has a purpose-named tool.
+   */
+  async renameChat(panelId: string, title: string): Promise<void> {
+    await this.request<unknown>(
+      `/api/canvas/panels/${encodeURIComponent(panelId)}`,
+      {
+        method: "PATCH",
+        toolName: "rename_chat",
+        body: { title },
       }
     );
   }
@@ -392,20 +537,6 @@ export class DoplClient {
   }> {
     return this.request(`/api/entries/${encodeURIComponent(id)}/check-updates`, {
       toolName: "check_entry_updates",
-    });
-  }
-
-  // ── Incremental synthesis ─────────────────────────────────────────
-
-  async synthesizeIncremental(
-    existingInstructions: string,
-    newEntry: { title: string; agents_md: string; readme: string }
-  ): Promise<{ instructions: string }> {
-    return this.request<{ instructions: string }>("/api/cluster/synthesize-incremental", {
-      method: "POST",
-      toolName: "_cluster_synthesize_incremental",
-      body: { existing_instructions: existingInstructions, new_entry: newEntry },
-      timeoutMs: 120_000,
     });
   }
 

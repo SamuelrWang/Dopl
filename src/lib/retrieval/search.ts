@@ -15,6 +15,12 @@ export interface SearchResult {
   similarity: number;
   source_platform: string | null;
   created_at: string | null;
+  // Skeleton-tier entries don't have readme/agents_md/manifest; the
+  // descriptor is the only content they carry. Callers that want to
+  // render or reason about a hit should fall back to descriptor when
+  // readme is null. ingestion_tier lets the caller branch explicitly.
+  descriptor: string | null;
+  ingestion_tier: "skeleton" | "full" | null;
 }
 
 export async function searchEntries(
@@ -45,18 +51,22 @@ export async function searchEntries(
     throw error;
   }
 
-  const rpcRows = (data || []) as Omit<SearchResult, "source_platform" | "created_at" | "slug">[];
+  const rpcRows = (data || []) as Omit<
+    SearchResult,
+    "source_platform" | "created_at" | "slug" | "descriptor" | "ingestion_tier"
+  >[];
 
   if (rpcRows.length === 0) {
     return [];
   }
 
-  // Hydrate slug, source_platform, and created_at via a follow-up select.
-  // The RPC (search_entries) does not return these columns.
+  // Hydrate columns that the RPC doesn't return. descriptor + ingestion_tier
+  // matter for skeleton-tier entries — they have no readme/agents_md, so
+  // the descriptor is the only readable content to hand a consumer.
   const ids = rpcRows.map((r) => r.entry_id);
   const { data: hydrated, error: hydrateError } = await supabase
     .from("entries")
-    .select("id, slug, source_platform, created_at")
+    .select("id, slug, source_platform, created_at, descriptor, ingestion_tier")
     .in("id", ids);
 
   if (hydrateError) {
@@ -66,13 +76,29 @@ export async function searchEntries(
 
   const byId = new Map<
     string,
-    { slug: string | null; source_platform: string | null; created_at: string | null }
+    {
+      slug: string | null;
+      source_platform: string | null;
+      created_at: string | null;
+      descriptor: string | null;
+      ingestion_tier: "skeleton" | "full" | null;
+    }
   >();
   for (const row of hydrated || []) {
-    byId.set(row.id, {
-      slug: row.slug ?? null,
-      source_platform: row.source_platform ?? null,
-      created_at: row.created_at ?? null,
+    const r = row as {
+      id: string;
+      slug: string | null;
+      source_platform: string | null;
+      created_at: string | null;
+      descriptor: string | null;
+      ingestion_tier: "skeleton" | "full" | null;
+    };
+    byId.set(r.id, {
+      slug: r.slug ?? null,
+      source_platform: r.source_platform ?? null,
+      created_at: r.created_at ?? null,
+      descriptor: r.descriptor ?? null,
+      ingestion_tier: r.ingestion_tier ?? null,
     });
   }
 
@@ -81,5 +107,7 @@ export async function searchEntries(
     slug: byId.get(r.entry_id)?.slug ?? null,
     source_platform: byId.get(r.entry_id)?.source_platform ?? null,
     created_at: byId.get(r.entry_id)?.created_at ?? null,
+    descriptor: byId.get(r.entry_id)?.descriptor ?? null,
+    ingestion_tier: byId.get(r.entry_id)?.ingestion_tier ?? null,
   }));
 }

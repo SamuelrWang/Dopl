@@ -11,34 +11,22 @@ export function getStripe(): Stripe {
   return _stripe;
 }
 
+/**
+ * Single-product launch pricing: Pro, $7.99/mo monthly. The only price
+ * ID read is STRIPE_PRO_PRICE_ID.
+ */
 export async function createCheckoutSession(
   userId: string,
   email: string,
-  stripeCustomerId?: string | null,
-  tier: "pro" | "power" = "pro",
-  interval: "month" | "year" = "month"
+  stripeCustomerId?: string | null
 ): Promise<string> {
   const stripe = getStripe();
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.usedopl.com";
 
-  // Price ID is tier + interval specific. Annual prices live in
-  // STRIPE_<TIER>_ANNUAL_PRICE_ID, monthly in STRIPE_<TIER>_PRICE_ID.
-  const priceId =
-    interval === "year"
-      ? tier === "power"
-        ? process.env.STRIPE_POWER_ANNUAL_PRICE_ID
-        : process.env.STRIPE_PRO_ANNUAL_PRICE_ID
-      : tier === "power"
-        ? process.env.STRIPE_POWER_PRICE_ID
-        : process.env.STRIPE_PRO_PRICE_ID;
-
+  const priceId = process.env.STRIPE_PRO_PRICE_ID;
   if (!priceId) {
-    const envVar =
-      interval === "year"
-        ? `STRIPE_${tier.toUpperCase()}_ANNUAL_PRICE_ID`
-        : `STRIPE_${tier.toUpperCase()}_PRICE_ID`;
     throw new Error(
-      `Stripe price ID not configured for tier "${tier}" (${interval}). Set ${envVar} in env.`
+      "Stripe price ID not configured. Set STRIPE_PRO_PRICE_ID in env."
     );
   }
 
@@ -47,11 +35,10 @@ export async function createCheckoutSession(
     mode: "subscription",
     line_items: [{ price: priceId, quantity: 1 }],
     return_url: `${appUrl}/settings/billing?session_id={CHECKOUT_SESSION_ID}`,
-    // Put tier + interval in both checkout and subscription metadata so
-    // webhooks can read them on initial checkout AND on subsequent updates.
-    metadata: { userId, tier, interval },
+    // Only userId metadata matters now; tier/interval gone.
+    metadata: { userId },
     subscription_data: {
-      metadata: { userId, tier, interval },
+      metadata: { userId },
     },
   };
 
@@ -80,9 +67,6 @@ export async function createPortalSession(
   const stripe = getStripe();
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.usedopl.com";
 
-  // `?portal=return` lets the billing page detect portal exits so it can
-  // poll /api/billing/status until the webhook-driven tier change lands,
-  // instead of showing stale state until the user reloads.
   const session = await stripe.billingPortal.sessions.create({
     customer: stripeCustomerId,
     return_url: `${appUrl}/settings/billing?portal=return`,

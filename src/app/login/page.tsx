@@ -15,7 +15,11 @@ export default function LoginPage() {
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get("redirectTo") || "/canvas";
+  // Default to /welcome so first-time users hit the onboarding flow.
+  // /welcome itself server-redirects to /canvas for already-onboarded
+  // users, so returning sign-ins cost one extra redirect and nothing else.
+  // Deep links that pass an explicit ?redirectTo= override this.
+  const redirectTo = searchParams.get("redirectTo") || "/welcome";
 
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");

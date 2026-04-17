@@ -54,6 +54,16 @@ export interface PublishedClusterDetail extends PublishedClusterSummary {
     source_platform: string | null;
     readme: string | null;
     agents_md: string | null;
+    /** Populated so the shared canvas can render full rich EntryPanel
+     *  bodies (same UI as /canvas) without a secondary fetch. */
+    source_author: string | null;
+    thumbnail_url: string | null;
+    use_case: string | null;
+    complexity: string | null;
+    content_type: string | null;
+    manifest: Record<string, unknown> | null;
+    created_at: string | null;
+    tags: Array<{ tag_type: string; tag_value: string }>;
   }>;
 }
 

@@ -1,15 +1,11 @@
 "use client";
 
 /**
- * use-canvas-db-sync.ts — Syncs the full canvas state between the client-side
- * reducer (+ localStorage cache) and the server-side database.
- *
- * DB is the source of truth. localStorage is a write-through cache.
- *
- * On mount:
- *   - Fetch GET /api/canvas/state
- *   - If 404 → first-time migration: push localStorage state to DB
- *   - If 200 → dispatch HYDRATE_FROM_DB to merge DB state with local transient state
+ * use-canvas-db-sync.ts — Write-through sync of the client-side reducer
+ * to the server-side database. Initial state is server-rendered by the
+ * /canvas page and seeded into the reducer directly, so this hook has
+ * no mount-fetch: it only watches state changes and emits the
+ * appropriate POST / PATCH / DELETE calls.
  *
  * On state changes (debounced):
  *   - Camera changes → PATCH /api/canvas/state (1000ms idle)
@@ -21,149 +17,8 @@
 import { useEffect, useRef } from "react";
 import { CANVAS_STORAGE_KEY_PREFIX, CANVAS_ACTIVE_USER_KEY } from "@/lib/config";
 import { useCanvas } from "./canvas-store";
-import type {
-  Panel,
-  ChatPanelData,
-  EntryPanelData,
-  ConnectionPanelData,
-  ClusterBrainPanelData,
-  Cluster,
-} from "./types";
-
-// ── Serialization helpers ────────────────────────────────────────────
-
-/** Serialize a panel into the shape the DB expects. */
-function panelToDbRow(panel: Panel) {
-  const base = {
-    panel_id: panel.id,
-    panel_type: panel.type,
-    x: panel.x,
-    y: panel.y,
-    width: panel.width,
-    height: panel.height,
-    entry_id: null as string | null,
-    title: null as string | null,
-    summary: null as string | null,
-    source_url: null as string | null,
-    panel_data: {} as Record<string, unknown>,
-  };
-
-  switch (panel.type) {
-    case "entry":
-      base.entry_id = panel.entryId;
-      base.title = panel.title;
-      base.summary = panel.summary;
-      base.source_url = panel.sourceUrl;
-      base.panel_data = {
-        sourcePlatform: panel.sourcePlatform,
-        sourceAuthor: panel.sourceAuthor,
-        thumbnailUrl: panel.thumbnailUrl,
-        useCase: panel.useCase,
-        complexity: panel.complexity,
-        contentType: panel.contentType,
-        tags: panel.tags,
-        readme: panel.readme,
-        agentsMd: panel.agentsMd,
-        manifest: panel.manifest,
-        createdAt: panel.createdAt,
-      };
-      break;
-    case "chat":
-      base.title = panel.title;
-      base.panel_data = {
-        conversationId: panel.conversationId,
-        pinned: panel.pinned,
-        expiresAt: panel.expiresAt,
-      };
-      break;
-    case "connection":
-      base.panel_data = { apiKey: panel.apiKey };
-      break;
-    case "cluster-brain":
-      base.panel_data = {
-        clusterId: panel.clusterId,
-        clusterName: panel.clusterName,
-        instructions: panel.instructions,
-        memories: panel.memories,
-        status: panel.status,
-        errorMessage: panel.errorMessage,
-      };
-      break;
-    case "browse":
-      break;
-  }
-
-  return base;
-}
-
-/** Deserialize a DB row back to a Panel. */
-function dbRowToPanel(row: Record<string, unknown>): Panel | null {
-  const base = {
-    id: row.panel_id as string,
-    x: (row.x as number) ?? 0,
-    y: (row.y as number) ?? 0,
-    width: (row.width as number) ?? 480,
-    height: (row.height as number) ?? 600,
-  };
-  const data = (row.panel_data as Record<string, unknown>) || {};
-  const type = row.panel_type as string;
-
-  switch (type) {
-    case "entry":
-      return {
-        ...base,
-        type: "entry",
-        entryId: (row.entry_id as string) || "",
-        title: (row.title as string) || "Untitled",
-        summary: (row.summary as string) || null,
-        sourceUrl: (row.source_url as string) || "",
-        sourcePlatform: (data.sourcePlatform as string) || null,
-        sourceAuthor: (data.sourceAuthor as string) || null,
-        thumbnailUrl: (data.thumbnailUrl as string) || null,
-        useCase: (data.useCase as string) || null,
-        complexity: (data.complexity as string) || null,
-        contentType: (data.contentType as string) || null,
-        tags: (data.tags as Array<{ type: string; value: string }>) || [],
-        readme: (data.readme as string) || "",
-        agentsMd: (data.agentsMd as string) || "",
-        manifest: (data.manifest as Record<string, unknown>) || {},
-        createdAt: (data.createdAt as string) || new Date().toISOString(),
-      } as EntryPanelData;
-    case "chat":
-      return {
-        ...base,
-        type: "chat",
-        title: (row.title as string) || "New Chat",
-        messages: [],
-        isProcessing: false,
-        activeEntryId: null,
-        conversationId: (data.conversationId as string) || undefined,
-        pinned: (data.pinned as boolean) || false,
-        expiresAt: (data.expiresAt as string) || undefined,
-      } as ChatPanelData;
-    case "connection":
-      return {
-        ...base,
-        type: "connection",
-        apiKey: (data.apiKey as string) || null,
-      } as ConnectionPanelData;
-    case "browse":
-      return { ...base, type: "browse" };
-    case "cluster-brain":
-      return {
-        ...base,
-        type: "cluster-brain",
-        clusterId: (data.clusterId as string) || "",
-        clusterName: (data.clusterName as string) || "",
-        instructions: (data.instructions as string) || "",
-        memories: (data.memories as string[]) || [],
-        status: (data.status as "generating" | "ready" | "error") || "ready",
-        errorMessage: (data.errorMessage as string) || null,
-      } as ClusterBrainPanelData;
-    default:
-      return null;
-  }
-}
+import type { Panel } from "./types";
+import { panelToDbRow } from "@/lib/canvas/panel-dto";
 
 // ── localStorage timestamp tracking ──────────────────────────────────
 // Lightweight write-breadcrumb used to debug stale local state. The
@@ -204,8 +59,8 @@ function panelIdSet(panels: Panel[]): Set<string> {
 
 // ── The hook ──────────────────────────────────────────────────────────
 
-export function useCanvasDbSync(onReady?: () => void) {
-  const { state, dispatch } = useCanvas();
+export function useCanvasDbSync() {
+  const { state } = useCanvas();
   const syncedRef = useRef(false);
   const prevCameraRef = useRef("");
   const prevPanelIdsRef = useRef<Set<string>>(new Set());
@@ -220,104 +75,34 @@ export function useCanvasDbSync(onReady?: () => void) {
   const clusterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const panelDataTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── Mount: load from DB and reconcile ──────────────────────────────
-  useEffect(() => {
-    if (syncedRef.current) return;
+  // Seed tracking refs SYNCHRONOUSLY from the server-rendered initial
+  // state — not inside a useEffect — so the write-through effects below
+  // (which fire on first render) don't see an empty prevPanelIdsRef and
+  // treat every pre-hydrated panel as "new", redundantly POSTing them.
+  //
+  // This block runs on every render but is guarded by syncedRef so the
+  // expensive serialization only happens once.
+  if (!syncedRef.current) {
     syncedRef.current = true;
-
-    async function loadFromDb() {
-      try {
-        const res = await fetch("/api/canvas/state");
-
-        if (res.status === 404) {
-          // First time: no DB row yet. Create an empty one.
-          await fetch("/api/canvas/state", {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ camera_x: 0, camera_y: 0, camera_zoom: 1 }),
-          });
-          initTracking(state);
-          onReady?.();
-          return;
-        }
-
-        if (!res.ok) {
-          console.error("[canvas-sync] Failed to load canvas state:", res.status, res.statusText);
-          onReady?.();
-          return;
-        }
-
-        const { canvas_state: cs, panels: dbPanels } = await res.json();
-
-        // Reconstruct panels from DB rows
-        const panels: Panel[] = [];
-        for (const row of dbPanels) {
-          const panel = dbRowToPanel(row);
-          if (panel) panels.push(panel);
-        }
-
-        // Reconstruct clusters from DB (JSONB array on canvas_state)
-        const dbClusters: Cluster[] = Array.isArray(cs.clusters) ? cs.clusters : [];
-        // Merge: prefer DB clusters, but keep any local-only clusters
-        // (e.g. just created this session before sync completed)
-        const dbClusterIds = new Set(dbClusters.map((c: Cluster) => c.id));
-        const mergedClusters = [
-          ...dbClusters,
-          ...state.clusters.filter((c) => !dbClusterIds.has(c.id)),
-        ];
-
-        // Dispatch HYDRATE_FROM_DB — merges with local transient state
-        dispatch({
-          type: "HYDRATE_FROM_DB",
-          camera: {
-            x: cs.camera_x,
-            y: cs.camera_y,
-            zoom: cs.camera_zoom,
-          },
-          panels,
-          clusters: mergedClusters,
-          nextPanelId: cs.next_panel_id,
-          nextClusterId: cs.next_cluster_id,
-        });
-
-        initTracking({
-          ...state,
-          camera: { x: cs.camera_x, y: cs.camera_y, zoom: cs.camera_zoom },
-          panels,
-          nextPanelId: cs.next_panel_id,
-          nextClusterId: cs.next_cluster_id,
-        });
-        onReady?.();
-      } catch (err) {
-        console.error("[canvas-sync] Failed to load from DB:", err);
-        onReady?.();
+    prevCameraRef.current = cameraKey(state.camera);
+    prevPanelIdsRef.current = panelIdSet(state.panels);
+    prevPositionsRef.current = panelPositionKey(state.panels);
+    prevCountersRef.current = `${state.nextPanelId}|${state.nextClusterId}`;
+    const titles = new Map<string, string>();
+    for (const p of state.panels) {
+      if ("title" in p && typeof p.title === "string") {
+        titles.set(p.id, p.title);
       }
     }
-
-    function initTracking(s: typeof state) {
-      prevCameraRef.current = cameraKey(s.camera);
-      prevPanelIdsRef.current = panelIdSet(s.panels);
-      prevPositionsRef.current = panelPositionKey(s.panels);
-      prevCountersRef.current = `${s.nextPanelId}|${s.nextClusterId}`;
-      const titles = new Map<string, string>();
-      for (const p of s.panels) {
-        if ("title" in p && typeof p.title === "string") {
-          titles.set(p.id, p.title);
-        }
-      }
-      prevTitlesRef.current = titles;
-      prevClustersRef.current = JSON.stringify(s.clusters);
-      const dataMap = new Map<string, string>();
-      for (const p of s.panels) {
-        const row = panelToDbRow(p);
-        dataMap.set(p.id, JSON.stringify(row.panel_data));
-      }
-      prevPanelDataRef.current = dataMap;
+    prevTitlesRef.current = titles;
+    prevClustersRef.current = JSON.stringify(state.clusters);
+    const dataMap = new Map<string, string>();
+    for (const p of state.panels) {
+      const row = panelToDbRow(p);
+      dataMap.set(p.id, JSON.stringify(row.panel_data));
     }
-
-    loadFromDb();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    prevPanelDataRef.current = dataMap;
+  }
 
   // ── Track changes and sync to DB (split into focused effects) ─────
 
@@ -612,29 +397,3 @@ export function useCanvasDbSync(onReady?: () => void) {
   }, []);
 }
 
-// ── Migration helper ──────────────────────────────────────────────────
-
-async function migrateToDb(state: {
-  camera: { x: number; y: number; zoom: number };
-  panels: Panel[];
-  clusters: Cluster[];
-  nextPanelId: number;
-  nextClusterId: number;
-}) {
-  const panels = state.panels.map(panelToDbRow);
-
-  await fetch("/api/canvas/state/migrate", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      camera_x: state.camera.x,
-      camera_y: state.camera.y,
-      camera_zoom: state.camera.zoom,
-      next_panel_id: state.nextPanelId,
-      next_cluster_id: state.nextClusterId,
-      sidebar_open: false,
-      clusters: state.clusters,
-      panels,
-    }),
-  });
-}

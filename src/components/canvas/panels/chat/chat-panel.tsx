@@ -596,12 +596,12 @@ function RenderedMessage({ message, entryNames }: { message: ChatMessage; entryN
     );
   }
 
-  // Insufficient credits — inline upgrade card so the user can act
-  // without leaving the chat.
-  if (message.role === "ai" && message.type === "insufficient_credits") {
+  // Trial expired — small inline notice. The root-level PaywallGate
+  // shows the actual subscribe modal; this is just feedback in chat.
+  if (message.role === "ai" && message.type === "trial_expired") {
     return (
-      <div className="max-w-[95%] mr-auto">
-        <InsufficientCreditsCard balance={message.balance} cost={message.cost} />
+      <div className="max-w-[95%] mr-auto rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-sm text-amber-300">
+        {message.message}
       </div>
     );
   }

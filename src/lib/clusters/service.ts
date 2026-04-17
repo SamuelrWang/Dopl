@@ -163,6 +163,14 @@ export async function createCluster(
 ): Promise<ClusterRow> {
   const db = supabaseAdmin();
 
+  // Pre-check whether this will be the user's first cluster (for the
+  // first_cluster_built conversion event). Cheap indexed count.
+  const { count: priorCount } = await db
+    .from("clusters")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", opts.userId);
+  const isFirstCluster = (priorCount ?? 0) === 0;
+
   // Generate unique slug scoped to this user's existing clusters.
   const { data: existing } = await db
     .from("clusters")
@@ -196,6 +204,21 @@ export async function createCluster(
       .from("cluster_panels")
       .insert(rows);
     if (panelError) throw panelError;
+  }
+
+  // Fire first_cluster_built event (analytics). Fire-and-forget; dynamic
+  // import so this module stays import-free of the analytics tree in
+  // environments that don't need it.
+  if (isFirstCluster) {
+    import("@/lib/analytics/conversion-events")
+      .then(({ logConversionEvent }) =>
+        logConversionEvent({
+          userId: opts.userId,
+          eventType: "first_cluster_built",
+          metadata: { cluster_id: cluster.id, slug: cluster.slug },
+        })
+      )
+      .catch(() => {});
   }
 
   return { ...cluster, panel_count: safeEntryIds.length };

@@ -73,9 +73,16 @@ export function useSpeechRecognition() {
   const restartTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const restartAttemptRef = useRef(0);
 
-  const isSupported =
-    typeof window !== "undefined" &&
-    !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+  // Start `false` on both server and first client render so SSR hydration
+  // matches. Flip to the real value in a mount effect — any downstream UI
+  // that branches on `isSupported` will re-render once it's known.
+  const [isSupported, setIsSupported] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setIsSupported(
+      !!(window.SpeechRecognition || window.webkitSpeechRecognition)
+    );
+  }, []);
 
   const startListening = useCallback(() => {
     if (!isSupported) {

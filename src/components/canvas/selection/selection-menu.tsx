@@ -100,46 +100,19 @@ export function SelectionMenu({ cursorPos }: SelectionMenuProps) {
         y: topY,
       });
 
-      // Gather entry data for synthesis.
-      const entryPanels = clusterCandidates.filter(
-        (p): p is import("../types").EntryPanelData => p.type === "entry"
-      );
-      const entries = entryPanels.map((p) => ({
-        title: p.title,
-        agents_md: p.agentsMd,
-        readme: p.readme,
-      }));
-
-      // Fire-and-forget synthesis request.
-      if (entries.length > 0) {
-        fetch("/api/cluster/synthesize", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ entries }),
-        })
-          .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`HTTP ${res.status}`))))
-          .then((data) => {
-            dispatch({
-              type: "UPDATE_CLUSTER_BRAIN_INSTRUCTIONS",
-              panelId: brainPanelId,
-              instructions: data.instructions || "",
-            });
-          })
-          .catch((err) => {
-            dispatch({
-              type: "SET_CLUSTER_BRAIN_ERROR",
-              panelId: brainPanelId,
-              errorMessage: err instanceof Error ? err.message : "Synthesis failed",
-            });
-          });
-      } else {
-        // No entries to synthesize — mark as ready with empty instructions
-        dispatch({
-          type: "UPDATE_CLUSTER_BRAIN_INSTRUCTIONS",
-          panelId: brainPanelId,
-          instructions: "No entry agents.md files found in this cluster. Add entries with agents.md content and regenerate.",
-        });
-      }
+      // Brain synthesis moved to the client (user's Claude Code via MCP).
+      // We no longer call /api/cluster/synthesize from the web UI — the
+      // route's POST handler returns 410 Gone. Leave the brain panel
+      // with a placeholder that tells the user how to fill it.
+      dispatch({
+        type: "UPDATE_CLUSTER_BRAIN_INSTRUCTIONS",
+        panelId: brainPanelId,
+        instructions: [
+          "_Brain not synthesized yet._",
+          "",
+          "Ask your connected Claude Code (or any Dopl-MCP-enabled agent) to call `get_skill_template` and run synthesis against this cluster's entries, then `update_cluster_brain` to save the result. Server-side auto-synthesis has been removed so you control exactly what lands in your skill.",
+        ].join("\n"),
+      });
     }
 
     // Sync to DB (fire-and-forget). Only entry panel IDs map to DB entries.

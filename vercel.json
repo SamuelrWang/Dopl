@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/trial-reactivation",
+      "schedule": "0 * * * *"
+    }
+  ]
+}

@@ -3,15 +3,7 @@ import { API_KEY_PREFIX } from "@/lib/config";
 import { createServerClient } from "@supabase/ssr";
 import { validateApiKey, checkAndRecordRateLimit, touchApiKey } from "./api-keys";
 import { getUserSubscription, type SubscriptionTier } from "@/lib/billing/subscriptions";
-import {
-  CREDIT_COSTS,
-  checkAndResetCycle,
-  deductCredits,
-  grantCredits,
-  grantDailyBonus,
-  type CreditAction,
-  type SubscriptionTier as CreditTier,
-} from "@/lib/credits";
+import { hasActiveAccess, accessDeniedBody } from "@/lib/billing/access";
 import { logMcpEvent } from "@/lib/analytics/mcp-events";
 import { logSystemEvent } from "@/lib/analytics/system-events";
 
@@ -250,23 +242,20 @@ export function withSubscriptionAuth(
 }
 
 /**
- * Like withUserAuth, but also enforces credit spend when the request came
- * from an API key (MCP / external integrations). Session-based UI requests
- * bypass credit enforcement — the in-app chat/ingest routes already
- * deduct their own credits; canvas/cluster management is free.
+ * Replaces the old credit-based withMcpCredits. Gates every MCP-reachable
+ * endpoint by the single hasActiveAccess() check:
  *
- * Behavior for API-key requests:
- *   1. Auth + rate limit (via withUserAuth)
- *   2. Refresh cycle / grant daily bonus
- *   3. Check balance >= CREDIT_COSTS[action]. If insufficient, return 402.
- *   4. Run handler.
- *   5. On 2xx response, deduct credits. On 4xx/5xx, do not charge.
+ *   1. Auth + rate limit (via withUserAuth).
+ *   2. API-key requests only: check trial-active-or-paid. Session (UI) calls bypass.
+ *   3. If denied, return 402 with a clean trial_expired body and log the event.
+ *   4. Run the handler. Log the MCP event for analytics. No credit math.
  *
- * Use this for every MCP-reachable endpoint that represents real usage
- * (search, get entry, build, synthesize, cluster query, etc.).
+ * The `action` parameter is kept purely as a tool-name hint for
+ * logMcpEvent (so the dashboards still group by tool). No deduction or
+ * refund logic runs.
  */
-export function withMcpCredits(
-  action: CreditAction,
+export function withMcpAccess(
+  action: string,
   handler: (
     request: NextRequest,
     context: {
@@ -280,27 +269,21 @@ export function withMcpCredits(
   return withUserAuth(async (request, ctx) => {
     const isApiKey = !!request.headers.get("authorization");
 
-    // Resolve tier (used by both UI and MCP for content-depth gating)
+    // Resolve tier for downstream content-depth logic (still used for
+    // free vs paid content gating inside some handlers). "free" here
+    // means non-paid — includes trialing users.
     const sub = await getUserSubscription(ctx.userId);
     const resolvedTier: SubscriptionTier =
-      (sub.tier === "pro" || sub.tier === "power") && sub.status === "active"
+      sub.status === "active" && (sub.tier === "pro" || sub.tier === "power")
         ? sub.tier
         : "free";
 
-    // UI (session) calls bypass credit enforcement AND analytics logging.
-    // We only instrument MCP-originated calls; in-app usage lives in the
-    // conversations table already.
+    // UI (session) calls are unmetered and unlogged — in-app usage is
+    // tracked via the conversations table. MCP calls get gated + logged.
     if (!isApiKey) {
       return handler(request, { ...ctx, tier: resolvedTier });
     }
 
-    // Refresh cycle + daily bonus (idempotent, covers MCP-only users)
-    const creditTier = (sub.tier as CreditTier) || "free";
-    await checkAndResetCycle(ctx.userId, creditTier, sub.subscription_period_end);
-    await grantDailyBonus(ctx.userId, creditTier);
-
-    // ── Capture request args before the handler consumes the body stream ──
-    // Clone so the downstream handler can still read the original body.
     const endpoint = `${request.method} ${request.nextUrl.pathname}`;
     const toolName = request.headers.get("x-mcp-tool") || action;
     const queryParams = Object.fromEntries(request.nextUrl.searchParams.entries());
@@ -315,25 +298,11 @@ export function withMcpCredits(
     }
     const startedAt = Date.now();
 
-    // Deduct BEFORE running the handler. Using the atomic RPC this is
-    // the source of truth — if the user has insufficient credits (either
-    // now or because a parallel request just drained them), it returns
-    // success=false and we 402 immediately without doing any work.
-    const cost = CREDIT_COSTS[action];
-    const deductResult = await deductCredits(ctx.userId, action, {
-      endpoint,
-      source: "mcp",
-    });
-    if (!deductResult.success) {
-      const response = NextResponse.json(
-        {
-          error: "insufficient_credits",
-          message: `This action requires ${cost} credits. You have ${deductResult.newBalance}. Visit ${process.env.NEXT_PUBLIC_APP_URL || "https://www.usedopl.com"}/pricing to upgrade.`,
-          balance: deductResult.newBalance,
-          cost,
-        },
-        { status: 402 }
-      );
+    // ── Access gate: trialing or paid, or 402. ──
+    const access = await hasActiveAccess(ctx.userId);
+    if (!access.allowed) {
+      const body = accessDeniedBody(access);
+      const response = NextResponse.json(body, { status: 402 });
       logMcpEvent({
         userId: ctx.userId,
         apiKeyId: ctx.apiKeyId ?? null,
@@ -341,37 +310,19 @@ export function withMcpCredits(
         endpoint,
         arguments: argsPayload,
         responseStatus: 402,
-        responseSummary: { error: "insufficient_credits", balance: deductResult.newBalance, cost },
+        responseSummary: body,
         latencyMs: Date.now() - startedAt,
         source: "mcp",
-        error: "insufficient_credits",
+        error: "trial_expired",
       }).catch(() => {});
       return response;
     }
 
-    // Run handler. If it throws or returns a non-2xx response, refund the
-    // credits we just deducted so failed requests aren't charged.
+    // Run handler.
     let response: Response | NextResponse;
     try {
       response = await handler(request, { ...ctx, tier: resolvedTier });
     } catch (err) {
-      // Refund on crash. Log refund failures so we can catch patterns
-      // where users get charged but silently not refunded.
-      grantCredits(ctx.userId, cost, `${action}_refund`, {
-        endpoint,
-        reason: "handler_exception",
-      }).catch((refundErr) => {
-        logSystemEvent({
-          severity: "error",
-          category: "other",
-          source: "withMcpCredits.refund",
-          message: `Credit refund failed on handler exception: ${refundErr instanceof Error ? refundErr.message : String(refundErr)}`,
-          fingerprintKeys: ["refund_failed", "handler_exception"],
-          metadata: { user_id: ctx.userId, action, cost, endpoint },
-          userId: ctx.userId,
-        }).catch(() => {});
-      });
-
       const message = err instanceof Error ? err.message : String(err);
       logMcpEvent({
         userId: ctx.userId,
@@ -387,8 +338,7 @@ export function withMcpCredits(
       throw err;
     }
 
-    // Capture a response summary for analytics (best-effort — don't consume
-    // the original response body, clone first).
+    // Capture response summary for analytics.
     let responseSummary: unknown = null;
     let errorMessage: string | null = null;
     try {
@@ -426,28 +376,19 @@ export function withMcpCredits(
       error: errorMessage,
     }).catch(() => {});
 
-    // Refund the upfront deduction if the handler responded with an error
-    // (4xx/5xx). Users shouldn't be charged for failed requests.
-    if (!response.ok) {
-      grantCredits(ctx.userId, cost, `${action}_refund`, {
-        endpoint,
-        reason: `response_${response.status}`,
-      }).catch((refundErr) => {
-        logSystemEvent({
-          severity: "error",
-          category: "other",
-          source: "withMcpCredits.refund",
-          message: `Credit refund failed on ${response.status} response: ${refundErr instanceof Error ? refundErr.message : String(refundErr)}`,
-          fingerprintKeys: ["refund_failed", String(response.status)],
-          metadata: { user_id: ctx.userId, action, cost, endpoint, status: response.status },
-          userId: ctx.userId,
-        }).catch(() => {});
-      });
-    }
-
     return response;
   });
 }
+
+/**
+ * @deprecated Old credit-based wrapper. Kept as an alias for withMcpAccess
+ * so existing import sites compile; all credit-deduction logic is gone.
+ * Cleanup pass will rename call sites and delete this alias.
+ */
+export const withMcpCredits = (
+  action: string,
+  handler: Parameters<typeof withMcpAccess>[1]
+) => withMcpAccess(action, handler);
 
 /**
  * Returns true if the given user ID is the designated admin.

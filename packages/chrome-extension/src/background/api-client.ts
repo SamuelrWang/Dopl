@@ -77,7 +77,6 @@ export async function searchSetups(query: string, maxResults = 5): Promise<Searc
     body: {
       query,
       max_results: maxResults,
-      include_synthesis: true,
     },
   });
 }

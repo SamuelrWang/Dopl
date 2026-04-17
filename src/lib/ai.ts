@@ -4,6 +4,7 @@ import { config } from "dotenv";
 import { resolve } from "path";
 import { retryWithBackoff } from "@/lib/ingestion/utils";
 import { callExternal } from "@/lib/analytics/call-external";
+import { logSystemEvent } from "@/lib/analytics/system-events";
 
 // Force-load .env.local with override.
 // Next.js doesn't override shell env vars (even empty ones) with .env.local values.
@@ -42,7 +43,31 @@ export const claude = new Proxy({} as Anthropic, {
   },
 });
 
+// text-embedding-3-small caps input at 8192 tokens. Using ~3 chars/token
+// as a conservative lower bound, 24000 chars is a safe ceiling. This is
+// a last-line defense — the embedder's splitIntoChunks is supposed to
+// keep chunks below this, but truncate-with-warning beats a hard 400
+// when an upstream caller slips through.
+const MAX_EMBEDDING_INPUT_CHARS = 24_000;
+
 export async function generateEmbedding(text: string): Promise<number[]> {
+  let input = text;
+  if (input.length > MAX_EMBEDDING_INPUT_CHARS) {
+    const original = input.length;
+    input = input.slice(0, MAX_EMBEDDING_INPUT_CHARS);
+    console.warn(
+      `[generateEmbedding] Truncated input from ${original} to ${MAX_EMBEDDING_INPUT_CHARS} chars`
+    );
+    void logSystemEvent({
+      severity: "warn",
+      category: "ingestion",
+      source: "ai.generateEmbedding",
+      message: `Embedding input truncated (${original} → ${MAX_EMBEDDING_INPUT_CHARS} chars)`,
+      fingerprintKeys: ["embedding", "truncated"],
+      metadata: { original_chars: original, truncated_chars: MAX_EMBEDDING_INPUT_CHARS },
+    });
+  }
+
   const client = getOpenAIClient();
   const response = await callExternal(
     "openai.embeddings",
@@ -51,7 +76,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
         () =>
           client.embeddings.create({
             model: process.env.EMBEDDING_MODEL || "text-embedding-3-small",
-            input: text,
+            input,
           }),
         { label: "generateEmbedding" }
       ),

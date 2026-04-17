@@ -15,7 +15,6 @@ import {
   useMemo,
   useReducer,
   useRef,
-  useState,
   type Dispatch,
   type MutableRefObject,
   type ReactNode,
@@ -36,7 +35,6 @@ import {
   CLUSTER_BRAIN_PANEL_SIZE,
   CONNECTION_PANEL_SIZE,
   ENTRY_PANEL_SIZE,
-  INITIAL_CANVAS_STATE,
   MIN_CLUSTER_SIZE,
   isPanelDeletable,
 } from "./types";
@@ -45,7 +43,13 @@ import type {
   ProgressEvent,
 } from "@/components/ingest/chat-message";
 import { useCanvasDbSync } from "./use-canvas-db-sync";
-import { useConversationSync, ChatConversationsProvider } from "./use-conversation-sync";
+import { useEntriesRealtime } from "./use-entries-realtime";
+import {
+  useConversationSync,
+  ChatConversationsProvider,
+  type ServerConversation,
+} from "./use-conversation-sync";
+import { stripFromClusters } from "@/lib/canvas/defaults";
 
 import { CANVAS_STORAGE_KEY_PREFIX, CANVAS_ACTIVE_USER_KEY } from "@/lib/config";
 const SAVE_DEBOUNCE_MS = 500;
@@ -58,29 +62,9 @@ function getStorageKey(userId?: string): string {
 
 
 // ── Cluster helpers ────────────────────────────────────────────────
-
-/**
- * Remove a panel id from every cluster, then drop clusters that have
- * fallen below MIN_CLUSTER_SIZE. Shared by CLOSE_PANEL and CREATE_CLUSTER
- * (which enforces one-cluster-per-panel by stripping newly-clustered ids
- * from any pre-existing clusters).
- */
-function stripFromClusters(
-  clusters: Cluster[],
-  panelIds: ReadonlySet<string>
-): Cluster[] {
-  const next: Cluster[] = [];
-  for (const c of clusters) {
-    const remaining = c.panelIds.filter((id) => !panelIds.has(id));
-    if (remaining.length === c.panelIds.length) {
-      next.push(c);
-      continue;
-    }
-    if (remaining.length < MIN_CLUSTER_SIZE) continue; // auto-dissolve
-    next.push({ ...c, panelIds: remaining });
-  }
-  return next;
-}
+// Shared with the server-side initial-state loader. See
+// src/lib/canvas/defaults.ts for stripFromClusters / dedupSingletonPanels /
+// ensureDefaultPanels — imported below.
 
 // ── Reducer ────────────────────────────────────────────────────────
 
@@ -88,46 +72,6 @@ function reducer(state: CanvasState, action: CanvasAction): CanvasState {
   switch (action.type) {
     case "HYDRATE":
       return action.state;
-
-    case "HYDRATE_FROM_DB": {
-      // Merge DB state with local ephemeral state.
-      // DB panels replace local panels, but we preserve transient fields
-      // (isProcessing, activeEntryId, streaming messages, pendingInput, loading flags)
-      // on chat panels that are currently active.
-      const dbPanelIds = new Set(action.panels.map((p) => p.id));
-      const mergedPanels = action.panels.map((dbPanel) => {
-        // Find matching local panel to preserve transient state
-        const local = state.panels.find((p) => p.id === dbPanel.id);
-        if (!local || local.type !== "chat" || dbPanel.type !== "chat") return dbPanel;
-        // Preserve chat transient state
-        return {
-          ...dbPanel,
-          messages: local.messages.length > 0 ? local.messages : dbPanel.messages,
-          isProcessing: local.isProcessing,
-          activeEntryId: local.activeEntryId,
-          pendingInput: local.pendingInput,
-        };
-      });
-      // Keep any local-only panels that are actively processing (transient)
-      for (const local of state.panels) {
-        if (!dbPanelIds.has(local.id) && local.type === "chat" && local.isProcessing) {
-          mergedPanels.push(local);
-        }
-      }
-      const hydrated: CanvasState = {
-        ...state,
-        camera: action.camera,
-        panels: mergedPanels,
-        clusters: action.clusters,
-        nextPanelId: Math.max(state.nextPanelId, action.nextPanelId),
-        nextClusterId: Math.max(state.nextClusterId, action.nextClusterId),
-        // selectedPanelIds stays local (ephemeral)
-      };
-      // Dedup BEFORE ensureDefaults so we don't inject a brand-new browse
-      // panel when the DB already has one (or several — in which case we
-      // collapse them and let the sync layer DELETE the extras).
-      return ensureDefaultPanels(dedupSingletonPanels(hydrated));
-    }
 
     case "SET_CAMERA":
       return { ...state, camera: action.camera };
@@ -539,6 +483,7 @@ function reducer(state: CanvasState, action: CanvasAction): CanvasState {
         agentsMdLoading: action.agentsMdLoading,
         tagsLoading: action.tagsLoading,
         isIngesting: action.isIngesting,
+        isPendingIngestion: action.isPendingIngestion,
       };
 
       // Cluster auto-join: if the source panel was in a cluster, the new
@@ -626,6 +571,29 @@ function reducer(state: CanvasState, action: CanvasAction): CanvasState {
       };
     }
 
+    case "SET_ENTRY_STATUS_FROM_REALTIME": {
+      // Driven by the entries realtime subscription. Only touches the
+      // two visual flags; leaves artifacts/metadata alone so an
+      // in-flight ingestion render isn't clobbered. When the agent
+      // finishes a prepare_ingest → submit flow, the resulting
+      // complete-entry payload arrives via the existing SSE pipeline
+      // (or a separate fetch on panel open), not this action.
+      return {
+        ...state,
+        panels: state.panels.map((p) => {
+          if (p.type !== "entry" || p.entryId !== action.entryId) return p;
+          const next: typeof p = { ...p };
+          if (action.isPendingIngestion !== undefined) {
+            next.isPendingIngestion = action.isPendingIngestion;
+          }
+          if (action.isIngesting !== undefined) {
+            next.isIngesting = action.isIngesting;
+          }
+          return next;
+        }),
+      };
+    }
+
     case "CREATE_CLUSTER": {
       // Apply the moves atomically with the cluster creation so the outline
       // never flashes in the pre-layout positions.
@@ -668,6 +636,16 @@ function reducer(state: CanvasState, action: CanvasAction): CanvasState {
         clusters: state.clusters.map((c) =>
           c.id === action.clusterId
             ? { ...c, dbId: action.dbId, slug: action.slug }
+            : c
+        ),
+      };
+
+    case "UPDATE_CLUSTER_PUBLISHED_SLUG":
+      return {
+        ...state,
+        clusters: state.clusters.map((c) =>
+          c.id === action.clusterId
+            ? { ...c, publishedSlug: action.publishedSlug }
             : c
         ),
       };
@@ -824,8 +802,6 @@ function findLastIndex<T>(arr: T[], pred: (item: T) => boolean): number {
 interface CanvasContextValue {
   state: CanvasState;
   dispatch: Dispatch<CanvasAction>;
-  /** True once the DB has been fetched and state hydrated. */
-  dbReady: boolean;
 }
 
 const CanvasContext = createContext<CanvasContextValue | null>(null);
@@ -850,6 +826,29 @@ const PanelsContext = createContext<PanelsContextValue | null>(null);
  * triggering a React re-render.
  */
 const CanvasStateRefContext = createContext<MutableRefObject<CanvasState> | null>(null);
+
+/**
+ * Capabilities — what the current viewer is allowed to do on this canvas.
+ * The `/canvas` page always runs with everything enabled (default).
+ * Read-only / shared-cluster views turn individual flags off.
+ */
+export interface CanvasCapabilities {
+  canMove: boolean;
+  canDelete: boolean;
+  canAdd: boolean;
+}
+
+const DEFAULT_CAPABILITIES: CanvasCapabilities = {
+  canMove: true,
+  canDelete: true,
+  canAdd: true,
+};
+
+const CapabilitiesContext = createContext<CanvasCapabilities>(DEFAULT_CAPABILITIES);
+
+export function useCapabilities(): CanvasCapabilities {
+  return useContext(CapabilitiesContext);
+}
 
 export function useCanvas(): CanvasContextValue {
   const ctx = useContext(CanvasContext);
@@ -886,108 +885,9 @@ export function useCanvasStateRef(): MutableRefObject<CanvasState> {
 
 // ── Provider ───────────────────────────────────────────────────────
 
-function buildDefaultConnectionPanel(id: string): ConnectionPanelData {
-  return {
-    id,
-    type: "connection",
-    x: 40,
-    y: 40,
-    width: CONNECTION_PANEL_SIZE.width,
-    height: CONNECTION_PANEL_SIZE.height,
-    apiKey: null,
-  };
-}
-
-/**
- * Ensure the two default panels exist: connection and browse.
- * Missing panels are auto-spawned with sensible positions so they don't
- * overlap. Existing saved canvases that already have some of these panels
- * only get the missing ones injected.
- */
-/**
- * Collapse duplicates of singleton panel types (connection, browse) to a
- * single instance each. Historical bug: a race between the pre-hydration
- * default-panel injection and the DB sync layer could leave ghost rows in
- * the DB, causing N browse panels to accumulate across reloads. This
- * helper runs inside HYDRATE_FROM_DB so existing accounts self-heal on
- * next load — the sync layer's add/remove effect then DELETEs the extras
- * from the DB on its next tick.
- *
- * Preserves the first occurrence in panel-order (matches DB insertion
- * order via added_at). Also strips dropped ids from any cluster that
- * referenced them so cluster invariants aren't violated.
- */
-function dedupSingletonPanels(state: CanvasState): CanvasState {
-  const SINGLETON_TYPES = new Set(["connection", "browse"]);
-  const seen = new Set<string>();
-  const dropped = new Set<string>();
-  const kept: Panel[] = [];
-
-  for (const p of state.panels) {
-    if (SINGLETON_TYPES.has(p.type)) {
-      if (seen.has(p.type)) {
-        dropped.add(p.id);
-        continue;
-      }
-      seen.add(p.type);
-    }
-    kept.push(p);
-  }
-
-  if (dropped.size === 0) return state;
-
-  return {
-    ...state,
-    panels: kept,
-    clusters: stripFromClusters(state.clusters, dropped),
-    selectedPanelIds: state.selectedPanelIds.filter((id) => !dropped.has(id)),
-  };
-}
-
-function ensureDefaultPanels(state: CanvasState): CanvasState {
-  let s = state;
-
-  // Strip any leftover ingestion panels from persisted state (localStorage
-  // may still contain them after this panel type was removed).
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const hadIngestion = s.panels.some((p) => (p as any).type === "ingestion");
-  if (hadIngestion) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    s = { ...s, panels: s.panels.filter((p) => (p as any).type !== "ingestion") };
-  }
-
-  // Connection panel (always present — hard singleton)
-  if (!s.panels.some((p) => p.type === "connection")) {
-    const id = `connection-${s.nextPanelId}`;
-    s = {
-      ...s,
-      panels: [...s.panels, buildDefaultConnectionPanel(id)],
-      nextPanelId: s.nextPanelId + 1,
-    };
-  }
-
-  // Browse panel
-  if (!s.panels.some((p) => p.type === "browse")) {
-    const id = `browse-${s.nextPanelId}`;
-    s = {
-      ...s,
-      panels: [
-        ...s.panels,
-        {
-          id,
-          type: "browse" as const,
-          x: 40 + CONNECTION_PANEL_SIZE.width + 32,
-          y: 40,
-          width: BROWSE_PANEL_SIZE.width,
-          height: BROWSE_PANEL_SIZE.height,
-        },
-      ],
-      nextPanelId: s.nextPanelId + 1,
-    };
-  }
-
-  return s;
-}
+// ensureDefaultPanels / dedupSingletonPanels moved to
+// src/lib/canvas/defaults.ts — shared with the server-side loader so the
+// invariants hold regardless of entry point.
 
 /**
  * Backward compat: pre-zoom canvases saved `camera: { x, y }` without zoom.
@@ -1046,38 +946,75 @@ function migrateAddClusters(state: CanvasState): CanvasState {
 }
 
 /**
- * Initial state is always empty. The real state comes from the DB via
- * useCanvasDbSync, which dispatches HYDRATE_FROM_DB once the fetch
- * completes. HYDRATE_FROM_DB is also where default panels (connection,
- * browse) get injected if the DB doesn't have them — doing it here would
- * race with the sync layer and cause duplicate-browse-panel accumulation:
- * the pre-hydration browse-2 gets POSTed to the DB before the GET returns
- * the real state, leaving a ghost row that compounds across reloads.
+ * How the canvas should persist state.
+ *   "user"   → default. Writes to the user's canvas_panels / canvas_state /
+ *              conversations tables via useCanvasDbSync + useConversationSync,
+ *              plus localStorage write-through. Used by `/canvas`.
+ *   "shared" → skip user tables. Mount a caller-supplied bridge via
+ *              `onPanelsMove` that persists panel drags to a different
+ *              endpoint (e.g. /api/community/[slug]/panels). Used by the
+ *              shared-cluster viewer when the viewer is the owner.
+ *   "none"   → read-only. No DB writes, no localStorage writes. Used when
+ *              a non-owner visitor opens a shared cluster.
+ *
+ * CRITICAL: when a logged-in user views someone else's shared cluster, we
+ * MUST NOT run in "user" mode — the sync hooks would overwrite their real
+ * canvas_panels / canvas_state rows with the shared cluster's panels.
  */
-function loadInitialState(userId?: string): CanvasState {
-  // Track the active user so add-to-canvas.ts (outside the canvas)
-  // can find the right localStorage key for its write-through cache.
-  if (typeof window !== "undefined" && userId) {
-    localStorage.setItem(CANVAS_ACTIVE_USER_KEY, userId);
-  }
-  return INITIAL_CANVAS_STATE;
-}
+export type CanvasSyncStrategy = "user" | "shared" | "none";
 
 interface CanvasProviderProps {
   children: ReactNode;
   userId?: string;
+  /**
+   * Server-rendered canvas state. Fetched by the `/canvas` server
+   * component (see src/app/canvas/page.tsx) and supplied here as a prop
+   * so `useReducer` has real data on first render — no hydration step.
+   */
+  initialState: CanvasState;
+  /** Server-rendered conversations list, paired with initialState. */
+  initialConversations: ServerConversation[];
+  /** Default "user" preserves existing `/canvas` behavior. */
+  syncStrategy?: CanvasSyncStrategy;
+  /**
+   * What the current viewer is allowed to do. Omit on `/canvas` to get
+   * the default (everything enabled). Shared / read-only views pass a
+   * narrower set. See CanvasCapabilities.
+   */
+  capabilities?: CanvasCapabilities;
+  /**
+   * Called in "shared" sync mode whenever a drag-driven panel move
+   * lands. Receives the final positions of every moved panel. The
+   * caller (typically the shared-cluster page) forwards these to the
+   * matching `/api/community/[slug]/panels` endpoint.
+   * Ignored in "user" / "none" modes.
+   */
+  onPanelsMove?: (
+    moves: Array<{ id: string; x: number; y: number }>
+  ) => void;
 }
 
-export function CanvasProvider({ children, userId }: CanvasProviderProps) {
+export function CanvasProvider({
+  children,
+  userId,
+  initialState,
+  initialConversations,
+  syncStrategy = "user",
+  capabilities,
+  onPanelsMove,
+}: CanvasProviderProps) {
   const [state, dispatch] = useReducer(
     reducer,
-    userId,
-    (uid) => loadInitialState(uid)
+    { userId, initialState },
+    ({ userId: uid, initialState: init }) => {
+      // Track the active user so add-to-canvas.ts (outside the canvas)
+      // can find the right localStorage key for its write-through cache.
+      if (typeof window !== "undefined" && uid) {
+        localStorage.setItem(CANVAS_ACTIVE_USER_KEY, uid);
+      }
+      return init;
+    }
   );
-
-  // DB readiness: starts false, set to true by CanvasDbSyncBridge
-  // after the first fetch completes (or fails).
-  const [dbReady, setDbReady] = useState(false);
 
   const stateRef = useRef<CanvasState>(state);
   useEffect(() => {
@@ -1087,12 +1024,15 @@ export function CanvasProvider({ children, userId }: CanvasProviderProps) {
   // Debounced write-through cache to localStorage. Still useful for
   // add-to-canvas.ts (operates outside the canvas page) and as a
   // backup, but never read on mount.
+  //
+  // CRITICAL: skip this entirely for shared / read-only views — the
+  // shared cluster's panels would otherwise overwrite the logged-in
+  // user's real canvas state the next time they open /canvas.
   const storageKey = getStorageKey(userId);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (typeof window === "undefined") return;
-    // Don't cache the empty initial state before DB has loaded
-    if (!dbReady) return;
+    if (syncStrategy !== "user") return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
       try {
@@ -1105,37 +1045,119 @@ export function CanvasProvider({ children, userId }: CanvasProviderProps) {
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
-  }, [state, storageKey, dbReady]);
+  }, [state, storageKey, syncStrategy]);
 
   const panelsCtx = useMemo(
     () => ({ panels: state.panels, clusters: state.clusters, dispatch }),
     [state.panels, state.clusters, dispatch]
   );
 
+  const effectiveCapabilities = capabilities ?? DEFAULT_CAPABILITIES;
+
   return (
-    <CanvasContext.Provider value={{ state, dispatch, dbReady }}>
+    <CanvasContext.Provider value={{ state, dispatch }}>
       <PanelsContext.Provider value={panelsCtx}>
         <CanvasStateRefContext.Provider value={stateRef}>
-          <ChatConversationsProvider>
-            <CanvasDbSyncBridge onReady={() => setDbReady(true)} />
-            <ConversationSyncBridge />
-            {children}
-          </ChatConversationsProvider>
+          <CapabilitiesContext.Provider value={effectiveCapabilities}>
+            <ChatConversationsProvider initialConversations={initialConversations}>
+              {syncStrategy === "user" && <CanvasDbSyncBridge />}
+              {syncStrategy === "user" && <ConversationSyncBridge />}
+              {syncStrategy === "user" && <EntriesRealtimeBridge />}
+              {syncStrategy === "shared" && (
+                <SharedPanelMoveBridge onPanelsMove={onPanelsMove} />
+              )}
+              {children}
+            </ChatConversationsProvider>
+          </CapabilitiesContext.Provider>
         </CanvasStateRefContext.Provider>
       </PanelsContext.Provider>
     </CanvasContext.Provider>
   );
 }
 
-/** Bridge for DB-backed canvas state sync. */
-function CanvasDbSyncBridge({ onReady }: { onReady: () => void }) {
-  useCanvasDbSync(onReady);
+/** Bridge for DB-backed canvas state sync (write-through only). */
+function CanvasDbSyncBridge() {
+  useCanvasDbSync();
   return null;
 }
 
-/** Bridge for conversation persistence — saves/loads chat messages to Supabase. */
+/** Bridge for conversation persistence — saves chat messages to Supabase. */
 function ConversationSyncBridge() {
   useConversationSync();
+  return null;
+}
+
+/**
+ * Bridge for realtime updates to `entries` rows the user owns. Flips
+ * amber pending tiles to the ingesting state (and on to complete) live
+ * when the user's MCP agent claims and finishes them.
+ */
+function EntriesRealtimeBridge() {
+  useEntriesRealtime();
+  return null;
+}
+
+/**
+ * Shared-cluster sync bridge. Watches panel positions and forwards
+ * debounced updates to an owner-supplied callback — no DB writes, no
+ * localStorage writes. Used by the shared-cluster viewer when the
+ * viewer is the cluster's owner and drags are persisted to
+ * /api/community/[slug]/panels.
+ */
+function SharedPanelMoveBridge({
+  onPanelsMove,
+}: {
+  onPanelsMove?: (moves: Array<{ id: string; x: number; y: number }>) => void;
+}) {
+  const { state } = useCanvas();
+  const lastSentRef = useRef<Map<string, { x: number; y: number }>>(new Map());
+  const initializedRef = useRef(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!onPanelsMove) return;
+
+    // First run: seed the baseline from initial panel positions without
+    // firing any moves. Previously this logic lived in a separate
+    // empty-deps effect, but React runs effects in declaration order,
+    // so the watcher would see an empty baseline on its first pass and
+    // schedule a spurious "send everything" POST 500ms after mount.
+    // Keeping both responsibilities in one effect fixes the ordering.
+    if (!initializedRef.current) {
+      const baseline = new Map<string, { x: number; y: number }>();
+      for (const p of state.panels) baseline.set(p.id, { x: p.x, y: p.y });
+      lastSentRef.current = baseline;
+      initializedRef.current = true;
+      return;
+    }
+
+    const moves: Array<{ id: string; x: number; y: number }> = [];
+    for (const panel of state.panels) {
+      const last = lastSentRef.current.get(panel.id);
+      if (!last || last.x !== panel.x || last.y !== panel.y) {
+        moves.push({ id: panel.id, x: panel.x, y: panel.y });
+      }
+    }
+
+    if (moves.length === 0) return;
+
+    // Debounce — mirrors the debounce useCanvasDbSync uses for position
+    // updates so dragging doesn't spam the API on every frame.
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      // Record what we're about to send so the next diff is against
+      // the post-send baseline.
+      for (const m of moves) {
+        lastSentRef.current.set(m.id, { x: m.x, y: m.y });
+      }
+      onPanelsMove(moves);
+    }, 500);
+
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, [state.panels, onPanelsMove]);
+
   return null;
 }
 

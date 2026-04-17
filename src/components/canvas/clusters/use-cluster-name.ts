@@ -1,20 +1,25 @@
 "use client";
 
 /**
- * useClusterName — on mount, fires a non-blocking POST to /api/cluster/name
- * for the given cluster's member panels and dispatches UPDATE_CLUSTER_NAME
- * when the response arrives. Skips the request if the cluster already has
- * a user-edited name (detected via a startsWithPlaceholder check).
+ * useClusterName — assign a deterministic display name to a freshly
+ * created cluster and sync it to the backend.
  *
- * The placeholder name "Cluster N" is treated as "needs AI generation".
- * Once the user edits the name manually, it no longer matches the
- * placeholder pattern and this hook will not overwrite it.
+ * The old hook POSTed cluster member summaries to `/api/cluster/name`
+ * which ran a server-side Claude call to auto-generate a name. That
+ * route has been retired as part of the client-only-LLM pivot: nothing
+ * on the server runs Claude for us anymore. This hook now derives a
+ * name locally from the panels and lets the user or a connected MCP
+ * agent rename it via the `rename_cluster` MCP tool.
  *
- * After the AI name is generated, a second effect syncs it to the backend
- * so the MCP server sees a meaningful name/slug instead of "Cluster_1".
+ * Name-derivation heuristics, in order:
+ *   1. If there's one entry panel: use its title (truncated).
+ *   2. If there are 2+ entry panels: use the first entry's title +
+ *      "and N more".
+ *   3. Fallback: "Cluster of N items" — guaranteed non-empty.
  *
- * Designed to be invoked once per cluster creation. The useEffect's empty
- * deps list ensures we don't re-fetch on every rerender.
+ * The user keeps the placeholder "Cluster N" format locked until this
+ * hook runs once; after that, the returned name is editable and no
+ * further auto-naming will occur.
  */
 
 import { useEffect, useRef } from "react";
@@ -22,81 +27,58 @@ import { useCanvas } from "../canvas-store";
 import type { Cluster, Panel } from "../types";
 
 const PLACEHOLDER_PATTERN = /^Cluster[_\s]+\d+$/i;
+const MAX_NAME_CHARS = 40;
 
-/** Shape sent to /api/cluster/name — mirrors the route's expectations. */
-interface PanelSummary {
-  type: string;
-  title?: string;
-  summary?: string;
-  useCase?: string;
-  tags?: string[];
-}
+function deriveClusterName(panels: Panel[]): string {
+  const entryTitles = panels
+    .filter((p) => p.type === "entry")
+    .map((p) => (p as Extract<Panel, { type: "entry" }>).title)
+    .filter((t): t is string => typeof t === "string" && t.length > 0);
 
-function summarisePanel(panel: Panel): PanelSummary {
-  const base: PanelSummary = { type: panel.type };
-  switch (panel.type) {
-    case "chat":
-      base.title = panel.title;
-      break;
-    case "entry":
-      base.title = panel.title;
-      if (panel.summary) base.summary = panel.summary;
-      if (panel.useCase) base.useCase = panel.useCase;
-      base.tags = panel.tags.map((t) => `${t.type}:${t.value}`).slice(0, 6);
-      break;
-    case "connection":
-      base.title = "API & MCP Connection";
-      break;
+  if (entryTitles.length === 0) {
+    return `Cluster of ${panels.length} items`;
   }
-  return base;
+
+  const primary = entryTitles[0];
+  const truncated =
+    primary.length > MAX_NAME_CHARS
+      ? primary.slice(0, MAX_NAME_CHARS - 1).trimEnd() + "…"
+      : primary;
+
+  if (entryTitles.length === 1) return truncated;
+  const extra = entryTitles.length - 1;
+  return `${truncated} +${extra}`;
 }
 
 export function useClusterName(cluster: Cluster): void {
   const { state, dispatch } = useCanvas();
   const syncedRef = useRef(false);
+  const namedRef = useRef(false);
 
-  // Effect 1: Generate AI name (runs once on mount)
+  // Effect 1: Assign a deterministic name once on mount (only if the
+  // current name is still the "Cluster N" placeholder).
   useEffect(() => {
-    if (!PLACEHOLDER_PATTERN.test(cluster.name)) {
-      return;
-    }
+    if (namedRef.current) return;
+    if (!PLACEHOLDER_PATTERN.test(cluster.name)) return;
 
-    const panels = state.panels
-      .filter((p) => cluster.panelIds.includes(p.id))
-      .map(summarisePanel);
+    const memberPanels = state.panels.filter((p) =>
+      cluster.panelIds.includes(p.id)
+    );
+    if (memberPanels.length === 0) return;
 
-    if (panels.length === 0) return;
-
-    let cancelled = false;
-    fetch("/api/cluster/name", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ panels }),
-    })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data: { name?: string } | null) => {
-        if (cancelled) return;
-        if (data?.name) {
-          dispatch({
-            type: "UPDATE_CLUSTER_NAME",
-            clusterId: cluster.id,
-            name: data.name,
-          });
-        }
-      })
-      .catch(() => {
-        // Silent — placeholder stays, user can rename manually.
-      });
-
-    return () => {
-      cancelled = true;
-    };
+    namedRef.current = true;
+    const derived = deriveClusterName(memberPanels);
+    dispatch({
+      type: "UPDATE_CLUSTER_NAME",
+      clusterId: cluster.id,
+      name: derived,
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cluster.id]);
 
-  // Effect 2: Sync AI-generated name to backend once slug is available.
-  // Runs when cluster.name or cluster.slug changes. The ref ensures we
-  // only sync once per cluster lifecycle.
+  // Effect 2: Sync the name to the backend once the slug is available.
+  // Runs when cluster.name or cluster.slug changes; the ref guarantees
+  // one network call per cluster lifecycle.
   useEffect(() => {
     if (syncedRef.current) return;
     if (!cluster.slug) return;
@@ -121,7 +103,7 @@ export function useClusterName(cluster: Cluster): void {
         }
       })
       .catch(() => {
-        // Silent — name is correct in UI, backend sync is best-effort
+        // Silent — UI name is already correct; backend sync is best-effort.
       });
   }, [cluster.slug, cluster.name, cluster.id, dispatch]);
 }

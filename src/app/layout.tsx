@@ -4,6 +4,7 @@ import "./globals.css";
 import { Header } from "@/components/layout/header";
 import { FlushGrid } from "@/components/design";
 import { LayoutShell } from "@/components/layout/layout-shell";
+import { ToastHost } from "@/components/ui/toast";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -98,6 +99,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} ${playfairDisplay.variable} ${inter.variable} antialiased mosaic-bg min-h-screen`}
       >
         <LayoutShell>{children}</LayoutShell>
+        <ToastHost />
       </body>
     </html>
   );

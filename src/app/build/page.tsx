@@ -1,36 +1,34 @@
-"use client";
+/**
+ * /build — server component entry point, mirrors /canvas.
+ *
+ * Fetches the user's canvas state + conversations from Supabase before
+ * rendering, so `CanvasProvider` receives real data on first render and
+ * the builder sidebar can immediately read the user's clusters from
+ * context without a loading flash.
+ */
 
-import { useEffect, useState } from "react";
-import { CanvasProvider } from "@/components/canvas/canvas-store";
-import { BuilderLayout } from "@/components/builder/builder-layout";
-import { getSupabaseBrowser } from "@/lib/supabase-browser";
+import { redirect } from "next/navigation";
+import { getUser } from "@/lib/supabase-server";
+import {
+  loadCanvasInitialState,
+  loadUserConversations,
+} from "@/lib/canvas/load-server-state";
+import BuildClientShell from "./build-client-shell";
 
-export default function BuildPage() {
-  const [userId, setUserId] = useState<string | undefined>();
-  const [authReady, setAuthReady] = useState(false);
+export const dynamic = "force-dynamic";
 
-  useEffect(() => {
-    getSupabaseBrowser()
-      .auth.getUser()
-      .then(({ data }: { data: { user: { id: string } | null } }) => {
-        if (data.user) setUserId(data.user.id);
-      })
-      .finally(() => setAuthReady(true));
-  }, []);
+export default async function BuildPage() {
+  const user = await getUser();
+  if (!user) redirect("/login");
 
-  if (!authReady) {
-    return (
-      <div className="flex h-[calc(100vh-4rem)] items-center justify-center">
-        <div className="animate-pulse text-muted-foreground text-sm">
-          Loading...
-        </div>
-      </div>
-    );
-  }
+  const conversations = await loadUserConversations(user.id);
+  const initialState = await loadCanvasInitialState(user.id, conversations);
 
   return (
-    <CanvasProvider userId={userId}>
-      <BuilderLayout />
-    </CanvasProvider>
+    <BuildClientShell
+      userId={user.id}
+      initialState={initialState}
+      initialConversations={conversations}
+    />
   );
 }

@@ -17,6 +17,7 @@ export { StatusDot, type StatusDotState } from "./status-dot";
 export { MonoLabel } from "./mono-label";
 export { MarkdownMessage } from "./markdown-message";
 export { FlushGrid } from "./flush-grid";
+export { PlatformIcon } from "./platform-icon";
 
 // ── Accent primitives (complementary) ──────────────────────────────
 export { Surface, surfaceVariants, type SurfaceProps } from "./surface";

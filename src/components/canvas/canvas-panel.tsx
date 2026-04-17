@@ -22,7 +22,7 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState, type Dispatch } from "react";
-import { useCanvasStateRef } from "./canvas-store";
+import { useCanvasStateRef, useCapabilities } from "./canvas-store";
 import { computeIdealClusterMembership } from "./clusters/cluster-geometry";
 import { ChatPanelBody } from "./panels/chat/chat-panel";
 import { ConnectionPanelBody } from "./panels/connection-panel";
@@ -113,6 +113,10 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
   // logic without subscribing to re-renders.
   const canvasStateRef = useCanvasStateRef();
 
+  // Viewer capabilities. On the main /canvas these are always true; on
+  // the shared cluster viewer non-owners get canMove=false / canDelete=false.
+  const capabilities = useCapabilities();
+
   // Drag origin captures the STARTING positions (and sizes) of every
   // panel that will move together (solo = just this panel; group = all
   // selected panels when the user drags a member of a multi-selection).
@@ -184,6 +188,7 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
       //    `data-drag-handle` on the wrapping div.
       const insideDragHandle = targetEl.closest("[data-drag-handle]");
       if (insideDragHandle) {
+        if (!capabilities.canMove) return;
         beginDrag(e);
         return;
       }
@@ -204,6 +209,7 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
       //    non-whitespace text as a direct child.
       if (hasDirectTextContent(targetEl)) return;
 
+      if (!capabilities.canMove) return;
       beginDrag(e);
 
       function beginDrag(evt: React.PointerEvent<HTMLDivElement>) {
@@ -250,7 +256,7 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
         }
       }
     },
-    [dispatch, panel, canvasStateRef]
+    [dispatch, panel, canvasStateRef, capabilities.canMove]
   );
 
   const handleRootPointerMove = useCallback(
@@ -483,7 +489,7 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
     setShowCloseConfirm(false);
   }, [dispatch, panel.id]);
 
-  const deletable = isPanelDeletable(panel);
+  const deletable = isPanelDeletable(panel) && capabilities.canDelete;
   const headerTitle =
     panel.type === "chat"
       ? panel.title

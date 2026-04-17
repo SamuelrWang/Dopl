@@ -63,9 +63,6 @@ git clone <repo_url> && cd <repo> && <install command>
 
 ## Configuration & Customization
 [What to tweak, which files, key parameters.]
-
-## Testing & Verification
-[How to verify the complete setup works.]
 \`\`\`
 
 Be terse. Every line should earn its place.`;

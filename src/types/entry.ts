@@ -11,7 +11,7 @@ export interface Entry {
   summary: string | null;
   use_case: string | null;
   complexity: "simple" | "moderate" | "complex" | "advanced" | null;
-  status: "pending" | "processing" | "complete" | "error";
+  status: "pending" | "pending_ingestion" | "processing" | "complete" | "error";
   raw_content: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;

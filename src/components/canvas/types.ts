@@ -89,6 +89,14 @@ export interface EntryPanelData extends BasePanelData {
   tagsLoading?: boolean;
   /** True while the entry is being ingested (skeleton/generating state) */
   isIngesting?: boolean;
+  /**
+   * True when the entry is a skeleton queued from the site chat, waiting
+   * for the user's connected MCP agent to pick it up. Rendered as an
+   * amber glow + "Waiting for your agent" banner. Flips to
+   * isIngesting=true via the entries realtime subscription when the
+   * agent claims it through prepare_ingest.
+   */
+  isPendingIngestion?: boolean;
   /** Live ingestion log events for the attached log header */
   ingestionLogs?: ProgressEvent[];
 }
@@ -159,6 +167,13 @@ export interface Cluster {
   dbId?: string;
   /** URL-safe slug — populated after syncing to /api/clusters. */
   slug?: string;
+  /**
+   * Globally-unique slug of the cluster's published (community) snapshot,
+   * if one exists. Hydrated on canvas load from `published_clusters` and
+   * stamped locally after the owner clicks Publish. Drives the
+   * "Copy share link" affordance on the cluster header tab.
+   */
+  publishedSlug?: string | null;
 }
 
 export const CONNECTION_PANEL_SIZE = {
@@ -305,18 +320,6 @@ export function computePanelsBounds(panels: ReadonlyArray<BasePanelData>): {
 // ── Action types ────────────────────────────────────────────────────
 
 export type CanvasAction =
-  | {
-      /**
-       * Replace canvas state with DB-loaded data. Preserves ephemeral local
-       * state (selectedPanelIds, isProcessing, streaming messages).
-       */
-      type: "HYDRATE_FROM_DB";
-      camera: { x: number; y: number; zoom: number };
-      panels: Panel[];
-      clusters: Cluster[];
-      nextPanelId: number;
-      nextClusterId: number;
-    }
   | { type: "SET_CAMERA"; camera: { x: number; y: number; zoom: number } }
   | { type: "PAN_CAMERA"; dx: number; dy: number }
   /**
@@ -472,6 +475,20 @@ export type CanvasAction =
       agentsMdLoading?: boolean;
       tagsLoading?: boolean;
       isIngesting?: boolean;
+      isPendingIngestion?: boolean;
+    }
+  | {
+      /**
+       * Flip an entry panel's status flags in response to the DB row
+       * changing status (driven by the Supabase realtime subscription).
+       * Specifically: pending_ingestion → processing flips
+       * isPendingIngestion=false, isIngesting=true. Complete clears
+       * both flags.
+       */
+      type: "SET_ENTRY_STATUS_FROM_REALTIME";
+      entryId: string;
+      isPendingIngestion?: boolean;
+      isIngesting?: boolean;
     }
   | {
       /** Progressively update an entry panel's artifacts as pipeline steps complete. */
@@ -556,6 +573,17 @@ export type CanvasAction =
       clusterId: string;
       dbId: string;
       slug: string;
+    }
+  | {
+      /**
+       * Stamp a cluster with its published (community) slug after a
+       * successful publish, so the "Copy share link" menu item on the
+       * cluster header renders immediately without waiting for a reload.
+       * Pass `null` to clear (e.g. if the published row is archived).
+       */
+      type: "UPDATE_CLUSTER_PUBLISHED_SLUG";
+      clusterId: string;
+      publishedSlug: string | null;
     }
   | {
       /** Spawn a cluster brain panel with initial "generating" status. */

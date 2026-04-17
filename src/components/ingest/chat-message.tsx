@@ -96,9 +96,8 @@ export type ChatMessage =
   | { role: "ai"; type: "onboarding_card"; cardType: "mcp_setup" | "chrome_extension" }
   | {
       role: "ai";
-      type: "insufficient_credits";
-      balance: number;
-      cost: number;
+      type: "trial_expired";
+      message: string;
     };
 
 const eventTypeConfig: Record<

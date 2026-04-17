@@ -23,7 +23,6 @@ export function setupOmnibox(): void {
         body: JSON.stringify({
           query: text,
           max_results: 5,
-          include_synthesis: false,
         }),
       });
 

@@ -1,66 +1,49 @@
 /**
- * POST /api/cluster/synthesize — synthesize a unified agents.md instruction
- * document from multiple entry data payloads.
+ * GET /api/cluster/synthesize — return the canonical skill synthesis
+ * prompt + output template. No LLM call runs on our server.
  *
- * Request body:
- *   {
- *     entries: Array<{ title: string; agents_md: string; readme: string }>
- *   }
+ * All brain synthesis happens in the user's Claude Code (or equivalent
+ * client). This endpoint exists so any client that needs the prompt —
+ * MCP via get_skill_template, the web UI's brain panel, etc. — can
+ * fetch it consistently without embedding a copy of the template in
+ * multiple codebases.
  *
- * Response body:
- *   { instructions: string }
+ * The previous version of this route performed a server-side Claude
+ * call to synthesize brain instructions. That was removed as part of
+ * the pivot to client-only synthesis: we supply the prompt, the
+ * agent runs the model.
  */
 
-import { NextRequest } from "next/server";
-import { callClaude } from "@/lib/ai";
-import { withMcpCredits } from "@/lib/auth/with-auth";
+import { NextResponse } from "next/server";
+import {
+  SKILL_TEMPLATE_VERSION,
+  SKILL_SYNTHESIS_PROMPT,
+  SKILL_BODY_TEMPLATE,
+  buildSkillTemplatePayload,
+} from "@/lib/prompts/skill-template";
 
 export const dynamic = "force-dynamic";
 
-const SYSTEM_PROMPT =
-  "You are synthesizing multiple AI/automation setup instructions into a single unified playbook. " +
-  "Merge the individual agents.md files into one coherent document. Preserve all actionable steps " +
-  "but eliminate redundancy. Group by workflow phase. Use markdown formatting. " +
-  "Output ONLY the synthesized instructions, nothing else.";
-
-async function handlePost(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const entries: Array<{ title: string; agents_md: string; readme: string }> =
-      Array.isArray(body.entries) ? body.entries : [];
-
-    if (entries.length === 0) {
-      return Response.json(
-        { error: "entries array is required and must not be empty" },
-        { status: 400 }
-      );
-    }
-
-    // Budget: ~8000 chars per entry to stay within context limits
-    const perEntryBudget = Math.min(8000, Math.floor(80000 / Math.max(entries.length, 1)));
-    const readmeBudget = Math.min(800, Math.floor(perEntryBudget * 0.1));
-    const agentsBudget = perEntryBudget - readmeBudget;
-
-    const userContent = entries
-      .map((entry) => {
-        const agentsMd = (entry.agents_md || "").slice(0, agentsBudget);
-        const readme = (entry.readme || "").slice(0, readmeBudget);
-        return (
-          `## ${entry.title}\n\n${agentsMd}\n\n` +
-          `### Additional context from README:\n${readme}`
-        );
-      })
-      .join("\n\n---\n\n");
-
-    const result = await callClaude(SYSTEM_PROMPT, userContent, {
-      maxTokens: 4096,
-    });
-
-    return Response.json({ instructions: result });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return Response.json({ error: message }, { status: 500 });
-  }
+export async function GET() {
+  return NextResponse.json({
+    version: SKILL_TEMPLATE_VERSION,
+    prompt: SKILL_SYNTHESIS_PROMPT,
+    template: SKILL_BODY_TEMPLATE,
+    payload: buildSkillTemplatePayload(),
+  });
 }
 
-export const POST = withMcpCredits("mcp_synthesize", handlePost);
+// Kill the old POST handler. Anyone still calling this with a synthesis
+// request gets an explicit 410 Gone so the failure mode is legible, not
+// a silent shape mismatch. Callers should migrate to fetching the
+// prompt here (GET) and running synthesis in their own context.
+export async function POST() {
+  return NextResponse.json(
+    {
+      error: "gone",
+      message:
+        "Server-side brain synthesis has been removed. Fetch the synthesis prompt via GET /api/cluster/synthesize (or the `get_skill_template` MCP tool) and run synthesis in your own client, then write the result via PATCH /api/clusters/{slug}/brain.",
+    },
+    { status: 410 }
+  );
+}

@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { withUserAuth } from "@/lib/auth/with-auth";
+import { validateBrainStructure } from "@/lib/prompts/skill-template";
 
 export const dynamic = "force-dynamic";
 
@@ -109,6 +110,12 @@ async function handlePatch(
       );
     }
 
+    // Advisory structural check — never rejects. Surface missing sections
+    // back to the caller so the agent (or web UI) can learn what the
+    // canonical skill shape looks like and self-correct next time. A
+    // flat-paragraph brain still saves, just with a warning attached.
+    const validation = validateBrainStructure(instructions);
+
     const db = supabaseAdmin();
     const now = new Date().toISOString();
 
@@ -146,7 +153,18 @@ async function handlePatch(
       brain = data;
     }
 
-    return NextResponse.json(brain);
+    return NextResponse.json({
+      ...brain,
+      structure_warning: validation.ok
+        ? null
+        : {
+            message:
+              "Brain instructions are missing canonical sections. The skill will still work, but Claude Code invocations will be less guided than with a fully-structured brain.",
+            missing_sections: validation.missingSections,
+            suggestion:
+              "Fetch the canonical template via the `get_skill_template` MCP tool (or GET /api/cluster/synthesize) and restructure.",
+          },
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });

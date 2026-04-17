@@ -16,48 +16,31 @@ export interface OnboardingStep {
   autoAdvance: boolean;
 }
 
+// Post-welcome canvas tour. These three steps are shown as popup coach
+// cards on top of /canvas right after the user finishes /welcome (signaled
+// via ?fromWelcome=1). MCP connection and intro copy already happened on
+// /welcome, so the tour is just a short orientation.
 export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
-    key: "welcome",
-    title: "Welcome to Dopl",
-    body: "This is your workspace for discovering, organizing, and building on real-world AI and automation implementations. I'll walk you through the key features \u2014 each step takes about 10 seconds.",
+    key: "canvas_intro",
+    title: "This is your Canvas",
+    body: "It's where you'll find skills you create, sources you ingest, and a view of the digital brain your agent uses.",
     highlight: null,
     autoAdvance: false,
   },
   {
-    key: "api_key",
-    title: "Your API Key & MCP Connection",
-    body: "This panel holds your API key \u2014 a unique identifier that lets external AI tools (like Claude Code) connect to your workspace. You'll use this later to connect your AI assistant so it can search your knowledge base, focus on clusters, and execute automations. For now, just know it's here.",
-    highlight: "connection",
+    key: "remote_capabilities",
+    title: "Your agent can do this remotely too",
+    body: "You can ingest X posts, chat, and create skills directly from your Canvas \u2014 and your agent can do all of it remotely through the MCP connection you just set up.",
+    highlight: null,
     autoAdvance: false,
   },
   {
-    key: "browse",
-    title: "Browse Existing Setups",
-    body: "The knowledge base has hundreds of pre-ingested setups \u2014 agent workflows, n8n automations, API integrations, and more. Browse them, filter by use case or complexity, and add any to your canvas with one click.\n\nClick the Browse panel on your canvas, or the Browse tab in the nav bar.",
-    highlight: "browse",
-    autoAdvance: true,
-  },
-  {
-    key: "cluster",
-    title: "Group Panels into Clusters",
-    body: "This is where it gets powerful. Select 2 or more panels (shift-click or drag a selection box around them), then click \u2018Cluster\u2019 in the menu that appears.\n\nClusters create a shared context \u2014 any chat panel inside a cluster automatically sees all the entries in it. The cluster also gets its own \u2018brain\u2019 with synthesized instructions and persistent memories.",
+    key: "happy_building",
+    title: "You're all set!",
+    body: "If you ever have questions, ask your agent or me in chat. For now, explore the Canvas or head back to your agent and have it help you build your first skill.\n\nHappy building :)",
     highlight: null,
-    autoAdvance: true,
-  },
-  {
-    key: "chat_in_cluster",
-    title: "Chat Inside a Cluster",
-    body: "Open a chat panel (from the bottom bar) and drag it into a cluster. When you send a message, the AI can see every entry in that cluster \u2014 their READMEs, setup instructions, and metadata.\n\nAsk it to compare approaches, explain how something works, or build a composite solution. The AI is fully cluster-aware.",
-    highlight: null,
-    autoAdvance: true,
-  },
-  {
-    key: "mcp_connect",
-    title: "Connect Your AI Assistant — Right Now",
-    body: "Let\u2019s connect Claude Code (or any MCP tool) to your workspace. Copy the config below and paste it into your MCP settings. Once connected, your AI can search your knowledge base, manage your canvas, and focus on clusters.",
-    highlight: "connection",
-    autoAdvance: true,
+    autoAdvance: false,
   },
 ];
 

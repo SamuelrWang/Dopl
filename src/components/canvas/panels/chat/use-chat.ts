@@ -110,18 +110,20 @@ export function useChat({ panel }: UseChatOptions) {
 
         if (!response.ok) {
           const err = await response.json().catch(() => ({}));
-          if (response.status === 402 && err.error === "insufficient_credits") {
-            // Show a real card with current balance + upgrade CTA, not an
-            // anonymous text error. setIsStreaming(false) below in finally
-            // resets input.
+          if (response.status === 402 && err.error === "trial_expired") {
+            // Trial ended or never started — the root-mounted PaywallGate
+            // will pick this up on its next poll and show the modal. We
+            // still surface a short notice inline so the user sees why
+            // their request didn't go through.
             dispatch({
               type: "APPEND_MESSAGE",
               panelId: panel.id,
               message: {
                 role: "ai",
-                type: "insufficient_credits",
-                balance: typeof err.balance === "number" ? err.balance : 0,
-                cost: typeof err.cost === "number" ? err.cost : 0,
+                type: "trial_expired",
+                message:
+                  err.message ||
+                  "Your free trial has ended. Subscribe for $7.99/mo to continue.",
               },
             });
             return;
@@ -228,7 +230,33 @@ export function useChat({ panel }: UseChatOptions) {
 
                 if (!entryId) break;
 
-                if (ingestStatus === "already_exists") {
+                if (ingestStatus === "queued") {
+                  // Site chat created a skeleton entry with status
+                  // 'pending_ingestion'. The user's connected MCP agent
+                  // will pick it up on its next tool call via the
+                  // _dopl_status footer. Spawn an amber placeholder
+                  // panel; it auto-transitions to the ingesting state
+                  // when the entries realtime subscription observes
+                  // the DB row flip to 'processing'.
+                  dispatch({
+                    type: "SPAWN_ENTRY_PANEL",
+                    sourcePanelId: panel.id,
+                    entryId,
+                    title: ingestTitle || "Queued — waiting for agent",
+                    summary: null,
+                    sourceUrl: "",
+                    sourcePlatform: null,
+                    sourceAuthor: null,
+                    thumbnailUrl: null,
+                    useCase: null,
+                    complexity: null,
+                    tags: [],
+                    readme: "",
+                    agentsMd: "",
+                    manifest: {},
+                    isPendingIngestion: true,
+                  });
+                } else if (ingestStatus === "already_exists") {
                   // Fetch full entry and spawn a completed panel. If the
                   // fetch fails the user sees chat success but no panel —
                   // surface that so they can retry / realize something's

@@ -6,14 +6,6 @@ import { Button } from "@/components/ui/button";
 import { useSearchParams } from "next/navigation";
 import { EmbeddedCheckoutForm } from "@/components/billing/embedded-checkout";
 
-interface CreditInfo {
-  balance: number;
-  tier: string;
-  monthlyCredits: number;
-  cycleStart: string;
-  cycleEnd: string;
-}
-
 export default function BillingPage() {
   return (
     <Suspense>
@@ -28,13 +20,11 @@ function BillingPageInner() {
   const [portalLoading, setPortalLoading] = useState(false);
   const [portalError, setPortalError] = useState<string | null>(null);
   const [showCheckout, setShowCheckout] = useState(false);
-  const [credits, setCredits] = useState<CreditInfo | null>(null);
 
   const sessionId = searchParams.get("session_id");
   const canceled = searchParams.get("canceled") === "true";
   const fromPortal = searchParams.get("portal") === "return";
 
-  // Check payment status after checkout return
   const [paymentStatus, setPaymentStatus] = useState<
     "loading" | "complete" | "open" | null
   >(null);
@@ -50,14 +40,6 @@ function BillingPageInner() {
       .catch(() => setPaymentStatus(null));
   }, [sessionId]);
 
-  // Webhook-driven tier change can lag the user's return by a few seconds.
-  // After checkout completes OR after returning from the Stripe portal,
-  // refetch /api/billing/status once per second for up to 10 seconds so the
-  // "Welcome to X" banner (for checkout) and the Current plan display (for
-  // portal) converge to the post-webhook state without requiring a manual
-  // reload. We don't early-exit on tier change — the additional refreshes
-  // are cheap and also catch subscription_period_end / status updates that
-  // the first-delivered webhook might have skipped.
   useEffect(() => {
     const shouldPoll =
       fromPortal || (sessionId && paymentStatus === "complete");
@@ -71,29 +53,14 @@ function BillingPageInner() {
     }, 1000);
 
     return () => window.clearInterval(interval);
-    // Intentionally depend on the trigger inputs only — including sub in
-    // deps would restart the timer on every refresh and never converge.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fromPortal, sessionId, paymentStatus]);
-
-  // Fetch credits
-  useEffect(() => {
-    fetch("/api/user/credits")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (data) setCredits(data);
-      })
-      .catch(() => {});
-  }, []);
 
   async function handleManage() {
     setPortalLoading(true);
     setPortalError(null);
     try {
       const res = await fetch("/api/billing/portal", { method: "POST" });
-      // Check status BEFORE parsing — `data.url` could be undefined on error
-      // and `window.location.href = undefined` silently does nothing,
-      // leaving the button stuck in its loading state.
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setPortalError(data.error || `Failed to open billing portal (HTTP ${res.status})`);
@@ -122,7 +89,6 @@ function BillingPageInner() {
     );
   }
 
-  // Checkout form for free users
   if (showCheckout && !sub.isPaid) {
     return (
       <div className="container mx-auto px-4 py-8 max-w-lg">
@@ -132,14 +98,18 @@ function BillingPageInner() {
         >
           &larr; Back to billing
         </button>
-        <h1 className="text-xl font-medium text-white mb-6">Upgrade</h1>
+        <h1 className="text-xl font-medium text-white mb-6">Subscribe</h1>
         <EmbeddedCheckoutForm />
       </div>
     );
   }
 
-  const tierLabel =
-    sub.tier === "power" ? "Power" : sub.tier === "pro" ? "Pro" : "Free";
+  // Labels
+  const planLabel = sub.isPaid
+    ? "Pro"
+    : sub.isTrialing
+    ? "Free trial"
+    : "Trial expired";
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-lg">
@@ -153,7 +123,7 @@ function BillingPageInner() {
 
       {paymentStatus === "complete" && sub.isPaid && (
         <div className="mb-4 rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-4 py-3 text-sm text-emerald-400">
-          Welcome to {tierLabel}! Your subscription is now active.
+          Welcome to Pro! Your subscription is now active.
         </div>
       )}
 
@@ -163,70 +133,36 @@ function BillingPageInner() {
         </div>
       )}
 
-      {sub.status === "past_due" && (
-        <div className="mb-4 rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">
-          Your payment failed. Please update your payment method to keep your{" "}
-          {tierLabel} plan active.
-          <button
-            onClick={handleManage}
-            className="underline underline-offset-2 ml-1 hover:text-red-300 transition-colors"
-          >
-            Update payment
-          </button>
-        </div>
-      )}
-
       <div className="rounded-xl bg-white/[0.03] border border-white/[0.08] p-5 space-y-5">
-        {/* Current Plan */}
+        {/* Plan row */}
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm text-white/60">Current plan</p>
             <p className="text-lg font-medium text-white">
-              {tierLabel}
-              {sub.isPaid && sub.status === "active" && (
+              {planLabel}
+              {sub.isPaid && (
                 <span className="ml-2 text-xs px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-normal">
                   Active
+                </span>
+              )}
+              {sub.isTrialing && (
+                <span className="ml-2 text-xs px-1.5 py-0.5 rounded-full bg-sky-500/15 text-sky-400 font-normal">
+                  Trial
                 </span>
               )}
             </p>
           </div>
           {sub.isPaid && sub.subscription_period_end && (
             <p className="text-xs text-white/40">
-              Renews{" "}
-              {new Date(sub.subscription_period_end).toLocaleDateString()}
+              Renews {new Date(sub.subscription_period_end).toLocaleDateString()}
+            </p>
+          )}
+          {sub.isTrialing && sub.access.trial_expires_at && (
+            <p className="text-xs text-white/40">
+              Ends {new Date(sub.access.trial_expires_at).toLocaleString()}
             </p>
           )}
         </div>
-
-        {/* Credits */}
-        {credits && (
-          <div className="border-t border-white/[0.06] pt-4">
-            <p className="text-sm text-white/60 mb-2">Credits</p>
-            <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-semibold text-white">
-                {credits.balance}
-              </span>
-              <span className="text-sm text-white/40">
-                / {credits.monthlyCredits} this cycle
-              </span>
-            </div>
-            <div className="mt-2 h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
-              <div
-                className="h-full rounded-full bg-white/30 transition-all"
-                style={{
-                  width: `${Math.min(
-                    100,
-                    (credits.balance / credits.monthlyCredits) * 100
-                  )}%`,
-                }}
-              />
-            </div>
-            <p className="text-xs text-white/30 mt-1.5">
-              Resets{" "}
-              {new Date(credits.cycleEnd).toLocaleDateString()}
-            </p>
-          </div>
-        )}
 
         {/* Actions */}
         <div className="border-t border-white/[0.06] pt-4">
@@ -245,17 +181,9 @@ function BillingPageInner() {
               {portalLoading ? "Loading..." : "Manage Subscription"}
             </Button>
           ) : (
-            <div className="space-y-3">
-              <Button onClick={() => setShowCheckout(true)} className="w-full">
-                Upgrade
-              </Button>
-              <a
-                href="/pricing"
-                className="block text-xs text-white/40 text-center hover:text-white/60 transition-colors underline underline-offset-2"
-              >
-                Compare plans in detail
-              </a>
-            </div>
+            <Button onClick={() => setShowCheckout(true)} className="w-full">
+              {sub.isTrialing ? "Subscribe early — $7.99/mo" : "Subscribe — $7.99/mo"}
+            </Button>
           )}
         </div>
       </div>

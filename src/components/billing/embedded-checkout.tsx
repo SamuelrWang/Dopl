@@ -11,18 +11,11 @@ const stripePromise = loadStripe(
   process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!
 );
 
-interface EmbeddedCheckoutFormProps {
-  tier?: "pro" | "power";
-  interval?: "month" | "year";
-}
-
-export function EmbeddedCheckoutForm({
-  tier = "pro",
-  interval = "month",
-}: EmbeddedCheckoutFormProps = {}) {
-  // Surface errors instead of letting Stripe's iframe hang indefinitely.
-  // Without this, a failed /api/billing/checkout call (missing price ID,
-  // already-subscribed conflict, etc.) gives the user a blank box.
+/**
+ * Single-tier launch checkout: $7.99/mo Pro. No tier or interval props —
+ * the backend only serves STRIPE_PRO_PRICE_ID.
+ */
+export function EmbeddedCheckoutForm() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -31,8 +24,6 @@ export function EmbeddedCheckoutForm({
     try {
       const res = await fetch("/api/billing/checkout", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tier, interval }),
       });
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
@@ -54,13 +45,12 @@ export function EmbeddedCheckoutForm({
       setLoading(false);
       throw err;
     }
-  }, [tier, interval]);
+  }, []);
 
-  // Reset error when inputs change so retry doesn't show stale message.
   useEffect(() => {
     setError(null);
     setLoading(true);
-  }, [tier, interval]);
+  }, []);
 
   if (error) {
     return (

@@ -9,8 +9,16 @@ interface CommunityCardProps {
 
 export function CommunityCard({ cluster }: CommunityCardProps) {
   return (
+    // next/link with target="_blank" gives us both:
+    //   - New-tab open (current page stays put — matches EntryCard)
+    //   - Automatic prefetch on hover in production, which warms Next's
+    //     Full Route Cache. Combined with the React cache() dedupe in
+    //     /community/[slug]/page.tsx, the cold-open of a cluster after
+    //     a ~200ms hover is usually instant.
     <Link
       href={`/community/${cluster.slug}`}
+      target="_blank"
+      rel="noopener"
       className="group cursor-pointer block"
     >
       {/* Thumbnail */}

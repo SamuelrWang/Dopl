@@ -8,78 +8,17 @@ import { getSupabaseBrowser } from "@/lib/supabase-browser";
 import { EmbeddedCheckoutForm } from "@/components/billing/embedded-checkout";
 import type { User } from "@supabase/supabase-js";
 
-// ── Tier definitions ───────────────────────────────────────────────
-
-type TierKey = "free" | "pro" | "power";
-type Interval = "month" | "year";
-
-interface Tier {
-  key: TierKey;
-  name: string;
-  tagline: string;
-  monthly: number; // dollars/month
-  credits: number; // credits/month (mirrors TIER_CREDITS in src/lib/credits.ts)
-  annualTotal?: number; // dollars/year when billed annually
-  annualSavings?: number; // dollars saved
-  features: string[];
-  inheritFrom?: string; // "All features in <name>, plus:"
-  highlight?: boolean;
-}
-
-const TIERS: Tier[] = [
-  {
-    key: "free",
-    name: "Free",
-    tagline: "Start here — all features, baseline credits.",
-    monthly: 0,
-    credits: 100,
-    features: [
-      "All features included",
-      "Daily credit bonus",
-      "No credit card needed",
-    ],
-  },
-  {
-    key: "pro",
-    name: "Pro",
-    tagline: "For regular users who want room to build and iterate.",
-    monthly: 20,
-    credits: 500,
-    annualTotal: 200,
-    annualSavings: 40,
-    features: [
-      "Credit rollover",
-      "Priority support",
-    ],
-    inheritFrom: "Free",
-    highlight: true,
-  },
-  {
-    key: "power",
-    name: "Power",
-    tagline: "For heavy users building serious workflows.",
-    monthly: 50,
-    credits: 2000,
-    annualTotal: 500,
-    annualSavings: 100,
-    features: [
-      "Larger daily bonus",
-      "Priority support",
-    ],
-    inheritFrom: "Pro",
-  },
-];
-
-// ── Page ───────────────────────────────────────────────────────────
+/**
+ * Launch pricing: one tier. 24-hour free trial (no card) → $7.99/mo Pro.
+ * Feature tiers and credits UI are gone.
+ */
 
 export default function PricingPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
-  const [tier, setTier] = useState<TierKey>("free");
+  const [isPaid, setIsPaid] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
-  const [checkoutTier, setCheckoutTier] = useState<TierKey>("pro");
-  const [interval, setInterval] = useState<Interval>("month");
 
   useEffect(() => {
     const supabase = getSupabaseBrowser();
@@ -89,37 +28,28 @@ export default function PricingPage() {
     });
 
     if (user) {
-      // Check response.ok before parsing so a 500 from /api/billing/status
-      // doesn't silently keep the user on "free" and show a misleading
-      // "Upgrade to Pro" button to an actual Pro user.
       fetch("/api/billing/status")
         .then(async (r) => {
-          if (!r.ok) {
-            console.error(
-              `[pricing] /api/billing/status returned ${r.status} — tier unknown, defaulting to free`
-            );
-            return null;
-          }
+          if (!r.ok) return null;
           return r.json();
         })
         .then((data) => {
-          if (data && data.status === "active" && data.tier) {
-            setTier(data.tier as TierKey);
+          if (data && data.status === "active") {
+            setIsPaid(true);
           }
         })
         .catch((err) => {
-          console.error("[pricing] tier fetch failed:", err);
+          console.error("[pricing] status fetch failed:", err);
         });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
-  function handleUpgrade(targetTier: TierKey) {
+  function handleSubscribe() {
     if (!user) {
       router.push("/login?redirect=/pricing");
       return;
     }
-    setCheckoutTier(targetTier);
     setShowCheckout(true);
   }
 
@@ -132,11 +62,6 @@ export default function PricingPage() {
   }
 
   if (showCheckout) {
-    const active = TIERS.find((t) => t.key === checkoutTier)!;
-    const price =
-      interval === "year" && active.annualTotal
-        ? `$${active.annualTotal}/year`
-        : `$${active.monthly}/month`;
     return (
       <div className="min-h-screen flex flex-col items-center pt-24 px-4">
         <div className="w-full max-w-lg">
@@ -147,18 +72,10 @@ export default function PricingPage() {
             &larr; Back to pricing
           </button>
           <h1 className="text-2xl font-semibold text-white mb-2">
-            Upgrade to {active.name}
+            Subscribe to Dopl Pro
           </h1>
-          <p className="text-sm text-white/60 mb-6">
-            {price}
-            {interval === "year" && active.annualSavings
-              ? ` · Save $${active.annualSavings}/yr`
-              : ""}
-          </p>
-          <EmbeddedCheckoutForm
-            tier={checkoutTier === "power" ? "power" : "pro"}
-            interval={interval}
-          />
+          <p className="text-sm text-white/60 mb-6">$7.99/month</p>
+          <EmbeddedCheckoutForm />
         </div>
       </div>
     );
@@ -181,157 +98,73 @@ export default function PricingPage() {
           </h1>
         </div>
         <p className="text-sm text-white/55 text-center max-w-md mx-auto leading-relaxed">
-          Start for free. Upgrade to get the capacity that matches your needs.
+          Try Dopl free for 24 hours. No credit card required.
         </p>
       </section>
 
-      {/* Global billing-interval toggle (lifted out of the cards so every
-          card has the same vertical rhythm). */}
-      <section className="px-4 pt-8">
-        <div className="max-w-5xl mx-auto flex justify-center">
-          <div className="inline-flex items-center gap-3 rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2">
-            <button
-              type="button"
-              role="switch"
-              aria-checked={interval === "year"}
-              onClick={() =>
-                setInterval(interval === "year" ? "month" : "year")
-              }
-              className={`relative inline-flex h-[18px] w-[32px] shrink-0 cursor-pointer rounded-full transition-colors ${
-                interval === "year" ? "bg-white/60" : "bg-white/[0.15]"
-              }`}
-            >
-              <span
-                className={`inline-block h-[14px] w-[14px] rounded-full bg-white shadow-sm transition-transform ${
-                  interval === "year" ? "translate-x-[16px]" : "translate-x-[2px]"
-                } translate-y-[2px]`}
-              />
-            </button>
-            <span className="text-sm text-white/80">Annual billing</span>
-            <span className="text-xs text-emerald-400/90">Save up to $100/yr</span>
-          </div>
-        </div>
-      </section>
+      {/* Single Pro card */}
+      <section className="flex-1 px-4 pt-10 pb-16">
+        <div className="max-w-md mx-auto">
+          <div className="flex flex-col h-full rounded-xl p-8 border border-white/[0.15] bg-white/[0.04]">
+            <div className="text-xl font-semibold text-white mb-1.5">Pro</div>
+            <p className="text-sm text-white/55 leading-relaxed mb-6">
+              Everything Dopl can do, billed monthly.
+            </p>
 
-      {/* Tier cards */}
-      <section className="flex-1 px-4 pt-6 pb-16">
-        <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-4 items-stretch">
-          {TIERS.map((t) => {
-            const isCurrent = tier === t.key && !!user;
-            const isPaid = t.key !== "free";
-            const isAnnual = interval === "year" && isPaid;
-            const priceDollars =
-              isAnnual && t.annualTotal
-                ? (t.annualTotal / 12).toFixed(0)
-                : t.monthly.toString();
-            const priceSuffix = "per month";
+            <div className="mb-1 flex items-baseline gap-2">
+              <span className="text-4xl font-semibold text-white">$7.99</span>
+              <span className="text-sm text-white/50">per month</span>
+            </div>
+            <p className="text-xs text-white/40 mb-6">
+              Cancel anytime. 24-hour free trial on signup.
+            </p>
 
-            return (
-              <div
-                key={t.key}
-                className={`flex flex-col h-full rounded-xl p-6 ${
-                  t.highlight
-                    ? "border border-white/[0.15] bg-white/[0.04]"
-                    : "border border-white/[0.08] bg-white/[0.02]"
-                }`}
+            {isPaid ? (
+              <Button variant="outline" size="lg" className="w-full mb-6" disabled>
+                Current plan
+              </Button>
+            ) : user ? (
+              <Button
+                size="lg"
+                className="w-full mb-6 cursor-pointer"
+                onClick={handleSubscribe}
+                disabled={!authChecked}
               >
-                {/* Tier name */}
-                <div className="text-xl font-semibold text-white mb-1.5">
-                  {t.name}
-                </div>
+                Subscribe
+              </Button>
+            ) : (
+              <Button
+                size="lg"
+                className="w-full mb-6 cursor-pointer"
+                onClick={handleGetStarted}
+              >
+                Start free trial
+              </Button>
+            )}
 
-                {/* Tagline */}
-                <p className="text-sm text-white/55 leading-relaxed mb-6 min-h-[40px]">
-                  {t.tagline}
-                </p>
-
-                {/* Price */}
-                <div className="mb-1 flex items-baseline gap-2">
-                  <span className="text-4xl font-semibold text-white">
-                    ${priceDollars}
-                  </span>
-                  <span className="text-sm text-white/50">{priceSuffix}</span>
-                </div>
-
-                {/* Billing helper */}
-                <p className="text-xs text-white/40 mb-5">
-                  {!isPaid
-                    ? "Forever free"
-                    : isAnnual
-                      ? `Billed $${t.annualTotal}/year`
-                      : "Billed monthly"}
-                </p>
-
-                {/* Credits per month — same row across all cards */}
-                <div className="mb-5 rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2.5">
-                  <div className="text-lg font-semibold text-white leading-tight">
-                    {t.credits.toLocaleString()} credits
-                  </div>
-                  <div className="text-xs text-white/50 mt-0.5">per month</div>
-                </div>
-
-                {/* Primary button */}
-                {isCurrent ? (
-                  <Button variant="outline" size="lg" className="w-full mb-6" disabled>
-                    Current plan
-                  </Button>
-                ) : isPaid ? (
-                  <Button
-                    size="lg"
-                    variant={t.highlight ? "default" : "outline"}
-                    className="w-full mb-6 cursor-pointer"
-                    onClick={() => handleUpgrade(t.key)}
-                    disabled={!authChecked}
-                  >
-                    Upgrade
-                  </Button>
-                ) : (
-                  <Button
-                    variant="outline"
-                    size="lg"
-                    className="w-full mb-6 cursor-pointer"
-                    onClick={handleGetStarted}
-                  >
-                    {user ? "Go to Canvas" : "Get started"}
-                  </Button>
-                )}
-
-                {/* Feature list header */}
-                {t.inheritFrom && (
-                  <div className="text-xs text-white/40 mb-3">
-                    All features in {t.inheritFrom}, plus:
-                  </div>
-                )}
-                {!t.inheritFrom && (
-                  <div className="text-xs text-white/40 mb-3">Free for everyone</div>
-                )}
-
-                {/* Features */}
-                <ul className="space-y-2.5">
-                  {t.features.map((f) => (
-                    <li key={f} className="flex items-start gap-2.5 text-sm text-white/75 leading-6">
-                      <Check />
-                      <span>{f}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Footnote */}
-        <div className="max-w-3xl mx-auto mt-12 text-center">
-          <p className="text-xs text-white/40 leading-relaxed">
-            All plans include every Dopl feature: canvas, clusters, knowledge base search, MCP server for your AI assistant, Chrome extension, and AI synthesis. Credits reset on a rolling 30-day cycle.
-          </p>
+            <ul className="space-y-2.5">
+              <li className="flex items-start gap-2.5 text-sm text-white/75 leading-6">
+                <Check /> <span>Unlimited ingestion</span>
+              </li>
+              <li className="flex items-start gap-2.5 text-sm text-white/75 leading-6">
+                <Check /> <span>MCP server access for your AI agent</span>
+              </li>
+              <li className="flex items-start gap-2.5 text-sm text-white/75 leading-6">
+                <Check /> <span>Canvas, clusters, and skill sync</span>
+              </li>
+              <li className="flex items-start gap-2.5 text-sm text-white/75 leading-6">
+                <Check /> <span>Cluster brain synthesis</span>
+              </li>
+              <li className="flex items-start gap-2.5 text-sm text-white/75 leading-6">
+                <Check /> <span>Auto-update tracking for GitHub sources</span>
+              </li>
+            </ul>
+          </div>
         </div>
       </section>
     </div>
   );
 }
-
-// ── Icon ───────────────────────────────────────────────────────────
 
 function Check() {
   return (

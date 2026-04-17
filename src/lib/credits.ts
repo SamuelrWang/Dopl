@@ -9,14 +9,20 @@ export const CREDIT_COSTS = {
   mcp_list: 1,
   mcp_cluster_query: 1,
   mcp_cluster_read: 1,
-  // AI-heavy operations
-  mcp_build: 5,
-  mcp_synthesize: 10,
+  // build_solution: retrieval-only after the pivot — the agent runs the
+  // synthesis prompt in its own context, server just returns the bundle.
+  // One credit covers the embedding-based retrieval.
+  mcp_build: 1,
   // Chat (in-app)
   chat_message: 2,
   chat_tool_call: 3,
-  // Ingestion
-  ingestion: 7,
+  // Agent-driven ingestion — prepare fetches + submit embeds + persists.
+  // No server-side Claude, so only the embedding cost is charged (~$0.0002).
+  // Deducted upfront on prepare; refunded on prepare/submit failure.
+  ingestion_agent: 1,
+  // Legacy `ingestion: 7` (pre-pivot server-side pipeline) and
+  // `mcp_synthesize: 10` (pre-pivot cluster brain synthesis) have been
+  // removed — no live callers and the underlying endpoints return 410.
 } as const;
 
 export type CreditAction = keyof typeof CREDIT_COSTS;

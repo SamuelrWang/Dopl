@@ -3,7 +3,8 @@
  * canvas from *outside* the CanvasProvider (e.g. browse page).
  *
  * Writes to both DB (durable) and localStorage cache (instant). The canvas
- * page will pick up the panel from DB on next load via HYDRATE_FROM_DB.
+ * page will pick up the panel from DB on next load — the canvas is
+ * server-rendered with real state, no hydration step needed.
  */
 
 import type { CanvasState, EntryPanelData } from "./types";

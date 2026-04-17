@@ -1,9 +1,17 @@
-import { callClaude } from "@/lib/ai";
 import { buildBuilderPrompt } from "@/lib/prompts/builder";
-import { searchEntries, SearchResult } from "./search";
-import { BuildResponse } from "@/types/api";
+import { searchEntries } from "./search";
+import type { BuildBundle } from "@/types/api";
 
-export async function buildComposite(
+/**
+ * Build a composite-solution bundle the agent runs in its own context.
+ *
+ * Retrieval (embedding-based search) stays server-side — it's cheap, has
+ * no LLM spend, and needs pgvector. The synthesis itself (reading the
+ * retrieved entries and producing composite README + agents.md) is the
+ * agent's job now: we hand back the ready-to-run prompt, the retrieved
+ * entries, and step-by-step instructions.
+ */
+export async function buildBuilderBundle(
   brief: string,
   constraints?: {
     preferred_tools?: string[];
@@ -11,31 +19,33 @@ export async function buildComposite(
     max_complexity?: string;
     budget_context?: string;
   }
-): Promise<BuildResponse> {
-  // 1. Search for relevant entries
+): Promise<BuildBundle> {
+  // 1. Retrieval — embedding search against the KB.
   const results = await searchEntries(brief, {
     maxResults: 10,
-    threshold: 0.5, // Lower threshold for builder to get more diverse results
+    threshold: 0.5, // Lower threshold to surface more diverse candidates.
   });
 
   if (results.length === 0) {
     return {
-      composite_readme: "# No Matching Entries\n\nNo entries in the knowledge base match this brief.",
-      composite_agents_md: "# No Implementation Available\n\nThe knowledge base does not have enough relevant entries to generate a composite solution.",
-      source_entries: [],
-      confidence: {
-        score: 0,
-        gaps: ["No relevant entries found in the knowledge base"],
-        suggestions: ["Add entries related to: " + brief.slice(0, 100)],
-      },
+      status: "no_matches",
+      brief,
+      constraints: constraints ?? null,
+      entries: [],
+      prompt: "",
+      instructions:
+        "No entries in the knowledge base matched this brief. Tell the user the KB doesn't have relevant prior art yet; suggest ingesting a few URLs (via `prepare_ingest`) related to the brief, then retry `build_solution`.",
     };
   }
 
-  // 2. Build entries context
+  // 2. Assemble entries for the prompt body. Preserve full readme +
+  //    agents.md content since the agent's context is the one doing the
+  //    synthesis — no server-side truncation needed beyond what the
+  //    embedder already capped entries at.
   const entriesStr = results
     .map(
       (r) =>
-        `Entry ID: ${r.entry_id}\nTitle: ${r.title}\nREADME:\n${r.readme || "N/A"}\nagents.md:\n${r.agents_md || "N/A"}\nManifest:\n${JSON.stringify(r.manifest, null, 2)}`
+        `Entry ID: ${r.entry_id}\nSlug: ${r.slug ?? "(no slug)"}\nTitle: ${r.title}\nREADME:\n${r.readme || "N/A"}\nagents.md:\n${r.agents_md || "N/A"}\nManifest:\n${JSON.stringify(r.manifest, null, 2)}`
     )
     .join("\n\n===\n\n");
 
@@ -43,62 +53,27 @@ export async function buildComposite(
     ? JSON.stringify(constraints, null, 2)
     : "None specified";
 
-  // 3. Call Claude to compose solution
   const prompt = buildBuilderPrompt(brief, constraintsStr, entriesStr);
-  const response = await callClaude("", prompt, { maxTokens: 16384 });
 
-  // 4. Parse response
-  const jsonStr = response
-    .replace(/^```json\s*/m, "")
-    .replace(/^```\s*/m, "")
-    .replace(/```\s*$/m, "")
-    .trim();
-
-  // Build a lookup from entry_id → slug so we can hydrate Claude's output
-  // (which only echoes entry_ids) with public slugs for hyperlinking.
-  const slugByEntryId = new Map<string, string | null>();
-  for (const r of results) slugByEntryId.set(r.entry_id, r.slug);
-
-  try {
-    const parsed = JSON.parse(jsonStr);
-    return {
-      composite_readme: parsed.composite_readme || "",
-      composite_agents_md: parsed.composite_agents_md || "",
-      source_entries: (parsed.source_attribution || []).map(
-        (a: { entry_id: string; title: string; how_used: string }) => ({
-          entry_id: a.entry_id,
-          slug: slugByEntryId.get(a.entry_id) ?? null,
-          title: a.title,
-          how_used: a.how_used,
-        })
-      ),
-      confidence: parsed.confidence || { score: 0.5, gaps: [], suggestions: [] },
-    };
-  } catch {
-    // If JSON parsing fails, try to extract sections from the response
-    return {
-      composite_readme: extractSection(response, "composite_readme") || response,
-      composite_agents_md: extractSection(response, "composite_agents_md") || "",
-      source_entries: results.map((r) => ({
-        entry_id: r.entry_id,
-        slug: r.slug,
-        title: r.title || "Unknown",
-        how_used: "Referenced in composite solution",
-      })),
-      confidence: {
-        score: 0.5,
-        gaps: ["Response parsing failed — manual review recommended"],
-        suggestions: [],
-      },
-    };
-  }
-}
-
-function extractSection(text: string, sectionName: string): string | null {
-  const regex = new RegExp(
-    `<${sectionName}>\\s*([\\s\\S]*?)\\s*</${sectionName}>`,
-    "i"
-  );
-  const match = text.match(regex);
-  return match ? match[1].trim() : null;
+  // 3. Return the agent-facing bundle. NO callClaude — the agent runs
+  //    `prompt` in its own context and uses the JSON output to respond
+  //    to the user. Nothing is persisted; build_solution is stateless.
+  return {
+    status: "ready",
+    brief,
+    constraints: constraints ?? null,
+    entries: results.map((r) => ({
+      entry_id: r.entry_id,
+      slug: r.slug,
+      title: r.title,
+      similarity: r.similarity,
+    })),
+    prompt,
+    instructions: [
+      "Run the `prompt` field against your own model context.",
+      "The prompt expects JSON output: `{ composite_readme, composite_agents_md, source_attribution, confidence }`.",
+      "Present the composite README + agents.md to the user in your reply. Link each source entry with its public URL (derive from slug: `<host>/e/<slug>`).",
+      "Nothing is persisted server-side — this is a synthesis-only tool. If the user wants the composite saved as a new KB entry, run `prepare_ingest` on the final artifacts separately.",
+    ].join(" "),
+  };
 }

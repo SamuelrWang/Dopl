@@ -6,12 +6,7 @@ import {
   updateSubscription,
 } from "@/lib/billing/subscriptions";
 import { supabaseAdmin } from "@/lib/supabase";
-import {
-  handleUpgrade,
-  grantCycleCredits,
-  TIER_CREDITS,
-  type SubscriptionTier,
-} from "@/lib/credits";
+import { logConversionEvent, hasFiredEvent } from "@/lib/analytics/conversion-events";
 import type Stripe from "stripe";
 
 export async function POST(request: NextRequest) {
@@ -38,23 +33,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: message }, { status: 400 });
   }
 
-  // ── Two-phase idempotency ─────────────────────────────────────────
-  // 1. RESERVE the event (processed=false). If this row already exists
-  //    with processed=true → we already finished this event, short-circuit.
-  //    If it exists with processed=false → a previous attempt crashed
-  //    mid-way; retry the handler.
-  // 2. Run the handler.
-  // 3. COMMIT by flipping processed=true on success.
-  //
-  // If the handler fails, the row stays at processed=false and Stripe
-  // retries the webhook until it succeeds.
+  // ── Two-phase idempotency (see original file for rationale) ──
   const supabase = supabaseAdmin();
   const { error: insertError } = await supabase
     .from("webhook_events")
     .insert({ event_id: event.id, event_type: event.type, processed: false });
 
   if (insertError && insertError.code === "23505") {
-    // Row already exists — check whether it's been committed.
     const { data: existing } = await supabase
       .from("webhook_events")
       .select("processed")
@@ -64,11 +49,8 @@ export async function POST(request: NextRequest) {
       console.log(`[webhook] Skipping already-processed event ${event.id}`);
       return NextResponse.json({ received: true, duplicate: true });
     }
-    // processed=false means a previous attempt failed; fall through to
-    // retry the handler.
     console.log(`[webhook] Retrying previously-failed event ${event.id}`);
   } else if (insertError) {
-    // Any other error: fail closed so Stripe retries.
     console.error(`[webhook] Idempotency insert failed: ${insertError.message}`);
     return NextResponse.json(
       { error: "Idempotency check failed; please retry" },
@@ -76,187 +58,155 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Wrap the handler so a thrown error leaves processed=false for retry,
-  // and records the error for debugging.
   try {
     switch (event.type) {
-    case "checkout.session.completed": {
-      const session = event.data.object as Stripe.Checkout.Session;
-      const customerId = session.customer as string;
-      const subscriptionId = session.subscription as string;
-      const newTier = (session.metadata?.tier as SubscriptionTier) || "pro";
-      const metadataUserId = session.metadata?.userId;
+      case "checkout.session.completed": {
+        const session = event.data.object as Stripe.Checkout.Session;
+        const customerId = session.customer as string;
+        const subscriptionId = session.subscription as string;
+        const metadataUserId = session.metadata?.userId;
 
-      if (!metadataUserId) {
-        console.error(`[webhook] checkout.session.completed missing userId metadata for event ${event.id}`);
+        if (!metadataUserId) {
+          console.error(
+            `[webhook] checkout.session.completed missing userId metadata for event ${event.id}`
+          );
+          break;
+        }
+
+        // Fetch subscription for current_period_end (session payload doesn't
+        // carry it). Non-fatal if this fails — subscription.updated backfills.
+        let periodEnd: number | undefined;
+        try {
+          const subscription = await getStripe().subscriptions.retrieve(subscriptionId);
+          periodEnd = subscription.items?.data?.[0]?.current_period_end;
+        } catch (err) {
+          console.error(
+            `[webhook] Failed to fetch subscription ${subscriptionId} for period_end: ${err instanceof Error ? err.message : String(err)}`
+          );
+        }
+
+        // Read prior state so we can distinguish first-time subscribe from
+        // a reactivation (prior expired trial).
+        const prior = await getUserSubscription(metadataUserId);
+        const wasExpired = prior.status === "expired";
+
+        await updateSubscription(metadataUserId, {
+          subscription_tier: "pro",
+          subscription_status: "active",
+          stripe_customer_id: customerId,
+          stripe_subscription_id: subscriptionId,
+          ...(periodEnd
+            ? { subscription_period_end: new Date(periodEnd * 1000).toISOString() }
+            : {}),
+        });
+
+        // Cross-verify customer-to-user mapping.
+        const resolvedUserId = await getUserByStripeCustomer(customerId);
+        if (resolvedUserId && resolvedUserId !== metadataUserId) {
+          console.error(
+            `[webhook] userId mismatch on event ${event.id}: metadata=${metadataUserId}, customer-resolved=${resolvedUserId}.`
+          );
+          break;
+        }
+
+        // Conversion events: first-time `subscribed`, and `reactivated`
+        // if they had previously crossed trial_expired. Idempotent via
+        // hasFiredEvent check for `subscribed`.
+        const alreadySubscribed = await hasFiredEvent(metadataUserId, "subscribed");
+        if (!alreadySubscribed) {
+          await logConversionEvent({
+            userId: metadataUserId,
+            eventType: "subscribed",
+          });
+        }
+        if (wasExpired) {
+          await logConversionEvent({
+            userId: metadataUserId,
+            eventType: "reactivated",
+          });
+        }
         break;
       }
 
-      // The session payload only carries the subscription ID, not the
-      // subscription object, so current_period_end isn't in here. Fetch
-      // it now — otherwise subscription_period_end stays NULL until the
-      // first `customer.subscription.updated` event fires (which isn't
-      // guaranteed to happen promptly after creation), breaking the
-      // "Renews MM/DD/YYYY" UI and Stripe-aligned cycle boundaries.
-      let periodEnd: number | undefined;
-      try {
-        const subscription = await getStripe().subscriptions.retrieve(subscriptionId);
-        periodEnd = subscription.items?.data?.[0]?.current_period_end;
-      } catch (err) {
-        // Non-fatal — the subsequent `customer.subscription.updated`
-        // event will backfill this field. Log so recurring failures
-        // are visible.
-        console.error(
-          `[webhook] Failed to fetch subscription ${subscriptionId} for period_end: ${err instanceof Error ? err.message : String(err)}`
-        );
-      }
+      case "customer.subscription.updated": {
+        const subscription = event.data.object as Stripe.Subscription;
+        const customerId = subscription.customer as string;
+        const userId = await getUserByStripeCustomer(customerId);
+        if (!userId) break;
 
-      // Read the user's actual current tier BEFORE we overwrite it, so
-      // handleUpgrade diffs correctly on tier-to-tier transitions (e.g.
-      // Pro → Power via re-checkout) instead of always assuming the
-      // old tier was "free".
-      const priorSub = await getUserSubscription(metadataUserId);
-      const oldTier: SubscriptionTier = priorSub.tier;
+        const status = subscription.status;
+        const periodEnd = subscription.items?.data?.[0]?.current_period_end;
 
-      // Link Stripe customer to user profile (this also persists the
-      // customerId ↔ userId mapping).
-      await updateSubscription(metadataUserId, {
-        subscription_tier: newTier,
-        subscription_status: "active",
-        stripe_customer_id: customerId,
-        stripe_subscription_id: subscriptionId,
-        ...(periodEnd
-          ? { subscription_period_end: new Date(periodEnd * 1000).toISOString() }
-          : {}),
-      });
-
-      // Cross-verify: look the user up by customer_id and confirm it matches
-      // the userId in metadata. If a future webhook for this customer would
-      // resolve to a different user, that's suspicious — refuse the grant.
-      const resolvedUserId = await getUserByStripeCustomer(customerId);
-      if (resolvedUserId && resolvedUserId !== metadataUserId) {
-        console.error(
-          `[webhook] userId mismatch on event ${event.id}: metadata=${metadataUserId}, customer-resolved=${resolvedUserId}. Skipping credit grant.`
-        );
-        break;
-      }
-
-      await handleUpgrade(metadataUserId, oldTier, newTier);
-      break;
-    }
-
-    case "customer.subscription.updated": {
-      const subscription = event.data.object as Stripe.Subscription;
-      const customerId = subscription.customer as string;
-      const userId = await getUserByStripeCustomer(customerId);
-      if (!userId) break;
-
-      const status = subscription.status;
-      const subTier = (subscription.metadata?.tier as SubscriptionTier) ||
-        (status === "active" || status === "trialing" ? "pro" : "free");
-
-      const periodEnd = subscription.items?.data?.[0]?.current_period_end;
-
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("subscription_tier")
-        .eq("id", userId)
-        .single();
-      const oldTier = (profile?.subscription_tier as SubscriptionTier) || "free";
-
-      await updateSubscription(userId, {
-        subscription_tier: subTier,
-        subscription_status:
+        // Map Stripe status → our simplified status. "active" / "trialing"
+        // at Stripe = "active" for us (we don't use Stripe trials);
+        // everything else collapses to "expired".
+        const mappedStatus =
           status === "active" || status === "trialing"
             ? "active"
-            : status === "past_due"
-            ? "past_due"
-            : "canceled",
-        ...(periodEnd
-          ? { subscription_period_end: new Date(periodEnd * 1000).toISOString() }
-          : {}),
-      });
+            : "expired";
 
-      if (subTier !== "free" && subTier !== oldTier) {
-        await handleUpgrade(userId, oldTier, subTier);
-      } else if (subTier !== "free" && periodEnd) {
-        const periodEndDate = new Date(periodEnd * 1000);
-        const { data: credits } = await supabase
-          .from("user_credits")
-          .select("cycle_start")
-          .eq("user_id", userId)
-          .single();
-        if (credits) {
-          const cycleStart = new Date(credits.cycle_start);
-          const daysSince = (Date.now() - cycleStart.getTime()) / (1000 * 60 * 60 * 24);
-          if (daysSince >= 25 && periodEndDate.getTime() > Date.now()) {
-            await grantCycleCredits(userId, subTier);
-          }
+        await updateSubscription(userId, {
+          subscription_tier: mappedStatus === "active" ? "pro" : "free",
+          subscription_status: mappedStatus,
+          ...(periodEnd
+            ? { subscription_period_end: new Date(periodEnd * 1000).toISOString() }
+            : {}),
+        });
+        break;
+      }
+
+      case "customer.subscription.deleted": {
+        const subscription = event.data.object as Stripe.Subscription;
+        const customerId = subscription.customer as string;
+        const userId = await getUserByStripeCustomer(customerId);
+        if (!userId) break;
+
+        await updateSubscription(userId, {
+          subscription_tier: "free",
+          subscription_status: "expired",
+          stripe_subscription_id: undefined,
+        });
+
+        await logConversionEvent({
+          userId,
+          eventType: "churned",
+        });
+        break;
+      }
+
+      case "invoice.payment_failed": {
+        const invoice = event.data.object as Stripe.Invoice;
+        const customerId = invoice.customer as string;
+        const userId = await getUserByStripeCustomer(customerId);
+        if (!userId) break;
+
+        // Simplified: treat payment failure as expired for access purposes.
+        // Stripe will retry on its own schedule; if they recover, the
+        // subsequent invoice.payment_succeeded flips them back to active.
+        await updateSubscription(userId, {
+          subscription_status: "expired",
+        });
+        break;
+      }
+
+      case "invoice.payment_succeeded": {
+        const invoice = event.data.object as Stripe.Invoice;
+        const customerId = invoice.customer as string;
+        const userId = await getUserByStripeCustomer(customerId);
+        if (!userId) break;
+
+        const sub = await getUserSubscription(userId);
+        if (sub.status !== "active") {
+          await updateSubscription(userId, {
+            subscription_tier: "pro",
+            subscription_status: "active",
+          });
         }
+        break;
       }
-      break;
     }
 
-    case "customer.subscription.deleted": {
-      const subscription = event.data.object as Stripe.Subscription;
-      const customerId = subscription.customer as string;
-      const userId = await getUserByStripeCustomer(customerId);
-      if (!userId) break;
-
-      await updateSubscription(userId, {
-        subscription_tier: "free",
-        subscription_status: "inactive",
-        stripe_subscription_id: undefined,
-      });
-
-      // Reset the cycle anchor so a future re-upgrade (even in the same
-      // 30-day window) sees cycle_credits_granted = free.monthly and
-      // grants the full pro/power diff. Without this, re-upgrading after
-      // a cancel in the same cycle computes diff = 500 - 500 = 0 and
-      // silently grants nothing even though the user paid.
-      await supabaseAdmin()
-        .from("user_credits")
-        .update({
-          cycle_credits_granted: TIER_CREDITS.free.monthly,
-          cycle_start: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("user_id", userId);
-      break;
-    }
-
-    case "invoice.payment_failed": {
-      const invoice = event.data.object as Stripe.Invoice;
-      const customerId = invoice.customer as string;
-      const userId = await getUserByStripeCustomer(customerId);
-      if (!userId) break;
-
-      await updateSubscription(userId, {
-        subscription_status: "past_due",
-      });
-      break;
-    }
-
-    case "invoice.payment_succeeded": {
-      // Recover from past_due when a previously-failed renewal finally
-      // settles. Stripe fires this on the initial checkout invoice too,
-      // so the `past_due` guard keeps the handler a no-op for normal
-      // renewals that never went past_due in the first place.
-      const invoice = event.data.object as Stripe.Invoice;
-      const customerId = invoice.customer as string;
-      const userId = await getUserByStripeCustomer(customerId);
-      if (!userId) break;
-
-      const sub = await getUserSubscription(userId);
-      if (sub.status === "past_due") {
-        await updateSubscription(userId, { subscription_status: "active" });
-      }
-      break;
-    }
-    }
-
-    // Commit: mark the event as processed so a duplicate delivery
-    // short-circuits instead of re-running the handler.
+    // Commit idempotency.
     await supabase
       .from("webhook_events")
       .update({ processed: true, completed_at: new Date().toISOString() })
@@ -264,12 +214,10 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`[webhook] Handler failed for event ${event.id}: ${message}`);
-    // Record the error but leave processed=false so Stripe retries.
     await supabase
       .from("webhook_events")
       .update({ last_error: message })
       .eq("event_id", event.id);
-    // Return 5xx to trigger Stripe retry.
     return NextResponse.json(
       { error: "Webhook handler failed; please retry" },
       { status: 500 }

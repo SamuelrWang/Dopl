@@ -79,7 +79,7 @@ function serverMessagesToChatMessages(
 export function FixedChatPanel() {
   const { isOpen, close, open } = useChatDrawer();
   const { panels, dispatch } = usePanelsContext();
-  const { state, dbReady } = useCanvas();
+  const { state } = useCanvas();
   const { conversations } = useChatConversations();
   const [selectedPanelId, setSelectedPanelId] = useState<string | null>(null);
   const [listOpen, setListOpen] = useState(true);
@@ -87,21 +87,14 @@ export function FixedChatPanel() {
 
   // First-load onboarding: create welcome conversation and open drawer.
   //
-  // IMPORTANT: must wait for dbReady. HYDRATE_FROM_DB replaces state.panels
-  // with whatever the DB returned, preserving only locally-processing
-  // chats. If we create the welcome panel before hydration, it gets
-  // nuked by HYDRATE_FROM_DB before the sync layer has a chance to POST
-  // it — the panel disappears and the localStorage flag blocks
-  // re-creation on next reload. Hence: wait for dbReady, then create.
-  //
-  // Also guard against re-creating the welcome panel if one already
-  // exists in the hydrated state (e.g. on a fresh browser where the
-  // localStorage flag isn't set but the user has done onboarding before
-  // in another session). The id prefix is a stable marker.
+  // State is now server-rendered, so it's always real on first render —
+  // no hydration gate needed. We guard against re-creating the welcome
+  // panel if one already exists (returning user, or fresh browser with
+  // no localStorage flag but the panel is in the DB). The id prefix
+  // `chat-welcome-` is a stable marker.
   useEffect(() => {
     if (onboardingRan.current) return;
     if (typeof window === "undefined") return;
-    if (!dbReady) return;
     if (localStorage.getItem(ONBOARDING_KEY) === "1") return;
     if (panels.some((p) => p.id.startsWith("chat-welcome-"))) {
       // Already have one from a prior session — don't spawn another.
@@ -139,7 +132,7 @@ export function FixedChatPanel() {
     }, 100);
 
     localStorage.setItem(ONBOARDING_KEY, "1");
-  }, [dispatch, open, dbReady, panels]);
+  }, [dispatch, open, panels]);
 
   const chatPanels = useMemo(
     () =>

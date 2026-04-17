@@ -368,25 +368,58 @@ export async function getPublishedCluster(
   if (entryIds.length > 0) {
     // Only surface approved entries — pending/denied entries referenced
     // by a published cluster should not leak into the public chat context.
-    const { data: entryRows } = await db
-      .from("entries")
-      .select("id, title, summary, source_url, source_platform, readme, agents_md")
-      .in("id", entryIds)
-      .eq("moderation_status", "approved");
+    const [entryRowsRes, tagRowsRes] = await Promise.all([
+      db
+        .from("entries")
+        .select(
+          "id, title, summary, source_url, source_platform, readme, agents_md, thumbnail_url, use_case, complexity, content_type, manifest, ingested_at, created_at"
+        )
+        .in("id", entryIds)
+        .eq("moderation_status", "approved"),
+      // Tags live in a separate table; fetch in parallel and group by entry.
+      db
+        .from("tags")
+        .select("entry_id, tag_type, tag_value")
+        .in("entry_id", entryIds),
+    ]);
 
-    entries = (entryRows || []).map((e) => ({
-      entry_id: e.id,
-      title: e.title,
-      summary: e.summary,
-      source_url: e.source_url,
-      source_platform: e.source_platform,
-      readme: e.readme
-        ? e.readme.slice(0, CONTEXT_CHAR_BUDGET_PER_FIELD)
-        : null,
-      agents_md: e.agents_md
-        ? e.agents_md.slice(0, CONTEXT_CHAR_BUDGET_PER_FIELD)
-        : null,
-    }));
+    const tagsByEntry = new Map<string, Array<{ tag_type: string; tag_value: string }>>();
+    for (const row of tagRowsRes.data || []) {
+      const arr = tagsByEntry.get(row.entry_id) || [];
+      arr.push({ tag_type: row.tag_type, tag_value: row.tag_value });
+      tagsByEntry.set(row.entry_id, arr);
+    }
+
+    entries = (entryRowsRes.data || []).map((e) => {
+      const manifest = e.manifest as Record<string, unknown> | null;
+      // Best-effort extract source author from manifest.source_author or
+      // nested shapes — mirrors what the user canvas already handles.
+      const sourceAuthor =
+        (manifest && typeof manifest["source_author"] === "string"
+          ? (manifest["source_author"] as string)
+          : null) ?? null;
+      return {
+        entry_id: e.id,
+        title: e.title,
+        summary: e.summary,
+        source_url: e.source_url,
+        source_platform: e.source_platform,
+        readme: e.readme
+          ? e.readme.slice(0, CONTEXT_CHAR_BUDGET_PER_FIELD)
+          : null,
+        agents_md: e.agents_md
+          ? e.agents_md.slice(0, CONTEXT_CHAR_BUDGET_PER_FIELD)
+          : null,
+        source_author: sourceAuthor,
+        thumbnail_url: e.thumbnail_url ?? null,
+        use_case: e.use_case ?? null,
+        complexity: e.complexity ?? null,
+        content_type: e.content_type ?? null,
+        manifest: manifest,
+        created_at: e.ingested_at ?? e.created_at ?? null,
+        tags: tagsByEntry.get(e.id) || [],
+      };
+    });
   }
 
   return {

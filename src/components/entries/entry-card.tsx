@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { GlassCard, MonoLabel } from "@/components/design";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
+import { GlassCard, MonoLabel, PlatformIcon } from "@/components/design";
 import {
   addEntryPanelToCanvas,
   fetchFullEntry,
@@ -87,6 +88,25 @@ export function EntryCard({
     "idle" | "loading" | "added" | "error"
   >("idle");
 
+  // Cursor-following description popup. Only shown while the pointer
+  // is over the card and the entry has a summary worth reading.
+  const [hoverPos, setHoverPos] = useState<{ x: number; y: number } | null>(null);
+  const [portalReady, setPortalReady] = useState(false);
+  useEffect(() => {
+    setPortalReady(true);
+  }, []);
+
+  const hasPopupContent = Boolean(summary && summary.trim().length > 0);
+  const shouldShowPopup = hoverPos !== null && hasPopupContent && portalReady;
+
+  function handleMouseMove(e: React.MouseEvent) {
+    // clientX/Y — viewport-relative, matches position: fixed.
+    setHoverPos({ x: e.clientX, y: e.clientY });
+  }
+  function handleMouseLeave() {
+    setHoverPos(null);
+  }
+
   function handleSourceClick(e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
@@ -111,7 +131,14 @@ export function EntryCard({
   }
 
   return (
-    <a href={`/entries/${id}`} target="_blank" rel="noopener" className="group block h-full">
+    <a
+      href={`/entries/${id}`}
+      target="_blank"
+      rel="noopener"
+      className="group block h-full"
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+    >
       <GlassCard
         variant="subtle"
         className="h-full !p-0 overflow-hidden hover:bg-white/[0.10] transition-colors cursor-pointer"
@@ -140,10 +167,14 @@ export function EntryCard({
             </span>
           </div>
 
-          {/* Platform badge — sharp corners, mono label */}
+          {/* Platform badge — brand SVG logo, matches the canvas entry panel */}
           <div className="absolute top-2 left-2">
-            <span className="font-mono text-[9px] uppercase tracking-wider px-1.5 py-0.5 bg-[oklch(0.07_0_0)] border border-white/10 text-white/80 rounded-[3px]">
-              {platformLabels[platform] || "Web"}
+            <span
+              className="w-6 h-6 inline-flex items-center justify-center bg-[oklch(0.07_0_0)] border border-white/10 text-white/80 rounded-[3px]"
+              title={platformLabels[platform] || "Web"}
+              aria-label={platformLabels[platform] || "Web"}
+            >
+              <PlatformIcon platform={platform} className="w-3.5 h-3.5 fill-current" />
             </span>
           </div>
 
@@ -157,7 +188,7 @@ export function EntryCard({
                     : "bg-amber-950/80 text-amber-400 border-amber-500/30"
                 }`}
               >
-                {status}
+                {status === "pending_ingestion" ? "queued" : status}
               </span>
             </div>
           )}
@@ -224,6 +255,68 @@ export function EntryCard({
           )}
         </div>
       </GlassCard>
+      {shouldShowPopup &&
+        createPortal(
+          <HoverDescriptionPopup
+            x={hoverPos!.x}
+            y={hoverPos!.y}
+            title={title}
+            summary={summary!}
+          />,
+          document.body
+        )}
     </a>
+  );
+}
+
+/**
+ * Floating description popup that follows the cursor. Rendered via
+ * portal to `document.body` so parent overflow/transform doesn't clip
+ * it, and with `pointer-events: none` so the card's hover state stays
+ * active while the popup is visible. Self-clamps to the viewport so
+ * it doesn't spill off the right or bottom edge.
+ */
+function HoverDescriptionPopup({
+  x,
+  y,
+  title,
+  summary,
+}: {
+  x: number;
+  y: number;
+  title: string | null;
+  summary: string;
+}) {
+  const OFFSET = 16;
+  const MAX_WIDTH = 360;
+  const ESTIMATED_HEIGHT = 180; // conservative — only used for edge-clamp
+
+  // Flip horizontally if the popup would spill off the right edge.
+  const vw = typeof window !== "undefined" ? window.innerWidth : 1440;
+  const vh = typeof window !== "undefined" ? window.innerHeight : 900;
+  const flipLeft = x + OFFSET + MAX_WIDTH > vw;
+  const flipUp = y + OFFSET + ESTIMATED_HEIGHT > vh;
+  const left = flipLeft ? x - OFFSET - MAX_WIDTH : x + OFFSET;
+  const top = flipUp ? y - OFFSET - ESTIMATED_HEIGHT : y + OFFSET;
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        left,
+        top,
+        maxWidth: MAX_WIDTH,
+        pointerEvents: "none",
+        zIndex: 9999,
+      }}
+      className="bg-[#0a0a0a] border border-white/[0.12] rounded-[4px] shadow-2xl shadow-black/60 px-3 py-2.5 text-xs text-white/80 leading-relaxed"
+    >
+      {title && (
+        <div className="font-medium text-white/95 text-[13px] mb-1.5 leading-snug">
+          {title}
+        </div>
+      )}
+      <div className="text-white/70 whitespace-pre-wrap">{summary}</div>
+    </div>
   );
 }

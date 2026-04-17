@@ -1,7 +1,18 @@
+/**
+ * POST /api/query — semantic search over the Dopl knowledge base.
+ *
+ * After the client-only-synthesis pivot this route only does retrieval.
+ * The legacy `include_synthesis` branch ran a server-side Claude call
+ * (`synthesizeResults`) to produce a recommendation + per-entry relevance
+ * explanations; that's the agent's job now. Consumers that used to rely
+ * on `response.synthesis` should either (a) format recommendations
+ * themselves in the caller's own model context, or (b) skip the field
+ * entirely — the raw entries are still returned.
+ */
+
 import { NextRequest, NextResponse } from "next/server";
 import { QueryRequestSchema } from "@/types/api";
 import { searchEntries } from "@/lib/retrieval/search";
-import { synthesizeResults } from "@/lib/retrieval/synthesize";
 import { withMcpCredits } from "@/lib/auth/with-auth";
 import { CONTENT_PREVIEW_LENGTH } from "@/lib/config";
 import type { SubscriptionTier } from "@/lib/billing/subscriptions";
@@ -21,9 +32,9 @@ async function handlePost(
       );
     }
 
-    const { query, filters, max_results, include_synthesis } = parsed.data;
+    const { query, filters, max_results } = parsed.data;
 
-    // Vector search
+    // Vector search. No LLM call here — retrieval only.
     const results = await searchEntries(query, {
       tags: filters?.tags,
       useCase: filters?.use_case,
@@ -31,7 +42,7 @@ async function handlePost(
       maxResults: max_results,
     });
 
-    // Format response — gate content depth for free users
+    // Format response — gate content depth for free users.
     const entries = results.map((r) => ({
       entry_id: r.entry_id,
       slug: r.slug,
@@ -47,38 +58,16 @@ async function handlePost(
       manifest: r.manifest,
       source_platform: r.source_platform,
       created_at: r.created_at,
+      descriptor: r.descriptor,
+      ingestion_tier: r.ingestion_tier,
     }));
 
-    // Optional LLM synthesis — pro only
-    let synthesis;
-    if (include_synthesis && results.length > 0) {
-      if (tier === "free") {
-        synthesis = {
-          _locked: true,
-          message:
-            "AI synthesis is a Pro feature. Upgrade to get personalized recommendations.",
-        };
-      } else {
-        const synthesisResult = await synthesizeResults(query, results);
-        synthesis = {
-          recommendation: synthesisResult.recommendation,
-          composite_approach: synthesisResult.composite_approach,
-        };
-
-        for (const synthEntry of synthesisResult.entries) {
-          const entry = entries.find((e) => e.entry_id === synthEntry.entry_id);
-          if (entry) {
-            (entry as Record<string, unknown>).relevance_explanation =
-              synthEntry.explanation;
-          }
-        }
-      }
-    }
-
-    // Note: subscription tier is deliberately NOT returned — clients should
-    // never need to know the caller's tier, and leaking it lets an attacker
-    // enumerate user plans.
-    return NextResponse.json({ entries, synthesis });
+    // No synthesis — clients format recommendations in their own context.
+    // Tier is deliberately NOT returned (leaking it lets attackers
+    // enumerate plans); kept as a ref so the lint doesn't trip on the
+    // destructured-but-unused parameter.
+    void tier;
+    return NextResponse.json({ entries });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(

@@ -5,18 +5,14 @@ import { supabaseAdmin } from "@/lib/supabase";
 const supabase = supabaseAdmin();
 import { BUILDER_CHAT_SYSTEM_PROMPT } from "@/lib/prompts/chat-system";
 import { withUserAuth } from "@/lib/auth/with-auth";
-import { ingestEntry } from "@/lib/ingestion/pipeline";
+// ingestEntry is retired — regular ingestion is agent-driven via the
+// prepare_ingest + submit_ingested_entry MCP tools. Chat attachment URLs
+// are returned to the agent; the agent decides whether to ingest.
 import { assertPublicHttpUrl, UnsafeUrlError } from "@/lib/ingestion/url-safety";
-import {
-  deductCredits,
-  grantCredits,
-  grantDailyBonus,
-  checkAndResetCycle,
-  CREDIT_COSTS,
-  type SubscriptionTier,
-} from "@/lib/credits";
-import { getUserSubscription } from "@/lib/billing/subscriptions";
+import { hasActiveAccess, accessDeniedBody } from "@/lib/billing/access";
 import { logSystemEvent } from "@/lib/analytics/system-events";
+import { detectPlatform } from "@/lib/ingestion/pipeline";
+import { fallbackSlugFromId } from "@/lib/entries/slug";
 import { config } from "dotenv";
 import { resolve } from "path";
 
@@ -362,17 +358,20 @@ async function executeTool(
       const normalizedUrl = normalizeUrl(rawUrl);
 
       // Dedup check — mirrors /api/ingest/route.ts so chat and direct
-      // ingestion behave the same. Only match (a) approved public entries
-      // OR (b) the calling user's own pending/processing entries.
-      // Without the scoping, User B sees "already exists" for User A's
-      // unapproved submission — cross-user leak.
+      // ingestion behave the same. Now considers three statuses:
+      //   - complete / processing → return already_exists / processing
+      //   - pending_ingestion (user's own) → return the existing skeleton
+      //     so a user who pastes the same URL twice doesn't get duplicate
+      //     amber tiles.
+      // Only match (a) approved public entries OR (b) the calling user's
+      // own pending/processing entries to avoid cross-user leak.
       const urlsToCheck = [normalizedUrl];
       if (rawUrl !== normalizedUrl) urlsToCheck.push(rawUrl);
       let existingQuery = supabase
         .from("entries")
         .select("id, title, status, updated_at")
         .in("source_url", urlsToCheck)
-        .in("status", ["complete", "processing"]);
+        .in("status", ["complete", "processing", "pending_ingestion"]);
       if (userId) {
         existingQuery = existingQuery.or(
           `moderation_status.eq.approved,and(ingested_by.eq.${userId},moderation_status.neq.denied)`
@@ -387,6 +386,20 @@ async function executeTool(
         .maybeSingle();
 
       if (existing) {
+        if (existing.status === "pending_ingestion") {
+          // Same user re-pasted a URL already queued. Don't create a
+          // duplicate skeleton — surface the existing one.
+          return {
+            result: JSON.stringify({
+              entry_id: existing.id,
+              status: "queued",
+              url: normalizedUrl,
+              title: existing.title ?? null,
+              message:
+                "Already queued. Your connected agent will pick it up on its next tool call.",
+            }),
+          };
+        }
         if (existing.status === "processing") {
           const updatedAt = new Date(existing.updated_at).getTime();
           const oneHourAgo = Date.now() - 60 * 60 * 1000;
@@ -418,66 +431,55 @@ async function executeTool(
         }
       }
 
-      // Charge ingestion credits separately (chat_tool_call only covers the
-      // chat round — ingestion itself is an expensive pipeline).
-      if (userId) {
-        const result = await deductCredits(userId, "ingestion", {
-          url: normalizedUrl,
-          source: "chat_tool",
-        });
-        if (!result.success) {
-          return {
-            result: JSON.stringify({
-              status: "insufficient_credits",
-              message: `Not enough credits to ingest this URL. Ingestion costs ${CREDIT_COSTS.ingestion} credits, you have ${result.newBalance}.`,
-            }),
-          };
-        }
-      }
-
-      // New ingestion. Pass userId so the async pipeline can refund
-      // credits on failure; also refund here if ingestEntry itself
-      // throws synchronously (e.g. DB down) so we don't leave the user
-      // charged for work that never happened.
-      try {
-        const entryId = await ingestEntry({
-          url: normalizedUrl,
-          content: { text: "" },
-          userId,
-        });
-
-        return {
-          result: JSON.stringify({
-            entry_id: entryId,
-            status: "processing",
-            stream_url: `/api/ingest/${entryId}/stream`,
-          }),
-        };
-      } catch (err) {
-        if (userId) {
-          grantCredits(userId, CREDIT_COSTS.ingestion, "ingestion_sync_refund", {
-            source: "chat_tool",
-            url: normalizedUrl,
-          }).catch((refundErr) => {
-            logSystemEvent({
-              severity: "error",
-              category: "other",
-              source: "chat.ingestion_refund",
-              message: `Credit refund failed after chat-tool ingest error: ${refundErr instanceof Error ? refundErr.message : String(refundErr)}`,
-              fingerprintKeys: ["refund_failed", "chat_ingest_sync"],
-              metadata: { user_id: userId, url: normalizedUrl },
-              userId,
-            }).catch(() => {});
-          });
-        }
-        const msg = err instanceof Error ? err.message : String(err);
+      // No matching entry — queue a skeleton row. The user's connected
+      // MCP agent discovers it via the `_dopl_status` footer on its next
+      // tool call and claims it through `prepare_ingest` (which flips
+      // pending_ingestion → processing atomically).
+      //
+      // Queuing is intentionally FREE — the access gate runs in
+      // /api/ingest/prepare when the agent actually claims the pending
+      // entry. Letting expired-trial users queue means the "upgrade to
+      // process" prompt fires at the right moment (claim time), not at
+      // paste time.
+      if (!userId) {
+        // Canvas is auth-gated, so this branch is effectively unreachable
+        // for real users. Return an error rather than an orphan skeleton.
         return {
           result: JSON.stringify({
             status: "error",
-            message: `Failed to start ingestion: ${msg}`,
+            message: "Sign in to queue URLs for ingestion.",
           }),
         };
       }
+
+      const entryId = crypto.randomUUID();
+      const { error: insertError } = await supabase.from("entries").insert({
+        id: entryId,
+        source_url: normalizedUrl,
+        source_platform: detectPlatform(normalizedUrl),
+        status: "pending_ingestion",
+        ingested_by: userId,
+        slug: fallbackSlugFromId(entryId),
+      });
+      if (insertError) {
+        return {
+          result: JSON.stringify({
+            status: "error",
+            message: `Failed to queue URL: ${insertError.message}`,
+          }),
+        };
+      }
+
+      return {
+        result: JSON.stringify({
+          status: "queued",
+          entry_id: entryId,
+          slug: fallbackSlugFromId(entryId),
+          url: normalizedUrl,
+          message:
+            "URL queued. Your connected MCP agent will ingest it on its next tool call.",
+        }),
+      };
     }
 
     // ── Cluster brain editing ────────────────────────────────────
@@ -896,24 +898,11 @@ async function handlePost(
       );
     }
 
-    // Ensure cycle is fresh + daily bonus is granted (covers MCP-only users)
-    const sub = await getUserSubscription(userId);
-    const userTier = (sub.tier as SubscriptionTier) || "free";
-    await checkAndResetCycle(userId, userTier, sub.subscription_period_end);
-    await grantDailyBonus(userId, userTier);
-
-    // Reserve the worst-case cost UPFRONT (chat with tool calls = 5). If the
-    // response ends up text-only (3), we refund the difference at the end.
-    // Atomic RPC — this closes the race where parallel requests both pass
-    // a check-then-update and burn our Anthropic budget for free.
-    const initialDeduct = await deductCredits(userId, "chat_tool_call");
-    if (!initialDeduct.success) {
+    // Access gate: trialing or paid. Expired trials 402.
+    const access = await hasActiveAccess(userId);
+    if (!access.allowed) {
       return new Response(
-        JSON.stringify({
-          error: "insufficient_credits",
-          balance: initialDeduct.newBalance,
-          cost: CREDIT_COSTS.chat_tool_call,
-        }),
+        JSON.stringify(accessDeniedBody(access)),
         { status: 402, headers: { "Content-Type": "application/json" } }
       );
     }
@@ -1047,7 +1036,21 @@ async function handlePost(
                 block.name === "search_knowledge_base"
                   ? `Found ${(toolOutput.entries || []).length} relevant source(s)`
                   : block.name === "ingest_url"
-                  ? `Started ingestion`
+                  ? (() => {
+                      // Branch on actual tool result status so the badge
+                      // doesn't lie ("Done" used to render even when the
+                      // tool refused). Keys off the parsed tool output.
+                      try {
+                        const parsed = JSON.parse(toolOutput.result);
+                        if (parsed.status === "queued") return "Queued for ingestion";
+                        if (parsed.status === "already_exists") return "Already ingested";
+                        if (parsed.status === "processing") return "Started ingestion";
+                        if (parsed.status === "error") return "Ingestion error";
+                      } catch {
+                        // fall through
+                      }
+                      return "Queued for ingestion";
+                    })()
                   : block.name === "list_user_clusters"
                   ? `Listed clusters`
                   : block.name === "list_cluster_brain_memories"
@@ -1089,44 +1092,26 @@ async function handlePost(
             break;
           }
 
-          // We charged the worst case (chat_tool_call = 5) upfront. If the
-          // conversation ended up text-only (chat_message = 3), refund the
-          // difference so users only pay for what they actually used.
-          if (!hadToolCalls) {
-            const refund = CREDIT_COSTS.chat_tool_call - CREDIT_COSTS.chat_message;
-            grantCredits(userId, refund, "chat_message_refund").catch((refundErr) => {
-              logSystemEvent({
-                severity: "error",
-                category: "other",
-                source: "chat.message_refund",
-                message: `Chat downgrade refund failed: ${refundErr instanceof Error ? refundErr.message : String(refundErr)}`,
-                fingerprintKeys: ["refund_failed", "chat_message"],
-                metadata: { user_id: userId },
-                userId,
-              }).catch(() => {});
-            });
-          }
+          // Access-only gating now — no credit math needed on success.
+          // Silence unused-variable lint warnings without removing the
+          // variable (future analytics hook).
+          void hadToolCalls;
 
           send({ type: "done" });
           controller.close();
         } catch (error) {
-          // Full refund on error — we pre-deducted chat_tool_call but the
-          // user didn't get a complete response.
-          grantCredits(userId, CREDIT_COSTS.chat_tool_call, "chat_error_refund", {
-            error: error instanceof Error ? error.message : String(error),
-          }).catch((refundErr) => {
-            logSystemEvent({
-              severity: "error",
-              category: "other",
-              source: "chat.error_refund",
-              message: `Chat error refund failed: ${refundErr instanceof Error ? refundErr.message : String(refundErr)}`,
-              fingerprintKeys: ["refund_failed", "chat_error"],
-              metadata: { user_id: userId },
-              userId,
-            }).catch(() => {});
-          });
+          // Access-only gating now — no credit refund needed on error.
           const message =
             error instanceof Error ? error.message : "Unknown error";
+          logSystemEvent({
+            severity: "error",
+            category: "other",
+            source: "chat.handler_error",
+            message: `Chat handler threw: ${message}`,
+            fingerprintKeys: ["chat_error"],
+            metadata: { user_id: userId },
+            userId,
+          }).catch(() => {});
           send({ type: "error", message });
           controller.close();
         }

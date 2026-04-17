@@ -10,11 +10,20 @@ export interface BrowseEntry {
   thumbnail_url: string | null;
   created_at: string | null;
   similarity?: number;
-  relevance_explanation?: string;
+  // `relevance_explanation` was populated by server-side synthesis, which
+  // has been retired in favour of client-only synthesis. Kept as optional
+  // for type-compat with older response payloads still in flight; the
+  // field will always be undefined from /api/query going forward.
 }
 
+// The Synthesis block used to carry a server-side-generated
+// recommendation + composite_approach. Retired — callers should compose
+// recommendations in their own model context. Fields stay optional so
+// existing render conditionals (`synthesis && synthesis.recommendation`)
+// still type-check; `synthesis` is always null at runtime now, so those
+// branches never render.
 export interface Synthesis {
-  recommendation: string;
+  recommendation?: string;
   composite_approach?: string;
 }
 
@@ -28,6 +37,7 @@ export interface BrowseState {
   totalCount: number;
   loading: boolean;
   error: string | null;
+  /** Always null post-pivot; kept for backward compat with existing consumers. */
   synthesis: Synthesis | null;
   handleSearch: () => void;
   clearSearch: () => void;
@@ -43,7 +53,7 @@ function mapBrowseEntries(raw: any[]): BrowseEntry[] {
     thumbnail_url: (e.thumbnail_url as string) ?? null,
     created_at: (e.created_at as string) ?? null,
     similarity: e.similarity as number | undefined,
-    relevance_explanation: e.relevance_explanation as string | undefined,
+    // relevance_explanation intentionally dropped — see BrowseEntry comment.
   }));
 }
 
@@ -116,7 +126,6 @@ export function useBrowseState(): BrowseState {
       body: JSON.stringify({
         query: q,
         max_results: 20,
-        include_synthesis: true,
       }),
       signal: controller.signal,
     })
@@ -127,9 +136,9 @@ export function useBrowseState(): BrowseState {
       .then((data) => {
         setEntries(mapBrowseEntries(data.entries || []));
         setTotalCount(data.entries?.length || 0);
-        if (data.synthesis) {
-          setSynthesis(data.synthesis);
-        }
+        // Synthesis was removed server-side — leave `synthesis` null.
+        // Any consumer UI block guarded by `synthesis && …` will cleanly
+        // not render.
         setLoading(false);
       })
       .catch((err) => {

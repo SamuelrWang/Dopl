@@ -1,22 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withUserAuth } from "@/lib/auth/with-auth";
 import { getUserSubscription } from "@/lib/billing/subscriptions";
-import { FREE_INGESTION_LIMIT } from "@/lib/config";
+import { hasActiveAccess } from "@/lib/billing/access";
 
 async function handleGet(
   _request: NextRequest,
   { userId }: { userId: string }
 ) {
   const sub = await getUserSubscription(userId);
+  const access = await hasActiveAccess(userId);
 
   return NextResponse.json({
+    // Stable shape for legacy UI consumers.
     tier: sub.tier,
     status: sub.status,
-    ingestion_count: sub.ingestion_count,
-    ingestion_limit:
-      sub.tier === "pro" || sub.tier === "power" ? null : FREE_INGESTION_LIMIT,
     subscription_period_end: sub.subscription_period_end,
     has_stripe_customer: !!sub.stripe_customer_id,
+    // New access fields — drive the trial countdown + paywall UI.
+    access: {
+      allowed: access.allowed,
+      reason: access.reason,
+      trial_expires_at: access.trial_expires_at,
+    },
   });
 }
 

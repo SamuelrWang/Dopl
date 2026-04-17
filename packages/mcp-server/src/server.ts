@@ -1,5 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { z } from "zod";
+import { z, type ZodRawShape } from "zod";
 import { DoplClient } from "./api-client.js";
 import type { ClusterSummary, BrainData } from "./types.js";
 import {
@@ -20,6 +20,44 @@ const SERVER_INSTRUCTIONS = `You are connected to **Dopl** — a knowledge base 
 
 You are an expert architect. Use the Dopl tools as your reference library — search for proven patterns, retrieve implementation details, and synthesize custom solutions. Your job is to **compose original recommendations** by combining knowledge from multiple sources, not to list or recommend individual entries.
 
+## Proactive use — start with search, don't ask permission
+
+When the user describes anything AI/automation-adjacent — building an agent, wiring up an n8n workflow, composing a Claude skill, integrating an API, scraping a site, automating a task, connecting two services, setting up an MCP, handling webhooks — **call \`search_setups\` immediately, before synthesizing anything from scratch**. Do not ask the user "should I search the KB first?" or "want me to check Dopl?" — just search. It's cheap (1 credit), the result is always relevant context, and it's the reason you're connected to this server.
+
+Same rule applies when the user asks "how would I…", "what's a good way to…", "can you help me build…" — these are all search triggers, not questions you answer from general knowledge.
+
+## Decision tree — which tool first
+
+- User wants to **find or build** something AI/automation-shaped → \`search_setups\` (cross-KB) or \`query_cluster\` (if a cluster is already in scope)
+- User wants the **full details** of an entry you already have a slug/UUID for → \`get_setup\`
+- User wants to **save** a specific entry to their workspace → \`canvas_add_entry\` (one entry by slug) or \`canvas_search_and_add\` (search + batch add in one shot)
+- User wants to **group** saved entries into a reusable skill → \`canvas_create_cluster\`
+- User gives you a **durable preference or correction** ("I prefer X over Y", "skip step Z") → \`save_cluster_memory\` on the relevant cluster
+- User wants to **compose an original solution** spanning multiple patterns → \`build_solution\`
+- User asks **has anything changed** in their saved work → \`check_cluster_updates\` (bulk) or \`check_entry_updates\` (one)
+
+## Pending ingestions — the user's Dopl queue
+
+Every Dopl tool response carries a \`_dopl_status\` footer with \`pending_ingestions: N\`. These are URLs the user pasted into the Dopl website chat that are **waiting for YOU** (their connected agent) to process. The site no longer auto-ingests — ingestion is your job.
+
+**When the footer shows \`pending_ingestions > 0\`:**
+
+1. Tell the user: "You have N URL(s) queued on Dopl — want me to process them?"
+2. On yes: call \`list_pending_ingests\` to see the URLs, then call \`prepare_ingest(url)\` for each. \`prepare_ingest\` transparently claims the pending skeleton (flips it to processing) — you do NOT need a special parameter; pass the same URL that's in the queue.
+3. Follow the normal \`prepare_ingest\` → run prompts → \`submit_ingested_entry\` flow. The amber tile on the user's canvas updates live as you progress.
+
+Don't nag the user repeatedly in a single session. If they decline once, drop it until they bring it up or a new item appears.
+
+## Sibling pairs — pick carefully
+
+These tool pairs overlap and picking the wrong one wastes a round trip:
+
+- \`search_setups\` (cross-KB, broad) vs \`query_cluster\` (scoped to one cluster, narrow) — use the second only when a cluster is already the focus of the conversation.
+- \`canvas_add_entry\` (you already have the slug) vs \`canvas_search_and_add\` (search + batch) — use the second when the user's request implies discovery, not a known entry.
+- \`save_cluster_memory\` (NEW memory) vs \`update_cluster_memory\` (edit existing) — call \`get_cluster_brain\` first if you're not sure whether a matching memory already exists.
+- \`check_entry_updates\` (one entry) vs \`check_cluster_updates\` (every entry in a cluster) — use the bulk version for cluster-wide refresh.
+- \`update_cluster_brain\` (edit synthesized instructions) vs \`save_cluster_memory\` (append a short preference) — use the memory path for short corrections, the brain edit path for structural changes.
+
 ## What you can do
 
 - **Search** — Find relevant implementations by natural language query
@@ -35,19 +73,133 @@ Every entry has a public URL of the form \`<host>/e/<slug>\`. Tool responses inc
 
 When a tool accepts an \`entry\` parameter, you may pass either the entry's slug or its UUID — the server resolves either.
 
-## Editing cluster brains
+## Cluster brains are the skill itself
 
-Cluster brains are **user-crafted knowledge**. An initial synthesis runs once when a cluster is created; after that, the brain is edited by you or the user, never automatically regenerated. When you learn something durable about how to apply a cluster:
-- Use \`update_cluster_brain\` to edit the synthesized instructions in place. Prefer surgical edits (add a section, correct a detail) over full rewrites so you never wipe work the user has already done.
-- Use \`save_cluster_memory\` for short preferences/corrections that augment the main instructions.
-- Use \`update_cluster_memory\` to revise an existing memory rather than accumulating near-duplicates.
+A cluster brain IS the skill body that Claude Code executes against — the local \`SKILL.md\` file is a thin pointer that fetches the brain at invocation time. That makes brain quality = skill quality, 1:1. **All brain generation happens in YOUR context, not on Dopl's server.** The server returns prompts and templates; you run the synthesis.
+
+The canonical brain structure mirrors Claude Code's native skill-creator format. Every brain should have these sections (omit any you can't fill honestly):
+
+\`## When to use this skill\` — concrete trigger scenarios with user-prompt phrasings
+\`## Instructions\` — core guidance for executing the skill
+\`## Step-by-step\` — numbered procedure (omit if the skill isn't procedural)
+\`## Examples\` — 2–3 concrete user-intent → agent-response scenarios
+\`## Anti-patterns\` — what NOT to do; wrong tools, out-of-scope uses
+\`## References\` — one line per cluster entry with its role
+
+When creating a new cluster: the tool response instructs you to call \`get_skill_template\` to fetch the synthesis prompt, run synthesis in your context against the entries' agents.md, and write the result with \`update_cluster_brain\`.
+
+## When to edit the brain vs. save a memory vs. do nothing
+
+This is a routing decision every conversation will produce. Get it right:
+
+**Edit the brain (\`update_cluster_brain\`) when the user gives you structural, durable knowledge:**
+- They correct a step in the workflow itself ("actually, step 3 is wrong — it should be X", "remove the part about Y")
+- They add a new repo/entry to the cluster that introduces a pattern the brain doesn't cover (chain with \`add_entry_to_cluster\` first)
+- They describe a new use case the skill should cover ("let's also make this work for …")
+- A section is out of date or contradicts current reality
+- The correction changes the fundamental approach, not just a parameter
+Read the brain first with \`get_cluster_brain\`, then make a SURGICAL edit — replace only the affected section, keep the rest verbatim. Never rewrite from scratch; the brain often contains prior edits you'd lose.
+
+**Save a memory (\`save_cluster_memory\`) when the user gives you a short preference, correction, or environmental fact:**
+- They express a preference ("I prefer Resend over SendGrid", "always use X")
+- They reveal a setup-specific value ("my API key env var is OPENAI_KEY, not OPENAI_API_KEY")
+- They note a gotcha specific to their environment ("this step doesn't work on Windows", "skip step 2 in my case")
+- Short corrections that augment rather than replace existing brain content
+Use \`update_cluster_memory\` instead when a near-duplicate memory already exists (call \`get_cluster_brain\` first to see memory IDs).
+
+**Do both when** a conversation produces both a structural correction AND a short preference. Don't cram preferences into brain instructions; memories are a separate lane for a reason.
+
+**Ask first when** the edit is material (renaming a section, removing guidance the user previously wrote) AND the user's intent was implicit — e.g., they described a problem but didn't explicitly ask you to change the skill. Brief confirmation: "Should I update the X cluster's skill to reflect this?"
+
+**Do nothing when** the observation is transient or task-specific (debugging a one-off, current session context, questions you answered but that don't change durable guidance).
+
+**Trigger phrases to pattern-match on:**
+- "from now on…" → memory or brain edit depending on scope
+- "actually, step X is wrong…" → brain edit
+- "for my setup…" / "in my environment…" → memory
+- "let's also include…" / "add X to the skill" → brain edit
+- "remove the part about…" / "that's wrong" → brain edit
+- "I just added <repo> to my canvas, update the <cluster> skill" → \`add_entry_to_cluster\` + brain edit
+
+After any brain or memory write, call \`sync_skills\` so the thin-pointer \`SKILL.md\` on disk reflects the canonical state.
 
 ## Behavior
 
 - When the user describes what they want to build, search first, then synthesize a concrete plan
 - Focus on actionable guidance: tool recommendations with rationale, architecture decisions, integration patterns, setup steps
 - Reference specific tools, repos, and patterns — not the database entries they came from
-- Cluster skills are living documents — update them when you learn new patterns or receive user corrections`;
+- Cluster skills are living documents — update them when you learn new patterns or receive user corrections
+- Never edit cluster \`SKILL.md\` files directly on disk; always go through the MCP tools so changes propagate to the brain (the canonical source)`;
+
+/**
+ * Tool-response shape the MCP SDK accepts. We re-declare it locally to
+ * keep the wrapper typed without pulling the SDK's handler type.
+ */
+type ToolResponse = {
+  content: Array<{ type: "text"; text: string }>;
+  isError?: boolean;
+};
+
+/**
+ * Append a pending-ingestion status footer to a tool response so the
+ * user's connected agent notices URLs they queued from the Dopl website
+ * chat. Fires on every tool response (see the `tool()` helper below).
+ *
+ * Skips the footer when:
+ *   - the handler returned isError: true (don't muddy error messages)
+ *   - the user has zero pending ingestions (keep successful responses
+ *     clean when there's nothing to surface)
+ *
+ * The pending status is cached inside DoplClient for 5s; prepare_ingest
+ * invalidates the cache so the footer reflects a just-claimed row.
+ */
+async function appendDoplStatus(
+  response: ToolResponse,
+  client: DoplClient,
+): Promise<ToolResponse> {
+  if (response.isError) return response;
+
+  let status;
+  try {
+    status = await client.getPendingStatus();
+  } catch {
+    return response;
+  }
+
+  if (!status || status.pending_ingestions <= 0) return response;
+
+  const hint = `Call \`list_pending_ingests\` to see queued URLs, then \`prepare_ingest(url)\` to claim and process.`;
+  const footer = `\n\n---\n_dopl_status:\n  pending_ingestions: ${status.pending_ingestions}\n  hint: "${hint}"`;
+
+  // Append to the final text block so the agent sees the footer at the
+  // end of a rendered response. If the response has no text content
+  // (rare — tools always return text), add a new block.
+  const content = [...response.content];
+  const lastIdx = content.length - 1;
+  if (lastIdx >= 0 && content[lastIdx]?.type === "text") {
+    content[lastIdx] = {
+      type: "text",
+      text: `${content[lastIdx].text}${footer}`,
+    };
+  } else {
+    content.push({ type: "text", text: footer.trimStart() });
+  }
+  return { ...response, content };
+}
+
+/**
+ * Wrap a tool handler so every successful response ends with the
+ * `_dopl_status` footer. Handlers stay unaware of the mechanism.
+ */
+function withDoplStatus<A extends object>(
+  handler: (args: A) => Promise<ToolResponse>,
+  client: DoplClient,
+): (args: A) => Promise<ToolResponse> {
+  return async (args: A) => {
+    const result = await handler(args);
+    return appendDoplStatus(result, client);
+  };
+}
 
 export function createServer(client: DoplClient): McpServer {
   const server = new McpServer(
@@ -60,40 +212,48 @@ export function createServer(client: DoplClient): McpServer {
     },
   );
 
+  // ── Tool registration helper ─────────────────────────────────────
+  // Every call funnels through here so the _dopl_status footer is
+  // attached uniformly. Matches the MCP SDK's own zod-inference
+  // signature so handler arg types come through correctly.
+  function registerTool<S extends ZodRawShape>(
+    name: string,
+    description: string,
+    schema: S,
+    handler: (args: z.infer<z.ZodObject<S>>) => Promise<ToolResponse>,
+  ): void {
+    server.tool(
+      name,
+      description,
+      schema,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      withDoplStatus(handler as any, client) as any,
+    );
+  }
+
   // ── search_setups ──────────────────────────────────────────────────
-  server.tool(
+  registerTool(
     "search_setups",
-    "Search the Dopl knowledge base for AI/automation setups matching a query. Returns ranked results with summaries and an AI synthesis recommendation.",
+    "Search the Dopl knowledge base for AI/automation setups. Returns ranked results with summaries. Use this for ANY user request that's AI/automation-shaped — 'how would I build X', 'find me patterns for Y', 'what's a good way to Z' — before synthesizing from scratch. Formatting recommendations / picking the best hit is YOUR job now (server no longer runs Claude synthesis); weigh similarity, read the summaries, and compose in your own context. For scoped search inside one cluster, use `query_cluster` instead.",
     {
       query: z.string().describe("Natural language search query, e.g. 'AI agent for job applications' or 'n8n automation with Supabase'"),
       tags: z.array(z.string()).optional().describe("Filter by tags, e.g. ['claude', 'playwright']"),
       use_case: z.string().optional().describe("Filter by use case category"),
       max_results: z.number().optional().describe("Number of results to return (default 5)"),
-      include_synthesis: z.boolean().optional().describe("Include AI synthesis/recommendation (default true)"),
     },
     async (params) => {
       const result = await client.searchSetups(params);
 
       const lines: string[] = [];
-
-      if (result.synthesis) {
-        lines.push("## Recommendation");
-        lines.push(result.synthesis.recommendation);
-        if (result.synthesis.composite_approach) {
-          lines.push("\n## Suggested Approach");
-          lines.push(result.synthesis.composite_approach);
-        }
-        lines.push("");
-      }
-
       lines.push(`## Results (${result.entries.length} found)\n`);
       for (const entry of result.entries) {
         const title = entry.title || "Untitled";
         const url = client.entryUrl(entry.slug);
         const heading = url ? `[${title}](${url})` : title;
-        lines.push(`### ${heading} (${Math.round(entry.similarity * 100)}% match)`);
+        const tierBadge =
+          entry.ingestion_tier === "skeleton" ? " _(skeleton)_" : "";
+        lines.push(`### ${heading} (${Math.round(entry.similarity * 100)}% match)${tierBadge}`);
         if (entry.summary) lines.push(entry.summary);
-        if (entry.relevance_explanation) lines.push(`Relevance: ${entry.relevance_explanation}`);
         lines.push("");
       }
 
@@ -102,9 +262,9 @@ export function createServer(client: DoplClient): McpServer {
   );
 
   // ── get_setup ──────────────────────────────────────────────────────
-  server.tool(
+  registerTool(
     "get_setup",
-    "Get full details of a specific setup from the knowledge base, including README, agents.md (AI setup instructions), and manifest.",
+    "Retrieve full implementation details — README, agents.md, manifest, tags — for one specific entry. Use this after `search_setups` when the user wants the complete setup for a match, or when the user references an entry by slug/URL/UUID. Also the right tool to poll an entry's status after `ingest_url` or `skeleton_ingest` — check the status field. Returns null content for entries still processing.",
     {
       entry: z.string().describe("Entry slug or UUID (from search_setups or a prior tool response)"),
     },
@@ -126,21 +286,32 @@ export function createServer(client: DoplClient): McpServer {
         lines.push(`\nTags: ${entry.tags.map((t) => `${t.tag_type}:${t.tag_value}`).join(", ")}`);
       }
 
-      if (entry.readme) {
-        lines.push("\n---\n## README\n");
-        lines.push(entry.readme);
-      }
+      // Skeleton-tier entries have no readme/agents_md/manifest — show
+      // the descriptor as their body instead. Full-tier entries show the
+      // normal README + agents.md + manifest sections.
+      if (entry.ingestion_tier === "skeleton" && entry.descriptor) {
+        lines.push("\n---\n## Descriptor (skeleton tier)\n");
+        lines.push(entry.descriptor);
+        lines.push(
+          "\n*This is a skeleton entry. Read the source repo directly for implementation details.*"
+        );
+      } else {
+        if (entry.readme) {
+          lines.push("\n---\n## README\n");
+          lines.push(entry.readme);
+        }
 
-      if (entry.agents_md) {
-        lines.push("\n---\n## agents.md (AI Setup Instructions)\n");
-        lines.push(entry.agents_md);
-      }
+        if (entry.agents_md) {
+          lines.push("\n---\n## agents.md (AI Setup Instructions)\n");
+          lines.push(entry.agents_md);
+        }
 
-      if (entry.manifest) {
-        lines.push("\n---\n## Manifest\n");
-        lines.push("```json");
-        lines.push(JSON.stringify(entry.manifest, null, 2));
-        lines.push("```");
+        if (entry.manifest) {
+          lines.push("\n---\n## Manifest\n");
+          lines.push("```json");
+          lines.push(JSON.stringify(entry.manifest, null, 2));
+          lines.push("```");
+        }
       }
 
       return { content: [{ type: "text" as const, text: lines.join("\n") }] };
@@ -148,9 +319,9 @@ export function createServer(client: DoplClient): McpServer {
   );
 
   // ── build_solution ─────────────────────────────────────────────────
-  server.tool(
+  registerTool(
     "build_solution",
-    "Compose a new AI/automation solution from the knowledge base. Describe what you want to build, and the system will find relevant setups and generate a composite README and agents.md.",
+    "Prepares a composite-solution synthesis task from the Dopl knowledge base. Returns retrieved entries + a pre-substituted synthesis prompt. YOU run the prompt in your own Claude context to produce the composite README + agents.md for the user — the server no longer runs Claude for this. Use when the user says 'design me a…', 'build me an…', 'compose a solution that…' across multiple KB patterns. For a single known entry, use `get_setup` instead.",
     {
       brief: z.string().describe("Description of what you want to build, e.g. 'An AI agent that monitors GitHub issues and auto-triages them'"),
       preferred_tools: z.array(z.string()).optional().describe("Tools you want to use, e.g. ['claude', 'n8n']"),
@@ -161,41 +332,53 @@ export function createServer(client: DoplClient): McpServer {
       const result = await client.buildSolution(params);
 
       const lines: string[] = [];
-      lines.push("## Composite Solution\n");
-      lines.push(`Confidence: ${Math.round(result.confidence.score * 100)}%`);
 
-      if (result.confidence.gaps.length > 0) {
-        lines.push(`\nGaps: ${result.confidence.gaps.join(", ")}`);
+      if (result.status === "no_matches") {
+        lines.push("## No matches found");
+        lines.push("");
+        lines.push(`No entries in the KB matched the brief: _${result.brief}_.`);
+        lines.push("");
+        lines.push(result.instructions);
+        return { content: [{ type: "text" as const, text: lines.join("\n") }] };
       }
 
-      lines.push("\n### Source Setups Used:");
-      for (const src of result.source_entries) {
-        const url = client.entryUrl(src.slug);
-        const label = url ? `[${src.title}](${url})` : src.title;
-        lines.push(`- **${label}**: ${src.how_used}`);
+      lines.push("# Build Solution — Agent Task");
+      lines.push("");
+      lines.push(`**Brief**: ${result.brief}`);
+      if (result.constraints) {
+        lines.push("");
+        lines.push("**Constraints**:");
+        lines.push("```json");
+        lines.push(JSON.stringify(result.constraints, null, 2));
+        lines.push("```");
       }
-
-      lines.push("\n---\n### README\n");
-      lines.push(result.composite_readme);
-
-      lines.push("\n---\n### agents.md\n");
-      lines.push(result.composite_agents_md);
-
-      if (result.confidence.suggestions.length > 0) {
-        lines.push("\n---\n### Suggestions for Improvement");
-        for (const s of result.confidence.suggestions) {
-          lines.push(`- ${s}`);
-        }
+      lines.push("");
+      lines.push(`## Retrieved candidates (${result.entries.length})`);
+      lines.push("");
+      for (const e of result.entries) {
+        const url = client.entryUrl(e.slug);
+        const label = url ? `[${e.title ?? "Untitled"}](${url})` : (e.title ?? "Untitled");
+        lines.push(`- **${label}** — ${Math.round(e.similarity * 100)}% match`);
       }
+      lines.push("");
+      lines.push("## Instructions");
+      lines.push("");
+      lines.push(result.instructions);
+      lines.push("");
+      lines.push("## Prompt — run this in your own context");
+      lines.push("");
+      lines.push("```");
+      lines.push(result.prompt);
+      lines.push("```");
 
       return { content: [{ type: "text" as const, text: lines.join("\n") }] };
     }
   );
 
   // ── list_setups ────────────────────────────────────────────────────
-  server.tool(
+  registerTool(
     "list_setups",
-    "Browse all available setups in the knowledge base with optional filters.",
+    "Paginated browse of all entries in the knowledge base, with optional filters (use_case, complexity). Use this for open-ended exploration when the user says 'what's in here?' or 'show me what you have for X complexity' — NOT for targeted retrieval. For anything keyword-shaped or task-shaped, use `search_setups` instead; semantic ranking always beats a flat list.",
     {
       use_case: z.string().optional().describe("Filter by use case category"),
       complexity: z.string().optional().describe("Filter by complexity: simple, moderate, complex, advanced"),
@@ -228,9 +411,9 @@ export function createServer(client: DoplClient): McpServer {
   );
 
   // ── list_clusters ──────────────────────────────────────────────────
-  server.tool(
+  registerTool(
     "list_clusters",
-    "List all clusters (curated groupings of setups) available in the knowledge base.",
+    "List all clusters (curated groupings of setups) in the knowledge base. Call this when you need to discover what clusters exist — to show the user their workspace, pick a cluster before scoping a search or update, or when another tool expects a cluster slug you don't already know. Cheap metadata call; run it proactively rather than asking the user for a slug.",
     {},
     async () => {
       const { clusters } = await client.listClusters();
@@ -250,9 +433,9 @@ export function createServer(client: DoplClient): McpServer {
   );
 
   // ── get_cluster ────────────────────────────────────────────────────
-  server.tool(
+  registerTool(
     "get_cluster",
-    "Get details of a specific cluster including its member entries with summaries and READMEs.",
+    "Retrieve a cluster's metadata plus its member entries (summaries + truncated READMEs). Use this when the user wants to see what's in a cluster, or when you need the member list before operating on the cluster. If you don't have a slug yet, call `list_clusters` first. For searching inside a cluster's entries, use `query_cluster`.",
     {
       slug: z.string().describe("Cluster slug from list_clusters"),
     },
@@ -286,9 +469,9 @@ export function createServer(client: DoplClient): McpServer {
   );
 
   // ── query_cluster ──────────────────────────────────────────────────
-  server.tool(
+  registerTool(
     "query_cluster",
-    "Semantic search scoped to a specific cluster's entries only.",
+    "Semantic search scoped to the entries inside one specific cluster. Use this when a cluster is already the focus of the conversation and the user wants to find something within it — NOT for broad discovery. For cross-KB search spanning every entry, use `search_setups` instead. If you don't have a cluster slug yet, call `list_clusters` first.",
     {
       cluster_slug: z.string().describe("Cluster slug"),
       query: z.string().describe("Natural language search query"),
@@ -325,9 +508,9 @@ export function createServer(client: DoplClient): McpServer {
   );
 
   // ── sync_skills ─────────────────────────────────────────────────────
-  server.tool(
+  registerTool(
     "sync_skills",
-    "Write skill files for all Dopl clusters. Default target is Claude Code (~/.claude/skills/). Set target to 'openclaw' to write to ~/.openclaw/workspace/data/dopl/ instead. Creates per-cluster SKILL.md files with synthesized instructions, a global canvas skill for routing, and updates the index file. Run this once to seed skills, then they evolve as living documents.",
+    "Write Dopl cluster skill files to disk so Claude Code can invoke them as real skills. Default target is Claude Code (`~/.claude/skills/`); pass target='openclaw' for `~/.openclaw/workspace/data/dopl/`. Call this AFTER any material change to a cluster — creating it, adding/removing entries, editing the brain, saving a memory — so the on-disk skill matches the DB state. Safe to call repeatedly; skips clusters that already have an up-to-date file unless force=true.",
     {
       force: z.boolean().optional().describe("Overwrite existing skill files (default: false, skips existing)"),
       target: z.enum(["claude", "openclaw"]).optional().describe("Target platform: 'claude' (default) writes to ~/.claude/skills/, 'openclaw' writes to ~/.openclaw/workspace/data/dopl/"),
@@ -351,29 +534,27 @@ export function createServer(client: DoplClient): McpServer {
 
           const detail = await client.getCluster(cluster.slug);
 
-          // Get or synthesize brain
+          // Client-only synthesis: the server does NOT auto-synthesize
+          // missing brains anymore. If a brain is missing or empty, we
+          // still write the skill file (so trigger-matching works) but
+          // flag the cluster so the agent can synthesize it.
           let brain: BrainData = { instructions: "", memories: [] };
+          let brainEmpty = false;
           try {
             brain = await client.getClusterBrain(cluster.slug);
-          } catch {
-            // Brain doesn't exist — synthesize it
-            const entriesToSynthesize = detail.entries
-              .filter((e) => e.agents_md)
-              .map((e) => ({
-                title: e.title || "Untitled",
-                agents_md: e.agents_md || "",
-                readme: e.readme || "",
-              }));
-
-            if (entriesToSynthesize.length > 0) {
-              const synthesis = await client.synthesizeBrain(entriesToSynthesize);
-              brain.instructions = synthesis.instructions;
-              await client.updateClusterBrain(cluster.slug, brain.instructions);
+            if (!brain.instructions || brain.instructions.trim().length === 0) {
+              brainEmpty = true;
             }
+          } catch {
+            brainEmpty = true;
           }
 
           await writeClusterSkill(cluster.slug, cluster.name, brain, detail.entries, skillTarget);
-          results.push(`- **${cluster.name}** — wrote skill with ${detail.entries.length} entries`);
+          if (brainEmpty) {
+            results.push(`- **${cluster.name}** — wrote thin-pointer skill (⚠️ brain is empty — synthesize it with \`get_skill_template\` → \`update_cluster_brain("${cluster.slug}", …)\`)`);
+          } else {
+            results.push(`- **${cluster.name}** — wrote skill with ${detail.entries.length} entries`);
+          }
 
           clusterSummaries.push(buildClusterSummary(cluster.slug, cluster.name, detail.entries));
         } catch (err) {
@@ -411,9 +592,9 @@ export function createServer(client: DoplClient): McpServer {
   );
 
   // ── save_cluster_memory ───────────────────────────────────────────
-  server.tool(
+  registerTool(
     "save_cluster_memory",
-    "Save a user preference or correction as a persistent memory for a cluster. Memories override the cluster's base instructions in future sessions. Use this when the user tells you to change how something works, skip a step, or prefer a specific tool.",
+    "Append a NEW durable preference or correction to a cluster's brain. Trigger phrases: 'I prefer X over Y', 'always use Z', 'skip that step', 'for my setup we don't use…', 'note that…'. Memories override the base instructions in future sessions. Use `update_cluster_memory` instead if a similar memory already exists (call `get_cluster_brain` first to check). Use `update_cluster_brain` for structural edits to the synthesized playbook rather than short preferences.",
     {
       slug: z.string().describe("Cluster slug"),
       memory: z.string().describe("The preference or correction to remember, e.g. 'User prefers Resend over SendGrid for email' or 'Skip the Slack notification step'"),
@@ -455,32 +636,258 @@ export function createServer(client: DoplClient): McpServer {
     }
   );
 
-  // ── ingest_url ──────────────────────────────────────────────────────
-  server.tool(
-    "ingest_url",
-    "Ingest a URL into the knowledge base. Extracts content, generates README, agents.md, and manifest. Returns the entry ID for tracking. The entry processes in the background (30-120s). Use get_setup to poll — check the status field: 'processing' means still working, 'complete' means done, 'error' means failed.",
-    {
-      url: z.string().describe("URL to ingest (blog post, GitHub repo, tweet, etc.)"),
-      text: z.string().optional().describe("Optional additional text content to include"),
-      links: z.array(z.string()).optional().describe("Optional additional URLs to follow and include"),
+  // ── list_pending_ingests ───────────────────────────────────────────
+  // URLs the user pasted into the Dopl website chat that are waiting
+  // for their connected agent to process. Read by the agent when the
+  // `_dopl_status` footer (attached to every tool response) shows a
+  // non-zero pending count. After listing, call `prepare_ingest(url)`
+  // per URL — the dedup logic transparently claims the pending row.
+  registerTool(
+    "list_pending_ingests",
+    "List the URLs the user queued from the Dopl website chat that are waiting to be ingested. Call this when the `_dopl_status` footer on a previous tool response showed `pending_ingestions > 0` and the user has agreed to process them. Returns one line per pending URL with its queue time. After listing, call `prepare_ingest(url)` for each — the dedup logic transparently claims the pending skeleton (no special parameter).",
+    {},
+    async () => {
+      // Always bypass the cache so the list reflects the DB right now.
+      client.invalidatePendingCache();
+      const status = await client.getPendingStatus();
+
+      if (status.pending_ingestions === 0) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: "No pending ingestions. The user has nothing queued from the Dopl website chat.",
+            },
+          ],
+        };
+      }
+
+      const lines: string[] = [];
+      lines.push(`## Pending ingestions (${status.pending_ingestions})\n`);
+      const now = Date.now();
+      for (const item of status.recent) {
+        const ageMs = now - new Date(item.queued_at).getTime();
+        const mins = Math.max(1, Math.round(ageMs / 60_000));
+        const ageLabel =
+          mins < 60
+            ? `${mins}m ago`
+            : mins < 1440
+            ? `${Math.round(mins / 60)}h ago`
+            : `${Math.round(mins / 1440)}d ago`;
+        lines.push(`- ${item.url} — queued ${ageLabel}`);
+      }
+      lines.push(
+        `\nCall \`prepare_ingest(url)\` with any of these to claim and process them.`
+      );
+
+      return {
+        content: [{ type: "text" as const, text: lines.join("\n") }],
+      };
     },
-    async ({ url, text, links }) => {
-      const content: { text?: string; links?: string[] } = {};
+  );
+
+  // ── prepare_ingest ─────────────────────────────────────────────────
+  // Step 1 of the agent-driven ingest flow. Server fetches + extracts content;
+  // we run the AI generation prompts locally; then call submit_ingested_entry.
+  registerTool(
+    "prepare_ingest",
+    "Start agent-driven ingestion. The server fetches the URL + follows links (no AI on their side), and returns the raw content + the exact prompts YOU run in your own Claude context. After running the prompts (content_type classify → manifest → README → agents.md → tags, plus vision for any images), call `submit_ingested_entry` with the artifacts. Costs 1 credit total (vs 7 for the legacy `ingest_url`). Prefer this over `ingest_url` for every URL the user wants to save.\n\nThe response includes a complete `instructions` field — follow it step-by-step. If the URL was already ingested, status=\"already_exists\" is returned and you can call `get_setup` directly.",
+    {
+      url: z.string().describe("URL to ingest (blog post, GitHub repo, tweet, docs page, etc.)"),
+      text: z.string().optional().describe("Optional pre-extracted text content (e.g. from a browser extension that already grabbed the page)."),
+      links: z.array(z.string()).optional().describe("Optional additional URLs to follow and include in the gathered content."),
+      images: z.array(z.string()).optional().describe("Optional base64-encoded images to analyze (max 5, each ≤ 10MB)."),
+    },
+    async ({ url, text, links, images }) => {
+      const content: { text?: string; links?: string[]; images?: string[] } = {};
       if (text) content.text = text;
       if (links) content.links = links;
+      if (images) content.images = images;
 
-      const result = await client.ingestUrl(url, Object.keys(content).length > 0 ? content : undefined);
+      const result = await client.prepareIngest(
+        url,
+        Object.keys(content).length > 0 ? content : undefined
+      );
 
-      const title = result.title || "Untitled";
+      if (result.status === "already_exists") {
+        const title = result.title || "Untitled";
+        const entryUrl = client.entryUrl(result.slug);
+        const label = entryUrl ? `[${title}](${entryUrl})` : title;
+        const ref = result.slug ?? result.entry_id;
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Already ingested: **${label}**\n\nUse \`get_setup("${ref}")\` to view. No prepare needed.`,
+            },
+          ],
+        };
+      }
+
+      // status === "ready" — return the full bundle as structured JSON so
+      // the agent can parse it and run the prompts.
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
+      };
+    }
+  );
+
+  // ── submit_ingested_entry ───────────────────────────────────────────
+  // Step 2 of the agent-driven ingest flow. Call this with the artifacts you
+  // generated after running the prompts from `prepare_ingest`.
+  registerTool(
+    "submit_ingested_entry",
+    "Finalize an agent-driven ingest. Submit the artifacts YOU generated after running the prompts returned by `prepare_ingest`. The server validates the shape, runs embeddings (the only AI call still on our side), persists the entries/tags/chunks rows, and marks status='complete'. Returns { entry_id, slug, title, use_case, complexity, content_type }.\n\nRequired fields come from the steps in the prepare response's `instructions`. Fields are:\n  - entry_id: from prepare response\n  - content_type: from step 1 (content_type classifier)\n  - source_type: from step 1\n  - manifest: entire JSON from step 3\n  - readme: markdown from step 4\n  - agents_md: markdown from step 5 (empty string for content_type='resource')\n  - tags: array from step 6 ({ tag_type, tag_value })\n  - image_analyses: array from step 7 (omit if no images)\n  - content_classification: JSON from step 2 (omit for non-setup/tutorial)\n\nOn success the entry is visible at `<host>/e/<slug>` and searchable by other agents.",
+    {
+      entry_id: z.string().uuid().describe("Entry ID from the prepare_ingest response."),
+      content_type: z
+        .enum([
+          "setup",
+          "tutorial",
+          "knowledge",
+          "article",
+          "reference",
+          "resource",
+        ])
+        .describe("Content type you classified in step 1."),
+      source_type: z
+        .string()
+        .describe(
+          "Source type you classified in step 1 (e.g. 'blog_post', 'github_repo', 'news_article')."
+        ),
+      manifest: z
+        .object({
+          title: z
+            .string()
+            .min(1)
+            .describe("Descriptive title (non-empty, required)."),
+          description: z.string().describe("One-paragraph description (required)."),
+          use_case: z
+            .object({
+              primary: z
+                .string()
+                .min(1)
+                .describe("Main category (e.g. 'agent_system', 'data_pipeline')."),
+              secondary: z.array(z.string()).optional(),
+            })
+            .passthrough(),
+          complexity: z
+            .enum(["simple", "moderate", "complex", "advanced"])
+            .describe("Overall complexity (required)."),
+        })
+        .passthrough()
+        .describe("Full manifest JSON from step 3."),
+      readme: z.string().min(1).describe("Markdown README from step 4."),
+      agents_md: z
+        .string()
+        .describe(
+          "Markdown agents.md (or key-insights / reference-guide) from step 5. Empty string if content_type='resource'."
+        ),
+      tags: z
+        .array(
+          z.object({
+            tag_type: z.string(),
+            tag_value: z.string(),
+          })
+        )
+        .describe("Tags from step 6."),
+      image_analyses: z
+        .array(
+          z.object({
+            image_id: z.string().optional(),
+            source_type: z.enum([
+              "code_screenshot",
+              "architecture_diagram",
+              "image",
+              "other",
+            ]),
+            raw_content: z.string(),
+            extracted_content: z.string(),
+            metadata: z.record(z.string(), z.unknown()).optional(),
+          })
+        )
+        .optional()
+        .describe("Per-image vision analyses from step 7. Omit if no images."),
+      content_classification: z
+        .object({
+          sections: z
+            .array(
+              z
+                .object({
+                  title: z.string(),
+                  classification: z.enum([
+                    "EXECUTABLE",
+                    "TACTICAL",
+                    "CONTEXT",
+                    "SKIP",
+                  ]),
+                  reason: z.string(),
+                  content_preview: z.string(),
+                })
+                .passthrough()
+            )
+            .optional(),
+          stats: z.record(z.string(), z.unknown()).optional(),
+          preservation_notes: z.array(z.string()).optional(),
+        })
+        .passthrough()
+        .optional()
+        .describe(
+          "Section classification from step 2. Only for setup/tutorial content_type."
+        ),
+    },
+    async (input) => {
+      const result = await client.submitIngestedEntry(input);
       const entryUrl = client.entryUrl(result.slug);
-      const label = entryUrl ? `[${title}](${entryUrl})` : title;
+      const label = entryUrl
+        ? `[${result.title}](${entryUrl})`
+        : result.title;
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `Ingestion complete. Entry: **${label}**\n\nType: ${result.content_type}\nUse case: ${result.use_case}\nComplexity: ${result.complexity}\n\nUse \`get_setup("${result.slug}")\` to retrieve, or \`canvas_add_entry("${result.slug}")\` to pin it to the user's canvas.`,
+          },
+        ],
+      };
+    }
+  );
+
+  // ── ingest_url — RETIRED ────────────────────────────────────────────
+  // The legacy server-side ingestion tool has been removed. Use
+  // `prepare_ingest` + `submit_ingested_entry` instead. The backend
+  // POST /api/ingest returns 410 Gone for any lingering external callers.
+
+  // ── skeleton_ingest ────────────────────────────────────────────────
+  // Admin-only. Runs the lightweight descriptor-only pipeline for mass
+  // indexing public GitHub repos. Gated by withAdminAuth (reads
+  // ADMIN_USER_ID env var). Non-admin callers receive 404 so the admin
+  // surface is not enumerable — matches the pattern used by
+  // /api/admin/entries.
+  registerTool(
+    "skeleton_ingest",
+    "ADMIN ONLY. Mass-index a public GitHub repo at skeleton tier — a single Sonnet call produces a task-agnostic descriptor + one embedding, no README/agents.md/manifest. Use this when the admin hands you a list of GitHub URLs to bulk-populate the discovery index. For a regular URL ingest with full generation, use `ingest_url` instead. Non-admin callers receive 404 (admin surface is non-enumerable). Poll with `get_setup` — descriptor usually lands in 10–30s.",
+    {
+      url: z.string().describe("Public GitHub repo URL (e.g. https://github.com/owner/repo)"),
+    },
+    async ({ url }) => {
+      const result = await client.skeletonIngest(url);
+      const entryUrl = client.entryUrl(result.slug);
+      const label = entryUrl
+        ? `[${result.title ?? result.slug ?? result.entry_id}](${entryUrl})`
+        : result.title ?? result.slug ?? result.entry_id;
       const ref = result.slug ?? result.entry_id;
 
       if (result.status === "already_exists") {
         return {
           content: [{
             type: "text" as const,
-            text: `Entry already exists: **${label}**\nUse \`get_setup("${ref}")\` to view it.`,
+            text: `Skeleton entry already exists: **${label}** (tier: ${result.tier ?? "unknown"})\nUse \`get_setup("${ref}")\` to view it.`,
           }],
         };
       }
@@ -488,16 +895,16 @@ export function createServer(client: DoplClient): McpServer {
       return {
         content: [{
           type: "text" as const,
-          text: `Ingestion started for ${url}\nEntry: **${label}**\nStatus: ${result.status}\n\nThe entry is processing in the background. Use \`get_setup("${ref}")\` to check when it's complete.`,
+          text: `Skeleton ingestion started for ${url}\nEntry ID: \`${result.entry_id}\`\nStatus: ${result.status}\n\nPoll with \`get_setup("${ref}")\` — the descriptor usually lands in 10–30s.`,
         }],
       };
     }
   );
 
   // ── update_cluster ─────────────────────────────────────────────────
-  server.tool(
+  registerTool(
     "update_cluster",
-    "Rename a cluster or modify its entry membership. Provide name, entry_ids, or both.",
+    "Rename a cluster or REPLACE its entry membership with a new set of entry IDs. Use this for structural changes to an existing cluster. For adding a single entry without replacing the whole set, use `add_entry_to_cluster` — it's less destructive. Note: does not regenerate the brain; follow up with `update_cluster_brain` if the membership change implies new patterns.",
     {
       slug: z.string().describe("Cluster slug from list_clusters"),
       name: z.string().optional().describe("New cluster name"),
@@ -528,10 +935,53 @@ export function createServer(client: DoplClient): McpServer {
     }
   );
 
+  // ── rename_cluster ─────────────────────────────────────────────────
+  // Thin wrapper over `update_cluster` with a focused purpose so the
+  // agent reaches for it when the user explicitly asks to rename. The
+  // auto-naming route `/api/cluster/name` was deleted as part of the
+  // client-only-LLM pivot — if you (the agent) want to propose a better
+  // name for a cluster based on its contents, call this.
+  registerTool(
+    "rename_cluster",
+    "Rename a cluster. Use this when the user asks to rename, or when you decide a clearer name would help (e.g. after the user has added enough entries for the theme to be obvious). Thin wrapper over `update_cluster` — the two are interchangeable, this one just reads clearer in context. Membership and brain are untouched.",
+    {
+      slug: z.string().describe("Cluster slug (from list_clusters)"),
+      name: z.string().min(1).describe("New cluster name"),
+    },
+    async ({ slug, name }) => {
+      const result = await client.updateCluster(slug, { name });
+      return {
+        content: [{
+          type: "text" as const,
+          text: `Renamed cluster to **${result.name}** (slug: \`${result.slug}\`).`,
+        }],
+      };
+    }
+  );
+
+  // ── rename_chat ────────────────────────────────────────────────────
+  registerTool(
+    "rename_chat",
+    "Rename a chat panel on the user's canvas. Use this when the user asks to rename a chat, or when the initial auto-derived title (first user message truncated) no longer captures the conversation's topic. Purpose-named wrapper over the generic panels PATCH endpoint.",
+    {
+      panel_id: z.string().describe("Chat panel ID (e.g. 'panel-3')"),
+      title: z.string().min(1).describe("New chat title"),
+    },
+    async ({ panel_id, title }) => {
+      await client.renameChat(panel_id, title);
+      return {
+        content: [{
+          type: "text" as const,
+          text: `Renamed chat to "${title}".`,
+        }],
+      };
+    }
+  );
+
   // ── delete_cluster ─────────────────────────────────────────────────
-  server.tool(
+  registerTool(
     "delete_cluster",
-    "Delete a cluster. This removes the cluster grouping but does NOT delete the individual entries.",
+    "Delete a cluster grouping. Individual entries REMAIN in the KB and on the user's canvas; only the cluster (and its brain + memories) is removed. Use when the user explicitly asks to drop a cluster. Irreversible — confirm intent if the user's phrasing is ambiguous.",
     {
       slug: z.string().describe("Cluster slug from list_clusters"),
     },
@@ -546,38 +996,78 @@ export function createServer(client: DoplClient): McpServer {
     }
   );
 
+  // ── get_skill_template ─────────────────────────────────────────────
+  registerTool(
+    "get_skill_template",
+    "Fetch the canonical skill synthesis prompt + expected output structure. Use this whenever you need to generate or restructure a cluster brain — e.g. right after `canvas_create_cluster` (initial synthesis), when restructuring a flat/legacy brain, or when a `update_cluster_brain` response returned a structure warning. The server does NOT run synthesis for you; paste the returned prompt into your context, feed it the entries' agents.md from `get_cluster(slug)`, produce a structured body, then call `update_cluster_brain(slug, <body>)`. No credits are charged by this tool.",
+    {},
+    async () => {
+      const tpl = await client.getSkillTemplate();
+      return {
+        content: [{ type: "text" as const, text: tpl.payload }],
+      };
+    }
+  );
+
   // ── get_cluster_brain ──────────────────────────────────────────────
-  server.tool(
+  registerTool(
     "get_cluster_brain",
-    "Get the current brain state for a cluster — its synthesized instructions and user memories.",
+    "Read the current brain for a cluster — synthesized instructions plus numbered user memories. Call this before `update_cluster_brain` (so surgical edits preserve existing text), before `update_cluster_memory` / `delete_cluster_memory` (to get memory IDs), and any time you want to know what durable knowledge already exists for a cluster before adding more.",
     {
       slug: z.string().describe("Cluster slug from list_clusters"),
     },
     async ({ slug }) => {
       const brain = await client.getClusterBrain(slug);
 
+      // Return the brain as a complete SKILL.md body so Claude Code can
+      // treat it as the canonical skill content at invocation time —
+      // no translation or assembly step on the agent's side. If the
+      // instructions are already section-structured, they carry through;
+      // if they're flat (legacy), they render as a plain body and the
+      // consumer still gets usable content.
       const sections: string[] = [];
-      sections.push(`# Cluster Brain: ${slug}`);
+      sections.push(`# Skill: ${slug}`);
+      sections.push("");
+      sections.push(
+        `> Canonical skill body for cluster \`${slug}\`, fetched from Dopl. Treat this as the full SKILL.md body — execute against it directly. If you need to modify it, call \`update_cluster_brain\` for structural changes or \`save_cluster_memory\` for short preferences.`
+      );
       sections.push("");
 
-      if (brain.instructions) {
-        sections.push("## Instructions");
-        sections.push("");
-        sections.push(brain.instructions);
+      if (brain.instructions && brain.instructions.trim().length > 0) {
+        // If the brain already has the canonical section headings, pass
+        // through as-is. Otherwise wrap the flat text in an Instructions
+        // section so the body still parses as a valid skill.
+        if (brain.instructions.includes("## When to use") || brain.instructions.includes("## Instructions")) {
+          sections.push(brain.instructions.trim());
+        } else {
+          sections.push("## Instructions");
+          sections.push("");
+          sections.push(brain.instructions.trim());
+        }
         sections.push("");
       } else {
-        sections.push("_No instructions synthesized yet._");
+        sections.push("## Instructions");
+        sections.push("");
+        sections.push(
+          `_This brain is empty._ Synthesize one: call \`get_skill_template\` for the canonical prompt, run synthesis in your context against \`get_cluster("${slug}")\`, then call \`update_cluster_brain("${slug}", <result>)\`.`
+        );
         sections.push("");
       }
 
+      // Memories always render as their own section so the agent can
+      // distinguish durable structural guidance from user-specific
+      // overrides. IDs are kept for update/delete tool targeting.
       if (brain.memories.length > 0) {
-        sections.push("## Memories");
+        sections.push("## User Memories");
+        sections.push("");
+        sections.push(
+          "_Persistent user preferences and corrections. These override the base instructions above when they conflict._"
+        );
         sections.push("");
         for (let i = 0; i < brain.memories.length; i++) {
-          sections.push(`${i + 1}. ${brain.memories[i].content} (id: \`${brain.memories[i].id}\`)`);
+          sections.push(`${i + 1}. ${brain.memories[i].content} _(id: \`${brain.memories[i].id}\`)_`);
         }
-      } else {
-        sections.push("_No memories saved yet._");
+        sections.push("");
       }
 
       return { content: [{ type: "text" as const, text: sections.join("\n") }] };
@@ -585,9 +1075,9 @@ export function createServer(client: DoplClient): McpServer {
   );
 
   // ── delete_cluster_memory ──────────────────────────────────────────
-  server.tool(
+  registerTool(
     "delete_cluster_memory",
-    "Remove a specific memory from a cluster's brain. Use get_cluster_brain first to see memory IDs.",
+    "Remove one specific memory from a cluster's brain by ID. Use when the user reverses a prior preference ('actually, ignore that', 'that's not true anymore') or explicitly says to drop a memory. Call `get_cluster_brain` first to get the memory ID. For REVISING an existing memory rather than deleting it, use `update_cluster_memory`.",
     {
       slug: z.string().describe("Cluster slug"),
       memory_id: z.string().describe("Memory ID to delete"),
@@ -604,9 +1094,9 @@ export function createServer(client: DoplClient): McpServer {
   );
 
   // ── update_cluster_brain ───────────────────────────────────────────
-  server.tool(
+  registerTool(
     "update_cluster_brain",
-    "Overwrite the cluster's synthesized brain instructions with new text. Use this to integrate new patterns, correct drift, or record durable knowledge you've learned while helping the user. Prefer surgical edits (read the brain first, then replace with a modified version) over full rewrites — the brain often contains user edits that should be preserved. Auto-synthesis does NOT run after cluster creation, so the brain only changes when you or the user change it.",
+    "Overwrite the cluster's brain with new instructions (the skill body Claude Code will execute against on invocation). ALWAYS call `get_cluster_brain` first and edit SURGICALLY — replace only the affected section, preserve the rest verbatim. The canonical structure has these section headings: `## When to use this skill`, `## Instructions`, `## Step-by-step`, `## Examples`, `## Anti-patterns`, `## References`. Omitting the first two triggers a structure warning in the response (non-blocking). Use this for structural/durable knowledge — for short preferences or environmental facts, use `save_cluster_memory` instead; for revising an existing memory, use `update_cluster_memory`. See the server instructions for the full when-to-edit-what decision rules.",
     {
       slug: z.string().describe("Cluster slug"),
       instructions: z
@@ -614,7 +1104,7 @@ export function createServer(client: DoplClient): McpServer {
         .describe("New brain instructions (markdown). This REPLACES the previous instructions — include everything you want kept."),
     },
     async ({ slug, instructions }) => {
-      await client.updateClusterBrain(slug, instructions);
+      const result = await client.updateClusterBrain(slug, instructions);
 
       // Keep the on-disk skill file in sync with the new brain.
       let diskNote = "";
@@ -627,19 +1117,29 @@ export function createServer(client: DoplClient): McpServer {
         console.error(`[Dopl] Failed to sync skill for ${slug}:`, err);
       }
 
+      // Surface the backend's advisory structure check so the agent learns
+      // what a proper brain looks like and self-corrects next time.
+      let warningNote = "";
+      if (result.structure_warning) {
+        warningNote =
+          `\n\n⚠️ Structure warning: brain is missing required sections: ${result.structure_warning.missing_sections.join(", ")}. ` +
+          `The write succeeded, but the skill will produce weaker results at invocation time. ` +
+          `Call \`get_skill_template\` for the canonical structure and consider re-synthesizing.`;
+      }
+
       return {
         content: [{
           type: "text" as const,
-          text: `Updated brain for cluster "${slug}" (${instructions.length} chars).${diskNote}`,
+          text: `Updated brain for cluster "${slug}" (${instructions.length} chars).${diskNote}${warningNote}`,
         }],
       };
     }
   );
 
   // ── update_cluster_memory ──────────────────────────────────────────
-  server.tool(
+  registerTool(
     "update_cluster_memory",
-    "Revise the content of an existing memory in place rather than adding a near-duplicate. Use get_cluster_brain first to see memory IDs and current text.",
+    "Revise the text of an EXISTING memory in place. Use this when the user refines or corrects a preference you already saved — avoids accumulating near-duplicate memories. Call `get_cluster_brain` first to get memory IDs and current text. For a genuinely new preference with no existing counterpart, use `save_cluster_memory`.",
     {
       slug: z.string().describe("Cluster slug"),
       memory_id: z.string().describe("Memory ID to update"),
@@ -657,9 +1157,9 @@ export function createServer(client: DoplClient): McpServer {
   );
 
   // ── update_entry ───────────────────────────────────────────────────
-  server.tool(
+  registerTool(
     "update_entry",
-    "Update metadata for a knowledge base entry (title, summary, use_case, complexity).",
+    "Update an entry's editable metadata fields: title, summary, use_case, complexity. Use when the user wants to correct an entry's categorization or description. Does NOT edit README, agents.md, or the source URL — those are regenerated only via re-ingestion. Scoped to the entry's owner and admin callers.",
     {
       entry: z.string().describe("Entry slug or UUID"),
       title: z.string().optional().describe("New title"),
@@ -688,9 +1188,9 @@ export function createServer(client: DoplClient): McpServer {
   );
 
   // ── delete_entry ───────────────────────────────────────────────────
-  server.tool(
+  registerTool(
     "delete_entry",
-    "Delete an entry from the knowledge base. This is permanent and cannot be undone.",
+    "Permanently remove an entry from the knowledge base. Use only when the user explicitly asks to delete it. Irreversible — the chunks, tags, sources, and entry row are all dropped. Does not remove canvas panels owned by other users that reference this entry (their canvases will show a missing-entry placeholder). Ask for confirmation before calling if the user's intent is at all ambiguous.",
     {
       entry: z.string().describe("Entry slug or UUID to delete"),
     },
@@ -706,9 +1206,9 @@ export function createServer(client: DoplClient): McpServer {
   );
 
   // ── check_entry_updates ─────────────────────────────────────────────
-  server.tool(
+  registerTool(
     "check_entry_updates",
-    "Check if a GitHub-sourced entry has been updated since ingestion. Returns update status for GitHub repos; non-GitHub entries are skipped.",
+    "Check whether ONE GitHub-sourced entry has new commits since it was ingested. Use when the user asks 'is this still current?' about a specific entry. Non-GitHub entries are skipped (returns a no-op status). For checking every entry in a cluster at once, use `check_cluster_updates` — much faster than looping.",
     {
       entry: z.string().describe("Entry slug or UUID to check"),
     },
@@ -755,9 +1255,9 @@ export function createServer(client: DoplClient): McpServer {
   );
 
   // ── check_cluster_updates ──────────────────────────────────────────
-  server.tool(
+  registerTool(
     "check_cluster_updates",
-    "Check all entries in a cluster for GitHub repo updates. Returns a summary of which entries have updates available.",
+    "Bulk-check every GitHub-sourced entry in a cluster for upstream changes. Use this when the user asks 'has anything in my cluster changed?', 'is my stack still current?', or before running `sync_skills` so the refreshed brain reflects reality. For a single entry, use `check_entry_updates`. Non-GitHub entries are skipped.",
     {
       slug: z.string().describe("Cluster slug from list_clusters"),
     },
@@ -811,9 +1311,9 @@ export function createServer(client: DoplClient): McpServer {
   );
 
   // ── add_entry_to_cluster ───────────────────────────────────────────
-  server.tool(
+  registerTool(
     "add_entry_to_cluster",
-    "Add an entry to an existing cluster. The brain is NOT auto-updated — initial synthesis happens only at cluster creation; subsequent changes are your job via update_cluster_brain. This preserves any edits the user or you have made to the brain.",
+    "Add a single entry to an existing cluster when the user wants to expand a cluster's membership. The brain is NOT auto-regenerated (initial synthesis runs once at cluster creation; later edits are preserved). If the new entry introduces a pattern the brain should reflect, follow up with `update_cluster_brain` — otherwise the addition is silent. To create a brand-new cluster from canvas entries, use `canvas_create_cluster` instead.",
     {
       slug: z.string().describe("Cluster slug"),
       entry: z.string().describe("Entry slug or UUID to add to the cluster"),
@@ -867,9 +1367,9 @@ export function createServer(client: DoplClient): McpServer {
   );
 
   // ── canvas_list_panels ──────────────────────────────────────────────
-  server.tool(
+  registerTool(
     "canvas_list_panels",
-    "List all knowledge base entries currently on your canvas workspace.",
+    "List every entry currently saved to the user's canvas. Use this when the user asks 'what's on my canvas?', 'show me my saved setups', or before operations that need to reason about the current workspace (e.g. deciding what belongs in a new cluster). Returns entry slugs, titles, and positions — not full content.",
     {},
     async () => {
       const panels = await client.listCanvasPanels();
@@ -897,9 +1397,9 @@ export function createServer(client: DoplClient): McpServer {
   );
 
   // ── canvas_add_entry ──────────────────────────────────────────────
-  server.tool(
+  registerTool(
     "canvas_add_entry",
-    "Add a knowledge base entry to your canvas. Use search_setups to find entries first.",
+    "Add ONE known knowledge-base entry to the user's canvas by slug or UUID. Use this when you already have the exact entry the user wants to save. For search + add in one step (the common case when the user says 'save some good options for X to my canvas'), use `canvas_search_and_add` instead — it's a batch operation and much faster than looping through search hits.",
     {
       entry: z.string().describe("Entry slug or UUID from search results or get_setup"),
     },
@@ -921,9 +1421,9 @@ export function createServer(client: DoplClient): McpServer {
   );
 
   // ── canvas_remove_entry ───────────────────────────────────────────
-  server.tool(
+  registerTool(
     "canvas_remove_entry",
-    "Remove an entry from your canvas. Does not delete it from the knowledge base.",
+    "Take an entry off the user's canvas. The entry stays in the knowledge base — only the canvas panel is removed. Use when the user says 'clear this from my canvas', 'I don't need this anymore', or is pruning their workspace. For permanent deletion from the KB, use `delete_entry` instead (destructive, different scope).",
     {
       entry: z.string().describe("Entry slug or UUID to remove from canvas"),
     },
@@ -941,9 +1441,9 @@ export function createServer(client: DoplClient): McpServer {
   );
 
   // ── canvas_search_and_add ──────────────────────────────────────────
-  server.tool(
+  registerTool(
     "canvas_search_and_add",
-    "Search the knowledge base and add the top results to your canvas in one step. Useful for quickly building a canvas around a topic.",
+    "Search the KB and add the top N matches to the user's canvas in one round trip. THIS is the default for 'save some good options for X to my canvas' / 'build me a starter canvas about Y' / 'find and bookmark patterns for Z' — much faster than `search_setups` followed by N `canvas_add_entry` calls. For adding a specific known entry by slug, use `canvas_add_entry`.",
     {
       query: z.string().describe("Natural language search query, e.g. 'marketing automations' or 'n8n workflows'"),
       max_results: z.number().optional().describe("Number of results to add (default 5, max 10)"),
@@ -953,7 +1453,6 @@ export function createServer(client: DoplClient): McpServer {
       const searchResult = await client.searchSetups({
         query,
         max_results: limit,
-        include_synthesis: false,
       });
 
       if (searchResult.entries.length === 0) {
@@ -999,9 +1498,9 @@ export function createServer(client: DoplClient): McpServer {
   );
 
   // ── canvas_create_cluster ─────────────────────────────────────────
-  server.tool(
+  registerTool(
     "canvas_create_cluster",
-    "Group canvas entries into a named cluster for organized access via query_cluster. An initial brain synthesis runs in the background — after that, edit the brain directly with update_cluster_brain instead of relying on automatic resynthesis (auto-synthesis only happens once, at cluster creation).",
+    "Create a new cluster from entries already on the user's canvas. Use when the user says 'group these into a skill', 'make a cluster for X', or when the set of canvas panels has grown to a point where clustering would help. **Creates the cluster only — brain synthesis is YOUR job now; the server does not run it.** The tool response includes the exact next-step chain (get template → synthesize → update brain → sync_skills). For adding a single entry to an existing cluster, use `add_entry_to_cluster`.",
     {
       name: z.string().min(1, "Cluster name cannot be empty").describe("Cluster name, e.g. 'AI Agent Stack'"),
       entries: z
@@ -1032,51 +1531,29 @@ export function createServer(client: DoplClient): McpServer {
 
       const result = await client.createCluster(name, resolvedIds);
 
-      // Fire-and-forget: brain synthesis + skill file generation
-      // This can take 30-120s so we don't block the tool response
-      (async () => {
-        try {
-          const detail = await client.getCluster(result.slug);
-
-          const entriesToSynthesize = detail.entries
-            .filter((e) => e.agents_md)
-            .map((e) => ({
-              title: e.title || "Untitled",
-              agents_md: e.agents_md || "",
-              readme: e.readme || "",
-            }));
-
-          let brain: BrainData = { instructions: "", memories: [] };
-          if (entriesToSynthesize.length > 0) {
-            const synthesis = await client.synthesizeBrain(entriesToSynthesize);
-            brain.instructions = synthesis.instructions;
-            await client.updateClusterBrain(result.slug, brain.instructions);
-          }
-
-          await writeClusterSkill(result.slug, result.name, brain, detail.entries);
-
-          const { clusters } = await client.listClusters();
-          const summaries: ClusterSummary[] = [];
-          for (const c of clusters) {
-            try {
-              const d = await client.getCluster(c.slug);
-              summaries.push(buildClusterSummary(c.slug, c.name, d.entries));
-            } catch {
-              summaries.push({ slug: c.slug, name: c.name, oneLiner: "", tools: [] });
-            }
-          }
-          await writeGlobalCanvasSkill(summaries);
-          await writeGlobalClaudemd(summaries);
-        } catch (err) {
-          console.error(`[Dopl] Auto-sync failed for ${result.slug}:`, err);
-        }
-      })();
+      // Client-only synthesis: we no longer run the LLM server-side to
+      // populate the initial brain. The agent receives explicit next-step
+      // instructions and runs synthesis in its own context, then writes
+      // the result back via update_cluster_brain.
+      const slug = result.slug;
+      const lines: string[] = [];
+      lines.push(`Created cluster **${result.name}** (slug: \`${slug}\`) with ${result.panel_count ?? resolvedIds.length} entries.`);
+      lines.push("");
+      lines.push(`The brain is empty — synthesis is your next step. Follow this chain:`);
+      lines.push("");
+      lines.push(`1. Call \`get_skill_template\` to get the canonical synthesis prompt + expected output structure.`);
+      lines.push(`2. Call \`get_cluster("${slug}")\` to pull the member entries' agents.md content (the raw material).`);
+      lines.push(`3. Run the synthesis prompt against that content IN YOUR CONTEXT. Produce a brain body in the canonical structure (When to use / Instructions / Step-by-step / Examples / Anti-patterns / References).`);
+      lines.push(`4. Call \`update_cluster_brain("${slug}", <your synthesized body>)\` to save it.`);
+      lines.push(`5. Call \`sync_skills\` so the thin-pointer \`SKILL.md\` on disk reflects the new brain.`);
+      lines.push("");
+      lines.push(`Do not skip step 3 — a brain saved without structure will trigger a validation warning and produce a weak skill at invocation time.`);
 
       return {
         content: [
           {
             type: "text" as const,
-            text: `Created cluster **${result.name}** (slug: \`${result.slug}\`) with ${result.panel_count ?? resolvedIds.length} entries.\nInitial brain synthesis running in background (~30s). After this one-time pass, the brain is yours to edit — use \`get_cluster_brain("${result.slug}")\` to read it and \`update_cluster_brain\` to modify it.`,
+            text: lines.join("\n"),
           },
         ],
       };
