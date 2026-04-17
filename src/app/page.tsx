@@ -985,7 +985,7 @@ export default function Home() {
               <ul className="space-y-3">
                 {[
                   { label: "Canvas", href: "/canvas" },
-                  { label: "Browse", href: "/entries" },
+                  { label: "Browse", href: "/browse" },
                   { label: "Builder", href: "/build" },
                   { label: "Pricing", href: "/pricing" },
                   { label: "Settings", href: "/settings" },

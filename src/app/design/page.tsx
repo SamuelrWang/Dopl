@@ -157,7 +157,7 @@ export default function DesignSystemPage() {
           >
             <GlassNavLink href="/design">Design</GlassNavLink>
             <GlassNavLink href="/canvas">Canvas</GlassNavLink>
-            <GlassNavLink href="/entries">Browse</GlassNavLink>
+            <GlassNavLink href="/browse">Browse</GlassNavLink>
             <GlassNavLink href="/build">Builder</GlassNavLink>
           </GlassNavbar>
           <p className="text-[10px] text-white/40 font-mono uppercase tracking-wide mt-3">

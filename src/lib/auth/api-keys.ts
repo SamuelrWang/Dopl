@@ -105,6 +105,39 @@ export function touchApiKey(keyId: string): void {
 }
 
 /**
+ * Refresh profiles.mcp_connected_at for the owner of an API key. Fire-and-forget.
+ *
+ * Every authenticated MCP call touches this timestamp, which means the
+ * welcome-step connection detector auto-advances as soon as the user's
+ * agent makes any tool call — not just on MCP server boot. This fixes
+ * the common failure mode where the MCP server was already running
+ * before the user reached /welcome (the one-shot boot ping was stale
+ * and the UI waited forever).
+ *
+ * In-process debounce: only writes once every 30s per user, since
+ * the client polls every 3s and tolerates 5 minutes of staleness.
+ * The debounce map is intentionally unbounded-but-small (one entry
+ * per active user); process restarts clear it harmlessly.
+ */
+const mcpStatusLastTouched = new Map<string, number>();
+const MCP_STATUS_TOUCH_INTERVAL_MS = 30_000;
+
+export function touchMcpStatus(userId: string): void {
+  const now = Date.now();
+  const last = mcpStatusLastTouched.get(userId) ?? 0;
+  if (now - last < MCP_STATUS_TOUCH_INTERVAL_MS) return;
+  mcpStatusLastTouched.set(userId, now);
+
+  supabase
+    .from("profiles")
+    .update({ mcp_connected_at: new Date(now).toISOString() })
+    .eq("id", userId)
+    .then(({ error }) => {
+      if (error) console.error("[auth] touchMcpStatus failed:", error);
+    });
+}
+
+/**
  * Create a new API key. Returns the plaintext key (shown ONCE).
  */
 export async function createApiKey(

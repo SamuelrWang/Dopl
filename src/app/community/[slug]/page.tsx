@@ -11,27 +11,15 @@
  * cluster shows the generic site card.
  */
 
-import { cache } from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getPublishedCluster } from "@/lib/community/service";
+import { getPublishedClusterCached } from "@/lib/community/get-published-cluster-cached";
 import CommunityDetailClient from "./community-detail-client";
 
 // Keep crawlers (X, Slack, Discord) from hammering the DB on every
 // link-preview request. 60s is fine for viral-post timing — the first
 // crawl fills the cache, subsequent crawls hit it.
 export const revalidate = 60;
-
-/**
- * Per-request memoized fetch for the published cluster. Both
- * generateMetadata and the default export call this on every cold
- * request; without the React cache() wrapper that's two round trips +
- * five Supabase queries each. cache() is request-scoped — it doesn't
- * bleed between requests — so combined with `revalidate = 60` we get:
- *   - 1 DB fetch per cold request (instead of 2)
- *   - 0 DB fetches for repeat hits within the revalidate window.
- */
-const getPublishedClusterOnce = cache(getPublishedCluster);
 
 type PageProps = {
   params: Promise<{ slug: string }>;
@@ -42,7 +30,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   let cluster;
   try {
-    cluster = await getPublishedClusterOnce(slug);
+    cluster = await getPublishedClusterCached(slug);
   } catch {
     // Missing row — return generic metadata so the 404 page still gets
     // reasonable social preview behavior.
@@ -68,19 +56,14 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       ? rawDescription.slice(0, 200)
       : `${cluster.panel_count} AI & automation setup${cluster.panel_count === 1 ? "" : "s"} from ${cluster.author.display_name || "Anonymous"} on Dopl.`;
 
-  // OG image priority:
-  //   1. Auto-captured canvas thumbnail (filled in by the owner's
-  //      first visit — see capture-thumbnail.ts).
-  //   2. thum.io universal fallback rendering the community page
-  //      itself — same trick pipeline.ts uses for entries.
-  // metadataBase from root layout.tsx turns relative paths absolute.
   const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "https://usedopl.com";
-  const ogImage =
-    cluster.thumbnail_url ||
-    `https://image.thum.io/get/${encodeURI(`${siteUrl}/community/${slug}`)}`;
-
   const pageUrl = `${siteUrl}/community/${slug}`;
 
+  // Note: NO explicit `images` key here. The colocated
+  // `opengraph-image.tsx` file is a Next.js metadata convention — it
+  // auto-populates `og:image` and `twitter:image` with a dynamically
+  // rendered card that includes the real panel layout. Manual images
+  // here would override that file and break the richer OG card.
   return {
     title,
     description,
@@ -90,20 +73,11 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       title,
       description,
       url: pageUrl,
-      images: [
-        {
-          url: ogImage,
-          width: 1200,
-          height: 630,
-          alt: cluster.title,
-        },
-      ],
     },
     twitter: {
       card: "summary_large_image",
       title,
       description,
-      images: [ogImage],
       creator: cluster.author.twitter_handle
         ? `@${cluster.author.twitter_handle.replace(/^@/, "")}`
         : undefined,
@@ -119,7 +93,7 @@ export default async function CommunityDetailPage({ params }: PageProps) {
 
   let cluster;
   try {
-    cluster = await getPublishedClusterOnce(slug);
+    cluster = await getPublishedClusterCached(slug);
   } catch {
     notFound();
   }

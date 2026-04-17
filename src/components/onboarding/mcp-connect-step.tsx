@@ -11,8 +11,9 @@
  *   3. "Connected!" success → calls onConnected() to auto-advance
  */
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Copy, Check } from "lucide-react";
+import { useMcpConnectionStatus } from "@/lib/hooks/use-mcp-connection-status";
 
 interface McpConnectStepProps {
   /** Called when MCP connection is detected — triggers auto-advance. */
@@ -24,9 +25,6 @@ export function McpConnectStep({ onConnected }: McpConnectStepProps) {
   const [apiKey, setApiKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
-  const [connected, setConnected] = useState(false);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const connectedRef = useRef(false);
 
   // Get base URL
   useEffect(() => {
@@ -76,35 +74,15 @@ export function McpConnectStep({ onConnected }: McpConnectStepProps) {
     fetchKey();
   }, []);
 
-  // Poll for MCP connection status
-  useEffect(() => {
-    if (connected || loading) return;
-
-    async function checkStatus() {
-      try {
-        const res = await fetch("/api/user/mcp-status");
-        if (!res.ok) return;
-        const data = await res.json();
-        if (data.connected && !connectedRef.current) {
-          connectedRef.current = true;
-          setConnected(true);
-          if (pollRef.current) clearInterval(pollRef.current);
-          // Brief delay so user sees the success state
-          setTimeout(() => onConnected(), 1500);
-        }
-      } catch {
-        // Polling is best-effort
-      }
-    }
-
-    // Check immediately, then every 3 seconds
-    checkStatus();
-    pollRef.current = setInterval(checkStatus, 3000);
-
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
-  }, [connected, loading, onConnected]);
+  // Poll for MCP connection status. Hook handles the single-fire guarantee
+  // and interval teardown; we add the 1.5s delay so the success state is
+  // actually visible before the parent auto-advances.
+  const { connected } = useMcpConnectionStatus({
+    enabled: !loading,
+    onConnected: useCallback(() => {
+      setTimeout(() => onConnected(), 1500);
+    }, [onConnected]),
+  });
 
   const handleCopy = useCallback(
     (text: string) => {

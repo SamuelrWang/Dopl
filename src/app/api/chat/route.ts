@@ -4,7 +4,7 @@ import { searchEntries } from "@/lib/retrieval/search";
 import { supabaseAdmin } from "@/lib/supabase";
 const supabase = supabaseAdmin();
 import { BUILDER_CHAT_SYSTEM_PROMPT } from "@/lib/prompts/chat-system";
-import { withUserAuth } from "@/lib/auth/with-auth";
+import { withUserAuth, isAdmin } from "@/lib/auth/with-auth";
 // ingestEntry is retired — regular ingestion is agent-driven via the
 // prepare_ingest + submit_ingested_entry MCP tools. Chat attachment URLs
 // are returned to the agent; the agent decides whether to ingest.
@@ -460,6 +460,10 @@ async function executeTool(
         status: "pending_ingestion",
         ingested_by: userId,
         slug: fallbackSlugFromId(entryId),
+        // Admin-queued URLs skip moderation — once the agent claims
+        // them via prepare, they'll already be approved and visible
+        // to everyone. Non-admins default to "pending".
+        ...(isAdmin(userId) ? { moderation_status: "approved" } : {}),
       });
       if (insertError) {
         return {

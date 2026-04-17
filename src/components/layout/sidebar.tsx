@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 
 const sidebarItems = [
   { href: "/canvas", label: "Canvas", icon: "📥" },
-  { href: "/entries", label: "Browse", icon: "📚" },
+  { href: "/browse", label: "Browse", icon: "📚" },
   { href: "/build", label: "Builder", icon: "🔨" },
 ];
 

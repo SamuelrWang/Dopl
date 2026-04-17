@@ -7,13 +7,16 @@
  * the original "fetch on mount with spinner" flash.
  *
  * Responsibilities:
- *   - Resolve the current user (used for the "is owner" decision and
- *     to drive the auto-thumbnail-capture for owners).
+ *   - Resolve the current user (used for the "is owner" decision).
  *   - Render the top bar with title, author, "Editing" badge, and a
  *     "Copy share link" icon button (visible to everyone — visitors
  *     re-share without opening devtools).
  *   - Mount `<SharedClusterShell>` — renders the full `/canvas`
  *     component tree in read-only mode (or owner-edit mode).
+ *
+ * Thumbnails for OG / gallery are now served by the dynamic
+ * opengraph-image route, so the html2canvas auto-capture that used to
+ * run here on owner-first-visit has been removed.
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -21,23 +24,16 @@ import Link from "next/link";
 import { ArrowLeft, Check, Link as LinkIcon } from "lucide-react";
 import SharedClusterShell from "./shared-cluster-shell";
 import { getSupabaseBrowser } from "@/lib/supabase-browser";
-import { captureAndUploadThumbnail } from "@/lib/community/capture-thumbnail";
 import type { PublishedClusterDetail } from "@/lib/community/types";
 
 interface Props {
   cluster: PublishedClusterDetail;
 }
 
-export default function CommunityDetailClient({
-  cluster: initialCluster,
-}: Props) {
-  // Mutable-ish copy so thumbnail auto-capture can patch the in-memory
-  // cluster (avoids a round trip to re-fetch just for the preview URL).
-  const [cluster, setCluster] = useState<PublishedClusterDetail>(initialCluster);
+export default function CommunityDetailClient({ cluster }: Props) {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const canvasContainerRef = useRef<HTMLDivElement>(null);
-  const thumbnailCapturedRef = useRef(false);
 
   // Resolve the logged-in user (if any) for the "is owner" check.
   useEffect(() => {
@@ -48,31 +44,6 @@ export default function CommunityDetailClient({
       })
       .catch(() => {});
   }, []);
-
-  // Auto-capture a canvas thumbnail the first time the owner opens
-  // their published cluster without one. Powers the OG image and
-  // community gallery card.
-  useEffect(() => {
-    if (
-      !currentUserId ||
-      cluster.author.id !== currentUserId ||
-      cluster.thumbnail_url ||
-      thumbnailCapturedRef.current
-    ) {
-      return;
-    }
-    const timer = setTimeout(() => {
-      const el = canvasContainerRef.current;
-      if (!el) return;
-      thumbnailCapturedRef.current = true;
-      captureAndUploadThumbnail(el, cluster.slug).then((url) => {
-        if (url) {
-          setCluster((prev) => (prev ? { ...prev, thumbnail_url: url } : prev));
-        }
-      });
-    }, 2000); // wait for canvas first paint
-    return () => clearTimeout(timer);
-  }, [cluster, currentUserId]);
 
   async function handleCopyLink() {
     const shareUrl = window.location.href;

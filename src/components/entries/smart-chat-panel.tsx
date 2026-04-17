@@ -1,58 +1,23 @@
 "use client";
 
 /**
- * SmartChatPanel — the left-rail panel on /entries. One fixed-size
- * glass surface with two sections:
+ * SmartChatPanel — left-rail conversational search on the browse
+ * page. One fixed-size glass surface. Each user message hits
+ * /api/query and renders the top matching entries inline as a compact
+ * clickable list (retrieval, not synthesis).
  *
- *   1. Filters (collapsible) — the legacy use-case / complexity
- *      filters, stays up top so the user can tighten the grid on the
- *      right without leaving the panel. Header is click-to-toggle.
+ * The outer box is fixed-size so the panel visually "holds" against
+ * the top nav. Only the messages area scrolls.
  *
- *   2. Smart chat — a conversational search UI. Messages live in the
- *      scroll area; the input pins to the bottom. Each user message
- *      calls /api/query and renders the top matching entries inline
- *      as a compact result list (not a textual answer — /api/query
- *      is retrieval, not synthesis).
- *
- * The outer box is fixed-size (sticky height) so the panel visually
- * "holds" against the top nav. Only the middle scrolls.
+ * Filters were previously bolted onto the top of this panel. Removed
+ * — the chat is the search mechanism, and browse-grid filtering will
+ * ship as a separate affordance when we need it.
  */
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ChevronDown, Search, ArrowUp, Loader2 } from "lucide-react";
+import { Search, ArrowUp, Loader2 } from "lucide-react";
 import { GlassCard, MonoLabel, PlatformIcon } from "@/components/design";
-
-// ── Filter constants (mirror the old FilterSidebar) ──────────────────
-
-const USE_CASES = [
-  "all",
-  "cold_outbound",
-  "lead_gen",
-  "content_creation",
-  "data_pipeline",
-  "monitoring",
-  "automation",
-  "agent_system",
-  "dev_tooling",
-  "customer_support",
-  "research",
-  "other",
-];
-
-const COMPLEXITIES = ["all", "simple", "moderate", "complex", "advanced"];
-
-const COMPLEXITY_ACCENT: Record<string, string> = {
-  simple: "var(--mint)",
-  moderate: "var(--gold)",
-  complex: "var(--coral)",
-  advanced: "var(--coral)",
-};
-
-function labelize(v: string): string {
-  if (v === "all") return "All";
-  return v.replace(/_/g, " ");
-}
 
 // ── Chat types ───────────────────────────────────────────────────────
 
@@ -72,31 +37,12 @@ interface ChatMessage {
   error?: boolean;
 }
 
-interface Props {
-  useCase: string;
-  complexity: string;
-  onUseCaseChange: (value: string) => void;
-  onComplexityChange: (value: string) => void;
-  onReset: () => void;
-}
-
-export function SmartChatPanel({
-  useCase,
-  complexity,
-  onUseCaseChange,
-  onComplexityChange,
-  onReset,
-}: Props) {
-  const [filtersOpen, setFiltersOpen] = useState(true);
+export function SmartChatPanel() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const nextId = useRef(1);
   const scrollRef = useRef<HTMLDivElement>(null);
-
-  const hasActiveFilters = useCase !== "all" || complexity !== "all";
-  const activeFilterCount =
-    (useCase !== "all" ? 1 : 0) + (complexity !== "all" ? 1 : 0);
 
   // Auto-scroll chat to bottom as messages land.
   useEffect(() => {
@@ -169,91 +115,6 @@ export function SmartChatPanel({
       variant="subtle"
       className="!p-0 h-full flex flex-col overflow-hidden"
     >
-      {/* ── Filters header (click to toggle) ── */}
-      <button
-        type="button"
-        onClick={() => setFiltersOpen((o) => !o)}
-        className="flex items-center justify-between px-4 h-10 border-b border-white/[0.1] hover:bg-white/[0.03] transition-colors shrink-0"
-      >
-        <MonoLabel tone="muted">
-          Filters
-          {activeFilterCount > 0 && (
-            <span className="ml-2 text-white/80">· {activeFilterCount} active</span>
-          )}
-        </MonoLabel>
-        <ChevronDown
-          size={14}
-          className={`text-white/40 transition-transform ${filtersOpen ? "rotate-180" : ""}`}
-        />
-      </button>
-
-      {/* ── Filters body (collapsible) ── */}
-      {filtersOpen && (
-        <div className="shrink-0 border-b border-white/[0.1] p-3 space-y-4 max-h-[38%] overflow-y-auto">
-          <div className="space-y-2">
-            <MonoLabel tone="muted">Use Case</MonoLabel>
-            <div className="grid grid-cols-2 gap-1">
-              {USE_CASES.map((uc) => {
-                const active = uc === useCase;
-                return (
-                  <button
-                    key={uc}
-                    onClick={() => onUseCaseChange(uc)}
-                    className={`text-left px-2 py-1 font-mono text-[10px] uppercase tracking-wide rounded-[3px] truncate transition-colors ${
-                      active
-                        ? "bg-white/[0.10] text-white/90 border border-white/[0.18]"
-                        : "text-white/40 hover:text-white/70 hover:bg-white/[0.04] border border-transparent"
-                    }`}
-                    title={labelize(uc)}
-                  >
-                    {labelize(uc)}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <MonoLabel tone="muted">Complexity</MonoLabel>
-            <div className="flex flex-wrap gap-1">
-              {COMPLEXITIES.map((c) => {
-                const active = c === complexity;
-                const accent = c !== "all" ? COMPLEXITY_ACCENT[c] : undefined;
-                return (
-                  <button
-                    key={c}
-                    onClick={() => onComplexityChange(c)}
-                    className={`flex items-center gap-1.5 px-2 py-1 font-mono text-[10px] uppercase tracking-wide rounded-[3px] transition-colors ${
-                      active
-                        ? "bg-white/[0.10] text-white/90 border border-white/[0.18]"
-                        : "text-white/40 hover:text-white/70 hover:bg-white/[0.04] border border-transparent"
-                    }`}
-                  >
-                    {accent && (
-                      <span
-                        className="w-0.5 h-2.5 rounded-full shrink-0"
-                        style={{ backgroundColor: accent }}
-                        aria-hidden
-                      />
-                    )}
-                    <span>{labelize(c)}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {hasActiveFilters && (
-            <button
-              onClick={onReset}
-              className="w-full h-7 font-mono text-[10px] uppercase tracking-wide bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.08] hover:border-white/[0.15] rounded-[3px] text-white/60 hover:text-white/90 transition-all"
-            >
-              Reset filters
-            </button>
-          )}
-        </div>
-      )}
-
       {/* ── Chat header ── */}
       <div className="flex items-center justify-between px-4 h-10 border-b border-white/[0.1] shrink-0">
         <MonoLabel tone="muted">Smart chat</MonoLabel>

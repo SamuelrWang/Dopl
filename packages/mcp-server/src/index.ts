@@ -59,8 +59,33 @@ async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
 
-  // Signal to the web app that an MCP connection is live (best-effort).
-  client.pingMcpStatus().catch(() => {});
+  // Signal to the web app that an MCP connection is live. Retries with
+  // exponential backoff (1s / 2s / 4s) so a transient network blip
+  // doesn't leave the user staring at "Waiting for connection…" forever.
+  // Runs in the background — never blocks MCP tool handling.
+  void pingWithRetry(client);
+}
+
+async function pingWithRetry(client: DoplClient): Promise<void> {
+  const delays = [1000, 2000, 4000];
+  for (let attempt = 0; attempt <= delays.length; attempt++) {
+    try {
+      await client.pingMcpStatus();
+      return;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (attempt === delays.length) {
+        // Final failure — surface it so users and logs can see it.
+        // Subsequent tool calls will still refresh the connection timestamp
+        // server-side, so this is not catastrophic.
+        console.error(
+          `[dopl-mcp] Initial status ping failed after ${delays.length + 1} attempts: ${msg}`
+        );
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, delays[attempt]));
+    }
+  }
 }
 
 main().catch((error) => {

@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/trial-reactivation",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/ingest/cleanup-pending",
+      "schedule": "17 4 * * *"
     }
   ]
 }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { IngestRequestSchema } from "@/types/api";
-import { withUserAuth } from "@/lib/auth/with-auth";
+import { withUserAuth, isAdmin } from "@/lib/auth/with-auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import {
   MAX_CONTENT_FOR_CLAUDE,
@@ -235,7 +235,10 @@ async function handlePost(
         status: "processing",
         ingested_by: userId,
         slug: fallbackSlugFromId(entryId),
-        // moderation_status defaults to "pending".
+        // Admin-ingested entries skip the human moderation queue — they
+        // land in the public catalog immediately. Non-admins default to
+        // "pending" (via the DB default) and go through /admin/review.
+        ...(isAdmin(userId) ? { moderation_status: "approved" } : {}),
       });
       if (createError) {
         throw new Error(`Failed to create entry: ${createError.message}`);

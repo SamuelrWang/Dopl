@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { slugifyClusterName } from "@/lib/clusters/slug";
+import { generatePublishedSlug, randomSuffix } from "./published-slug";
 import { CONTEXT_CHAR_BUDGET_PER_FIELD } from "@/lib/config";
 import { generateEmbedding } from "@/lib/ai";
 import type {
@@ -34,30 +35,65 @@ export async function publishCluster(
     throw new Error("Not authorized to publish this cluster");
   }
 
-  // Generate a globally unique slug for the published URL
-  const { data: existingSlugs } = await db
-    .from("published_clusters")
-    .select("slug");
-  const slugList = (existingSlugs || []).map((r) => r.slug);
-  const slug = slugifyClusterName(req.title, slugList);
+  // Generate a globally unique slug. 4 random base36 chars (~1.6M
+  // combinations) make collisions effectively impossible without any
+  // DB scan. The UNIQUE constraint + retry below are the backstop.
+  let slug = generatePublishedSlug(req.title);
 
-  // Create the published cluster record
-  const { data: published, error: pubError } = await db
-    .from("published_clusters")
-    .insert({
-      cluster_id: clusterId,
-      user_id: userId,
-      slug,
-      title: req.title,
-      description: req.description || "",
-      category: req.category || null,
-      status: "published",
-    })
-    .select("id, slug, title, description, category, thumbnail_url, fork_count, status, created_at, updated_at")
-    .single();
+  // Insert with retry-on-23505 (Postgres unique-violation). Max 5
+  // attempts, new suffix each retry. Mirrors the entry pipeline's
+  // `persistWithSlugRetry` pattern (see pipeline.ts:1008).
+  const MAX_SLUG_ATTEMPTS = 5;
+  let published: {
+    id: string;
+    slug: string;
+    title: string;
+    description: string | null;
+    category: string | null;
+    thumbnail_url: string | null;
+    fork_count: number;
+    status: PublishedClusterSummary["status"];
+    created_at: string;
+    updated_at: string;
+  } | null = null;
+  let lastPubError: unknown = null;
 
-  if (pubError || !published) {
-    throw pubError || new Error("Failed to create published cluster");
+  for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt++) {
+    const { data, error } = await db
+      .from("published_clusters")
+      .insert({
+        cluster_id: clusterId,
+        user_id: userId,
+        slug,
+        title: req.title,
+        description: req.description || "",
+        category: req.category || null,
+        status: "published",
+      })
+      .select(
+        "id, slug, title, description, category, thumbnail_url, fork_count, status, created_at, updated_at"
+      )
+      .single();
+
+    if (!error && data) {
+      published = data;
+      break;
+    }
+
+    lastPubError = error;
+    // 23505 = unique violation; retry with a fresh suffix. Anything
+    // else is a real error — stop.
+    if ((error as { code?: string } | null)?.code !== "23505") break;
+
+    // Swap just the suffix, keep the readable base.
+    const lastDash = slug.lastIndexOf("-");
+    slug = lastDash > 0 ? `${slug.slice(0, lastDash)}-${randomSuffix()}` : `${slug}-${randomSuffix()}`;
+  }
+
+  if (!published) {
+    throw lastPubError instanceof Error
+      ? lastPubError
+      : new Error("Failed to create published cluster (slug retries exhausted)");
   }
 
   // Snapshot panel positions: join cluster_panels with canvas_panels
@@ -176,6 +212,7 @@ export async function publishCluster(
 
   return {
     ...published,
+    description: published.description || "",
     author: {
       id: userId,
       display_name: profile?.display_name || null,

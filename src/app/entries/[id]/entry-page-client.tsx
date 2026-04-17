@@ -63,7 +63,7 @@ export function EntryPageClient({ entryKey }: { entryKey: string }) {
     return (
       <div className="text-center py-12">
         <p className="text-lg text-destructive">{error || "Entry not found"}</p>
-        <Link href="/entries">
+        <Link href="/browse/entries">
           <Button variant="ghost" className="mt-4">
             ← Back to entries
           </Button>
@@ -74,7 +74,7 @@ export function EntryPageClient({ entryKey }: { entryKey: string }) {
 
   return (
     <div>
-      <Link href="/entries">
+      <Link href="/browse/entries">
         <Button variant="ghost" size="sm" className="mb-4">
           ← Back to entries
         </Button>

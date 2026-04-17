@@ -16,8 +16,9 @@
  * two files avoids polluting the simpler in-canvas card.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, Copy } from "lucide-react";
+import { useMcpConnectionStatus } from "@/lib/hooks/use-mcp-connection-status";
 
 // ─────────────────────────────────────────────────────────
 // Tab definitions
@@ -97,9 +98,6 @@ export function WelcomeMcpConnectStep({
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabKey>("claude-code");
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
-  const [connected, setConnected] = useState(false);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const connectedRef = useRef(false);
 
   // Resolve deploy URL for snippets.
   useEffect(() => {
@@ -131,32 +129,15 @@ export function WelcomeMcpConnectStep({
     };
   }, []);
 
-  // Poll for connection.
-  useEffect(() => {
-    if (connected || loading) return;
-    async function checkStatus() {
-      try {
-        const res = await fetch("/api/user/mcp-status");
-        if (!res.ok) return;
-        const data = await res.json();
-        if (data.connected && !connectedRef.current) {
-          connectedRef.current = true;
-          setConnected(true);
-          if (pollRef.current) clearInterval(pollRef.current);
-          // Brief pause so the user sees the success state before the
-          // parent fades the whole card out.
-          setTimeout(() => onConnected(), 1200);
-        }
-      } catch {
-        // Polling is best-effort.
-      }
-    }
-    checkStatus();
-    pollRef.current = setInterval(checkStatus, 3000);
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
-  }, [connected, loading, onConnected]);
+  // Poll for connection. The hook sets `connected` immediately so the
+  // success state flashes, then we wait 1200ms before telling the parent
+  // to advance (so the user actually sees "Connected!").
+  const { connected } = useMcpConnectionStatus({
+    enabled: !loading,
+    onConnected: useCallback(() => {
+      setTimeout(() => onConnected(), 1200);
+    }, [onConnected]),
+  });
 
   const handleCopy = useCallback((id: string, text: string) => {
     if (typeof navigator === "undefined") return;

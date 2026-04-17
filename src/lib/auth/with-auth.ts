@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { API_KEY_PREFIX } from "@/lib/config";
 import { createServerClient } from "@supabase/ssr";
-import { validateApiKey, checkAndRecordRateLimit, touchApiKey } from "./api-keys";
+import { validateApiKey, checkAndRecordRateLimit, touchApiKey, touchMcpStatus } from "./api-keys";
 import { getUserSubscription, type SubscriptionTier } from "@/lib/billing/subscriptions";
 import { hasActiveAccess, accessDeniedBody } from "@/lib/billing/access";
 import { logMcpEvent } from "@/lib/analytics/mcp-events";
@@ -188,6 +188,9 @@ export function withUserAuth(
 
       // Locally bind narrowed userId so the closure sees a non-null value.
       const userId = keyRecord.user_id;
+      // Every authenticated MCP call acts as a heartbeat for the
+      // welcome-step connection detector. Debounced to ~30s.
+      touchMcpStatus(userId);
       return runAndLog5xx(
         () =>
           handler(request, {

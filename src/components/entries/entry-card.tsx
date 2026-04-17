@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { Bookmark } from "lucide-react";
 import { GlassCard, MonoLabel, PlatformIcon } from "@/components/design";
 import {
   addEntryPanelToCanvas,
   fetchFullEntry,
 } from "@/components/canvas/add-to-canvas";
+import { useSavedToggle } from "@/lib/saved/local-store";
 
 interface EntryCardProps {
   id: string;
@@ -21,13 +23,6 @@ interface EntryCardProps {
   createdAt: string;
 }
 
-
-const complexityAccent: Record<string, string> = {
-  simple: "var(--mint)",
-  moderate: "var(--gold)",
-  complex: "var(--coral)",
-  advanced: "var(--coral)",
-};
 
 const platformLabels: Record<string, string> = {
   x: "X",
@@ -63,6 +58,9 @@ function truncateUrl(url: string): string {
   }
 }
 
+// Note: `complexity` is still sent by EntryGrid but no longer rendered
+// — the old complexity pill was replaced with the bookmark toggle.
+// Kept on the props interface so the grid callsite stays unchanged.
 export function EntryCard({
   id,
   title,
@@ -71,13 +69,21 @@ export function EntryCard({
   sourcePlatform,
   thumbnailUrl,
   useCase,
-  complexity,
   status,
   createdAt,
 }: EntryCardProps) {
   const platform = sourcePlatform || "web";
   const gradientClass = placeholderGradients[platform] || placeholderGradients.web;
-  const accentColor = complexity ? complexityAccent[complexity] : undefined;
+
+  // Save-for-later state — drives the bookmark toggle that replaced
+  // the old complexity pill. Writes to localStorage via the shared
+  // saved store; the Saved tab reads the same bucket.
+  const { saved, toggle: toggleSaved } = useSavedToggle("entry", id);
+  function handleBookmarkClick(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleSaved();
+  }
 
   // "Add to canvas" button state:
   //  - idle   → "+" icon
@@ -218,14 +224,27 @@ export function EntryCard({
             {truncateUrl(sourceUrl)}
           </button>
 
-          {/* Metadata row */}
+          {/* Metadata row: bookmark toggle + date. Replaced the old
+              complexity pill — clicking the bookmark saves the entry
+              to the Saved tab. */}
           <div className="flex items-center gap-3 pt-2 border-t border-white/[0.06]">
-            {complexity && (
-              <MonoLabel accentColor={accentColor} tone="muted">
-                {complexity}
-              </MonoLabel>
-            )}
-            {useCase && !complexity && (
+            <button
+              onClick={handleBookmarkClick}
+              aria-label={saved ? "Remove from saved" : "Save for later"}
+              title={saved ? "Saved" : "Save"}
+              className={`inline-flex items-center justify-center transition-colors cursor-pointer ${
+                saved
+                  ? "text-white"
+                  : "text-white/40 hover:text-white/80"
+              }`}
+            >
+              <Bookmark
+                size={15}
+                strokeWidth={1.75}
+                fill={saved ? "currentColor" : "none"}
+              />
+            </button>
+            {useCase && (
               <MonoLabel tone="muted">{useCase.replace(/_/g, " ")}</MonoLabel>
             )}
             <span className="font-mono text-[10px] text-white/30 ml-auto">
