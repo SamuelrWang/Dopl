@@ -48,14 +48,41 @@ END$$;
 --
 -- The real normalizer (src/lib/ingestion/url.ts) also strips utm_*
 -- params and trailing slashes, so freshly-inserted rows will have richer
--- normalization than legacy rows. That's fine — the unique index below
--- catches new duplicates, and legacy data isn't re-deduped.
+-- normalization than legacy rows. Close enough — the unique index below
+-- catches future duplicates; the one-shot dedup below clears legacy ones.
 UPDATE sources
 SET normalized_url = lower(url)
 WHERE normalized_url IS NULL
   AND url IS NOT NULL;
 
--- ── 3. Dedup enforcement ──────────────────────────────────────────────
+-- ── 3. Dedup legacy rows ──────────────────────────────────────────────
+-- The pre-refactor pipeline could write the same (entry_id, url) multiple
+-- times (see heygen-com/hyperframes: github_repo at depth 0 + tweet_text
+-- inline + github_repo at depth 1, all with the same URL). Creating the
+-- unique index below would fail on any such entry.
+--
+-- Strategy: for each (entry_id, normalized_url) group with 2+ rows, keep
+-- the lowest-depth row (the one the new pipeline would have chosen
+-- first), break ties by earliest created_at (preserves the canonical
+-- first extraction). Delete the rest. This is irreversible but only
+-- touches rows that are strict duplicates — no real content is lost
+-- because the kept row has the same URL's content at the same or lower
+-- depth.
+WITH ranked AS (
+  SELECT
+    id,
+    ROW_NUMBER() OVER (
+      PARTITION BY entry_id, normalized_url
+      ORDER BY depth ASC, created_at ASC
+    ) AS rn
+  FROM sources
+  WHERE status = 'ok'
+    AND normalized_url IS NOT NULL
+)
+DELETE FROM sources
+WHERE id IN (SELECT id FROM ranked WHERE rn > 1);
+
+-- ── 4. Dedup enforcement ──────────────────────────────────────────────
 -- Partial unique index: only applies to rows where we have a URL AND the
 -- extraction succeeded. Failed/skipped rows and image-only rows (where
 -- url IS NULL because content lives in storage_path) are exempt — those

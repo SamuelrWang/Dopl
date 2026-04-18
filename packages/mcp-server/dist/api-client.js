@@ -93,6 +93,22 @@ class DoplClient {
     async getSetup(id) {
         return this.request(`/api/entries/${id}`, { toolName: "get_setup" });
     }
+    /**
+     * Fetch extracted content for an in-progress (or completed) ingestion.
+     * The prepare_ingest response no longer inlines `gathered_content` — the
+     * agent calls this between prepare and submit to retrieve the body it
+     * substitutes into prompt `{ALL_RAW_CONTENT}` / `{POST_TEXT}` slots.
+     *
+     * Passing `sourceUrl` restricts the response to one extracted source
+     * (e.g. just the README for the content_type classifier), which keeps
+     * per-prompt token cost down for large repos.
+     */
+    async getIngestContent(entryId, sourceUrl) {
+        const qs = sourceUrl ? `?source_url=${encodeURIComponent(sourceUrl)}` : "";
+        return this.request(`/api/ingest/content/${encodeURIComponent(entryId)}${qs}`, {
+            toolName: "get_ingest_content",
+        });
+    }
     async buildSolution(params) {
         return this.request("/api/build", {
             method: "POST",
@@ -179,11 +195,12 @@ class DoplClient {
     }
     // ── MCP status ping ────────────────────────────────────────────────
     async pingMcpStatus() {
-        await this.request("/api/user/mcp-status", {
+        const res = await this.request("/api/user/mcp-status", {
             method: "POST",
             toolName: "_mcp_status_ping",
             body: {},
         });
+        return { is_admin: res.is_admin === true };
     }
     // ── Cluster brain methods ─────────────────────────────────────────
     async getClusterBrain(slug) {

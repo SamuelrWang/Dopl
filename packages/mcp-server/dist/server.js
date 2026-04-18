@@ -186,7 +186,8 @@ function withDoplStatus(handler, client) {
         return appendDoplStatus(result, client);
     };
 }
-function createServer(client) {
+function createServer(client, options = {}) {
+    const isAdmin = options.isAdmin === true;
     const server = new mcp_js_1.McpServer({
         name: "dopl",
         version: "0.1.0",
@@ -700,40 +701,76 @@ function createServer(client) {
             ],
         };
     });
+    // ── get_ingest_content ─────────────────────────────────────────────
+    // Pull extracted content for an in-progress (or completed) ingestion.
+    // Called between `prepare_ingest` and `submit_ingested_entry` to
+    // retrieve the body the agent substitutes into prompt
+    // `{ALL_RAW_CONTENT}` / `{POST_TEXT}` placeholders.
+    //
+    // Why this exists: the prepare response used to inline a single fat
+    // `gathered_content` string plus 10 copies of it across prompt
+    // templates. That blew the MCP tool-response size cap for anything
+    // larger than a trivial repo. Now prepare returns a `sources[]`
+    // inventory + slim templates, and the agent calls this tool per-prompt
+    // to retrieve content (optionally narrowed to a single source to save
+    // tokens on steps that only need the README).
+    registerTool("get_ingest_content", "Retrieve the extracted content for an in-progress ingestion (between prepare_ingest and submit_ingested_entry). Returns the aggregated text from all successful sources, or — when `source_url` is passed — just that one source. Use this before running each prompt from the prepare_ingest response: substitute the returned `content` into the `{ALL_RAW_CONTENT}` / `{POST_TEXT}` placeholders. Pass `source_url` matching a `sources[].url` entry from the prepare response to fetch only that source (saves tokens on narrow steps like the content_type classifier that only need the README). Returns `{ content, chars, truncated }` — if `truncated` is true, the content exceeds the 500KB cap and the agent should narrow to specific sources.", {
+        entry_id: zod_1.z.string().describe("Entry UUID from the prepare_ingest response"),
+        source_url: zod_1.z
+            .string()
+            .optional()
+            .describe("Optional: fetch only the content for one source (must match a `sources[].url` from prepare_ingest). Omit to get all sources concatenated."),
+    }, async ({ entry_id, source_url }) => {
+        const result = await client.getIngestContent(entry_id, source_url);
+        const suffix = result.truncated
+            ? `\n\n---\n_Truncated: total ${result.chars.toLocaleString()} chars, returned first ${result.content.length.toLocaleString()}. Narrow via \`source_url\` to fetch specific sources._`
+            : "";
+        return {
+            content: [
+                {
+                    type: "text",
+                    text: `${result.content}${suffix}`,
+                },
+            ],
+        };
+    });
     // ── ingest_url — RETIRED ────────────────────────────────────────────
     // The legacy server-side ingestion tool has been removed. Use
     // `prepare_ingest` + `submit_ingested_entry` instead. The backend
     // POST /api/ingest returns 410 Gone for any lingering external callers.
     // ── skeleton_ingest ────────────────────────────────────────────────
     // Admin-only. Runs the lightweight descriptor-only pipeline for mass
-    // indexing public GitHub repos. Gated by withAdminAuth (reads
-    // ADMIN_USER_ID env var). Non-admin callers receive 404 so the admin
-    // surface is not enumerable — matches the pattern used by
-    // /api/admin/entries.
-    registerTool("skeleton_ingest", "ADMIN ONLY. Mass-index a public GitHub repo at skeleton tier — a single Sonnet call produces a task-agnostic descriptor + one embedding, no README/agents.md/manifest. Use this when the admin hands you a list of GitHub URLs to bulk-populate the discovery index. For a regular URL ingest with full generation, use `ingest_url` instead. Non-admin callers receive 404 (admin surface is non-enumerable). Poll with `get_setup` — descriptor usually lands in 10–30s.", {
-        url: zod_1.z.string().describe("Public GitHub repo URL (e.g. https://github.com/owner/repo)"),
-    }, async ({ url }) => {
-        const result = await client.skeletonIngest(url);
-        const entryUrl = client.entryUrl(result.slug);
-        const label = entryUrl
-            ? `[${result.title ?? result.slug ?? result.entry_id}](${entryUrl})`
-            : result.title ?? result.slug ?? result.entry_id;
-        const ref = result.slug ?? result.entry_id;
-        if (result.status === "already_exists") {
+    // indexing public GitHub repos. Backend is gated by withAdminAuth
+    // (reads ADMIN_USER_ID env var) and returns 404 to non-admins. We
+    // additionally avoid advertising the tool at all to non-admin MCP
+    // sessions — `isAdmin` is determined at startup via the mcp-status
+    // ping. Non-admin clients' `tools/list` simply will not contain it.
+    if (isAdmin) {
+        registerTool("skeleton_ingest", "ADMIN ONLY. Mass-index a public GitHub repo at skeleton tier — a single Sonnet call produces a task-agnostic descriptor + one embedding, no README/agents.md/manifest. Use this when the admin hands you a list of GitHub URLs to bulk-populate the discovery index. For a regular URL ingest with full generation, use `ingest_url` instead. Poll with `get_setup` — descriptor usually lands in 10–30s.", {
+            url: zod_1.z.string().describe("Public GitHub repo URL (e.g. https://github.com/owner/repo)"),
+        }, async ({ url }) => {
+            const result = await client.skeletonIngest(url);
+            const entryUrl = client.entryUrl(result.slug);
+            const label = entryUrl
+                ? `[${result.title ?? result.slug ?? result.entry_id}](${entryUrl})`
+                : result.title ?? result.slug ?? result.entry_id;
+            const ref = result.slug ?? result.entry_id;
+            if (result.status === "already_exists") {
+                return {
+                    content: [{
+                            type: "text",
+                            text: `Skeleton entry already exists: **${label}** (tier: ${result.tier ?? "unknown"})\nUse \`get_setup("${ref}")\` to view it.`,
+                        }],
+                };
+            }
             return {
                 content: [{
                         type: "text",
-                        text: `Skeleton entry already exists: **${label}** (tier: ${result.tier ?? "unknown"})\nUse \`get_setup("${ref}")\` to view it.`,
+                        text: `Skeleton ingestion started for ${url}\nEntry ID: \`${result.entry_id}\`\nStatus: ${result.status}\n\nPoll with \`get_setup("${ref}")\` — the descriptor usually lands in 10–30s.`,
                     }],
             };
-        }
-        return {
-            content: [{
-                    type: "text",
-                    text: `Skeleton ingestion started for ${url}\nEntry ID: \`${result.entry_id}\`\nStatus: ${result.status}\n\nPoll with \`get_setup("${ref}")\` — the descriptor usually lands in 10–30s.`,
-                }],
-        };
-    });
+        });
+    }
     // ── update_cluster ─────────────────────────────────────────────────
     registerTool("update_cluster", "Rename a cluster or REPLACE its entry membership with a new set of entry IDs. Use this for structural changes to an existing cluster. For adding a single entry without replacing the whole set, use `add_entry_to_cluster` — it's less destructive. Note: does not regenerate the brain; follow up with `update_cluster_brain` if the membership change implies new patterns.", {
         slug: zod_1.z.string().describe("Cluster slug from list_clusters"),

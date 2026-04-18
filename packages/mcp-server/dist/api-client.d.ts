@@ -30,6 +30,23 @@ export declare class DoplClient {
         max_results?: number;
     }): Promise<SearchResult>;
     getSetup(id: string): Promise<DoplEntry>;
+    /**
+     * Fetch extracted content for an in-progress (or completed) ingestion.
+     * The prepare_ingest response no longer inlines `gathered_content` — the
+     * agent calls this between prepare and submit to retrieve the body it
+     * substitutes into prompt `{ALL_RAW_CONTENT}` / `{POST_TEXT}` slots.
+     *
+     * Passing `sourceUrl` restricts the response to one extracted source
+     * (e.g. just the README for the content_type classifier), which keeps
+     * per-prompt token cost down for large repos.
+     */
+    getIngestContent(entryId: string, sourceUrl?: string): Promise<{
+        entry_id: string;
+        source_url: string | null;
+        content: string;
+        chars: number;
+        truncated: boolean;
+    }>;
     buildSolution(params: {
         brief: string;
         preferred_tools?: string[];
@@ -54,7 +71,9 @@ export declare class DoplClient {
     }>;
     getCluster(slug: string): Promise<ClusterDetail>;
     queryCluster(slug: string, query: string, maxResults?: number): Promise<ClusterQueryResult>;
-    pingMcpStatus(): Promise<void>;
+    pingMcpStatus(): Promise<{
+        is_admin: boolean;
+    }>;
     getClusterBrain(slug: string): Promise<{
         instructions: string;
         memories: {

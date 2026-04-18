@@ -310,20 +310,26 @@ export async function stepPlatformFetch(
     // Record the failure as a source row so it surfaces on the prepare
     // response's fetch_warnings. extractWebContent now throws (instead
     // of catching+returning null) so typed ExtractorError reasons
-    // propagate here — preserve them when persisting.
+    // propagate here — preserve them when persisting. Audit-write
+    // failure must not crash the step; we'd rather lose the audit
+    // breadcrumb than block the whole ingest for sibling content.
     const isTyped = error instanceof ExtractorError;
     console.error(`[pipeline] Web extractor failed for ${input.url}:`, error);
-    await storeSources(entryId, [
-      {
-        url: input.url,
-        sourceType: "other",
-        rawContent: "",
-        depth: 0,
-        status: "failed",
-        statusReason: isTyped ? error.statusReason : "extractor_error",
-        fetchStatusCode: isTyped && error.fetchStatusCode !== null ? error.fetchStatusCode : undefined,
-      },
-    ]);
+    try {
+      await storeSources(entryId, [
+        {
+          url: input.url,
+          sourceType: "other",
+          rawContent: "",
+          depth: 0,
+          status: "failed",
+          statusReason: isTyped ? error.statusReason : "extractor_error",
+          fetchStatusCode: isTyped && error.fetchStatusCode !== null ? error.fetchStatusCode : undefined,
+        },
+      ]);
+    } catch (persistErr) {
+      console.error(`[pipeline] Failed to persist web-failure audit row for ${input.url}:`, persistErr);
+    }
   }
   let updatedText: string | undefined;
   let updatedLinks: string[] | undefined;
@@ -560,32 +566,43 @@ async function followAndStore(
     const fetchStatusCode = isTyped ? error.fetchStatusCode : null;
     console.error(`[pipeline] Extractor failed for ${normalized}:`, error);
     ingestionProgress.emit(entryId, "detail", `Failed to extract: ${shortUrl}`);
-    await storeSources(entryId, [
-      {
-        url: normalized,
-        sourceType: "other",
-        rawContent: "",
-        depth,
-        status: "failed",
-        statusReason,
-        fetchStatusCode: fetchStatusCode ?? undefined,
-      },
-    ]);
+    // Audit-write failure should never crash the link-follow. If the DB
+    // is unreachable we've already lost the extraction attempt; we
+    // shouldn't compound it by breaking the batch for sibling links.
+    try {
+      await storeSources(entryId, [
+        {
+          url: normalized,
+          sourceType: "other",
+          rawContent: "",
+          depth,
+          status: "failed",
+          statusReason,
+          fetchStatusCode: fetchStatusCode ?? undefined,
+        },
+      ]);
+    } catch (persistErr) {
+      console.error(`[pipeline] Failed to persist failed-source audit row for ${normalized}:`, persistErr);
+    }
     return;
   }
 
   if (!result) {
     ingestionProgress.emit(entryId, "detail", `No content extracted from: ${shortUrl}`);
-    await storeSources(entryId, [
-      {
-        url: normalized,
-        sourceType: "other",
-        rawContent: "",
-        depth,
-        status: "failed",
-        statusReason: "empty_content",
-      },
-    ]);
+    try {
+      await storeSources(entryId, [
+        {
+          url: normalized,
+          sourceType: "other",
+          rawContent: "",
+          depth,
+          status: "failed",
+          statusReason: "empty_content",
+        },
+      ]);
+    } catch (persistErr) {
+      console.error(`[pipeline] Failed to persist empty-content audit row for ${normalized}:`, persistErr);
+    }
     return;
   }
 

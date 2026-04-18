@@ -27,13 +27,15 @@ const supabase = supabaseAdmin();
  *   - 404 { error } — entry doesn't exist or caller has no access
  *   - 404 { error } — if ?source_url is passed but no matching source row
  *
- * A 500KB content cap applies. If the concatenated content exceeds the
- * cap we return a slice with `truncated: true`. For repos that large
- * the agent should narrow to specific sources via `?source_url` rather
- * than pulling everything at once.
+ * A 90KB content cap applies. The MCP tool-result surface rejects
+ * responses above roughly 100KB (the heygen walkthrough hit this at
+ * 295KB), so we cap well under that and leave room for the envelope.
+ * If the concatenated content exceeds the cap we return a slice with
+ * `truncated: true` — the agent should then narrow to specific sources
+ * via `?source_url` rather than pulling everything at once.
  */
 
-const MAX_CONTENT_CHARS = 500_000;
+const MAX_CONTENT_CHARS = 90_000;
 
 interface SourceRow {
   url: string | null;
@@ -80,18 +82,24 @@ async function handleGet(
   const sourceUrlParam = url.searchParams.get("source_url");
 
   if (sourceUrlParam) {
-    // Single-source fetch. Normalize the requested URL so callers can
-    // pass the exact URL they saw in `sources[].url` (which may be
-    // pre-normalization) OR the canonical form — either matches.
+    // Single-source fetch. Normalize the requested URL to match what
+    // `storeSources` wrote into `normalized_url` at ingestion time.
+    //
+    // Only query by normalized_url (not OR-ing with raw url) — PostgREST's
+    // `.or()` uses `.` and `,` as delimiters, both of which appear in
+    // URLs, so an OR expression containing a URL is unsafe. For fresh
+    // ingests this is lossless: the extractors now store normalized URLs
+    // in sources.url too, so callers passing the URL they saw in
+    // `sources[].url` from prepare always land on a match. Legacy rows
+    // with un-stripped tracking params will miss — acceptable since
+    // those entries pre-date the refactor.
     const normalizedTarget = normalizeUrl(sourceUrlParam);
     const { data: row } = await supabase
       .from("sources")
       .select("url, normalized_url, source_type, depth, extracted_content, raw_content")
       .eq("entry_id", entryId)
       .eq("status", "ok")
-      .or(
-        `normalized_url.eq.${normalizedTarget},url.eq.${sourceUrlParam}`
-      )
+      .eq("normalized_url", normalizedTarget)
       .order("depth", { ascending: true })
       .limit(1)
       .maybeSingle();
@@ -127,7 +135,6 @@ async function handleGet(
     .order("created_at", { ascending: true });
 
   const parts: string[] = [];
-  let totalChars = 0;
   for (const row of (rows ?? []) as SourceRow[]) {
     const body = row.extracted_content ?? row.raw_content ?? "";
     if (body.length === 0) continue;
@@ -135,7 +142,6 @@ async function handleGet(
       ? `--- [${row.source_type}] ${row.url} (depth: ${row.depth}) ---`
       : `--- [${row.source_type}] (depth: ${row.depth}) ---`;
     parts.push(`${header}\n${body}`);
-    totalChars += body.length + header.length + 1;
   }
 
   const combined = parts.join("\n\n");
