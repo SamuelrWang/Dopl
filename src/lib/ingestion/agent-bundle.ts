@@ -168,9 +168,57 @@ export function buildAgentIngestBundle(input: {
  * Rendered verbatim into the prepare response so every client sees the same
  * playbook regardless of its version of the MCP server.
  */
-export const AGENT_INGEST_INSTRUCTIONS = `To complete this ingestion, run these steps in YOUR OWN Claude context, then call \`submit_ingested_entry\` with the results.
+export const AGENT_INGEST_INSTRUCTIONS = `To complete this ingestion, run steps 1-8 below, then call \`submit_ingested_entry\` with the results.
 
-## Fetching content
+## HOW to run this — strongly prefer a subagent
+
+A full ingest pulls 100-300KB of repo content, runs 6 LLM prompts, and
+produces 20-30KB of artifacts. Running that inline bloats your main
+conversation with tokens the user didn't ask to pay attention to.
+Instead: **delegate the whole thing to a subagent** whenever your client
+supports one.
+
+### Preferred path — spawn a subagent
+
+If you have a subagent / task-delegation tool (Claude Code's \`Task\`,
+Cursor background agents, similar primitives in other clients), spawn
+one now with these properties:
+
+- **Model: \`sonnet\`** — pin this explicitly. Sonnet produces ~90-95%
+  quality-equivalent output to Opus on ingestion at a fraction of the
+  cost and latency. Don't let the subagent default to whatever model
+  your main conversation is running — ingestion is a bulk background
+  task, not an interactive UX surface.
+- **MCP tool access**: subagent needs \`get_ingest_content\` and
+  \`submit_ingested_entry\`. In Claude Code these inherit from the
+  parent; in other clients verify before spawning.
+- **Task description**: paste the prepare_ingest response fields the
+  subagent needs (\`entry_id\`, \`source_url\`, \`sources\`,
+  \`fetch_warnings\`, the full \`prompts\` object, and any \`images\`)
+  plus steps 1-8 below verbatim. The subagent follows the steps, calls
+  \`submit_ingested_entry\`, and returns a one-paragraph summary.
+
+After the subagent returns, relay its summary to the user. You don't
+need to touch the gathered content or artifacts yourself — the
+subagent's result is the whole ingest.
+
+### Fallback — run inline only if no subagent is available
+
+If your client doesn't expose a subagent primitive, run steps 1-8
+yourself. Be aware:
+- 100-300KB of content + 6 prompt responses will persist in your
+  conversation history. On a small entry (a tweet, short blog) this is
+  fine. On a large GitHub monorepo it can eat 20-40% of your context
+  budget.
+- Flag this trade-off to the user before starting: \"This ingest will
+  consume substantial context because my client can't delegate it.
+  Proceed?\"
+
+---
+
+## The 8 steps (for whoever's running them — subagent or you)
+
+### Fetching content
 
 The prepare response gives you a \`sources\` inventory but NOT the content
 itself. Before running any prompt below, call
@@ -184,12 +232,20 @@ needs the README), pass an optional \`source_url\` to
 \`get_ingest_content\` matching one of the \`sources[].url\` entries —
 you'll get just that source back.
 
+If a call returns \`truncated: true\`, the entry's total content
+exceeds the endpoint's 90KB cap — switch to per-source fetches for
+the remaining prompts to stay under the MCP response limit.
+
+### Placeholder substitution rule
+
 Every prompt is a template with {CURLY_BRACE} placeholders. Before running
 a prompt, do plain string-replace on every placeholder it contains. The
 content placeholders ({ALL_RAW_CONTENT} and {POST_TEXT}) both get filled
 with content from \`get_ingest_content\`. Other placeholders ({CONTENT_TYPE},
 {MANIFEST_JSON}, {GENERATED_README}, {SOURCE_URL}, etc.) are filled with
 values you produce as you walk these steps.
+
+### fetch_warnings
 
 \`fetch_warnings[]\` lists URLs the extractor attempted but couldn't
 retrieve (S3 AccessDenied, 404 pages, network timeouts). Use this to
