@@ -11,6 +11,7 @@ import { hasActiveAccess, accessDeniedBody } from "@/lib/billing/access";
 import { assertPublicHttpUrl, UnsafeUrlError } from "@/lib/ingestion/url-safety";
 import { logSystemEvent } from "@/lib/analytics/system-events";
 import { detectPlatform, extractForAgent, deleteFailedEntry, logStep } from "@/lib/ingestion/pipeline";
+import { normalizeUrl } from "@/lib/ingestion/url";
 import { fallbackSlugFromId } from "@/lib/entries/slug";
 import {
   buildAgentIngestBundle,
@@ -373,8 +374,60 @@ async function handlePost(
       throw new Error(reason);
     }
 
+    // ── Build sources index + fetch_warnings from the DB ──
+    // The extractors just wrote status='ok' / status='failed' rows to
+    // `sources`. Query both back so the agent gets an inventory of
+    // what's available (drives get_ingest_content calls) AND a list
+    // of what the extractor couldn't retrieve (surfaces to the user).
+    const { data: okSourceRows, error: okSourcesError } = await supabase
+      .from("sources")
+      .select("url, source_type, depth, extracted_content, raw_content")
+      .eq("entry_id", entryId)
+      .eq("status", "ok")
+      .order("depth", { ascending: true });
+    if (okSourcesError) {
+      throw new Error(`Failed to load sources index: ${okSourcesError.message}`);
+    }
+    const sourceIndex = (okSourceRows ?? []).map((row) => {
+      const r = row as {
+        url: string | null;
+        source_type: string;
+        depth: number;
+        extracted_content: string | null;
+        raw_content: string | null;
+      };
+      return {
+        url: r.url,
+        source_type: r.source_type,
+        depth: r.depth,
+        chars: (r.extracted_content ?? r.raw_content ?? "").length,
+      };
+    });
+
+    const { data: failedSourceRows } = await supabase
+      .from("sources")
+      .select("url, status_reason, fetch_status_code")
+      .eq("entry_id", entryId)
+      .eq("status", "failed")
+      .order("created_at", { ascending: true });
+    const fetchWarnings = (failedSourceRows ?? []).map((row) => {
+      const r = row as {
+        url: string | null;
+        status_reason: string | null;
+        fetch_status_code: number | null;
+      };
+      return {
+        url: r.url,
+        reason: r.status_reason ?? "extractor_error",
+        fetch_status_code: r.fetch_status_code,
+      };
+    });
+
     // ── Build prompt bundle for the agent ──
-    const bundle = buildAgentIngestBundle({ gatheredContent });
+    const bundle = buildAgentIngestBundle({
+      sources: sourceIndex,
+      fetchWarnings,
+    });
 
     // Echo images back so the agent can vision-analyze them. We assume the
     // client sent base64 in content.images (same contract as /api/ingest).
@@ -393,8 +446,8 @@ async function handlePost(
       source_url: normalizedUrl,
       source_platform: sourcePlatform,
       thumbnail_url: thumbnailUrl,
-      gathered_content: bundle.gathered_content,
-      gathered_content_chars: bundle.gathered_content_chars,
+      sources: bundle.sources,
+      fetch_warnings: bundle.fetch_warnings,
       images,
       prompts: bundle.prompts,
       instructions: AGENT_INGEST_INSTRUCTIONS,
@@ -463,30 +516,3 @@ async function handlePost(
 }
 
 export const POST = withUserAuth(handlePost);
-
-/**
- * Normalize a URL for dedup comparison.
- * Strips trailing slashes, strips utm_* / ref / source / fbclid / gclid
- * params, lowercases the host. Matches the helper in /api/ingest/route.ts
- * verbatim — kept duplicated rather than exported across routes to keep
- * the legacy ingest path's surface unchanged.
- */
-function normalizeUrl(url: string): string {
-  try {
-    const u = new URL(url);
-    u.hostname = u.hostname.toLowerCase();
-    const trackingPrefixes = ["utm_", "ref", "source", "fbclid", "gclid"];
-    for (const key of [...u.searchParams.keys()]) {
-      if (trackingPrefixes.some((p) => key.startsWith(p))) {
-        u.searchParams.delete(key);
-      }
-    }
-    let result = u.toString();
-    if (result.endsWith("/") && u.pathname !== "/") {
-      result = result.slice(0, -1);
-    }
-    return result;
-  } catch {
-    return url;
-  }
-}

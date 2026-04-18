@@ -1,31 +1,63 @@
 import { ExtractedSource } from "../types";
+import { normalizeUrl } from "../url";
 
 /**
  * Extract structured content from post text without an AI call.
  * Pulls out URLs and code blocks via regex. Semantic analysis
  * (tool detection, architecture) happens downstream in generateManifest.
+ *
+ * Returns an empty array when the input is effectively empty so we
+ * don't create a useless `post_text` row alongside the platform source
+ * for MCP ingests where `content.text` is empty. Direct URL ingests
+ * (agent paste) used to produce a spurious depth-0 post_text row that
+ * contributed nothing but showed up in the downstream gathered_content.
  */
+const MIN_MEANINGFUL_TEXT_CHARS = 40;
+
 export async function extractText(text: string): Promise<ExtractedSource[]> {
-  const codeBlocks = extractCodeBlocks(text);
+  const trimmed = text.trim();
+  if (trimmed.length < MIN_MEANINGFUL_TEXT_CHARS) {
+    return [];
+  }
+
+  const codeBlocks = extractCodeBlocks(trimmed);
   const extracted = codeBlocks.length > 0
-    ? `${text}\n\n--- Extracted Code Blocks ---\n\n${codeBlocks.join("\n\n")}`
-    : text;
+    ? `${trimmed}\n\n--- Extracted Code Blocks ---\n\n${codeBlocks.join("\n\n")}`
+    : trimmed;
 
   return [
     {
-      sourceType: "tweet_text",
-      rawContent: text,
+      sourceType: "post_text",
+      rawContent: trimmed,
       extractedContent: extracted,
       depth: 0,
-      childLinks: extractUrls(text),
+      childLinks: extractUrls(trimmed),
     },
   ];
 }
 
+/**
+ * Pull URLs out of body text.
+ *
+ * Previously used a permissive regex that grabbed everything up to
+ * whitespace. That produced gems like `hyperframes"><img` when the
+ * body was HTML-flavored markdown — the URL bled into attribute
+ * markers. Excluding quotes and angle brackets from the URL body
+ * stops the bleed without dropping legitimate URL characters.
+ *
+ * Also normalizes each URL via the shared normalizer so downstream
+ * dedup (visitedUrls Set, storeSources) treats a/?utm=... and a the
+ * same on first contact.
+ */
 function extractUrls(text: string): string[] {
-  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const urlRegex = /(https?:\/\/[^\s"'<>`()]+)/g;
   const matches = text.match(urlRegex) || [];
-  return matches.map((url) => url.replace(/[.,;:!?]$/, ""));
+  const cleaned = matches
+    // Strip trailing sentence punctuation that commonly abuts a URL
+    // in prose but isn't part of it.
+    .map((url) => url.replace(/[.,;:!?)]+$/, ""))
+    .map((url) => normalizeUrl(url));
+  return [...new Set(cleaned)];
 }
 
 /**

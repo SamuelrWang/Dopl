@@ -874,6 +874,47 @@ export function createServer(
     }
   );
 
+  // ── get_ingest_content ─────────────────────────────────────────────
+  // Pull extracted content for an in-progress (or completed) ingestion.
+  // Called between `prepare_ingest` and `submit_ingested_entry` to
+  // retrieve the body the agent substitutes into prompt
+  // `{ALL_RAW_CONTENT}` / `{POST_TEXT}` placeholders.
+  //
+  // Why this exists: the prepare response used to inline a single fat
+  // `gathered_content` string plus 10 copies of it across prompt
+  // templates. That blew the MCP tool-response size cap for anything
+  // larger than a trivial repo. Now prepare returns a `sources[]`
+  // inventory + slim templates, and the agent calls this tool per-prompt
+  // to retrieve content (optionally narrowed to a single source to save
+  // tokens on steps that only need the README).
+  registerTool(
+    "get_ingest_content",
+    "Retrieve the extracted content for an in-progress ingestion (between prepare_ingest and submit_ingested_entry). Returns the aggregated text from all successful sources, or — when `source_url` is passed — just that one source. Use this before running each prompt from the prepare_ingest response: substitute the returned `content` into the `{ALL_RAW_CONTENT}` / `{POST_TEXT}` placeholders. Pass `source_url` matching a `sources[].url` entry from the prepare response to fetch only that source (saves tokens on narrow steps like the content_type classifier that only need the README). Returns `{ content, chars, truncated }` — if `truncated` is true, the content exceeds the 500KB cap and the agent should narrow to specific sources.",
+    {
+      entry_id: z.string().describe("Entry UUID from the prepare_ingest response"),
+      source_url: z
+        .string()
+        .optional()
+        .describe(
+          "Optional: fetch only the content for one source (must match a `sources[].url` from prepare_ingest). Omit to get all sources concatenated."
+        ),
+    },
+    async ({ entry_id, source_url }) => {
+      const result = await client.getIngestContent(entry_id, source_url);
+      const suffix = result.truncated
+        ? `\n\n---\n_Truncated: total ${result.chars.toLocaleString()} chars, returned first ${result.content.length.toLocaleString()}. Narrow via \`source_url\` to fetch specific sources._`
+        : "";
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `${result.content}${suffix}`,
+          },
+        ],
+      };
+    }
+  );
+
   // ── ingest_url — RETIRED ────────────────────────────────────────────
   // The legacy server-side ingestion tool has been removed. Use
   // `prepare_ingest` + `submit_ingested_entry` instead. The backend

@@ -27,18 +27,52 @@ import { CONTENT_CLASSIFIER_PROMPT } from "@/lib/prompts/content-classifier";
 import { TAGS_PROMPT } from "@/lib/prompts/tags";
 import { IMAGE_ANALYSIS_PROMPT } from "@/lib/prompts/image-vision";
 
+/**
+ * Inventory entry for one extracted source. The prepare response ships
+ * these instead of the content itself — the agent calls
+ * `get_ingest_content(entry_id [, source_url])` to pull the body when
+ * it's about to run a prompt. Cuts response size from O(content_size)
+ * to O(num_sources).
+ */
+export interface SourceIndexEntry {
+  url: string | null;
+  source_type: string;
+  depth: number;
+  chars: number;
+}
+
+/**
+ * Record of an extraction attempt that didn't produce usable content.
+ * Surfaces failures up to the agent so it knows what's missing from the
+ * corpus rather than assuming the server fetched everything successfully.
+ * Backed by `sources` rows with `status='failed'`.
+ */
+export interface FetchWarning {
+  url: string | null;
+  reason: string;
+  fetch_status_code: number | null;
+}
+
 export interface AgentIngestBundle {
-  /** Raw content fetched by the server (primary URL + followed links). */
-  gathered_content: string;
-  /** Character count — sometimes useful for the agent to budget its context. */
-  gathered_content_chars: number;
   /**
-   * Prompt templates with {PLACEHOLDERS}. The agent substitutes
-   * `gathered_content` (and other fields it generates as it goes) into the
-   * placeholders before running each prompt. Keeping `gathered_content` out
-   * of the templates is what keeps the prepare response slim — a 250KB
-   * repo would otherwise inline into every template, ballooning the
-   * response by 10x and eating the agent's context for no reason.
+   * Inventory of successfully-extracted sources for this entry. Each
+   * entry's content is retrievable via `get_ingest_content` — the
+   * response deliberately doesn't inline content here so the payload
+   * stays small regardless of how much the extractor pulled.
+   */
+  sources: SourceIndexEntry[];
+  /**
+   * Extractor attempts that didn't yield usable content. The agent can
+   * surface these to the user ("I couldn't fetch X") or ignore them.
+   */
+  fetch_warnings: FetchWarning[];
+  /**
+   * Prompt templates with {PLACEHOLDERS}. Before running each prompt,
+   * the agent calls `get_ingest_content(entry_id)` to retrieve the
+   * extracted content, then substitutes it into `{ALL_RAW_CONTENT}` and
+   * `{POST_TEXT}` along with the step-specific placeholders (content_type,
+   * manifest_json, etc.). Keeping content out of the response is what
+   * makes this bundle tractable for large repos.
    */
   prompts: {
     /** Run first. Substitute {POST_TEXT} = gathered_content. JSON response classifies content. */
@@ -97,18 +131,17 @@ export interface AgentIngestBundle {
  * already run the extractors.
  */
 export function buildAgentIngestBundle(input: {
-  gatheredContent: string;
+  sources: SourceIndexEntry[];
+  fetchWarnings: FetchWarning[];
 }): AgentIngestBundle {
-  const gathered = input.gatheredContent;
-
-  // Templates ship as-is. The agent substitutes {ALL_RAW_CONTENT} (and
-  // {POST_TEXT} for the content_type classifier) from the response's
-  // top-level `gathered_content` field at the moment it runs each prompt.
-  // This keeps the prepare response O(content_size) instead of
-  // O(content_size × num_prompts) — for a 250KB repo, ~250KB vs ~2.8MB.
+  // Templates ship as-is. The agent calls `get_ingest_content(entry_id)`
+  // to retrieve content before running each prompt and substitutes
+  // {ALL_RAW_CONTENT} / {POST_TEXT} itself. This keeps the prepare
+  // response O(num_sources) instead of O(content_size × num_prompts)
+  // (which the legacy bundle produced — 2.8MB for a 250KB repo).
   return {
-    gathered_content: gathered,
-    gathered_content_chars: gathered.length,
+    sources: input.sources,
+    fetch_warnings: input.fetchWarnings,
     prompts: {
       content_type: CONTENT_TYPE_CLASSIFIER_PROMPT,
       classify_content: CONTENT_CLASSIFIER_PROMPT,
@@ -137,15 +170,34 @@ export function buildAgentIngestBundle(input: {
  */
 export const AGENT_INGEST_INSTRUCTIONS = `To complete this ingestion, run these steps in YOUR OWN Claude context, then call \`submit_ingested_entry\` with the results.
 
+## Fetching content
+
+The prepare response gives you a \`sources\` inventory but NOT the content
+itself. Before running any prompt below, call
+\`get_ingest_content(entry_id)\` to retrieve the aggregated extracted
+content across all successful sources. This returns \`{ content, chars,
+truncated }\`. Use \`content\` to fill the \`{ALL_RAW_CONTENT}\` and
+\`{POST_TEXT}\` placeholders below.
+
+To save tokens on a narrow step (e.g. the content_type classifier only
+needs the README), pass an optional \`source_url\` to
+\`get_ingest_content\` matching one of the \`sources[].url\` entries —
+you'll get just that source back.
+
 Every prompt is a template with {CURLY_BRACE} placeholders. Before running
 a prompt, do plain string-replace on every placeholder it contains. The
 content placeholders ({ALL_RAW_CONTENT} and {POST_TEXT}) both get filled
-with the response's top-level \`gathered_content\` field. Other placeholders
-({CONTENT_TYPE}, {MANIFEST_JSON}, {GENERATED_README}, {SOURCE_URL}, etc.)
-are filled with values you produce as you walk these steps.
+with content from \`get_ingest_content\`. Other placeholders ({CONTENT_TYPE},
+{MANIFEST_JSON}, {GENERATED_README}, {SOURCE_URL}, etc.) are filled with
+values you produce as you walk these steps.
+
+\`fetch_warnings[]\` lists URLs the extractor attempted but couldn't
+retrieve (S3 AccessDenied, 404 pages, network timeouts). Use this to
+flag missing content to the user rather than inventing details about
+assets that didn't make it into the corpus.
 
 1. CLASSIFY CONTENT TYPE
-   Take \`prompts.content_type\`. Replace {POST_TEXT} with \`gathered_content\`.
+   Take \`prompts.content_type\`. Replace {POST_TEXT} with the content from \`get_ingest_content(entry_id)\`.
    Run the prompt. Parse the JSON. You will get:
      { content_type: "setup"|"tutorial"|"knowledge"|"article"|"reference"|"resource",
        source_type: string,
@@ -154,13 +206,13 @@ are filled with values you produce as you walk these steps.
    Keep content_type and source_type — you will use them below.
 
 2. CLASSIFY CONTENT SECTIONS (only for setup OR tutorial, otherwise skip)
-   Take \`prompts.classify_content\`. Replace {ALL_RAW_CONTENT} with \`gathered_content\`.
+   Take \`prompts.classify_content\`. Replace {ALL_RAW_CONTENT} with the content from \`get_ingest_content(entry_id)\`.
    Run the prompt. Parse the JSON. Keep the full object — you will include
    it in the submit payload as \`content_classification\`.
 
 3. GENERATE MANIFEST
    Take \`prompts.manifest_template\`. Replace:
-     {ALL_RAW_CONTENT} → \`gathered_content\`
+     {ALL_RAW_CONTENT} → the content from \`get_ingest_content(entry_id)\`
      {CONTENT_TYPE}    → content_type from step 1
      {SOURCE_TYPE}     → source_type from step 1
    Run. Parse the JSON. Required fields in the output: title,
@@ -173,7 +225,7 @@ are filled with values you produce as you walk these steps.
      article → \`article\`
      reference OR resource → \`reference\`
    Replace:
-     {ALL_RAW_CONTENT} → \`gathered_content\`
+     {ALL_RAW_CONTENT} → the content from \`get_ingest_content(entry_id)\`
      {MANIFEST_JSON}   → JSON.stringify(manifest, null, 2)
    Run. Keep the output markdown as \`readme\`.
 
@@ -183,7 +235,7 @@ are filled with values you produce as you walk these steps.
      knowledge OR article → \`knowledge\`
      reference → \`reference\`
    Replace:
-     {ALL_RAW_CONTENT} → \`gathered_content\`
+     {ALL_RAW_CONTENT} → the content from \`get_ingest_content(entry_id)\`
      {MANIFEST_JSON}   → JSON.stringify(manifest, null, 2)
      {GENERATED_README} → the readme from step 4
      {SOURCE_URL}      → source_url from the prepare response

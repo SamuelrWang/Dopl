@@ -120,6 +120,32 @@ export class DoplClient {
     return this.request<DoplEntry>(`/api/entries/${id}`, { toolName: "get_setup" });
   }
 
+  /**
+   * Fetch extracted content for an in-progress (or completed) ingestion.
+   * The prepare_ingest response no longer inlines `gathered_content` — the
+   * agent calls this between prepare and submit to retrieve the body it
+   * substitutes into prompt `{ALL_RAW_CONTENT}` / `{POST_TEXT}` slots.
+   *
+   * Passing `sourceUrl` restricts the response to one extracted source
+   * (e.g. just the README for the content_type classifier), which keeps
+   * per-prompt token cost down for large repos.
+   */
+  async getIngestContent(
+    entryId: string,
+    sourceUrl?: string
+  ): Promise<{
+    entry_id: string;
+    source_url: string | null;
+    content: string;
+    chars: number;
+    truncated: boolean;
+  }> {
+    const qs = sourceUrl ? `?source_url=${encodeURIComponent(sourceUrl)}` : "";
+    return this.request(`/api/ingest/content/${encodeURIComponent(entryId)}${qs}`, {
+      toolName: "get_ingest_content",
+    });
+  }
+
   async buildSolution(params: {
     brief: string;
     preferred_tools?: string[];

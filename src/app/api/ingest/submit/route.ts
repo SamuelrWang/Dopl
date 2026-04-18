@@ -186,6 +186,7 @@ async function handlePost(
         .from("sources")
         .select("content_metadata")
         .eq("entry_id", entry_id)
+        .eq("status", "ok")
         .not("content_metadata", "is", null)
         .limit(20);
       for (const s of sources || []) {

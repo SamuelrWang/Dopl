@@ -23,9 +23,15 @@ Generate a manifest.json. Include ALL fields that are relevant to this content. 
     "primary": "[main category — can be any descriptive category like: cold_outbound, lead_gen, content_creation, data_pipeline, monitoring, automation, agent_system, dev_tooling, customer_support, research, education, news, analysis, opinion, comparison, tutorial, reference, other]",
     "secondary": ["[additional categories]"]
   },
-  "complexity": "[simple|moderate|complex|advanced]",
-  "tags": ["[searchable tags — lowercase, hyphen-separated]"]
+  "complexity": "[simple|moderate|complex|advanced]"
 }
+
+Do NOT include a top-level "tags" field. The ingestion flow derives tags
+in a later step from the structured fields you produce below
+(tools[].name → tag_type: tool, frameworks[] → framework, languages[] →
+language, patterns[] → pattern, use_case.primary/secondary → use_case,
+platform → platform, integrations[] → integration). Tags in the manifest
+would either duplicate those or drift from them — both harmful.
 
 ## Include these fields when tools/tech are involved (setup, tutorial, reference):
 

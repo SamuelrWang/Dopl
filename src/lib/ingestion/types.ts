@@ -13,9 +13,22 @@ export interface IngestInput {
   userId?: string;
 }
 
+export type SourceStatus = "ok" | "failed" | "skipped";
+
+export type SourceStatusReason =
+  | "http_4xx"
+  | "http_5xx"
+  | "timeout"
+  | "access_denied_body"
+  | "empty_content"
+  | "unsupported_content_type"
+  | "duplicate_url"
+  | "extractor_error";
+
 export interface ExtractedSource {
   url?: string;
   sourceType:
+    | "post_text"
     | "tweet_text"
     | "tweet_thread"
     | "image"
@@ -33,6 +46,15 @@ export interface ExtractedSource {
   parentSourceId?: string;
   depth: number;
   childLinks?: string[];
+  /**
+   * When omitted, `storeSources` treats the row as 'ok'. Explicit 'failed'
+   * / 'skipped' rows are audit breadcrumbs for URLs the extractor
+   * attempted but couldn't retrieve — they surface as `fetch_warnings`
+   * on the prepare response so the agent knows what's missing.
+   */
+  status?: SourceStatus;
+  statusReason?: SourceStatusReason;
+  fetchStatusCode?: number;
 }
 
 export interface LinkFollowResult {

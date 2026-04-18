@@ -3,8 +3,9 @@ const supabase = supabaseAdmin();
 import { IngestInput, ExtractedSource, ContentType } from "./types";
 import { ModelTier } from "@/lib/ai";
 import { extractText } from "./extractors/text";
-import { extractWebContent, linkResultToSource, shouldSkipLink } from "./extractors/web";
+import { extractWebContent, linkResultToSource, shouldSkipLink, ExtractorError } from "./extractors/web";
 import { extractGitHubContent } from "./extractors/github";
+import { normalizeUrl } from "./url";
 
 import { extractTweetContent, isTweetUrl } from "./extractors/twitter";
 import {
@@ -302,7 +303,28 @@ export async function stepPlatformFetch(
   await logStep(entryId, "web_fetch", "started");
   ingestionProgress.emit(entryId, "step_start", "Fetching web content...", { step: "web_fetch" });
 
-  const webResult = await extractWebContent(input.url, 0);
+  let webResult: Awaited<ReturnType<typeof extractWebContent>> = null;
+  try {
+    webResult = await extractWebContent(input.url, 0);
+  } catch (error) {
+    // Record the failure as a source row so it surfaces on the prepare
+    // response's fetch_warnings. extractWebContent now throws (instead
+    // of catching+returning null) so typed ExtractorError reasons
+    // propagate here — preserve them when persisting.
+    const isTyped = error instanceof ExtractorError;
+    console.error(`[pipeline] Web extractor failed for ${input.url}:`, error);
+    await storeSources(entryId, [
+      {
+        url: input.url,
+        sourceType: "other",
+        rawContent: "",
+        depth: 0,
+        status: "failed",
+        statusReason: isTyped ? error.statusReason : "extractor_error",
+        fetchStatusCode: isTyped && error.fetchStatusCode !== null ? error.fetchStatusCode : undefined,
+      },
+    ]);
+  }
   let updatedText: string | undefined;
   let updatedLinks: string[] | undefined;
 
@@ -369,7 +391,11 @@ export async function stepLinkFollowing(
     ...(input.content.links || []),
     ...textSources.flatMap((s) => s.childLinks || []),
   ];
-  const uniqueLinks = [...new Set(allLinks)];
+  // Dedup by normalized form. Without this, the same URL with different
+  // tracking params or case-variants would consume multiple slots of
+  // the maxLinks budget. `followAndStore` re-normalizes on arrival so
+  // the invariant holds end-to-end.
+  const uniqueLinks = [...new Set(allLinks.map((l) => normalizeUrl(l)))];
 
   if (uniqueLinks.length === 0) return { thumbnailUrl };
 
@@ -473,9 +499,15 @@ async function followAndStore(
   maxDepth: number = MAX_LINK_DEPTH,
   maxLinks: number = 30
 ): Promise<void> {
+  // Normalize on the way in so `visitedUrls` keys on canonical form.
+  // Without this, `https://foo.com/x` and `https://foo.com/x?utm=...`
+  // are different to the Set — exactly the bug that let the same repo
+  // get stored at both depth 0 and depth 1 during the heygen walkthrough.
+  const normalized = normalizeUrl(url);
+
   if (
     depth > maxDepth ||
-    visitedUrls.has(url) ||
+    visitedUrls.has(normalized) ||
     linksFollowed.count >= maxLinks
   ) {
     return;
@@ -484,46 +516,76 @@ async function followAndStore(
   // Skip known-low-value paths (CI workflows, tests, build artifacts,
   // lockfiles) without consuming a maxLinks slot — these are noise that
   // blow the gathered_content budget without improving synthesis.
-  if (shouldSkipLink(url)) {
-    visitedUrls.add(url);
-    ingestionProgress.emit(entryId, "detail", `Skipped low-value path: ${url.length > 80 ? url.slice(0, 77) + "..." : url}`);
+  if (shouldSkipLink(normalized)) {
+    visitedUrls.add(normalized);
+    ingestionProgress.emit(entryId, "detail", `Skipped low-value path: ${normalized.length > 80 ? normalized.slice(0, 77) + "..." : normalized}`);
     return;
   }
 
-  visitedUrls.add(url);
+  visitedUrls.add(normalized);
   linksFollowed.count++;
 
   // Describe what we're doing
-  const shortUrl = url.length > 80 ? url.slice(0, 77) + "..." : url;
+  const shortUrl = normalized.length > 80 ? normalized.slice(0, 77) + "..." : normalized;
   let description = `Following: ${shortUrl}`;
-  if (isTweetUrl(url)) description = `Following tweet: ${shortUrl}`;
-  else if (isInstagramPostUrl(url)) description = `Following Instagram post: ${shortUrl}`;
-  else if (isRedditPostUrl(url)) description = `Following Reddit post: ${shortUrl}`;
-  else if (url.includes("github.com")) description = `Following GitHub: ${shortUrl}`;
+  if (isTweetUrl(normalized)) description = `Following tweet: ${shortUrl}`;
+  else if (isInstagramPostUrl(normalized)) description = `Following Instagram post: ${shortUrl}`;
+  else if (isRedditPostUrl(normalized)) description = `Following Reddit post: ${shortUrl}`;
+  else if (normalized.includes("github.com")) description = `Following GitHub: ${shortUrl}`;
 
   ingestionProgress.emit(entryId, "detail", description);
 
   let result;
   try {
-    if (isTweetUrl(url)) {
-      result = await extractTweetContent(url, depth);
-    } else if (isInstagramPostUrl(url)) {
-      result = await extractInstagramContent(url, depth);
-    } else if (isRedditPostUrl(url)) {
-      result = await extractRedditContent(url, depth);
-    } else if (url.includes("github.com")) {
-      result = await extractGitHubContent(url, depth);
+    if (isTweetUrl(normalized)) {
+      result = await extractTweetContent(normalized, depth);
+    } else if (isInstagramPostUrl(normalized)) {
+      result = await extractInstagramContent(normalized, depth);
+    } else if (isRedditPostUrl(normalized)) {
+      result = await extractRedditContent(normalized, depth);
+    } else if (normalized.includes("github.com")) {
+      result = await extractGitHubContent(normalized, depth);
     } else {
-      result = await extractWebContent(url, depth);
+      result = await extractWebContent(normalized, depth);
     }
   } catch (error) {
-    console.error(`[pipeline] Extractor failed for ${url}:`, error);
+    // Record the failure as an audit breadcrumb so it appears in
+    // fetch_warnings on the prepare response. The agent then knows the
+    // URL was attempted but content wasn't retrieved, rather than
+    // silently missing from the corpus. Typed ExtractorError carries a
+    // precise reason (access_denied_body, http_4xx, empty_content) that
+    // we persist verbatim; anything else falls back to extractor_error.
+    const isTyped = error instanceof ExtractorError;
+    const statusReason = isTyped ? error.statusReason : "extractor_error";
+    const fetchStatusCode = isTyped ? error.fetchStatusCode : null;
+    console.error(`[pipeline] Extractor failed for ${normalized}:`, error);
     ingestionProgress.emit(entryId, "detail", `Failed to extract: ${shortUrl}`);
+    await storeSources(entryId, [
+      {
+        url: normalized,
+        sourceType: "other",
+        rawContent: "",
+        depth,
+        status: "failed",
+        statusReason,
+        fetchStatusCode: fetchStatusCode ?? undefined,
+      },
+    ]);
     return;
   }
 
   if (!result) {
     ingestionProgress.emit(entryId, "detail", `No content extracted from: ${shortUrl}`);
+    await storeSources(entryId, [
+      {
+        url: normalized,
+        sourceType: "other",
+        rawContent: "",
+        depth,
+        status: "failed",
+        statusReason: "empty_content",
+      },
+    ]);
     return;
   }
 
@@ -552,41 +614,125 @@ async function followAndStore(
   }
 }
 
+/**
+ * Persist a batch of extracted sources to the `sources` table.
+ *
+ * Dedup contract (enforced by both this function and the partial unique
+ * index `sources_entry_normalized_url_ok_idx` on the DB):
+ *   - Two `status='ok'` rows for the same `(entry_id, normalized_url)`
+ *     are NEVER both written. First-writer-wins. The second attempt
+ *     silently becomes a no-op — the first successful extraction of a
+ *     URL at the earliest depth is canonical.
+ *   - `status='failed'` and `status='skipped'` rows are NOT deduped.
+ *     They're audit breadcrumbs and should accumulate.
+ *   - Image-only rows (where `url` is null, content lives in
+ *     `storage_path`) skip the dedup check.
+ *
+ * The in-code dedup (query existing ok-urls for this entry before
+ * inserting) is a cheap fast-path. The DB unique index is the correctness
+ * backstop — if a race wins past the check, the insert fails with 23505
+ * and we log it as a duplicate without raising.
+ */
 export async function storeSources(
   entryId: string,
   sources: ExtractedSource[]
 ): Promise<void> {
   if (sources.length === 0) return;
 
-  const rows = sources.map((source) => ({
-    entry_id: entryId,
-    url: source.url || null,
-    source_type: source.sourceType,
-    raw_content: source.rawContent,
-    extracted_content: source.extractedContent || null,
-    content_metadata: source.contentMetadata || null,
-    depth: source.depth,
-  }));
+  const allRows = sources.map((source) => {
+    const normalized =
+      source.url && source.url.length > 0 ? normalizeUrl(source.url) : null;
+    const status = source.status ?? "ok";
+    return {
+      entry_id: entryId,
+      url: source.url || null,
+      normalized_url: normalized,
+      source_type: source.sourceType,
+      raw_content: source.rawContent,
+      extracted_content: source.extractedContent || null,
+      content_metadata: source.contentMetadata || null,
+      depth: source.depth,
+      status,
+      status_reason: source.statusReason ?? null,
+      fetch_status_code: source.fetchStatusCode ?? null,
+    };
+  });
 
-  const { error } = await supabase.from("sources").insert(rows);
+  // Partition rows into "subject to dedup" (status='ok' with a URL) and
+  // "always insert" (failed/skipped rows, or rows without a URL). Only
+  // the first partition hits the pre-check query.
+  const dedupCandidates = allRows.filter(
+    (r) => r.status === "ok" && r.normalized_url !== null
+  );
+  const alwaysInsert = allRows.filter(
+    (r) => !(r.status === "ok" && r.normalized_url !== null)
+  );
+
+  let toInsert = [...alwaysInsert];
+
+  if (dedupCandidates.length > 0) {
+    const candidateUrls = dedupCandidates.map(
+      (r) => r.normalized_url as string
+    );
+    const { data: existing, error: queryError } = await supabase
+      .from("sources")
+      .select("normalized_url")
+      .eq("entry_id", entryId)
+      .eq("status", "ok")
+      .in("normalized_url", candidateUrls);
+
+    if (queryError) {
+      throw new Error(
+        `Failed to dedup-check sources: ${queryError.message}`
+      );
+    }
+
+    const alreadyStored = new Set(
+      (existing ?? [])
+        .map((r) => (r as { normalized_url: string | null }).normalized_url)
+        .filter((u): u is string => typeof u === "string")
+    );
+
+    toInsert.push(
+      ...dedupCandidates.filter(
+        (r) => !alreadyStored.has(r.normalized_url as string)
+      )
+    );
+  }
+
+  if (toInsert.length === 0) return;
+
+  const { error } = await supabase.from("sources").insert(toInsert);
 
   if (error) {
+    // 23505 = unique_violation. A concurrent storeSources call beat us
+    // to the punch on at least one URL between our dedup-check query
+    // and the insert. Treat as a no-op — the other writer's row is the
+    // canonical one. Logging still useful so ops can spot pathological
+    // contention.
+    if ((error as { code?: string }).code === "23505") {
+      console.warn(
+        `[pipeline] storeSources lost dedup race for entry ${entryId}: ${error.message}`
+      );
+      return;
+    }
+
     // PostgrestError has code / details / hint in addition to message.
-    // The previous bubble only included `.message`, which drops the
-    // constraint name and the column/value that caused the violation —
-    // exactly the info you need to fix it. Surface all four fields in
-    // logs and in the thrown error's message.
-    const shapeSummary = sources.map((s) => ({
-      url: s.url,
-      source_type: s.sourceType,
-      raw_content_len: s.rawContent?.length ?? null,
-      extracted_content_len: s.extractedContent?.length ?? null,
-      content_metadata_len: s.contentMetadata
-        ? JSON.stringify(s.contentMetadata).length
+    // Surface all four fields so a genuine constraint/type issue is
+    // debuggable without re-running the pipeline under a debugger.
+    const shapeSummary = toInsert.map((r) => ({
+      url: r.url,
+      normalized_url: r.normalized_url,
+      source_type: r.source_type,
+      status: r.status,
+      raw_content_len: r.raw_content?.length ?? null,
+      extracted_content_len: r.extracted_content?.length ?? null,
+      content_metadata_len: r.content_metadata
+        ? JSON.stringify(r.content_metadata).length
         : null,
     }));
     console.error(
-      `[pipeline] Failed to store ${sources.length} source(s) for entry ${entryId}:`,
+      `[pipeline] Failed to store ${toInsert.length} source(s) for entry ${entryId}:`,
       {
         code: error.code,
         message: error.message,
@@ -642,10 +788,14 @@ async function generateEntrySlug(
 }
 
 async function gatherAllContent(entryId: string): Promise<string> {
+  // Filter on status='ok' — failed/skipped rows are audit breadcrumbs
+  // from the hardened extractor, not real content. Including them
+  // would inject empty headers into the downstream embedding corpus.
   const { data: sources } = await supabase
     .from("sources")
     .select("*")
     .eq("entry_id", entryId)
+    .eq("status", "ok")
     .order("depth", { ascending: true })
     .limit(200);
 

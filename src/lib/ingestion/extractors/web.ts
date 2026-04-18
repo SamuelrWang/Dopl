@@ -1,8 +1,86 @@
-import { ExtractedSource, LinkFollowResult } from "../types";
+import { ExtractedSource, LinkFollowResult, SourceStatusReason } from "../types";
 import { fetchWithTimeout, retryWithBackoff } from "../utils";
 import { assertPublicHttpUrl } from "../url-safety";
 import { MAX_LINK_DEPTH } from "@/lib/config";
 const MAX_CONTENT_LENGTH = 50_000; // 50K chars max per page
+
+/**
+ * Typed extractor failure. Thrown from content validators so the caller
+ * (followAndStore) can read a precise `statusReason` and persist a
+ * meaningful failed-source row for audit / agent-visible fetch_warnings.
+ */
+export class ExtractorError extends Error {
+  readonly statusReason: SourceStatusReason;
+  readonly fetchStatusCode: number | null;
+  constructor(statusReason: SourceStatusReason, message: string, fetchStatusCode: number | null = null) {
+    super(message);
+    this.name = "ExtractorError";
+    this.statusReason = statusReason;
+    this.fetchStatusCode = fetchStatusCode;
+  }
+}
+
+const MIN_ACCEPTABLE_CONTENT_CHARS = 100;
+
+/**
+ * Detect content bodies that look like valid HTTP responses but are
+ * actually disguised errors — the pipeline was previously storing these
+ * as if they were real content and poisoning downstream prompts.
+ *
+ * Cases caught:
+ *   - S3 AccessDenied XML returned with 200 from origin (hotlink-
+ *     protected assets). Shape: starts with `<?xml` + contains
+ *     `AccessDenied` / `<Error>`.
+ *   - Vendor-served 404 pages (Mintlify, npm) returned with HTTP 200.
+ *     Shape: title matches "Page Not Found" / "not found" /
+ *     "Route not found", body is small-ish boilerplate.
+ *   - Empty or near-empty bodies — nothing to synthesize from.
+ *
+ * Throws `ExtractorError` with a precise `statusReason`. The callers
+ * are the fetch wrappers (Firecrawl, Jina, simple) — running validation
+ * there (as opposed to downstream after storage) means garbage never
+ * touches the `sources` table as a successful row.
+ */
+export function validateExtractedContent(content: string, url: string): void {
+  const trimmed = content.trim();
+
+  if (trimmed.length < MIN_ACCEPTABLE_CONTENT_CHARS) {
+    throw new ExtractorError(
+      "empty_content",
+      `Extractor returned <${MIN_ACCEPTABLE_CONTENT_CHARS} chars for ${url}`
+    );
+  }
+
+  // S3-style error XML. These come in several flavors (AccessDenied,
+  // NoSuchKey, PermanentRedirect) but all start with <?xml and have
+  // <Error>/<Code> markers within the first ~500 chars.
+  const head = trimmed.slice(0, 500);
+  if (head.startsWith("<?xml") && (/\bAccessDenied\b/.test(head) || /<Error>/.test(head))) {
+    throw new ExtractorError(
+      "access_denied_body",
+      `Origin returned XML error body for ${url}`
+    );
+  }
+
+  // Vendor 404 pages served with HTTP 200. We can't tell from the status
+  // line; the signal is in the content. Common patterns from Mintlify
+  // (docs.*), Vercel, npm registry pages, and GitHub Pages "not found"
+  // templates.
+  const notFoundSignatures = [
+    /<title>[^<]{0,40}(Page Not Found|Not Found|Route not found)/i,
+    /^#?\s*not found\s*$/im,
+    /Route not found!/i,
+  ];
+  // Only treat as 404-page if the body is also small (real pages that
+  // mention "not found" in prose are long). This keeps false positives
+  // low while catching boilerplate 404 bodies.
+  if (trimmed.length < 4_000 && notFoundSignatures.some((r) => r.test(trimmed))) {
+    throw new ExtractorError(
+      "http_4xx",
+      `Origin served a 404 page body for ${url}`
+    );
+  }
+}
 
 export async function extractWebContent(
   url: string,
@@ -10,44 +88,46 @@ export async function extractWebContent(
 ): Promise<LinkFollowResult | null> {
   if (depth > MAX_LINK_DEPTH) return null;
 
-  try {
-    let content: string;
-    let metadata: Record<string, unknown> = {};
+  let content: string;
+  let metadata: Record<string, unknown> = {};
 
-    if (process.env.FIRECRAWL_API_KEY) {
-      const result = await retryWithBackoff(
-        () => fetchWithFirecrawl(url),
-        { label: `Firecrawl:${url}` }
-      );
-      content = result.content;
-      metadata = result.metadata;
-    } else if (process.env.JINA_API_KEY) {
-      const result = await retryWithBackoff(
-        () => fetchWithJina(url),
-        { label: `Jina:${url}` }
-      );
-      content = result.content;
-      metadata = result.metadata;
-    } else {
-      console.warn(`[web] No FIRECRAWL_API_KEY or JINA_API_KEY set — using basic HTML fallback for ${url}. Content quality may be degraded.`);
-      const result = await fetchSimple(url);
-      content = result.content;
-      metadata = result.metadata;
-    }
-
-    const childLinks = extractUrls(content);
-
-    return {
-      url,
-      type: "other",
-      content,
-      childLinks,
-      metadata,
-    };
-  } catch (error) {
-    console.error(`Failed to extract web content from ${url}:`, error);
-    return null;
+  if (process.env.FIRECRAWL_API_KEY) {
+    const result = await retryWithBackoff(
+      () => fetchWithFirecrawl(url),
+      { label: `Firecrawl:${url}` }
+    );
+    content = result.content;
+    metadata = result.metadata;
+  } else if (process.env.JINA_API_KEY) {
+    const result = await retryWithBackoff(
+      () => fetchWithJina(url),
+      { label: `Jina:${url}` }
+    );
+    content = result.content;
+    metadata = result.metadata;
+  } else {
+    console.warn(`[web] No FIRECRAWL_API_KEY or JINA_API_KEY set — using basic HTML fallback for ${url}. Content quality may be degraded.`);
+    const result = await fetchSimple(url);
+    content = result.content;
+    metadata = result.metadata;
   }
+
+  // Validate AFTER fetch: catches garbage that slipped through the HTTP
+  // status check (S3 AccessDenied XML returned with 200, Mintlify 404
+  // pages, empty bodies). Throws ExtractorError which bubbles to
+  // followAndStore; followAndStore records the failure as a status='failed'
+  // source row for audit and for the agent's fetch_warnings surface.
+  validateExtractedContent(content, url);
+
+  const childLinks = extractUrls(content);
+
+  return {
+    url,
+    type: "other",
+    content,
+    childLinks,
+    metadata,
+  };
 }
 
 async function fetchWithFirecrawl(
@@ -71,7 +151,11 @@ async function fetchWithFirecrawl(
   );
 
   if (!response.ok) {
-    throw new Error(`Firecrawl error: ${response.status}`);
+    throw new ExtractorError(
+      response.status >= 500 ? "http_5xx" : "http_4xx",
+      `Firecrawl error: ${response.status}`,
+      response.status
+    );
   }
 
   const data = await response.json();
@@ -102,7 +186,11 @@ async function fetchWithJina(
   });
 
   if (!response.ok) {
-    throw new Error(`Jina error: ${response.status}`);
+    throw new ExtractorError(
+      response.status >= 500 ? "http_5xx" : "http_4xx",
+      `Jina error: ${response.status}`,
+      response.status
+    );
   }
 
   const data = await response.json();
@@ -137,7 +225,11 @@ async function fetchSimple(
   });
 
   if (!response.ok) {
-    throw new Error(`Fetch error: ${response.status}`);
+    throw new ExtractorError(
+      response.status >= 500 ? "http_5xx" : "http_4xx",
+      `Fetch error: ${response.status}`,
+      response.status
+    );
   }
 
   const html = await response.text();

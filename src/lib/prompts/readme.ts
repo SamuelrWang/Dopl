@@ -28,7 +28,7 @@ Generate a README in markdown format following this structure:
 
 > [One-line description]
 
-**Source:** [Original URL]
+**Source:** {SOURCE_URL}
 **Author:** [Author if available]
 **Date:** [Date if available]
 **Complexity:** [From manifest]
@@ -89,7 +89,7 @@ Generate a README in markdown format following this structure:
 
 > [One-line description of the key insight or topic]
 
-**Source:** [Original URL]
+**Source:** {SOURCE_URL}
 **Author:** [Author if available]
 **Date:** [Date if available]
 **Type:** Knowledge / Insight
@@ -151,7 +151,7 @@ Generate a README in markdown format following this structure:
 
 > [One-line summary of the article's main point]
 
-**Source:** [Original URL]
+**Source:** {SOURCE_URL}
 **Author:** [Author/Publication if available]
 **Date:** [Date if available]
 **Type:** Article
@@ -208,7 +208,7 @@ Generate a README in markdown format following this structure:
 
 > [One-line description of what this reference covers]
 
-**Source:** [Original URL]
+**Source:** {SOURCE_URL}
 **Type:** Reference / Documentation
 
 ## What This Covers
