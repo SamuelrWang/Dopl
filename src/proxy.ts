@@ -34,6 +34,18 @@ export async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
+  // Allow OG / Twitter image routes through for social crawlers that
+  // have no session. Convention-based route files like
+  // /community/[slug]/opengraph-image resolve to paths ending in
+  // /opengraph-image or /twitter-image. Redirecting these to /login
+  // breaks social card previews.
+  if (
+    pathname.endsWith("/opengraph-image") ||
+    pathname.endsWith("/twitter-image")
+  ) {
+    return supabaseResponse;
+  }
+
   // If authenticated, redirect landing page and login to /canvas
   if (user && (pathname === "/" || pathname === "/login")) {
     const url = request.nextUrl.clone();

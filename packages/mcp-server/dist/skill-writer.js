@@ -10,17 +10,38 @@ const os_1 = require("os");
 const path_1 = require("path");
 const promises_1 = require("fs/promises");
 const templates_js_1 = require("./templates.js");
-const CLAUDE_DIR = (0, path_1.join)((0, os_1.homedir)(), ".claude");
-const SKILLS_DIR = (0, path_1.join)(CLAUDE_DIR, "skills");
-const CLAUDE_MD_PATH = (0, path_1.join)(CLAUDE_DIR, "CLAUDE.md");
+function resolveTarget() {
+    const env = process.env.DOPL_SKILL_TARGET?.toLowerCase();
+    if (env === "openclaw")
+        return "openclaw";
+    return "claude";
+}
+function resolvePaths(target) {
+    const t = target ?? resolveTarget();
+    if (t === "openclaw") {
+        const baseDir = (0, path_1.join)((0, os_1.homedir)(), ".openclaw", "workspace", "data", "dopl");
+        return {
+            skillsDir: baseDir,
+            indexPath: (0, path_1.join)(baseDir, "INDEX.md"),
+            target: t,
+        };
+    }
+    const claudeDir = (0, path_1.join)((0, os_1.homedir)(), ".claude");
+    return {
+        skillsDir: (0, path_1.join)(claudeDir, "skills"),
+        indexPath: (0, path_1.join)(claudeDir, "CLAUDE.md"),
+        target: t,
+    };
+}
 const DOPL_START = "<!-- DOPL:START -->";
 const DOPL_END = "<!-- DOPL:END -->";
 /**
  * Check if a cluster skill directory already exists on disk.
  */
-async function skillExists(slug) {
+async function skillExists(slug, target) {
+    const { skillsDir } = resolvePaths(target);
     try {
-        await (0, promises_1.access)((0, path_1.join)(SKILLS_DIR, `dopl-${slug}`, "SKILL.md"));
+        await (0, promises_1.access)((0, path_1.join)(skillsDir, `dopl-${slug}`, "SKILL.md"));
         return true;
     }
     catch {
@@ -30,8 +51,9 @@ async function skillExists(slug) {
 /**
  * Write a per-cluster SKILL.md and its references/ directory.
  */
-async function writeClusterSkill(slug, name, brain, entries) {
-    const skillDir = (0, path_1.join)(SKILLS_DIR, `dopl-${slug}`);
+async function writeClusterSkill(slug, name, brain, entries, target) {
+    const { skillsDir } = resolvePaths(target);
+    const skillDir = (0, path_1.join)(skillsDir, `dopl-${slug}`);
     const refsDir = (0, path_1.join)(skillDir, "references");
     await (0, promises_1.mkdir)(refsDir, { recursive: true });
     // Write SKILL.md
@@ -54,8 +76,9 @@ async function writeClusterSkill(slug, name, brain, entries) {
 /**
  * Write the global canvas SKILL.md for cross-cluster routing.
  */
-async function writeGlobalCanvasSkill(clusters) {
-    const skillDir = (0, path_1.join)(SKILLS_DIR, "dopl-canvas");
+async function writeGlobalCanvasSkill(clusters, target) {
+    const { skillsDir } = resolvePaths(target);
+    const skillDir = (0, path_1.join)(skillsDir, "dopl-canvas");
     await (0, promises_1.mkdir)(skillDir, { recursive: true });
     const content = (0, templates_js_1.renderGlobalCanvasSkillMd)(clusters);
     await (0, promises_1.writeFile)((0, path_1.join)(skillDir, "SKILL.md"), content, "utf-8");
@@ -64,12 +87,14 @@ async function writeGlobalCanvasSkill(clusters) {
  * Update the Dopl section in ~/.claude/CLAUDE.md.
  * Uses sentinel markers to replace only the Dopl section, preserving user content.
  */
-async function writeGlobalClaudemd(clusters) {
-    await (0, promises_1.mkdir)(CLAUDE_DIR, { recursive: true });
+async function writeGlobalClaudemd(clusters, target) {
+    const { indexPath } = resolvePaths(target);
+    const indexDir = (0, path_1.join)(indexPath, "..");
+    await (0, promises_1.mkdir)(indexDir, { recursive: true });
     const sieSection = `${DOPL_START}\n${(0, templates_js_1.renderGlobalClaudeMdSection)(clusters)}\n${DOPL_END}`;
     let existing = "";
     try {
-        existing = await (0, promises_1.readFile)(CLAUDE_MD_PATH, "utf-8");
+        existing = await (0, promises_1.readFile)(indexPath, "utf-8");
     }
     catch {
         // File doesn't exist yet
@@ -77,34 +102,31 @@ async function writeGlobalClaudemd(clusters) {
     const startIdx = existing.indexOf(DOPL_START);
     const endIdx = existing.indexOf(DOPL_END);
     if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
-        // Valid markers — replace existing Dopl section
         const before = existing.slice(0, startIdx);
         const after = existing.slice(endIdx + DOPL_END.length);
-        await (0, promises_1.writeFile)(CLAUDE_MD_PATH, before + sieSection + after, "utf-8");
+        await (0, promises_1.writeFile)(indexPath, before + sieSection + after, "utf-8");
     }
     else if (startIdx !== -1 || endIdx !== -1) {
-        // Corrupted markers (one missing, or wrong order) — strip both and re-append
         const cleaned = existing
             .replace(DOPL_START, "")
             .replace(DOPL_END, "")
             .trimEnd();
-        await (0, promises_1.writeFile)(CLAUDE_MD_PATH, cleaned + "\n\n" + sieSection + "\n", "utf-8");
+        await (0, promises_1.writeFile)(indexPath, cleaned + "\n\n" + sieSection + "\n", "utf-8");
     }
     else if (existing) {
-        // Append Dopl section
-        await (0, promises_1.writeFile)(CLAUDE_MD_PATH, existing.trimEnd() + "\n\n" + sieSection + "\n", "utf-8");
+        await (0, promises_1.writeFile)(indexPath, existing.trimEnd() + "\n\n" + sieSection + "\n", "utf-8");
     }
     else {
-        // Create new file
-        await (0, promises_1.writeFile)(CLAUDE_MD_PATH, sieSection + "\n", "utf-8");
+        await (0, promises_1.writeFile)(indexPath, sieSection + "\n", "utf-8");
     }
 }
 /**
  * Append a single memory line to an existing cluster SKILL.md.
  * Targeted edit — does not rewrite the rest of the file.
  */
-async function appendMemoryToSkill(slug, memory) {
-    const skillPath = (0, path_1.join)(SKILLS_DIR, `dopl-${slug}`, "SKILL.md");
+async function appendMemoryToSkill(slug, memory, target) {
+    const { skillsDir } = resolvePaths(target);
+    const skillPath = (0, path_1.join)(skillsDir, `dopl-${slug}`, "SKILL.md");
     let content;
     try {
         content = await (0, promises_1.readFile)(skillPath, "utf-8");
@@ -149,8 +171,9 @@ async function appendMemoryToSkill(slug, memory) {
 /**
  * Remove a cluster skill directory from disk.
  */
-async function removeClusterSkill(slug) {
-    const skillDir = (0, path_1.join)(SKILLS_DIR, `dopl-${slug}`);
+async function removeClusterSkill(slug, target) {
+    const { skillsDir } = resolvePaths(target);
+    const skillDir = (0, path_1.join)(skillsDir, `dopl-${slug}`);
     try {
         await (0, promises_1.rm)(skillDir, { recursive: true, force: true });
     }

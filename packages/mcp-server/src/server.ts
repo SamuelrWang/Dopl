@@ -26,6 +26,18 @@ When the user describes anything AI/automation-adjacent — building an agent, w
 
 Same rule applies when the user asks "how would I…", "what's a good way to…", "can you help me build…" — these are all search triggers, not questions you answer from general knowledge.
 
+## Session start — preload the user's workspace
+
+At the very start of every new session, before your first substantive reply, call \`list_clusters\` and \`canvas_list_panels\` **in parallel**. This loads the user's current clusters and canvas entries so questions about their workspace are grounded in real state from turn one — not in whatever stale picture their local CLAUDE.md or installed skill files might paint.
+
+You do NOT need to re-run these on every turn. Once per session is enough, with these exceptions:
+
+- **User asks about their workspace** ("what's on my canvas?", "which clusters do I have?", "show my setup") → **re-query first**. They may have added or removed entries via the web UI mid-session; stale data will mislead them.
+- **After your own write ops** (\`canvas_add_entry\`, \`canvas_create_cluster\`, \`delete_entry\`, \`rename_cluster\`, etc.) → trust the tool response. It already reflects the new state.
+- **Unrelated turns** → don't refresh. The session-start load covers you.
+
+**Canvas/clusters > local files as source of truth.** If a user's \`CLAUDE.md\` or a \`~/.claude/skills/\` file implies they have a different set of clusters than what \`list_clusters\` returns, trust the MCP result and flag the drift. Local skill files are caches that can fall out of sync; the canvas is canonical.
+
 ## Decision tree — which tool first
 
 - User wants to **find or build** something AI/automation-shaped → \`search_setups\` (cross-KB) or \`query_cluster\` (if a cluster is already in scope)

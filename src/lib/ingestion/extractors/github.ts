@@ -154,6 +154,27 @@ async function extractRepoContent(
     console.warn(`[github] No README for ${owner}/${repo}:`, err);
   }
 
+  // AI-agent-oriented docs. These files tell a connected agent how to work
+  // with the repo — far higher signal than generic README text for setup/tutorial
+  // synthesis. Fetched with a 30K cap each (same as README).
+  const agentDocFiles = [
+    "CLAUDE.md",
+    "AGENTS.md",
+    "DESIGN.md",
+  ];
+
+  for (const filename of agentDocFiles) {
+    try {
+      const file = await octokit.repos.getContent({ owner, repo, path: filename });
+      if ("content" in file.data && file.data.content) {
+        const content = Buffer.from(file.data.content, "base64").toString("utf-8");
+        contentParts.push(`\n## ${filename}\n${content.slice(0, 30_000)}\n`);
+      }
+    } catch {
+      // File doesn't exist — expected for most repos
+    }
+  }
+
   // Get key config files
   const configFiles = [
     "package.json",
@@ -161,6 +182,8 @@ async function extractRepoContent(
     ".env.example",
     "docker-compose.yml",
     "docker-compose.yaml",
+    "CONTRIBUTING.md",
+    "DOCS_GUIDELINES.md",
   ];
 
   for (const filename of configFiles) {

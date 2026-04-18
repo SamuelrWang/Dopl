@@ -3,7 +3,7 @@ const supabase = supabaseAdmin();
 import { IngestInput, ExtractedSource, ContentType } from "./types";
 import { ModelTier } from "@/lib/ai";
 import { extractText } from "./extractors/text";
-import { extractWebContent, linkResultToSource } from "./extractors/web";
+import { extractWebContent, linkResultToSource, shouldSkipLink } from "./extractors/web";
 import { extractGitHubContent } from "./extractors/github";
 
 import { extractTweetContent, isTweetUrl } from "./extractors/twitter";
@@ -25,7 +25,11 @@ import {
 import { chunkAndEmbed } from "./embedder";
 import { truncateContent } from "./utils";
 import { ingestionProgress } from "./progress";
-import { MAX_LINK_DEPTH, MAX_CONTENT_FOR_CLAUDE } from "@/lib/config";
+import {
+  MAX_LINK_DEPTH,
+  MAX_CONTENT_FOR_CLAUDE,
+  GATHERED_CONTENT_MAX,
+} from "@/lib/config";
 import { slugifyEntryTitle, fallbackSlugFromId } from "@/lib/entries/slug";
 // Credits removed — access is gated at the HTTP boundary via
 // hasActiveAccess(), not via credit math. No refunds needed here.
@@ -477,6 +481,15 @@ async function followAndStore(
     return;
   }
 
+  // Skip known-low-value paths (CI workflows, tests, build artifacts,
+  // lockfiles) without consuming a maxLinks slot — these are noise that
+  // blow the gathered_content budget without improving synthesis.
+  if (shouldSkipLink(url)) {
+    visitedUrls.add(url);
+    ingestionProgress.emit(entryId, "detail", `Skipped low-value path: ${url.length > 80 ? url.slice(0, 77) + "..." : url}`);
+    return;
+  }
+
   visitedUrls.add(url);
   linksFollowed.count++;
 
@@ -638,13 +651,38 @@ async function gatherAllContent(entryId: string): Promise<string> {
 
   if (!sources || sources.length === 0) return "";
 
-  const parts = sources.map((s) => {
+  const kept: string[] = [];
+  let totalChars = 0;
+  let droppedCount = 0;
+  let droppedChars = 0;
+  const droppedByType: Record<string, number> = {};
+
+  for (const s of sources) {
     const header = `--- [${s.source_type}] ${s.url || "inline"} (depth: ${s.depth}) ---`;
     const content = s.extracted_content || s.raw_content || "";
-    return `${header}\n${content}`;
-  });
+    const sourceText = `${header}\n${content}`;
 
-  return parts.join("\n\n");
+    // Depth-0 sources are the primary content (README / tweet text / main
+    // article) — always kept. Higher-depth followed links drop from the tail
+    // once the budget is exhausted.
+    if (s.depth === 0 || totalChars + sourceText.length <= GATHERED_CONTENT_MAX) {
+      kept.push(sourceText);
+      totalChars += sourceText.length + 2; // +2 for the "\n\n" join
+    } else {
+      droppedCount++;
+      droppedChars += sourceText.length;
+      droppedByType[s.source_type] = (droppedByType[s.source_type] || 0) + 1;
+    }
+  }
+
+  let result = kept.join("\n\n");
+  if (droppedCount > 0) {
+    const typesSummary = Object.entries(droppedByType)
+      .map(([type, count]) => `${count}× ${type}`)
+      .join(", ");
+    result += `\n\n[TRUNCATED: ${droppedCount} source(s) omitted (~${Math.round(droppedChars / 1000)}K chars): ${typesSummary}. Budget was ${Math.round(GATHERED_CONTENT_MAX / 1000)}K chars. Use \`get_setup\` after submit or re-run prepare with a narrower URL if specific sections are needed.]`;
+  }
+  return result;
 }
 
 export function detectPlatform(url: string): string {

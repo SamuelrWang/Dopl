@@ -191,6 +191,50 @@ function extractUrls(text: string): string[] {
   return [...new Set(matches.map((url) => url.replace(/[.,;:!?]+$/, "")))];
 }
 
+/**
+ * Skip-list for link-following. Matches path segments and file extensions
+ * that are known-low-value (CI configs, tests, build artifacts, lockfiles) —
+ * these rarely add synthesis signal and often blow the gathered_content
+ * budget. Called by the pipeline before spending a maxLinks slot.
+ *
+ * Keep the patterns broad enough to handle both raw GitHub URLs
+ * (github.com/owner/repo/tree/main/tests) and docs-site URLs
+ * (site.com/docs/.github/workflows/...). Matches path only, not query string.
+ */
+const SKIP_PATH_PATTERNS: RegExp[] = [
+  /\/\.github\/workflows\//i,
+  /\/\.github\/actions\//i,
+  /\/tests?\//i,
+  /\/__tests__\//i,
+  /\/spec\//i,
+  /\/e2e\//i,
+  /\/dist\//i,
+  /\/build\//i,
+  /\/out\//i,
+  /\/node_modules\//i,
+];
+
+const SKIP_EXT_PATTERNS: RegExp[] = [
+  /\.lock$/i,
+  /\.lockb$/i,
+  /\.min\.js$/i,
+  /\.min\.css$/i,
+  /\.map$/i,
+];
+
+export function shouldSkipLink(url: string): boolean {
+  try {
+    const { pathname } = new URL(url);
+    if (SKIP_PATH_PATTERNS.some((p) => p.test(pathname))) return true;
+    if (SKIP_EXT_PATTERNS.some((p) => p.test(pathname))) return true;
+    return false;
+  } catch {
+    // Malformed URL — let the downstream fetcher deal with it rather than
+    // silently dropping it here.
+    return false;
+  }
+}
+
 function extractOgImage(html: string): string | null {
   const match = html.match(
     /<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i

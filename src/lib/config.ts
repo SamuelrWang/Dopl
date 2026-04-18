@@ -8,6 +8,11 @@
 // ── Ingestion limits ────────────────────────────────────────────────
 export const MAX_LINK_DEPTH = parseInt(process.env.MAX_LINK_DEPTH || "3", 10);
 export const MAX_CONTENT_FOR_CLAUDE = 100_000;
+// Ceiling on the `gathered_content` string returned by /api/ingest/prepare.
+// Depth-0 sources (primary README / extracted text) are always kept; higher-
+// depth followed-link sources are dropped from the tail once the budget is hit.
+// 300K keeps a 200K-context agent comfortable with room for prompts + system.
+export const GATHERED_CONTENT_MAX = 300_000;
 export const MAX_IMAGES_PER_ENTRY = 20;
 export const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
 
