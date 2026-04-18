@@ -12,16 +12,19 @@
  * Dopl branding. This looks like a real screenshot of the cluster
  * canvas (entry thumbnails are real remote images, not schematics).
  *
- * Runtime: edge (fast global cold start, no Node server runtime
- * overhead). Output cached by Next's ISR — first crawler pays the
- * render cost, every subsequent request hits the cached PNG.
+ * Runtime: Node. We need the full Node runtime because the data
+ * loader (`getPublishedCluster`) transitively imports modules that
+ * rely on Node APIs like `process.cwd` (via Supabase admin / the
+ * AI client stack). Edge is not viable here and the ISR cache
+ * (`revalidate = 60`) makes the cold-start difference negligible —
+ * every request after the first hits a cached PNG anyway.
  */
 
 import { ImageResponse } from "next/og";
 import { getPublishedClusterCached } from "@/lib/community/get-published-cluster-cached";
 import type { PublishedClusterDetail } from "@/lib/community/types";
 
-export const runtime = "edge";
+export const runtime = "nodejs";
 export const revalidate = 60;
 
 export const alt = "Dopl cluster preview";
