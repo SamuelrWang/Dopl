@@ -46,6 +46,13 @@ async function handlePost(
   let claimedFromPending = false;
   let claimedEntryId: string | null = null;
   let claimedSlug: string | null = null;
+  // Upgrade-from-skeleton state: when an existing skeleton entry exists
+  // for this URL, we reuse its id and re-run the full pipeline against
+  // it instead of returning already_exists. The catch block reverts the
+  // row's status to "complete" on failure so the skeleton survives a
+  // botched upgrade attempt.
+  let upgradedFromSkeleton = false;
+  let upgradedEntryId: string | null = null;
 
   try {
     const body = await request.json();
@@ -124,7 +131,7 @@ async function handlePost(
     if (parsed.data.url !== normalizedUrl) urlsToCheck.push(parsed.data.url);
     const { data: existing } = await supabase
       .from("entries")
-      .select("id, slug, title, status, updated_at, moderation_status, ingested_by")
+      .select("id, slug, title, status, updated_at, moderation_status, ingested_by, ingestion_tier")
       .in("source_url", urlsToCheck)
       .in("status", ["complete", "processing", "pending_ingestion"])
       .or(
@@ -201,13 +208,39 @@ async function handlePost(
           });
         }
       } else if (existing.status === "complete") {
-        return NextResponse.json({
-          status: "already_exists",
-          entry_id: existing.id,
-          slug: existing.slug ?? null,
-          title: existing.title,
-          message: "This URL has already been ingested.",
-        });
+        // Skeleton-tier entries are intentionally minimum-viable index
+        // rows. When the caller asks to ingest a URL that's already a
+        // skeleton, treat it as an upgrade request: reuse the row id,
+        // flip status to processing, and fall through to the prepare
+        // flow. The skeleton's content (descriptor, tags, single
+        // embedding) gets replaced when persistAgentArtifacts runs at
+        // submit time. Canvas references and the existing slug survive.
+        if (existing.ingestion_tier === "skeleton") {
+          const { error: claimError } = await supabase
+            .from("entries")
+            .update({
+              status: "processing",
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", existing.id)
+            .eq("status", "complete");
+          if (claimError) {
+            throw new Error(
+              `Failed to claim skeleton entry for upgrade: ${claimError.message}`
+            );
+          }
+          upgradedFromSkeleton = true;
+          upgradedEntryId = existing.id;
+          // Fall through to prepare flow below, reusing this row.
+        } else {
+          return NextResponse.json({
+            status: "already_exists",
+            entry_id: existing.id,
+            slug: existing.slug ?? null,
+            title: existing.title,
+            message: "This URL has already been ingested.",
+          });
+        }
       }
     }
 
@@ -226,6 +259,11 @@ async function handlePost(
       // createdEntryId stays null: we don't want the catch-block to
       // delete a row we didn't create. If the prepare fails for a
       // claimed entry, we'll revert its status to pending_ingestion.
+    } else if (upgradedFromSkeleton && upgradedEntryId) {
+      entryId = upgradedEntryId;
+      // createdEntryId stays null for the same reason — the catch
+      // block reverts status to "complete" so the skeleton survives a
+      // failed upgrade rather than getting deleted.
     } else {
       entryId = crypto.randomUUID();
       const { error: createError } = await supabase.from("entries").insert({
@@ -382,6 +420,26 @@ async function handlePost(
           if (revertErr) {
             console.error(
               "[prepare] failed to revert claimed pending row:",
+              revertErr.message
+            );
+          }
+        });
+    } else if (upgradedFromSkeleton && upgradedEntryId) {
+      // We were upgrading a skeleton entry and prepare failed. Flip
+      // status back to "complete" so the original skeleton row remains
+      // a usable entry — losing the upgrade attempt shouldn't cost the
+      // user the existing skeleton content, descriptor, or chunks.
+      await supabase
+        .from("entries")
+        .update({
+          status: "complete",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", upgradedEntryId)
+        .then(({ error: revertErr }) => {
+          if (revertErr) {
+            console.error(
+              "[prepare] failed to revert upgraded skeleton row:",
               revertErr.message
             );
           }

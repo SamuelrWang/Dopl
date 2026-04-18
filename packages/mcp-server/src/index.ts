@@ -54,24 +54,28 @@ Claude Code config example:
 async function main() {
   const { apiKey, baseUrl } = parseArgs();
   const client = new DoplClient(baseUrl, apiKey);
-  const server = createServer(client);
+
+  // Block on the first status ping so we know whether this caller is the
+  // admin before we register tools. The ping doubles as the initial
+  // liveness signal to the web app, so we can drop the prior background
+  // retry. If the backend is unreachable, we default to non-admin —
+  // safe-default: admin loses skeleton_ingest until restart, non-admins
+  // are unaffected.
+  const { is_admin } = await pingWithRetry(client);
+
+  const server = createServer(client, { isAdmin: is_admin });
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
-
-  // Signal to the web app that an MCP connection is live. Retries with
-  // exponential backoff (1s / 2s / 4s) so a transient network blip
-  // doesn't leave the user staring at "Waiting for connection…" forever.
-  // Runs in the background — never blocks MCP tool handling.
-  void pingWithRetry(client);
 }
 
-async function pingWithRetry(client: DoplClient): Promise<void> {
+async function pingWithRetry(
+  client: DoplClient,
+): Promise<{ is_admin: boolean }> {
   const delays = [1000, 2000, 4000];
   for (let attempt = 0; attempt <= delays.length; attempt++) {
     try {
-      await client.pingMcpStatus();
-      return;
+      return await client.pingMcpStatus();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       if (attempt === delays.length) {
@@ -81,11 +85,12 @@ async function pingWithRetry(client: DoplClient): Promise<void> {
         console.error(
           `[dopl-mcp] Initial status ping failed after ${delays.length + 1} attempts: ${msg}`
         );
-        return;
+        return { is_admin: false };
       }
       await new Promise((resolve) => setTimeout(resolve, delays[attempt]));
     }
   }
+  return { is_admin: false };
 }
 
 main().catch((error) => {

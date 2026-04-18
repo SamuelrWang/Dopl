@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withExternalAuth, withUserAuth } from "@/lib/auth/with-auth";
+import { withExternalAuth, withUserAuth, isAdmin } from "@/lib/auth/with-auth";
 import { supabaseAdmin } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -14,6 +14,7 @@ const supabase = supabaseAdmin();
  */
 export const POST = withUserAuth(async (_request, { userId }) => {
   const now = new Date().toISOString();
+  const is_admin = isAdmin(userId);
 
   // Upsert into a lightweight mcp_connections table
   const { error } = await supabase
@@ -24,10 +25,10 @@ export const POST = withUserAuth(async (_request, { userId }) => {
   if (error) {
     // If the column doesn't exist yet, try a raw approach — store in metadata
     // For now just acknowledge the ping
-    return NextResponse.json({ ok: true, connected_at: now });
+    return NextResponse.json({ ok: true, connected_at: now, is_admin });
   }
 
-  return NextResponse.json({ ok: true, connected_at: now });
+  return NextResponse.json({ ok: true, connected_at: now, is_admin });
 });
 
 /**

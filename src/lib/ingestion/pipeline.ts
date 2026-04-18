@@ -871,6 +871,13 @@ export async function persistAgentArtifacts(args: {
         raw_content: { gathered: gatheredContent },
         slug: candidate,
         status: "processing",
+        // Always full tier here. When this is an upgrade from skeleton,
+        // flipping the tier and clearing the skeleton-only descriptor
+        // fields keeps the row schema-consistent — search and detail
+        // pages key behavior off ingestion_tier.
+        ingestion_tier: "full",
+        descriptor: null,
+        descriptor_prompt_version: null,
         ingested_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
@@ -894,6 +901,23 @@ export async function persistAgentArtifacts(args: {
   if (!finalSlug) {
     throw new Error(
       `Failed to assign a unique slug for entry ${entryId} after ${maxAttempts} attempts`
+    );
+  }
+
+  // Replace tags rather than append. On a skeleton→full upgrade the row
+  // already has skeleton-derived tags (popularity, activity, framework
+  // detection from package.json, etc.); the full pipeline produces its
+  // own canonical tag set and we want that set as the source of truth.
+  // Delete-then-insert is safe even on first ingestion (delete is a
+  // no-op against an empty tag set).
+  const { error: tagDeleteError } = await supabase
+    .from("tags")
+    .delete()
+    .eq("entry_id", entryId);
+  if (tagDeleteError) {
+    console.error(
+      "[pipeline] Failed to clear existing tags before upgrade:",
+      tagDeleteError
     );
   }
 

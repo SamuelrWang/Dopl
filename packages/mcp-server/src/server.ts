@@ -213,7 +213,11 @@ function withDoplStatus<A extends object>(
   };
 }
 
-export function createServer(client: DoplClient): McpServer {
+export function createServer(
+  client: DoplClient,
+  options: { isAdmin?: boolean } = {},
+): McpServer {
+  const isAdmin = options.isAdmin === true;
   const server = new McpServer(
     {
       name: "dopl",
@@ -877,41 +881,44 @@ export function createServer(client: DoplClient): McpServer {
 
   // ── skeleton_ingest ────────────────────────────────────────────────
   // Admin-only. Runs the lightweight descriptor-only pipeline for mass
-  // indexing public GitHub repos. Gated by withAdminAuth (reads
-  // ADMIN_USER_ID env var). Non-admin callers receive 404 so the admin
-  // surface is not enumerable — matches the pattern used by
-  // /api/admin/entries.
-  registerTool(
-    "skeleton_ingest",
-    "ADMIN ONLY. Mass-index a public GitHub repo at skeleton tier — a single Sonnet call produces a task-agnostic descriptor + one embedding, no README/agents.md/manifest. Use this when the admin hands you a list of GitHub URLs to bulk-populate the discovery index. For a regular URL ingest with full generation, use `ingest_url` instead. Non-admin callers receive 404 (admin surface is non-enumerable). Poll with `get_setup` — descriptor usually lands in 10–30s.",
-    {
-      url: z.string().describe("Public GitHub repo URL (e.g. https://github.com/owner/repo)"),
-    },
-    async ({ url }) => {
-      const result = await client.skeletonIngest(url);
-      const entryUrl = client.entryUrl(result.slug);
-      const label = entryUrl
-        ? `[${result.title ?? result.slug ?? result.entry_id}](${entryUrl})`
-        : result.title ?? result.slug ?? result.entry_id;
-      const ref = result.slug ?? result.entry_id;
+  // indexing public GitHub repos. Backend is gated by withAdminAuth
+  // (reads ADMIN_USER_ID env var) and returns 404 to non-admins. We
+  // additionally avoid advertising the tool at all to non-admin MCP
+  // sessions — `isAdmin` is determined at startup via the mcp-status
+  // ping. Non-admin clients' `tools/list` simply will not contain it.
+  if (isAdmin) {
+    registerTool(
+      "skeleton_ingest",
+      "ADMIN ONLY. Mass-index a public GitHub repo at skeleton tier — a single Sonnet call produces a task-agnostic descriptor + one embedding, no README/agents.md/manifest. Use this when the admin hands you a list of GitHub URLs to bulk-populate the discovery index. For a regular URL ingest with full generation, use `ingest_url` instead. Poll with `get_setup` — descriptor usually lands in 10–30s.",
+      {
+        url: z.string().describe("Public GitHub repo URL (e.g. https://github.com/owner/repo)"),
+      },
+      async ({ url }) => {
+        const result = await client.skeletonIngest(url);
+        const entryUrl = client.entryUrl(result.slug);
+        const label = entryUrl
+          ? `[${result.title ?? result.slug ?? result.entry_id}](${entryUrl})`
+          : result.title ?? result.slug ?? result.entry_id;
+        const ref = result.slug ?? result.entry_id;
 
-      if (result.status === "already_exists") {
+        if (result.status === "already_exists") {
+          return {
+            content: [{
+              type: "text" as const,
+              text: `Skeleton entry already exists: **${label}** (tier: ${result.tier ?? "unknown"})\nUse \`get_setup("${ref}")\` to view it.`,
+            }],
+          };
+        }
+
         return {
           content: [{
             type: "text" as const,
-            text: `Skeleton entry already exists: **${label}** (tier: ${result.tier ?? "unknown"})\nUse \`get_setup("${ref}")\` to view it.`,
+            text: `Skeleton ingestion started for ${url}\nEntry ID: \`${result.entry_id}\`\nStatus: ${result.status}\n\nPoll with \`get_setup("${ref}")\` — the descriptor usually lands in 10–30s.`,
           }],
         };
       }
-
-      return {
-        content: [{
-          type: "text" as const,
-          text: `Skeleton ingestion started for ${url}\nEntry ID: \`${result.entry_id}\`\nStatus: ${result.status}\n\nPoll with \`get_setup("${ref}")\` — the descriptor usually lands in 10–30s.`,
-        }],
-      };
-    }
-  );
+    );
+  }
 
   // ── update_cluster ─────────────────────────────────────────────────
   registerTool(

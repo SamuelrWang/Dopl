@@ -234,12 +234,16 @@ export class DoplClient {
 
   // ── MCP status ping ────────────────────────────────────────────────
 
-  async pingMcpStatus(): Promise<void> {
-    await this.request<{ ok: boolean }>("/api/user/mcp-status", {
-      method: "POST",
-      toolName: "_mcp_status_ping",
-      body: {},
-    });
+  async pingMcpStatus(): Promise<{ is_admin: boolean }> {
+    const res = await this.request<{ ok: boolean; is_admin?: boolean }>(
+      "/api/user/mcp-status",
+      {
+        method: "POST",
+        toolName: "_mcp_status_ping",
+        body: {},
+      }
+    );
+    return { is_admin: res.is_admin === true };
   }
 
   // ── Cluster brain methods ─────────────────────────────────────────

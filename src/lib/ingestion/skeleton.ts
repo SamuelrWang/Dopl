@@ -6,15 +6,19 @@ import { logSystemEvent } from "@/lib/analytics/system-events";
 import {
   SKELETON_DESCRIPTOR_PROMPT_VERSION,
   buildSkeletonDescriptorPrompt,
+  parseSkeletonStructuredOutput,
+  type SkeletonStructuredOutput,
 } from "@/lib/prompts/skeleton-descriptor";
 
 /**
  * Skeleton-tier ingestion pipeline.
  *
  * Replaces the full manifest + README + agents.md + multi-chunk-embedding
- * flow with one Sonnet call that produces a task-agnostic descriptor,
- * plus a single embedding for search. Much cheaper than full ingestion
- * (one LLM call instead of three, single chunk instead of dozens).
+ * flow with one Sonnet call that produces a structured descriptor (title,
+ * summary, tags, classification, prose), plus a single embedding for
+ * search and GitHub-derived metadata for browse cards. Much cheaper than
+ * full ingestion (one LLM call instead of three, single chunk instead of
+ * dozens) but rich enough to be searchable and recognizable.
  *
  * Runs in the background just like the full pipeline — the admin-only
  * caller (api/admin/skeleton-ingest/route.ts) POSTs a URL, we insert the
@@ -39,6 +43,15 @@ export async function ingestEntrySkeleton(input: {
   const supabase = supabaseAdmin();
   const entryId = crypto.randomUUID();
 
+  // Set the GitHub social-preview image as the thumbnail at row creation
+  // time. It's deterministic per repo, free, and turns the browse card
+  // from "untitled grey square" into a recognizable preview the moment
+  // the row exists — well before the LLM finishes the descriptor.
+  const parsedRepo = parseRepoUrl(input.url);
+  const thumbnailUrl = parsedRepo
+    ? `https://opengraph.githubassets.com/1/${parsedRepo.owner}/${parsedRepo.repo}`
+    : null;
+
   const { error: createError } = await supabase.from("entries").insert({
     id: entryId,
     source_url: input.url,
@@ -47,6 +60,7 @@ export async function ingestEntrySkeleton(input: {
     ingestion_tier: "skeleton",
     ingested_by: input.userId ?? null,
     slug: fallbackSlugFromId(entryId),
+    thumbnail_url: thumbnailUrl,
     // Skeleton ingestion is admin-only — auto-approve so entries are
     // searchable immediately without a human moderation queue.
     moderation_status: "approved",
@@ -110,6 +124,14 @@ interface GitHubFacts {
   topics: string[];
   readmeExcerpt: string;
   fileTree: string;
+  topLevelFiles: string[];
+  topLevelDirs: string[];
+  defaultBranch: string;
+}
+
+interface SkeletonTag {
+  tag_type: string;
+  tag_value: string;
 }
 
 export async function runSkeletonIngest(input: SkeletonInput): Promise<void> {
@@ -155,20 +177,19 @@ export async function runSkeletonIngest(input: SkeletonInput): Promise<void> {
 
     const prompt = buildSkeletonDescriptorPrompt(repoContent, metadata, url);
 
-    const descriptor = await callClaude(
-      "You produce tight, task-agnostic repo descriptors. Markdown only, no preamble.",
-      prompt,
-      { model: "sonnet", maxTokens: 1500 }
-    );
-
-    const trimmed = descriptor.trim();
-    if (trimmed.length < 80) {
-      await failEntry(entryId, "Descriptor generation returned empty content");
+    const structured = await generateStructuredDescriptor(prompt);
+    if (!structured) {
+      await failEntry(entryId, "Descriptor generation returned unparseable output after retry");
       return;
     }
 
-    const title = `${facts.owner}/${facts.repo}`;
-    const summary = extractSummary(trimmed, facts.description);
+    // Compose final descriptor markdown. Prepend a "Key capabilities"
+    // section if the LLM produced one — it lives at the top because it's
+    // the most-scanned region of the entry detail page.
+    const descriptorBody = composeDescriptorMarkdown(structured);
+
+    const summary = structured.summary || extractSummary(descriptorBody, facts.description);
+    const title = structured.title || facts.repo || `${facts.owner}/${facts.repo}`;
     const slug = await generateSkeletonSlug(entryId, title);
 
     // Embed FIRST so search is functional the moment status flips to
@@ -176,10 +197,23 @@ export async function runSkeletonIngest(input: SkeletonInput): Promise<void> {
     // lands — otherwise a poller seeing "complete" might find an entry
     // that isn't searchable yet, or read a descriptor that a subsequent
     // embedding failure would orphan.
-    await embedDescriptor(entryId, trimmed);
+    await embedDescriptor(entryId, descriptorBody);
 
-    // Tags from GitHub metadata — no LLM pass needed at skeleton tier.
-    await writeSkeletonTags(entryId, facts);
+    // Tags from three sources, deduped:
+    //  - GitHub metadata (language, topic, license) — always cheap, always present
+    //  - LLM-derived (purpose, framework, integration) — high signal, occasionally hallucinated
+    //  - Framework detection from package.json/pyproject.toml — concrete dep evidence
+    //  - Heuristic buckets (popularity, activity, presence flags) — UX signals
+    const githubMetadataTags = deriveGithubMetadataTags(facts);
+    const heuristicTags = deriveHeuristicTags(facts);
+    const frameworkTags = await detectFrameworkTags(facts);
+    const allTags = dedupeTags([
+      ...githubMetadataTags,
+      ...heuristicTags,
+      ...frameworkTags,
+      ...structured.tags,
+    ]);
+    await writeSkeletonTags(entryId, allTags);
 
     // Final write: content fields + status=complete in one atomic update.
     const { error: updateError } = await supabase
@@ -190,10 +224,12 @@ export async function runSkeletonIngest(input: SkeletonInput): Promise<void> {
         title,
         summary,
         slug,
-        descriptor: trimmed,
+        descriptor: descriptorBody,
         github_sha: facts.headSha,
         descriptor_prompt_version: SKELETON_DESCRIPTOR_PROMPT_VERSION,
-        content_type: "setup",
+        content_type: structured.content_type,
+        complexity: structured.complexity,
+        use_case: structured.use_case,
         updated_at: new Date().toISOString(),
       })
       .eq("id", entryId);
@@ -212,7 +248,8 @@ export async function runSkeletonIngest(input: SkeletonInput): Promise<void> {
         entry_id: entryId,
         owner: facts.owner,
         repo: facts.repo,
-        descriptor_chars: trimmed.length,
+        descriptor_chars: descriptorBody.length,
+        tag_count: allTags.length,
         user_id: userId,
       },
     });
@@ -228,6 +265,44 @@ export async function runSkeletonIngest(input: SkeletonInput): Promise<void> {
       metadata: { entry_id: entryId, url, user_id: userId },
     });
   }
+}
+
+/**
+ * Run the LLM call and parse the structured output. Retries the call once
+ * if the first response isn't parseable — Claude occasionally wraps JSON
+ * in fences or adds a preamble despite the prompt forbidding it, and a
+ * single retry catches almost all of those cases.
+ */
+async function generateStructuredDescriptor(
+  prompt: string
+): Promise<SkeletonStructuredOutput | null> {
+  const system =
+    "You produce structured JSON descriptors of GitHub repositories. Output a single JSON object. No prose, no markdown fences. The first character of your reply must be `{`.";
+
+  const first = await callClaude(system, prompt, { model: "sonnet", maxTokens: 2500 });
+  const parsed = parseSkeletonStructuredOutput(first);
+  if (parsed) return parsed;
+
+  // One retry with a sharper instruction. Use the prior bad output as
+  // negative-example context so Claude knows not to repeat the wrapper.
+  const retryPrompt = `${prompt}
+
+Your previous reply was not valid JSON. Output ONLY the JSON object. No fences, no preamble, no commentary. The first character must be \`{\`.`;
+  const retry = await callClaude(system, retryPrompt, { model: "sonnet", maxTokens: 2500 });
+  return parseSkeletonStructuredOutput(retry);
+}
+
+function composeDescriptorMarkdown(s: SkeletonStructuredOutput): string {
+  const parts: string[] = [];
+  if (s.key_capabilities.length > 0) {
+    parts.push("## Key capabilities");
+    for (const cap of s.key_capabilities) {
+      parts.push(`- ${cap}`);
+    }
+    parts.push("");
+  }
+  parts.push(s.descriptor.trim());
+  return parts.join("\n");
 }
 
 // ── GitHub metadata gathering ────────────────────────────────────────
@@ -281,6 +356,8 @@ async function gatherGitHubFacts(url: string): Promise<GitHubFacts | null> {
 
   let fileTree = "";
   let headSha: string | null = null;
+  let topLevelFiles: string[] = [];
+  let topLevelDirs: string[] = [];
   try {
     const tree = await octokit.git.getTree({
       owner,
@@ -289,10 +366,16 @@ async function gatherGitHubFacts(url: string): Promise<GitHubFacts | null> {
       recursive: "false",
     });
     headSha = tree.data.sha ?? null;
-    fileTree = tree.data.tree
-      .slice(0, 60)
+    const items = tree.data.tree.slice(0, 60);
+    fileTree = items
       .map((item) => `${item.type === "tree" ? "d" : "f"} ${item.path}`)
       .join("\n");
+    topLevelFiles = items
+      .filter((item) => item.type === "blob" && typeof item.path === "string")
+      .map((item) => item.path as string);
+    topLevelDirs = items
+      .filter((item) => item.type === "tree" && typeof item.path === "string")
+      .map((item) => item.path as string);
   } catch {
     // Non-fatal — descriptor still useful without the tree
   }
@@ -309,6 +392,9 @@ async function gatherGitHubFacts(url: string): Promise<GitHubFacts | null> {
     topics,
     readmeExcerpt,
     fileTree,
+    topLevelFiles,
+    topLevelDirs,
+    defaultBranch,
   };
 }
 
@@ -326,26 +412,282 @@ function parseRepoUrl(
   }
 }
 
+// ── Tag derivation ───────────────────────────────────────────────────
+
+/**
+ * Tags pulled directly from GitHub's structured fields. Always present,
+ * always trustworthy — these are the floor.
+ */
+function deriveGithubMetadataTags(facts: GitHubFacts): SkeletonTag[] {
+  const tags: SkeletonTag[] = [];
+  if (facts.language) {
+    tags.push({ tag_type: "language", tag_value: facts.language.toLowerCase() });
+  }
+  for (const topic of facts.topics.slice(0, 20)) {
+    tags.push({ tag_type: "topic", tag_value: topic.toLowerCase() });
+  }
+  if (facts.license) {
+    tags.push({ tag_type: "license", tag_value: facts.license.toLowerCase() });
+  }
+  return tags;
+}
+
+/**
+ * UX-signal tags derived from GitHub metadata + file presence. These
+ * help an agent rank results ("active and well-known beats stale and
+ * obscure") and help a user filter browse views.
+ */
+function deriveHeuristicTags(facts: GitHubFacts): SkeletonTag[] {
+  const tags: SkeletonTag[] = [];
+
+  // Stars buckets — coarse on purpose. A 10-bucket popularity tag would
+  // bloat the tag namespace and the boundaries are arbitrary anyway.
+  if (facts.stars >= 1000) {
+    tags.push({ tag_type: "popularity", tag_value: "popular" });
+  } else if (facts.stars >= 100) {
+    tags.push({ tag_type: "popularity", tag_value: "notable" });
+  }
+
+  // Activity recency — based on pushed_at, which moves with any commit
+  // including merges, so it's a fair "is this maintained" signal.
+  if (facts.pushedAt) {
+    const pushed = new Date(facts.pushedAt).getTime();
+    const ageDays = (Date.now() - pushed) / (1000 * 60 * 60 * 24);
+    if (ageDays <= 90) {
+      tags.push({ tag_type: "activity", tag_value: "active" });
+    } else if (ageDays > 365) {
+      tags.push({ tag_type: "activity", tag_value: "stale" });
+    }
+  }
+
+  // Presence flags from the top-level file/dir listing.
+  const fileSet = new Set(facts.topLevelFiles.map((f) => f.toLowerCase()));
+  const dirSet = new Set(facts.topLevelDirs.map((d) => d.toLowerCase()));
+  if (facts.readmeExcerpt.length > 0) {
+    tags.push({ tag_type: "presence", tag_value: "has-readme" });
+  }
+  if (dirSet.has("examples") || dirSet.has("example")) {
+    tags.push({ tag_type: "presence", tag_value: "has-examples" });
+  }
+  if (dirSet.has("tests") || dirSet.has("test") || dirSet.has("__tests__")) {
+    tags.push({ tag_type: "presence", tag_value: "has-tests" });
+  }
+  if (fileSet.has("dockerfile") || fileSet.has("docker-compose.yml") || fileSet.has("docker-compose.yaml")) {
+    tags.push({ tag_type: "pattern", tag_value: "containerized" });
+  }
+
+  return tags;
+}
+
+/**
+ * Concrete framework tags from the repo's dependency manifest. We fetch
+ * package.json or pyproject.toml when present and map dep names to
+ * canonical framework tag values. This catches frameworks an LLM might
+ * miss because they're only mentioned in deps, not the README.
+ *
+ * One extra Octokit call per ingest (or two if both files exist), which
+ * is fine with GITHUB_TOKEN set (5000/hr) and matters less without it
+ * since anonymous mass ingest is already gated on rate-limit.
+ */
+async function detectFrameworkTags(facts: GitHubFacts): Promise<SkeletonTag[]> {
+  const tags: SkeletonTag[] = [];
+  const fileSet = new Set(facts.topLevelFiles.map((f) => f.toLowerCase()));
+
+  if (fileSet.has("package.json")) {
+    const deps = await fetchPackageJsonDeps(facts);
+    for (const dep of deps) {
+      const tag = mapNpmDepToTag(dep);
+      if (tag) tags.push(tag);
+    }
+  }
+
+  if (fileSet.has("pyproject.toml") || fileSet.has("requirements.txt")) {
+    const deps = await fetchPythonDeps(facts);
+    for (const dep of deps) {
+      const tag = mapPythonDepToTag(dep);
+      if (tag) tags.push(tag);
+    }
+  }
+
+  // Plain-language ecosystem tags from manifest presence — useful even
+  // when we couldn't fetch the manifest body (private fork, big file, etc.).
+  if (fileSet.has("go.mod")) {
+    tags.push({ tag_type: "language", tag_value: "go" });
+  }
+  if (fileSet.has("cargo.toml")) {
+    tags.push({ tag_type: "language", tag_value: "rust" });
+  }
+
+  return tags;
+}
+
+async function fetchPackageJsonDeps(facts: GitHubFacts): Promise<string[]> {
+  try {
+    const res = await octokit.repos.getContent({
+      owner: facts.owner,
+      repo: facts.repo,
+      path: "package.json",
+      ref: facts.defaultBranch,
+    });
+    const data = res.data as { content?: string; encoding?: string };
+    if (!data.content) return [];
+    const text = Buffer.from(data.content, "base64").toString("utf-8");
+    const parsed = JSON.parse(text) as {
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+      peerDependencies?: Record<string, string>;
+    };
+    return [
+      ...Object.keys(parsed.dependencies ?? {}),
+      ...Object.keys(parsed.devDependencies ?? {}),
+      ...Object.keys(parsed.peerDependencies ?? {}),
+    ];
+  } catch {
+    return [];
+  }
+}
+
+async function fetchPythonDeps(facts: GitHubFacts): Promise<string[]> {
+  // Prefer pyproject.toml — it's structured. Fall back to requirements.txt
+  // which is often a kitchen sink but parseable line-by-line.
+  const fileSet = new Set(facts.topLevelFiles.map((f) => f.toLowerCase()));
+
+  if (fileSet.has("pyproject.toml")) {
+    try {
+      const res = await octokit.repos.getContent({
+        owner: facts.owner,
+        repo: facts.repo,
+        path: "pyproject.toml",
+        ref: facts.defaultBranch,
+      });
+      const data = res.data as { content?: string };
+      if (!data.content) return [];
+      const text = Buffer.from(data.content, "base64").toString("utf-8");
+      // Cheap parse — just pull names from `dependencies = [...]` and
+      // `[project] dependencies =`. Full toml parser would be overkill
+      // for tag derivation.
+      const matches = text.match(/^\s*"?([a-z0-9_\-]+)["~><=\s]/gim) ?? [];
+      return matches
+        .map((m) => m.replace(/[^a-z0-9_\-]/gi, "").toLowerCase())
+        .filter((s) => s.length > 1);
+    } catch {
+      return [];
+    }
+  }
+
+  if (fileSet.has("requirements.txt")) {
+    try {
+      const res = await octokit.repos.getContent({
+        owner: facts.owner,
+        repo: facts.repo,
+        path: "requirements.txt",
+        ref: facts.defaultBranch,
+      });
+      const data = res.data as { content?: string };
+      if (!data.content) return [];
+      const text = Buffer.from(data.content, "base64").toString("utf-8");
+      return text
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line && !line.startsWith("#") && !line.startsWith("-"))
+        .map((line) => line.split(/[<>=!~;\s]/)[0]?.toLowerCase() ?? "")
+        .filter((s) => s.length > 1);
+    } catch {
+      return [];
+    }
+  }
+
+  return [];
+}
+
+/**
+ * Map known npm package names to canonical tag values. Only includes
+ * packages whose presence is meaningful for search/discovery — generic
+ * deps like lodash or zod don't earn a tag.
+ */
+function mapNpmDepToTag(dep: string): SkeletonTag | null {
+  const d = dep.toLowerCase();
+  // Frameworks
+  if (d === "next") return { tag_type: "framework", tag_value: "nextjs" };
+  if (d === "react") return { tag_type: "framework", tag_value: "react" };
+  if (d === "vue") return { tag_type: "framework", tag_value: "vue" };
+  if (d === "nuxt") return { tag_type: "framework", tag_value: "nuxt" };
+  if (d === "svelte" || d === "@sveltejs/kit") return { tag_type: "framework", tag_value: "svelte" };
+  if (d === "fastify") return { tag_type: "framework", tag_value: "fastify" };
+  if (d === "express") return { tag_type: "framework", tag_value: "express" };
+  if (d === "hono") return { tag_type: "framework", tag_value: "hono" };
+  if (d === "@nestjs/core") return { tag_type: "framework", tag_value: "nestjs" };
+  if (d === "remix" || d === "@remix-run/react") return { tag_type: "framework", tag_value: "remix" };
+  if (d === "astro") return { tag_type: "framework", tag_value: "astro" };
+  if (d === "electron") return { tag_type: "framework", tag_value: "electron" };
+  // AI/agent stack
+  if (d === "@anthropic-ai/sdk") return { tag_type: "tool", tag_value: "claude" };
+  if (d === "openai") return { tag_type: "tool", tag_value: "openai" };
+  if (d === "@modelcontextprotocol/sdk") return { tag_type: "pattern", tag_value: "mcp-server" };
+  if (d === "langchain" || d === "@langchain/core") return { tag_type: "framework", tag_value: "langchain" };
+  if (d === "ai") return { tag_type: "framework", tag_value: "vercel-ai-sdk" };
+  // Browser / scraping
+  if (d === "puppeteer" || d === "puppeteer-core") return { tag_type: "tool", tag_value: "puppeteer" };
+  if (d === "playwright" || d === "@playwright/test") return { tag_type: "tool", tag_value: "playwright" };
+  if (d === "cheerio") return { tag_type: "tool", tag_value: "cheerio" };
+  // Data / storage
+  if (d === "@supabase/supabase-js") return { tag_type: "platform", tag_value: "supabase" };
+  if (d === "@prisma/client" || d === "prisma") return { tag_type: "tool", tag_value: "prisma" };
+  if (d === "drizzle-orm") return { tag_type: "tool", tag_value: "drizzle" };
+  // Animation / video
+  if (d === "gsap") return { tag_type: "tool", tag_value: "gsap" };
+  if (d === "fluent-ffmpeg" || d === "ffmpeg-static") return { tag_type: "tool", tag_value: "ffmpeg" };
+  return null;
+}
+
+function mapPythonDepToTag(dep: string): SkeletonTag | null {
+  const d = dep.toLowerCase();
+  if (d === "fastapi") return { tag_type: "framework", tag_value: "fastapi" };
+  if (d === "flask") return { tag_type: "framework", tag_value: "flask" };
+  if (d === "django") return { tag_type: "framework", tag_value: "django" };
+  if (d === "starlette") return { tag_type: "framework", tag_value: "starlette" };
+  if (d === "anthropic") return { tag_type: "tool", tag_value: "claude" };
+  if (d === "openai") return { tag_type: "tool", tag_value: "openai" };
+  if (d === "langchain" || d === "langchain-core") return { tag_type: "framework", tag_value: "langchain" };
+  if (d === "llama-index" || d === "llama_index") return { tag_type: "framework", tag_value: "llama-index" };
+  if (d === "transformers") return { tag_type: "framework", tag_value: "huggingface" };
+  if (d === "torch" || d === "pytorch") return { tag_type: "framework", tag_value: "pytorch" };
+  if (d === "tensorflow") return { tag_type: "framework", tag_value: "tensorflow" };
+  if (d === "playwright") return { tag_type: "tool", tag_value: "playwright" };
+  if (d === "selenium") return { tag_type: "tool", tag_value: "selenium" };
+  if (d === "beautifulsoup4" || d === "bs4") return { tag_type: "tool", tag_value: "beautifulsoup" };
+  if (d === "scrapy") return { tag_type: "framework", tag_value: "scrapy" };
+  if (d === "supabase") return { tag_type: "platform", tag_value: "supabase" };
+  if (d === "psycopg2" || d === "psycopg") return { tag_type: "tool", tag_value: "postgres" };
+  return null;
+}
+
+function dedupeTags(tags: SkeletonTag[]): SkeletonTag[] {
+  const seen = new Set<string>();
+  const out: SkeletonTag[] = [];
+  for (const t of tags) {
+    const key = `${t.tag_type}::${t.tag_value}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(t);
+  }
+  return out;
+}
+
 // ── Side-effect writes ───────────────────────────────────────────────
 
 async function writeSkeletonTags(
   entryId: string,
-  facts: GitHubFacts
+  tags: SkeletonTag[]
 ): Promise<void> {
+  if (tags.length === 0) return;
+
   const supabase = supabaseAdmin();
-  const rows: Array<{ entry_id: string; tag_type: string; tag_value: string }> = [];
-
-  if (facts.language) {
-    rows.push({ entry_id: entryId, tag_type: "language", tag_value: facts.language });
-  }
-  for (const topic of facts.topics.slice(0, 20)) {
-    rows.push({ entry_id: entryId, tag_type: "topic", tag_value: topic });
-  }
-  if (facts.license) {
-    rows.push({ entry_id: entryId, tag_type: "license", tag_value: facts.license });
-  }
-
-  if (rows.length === 0) return;
+  const rows = tags.map((t) => ({
+    entry_id: entryId,
+    tag_type: t.tag_type,
+    tag_value: t.tag_value,
+  }));
 
   // Non-fatal on error — tags are searchable metadata, not correctness
   // for the entry itself. But log so a broken schema/constraint is
