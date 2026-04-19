@@ -76,8 +76,29 @@ async function handleGet(
       memories: (memories || []).map((m) => ({ id: m.id, content: m.content })),
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    // Surface Supabase PostgrestError shape (code + details + hint) in
+    // addition to plain Error.message so a 500 from the upsert path
+    // actually tells us what column/constraint failed. Without this,
+    // cluster_brains insert errors render as "Unknown error" because
+    // PostgrestError isn't an Error instance.
+    const err = error as Record<string, unknown> | null;
+    const message =
+      (err && typeof err.message === "string" && err.message) ||
+      (error instanceof Error ? error.message : null) ||
+      "Unknown error";
+    const details = err && typeof err.details === "string" ? err.details : undefined;
+    const code = err && typeof err.code === "string" ? err.code : undefined;
+    const hint = err && typeof err.hint === "string" ? err.hint : undefined;
+    console.error(`[cluster-brain] handler failed:`, { message, code, details, hint });
+    return NextResponse.json(
+      {
+        error: message,
+        ...(code ? { code } : {}),
+        ...(details ? { details } : {}),
+        ...(hint ? { hint } : {}),
+      },
+      { status: 500 }
+    );
   }
 }
 
@@ -143,6 +164,7 @@ async function handlePatch(
         .from("cluster_brains")
         .insert({
           cluster_id: cluster.id,
+          user_id: userId,
           instructions,
           updated_at: now,
         })
@@ -166,8 +188,29 @@ async function handlePatch(
           },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    // Surface Supabase PostgrestError shape (code + details + hint) in
+    // addition to plain Error.message so a 500 from the upsert path
+    // actually tells us what column/constraint failed. Without this,
+    // cluster_brains insert errors render as "Unknown error" because
+    // PostgrestError isn't an Error instance.
+    const err = error as Record<string, unknown> | null;
+    const message =
+      (err && typeof err.message === "string" && err.message) ||
+      (error instanceof Error ? error.message : null) ||
+      "Unknown error";
+    const details = err && typeof err.details === "string" ? err.details : undefined;
+    const code = err && typeof err.code === "string" ? err.code : undefined;
+    const hint = err && typeof err.hint === "string" ? err.hint : undefined;
+    console.error(`[cluster-brain] handler failed:`, { message, code, details, hint });
+    return NextResponse.json(
+      {
+        error: message,
+        ...(code ? { code } : {}),
+        ...(details ? { details } : {}),
+        ...(hint ? { hint } : {}),
+      },
+      { status: 500 }
+    );
   }
 }
 

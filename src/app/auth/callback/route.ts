@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from "@/lib/supabase";
 import { cookies } from "next/headers";
 import { startTrialIfNew } from "@/lib/billing/subscriptions";
 import { logConversionEvent, hasFiredEvent } from "@/lib/analytics/conversion-events";
+import { forkPublishedCluster } from "@/lib/community/service";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -11,6 +12,10 @@ export async function GET(request: NextRequest) {
   // /welcome itself server-redirects to /canvas for already-onboarded
   // users, so returning sign-ins cost one extra redirect and nothing else.
   const redirectTo = searchParams.get("redirectTo") || "/welcome";
+  // Optional "install this cluster on landing" intent. Set by the
+  // shared-cluster page's "Log in to install" CTA so the visitor lands
+  // on /canvas with the cluster already imported, no extra click.
+  const installCluster = searchParams.get("installCluster");
 
   if (code) {
     const cookieStore = await cookies();
@@ -40,11 +45,31 @@ export async function GET(request: NextRequest) {
               eventType: "trial_started",
             });
           }
+
+          // Fulfil install intent. Self-fork and "already imported"
+          // failures are silent successes from the visitor's POV — they
+          // still land on /canvas and the cluster is there.
+          if (installCluster) {
+            try {
+              await forkPublishedCluster(installCluster, user.id);
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err);
+              if (
+                !msg.includes("already imported") &&
+                !msg.includes("Cannot import your own cluster")
+              ) {
+                console.error(
+                  `[auth.callback] auto-install failed for ${installCluster}:`,
+                  msg
+                );
+              }
+            }
+          }
         }
       } catch (err) {
-        // Swallow — trial/event failures must not break sign-in.
+        // Swallow — trial/event/install failures must not break sign-in.
         console.error(
-          `[auth.callback] trial start failed:`,
+          `[auth.callback] post-auth side effects failed:`,
           err instanceof Error ? err.message : String(err)
         );
       }

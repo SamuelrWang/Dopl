@@ -48,13 +48,13 @@ async function memoryBelongsToUser(
   return brains?.clusters?.user_id === userId;
 }
 
-async function getOrCreateBrain(clusterId: string): Promise<string> {
+async function getOrCreateBrain(clusterId: string, userId: string): Promise<string> {
   const db = supabaseAdmin();
 
   const { data: brain, error } = await db
     .from("cluster_brains")
     .upsert(
-      { cluster_id: clusterId, instructions: "" },
+      { cluster_id: clusterId, user_id: userId, instructions: "" },
       { onConflict: "cluster_id", ignoreDuplicates: true }
     )
     .select("id")
@@ -96,12 +96,17 @@ async function handlePost(
       );
     }
 
-    const brainId = await getOrCreateBrain(cluster.id);
+    const brainId = await getOrCreateBrain(cluster.id, userId);
 
     const db = supabaseAdmin();
     const { data: memory, error } = await db
       .from("cluster_brain_memories")
-      .insert({ cluster_brain_id: brainId, content })
+      .insert({
+        cluster_brain_id: brainId,
+        cluster_id: cluster.id,
+        user_id: userId,
+        content,
+      })
       .select("id, content, created_at")
       .single();
 

@@ -98,6 +98,20 @@ export function MarkdownMessage({ content, className, entryNames }: MarkdownMess
         "prose-h1:mt-3 prose-h2:mt-3 prose-h3:mt-2",
         // Bold text
         "prose-strong:text-white/90 prose-strong:font-semibold",
+        // Italic / emphasis — Tailwind Typography's default is
+        // text-gray-500 which is unreadable on our dark surface.
+        "prose-em:text-white/80 prose-em:italic",
+        // Blockquotes — same readability issue. Keep the italic quote
+        // feel but lift the text color, soften the left border to match
+        // the rest of the dark chrome.
+        "prose-blockquote:text-white/75 prose-blockquote:italic",
+        "prose-blockquote:border-l-2 prose-blockquote:border-l-white/20",
+        "prose-blockquote:pl-3 prose-blockquote:my-2",
+        "prose-blockquote:font-normal",
+        // Links — make them visible on the dark surface without
+        // over-saturating. Default prose link color is too muted.
+        "prose-a:text-sky-300/90 prose-a:underline prose-a:decoration-sky-300/30",
+        "hover:prose-a:decoration-sky-300/80",
         // Inline code
         "prose-code:text-xs prose-code:bg-white/[0.08]",
         "prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded",

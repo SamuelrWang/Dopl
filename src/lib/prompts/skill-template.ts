@@ -35,6 +35,12 @@ export const SKILL_BODY_TEMPLATE = `## When to use this skill
 ## Anti-patterns
 <What NOT to do. Common mistakes, wrong tools for the job, scale misuse. Honest about boundaries.>
 
+## When to save a memory
+<One paragraph + bulleted trigger categories. The kinds of user statements that should fire \`save_cluster_memory\` silently in the background. Three categories: (1) preferences and environment facts ("I prefer X over Y", "for my setup …", "always use …", "skip step …", "from now on …", "in my environment …", "my <env var / value> is …"); (2) soft corrections without canonical wrong-phrasing ("no", "actually …", "that's not right", "you got X backwards", "the answer is Y, not Z"); (3) outcome dissatisfaction — the highest-signal category, where the skill led the agent astray and the user is reacting to the result ("I tried that, it didn't work", "the output wasn't what I wanted", "ran it and got the wrong result", "this approach gave me garbage", "that didn't produce X"). Capture category-3 lessons as memories describing the gotcha.>
+
+## When to update this skill
+<One paragraph + bulleted trigger phrases. The kinds of user statements that should fire \`update_cluster_brain\` (after a \`get_cluster_brain\` read + surgical edit). Structural corrections to the workflow itself, additions of new use cases, removals of stale guidance. Trigger phrases: "step X is wrong", "remove the part about …", "let's also include …", "add Y to the skill", "from now on always …" (when scope is the workflow). Also fires on outcome dissatisfaction when the cause traces back to the brain's instructions, not a one-off setup detail — if the skill itself produced bad guidance, the skill needs to change.>
+
 ## References
 <Each entry in this cluster with a one-line role. Format: "- [Entry title](entry-url) — what role this entry plays in the skill."  This is the provenance trail.>`;
 
@@ -68,6 +74,12 @@ Numbered steps, only when a sequential approach applies. Omit entirely for non-p
 
 ## Anti-patterns
 Bulleted list of what NOT to do. Common mistakes, wrong tool choices, out-of-scope uses. Be honest about what this skill is not for.
+
+## When to save a memory
+One paragraph + bulleted trigger categories. Tells future invocations of this skill which user statements fire \`save_cluster_memory\` silently in the background. Cover three categories: (1) preferences and environment facts — "I prefer X over Y", "for my setup …", "always use …", "skip step …", "from now on …", "in my environment …"; (2) soft corrections without canonical wrong-phrasing — "no", "actually …", "that's not right", "you got X backwards", "the answer is Y, not Z"; (3) outcome dissatisfaction — "I tried that, it didn't work", "the output wasn't what I wanted", "this approach gave me garbage". Category 3 is highest-signal — capture as a memory describing the specific gotcha.
+
+## When to update this skill
+One paragraph + bulleted trigger phrases. Tells future invocations which user statements fire \`update_cluster_brain\` (after a \`get_cluster_brain\` read + surgical edit). Cover: structural corrections to the workflow, new use cases the skill should handle, stale guidance to remove. Trigger phrases: "step X is wrong", "remove the part about …", "let's also include …", "add Y to the skill", "from now on always …" (when scope is the workflow). Also fires on outcome dissatisfaction when the cause traces back to brain instructions rather than a one-off setup detail.
 
 ## References
 Bulleted list of the entries in this cluster, one line each. Format: "- <entry title> — <its specific role in the skill>". This is the provenance trail.
@@ -115,7 +127,16 @@ export function validateBrainStructure(instructions: string): {
   ok: boolean;
   missingSections: string[];
 } {
-  const required = ["## When to use this skill", "## Instructions"];
+  // Two tiers — the executable skeleton (must-have) and the
+  // self-maintenance protocol (should-have so the agent reliably
+  // refreshes/edits/saves at the right moments). Both feed the same
+  // advisory warning; we don't differentiate severity yet.
+  const required = [
+    "## When to use this skill",
+    "## Instructions",
+    "## When to save a memory",
+    "## When to update this skill",
+  ];
   const missing = required.filter((heading) => !instructions.includes(heading));
   return {
     ok: missing.length === 0,

@@ -701,6 +701,7 @@ export async function forkPublishedCluster(
   if (brain?.instructions) {
     await db.from("cluster_brains").insert({
       cluster_id: newCluster.id,
+      user_id: userId,
       instructions: brain.instructions,
     });
   }

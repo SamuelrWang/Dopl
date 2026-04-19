@@ -12,6 +12,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import type { PublishedClusterDetail } from "@/lib/community/types";
 import type { CanvasContextPayload, ContextPanelDTO } from "@/components/canvas/panels/chat/cluster-context";
 import { CONTEXT_CHAR_BUDGET_PER_FIELD } from "@/lib/config";
+import { MarkdownMessage } from "@/components/design/markdown-message";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -170,18 +171,15 @@ export function CommunityChat({ cluster }: CommunityChatProps) {
           </div>
         )}
         {messages.map((msg, i) => (
-          <div
-            key={i}
-            className={`text-sm leading-relaxed ${
-              msg.role === "user"
-                ? "text-white/70"
-                : "text-white/50"
-            }`}
-          >
+          <div key={i} className="text-sm leading-relaxed">
             <span className="text-[10px] font-mono uppercase tracking-wider text-white/20 block mb-0.5">
               {msg.role === "user" ? "You" : "AI"}
             </span>
-            <div className="whitespace-pre-wrap">{msg.content}</div>
+            {msg.role === "user" ? (
+              <div className="whitespace-pre-wrap text-white/70">{msg.content}</div>
+            ) : (
+              <MarkdownMessage content={msg.content} />
+            )}
           </div>
         ))}
         {streaming && messages[messages.length - 1]?.content === "" && (

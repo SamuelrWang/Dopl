@@ -37,12 +37,20 @@ const DETAIL_OVERLAY_RESERVED_PX = 436;
 interface Props {
   cluster: PublishedClusterDetail;
   isOwner: boolean;
+  /**
+   * Whether the visitor has an authenticated session. Decouples
+   * "signed-in viewer who isn't the owner" from "logged-out visitor" —
+   * the fork CTA needs to surface a Sign-In affordance to the latter
+   * rather than auto-redirecting on a post-click 401.
+   */
+  isAuthenticated: boolean;
   canvasContainerRef: React.RefObject<HTMLDivElement | null>;
 }
 
 export default function SharedClusterShell({
   cluster,
   isOwner,
+  isAuthenticated,
   canvasContainerRef,
 }: Props) {
   // Build the CanvasState once per cluster identity. Re-seeding on every
@@ -90,12 +98,12 @@ export default function SharedClusterShell({
           rounded, detached overlay — matching the FixedChatPanel look
           on /canvas. 16px gap on all three visible sides. */}
       <div className="flex-1 relative overflow-hidden" ref={canvasContainerRef}>
-        <Canvas />
+        <Canvas showMinimap={false} />
         <div
           className="absolute top-4 right-4 bottom-4 z-10"
           style={{ width: 420 }}
         >
-          <DetailPanel cluster={cluster} isOwner={isOwner} />
+          <DetailPanel cluster={cluster} isOwner={isOwner} isAuthenticated={isAuthenticated} />
         </div>
       </div>
       <FitAllOnMountBridge />

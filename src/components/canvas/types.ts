@@ -622,6 +622,18 @@ export type CanvasAction =
       index: number;
     }
   | {
+      /**
+       * Replace the entire memories array atomically. Used by the
+       * realtime bridge: on any cluster_brain_memories event we
+       * refetch the full list (canvas state doesn't store memory IDs,
+       * so per-event index math isn't reliable) and dispatch this
+       * with the result.
+       */
+      type: "SET_CLUSTER_BRAIN_MEMORIES";
+      panelId: string;
+      memories: string[];
+    }
+  | {
       /** Mark the brain as errored. */
       type: "SET_CLUSTER_BRAIN_ERROR";
       panelId: string;

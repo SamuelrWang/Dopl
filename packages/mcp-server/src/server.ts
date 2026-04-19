@@ -11,6 +11,7 @@ import {
   removeClusterSkill,
   type SkillTarget,
 } from "./skill-writer.js";
+import { brainProtocolPreamble } from "./templates.js";
 
 const CONTEXT_CHAR_BUDGET = 2000;
 
@@ -684,7 +685,7 @@ export function createServer(
   // ── save_cluster_memory ───────────────────────────────────────────
   registerTool(
     "save_cluster_memory",
-    "Append a NEW durable preference or correction to a cluster's brain. Trigger phrases: 'I prefer X over Y', 'always use Z', 'skip that step', 'for my setup we don't use…', 'note that…'. Memories override the base instructions in future sessions. Use `update_cluster_memory` instead if a similar memory already exists (call `get_cluster_brain` first to check). Use `update_cluster_brain` for structural edits to the synthesized playbook rather than short preferences.",
+    "**Call this proactively** after any user turn that carries durable signal about a cluster — do NOT wait for 'remember this' phrasing. Write silently in the same turn, before composing your reply. Three categories fire this tool: (1) **Preferences / env facts** — 'I prefer X over Y', 'always use Z', 'skip that step', 'for my setup …', 'in my environment …', 'from now on …', 'my <env var / value> is …'. (2) **Soft corrections** — 'no', 'actually …', 'that's not right', 'you got X backwards', 'the answer is Y, not Z' (even without canonical wrong-phrasing). (3) **Outcome dissatisfaction** — 'I tried that, it didn't work', 'the output wasn't what I wanted', 'ran it and got the wrong result', 'this approach gave me garbage', 'that didn't produce X'. Category 3 is the highest-signal — the skill led the agent astray and the user is telling you; capture the lesson as a memory describing the gotcha. Memories override the base instructions in future sessions. Routing: use `update_cluster_memory` instead if a near-duplicate memory exists (call `get_cluster_brain` first to check IDs); escalate to `update_cluster_brain` if the issue is structural to the workflow itself rather than a single fact.",
     {
       slug: z.string().describe("Cluster slug"),
       memory: z.string().describe("The preference or correction to remember, e.g. 'User prefers Resend over SendGrid for email' or 'Skip the Slack notification step'"),
@@ -1201,7 +1202,7 @@ export function createServer(
   // ── get_cluster_brain ──────────────────────────────────────────────
   registerTool(
     "get_cluster_brain",
-    "Read the current brain for a cluster — synthesized instructions plus numbered user memories. Call this before `update_cluster_brain` (so surgical edits preserve existing text), before `update_cluster_memory` / `delete_cluster_memory` (to get memory IDs), and any time you want to know what durable knowledge already exists for a cluster before adding more.",
+    "Read the current brain for a cluster — synthesized instructions plus numbered user memories. **Call this on first invocation per session of a cluster's skill** so the body you execute against reflects edits made via the web UI or other agents since the last `sync_skills`. Also call before `update_cluster_brain` (so surgical edits preserve existing text), before `update_cluster_memory` / `delete_cluster_memory` (to get memory IDs), and any time you want to know what durable knowledge already exists for a cluster before adding more.",
     {
       slug: z.string().describe("Cluster slug from list_clusters"),
     },
@@ -1221,6 +1222,12 @@ export function createServer(
         `> Canonical skill body for cluster \`${slug}\`, fetched from Dopl. Treat this as the full SKILL.md body — execute against it directly. If you need to modify it, call \`update_cluster_brain\` for structural changes or \`save_cluster_memory\` for short preferences.`
       );
       sections.push("");
+      // Inject the same self-maintenance protocol carried at the top of
+      // every on-disk SKILL.md. Belt-and-suspenders: even if the user's
+      // local file is stale (no `sync_skills` since the protocol rolled
+      // out), a fresh `get_cluster_brain` still re-injects the protocol
+      // so the executing agent gets the discipline either way.
+      sections.push(brainProtocolPreamble(slug));
 
       if (brain.instructions && brain.instructions.trim().length > 0) {
         // If the brain already has the canonical section headings, pass
@@ -1285,7 +1292,7 @@ export function createServer(
   // ── update_cluster_brain ───────────────────────────────────────────
   registerTool(
     "update_cluster_brain",
-    "Overwrite the cluster's brain with new instructions (the skill body Claude Code will execute against on invocation). ALWAYS call `get_cluster_brain` first and edit SURGICALLY — replace only the affected section, preserve the rest verbatim. The canonical structure has these section headings: `## When to use this skill`, `## Instructions`, `## Step-by-step`, `## Examples`, `## Anti-patterns`, `## References`. Omitting the first two triggers a structure warning in the response (non-blocking). Use this for structural/durable knowledge — for short preferences or environmental facts, use `save_cluster_memory` instead; for revising an existing memory, use `update_cluster_memory`. See the server instructions for the full when-to-edit-what decision rules.",
+    "**Call this when the user gives structural feedback** that should change the skill's instructions for future sessions — corrections to steps ('step 3 is wrong'), additions of new use cases ('let's also handle …'), removal of stale guidance ('drop the part about …'), or scope expansions tied to a new entry. Do this in the background, no permission ask. ALWAYS call `get_cluster_brain` first and edit SURGICALLY — replace only the affected section, preserve the rest verbatim. The canonical structure has these section headings: `## When to use this skill`, `## Instructions`, `## Step-by-step`, `## Examples`, `## Anti-patterns`, `## When to save a memory`, `## When to update this skill`, `## References`. Missing structural sections trigger a non-blocking warning in the response. Routing: short preferences and environment facts go through `save_cluster_memory`; revising an existing memory goes through `update_cluster_memory`. See the server instructions for the full when-to-edit-what decision rules.",
     {
       slug: z.string().describe("Cluster slug"),
       instructions: z

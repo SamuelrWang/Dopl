@@ -24,30 +24,43 @@ type Tab = "info" | "chat";
 interface DetailPanelProps {
   cluster: PublishedClusterDetail;
   isOwner: boolean;
+  /**
+   * True when the visitor has an authenticated session. When false, the
+   * CTA renders as a "Sign in to import" link instead of a fork button
+   * so we don't silently redirect on click (bad UX for public viewers).
+   */
+  isAuthenticated: boolean;
 }
 
-export function DetailPanel({ cluster, isOwner }: DetailPanelProps) {
+export function DetailPanel({ cluster, isOwner, isAuthenticated }: DetailPanelProps) {
   const [forking, setForking] = useState(false);
   const [forked, setForked] = useState(false);
+  const [forkError, setForkError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("info");
 
   async function handleFork() {
     setForking(true);
+    setForkError(null);
     try {
       const res = await fetch(`/api/community/${cluster.slug}/fork`, {
         method: "POST",
       });
       if (!res.ok) {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
+        // 401 shouldn't happen now that the unauthenticated path renders
+        // a Sign-In link instead of the fork button — but if it does
+        // (e.g. the session expired between load and click), show an
+        // inline message rather than hard-redirecting to /login, which
+        // would blow away any scroll/state the visitor had on the page.
         if (res.status === 401) {
-          window.location.href = `/login?redirect=/community/${cluster.slug}`;
+          setForkError("Your session expired. Sign in to import this cluster.");
           return;
         }
         throw new Error(data.error || "Failed to import");
       }
       setForked(true);
-    } catch {
-      // Non-fatal — a toast could surface this later.
+    } catch (err) {
+      setForkError(err instanceof Error ? err.message : "Failed to import");
     } finally {
       setForking(false);
     }
@@ -96,21 +109,30 @@ export function DetailPanel({ cluster, isOwner }: DetailPanelProps) {
       </div>
 
       {/* ── Body ──────────────────────────────────────────────────── */}
-      {activeTab === "chat" ? (
-        <div className="flex-1 min-h-0 overflow-hidden">
-          <CommunityChat cluster={cluster} />
-        </div>
-      ) : (
-        <div className="flex-1 min-h-0 overflow-y-auto">
-          <InfoBody
-            cluster={cluster}
-            isOwner={isOwner}
-            forking={forking}
-            forked={forked}
-            onFork={handleFork}
-          />
-        </div>
-      )}
+      {/*
+        Both tabs stay mounted; we toggle visibility via `hidden` so
+        chat state (messages, input draft, in-flight stream) survives
+        tab switches. Previously the chat unmounted on every Info
+        click, vaporizing the conversation.
+      */}
+      <div
+        className={`flex-1 min-h-0 overflow-y-auto ${activeTab === "info" ? "" : "hidden"}`}
+      >
+        <InfoBody
+          cluster={cluster}
+          isOwner={isOwner}
+          isAuthenticated={isAuthenticated}
+          forking={forking}
+          forked={forked}
+          forkError={forkError}
+          onFork={handleFork}
+        />
+      </div>
+      <div
+        className={`flex-1 min-h-0 overflow-hidden ${activeTab === "chat" ? "" : "hidden"}`}
+      >
+        <CommunityChat cluster={cluster} />
+      </div>
     </div>
   );
 }
@@ -145,31 +167,74 @@ function TabButton({
   );
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────
+
+// When the curator never wrote a description, fall back to the cluster
+// brain. The brain is structured as a Claude skill (frontmatter + ##
+// headers + body), so we strip the YAML frontmatter, drop heading lines,
+// and pick the first non-empty paragraph. Truncated to keep the panel
+// from ballooning. Returns "" if nothing usable can be extracted.
+function synopsisFromBrain(brain: string | null | undefined): string {
+  if (!brain) return "";
+  let text = brain;
+
+  // Strip leading YAML frontmatter (--- ... ---).
+  if (text.startsWith("---")) {
+    const end = text.indexOf("\n---", 3);
+    if (end !== -1) text = text.slice(end + 4);
+  }
+
+  // Walk paragraph by paragraph; first non-heading, non-bullet block wins.
+  const blocks = text.split(/\n\s*\n/);
+  for (const raw of blocks) {
+    const block = raw.trim();
+    if (!block) continue;
+    if (block.startsWith("#")) continue;
+    if (block.startsWith("-") || block.startsWith("*")) continue;
+    const cleaned = block.replace(/\s+/g, " ").trim();
+    if (cleaned.length < 30) continue;
+    return cleaned.length > 320 ? cleaned.slice(0, 317) + "…" : cleaned;
+  }
+  return "";
+}
+
 // ── Info body ─────────────────────────────────────────────────────────
 
 function InfoBody({
   cluster,
   isOwner,
+  isAuthenticated,
   forking,
   forked,
+  forkError,
   onFork,
 }: {
   cluster: PublishedClusterDetail;
   isOwner: boolean;
+  isAuthenticated: boolean;
   forking: boolean;
   forked: boolean;
+  forkError: string | null;
   onFork: () => void;
 }) {
+  // Prefer the curator-written description. If empty, synthesize a
+  // short blurb from the cluster brain — strip the structured-skill
+  // headers and pick the first meaningful paragraph so the visitor
+  // gets a real overview of what they're looking at instead of a
+  // blank section.
+  const synopsis =
+    cluster.description?.trim() || synopsisFromBrain(cluster.brain_instructions);
+
   return (
     <div className="px-4 py-4 space-y-5">
-      {/* Title + description (compact, matches canvas-panel scale) */}
+      {/* Title + synopsis */}
       <div>
         <h1 className="text-sm font-medium text-white/90 leading-snug mb-1.5">
           {cluster.title}
         </h1>
-        {cluster.description && (
-          <p className="text-[11px] text-white/50 leading-relaxed">
-            {cluster.description}
+        {synopsis && (
+          <p className="text-[11px] text-white/55 leading-relaxed whitespace-pre-line">
+            {synopsis}
           </p>
         )}
       </div>
@@ -259,70 +324,63 @@ function InfoBody({
       </div>
 
       {/* CTA */}
-      {!isOwner ? (
-        <button
-          onClick={onFork}
-          disabled={forking || forked}
-          className="w-full h-9 rounded-[4px] bg-white text-black text-[11px] font-medium uppercase tracking-wider hover:bg-white/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-        >
-          {forked
-            ? "Imported to canvas"
-            : forking
-              ? "Importing..."
-              : "Import to my canvas"}
-        </button>
-      ) : (
+      {isOwner ? (
         <Link
           href="/community/posts"
           className="w-full h-9 flex items-center justify-center rounded-[4px] border border-white/[0.1] text-white/60 text-[11px] font-medium uppercase tracking-wider hover:text-white/90 hover:border-white/[0.2] transition-colors"
         >
           Manage posts
         </Link>
-      )}
-
-      {/* Entries */}
-      <div>
-        <div className="font-mono text-[10px] uppercase tracking-wider text-white/40 mb-2">
-          Entries ({cluster.entries.length})
-        </div>
-        <div className="space-y-1.5">
-          {cluster.entries.map((entry) => (
-            <div
-              key={entry.entry_id}
-              className="px-3 py-2 rounded-[4px] border border-white/[0.05] bg-white/[0.02] hover:bg-white/[0.04] transition-colors"
-            >
-              <div className="text-[11px] text-white/80 font-medium line-clamp-1 leading-snug">
-                {entry.title || "Untitled"}
-              </div>
-              {entry.summary && (
-                <div className="mt-0.5 text-[10px] text-white/35 line-clamp-2 leading-snug">
-                  {entry.summary}
-                </div>
-              )}
-              {entry.source_platform && (
-                <span className="inline-block mt-1 font-mono text-[9px] uppercase tracking-wider text-white/25">
-                  {entry.source_platform}
-                </span>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Brain */}
-      {cluster.brain_instructions && (
-        <div>
-          <div className="font-mono text-[10px] uppercase tracking-wider text-white/40 mb-2">
-            Cluster brain
-          </div>
-          <div
-            className="p-3 rounded-[4px] border border-white/[0.05] bg-white/[0.02] text-[10px] text-white/45 leading-relaxed whitespace-pre-wrap line-clamp-[12]"
+      ) : isAuthenticated ? (
+        <>
+          <button
+            onClick={onFork}
+            disabled={forking || forked}
+            className="w-full h-9 rounded-[4px] bg-white text-black text-[11px] font-medium uppercase tracking-wider hover:bg-white/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
-            {cluster.brain_instructions.slice(0, 500)}
-            {cluster.brain_instructions.length > 500 && "..."}
-          </div>
-        </div>
+            {forked
+              ? "Installed to canvas"
+              : forking
+                ? "Installing..."
+                : "Install to my canvas"}
+          </button>
+          {forkError && (
+            <p className="mt-2 text-[10px] text-red-400/80 text-center">
+              {forkError}
+            </p>
+          )}
+        </>
+      ) : (
+        // Unauthenticated visitor: surface the Sign-In requirement up
+        // front as an explicit affordance. Previously this rendered as
+        // the normal Import button that silently bounced the visitor
+        // to /login on click (401 → window.location.href) — a surprise
+        // redirect, which is the pattern the user flagged as bad UX.
+        <Link
+          href={`/login?redirectTo=/canvas&installCluster=${encodeURIComponent(cluster.slug)}`}
+          className="w-full h-9 flex items-center justify-center rounded-[4px] bg-white text-black text-[11px] font-medium uppercase tracking-wider hover:bg-white/90 transition-colors"
+        >
+          Log in to install
+        </Link>
       )}
+
+      {/* What is Dopl? — orient first-time visitors who land on a
+          shared cluster without context. Keep it short and tonally
+          aligned with the rest of the chrome (mono header, muted body). */}
+      <div
+        className="p-3 rounded-[4px] border border-white/[0.06] bg-white/[0.02]"
+        style={{ boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)" }}
+      >
+        <div className="font-mono text-[10px] uppercase tracking-wider text-white/40 mb-1.5">
+          What is Dopl?
+        </div>
+        <p className="text-[11px] text-white/55 leading-relaxed">
+          Dopl is a knowledge base of proven AI and automation setups —
+          agents, skills, workflows, and integrations. Browse what others
+          have built, install one to your own canvas, and remix it for
+          your own workflow.
+        </p>
+      </div>
 
       {/* Date */}
       <div

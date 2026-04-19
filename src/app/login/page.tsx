@@ -20,6 +20,20 @@ function LoginForm() {
   // users, so returning sign-ins cost one extra redirect and nothing else.
   // Deep links that pass an explicit ?redirectTo= override this.
   const redirectTo = searchParams.get("redirectTo") || "/welcome";
+  // Optional "install this cluster after sign-in" intent. Threaded
+  // through to /auth/callback so OAuth + email-confirm flows can run
+  // the fork server-side; on the email/password path we run it from
+  // here just before pushing to redirectTo.
+  const installCluster = searchParams.get("installCluster");
+
+  // Build the callback URL for OAuth / email-confirm flows. Only safe
+  // to call inside event handlers — `window` isn't defined during
+  // server render.
+  function buildCallbackUrl(): string {
+    const params = new URLSearchParams({ redirectTo });
+    if (installCluster) params.set("installCluster", installCluster);
+    return `${window.location.origin}/auth/callback?${params.toString()}`;
+  }
 
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
@@ -43,6 +57,19 @@ function LoginForm() {
           password,
         });
         if (error) throw error;
+        // Email/password login skips /auth/callback, so we run the
+        // install-on-sign-in intent client-side here. Self-fork and
+        // duplicate-import errors are swallowed — the visitor still
+        // lands on /canvas with the cluster (already) present.
+        if (installCluster) {
+          try {
+            await fetch(`/api/community/${encodeURIComponent(installCluster)}/fork`, {
+              method: "POST",
+            });
+          } catch {
+            // Intentional: install is best-effort here.
+          }
+        }
         router.push(redirectTo);
         router.refresh();
       } else {
@@ -50,7 +77,7 @@ function LoginForm() {
           email,
           password,
           options: {
-            emailRedirectTo: `${window.location.origin}/auth/callback?redirectTo=${redirectTo}`,
+            emailRedirectTo: buildCallbackUrl(),
           },
         });
         if (error) throw error;
@@ -68,7 +95,7 @@ function LoginForm() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback?redirectTo=${redirectTo}`,
+        redirectTo: buildCallbackUrl(),
       },
     });
     if (error) {

@@ -206,7 +206,16 @@ function getGridCellSize(): { cx: number; cy: number } {
   return { cx, cy };
 }
 
-export function Canvas() {
+interface CanvasProps {
+  /**
+   * Show the bird's-eye minimap in the bottom-right corner. Defaults to
+   * true. The published cluster viewer turns it off — visitors there
+   * don't navigate large workspaces, so the minimap is just chrome.
+   */
+  showMinimap?: boolean;
+}
+
+export function Canvas({ showMinimap = true }: CanvasProps = {}) {
   const { state, dispatch } = useCanvas();
   const viewportRef = useRef<HTMLDivElement>(null);
   const worldRef = useRef<HTMLDivElement>(null);
@@ -298,7 +307,7 @@ export function Canvas() {
       const cam = pendingCameraRef.current ?? cameraRef.current;
       applyCameraDirect(el, worldEl, cam, gridCellRef.current);
     }
-  });
+  }, [state.camera]);
 
   // Same trick for the live panels list — the marquee handler needs to
   // read the current panel positions on every pointermove without being
@@ -850,7 +859,7 @@ export function Canvas() {
       )}
 
       {/* Minimap — bird's-eye view of all panels + viewport indicator */}
-      {vpSize.w > 0 && (
+      {showMinimap && vpSize.w > 0 && (
         <CanvasMinimap
           viewportWidth={vpSize.w}
           viewportHeight={vpSize.h}

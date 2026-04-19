@@ -44,6 +44,7 @@ import type {
 } from "@/components/ingest/chat-message";
 import { useCanvasDbSync } from "./use-canvas-db-sync";
 import { useEntriesRealtime } from "./use-entries-realtime";
+import { useClustersRealtime } from "./use-clusters-realtime";
 import {
   useConversationSync,
   ChatConversationsProvider,
@@ -774,6 +775,16 @@ function reducer(state: CanvasState, action: CanvasAction): CanvasState {
         ),
       };
 
+    case "SET_CLUSTER_BRAIN_MEMORIES":
+      return {
+        ...state,
+        panels: state.panels.map((p) =>
+          p.id === action.panelId && p.type === "cluster-brain"
+            ? { ...p, memories: action.memories }
+            : p
+        ),
+      };
+
     case "SET_CLUSTER_BRAIN_ERROR":
       return {
         ...state,
@@ -1063,6 +1074,7 @@ export function CanvasProvider({
               {syncStrategy === "user" && <CanvasDbSyncBridge />}
               {syncStrategy === "user" && <ConversationSyncBridge />}
               {syncStrategy === "user" && <EntriesRealtimeBridge />}
+              {syncStrategy === "user" && <ClustersRealtimeBridge />}
               {syncStrategy === "shared" && (
                 <SharedPanelMoveBridge onPanelsMove={onPanelsMove} />
               )}
@@ -1094,6 +1106,16 @@ function ConversationSyncBridge() {
  */
 function EntriesRealtimeBridge() {
   useEntriesRealtime();
+  return null;
+}
+
+/**
+ * Bridge for realtime updates to clusters, brains, and brain memories.
+ * Reflects MCP-agent edits (rename / delete / brain update / memory
+ * write) on the canvas without a page reload.
+ */
+function ClustersRealtimeBridge() {
+  useClustersRealtime();
   return null;
 }
 

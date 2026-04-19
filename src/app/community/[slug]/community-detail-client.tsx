@@ -97,6 +97,7 @@ export default function CommunityDetailClient({ cluster }: Props) {
       <SharedClusterShell
         cluster={cluster}
         isOwner={isOwner}
+        isAuthenticated={currentUserId !== null}
         canvasContainerRef={canvasContainerRef}
       />
     </div>

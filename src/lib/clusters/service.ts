@@ -436,6 +436,76 @@ export async function deleteCluster(
   opts: { userId: string }
 ): Promise<void> {
   const db = supabaseAdmin();
+
+  // Look up the cluster first so we know its id for cascade cleanup.
+  // A missing cluster is not an error here — delete is idempotent and
+  // we still want to clean orphan canvas rows from a prior broken state.
+  const { data: cluster } = await db
+    .from("clusters")
+    .select("id")
+    .eq("slug", slug)
+    .eq("user_id", opts.userId)
+    .maybeSingle();
+
+  // ── Cascade: remove the cluster-brain canvas panel ────────────────
+  // Without this, delete+recreate leaves an orphan `canvas_panels` row
+  // whose `cluster_id` points at a now-dead cluster. The client
+  // hydrator renders it as an "Untitled" floating panel and a recreate
+  // spawns a second brain panel next to it.
+  if (cluster) {
+    const { error: brainPanelError } = await db
+      .from("canvas_panels")
+      .delete()
+      .eq("user_id", opts.userId)
+      .eq("panel_type", "cluster-brain")
+      .eq("panel_id", `brain-${cluster.id}`);
+    if (brainPanelError) {
+      console.error(
+        `[clusters] Failed to delete brain panel for cluster ${slug}:`,
+        brainPanelError.message
+      );
+    }
+  }
+
+  // ── Cascade: prune canvas_state.clusters[] JSON entry ─────────────
+  // Same reason — stale JSON entries keep their ghost outline on the
+  // canvas and their `panelIds` still point at deleted panels.
+  const { data: stateRow } = await db
+    .from("canvas_state")
+    .select("clusters")
+    .eq("user_id", opts.userId)
+    .maybeSingle();
+
+  if (stateRow && Array.isArray((stateRow as { clusters: unknown[] }).clusters)) {
+    const existing = (stateRow as { clusters: Record<string, unknown>[] }).clusters;
+    const pruned = existing.filter((c) => {
+      const entrySlug = typeof c.slug === "string" ? c.slug : null;
+      const entryDbId = typeof c.dbId === "string" ? c.dbId : null;
+      if (entrySlug === slug) return false;
+      if (cluster && entryDbId === cluster.id) return false;
+      return true;
+    });
+    if (pruned.length !== existing.length) {
+      const { error: stateError } = await db
+        .from("canvas_state")
+        .upsert(
+          {
+            user_id: opts.userId,
+            clusters: pruned,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "user_id" }
+        );
+      if (stateError) {
+        console.error(
+          `[clusters] Failed to prune canvas_state.clusters for cluster ${slug}:`,
+          stateError.message
+        );
+      }
+    }
+  }
+
+  // Finally, delete the cluster row itself. cluster_panels FK cascades.
   const { error } = await db
     .from("clusters")
     .delete()

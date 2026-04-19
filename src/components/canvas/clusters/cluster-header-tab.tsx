@@ -174,7 +174,7 @@ export function ClusterHeaderTab({
       }}
       className="z-20"
     >
-      <div className="inline-flex items-center h-6 px-2 gap-1.5 rounded-[4px] bg-[var(--cluster-tab-surface)] border border-white/[0.12] shadow-[0_2px_8px_rgba(0,0,0,0.35)]">
+      <div className="inline-flex items-center h-6 px-2 gap-1.5 rounded-[4px] bg-[var(--cluster-tab-surface)] border border-white/[0.12] shadow-[0_2px_8px_rgba(0,0,0,0.35)] whitespace-nowrap">
         {editing ? (
           <input
             ref={(el) => el?.focus({ preventScroll: true })}
@@ -190,20 +190,25 @@ export function ClusterHeaderTab({
               }
             }}
             onBlur={commitName}
-            className="bg-transparent outline-none font-mono text-[10px] uppercase tracking-wider text-white/90 w-28"
+            // `size` auto-fits the input to the draft length so long
+            // cluster names (e.g. POLYMARKET_TRADING_BOTS) don't truncate
+            // or force wrap. Clamp at a reasonable min so an empty input
+            // still has a click target.
+            size={Math.max(draft.length, 10)}
+            className="bg-transparent outline-none font-mono text-[10px] uppercase tracking-wider text-white/90"
           />
         ) : capabilities.canAdd ? (
           <button
             type="button"
             onClick={() => setEditing(true)}
-            className="font-mono text-[10px] uppercase tracking-wider text-white/80 hover:text-white transition-colors"
+            className="font-mono text-[10px] uppercase tracking-wider text-white/80 hover:text-white transition-colors whitespace-nowrap"
             title="Click to rename"
           >
             {cluster.name}
           </button>
         ) : (
           // Read-only viewer — name is plain text, not an edit target.
-          <span className="font-mono text-[10px] uppercase tracking-wider text-white/80">
+          <span className="font-mono text-[10px] uppercase tracking-wider text-white/80 whitespace-nowrap">
             {cluster.name}
           </span>
         )}
