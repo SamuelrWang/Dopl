@@ -269,6 +269,74 @@ export async function createCluster(
         brainPanelError.message
       );
     }
+
+    // ── Hydrate canvas_state.clusters ────────────────────────────────
+    // The visual grouping on the canvas — the box around member panels
+    // plus the cluster name header — is driven by `canvas_state.clusters`
+    // (a JSON array), NOT by the `clusters` table. The UI's selection-
+    // menu path updates this via Redux + a debounced PATCH to
+    // /api/canvas/state. MCP-initiated cluster creation bypasses the
+    // client entirely, so without this block the grouping visual never
+    // appears on reload — the cluster exists in the DB, has a brain
+    // panel, but no box is drawn around the member entries.
+    //
+    // Panel IDs are the LOCAL panel_id strings on canvas_panels
+    // (e.g. "panel-7", "brain-<uuid>"), NOT entry UUIDs. Lookup the
+    // entries' panel_ids, add the brain panel's id, and persist.
+    const { data: entryPanelRows } = await db
+      .from("canvas_panels")
+      .select("panel_id, entry_id")
+      .eq("user_id", opts.userId)
+      .eq("panel_type", "entry")
+      .in("entry_id", safeEntryIds);
+
+    const entryPanelIds = (entryPanelRows ?? []).map(
+      (r) => (r as { panel_id: string }).panel_id
+    );
+
+    const memberPanelIds = [...entryPanelIds, brainPanelId];
+
+    const { data: stateRow } = await db
+      .from("canvas_state")
+      .select("clusters")
+      .eq("user_id", opts.userId)
+      .maybeSingle();
+
+    const existingClusters = Array.isArray(stateRow?.clusters)
+      ? ((stateRow as { clusters: unknown[] }).clusters as Record<string, unknown>[])
+      : [];
+
+    const newClusterEntry = {
+      // Prefix with `cluster-` to match the client's string-id convention
+      // for MCP-created clusters. The client reducer treats id as an
+      // opaque string; no parseInt assumptions.
+      id: `cluster-${cluster.id}`,
+      name: cluster.name,
+      panelIds: memberPanelIds,
+      createdAt: new Date().toISOString(),
+      dbId: cluster.id,
+      slug: cluster.slug,
+    };
+
+    const { error: stateError } = await db
+      .from("canvas_state")
+      .upsert(
+        {
+          user_id: opts.userId,
+          clusters: [...existingClusters, newClusterEntry],
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id" }
+      );
+
+    // Non-fatal for the same reason as the brain-panel insert — the
+    // cluster data is intact; only the visual grouping is missing.
+    if (stateError) {
+      console.error(
+        `[clusters] Failed to hydrate canvas_state.clusters for cluster ${cluster.slug}:`,
+        stateError.message
+      );
+    }
   }
 
   // Fire first_cluster_built event (analytics). Fire-and-forget; dynamic
