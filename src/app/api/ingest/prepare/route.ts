@@ -294,8 +294,12 @@ async function handlePost(
       from_pending: claimedFromPending,
     });
 
-    // ── Fetch + link-follow (no AI) ──
-    const { gatheredContent, thumbnailUrl, sourcePlatform } =
+    // ── Fetch primary URL only (no AI, no link-following) ──
+    // Link-following is opt-in via the follow_ingest_links tool. The
+    // detected_links returned here tell the agent what's available to
+    // follow. This keeps prepare_ingest bounded to ~15s even for
+    // link-heavy sources that would otherwise blow the function timeout.
+    const { gatheredContent, thumbnailUrl, sourcePlatform, detectedLinks } =
       await extractForAgent(entryId, {
         url: normalizedUrl,
         content: {
@@ -448,6 +452,7 @@ async function handlePost(
       thumbnail_url: thumbnailUrl,
       sources: bundle.sources,
       fetch_warnings: bundle.fetch_warnings,
+      detected_links: detectedLinks,
       images,
       prompts: bundle.prompts,
       instructions: AGENT_INGEST_INSTRUCTIONS,

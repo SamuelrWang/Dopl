@@ -934,11 +934,13 @@ export async function logStep(
  */
 export async function extractForAgent(
   entryId: string,
-  input: IngestInput
+  input: IngestInput,
+  options: { followLinks?: boolean } = {}
 ): Promise<{
   gatheredContent: string;
   thumbnailUrl: string | null;
   sourcePlatform: string;
+  detectedLinks: string[];
 }> {
   const sourcePlatform = detectPlatform(input.url);
 
@@ -956,17 +958,39 @@ export async function extractForAgent(
     input.content.text || ""
   );
 
-  // Use setup-tier link-following aggressiveness. The agent can ignore
-  // content it doesn't need, but we can't re-fetch after the fact.
-  const strategy = PIPELINE_STRATEGIES.setup;
-  const linkResult = await stepLinkFollowing(
-    entryId,
-    input,
-    textSources,
-    thumbnailUrl,
-    strategy
-  );
-  thumbnailUrl = linkResult.thumbnailUrl;
+  // Collect all child links the primary extractors discovered.
+  // When link-following is disabled (the default for prepare_ingest),
+  // these come back to the caller as `detectedLinks` so the agent can
+  // decide which (if any) are worth the extraction cost via
+  // `follow_ingest_links`. Skip-list filtering is applied up front so
+  // low-value paths (CI files, lockfiles, tests) never reach the
+  // agent's visibility surface.
+  const allLinks = [
+    ...(input.content.links || []),
+    ...textSources.flatMap((s) => s.childLinks || []),
+  ];
+  const detectedLinks = [
+    ...new Set(allLinks.map((l) => normalizeUrl(l))),
+  ].filter((url) => !shouldSkipLink(url));
+
+  // Opt-in link-following. Default is OFF because the old synchronous
+  // link-follow step routinely blew Vercel's 60s function timeout on
+  // link-heavy READMEs (the voicebox monorepo hit 120s). With link-
+  // following deferred to the explicit `follow_ingest_links` tool call,
+  // `prepare_ingest` stays bounded to the primary-URL extraction
+  // (typically < 15s) regardless of how many external docs the source
+  // references.
+  if (options.followLinks) {
+    const strategy = PIPELINE_STRATEGIES.setup;
+    const linkResult = await stepLinkFollowing(
+      entryId,
+      input,
+      textSources,
+      thumbnailUrl,
+      strategy
+    );
+    thumbnailUrl = linkResult.thumbnailUrl;
+  }
 
   const { allContent } = await stepGatherContent(entryId);
 
@@ -974,6 +998,7 @@ export async function extractForAgent(
     gatheredContent: allContent,
     thumbnailUrl,
     sourcePlatform,
+    detectedLinks,
   };
 }
 

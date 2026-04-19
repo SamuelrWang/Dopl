@@ -255,6 +255,43 @@ retrieve (S3 AccessDenied, 404 pages, network timeouts). Use this to
 flag missing content to the user rather than inventing details about
 assets that didn't make it into the corpus.
 
+### detected_links — optional deeper extraction
+
+\`detected_links[]\` lists URLs the primary extractor discovered (in
+README bodies, linked docs, referenced repos) but did NOT follow.
+Link-following is opt-in because fetching many external URLs routinely
+blew the serverless function timeout, and most ingests don't need the
+extra coverage.
+
+**Default: do nothing with \`detected_links\`.** The primary source
+is usually sufficient to produce a quality manifest, README, and
+agents.md. Jump straight into the 6-step flow.
+
+**Opt in only when a specific link is clearly load-bearing for the
+synthesis** — e.g., the repo's README points at an external docs
+site that explains the actual concepts, and without it you'd be
+guessing. In that case, before running step 1, call:
+
+\`follow_ingest_links(entry_id, [chosen urls, max 8])\`
+
+This extracts each URL at depth=1 and appends results to the entry's
+sources. Subsequent \`get_ingest_content\` calls include the new
+sources automatically. Be conservative — pick 1-3 URLs, not all of
+them. Each call is bounded but not free. Per-URL failures (\`failed\`
+or \`skipped\`) just mean the URL didn't contribute; the ingest
+continues normally.
+
+Signals a link is worth following:
+- Referenced explicitly by the README as "see the docs at …"
+- A sibling repo or official documentation site
+- Likely to contain canonical API/contract info not duplicated in the
+  primary source
+
+Signals a link is NOT worth following:
+- Badges, shields.io, image CDNs, analytics
+- Tangential blog posts / tweet threads / unrelated tools
+- Anything where the primary README already explains the concept
+
 ### Submission decision rule
 
 Call \`submit_ingested_entry\` at the end of the flow UNLESS one of
