@@ -255,42 +255,59 @@ retrieve (S3 AccessDenied, 404 pages, network timeouts). Use this to
 flag missing content to the user rather than inventing details about
 assets that didn't make it into the corpus.
 
-### detected_links — optional deeper extraction
+### detected_links — offer related entries AFTER submit
 
 \`detected_links[]\` lists URLs the primary extractor discovered (in
 README bodies, linked docs, referenced repos) but did NOT follow.
-Link-following is opt-in because fetching many external URLs routinely
-blew the serverless function timeout, and most ingests don't need the
-extra coverage.
 
-**Default: do nothing with \`detected_links\`.** The primary source
-is usually sufficient to produce a quality manifest, README, and
-agents.md. Jump straight into the 6-step flow.
+Important framing: **these links are NOT for enriching the current
+entry.** The primary extractor already handles same-project deeper
+content (for GitHub: README + CLAUDE.md + AGENTS.md + DESIGN.md + file
+tree + package.json + configs; for an X post: the tweet body + author
+context; etc.). If a link is same-project, it's already covered.
 
-**Opt in only when a specific link is clearly load-bearing for the
-synthesis** — e.g., the repo's README points at an external docs
-site that explains the actual concepts, and without it you'd be
-guessing. In that case, before running step 1, call:
+\`detected_links\` exists for the case where the current source
+**references a distinct external source** that's worth being its own
+KB entry — e.g., an X post that links to a GitHub repo, a blog post
+that references a canonical whitepaper, a tutorial that cites a
+sibling tool. The right outcome there is **two entries, not one
+bundle**: the current entry stays focused on its own source, and the
+referenced source gets its own full-tier entry that other entries
+can mention by slug.
 
-\`follow_ingest_links(entry_id, [chosen urls, max 8])\`
+**Protocol:**
 
-This extracts each URL at depth=1 and appends results to the entry's
-sources. Subsequent \`get_ingest_content\` calls include the new
-sources automatically. Be conservative — pick 1-3 URLs, not all of
-them. Each call is bounded but not free. Per-URL failures (\`failed\`
-or \`skipped\`) just mean the URL didn't contribute; the ingest
-continues normally.
+1. **Finish the current entry first.** Run steps 1-8 below, call
+   \`submit_ingested_entry\`. Do NOT touch \`detected_links\` before
+   submitting.
+2. **After submission,** review \`detected_links\`. Filter out:
+   - Badges, shields.io, image CDNs, analytics (noise)
+   - Self-references (releases, stargazers, the same source under
+     different paths)
+   - Tangential mentions where the primary entry already explains
+     everything relevant
+3. **For remaining links** that look like distinct content sources
+   worth their own entry, present them to the user with a one-line
+   rationale each. Template:
+   > "The [source_platform] entry I just ingested references these
+   > external sources: [list with one-line rationale each]. Want me
+   > to ingest any of them as separate KB entries?"
+4. **Wait for explicit user approval.** On approval, call
+   \`prepare_ingest(url)\` for each chosen URL — normal flow,
+   becomes its own entry. Mention the originating entry's slug in
+   the new entry's README prose so the two are cross-referenced
+   editorially.
+5. **Never expand scope without explicit user approval.** No silent
+   follows, no "I'll just grab this one because it looks useful."
+   User consent is the scope gate.
 
-Signals a link is worth following:
-- Referenced explicitly by the README as "see the docs at …"
-- A sibling repo or official documentation site
-- Likely to contain canonical API/contract info not duplicated in the
-  primary source
-
-Signals a link is NOT worth following:
-- Badges, shields.io, image CDNs, analytics
-- Tangential blog posts / tweet threads / unrelated tools
-- Anything where the primary README already explains the concept
+Typical outcome: most detected_links are low-signal and the list
+collapses to zero after filtering. In that case just report "no
+related sources worth ingesting separately" and move on. When there
+IS a genuine distinct-source reference (X post → GitHub repo is the
+canonical example), the two-entry model keeps the KB clean: the X
+post entry is about what the author said; the GitHub repo entry is
+about the project, independently searchable and reusable.
 
 ### Submission decision rule
 

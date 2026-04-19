@@ -961,9 +961,12 @@ export async function extractForAgent(
   // Collect all child links the primary extractors discovered.
   // When link-following is disabled (the default for prepare_ingest),
   // these come back to the caller as `detectedLinks` so the agent can
-  // decide which (if any) are worth the extraction cost via
-  // `follow_ingest_links`. Skip-list filtering is applied up front so
-  // low-value paths (CI files, lockfiles, tests) never reach the
+  // review them AFTER the primary entry is submitted, filter out
+  // noise, and offer any distinct external sources to the user as
+  // candidates for separate KB entries (two-entry model — the primary
+  // entry stays focused, any referenced distinct source gets its own
+  // entry on user approval). Skip-list filtering is applied up front
+  // so low-value paths (CI files, lockfiles, tests) never reach the
   // agent's visibility surface.
   const allLinks = [
     ...(input.content.links || []),
@@ -975,11 +978,13 @@ export async function extractForAgent(
 
   // Opt-in link-following. Default is OFF because the old synchronous
   // link-follow step routinely blew Vercel's 60s function timeout on
-  // link-heavy READMEs (the voicebox monorepo hit 120s). With link-
-  // following deferred to the explicit `follow_ingest_links` tool call,
-  // `prepare_ingest` stays bounded to the primary-URL extraction
-  // (typically < 15s) regardless of how many external docs the source
-  // references.
+  // link-heavy READMEs (the voicebox monorepo hit 120s). The prepare
+  // flow now returns `detectedLinks` for the agent to offer as
+  // candidate separate entries to the user; there's no
+  // into-the-same-entry follow path exposed to clients. The
+  // `options.followLinks` flag remains for internal callers (e.g.
+  // batch ingestion scripts) that need the old recursive behavior;
+  // `prepare_ingest` never sets it.
   if (options.followLinks) {
     const strategy = PIPELINE_STRATEGIES.setup;
     const linkResult = await stepLinkFollowing(

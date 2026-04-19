@@ -295,10 +295,16 @@ async function handlePost(
     });
 
     // ── Fetch primary URL only (no AI, no link-following) ──
-    // Link-following is opt-in via the follow_ingest_links tool. The
-    // detected_links returned here tell the agent what's available to
-    // follow. This keeps prepare_ingest bounded to ~15s even for
-    // link-heavy sources that would otherwise blow the function timeout.
+    // The primary extractor already covers same-project deeper content
+    // (for GitHub: README + CLAUDE.md + AGENTS.md + DESIGN.md + file
+    // tree + configs; for tweets: the body + author context; etc.) so
+    // bundling linked URLs into the same entry would double-count at
+    // best. The `detected_links` field returned here surfaces URLs
+    // that reference DISTINCT external sources — the agent presents
+    // those to the user after submit, and on explicit approval
+    // prepares each as a separate entry. No silent link-follow.
+    // This also keeps prepare_ingest bounded to ~15s regardless of
+    // how many external docs the source references.
     const { gatheredContent, thumbnailUrl, sourcePlatform, detectedLinks } =
       await extractForAgent(entryId, {
         url: normalizedUrl,

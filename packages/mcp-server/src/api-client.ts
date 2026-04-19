@@ -146,37 +146,6 @@ export class DoplClient {
     });
   }
 
-  /**
-   * Fetch and persist additional linked sources for an in-progress
-   * ingestion. Called between prepare_ingest and submit_ingested_entry
-   * to enrich the corpus with specific URLs from the prepare response's
-   * `detected_links[]` inventory — when the agent judges they add
-   * signal the primary source doesn't already cover.
-   *
-   * Each URL is extracted at depth=1 (no recursive child-following)
-   * and appended to the entry's sources. After the call, subsequent
-   * `get_ingest_content(entry_id)` returns include the new sources.
-   */
-  async followIngestLinks(
-    entryId: string,
-    urls: string[]
-  ): Promise<{
-    entry_id: string;
-    results: Array<{
-      url: string;
-      status: "ok" | "failed" | "skipped";
-      status_reason?: string;
-      chars?: number;
-      source_type?: string;
-    }>;
-    summary: { total: number; ok: number; failed: number; skipped: number };
-  }> {
-    return this.request("/api/ingest/follow-links", {
-      method: "POST",
-      body: { entry_id: entryId, urls },
-      toolName: "follow_ingest_links",
-    });
-  }
 
   async buildSolution(params: {
     brief: string;

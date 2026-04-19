@@ -915,59 +915,6 @@ export function createServer(
     }
   );
 
-  // ── follow_ingest_links ────────────────────────────────────────────
-  // Enrich an in-progress ingestion by extracting specific URLs from
-  // the `detected_links[]` inventory in the prepare response. Runs
-  // one platform-appropriate extractor per URL at depth=1 (no
-  // recursive follow) and appends each result to the entry's sources.
-  //
-  // Why this is a separate tool: link-following inside prepare_ingest
-  // routinely blew Vercel's function timeout on link-heavy sources
-  // (30 links × 10s each). Splitting it lets prepare stay bounded to
-  // ~15s regardless of source density, and gives the agent control
-  // over which specific links are worth the extraction cost.
-  //
-  // Agent strategy: call this between prepare_ingest and running the
-  // prompt flow — only when `detected_links[]` contains URLs that
-  // would add signal the primary source doesn't already cover. Most
-  // ingests don't need this; the primary URL content is sufficient.
-  registerTool(
-    "follow_ingest_links",
-    "Enrich an in-progress ingestion by fetching specific URLs from the prepare response's `detected_links[]` inventory. Pass `entry_id` + the chosen URLs (max 8 per call). Each URL gets extracted at depth=1 and appended to the entry's sources — subsequent `get_ingest_content` calls include them. Use this AFTER prepare_ingest and BEFORE running prompts, only if you judge a detected link would add signal the primary source doesn't cover (e.g., a referenced docs site that explains what the repo does). For typical ingests you can skip this entirely — the primary source is usually sufficient. Returns per-URL status (ok/failed/skipped) + a summary. Idempotent — safe to call multiple times as you iterate.",
-    {
-      entry_id: z.string().describe("Entry UUID from the prepare_ingest response"),
-      urls: z
-        .array(z.string())
-        .describe(
-          "Array of URLs to follow (max 8). Each should come from the `detected_links[]` array in the prepare_ingest response, or otherwise be a URL you have a reason to follow."
-        ),
-    },
-    async ({ entry_id, urls }) => {
-      const result = await client.followIngestLinks(entry_id, urls);
-      const lines: string[] = [];
-      lines.push(
-        `Followed ${result.summary.total} link(s) for entry \`${result.entry_id}\`:`
-      );
-      lines.push(
-        `- ✓ ${result.summary.ok} ok, ✗ ${result.summary.failed} failed, ⊘ ${result.summary.skipped} skipped`
-      );
-      lines.push("");
-      for (const r of result.results) {
-        const icon = r.status === "ok" ? "✓" : r.status === "failed" ? "✗" : "⊘";
-        const suffix =
-          r.status === "ok"
-            ? ` (${(r.chars ?? 0).toLocaleString()} chars, ${r.source_type})`
-            : r.status_reason
-              ? ` — ${r.status_reason}`
-              : "";
-        lines.push(`${icon} ${r.url}${suffix}`);
-      }
-      return {
-        content: [{ type: "text" as const, text: lines.join("\n") }],
-      };
-    }
-  );
-
   // ── ingest_url — RETIRED ────────────────────────────────────────────
   // The legacy server-side ingestion tool has been removed. Use
   // `prepare_ingest` + `submit_ingested_entry` instead. The backend
