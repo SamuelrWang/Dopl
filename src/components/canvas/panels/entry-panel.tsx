@@ -20,7 +20,7 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import Link from "next/link";
 import { Copy, Check, Download } from "lucide-react";
-import { PlatformIcon } from "@/components/design";
+import { MarkdownMessage, PlatformIcon } from "@/components/design";
 import type { EntryPanelData } from "../types";
 import type { ProgressEvent } from "@/components/ingest/chat-message";
 
@@ -321,9 +321,15 @@ export function EntryPanelBody({ panel }: EntryPanelBodyProps) {
                   <Download className="w-3.5 h-3.5" />
                 </button>
               </div>
-              <pre className="h-full overflow-y-auto text-[10px] font-mono bg-black/[0.3] border border-white/[0.08] rounded-[3px] p-3 pt-4 text-white/70 leading-relaxed whitespace-pre-wrap break-words">
-                {active.content}
-              </pre>
+              {active.filename.endsWith(".md") ? (
+                <div className="h-full overflow-y-auto bg-black/[0.3] border border-white/[0.08] rounded-[3px] p-3 pt-4">
+                  <MarkdownMessage content={active.content} />
+                </div>
+              ) : (
+                <pre className="h-full overflow-y-auto text-[10px] font-mono bg-black/[0.3] border border-white/[0.08] rounded-[3px] p-3 pt-4 text-white/70 leading-relaxed whitespace-pre-wrap break-words">
+                  {active.content}
+                </pre>
+              )}
             </>
           )}
         </div>

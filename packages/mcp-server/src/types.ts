@@ -98,9 +98,17 @@ export interface ClusterDetail extends ClusterRow {
 
 // ── Canvas types ────────────────────────────────────────────────────
 
+export type CanvasPanelType =
+  | "entry"
+  | "chat"
+  | "connection"
+  | "browse"
+  | "cluster-brain";
+
 export interface CanvasPanel {
   id: string;
-  entry_id: string;
+  entry_id: string | null;
+  panel_type: CanvasPanelType;
   slug: string | null;
   title: string | null;
   summary: string | null;

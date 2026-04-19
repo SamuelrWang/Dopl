@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { RepoFileBrowser } from "./repo-file-browser";
-import { GlassCard, GlassDivider, MonoLabel } from "@/components/design";
+import { GlassCard, GlassDivider, MarkdownMessage, MonoLabel } from "@/components/design";
 
 interface EntryTabsProps {
   readme: string | null;
@@ -137,9 +137,7 @@ export function EntryTabs({
               {copied === "readme" ? "Copied" : "Copy"}
             </SharpButton>
           </div>
-          <div className="prose prose-sm prose-invert max-w-none whitespace-pre-wrap text-white/80 leading-relaxed">
-            {readme || "No README generated yet."}
-          </div>
+          <MarkdownMessage content={readme || "No README generated yet."} />
         </GlassCard>
       )}
 
@@ -172,9 +170,9 @@ export function EntryTabs({
               Download
             </SharpButton>
           </div>
-          <div className="prose prose-sm prose-invert max-w-none whitespace-pre-wrap text-white/80 leading-relaxed">
-            {agentsMd || `No ${secondaryLabel.toLowerCase()} generated yet.`}
-          </div>
+          <MarkdownMessage
+            content={agentsMd || `No ${secondaryLabel.toLowerCase()} generated yet.`}
+          />
         </GlassCard>
       )}
 

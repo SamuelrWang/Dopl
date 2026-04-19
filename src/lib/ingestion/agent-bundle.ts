@@ -280,26 +280,46 @@ can mention by slug.
 1. **Finish the current entry first.** Run steps 1-8 below, call
    \`submit_ingested_entry\`. Do NOT touch \`detected_links\` before
    submitting.
-2. **After submission,** review \`detected_links\`. Filter out:
-   - Badges, shields.io, image CDNs, analytics (noise)
-   - Self-references (releases, stargazers, the same source under
-     different paths)
-   - Tangential mentions where the primary entry already explains
-     everything relevant
-3. **For remaining links** that look like distinct content sources
-   worth their own entry, present them to the user with a one-line
-   rationale each. Template:
+2. **After submission,** review \`detected_links\`. Filter out noise
+   LOCALLY (no tool calls required):
+   - Badges, shields.io, badgen, pepy.tech, image CDNs, analytics
+   - Self-references (releases, stargazers, tags, tree/blob/commit
+     paths pointing back at the same source)
+   - Translation mirrors (readme-i18n, multi-language docs variants)
+   - Tangential mentions — homepages for commonly-known tools (e.g.
+     python.org, github.com, bun.sh) that the primary entry
+     already names; the reader doesn't need a separate entry for those
+   - Placeholder/example URLs from code snippets (\`localhost:*\`,
+     \`your-domain.com\`, anything that isn't a real destination)
+   - Obvious duplicates
+3. **Call \`describe_link(url)\`** on each surviving candidate (typically
+   2-5 URLs remaining after filtering). This returns the link's own
+   self-description — the repo's own one-liner for GitHub URLs, the
+   og:description for web pages, the abstract for arxiv papers. Use
+   this as the rationale when presenting to the user, NOT your
+   training knowledge of what the link might be. The source's
+   authoritative self-description is the right signal.
+4. **Present the candidates to the user** with the described one-liner
+   for each. Template:
    > "The [source_platform] entry I just ingested references these
-   > external sources: [list with one-line rationale each]. Want me
-   > to ingest any of them as separate KB entries?"
-4. **Wait for explicit user approval.** On approval, call
+   > distinct sources. Want me to ingest any as separate KB entries?
+   >
+   > 1. **[title]** — [description from describe_link]
+   > 2. **[title]** — [description from describe_link]
+   > ..."
+5. **Wait for explicit user approval.** On approval, call
    \`prepare_ingest(url)\` for each chosen URL — normal flow,
    becomes its own entry. Mention the originating entry's slug in
    the new entry's README prose so the two are cross-referenced
    editorially.
-5. **Never expand scope without explicit user approval.** No silent
+6. **Never expand scope without explicit user approval.** No silent
    follows, no "I'll just grab this one because it looks useful."
    User consent is the scope gate.
+
+**If \`describe_link\` returns with \`error\` set** for a candidate
+(URL unreachable, 404, timeout), exclude that candidate from the
+offer list or note it as "couldn't describe" — don't present a
+candidate you can't describe honestly.
 
 Typical outcome: most detected_links are low-signal and the list
 collapses to zero after filtering. In that case just report "no

@@ -206,6 +206,71 @@ export async function createCluster(
     if (panelError) throw panelError;
   }
 
+  // ── Spawn a cluster-brain canvas panel ────────────────────────────
+  // The UI's selection-menu path (create cluster by selecting entries
+  // on the canvas) dispatches CREATE_CLUSTER_BRAIN_PANEL to Redux and
+  // syncs to the DB via the canvas panel-save cycle. The MCP path
+  // (`canvas_create_cluster` tool) hits this service directly without
+  // going through the client, so without this block the cluster would
+  // exist in the DB but have NO canvas panel — the user reloads and
+  // sees no cluster box. Creating the brain panel here makes both
+  // entry points behave identically.
+  //
+  // Positioning: if any of the member entries are already on the
+  // canvas, place the brain panel to the right of the rightmost entry
+  // at the topmost entry's y — matching the selection-menu's layout.
+  // Otherwise default to origin so the user can drag it later.
+  if (safeEntryIds.length > 0) {
+    const { data: entryPanels } = await db
+      .from("canvas_panels")
+      .select("x, y, width")
+      .eq("user_id", opts.userId)
+      .eq("panel_type", "entry")
+      .in("entry_id", safeEntryIds);
+
+    let brainX = 0;
+    let brainY = 0;
+    if (entryPanels && entryPanels.length > 0) {
+      const panels = entryPanels as { x: number; y: number; width: number }[];
+      const rightmostX = Math.max(...panels.map((p) => p.x + (p.width ?? 380)));
+      const topY = Math.min(...panels.map((p) => p.y));
+      brainX = rightmostX + 40;
+      brainY = topY;
+    }
+
+    const brainPanelId = `brain-${cluster.id}`;
+    const { error: brainPanelError } = await db
+      .from("canvas_panels")
+      .insert({
+        user_id: opts.userId,
+        panel_id: brainPanelId,
+        panel_type: "cluster-brain",
+        x: brainX,
+        y: brainY,
+        width: 480,
+        height: 400,
+        panel_data: {
+          clusterId: cluster.id,
+          clusterName: cluster.name,
+          instructions:
+            "_Brain not synthesized yet._\n\nAsk your connected Claude Code (or any Dopl-MCP-enabled agent) to call `get_skill_template` and run synthesis against this cluster's entries, then `update_cluster_brain` to save the result. Server-side auto-synthesis has been removed so you control exactly what lands in your skill.",
+          memories: [],
+          status: "ready",
+          errorMessage: null,
+        },
+      });
+    // Non-fatal: if the brain-panel insert fails, the cluster still
+    // exists and is usable via MCP; the user just won't see the panel
+    // on the canvas until they retry or add it manually. Logging the
+    // error lets ops see this in the health dashboard.
+    if (brainPanelError) {
+      console.error(
+        `[clusters] Failed to spawn brain panel for cluster ${cluster.slug}:`,
+        brainPanelError.message
+      );
+    }
+  }
+
   // Fire first_cluster_built event (analytics). Fire-and-forget; dynamic
   // import so this module stays import-free of the analytics tree in
   // environments that don't need it.

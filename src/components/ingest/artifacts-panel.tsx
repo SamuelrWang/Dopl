@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { MarkdownMessage } from "@/components/design";
 
 interface ArtifactsPanelProps {
   entryId: string;
@@ -24,8 +25,8 @@ function ArtifactSection({ label, filename, content, language }: ArtifactSection
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const preview = content.split("\n").slice(0, 5).join("\n");
   const hasMore = content.split("\n").length > 5;
+  const isMarkdown = language === "markdown";
 
   function handleCopy() {
     navigator.clipboard.writeText(content);
@@ -43,6 +44,8 @@ function ArtifactSection({ label, filename, content, language }: ArtifactSection
     URL.revokeObjectURL(url);
   }
 
+  const heightClass = expanded ? "max-h-[400px]" : "max-h-[120px]";
+
   return (
     <div className="border rounded-lg p-3 space-y-2">
       <div className="flex items-center justify-between">
@@ -56,11 +59,17 @@ function ArtifactSection({ label, filename, content, language }: ArtifactSection
           </Button>
         </div>
       </div>
-      <pre className={`text-xs bg-black/30 rounded p-2 overflow-x-auto ${expanded ? "max-h-[400px]" : "max-h-[120px]"} overflow-y-auto`}>
-        <code className={language ? `language-${language}` : ""}>
-          {expanded ? content : preview}
-        </code>
-      </pre>
+      {isMarkdown ? (
+        <div className={`bg-black/30 rounded p-2 overflow-y-auto ${heightClass}`}>
+          <MarkdownMessage content={content} />
+        </div>
+      ) : (
+        <pre className={`text-xs bg-black/30 rounded p-2 overflow-x-auto ${heightClass} overflow-y-auto`}>
+          <code className={language ? `language-${language}` : ""}>
+            {content}
+          </code>
+        </pre>
+      )}
       {hasMore && (
         <button
           onClick={() => setExpanded(!expanded)}

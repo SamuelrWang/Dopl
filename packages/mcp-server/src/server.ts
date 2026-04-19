@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z, type ZodRawShape } from "zod";
 import { DoplClient } from "./api-client.js";
-import type { ClusterSummary, BrainData } from "./types.js";
+import type { ClusterSummary, BrainData, CanvasPanel } from "./types.js";
 import {
   writeClusterSkill,
   writeGlobalCanvasSkill,
@@ -69,6 +69,49 @@ These tool pairs overlap and picking the wrong one wastes a round trip:
 - \`save_cluster_memory\` (NEW memory) vs \`update_cluster_memory\` (edit existing) — call \`get_cluster_brain\` first if you're not sure whether a matching memory already exists.
 - \`check_entry_updates\` (one entry) vs \`check_cluster_updates\` (every entry in a cluster) — use the bulk version for cluster-wide refresh.
 - \`update_cluster_brain\` (edit synthesized instructions) vs \`save_cluster_memory\` (append a short preference) — use the memory path for short corrections, the brain edit path for structural changes.
+
+## Skeleton entries — upgrade before handing off
+
+Some entries in the KB are **skeleton tier**: a short task-agnostic
+descriptor + one embedding, no README / agents.md / manifest / tags.
+They exist to populate the discovery index cheaply. In \`search_setups\`
+results they render with an \`_(skeleton)_\` badge after the match score;
+in \`get_setup\` output they have a "Descriptor (skeleton tier)" section
+instead of the normal README/agents.md/manifest sections and end with
+"*This is a skeleton entry…*".
+
+**Rule: if the user wants to use a skeleton entry for anything
+substantive** — adopt it into their work, copy the setup, understand
+how to build like it — **upgrade it to full tier before presenting.**
+The skeleton descriptor is too thin for serious use; a full-tier
+version will have README, agents.md, detailed manifest, and richer tags.
+
+To upgrade: call \`prepare_ingest(url)\` with the skeleton entry's
+\`source_url\`. The server detects the existing skeleton, atomically
+claims it, and runs the same agent-driven full-ingestion flow as a
+fresh URL. The entry UUID is preserved; the slug regenerates from the
+new title. Canvas pins on the old slug will no longer resolve, but the
+entry_id-based references survive.
+
+**When to skip upgrading:**
+- User just wants to SEE what's in the KB ("what skeleton entries do
+  you have for X?") — show them the descriptor, don't upgrade
+  unsolicited.
+- The descriptor alone is sufficient for the user's current question
+  (e.g. "does this KB have anything on topic Y?" and a skeleton match
+  answers "yes, here's the gist").
+- Cost-sensitive bulk operations where multiple skeleton hits would
+  each trigger a full ingest.
+
+**When to always upgrade:**
+- User wants to adopt, replicate, or extend a setup based on the entry.
+- User is composing a solution via \`build_solution\` that would treat
+  the entry as a load-bearing reference.
+- The match is strong but you know you'd otherwise deliver a thin
+  "here's the descriptor" response that doesn't actually help.
+
+Upgrade takes ~30-60 seconds end-to-end (prepare + 6 prompts + submit).
+Tell the user you're upgrading so they know why there's a pause.
 
 ## What you can do
 
@@ -151,6 +194,37 @@ type ToolResponse = {
   content: Array<{ type: "text"; text: string }>;
   isError?: boolean;
 };
+
+/**
+ * Human-readable label for non-entry canvas panel types. The backend
+ * stores `panel_type` in `canvas_panels` but the MCP tool output used
+ * to render every non-entry panel as "Untitled" because the renderer
+ * only looked at the entry fields (title/summary/source_url) which
+ * are all null for system panels.
+ */
+function systemPanelLabel(type: CanvasPanel["panel_type"]): string {
+  switch (type) {
+    case "chat": return "Chat panel";
+    case "connection": return "MCP connection panel";
+    case "browse": return "Browse panel";
+    case "cluster-brain": return "Cluster brain panel";
+    default: return "System panel";
+  }
+}
+
+function systemPanelDetail(panel: CanvasPanel): string | null {
+  // System panels occasionally carry a title (e.g. the browse panel's
+  // active filter, a chat panel's conversation topic). Surface it when
+  // present; otherwise describe the panel's purpose inline.
+  if (panel.title) return panel.title;
+  switch (panel.panel_type) {
+    case "browse": return "the KB browse surface";
+    case "connection": return "status of your connected MCP agent";
+    case "chat": return "an in-canvas chat thread";
+    case "cluster-brain": return "a cluster brain viewer";
+    default: return null;
+  }
+}
 
 /**
  * Append a pending-ingestion status footer to a tool response so the
@@ -915,6 +989,61 @@ export function createServer(
     }
   );
 
+  // ── describe_link ──────────────────────────────────────────────────
+  // Lightweight per-URL metadata fetch. Used by the agent's post-submit
+  // `detected_links` review flow (see `AGENT_INGEST_INSTRUCTIONS`): the
+  // agent filters out noise (badges, self-refs, translations) locally,
+  // then calls this per surviving candidate to get each link's OWN
+  // self-description — GitHub repo description via the repos API,
+  // og:description on web pages, arxiv abstract snippet, etc. Those
+  // author-curated self-descriptions are always more informative than
+  // surrounding-text heuristics on the primary README (where most links
+  // are bullet-list or badge refs with no meaningful context).
+  //
+  // Bounded 5s server-side timeout per URL; no content storage; pure
+  // metadata fetch. Agent typically calls this 2-5 times per ingest —
+  // only for the candidates that pass local filtering and might be
+  // offered to the user as separate-entry ingests.
+  registerTool(
+    "describe_link",
+    "Fetch the self-description metadata for a URL — the link's own authoritative one-liner (GitHub repo description, og:description on web pages, arxiv abstract, etc.) — without running a full extraction. Use this during the post-submit `detected_links` review flow: after filtering out noise (badges, self-refs, translations) locally, call this per surviving candidate before offering them to the user as separate-entry ingests. The returned `description` is the source's authoritative self-description, more reliable than guessing from surrounding README text. Bounded ~1s per URL. Returns `{ url, type, title, description, metadata, error? }` — when `error` is set, the URL couldn't be fetched (timeout, 404, etc.) and the agent should exclude it from the offer list or note it as \"couldn't describe\" to the user.",
+    {
+      url: z
+        .string()
+        .describe(
+          "URL to describe. Typically pulled from `detected_links[]` in a prepare_ingest response after local filtering."
+        ),
+    },
+    async ({ url }) => {
+      const result = await client.describeLink(url);
+      const lines: string[] = [];
+      lines.push(`**${result.title ?? url}**`);
+      if (result.type !== "unknown") lines.push(`_Type: ${result.type}_`);
+      if (result.description) {
+        lines.push("");
+        lines.push(result.description);
+      }
+      if (result.metadata && Object.keys(result.metadata).length > 0) {
+        const metaBits: string[] = [];
+        if (typeof result.metadata.stars === "number") metaBits.push(`${result.metadata.stars.toLocaleString()} ★`);
+        if (typeof result.metadata.language === "string") metaBits.push(result.metadata.language);
+        if (typeof result.metadata.license === "string") metaBits.push(result.metadata.license);
+        if (typeof result.metadata.site_name === "string") metaBits.push(result.metadata.site_name);
+        if (metaBits.length > 0) {
+          lines.push("");
+          lines.push(`_${metaBits.join(" · ")}_`);
+        }
+      }
+      if (result.error) {
+        lines.push("");
+        lines.push(`_(couldn't describe: ${result.error})_`);
+      }
+      return {
+        content: [{ type: "text" as const, text: lines.join("\n") }],
+      };
+    }
+  );
+
   // ── ingest_url — RETIRED ────────────────────────────────────────────
   // The legacy server-side ingestion tool has been removed. Use
   // `prepare_ingest` + `submit_ingested_entry` instead. The backend
@@ -1429,7 +1558,7 @@ export function createServer(
   // ── canvas_list_panels ──────────────────────────────────────────────
   registerTool(
     "canvas_list_panels",
-    "List every entry currently saved to the user's canvas. Use this when the user asks 'what's on my canvas?', 'show me my saved setups', or before operations that need to reason about the current workspace (e.g. deciding what belongs in a new cluster). Returns entry slugs, titles, and positions — not full content.",
+    "List every panel currently on the user's canvas. Use this when the user asks 'what's on my canvas?', 'show me my saved setups', or before operations that need to reason about the current workspace (e.g. deciding what belongs in a new cluster). Returns a mix of entry panels (the saved KB entries — title, slug, source_url) and system panels (chat, connection, browse, cluster-brain — the UI surfaces the user placed on their canvas). Entry panels are the ones relevant for clustering/canvas_add/remove operations; system panels are display-only.",
     {},
     async () => {
       const panels = await client.listCanvasPanels();
@@ -1440,16 +1569,39 @@ export function createServer(
         };
       }
 
-      const lines: string[] = [];
-      lines.push(`## Your Canvas (${panels.length} entries)\n`);
+      // Split by panel type so the entry list stays clean for the agent's
+      // clustering/search decisions, while system panels (chat, connection,
+      // browse, cluster-brain) render underneath as a separate group. The
+      // backend stores panel_type; before this split, system panels rendered
+      // as "Untitled" alongside real entries and confused the agent.
+      const entryPanels = panels.filter((p) => p.panel_type === "entry");
+      const systemPanels = panels.filter((p) => p.panel_type !== "entry");
 
-      for (const p of panels) {
-        const title = p.title || "Untitled";
-        const url = client.entryUrl(p.slug);
-        const label = url ? `[${title}](${url})` : title;
-        lines.push(`- **${label}**`);
-        if (p.summary) lines.push(`  ${p.summary}`);
-        if (p.source_url) lines.push(`  Source: ${p.source_url}`);
+      const lines: string[] = [];
+      lines.push(
+        `## Your Canvas — ${entryPanels.length} entry${entryPanels.length === 1 ? "" : "ies"}${systemPanels.length > 0 ? ` + ${systemPanels.length} system panel${systemPanels.length === 1 ? "" : "s"}` : ""}\n`
+      );
+
+      if (entryPanels.length > 0) {
+        lines.push("### Entries");
+        for (const p of entryPanels) {
+          const title = p.title || "Untitled entry";
+          const url = client.entryUrl(p.slug);
+          const label = url ? `[${title}](${url})` : title;
+          lines.push(`- **${label}**`);
+          if (p.summary) lines.push(`  ${p.summary}`);
+          if (p.source_url) lines.push(`  Source: ${p.source_url}`);
+        }
+      }
+
+      if (systemPanels.length > 0) {
+        lines.push("");
+        lines.push("### System panels (UI surfaces, not saved content)");
+        for (const p of systemPanels) {
+          const label = systemPanelLabel(p.panel_type);
+          const detail = systemPanelDetail(p);
+          lines.push(`- **${label}**${detail ? ` — ${detail}` : ""}`);
+        }
       }
 
       return { content: [{ type: "text" as const, text: lines.join("\n") }] };
