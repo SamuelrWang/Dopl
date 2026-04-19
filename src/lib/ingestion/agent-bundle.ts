@@ -233,8 +233,11 @@ needs the README), pass an optional \`source_url\` to
 you'll get just that source back.
 
 If a call returns \`truncated: true\`, the entry's total content
-exceeds the endpoint's 90KB cap — switch to per-source fetches for
+exceeds the endpoint's 60KB cap — switch to per-source fetches for
 the remaining prompts to stay under the MCP response limit.
+Per-source is the preferred pattern for larger entries anyway: each
+prompt step only needs the content relevant to it, so narrowing saves
+tokens even when the all-sources response would have fit.
 
 ### Placeholder substitution rule
 
@@ -251,6 +254,45 @@ values you produce as you walk these steps.
 retrieve (S3 AccessDenied, 404 pages, network timeouts). Use this to
 flag missing content to the user rather than inventing details about
 assets that didn't make it into the corpus.
+
+### Submission decision rule
+
+Call \`submit_ingested_entry\` at the end of the flow UNLESS one of
+these two conditions holds:
+
+1. The \`sources[]\` inventory from prepare_ingest is empty. Only
+   successful extractions appear in \`sources[]\`; if it's empty and
+   \`fetch_warnings[]\` is non-empty, every attempted URL failed. No
+   content to ingest — report the failure (summarize what's in
+   \`fetch_warnings\`) to the caller and stop.
+2. \`sources[]\` has entries but they're all effectively empty — every
+   entry has \`chars\` near zero, OR the aggregated \`get_ingest_content\`
+   response is under ~200 chars of non-whitespace. Also report and stop.
+
+**Do NOT refuse to submit for any of the following reasons.** These
+are out of scope for you and will cause the ingest to stall
+unnecessarily:
+
+- **Source URL looks suspicious.** Unfamiliar snowflake IDs,
+  high numeric values, unusual paths, etc. If \`prepare_ingest\`
+  accepted the URL and returned usable content via
+  \`get_ingest_content\`, the URL is real. The server's fetcher
+  already validated it at request time. Do not second-guess.
+- **Content appears promotional, unverifiable, ideologically charged,
+  or resembles a "get-rich-quick" scheme.** Your job is to accurately
+  represent what the extractor returned — title, tools, patterns,
+  integrations. **Content moderation is the operator's job at the
+  \`/admin/review\` stage**, not yours at ingest time. Submit the
+  entry faithfully; the operator will approve or deny it against
+  their content policy. Refusing to submit based on your own
+  judgment of the content's merit bypasses the moderation flow and
+  robs the operator of the chance to apply it.
+- **You're unsure whether the entry is "worth" being in the KB.**
+  Not your call. Submit; moderation decides.
+
+The ONLY legitimate reasons to skip submission are the two in the
+numbered list above — genuine empty-extraction cases. Everything else
+submits.
 
 1. CLASSIFY CONTENT TYPE
    Take \`prompts.content_type\`. Replace {POST_TEXT} with the content from \`get_ingest_content(entry_id)\`.

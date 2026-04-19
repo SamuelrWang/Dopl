@@ -8,15 +8,27 @@ const MAX_CONTENT_LENGTH = 50_000; // 50K chars max per page
  * Typed extractor failure. Thrown from content validators so the caller
  * (followAndStore) can read a precise `statusReason` and persist a
  * meaningful failed-source row for audit / agent-visible fetch_warnings.
+ *
+ * Also mirrors `fetchStatusCode` as `.status` on the Error instance.
+ * `utils.isTransientError` (the retry guard used by Firecrawl/Jina
+ * wrappers in retryWithBackoff) follows the SDK convention of reading
+ * `.status` off the error — without this, 429/5xx responses from the
+ * extraction services wouldn't trigger the exponential-backoff retry
+ * loop, and transient upstream errors would fail ingests that should
+ * have succeeded on the second attempt.
  */
 export class ExtractorError extends Error {
   readonly statusReason: SourceStatusReason;
   readonly fetchStatusCode: number | null;
+  readonly status?: number;
   constructor(statusReason: SourceStatusReason, message: string, fetchStatusCode: number | null = null) {
     super(message);
     this.name = "ExtractorError";
     this.statusReason = statusReason;
     this.fetchStatusCode = fetchStatusCode;
+    if (fetchStatusCode !== null) {
+      this.status = fetchStatusCode;
+    }
   }
 }
 

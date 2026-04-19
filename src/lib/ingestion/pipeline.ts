@@ -724,13 +724,36 @@ export async function storeSources(
   if (error) {
     // 23505 = unique_violation. A concurrent storeSources call beat us
     // to the punch on at least one URL between our dedup-check query
-    // and the insert. Treat as a no-op — the other writer's row is the
-    // canonical one. Logging still useful so ops can spot pathological
-    // contention.
+    // and the insert. Postgres aborts the whole batch on conflict, so
+    // without a fallback a single lost race would drop every other
+    // non-conflicting row in the same batch too. For single-row
+    // batches (current common case) just skip. For multi-row batches
+    // retry one-at-a-time so surviving rows still land.
     if ((error as { code?: string }).code === "23505") {
+      if (toInsert.length === 1) {
+        console.warn(
+          `[pipeline] storeSources lost dedup race for entry ${entryId} on single row: ${error.message}`
+        );
+        return;
+      }
       console.warn(
-        `[pipeline] storeSources lost dedup race for entry ${entryId}: ${error.message}`
+        `[pipeline] storeSources batch 23505 for entry ${entryId}, falling back to one-at-a-time for ${toInsert.length} rows`
       );
+      for (const row of toInsert) {
+        const { error: singleErr } = await supabase.from("sources").insert(row);
+        if (!singleErr) continue;
+        const singleCode = (singleErr as { code?: string }).code;
+        if (singleCode === "23505") {
+          // Expected for the row(s) that lost the race. Skip silently.
+          continue;
+        }
+        // Anything else is a genuine error on a specific row — log
+        // and continue so the others still get written, mirroring the
+        // legacy tag-insert behavior (non-fatal for search correctness).
+        console.error(
+          `[pipeline] single-row insert failed for ${row.url ?? "(no url)"}: ${singleErr.message}`
+        );
+      }
       return;
     }
 

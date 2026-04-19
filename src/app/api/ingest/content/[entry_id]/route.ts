@@ -27,15 +27,32 @@ const supabase = supabaseAdmin();
  *   - 404 { error } — entry doesn't exist or caller has no access
  *   - 404 { error } — if ?source_url is passed but no matching source row
  *
- * A 90KB content cap applies. The MCP tool-result surface rejects
- * responses above roughly 100KB (the heygen walkthrough hit this at
- * 295KB), so we cap well under that and leave room for the envelope.
- * If the concatenated content exceeds the cap we return a slice with
- * `truncated: true` — the agent should then narrow to specific sources
- * via `?source_url` rather than pulling everything at once.
+ * A 60KB content cap applies. Empirically the MCP tool-result surface
+ * rejected a 90,113-char response during verification (the harness
+ * caps in tokens, which varies with content density). 60KB gives a
+ * safe margin well under any realistic per-response ceiling while
+ * still covering most single-source fetches. If the concatenated
+ * content exceeds the cap we return a slice with `truncated: true`
+ * and the agent pivots to per-source fetches via `?source_url` —
+ * which is the preferred per-prompt pattern anyway since it lets the
+ * agent target exactly the content a given step needs (README for
+ * content-type classification, code-heavy sources for manifest tool
+ * extraction, etc.) at lower token cost.
  */
 
-const MAX_CONTENT_CHARS = 90_000;
+const MAX_CONTENT_CHARS = 60_000;
+
+/**
+ * Entry-ID validator. The `entry_id` path param is supposed to be a
+ * UUID written by `prepare_ingest`. A non-UUID string reaching the
+ * Supabase query would surface as a 500 (`invalid input syntax for
+ * type uuid`) — confusing diagnostic noise and a vector for probes.
+ * Returning 400 up front keeps the 500 surface clean for real errors.
+ *
+ * Permissive regex: accepts the canonical 8-4-4-4-12 hex form. The
+ * DB accepts any variant; this is just a sanity gate.
+ */
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 interface SourceRow {
   url: string | null;
@@ -53,6 +70,12 @@ async function handleGet(
   const entryId = params?.entry_id;
   if (!entryId) {
     return NextResponse.json({ error: "Missing entry_id" }, { status: 400 });
+  }
+  if (!UUID_REGEX.test(entryId)) {
+    return NextResponse.json(
+      { error: "Invalid entry_id (expected UUID)" },
+      { status: 400 }
+    );
   }
 
   // Access gate: owned by caller OR publicly moderated='approved'. We
