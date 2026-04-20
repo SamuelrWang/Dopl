@@ -18,12 +18,15 @@ export async function buildBuilderBundle(
     excluded_tools?: string[];
     max_complexity?: string;
     budget_context?: string;
-  }
+  },
+  callerUserId?: string
 ): Promise<BuildBundle> {
-  // 1. Retrieval — embedding search against the KB.
+  // 1. Retrieval — embedding search against the KB. callerUserId gates
+  //    non-approved entries out of the bundle (same rationale as /api/query).
   const results = await searchEntries(brief, {
     maxResults: 10,
     threshold: 0.5, // Lower threshold to surface more diverse candidates.
+    callerUserId,
   });
 
   if (results.length === 0) {

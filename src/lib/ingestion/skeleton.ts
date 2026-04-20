@@ -3,6 +3,7 @@ import { callClaude, generateEmbedding } from "@/lib/ai";
 import { supabaseAdmin } from "@/lib/supabase";
 import { slugifyEntryTitle, fallbackSlugFromId } from "@/lib/entries/slug";
 import { logSystemEvent } from "@/lib/analytics/system-events";
+import { normalizeTag } from "./tags";
 import {
   SKELETON_DESCRIPTOR_PROMPT_VERSION,
   buildSkeletonDescriptorPrompt,
@@ -214,6 +215,18 @@ export async function runSkeletonIngest(input: SkeletonInput): Promise<void> {
       ...structured.tags,
     ]);
     await writeSkeletonTags(entryId, allTags);
+
+    // Short-query retrieval parity with full ingest. Skeletons now carry
+    // a dedicated title_summary chunk alongside the descriptor so that
+    // title-shaped queries ("clone website", "polymarket bot") rank
+    // skeletons competitively. Failure here degrades search quality but
+    // doesn't justify failing the whole entry — log and move on.
+    await embedTitleSummary(
+      entryId,
+      title,
+      summary,
+      allTags.map((t) => t.tag_value)
+    );
 
     // Final write: content fields + status=complete in one atomic update.
     const { error: updateError } = await supabase
@@ -663,13 +676,19 @@ function mapPythonDepToTag(dep: string): SkeletonTag | null {
 }
 
 function dedupeTags(tags: SkeletonTag[]): SkeletonTag[] {
+  // Normalize before dedup so 'Claude' and 'claude' collapse to one row.
+  // The per-source tag builders in this file already lowercase inline,
+  // but routing through normalizeTag centralizes the contract and
+  // guards against a future path that forgets.
   const seen = new Set<string>();
   const out: SkeletonTag[] = [];
   for (const t of tags) {
-    const key = `${t.tag_type}::${t.tag_value}`;
+    const n = normalizeTag(t);
+    if (!n) continue;
+    const key = `${n.tag_type}::${n.tag_value}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    out.push(t);
+    out.push(n);
   }
   return out;
 }
@@ -728,6 +747,44 @@ async function embedDescriptor(
   });
   if (error) {
     throw new Error(`Failed to insert descriptor chunk: ${error.message}`);
+  }
+}
+
+async function embedTitleSummary(
+  entryId: string,
+  title: string,
+  summary: string,
+  tagValues: string[]
+): Promise<void> {
+  const content = [title, summary, tagValues.filter(Boolean).join(", ")]
+    .map((s) => (s || "").trim())
+    .filter((s) => s.length > 0)
+    .join("\n\n");
+
+  if (content.length === 0) return;
+
+  try {
+    const supabase = supabaseAdmin();
+    const embedding = await generateEmbedding(content);
+    const { error } = await supabase.from("chunks").insert({
+      entry_id: entryId,
+      content,
+      chunk_type: "title_summary",
+      chunk_index: 0,
+      embedding: JSON.stringify(embedding),
+    });
+    if (error) throw error;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[skeleton] title_summary embed failed for ${entryId}: ${msg}`);
+    void logSystemEvent({
+      severity: "warn",
+      category: "ingestion",
+      source: "skeleton.embedTitleSummary",
+      message: `title_summary embed failed: ${msg}`,
+      fingerprintKeys: ["skeleton", "title_summary_failed"],
+      metadata: { entry_id: entryId },
+    });
   }
 }
 

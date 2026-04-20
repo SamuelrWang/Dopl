@@ -32,18 +32,25 @@ export async function searchEntries(
     maxResults?: number;
     threshold?: number;
     entryIds?: string[];
+    // Passed to the RPC's `caller_user_id` arg. Lets the owner of a
+    // pending/rejected entry still find it via search while the
+    // moderation_status='approved' filter applies to everyone else. Omit
+    // or pass undefined for strict approved-only behavior (unauth / cron
+    // paths).
+    callerUserId?: string;
   }
 ): Promise<SearchResult[]> {
   const embedding = await generateEmbedding(query);
 
   const { data, error } = await supabase.rpc("search_entries", {
     query_embedding: JSON.stringify(embedding),
-    match_threshold: options?.threshold ?? 0.35,
+    match_threshold: options?.threshold ?? 0.4,
     match_count: options?.maxResults || 10,
     filter_tags: options?.tags || null,
     filter_use_case: options?.useCase || null,
     filter_complexity: options?.complexity || null,
     filter_entry_ids: options?.entryIds || null,
+    caller_user_id: options?.callerUserId ?? null,
   });
 
   if (error) {
@@ -63,6 +70,8 @@ export async function searchEntries(
   // Hydrate columns that the RPC doesn't return. descriptor + ingestion_tier
   // matter for skeleton-tier entries — they have no readme/agents_md, so
   // the descriptor is the only readable content to hand a consumer.
+  // Moderation filtering lives in the RPC itself (see the search_entries
+  // migration) — no post-filter needed here.
   const ids = rpcRows.map((r) => r.entry_id);
   const { data: hydrated, error: hydrateError } = await supabase
     .from("entries")

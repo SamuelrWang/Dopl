@@ -16,7 +16,10 @@ import { BuildRequestSchema } from "@/types/api";
 import { buildBuilderBundle } from "@/lib/retrieval/builder";
 import { withMcpCredits } from "@/lib/auth/with-auth";
 
-async function handlePost(request: NextRequest) {
+async function handlePost(
+  request: NextRequest,
+  { userId }: { userId: string }
+) {
   try {
     const body = await request.json();
     const parsed = BuildRequestSchema.safeParse(body);
@@ -30,7 +33,8 @@ async function handlePost(request: NextRequest) {
 
     const bundle = await buildBuilderBundle(
       parsed.data.brief,
-      parsed.data.constraints
+      parsed.data.constraints,
+      userId
     );
 
     return NextResponse.json(bundle);

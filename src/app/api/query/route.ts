@@ -19,7 +19,7 @@ import type { SubscriptionTier } from "@/lib/billing/subscriptions";
 
 async function handlePost(
   request: NextRequest,
-  { tier }: { userId: string; tier: SubscriptionTier }
+  { userId, tier }: { userId: string; tier: SubscriptionTier }
 ) {
   try {
     const body = await request.json();
@@ -35,11 +35,14 @@ async function handlePost(
     const { query, filters, max_results } = parsed.data;
 
     // Vector search. No LLM call here — retrieval only.
+    // callerUserId gates non-approved entries out of the results — without
+    // it, pending/rejected entries would leak to every MCP search_setups.
     const results = await searchEntries(query, {
       tags: filters?.tags,
       useCase: filters?.use_case,
       complexity: filters?.complexity,
       maxResults: max_results,
+      callerUserId: userId,
     });
 
     // Format response — gate content depth for free users.

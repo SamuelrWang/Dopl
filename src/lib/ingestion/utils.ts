@@ -6,7 +6,11 @@
  * - truncateContent: enforce content budget before Claude calls
  */
 
+import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 import { MAX_IMAGE_SIZE_BYTES } from "@/lib/config";
+
+const TRANSIENT_HTTP_STATUSES = new Set([408, 409, 425, 429, 500, 502, 503, 504, 529]);
 
 const DEFAULT_FETCH_TIMEOUT_MS = 30_000; // 30 seconds
 const MAX_RETRY_ATTEMPTS = 3;
@@ -75,14 +79,29 @@ export async function retryWithBackoff<T>(
 }
 
 function isTransientError(error: Error): boolean {
-  const msg = error.message.toLowerCase();
+  // Typed SDK errors — primary signal. Both SDKs expose `.status` on
+  // APIError subclasses; checking the class first means an SDK reword
+  // of the error message ("API overloaded" → "Service at capacity")
+  // can't break retry behavior. Keeps the pipeline resilient to SDK
+  // upgrades without us having to chase string changes.
+  if (error instanceof OpenAI.APIError && typeof error.status === "number") {
+    if (TRANSIENT_HTTP_STATUSES.has(error.status)) return true;
+  }
+  if (error instanceof Anthropic.APIError && typeof error.status === "number") {
+    if (TRANSIENT_HTTP_STATUSES.has(error.status)) return true;
+  }
 
-  // Check for HTTP status code in error object (Anthropic/OpenAI SDKs set .status)
+  // Generic `.status` on non-SDK errors (e.g. fetch wrappers, custom
+  // throws from scraper extractors).
   const status = (error as unknown as Record<string, unknown>).status;
-  if (typeof status === "number" && (status === 429 || status === 529 || status === 502 || status === 503)) {
+  if (typeof status === "number" && TRANSIENT_HTTP_STATUSES.has(status)) {
     return true;
   }
 
+  // String fallback for errors without typed classes or status fields —
+  // node's fetch `TypeError: fetch failed`, DNS errors, etc. Kept as
+  // defense-in-depth. SDK errors should never fall through to here.
+  const msg = error.message.toLowerCase();
   return (
     msg.includes("timed out") ||
     msg.includes("timeout") ||

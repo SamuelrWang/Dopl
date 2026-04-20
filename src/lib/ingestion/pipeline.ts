@@ -24,6 +24,7 @@ import {
 // prompts via prepare_ingest + submit_ingested_entry and POSTs artifacts
 // back to us for embedding + persistence.
 import { chunkAndEmbed } from "./embedder";
+import { normalizeTag } from "./tags";
 import { truncateContent } from "./utils";
 import { ingestionProgress } from "./progress";
 import {
@@ -1142,16 +1143,23 @@ export async function persistAgentArtifacts(args: {
   }
 
   if (tags.length > 0) {
-    const tagRows = tags.map((t) => ({
-      entry_id: entryId,
-      tag_type: t.tag_type,
-      tag_value: t.tag_value,
-    }));
-    const { error: tagError } = await supabase.from("tags").insert(tagRows);
-    if (tagError) {
-      // Legacy pipeline treats tag insert failure as non-fatal; match that so
-      // a bad tag row doesn't poison an otherwise-good ingest.
-      console.error("[pipeline] Failed to store tags:", tagError);
+    // Normalize agent-supplied tags so case/whitespace differences don't
+    // fragment the tag namespace (see src/lib/ingestion/tags.ts).
+    const normalized = tags
+      .map((t) => normalizeTag({ tag_type: t.tag_type, tag_value: t.tag_value }))
+      .filter((t): t is { tag_type: string; tag_value: string } => t !== null);
+    if (normalized.length > 0) {
+      const tagRows = normalized.map((t) => ({
+        entry_id: entryId,
+        tag_type: t.tag_type,
+        tag_value: t.tag_value,
+      }));
+      const { error: tagError } = await supabase.from("tags").insert(tagRows);
+      if (tagError) {
+        // Legacy pipeline treats tag insert failure as non-fatal; match that so
+        // a bad tag row doesn't poison an otherwise-good ingest.
+        console.error("[pipeline] Failed to store tags:", tagError);
+      }
     }
   }
 

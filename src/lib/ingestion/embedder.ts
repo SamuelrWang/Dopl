@@ -44,9 +44,6 @@ export async function chunkAndEmbed(
     titleSummary?: string;
   }
 ): Promise<void> {
-  // Delete existing chunks for this entry (in case of re-processing)
-  await supabase.from("chunks").delete().eq("entry_id", entryId);
-
   const allChunks: ChunkData[] = [];
 
   // title_summary is a dedicated high-signal chunk (title + summary + tags).
@@ -74,14 +71,28 @@ export async function chunkAndEmbed(
     return;
   }
 
-  // Generate embeddings and insert in batches. Use allSettled so a
-  // single oversize/malformed chunk doesn't abort the whole entry —
-  // earlier behavior was to fail the pipeline on one 400, which wiped
-  // the user's in-flight ingestion (see the 8192-token regression for
-  // addyosmani/agent-skills).
+  // ─── Phase 1: embed everything into memory, do NOT touch the DB yet. ───
+  // Previously we deleted existing chunks as step 1 then inserted as we
+  // embedded. That made a mid-flight embedding failure catastrophic for
+  // re-ingests: old chunks already gone, new ones never landed, entry
+  // silently becomes unsearchable. Collecting rows first and only
+  // swapping at the end preserves the old chunk set for any failure
+  // before the swap.
+  //
+  // allSettled so a single oversize/malformed chunk doesn't abort the
+  // whole entry — earlier behavior was to fail the pipeline on one 400,
+  // which wiped the user's in-flight ingestion (8192-token regression
+  // for addyosmani/agent-skills).
   const batchSize = 10;
   let successCount = 0;
   let failureCount = 0;
+  const newRows: Array<{
+    entry_id: string;
+    content: string;
+    chunk_type: ChunkData["chunkType"];
+    chunk_index: number;
+    embedding: string;
+  }> = [];
 
   for (let i = 0; i < limitedChunks.length; i += batchSize) {
     const batch = limitedChunks.slice(i, i + batchSize);
@@ -90,17 +101,9 @@ export async function chunkAndEmbed(
       batch.map((chunk) => generateEmbedding(chunk.content))
     );
 
-    const rows: Array<{
-      entry_id: string;
-      content: string;
-      chunk_type: ChunkData["chunkType"];
-      chunk_index: number;
-      embedding: string;
-    }> = [];
-
     results.forEach((res, idx) => {
       if (res.status === "fulfilled") {
-        rows.push({
+        newRows.push({
           entry_id: entryId,
           content: batch[idx].content,
           chunk_type: batch[idx].chunkType,
@@ -130,21 +133,58 @@ export async function chunkAndEmbed(
         });
       }
     });
-
-    if (rows.length === 0) continue;
-
-    const { error } = await supabase.from("chunks").insert(rows);
-    if (error) {
-      console.error("[embedder] Failed to insert chunks:", error);
-      throw error;
-    }
   }
 
-  // Only throw if NO chunks landed — otherwise degrade gracefully.
-  if (successCount === 0 && failureCount > 0) {
+  // If nothing embedded, leave existing chunks alone and throw. Old
+  // chunks (if any) remain searchable — a retry is safe.
+  if (newRows.length === 0) {
     throw new Error(
       `All ${failureCount} chunk embeddings failed for entry ${entryId}`
     );
+  }
+
+  // ─── Phase 2: atomic swap — delete old, insert new. ───
+  // Narrow failure window: if DELETE succeeds and INSERT fails we've
+  // lost the old chunks. Log critical so the entry is easy to find in
+  // audit, then throw so the caller can decide whether to retry.
+  const { error: deleteError } = await supabase
+    .from("chunks")
+    .delete()
+    .eq("entry_id", entryId);
+  if (deleteError) {
+    throw new Error(`Failed to clear existing chunks: ${deleteError.message}`);
+  }
+
+  const { error: insertError } = await supabase.from("chunks").insert(newRows);
+  if (insertError) {
+    console.error("[embedder] Failed to insert chunks after delete:", insertError);
+    void logSystemEvent({
+      severity: "critical",
+      category: "ingestion",
+      source: "embedder.insert_post_delete",
+      message: `Insert failed after delete — entry has no chunks: ${insertError.message}`,
+      fingerprintKeys: ["embedder", "insert_post_delete"],
+      metadata: {
+        entry_id: entryId,
+        attempted_rows: newRows.length,
+      },
+    });
+    throw insertError;
+  }
+
+  // ─── Phase 3: record embedding coverage on the entry row. ───
+  // Lets ops see which entries got a partial index (successCount <
+  // limitedChunks.length) vs a clean one. Non-fatal if the update fails —
+  // search is already working.
+  const { error: statsError } = await supabase
+    .from("entries")
+    .update({
+      chunks_attempted: limitedChunks.length,
+      chunks_embedded: successCount,
+    })
+    .eq("id", entryId);
+  if (statsError) {
+    console.warn(`[embedder] Failed to stamp embedding stats for ${entryId}: ${statsError.message}`);
   }
 }
 

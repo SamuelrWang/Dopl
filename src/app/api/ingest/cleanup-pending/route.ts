@@ -5,17 +5,24 @@ import { logSystemEvent } from "@/lib/analytics/system-events";
 /**
  * GET /api/ingest/cleanup-pending
  *
- * Scheduled job: delete `pending_ingestion` skeletons that have sat in
- * the queue for more than 7 days without being claimed by the user's
- * MCP agent. Mirrors the "zombie processing" cleanup in
- * /api/ingest/prepare (which handles 1-hour-stuck processing rows) but
- * for the longer-lived pending state.
+ * Scheduled job. Two sweeps:
+ *
+ *   1. `pending_ingestion` skeletons older than 7 days — skeletons the
+ *      user's MCP agent never claimed. (Original purpose of this route.)
+ *
+ *   2. `processing` entries older than 1 hour with `ingested_at IS NULL` —
+ *      zombie ingests where prepare created the row but submit never
+ *      claimed it (server crash, network drop, agent abandoned the
+ *      pipeline). `/api/ingest/prepare` reaps these opportunistically
+ *      when the same URL is re-prepared, but that's URL-scoped and only
+ *      fires on demand. This sweep is the unconditional safety net.
  *
  * Hit this from Vercel Cron (or any external scheduler). Authentication:
  * requires the `CRON_SECRET` env var as a bearer token so random
  * unauth'd calls don't wipe queued rows.
  */
 const PENDING_TTL_DAYS = 7;
+const PROCESSING_TTL_HOURS = 1;
 
 export const dynamic = "force-dynamic";
 
@@ -38,47 +45,88 @@ export async function GET(request: NextRequest) {
   }
 
   const supabase = supabaseAdmin();
-  const cutoff = new Date(
+  const pendingCutoff = new Date(
     Date.now() - PENDING_TTL_DAYS * 24 * 60 * 60 * 1000
   ).toISOString();
+  const processingCutoff = new Date(
+    Date.now() - PROCESSING_TTL_HOURS * 60 * 60 * 1000
+  ).toISOString();
 
-  const { data: deleted, error } = await supabase
+  // Sweep 1 — pending_ingestion skeletons > 7 days.
+  const { data: pendingDeleted, error: pendingError } = await supabase
     .from("entries")
     .delete()
     .eq("status", "pending_ingestion")
-    .lt("created_at", cutoff)
+    .lt("created_at", pendingCutoff)
     .select("id");
 
-  if (error) {
+  if (pendingError) {
     void logSystemEvent({
       severity: "error",
       category: "ingestion",
       source: "cron.cleanup_pending",
-      message: `Cleanup failed: ${error.message}`,
+      message: `Pending cleanup failed: ${pendingError.message}`,
       fingerprintKeys: ["cron", "cleanup_pending", "error"],
-      metadata: { cutoff },
+      metadata: { pendingCutoff },
     });
     return NextResponse.json(
-      { error: "Cleanup failed", message: error.message },
+      { error: "Pending cleanup failed", message: pendingError.message },
       { status: 500 }
     );
   }
 
-  const count = deleted?.length ?? 0;
-  if (count > 0) {
+  // Sweep 2 — processing rows > 1 hour where submit never claimed them.
+  // The `ingested_at IS NULL` guard protects in-flight embeds (submit sets
+  // ingested_at at claim time; chunkAndEmbed can legitimately run for
+  // tens of seconds). updated_at isn't bumped during processing, so
+  // we use created_at for age.
+  const { data: processingDeleted, error: processingError } = await supabase
+    .from("entries")
+    .delete()
+    .eq("status", "processing")
+    .is("ingested_at", null)
+    .lt("created_at", processingCutoff)
+    .select("id");
+
+  if (processingError) {
+    void logSystemEvent({
+      severity: "error",
+      category: "ingestion",
+      source: "cron.cleanup_pending",
+      message: `Processing cleanup failed: ${processingError.message}`,
+      fingerprintKeys: ["cron", "cleanup_pending", "error"],
+      metadata: { processingCutoff },
+    });
+    return NextResponse.json(
+      { error: "Processing cleanup failed", message: processingError.message },
+      { status: 500 }
+    );
+  }
+
+  const pendingCount = pendingDeleted?.length ?? 0;
+  const processingCount = processingDeleted?.length ?? 0;
+
+  if (pendingCount > 0 || processingCount > 0) {
     void logSystemEvent({
       severity: "info",
       category: "ingestion",
       source: "cron.cleanup_pending",
-      message: `Pruned ${count} pending_ingestion skeleton(s) older than ${PENDING_TTL_DAYS} days`,
+      message: `Pruned ${pendingCount} pending + ${processingCount} zombie processing row(s)`,
       fingerprintKeys: ["cron", "cleanup_pending"],
-      metadata: { count, cutoff },
+      metadata: {
+        pending_count: pendingCount,
+        processing_count: processingCount,
+        pending_cutoff: pendingCutoff,
+        processing_cutoff: processingCutoff,
+      },
     });
   }
 
   return NextResponse.json({
     status: "ok",
-    deleted: count,
-    cutoff,
+    pending_deleted: pendingCount,
+    processing_deleted: processingCount,
+    pending_cutoff: pendingCutoff,
+    processing_cutoff: processingCutoff,
   });
 }
