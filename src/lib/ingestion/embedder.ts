@@ -37,12 +37,25 @@ const MAX_CHUNK_CHARS = MAX_EMBEDDING_TOKENS * CHARS_PER_TOKEN_ESTIMATE;
 
 export async function chunkAndEmbed(
   entryId: string,
-  content: { readme: string; agentsMd: string; rawContent: string }
+  content: {
+    readme: string;
+    agentsMd: string;
+    rawContent: string;
+    titleSummary?: string;
+  }
 ): Promise<void> {
   // Delete existing chunks for this entry (in case of re-processing)
   await supabase.from("chunks").delete().eq("entry_id", entryId);
 
   const allChunks: ChunkData[] = [];
+
+  // title_summary is a dedicated high-signal chunk (title + summary + tags).
+  // Kept as a single chunk — it's short, and splitting would dilute the
+  // query→title cosine similarity that the whole thing exists to rescue.
+  if (content.titleSummary && content.titleSummary.trim().length > 0) {
+    const trimmed = content.titleSummary.trim().slice(0, MAX_CHUNK_CHARS);
+    allChunks.push({ content: trimmed, chunkType: "title_summary", chunkIndex: 0 });
+  }
 
   const readmeChunks = splitIntoChunks(content.readme, "readme");
   allChunks.push(...readmeChunks);

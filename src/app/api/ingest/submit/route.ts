@@ -235,12 +235,29 @@ async function handlePost(
     });
 
     // ── 7. Embeddings (the only AI call we still run server-side). ──
+    // Build a dedicated title_summary chunk so short title-shaped queries
+    // ("clone website", "polymarket bot") don't have to beat the cosine
+    // similarity of 500-word readme chunks. manifest.description is the
+    // summary field (legacy naming); tags pack keyword signal cheaply.
+    const manifestRec = manifest as Record<string, unknown>;
+    const entryTitle = typeof manifestRec.title === "string" ? manifestRec.title : "";
+    const entrySummary =
+      typeof manifestRec.description === "string" ? manifestRec.description : "";
+    const tagLine = (tags || [])
+      .map((t) => t.tag_value)
+      .filter(Boolean)
+      .join(", ");
+    const titleSummary = [entryTitle, entrySummary, tagLine]
+      .filter((s) => s && s.trim().length > 0)
+      .join("\n\n");
+
     await logStep(entry_id, "embedding", "started");
     const embedStart = Date.now();
     await chunkAndEmbed(entry_id, {
       readme,
       agentsMd: agents_md,
       rawContent: allContent,
+      titleSummary,
     });
     await logStep(
       entry_id,

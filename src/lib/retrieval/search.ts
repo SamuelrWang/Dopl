@@ -38,7 +38,7 @@ export async function searchEntries(
 
   const { data, error } = await supabase.rpc("search_entries", {
     query_embedding: JSON.stringify(embedding),
-    match_threshold: options?.threshold || 0.6,
+    match_threshold: options?.threshold ?? 0.35,
     match_count: options?.maxResults || 10,
     filter_tags: options?.tags || null,
     filter_use_case: options?.useCase || null,

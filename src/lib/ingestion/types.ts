@@ -78,7 +78,7 @@ export interface GeneratedArtifacts {
 
 export interface ChunkData {
   content: string;
-  chunkType: "readme" | "agents_md" | "raw_content" | "content" | "descriptor";
+  chunkType: "readme" | "agents_md" | "raw_content" | "content" | "descriptor" | "title_summary";
   chunkIndex: number;
 }
 
