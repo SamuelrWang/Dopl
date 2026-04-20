@@ -4,6 +4,7 @@ exports.createServer = createServer;
 const mcp_js_1 = require("@modelcontextprotocol/sdk/server/mcp.js");
 const zod_1 = require("zod");
 const skill_writer_js_1 = require("./skill-writer.js");
+const templates_js_1 = require("./templates.js");
 const CONTEXT_CHAR_BUDGET = 2000;
 const SERVER_INSTRUCTIONS = `You are connected to **Dopl** — a knowledge base of proven AI and automation implementations including agent workflows, n8n automations, Claude skills, API integrations, and more.
 
@@ -60,6 +61,49 @@ These tool pairs overlap and picking the wrong one wastes a round trip:
 - \`save_cluster_memory\` (NEW memory) vs \`update_cluster_memory\` (edit existing) — call \`get_cluster_brain\` first if you're not sure whether a matching memory already exists.
 - \`check_entry_updates\` (one entry) vs \`check_cluster_updates\` (every entry in a cluster) — use the bulk version for cluster-wide refresh.
 - \`update_cluster_brain\` (edit synthesized instructions) vs \`save_cluster_memory\` (append a short preference) — use the memory path for short corrections, the brain edit path for structural changes.
+
+## Skeleton entries — upgrade before handing off
+
+Some entries in the KB are **skeleton tier**: a short task-agnostic
+descriptor + one embedding, no README / agents.md / manifest / tags.
+They exist to populate the discovery index cheaply. In \`search_setups\`
+results they render with an \`_(skeleton)_\` badge after the match score;
+in \`get_setup\` output they have a "Descriptor (skeleton tier)" section
+instead of the normal README/agents.md/manifest sections and end with
+"*This is a skeleton entry…*".
+
+**Rule: if the user wants to use a skeleton entry for anything
+substantive** — adopt it into their work, copy the setup, understand
+how to build like it — **upgrade it to full tier before presenting.**
+The skeleton descriptor is too thin for serious use; a full-tier
+version will have README, agents.md, detailed manifest, and richer tags.
+
+To upgrade: call \`prepare_ingest(url)\` with the skeleton entry's
+\`source_url\`. The server detects the existing skeleton, atomically
+claims it, and runs the same agent-driven full-ingestion flow as a
+fresh URL. The entry UUID is preserved; the slug regenerates from the
+new title. Canvas pins on the old slug will no longer resolve, but the
+entry_id-based references survive.
+
+**When to skip upgrading:**
+- User just wants to SEE what's in the KB ("what skeleton entries do
+  you have for X?") — show them the descriptor, don't upgrade
+  unsolicited.
+- The descriptor alone is sufficient for the user's current question
+  (e.g. "does this KB have anything on topic Y?" and a skeleton match
+  answers "yes, here's the gist").
+- Cost-sensitive bulk operations where multiple skeleton hits would
+  each trigger a full ingest.
+
+**When to always upgrade:**
+- User wants to adopt, replicate, or extend a setup based on the entry.
+- User is composing a solution via \`build_solution\` that would treat
+  the entry as a load-bearing reference.
+- The match is strong but you know you'd otherwise deliver a thin
+  "here's the descriptor" response that doesn't actually help.
+
+Upgrade takes ~30-60 seconds end-to-end (prepare + 6 prompts + submit).
+Tell the user you're upgrading so they know why there's a pause.
 
 ## What you can do
 
@@ -133,6 +177,36 @@ After any brain or memory write, call \`sync_skills\` so the thin-pointer \`SKIL
 - Reference specific tools, repos, and patterns — not the database entries they came from
 - Cluster skills are living documents — update them when you learn new patterns or receive user corrections
 - Never edit cluster \`SKILL.md\` files directly on disk; always go through the MCP tools so changes propagate to the brain (the canonical source)`;
+/**
+ * Human-readable label for non-entry canvas panel types. The backend
+ * stores `panel_type` in `canvas_panels` but the MCP tool output used
+ * to render every non-entry panel as "Untitled" because the renderer
+ * only looked at the entry fields (title/summary/source_url) which
+ * are all null for system panels.
+ */
+function systemPanelLabel(type) {
+    switch (type) {
+        case "chat": return "Chat panel";
+        case "connection": return "MCP connection panel";
+        case "browse": return "Browse panel";
+        case "cluster-brain": return "Cluster brain panel";
+        default: return "System panel";
+    }
+}
+function systemPanelDetail(panel) {
+    // System panels occasionally carry a title (e.g. the browse panel's
+    // active filter, a chat panel's conversation topic). Surface it when
+    // present; otherwise describe the panel's purpose inline.
+    if (panel.title)
+        return panel.title;
+    switch (panel.panel_type) {
+        case "browse": return "the KB browse surface";
+        case "connection": return "status of your connected MCP agent";
+        case "chat": return "an in-canvas chat thread";
+        case "cluster-brain": return "a cluster brain viewer";
+        default: return null;
+    }
+}
 /**
  * Append a pending-ingestion status footer to a tool response so the
  * user's connected agent notices URLs they queued from the Dopl website
@@ -480,7 +554,7 @@ function createServer(client, options = {}) {
         };
     });
     // ── save_cluster_memory ───────────────────────────────────────────
-    registerTool("save_cluster_memory", "Append a NEW durable preference or correction to a cluster's brain. Trigger phrases: 'I prefer X over Y', 'always use Z', 'skip that step', 'for my setup we don't use…', 'note that…'. Memories override the base instructions in future sessions. Use `update_cluster_memory` instead if a similar memory already exists (call `get_cluster_brain` first to check). Use `update_cluster_brain` for structural edits to the synthesized playbook rather than short preferences.", {
+    registerTool("save_cluster_memory", "**Call this proactively** after any user turn that carries durable signal about a cluster — do NOT wait for 'remember this' phrasing. Write silently in the same turn, before composing your reply. Three categories fire this tool: (1) **Preferences / env facts** — 'I prefer X over Y', 'always use Z', 'skip that step', 'for my setup …', 'in my environment …', 'from now on …', 'my <env var / value> is …'. (2) **Soft corrections** — 'no', 'actually …', 'that's not right', 'you got X backwards', 'the answer is Y, not Z' (even without canonical wrong-phrasing). (3) **Outcome dissatisfaction** — 'I tried that, it didn't work', 'the output wasn't what I wanted', 'ran it and got the wrong result', 'this approach gave me garbage', 'that didn't produce X'. Category 3 is the highest-signal — the skill led the agent astray and the user is telling you; capture the lesson as a memory describing the gotcha. Memories override the base instructions in future sessions. Routing: use `update_cluster_memory` instead if a near-duplicate memory exists (call `get_cluster_brain` first to check IDs); escalate to `update_cluster_brain` if the issue is structural to the workflow itself rather than a single fact.", {
         slug: zod_1.z.string().describe("Cluster slug"),
         memory: zod_1.z.string().describe("The preference or correction to remember, e.g. 'User prefers Resend over SendGrid for email' or 'Skip the Slack notification step'"),
     }, async ({ slug, memory }) => {
@@ -734,6 +808,58 @@ function createServer(client, options = {}) {
             ],
         };
     });
+    // ── describe_link ──────────────────────────────────────────────────
+    // Lightweight per-URL metadata fetch. Used by the agent's post-submit
+    // `detected_links` review flow (see `AGENT_INGEST_INSTRUCTIONS`): the
+    // agent filters out noise (badges, self-refs, translations) locally,
+    // then calls this per surviving candidate to get each link's OWN
+    // self-description — GitHub repo description via the repos API,
+    // og:description on web pages, arxiv abstract snippet, etc. Those
+    // author-curated self-descriptions are always more informative than
+    // surrounding-text heuristics on the primary README (where most links
+    // are bullet-list or badge refs with no meaningful context).
+    //
+    // Bounded 5s server-side timeout per URL; no content storage; pure
+    // metadata fetch. Agent typically calls this 2-5 times per ingest —
+    // only for the candidates that pass local filtering and might be
+    // offered to the user as separate-entry ingests.
+    registerTool("describe_link", "Fetch the self-description metadata for a URL — the link's own authoritative one-liner (GitHub repo description, og:description on web pages, arxiv abstract, etc.) — without running a full extraction. Use this during the post-submit `detected_links` review flow: after filtering out noise (badges, self-refs, translations) locally, call this per surviving candidate before offering them to the user as separate-entry ingests. The returned `description` is the source's authoritative self-description, more reliable than guessing from surrounding README text. Bounded ~1s per URL. Returns `{ url, type, title, description, metadata, error? }` — when `error` is set, the URL couldn't be fetched (timeout, 404, etc.) and the agent should exclude it from the offer list or note it as \"couldn't describe\" to the user.", {
+        url: zod_1.z
+            .string()
+            .describe("URL to describe. Typically pulled from `detected_links[]` in a prepare_ingest response after local filtering."),
+    }, async ({ url }) => {
+        const result = await client.describeLink(url);
+        const lines = [];
+        lines.push(`**${result.title ?? url}**`);
+        if (result.type !== "unknown")
+            lines.push(`_Type: ${result.type}_`);
+        if (result.description) {
+            lines.push("");
+            lines.push(result.description);
+        }
+        if (result.metadata && Object.keys(result.metadata).length > 0) {
+            const metaBits = [];
+            if (typeof result.metadata.stars === "number")
+                metaBits.push(`${result.metadata.stars.toLocaleString()} ★`);
+            if (typeof result.metadata.language === "string")
+                metaBits.push(result.metadata.language);
+            if (typeof result.metadata.license === "string")
+                metaBits.push(result.metadata.license);
+            if (typeof result.metadata.site_name === "string")
+                metaBits.push(result.metadata.site_name);
+            if (metaBits.length > 0) {
+                lines.push("");
+                lines.push(`_${metaBits.join(" · ")}_`);
+            }
+        }
+        if (result.error) {
+            lines.push("");
+            lines.push(`_(couldn't describe: ${result.error})_`);
+        }
+        return {
+            content: [{ type: "text", text: lines.join("\n") }],
+        };
+    });
     // ── ingest_url — RETIRED ────────────────────────────────────────────
     // The legacy server-side ingestion tool has been removed. Use
     // `prepare_ingest` + `submit_ingested_entry` instead. The backend
@@ -850,7 +976,7 @@ function createServer(client, options = {}) {
         };
     });
     // ── get_cluster_brain ──────────────────────────────────────────────
-    registerTool("get_cluster_brain", "Read the current brain for a cluster — synthesized instructions plus numbered user memories. Call this before `update_cluster_brain` (so surgical edits preserve existing text), before `update_cluster_memory` / `delete_cluster_memory` (to get memory IDs), and any time you want to know what durable knowledge already exists for a cluster before adding more.", {
+    registerTool("get_cluster_brain", "Read the current brain for a cluster — synthesized instructions plus numbered user memories. **Call this on first invocation per session of a cluster's skill** so the body you execute against reflects edits made via the web UI or other agents since the last `sync_skills`. Also call before `update_cluster_brain` (so surgical edits preserve existing text), before `update_cluster_memory` / `delete_cluster_memory` (to get memory IDs), and any time you want to know what durable knowledge already exists for a cluster before adding more.", {
         slug: zod_1.z.string().describe("Cluster slug from list_clusters"),
     }, async ({ slug }) => {
         const brain = await client.getClusterBrain(slug);
@@ -865,6 +991,12 @@ function createServer(client, options = {}) {
         sections.push("");
         sections.push(`> Canonical skill body for cluster \`${slug}\`, fetched from Dopl. Treat this as the full SKILL.md body — execute against it directly. If you need to modify it, call \`update_cluster_brain\` for structural changes or \`save_cluster_memory\` for short preferences.`);
         sections.push("");
+        // Inject the same self-maintenance protocol carried at the top of
+        // every on-disk SKILL.md. Belt-and-suspenders: even if the user's
+        // local file is stale (no `sync_skills` since the protocol rolled
+        // out), a fresh `get_cluster_brain` still re-injects the protocol
+        // so the executing agent gets the discipline either way.
+        sections.push((0, templates_js_1.brainProtocolPreamble)(slug));
         if (brain.instructions && brain.instructions.trim().length > 0) {
             // If the brain already has the canonical section headings, pass
             // through as-is. Otherwise wrap the flat text in an Instructions
@@ -914,7 +1046,7 @@ function createServer(client, options = {}) {
         };
     });
     // ── update_cluster_brain ───────────────────────────────────────────
-    registerTool("update_cluster_brain", "Overwrite the cluster's brain with new instructions (the skill body Claude Code will execute against on invocation). ALWAYS call `get_cluster_brain` first and edit SURGICALLY — replace only the affected section, preserve the rest verbatim. The canonical structure has these section headings: `## When to use this skill`, `## Instructions`, `## Step-by-step`, `## Examples`, `## Anti-patterns`, `## References`. Omitting the first two triggers a structure warning in the response (non-blocking). Use this for structural/durable knowledge — for short preferences or environmental facts, use `save_cluster_memory` instead; for revising an existing memory, use `update_cluster_memory`. See the server instructions for the full when-to-edit-what decision rules.", {
+    registerTool("update_cluster_brain", "**Call this when the user gives structural feedback** that should change the skill's instructions for future sessions — corrections to steps ('step 3 is wrong'), additions of new use cases ('let's also handle …'), removal of stale guidance ('drop the part about …'), or scope expansions tied to a new entry. Do this in the background, no permission ask. ALWAYS call `get_cluster_brain` first and edit SURGICALLY — replace only the affected section, preserve the rest verbatim. The canonical structure has these section headings: `## When to use this skill`, `## Instructions`, `## Step-by-step`, `## Examples`, `## Anti-patterns`, `## When to save a memory`, `## When to update this skill`, `## References`. Missing structural sections trigger a non-blocking warning in the response. Routing: short preferences and environment facts go through `save_cluster_memory`; revising an existing memory goes through `update_cluster_memory`. See the server instructions for the full when-to-edit-what decision rules.", {
         slug: zod_1.z.string().describe("Cluster slug"),
         instructions: zod_1.z
             .string()
@@ -1137,24 +1269,43 @@ function createServer(client, options = {}) {
         };
     });
     // ── canvas_list_panels ──────────────────────────────────────────────
-    registerTool("canvas_list_panels", "List every entry currently saved to the user's canvas. Use this when the user asks 'what's on my canvas?', 'show me my saved setups', or before operations that need to reason about the current workspace (e.g. deciding what belongs in a new cluster). Returns entry slugs, titles, and positions — not full content.", {}, async () => {
+    registerTool("canvas_list_panels", "List every panel currently on the user's canvas. Use this when the user asks 'what's on my canvas?', 'show me my saved setups', or before operations that need to reason about the current workspace (e.g. deciding what belongs in a new cluster). Returns a mix of entry panels (the saved KB entries — title, slug, source_url) and system panels (chat, connection, browse, cluster-brain — the UI surfaces the user placed on their canvas). Entry panels are the ones relevant for clustering/canvas_add/remove operations; system panels are display-only.", {}, async () => {
         const panels = await client.listCanvasPanels();
         if (panels.length === 0) {
             return {
                 content: [{ type: "text", text: "Your canvas is empty. Use `canvas_add_entry` to add entries, or `search_setups` to find them first." }],
             };
         }
+        // Split by panel type so the entry list stays clean for the agent's
+        // clustering/search decisions, while system panels (chat, connection,
+        // browse, cluster-brain) render underneath as a separate group. The
+        // backend stores panel_type; before this split, system panels rendered
+        // as "Untitled" alongside real entries and confused the agent.
+        const entryPanels = panels.filter((p) => p.panel_type === "entry");
+        const systemPanels = panels.filter((p) => p.panel_type !== "entry");
         const lines = [];
-        lines.push(`## Your Canvas (${panels.length} entries)\n`);
-        for (const p of panels) {
-            const title = p.title || "Untitled";
-            const url = client.entryUrl(p.slug);
-            const label = url ? `[${title}](${url})` : title;
-            lines.push(`- **${label}**`);
-            if (p.summary)
-                lines.push(`  ${p.summary}`);
-            if (p.source_url)
-                lines.push(`  Source: ${p.source_url}`);
+        lines.push(`## Your Canvas — ${entryPanels.length} entry${entryPanels.length === 1 ? "" : "ies"}${systemPanels.length > 0 ? ` + ${systemPanels.length} system panel${systemPanels.length === 1 ? "" : "s"}` : ""}\n`);
+        if (entryPanels.length > 0) {
+            lines.push("### Entries");
+            for (const p of entryPanels) {
+                const title = p.title || "Untitled entry";
+                const url = client.entryUrl(p.slug);
+                const label = url ? `[${title}](${url})` : title;
+                lines.push(`- **${label}**`);
+                if (p.summary)
+                    lines.push(`  ${p.summary}`);
+                if (p.source_url)
+                    lines.push(`  Source: ${p.source_url}`);
+            }
+        }
+        if (systemPanels.length > 0) {
+            lines.push("");
+            lines.push("### System panels (UI surfaces, not saved content)");
+            for (const p of systemPanels) {
+                const label = systemPanelLabel(p.panel_type);
+                const detail = systemPanelDetail(p);
+                lines.push(`- **${label}**${detail ? ` — ${detail}` : ""}`);
+            }
         }
         return { content: [{ type: "text", text: lines.join("\n") }] };
     });

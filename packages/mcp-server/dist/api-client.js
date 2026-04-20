@@ -94,6 +94,21 @@ class DoplClient {
         return this.request(`/api/entries/${id}`, { toolName: "get_setup" });
     }
     /**
+     * Fetch lightweight self-description metadata for a URL. Used by
+     * the agent's post-submit `detected_links` review flow: after
+     * filtering noise (badges, self-refs), the agent calls this per
+     * surviving candidate to get authoritative one-liners for the
+     * user-facing "want me to ingest these as separate entries?"
+     * offer. Bounded ~1s per URL (5s hard timeout server-side).
+     */
+    async describeLink(url) {
+        return this.request("/api/links/describe", {
+            method: "POST",
+            body: { url },
+            toolName: "describe_link",
+        });
+    }
+    /**
      * Fetch extracted content for an in-progress (or completed) ingestion.
      * The prepare_ingest response no longer inlines `gathered_content` — the
      * agent calls this between prepare and submit to retrieve the body it

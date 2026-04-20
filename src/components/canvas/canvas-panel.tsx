@@ -499,7 +499,9 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
           ? `Entry · ${panel.title}`
           : panel.type === "browse"
             ? "Browse Entries"
-            : "Panel";
+            : panel.type === "cluster-brain"
+              ? `Brain · ${panel.clusterName}`
+              : "Panel";
 
   return (
     <div

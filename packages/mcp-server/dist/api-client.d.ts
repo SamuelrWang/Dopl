@@ -31,6 +31,22 @@ export declare class DoplClient {
     }): Promise<SearchResult>;
     getSetup(id: string): Promise<DoplEntry>;
     /**
+     * Fetch lightweight self-description metadata for a URL. Used by
+     * the agent's post-submit `detected_links` review flow: after
+     * filtering noise (badges, self-refs), the agent calls this per
+     * surviving candidate to get authoritative one-liners for the
+     * user-facing "want me to ingest these as separate entries?"
+     * offer. Bounded ~1s per URL (5s hard timeout server-side).
+     */
+    describeLink(url: string): Promise<{
+        url: string;
+        type: string;
+        title: string | null;
+        description: string | null;
+        metadata: Record<string, unknown>;
+        error?: string;
+    }>;
+    /**
      * Fetch extracted content for an in-progress (or completed) ingestion.
      * The prepare_ingest response no longer inlines `gathered_content` — the
      * agent calls this between prepare and submit to retrieve the body it

@@ -1,5 +1,18 @@
 import type { ClusterSkillParams, ClusterDetailEntry, ClusterSummary } from "./types.js";
 /**
+ * The "self-care" protocol every cluster skill carries at the top.
+ *
+ * Three imperative steps the executing agent MUST follow whenever this
+ * skill is in scope: refresh the brain on first invocation, write
+ * memories silently after notable turns, and edit the brain surgically
+ * on structural corrections. Reproduced verbatim in `get_cluster_brain`
+ * tool responses so it survives stale on-disk SKILL.md files.
+ *
+ * Kept tight on purpose — this lives at the top of every skill body
+ * and on every brain fetch; bloat here costs context everywhere.
+ */
+export declare function brainProtocolPreamble(slug: string): string;
+/**
  * Slugify an entry title for use as a reference filename.
  */
 export declare function slugifyTitle(title: string): string;
