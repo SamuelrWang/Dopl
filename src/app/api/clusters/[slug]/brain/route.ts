@@ -175,6 +175,52 @@ async function handlePatch(
       brain = data;
     }
 
+    // Mirror the new instructions into canvas_panels.panel_data for
+    // this cluster's brain panel. The canvas UI reads from
+    // canvas_panels (its single hydration source), not from
+    // cluster_brains — without this write-through, the panel keeps
+    // showing whatever was frozen into panel_data at cluster create
+    // time ("_Brain not synthesized yet._") even after the brain is
+    // fully populated. The realtime bridge also re-reads the fresh
+    // panel_data on hydration, so reload + realtime converge.
+    //
+    // Non-fatal: if the canvas_panels row doesn't exist (headless
+    // cluster, no canvas panel spawned), nothing to update — skip.
+    try {
+      const brainPanelId = `brain-${cluster.id}`;
+      const { data: existingPanel } = await db
+        .from("canvas_panels")
+        .select("panel_data")
+        .eq("user_id", userId)
+        .eq("panel_id", brainPanelId)
+        .eq("panel_type", "cluster-brain")
+        .maybeSingle();
+
+      if (existingPanel) {
+        const currentData =
+          (existingPanel.panel_data as Record<string, unknown>) ?? {};
+        await db
+          .from("canvas_panels")
+          .update({
+            panel_data: {
+              ...currentData,
+              instructions,
+              status: "ready",
+              errorMessage: null,
+            },
+          })
+          .eq("user_id", userId)
+          .eq("panel_id", brainPanelId);
+      }
+    } catch (syncErr) {
+      // Non-fatal; the brain itself saved. Log and move on so the
+      // response doesn't 500 on a canvas-layer issue.
+      console.error(
+        `[cluster-brain] panel_data write-through failed:`,
+        syncErr instanceof Error ? syncErr.message : String(syncErr)
+      );
+    }
+
     return NextResponse.json({
       ...brain,
       structure_warning: validation.ok

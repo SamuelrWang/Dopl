@@ -67,6 +67,43 @@ async function getOrCreateBrain(clusterId: string, userId: string): Promise<stri
   return brain.id;
 }
 
+// Re-read the full memory list for a cluster and mirror it into the
+// canvas_panels brain panel's panel_data.memories array. The canvas UI
+// hydrates memories from panel_data, not from cluster_brain_memories,
+// so without this write-through the visible list never updates even
+// though the DB is correct. Kept as an array of plain content strings
+// because that's the shape the panel renderer expects today.
+async function syncMemoriesToPanel(clusterId: string, userId: string) {
+  const db = supabaseAdmin();
+  const { data: memories } = await db
+    .from("cluster_brain_memories")
+    .select("content, created_at")
+    .eq("cluster_id", clusterId)
+    .order("created_at", { ascending: true });
+
+  const contents = (memories ?? []).map((m) => m.content as string);
+
+  const brainPanelId = `brain-${clusterId}`;
+  const { data: panel } = await db
+    .from("canvas_panels")
+    .select("panel_data")
+    .eq("user_id", userId)
+    .eq("panel_id", brainPanelId)
+    .eq("panel_type", "cluster-brain")
+    .maybeSingle();
+
+  if (!panel) return; // Headless cluster — no panel to sync.
+
+  const currentData = (panel.panel_data as Record<string, unknown>) ?? {};
+  await db
+    .from("canvas_panels")
+    .update({
+      panel_data: { ...currentData, memories: contents },
+    })
+    .eq("user_id", userId)
+    .eq("panel_id", brainPanelId);
+}
+
 // ── POST ────────────────────────────────────────────────────────────
 
 async function handlePost(
@@ -114,6 +151,14 @@ async function handlePost(
       throw error || new Error("Failed to create memory");
     }
 
+    // Mirror to canvas_panels so the UI shows the new memory without
+    // a reload. Non-fatal — the memory itself is saved.
+    try {
+      await syncMemoriesToPanel(cluster.id, userId);
+    } catch (err) {
+      console.error("[memories POST] panel sync failed:", err);
+    }
+
     return NextResponse.json(memory, { status: 201 });
   } catch (error) {
     console.error("[memories POST] Error saving cluster memory:", error);
@@ -154,7 +199,7 @@ async function handlePatch(
       .from("cluster_brain_memories")
       .update({ content })
       .eq("id", memory_id)
-      .select("id, content")
+      .select("id, content, cluster_id")
       .single();
 
     if (error || !updated) {
@@ -162,6 +207,18 @@ async function handlePatch(
         { error: error?.message || "Memory not found" },
         { status: 404 }
       );
+    }
+
+    // Re-sync the panel's memory list so the edited content is
+    // visible on canvas without a reload.
+    const clusterId = (updated as unknown as { cluster_id: string })
+      .cluster_id;
+    if (clusterId) {
+      try {
+        await syncMemoriesToPanel(clusterId, userId);
+      } catch (err) {
+        console.error("[memories PATCH] panel sync failed:", err);
+      }
     }
 
     return NextResponse.json(updated);
@@ -193,12 +250,28 @@ async function handleDelete(
     }
 
     const db = supabaseAdmin();
+    // Pull cluster_id before delete so we can resync the panel.
+    const { data: toDelete } = await db
+      .from("cluster_brain_memories")
+      .select("cluster_id")
+      .eq("id", memory_id)
+      .maybeSingle();
+
     const { error } = await db
       .from("cluster_brain_memories")
       .delete()
       .eq("id", memory_id);
 
     if (error) throw error;
+
+    const clusterId = (toDelete as { cluster_id?: string } | null)?.cluster_id;
+    if (clusterId) {
+      try {
+        await syncMemoriesToPanel(clusterId, userId);
+      } catch (err) {
+        console.error("[memories DELETE] panel sync failed:", err);
+      }
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {
