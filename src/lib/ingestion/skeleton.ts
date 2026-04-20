@@ -279,7 +279,7 @@ async function generateStructuredDescriptor(
   const system =
     "You produce structured JSON descriptors of GitHub repositories. Output a single JSON object. No prose, no markdown fences. The first character of your reply must be `{`.";
 
-  const first = await callClaude(system, prompt, { model: "haiku", maxTokens: 2500 });
+  const first = await callClaude(system, prompt, { model: "sonnet", maxTokens: 2500 });
   const parsed = parseSkeletonStructuredOutput(first);
   if (parsed) return parsed;
 
@@ -288,7 +288,7 @@ async function generateStructuredDescriptor(
   const retryPrompt = `${prompt}
 
 Your previous reply was not valid JSON. Output ONLY the JSON object. No fences, no preamble, no commentary. The first character must be \`{\`.`;
-  const retry = await callClaude(system, retryPrompt, { model: "haiku", maxTokens: 2500 });
+  const retry = await callClaude(system, retryPrompt, { model: "sonnet", maxTokens: 2500 });
   return parseSkeletonStructuredOutput(retry);
 }
 
