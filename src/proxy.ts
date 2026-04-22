@@ -74,6 +74,15 @@ export async function proxy(request: NextRequest) {
     return supabaseResponse;
   }
 
+  // Knowledge-pack sync webhooks are HMAC-authenticated, not session-
+  // authenticated — bypass so the route's verifyHmac() check runs.
+  if (
+    pathname.startsWith("/api/knowledge/packs/") &&
+    pathname.endsWith("/sync")
+  ) {
+    return supabaseResponse;
+  }
+
   // If not authenticated, redirect to login (for pages) or return 401 (for API)
   if (!user) {
     if (pathname.startsWith("/api/")) {
