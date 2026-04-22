@@ -17,7 +17,11 @@ import { supabaseAdmin } from "@/lib/supabase";
  *   2. Scheduled task — nightly fallback that hits the same endpoint.
  */
 
-const GH_TOKEN = process.env.GITHUB_TOKEN || undefined;
+// Prefer a pack-scoped token so the narrow read-only PAT used here doesn't
+// collide with the broader GITHUB_TOKEN the ingestion pipeline relies on.
+// Fall back to GITHUB_TOKEN for backwards compatibility / single-token setups.
+const GH_TOKEN =
+  process.env.KNOWLEDGE_PACK_GITHUB_TOKEN || process.env.GITHUB_TOKEN || undefined;
 
 function octokit(): Octokit {
   return new Octokit({ auth: GH_TOKEN });
