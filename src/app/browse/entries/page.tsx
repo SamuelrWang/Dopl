@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { EntryGrid, EntryGridSkeleton } from "@/components/entries/entry-grid";
 import { GlassCard, MonoLabel } from "@/components/design";
 
@@ -24,34 +24,117 @@ interface PendingIngest {
   queued_at: string;
 }
 
+// Page size for both initial load and each subsequent infinite-scroll
+// batch. 24 fits ~3-4 grid rows on a typical desktop and gives the
+// next batch headroom to load before the user runs out of cards.
+const PAGE_SIZE = 24;
+
+// Distance from the bottom of the page (in pixels) at which we kick
+// off the next batch fetch. Larger margin = more aggressive prefetch =
+// less chance the user ever sees an empty space; smaller margin =
+// fewer wasted fetches if they bounce off the page early.
+const ROOT_MARGIN_PX = 600;
+
 export default function BrowseEntriesPage() {
   const [entries, setEntries] = useState<EntryListItem[]>([]);
   const [pending, setPending] = useState<PendingIngest[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  const fetchEntries = useCallback(async () => {
-    setLoading(true);
+  // Refs guard against the race where IntersectionObserver fires twice
+  // before React has flushed loadingMore=true. Without these, scrolling
+  // fast can issue two parallel fetches for the same page.
+  const loadingRef = useRef(false);
+  const offsetRef = useRef(0);
+  const hasMoreRef = useRef(true);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  const loadPage = useCallback(async (offset: number, replace: boolean) => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
+    if (replace) {
+      setInitialLoading(true);
+    } else {
+      setLoadingMore(true);
+    }
     setLoadError(null);
     try {
       const params = new URLSearchParams();
       params.set("status", "complete");
+      params.set("limit", String(PAGE_SIZE));
+      params.set("offset", String(offset));
       const res = await fetch(`/api/entries?${params}`);
       if (!res.ok) throw new Error(`Failed to load entries (HTTP ${res.status})`);
       const data = await res.json();
-      setEntries(Array.isArray(data.entries) ? data.entries : []);
+      const batch: EntryListItem[] = Array.isArray(data.entries) ? data.entries : [];
+
+      // A short batch (less than PAGE_SIZE) means we hit the end. Stop
+      // observing further intersection events.
+      const reachedEnd = batch.length < PAGE_SIZE;
+      hasMoreRef.current = !reachedEnd;
+      setHasMore(!reachedEnd);
+
+      offsetRef.current = offset + batch.length;
+
+      setEntries((prev) => {
+        if (replace) return batch;
+        // Defensive de-dupe by id. Offset pagination drifts if rows
+        // are inserted between fetches; without this guard, rapid
+        // ingest activity can produce duplicate cards.
+        const seen = new Set(prev.map((e) => e.id));
+        return [...prev, ...batch.filter((e) => !seen.has(e.id))];
+      });
     } catch (err) {
       console.error("Failed to fetch entries:", err);
       setLoadError(err instanceof Error ? err.message : "Failed to load entries");
-      setEntries([]);
+      if (replace) setEntries([]);
     } finally {
-      setLoading(false);
+      loadingRef.current = false;
+      if (replace) {
+        setInitialLoading(false);
+      } else {
+        setLoadingMore(false);
+      }
     }
   }, []);
 
+  const reload = useCallback(() => {
+    offsetRef.current = 0;
+    hasMoreRef.current = true;
+    setHasMore(true);
+    void loadPage(0, true);
+  }, [loadPage]);
+
+  // Initial load.
   useEffect(() => {
-    fetchEntries();
-  }, [fetchEntries]);
+    void loadPage(0, true);
+  }, [loadPage]);
+
+  // Wire the sentinel to an IntersectionObserver. Re-runs only when the
+  // sentinel ref changes (mount/unmount); the `loadPage` reference is
+  // stable thanks to useCallback with no deps.
+  useEffect(() => {
+    const node = sentinelRef.current;
+    if (!node) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (
+            entry.isIntersecting &&
+            !loadingRef.current &&
+            hasMoreRef.current
+          ) {
+            void loadPage(offsetRef.current, false);
+          }
+        }
+      },
+      { rootMargin: `${ROOT_MARGIN_PX}px 0px` }
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [loadPage]);
 
   // User's pending queue — skeleton entries waiting for their MCP agent.
   useEffect(() => {
@@ -69,7 +152,11 @@ export default function BrowseEntriesPage() {
     return () => {
       cancelled = true;
     };
-  }, [entries.length]);
+    // Fires once on mount — previously gated on `entries.length` to
+    // re-poll after the initial entries load, but with infinite scroll
+    // that would fire on every batch. The pending list is its own
+    // surface; one refresh per page visit is enough.
+  }, []);
 
   return (
     <div className="space-y-4">
@@ -120,23 +207,58 @@ export default function BrowseEntriesPage() {
         </GlassCard>
       )}
 
-      {loading ? (
+      {initialLoading ? (
         <EntryGridSkeleton />
-      ) : loadError ? (
+      ) : loadError && entries.length === 0 ? (
         <GlassCard
           variant="subtle"
           className="flex flex-col items-center justify-center h-64 gap-3"
         >
           <p className="text-sm text-red-400">{loadError}</p>
           <button
-            onClick={fetchEntries}
+            onClick={reload}
             className="font-mono text-[10px] uppercase tracking-wide text-white/60 hover:text-white/90 border border-white/[0.15] rounded-[3px] px-3 py-1.5"
           >
             Retry
           </button>
         </GlassCard>
       ) : (
-        <EntryGrid entries={entries} />
+        <>
+          <EntryGrid entries={entries} />
+
+          {/* Loader row shown while the next batch is in flight. Mirrors
+              the initial skeleton so the page doesn't visually jolt. */}
+          {loadingMore && (
+            <div className="pt-2">
+              <EntryGridSkeleton />
+            </div>
+          )}
+
+          {/* IntersectionObserver sentinel. Sits ~600px above the actual
+              bottom of the grid (rootMargin) so the next batch starts
+              loading before the user reaches the end. Hidden but takes
+              one row of vertical space so it intersects reliably. */}
+          {hasMore && (
+            <div ref={sentinelRef} aria-hidden className="h-px w-full" />
+          )}
+
+          {/* End-of-list affordance + inline retry on mid-stream errors. */}
+          {!hasMore && entries.length > 0 && (
+            <p className="pt-6 pb-4 text-center font-mono text-[10px] uppercase tracking-wider text-white/30">
+              End of feed
+            </p>
+          )}
+          {loadError && entries.length > 0 && (
+            <div className="pt-4 flex justify-center">
+              <button
+                onClick={() => void loadPage(offsetRef.current, false)}
+                className="font-mono text-[10px] uppercase tracking-wide text-red-300/80 hover:text-red-200 border border-red-400/30 rounded-[3px] px-3 py-1.5"
+              >
+                Retry — {loadError}
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

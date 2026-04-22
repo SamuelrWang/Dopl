@@ -58,10 +58,19 @@ export const GET = withUserAuth(async (_request, { userId }) => {
  */
 export const POST = withUserAuth(async (request, { userId }) => {
   const body = await request.json();
-  const { panel_id, panel_type, entry_id, x, y, width, height, title, summary, source_url, panel_data } = body;
+  const { panel_type, entry_id, x, y, width, height, title, summary, source_url, panel_data } = body;
+  let { panel_id } = body;
+
+  // MCP's canvas_add_entry posts { entry_id } only — no panel_id. The UI
+  // posts both. Synthesize a stable panel_id from entry_id when missing so
+  // both callers work against the same endpoint. `entry-<uuid>` mirrors
+  // the convention the DELETE fallback comment alludes to.
+  if ((!panel_id || typeof panel_id !== "string") && typeof entry_id === "string" && entry_id.length > 0) {
+    panel_id = `entry-${entry_id}`;
+  }
 
   if (!panel_id || typeof panel_id !== "string") {
-    return NextResponse.json({ error: "panel_id is required" }, { status: 400 });
+    return NextResponse.json({ error: "panel_id or entry_id is required" }, { status: 400 });
   }
 
   const VALID_PANEL_TYPES = ["entry", "chat", "connection", "browse", "cluster-brain"];

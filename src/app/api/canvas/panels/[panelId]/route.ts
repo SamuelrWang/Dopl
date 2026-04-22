@@ -76,9 +76,12 @@ export const PATCH = withUserAuth(async (request, { userId, params }) => {
 
 /**
  * DELETE /api/canvas/panels/[panelId] — remove a panel from the user's canvas.
- * Accepts either a panel_id (e.g., "entry-5") or an entry_id (UUID) for
- * backward compatibility with the chrome extension and MCP server.
+ * Accepts panel_id (e.g. "entry-<uuid>"), an entry_id UUID, OR an entry slug
+ * (MCP's canvas_remove_entry tool advertises slug support). Resolution
+ * order: panel_id → slug → entry_id UUID fallback.
  */
+const UUID_REGEX = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
 export const DELETE = withUserAuth(async (_request, { userId, params }) => {
   const panelId = params?.panelId;
   if (!panelId) {
@@ -105,12 +108,31 @@ export const DELETE = withUserAuth(async (_request, { userId, params }) => {
     return new NextResponse(null, { status: 204 });
   }
 
-  // Fallback: try deleting by entry_id (legacy callers: chrome extension, MCP server)
+  // Resolve slug → entry_id UUID before trying the entry_id fallback.
+  // entry_id is a uuid column; passing a slug straight through throws a
+  // Postgres type cast error and 500s. MCP's canvas_remove_entry tool
+  // accepts slugs per its description, so support them here.
+  let entryIdForFallback: string | null = UUID_REGEX.test(panelId) ? panelId : null;
+  if (!entryIdForFallback) {
+    const { data: bySlug } = await supabase
+      .from("entries")
+      .select("id")
+      .eq("slug", panelId)
+      .maybeSingle();
+    if (bySlug?.id) entryIdForFallback = bySlug.id;
+  }
+
+  if (!entryIdForFallback) {
+    // Neither panel_id, slug, nor UUID — treat as already-gone.
+    return new NextResponse(null, { status: 204 });
+  }
+
+  // Fallback: delete by entry_id (legacy callers: chrome extension, MCP server).
   const { data: byEntryId, error: err2 } = await supabase
     .from("canvas_panels")
     .delete()
     .eq("user_id", userId)
-    .eq("entry_id", panelId)
+    .eq("entry_id", entryIdForFallback)
     .select("id, entry_id");
 
   if (err2) {

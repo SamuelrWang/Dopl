@@ -615,4 +615,75 @@ export class DoplClient {
       clearTimeout(timeout);
     }
   }
+
+  // ── Knowledge packs ───────────────────────────────────────────────
+  //
+  // Specialist verticals (Rokid AR, Unity VR, etc.) backed by public
+  // GitHub repos. The MCP exposes a 3-tool progressive-disclosure surface:
+  // kb_list_packs (cheap discovery) → kb_list (cheap browse) → kb_get
+  // (full body). Bodies are markdown and may be large; that's why the
+  // browse step is body-less.
+
+  async listPacks(): Promise<{
+    packs: Array<{
+      id: string;
+      name: string;
+      description: string | null;
+      sdk_version: string | null;
+      repo_url: string;
+      last_synced_at: string | null;
+      last_commit_sha: string | null;
+    }>;
+  }> {
+    return this.request("/api/knowledge/packs", { toolName: "kb_list_packs" });
+  }
+
+  async kbList(
+    pack: string,
+    opts: { category?: string; limit?: number } = {}
+  ): Promise<{
+    pack_id: string;
+    files: Array<{
+      pack_id: string;
+      path: string;
+      title: string | null;
+      summary: string | null;
+      tags: string[];
+      category: string | null;
+      updated_at: string;
+    }>;
+  }> {
+    const qs = new URLSearchParams();
+    if (opts.category) qs.set("category", opts.category);
+    if (opts.limit) qs.set("limit", String(opts.limit));
+    const suffix = qs.toString() ? `?${qs.toString()}` : "";
+    return this.request(
+      `/api/knowledge/packs/${encodeURIComponent(pack)}/files${suffix}`,
+      { toolName: "kb_list" }
+    );
+  }
+
+  async kbGet(
+    pack: string,
+    path: string
+  ): Promise<{
+    file: {
+      pack_id: string;
+      path: string;
+      title: string | null;
+      summary: string | null;
+      body: string;
+      frontmatter: Record<string, unknown>;
+      tags: string[];
+      category: string | null;
+      updated_at: string;
+    };
+  }> {
+    // Path goes as a query param so the route doesn't need a catch-all
+    // segment — keeps types simple and lets the path carry slashes.
+    return this.request(
+      `/api/knowledge/packs/${encodeURIComponent(pack)}/file?path=${encodeURIComponent(path)}`,
+      { toolName: "kb_get" }
+    );
+  }
 }
