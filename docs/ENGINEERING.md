@@ -73,17 +73,20 @@ setup-intelligence-engine/
 
 ## 2. File Size & Splitting
 
+**Hard cap: 500 lines. No exceptions for new or edited files.**
+
 | Threshold | Action |
 |-----------|--------|
 | **≤ 300 lines** | Target. No action needed. |
 | **300–500 lines** | Soft cap. Review for split opportunities during the next edit. |
-| **500–700 lines** | Hard cap. Must split before merging new features into it. |
-| **> 700 lines** | Violation. Add to refactor queue. No PR may *add* lines to a file already over 700. |
+| **> 500 lines** | **Violation.** Any edit to a file over 500 lines must either (a) split the file in the same PR, or (b) the edit must *reduce* the line count. New files may never be created over 500 lines. |
 
-**Exceptions (file may exceed 700 lines with justification at top):**
+**Exceptions (file may exceed 500 lines with justification at the top of the file):**
 - Auto-generated code (Supabase types, OpenAPI clients).
 - Dense type-only files where a split would fragment a cohesive domain model.
 - Pure data/config tables (cluster-geometry constants, country lists).
+
+Existing files over 500 lines (refactor queue below) are grandfathered *only* until their scheduled split phase. Once touched, they must be split or the edit must shrink them.
 
 **When you see a large file, split by:**
 1. **Responsibility** — one file per "reason to change" (reducer vs. persistence vs. selectors).
@@ -92,18 +95,21 @@ setup-intelligence-engine/
 
 ### Current offenders (refactor queue, ordered by ROI)
 
-| File | Lines | Split target |
-|------|-------|--------------|
-| `src/components/canvas/canvas-store.tsx` | 1224 | `store/reducer.ts`, `store/persistence.ts`, `store/selectors.ts`, `store/context.tsx`, `store/actions.ts` |
-| `src/lib/ingestion/pipeline.ts` | 1212 | `pipeline/orchestrator.ts`, `pipeline/extractors/{github,twitter,instagram,web}.ts`, `pipeline/link-follower.ts`, `pipeline/embed.ts` |
-| `src/app/api/chat/route.ts` | 1141 | `route.ts` (dispatcher only) + `features/chat/tools/<tool-name>.ts` per tool |
-| `src/app/page.tsx` | 1114 | `features/marketing/{hero,typing-animation,waitlist-form,modals}.tsx` |
-| `src/components/canvas/panels/chat/chat-panel.tsx` | 897 | Split into `chat-panel.tsx` (shell), `chat-messages.tsx`, `chat-input.tsx`, `chat-attachments.tsx` |
-| `src/components/canvas/canvas.tsx` | 870 | `canvas.tsx` (shell), `canvas-viewport.ts` (hook), `canvas-interactions.ts` (hook) |
-| `src/lib/community/service.ts` | 861 | Merge/split with `src/lib/clusters/service.ts` — see §8 |
-| `src/lib/ingestion/skeleton.ts` | 847 | `skeleton/entry.ts`, `skeleton/descriptor.ts` |
-| `src/components/canvas/use-panel-ingestion.ts` | 816 | `use-panel-ingestion.ts` (glue) + `lib/ingestion-client.ts` |
-| `src/components/canvas/canvas-panel.tsx` | 775 | Extract drag, resize, and expiry-bar into own files |
+Updated after P2. Files marked ✅ have been addressed.
+
+| File | Lines | Split target | Status |
+|------|-------|--------------|--------|
+| `src/components/canvas/canvas-store.tsx` | 1224 | `store/reducer.ts`, `store/persistence.ts`, `store/selectors.ts`, `store/context.tsx`, `store/actions.ts` | P5a |
+| `src/features/ingestion/server/pipeline.ts` | 1212 | `pipeline/orchestrator.ts`, `pipeline/extractors/*.ts` (may already exist — see F-001), `pipeline/link-follower.ts`, `pipeline/embed.ts` | P3a |
+| `src/app/api/chat/route.ts` | 1141 | `route.ts` (dispatcher only) + `features/chat/server/tools/<tool-name>.ts` per tool | P4 |
+| `src/app/page.tsx` | 823 | Still monolithic `Home` component; carve hero/nav/features/CTA sections into `features/marketing/components/*` | P6 |
+| `src/components/canvas/panels/chat/chat-panel.tsx` | 897 | Split into `chat-panel.tsx` (shell), `chat-messages.tsx`, `chat-input.tsx`, `chat-attachments.tsx` | P3c |
+| `src/components/canvas/canvas.tsx` | 870 | `canvas.tsx` (shell), `canvas/use-viewport.ts`, `canvas/use-interactions.ts` | P5b |
+| `src/features/community/server/service.ts` | 861 | Keep boundary with `features/clusters/server/service.ts`; if overlap grows, split by topic (publishing / forking / querying) | P3b |
+| `src/features/ingestion/server/skeleton.ts` | 847 | `skeleton/entry.ts`, `skeleton/descriptor.ts`, `skeleton/prompt.ts` | P3a |
+| `src/components/canvas/use-panel-ingestion.ts` | 816 | `use-panel-ingestion.ts` (glue) + `ingestion-client.ts` (pure client-side fetch wrapper) | P5b |
+| `src/components/canvas/canvas-panel.tsx` | ✅ 308 | Done — drag/resize/expiry extracted | P2.4 done |
+| `src/features/clusters/server/service.ts` | 516 | Marginally over; reasonable split is `service.ts` (CRUD) + `service-brain.ts` (cluster-brain canvas panel spawn logic, lines 223–340) | P6 cleanup |
 
 ---
 

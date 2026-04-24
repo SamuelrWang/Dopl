@@ -120,3 +120,28 @@ See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture and [plan 
 - Description: A 30-line `DRAG_BLOCK_SELECTOR` constant was declared in `canvas-panel.tsx` but never referenced — the actual drag-block logic used inline `closest(...)` calls with hardcoded selector strings. The file's header comment further described a "cursor-style-based" drag-block approach that was never actually implemented (the implementation is purely selector-based). Both were artifacts of an earlier design pass that got superseded without cleanup.
 - Proposed resolution: fix-now (in-scope with the drag extraction — the constant isn't carried into the new hook, and the stale comment is corrected in the same commit).
 - Status: fixed-in-7c6449a
+
+### F-010: Stale doc comment in useCanvasPanelDrag
+- Location: `src/components/canvas/use-canvas-panel-drag.ts:27-40` (as written in commit 7c6449a)
+- Found during: P2 post-phase audit
+- Severity: smell
+- Description: The hook's JSDoc claimed it returned `{isDragging, didDragRef}` and that the caller would use `didDragRef` for click-vs-drag detection. The actual return is `{isDragging, handleRootPointerDown, handleRootPointerMove, handleRootPointerUp}` — click-vs-drag is handled *inside* the hook's pointer-up handler. The doc was a leftover from an earlier extraction draft where the decision lived in the component.
+- Proposed resolution: fix-now (corrected in the P2 audit commit).
+- Status: fixed-in-audit-commit
+
+### F-011: `withErrorHandler` may double-log when composed with `withUserAuth`
+- Location: `src/shared/api/error-handler.ts` (new in P1)
+- Found during: P2 post-phase audit
+- Severity: smell
+- Description: `withErrorHandler` catches unhandled exceptions and logs a `system_events` row with `fingerprintKeys: ["unhandled_route_error", source, name]`, then returns a 500 response. `withUserAuth` in `src/lib/auth/with-auth.ts` wraps its handler in `runAndLog5xx`, which also logs `system_events` with `["5xx", endpoint, "500"]` when the handler returns status ≥ 500. When composed as `withUserAuth(withErrorHandler(...))`, a single unhandled exception produces **two** `system_events` rows (different fingerprints, same incident). Not a crash — fingerprints differ so grouping isn't broken — but it doubles volume and can mislead incident counts.
+- Evidence: `error-handler.ts:39-46` logs, then returns 500 → `with-auth.ts:runAndLog5xx` sees 5xx → logs again.
+- Proposed resolution: defer-to-P4 — decide the composition design when we actually wire `withErrorHandler` into the first route (api/chat/route.ts). Candidate fixes: (a) have withErrorHandler skip its log when a caller signals it's composed under withUserAuth, (b) drop the unhandled-error log from withErrorHandler and rely on runAndLog5xx, (c) keep both intentionally — two perspectives on one incident, with the docs explaining the duplication.
+- Status: open
+
+### F-012: Grandfathered 500-line violators touched during P2 relocations
+- Location: `src/features/ingestion/server/skeleton.ts` (850 lines after relocation; was 847), `src/features/clusters/server/service.ts` (517 after; was 516), `src/lib/ingestion/pipeline.ts` (1212, untouched but over), `src/app/page.tsx` (823 after P2.5 extractions; was 1114)
+- Found during: P2 post-phase audit, after user set a 500-line hard cap
+- Severity: smell
+- Description: The new ENGINEERING.md §2 rule is **500 lines hard cap, no edit may add lines to a file already over 500**. P2 relocations added 1–3 lines to `skeleton.ts` and `clusters/service.ts` via `import "server-only"` + a boundary-note comment, technically violating the new rule. `page.tsx` dropped from 1114 → 823 in P2.5 but is still over. `pipeline.ts` is untouched and will be split in P3a.
+- Proposed resolution: defer — these files are already in the refactor queue for their respective phases (skeleton.ts → P3a, clusters/service.ts → P6 cleanup, pipeline.ts → P3a, page.tsx → P6). Grandfathered with explicit deadlines in ENGINEERING.md §2. Any *further* edits to these files that don't shrink them below 500 must include a split in the same PR.
+- Status: open (tracked)

@@ -35,9 +35,14 @@ function hasDirectTextContent(el: Element): boolean {
  * moving-panels-are-all-one-cluster short-circuit avoids surprise
  * re-clustering when the user deliberately drags a whole cluster.
  *
- * Returns {isDragging, didDragRef} so the caller can:
- *  - drive the cursor swap (grab ↔ grabbing) from isDragging,
- *  - detect click-vs-drag in its own pointerup (via didDragRef.current).
+ * The click-vs-drag decision (used to collapse multi-selection on a
+ * plain click while preserving it on a group drag) is handled inside
+ * the hook's pointer-up handler — callers don't need to thread a ref.
+ *
+ * Returns {isDragging, handleRootPointerDown, handleRootPointerMove,
+ * handleRootPointerUp}. isDragging drives the cursor swap (grab ↔
+ * grabbing); the three handlers wire to the panel root's pointer
+ * events.
  */
 export function useCanvasPanelDrag(
   panel: Panel,
