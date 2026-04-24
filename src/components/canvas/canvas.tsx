@@ -304,7 +304,11 @@ export function Canvas({ showMinimap = true }: CanvasProps = {}) {
     const worldEl = worldRef.current;
     const el = viewportRef.current;
     if (worldEl && el) {
-      const cam = pendingCameraRef.current ?? cameraRef.current;
+      // Outside gestures, state.camera is authoritative — read it
+      // directly. cameraRef lags by one render (its sync runs in a
+      // useEffect, after this layout effect), so using it here would
+      // apply the pre-dispatch transform for external SET_CAMERA calls.
+      const cam = pendingCameraRef.current ?? state.camera;
       applyCameraDirect(el, worldEl, cam, gridCellRef.current);
     }
   }, [state.camera]);

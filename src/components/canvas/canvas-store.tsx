@@ -136,11 +136,18 @@ function reducer(state: CanvasState, action: CanvasAction): CanvasState {
     }
 
     case "CREATE_CHAT_PANEL": {
+      const { x, y } = findNonOverlappingPosition(
+        action.x,
+        action.y,
+        480,
+        600,
+        state.panels
+      );
       const newPanel: ChatPanelData = {
         id: action.id,
         type: "chat",
-        x: action.x,
-        y: action.y,
+        x,
+        y,
         width: 480,
         height: 600,
         title: action.title,
@@ -435,11 +442,21 @@ function reducer(state: CanvasState, action: CanvasAction): CanvasState {
       let y: number;
       if (action.position) {
         // Ingestion panel replacement — take over the exact slot.
+        // Skip overlap-avoidance: the panel being replaced still lives in
+        // state at this point and would otherwise nudge the new one away
+        // from its intended slot.
         x = action.position.x;
         y = action.position.y;
       } else if (source) {
-        x = source.x + source.width + 32;
-        y = source.y;
+        const preferred = findNonOverlappingPosition(
+          source.x + source.width + 32,
+          source.y,
+          ENTRY_PANEL_SIZE.width,
+          ENTRY_PANEL_SIZE.height,
+          state.panels
+        );
+        x = preferred.x;
+        y = preferred.y;
       } else {
         // Fallback — camera center. `window` may be undefined during SSR,
         // but the reducer only runs after hydration, so it's safe to read.
@@ -452,8 +469,15 @@ function reducer(state: CanvasState, action: CanvasAction): CanvasState {
           ENTRY_PANEL_SIZE.width,
           ENTRY_PANEL_SIZE.height
         );
-        x = pos.x;
-        y = pos.y;
+        const adjusted = findNonOverlappingPosition(
+          pos.x,
+          pos.y,
+          ENTRY_PANEL_SIZE.width,
+          ENTRY_PANEL_SIZE.height,
+          state.panels
+        );
+        x = adjusted.x;
+        y = adjusted.y;
       }
 
       const newPanelId = `entry-${state.nextPanelId}`;
@@ -689,11 +713,18 @@ function reducer(state: CanvasState, action: CanvasAction): CanvasState {
       };
 
     case "CREATE_BROWSE_PANEL": {
+      const { x, y } = findNonOverlappingPosition(
+        action.x,
+        action.y,
+        BROWSE_PANEL_SIZE.width,
+        BROWSE_PANEL_SIZE.height,
+        state.panels
+      );
       const newPanel: BrowsePanelData = {
         id: action.id,
         type: "browse",
-        x: action.x,
-        y: action.y,
+        x,
+        y,
         width: BROWSE_PANEL_SIZE.width,
         height: BROWSE_PANEL_SIZE.height,
       };
@@ -707,13 +738,20 @@ function reducer(state: CanvasState, action: CanvasAction): CanvasState {
     // ── Cluster brain panel actions ─────────────────────────────────
 
     case "CREATE_CLUSTER_BRAIN_PANEL": {
+      const { x, y } = findNonOverlappingPosition(
+        action.x,
+        action.y,
+        CLUSTER_BRAIN_PANEL_SIZE.width,
+        CLUSTER_BRAIN_PANEL_SIZE.height,
+        state.panels
+      );
       const newPanel: ClusterBrainPanelData = {
         id: action.id,
         type: "cluster-brain",
         clusterId: action.clusterId,
         clusterName: action.clusterName,
-        x: action.x,
-        y: action.y,
+        x,
+        y,
         width: CLUSTER_BRAIN_PANEL_SIZE.width,
         height: CLUSTER_BRAIN_PANEL_SIZE.height,
         instructions: "",
@@ -1075,6 +1113,7 @@ export function CanvasProvider({
               {syncStrategy === "user" && <ConversationSyncBridge />}
               {syncStrategy === "user" && <EntriesRealtimeBridge />}
               {syncStrategy === "user" && <ClustersRealtimeBridge />}
+              {syncStrategy === "user" && <AutoFocusNewPanelBridge />}
               {syncStrategy === "shared" && (
                 <SharedPanelMoveBridge onPanelsMove={onPanelsMove} />
               )}
@@ -1085,6 +1124,65 @@ export function CanvasProvider({
       </PanelsContext.Provider>
     </CanvasContext.Provider>
   );
+}
+
+/**
+ * Pan the camera to center any newly-spawned panel in the viewport.
+ * Triggers only when exactly one panel is added since the previous render,
+ * so bulk hydration (initial load, undo-restore) doesn't hijack the view.
+ * Keeps the current zoom — only the center point changes.
+ */
+function useAutoFocusNewPanel() {
+  const { state, dispatch } = useCanvas();
+  const knownIdsRef = useRef<Set<string> | null>(null);
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
+  useEffect(() => {
+    const panels = state.panels;
+
+    // First run — seed baseline without focusing on anything.
+    if (knownIdsRef.current === null) {
+      knownIdsRef.current = new Set(panels.map((p) => p.id));
+      return;
+    }
+
+    const known = knownIdsRef.current;
+    const newPanels: Panel[] = [];
+    for (const p of panels) {
+      if (!known.has(p.id)) newPanels.push(p);
+    }
+
+    // Refresh the tracked set (add new, drop removed).
+    const liveIds = new Set(panels.map((p) => p.id));
+    for (const id of known) {
+      if (!liveIds.has(id)) known.delete(id);
+    }
+    for (const p of newPanels) known.add(p.id);
+
+    // Only focus on single-panel additions — the typical user-driven spawn.
+    // Bulk additions (hydrate, restore) would be disorienting to pan through.
+    if (newPanels.length !== 1) return;
+    if (typeof window === "undefined") return;
+
+    const target = newPanels[0];
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const zoom = stateRef.current.camera.zoom;
+    dispatch({
+      type: "SET_CAMERA",
+      camera: {
+        x: -(target.x + target.width / 2) * zoom + vw / 2,
+        y: -(target.y + target.height / 2) * zoom + vh / 2,
+        zoom,
+      },
+    });
+  }, [state.panels, dispatch]);
+}
+
+function AutoFocusNewPanelBridge() {
+  useAutoFocusNewPanel();
+  return null;
 }
 
 /** Bridge for DB-backed canvas state sync (write-through only). */
@@ -1199,13 +1297,82 @@ export function computeNewPanelPosition(
   const worldX = (viewportWidth / 2 - camX) / zoom;
   const worldY = (viewportHeight / 2 - camY) / zoom;
 
-  // Slight per-spawn offset so panels don't perfectly stack
-  const spawnOffset = (state.nextPanelId % 8) * 24;
-
   return {
-    x: Math.round(worldX - panelWidth / 2 + spawnOffset),
-    y: Math.round(worldY - panelHeight / 2 + spawnOffset),
+    x: Math.round(worldX - panelWidth / 2),
+    y: Math.round(worldY - panelHeight / 2),
   };
+}
+
+/** Minimum gap (world units) to keep between a newly-placed panel and existing ones. */
+const PANEL_SPAWN_GAP = 32;
+
+function rectsOverlap(
+  a: { x: number; y: number; width: number; height: number },
+  b: { x: number; y: number; width: number; height: number },
+  gap: number
+): boolean {
+  return !(
+    a.x + a.width + gap <= b.x ||
+    b.x + b.width + gap <= a.x ||
+    a.y + a.height + gap <= b.y ||
+    b.y + b.height + gap <= a.y
+  );
+}
+
+/**
+ * Find the closest non-overlapping position for a new panel of the given
+ * size, starting from `preferredX, preferredY`. Searches concentric rings
+ * (right → down → left → up → diagonals) at increasing distance until a
+ * clear slot is found. Falls back to the preferred position if nothing
+ * fits within a large search radius.
+ */
+export function findNonOverlappingPosition(
+  preferredX: number,
+  preferredY: number,
+  width: number,
+  height: number,
+  panels: Panel[],
+  gap: number = PANEL_SPAWN_GAP
+): { x: number; y: number } {
+  const fits = (x: number, y: number) => {
+    const candidate = { x, y, width, height };
+    for (const p of panels) {
+      if (rectsOverlap(candidate, p, gap)) return false;
+    }
+    return true;
+  };
+
+  if (fits(preferredX, preferredY)) {
+    return { x: Math.round(preferredX), y: Math.round(preferredY) };
+  }
+
+  // Step in half-panel increments so we scan with reasonable granularity.
+  const step = Math.max(80, Math.min(width, height) / 2);
+  // Try directions roughly ordered by UX preference (right first, then
+  // down, then left/up, then diagonals).
+  const directions: Array<[number, number]> = [
+    [1, 0],
+    [0, 1],
+    [-1, 0],
+    [0, -1],
+    [1, 1],
+    [-1, 1],
+    [1, -1],
+    [-1, -1],
+  ];
+  const MAX_RINGS = 60;
+  for (let ring = 1; ring <= MAX_RINGS; ring++) {
+    const d = ring * step;
+    for (const [dx, dy] of directions) {
+      const x = preferredX + dx * d;
+      const y = preferredY + dy * d;
+      if (fits(x, y)) {
+        return { x: Math.round(x), y: Math.round(y) };
+      }
+    }
+  }
+  // Give up — return preferred (will overlap, but beats infinite loop).
+  return { x: Math.round(preferredX), y: Math.round(preferredY) };
 }
 
 /** Build the next panel ID as a string */

@@ -14,6 +14,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { SmartChatPanel } from "@/components/entries/smart-chat-panel";
+import { EntryPreviewProvider } from "@/components/entries/entry-preview-context";
+import { EntryPreviewPanel } from "@/components/entries/entry-preview-panel";
 
 export default function BrowseLayout({
   children,
@@ -27,27 +29,30 @@ export default function BrowseLayout({
   const isSaved = pathname.startsWith("/browse/saved");
 
   return (
-    <div className="flex flex-col h-[calc(100vh-100px)]">
-      <div className="flex items-center gap-1 mb-4 shrink-0">
-        <TabLink href="/browse/entries" active={isEntries}>
-          Entries
-        </TabLink>
-        <TabLink href="/browse/clusters" active={isClusters}>
-          Clusters
-        </TabLink>
-        <TabLink href="/browse/saved" active={isSaved}>
-          Saved
-        </TabLink>
-      </div>
+    <EntryPreviewProvider>
+      <div className="flex flex-col h-[calc(100vh-100px)]">
+        <div className="flex items-center gap-1 mb-4 shrink-0">
+          <TabLink href="/browse/entries" active={isEntries}>
+            Entries
+          </TabLink>
+          <TabLink href="/browse/clusters" active={isClusters}>
+            Clusters
+          </TabLink>
+          <TabLink href="/browse/saved" active={isSaved}>
+            Saved
+          </TabLink>
+        </div>
 
-      <div className="flex gap-4 flex-1 min-h-0">
-        <aside className="w-[320px] shrink-0 hidden md:block h-full">
-          <SmartChatPanel />
-        </aside>
+        <div className="flex gap-4 flex-1 min-h-0">
+          <aside className="w-[320px] shrink-0 hidden md:block h-full">
+            <SmartChatPanel />
+          </aside>
 
-        <div className="flex-1 min-w-0 overflow-y-auto pr-1">{children}</div>
+          <div className="flex-1 min-w-0 overflow-y-auto pr-1">{children}</div>
+        </div>
       </div>
-    </div>
+      <EntryPreviewPanel />
+    </EntryPreviewProvider>
   );
 }
 

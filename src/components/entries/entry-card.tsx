@@ -9,6 +9,7 @@ import {
   fetchFullEntry,
 } from "@/components/canvas/add-to-canvas";
 import { useSavedToggle } from "@/lib/saved/local-store";
+import { useEntryPreviewActions } from "./entry-preview-context";
 
 interface EntryCardProps {
   id: string;
@@ -74,6 +75,29 @@ export function EntryCard({
 }: EntryCardProps) {
   const platform = sourcePlatform || "web";
   const gradientClass = placeholderGradients[platform] || placeholderGradients.web;
+
+  // Preview-panel integration. `previewActions` is a stable reference
+  // (see entry-preview-context.tsx), so subscribing here does NOT cause
+  // this card to re-render when some other card opens the preview.
+  // Null when rendered outside a provider (e.g. embedded in canvas) —
+  // the anchor then falls back to its default new-tab behavior.
+  const previewActions = useEntryPreviewActions();
+  function handleCardClick(e: React.MouseEvent) {
+    // Respect new-tab intents: ⌘/Ctrl/Shift-click and middle-click.
+    if (
+      !previewActions ||
+      e.defaultPrevented ||
+      e.button !== 0 ||
+      e.metaKey ||
+      e.ctrlKey ||
+      e.shiftKey ||
+      e.altKey
+    ) {
+      return;
+    }
+    e.preventDefault();
+    previewActions.openPreview(id);
+  }
 
   // Save-for-later state — drives the bookmark toggle that replaced
   // the old complexity pill. Writes to localStorage via the shared
@@ -142,6 +166,7 @@ export function EntryCard({
       target="_blank"
       rel="noopener"
       className="group block h-full"
+      onClick={handleCardClick}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
     >

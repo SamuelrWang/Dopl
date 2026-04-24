@@ -17,7 +17,7 @@ import {
   nextPanelIdString,
   useCanvas,
 } from "./canvas-store";
-import { BROWSE_PANEL_SIZE, DEFAULT_PANEL_SIZE } from "./types";
+import { BROWSE_PANEL_SIZE, DEFAULT_PANEL_SIZE, MAX_ZOOM, MIN_ZOOM } from "./types";
 import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 import { useChatDrawer, useBrainDrawer } from "./chat-drawer-context";
 
@@ -137,10 +137,37 @@ export function FixedInputBar() {
     spawnChatPanel();
   }
 
-  /** Spawn a new browse panel at the camera viewport center. */
+  /**
+   * Spawn a new browse panel at the camera viewport center — OR, if one
+   * already exists, frame the camera on the existing panel so it fills
+   * the viewport. Only one browse panel is allowed at a time.
+   */
   function handleSpawnBrowse() {
     const vw = window.innerWidth;
     const vh = window.innerHeight;
+
+    const existing = state.panels.find((p) => p.type === "browse");
+    if (existing) {
+      // Fit-to-viewport zoom with 10% margin, clamped to canvas limits.
+      const fitZoom = Math.max(
+        MIN_ZOOM,
+        Math.min(
+          MAX_ZOOM,
+          Math.min(vw / existing.width, vh / existing.height) * 0.9
+        )
+      );
+      dispatch({
+        type: "SET_CAMERA",
+        camera: {
+          x: -(existing.x + existing.width / 2) * fitZoom + vw / 2,
+          y: -(existing.y + existing.height / 2) * fitZoom + vh / 2,
+          zoom: fitZoom,
+        },
+      });
+      dispatch({ type: "SET_SELECTION", panelIds: [existing.id] });
+      return;
+    }
+
     const { x, y } = computeNewPanelPosition(
       state,
       vw,
