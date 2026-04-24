@@ -1,4 +1,4 @@
-import type { ClusterSkillParams, ClusterDetailEntry, ClusterSummary } from "./types.js";
+import type { ClusterSkillParams, ClusterDetailEntry, ClusterSummary } from "@dopl/client";
 
 /**
  * The "self-care" protocol every cluster skill carries at the top.

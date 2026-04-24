@@ -1,10 +1,11 @@
 {
-  "name": "@dopl/mcp-server",
-  "version": "0.6.2",
-  "description": "MCP server for Dopl — search and build from a knowledge base of AI/automation setups",
+  "name": "@dopl/cli",
+  "version": "0.1.0",
+  "description": "Command-line interface for the Dopl knowledge base — the shell-native companion to @dopl/mcp-server",
   "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "bin": {
-    "dopl-mcp": "dist/bin/dopl-mcp.js"
+    "dopl": "dist/bin/dopl.js"
   },
   "scripts": {
     "build": "tsc",
@@ -12,7 +13,7 @@
   },
   "dependencies": {
     "@dopl/client": "*",
-    "@modelcontextprotocol/sdk": "^1.29.0"
+    "commander": "^12.1.0"
   },
   "devDependencies": {
     "typescript": "^5.0.0",

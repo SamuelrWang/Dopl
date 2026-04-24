@@ -1,4 +1,4 @@
-import type { BrainData, ClusterDetailEntry, ClusterSummary } from "./types.js";
+import type { BrainData, ClusterDetailEntry, ClusterSummary } from "@dopl/client";
 export type SkillTarget = "claude" | "openclaw";
 /**
  * Check if a cluster skill directory already exists on disk.

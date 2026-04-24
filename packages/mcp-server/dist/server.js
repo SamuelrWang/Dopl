@@ -176,7 +176,28 @@ After any brain or memory write, call \`sync_skills\` so the thin-pointer \`SKIL
 - Focus on actionable guidance: tool recommendations with rationale, architecture decisions, integration patterns, setup steps
 - Reference specific tools, repos, and patterns — not the database entries they came from
 - Cluster skills are living documents — update them when you learn new patterns or receive user corrections
-- Never edit cluster \`SKILL.md\` files directly on disk; always go through the MCP tools so changes propagate to the brain (the canonical source)`;
+- Never edit cluster \`SKILL.md\` files directly on disk; always go through the MCP tools so changes propagate to the brain (the canonical source)
+
+## Knowledge Packs — specialist verticals
+
+Beyond the open KB, Dopl ships **knowledge packs**: curated, version-pinned reference docs for specialist domains (e.g. Rokid AR glasses, Unity VR). Each pack is backed by a public GitHub repo of nested markdown files, synced into Dopl on every push. Use these when the user is doing real implementation work in a domain that has a pack — your training data may be stale or wrong; the pack is canonical.
+
+**Three tools, progressive disclosure:**
+
+- \`kb_list_packs\` — discover what packs exist (cheap; run once per session if the user mentions a vertical you don't have one open for)
+- \`kb_list({ pack, category? })\` — browse a pack's file tree (cheap; metadata only, no bodies)
+- \`kb_get({ pack, path })\` — fetch one file's full markdown (use after kb_list to drill in)
+
+**When to use packs:**
+- User mentions a domain that has a pack (e.g. "Rokid", "AR glasses", "YodaOS") → call \`kb_list_packs\` if you don't already know what's installed, then \`kb_list\` against the matching pack
+- Coding for that domain → reach for \`kb_get\` instead of guessing API shapes from training data
+- Always cite the file path (e.g. \`docs/sdk/camera.md\`) in code comments so the user can verify against the public repo
+
+**When NOT to use packs:**
+- General AI/automation questions — those are \`search_setups\` territory
+- Domains with no installed pack — say so plainly, don't fabricate
+
+Packs and KB entries are independent surfaces; don't conflate them. A pack is a maintained doc set, not a single ingested entry.`;
 /**
  * Human-readable label for non-entry canvas panel types. The backend
  * stores `panel_type` in `canvas_panels` but the MCP tool output used
@@ -1443,6 +1464,63 @@ function createServer(client, options = {}) {
                 },
             ],
         };
+    });
+    // ── kb_list_packs ──────────────────────────────────────────────────
+    registerTool("kb_list_packs", "List installed knowledge packs — specialist verticals (e.g. Rokid AR, Unity VR) backed by public GitHub repos. Each pack exposes nested reference docs that the agent can pull on demand via `kb_list` and `kb_get`. Call this when the user asks about a vertical you don't recognize, or to discover what specialist domains the engine covers.", {}, async () => {
+        const { packs } = await client.listPacks();
+        if (packs.length === 0) {
+            return { content: [{ type: "text", text: "No knowledge packs installed." }] };
+        }
+        const lines = packs.map((p) => {
+            const sdk = p.sdk_version ? ` (SDK ${p.sdk_version})` : "";
+            const synced = p.last_synced_at
+                ? ` — last synced ${p.last_synced_at}`
+                : " — never synced";
+            return `- **${p.name}** (id: \`${p.id}\`)${sdk}${synced}\n  ${p.description ?? "(no description)"}\n  Repo: ${p.repo_url}`;
+        });
+        return { content: [{ type: "text", text: lines.join("\n") }] };
+    });
+    // ── kb_list ────────────────────────────────────────────────────────
+    registerTool("kb_list", "List files in a knowledge pack. Returns paths + titles + summaries — cheap, no bodies. Use this to browse what's available before drilling into a specific doc with `kb_get`. Optional `category` narrows to one section (e.g. 'sdk' for /docs/sdk/*).", {
+        pack: zod_1.z.string().describe("Pack id from `kb_list_packs`, e.g. 'rokid'"),
+        category: zod_1.z.string().optional().describe("Restrict to one /docs/<category>/ subtree"),
+        limit: zod_1.z.number().optional().describe("Max results (default 50, max 500)"),
+    }, async ({ pack, category, limit }) => {
+        const { files } = await client.kbList(pack, { category, limit });
+        if (files.length === 0) {
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: `No files found in pack \`${pack}\`${category ? ` for category \`${category}\`` : ""}.`,
+                    },
+                ],
+            };
+        }
+        const lines = [`## ${pack} — ${files.length} files\n`];
+        for (const f of files) {
+            const cat = f.category ? `[${f.category}] ` : "";
+            const summary = f.summary ? ` — ${f.summary}` : "";
+            lines.push(`- ${cat}**${f.title ?? f.path}** \`${f.path}\`${summary}`);
+        }
+        return { content: [{ type: "text", text: lines.join("\n") }] };
+    });
+    // ── kb_get ─────────────────────────────────────────────────────────
+    registerTool("kb_get", "Fetch one file's full markdown body from a knowledge pack. Use after `kb_list` to drill into a specific doc. Always cite the returned path in your reply so the user can verify against the public repo.", {
+        pack: zod_1.z.string().describe("Pack id, e.g. 'rokid'"),
+        path: zod_1.z.string().describe("File path within the pack, e.g. 'docs/sdk/camera.md'"),
+    }, async ({ pack, path }) => {
+        const { file } = await client.kbGet(pack, path);
+        const lines = [];
+        lines.push(`# ${file.title ?? file.path}`);
+        lines.push(`Pack: \`${pack}\` · Path: \`${file.path}\``);
+        if (file.tags.length > 0)
+            lines.push(`Tags: ${file.tags.join(", ")}`);
+        if (file.summary)
+            lines.push(`\n${file.summary}`);
+        lines.push("\n---\n");
+        lines.push(file.body);
+        return { content: [{ type: "text", text: lines.join("\n") }] };
     });
     return server;
 }

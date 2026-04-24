@@ -36,11 +36,6 @@ export interface SearchResult {
         ingestion_tier?: "skeleton" | "full" | null;
     }[];
 }
-/**
- * Response from POST /api/build after the client-only-synthesis pivot.
- * Server retrieves candidate entries and returns a pre-substituted
- * synthesis prompt. The agent runs the prompt in its own context.
- */
 export interface BuildResult {
     status: "ready" | "no_matches";
     brief: string;
@@ -130,10 +125,6 @@ export interface ClusterSummary {
     oneLiner: string;
     tools: string[];
 }
-/**
- * Response from POST /api/ingest/prepare. The agent runs the prompts in
- * its own Claude context and follows up with POST /api/ingest/submit.
- */
 export interface PrepareIngestResult {
     status: "ready" | "already_exists";
     entry_id: string;
@@ -170,10 +161,6 @@ export interface PrepareIngestResult {
     };
     instructions?: string;
 }
-/**
- * Input payload the agent assembles after running the prepare prompts.
- * Mirrors IngestSubmitSchema in src/types/api.ts.
- */
 export interface SubmitIngestedEntryInput {
     entry_id: string;
     content_type: "setup" | "tutorial" | "knowledge" | "article" | "reference" | "resource";
@@ -225,12 +212,29 @@ export interface PendingIngestItem {
     url: string;
     queued_at: string;
 }
-/**
- * Response from GET /api/ingest/pending. Surfaced to the agent via the
- * `_dopl_status` footer the MCP server appends to every tool response,
- * and via the `list_pending_ingests` tool.
- */
 export interface PendingStatus {
     pending_ingestions: number;
     recent: PendingIngestItem[];
+}
+export interface Pack {
+    id: string;
+    name: string;
+    description: string | null;
+    sdk_version: string | null;
+    repo_url: string;
+    last_synced_at: string | null;
+    last_commit_sha: string | null;
+}
+export interface PackFileMeta {
+    pack_id: string;
+    path: string;
+    title: string | null;
+    summary: string | null;
+    tags: string[];
+    category: string | null;
+    updated_at: string;
+}
+export interface PackFile extends PackFileMeta {
+    body: string;
+    frontmatter: Record<string, unknown>;
 }

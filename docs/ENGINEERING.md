@@ -27,7 +27,9 @@ setup-intelligence-engine/
 ├── docs/                          # This file, ADRs, runbooks
 ├── packages/
 │   ├── chrome-extension/          # Browser extension (webpack build)
-│   └── mcp-server/                # MCP server
+│   ├── cli/                       # `dopl` CLI (shell companion; consumes @dopl/client)
+│   ├── dopl-client/               # @dopl/client — shared HTTP client + types
+│   └── mcp-server/                # MCP server (consumes @dopl/client)
 ├── public/                        # Static assets
 ├── scripts/                       # One-off ops scripts (tsx-run)
 ├── supabase/

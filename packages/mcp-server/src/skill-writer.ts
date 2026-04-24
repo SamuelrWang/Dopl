@@ -1,7 +1,7 @@
 import { homedir } from "os";
 import { join } from "path";
 import { mkdir, writeFile, readFile, rm, access } from "fs/promises";
-import type { BrainData, ClusterDetailEntry, ClusterSummary } from "./types.js";
+import type { BrainData, ClusterDetailEntry, ClusterSummary } from "@dopl/client";
 import {
   renderClusterSkillMd,
   renderEntryReferenceMd,

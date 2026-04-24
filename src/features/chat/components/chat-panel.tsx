@@ -121,15 +121,20 @@ export function ChatPanelBody({ panel }: ChatPanelBodyProps) {
 
   // Seed input consumption — when the FixedInputBar spawns this panel
   // with a typed message, fire a normal chat/ingest send as if the user
-  // had typed it here. Clear the pending input BEFORE calling send so a
-  // StrictMode double-invoke can't double-fire the request.
+  // had typed it here. Clearing the pending input isn't enough on its
+  // own: React StrictMode double-invokes mount effects before the
+  // CLEAR_PENDING_INPUT dispatch commits, so both passes see the same
+  // pending value. The ref-by-value guard below is what actually keeps
+  // the send idempotent, and also covers the narrow production case
+  // where the panel unmounts/remounts before the clear commits.
+  const consumedInputRef = useRef<string | null>(null);
   useEffect(() => {
     const pending = panel.pendingInput;
     if (!pending) return;
+    if (consumedInputRef.current === pending) return;
+    consumedInputRef.current = pending;
     dispatch({ type: "CLEAR_PENDING_INPUT", panelId: panel.id });
     sendChat(pending);
-    // sendChat ref is stable via useCallback, so
-    // depending on panel.pendingInput alone is enough.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [panel.pendingInput]);
 

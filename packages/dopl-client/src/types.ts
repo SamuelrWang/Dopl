@@ -11,19 +11,12 @@ export interface DoplEntry {
   readme: string | null;
   agents_md: string | null;
   manifest: Record<string, unknown> | null;
-  // Skeleton-tier entries (ingestion_tier === "skeleton") carry ONLY the
-  // descriptor — readme, agents_md, and manifest are null for them.
-  // Render descriptor as the primary body when ingestion_tier is
-  // "skeleton".
   descriptor?: string | null;
   ingestion_tier?: "skeleton" | "full" | null;
   tags?: { tag_type: string; tag_value: string }[];
   sources?: { source_type: string; url: string | null }[];
 }
 
-// SearchResult after the client-only-synthesis pivot: `synthesis` and
-// per-entry `relevance_explanation` fields are gone. Agents format
-// recommendations and relevance blurbs in their own context.
 export interface SearchResult {
   entries: {
     entry_id: string;
@@ -39,11 +32,6 @@ export interface SearchResult {
   }[];
 }
 
-/**
- * Response from POST /api/build after the client-only-synthesis pivot.
- * Server retrieves candidate entries and returns a pre-substituted
- * synthesis prompt. The agent runs the prompt in its own context.
- */
 export interface BuildResult {
   status: "ready" | "no_matches";
   brief: string;
@@ -72,8 +60,6 @@ export interface ListResult {
   offset: number;
 }
 
-// ── Cluster types ────────────────────────────────────────────────────
-
 export interface ClusterRow {
   id: string;
   slug: string;
@@ -95,8 +81,6 @@ export interface ClusterDetailEntry {
 export interface ClusterDetail extends ClusterRow {
   entries: ClusterDetailEntry[];
 }
-
-// ── Canvas types ────────────────────────────────────────────────────
 
 export type CanvasPanelType =
   | "entry"
@@ -132,8 +116,6 @@ export interface ClusterQueryResult {
   }[];
 }
 
-// ── Skill generation types ─────────────────────────────────────────
-
 export interface BrainMemory {
   id: string;
   content: string;
@@ -158,19 +140,12 @@ export interface ClusterSummary {
   tools: string[];
 }
 
-// ── Agent-driven ingestion types ──────────────────────────────────
-
-/**
- * Response from POST /api/ingest/prepare. The agent runs the prompts in
- * its own Claude context and follows up with POST /api/ingest/submit.
- */
 export interface PrepareIngestResult {
   status: "ready" | "already_exists";
   entry_id: string;
   slug: string | null;
   title?: string | null;
   message?: string;
-  // Only set when status === "ready":
   source_url?: string;
   source_platform?: string;
   thumbnail_url?: string | null;
@@ -202,10 +177,6 @@ export interface PrepareIngestResult {
   instructions?: string;
 }
 
-/**
- * Input payload the agent assembles after running the prepare prompts.
- * Mirrors IngestSubmitSchema in src/types/api.ts.
- */
 export interface SubmitIngestedEntryInput {
   entry_id: string;
   content_type:
@@ -258,20 +229,38 @@ export interface SubmitIngestedEntryResult {
   content_type: string;
 }
 
-// ── Pending ingestion status (site-chat queued URLs) ─────────────────
-
 export interface PendingIngestItem {
   entry_id: string;
   url: string;
   queued_at: string;
 }
 
-/**
- * Response from GET /api/ingest/pending. Surfaced to the agent via the
- * `_dopl_status` footer the MCP server appends to every tool response,
- * and via the `list_pending_ingests` tool.
- */
 export interface PendingStatus {
   pending_ingestions: number;
   recent: PendingIngestItem[];
+}
+
+export interface Pack {
+  id: string;
+  name: string;
+  description: string | null;
+  sdk_version: string | null;
+  repo_url: string;
+  last_synced_at: string | null;
+  last_commit_sha: string | null;
+}
+
+export interface PackFileMeta {
+  pack_id: string;
+  path: string;
+  title: string | null;
+  summary: string | null;
+  tags: string[];
+  category: string | null;
+  updated_at: string;
+}
+
+export interface PackFile extends PackFileMeta {
+  body: string;
+  frontmatter: Record<string, unknown>;
 }

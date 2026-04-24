@@ -2,7 +2,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const stdio_js_1 = require("@modelcontextprotocol/sdk/server/stdio.js");
-const api_client_js_1 = require("./api-client.js");
+const client_1 = require("@dopl/client");
 const server_js_1 = require("./server.js");
 function parseArgs() {
     const args = process.argv.slice(2);
@@ -49,7 +49,7 @@ Claude Code config example:
 }
 async function main() {
     const { apiKey, baseUrl } = parseArgs();
-    const client = new api_client_js_1.DoplClient(baseUrl, apiKey);
+    const client = new client_1.DoplClient(baseUrl, apiKey);
     // Block on the first status ping so we know whether this caller is the
     // admin before we register tools. The ping doubles as the initial
     // liveness signal to the web app, so we can drop the prior background

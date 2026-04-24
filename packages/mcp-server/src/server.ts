@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z, type ZodRawShape } from "zod";
-import { DoplClient } from "./api-client.js";
-import type { ClusterSummary, BrainData, CanvasPanel } from "./types.js";
+import { DoplClient } from "@dopl/client";
+import type { ClusterSummary, BrainData, CanvasPanel } from "@dopl/client";
 import {
   writeClusterSkill,
   writeGlobalCanvasSkill,

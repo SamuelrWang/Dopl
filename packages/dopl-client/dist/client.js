@@ -1,44 +1,26 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DoplClient = void 0;
-/**
- * How long a successful pending-status fetch is reused without hitting the
- * backend. The MCP server appends `_dopl_status` to every tool response,
- * so a chatty agent firing 5+ tools in a turn coalesces down to ~1 call.
- * `invalidatePendingCache()` is called by `prepareIngest` so the moment
- * an agent claims a pending row, the footer is up-to-date on the next
- * tool response.
- */
+const errors_js_1 = require("./errors.js");
 const PENDING_CACHE_TTL_MS = 5_000;
 class DoplClient {
     baseUrl;
     apiKey;
     pendingCache = null;
-    constructor(baseUrl, apiKey) {
+    toolHeaderName;
+    constructor(baseUrl, apiKey, opts = {}) {
         this.baseUrl = baseUrl.replace(/\/$/, "");
         this.apiKey = apiKey;
+        this.toolHeaderName = opts.toolHeaderName ?? "X-MCP-Tool";
     }
-    /**
-     * Public URL for an entry. The server hands this to AI clients instead of
-     * leaking the internal UUID — the AI hyperlinks this in prose, and the
-     * user sees a clean /e/<slug> URL.
-     *
-     * Returns null if no slug is available (extremely rare — the schema
-     * guarantees every row has a slug, but MCP is called against older
-     * backends during the cutover).
-     */
+    getBaseUrl() {
+        return this.baseUrl;
+    }
     entryUrl(slug) {
         if (!slug)
             return null;
         return `${this.baseUrl}/e/${encodeURIComponent(slug)}`;
     }
-    /**
-     * Build request headers, including the X-MCP-Tool header when a tool name
-     * is provided. The API layer (`withMcpCredits` in src/lib/auth/with-auth.ts)
-     * reads this header to record the MCP tool name in the `mcp_events`
-     * analytics table. Without it, analytics would only see the HTTP endpoint,
-     * which doesn't always map 1:1 to a tool name.
-     */
     buildHeaders(toolName, withJsonBody = true) {
         const headers = {
             Authorization: `Bearer ${this.apiKey}`,
@@ -46,7 +28,7 @@ class DoplClient {
         if (withJsonBody)
             headers["Content-Type"] = "application/json";
         if (toolName)
-            headers["X-MCP-Tool"] = toolName;
+            headers[this.toolHeaderName] = toolName;
         return headers;
     }
     async request(path, options = {}) {
@@ -62,15 +44,20 @@ class DoplClient {
             });
             if (!res.ok) {
                 const text = await res.text();
-                throw new Error(`Dopl API error ${res.status}: ${text}`);
+                if (res.status === 401 || res.status === 403) {
+                    throw new errors_js_1.DoplAuthError(res.status, text);
+                }
+                throw new errors_js_1.DoplApiError(res.status, text);
             }
-            return res.json();
+            return (await res.json());
         }
         catch (error) {
+            if (error instanceof errors_js_1.DoplApiError)
+                throw error;
             if (error instanceof DOMException && error.name === "AbortError") {
-                throw new Error(`Dopl API request timed out after ${timeoutMs}ms: ${method} ${path}`);
+                throw new errors_js_1.DoplTimeoutError(method, path, timeoutMs);
             }
-            throw error;
+            throw new errors_js_1.DoplNetworkError(error instanceof Error ? error.message : String(error), error);
         }
         finally {
             clearTimeout(timeout);
@@ -93,14 +80,6 @@ class DoplClient {
     async getSetup(id) {
         return this.request(`/api/entries/${id}`, { toolName: "get_setup" });
     }
-    /**
-     * Fetch lightweight self-description metadata for a URL. Used by
-     * the agent's post-submit `detected_links` review flow: after
-     * filtering noise (badges, self-refs), the agent calls this per
-     * surviving candidate to get authoritative one-liners for the
-     * user-facing "want me to ingest these as separate entries?"
-     * offer. Bounded ~1s per URL (5s hard timeout server-side).
-     */
     async describeLink(url) {
         return this.request("/api/links/describe", {
             method: "POST",
@@ -108,16 +87,6 @@ class DoplClient {
             toolName: "describe_link",
         });
     }
-    /**
-     * Fetch extracted content for an in-progress (or completed) ingestion.
-     * The prepare_ingest response no longer inlines `gathered_content` — the
-     * agent calls this between prepare and submit to retrieve the body it
-     * substitutes into prompt `{ALL_RAW_CONTENT}` / `{POST_TEXT}` slots.
-     *
-     * Passing `sourceUrl` restricts the response to one extracted source
-     * (e.g. just the README for the content_type classifier), which keeps
-     * per-prompt token cost down for large repos.
-     */
     async getIngestContent(entryId, sourceUrl) {
         const qs = sourceUrl ? `?source_url=${encodeURIComponent(sourceUrl)}` : "";
         return this.request(`/api/ingest/content/${encodeURIComponent(entryId)}${qs}`, {
@@ -153,7 +122,6 @@ class DoplClient {
             toolName: "list_setups",
         });
     }
-    // ── Canvas methods ───────────────────────────────────────────────────
     async listCanvasPanels() {
         const res = await this.request("/api/canvas/panels", {
             toolName: "canvas_list_panels",
@@ -168,22 +136,7 @@ class DoplClient {
         });
     }
     async removeCanvasPanel(entryId) {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 30_000);
-        try {
-            const res = await fetch(`${this.baseUrl}/api/canvas/panels/${encodeURIComponent(entryId)}`, {
-                method: "DELETE",
-                headers: this.buildHeaders("canvas_remove_entry", false),
-                signal: controller.signal,
-            });
-            if (!res.ok && res.status !== 204) {
-                const text = await res.text();
-                throw new Error(`Dopl API error ${res.status}: ${text}`);
-            }
-        }
-        finally {
-            clearTimeout(timeout);
-        }
+        await this.requestNoContent(`/api/canvas/panels/${encodeURIComponent(entryId)}`, "DELETE", "canvas_remove_entry");
     }
     async createCluster(name, entryIds) {
         return this.request("/api/clusters", {
@@ -192,7 +145,6 @@ class DoplClient {
             body: { name, entry_ids: entryIds },
         });
     }
-    // ── Cluster methods ──────────────────────────────────────────────────
     async listClusters() {
         return this.request("/api/clusters", {
             toolName: "list_clusters",
@@ -208,7 +160,6 @@ class DoplClient {
             body: { query, max_results: maxResults ?? 5 },
         });
     }
-    // ── MCP status ping ────────────────────────────────────────────────
     async pingMcpStatus() {
         const res = await this.request("/api/user/mcp-status", {
             method: "POST",
@@ -217,7 +168,6 @@ class DoplClient {
         });
         return { is_admin: res.is_admin === true };
     }
-    // ── Cluster brain methods ─────────────────────────────────────────
     async getClusterBrain(slug) {
         return this.request(`/api/clusters/${encodeURIComponent(slug)}/brain`, { toolName: "get_cluster_brain" });
     }
@@ -228,12 +178,6 @@ class DoplClient {
             body: { content },
         });
     }
-    /**
-     * Fetch the canonical skill synthesis prompt + body template. Replaces
-     * the old synthesizeBrain() method — all brain generation now happens
-     * in the user's Claude Code (not on our server), so the client's job
-     * is to grab the prompt and run synthesis locally.
-     */
     async getSkillTemplate() {
         return this.request("/api/cluster/synthesize", {
             method: "GET",
@@ -247,17 +191,6 @@ class DoplClient {
             body: { instructions },
         });
     }
-    // ── Ingestion ─────────────────────────────────────────────────────
-    //
-    // The legacy `ingestUrl()` method (POST /api/ingest) has been removed.
-    // All regular ingestion goes through `prepareIngest()` + `submitIngestedEntry()`
-    // — no server-side Claude. Admin skeleton ingest uses `skeletonIngest()`.
-    /**
-     * Agent-driven ingest, step 1/2. Server fetches + extracts; we get back
-     * the raw content and the prompts to run locally. Pair with
-     * `submitIngestedEntry` once the agent has generated the artifacts.
-     * Longer timeout because link-following can fetch many pages.
-     */
     async prepareIngest(url, content) {
         const result = await this.request("/api/ingest/prepare", {
             method: "POST",
@@ -265,17 +198,9 @@ class DoplClient {
             body: { url, content: content || {} },
             timeoutMs: 120_000,
         });
-        // If this prepare just claimed a pending skeleton (or created a new
-        // processing row), the pending count is now stale. Bust the cache so
-        // the next tool response's footer reflects reality.
         this.invalidatePendingCache();
         return result;
     }
-    // ── Pending-ingestion status ──────────────────────────────────────
-    //
-    // Read by the `withDoplStatus` wrapper in server.ts — it appends a
-    // `_dopl_status` footer to every tool response so the connected agent
-    // notices queued URLs on its next tool call.
     async getPendingStatus() {
         const now = Date.now();
         if (this.pendingCache &&
@@ -290,9 +215,6 @@ class DoplClient {
             return data;
         }
         catch {
-            // Never block a tool call on the status fetch failing. If the
-            // endpoint is down or the user has no pending entries, just
-            // return an empty snapshot so the wrapper omits the footer.
             const empty = { pending_ingestions: 0, recent: [] };
             this.pendingCache = { ts: now, data: empty };
             return empty;
@@ -301,29 +223,14 @@ class DoplClient {
     invalidatePendingCache() {
         this.pendingCache = null;
     }
-    /**
-     * Agent-driven ingest, step 2/2. Submits the artifacts the agent generated;
-     * server embeds + persists. Synchronous — returns once the entry is
-     * status="complete".
-     */
     async submitIngestedEntry(input) {
         return this.request("/api/ingest/submit", {
             method: "POST",
             toolName: "submit_ingested_entry",
             body: input,
-            // Embeddings + DB writes can take 30–60s for large entries (50 chunks
-            // × 10-batch through OpenAI + tag inserts + slug retry loop).
-            // 120s leaves headroom for the worst case.
             timeoutMs: 120_000,
         });
     }
-    /**
-     * Admin-only skeleton ingestion — runs the cheap descriptor pipeline
-     * against a public GitHub repo. Non-admin API keys get 404 from the
-     * backend (admin surfaces are non-enumerable). Uses the existing
-     * withAdminAuth gate in src/lib/auth/with-auth.ts, which reads
-     * ADMIN_USER_ID.
-     */
     async skeletonIngest(url) {
         return this.request("/api/admin/skeleton-ingest", {
             method: "POST",
@@ -332,7 +239,6 @@ class DoplClient {
             timeoutMs: 60_000,
         });
     }
-    // ── Cluster mutations ─────────────────────────────────────────────
     async updateCluster(slug, updates) {
         return this.request(`/api/clusters/${encodeURIComponent(slug)}`, {
             method: "PATCH",
@@ -340,10 +246,6 @@ class DoplClient {
             body: updates,
         });
     }
-    /**
-     * Rename a chat panel on the user's canvas. Wraps the generic panels
-     * PATCH endpoint so the agent has a purpose-named tool.
-     */
     async renameChat(panelId, title) {
         await this.request(`/api/canvas/panels/${encodeURIComponent(panelId)}`, {
             method: "PATCH",
@@ -352,24 +254,8 @@ class DoplClient {
         });
     }
     async deleteCluster(slug) {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 30_000);
-        try {
-            const res = await fetch(`${this.baseUrl}/api/clusters/${encodeURIComponent(slug)}`, {
-                method: "DELETE",
-                headers: this.buildHeaders("delete_cluster", false),
-                signal: controller.signal,
-            });
-            if (!res.ok && res.status !== 204) {
-                const text = await res.text();
-                throw new Error(`Dopl API error ${res.status}: ${text}`);
-            }
-        }
-        finally {
-            clearTimeout(timeout);
-        }
+        await this.requestNoContent(`/api/clusters/${encodeURIComponent(slug)}`, "DELETE", "delete_cluster");
     }
-    // ── Brain read + memory delete/edit ───────────────────────────────
     async updateClusterMemory(slug, memoryId, content) {
         return this.request(`/api/clusters/${encodeURIComponent(slug)}/brain/memories`, {
             method: "PATCH",
@@ -389,14 +275,13 @@ class DoplClient {
             });
             if (!res.ok) {
                 const text = await res.text();
-                throw new Error(`Dopl API error ${res.status}: ${text}`);
+                throw new errors_js_1.DoplApiError(res.status, text);
             }
         }
         finally {
             clearTimeout(timeout);
         }
     }
-    // ── Entry mutations ───────────────────────────────────────────────
     async updateEntry(id, updates) {
         return this.request(`/api/entries/${encodeURIComponent(id)}`, {
             method: "PATCH",
@@ -410,17 +295,40 @@ class DoplClient {
         });
     }
     async deleteEntry(id) {
+        await this.requestNoContent(`/api/entries/${encodeURIComponent(id)}`, "DELETE", "delete_entry");
+    }
+    async listPacks() {
+        return this.request("/api/knowledge/packs", {
+            toolName: "kb_list_packs",
+        });
+    }
+    async kbList(pack, opts = {}) {
+        const qs = new URLSearchParams();
+        if (opts.category)
+            qs.set("category", opts.category);
+        if (opts.limit)
+            qs.set("limit", String(opts.limit));
+        const suffix = qs.toString() ? `?${qs.toString()}` : "";
+        return this.request(`/api/knowledge/packs/${encodeURIComponent(pack)}/files${suffix}`, { toolName: "kb_list" });
+    }
+    async kbGet(pack, path) {
+        return this.request(`/api/knowledge/packs/${encodeURIComponent(pack)}/file?path=${encodeURIComponent(path)}`, { toolName: "kb_get" });
+    }
+    async requestNoContent(path, method, toolName) {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 30_000);
         try {
-            const res = await fetch(`${this.baseUrl}/api/entries/${encodeURIComponent(id)}`, {
-                method: "DELETE",
-                headers: this.buildHeaders("delete_entry", false),
+            const res = await fetch(`${this.baseUrl}${path}`, {
+                method,
+                headers: this.buildHeaders(toolName, false),
                 signal: controller.signal,
             });
-            if (!res.ok) {
+            if (!res.ok && res.status !== 204) {
                 const text = await res.text();
-                throw new Error(`Dopl API error ${res.status}: ${text}`);
+                if (res.status === 401 || res.status === 403) {
+                    throw new errors_js_1.DoplAuthError(res.status, text);
+                }
+                throw new errors_js_1.DoplApiError(res.status, text);
             }
         }
         finally {

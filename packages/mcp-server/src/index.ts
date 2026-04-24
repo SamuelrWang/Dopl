@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { DoplClient } from "./api-client.js";
+import { DoplClient } from "@dopl/client";
 import { createServer } from "./server.js";
 
 function parseArgs(): { apiKey: string; baseUrl: string } {
