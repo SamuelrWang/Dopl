@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { ingestEntrySkeleton } from "@/lib/ingestion/skeleton";
+import { ingestEntrySkeleton } from "@/features/ingestion/server/skeleton";
 import { withAdminAuth } from "@/lib/auth/with-auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { assertPublicHttpUrl, UnsafeUrlError } from "@/lib/ingestion/url-safety";
@@ -9,7 +9,7 @@ import { logSystemEvent } from "@/lib/analytics/system-events";
 /**
  * Admin-only skeleton ingestion.
  *
- * Runs the lightweight descriptor pipeline in src/lib/ingestion/skeleton.ts
+ * Runs the lightweight descriptor pipeline in features/ingestion/server/skeleton.ts
  * for mass-indexing public GitHub repos. Bypasses credits (admin), skips
  * moderation queue (auto-approved), and skips the user-scoped dedup
  * filter because admin ingests are the canonical source for skeleton
