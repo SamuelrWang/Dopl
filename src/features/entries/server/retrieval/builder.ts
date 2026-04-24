@@ -1,4 +1,4 @@
-import { buildBuilderPrompt } from "@/lib/prompts/builder";
+import { buildBuilderPrompt } from "@/shared/prompts/builder";
 import { searchEntries } from "./search";
 import type { BuildBundle } from "@/types/api";
 

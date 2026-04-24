@@ -4,7 +4,7 @@ import { ingestEntrySkeleton } from "@/features/ingestion/server/skeleton";
 import { withAdminAuth } from "@/shared/auth/with-auth";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { assertPublicHttpUrl, UnsafeUrlError } from "@/features/ingestion/server/url-safety";
-import { logSystemEvent } from "@/lib/analytics/system-events";
+import { logSystemEvent } from "@/features/analytics/server/system-events";
 
 /**
  * Admin-only skeleton ingestion.

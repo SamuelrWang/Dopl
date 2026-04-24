@@ -20,7 +20,7 @@ import {
   SKILL_SYNTHESIS_PROMPT,
   SKILL_BODY_TEMPLATE,
   buildSkillTemplatePayload,
-} from "@/lib/prompts/skill-template";
+} from "@/shared/prompts/skill-template";
 
 export const dynamic = "force-dynamic";
 

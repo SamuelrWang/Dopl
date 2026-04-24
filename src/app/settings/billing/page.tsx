@@ -1,10 +1,10 @@
 "use client";
 
 import { Suspense, useState, useEffect } from "react";
-import { useSubscription } from "@/components/billing/use-subscription";
+import { useSubscription } from "@/features/billing/components/use-subscription";
 import { Button } from "@/shared/ui/button";
 import { useSearchParams } from "next/navigation";
-import { EmbeddedCheckoutForm } from "@/components/billing/embedded-checkout";
+import { EmbeddedCheckoutForm } from "@/features/billing/components/embedded-checkout";
 
 export default function BillingPage() {
   return (

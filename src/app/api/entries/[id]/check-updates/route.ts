@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { withUserAuth, isAdmin } from "@/shared/auth/with-auth";
-import { resolveEntryId } from "@/lib/entries/resolver";
+import { resolveEntryId } from "@/features/entries/server/resolver";
 import { Octokit } from "@octokit/rest";
 
 export const dynamic = "force-dynamic";

@@ -25,7 +25,7 @@ import { useCallback, useEffect, useMemo } from "react";
 import { CanvasProvider, useCanvas } from "@/features/canvas/canvas-store";
 import { Canvas } from "@/features/canvas/canvas";
 import { MIN_ZOOM, computePanelsBounds } from "@/features/canvas/types";
-import { DetailPanel } from "@/components/community/detail-panel";
+import { DetailPanel } from "@/features/community/components/detail-panel";
 import { publishedClusterToCanvasState } from "@/features/community/server/to-canvas-state";
 import type { PublishedClusterDetail } from "@/features/community/server/types";
 

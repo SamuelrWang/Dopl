@@ -18,7 +18,7 @@ import {
   GlassNavLink,
   StatusDot,
   MonoLabel,
-} from "@/components/design";
+} from "@/shared/design";
 
 const colorSwatches = [
   { name: "bg-base", value: "var(--bg-base)", oklch: "oklch(0.08 0.002 260)" },

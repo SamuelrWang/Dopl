@@ -1,6 +1,6 @@
 import { supabaseAdmin } from "@/shared/supabase/admin";
 const supabase = supabaseAdmin();
-import { generateEmbedding } from "@/lib/ai";
+import { generateEmbedding } from "@/shared/lib/ai";
 
 export interface SearchResult {
   entry_id: string;

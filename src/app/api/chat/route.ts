@@ -1,9 +1,9 @@
 import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { BUILDER_CHAT_SYSTEM_PROMPT } from "@/lib/prompts/chat-system";
+import { BUILDER_CHAT_SYSTEM_PROMPT } from "@/shared/prompts/chat-system";
 import { withUserAuth } from "@/shared/auth/with-auth";
-import { hasActiveAccess, accessDeniedBody } from "@/lib/billing/access";
-import { logSystemEvent } from "@/lib/analytics/system-events";
+import { hasActiveAccess, accessDeniedBody } from "@/features/billing/server/access";
+import { logSystemEvent } from "@/features/analytics/server/system-events";
 import {
   buildCanvasContextPrefix,
   type CanvasContextPayload,

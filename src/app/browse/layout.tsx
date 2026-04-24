@@ -13,9 +13,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { SmartChatPanel } from "@/components/entries/smart-chat-panel";
-import { EntryPreviewProvider } from "@/components/entries/entry-preview-context";
-import { EntryPreviewPanel } from "@/components/entries/entry-preview-panel";
+import { SmartChatPanel } from "@/features/entries/components/smart-chat-panel";
+import { EntryPreviewProvider } from "@/features/entries/components/entry-preview-context";
+import { EntryPreviewPanel } from "@/features/entries/components/entry-preview-panel";
 
 export default function BrowseLayout({
   children,

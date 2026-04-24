@@ -7,7 +7,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { Copy, Check } from "lucide-react";
-import { MonoLabel } from "@/components/design";
+import { MonoLabel } from "@/shared/design";
 import type { ConnectionPanelData } from "../types";
 
 interface ApiKey {

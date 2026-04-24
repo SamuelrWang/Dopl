@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { EntryDetail } from "@/components/entries/entry-detail";
+import { EntryDetail } from "@/features/entries/components/entry-detail";
 import { Button } from "@/shared/ui/button";
 import Link from "next/link";
 

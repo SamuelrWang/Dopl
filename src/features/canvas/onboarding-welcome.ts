@@ -1,4 +1,4 @@
-import type { ChatMessage } from "@/components/ingest/chat-message";
+import type { ChatMessage } from "@/features/ingestion/components/chat-message";
 
 /**
  * Pre-populated welcome conversation for first-time users.

@@ -13,7 +13,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { BuildRequestSchema } from "@/types/api";
-import { buildBuilderBundle } from "@/lib/retrieval/builder";
+import { buildBuilderBundle } from "@/features/entries/server/retrieval/builder";
 import { withMcpCredits } from "@/shared/auth/with-auth";
 
 async function handlePost(

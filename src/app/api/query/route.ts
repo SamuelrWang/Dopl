@@ -12,10 +12,10 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { QueryRequestSchema } from "@/types/api";
-import { searchEntries } from "@/lib/retrieval/search";
+import { searchEntries } from "@/features/entries/server/retrieval/search";
 import { withMcpCredits } from "@/shared/auth/with-auth";
 import { CONTENT_PREVIEW_LENGTH } from "@/config";
-import type { SubscriptionTier } from "@/lib/billing/subscriptions";
+import type { SubscriptionTier } from "@/features/billing/server/subscriptions";
 
 async function handlePost(
   request: NextRequest,

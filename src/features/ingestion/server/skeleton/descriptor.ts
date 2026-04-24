@@ -1,9 +1,9 @@
 import "server-only";
-import { callClaude } from "@/lib/ai";
+import { callClaude } from "@/shared/lib/ai";
 import {
   parseSkeletonStructuredOutput,
   type SkeletonStructuredOutput,
-} from "@/lib/prompts/skeleton-descriptor";
+} from "@/shared/prompts/skeleton-descriptor";
 
 /**
  * Run the LLM call and parse the structured output. Retries the call once

@@ -1,11 +1,11 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
-import { slugifyEntryTitle, fallbackSlugFromId } from "@/lib/entries/slug";
-import { logSystemEvent } from "@/lib/analytics/system-events";
+import { slugifyEntryTitle, fallbackSlugFromId } from "@/features/entries/server/slug";
+import { logSystemEvent } from "@/features/analytics/server/system-events";
 import {
   SKELETON_DESCRIPTOR_PROMPT_VERSION,
   buildSkeletonDescriptorPrompt,
-} from "@/lib/prompts/skeleton-descriptor";
+} from "@/shared/prompts/skeleton-descriptor";
 import {
   gatherGitHubFacts,
   parseRepoUrl,

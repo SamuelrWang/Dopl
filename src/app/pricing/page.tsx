@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Button } from "@/shared/ui/button";
 import { getSupabaseBrowser } from "@/shared/supabase/browser";
-import { EmbeddedCheckoutForm } from "@/components/billing/embedded-checkout";
+import { EmbeddedCheckoutForm } from "@/features/billing/components/embedded-checkout";
 import type { User } from "@supabase/supabase-js";
 
 /**

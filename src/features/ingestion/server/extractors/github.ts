@@ -1,6 +1,6 @@
 import { Octokit } from "@octokit/rest";
 import { LinkFollowResult } from "../types";
-import { logSystemEvent } from "@/lib/analytics/system-events";
+import { logSystemEvent } from "@/features/analytics/server/system-events";
 
 const GITHUB_TIMEOUT_MS = 15_000;
 

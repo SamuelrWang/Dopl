@@ -35,7 +35,7 @@ type TagRow = {
 
 async function main() {
   const { supabaseAdmin } = await import("../src/shared/supabase/admin");
-  const { generateEmbedding } = await import("../src/lib/ai");
+  const { generateEmbedding } = await import("../src/shared/lib/ai");
   const supabase = supabaseAdmin();
 
   console.log("\n🔬 title_summary backfill\n");

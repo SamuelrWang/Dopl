@@ -19,8 +19,8 @@ import { FixedInputBar } from "@/features/canvas/fixed-input-bar";
 import { FixedChatPanel } from "@/features/canvas/fixed-chat-panel";
 import { FixedBrainPanel } from "@/features/canvas/fixed-brain-panel";
 import { DrawerProvider } from "@/features/canvas/chat-drawer-context";
-import { OnboardingProvider } from "@/components/onboarding/onboarding-provider";
-import { PaywallGate } from "@/components/billing/paywall-gate";
+import { OnboardingProvider } from "@/features/onboarding/components/onboarding-provider";
+import { PaywallGate } from "@/features/billing/components/paywall-gate";
 import type { CanvasState } from "@/features/canvas/types";
 import type { ServerConversation } from "@/features/canvas/use-conversation-sync";
 

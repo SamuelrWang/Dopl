@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Button } from "@/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
-import { MarkdownMessage } from "@/components/design";
+import { MarkdownMessage } from "@/shared/design";
 
 interface ArtifactsPanelProps {
   entryId: string;

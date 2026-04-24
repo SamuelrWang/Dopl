@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 // TEMP-COMMUNITY: hidden until community launches — restore by uncommenting blocks marked TEMP-COMMUNITY
-// import { CommunityCard } from "@/components/community/community-card";
+// import { CommunityCard } from "@/features/community/components/community-card";
 // import type { PublishedClusterSummary } from "@/features/community/server/types";
 import {
   ArrowUp,
@@ -16,7 +16,7 @@ import {
 import { PromptInput } from "@/features/marketing/components/prompt-input";
 import { FaqItem } from "@/features/marketing/components/faq-item";
 import { SnowflakeGrid } from "@/features/marketing/components/snowflake-grid";
-import { EARLY_SUPPORTER_ENABLED } from "@/lib/billing/early-supporter-flag";
+import { EARLY_SUPPORTER_ENABLED } from "@/features/billing/server/early-supporter-flag";
 
 /* ──────────────────────────────────────────────────────────────────── */
 /*  Main Landing Page                                                  */

@@ -1,7 +1,7 @@
 import "server-only";
-import { generateEmbedding } from "@/lib/ai";
+import { generateEmbedding } from "@/shared/lib/ai";
 import { supabaseAdmin } from "@/shared/supabase/admin";
-import { logSystemEvent } from "@/lib/analytics/system-events";
+import { logSystemEvent } from "@/features/analytics/server/system-events";
 
 /**
  * Embed the descriptor as a single chunk. Clears any pre-existing chunks

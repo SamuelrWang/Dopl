@@ -103,7 +103,7 @@ async function main() {
   if (SHOULD_SYNC) {
     console.log("Syncing from GitHub…");
     // Lazy import so the script still runs without the GH token in stub mode.
-    const { syncPack } = await import("../src/lib/knowledge/sync");
+    const { syncPack } = await import("../src/features/knowledge-packs/server/sync");
     try {
       const result = await syncPack(PACK_ID);
       console.log(`  synced: ${result.files_synced} files, ${result.files_deleted} removed @ ${result.commit_sha.slice(0, 7)}`);

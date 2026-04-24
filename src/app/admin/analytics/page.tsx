@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getUser } from "@/shared/supabase/server";
 import { isAdmin } from "@/shared/auth/with-auth";
-import { getLaunchMetrics } from "@/lib/analytics/launch-metrics";
+import { getLaunchMetrics } from "@/features/analytics/server/launch-metrics";
 
 export const dynamic = "force-dynamic";
 

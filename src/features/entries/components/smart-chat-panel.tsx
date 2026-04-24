@@ -17,7 +17,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Search, ArrowUp, Loader2 } from "lucide-react";
-import { GlassCard, MonoLabel, PlatformIcon } from "@/components/design";
+import { GlassCard, MonoLabel, PlatformIcon } from "@/shared/design";
 
 // ── Chat types ───────────────────────────────────────────────────────
 

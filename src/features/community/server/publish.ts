@@ -1,6 +1,6 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
-import { generateEmbedding } from "@/lib/ai";
+import { generateEmbedding } from "@/shared/lib/ai";
 import { generatePublishedSlug, randomSuffix } from "./published-slug";
 import type {
   PublishedClusterSummary,

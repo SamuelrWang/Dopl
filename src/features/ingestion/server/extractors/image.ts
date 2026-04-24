@@ -1,6 +1,6 @@
-import { claude } from "@/lib/ai";
+import { claude } from "@/shared/lib/ai";
 import { ExtractedSource } from "../types";
-import { IMAGE_ANALYSIS_PROMPT } from "@/lib/prompts/image-vision";
+import { IMAGE_ANALYSIS_PROMPT } from "@/shared/prompts/image-vision";
 
 type ImageType =
   | "code_screenshot"

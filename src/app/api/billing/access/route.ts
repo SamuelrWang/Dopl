@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withUserAuth } from "@/shared/auth/with-auth";
-import { hasActiveAccess } from "@/lib/billing/access";
+import { hasActiveAccess } from "@/features/billing/server/access";
 
 async function handleGet(
   _request: NextRequest,

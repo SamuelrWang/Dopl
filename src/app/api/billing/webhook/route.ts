@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { constructWebhookEvent, getStripe } from "@/lib/billing/stripe";
+import { constructWebhookEvent, getStripe } from "@/features/billing/server/stripe";
 import {
   getUserByStripeCustomer,
   getUserSubscription,
   updateSubscription,
-} from "@/lib/billing/subscriptions";
+} from "@/features/billing/server/subscriptions";
 import { supabaseAdmin } from "@/shared/supabase/admin";
-import { logConversionEvent, hasFiredEvent } from "@/lib/analytics/conversion-events";
+import { logConversionEvent, hasFiredEvent } from "@/features/analytics/server/conversion-events";
 import type Stripe from "stripe";
 
 export async function POST(request: NextRequest) {

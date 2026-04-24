@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CommunityCard } from "@/components/community/community-card";
-import { GlassCard } from "@/components/design";
+import { CommunityCard } from "@/features/community/components/community-card";
+import { GlassCard } from "@/shared/design";
 import type { PublishedClusterSummary } from "@/features/community/server/types";
 
 export default function BrowseClustersPage() {

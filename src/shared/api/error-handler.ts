@@ -1,7 +1,7 @@
 import "server-only";
 import { NextResponse } from "next/server";
 import { HttpError } from "@/shared/lib/http-error";
-import { logSystemEvent } from "@/lib/analytics/system-events";
+import { logSystemEvent } from "@/features/analytics/server/system-events";
 
 type RouteHandler<Ctx> = (
   req: Request,

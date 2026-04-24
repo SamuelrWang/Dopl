@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/shared/supabase/admin";
-import { logConversionEvent } from "@/lib/analytics/conversion-events";
+import { logConversionEvent } from "@/features/analytics/server/conversion-events";
 
 /**
  * Hourly cron (vercel.json). Two jobs in one endpoint:

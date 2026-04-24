@@ -20,7 +20,7 @@ import type { CanvasAction, ChatPanelData } from "./types";
 import type {
   ChatMessage,
   ProgressEvent,
-} from "@/components/ingest/chat-message";
+} from "@/features/ingestion/components/chat-message";
 
 interface IngestStartResponse {
   entry_id: string;

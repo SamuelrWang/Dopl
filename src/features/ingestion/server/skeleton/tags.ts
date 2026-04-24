@@ -1,6 +1,6 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
-import { logSystemEvent } from "@/lib/analytics/system-events";
+import { logSystemEvent } from "@/features/analytics/server/system-events";
 import { normalizeTag } from "../tags";
 import { octokit, type GitHubFacts } from "./github";
 

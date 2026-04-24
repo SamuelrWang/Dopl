@@ -20,9 +20,9 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import Link from "next/link";
 import { Copy, Check, Download } from "lucide-react";
-import { MarkdownMessage, PlatformIcon } from "@/components/design";
+import { MarkdownMessage, PlatformIcon } from "@/shared/design";
 import type { EntryPanelData } from "../types";
-import type { ProgressEvent } from "@/components/ingest/chat-message";
+import type { ProgressEvent } from "@/features/ingestion/components/chat-message";
 
 interface EntryPanelBodyProps {
   panel: EntryPanelData;

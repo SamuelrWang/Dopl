@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import Link from "next/link";
 import { ArrowLeft, Search, X } from "lucide-react";
-import { CommunityCard } from "@/components/community/community-card";
+import { CommunityCard } from "@/features/community/components/community-card";
 import type { PublishedClusterSummary } from "@/features/community/server/types";
 
 type SortOption = "popular" | "newest";

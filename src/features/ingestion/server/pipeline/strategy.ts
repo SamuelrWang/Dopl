@@ -1,5 +1,5 @@
 import type { ContentType } from "../types";
-import type { ModelTier } from "@/lib/ai";
+import type { ModelTier } from "@/shared/lib/ai";
 import { MAX_LINK_DEPTH } from "@/config";
 
 /**

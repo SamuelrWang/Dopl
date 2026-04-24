@@ -3,8 +3,8 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
 import { EntryUpdateSchema } from "@/types/api";
 import { withUserAuth, withMcpCredits, isAdmin } from "@/shared/auth/with-auth";
 import { CONTENT_PREVIEW_LENGTH } from "@/config";
-import type { SubscriptionTier } from "@/lib/billing/subscriptions";
-import { resolveEntryId } from "@/lib/entries/resolver";
+import type { SubscriptionTier } from "@/features/billing/server/subscriptions";
+import { resolveEntryId } from "@/features/entries/server/resolver";
 
 const supabase = supabaseAdmin();
 

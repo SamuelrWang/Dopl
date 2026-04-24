@@ -21,7 +21,7 @@ import { ConnectionPanelBody } from "./panels/connection-panel";
 import { EntryPanelBody } from "./panels/entry-panel";
 import { BrowsePanelBody } from "./panels/browse/browse-panel";
 import { ClusterBrainPanel } from "./panels/cluster-brain/cluster-brain-panel";
-import { useOnboardingContext } from "@/components/onboarding/onboarding-provider";
+import { useOnboardingContext } from "@/features/onboarding/components/onboarding-provider";
 import { ChatExpiryBar } from "./canvas-panel-expiry";
 import { useCanvasPanelDrag } from "./use-canvas-panel-drag";
 import { useCanvasPanelResize } from "./use-canvas-panel-resize";

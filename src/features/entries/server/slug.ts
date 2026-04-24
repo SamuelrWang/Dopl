@@ -1,4 +1,4 @@
-import { slugify } from "@/lib/slug/slugify";
+import { slugify } from "@/shared/lib/slug/slugify";
 
 /**
  * Slugify an entry title. Falls back to "entry" if the title produces an empty slug.

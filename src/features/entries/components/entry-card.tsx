@@ -3,12 +3,12 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Bookmark } from "lucide-react";
-import { GlassCard, MonoLabel, PlatformIcon } from "@/components/design";
+import { GlassCard, MonoLabel, PlatformIcon } from "@/shared/design";
 import {
   addEntryPanelToCanvas,
   fetchFullEntry,
 } from "@/features/canvas/add-to-canvas";
-import { useSavedToggle } from "@/lib/saved/local-store";
+import { useSavedToggle } from "@/features/entries/server/saved/local-store";
 import { useEntryPreviewActions } from "./entry-preview-context";
 
 interface EntryCardProps {

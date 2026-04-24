@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generateEmbedding } from "@/lib/ai";
+import { generateEmbedding } from "@/shared/lib/ai";
 import { withMcpCredits } from "@/shared/auth/with-auth";
 import { z } from "zod";
 

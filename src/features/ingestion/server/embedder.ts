@@ -1,8 +1,8 @@
-import { generateEmbedding } from "@/lib/ai";
+import { generateEmbedding } from "@/shared/lib/ai";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 const supabase = supabaseAdmin();
 import { ChunkData } from "./types";
-import { logSystemEvent } from "@/lib/analytics/system-events";
+import { logSystemEvent } from "@/features/analytics/server/system-events";
 
 const MIN_CHUNK_SIZE = 10;
 const MAX_CHUNK_SIZE = 5000;

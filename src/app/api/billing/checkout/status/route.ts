@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withUserAuth } from "@/shared/auth/with-auth";
-import { getCheckoutSessionStatus } from "@/lib/billing/stripe";
+import { getCheckoutSessionStatus } from "@/features/billing/server/stripe";
 
 async function handleGet(request: NextRequest) {
   const sessionId = request.nextUrl.searchParams.get("session_id");

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { EntryTabs } from "./entry-tabs";
-import { MonoLabel } from "@/components/design";
+import { MonoLabel } from "@/shared/design";
 
 interface EntryDetailProps {
   entry: {

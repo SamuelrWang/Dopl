@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { MarkdownMessage } from "@/components/design";
-import { ArtifactsPanel } from "@/components/ingest/artifacts-panel";
-import type { ChatMessage } from "@/components/ingest/chat-message";
+import { MarkdownMessage } from "@/shared/design";
+import { ArtifactsPanel } from "@/features/ingestion/components/artifacts-panel";
+import type { ChatMessage } from "@/features/ingestion/components/chat-message";
 import { SentAttachmentPreview } from "./chat-attachments";
 import { McpSetupCard, ChromeExtensionCard } from "./chat-panel-cards";
 
@@ -174,7 +174,7 @@ function ProgressInline({
   events,
   status,
 }: {
-  events: import("@/components/ingest/chat-message").ProgressEvent[];
+  events: import("@/features/ingestion/components/chat-message").ProgressEvent[];
   status: "streaming" | "complete" | "error";
 }) {
   return (

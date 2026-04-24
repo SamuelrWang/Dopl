@@ -24,7 +24,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ChatAttachment } from "@/components/ingest/chat-message";
+import type { ChatAttachment } from "@/features/ingestion/components/chat-message";
 import type { ChatPanelData } from "@/features/canvas/types";
 import { usePanelsContext } from "@/features/canvas/canvas-store";
 import { useChat } from "./use-chat";

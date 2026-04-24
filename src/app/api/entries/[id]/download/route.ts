@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 const supabase = supabaseAdmin();
 import { withUserAuth, isAdmin } from "@/shared/auth/with-auth";
-import { resolveEntryId } from "@/lib/entries/resolver";
+import { resolveEntryId } from "@/features/entries/server/resolver";
 
 async function handleGet(
   request: NextRequest,

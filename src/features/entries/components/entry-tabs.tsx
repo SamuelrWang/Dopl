@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { RepoFileBrowser } from "./repo-file-browser";
-import { GlassCard, GlassDivider, MarkdownMessage, MonoLabel } from "@/components/design";
+import { GlassCard, GlassDivider, MarkdownMessage, MonoLabel } from "@/shared/design";
 
 interface EntryTabsProps {
   readme: string | null;

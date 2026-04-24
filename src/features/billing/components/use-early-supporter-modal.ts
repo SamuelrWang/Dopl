@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { EARLY_SUPPORTER_ENABLED } from "@/lib/billing/early-supporter-flag";
+import { EARLY_SUPPORTER_ENABLED } from "@/features/billing/server/early-supporter-flag";
 
 const SEEN_KEY = "dopl:early-supporter-seen";
 

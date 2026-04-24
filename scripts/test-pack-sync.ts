@@ -13,7 +13,7 @@ dotenv.config({ path: resolve(__dirname, "../.env.local") });
 async function main() {
   // Dynamic import so dotenv runs before supabase.ts reads env vars at
   // module-evaluation time.
-  const { syncPack } = await import("../src/lib/knowledge/sync");
+  const { syncPack } = await import("../src/features/knowledge-packs/server/sync");
   const result = await syncPack("rokid");
   console.log("✓ Sync OK:", JSON.stringify(result, null, 2));
 }

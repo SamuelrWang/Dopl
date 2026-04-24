@@ -8,7 +8,7 @@ import {
   getIngestionHealth,
   getMcpHealth,
   computeOverallStatus,
-} from "@/lib/analytics/health";
+} from "@/features/analytics/server/health";
 
 export const dynamic = "force-dynamic";
 

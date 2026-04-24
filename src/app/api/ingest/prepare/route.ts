@@ -7,12 +7,12 @@ import {
   MAX_IMAGES_PER_ENTRY,
   MAX_IMAGE_SIZE_BYTES,
 } from "@/config";
-import { hasActiveAccess, accessDeniedBody } from "@/lib/billing/access";
+import { hasActiveAccess, accessDeniedBody } from "@/features/billing/server/access";
 import { assertPublicHttpUrl, UnsafeUrlError } from "@/features/ingestion/server/url-safety";
-import { logSystemEvent } from "@/lib/analytics/system-events";
+import { logSystemEvent } from "@/features/analytics/server/system-events";
 import { detectPlatform, extractForAgent, deleteFailedEntry, logStep } from "@/features/ingestion/server/pipeline";
 import { normalizeUrl } from "@/features/ingestion/server/url";
-import { fallbackSlugFromId } from "@/lib/entries/slug";
+import { fallbackSlugFromId } from "@/features/entries/server/slug";
 import {
   buildAgentIngestBundle,
   AGENT_INGEST_INSTRUCTIONS,

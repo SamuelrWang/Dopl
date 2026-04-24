@@ -26,7 +26,7 @@ import type {
   Panel,
 } from "@/features/canvas/types";
 import { INITIAL_CANVAS_STATE } from "@/features/canvas/types";
-import type { ChatMessage, ChatAttachment } from "@/components/ingest/chat-message";
+import type { ChatMessage, ChatAttachment } from "@/features/ingestion/components/chat-message";
 
 // ── Shared types mirrored from the client-side conversation sync ─────
 

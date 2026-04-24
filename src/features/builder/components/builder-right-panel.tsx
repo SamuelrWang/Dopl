@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { usePanelsContext } from "@/features/canvas/canvas-store";
 import { ClusterBrainPanel } from "@/features/canvas/panels/cluster-brain/cluster-brain-panel";
-import { MarkdownMessage } from "@/components/design/markdown-message";
+import { MarkdownMessage } from "@/shared/design/markdown-message";
 import type {
   Cluster,
   EntryPanelData,

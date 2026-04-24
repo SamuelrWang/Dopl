@@ -26,7 +26,7 @@ import {
   useChatConversations,
   type ServerConversation,
 } from "./use-conversation-sync";
-import type { ChatMessage } from "@/components/ingest/chat-message";
+import type { ChatMessage } from "@/features/ingestion/components/chat-message";
 
 const PANEL_WIDTH = 520;
 const LIST_WIDTH = 180;

@@ -13,7 +13,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useCanvas } from "./canvas-store";
 import type { ChatPanelData } from "./types";
-import { MarkdownMessage } from "@/components/design";
+import { MarkdownMessage } from "@/shared/design";
 
 function formatTimeShort(expiresAt: string): string {
   const diff = new Date(expiresAt).getTime() - Date.now();

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withUserAuth } from "@/shared/auth/with-auth";
-import { getUserSubscription } from "@/lib/billing/subscriptions";
-import { createPortalSession } from "@/lib/billing/stripe";
+import { getUserSubscription } from "@/features/billing/server/subscriptions";
+import { createPortalSession } from "@/features/billing/server/stripe";
 
 async function handlePost(
   _request: NextRequest,

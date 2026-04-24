@@ -1,7 +1,7 @@
 "use client";
 
 import { EntryCard } from "./entry-card";
-import { GlassCard } from "@/components/design";
+import { GlassCard } from "@/shared/design";
 
 interface EntryGridEntry {
   id: string;

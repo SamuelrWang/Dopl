@@ -12,7 +12,7 @@ import {
   logStep,
 } from "@/features/ingestion/server/pipeline";
 import { chunkAndEmbed } from "@/features/ingestion/server/embedder";
-import { logSystemEvent } from "@/lib/analytics/system-events";
+import { logSystemEvent } from "@/features/analytics/server/system-events";
 import type { ExtractedSource } from "@/features/ingestion/server/types";
 
 /**

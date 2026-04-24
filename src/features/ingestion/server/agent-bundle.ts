@@ -10,22 +10,22 @@
  * strings the agent can substitute.
  */
 
-import { UNIFIED_MANIFEST_PROMPT } from "@/lib/prompts/manifest";
+import { UNIFIED_MANIFEST_PROMPT } from "@/shared/prompts/manifest";
 import {
   SETUP_README_PROMPT,
   KNOWLEDGE_README_PROMPT,
   ARTICLE_README_PROMPT,
   REFERENCE_README_PROMPT,
-} from "@/lib/prompts/readme";
+} from "@/shared/prompts/readme";
 import {
   AGENTS_MD_PROMPT,
   KEY_INSIGHTS_PROMPT,
   REFERENCE_GUIDE_PROMPT,
-} from "@/lib/prompts/agents-md";
-import { CONTENT_TYPE_CLASSIFIER_PROMPT } from "@/lib/prompts/content-type-classifier";
-import { CONTENT_CLASSIFIER_PROMPT } from "@/lib/prompts/content-classifier";
-import { TAGS_PROMPT } from "@/lib/prompts/tags";
-import { IMAGE_ANALYSIS_PROMPT } from "@/lib/prompts/image-vision";
+} from "@/shared/prompts/agents-md";
+import { CONTENT_TYPE_CLASSIFIER_PROMPT } from "@/shared/prompts/content-type-classifier";
+import { CONTENT_CLASSIFIER_PROMPT } from "@/shared/prompts/content-classifier";
+import { TAGS_PROMPT } from "@/shared/prompts/tags";
+import { IMAGE_ANALYSIS_PROMPT } from "@/shared/prompts/image-vision";
 
 /**
  * Inventory entry for one extracted source. The prepare response ships

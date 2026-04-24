@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { EntryGrid, EntryGridSkeleton } from "@/components/entries/entry-grid";
-import { GlassCard, MonoLabel } from "@/components/design";
+import { EntryGrid, EntryGridSkeleton } from "@/features/entries/components/entry-grid";
+import { GlassCard, MonoLabel } from "@/shared/design";
 
 interface EntryListItem {
   id: string;

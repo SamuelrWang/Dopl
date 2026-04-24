@@ -12,10 +12,10 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { EntryGrid } from "@/components/entries/entry-grid";
-import { CommunityCard } from "@/components/community/community-card";
-import { GlassCard, MonoLabel } from "@/components/design";
-import { useSavedList } from "@/lib/saved/local-store";
+import { EntryGrid } from "@/features/entries/components/entry-grid";
+import { CommunityCard } from "@/features/community/components/community-card";
+import { GlassCard, MonoLabel } from "@/shared/design";
+import { useSavedList } from "@/features/entries/server/saved/local-store";
 import type { PublishedClusterSummary } from "@/features/community/server/types";
 
 interface EntryListItem {

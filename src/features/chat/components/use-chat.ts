@@ -18,7 +18,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { useCanvas, computeNewPanelPosition } from "@/features/canvas/canvas-store";
-import type { ChatMessage, ChatAttachment } from "@/components/ingest/chat-message";
+import type { ChatMessage, ChatAttachment } from "@/features/ingestion/components/chat-message";
 import type { ChatPanelData } from "@/features/canvas/types";
 import { ENTRY_PANEL_SIZE } from "@/features/canvas/types";
 import { buildCanvasContext } from "./cluster-context";

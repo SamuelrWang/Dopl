@@ -18,7 +18,7 @@ import {
   isPanelDeletable,
 } from "../types";
 import { stripFromClusters } from "@/features/canvas/server/defaults";
-import type { ChatMessage } from "@/components/ingest/chat-message";
+import type { ChatMessage } from "@/features/ingestion/components/chat-message";
 import { findNonOverlappingPosition, computeNewPanelPosition } from "./layout";
 
 // ── Reducer ────────────────────────────────────────────────────────

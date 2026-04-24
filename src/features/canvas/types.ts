@@ -8,7 +8,7 @@
 import type {
   ChatMessage,
   ProgressEvent,
-} from "@/components/ingest/chat-message";
+} from "@/features/ingestion/components/chat-message";
 
 export interface BasePanelData {
   id: string;
@@ -405,7 +405,7 @@ export type CanvasAction =
       type: "UPDATE_PROGRESS";
       panelId: string;
       entryId: string;
-      event: import("@/components/ingest/chat-message").ProgressEvent;
+      event: import("@/features/ingestion/components/chat-message").ProgressEvent;
     }
   | {
       type: "SET_PROCESSING";

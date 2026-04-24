@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Space_Grotesk, JetBrains_Mono, Playfair_Display, Inter } from "next/font/google";
 import "./globals.css";
-import { Header } from "@/components/layout/header";
-import { FlushGrid } from "@/components/design";
-import { LayoutShell } from "@/components/layout/layout-shell";
+import { Header } from "@/shared/layout/header";
+import { FlushGrid } from "@/shared/design";
+import { LayoutShell } from "@/shared/layout/layout-shell";
 import { ToastHost } from "@/shared/ui/toast";
 
 const geistSans = Geist({

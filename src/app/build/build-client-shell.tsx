@@ -1,7 +1,7 @@
 "use client";
 
 import { CanvasProvider } from "@/features/canvas/canvas-store";
-import { BuilderLayout } from "@/components/builder/builder-layout";
+import { BuilderLayout } from "@/features/builder/components/builder-layout";
 import type { CanvasState } from "@/features/canvas/types";
 import type { ServerConversation } from "@/features/canvas/use-conversation-sync";
 

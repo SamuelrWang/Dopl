@@ -1,6 +1,6 @@
 "use client";
 
-import { GlassCard, GlassDivider, MonoLabel } from "@/components/design";
+import { GlassCard, GlassDivider, MonoLabel } from "@/shared/design";
 
 interface FilterSidebarProps {
   useCase: string;

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { syncPack, verifyHmac } from "@/lib/knowledge/sync";
+import { syncPack, verifyHmac } from "@/features/knowledge-packs/server/sync";
 
 /**
  * POST /api/knowledge/packs/[packId]/sync — pull the latest from the pack's

@@ -344,7 +344,7 @@ export async function createCluster(
   // import so this module stays import-free of the analytics tree in
   // environments that don't need it.
   if (isFirstCluster) {
-    import("@/lib/analytics/conversion-events")
+    import("@/features/analytics/server/conversion-events")
       .then(({ logConversionEvent }) =>
         logConversionEvent({
           userId: opts.userId,

@@ -1,6 +1,6 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
-import { searchEntries } from "@/lib/retrieval/search";
+import { searchEntries } from "@/features/entries/server/retrieval/search";
 import type { ToolResult } from "./types";
 
 const supabase = supabaseAdmin();

@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { API_KEY_PREFIX } from "@/config";
 import { createServerClient } from "@supabase/ssr";
 import { validateApiKey, checkAndRecordRateLimit, touchApiKey, touchMcpStatus } from "./api-keys";
-import { getUserSubscription, type SubscriptionTier } from "@/lib/billing/subscriptions";
-import { hasActiveAccess, accessDeniedBody } from "@/lib/billing/access";
-import { logMcpEvent } from "@/lib/analytics/mcp-events";
-import { logSystemEvent } from "@/lib/analytics/system-events";
+import { getUserSubscription, type SubscriptionTier } from "@/features/billing/server/subscriptions";
+import { hasActiveAccess, accessDeniedBody } from "@/features/billing/server/access";
+import { logMcpEvent } from "@/features/analytics/server/mcp-events";
+import { logSystemEvent } from "@/features/analytics/server/system-events";
 
 /**
  * Wrap a handler call so any thrown error or 5xx response emits a

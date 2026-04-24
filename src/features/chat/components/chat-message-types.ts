@@ -1,7 +1,7 @@
 /**
  * Chat message helpers for the real-chat panel.
  *
- * The shared `ChatMessage` union in `@/components/ingest/chat-message`
+ * The shared `ChatMessage` union in `@/features/ingestion/components/chat-message`
  * now includes the full set of variants for both the URL-ingestion flow
  * and the real-chat flow (text / user-text / progress / artifacts /
  * streaming / tool_activity / entry_cards). This file re-exports those
@@ -12,7 +12,7 @@ import type {
   ChatMessage,
   ChatAttachment,
   EntryReference,
-} from "@/components/ingest/chat-message";
+} from "@/features/ingestion/components/chat-message";
 
 export type { ChatMessage, ChatAttachment, EntryReference };
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { cn } from "@/shared/lib/utils";
-import { MarkdownMessage } from "@/components/design";
+import { MarkdownMessage } from "@/shared/design";
 import { ArtifactsPanel } from "./artifacts-panel";
 
 export interface ProgressEvent {

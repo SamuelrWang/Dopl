@@ -54,4 +54,4 @@ export type {
 export type {
   ChatMessage,
   ProgressEvent,
-} from "@/components/ingest/chat-message";
+} from "@/features/ingestion/components/chat-message";

@@ -1,4 +1,4 @@
-import { slugify } from "@/lib/slug/slugify";
+import { slugify } from "@/shared/lib/slug/slugify";
 
 /**
  * Slugify a cluster name for use in URLs and MCP prompt names.

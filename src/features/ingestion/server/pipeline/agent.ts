@@ -291,7 +291,7 @@ export async function finalizeAgentEntry(entryId: string): Promise<void> {
     const userId = entry?.ingested_by as string | null;
     if (userId) {
       const { logConversionEvent, hasFiredEvent } = await import(
-        "@/lib/analytics/conversion-events"
+        "@/features/analytics/server/conversion-events"
       );
       const already = await hasFiredEvent(userId, "first_ingest_completed");
       if (!already) {

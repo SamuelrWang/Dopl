@@ -21,7 +21,7 @@ import { useEffect, useRef, useState } from "react";
 import { useCapabilities, usePanelsContext } from "../canvas-store";
 import type { Cluster } from "../types";
 import { isPanelDeletable } from "../types";
-import { PublishDialog } from "@/components/community/publish-dialog";
+import { PublishDialog } from "@/features/community/components/publish-dialog";
 import { toast } from "@/shared/ui/toast";
 
 interface ClusterHeaderTabProps {

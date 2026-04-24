@@ -4,7 +4,7 @@ import {
   getContents,
   getFileContent,
   getRepoMeta,
-} from "@/lib/github";
+} from "@/shared/lib/github";
 import { withExternalAuth } from "@/shared/auth/with-auth";
 
 /**

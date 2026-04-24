@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/shared/supabase/admin";
 import { cookies } from "next/headers";
-import { startTrialIfNew } from "@/lib/billing/subscriptions";
-import { logConversionEvent, hasFiredEvent } from "@/lib/analytics/conversion-events";
+import { startTrialIfNew } from "@/features/billing/server/subscriptions";
+import { logConversionEvent, hasFiredEvent } from "@/features/analytics/server/conversion-events";
 import { forkPublishedCluster } from "@/features/community/server/service";
 
 export async function GET(request: NextRequest) {

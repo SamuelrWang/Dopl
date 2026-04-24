@@ -3,7 +3,7 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
 import { isAdmin } from "@/shared/auth/with-auth";
 import { assertPublicHttpUrl, UnsafeUrlError } from "@/features/ingestion/server/url-safety";
 import { detectPlatform } from "@/features/ingestion/server/pipeline";
-import { fallbackSlugFromId } from "@/lib/entries/slug";
+import { fallbackSlugFromId } from "@/features/entries/server/slug";
 import { normalizeUrl } from "./url-normalize";
 import type { ToolResult } from "./types";
 

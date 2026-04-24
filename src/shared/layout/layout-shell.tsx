@@ -3,7 +3,7 @@
 import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 import { Header } from "./header";
-import { FlushGrid } from "@/components/design";
+import { FlushGrid } from "@/shared/design";
 
 export function LayoutShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
