@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "@/lib/supabase";
+import { supabaseAdmin } from "@/shared/supabase/admin";
 
 export type EarlySupporterClaimResult =
   | { granted: true; amount: number; slot_number: number }

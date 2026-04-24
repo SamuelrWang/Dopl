@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase";
+import { supabaseAdmin } from "@/shared/supabase/admin";
 const supabase = supabaseAdmin();
-import { withMcpCredits } from "@/lib/auth/with-auth";
+import { withMcpCredits } from "@/shared/auth/with-auth";
 
 async function handleGet(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;

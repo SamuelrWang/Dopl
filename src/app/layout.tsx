@@ -4,7 +4,7 @@ import "./globals.css";
 import { Header } from "@/components/layout/header";
 import { FlushGrid } from "@/components/design";
 import { LayoutShell } from "@/components/layout/layout-shell";
-import { ToastHost } from "@/components/ui/toast";
+import { ToastHost } from "@/shared/ui/toast";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",

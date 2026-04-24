@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withUserAuth } from "@/lib/auth/with-auth";
-import { supabaseAdmin } from "@/lib/supabase";
+import { withUserAuth } from "@/shared/auth/with-auth";
+import { supabaseAdmin } from "@/shared/supabase/admin";
 
 /**
  * GET /api/user/profile — Get the current user's profile.

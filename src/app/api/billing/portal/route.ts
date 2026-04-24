@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withUserAuth } from "@/lib/auth/with-auth";
+import { withUserAuth } from "@/shared/auth/with-auth";
 import { getUserSubscription } from "@/lib/billing/subscriptions";
 import { createPortalSession } from "@/lib/billing/stripe";
 

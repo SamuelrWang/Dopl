@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "@/lib/supabase";
+import { supabaseAdmin } from "@/shared/supabase/admin";
 import { IngestInput, ContentType } from "../types";
 import { shouldSkipLink } from "../extractors/web";
 import { normalizeUrl } from "../url";

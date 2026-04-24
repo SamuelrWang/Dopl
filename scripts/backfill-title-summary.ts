@@ -17,7 +17,7 @@ import * as dotenv from "dotenv";
 import { resolve } from "path";
 
 // Must load env before any import that reads process.env at module-init.
-// src/lib/supabase.ts throws at import time if NEXT_PUBLIC_SUPABASE_URL is
+// src/shared/supabase/admin.ts throws at import time if NEXT_PUBLIC_SUPABASE_URL is
 // missing, so we can't use a top-level import here — use dynamic import
 // inside main() after dotenv.config has run.
 dotenv.config({ path: resolve(__dirname, "../.env.local") });
@@ -34,7 +34,7 @@ type TagRow = {
 };
 
 async function main() {
-  const { supabaseAdmin } = await import("../src/lib/supabase");
+  const { supabaseAdmin } = await import("../src/shared/supabase/admin");
   const { generateEmbedding } = await import("../src/lib/ai");
   const supabase = supabaseAdmin();
 

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase";
+import { supabaseAdmin } from "@/shared/supabase/admin";
 
 /**
  * Public endpoint — returns how many of the 100 early-supporter slots have

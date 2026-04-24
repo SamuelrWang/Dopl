@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase";
+import { supabaseAdmin } from "@/shared/supabase/admin";
 const supabase = supabaseAdmin();
-import { withExternalAuth } from "@/lib/auth/with-auth";
+import { withExternalAuth } from "@/shared/auth/with-auth";
 
 async function handleGet(_request: NextRequest) {
   // Only aggregate tags from approved entries so the public tag cloud

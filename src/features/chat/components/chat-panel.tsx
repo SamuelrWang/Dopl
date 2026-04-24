@@ -38,7 +38,7 @@ import {
   AttachmentPreviewStrip,
 } from "./chat-attachments";
 import { RenderedMessage } from "./chat-panel-message";
-import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
+import { useSpeechRecognition } from "@/shared/hooks/use-speech-recognition";
 
 interface ChatPanelBodyProps {
   panel: ChatPanelData;

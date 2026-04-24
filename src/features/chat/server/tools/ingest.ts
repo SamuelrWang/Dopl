@@ -1,6 +1,6 @@
 import "server-only";
-import { supabaseAdmin } from "@/lib/supabase";
-import { isAdmin } from "@/lib/auth/with-auth";
+import { supabaseAdmin } from "@/shared/supabase/admin";
+import { isAdmin } from "@/shared/auth/with-auth";
 import { assertPublicHttpUrl, UnsafeUrlError } from "@/features/ingestion/server/url-safety";
 import { detectPlatform } from "@/features/ingestion/server/pipeline";
 import { fallbackSlugFromId } from "@/lib/entries/slug";

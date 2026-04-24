@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "@/lib/supabase";
+import { supabaseAdmin } from "@/shared/supabase/admin";
 import { ExtractedSource } from "../types";
 import { normalizeUrl } from "../url";
 import { slugifyEntryTitle, fallbackSlugFromId } from "@/lib/entries/slug";

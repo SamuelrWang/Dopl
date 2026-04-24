@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "@/lib/supabase";
+import { supabaseAdmin } from "@/shared/supabase/admin";
 import { isTweetUrl } from "../extractors/twitter";
 import { isInstagramPostUrl } from "../extractors/instagram";
 import { isRedditPostUrl } from "../extractors/reddit";

@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "@/lib/supabase";
+import { supabaseAdmin } from "@/shared/supabase/admin";
 
 /**
  * Launch-metrics aggregations for the admin analytics dashboard.

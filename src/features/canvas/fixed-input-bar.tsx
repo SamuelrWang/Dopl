@@ -18,7 +18,7 @@ import {
   useCanvas,
 } from "./canvas-store";
 import { BROWSE_PANEL_SIZE, DEFAULT_PANEL_SIZE, MAX_ZOOM, MIN_ZOOM } from "./types";
-import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
+import { useSpeechRecognition } from "@/shared/hooks/use-speech-recognition";
 import { useChatDrawer, useBrainDrawer } from "./chat-drawer-context";
 
 export function FixedInputBar() {

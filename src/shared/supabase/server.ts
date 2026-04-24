@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { createServerSupabaseClient } from "./supabase";
+import { createServerSupabaseClient } from "./admin";
 
 /**
  * Create an auth-aware Supabase client for Server Components and API routes.

@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "crypto";
-import { supabaseAdmin } from "@/lib/supabase";
+import { supabaseAdmin } from "@/shared/supabase/admin";
 import { API_KEY_PREFIX } from "@/config";
 const supabase = supabaseAdmin();
 

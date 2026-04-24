@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { IngestSubmitSchema } from "@/types/api";
-import { withUserAuth } from "@/lib/auth/with-auth";
-import { supabaseAdmin } from "@/lib/supabase";
+import { withUserAuth } from "@/shared/auth/with-auth";
+import { supabaseAdmin } from "@/shared/supabase/admin";
 // Credits removed — access is gated at prepare; submit does no credit math.
 import {
   deleteFailedEntry,

@@ -23,7 +23,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Check, Link as LinkIcon } from "lucide-react";
 import SharedClusterShell from "./shared-cluster-shell";
-import { getSupabaseBrowser } from "@/lib/supabase-browser";
+import { getSupabaseBrowser } from "@/shared/supabase/browser";
 import type { PublishedClusterDetail } from "@/features/community/server/types";
 
 interface Props {

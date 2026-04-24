@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withMcpCredits } from "@/lib/auth/with-auth";
-import { supabaseAdmin } from "@/lib/supabase";
+import { withMcpCredits } from "@/shared/auth/with-auth";
+import { supabaseAdmin } from "@/shared/supabase/admin";
 import { searchEntries } from "@/lib/retrieval/search";
 
 async function handlePost(

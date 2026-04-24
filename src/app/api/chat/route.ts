@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { BUILDER_CHAT_SYSTEM_PROMPT } from "@/lib/prompts/chat-system";
-import { withUserAuth } from "@/lib/auth/with-auth";
+import { withUserAuth } from "@/shared/auth/with-auth";
 import { hasActiveAccess, accessDeniedBody } from "@/lib/billing/access";
 import { logSystemEvent } from "@/lib/analytics/system-events";
 import {

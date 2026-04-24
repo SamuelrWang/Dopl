@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { supabaseAdmin } from "@/lib/supabase";
+import { supabaseAdmin } from "@/shared/supabase/admin";
 
 /**
  * Health/anomaly signal logger.

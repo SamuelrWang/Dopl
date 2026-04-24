@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase";
-import { getUser } from "@/lib/supabase-server";
+import { supabaseAdmin } from "@/shared/supabase/admin";
+import { getUser } from "@/shared/supabase/server";
 import { getStripe } from "@/lib/billing/stripe";
 import { getUserSubscription } from "@/lib/billing/subscriptions";
 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Monitor, Settings, Paperclip, ChevronDown } from "lucide-react";
-import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
+import { useSpeechRecognition } from "@/shared/hooks/use-speech-recognition";
 
 const ROTATING_PROMPTS = [
   "Extract these X posts and convert them into one Claude Code skill...",

@@ -8,7 +8,7 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from "@/components/ui/dialog";
+} from "@/shared/ui/dialog";
 
 interface PublishDialogProps {
   open: boolean;

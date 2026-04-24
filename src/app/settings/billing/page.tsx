@@ -2,7 +2,7 @@
 
 import { Suspense, useState, useEffect } from "react";
 import { useSubscription } from "@/components/billing/use-subscription";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/shared/ui/button";
 import { useSearchParams } from "next/navigation";
 import { EmbeddedCheckoutForm } from "@/components/billing/embedded-checkout";
 

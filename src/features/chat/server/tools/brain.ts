@@ -1,5 +1,5 @@
 import "server-only";
-import { supabaseAdmin } from "@/lib/supabase";
+import { supabaseAdmin } from "@/shared/supabase/admin";
 import type { CanvasContextPayload } from "../canvas-context";
 import { enforceClusterEditScope, getClusterForUser } from "./cluster-scope";
 import type { ToolResult } from "./types";

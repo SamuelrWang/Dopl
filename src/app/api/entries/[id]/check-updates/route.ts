@@ -4,8 +4,8 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase";
-import { withUserAuth, isAdmin } from "@/lib/auth/with-auth";
+import { supabaseAdmin } from "@/shared/supabase/admin";
+import { withUserAuth, isAdmin } from "@/shared/auth/with-auth";
 import { resolveEntryId } from "@/lib/entries/resolver";
 import { Octokit } from "@octokit/rest";
 

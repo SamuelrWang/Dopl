@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase";
+import { supabaseAdmin } from "@/shared/supabase/admin";
 import { EntryUpdateSchema } from "@/types/api";
-import { withUserAuth, withMcpCredits, isAdmin } from "@/lib/auth/with-auth";
+import { withUserAuth, withMcpCredits, isAdmin } from "@/shared/auth/with-auth";
 import { CONTENT_PREVIEW_LENGTH } from "@/config";
 import type { SubscriptionTier } from "@/lib/billing/subscriptions";
 import { resolveEntryId } from "@/lib/entries/resolver";

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withUserAuth } from "@/lib/auth/with-auth";
+import { withUserAuth } from "@/shared/auth/with-auth";
 import { getUserSubscription } from "@/lib/billing/subscriptions";
 import { createCheckoutSession } from "@/lib/billing/stripe";
-import { supabaseAdmin } from "@/lib/supabase";
+import { supabaseAdmin } from "@/shared/supabase/admin";
 
 async function handlePost(
   _request: NextRequest,

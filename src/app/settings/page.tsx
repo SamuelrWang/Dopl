@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
-import { getUser } from "@/lib/supabase-server";
-import { supabaseAdmin as getAdmin } from "@/lib/supabase";
+import { getUser } from "@/shared/supabase/server";
+import { supabaseAdmin as getAdmin } from "@/shared/supabase/admin";
 import Link from "next/link";
 import { DeleteAccount } from "./delete-account";
 

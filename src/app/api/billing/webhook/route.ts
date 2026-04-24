@@ -5,7 +5,7 @@ import {
   getUserSubscription,
   updateSubscription,
 } from "@/lib/billing/subscriptions";
-import { supabaseAdmin } from "@/lib/supabase";
+import { supabaseAdmin } from "@/shared/supabase/admin";
 import { logConversionEvent, hasFiredEvent } from "@/lib/analytics/conversion-events";
 import type Stripe from "stripe";
 

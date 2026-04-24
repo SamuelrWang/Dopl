@@ -8,7 +8,7 @@
  */
 
 import { redirect } from "next/navigation";
-import { getUser } from "@/lib/supabase-server";
+import { getUser } from "@/shared/supabase/server";
 import {
   loadCanvasInitialState,
   loadUserConversations,

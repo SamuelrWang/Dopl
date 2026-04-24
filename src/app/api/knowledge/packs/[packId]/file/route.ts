@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { withMcpAccess } from "@/lib/auth/with-auth";
-import { supabaseAdmin } from "@/lib/supabase";
+import { withMcpAccess } from "@/shared/auth/with-auth";
+import { supabaseAdmin } from "@/shared/supabase/admin";
 
 const supabase = supabaseAdmin();
 

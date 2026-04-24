@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { supabaseAdmin } from "@/lib/supabase";
+import { supabaseAdmin } from "@/shared/supabase/admin";
 
 /**
  * Analytics logger for MCP-originated tool calls.

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase";
-import { withAdminAuth } from "@/lib/auth/with-auth";
+import { supabaseAdmin } from "@/shared/supabase/admin";
+import { withAdminAuth } from "@/shared/auth/with-auth";
 import { deleteFailedEntry } from "@/features/ingestion/server/pipeline";
 
 const supabase = supabaseAdmin();

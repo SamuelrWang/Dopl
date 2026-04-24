@@ -1,6 +1,6 @@
 import "server-only";
 import { generateEmbedding } from "@/lib/ai";
-import { supabaseAdmin } from "@/lib/supabase";
+import { supabaseAdmin } from "@/shared/supabase/admin";
 import { logSystemEvent } from "@/lib/analytics/system-events";
 
 /**

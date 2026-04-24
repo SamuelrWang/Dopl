@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getUser } from "@/lib/supabase-server";
-import { isAdmin } from "@/lib/auth/with-auth";
+import { getUser } from "@/shared/supabase/server";
+import { isAdmin } from "@/shared/auth/with-auth";
 import {
   getRecentAlerts,
   getExternalApiHealth,

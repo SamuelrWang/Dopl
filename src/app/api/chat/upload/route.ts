@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fileTypeFromBuffer } from "file-type";
-import { withUserAuth } from "@/lib/auth/with-auth";
-import { supabaseAdmin } from "@/lib/supabase";
+import { withUserAuth } from "@/shared/auth/with-auth";
+import { supabaseAdmin } from "@/shared/supabase/admin";
 import {
   MAX_CHAT_ATTACHMENT_SIZE,
   MAX_CHAT_ATTACHMENTS_PER_MESSAGE,

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
-import { createApiKey, listApiKeys } from "@/lib/auth/api-keys";
+import { createApiKey, listApiKeys } from "@/shared/auth/api-keys";
 
 // In-memory IP → failed attempt counter. Resets every 60s.
 // Single-process only — on Vercel this is per-lambda-instance, but attackers

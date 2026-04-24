@@ -1,5 +1,5 @@
 import "server-only";
-import { supabaseAdmin } from "@/lib/supabase";
+import { supabaseAdmin } from "@/shared/supabase/admin";
 import { generateEmbedding } from "@/lib/ai";
 import { CONTEXT_CHAR_BUDGET_PER_FIELD } from "@/config";
 import type {

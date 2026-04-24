@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { withUserAuth } from "@/lib/auth/with-auth";
+import { withUserAuth } from "@/shared/auth/with-auth";
 import { describeLink } from "@/features/ingestion/server/link-describer";
 
 export const dynamic = "force-dynamic";

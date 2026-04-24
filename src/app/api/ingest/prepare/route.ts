@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { IngestRequestSchema } from "@/types/api";
-import { withUserAuth, isAdmin } from "@/lib/auth/with-auth";
-import { supabaseAdmin } from "@/lib/supabase";
+import { withUserAuth, isAdmin } from "@/shared/auth/with-auth";
+import { supabaseAdmin } from "@/shared/supabase/admin";
 import {
   MAX_CONTENT_FOR_CLAUDE,
   MAX_IMAGES_PER_ENTRY,

@@ -13,7 +13,7 @@
  */
 
 import "server-only";
-import { supabaseAdmin } from "@/lib/supabase";
+import { supabaseAdmin } from "@/shared/supabase/admin";
 import { dbRowToPanel } from "./panel-dto";
 import {
   dedupSingletonPanels,

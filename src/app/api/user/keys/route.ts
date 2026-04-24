@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUser } from "@/lib/supabase-server";
-import { createApiKey, listApiKeys } from "@/lib/auth/api-keys";
+import { getUser } from "@/shared/supabase/server";
+import { createApiKey, listApiKeys } from "@/shared/auth/api-keys";
 
 export async function GET() {
   const user = await getUser();

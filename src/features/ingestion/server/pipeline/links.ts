@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "@/lib/supabase";
+import { supabaseAdmin } from "@/shared/supabase/admin";
 import { IngestInput, ExtractedSource } from "../types";
 import { extractText } from "../extractors/text";
 import {

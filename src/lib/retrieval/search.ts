@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "@/lib/supabase";
+import { supabaseAdmin } from "@/shared/supabase/admin";
 const supabase = supabaseAdmin();
 import { generateEmbedding } from "@/lib/ai";
 

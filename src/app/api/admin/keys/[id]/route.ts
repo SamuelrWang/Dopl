@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { revokeApiKey } from "@/lib/auth/api-keys";
+import { revokeApiKey } from "@/shared/auth/api-keys";
 
 function checkAdminAuth(request: NextRequest): boolean {
   const secret = process.env.ADMIN_SECRET;

@@ -14,7 +14,7 @@
  *   <ToastHost />
  *
  *   // Fire from anywhere (client component)
- *   import { toast } from "@/components/ui/toast";
+ *   import { toast } from "@/shared/ui/toast";
  *   toast({ title: "Share link copied", description: url, action: { label: "Open", onClick: () => {} } });
  */
 

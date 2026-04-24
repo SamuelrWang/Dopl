@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withUserAuth } from "@/lib/auth/with-auth";
+import { withUserAuth } from "@/shared/auth/with-auth";
 import { publishCluster } from "@/features/community/server/service";
 
 /**

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateEmbedding } from "@/lib/ai";
-import { withMcpCredits } from "@/lib/auth/with-auth";
+import { withMcpCredits } from "@/shared/auth/with-auth";
 import { z } from "zod";
 
 const EmbedSchema = z.object({

@@ -14,7 +14,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { BuildRequestSchema } from "@/types/api";
 import { buildBuilderBundle } from "@/lib/retrieval/builder";
-import { withMcpCredits } from "@/lib/auth/with-auth";
+import { withMcpCredits } from "@/shared/auth/with-auth";
 
 async function handlePost(
   request: NextRequest,

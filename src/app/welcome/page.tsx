@@ -11,7 +11,7 @@
  */
 
 import { redirect } from "next/navigation";
-import { getServerClient, getUser } from "@/lib/supabase-server";
+import { getServerClient, getUser } from "@/shared/supabase/server";
 import { WelcomeContent } from "./welcome-content";
 
 // Never cache this across users — the onboarded_at check is per-request.

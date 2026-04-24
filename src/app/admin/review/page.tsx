@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getUser } from "@/lib/supabase-server";
-import { supabaseAdmin } from "@/lib/supabase";
-import { isAdmin } from "@/lib/auth/with-auth";
+import { getUser } from "@/shared/supabase/server";
+import { supabaseAdmin } from "@/shared/supabase/admin";
+import { isAdmin } from "@/shared/auth/with-auth";
 import { ReviewCard } from "./review-card";
 
 export const dynamic = "force-dynamic";

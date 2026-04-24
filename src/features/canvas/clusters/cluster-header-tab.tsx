@@ -22,7 +22,7 @@ import { useCapabilities, usePanelsContext } from "../canvas-store";
 import type { Cluster } from "../types";
 import { isPanelDeletable } from "../types";
 import { PublishDialog } from "@/components/community/publish-dialog";
-import { toast } from "@/components/ui/toast";
+import { toast } from "@/shared/ui/toast";
 
 interface ClusterHeaderTabProps {
   cluster: Cluster;

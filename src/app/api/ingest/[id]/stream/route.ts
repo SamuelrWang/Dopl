@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ingestionProgress } from "@/features/ingestion/server/progress";
-import { withUserAuth, isAdmin } from "@/lib/auth/with-auth";
-import { supabaseAdmin } from "@/lib/supabase";
+import { withUserAuth, isAdmin } from "@/shared/auth/with-auth";
+import { supabaseAdmin } from "@/shared/supabase/admin";
 
 const supabase = supabaseAdmin();
 

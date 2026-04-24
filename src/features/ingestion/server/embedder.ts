@@ -1,5 +1,5 @@
 import { generateEmbedding } from "@/lib/ai";
-import { supabaseAdmin } from "@/lib/supabase";
+import { supabaseAdmin } from "@/shared/supabase/admin";
 const supabase = supabaseAdmin();
 import { ChunkData } from "./types";
 import { logSystemEvent } from "@/lib/analytics/system-events";

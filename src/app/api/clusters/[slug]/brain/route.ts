@@ -4,8 +4,8 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase";
-import { withUserAuth } from "@/lib/auth/with-auth";
+import { supabaseAdmin } from "@/shared/supabase/admin";
+import { withUserAuth } from "@/shared/auth/with-auth";
 import { validateBrainStructure } from "@/lib/prompts/skill-template";
 
 export const dynamic = "force-dynamic";

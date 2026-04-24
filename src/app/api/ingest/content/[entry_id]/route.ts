@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withUserAuth } from "@/lib/auth/with-auth";
-import { supabaseAdmin } from "@/lib/supabase";
+import { withUserAuth } from "@/shared/auth/with-auth";
+import { supabaseAdmin } from "@/shared/supabase/admin";
 import { normalizeUrl } from "@/features/ingestion/server/url";
 
 export const dynamic = "force-dynamic";

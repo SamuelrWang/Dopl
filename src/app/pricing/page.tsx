@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { Button } from "@/components/ui/button";
-import { getSupabaseBrowser } from "@/lib/supabase-browser";
+import { Button } from "@/shared/ui/button";
+import { getSupabaseBrowser } from "@/shared/supabase/browser";
 import { EmbeddedCheckoutForm } from "@/components/billing/embedded-checkout";
 import type { User } from "@supabase/supabase-js";
 

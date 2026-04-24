@@ -1,6 +1,6 @@
 import { Octokit } from "@octokit/rest";
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { supabaseAdmin } from "@/lib/supabase";
+import { supabaseAdmin } from "@/shared/supabase/admin";
 
 /**
  * Knowledge-pack sync engine.

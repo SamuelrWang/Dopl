@@ -5,7 +5,7 @@ import {
   getFileContent,
   getRepoMeta,
 } from "@/lib/github";
-import { withExternalAuth } from "@/lib/auth/with-auth";
+import { withExternalAuth } from "@/shared/auth/with-auth";
 
 /**
  * GET /api/github/contents?repo=owner/repo&path=&type=dir|file&ref=

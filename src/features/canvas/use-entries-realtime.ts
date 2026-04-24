@@ -21,7 +21,7 @@
  */
 
 import { useEffect } from "react";
-import { getSupabaseBrowser } from "@/lib/supabase-browser";
+import { getSupabaseBrowser } from "@/shared/supabase/browser";
 import { useCanvas } from "./canvas-store";
 
 type EntriesRow = {

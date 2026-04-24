@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUser } from "@/lib/supabase-server";
-import { revokeApiKey } from "@/lib/auth/api-keys";
+import { getUser } from "@/shared/supabase/server";
+import { revokeApiKey } from "@/shared/auth/api-keys";
 
 export async function DELETE(
   _request: NextRequest,
