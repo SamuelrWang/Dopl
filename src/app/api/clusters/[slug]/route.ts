@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withUserAuth } from "@/lib/auth/with-auth";
-import { getCluster, updateCluster, deleteCluster } from "@/lib/clusters/service";
+import { getCluster, updateCluster, deleteCluster } from "@/features/clusters/server/service";
 
 async function handleGet(
   _request: NextRequest,
