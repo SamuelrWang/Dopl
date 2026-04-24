@@ -8,10 +8,10 @@ import { withUserAuth, isAdmin } from "@/lib/auth/with-auth";
 // ingestEntry is retired — regular ingestion is agent-driven via the
 // prepare_ingest + submit_ingested_entry MCP tools. Chat attachment URLs
 // are returned to the agent; the agent decides whether to ingest.
-import { assertPublicHttpUrl, UnsafeUrlError } from "@/lib/ingestion/url-safety";
+import { assertPublicHttpUrl, UnsafeUrlError } from "@/features/ingestion/server/url-safety";
 import { hasActiveAccess, accessDeniedBody } from "@/lib/billing/access";
 import { logSystemEvent } from "@/lib/analytics/system-events";
-import { detectPlatform } from "@/lib/ingestion/pipeline";
+import { detectPlatform } from "@/features/ingestion/server/pipeline";
 import { fallbackSlugFromId } from "@/lib/entries/slug";
 import { config } from "dotenv";
 import { resolve } from "path";

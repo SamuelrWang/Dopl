@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withUserAuth } from "@/lib/auth/with-auth";
 import { supabaseAdmin } from "@/lib/supabase";
-import { normalizeUrl } from "@/lib/ingestion/url";
+import { normalizeUrl } from "@/features/ingestion/server/url";
 
 export const dynamic = "force-dynamic";
 

@@ -8,15 +8,15 @@ import {
   MAX_IMAGE_SIZE_BYTES,
 } from "@/config";
 import { hasActiveAccess, accessDeniedBody } from "@/lib/billing/access";
-import { assertPublicHttpUrl, UnsafeUrlError } from "@/lib/ingestion/url-safety";
+import { assertPublicHttpUrl, UnsafeUrlError } from "@/features/ingestion/server/url-safety";
 import { logSystemEvent } from "@/lib/analytics/system-events";
-import { detectPlatform, extractForAgent, deleteFailedEntry, logStep } from "@/lib/ingestion/pipeline";
-import { normalizeUrl } from "@/lib/ingestion/url";
+import { detectPlatform, extractForAgent, deleteFailedEntry, logStep } from "@/features/ingestion/server/pipeline";
+import { normalizeUrl } from "@/features/ingestion/server/url";
 import { fallbackSlugFromId } from "@/lib/entries/slug";
 import {
   buildAgentIngestBundle,
   AGENT_INGEST_INSTRUCTIONS,
-} from "@/lib/ingestion/agent-bundle";
+} from "@/features/ingestion/server/agent-bundle";
 
 const MAX_LINKS = 50;
 const MAX_URL_LENGTH = 2_048;

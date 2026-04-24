@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ingestionProgress } from "@/lib/ingestion/progress";
+import { ingestionProgress } from "@/features/ingestion/server/progress";
 import { withUserAuth, isAdmin } from "@/lib/auth/with-auth";
 import { supabaseAdmin } from "@/lib/supabase";
 

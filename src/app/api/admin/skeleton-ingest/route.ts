@@ -3,7 +3,7 @@ import { z } from "zod";
 import { ingestEntrySkeleton } from "@/features/ingestion/server/skeleton";
 import { withAdminAuth } from "@/lib/auth/with-auth";
 import { supabaseAdmin } from "@/lib/supabase";
-import { assertPublicHttpUrl, UnsafeUrlError } from "@/lib/ingestion/url-safety";
+import { assertPublicHttpUrl, UnsafeUrlError } from "@/features/ingestion/server/url-safety";
 import { logSystemEvent } from "@/lib/analytics/system-events";
 
 /**

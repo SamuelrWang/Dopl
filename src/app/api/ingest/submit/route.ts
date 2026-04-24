@@ -10,10 +10,10 @@ import {
   persistAgentArtifacts,
   finalizeAgentEntry,
   logStep,
-} from "@/lib/ingestion/pipeline";
-import { chunkAndEmbed } from "@/lib/ingestion/embedder";
+} from "@/features/ingestion/server/pipeline";
+import { chunkAndEmbed } from "@/features/ingestion/server/embedder";
 import { logSystemEvent } from "@/lib/analytics/system-events";
-import type { ExtractedSource } from "@/lib/ingestion/types";
+import type { ExtractedSource } from "@/features/ingestion/server/types";
 
 /**
  * POST /api/ingest/submit

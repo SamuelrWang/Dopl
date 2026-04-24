@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { config } from "dotenv";
 import { resolve } from "path";
-import { retryWithBackoff } from "@/lib/ingestion/utils";
+import { retryWithBackoff } from "@/features/ingestion/server/utils";
 import { callExternal } from "@/lib/analytics/call-external";
 import { logSystemEvent } from "@/lib/analytics/system-events";
 
