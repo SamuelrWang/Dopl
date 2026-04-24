@@ -14,9 +14,13 @@ Stack: Next.js 16 (App Router) · React 19 · TypeScript (strict) · Supabase ·
 4. **The type system is the API.** Strict TypeScript, no `any`, no `@ts-ignore`. Types live next to the feature that owns them.
 5. **No dead code and no decorative comments.** If it's commented out, delete it (git remembers). If a comment explains what the code does, rename variables instead.
 
+### Known debt
+
+See [docs/REFACTOR-FINDINGS.md](REFACTOR-FINDINGS.md) for the current list of open findings (`F-NNN` ids). At a glance: pre-existing lint errors (F-006), chrome-extension PascalCase filenames (F-007), a few files still over the 500-line cap (§2), the canvas store still syncs server data it should push out to a query library (§7). None block shipping; all are tracked.
+
 ---
 
-## 1. Target Project Structure
+## 1. Project Structure
 
 ```
 setup-intelligence-engine/
@@ -30,44 +34,44 @@ setup-intelligence-engine/
 │   └── migrations/                # SQL migrations (source of truth for schema)
 ├── src/
 │   ├── app/                       # Next.js App Router (routes + route handlers only)
-│   │   ├── (marketing)/           # Route groups for layout segmentation
-│   │   ├── (app)/                 # Authenticated app shell
 │   │   ├── api/                   # Route handlers — thin, delegate to features/
-│   │   └── layout.tsx
-│   ├── features/                  # ← NEW: feature modules (see §3)
-│   │   ├── canvas/
-│   │   ├── chat/
-│   │   ├── ingestion/
-│   │   ├── clusters/
-│   │   ├── billing/
-│   │   ├── community/
-│   │   ├── knowledge-packs/
-│   │   └── onboarding/
-│   ├── shared/                    # ← NEW: cross-feature primitives only
-│   │   ├── ui/                    # Design system (Button, Dialog, etc.)
-│   │   ├── lib/                   # Pure utilities (formatDate, cn, etc.)
-│   │   ├── hooks/                 # Generic hooks (useDebounce, useMediaQuery)
-│   │   ├── types/                 # Truly shared types (ApiError, Result)
+│   │   └── ...                    # One folder per route
+│   ├── features/                  # Feature modules (see §3)
+│   │   ├── analytics/             # System + conversion event loggers
+│   │   ├── billing/               # Stripe, subscriptions, access gates
+│   │   ├── builder/               # Composite-solution builder UI
+│   │   ├── canvas/                # The infinite canvas + panels + store
+│   │   ├── chat/                  # Chat panel + tool handlers
+│   │   ├── clusters/              # Per-user cluster CRUD
+│   │   ├── community/             # Publishing / forking / gallery
+│   │   ├── entries/               # Entry rows + search + retrieval + saved
+│   │   ├── ingestion/             # Pipeline + skeleton + extractors
+│   │   ├── knowledge-packs/       # Pack sync
+│   │   ├── marketing/             # Landing page components
+│   │   └── onboarding/            # First-run flow
+│   ├── shared/                    # Cross-feature primitives only
+│   │   ├── ui/                    # shadcn primitives (Button, Dialog, etc.)
+│   │   ├── design/                # Higher-level design components (MarkdownMessage, Orb, ...)
+│   │   ├── layout/                # Shells + headers + sidebars
+│   │   ├── lib/                   # Pure utilities (ai, github, slug, utils, http-error)
+│   │   ├── prompts/               # Claude prompt templates
+│   │   ├── hooks/                 # Generic hooks
 │   │   ├── api/                   # parse-json, error-handler (shared route helpers)
 │   │   ├── auth/                  # Route wrappers (withUserAuth, withMcpAccess, withAdminAuth)
-│   │   └── supabase/              # Supabase client factories (browser/server/admin)
+│   │   ├── supabase/              # Supabase client factories (admin/browser/server)
+│   │   └── types/                 # Truly shared types (ApiError, Result)
 │   ├── config/                    # Environment, flags, constants
+│   ├── types/                     # Residual top-level types (api.ts, entry.ts, ...)
 │   ├── middleware.ts
 │   └── proxy.ts
+├── CLAUDE.md                      # Pointer to this doc
 ├── eslint.config.mjs
 ├── next.config.ts
 ├── package.json
 └── tsconfig.json
 ```
 
-### Migration notes (current → target)
-
-- `src/lib/canvas/`, `src/lib/clusters/`, `src/lib/community/`, `src/lib/ingestion/`, `src/lib/billing/`, `src/lib/knowledge/` → move into `src/features/<name>/`.
-- `src/lib/supabase/`, `src/lib/utils.ts`, `src/lib/analytics/` → `src/shared/`.
-- `src/components/canvas/*`, `src/components/billing/*`, `src/components/entries/*` → `src/features/<name>/components/`.
-- `src/components/ui/` → `src/shared/ui/`.
-- `src/hooks/use-speech-recognition.ts` → `src/shared/hooks/` (it's generic).
-- `src/types/entry.ts`, `src/types/api.ts`, `src/types/manifest.ts` → co-locate inside the owning feature; keep only cross-cutting types in `src/shared/types/`.
+**Rule of thumb:** if a new thing is used by more than one feature, it goes in `shared/`. If it's used by exactly one feature, it goes inside that feature. Never create a `lib/` or `components/` tree at the top of `src/`.
 
 ---
 
@@ -85,32 +89,23 @@ setup-intelligence-engine/
 - Auto-generated code (Supabase types, OpenAPI clients).
 - Dense type-only files where a split would fragment a cohesive domain model.
 - Pure data/config tables (cluster-geometry constants, country lists).
-- Single-function switch reducers where the switch is one coherent state machine — splitting by action type fragments the state transitions across files and makes the reducer harder to reason about. (Currently: `src/components/canvas/canvas-store/reducer.ts` at ~800 lines.)
-
-Existing files over 500 lines (refactor queue below) are grandfathered *only* until their scheduled split phase. Once touched, they must be split or the edit must shrink them.
+- Single-function switch reducers where the switch is one coherent state machine — splitting by action type fragments the state transitions across files and makes the reducer harder to reason about.
 
 **When you see a large file, split by:**
 1. **Responsibility** — one file per "reason to change" (reducer vs. persistence vs. selectors).
 2. **Layer** — handler vs. validator vs. service vs. data-access.
 3. **Sub-feature** — if the feature has natural seams (per-platform extractors, per-tool handlers), give each its own file.
 
-### Current offenders (refactor queue, ordered by ROI)
+### Known files that exceed 500 lines
 
-Updated after P2. Files marked ✅ have been addressed.
+These are allowed under the exceptions above OR scheduled for a future split. If you touch one, either shrink it or split it in the same PR.
 
-| File | Lines | Split target | Status |
-|------|-------|--------------|--------|
-| `src/components/canvas/canvas-store.tsx` | 1224 | `store/reducer.ts`, `store/persistence.ts`, `store/selectors.ts`, `store/context.tsx`, `store/actions.ts` | P5a |
-| `src/features/ingestion/server/pipeline.ts` | 1212 | `pipeline/orchestrator.ts`, `pipeline/extractors/*.ts` (may already exist — see F-001), `pipeline/link-follower.ts`, `pipeline/embed.ts` | P3a |
-| `src/app/api/chat/route.ts` | 1141 | `route.ts` (dispatcher only) + `features/chat/server/tools/<tool-name>.ts` per tool | P4 |
-| `src/app/page.tsx` | 823 | Still monolithic `Home` component; carve hero/nav/features/CTA sections into `features/marketing/components/*` | P6 |
-| `src/components/canvas/panels/chat/chat-panel.tsx` | 897 | Split into `chat-panel.tsx` (shell), `chat-messages.tsx`, `chat-input.tsx`, `chat-attachments.tsx` | P3c |
-| `src/components/canvas/canvas.tsx` | 870 | `canvas.tsx` (shell), `canvas/use-viewport.ts`, `canvas/use-interactions.ts` | P5b |
-| `src/features/community/server/service.ts` | 861 | Keep boundary with `features/clusters/server/service.ts`; if overlap grows, split by topic (publishing / forking / querying) | P3b |
-| `src/features/ingestion/server/skeleton.ts` | 847 | `skeleton/entry.ts`, `skeleton/descriptor.ts`, `skeleton/prompt.ts` | P3a |
-| `src/components/canvas/use-panel-ingestion.ts` | 816 | `use-panel-ingestion.ts` (glue) + `ingestion-client.ts` (pure client-side fetch wrapper) | P5b |
-| `src/components/canvas/canvas-panel.tsx` | ✅ 308 | Done — drag/resize/expiry extracted | P2.4 done |
-| `src/features/clusters/server/service.ts` | 516 | Marginally over; reasonable split is `service.ts` (CRUD) + `service-brain.ts` (cluster-brain canvas panel spawn logic, lines 223–340) | P6 cleanup |
+| File | Lines | Reason |
+|------|-------|--------|
+| `src/features/canvas/canvas-store/reducer.ts` | ~800 | Exception: cohesive state-machine reducer |
+| `src/features/canvas/canvas.tsx` | ~720 | Scheduled: imperative pointer/wheel handlers await extraction into `use-viewport` + `use-interactions` hooks |
+| `src/features/canvas/use-panel-ingestion.ts` | ~820 | Scheduled: split into glue hook + pure `ingestion-client` |
+| `src/features/clusters/server/service.ts` | ~520 | Scheduled: cluster-brain canvas-panel spawn logic would split cleanly |
 
 ---
 
@@ -170,11 +165,11 @@ These are already 99% consistent in this repo. Codifying them so they stay that 
 
 ### Actions (canvas-store)
 
-Current format is excellent: `DOMAIN_VERB` (e.g., `PANEL_MOVE`, `CLUSTER_CREATE`). **Audit for drift when splitting the store** — a few legacy names use `VERB_DOMAIN` (`MOVE_PANEL`, `CREATE_CLUSTER`). Normalize to `DOMAIN_VERB` during the refactor.
+Action types are `SCREAMING_SNAKE_CASE`. Most are `DOMAIN_VERB` (e.g., `PANEL_MOVE`, `CLUSTER_CREATE`) but some legacy names use `VERB_DOMAIN` (`MOVE_PANEL`, `CREATE_CLUSTER`). New actions should follow `DOMAIN_VERB`. When touching the reducer, normalize nearby legacy names in the same PR if the diff stays reasonable.
 
-### Known inconsistency to fix
+### Known naming inconsistency
 
-`packages/chrome-extension/src/panel/components/*.tsx` uses `PascalCase` filenames (`EntryCard.tsx`, `ClusterBadge.tsx`). The main app uses `kebab-case` (`entry-card.tsx`). **Rename chrome-extension files to kebab-case** to match.
+`packages/chrome-extension/src/panel/components/*.tsx` uses `PascalCase` filenames (`EntryCard.tsx`, `ClusterBadge.tsx`). The main app uses `kebab-case` (`entry-card.tsx`). Outstanding — rename when the extension next gets touched.
 
 ---
 
@@ -203,8 +198,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 // 3. @/ absolute (alphabetized by path)
+import { withUserAuth } from "@/shared/auth/with-auth";
 import { createServerClient } from "@/shared/supabase/server";
-import { assertUser } from "@/shared/auth/assert-user";
 import type { Entry } from "@/features/entries/types";
 
 // 4. Relative
@@ -212,7 +207,7 @@ import { mapEntryRow } from "./dto";
 import { MAX_CHUNKS } from "./constants";
 ```
 
-Enforce via ESLint `import/order` when the refactor lands.
+Enforced via ESLint `import/order` (see Appendix A).
 
 ### Comments
 
@@ -270,23 +265,19 @@ This repo has three layers of state. Keep them separate.
 
 | Layer | Tool | What lives here |
 |-------|------|-----------------|
-| **Server state** | TanStack Query (to be added) | Anything that comes from Supabase or an API |
+| **Server state** | TanStack Query (future — not yet adopted) | Anything that comes from Supabase or an API |
 | **Canvas client state** | `canvas-store` (context + reducer) | Viewport, panel positions, in-flight chat streams |
 | **Local UI state** | `useState` / `useReducer` | Form values, open/closed, hover |
 
-**Do not** put server data in the canvas store. The current store has `entries`, `clusters` etc. synced in via `useCanvasDbSync` — this is the duplication that needs to move to TanStack Query or similar. After refactor:
-- Canvas store owns **viewport + layout + interaction state only**.
-- Server entities (entries, clusters, panels, packs) come from query hooks.
-- Real-time updates from Supabase invalidate those queries.
+**Known debt — do not add to it:** the canvas store currently syncs server entities (entries, clusters, panels) via `useCanvasDbSync` and the realtime hooks. That's duplication the future query-library adoption is meant to eliminate. Until then, don't add more server data to the canvas store — if you need to read an entity, add a new hook that reads directly, don't shove it through the reducer.
 
-### Canvas store rules (post-split)
+### Canvas store file layout
 
-After splitting `canvas-store.tsx`:
+`src/features/canvas/canvas-store.tsx` is a barrel over four sub-modules under `src/features/canvas/canvas-store/`:
 - `reducer.ts` — pure, no async, no Supabase. Input state + action → output state.
-- `persistence.ts` — debounced writes to Supabase. Subscribed via middleware.
-- `selectors.ts` — memoized derivations.
-- `actions.ts` — action creators (typed).
-- `context.tsx` — Provider + `useCanvasStore` hook.
+- `context.tsx` — React contexts + hooks (`useCanvas`, `usePanelsContext`, `useCanvasStateRef`, `useCapabilities`).
+- `layout.ts` — pure geometry helpers (`computeNewPanelPosition`, `findNonOverlappingPosition`, `nextPanelIdString`).
+- `provider.tsx` — `CanvasProvider` + sync bridges (DB / conversations / realtime / auto-focus / shared-panel-move).
 
 ---
 
@@ -308,12 +299,12 @@ src/features/<name>/
 └── ...
 ```
 
-And API routes — use the **existing** `withUserAuth` / `withMcpAccess` / `withExternalAuth` / `withAdminAuth` wrappers (currently in `src/lib/auth/with-auth.ts`, migrating to `src/shared/auth/` in P6). Do not invent a new `requireUser`.
+And API routes — use the auth wrappers in `src/shared/auth/with-auth.ts` (`withUserAuth` / `withMcpAccess` / `withExternalAuth` / `withAdminAuth`). Do not invent a new `requireUser`.
 
 ```ts
 // src/app/api/<feature>/<action>/route.ts
 import { NextResponse } from "next/server";
-import { withUserAuth } from "@/lib/auth/with-auth";
+import { withUserAuth } from "@/shared/auth/with-auth";
 import { parseJson } from "@/shared/api/parse-json";
 import { <Action>Schema } from "@/features/<name>/schema";
 import { <action> } from "@/features/<name>/server/service";
@@ -351,15 +342,14 @@ export function mapEntryRow(row: EntryRow): Entry {
 
 No `snake_case` keys should ever leak past `repository.ts`.
 
-### Consolidating clusters + community
+### Clusters vs. community boundary
 
-Current state: `src/lib/clusters/service.ts` (516L) and `src/lib/community/service.ts` (861L) both handle cluster-shaped data.
+Two features touch cluster-shaped data. Keep the boundary explicit:
 
-Target:
-- `features/clusters/` — owns the `clusters` table, CRUD, queries, local synthesis.
-- `features/community/` — owns **publishing/forking only**. Calls `features/clusters` via its public API. Does not re-implement cluster CRUD.
+- `features/clusters/server/service.ts` — per-user cluster CRUD on the `clusters` table.
+- `features/community/server/` (split into `publish.ts` / `query.ts` / `edit.ts` / `fork.ts` + a barrel `service.ts`) — operates on `published_clusters` rows, exclusively public / fork-related workflows.
 
-If that boundary ends up contrived (e.g., community needs to read cluster internals), merge them into `features/clusters/` with `clusters/server/community.ts` as a sub-module.
+If `community` starts needing to read cluster internals, either call `clusters/server/service.ts` through its public API or fold community into clusters as a sub-module (`clusters/server/community.ts`). Don't re-implement cluster reads in community.
 
 ---
 
@@ -372,7 +362,7 @@ Every route handler is ≤ 80 lines. If longer, you're doing business logic inli
 ```ts
 // src/app/api/<feature>/<action>/route.ts
 import { NextResponse } from "next/server";
-import { withUserAuth } from "@/lib/auth/with-auth";
+import { withUserAuth } from "@/shared/auth/with-auth";
 import { parseJson } from "@/shared/api/parse-json";
 import { <Action>Schema } from "@/features/<name>/schema";
 import { <action> } from "@/features/<name>/server/service";
@@ -384,9 +374,9 @@ export const POST = withUserAuth(async (req, { userId }) => {
 });
 ```
 
-### Existing auth wrappers (reuse — do not reinvent)
+### Auth wrappers (reuse — do not reinvent)
 
-All auth wrappers already exist at `src/lib/auth/with-auth.ts` (migrating to `src/shared/auth/` in P6):
+All auth wrappers live in `src/shared/auth/with-auth.ts`:
 
 - `withExternalAuth(handler)` — API-key OR session; 401 if neither.
 - `withUserAuth(handler)` — same, plus injects `userId` into the handler context.
@@ -396,15 +386,15 @@ All auth wrappers already exist at `src/lib/auth/with-auth.ts` (migrating to `sr
 
 They handle: Bearer `sk-dopl-*` API-key validation, Supabase session cookies, rate limiting, and automatic 5xx system-event logging.
 
-### Shared helpers to build (P1)
+### Shared API helpers
 
-Put these new helpers in `src/shared/`:
+Available in `src/shared/`:
 
-- `src/shared/api/parse-json.ts` — `parseJson(req, schema)` parses JSON body and zod-validates. Throws `HttpError(400)` on failure.
-- `src/shared/api/error-handler.ts` — `withErrorHandler(handler)` wraps a handler, converts thrown `HttpError` into responses, logs unexpected errors.
-- `src/shared/lib/http-error.ts` — `HttpError` class with `status`, `code`, `message`, `details`.
+- `src/shared/lib/http-error.ts` — `HttpError` class with `status`, `code`, `message`, `details` + convenience constructors (`HttpError.badRequest`, `.unauthorized`, `.notFound`, ...).
+- `src/shared/api/parse-json.ts` — `parseJson(req, schema)` parses JSON body and zod-validates. Throws `HttpError(400, INVALID_JSON | VALIDATION_FAILED)` on failure.
+- `src/shared/api/error-handler.ts` — `withErrorHandler(source, handler)` catches thrown `HttpError`, converts to typed JSON, logs unexpected throws. Composes inside `withUserAuth`.
 
-After these land, the refactored `api/chat/route.ts` (P4) is a dispatcher that picks a tool handler from `features/chat/server/tools/<tool>.ts` — each tool gets its own file — and the ~8 inline `if (!userId) return 401` blocks collapse into `withUserAuth` + thrown `HttpError`.
+**Adopt these for new routes.** When modifying an existing route with inline 4xx/5xx patterns, prefer migrating it to `HttpError` + `parseJson` in the same PR if the diff stays reasonable.
 
 ### Error response shape
 
@@ -526,7 +516,7 @@ canvas: split store into reducer + persistence
 
 ## 16. Anti-Patterns (don't do this)
 
-1. **Files over 700 lines.** See §2.
+1. **Files over 500 lines** (outside the §2 exceptions).
 2. **Cross-feature imports.** `features/chat` importing `features/canvas/internals` — move the shared thing to `shared/` or expose via barrel.
 3. **Components that fetch their own data AND manage mutations AND render UI.** Split: fetch in a hook, render in a component.
 4. **Reducers that call async code.** Reducers are pure. Async belongs in action creators / services / middleware.
@@ -539,30 +529,18 @@ canvas: split store into reducer + persistence
 
 ---
 
-## 17. Refactor Rules of Engagement
+## 17. Major structural changes — rules of engagement
 
-The refactor is **not** a rewrite. Apply these rules while converting the repo to this structure:
+When doing a large restructure (feature relocation, service split, directory reorg), apply these rules:
 
-1. **One feature module at a time.** Complete the move (files, imports, tests) before starting the next.
-2. **No behavior changes during a move.** A refactor commit must be verifiable by running the app and seeing nothing differ. Behavior changes go in separate PRs.
-3. **No new features during the refactor.** If a feature is urgent, pause the refactor, ship the feature in the old structure, resume.
+1. **One feature module at a time.** Complete the move (files, imports) before starting the next.
+2. **No behavior changes during a structural move.** A restructure commit must be verifiable by running the app and seeing nothing differ. Behavior changes go in separate PRs.
+3. **No new features during a restructure.** If a feature is urgent, pause the restructure, ship the feature, resume.
 4. **Delete as you go.** Do not leave `old-*.ts` or `legacy-*.ts` files behind. Git has the history.
 5. **Fix naming drift in the same PR as the move.** If you find `MOVE_PANEL` when normalizing to `DOMAIN_VERB`, fix it now.
 6. **Keep PRs small.** ~500 lines changed max. If a file split creates a giant PR, split it into two commits in the same PR (rename-only commit + content commit) so review is easy.
 7. **Update this doc** when you find a pattern that isn't covered, or when a rule turns out to be wrong. This doc is a living contract.
-
-### Refactor order (suggested)
-
-1. **Scaffolding** — create `src/shared/lib/http-error.ts`, `src/shared/api/parse-json.ts`, `src/shared/api/error-handler.ts`. `src/features/` and `src/shared/` directories materialize as their first files land. Reuse the existing auth wrappers at `src/lib/auth/with-auth.ts`; migrate them in P6.
-2. **Ingestion** — biggest win. Split `pipeline.ts`, create `features/ingestion/` with extractors.
-3. **Chat route** — split tool handlers, introduce middleware helpers.
-4. **Canvas store** — split into reducer/persistence/selectors/actions/context.
-5. **Clusters + community** — consolidate per §8.
-6. **Landing page** — extract components.
-7. **Add test suite baseline** — ingestion parsers, DTO mappers, cluster math.
-8. **Migrate remaining lib/ and components/ into feature folders** — final cleanup.
-
-Each step is a separate PR. No step blocks shipping.
+8. **Phase-tag for rollback.** For a multi-day restructure, tag `<name>/pN-done` at each phase boundary so `git revert` and `git reset --hard <tag>` are always clean options.
 
 ---
 
