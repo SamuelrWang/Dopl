@@ -4,9 +4,7 @@ import { callClaude, generateEmbedding } from "@/lib/ai";
 import { supabaseAdmin } from "@/lib/supabase";
 import { slugifyEntryTitle, fallbackSlugFromId } from "@/lib/entries/slug";
 import { logSystemEvent } from "@/lib/analytics/system-events";
-// NOTE: `@/lib/ingestion/tags` until the rest of the ingestion tree
-// relocates in P3a; will become a relative import at that point.
-import { normalizeTag } from "@/lib/ingestion/tags";
+import { normalizeTag } from "./tags";
 import {
   SKELETON_DESCRIPTOR_PROMPT_VERSION,
   buildSkeletonDescriptorPrompt,
