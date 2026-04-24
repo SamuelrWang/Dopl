@@ -30,181 +30,24 @@
 
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useCanvas } from "./canvas-store";
-import { CanvasPanel } from "./canvas-panel";
 import { MAX_ZOOM, MIN_ZOOM, computePanelsBounds, type Cluster, type Panel } from "./types";
 import { CanvasMinimap } from "./canvas-minimap";
-import {
-  ClusterWorldLayer,
-} from "./clusters/cluster-layer";
-import { clusterBounds, isPointInClusterShape } from "./clusters/cluster-geometry";
+import { clusterBounds } from "./clusters/cluster-geometry";
 import { SelectionMenu } from "./selection/selection-menu";
 import { useEdgeScroll } from "./use-edge-scroll";
+import {
+  applyCameraDirect,
+  MARQUEE_CLICK_THRESHOLD_PX,
+  WorldContents,
+  findClusterAtPoint,
+  boxIntersectsPanel,
+  getGridCellSize,
+  type ClusterDragState,
+  type MarqueeState,
+} from "./canvas-parts";
 
-/**
- * Apply camera transform directly to DOM elements, bypassing React.
- * Used during zoom/pan gestures for 60fps performance.
- */
-/**
- * Apply camera transform directly to the world DOM element, bypassing React.
- * The grid lives inside the world div so it transforms automatically.
- */
-export function applyCameraDirect(
-  viewportEl: HTMLElement,
-  worldEl: HTMLElement,
-  cam: { x: number; y: number; zoom: number },
-  _grid: { cx: number; cy: number }
-) {
-  const z = cam.zoom;
-  worldEl.style.transform = `matrix3d(${z},0,0,0, 0,${z},0,0, 0,0,1,0, ${cam.x},${cam.y},0,1)`;
-  worldEl.style.setProperty("--canvas-inv-zoom", String(1 / cam.zoom));
-}
-
-/** Below this total pointer movement we treat a drag as a "click". */
-const MARQUEE_CLICK_THRESHOLD_PX = 4;
-
-/** Base grid cell size in world pixels. */
-const BASE_GRID_CELL = 160;
-/** Minimum screen-pixel size a grid cell should occupy before we double. */
-const MIN_SCREEN_CELL = 60;
-/** Grid extent in world units (±5k from origin = 10k total). */
-const GRID_HALF = 5000;
-
-/**
- * Adaptive canvas grid — doubles the cell spacing as zoom decreases so
- * the on-screen line density stays comfortable and the GPU doesn't choke
- * rasterizing tens of thousands of hairline gradients during fast pan.
- */
-function CanvasGrid({ zoom }: { zoom: number }) {
-  // Double the world-space cell size until each cell is ≥ MIN_SCREEN_CELL px on screen.
-  let cell = BASE_GRID_CELL;
-  while (cell * zoom < MIN_SCREEN_CELL && cell < GRID_HALF) {
-    cell *= 2;
-  }
-  // Fade grid lines when zoomed way out so they don't dominate visually.
-  const opacity = Math.min(1, (cell * zoom) / 120);
-
-  return (
-    <div
-      className="pointer-events-none absolute"
-      style={{
-        left: -GRID_HALF,
-        top: -GRID_HALF,
-        width: GRID_HALF * 2,
-        height: GRID_HALF * 2,
-        backgroundImage: `
-          linear-gradient(to right, rgba(0, 0, 0, ${(0.7 * opacity).toFixed(2)}) 1px, transparent 1px),
-          linear-gradient(to bottom, rgba(0, 0, 0, ${(0.7 * opacity).toFixed(2)}) 1px, transparent 1px)
-        `,
-        backgroundSize: `${cell}px ${cell}px`,
-        backgroundPosition: "0 0",
-      }}
-    />
-  );
-}
-
-/**
- * WorldContents — memoized children of the world div. During a pure pan
- * (no zoom change), none of the props change, so React skips the entire
- * subtree reconciliation. This eliminates the 80ms-debounce re-render stutter
- * that was the main source of panning flicker.
- */
-const WorldContents = React.memo(function WorldContents({
-  zoom,
-  panels,
-  selectedPanelIds,
-  dispatch,
-}: {
-  zoom: number;
-  panels: Panel[];
-  selectedPanelIds: string[];
-  dispatch: React.Dispatch<import("./types").CanvasAction>;
-}) {
-  return (
-    <>
-      <CanvasGrid zoom={zoom} />
-      <ClusterWorldLayer />
-      {panels.map((panel) => (
-        <CanvasPanel
-          key={panel.id}
-          panel={panel}
-          isSelected={selectedPanelIds.includes(panel.id)}
-          dispatch={dispatch}
-        />
-      ))}
-    </>
-  );
-});
-
-/**
- * Find the topmost cluster (by z-order — later in the array wins) whose
- * world-space bounds contain the given world-space point. Returns null
- * if the point isn't inside any cluster.
- */
-function findClusterAtPoint(
-  clusters: Cluster[],
-  panels: Panel[],
-  worldPoint: { x: number; y: number }
-): Cluster | null {
-  for (let i = clusters.length - 1; i >= 0; i--) {
-    const c = clusters[i];
-    const members = panels.filter((p) => c.panelIds.includes(p.id));
-    if (members.length === 0) continue;
-    // Use the actual padded-per-panel shape, not the full bounding box.
-    // This avoids triggering drags from empty corners of the AABB.
-    if (isPointInClusterShape(members, worldPoint)) return c;
-  }
-  return null;
-}
-
-interface ClusterDragState {
-  clusterId: string;
-  mouseX: number;
-  mouseY: number;
-  panels: Array<{ id: string; x: number; y: number }>;
-}
-
-interface MarqueeState {
-  /** Viewport-relative start point (pixels). */
-  startX: number;
-  startY: number;
-  /** Viewport-relative current endpoint. */
-  endX: number;
-  endY: number;
-  /**
-   * Selection that existed BEFORE the marquee started. Used for
-   * additive (shift) mode where the marquee adds to the existing set
-   * instead of replacing it.
-   */
-  baseSelection: string[];
-  /** True if the user held shift when starting the marquee (additive). */
-  additive: boolean;
-}
-
-/** Does a viewport-space box intersect a panel? Converts the panel to
- *  screen coords (world→viewport) and tests AABB in screen space. */
-function boxIntersectsPanel(
-  box: { x1: number; y1: number; x2: number; y2: number },
-  panel: Panel,
-  camera: { x: number; y: number; zoom: number }
-): boolean {
-  // Convert panel world coords to viewport/screen coords:
-  //   screen = world * zoom + camera
-  const sx = panel.x * camera.zoom + camera.x;
-  const sy = panel.y * camera.zoom + camera.y;
-  const sw = panel.width * camera.zoom;
-  const sh = panel.height * camera.zoom;
-
-  // Standard AABB intersection in screen space.
-  return box.x1 < sx + sw && box.x2 > sx && box.y1 < sy + sh && box.y2 > sy;
-}
-
-/** Read the grid cell size CSS vars (set by FlushGrid). Returns px numbers. */
-function getGridCellSize(): { cx: number; cy: number } {
-  const style = getComputedStyle(document.body);
-  const cx = parseFloat(style.getPropertyValue("--grid-cell-x")) || 160;
-  const cy = parseFloat(style.getPropertyValue("--grid-cell-y")) || 160;
-  return { cx, cy };
-}
+// Re-export for external consumers (e.g. canvas-minimap).
+export { applyCameraDirect };
 
 interface CanvasProps {
   /**
