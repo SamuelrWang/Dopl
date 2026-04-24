@@ -138,6 +138,14 @@ See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture and [plan 
 - Proposed resolution: defer-to-P4 — decide the composition design when we actually wire `withErrorHandler` into the first route (api/chat/route.ts). Candidate fixes: (a) have withErrorHandler skip its log when a caller signals it's composed under withUserAuth, (b) drop the unhandled-error log from withErrorHandler and rely on runAndLog5xx, (c) keep both intentionally — two perspectives on one incident, with the docs explaining the duplication.
 - Status: open
 
+### F-013: Dead imports / constants in pipeline.ts
+- Location: `src/lib/ingestion/pipeline.ts` (pre-P3a)
+- Found during: P3a.1 survey
+- Severity: smell
+- Description: `pipeline.ts` imported `chunkAndEmbed` from `./embedder` and declared `const PIPELINE_TIMEOUT_MS = 10 * 60 * 1000` — both unreferenced anywhere in the file. Legacy from the removed `runPipeline` orchestrator.
+- Proposed resolution: fix-now (removed during the strategy extraction, same commit).
+- Status: fixed-in-5ef0198
+
 ### F-012: Grandfathered 500-line violators touched during P2 relocations
 - Location: `src/features/ingestion/server/skeleton.ts` (850 lines after relocation; was 847), `src/features/clusters/server/service.ts` (517 after; was 516), `src/lib/ingestion/pipeline.ts` (1212, untouched but over), `src/app/page.tsx` (823 after P2.5 extractions; was 1114)
 - Found during: P2 post-phase audit, after user set a 500-line hard cap

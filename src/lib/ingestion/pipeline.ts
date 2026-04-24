@@ -32,6 +32,8 @@ import {
 } from "@/config";
 import { slugifyEntryTitle, fallbackSlugFromId } from "@/lib/entries/slug";
 import { PipelineStrategy, PIPELINE_STRATEGIES } from "./pipeline/strategy";
+import { deleteFailedEntry, detectPlatform, logStep } from "./pipeline/util";
+export { deleteFailedEntry, detectPlatform, logStep };
 // Credits removed — access is gated at the HTTP boundary via
 // hasActiveAccess(), not via credit math. No refunds needed here.
 
@@ -45,26 +47,6 @@ import { PipelineStrategy, PIPELINE_STRATEGIES } from "./pipeline/strategy";
 // finalizeAgentEntry, plus the step* helpers they share with the old
 // flow) are the complete server-side surface now.
 // ════════════════════════════════════════════════════════════════════
-
-/**
- * Remove a failed/partial entry from the common DB. Deletes child rows
- * explicitly in case FK cascades aren't fully wired up — so no orphaned
- * sources/tags/chunks/logs are left behind.
- */
-export async function deleteFailedEntry(entryId: string): Promise<void> {
-  try {
-    // Children first (no-op if ON DELETE CASCADE is configured)
-    await Promise.all([
-      supabase.from("chunks").delete().eq("entry_id", entryId),
-      supabase.from("sources").delete().eq("entry_id", entryId),
-      supabase.from("tags").delete().eq("entry_id", entryId),
-      supabase.from("ingestion_logs").delete().eq("entry_id", entryId),
-    ]);
-    await supabase.from("entries").delete().eq("id", entryId);
-  } catch (err) {
-    console.error(`[pipeline] Failed to delete partial entry ${entryId}:`, err);
-  }
-}
 
 // ════════════════════════════════════════════════════════════════════
 // Step functions
@@ -827,41 +809,11 @@ async function gatherAllContent(entryId: string): Promise<string> {
   return result;
 }
 
-export function detectPlatform(url: string): string {
-  if (isTweetUrl(url)) return "x";
-  if (isInstagramPostUrl(url)) return "instagram";
-  if (isRedditPostUrl(url)) return "reddit";
-  if (url.includes("github.com")) return "github";
-  if (url.includes("youtube.com") || url.includes("youtu.be")) return "youtube";
-  if (url.includes("news.ycombinator.com")) return "hackernews";
-  if (url.includes("stackoverflow.com")) return "stackoverflow";
-  if (url.includes("medium.com")) return "medium";
-  if (url.includes("substack.com") || url.includes(".substack.")) return "substack";
-  if (url.includes("dev.to")) return "devto";
-  if (url.includes("arxiv.org")) return "arxiv";
-
-  return "web";
-}
-
 // NOTE: getSecondaryArtifactLabel + getSecondaryArtifactFilename were
 // helpers for the removed stepGenerateSecondaryArtifact. Deleted — no
 // live callers.
-
-export async function logStep(
-  entryId: string,
-  step: string,
-  status: "started" | "completed" | "error",
-  details?: Record<string, unknown>,
-  durationMs?: number
-): Promise<void> {
-  await supabase.from("ingestion_logs").insert({
-    entry_id: entryId,
-    step,
-    status,
-    details: details || null,
-    duration_ms: durationMs || null,
-  });
-}
+// detectPlatform + logStep have been extracted to ./pipeline/util.ts and
+// are re-exported from the top of this file.
 
 // ════════════════════════════════════════════════════════════════════
 // Agent-driven ingest — exposed helpers for /api/ingest/prepare and
