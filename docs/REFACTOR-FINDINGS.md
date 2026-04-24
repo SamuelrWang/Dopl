@@ -138,6 +138,14 @@ See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture and [plan 
 - Proposed resolution: defer-to-P4 — decide the composition design when we actually wire `withErrorHandler` into the first route (api/chat/route.ts). Candidate fixes: (a) have withErrorHandler skip its log when a caller signals it's composed under withUserAuth, (b) drop the unhandled-error log from withErrorHandler and rely on runAndLog5xx, (c) keep both intentionally — two perspectives on one incident, with the docs explaining the duplication.
 - Status: open
 
+### F-014: Dead `InsufficientCreditsCard` in chat-panel.tsx
+- Location: `src/components/canvas/panels/chat/chat-panel.tsx:837` (pre-P3c)
+- Found during: P3c chat-panel split
+- Severity: smell
+- Description: `InsufficientCreditsCard` was defined at the bottom of chat-panel.tsx but never referenced (not called, not exported). Dead code from a since-removed credits-gating path.
+- Proposed resolution: fix-now — dropped during the split rather than carrying into a new sub-module.
+- Status: fixed-in-p3c
+
 ### F-013: Dead imports / constants in pipeline.ts
 - Location: `src/lib/ingestion/pipeline.ts` (pre-P3a)
 - Found during: P3a.1 survey
