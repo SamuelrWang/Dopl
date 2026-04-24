@@ -1,7 +1,7 @@
 import { ExtractedSource, LinkFollowResult, SourceStatusReason } from "../types";
 import { fetchWithTimeout, retryWithBackoff } from "../utils";
 import { assertPublicHttpUrl } from "../url-safety";
-import { MAX_LINK_DEPTH } from "@/lib/config";
+import { MAX_LINK_DEPTH } from "@/config";
 const MAX_CONTENT_LENGTH = 50_000; // 50K chars max per page
 
 /**

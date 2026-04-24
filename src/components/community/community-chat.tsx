@@ -11,7 +11,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import type { PublishedClusterDetail } from "@/lib/community/types";
 import type { CanvasContextPayload, ContextPanelDTO } from "@/components/canvas/panels/chat/cluster-context";
-import { CONTEXT_CHAR_BUDGET_PER_FIELD } from "@/lib/config";
+import { CONTEXT_CHAR_BUDGET_PER_FIELD } from "@/config";
 import { MarkdownMessage } from "@/components/design/markdown-message";
 
 interface ChatMessage {

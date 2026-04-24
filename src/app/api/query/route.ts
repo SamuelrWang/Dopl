@@ -14,7 +14,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { QueryRequestSchema } from "@/types/api";
 import { searchEntries } from "@/lib/retrieval/search";
 import { withMcpCredits } from "@/lib/auth/with-auth";
-import { CONTENT_PREVIEW_LENGTH } from "@/lib/config";
+import { CONTENT_PREVIEW_LENGTH } from "@/config";
 import type { SubscriptionTier } from "@/lib/billing/subscriptions";
 
 async function handlePost(

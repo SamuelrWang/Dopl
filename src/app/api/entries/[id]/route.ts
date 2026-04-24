@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { EntryUpdateSchema } from "@/types/api";
 import { withUserAuth, withMcpCredits, isAdmin } from "@/lib/auth/with-auth";
-import { CONTENT_PREVIEW_LENGTH } from "@/lib/config";
+import { CONTENT_PREVIEW_LENGTH } from "@/config";
 import type { SubscriptionTier } from "@/lib/billing/subscriptions";
 import { resolveEntryId } from "@/lib/entries/resolver";
 

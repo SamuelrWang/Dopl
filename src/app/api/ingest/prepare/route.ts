@@ -6,7 +6,7 @@ import {
   MAX_CONTENT_FOR_CLAUDE,
   MAX_IMAGES_PER_ENTRY,
   MAX_IMAGE_SIZE_BYTES,
-} from "@/lib/config";
+} from "@/config";
 import { hasActiveAccess, accessDeniedBody } from "@/lib/billing/access";
 import { assertPublicHttpUrl, UnsafeUrlError } from "@/lib/ingestion/url-safety";
 import { logSystemEvent } from "@/lib/analytics/system-events";

@@ -9,7 +9,7 @@
 
 import type { CanvasState, EntryPanelData } from "./types";
 import { ENTRY_PANEL_SIZE, INITIAL_CANVAS_STATE } from "./types";
-import { CANVAS_ACTIVE_USER_KEY, CANVAS_STORAGE_KEY_PREFIX } from "@/lib/config";
+import { CANVAS_ACTIVE_USER_KEY, CANVAS_STORAGE_KEY_PREFIX } from "@/config";
 
 function getStorageKey(): string {
   if (typeof window === "undefined") return CANVAS_STORAGE_KEY_PREFIX;

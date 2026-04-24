@@ -52,7 +52,7 @@ import {
 } from "./use-conversation-sync";
 import { stripFromClusters } from "@/lib/canvas/defaults";
 
-import { CANVAS_STORAGE_KEY_PREFIX, CANVAS_ACTIVE_USER_KEY } from "@/lib/config";
+import { CANVAS_STORAGE_KEY_PREFIX, CANVAS_ACTIVE_USER_KEY } from "@/config";
 const SAVE_DEBOUNCE_MS = 500;
 
 /** Build the user-scoped localStorage key for canvas state. */

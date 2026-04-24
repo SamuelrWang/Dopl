@@ -7,7 +7,7 @@ import {
   MAX_CHAT_ATTACHMENTS_PER_MESSAGE,
   MAX_CHAT_MESSAGE_SIZE,
   ALLOWED_CHAT_ATTACHMENT_TYPES,
-} from "@/lib/config";
+} from "@/config";
 
 // MIME types that file-type can detect via magic bytes. Text-like formats
 // (txt, md, csv, json) are plain text and need a different validation path.

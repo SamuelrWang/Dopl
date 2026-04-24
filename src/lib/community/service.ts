@@ -1,7 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { slugifyClusterName } from "@/lib/clusters/slug";
 import { generatePublishedSlug, randomSuffix } from "./published-slug";
-import { CONTEXT_CHAR_BUDGET_PER_FIELD } from "@/lib/config";
+import { CONTEXT_CHAR_BUDGET_PER_FIELD } from "@/config";
 import { generateEmbedding } from "@/lib/ai";
 import type {
   PublishedClusterSummary,

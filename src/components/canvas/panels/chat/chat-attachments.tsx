@@ -5,7 +5,7 @@ import {
   MAX_CHAT_ATTACHMENT_SIZE,
   MAX_CHAT_ATTACHMENTS_PER_MESSAGE,
   ALLOWED_CHAT_ATTACHMENT_TYPES,
-} from "@/lib/config";
+} from "@/config";
 
 export interface PendingAttachment {
   file: File;

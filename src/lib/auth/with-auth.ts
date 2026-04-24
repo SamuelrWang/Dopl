@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { API_KEY_PREFIX } from "@/lib/config";
+import { API_KEY_PREFIX } from "@/config";
 import { createServerClient } from "@supabase/ssr";
 import { validateApiKey, checkAndRecordRateLimit, touchApiKey, touchMcpStatus } from "./api-keys";
 import { getUserSubscription, type SubscriptionTier } from "@/lib/billing/subscriptions";

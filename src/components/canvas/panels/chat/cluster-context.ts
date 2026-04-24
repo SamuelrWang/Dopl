@@ -20,7 +20,7 @@ import type { CanvasState, Panel } from "../../types";
 
 // ── Constants ────────────────────────────────────────────────────────
 
-import { CONTEXT_CHAR_BUDGET_PER_FIELD } from "@/lib/config";
+import { CONTEXT_CHAR_BUDGET_PER_FIELD } from "@/config";
 
 /** Max total chars across all serialized panels in one context payload. */
 const TOTAL_CONTEXT_CHAR_BUDGET = 30_000;

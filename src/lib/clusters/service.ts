@@ -1,6 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { slugifyClusterName } from "./slug";
-import { CONTEXT_CHAR_BUDGET_PER_FIELD } from "@/lib/config";
+import { CONTEXT_CHAR_BUDGET_PER_FIELD } from "@/config";
 
 // ── Types ────────────────────────────────────────────────────────────
 

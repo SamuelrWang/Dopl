@@ -31,7 +31,7 @@ import {
   MAX_LINK_DEPTH,
   MAX_CONTENT_FOR_CLAUDE,
   GATHERED_CONTENT_MAX,
-} from "@/lib/config";
+} from "@/config";
 import { slugifyEntryTitle, fallbackSlugFromId } from "@/lib/entries/slug";
 // Credits removed — access is gated at the HTTP boundary via
 // hasActiveAccess(), not via credit math. No refunds needed here.

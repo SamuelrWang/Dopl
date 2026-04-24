@@ -8,7 +8,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
-import { MAX_IMAGE_SIZE_BYTES } from "@/lib/config";
+import { MAX_IMAGE_SIZE_BYTES } from "@/config";
 
 const TRANSIENT_HTTP_STATUSES = new Set([408, 409, 425, 429, 500, 502, 503, 504, 529]);
 
