@@ -10,63 +10,13 @@ import {
   ArrowUp,
   ChevronDown,
   ArrowRight,
-  Plus,
-  Minus,
   Globe,
   Mic,
 } from "lucide-react";
 import { PromptInput } from "@/features/marketing/components/prompt-input";
+import { FaqItem } from "@/features/marketing/components/faq-item";
+import { SnowflakeGrid } from "@/features/marketing/components/snowflake-grid";
 import { EARLY_SUPPORTER_ENABLED } from "@/lib/billing/early-supporter-flag";
-
-/* ──────────────────────────────────────────────────────────────────── */
-/*  FAQ Accordion Item                                                 */
-/* ──────────────────────────────────────────────────────────────────── */
-function FaqItem({
-  question,
-  answer,
-}: {
-  question: string;
-  answer: string;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="border-b border-white/[0.08]">
-      <button
-        onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between py-6 text-left"
-      >
-        <span className="text-white text-[16px] font-medium">{question}</span>
-        {open ? (
-          <Minus size={18} className="text-white/40 shrink-0 ml-4" />
-        ) : (
-          <Plus size={18} className="text-white/40 shrink-0 ml-4" />
-        )}
-      </button>
-      {open && (
-        <div className="pb-6 text-white/50 text-[15px] leading-relaxed">
-          {answer}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ──────────────────────────────────────────────────────────────────── */
-/*  Snowflake / asterisk decoration                                    */
-/* ──────────────────────────────────────────────────────────────────── */
-function SnowflakeGrid() {
-  return (
-    <div className="absolute inset-0 overflow-hidden opacity-[0.06]">
-      <div className="grid grid-cols-6 gap-16 p-8">
-        {Array.from({ length: 48 }).map((_, i) => (
-          <div key={i} className="text-white text-4xl text-center select-none">
-            &#10052;
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 /* ──────────────────────────────────────────────────────────────────── */
 /*  Main Landing Page                                                  */
