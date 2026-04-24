@@ -48,6 +48,8 @@ setup-intelligence-engine/
 │   │   ├── lib/                   # Pure utilities (formatDate, cn, etc.)
 │   │   ├── hooks/                 # Generic hooks (useDebounce, useMediaQuery)
 │   │   ├── types/                 # Truly shared types (ApiError, Result)
+│   │   ├── api/                   # parse-json, error-handler (shared route helpers)
+│   │   ├── auth/                  # Route wrappers (withUserAuth, withMcpAccess, withAdminAuth)
 │   │   └── supabase/              # Supabase client factories (browser/server/admin)
 │   ├── config/                    # Environment, flags, constants
 │   ├── middleware.ts
@@ -55,8 +57,7 @@ setup-intelligence-engine/
 ├── eslint.config.mjs
 ├── next.config.ts
 ├── package.json
-├── tsconfig.json
-└── vitest.config.ts               # ← NEW
+└── tsconfig.json
 ```
 
 ### Migration notes (current → target)
@@ -300,19 +301,24 @@ src/features/<name>/
 └── ...
 ```
 
-And API routes:
+And API routes — use the **existing** `withUserAuth` / `withMcpAccess` / `withExternalAuth` / `withAdminAuth` wrappers (currently in `src/lib/auth/with-auth.ts`, migrating to `src/shared/auth/` in P6). Do not invent a new `requireUser`.
 
 ```ts
 // src/app/api/<feature>/<action>/route.ts
-export async function POST(req: Request) {
-  const input = await parseBody(req, RequestSchema);     // zod
-  const { userId } = await requireUser(req);             // shared auth middleware
-  const result = await featureService.doThing(input, userId);
+import { NextResponse } from "next/server";
+import { withUserAuth } from "@/lib/auth/with-auth";
+import { parseJson } from "@/shared/api/parse-json";
+import { <Action>Schema } from "@/features/<name>/schema";
+import { <action> } from "@/features/<name>/server/service";
+
+export const POST = withUserAuth(async (req, { userId }) => {
+  const input = await parseJson(req, <Action>Schema);
+  const result = await <action>(input, userId);
   return NextResponse.json(result);
-}
+});
 ```
 
-The route handler is **thin**. All logic is in `service.ts`.
+The route handler is **thin**. All logic is in `service.ts`. `withUserAuth` injects `userId`, handles both session-cookie and `sk-dopl-*` API-key paths, rate-limits API keys, and logs 5xx responses to the system-events telemetry table.
 
 ### DTO mapping
 
@@ -358,31 +364,40 @@ Every route handler is ≤ 80 lines. If longer, you're doing business logic inli
 
 ```ts
 // src/app/api/<feature>/<action>/route.ts
-import "server-only";
 import { NextResponse } from "next/server";
-import { requireUser } from "@/shared/auth/require-user";
+import { withUserAuth } from "@/lib/auth/with-auth";
 import { parseJson } from "@/shared/api/parse-json";
 import { <Action>Schema } from "@/features/<name>/schema";
 import { <action> } from "@/features/<name>/server/service";
 
-export async function POST(req: Request) {
-  const user = await requireUser(req);
+export const POST = withUserAuth(async (req, { userId }) => {
   const input = await parseJson(req, <Action>Schema);
-  const result = await <action>(input, user);
+  const result = await <action>(input, userId);
   return NextResponse.json(result);
-}
+});
 ```
 
-### Shared helpers (to build)
+### Existing auth wrappers (reuse — do not reinvent)
 
-Put these in `src/shared/api/`:
+All auth wrappers already exist at `src/lib/auth/with-auth.ts` (migrating to `src/shared/auth/` in P6):
 
-- `requireUser(req)` — throws `HttpError(401)` if no valid session. Replaces the ~8 inline `if (!userId) return 401` blocks in `api/chat/route.ts`.
-- `parseJson(req, schema)` — parses + zod-validates. Throws `HttpError(400)`.
-- `withErrorHandler(handler)` — wraps a handler, converts thrown `HttpError` into responses, logs unexpected errors.
-- `HttpError` class with `status`, `code`, `message`.
+- `withExternalAuth(handler)` — API-key OR session; 401 if neither.
+- `withUserAuth(handler)` — same, plus injects `userId` into the handler context.
+- `withSubscriptionAuth(handler)` — also resolves the user's subscription tier.
+- `withMcpAccess(action, handler)` — gates MCP calls by trial/paid status, logs analytics. Alias `withMcpCredits` exists pending cleanup.
+- `withAdminAuth(handler)` — requires `ADMIN_USER_ID` env var match.
 
-After this lands, the refactored `api/chat/route.ts` is a dispatcher that picks a tool handler from `features/chat/tools/<tool>.ts` — each tool gets its own file.
+They handle: Bearer `sk-dopl-*` API-key validation, Supabase session cookies, rate limiting, and automatic 5xx system-event logging.
+
+### Shared helpers to build (P1)
+
+Put these new helpers in `src/shared/`:
+
+- `src/shared/api/parse-json.ts` — `parseJson(req, schema)` parses JSON body and zod-validates. Throws `HttpError(400)` on failure.
+- `src/shared/api/error-handler.ts` — `withErrorHandler(handler)` wraps a handler, converts thrown `HttpError` into responses, logs unexpected errors.
+- `src/shared/lib/http-error.ts` — `HttpError` class with `status`, `code`, `message`, `details`.
+
+After these land, the refactored `api/chat/route.ts` (P4) is a dispatcher that picks a tool handler from `features/chat/server/tools/<tool>.ts` — each tool gets its own file — and the ~8 inline `if (!userId) return 401` blocks collapse into `withUserAuth` + thrown `HttpError`.
 
 ### Error response shape
 
@@ -531,7 +546,7 @@ The refactor is **not** a rewrite. Apply these rules while converting the repo t
 
 ### Refactor order (suggested)
 
-1. **Scaffolding** — create `src/features/`, `src/shared/`, add vitest, add `requireUser` + `parseJson` helpers.
+1. **Scaffolding** — create `src/shared/lib/http-error.ts`, `src/shared/api/parse-json.ts`, `src/shared/api/error-handler.ts`. `src/features/` and `src/shared/` directories materialize as their first files land. Reuse the existing auth wrappers at `src/lib/auth/with-auth.ts`; migrate them in P6.
 2. **Ingestion** — biggest win. Split `pipeline.ts`, create `features/ingestion/` with extractors.
 3. **Chat route** — split tool handlers, introduce middleware helpers.
 4. **Canvas store** — split into reducer/persistence/selectors/actions/context.
