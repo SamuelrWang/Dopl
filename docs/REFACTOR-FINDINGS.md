@@ -113,4 +113,10 @@ See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture and [plan 
 
 ## Findings added during refactor (P1 onwards)
 
-<!-- New findings are appended here during each phase. -->
+### F-009: Dead `DRAG_BLOCK_SELECTOR` constant + stale doc comment in canvas-panel.tsx
+- Location: `src/components/canvas/canvas-panel.tsx` (pre-P2.4)
+- Found during: P2.4 canvas-panel split
+- Severity: smell
+- Description: A 30-line `DRAG_BLOCK_SELECTOR` constant was declared in `canvas-panel.tsx` but never referenced — the actual drag-block logic used inline `closest(...)` calls with hardcoded selector strings. The file's header comment further described a "cursor-style-based" drag-block approach that was never actually implemented (the implementation is purely selector-based). Both were artifacts of an earlier design pass that got superseded without cleanup.
+- Proposed resolution: fix-now (in-scope with the drag extraction — the constant isn't carried into the new hook, and the stale comment is corrected in the same commit).
+- Status: fixed-in-7c6449a
