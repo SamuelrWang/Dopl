@@ -16,7 +16,7 @@
 
 import React, { useCallback, useState, type Dispatch } from "react";
 import { useCapabilities } from "./canvas-store";
-import { ChatPanelBody } from "./panels/chat/chat-panel";
+import { ChatPanelBody } from "@/features/chat/components/chat-panel";
 import { ConnectionPanelBody } from "./panels/connection-panel";
 import { EntryPanelBody } from "./panels/entry-panel";
 import { BrowsePanelBody } from "./panels/browse/browse-panel";

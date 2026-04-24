@@ -7,7 +7,7 @@ import { GlassCard, MonoLabel, PlatformIcon } from "@/components/design";
 import {
   addEntryPanelToCanvas,
   fetchFullEntry,
-} from "@/components/canvas/add-to-canvas";
+} from "@/features/canvas/add-to-canvas";
 import { useSavedToggle } from "@/lib/saved/local-store";
 import { useEntryPreviewActions } from "./entry-preview-context";
 

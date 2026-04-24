@@ -15,7 +15,7 @@ import {
   nextPanelIdString,
 } from "./canvas-store";
 import { useChatDrawer } from "./chat-drawer-context";
-import { ChatPanelBody } from "./panels/chat/chat-panel";
+import { ChatPanelBody } from "@/features/chat/components/chat-panel";
 import { createWelcomeMessages } from "./onboarding-welcome";
 import {
   BROWSE_PANEL_SIZE,

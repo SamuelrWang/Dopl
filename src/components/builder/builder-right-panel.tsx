@@ -1,14 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { usePanelsContext } from "@/components/canvas/canvas-store";
-import { ClusterBrainPanel } from "@/components/canvas/panels/cluster-brain/cluster-brain-panel";
+import { usePanelsContext } from "@/features/canvas/canvas-store";
+import { ClusterBrainPanel } from "@/features/canvas/panels/cluster-brain/cluster-brain-panel";
 import { MarkdownMessage } from "@/components/design/markdown-message";
 import type {
   Cluster,
   EntryPanelData,
   ClusterBrainPanelData,
-} from "@/components/canvas/types";
+} from "@/features/canvas/types";
 
 interface BuilderRightPanelProps {
   cluster: Cluster | null;

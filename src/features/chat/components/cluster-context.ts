@@ -16,7 +16,7 @@
  *   - Connection / browse panels: excluded (not knowledge content)
  */
 
-import type { CanvasState, Panel } from "../../types";
+import type { CanvasState, Panel } from "@/features/canvas/types";
 
 // ── Constants ────────────────────────────────────────────────────────
 

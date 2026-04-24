@@ -1,9 +1,9 @@
 "use client";
 
-import { CanvasProvider } from "@/components/canvas/canvas-store";
+import { CanvasProvider } from "@/features/canvas/canvas-store";
 import { BuilderLayout } from "@/components/builder/builder-layout";
-import type { CanvasState } from "@/components/canvas/types";
-import type { ServerConversation } from "@/components/canvas/use-conversation-sync";
+import type { CanvasState } from "@/features/canvas/types";
+import type { ServerConversation } from "@/features/canvas/use-conversation-sync";
 
 interface Props {
   userId: string;

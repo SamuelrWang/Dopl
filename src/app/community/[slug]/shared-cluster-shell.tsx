@@ -22,9 +22,9 @@
  */
 
 import { useCallback, useEffect, useMemo } from "react";
-import { CanvasProvider, useCanvas } from "@/components/canvas/canvas-store";
-import { Canvas } from "@/components/canvas/canvas";
-import { MIN_ZOOM, computePanelsBounds } from "@/components/canvas/types";
+import { CanvasProvider, useCanvas } from "@/features/canvas/canvas-store";
+import { Canvas } from "@/features/canvas/canvas";
+import { MIN_ZOOM, computePanelsBounds } from "@/features/canvas/types";
 import { DetailPanel } from "@/components/community/detail-panel";
 import { publishedClusterToCanvasState } from "@/features/community/server/to-canvas-state";
 import type { PublishedClusterDetail } from "@/features/community/server/types";

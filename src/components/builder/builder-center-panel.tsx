@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { usePanelsContext } from "@/components/canvas/canvas-store";
-import { ChatPanelBody } from "@/components/canvas/panels/chat/chat-panel";
-import type { Cluster, ChatPanelData } from "@/components/canvas/types";
+import { usePanelsContext } from "@/features/canvas/canvas-store";
+import { ChatPanelBody } from "@/features/chat/components/chat-panel";
+import type { Cluster, ChatPanelData } from "@/features/canvas/types";
 
 interface BuilderCenterPanelProps {
   cluster: Cluster | null;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { usePanelsContext } from "@/components/canvas/canvas-store";
+import { usePanelsContext } from "@/features/canvas/canvas-store";
 import { BuilderSidebar } from "./builder-sidebar";
 import { BuilderCenterPanel } from "./builder-center-panel";
 import { BuilderRightPanel } from "./builder-right-panel";

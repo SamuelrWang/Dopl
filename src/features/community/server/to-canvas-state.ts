@@ -19,12 +19,12 @@ import type {
   Cluster,
   EntryPanelData,
   Panel,
-} from "@/components/canvas/types";
+} from "@/features/canvas/types";
 import {
   ENTRY_PANEL_SIZE,
   MIN_ZOOM,
   computePanelsBounds,
-} from "@/components/canvas/types";
+} from "@/features/canvas/types";
 import type { PublishedClusterDetail } from "./types";
 
 /**

@@ -12,17 +12,17 @@
 
 import { createPortal } from "react-dom";
 import { useEffect, useState } from "react";
-import { CanvasProvider } from "@/components/canvas/canvas-store";
-import { CanvasGridSync } from "@/components/canvas/canvas-grid-sync";
-import { Canvas } from "@/components/canvas/canvas";
-import { FixedInputBar } from "@/components/canvas/fixed-input-bar";
-import { FixedChatPanel } from "@/components/canvas/fixed-chat-panel";
-import { FixedBrainPanel } from "@/components/canvas/fixed-brain-panel";
-import { DrawerProvider } from "@/components/canvas/chat-drawer-context";
+import { CanvasProvider } from "@/features/canvas/canvas-store";
+import { CanvasGridSync } from "@/features/canvas/canvas-grid-sync";
+import { Canvas } from "@/features/canvas/canvas";
+import { FixedInputBar } from "@/features/canvas/fixed-input-bar";
+import { FixedChatPanel } from "@/features/canvas/fixed-chat-panel";
+import { FixedBrainPanel } from "@/features/canvas/fixed-brain-panel";
+import { DrawerProvider } from "@/features/canvas/chat-drawer-context";
 import { OnboardingProvider } from "@/components/onboarding/onboarding-provider";
 import { PaywallGate } from "@/components/billing/paywall-gate";
-import type { CanvasState } from "@/components/canvas/types";
-import type { ServerConversation } from "@/components/canvas/use-conversation-sync";
+import type { CanvasState } from "@/features/canvas/types";
+import type { ServerConversation } from "@/features/canvas/use-conversation-sync";
 
 /**
  * The canvas renders via a portal to document.body so it escapes the root

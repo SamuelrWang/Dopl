@@ -10,7 +10,7 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import type { PublishedClusterDetail } from "@/features/community/server/types";
-import type { CanvasContextPayload, ContextPanelDTO } from "@/components/canvas/panels/chat/cluster-context";
+import type { CanvasContextPayload, ContextPanelDTO } from "@/features/chat/components/cluster-context";
 import { CONTEXT_CHAR_BUDGET_PER_FIELD } from "@/config";
 import { MarkdownMessage } from "@/components/design/markdown-message";
 

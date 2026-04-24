@@ -15,12 +15,12 @@
  *     missing. Also strips a legacy "ingestion" panel type.
  */
 
-import type { CanvasState, Cluster, Panel } from "@/components/canvas/types";
+import type { CanvasState, Cluster, Panel } from "@/features/canvas/types";
 import {
   BROWSE_PANEL_SIZE,
   CONNECTION_PANEL_SIZE,
   MIN_CLUSTER_SIZE,
-} from "@/components/canvas/types";
+} from "@/features/canvas/types";
 
 export function stripFromClusters(
   clusters: Cluster[],

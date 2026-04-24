@@ -14,8 +14,8 @@
  */
 
 import { useEffect, useRef } from "react";
-import { useCanvas } from "../../canvas-store";
-import type { ChatPanelData } from "../../types";
+import { useCanvas } from "@/features/canvas/canvas-store";
+import type { ChatPanelData } from "@/features/canvas/types";
 
 const PLACEHOLDER_PATTERN = /^(Chat\s*#\d+|New Chat)$/i;
 const MAX_TITLE_CHARS = 40;

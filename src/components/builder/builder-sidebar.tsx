@@ -1,12 +1,12 @@
 "use client";
 
 import { useCallback, useState, useRef, useEffect } from "react";
-import { useCanvas } from "@/components/canvas/canvas-store";
-import type { Cluster } from "@/components/canvas/types";
+import { useCanvas } from "@/features/canvas/canvas-store";
+import type { Cluster } from "@/features/canvas/types";
 import {
   DEFAULT_PANEL_SIZE,
   computePanelsBounds,
-} from "@/components/canvas/types";
+} from "@/features/canvas/types";
 
 interface BuilderSidebarProps {
   activeClusterId: string | null;
@@ -170,7 +170,7 @@ function ClusterItem({
   entryCount: number;
   chatCount: number;
   onSelect: () => void;
-  dispatch: React.Dispatch<import("@/components/canvas/types").CanvasAction>;
+  dispatch: React.Dispatch<import("@/features/canvas/types").CanvasAction>;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(cluster.name);

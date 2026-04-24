@@ -18,7 +18,7 @@
  *                    (DB / conversations / realtime / auto-focus /
  *                    shared-panel-move).
  *
- * Importers keep using `@/components/canvas/canvas-store` — this barrel
+ * Importers keep using `@/features/canvas/canvas-store` — this barrel
  * preserves every public symbol that existed before the split. Prefer
  * the direct sub-module paths for new code.
  */

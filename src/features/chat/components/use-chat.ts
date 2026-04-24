@@ -17,13 +17,13 @@
  */
 
 import { useCallback, useRef, useState } from "react";
-import { useCanvas, computeNewPanelPosition } from "../../canvas-store";
+import { useCanvas, computeNewPanelPosition } from "@/features/canvas/canvas-store";
 import type { ChatMessage, ChatAttachment } from "@/components/ingest/chat-message";
-import type { ChatPanelData } from "../../types";
-import { ENTRY_PANEL_SIZE } from "../../types";
+import type { ChatPanelData } from "@/features/canvas/types";
+import { ENTRY_PANEL_SIZE } from "@/features/canvas/types";
 import { buildCanvasContext } from "./cluster-context";
 import { messagesToApiHistory } from "./chat-message-types";
-import { connectToIngestionStream } from "../../use-panel-ingestion";
+import { connectToIngestionStream } from "@/features/canvas/use-panel-ingestion";
 
 interface UseChatOptions {
   panel: ChatPanelData;

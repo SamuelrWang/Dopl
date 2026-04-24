@@ -15,7 +15,7 @@ import type {
   EntryPanelData,
   ConnectionPanelData,
   ClusterBrainPanelData,
-} from "@/components/canvas/types";
+} from "@/features/canvas/types";
 
 /** Serialize a panel into the shape the `canvas_panels` DB row expects. */
 export function panelToDbRow(panel: Panel) {
