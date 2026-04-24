@@ -18,7 +18,7 @@ import Link from "next/link";
 import { Bookmark, GitFork } from "lucide-react";
 import { GlassCard, MonoLabel } from "@/components/design";
 import { useSavedToggle } from "@/lib/saved/local-store";
-import type { PublishedClusterSummary } from "@/lib/community/types";
+import type { PublishedClusterSummary } from "@/features/community/server/types";
 
 interface CommunityCardProps {
   cluster: PublishedClusterSummary;

@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 // TEMP-COMMUNITY: hidden until community launches — restore by uncommenting blocks marked TEMP-COMMUNITY
 // import { CommunityCard } from "@/components/community/community-card";
-// import type { PublishedClusterSummary } from "@/lib/community/types";
+// import type { PublishedClusterSummary } from "@/features/community/server/types";
 import {
   ArrowUp,
   ChevronDown,

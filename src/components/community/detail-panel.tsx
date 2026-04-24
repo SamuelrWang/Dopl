@@ -16,7 +16,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import type { PublishedClusterDetail } from "@/lib/community/types";
+import type { PublishedClusterDetail } from "@/features/community/server/types";
 import { CommunityChat } from "./community-chat";
 
 type Tab = "info" | "chat";

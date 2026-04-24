@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withUserAuth } from "@/lib/auth/with-auth";
-import { publishCluster } from "@/lib/community/service";
+import { publishCluster } from "@/features/community/server/service";
 
 /**
  * POST /api/community/publish — Publish a cluster as a community post.

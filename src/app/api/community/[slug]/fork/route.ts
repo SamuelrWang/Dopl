@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withUserAuth } from "@/lib/auth/with-auth";
-import { forkPublishedCluster } from "@/lib/community/service";
+import { forkPublishedCluster } from "@/features/community/server/service";
 
 /**
  * POST /api/community/[slug]/fork — Import a published cluster into the user's canvas.

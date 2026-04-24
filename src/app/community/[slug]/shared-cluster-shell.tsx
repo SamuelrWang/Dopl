@@ -26,8 +26,8 @@ import { CanvasProvider, useCanvas } from "@/components/canvas/canvas-store";
 import { Canvas } from "@/components/canvas/canvas";
 import { MIN_ZOOM, computePanelsBounds } from "@/components/canvas/types";
 import { DetailPanel } from "@/components/community/detail-panel";
-import { publishedClusterToCanvasState } from "@/lib/community/to-canvas-state";
-import type { PublishedClusterDetail } from "@/lib/community/types";
+import { publishedClusterToCanvasState } from "@/features/community/server/to-canvas-state";
+import type { PublishedClusterDetail } from "@/features/community/server/types";
 
 // Width the DetailPanel overlay reserves on the right side (panel
 // width + right gap). Fit-all math uses this to avoid hiding panels

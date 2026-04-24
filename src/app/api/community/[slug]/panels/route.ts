@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withUserAuth } from "@/lib/auth/with-auth";
-import { updatePanelPositions } from "@/lib/community/service";
+import { updatePanelPositions } from "@/features/community/server/service";
 
 /**
  * PATCH /api/community/[slug]/panels — Update panel positions.

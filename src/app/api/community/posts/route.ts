@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withUserAuth } from "@/lib/auth/with-auth";
-import { listMyPublishedClusters } from "@/lib/community/service";
+import { listMyPublishedClusters } from "@/features/community/server/service";
 
 /**
  * GET /api/community/posts — List the current user's published clusters.

@@ -4,7 +4,7 @@ import {
   getPublishedCluster,
   updatePublishedCluster,
   deletePublishedCluster,
-} from "@/lib/community/service";
+} from "@/features/community/server/service";
 
 /**
  * GET /api/community/[slug] — Public detail endpoint.

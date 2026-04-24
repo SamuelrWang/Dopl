@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { listPublishedClusters, searchPublishedClusters } from "@/lib/community/service";
+import { listPublishedClusters, searchPublishedClusters } from "@/features/community/server/service";
 
 /**
  * GET /api/community — Public gallery listing + search.

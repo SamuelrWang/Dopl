@@ -3,7 +3,7 @@ import { createServerSupabaseClient } from "@/lib/supabase";
 import { cookies } from "next/headers";
 import { startTrialIfNew } from "@/lib/billing/subscriptions";
 import { logConversionEvent, hasFiredEvent } from "@/lib/analytics/conversion-events";
-import { forkPublishedCluster } from "@/lib/community/service";
+import { forkPublishedCluster } from "@/features/community/server/service";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);

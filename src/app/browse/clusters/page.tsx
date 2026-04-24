@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { CommunityCard } from "@/components/community/community-card";
 import { GlassCard } from "@/components/design";
-import type { PublishedClusterSummary } from "@/lib/community/types";
+import type { PublishedClusterSummary } from "@/features/community/server/types";
 
 export default function BrowseClustersPage() {
   const [clusters, setClusters] = useState<PublishedClusterSummary[]>([]);

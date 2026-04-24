@@ -16,7 +16,7 @@ import { EntryGrid } from "@/components/entries/entry-grid";
 import { CommunityCard } from "@/components/community/community-card";
 import { GlassCard, MonoLabel } from "@/components/design";
 import { useSavedList } from "@/lib/saved/local-store";
-import type { PublishedClusterSummary } from "@/lib/community/types";
+import type { PublishedClusterSummary } from "@/features/community/server/types";
 
 interface EntryListItem {
   id: string;

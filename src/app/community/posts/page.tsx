@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import type { PublishedClusterSummary } from "@/lib/community/types";
+import type { PublishedClusterSummary } from "@/features/community/server/types";
 
 type PostStatus = "published" | "draft" | "archived";
 

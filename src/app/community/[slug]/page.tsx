@@ -13,7 +13,7 @@
 
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getPublishedClusterCached } from "@/lib/community/get-published-cluster-cached";
+import { getPublishedClusterCached } from "@/features/community/server/get-published-cluster-cached";
 import CommunityDetailClient from "./community-detail-client";
 
 // Keep crawlers (X, Slack, Discord) from hammering the DB on every

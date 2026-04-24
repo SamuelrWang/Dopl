@@ -21,8 +21,8 @@
  */
 
 import { ImageResponse } from "next/og";
-import { getPublishedClusterCached } from "@/lib/community/get-published-cluster-cached";
-import type { PublishedClusterDetail } from "@/lib/community/types";
+import { getPublishedClusterCached } from "@/features/community/server/get-published-cluster-cached";
+import type { PublishedClusterDetail } from "@/features/community/server/types";
 
 export const runtime = "nodejs";
 export const revalidate = 60;
