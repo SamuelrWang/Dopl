@@ -3,7 +3,7 @@
 /**
  * Saved tab — shows entries and clusters the user has bookmarked.
  *
- * Storage: localStorage (see src/lib/saved/local-store.ts). Reads the
+ * Storage: localStorage (see src/features/entries/server/saved/local-store.ts). Reads the
  * saved id + slug lists, then fetches full records from the existing
  * listing endpoints (`/api/entries`, `/api/community`) and filters
  * down. Filter-client-side is fine while saved lists stay small;

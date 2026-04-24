@@ -1,7 +1,7 @@
 /**
  * PlatformIcon — brand-logo SVG for an entry's source platform.
  *
- * Originally inlined in src/components/canvas/panels/entry-panel.tsx;
+ * Originally inlined in src/features/canvas/panels/entry-panel.tsx;
  * extracted here so grid cards, list items, and anywhere else that
  * references a platform can share one source of truth. Keeping the
  * SVGs inline (not an icon library) means no extra dependency and

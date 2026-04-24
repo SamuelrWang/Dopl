@@ -8,7 +8,7 @@
  *
  * Consolidates the identical polling loops previously duplicated in:
  *   - src/app/welcome/welcome-mcp-step.tsx
- *   - src/components/onboarding/mcp-connect-step.tsx
+ *   - src/features/onboarding/components/mcp-connect-step.tsx
  *
  * The hook does NOT delay the onConnected callback — callers control
  * the "show success state for N ms before advancing" behavior by

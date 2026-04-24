@@ -10,7 +10,7 @@
  * Polls /api/user/mcp-status every 3s; calls onConnected() once the MCP
  * server pings in. Reuses /api/user/keys to mint a fresh API key.
  *
- * NOTE: The older `McpConnectStep` (in src/components/onboarding/) is still
+ * NOTE: The older `McpConnectStep` (in src/features/onboarding/components/) is still
  * used by the in-canvas OnboardingCoachCard. This welcome-specific variant
  * is wider, tabbed, and shows the agent-prompt affordance. Keeping them as
  * two files avoids polluting the simpler in-canvas card.

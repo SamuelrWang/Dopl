@@ -3,7 +3,7 @@
  * client-side reducer shape) and the `canvas_panels` DB row shape.
  *
  * Extracted from use-canvas-db-sync.ts so the server-side canvas state
- * loader (src/lib/canvas/load-server-state.ts) and the client-side sync
+ * loader (src/features/canvas/server/load-server-state.ts) and the client-side sync
  * hook can share one source of truth. This file is safe to import from
  * both server and client code — it has no React dependencies and does
  * no DB I/O.
