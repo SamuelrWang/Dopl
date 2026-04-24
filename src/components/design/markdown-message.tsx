@@ -13,7 +13,7 @@
 
 import React, { useMemo } from "react";
 import ReactMarkdown from "react-markdown";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/lib/utils";
 
 interface MarkdownMessageProps {
   content: string;

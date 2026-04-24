@@ -10,7 +10,7 @@
  */
 
 import { cva, type VariantProps } from "class-variance-authority";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/lib/utils";
 
 const orbVariants = cva(
   "relative rounded-full shrink-0 isolate",

@@ -18,7 +18,7 @@ import { useEffect, useRef } from "react";
 import { CANVAS_STORAGE_KEY_PREFIX, CANVAS_ACTIVE_USER_KEY } from "@/config";
 import { useCanvas } from "./canvas-store";
 import type { Panel } from "./types";
-import { panelToDbRow } from "@/lib/canvas/panel-dto";
+import { panelToDbRow } from "@/features/canvas/server/panel-dto";
 
 // ── localStorage timestamp tracking ──────────────────────────────────
 // Lightweight write-breadcrumb used to debug stale local state. The

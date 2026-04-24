@@ -107,7 +107,7 @@ See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture and [plan 
 - Severity: smell
 - Description: The single file in `src/hooks/` is `use-speech-recognition.ts`, imported by the landing page. Plan already schedules this move to `src/shared/hooks/` in P6.
 - Proposed resolution: defer-to-P6.
-- Status: open
+- Status: fixed-in-p6 (moved to `src/shared/hooks/use-speech-recognition.ts`; `src/hooks/` removed)
 
 ---
 

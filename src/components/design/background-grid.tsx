@@ -5,7 +5,7 @@
  * but this component lets you scope it to a specific area if needed.
  */
 
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/lib/utils";
 
 interface BackgroundGridProps {
   className?: string;

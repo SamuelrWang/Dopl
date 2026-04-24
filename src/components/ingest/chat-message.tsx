@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/lib/utils";
 import { MarkdownMessage } from "@/components/design";
 import { ArtifactsPanel } from "./artifacts-panel";
 

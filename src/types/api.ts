@@ -13,7 +13,7 @@ export type IngestRequest = z.infer<typeof IngestRequestSchema>;
 
 // Agent-driven ingest: submit finished artifacts after the agent ran the
 // prompts returned by /api/ingest/prepare. Mirrors the shapes written by
-// stepPersistEntry in src/lib/ingestion/pipeline.ts.
+// persistAgentArtifacts in src/features/ingestion/server/pipeline/agent.ts.
 export const IngestSubmitSchema = z.object({
   entry_id: z.string().uuid(),
   content_type: z.enum([

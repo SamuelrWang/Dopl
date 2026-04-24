@@ -12,7 +12,7 @@ import { getUser } from "@/shared/supabase/server";
 import {
   loadCanvasInitialState,
   loadUserConversations,
-} from "@/lib/canvas/load-server-state";
+} from "@/features/canvas/server/load-server-state";
 import BuildClientShell from "./build-client-shell";
 
 export const dynamic = "force-dynamic";

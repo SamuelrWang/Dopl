@@ -13,7 +13,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { Copy, Check } from "lucide-react";
-import { useMcpConnectionStatus } from "@/lib/hooks/use-mcp-connection-status";
+import { useMcpConnectionStatus } from "@/shared/hooks/use-mcp-connection-status";
 
 interface McpConnectStepProps {
   /** Called when MCP connection is detected — triggers auto-advance. */

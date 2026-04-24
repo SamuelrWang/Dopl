@@ -1,8 +1,7 @@
 /**
  * Image-analysis prompt shared between the server-side vision step
- * ([src/lib/ingestion/extractors/image.ts](../ingestion/extractors/image.ts)) and
- * the agent-driven ingest flow
- * ([src/lib/ingestion/agent-bundle.ts](../ingestion/agent-bundle.ts)).
+ * (src/features/ingestion/server/extractors/image.ts) and the
+ * agent-driven ingest flow (src/features/ingestion/server/agent-bundle.ts).
  * Keeping one copy means the two paths produce identical "extractedContent"
  * text for downstream persistence.
  */

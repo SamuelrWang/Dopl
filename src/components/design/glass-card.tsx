@@ -10,7 +10,7 @@
  *  - "subtle"   — darker, lower contrast (for inline/nested use)
  */
 
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/lib/utils";
 import { HTMLAttributes, ReactNode } from "react";
 
 type GlassVariant = "default" | "elevated" | "subtle";

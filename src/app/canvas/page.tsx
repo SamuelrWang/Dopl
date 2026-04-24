@@ -16,7 +16,7 @@ import { getUser } from "@/shared/supabase/server";
 import {
   loadCanvasInitialState,
   loadUserConversations,
-} from "@/lib/canvas/load-server-state";
+} from "@/features/canvas/server/load-server-state";
 import CanvasClientShell from "./canvas-client-shell";
 
 // Per-request evaluation — never cache user canvas HTML across users.

@@ -18,7 +18,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, Copy } from "lucide-react";
-import { useMcpConnectionStatus } from "@/lib/hooks/use-mcp-connection-status";
+import { useMcpConnectionStatus } from "@/shared/hooks/use-mcp-connection-status";
 
 // ─────────────────────────────────────────────────────────
 // Tab definitions

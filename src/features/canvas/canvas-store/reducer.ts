@@ -17,7 +17,7 @@ import {
   MIN_CLUSTER_SIZE,
   isPanelDeletable,
 } from "../types";
-import { stripFromClusters } from "@/lib/canvas/defaults";
+import { stripFromClusters } from "@/features/canvas/server/defaults";
 import type { ChatMessage } from "@/components/ingest/chat-message";
 import { findNonOverlappingPosition, computeNewPanelPosition } from "./layout";
 
