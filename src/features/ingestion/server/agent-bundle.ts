@@ -6,8 +6,8 @@
  * POSTs them to /api/ingest/submit for embedding + persistence.
  *
  * Single source of truth for every prompt used in the agent-driven flow —
- * mirrors the server-side generators in [src/lib/ingestion/generators/](./generators/)
- * but keeps them as inert strings the agent can substitute.
+ * mirrors the retired server-side generators but keeps them as inert
+ * strings the agent can substitute.
  */
 
 import { UNIFIED_MANIFEST_PROMPT } from "@/lib/prompts/manifest";

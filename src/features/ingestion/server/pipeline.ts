@@ -15,9 +15,11 @@
  *   links.ts         — text-extract, link-follow, gather-content, recurse
  *   agent.ts         — extractForAgent, persistAgentArtifacts, finalizeAgentEntry
  *
- * This file is the public barrel. Importers keep using
- * `@/lib/ingestion/pipeline` unchanged; switch to the sub-module paths
- * only for new code or when touching an importer for other reasons.
+ * This file is the public barrel exposed as
+ * `@/features/ingestion/server/pipeline`. Prefer the direct sub-module
+ * paths (`./pipeline/agent`, `./pipeline/platform-fetch`, etc.) for new
+ * code; this barrel exists to make the feature's top-level entry point
+ * discoverable and to keep the public surface cohesive.
  *
  * Legacy exports that have been removed (and should not come back unless
  * server-side synthesis returns): ingestEntry, runPipeline,

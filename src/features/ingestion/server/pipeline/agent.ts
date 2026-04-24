@@ -240,7 +240,7 @@ export async function persistAgentArtifacts(args: {
 
   if (tags.length > 0) {
     // Normalize agent-supplied tags so case/whitespace differences don't
-    // fragment the tag namespace (see src/lib/ingestion/tags.ts).
+    // fragment the tag namespace (see ../tags.ts).
     const normalized = tags
       .map((t) => normalizeTag({ tag_type: t.tag_type, tag_value: t.tag_value }))
       .filter((t): t is { tag_type: string; tag_value: string } => t !== null);
