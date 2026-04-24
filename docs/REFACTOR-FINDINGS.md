@@ -138,6 +138,14 @@ See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture and [plan 
 - Proposed resolution: defer-to-P4 — decide the composition design when we actually wire `withErrorHandler` into the first route (api/chat/route.ts). Candidate fixes: (a) have withErrorHandler skip its log when a caller signals it's composed under withUserAuth, (b) drop the unhandled-error log from withErrorHandler and rely on runAndLog5xx, (c) keep both intentionally — two perspectives on one incident, with the docs explaining the duplication.
 - Status: open
 
+### F-015: Dead migration functions in canvas-store.tsx
+- Location: `src/components/canvas/canvas-store.tsx` (pre-P5a)
+- Found during: P5a canvas-store split
+- Severity: smell
+- Description: `migratePreZoomCamera`, `migrateMissingSelection`, `migrateAddClusters` — three backward-compat functions for localStorage-persisted canvas state — were declared but never referenced. The `CanvasProvider`'s `useReducer` initializer returns `initialState` unchanged without running any migrations. All three are dead code (from an earlier client-only persistence path).
+- Proposed resolution: fix-now — dropped during the split rather than relocating dead code into a new sub-module.
+- Status: fixed-in-p5a
+
 ### F-014: Dead `InsufficientCreditsCard` in chat-panel.tsx
 - Location: `src/components/canvas/panels/chat/chat-panel.tsx:837` (pre-P3c)
 - Found during: P3c chat-panel split

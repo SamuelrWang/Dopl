@@ -85,6 +85,7 @@ setup-intelligence-engine/
 - Auto-generated code (Supabase types, OpenAPI clients).
 - Dense type-only files where a split would fragment a cohesive domain model.
 - Pure data/config tables (cluster-geometry constants, country lists).
+- Single-function switch reducers where the switch is one coherent state machine — splitting by action type fragments the state transitions across files and makes the reducer harder to reason about. (Currently: `src/components/canvas/canvas-store/reducer.ts` at ~800 lines.)
 
 Existing files over 500 lines (refactor queue below) are grandfathered *only* until their scheduled split phase. Once touched, they must be split or the edit must shrink them.
 
