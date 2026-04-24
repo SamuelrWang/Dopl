@@ -1,7 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase";
 const supabase = supabaseAdmin();
 import { IngestInput, ExtractedSource, ContentType } from "./types";
-import { ModelTier } from "@/lib/ai";
 import { extractText } from "./extractors/text";
 import { extractWebContent, linkResultToSource, shouldSkipLink, ExtractorError } from "./extractors/web";
 import { extractGitHubContent } from "./extractors/github";
@@ -23,7 +22,6 @@ import {
 // ingestion flow calls Claude on the server anymore — the agent runs
 // prompts via prepare_ingest + submit_ingested_entry and POSTs artifacts
 // back to us for embedding + persistence.
-import { chunkAndEmbed } from "./embedder";
 import { normalizeTag } from "./tags";
 import { truncateContent } from "./utils";
 import { ingestionProgress } from "./progress";
@@ -33,56 +31,9 @@ import {
   GATHERED_CONTENT_MAX,
 } from "@/config";
 import { slugifyEntryTitle, fallbackSlugFromId } from "@/lib/entries/slug";
+import { PipelineStrategy, PIPELINE_STRATEGIES } from "./pipeline/strategy";
 // Credits removed — access is gated at the HTTP boundary via
 // hasActiveAccess(), not via credit math. No refunds needed here.
-
-const PIPELINE_TIMEOUT_MS = 10 * 60 * 1000;
-
-// ════════════════════════════════════════════════════════════════════
-// Pipeline strategy — per-content-type behavior
-// ════════════════════════════════════════════════════════════════════
-
-interface PipelineStrategy {
-  classifyContent: boolean;
-  linkDepth: number;
-  maxLinks: number;
-  generateSecondaryArtifact: boolean;
-  models: {
-    classifier: ModelTier;
-    contentClassifier: ModelTier;
-    manifest: ModelTier;
-    readme: ModelTier;
-    secondary: ModelTier;
-    tags: ModelTier;
-  };
-}
-
-const PIPELINE_STRATEGIES: Record<ContentType, PipelineStrategy> = {
-  setup: {
-    classifyContent: true, linkDepth: MAX_LINK_DEPTH, maxLinks: 30, generateSecondaryArtifact: true,
-    models: { classifier: "haiku", contentClassifier: "sonnet", manifest: "sonnet", readme: "sonnet", secondary: "sonnet", tags: "haiku" },
-  },
-  tutorial: {
-    classifyContent: true, linkDepth: MAX_LINK_DEPTH, maxLinks: 30, generateSecondaryArtifact: true,
-    models: { classifier: "haiku", contentClassifier: "sonnet", manifest: "sonnet", readme: "sonnet", secondary: "sonnet", tags: "haiku" },
-  },
-  knowledge: {
-    classifyContent: false, linkDepth: 1, maxLinks: 10, generateSecondaryArtifact: true,
-    models: { classifier: "haiku", contentClassifier: "haiku", manifest: "haiku", readme: "haiku", secondary: "haiku", tags: "haiku" },
-  },
-  article: {
-    classifyContent: false, linkDepth: 1, maxLinks: 10, generateSecondaryArtifact: true,
-    models: { classifier: "haiku", contentClassifier: "haiku", manifest: "haiku", readme: "haiku", secondary: "haiku", tags: "haiku" },
-  },
-  resource: {
-    classifyContent: false, linkDepth: MAX_LINK_DEPTH, maxLinks: 30, generateSecondaryArtifact: false,
-    models: { classifier: "haiku", contentClassifier: "haiku", manifest: "haiku", readme: "haiku", secondary: "haiku", tags: "haiku" },
-  },
-  reference: {
-    classifyContent: false, linkDepth: 2, maxLinks: 15, generateSecondaryArtifact: true,
-    models: { classifier: "haiku", contentClassifier: "haiku", manifest: "haiku", readme: "haiku", secondary: "haiku", tags: "haiku" },
-  },
-};
 
 // ════════════════════════════════════════════════════════════════════
 // Legacy ingestEntry / runPipeline / step* generators — REMOVED.
