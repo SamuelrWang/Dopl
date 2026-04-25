@@ -13,6 +13,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect } from "react";
 import { SmartChatPanel } from "@/features/entries/components/smart-chat-panel";
 import { EntryPreviewProvider } from "@/features/entries/components/entry-preview-context";
 import { EntryPreviewPanel } from "@/features/entries/components/entry-preview-panel";
@@ -28,9 +29,24 @@ export default function BrowseLayout({
   const isClusters = pathname.startsWith("/browse/clusters");
   const isSaved = pathname.startsWith("/browse/saved");
 
+  // EntryPreviewPanel is fixed-positioned and slides off-screen right
+  // when closed. Fixed elements are viewport-scoped for overflow, so a
+  // div-level `overflow-x-hidden` on an ancestor can't clip them —
+  // only a body-level rule does. Scope here so /canvas's horizontal
+  // pan gestures aren't affected.
+  useEffect(() => {
+    const prev = document.body.style.overflowX;
+    document.body.style.overflowX = "hidden";
+    return () => {
+      document.body.style.overflowX = prev;
+    };
+  }, []);
+
   return (
     <EntryPreviewProvider>
-      <div className="flex flex-col h-[calc(100vh-100px)]">
+      {/* h fills the viewport minus main's pt-12 (48px) + pb-3 (12px),
+          so the bottom gap matches the 12px left/right gap exactly. */}
+      <div className="flex flex-col h-[calc(100vh-60px)]">
         <div className="flex items-center gap-1 mb-4 shrink-0">
           <TabLink href="/browse/entries" active={isEntries}>
             Entries

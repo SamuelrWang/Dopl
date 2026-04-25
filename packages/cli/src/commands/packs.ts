@@ -1,6 +1,7 @@
 import { Command } from "commander";
 
 import { createClient } from "../lib/client-factory.js";
+import { getGlobalOpts } from "../lib/global-options.js";
 import {
   formatDateCompact,
   formatTable,
@@ -8,16 +9,6 @@ import {
   writeJson,
   writeLine,
 } from "../lib/output.js";
-
-interface GlobalOptions {
-  json?: boolean;
-  apiKey?: string;
-  baseUrl?: string;
-}
-
-function getGlobalOpts(cmd: Command): GlobalOptions {
-  return cmd.optsWithGlobals<GlobalOptions>();
-}
 
 export function registerPacksCommands(program: Command): void {
   const packs = program
@@ -27,6 +18,10 @@ export function registerPacksCommands(program: Command): void {
   packs
     .command("list")
     .description("List installed knowledge packs")
+    .addHelpText(
+      "after",
+      "\nExamples:\n  $ dopl packs list\n  $ dopl packs list --json | jq '.packs[].id'\n"
+    )
     .action(async (_cmdOpts: unknown, cmd: Command) => {
       const globals = getGlobalOpts(cmd);
       const client = await createClient(globals);
@@ -56,6 +51,10 @@ export function registerPacksCommands(program: Command): void {
     .description("List files in a pack (metadata only)")
     .option("-c, --category <category>", "Restrict to one /docs/<category>/ subtree")
     .option("-l, --limit <n>", "Max results", (v) => Number.parseInt(v, 10))
+    .addHelpText(
+      "after",
+      "\nExamples:\n  $ dopl packs files rokid\n  $ dopl packs files rokid --category sdk --limit 20\n"
+    )
     .action(
       async (
         pack: string,
@@ -98,6 +97,10 @@ export function registerPacksCommands(program: Command): void {
   packs
     .command("get <pack> <path>")
     .description("Fetch one file's markdown body from a pack")
+    .addHelpText(
+      "after",
+      "\nExamples:\n  $ dopl packs get rokid docs/sdk/camera.md\n  $ dopl packs get rokid docs/sdk/camera.md > camera.md\n"
+    )
     .action(async (pack: string, path: string, _cmdOpts: unknown, cmd: Command) => {
       const globals = getGlobalOpts(cmd);
       const client = await createClient(globals);

@@ -49,7 +49,7 @@ export default function BrowseEntriesPage() {
   const loadingRef = useRef(false);
   const offsetRef = useRef(0);
   const hasMoreRef = useRef(true);
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const observerRef = useRef<IntersectionObserver | null>(null);
 
   const loadPage = useCallback(async (offset: number, replace: boolean) => {
     if (loadingRef.current) return;
@@ -112,29 +112,36 @@ export default function BrowseEntriesPage() {
     void loadPage(0, true);
   }, [loadPage]);
 
-  // Wire the sentinel to an IntersectionObserver. Re-runs only when the
-  // sentinel ref changes (mount/unmount); the `loadPage` reference is
-  // stable thanks to useCallback with no deps.
-  useEffect(() => {
-    const node = sentinelRef.current;
-    if (!node) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (
-            entry.isIntersecting &&
-            !loadingRef.current &&
-            hasMoreRef.current
-          ) {
-            void loadPage(offsetRef.current, false);
+  // Callback ref: React invokes this the moment the sentinel mounts
+  // (and again with `null` on unmount), so the observer wires up
+  // exactly when the element exists. A useEffect-based observer would
+  // miss the mount because the sentinel is gated on `!initialLoading`
+  // and renders AFTER the effect's first run, with no dep change to
+  // re-trigger it.
+  const setSentinel = useCallback(
+    (node: HTMLDivElement | null) => {
+      observerRef.current?.disconnect();
+      observerRef.current = null;
+      if (!node) return;
+      const observer = new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            if (
+              entry.isIntersecting &&
+              !loadingRef.current &&
+              hasMoreRef.current
+            ) {
+              void loadPage(offsetRef.current, false);
+            }
           }
-        }
-      },
-      { rootMargin: `${ROOT_MARGIN_PX}px 0px` }
-    );
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [loadPage]);
+        },
+        { rootMargin: `${ROOT_MARGIN_PX}px 0px` }
+      );
+      observer.observe(node);
+      observerRef.current = observer;
+    },
+    [loadPage]
+  );
 
   // User's pending queue — skeleton entries waiting for their MCP agent.
   useEffect(() => {
@@ -239,7 +246,7 @@ export default function BrowseEntriesPage() {
               loading before the user reaches the end. Hidden but takes
               one row of vertical space so it intersects reliably. */}
           {hasMore && (
-            <div ref={sentinelRef} aria-hidden className="h-px w-full" />
+            <div ref={setSentinel} aria-hidden className="h-px w-full" />
           )}
 
           {/* End-of-list affordance + inline retry on mid-stream errors. */}

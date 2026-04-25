@@ -1,17 +1,14 @@
-import type { BuildResult, CanvasPanel, ClusterDetail, ClusterQueryResult, ClusterRow, DoplEntry, ListResult, Pack, PackFile, PackFileMeta, PendingStatus, PrepareIngestResult, SearchResult, SubmitIngestedEntryInput, SubmitIngestedEntryResult } from "./types.js";
-export interface DoplClientOptions {
-    toolHeaderName?: string;
-}
+import type { PendingStatus } from "./types.js";
+import type { BuildResult, CanvasPanel, ClusterDetail, ClusterQueryResult, ClusterRow, DoplEntry, ListResult, Pack, PackFile, PackFileMeta, PrepareIngestResult, SearchResult, SubmitIngestedEntryInput, SubmitIngestedEntryResult } from "./types.js";
+import { DoplTransport } from "./transport.js";
+export type { DoplTransportOptions as DoplClientOptions } from "./transport.js";
+export { parseRetryAfter } from "./retry.js";
 export declare class DoplClient {
-    private baseUrl;
-    private apiKey;
+    private transport;
     private pendingCache;
-    private toolHeaderName;
-    constructor(baseUrl: string, apiKey: string, opts?: DoplClientOptions);
+    constructor(baseUrl: string, apiKey: string, opts?: ConstructorParameters<typeof DoplTransport>[2]);
     getBaseUrl(): string;
     entryUrl(slug: string | null | undefined): string | null;
-    private buildHeaders;
-    private request;
     searchSetups(params: {
         query: string;
         tags?: string[];
@@ -145,5 +142,4 @@ export declare class DoplClient {
     kbGet(pack: string, path: string): Promise<{
         file: PackFile;
     }>;
-    private requestNoContent;
 }

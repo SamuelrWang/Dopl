@@ -6,12 +6,15 @@
   "bin": {
     "dopl-mcp": "dist/bin/dopl-mcp.js"
   },
+  "engines": {
+    "node": ">=18.17"
+  },
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch"
   },
   "dependencies": {
-    "@dopl/client": "*",
+    "@dopl/client": "^0.1.0",
     "@modelcontextprotocol/sdk": "^1.29.0"
   },
   "devDependencies": {
@@ -19,7 +22,28 @@
     "@types/node": "^22.0.0"
   },
   "files": [
-    "dist"
+    "dist",
+    "CHANGELOG.md",
+    "README.md"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SamuelrSun/usedopl.git",
+    "directory": "packages/mcp-server"
+  },
+  "homepage": "https://github.com/SamuelrSun/usedopl/tree/master/packages/mcp-server#readme",
+  "bugs": {
+    "url": "https://github.com/SamuelrSun/usedopl/issues"
+  },
+  "keywords": [
+    "dopl",
+    "mcp",
+    "knowledge-base",
+    "claude-code",
+    "agent"
+  ]
 }

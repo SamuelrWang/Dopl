@@ -11,5 +11,6 @@ export interface GlobalFlags {
 export declare class MissingApiKeyError extends Error {
     constructor();
 }
+export declare function nonEmpty(value: string | undefined | null): string | undefined;
 export declare function resolveCredentials(flags: GlobalFlags): Promise<ResolvedCredentials>;
 export declare function createClient(flags: GlobalFlags): Promise<DoplClient>;

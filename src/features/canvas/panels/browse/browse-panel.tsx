@@ -300,20 +300,36 @@ export function BrowsePanelBody({ panel }: BrowsePanelBodyProps) {
             </span>
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-2">
-            {displayEntries.map((entry) => (
-              <BrowseEntryCard
-                key={entry.id}
-                entry={entry}
-                onAdd={handleAdd}
-                adding={addingId === entry.id}
-                isBookmarked={bookmarks.isBookmarked(entry.id)}
-                onToggleBookmark={bookmarks.toggleBookmark}
-                onDragMove={handleDragMove}
-                onDragEnd={handleDragEnd}
-              />
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-3 gap-2">
+              {displayEntries.map((entry) => (
+                <BrowseEntryCard
+                  key={entry.id}
+                  entry={entry}
+                  onAdd={handleAdd}
+                  adding={addingId === entry.id}
+                  isBookmarked={bookmarks.isBookmarked(entry.id)}
+                  onToggleBookmark={bookmarks.toggleBookmark}
+                  onDragMove={handleDragMove}
+                  onDragEnd={handleDragEnd}
+                />
+              ))}
+            </div>
+            {browse.hasMore && !showBookmarkedOnly && (
+              <div className="mt-3 flex justify-center">
+                <button
+                  type="button"
+                  onClick={browse.loadMore}
+                  disabled={browse.loadingMore}
+                  className="inline-flex h-7 items-center px-3 font-mono text-[10px] uppercase tracking-wide rounded-[3px] border border-white/[0.12] text-white/60 hover:text-white/90 hover:border-white/[0.22] bg-white/[0.04] hover:bg-white/[0.08] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {browse.loadingMore
+                    ? "Loading..."
+                    : `Load more (${browse.totalCount - browse.entries.length} left)`}
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
 

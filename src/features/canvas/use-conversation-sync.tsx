@@ -133,9 +133,20 @@ function messagesToPersistFormat(messages: ChatMessage[]): ServerMessage[] {
 
 const SAVE_DEBOUNCE_MS = 2000;
 
-/** Snapshot key for tracking changes — includes message count, title, and pinned state. */
+/**
+ * Fingerprint the last message by role+type. The streaming → text
+ * finalisation doesn't change messages.length, so without this the
+ * snapshot key wouldn't flip on finalise and the agent's reply would
+ * never persist. Content is deliberately excluded so token-by-token
+ * streaming updates don't re-arm the debounce on every frame.
+ */
+function lastMessageSig(panel: ChatPanelData): string {
+  const last = panel.messages[panel.messages.length - 1];
+  return last ? `${last.role}:${last.type}` : "";
+}
+
 function panelSnapshotKey(panel: ChatPanelData): string {
-  return `${panel.messages.length}|${panel.title}|${panel.pinned ?? false}`;
+  return `${panel.messages.length}|${lastMessageSig(panel)}|${panel.title}|${panel.pinned ?? false}`;
 }
 
 export function useConversationSync() {
@@ -172,6 +183,14 @@ export function useConversationSync() {
   // changed (e.g. a panel was just moved/resized).
   const chatSnapshotKeyRef = useRef("");
 
+  // Mirror latest panels into a ref so the debounced save can read the
+  // post-finalise state when it fires — not the schedule-time snapshot.
+  // Without this, a save scheduled while the last message is still a
+  // `streaming` bubble would POST a payload with the bubble filtered
+  // out (messagesToPersistFormat only keeps `text`), losing the reply.
+  const panelsRef = useRef(state.panels);
+  panelsRef.current = state.panels;
+
   useEffect(() => {
     if (!syncedRef.current) return;
 
@@ -182,7 +201,10 @@ export function useConversationSync() {
     // Quick bail: build a composite key from chat-specific fields only.
     // If it hasn't changed, skip all the per-panel diff work.
     const compositeKey = chatPanels
-      .map((p) => `${p.id}:${p.messages.length}:${p.title}:${p.pinned ?? false}`)
+      .map(
+        (p) =>
+          `${p.id}:${p.messages.length}:${lastMessageSig(p)}:${p.title}:${p.pinned ?? false}`
+      )
       .join("|");
     if (compositeKey === chatSnapshotKeyRef.current) return;
     chatSnapshotKeyRef.current = compositeKey;
@@ -202,53 +224,57 @@ export function useConversationSync() {
         if (existing) clearTimeout(existing);
 
         const panelId = panel.id;
-        const title = panel.title;
-        const pinned = panel.pinned ?? false;
-        const messages = messagesToPersistFormat(panel.messages);
 
-        if (messages.length > 0) {
-          const timer = setTimeout(() => {
-            fetch("/api/conversations", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                panel_id: panelId,
-                title,
-                messages,
-                pinned,
-              }),
-            })
-              .then(async (res) => {
-                if (!res.ok) return;
-                // Reflect the save in our context so the drawer can
-                // show this conversation later if the canvas panel is
-                // closed. Update-or-insert by panel_id.
-                try {
-                  const { conversation } = await res.json();
-                  if (conversation && conversation.panel_id) {
-                    setConversations((prevList) => {
-                      const without = prevList.filter(
-                        (c) => c.panel_id !== conversation.panel_id
-                      );
-                      return [conversation, ...without];
-                    });
-                  }
-                } catch {
-                  // Non-JSON or unexpected shape — skip context update.
+        const timer = setTimeout(() => {
+          debounceTimers.current.delete(panelId);
+
+          const latest = panelsRef.current.find(
+            (p): p is ChatPanelData => p.id === panelId && p.type === "chat"
+          );
+          if (!latest) return;
+
+          const messages = messagesToPersistFormat(latest.messages);
+          if (messages.length === 0) return;
+
+          fetch("/api/conversations", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              panel_id: panelId,
+              title: latest.title,
+              messages,
+              pinned: latest.pinned ?? false,
+            }),
+          })
+            .then(async (res) => {
+              if (!res.ok) return;
+              // Reflect the save in our context so the drawer can
+              // show this conversation later if the canvas panel is
+              // closed. Update-or-insert by panel_id.
+              try {
+                const { conversation } = await res.json();
+                if (conversation && conversation.panel_id) {
+                  setConversations((prevList) => {
+                    const without = prevList.filter(
+                      (c) => c.panel_id !== conversation.panel_id
+                    );
+                    return [conversation, ...without];
+                  });
                 }
-              })
-              .catch((err) =>
-                console.error(
-                  "[conversation-sync] save failed for panel:",
-                  panelId,
-                  err
-                )
-              );
-            debounceTimers.current.delete(panelId);
-          }, SAVE_DEBOUNCE_MS);
+              } catch {
+                // Non-JSON or unexpected shape — skip context update.
+              }
+            })
+            .catch((err) =>
+              console.error(
+                "[conversation-sync] save failed for panel:",
+                panelId,
+                err
+              )
+            );
+        }, SAVE_DEBOUNCE_MS);
 
-          debounceTimers.current.set(panelId, timer);
-        }
+        debounceTimers.current.set(panelId, timer);
       }
     }
 

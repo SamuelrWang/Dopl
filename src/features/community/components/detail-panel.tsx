@@ -16,6 +16,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { PublishedClusterDetail } from "@/features/community/server/types";
 import { CommunityChat } from "./community-chat";
 
@@ -33,6 +34,7 @@ interface DetailPanelProps {
 }
 
 export function DetailPanel({ cluster, isOwner, isAuthenticated }: DetailPanelProps) {
+  const router = useRouter();
   const [forking, setForking] = useState(false);
   const [forked, setForked] = useState(false);
   const [forkError, setForkError] = useState<string | null>(null);
@@ -59,6 +61,12 @@ export function DetailPanel({ cluster, isOwner, isAuthenticated }: DetailPanelPr
         throw new Error(data.error || "Failed to import");
       }
       setForked(true);
+      // /canvas is a server component that loads canvas_panels +
+      // canvas_state at render time — refresh so the next visit picks
+      // up the freshly-written rows. Prefetch makes the navigation
+      // feel instant when the user clicks through.
+      router.refresh();
+      router.prefetch("/canvas");
     } catch (err) {
       setForkError(err instanceof Error ? err.message : "Failed to import");
     } finally {

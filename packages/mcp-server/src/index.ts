@@ -3,6 +3,7 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { DoplClient } from "@dopl/client";
 import { createServer } from "./server.js";
+import { clientIdentifier } from "./version.js";
 
 function parseArgs(): { apiKey: string; baseUrl: string } {
   const args = process.argv.slice(2);
@@ -53,7 +54,7 @@ Claude Code config example:
 
 async function main() {
   const { apiKey, baseUrl } = parseArgs();
-  const client = new DoplClient(baseUrl, apiKey);
+  const client = new DoplClient(baseUrl, apiKey, { clientIdentifier });
 
   // Block on the first status ping so we know whether this caller is the
   // admin before we register tools. The ping doubles as the initial

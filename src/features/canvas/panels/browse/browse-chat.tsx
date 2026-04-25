@@ -258,9 +258,16 @@ export function BrowseChat({ onAddEntry }: BrowseChatProps) {
         )}
       </div>
 
-      {/* Input */}
+      {/* Input — matches the canonical compact input style. */}
       <div className="shrink-0 px-3 pb-3 pt-1">
-        <div className="relative">
+        <div className="relative rounded-xl overflow-hidden bg-[var(--input-surface)] border border-white/[0.1] shadow-[0_2px_8px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.06)] transition-colors duration-200 focus-within:bg-[var(--input-surface-focus)] focus-within:border-white/[0.18]">
+          <div
+            className="pointer-events-none absolute inset-x-0 top-0 h-px"
+            style={{
+              background:
+                "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.25) 30%, rgba(255,255,255,0.35) 50%, rgba(255,255,255,0.25) 70%, transparent 100%)",
+            }}
+          />
           <textarea
             ref={textareaRef}
             value={input}
@@ -268,17 +275,19 @@ export function BrowseChat({ onAddEntry }: BrowseChatProps) {
             onKeyDown={handleKeyDown}
             placeholder="What are you looking for?"
             rows={1}
-            className="w-full resize-none px-3 py-2 pr-8 text-[12px] text-white/90 bg-white/[0.04] border border-white/[0.1] rounded-[4px] outline-none placeholder:text-white/30 focus:border-white/[0.2] focus:bg-white/[0.06] transition-colors leading-relaxed"
-            style={{ maxHeight: 80 }}
+            className="w-full bg-transparent px-3 pt-3 pb-1.5 text-xs leading-[18px] text-white/90 outline-none resize-none placeholder:text-white/30 disabled:opacity-50 min-h-[36px] max-h-[120px]"
           />
-          <button
-            type="button"
-            onClick={() => send(input)}
-            disabled={!input.trim() || isStreaming}
-            className="absolute right-2 bottom-2 text-white/40 hover:text-white/80 disabled:opacity-30 transition-colors"
-          >
-            <Send className="w-3.5 h-3.5" />
-          </button>
+          <div className="flex items-center justify-end px-2 pb-2">
+            <button
+              type="button"
+              onClick={() => send(input)}
+              disabled={!input.trim() || isStreaming}
+              aria-label={isStreaming ? "Sending" : "Send"}
+              className="w-7 h-7 flex items-center justify-center text-white/50 hover:text-white/90 border border-white/[0.12] hover:border-white/[0.22] rounded-full transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-white/[0.04] hover:bg-white/[0.08]"
+            >
+              <Send className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
       </div>
     </div>

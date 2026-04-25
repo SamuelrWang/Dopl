@@ -36,6 +36,9 @@ export interface BrowseState {
   entries: BrowseEntry[];
   totalCount: number;
   loading: boolean;
+  loadingMore: boolean;
+  hasMore: boolean;
+  loadMore: () => void;
   error: string | null;
   /** Always null post-pivot; kept for backward compat with existing consumers. */
   synthesis: Synthesis | null;
@@ -57,6 +60,8 @@ function mapBrowseEntries(raw: any[]): BrowseEntry[] {
   }));
 }
 
+const PAGE_SIZE = 50;
+
 export function useBrowseState(): BrowseState {
   const [mode, setMode] = useState<"browse" | "search">("browse");
   const [query, setQuery] = useState("");
@@ -64,12 +69,13 @@ export function useBrowseState(): BrowseState {
   const [entries, setEntries] = useState<BrowseEntry[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [synthesis, setSynthesis] = useState<Synthesis | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
 
-  // Browse mode: fetch entries on mount and when sort changes.
+  // Browse mode: fetch first page on mount and when sort changes.
   // The setState calls inside the .then callbacks are fine — they run
   // asynchronously (not synchronously in the effect body).
   useEffect(() => {
@@ -80,8 +86,9 @@ export function useBrowseState(): BrowseState {
     abortRef.current = controller;
 
     let cancelled = false;
+    setLoading(true);
 
-    fetch(`/api/entries?status=complete&sort=${sort}&limit=50`, {
+    fetch(`/api/entries?status=complete&sort=${sort}&limit=${PAGE_SIZE}&offset=0`, {
       signal: controller.signal,
     })
       .then((res) => {
@@ -106,6 +113,39 @@ export function useBrowseState(): BrowseState {
       controller.abort();
     };
   }, [mode, sort]);
+
+  const loadMore = useCallback(() => {
+    if (mode !== "browse") return;
+    if (loading || loadingMore) return;
+    if (entries.length >= totalCount) return;
+
+    const offset = entries.length;
+    setLoadingMore(true);
+
+    fetch(`/api/entries?status=complete&sort=${sort}&limit=${PAGE_SIZE}&offset=${offset}`)
+      .then((res) => {
+        if (!res.ok) throw new Error(`Failed to load more (${res.status})`);
+        return res.json();
+      })
+      .then((data) => {
+        const incoming = mapBrowseEntries(data.entries || []);
+        // Dedup by id in case a row shifted pages between fetches.
+        setEntries((prev) => {
+          const seen = new Set(prev.map((e) => e.id));
+          const merged = [...prev];
+          for (const e of incoming) {
+            if (!seen.has(e.id)) merged.push(e);
+          }
+          return merged;
+        });
+        setTotalCount(data.total || 0);
+        setLoadingMore(false);
+      })
+      .catch((err) => {
+        setError(err.message || "Failed to load more entries");
+        setLoadingMore(false);
+      });
+  }, [mode, sort, entries.length, totalCount, loading, loadingMore]);
 
   const handleSearch = useCallback(() => {
     const q = query.trim();
@@ -170,6 +210,9 @@ export function useBrowseState(): BrowseState {
     entries,
     totalCount,
     loading,
+    loadingMore,
+    hasMore: mode === "browse" && entries.length < totalCount,
+    loadMore,
     error,
     synthesis,
     handleSearch,

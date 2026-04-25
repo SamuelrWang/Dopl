@@ -108,6 +108,7 @@ These are allowed under the exceptions above OR scheduled for a future split. If
 | `src/features/canvas/canvas.tsx` | ~720 | Scheduled: imperative pointer/wheel handlers await extraction into `use-viewport` + `use-interactions` hooks |
 | `src/features/canvas/use-panel-ingestion.ts` | ~820 | Scheduled: split into glue hook + pure `ingestion-client` |
 | `src/features/clusters/server/service.ts` | ~520 | Scheduled: cluster-brain canvas-panel spawn logic would split cleanly |
+| `packages/mcp-server/src/server.ts` | ~1900 | Scheduled: split per-tool registrations into per-domain modules (packs, clusters, canvas, ingest) — see CLI as the precedent |
 
 ---
 

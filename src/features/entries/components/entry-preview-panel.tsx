@@ -121,21 +121,31 @@ export function EntryPreviewPanel() {
   return (
     <>
       {/* Backdrop — always in the DOM, toggled via opacity + pointer
-          events so the fade is a cheap compositor op. */}
+          events so the fade is a cheap compositor op. Hidden from
+          layout/paint entirely once the fade-out settles.
+          No backdrop-filter: the 2px blur was forcing a per-frame
+          recomposite of the grid behind during the slide animation,
+          and again on any repaint below (hover states, infinite
+          scroll). Solid tint only. */}
       <div
         aria-hidden
         onClick={handleBackdropClick}
-        className="fixed inset-0 bg-black/40 backdrop-blur-[2px] z-40"
+        className="fixed inset-0 bg-black/55 z-40"
         style={{
           opacity: isOpen ? 1 : 0,
           pointerEvents: isOpen ? "auto" : "none",
+          visibility: bodyMounted ? "visible" : "hidden",
           transition: `opacity ${TRANSITION_MS}ms ease-out`,
         }}
       />
 
       {/* Panel shell — always mounted. When closed, it's translated
           off-screen past the right edge. Transition lives on the
-          element, not on its mount, so it's smooth even in dev. */}
+          element, not on its mount, so it's smooth even in dev.
+          `visibility: hidden` post-transition removes the off-screen
+          panel from the document's scrollable width (fixed elements
+          still contribute to overflow) and from the compositor —
+          otherwise it leaks horizontal scroll and keeps a layer live. */}
       <aside
         role="dialog"
         aria-label="Entry preview"
@@ -148,8 +158,9 @@ export function EntryPreviewPanel() {
             ? "translate3d(0,0,0)"
             : "translate3d(calc(100% + 32px), 0, 0)",
           transition: `transform ${TRANSITION_MS}ms ease-out`,
-          willChange: "transform",
+          willChange: isOpen ? "transform" : "auto",
           pointerEvents: isOpen ? "auto" : "none",
+          visibility: bodyMounted ? "visible" : "hidden",
           boxShadow:
             "0 12px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06)",
         }}
@@ -197,8 +208,12 @@ export function EntryPreviewPanel() {
         </div>
 
         {/* Body — gated on `bodyMounted` so the slide-out can finish
-            before its content is torn down. */}
-        <div className="flex-1 min-h-0 overflow-y-auto p-5">
+            before its content is torn down. `overscroll-contain`
+            stops scroll from chaining into the /browse grid behind;
+            without it, hitting top/bottom of the panel drives the
+            background list and its infinite-scroll observer, which
+            was the real lag source. */}
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-5">
           {bodyMounted && (
             <>
               {loading && (

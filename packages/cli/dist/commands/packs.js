@@ -2,10 +2,8 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerPacksCommands = registerPacksCommands;
 const client_factory_js_1 = require("../lib/client-factory.js");
+const global_options_js_1 = require("../lib/global-options.js");
 const output_js_1 = require("../lib/output.js");
-function getGlobalOpts(cmd) {
-    return cmd.optsWithGlobals();
-}
 function registerPacksCommands(program) {
     const packs = program
         .command("packs")
@@ -13,8 +11,9 @@ function registerPacksCommands(program) {
     packs
         .command("list")
         .description("List installed knowledge packs")
+        .addHelpText("after", "\nExamples:\n  $ dopl packs list\n  $ dopl packs list --json | jq '.packs[].id'\n")
         .action(async (_cmdOpts, cmd) => {
-        const globals = getGlobalOpts(cmd);
+        const globals = (0, global_options_js_1.getGlobalOpts)(cmd);
         const client = await (0, client_factory_js_1.createClient)(globals);
         const { packs: rows } = await client.listPacks();
         if (globals.json) {
@@ -38,8 +37,9 @@ function registerPacksCommands(program) {
         .description("List files in a pack (metadata only)")
         .option("-c, --category <category>", "Restrict to one /docs/<category>/ subtree")
         .option("-l, --limit <n>", "Max results", (v) => Number.parseInt(v, 10))
+        .addHelpText("after", "\nExamples:\n  $ dopl packs files rokid\n  $ dopl packs files rokid --category sdk --limit 20\n")
         .action(async (pack, cmdOpts, cmd) => {
-        const globals = getGlobalOpts(cmd);
+        const globals = (0, global_options_js_1.getGlobalOpts)(cmd);
         const client = await (0, client_factory_js_1.createClient)(globals);
         const res = await client.kbList(pack, {
             category: cmdOpts.category,
@@ -73,8 +73,9 @@ function registerPacksCommands(program) {
     packs
         .command("get <pack> <path>")
         .description("Fetch one file's markdown body from a pack")
+        .addHelpText("after", "\nExamples:\n  $ dopl packs get rokid docs/sdk/camera.md\n  $ dopl packs get rokid docs/sdk/camera.md > camera.md\n")
         .action(async (pack, path, _cmdOpts, cmd) => {
-        const globals = getGlobalOpts(cmd);
+        const globals = (0, global_options_js_1.getGlobalOpts)(cmd);
         const client = await (0, client_factory_js_1.createClient)(globals);
         const res = await client.kbGet(pack, path);
         if (globals.json) {

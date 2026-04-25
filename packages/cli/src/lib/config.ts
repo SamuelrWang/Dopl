@@ -12,9 +12,13 @@ export interface DoplConfig {
 function configPath(): string {
   const override = process.env.DOPL_CONFIG_PATH;
   if (override) return override;
-  const xdg = process.env.XDG_CONFIG_HOME;
-  const base = xdg ?? join(homedir(), ".config");
-  return join(base, "dopl", "config.json");
+  if (process.platform === "win32") {
+    const appData =
+      process.env.APPDATA ?? join(homedir(), "AppData", "Roaming");
+    return join(appData, "dopl", "config.json");
+  }
+  const xdg = process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config");
+  return join(xdg, "dopl", "config.json");
 }
 
 export async function readConfig(): Promise<DoplConfig> {

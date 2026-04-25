@@ -13,9 +13,12 @@ function configPath() {
     const override = process.env.DOPL_CONFIG_PATH;
     if (override)
         return override;
-    const xdg = process.env.XDG_CONFIG_HOME;
-    const base = xdg ?? (0, path_1.join)((0, os_1.homedir)(), ".config");
-    return (0, path_1.join)(base, "dopl", "config.json");
+    if (process.platform === "win32") {
+        const appData = process.env.APPDATA ?? (0, path_1.join)((0, os_1.homedir)(), "AppData", "Roaming");
+        return (0, path_1.join)(appData, "dopl", "config.json");
+    }
+    const xdg = process.env.XDG_CONFIG_HOME ?? (0, path_1.join)((0, os_1.homedir)(), ".config");
+    return (0, path_1.join)(xdg, "dopl", "config.json");
 }
 async function readConfig() {
     try {

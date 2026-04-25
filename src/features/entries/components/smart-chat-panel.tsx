@@ -154,25 +154,35 @@ export function SmartChatPanel() {
         )}
       </div>
 
-      {/* ── Chat input (pinned bottom) ── */}
-      <div className="shrink-0 border-t border-white/[0.1] p-3">
-        <div className="relative">
+      {/* ── Chat input (pinned bottom) — matches the canonical compact
+          input style used in the canvas chat panel. */}
+      <div className="shrink-0 p-3">
+        <div className="relative rounded-xl overflow-hidden bg-white/[0.04] border border-white/[0.1] shadow-[0_2px_8px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.06)] transition-colors duration-200 focus-within:bg-white/[0.06] focus-within:border-white/[0.18]">
+          <div
+            className="pointer-events-none absolute inset-x-0 top-0 h-px"
+            style={{
+              background:
+                "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.25) 30%, rgba(255,255,255,0.35) 50%, rgba(255,255,255,0.25) 70%, transparent 100%)",
+            }}
+          />
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKey}
             placeholder="Ask about a setup..."
-            rows={2}
-            className="w-full resize-none bg-white/[0.04] border border-white/[0.08] rounded-[3px] pl-3 pr-10 py-2 text-sm text-white/90 placeholder:text-white/25 outline-none focus:border-white/[0.18] transition-colors"
+            rows={1}
+            className="w-full bg-transparent px-3 pt-3 pb-1.5 text-xs leading-[18px] text-white/90 outline-none resize-none placeholder:text-white/30 disabled:opacity-50 min-h-[36px] max-h-[120px]"
           />
-          <button
-            onClick={handleSend}
-            disabled={sending || !input.trim()}
-            aria-label="Send"
-            className="absolute right-2 bottom-2 w-7 h-7 flex items-center justify-center rounded-[3px] bg-white/[0.08] hover:bg-white/[0.14] border border-white/[0.12] hover:border-white/[0.20] text-white/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-          >
-            <ArrowUp size={14} />
-          </button>
+          <div className="flex items-center justify-end px-2 pb-2">
+            <button
+              onClick={handleSend}
+              disabled={sending || !input.trim()}
+              aria-label={sending ? "Sending" : "Send"}
+              className="w-7 h-7 flex items-center justify-center text-white/50 hover:text-white/90 border border-white/[0.12] hover:border-white/[0.22] rounded-full transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-white/[0.04] hover:bg-white/[0.08]"
+            >
+              <ArrowUp size={14} />
+            </button>
+          </div>
         </div>
       </div>
     </GlassCard>

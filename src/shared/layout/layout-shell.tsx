@@ -50,7 +50,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
             // the left edge, grid fills the rest. No mx-auto + no
             // max-width so wide monitors don't get empty side gutters.
             isBrowse
-              ? "w-full pl-3 pr-3 pt-12 pb-6 pointer-events-auto"
+              ? "w-full pl-3 pr-3 pt-12 pb-3 pointer-events-auto"
               : "container mx-auto px-4 py-8 pointer-events-auto"
           }
         >

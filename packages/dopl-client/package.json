@@ -4,16 +4,46 @@
   "description": "Shared HTTP client for the Dopl API — consumed by @dopl/mcp-server and @dopl/cli",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "engines": {
+    "node": ">=18.17"
+  },
   "scripts": {
     "build": "tsc",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
+    "@types/debug": "^4.1.13",
+    "@types/node": "^22.0.0",
     "typescript": "^5.0.0",
-    "@types/node": "^22.0.0"
+    "vitest": "^4.1.5"
   },
   "files": [
-    "dist"
+    "dist",
+    "CHANGELOG.md",
+    "README.md"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "debug": "^4.4.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SamuelrSun/usedopl.git",
+    "directory": "packages/dopl-client"
+  },
+  "homepage": "https://github.com/SamuelrSun/usedopl/tree/master/packages/dopl-client#readme",
+  "bugs": {
+    "url": "https://github.com/SamuelrSun/usedopl/issues"
+  },
+  "keywords": [
+    "dopl",
+    "knowledge-base",
+    "http-client",
+    "claude-code"
+  ]
 }

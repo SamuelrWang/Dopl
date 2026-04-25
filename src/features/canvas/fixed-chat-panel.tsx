@@ -134,17 +134,25 @@ export function FixedChatPanel() {
     localStorage.setItem(ONBOARDING_KEY, "1");
   }, [dispatch, open, panels]);
 
-  const chatPanels = useMemo(
-    () =>
-      panels
-        .filter((p): p is ChatPanelData => p.type === "chat")
-        .sort((a, b) => {
-          if (a.pinned && !b.pinned) return -1;
-          if (!a.pinned && b.pinned) return 1;
-          return 0;
-        }),
-    [panels]
-  );
+  const chatPanels = useMemo(() => {
+    // Rank by most-recent activity. Server conversations carry updated_at;
+    // panels with no matching conversation yet (brand new, not yet
+    // persisted) sort to the top so a fresh chat shows up where the user
+    // expects it.
+    const activityByPanelId = new Map<string, number>();
+    for (const c of conversations) {
+      activityByPanelId.set(c.panel_id, new Date(c.updated_at).getTime());
+    }
+    return panels
+      .filter((p): p is ChatPanelData => p.type === "chat")
+      .sort((a, b) => {
+        if (a.pinned && !b.pinned) return -1;
+        if (!a.pinned && b.pinned) return 1;
+        const aAt = activityByPanelId.get(a.id) ?? Infinity;
+        const bAt = activityByPanelId.get(b.id) ?? Infinity;
+        return bAt - aAt;
+      });
+  }, [panels, conversations]);
 
   // Closed chats: server-known conversations whose matching canvas panel
   // has been closed. These still live in the DB (on their 7-day timer)
