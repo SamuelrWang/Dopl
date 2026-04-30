@@ -507,7 +507,7 @@ function createServer(client, options = {}) {
         return { content: [{ type: "text", text: lines.join("\n") }] };
     });
     // ── sync_skills ─────────────────────────────────────────────────────
-    registerTool("sync_skills", "Write Dopl cluster skill files to disk so Claude Code can invoke them as real skills. Default target is Claude Code (`~/.claude/skills/`); pass target='openclaw' for `~/.openclaw/workspace/data/dopl/`. Call this AFTER any material change to a cluster — creating it, adding/removing entries, editing the brain, saving a memory — so the on-disk skill matches the DB state. Safe to call repeatedly; skips clusters that already have an up-to-date file unless force=true.", {
+    registerTool("sync_skills", "Write Dopl cluster skill files to disk so Claude Code can invoke them as real skills. Default target is Claude Code (`~/.claude/skills/`); pass target='openclaw' for `~/.openclaw/workspace/data/dopl/`. Call this AFTER any material change to a cluster — creating it, adding/removing entries, editing the brain, saving a memory — so the on-disk skill matches the DB state. Safe to call repeatedly: each skill dir tracks the server brain version in `.dopl-meta.json`, so clusters whose brain hasn't changed since the last sync are skipped automatically. Pass force=true to rewrite every skill regardless of version (useful when debugging or after manually editing a SKILL.md). Orphan reference files for entries that have left a cluster are pruned on every rewrite.", {
         force: zod_1.z.boolean().optional().describe("Overwrite existing skill files (default: false, skips existing)"),
         target: zod_1.z.enum(["claude", "openclaw"]).optional().describe("Target platform: 'claude' (default) writes to ~/.claude/skills/, 'openclaw' writes to ~/.openclaw/workspace/data/dopl/"),
     }, async ({ force, target }) => {
@@ -517,20 +517,14 @@ function createServer(client, options = {}) {
         const clusterSummaries = [];
         for (const cluster of clusters) {
             try {
-                // Check if skill already exists
-                if (!force && await (0, skill_writer_js_1.skillExists)(canvasContext, cluster.slug, skillTarget)) {
-                    results.push(`- **${cluster.name}** — skipped (already exists)`);
-                    // Still collect summary for global files
-                    const detail = await client.getCluster(cluster.slug);
-                    clusterSummaries.push(buildClusterSummary(cluster.slug, cluster.name, detail.entries));
-                    continue;
-                }
-                const detail = await client.getCluster(cluster.slug);
-                // Client-only synthesis: the server does NOT auto-synthesize
-                // missing brains anymore. If a brain is missing or empty, we
-                // still write the skill file (so trigger-matching works) but
-                // flag the cluster so the agent can synthesize it.
-                let brain = { instructions: "", memories: [] };
+                // Pull the brain first so we know its server-side version.
+                // The version is the gate for skipping — if the on-disk meta
+                // file matches, we don't need to refetch entries or rewrite.
+                let brain = {
+                    instructions: "",
+                    memories: [],
+                    brain_version: 0,
+                };
                 let brainEmpty = false;
                 try {
                     brain = await client.getClusterBrain(cluster.slug);
@@ -541,12 +535,26 @@ function createServer(client, options = {}) {
                 catch {
                     brainEmpty = true;
                 }
+                const serverVersion = brain.brain_version ?? 0;
+                // Version-aware skip — the on-disk `.dopl-meta.json` records
+                // the brain version this skill reflects. Skip the rewrite
+                // only when versions match. Replaces the legacy "if file
+                // exists, skip" heuristic, which silently missed every
+                // server-side brain edit.
+                if (!force &&
+                    (await (0, skill_writer_js_1.skillIsCurrent)(canvasContext, cluster.slug, serverVersion, skillTarget))) {
+                    results.push(`- **${cluster.name}** — skipped (up to date, brain v${serverVersion})`);
+                    const detail = await client.getCluster(cluster.slug);
+                    clusterSummaries.push(buildClusterSummary(cluster.slug, cluster.name, detail.entries));
+                    continue;
+                }
+                const detail = await client.getCluster(cluster.slug);
                 await (0, skill_writer_js_1.writeClusterSkill)(canvasContext, cluster.slug, cluster.name, brain, detail.entries, skillTarget);
                 if (brainEmpty) {
                     results.push(`- **${cluster.name}** — wrote thin-pointer skill (⚠️ brain is empty — synthesize it with \`get_skill_template\` → \`update_cluster_brain("${cluster.slug}", …)\`)`);
                 }
                 else {
-                    results.push(`- **${cluster.name}** — wrote skill with ${detail.entries.length} entries`);
+                    results.push(`- **${cluster.name}** — wrote skill v${serverVersion} with ${detail.entries.length} entries`);
                 }
                 clusterSummaries.push(buildClusterSummary(cluster.slug, cluster.name, detail.entries));
             }

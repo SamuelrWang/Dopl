@@ -12,13 +12,24 @@ export interface CanvasContext {
 }
 /**
  * Check if a cluster skill directory already exists on disk for the
- * given canvas.
+ * given canvas. Existence-only — does NOT verify the on-disk version
+ * matches the server. Use `skillIsCurrent` for that check.
  */
 export declare function skillExists(canvas: CanvasContext, clusterSlug: string, target?: SkillTarget): Promise<boolean>;
 /**
+ * Returns true when the on-disk skill is up to date for the given
+ * server brain version. Used by `sync_skills` to skip reads + writes
+ * for clusters whose brain hasn't changed. Treats "no meta file" as
+ * stale so a freshly-installed agent re-syncs everything once.
+ */
+export declare function skillIsCurrent(canvas: CanvasContext, clusterSlug: string, serverBrainVersion: number, target?: SkillTarget): Promise<boolean>;
+/**
  * Write a per-cluster SKILL.md and its references/ directory. Atomic:
  * SKILL.md and every reference file land via `<file>.tmp` + rename so
- * a crash mid-write never leaves a torn skill.
+ * a crash mid-write never leaves a torn skill. Reconciles orphaned
+ * reference files (entries removed from the cluster since the last
+ * sync) and writes a `.dopl-meta.json` recording the server brain
+ * version this write reflects.
  */
 export declare function writeClusterSkill(canvas: CanvasContext, clusterSlug: string, name: string, brain: BrainData, entries: ClusterDetailEntry[], target?: SkillTarget): Promise<void>;
 /**

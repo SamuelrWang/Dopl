@@ -4,6 +4,34 @@ All notable changes to `@dopl/client` are documented here. Format follows [Keep 
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-04-30
+
+### Added
+- Canvas (workspace) selection on the transport. New
+  `DoplClientOptions.canvasId` and `DoplClient.setCanvasId(id)` /
+  `getCanvasId()`. When set, every request emits an `X-Canvas-Id`
+  header so the server scopes data to that canvas. When unset, the
+  server falls back to the user's default canvas.
+- `client.listCanvases()` — list every canvas the caller is an active
+  member of.
+- `client.getCanvas(slug)` — fetch one canvas + caller's role.
+- `client.getActiveCanvas()` — resolve the canvas this transport is
+  currently scoped to (used by the MCP server's startup handshake).
+- `client.saveClusterMemory(slug, content, scope?)` — the optional
+  `scope` arg (`workspace` | `personal`) routes the write through the
+  new server-side scope/visibility filter.
+- `BrainData.brain_version` (number, optional) returned by
+  `getClusterBrain` — monotonic counter the server bumps on every
+  `instructions` change.
+- `BrainMemory.scope` and `BrainMemory.is_mine` carried through on
+  every memory returned by `getClusterBrain`.
+- New types: `CanvasSummary`, `CanvasRole`, `ResolvedCanvas`,
+  `MemoryScope`.
+
+### Changed
+- `getClusterBrain` return type is now richer (includes
+  `brain_version` and per-memory scope/is_mine).
+
 ## [0.1.0] — 2026-04-24
 
 Initial extraction from `@dopl/mcp-server`. Shared HTTP client consumed by `@dopl/mcp-server` and `@dopl/cli`.
@@ -17,5 +45,6 @@ Initial extraction from `@dopl/mcp-server`. Shared HTTP client consumed by `@dop
 - `debug` namespace `dopl:client` — logs method, path, status, duration, and retry count. No secrets or response bodies.
 - `engines.node >=18.17` (Node 18+ ships stable `fetch`).
 
-[Unreleased]: https://github.com/SamuelrSun/usedopl/compare/client-v0.1.0...HEAD
+[Unreleased]: https://github.com/SamuelrSun/usedopl/compare/client-v0.2.0...HEAD
+[0.2.0]: https://github.com/SamuelrSun/usedopl/releases/tag/client-v0.2.0
 [0.1.0]: https://github.com/SamuelrSun/usedopl/releases/tag/client-v0.1.0

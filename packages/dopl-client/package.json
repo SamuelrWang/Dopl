@@ -1,6 +1,6 @@
 {
   "name": "@dopl/client",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Shared HTTP client for the Dopl API — consumed by @dopl/mcp-server and @dopl/cli",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
