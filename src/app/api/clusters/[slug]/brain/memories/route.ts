@@ -98,7 +98,10 @@ async function getOrCreateBrain(
   canvasId: string
 ): Promise<string> {
   const db = supabaseAdmin();
-  const { data: brain, error } = await db
+  // Upsert with ignoreDuplicates returns ZERO rows when a brain already
+  // exists, so .single() errors. Use maybeSingle() and fall back to a
+  // direct SELECT for the existing-brain path.
+  const { data: upserted } = await db
     .from("cluster_brains")
     .upsert(
       {
@@ -110,12 +113,19 @@ async function getOrCreateBrain(
       { onConflict: "cluster_id", ignoreDuplicates: true }
     )
     .select("id")
-    .single();
+    .maybeSingle();
 
-  if (error || !brain) {
-    throw error || new Error("Failed to get or create cluster brain");
+  if (upserted?.id) return upserted.id;
+
+  const { data: existing, error: selectError } = await db
+    .from("cluster_brains")
+    .select("id")
+    .eq("cluster_id", clusterId)
+    .single();
+  if (selectError || !existing) {
+    throw selectError || new Error("Failed to get or create cluster brain");
   }
-  return brain.id;
+  return existing.id;
 }
 
 // Re-read the workspace-scoped memory list and mirror it into the
