@@ -13,10 +13,14 @@
  * Slug resolution: looks up by (owner_id, slug). Membership-via-invite
  * (canvases the user joined but doesn't own) lands in Phase 4 — until
  * then, owner-side lookup covers every reachable canvas.
+ *
+ * Last-active-canvas persistence is handled client-side (the canvas
+ * shell writes `document.cookie` on mount). Server Components can't
+ * call `cookies().set()` in Next.js 16 — that throws — so the write
+ * has to live on the client or in a Route Handler.
  */
 
 import { notFound, redirect } from "next/navigation";
-import { cookies } from "next/headers";
 import { getUser } from "@/shared/supabase/server";
 import {
   loadCanvasConversations,
@@ -29,8 +33,6 @@ import {
 import CanvasClientShell from "../canvas-client-shell";
 
 export const dynamic = "force-dynamic";
-
-const ACTIVE_CANVAS_COOKIE = "dopl_active_canvas";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -49,15 +51,6 @@ export default async function CanvasSlugPage({ params }: PageProps) {
   // through canvas_members, but the assertion turns a stale-cache miss
   // into a clean 404 instead of a half-rendered canvas.
   await resolveMembershipOrThrow(canvas.id, user.id);
-
-  // Persist as last-active so plain `/canvas` redirects here on return.
-  const cookieJar = await cookies();
-  cookieJar.set(ACTIVE_CANVAS_COOKIE, canvas.slug, {
-    httpOnly: false,
-    sameSite: "lax",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 365,
-  });
 
   const scope = { userId: user.id, canvasId: canvas.id };
   const conversations = await loadCanvasConversations(scope);
