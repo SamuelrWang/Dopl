@@ -11,6 +11,7 @@ import { MissingApiKeyError } from "../lib/client-factory.js";
 import { getGlobalOpts } from "../lib/global-options.js";
 import { writeError } from "../lib/output.js";
 import { registerAuthCommands } from "../commands/auth.js";
+import { registerCanvasCommands } from "../commands/canvas.js";
 import { registerPacksCommands } from "../commands/packs.js";
 import { maybeNotifyOfUpdate } from "../lib/update-check.js";
 import { packageVersion } from "../lib/version.js";
@@ -31,6 +32,10 @@ async function run(): Promise<void> {
     .version(packageVersion)
     .option("--api-key <key>", "Dopl API key (overrides env + config)")
     .option("--base-url <url>", "API base URL (overrides env + config)")
+    .option(
+      "--canvas <id>",
+      "Active canvas UUID (overrides env + config). To pick by slug, run `dopl canvas use <slug>` first."
+    )
     .option("--json", "Emit JSON instead of human-readable output", false)
     .option("--verbose", "Log request/response trace to stderr", false)
     .option("--no-update-notifier", "Skip the once-a-day npm update check")
@@ -48,6 +53,7 @@ async function run(): Promise<void> {
   });
 
   registerAuthCommands(program);
+  registerCanvasCommands(program);
   registerPacksCommands(program);
 
   await program.parseAsync(process.argv);

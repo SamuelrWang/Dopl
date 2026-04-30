@@ -7,6 +7,10 @@ const DEFAULT_BASE_URL = "https://www.usedopl.com";
 export interface DoplConfig {
   apiKey?: string;
   baseUrl?: string;
+  /** Active canvas (workspace) UUID. Set by `dopl canvas use <slug>`. */
+  canvasId?: string;
+  /** Slug of the active canvas. Stored alongside canvasId for display. */
+  canvasSlug?: string;
 }
 
 function configPath(): string {
@@ -30,6 +34,8 @@ export async function readConfig(): Promise<DoplConfig> {
     const out: DoplConfig = {};
     if (typeof cfg.apiKey === "string") out.apiKey = cfg.apiKey;
     if (typeof cfg.baseUrl === "string") out.baseUrl = cfg.baseUrl;
+    if (typeof cfg.canvasId === "string") out.canvasId = cfg.canvasId;
+    if (typeof cfg.canvasSlug === "string") out.canvasSlug = cfg.canvasSlug;
     return out;
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") return {};

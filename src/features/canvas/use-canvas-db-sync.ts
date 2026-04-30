@@ -16,9 +16,24 @@
 
 import { useEffect, useRef } from "react";
 import { CANVAS_STORAGE_KEY_PREFIX, CANVAS_ACTIVE_USER_KEY } from "@/config";
-import { useCanvas } from "./canvas-store";
+import { useCanvas, useCanvasScope } from "./canvas-store";
 import type { Panel } from "./types";
 import { panelToDbRow } from "@/features/canvas/server/panel-dto";
+import {
+  fetchCurrentVersion,
+  patchCanvasState,
+} from "./canvas-state-sync";
+
+/**
+ * Build the standard headers for every canvas-sync fetch. Stamps the
+ * active canvas id so the server can scope the write to the correct
+ * workspace. Falls back to user-default if no canvas id is set.
+ */
+function syncHeaders(canvasId: string | null): HeadersInit {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (canvasId) headers["X-Canvas-Id"] = canvasId;
+  return headers;
+}
 
 // ── localStorage timestamp tracking ──────────────────────────────────
 // Lightweight write-breadcrumb used to debug stale local state. The
@@ -61,6 +76,8 @@ function panelIdSet(panels: Panel[]): Set<string> {
 
 export function useCanvasDbSync() {
   const { state } = useCanvas();
+  const scope = useCanvasScope();
+  const canvasId = scope?.canvasId ?? null;
   const syncedRef = useRef(false);
   const prevCameraRef = useRef("");
   const prevPanelIdsRef = useRef<Set<string>>(new Set());
@@ -74,6 +91,26 @@ export function useCanvasDbSync() {
   const titleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const clusterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const panelDataTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Optimistic-lock version for canvas_state. Hydrated on mount via a
+  // GET, then bumped in lock-step with every successful PATCH so cross-
+  // tab races resolve as 409 + refetch instead of silent overwrites.
+  const stateVersionRef = useRef<number | null>(null);
+
+  // Mount-time version hydration. Runs once per canvasId — if the
+  // canvas changes (Phase 2 switcher), we re-fetch so the next PATCH
+  // doesn't carry a stale baseline. Result null is fine — the first
+  // PATCH will create the row and learn the server's version then.
+  useEffect(() => {
+    if (!canvasId) return;
+    let cancelled = false;
+    fetchCurrentVersion(canvasId).then((v) => {
+      if (cancelled) return;
+      if (v !== null) stateVersionRef.current = v;
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [canvasId]);
 
   // Seed tracking refs SYNCHRONOUSLY from the server-rendered initial
   // state — not inside a useEffect — so the write-through effects below
@@ -114,17 +151,13 @@ export function useCanvasDbSync() {
     if (currentCamera !== prevCameraRef.current || currentCounters !== prevCountersRef.current) {
       if (cameraTimerRef.current) clearTimeout(cameraTimerRef.current);
       cameraTimerRef.current = setTimeout(() => {
-        fetch("/api/canvas/state", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            camera_x: state.camera.x,
-            camera_y: state.camera.y,
-            camera_zoom: state.camera.zoom,
-            next_panel_id: state.nextPanelId,
-            next_cluster_id: state.nextClusterId,
-          }),
-        }).then(() => setLocalSaveTimestamp()).catch((err) => console.error("[canvas-sync] camera save failed:", err));
+        void patchCanvasState(canvasId, stateVersionRef, {
+          camera_x: state.camera.x,
+          camera_y: state.camera.y,
+          camera_zoom: state.camera.zoom,
+          next_panel_id: state.nextPanelId,
+          next_cluster_id: state.nextClusterId,
+        }).then(() => setLocalSaveTimestamp());
         cameraTimerRef.current = null;
       }, 1000);
       prevCameraRef.current = currentCamera;
@@ -144,7 +177,7 @@ export function useCanvasDbSync() {
         const row = panelToDbRow(panel);
         fetch("/api/canvas/panels", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: syncHeaders(canvasId),
           body: JSON.stringify(row),
         }).then(() => setLocalSaveTimestamp()).catch((err) => console.error("[canvas-sync] panel create failed:", err));
       }
@@ -155,6 +188,7 @@ export function useCanvasDbSync() {
       if (!currentPanelIds.has(prevId)) {
         fetch(`/api/canvas/panels/${encodeURIComponent(prevId)}`, {
           method: "DELETE",
+          headers: canvasId ? { "X-Canvas-Id": canvasId } : undefined,
         }).catch((err) => console.error("[canvas-sync] panel delete failed:", err));
       }
     }
@@ -176,7 +210,7 @@ export function useCanvasDbSync() {
         }));
         fetch("/api/canvas/panels/batch", {
           method: "PATCH",
-          headers: { "Content-Type": "application/json" },
+          headers: syncHeaders(canvasId),
           body: JSON.stringify({ updates }),
         }).catch((err) => console.error("[canvas-sync] position batch update failed:", err));
         positionTimerRef.current = null;
@@ -204,7 +238,7 @@ export function useCanvasDbSync() {
       titleTimerRef.current = setTimeout(() => {
         fetch("/api/canvas/panels/batch", {
           method: "PATCH",
-          headers: { "Content-Type": "application/json" },
+          headers: syncHeaders(canvasId),
           body: JSON.stringify({ updates: changedTitles }),
         }).catch((err) => console.error("[canvas-sync] title batch update failed:", err));
         titleTimerRef.current = null;
@@ -220,12 +254,9 @@ export function useCanvasDbSync() {
     if (currentClustersKey !== prevClustersRef.current) {
       if (clusterTimerRef.current) clearTimeout(clusterTimerRef.current);
       clusterTimerRef.current = setTimeout(() => {
-        fetch("/api/canvas/state", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ clusters: state.clusters }),
-        }).then(() => setLocalSaveTimestamp())
-          .catch((err) => console.error("[canvas-sync] cluster save failed:", err));
+        void patchCanvasState(canvasId, stateVersionRef, {
+          clusters: state.clusters,
+        }).then(() => setLocalSaveTimestamp());
         clusterTimerRef.current = null;
       }, 1000);
       prevClustersRef.current = currentClustersKey;
@@ -251,7 +282,7 @@ export function useCanvasDbSync() {
       panelDataTimerRef.current = setTimeout(() => {
         fetch("/api/canvas/panels/batch", {
           method: "PATCH",
-          headers: { "Content-Type": "application/json" },
+          headers: syncHeaders(canvasId),
           body: JSON.stringify({ updates: panelDataUpdates }),
         }).then(() => setLocalSaveTimestamp())
           .catch((err) => console.error("[canvas-sync] panel_data batch update failed:", err));
@@ -302,18 +333,18 @@ export function useCanvasDbSync() {
       if (cameraTimerRef.current) {
         clearTimeout(cameraTimerRef.current);
         cameraTimerRef.current = null;
-        fetch("/api/canvas/state", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          keepalive: true,
-          body: JSON.stringify({
+        void patchCanvasState(
+          canvasId,
+          stateVersionRef,
+          {
             camera_x: s.camera.x,
             camera_y: s.camera.y,
             camera_zoom: s.camera.zoom,
             next_panel_id: s.nextPanelId,
             next_cluster_id: s.nextClusterId,
-          }),
-        }).catch(() => {});
+          },
+          { keepalive: true },
+        );
       }
 
       // Positions + panel_data (all panel batches flushed together)
@@ -333,7 +364,7 @@ export function useCanvasDbSync() {
         });
         fetch("/api/canvas/panels/batch", {
           method: "PATCH",
-          headers: { "Content-Type": "application/json" },
+          headers: syncHeaders(canvasId),
           keepalive: true,
           body: JSON.stringify({ updates }),
         }).catch(() => {});
@@ -355,7 +386,7 @@ export function useCanvasDbSync() {
         if (titleUpdates.length > 0) {
           fetch("/api/canvas/panels/batch", {
             method: "PATCH",
-            headers: { "Content-Type": "application/json" },
+            headers: syncHeaders(canvasId),
             keepalive: true,
             body: JSON.stringify({ updates: titleUpdates }),
           }).catch(() => {});
@@ -366,12 +397,12 @@ export function useCanvasDbSync() {
       if (clusterTimerRef.current) {
         clearTimeout(clusterTimerRef.current);
         clusterTimerRef.current = null;
-        fetch("/api/canvas/state", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          keepalive: true,
-          body: JSON.stringify({ clusters: s.clusters }),
-        }).catch(() => {});
+        void patchCanvasState(
+          canvasId,
+          stateVersionRef,
+          { clusters: s.clusters },
+          { keepalive: true },
+        );
       }
     }
 

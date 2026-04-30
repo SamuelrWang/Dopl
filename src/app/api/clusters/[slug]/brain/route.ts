@@ -5,23 +5,23 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/shared/supabase/admin";
-import { withUserAuth } from "@/shared/auth/with-auth";
+import { withCanvasAuth } from "@/shared/auth/with-canvas-auth";
 import { validateBrainStructure } from "@/shared/prompts/skill-template";
 
 export const dynamic = "force-dynamic";
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
-// Look up a cluster by slug, scoped to the owning user. Returns null
-// if the cluster doesn't exist OR the user doesn't own it — either way
-// the caller returns 404 so we don't leak existence across users.
-async function getClusterBySlugForUser(slug: string, userId: string) {
+// Look up a cluster by slug, scoped to the active canvas. Returns null
+// if the cluster doesn't exist in this canvas — the caller returns 404
+// so existence isn't leaked across canvases.
+async function getClusterBySlugForCanvas(slug: string, canvasId: string) {
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("clusters")
     .select("id, slug, name")
     .eq("slug", slug)
-    .eq("user_id", userId)
+    .eq("canvas_id", canvasId)
     .single();
 
   if (error || !data) {
@@ -34,14 +34,18 @@ async function getClusterBySlugForUser(slug: string, userId: string) {
 
 async function handleGet(
   _request: NextRequest,
-  { userId, params }: { userId: string; params?: Record<string, string> }
+  {
+    userId,
+    canvasId,
+    params,
+  }: { userId: string; canvasId: string; params?: Record<string, string> }
 ) {
   try {
     const slug = params?.slug;
     if (!slug) {
       return NextResponse.json({ error: "slug required" }, { status: 400 });
     }
-    const cluster = await getClusterBySlugForUser(slug, userId);
+    const cluster = await getClusterBySlugForCanvas(slug, canvasId);
     if (!cluster) {
       return NextResponse.json(
         { error: `Cluster not found: ${slug}` },
@@ -54,26 +58,43 @@ async function handleGet(
     // Look up the brain
     const { data: brain, error: brainError } = await db
       .from("cluster_brains")
-      .select("id, instructions, created_at, updated_at")
+      .select("id, instructions, brain_version, created_at, updated_at")
       .eq("cluster_id", cluster.id)
       .single();
 
     if (brainError || !brain) {
-      return NextResponse.json({ instructions: "", memories: [] });
+      return NextResponse.json({
+        instructions: "",
+        memories: [],
+        brain_version: 0,
+      });
     }
 
-    // Fetch memories
+    // Visibility filter: workspace memories visible to every member,
+    // personal memories visible only to their author. Implemented via
+    // an OR filter so we make one query and let Postgres apply both
+    // arms in the same scan (`brain_scope_idx` covers the workspace
+    // arm; `author_id_idx` covers personal-by-author).
     const { data: memories, error: memError } = await db
       .from("cluster_brain_memories")
-      .select("id, content, created_at")
+      .select("id, content, created_at, scope, author_id")
       .eq("cluster_brain_id", brain.id)
+      .or(`scope.eq.workspace,author_id.eq.${userId}`)
       .order("created_at", { ascending: true });
 
     if (memError) throw memError;
 
     return NextResponse.json({
       instructions: brain.instructions,
-      memories: (memories || []).map((m) => ({ id: m.id, content: m.content })),
+      brain_version: brain.brain_version ?? 1,
+      updated_at: brain.updated_at,
+      memories: (memories || []).map((m) => ({
+        id: m.id,
+        content: m.content,
+        scope: m.scope,
+        author_id: m.author_id,
+        is_mine: m.author_id === userId,
+      })),
     });
   } catch (error) {
     // Surface Supabase PostgrestError shape (code + details + hint) in
@@ -106,14 +127,18 @@ async function handleGet(
 
 async function handlePatch(
   request: NextRequest,
-  { userId, params }: { userId: string; params?: Record<string, string> }
+  {
+    userId,
+    canvasId,
+    params,
+  }: { userId: string; canvasId: string; params?: Record<string, string> }
 ) {
   try {
     const slug = params?.slug;
     if (!slug) {
       return NextResponse.json({ error: "slug required" }, { status: 400 });
     }
-    const cluster = await getClusterBySlugForUser(slug, userId);
+    const cluster = await getClusterBySlugForCanvas(slug, canvasId);
     if (!cluster) {
       return NextResponse.json(
         { error: `Cluster not found: ${slug}` },
@@ -165,6 +190,7 @@ async function handlePatch(
         .insert({
           cluster_id: cluster.id,
           user_id: userId,
+          canvas_id: canvasId,
           instructions,
           updated_at: now,
         })
@@ -191,7 +217,7 @@ async function handlePatch(
       const { data: existingPanel } = await db
         .from("canvas_panels")
         .select("panel_data")
-        .eq("user_id", userId)
+        .eq("canvas_id", canvasId)
         .eq("panel_id", brainPanelId)
         .eq("panel_type", "cluster-brain")
         .maybeSingle();
@@ -209,7 +235,7 @@ async function handlePatch(
               errorMessage: null,
             },
           })
-          .eq("user_id", userId)
+          .eq("canvas_id", canvasId)
           .eq("panel_id", brainPanelId);
       }
     } catch (syncErr) {
@@ -260,5 +286,5 @@ async function handlePatch(
   }
 }
 
-export const GET = withUserAuth(handleGet);
-export const PATCH = withUserAuth(handlePatch);
+export const GET = withCanvasAuth(handleGet);
+export const PATCH = withCanvasAuth(handlePatch, { minRole: "editor" });

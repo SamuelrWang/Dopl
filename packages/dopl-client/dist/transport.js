@@ -14,11 +14,23 @@ class DoplTransport {
     apiKey;
     toolHeaderName;
     clientIdentifier;
+    canvasId;
     constructor(baseUrl, apiKey, opts = {}) {
         this.baseUrl = baseUrl.replace(/\/$/, "");
         this.apiKey = apiKey;
         this.toolHeaderName = opts.toolHeaderName ?? "X-MCP-Tool";
         this.clientIdentifier = opts.clientIdentifier ?? null;
+        this.canvasId = opts.canvasId ?? null;
+    }
+    /**
+     * Update the active canvas after construction (e.g. CLI flow where
+     * the user runs `dopl canvas use <slug>` mid-session).
+     */
+    setCanvasId(canvasId) {
+        this.canvasId = canvasId;
+    }
+    getCanvasId() {
+        return this.canvasId;
     }
     getBaseUrl() {
         return this.baseUrl;
@@ -100,6 +112,8 @@ class DoplTransport {
             headers[this.toolHeaderName] = toolName;
         if (this.clientIdentifier)
             headers["X-Dopl-Client"] = this.clientIdentifier;
+        if (this.canvasId)
+            headers["X-Canvas-Id"] = this.canvasId;
         return headers;
     }
     async doFetch(path, method, body, timeoutMs, toolName) {

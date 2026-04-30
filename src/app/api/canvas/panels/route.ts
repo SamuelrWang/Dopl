@@ -1,17 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withUserAuth } from "@/shared/auth/with-auth";
+import { withCanvasAuth } from "@/shared/auth/with-canvas-auth";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 
 const supabase = supabaseAdmin();
 
 /**
- * GET /api/canvas/panels — list all panels on the user's canvas.
+ * GET /api/canvas/panels — list all panels on the active canvas.
  */
-export const GET = withUserAuth(async (_request, { userId }) => {
+export const GET = withCanvasAuth(async (_request, { canvasId }) => {
   const { data, error } = await supabase
     .from("canvas_panels")
     .select("*")
-    .eq("user_id", userId)
+    .eq("canvas_id", canvasId)
     .order("added_at", { ascending: false });
 
   if (error) {
@@ -26,7 +26,7 @@ export const GET = withUserAuth(async (_request, { userId }) => {
     .map((p) => (p as { entry_id: string | null }).entry_id)
     .filter((id): id is string => typeof id === "string" && id.length > 0);
 
-  let slugByEntryId = new Map<string, string | null>();
+  const slugByEntryId = new Map<string, string | null>();
   if (entryIds.length > 0) {
     const { data: entries } = await supabase
       .from("entries")
@@ -52,85 +52,85 @@ export const GET = withUserAuth(async (_request, { userId }) => {
 });
 
 /**
- * POST /api/canvas/panels — add a panel to the user's canvas.
+ * POST /api/canvas/panels — add a panel to the active canvas.
  * Supports all panel types: entry, chat, connection, browse, cluster-brain.
  * Body: { panel_id, panel_type, entry_id?, x, y, width?, height?, title?, summary?, source_url?, panel_data? }
  */
-export const POST = withUserAuth(async (request, { userId }) => {
-  const body = await request.json();
-  const { panel_type, entry_id, x, y, width, height, title, summary, source_url, panel_data } = body;
-  let { panel_id } = body;
+export const POST = withCanvasAuth(
+  async (request, { userId, canvasId }) => {
+    const body = await request.json();
+    const { panel_type, entry_id, x, y, width, height, title, summary, source_url, panel_data } = body;
+    let { panel_id } = body;
 
-  // MCP's canvas_add_entry posts { entry_id } only — no panel_id. The UI
-  // posts both. Synthesize a stable panel_id from entry_id when missing so
-  // both callers work against the same endpoint. `entry-<uuid>` mirrors
-  // the convention the DELETE fallback comment alludes to.
-  if ((!panel_id || typeof panel_id !== "string") && typeof entry_id === "string" && entry_id.length > 0) {
-    panel_id = `entry-${entry_id}`;
-  }
-
-  if (!panel_id || typeof panel_id !== "string") {
-    return NextResponse.json({ error: "panel_id or entry_id is required" }, { status: 400 });
-  }
-
-  const VALID_PANEL_TYPES = ["entry", "chat", "connection", "browse", "cluster-brain"];
-  if (panel_type && !VALID_PANEL_TYPES.includes(panel_type)) {
-    return NextResponse.json(
-      { error: `Invalid panel_type. Must be one of: ${VALID_PANEL_TYPES.join(", ")}` },
-      { status: 400 }
-    );
-  }
-
-  // For entry panels, validate entry exists
-  if (panel_type === "entry" && entry_id) {
-    const { data: entry, error: entryError } = await supabase
-      .from("entries")
-      .select("id, status")
-      .eq("id", entry_id)
-      .single();
-
-    if (entryError || !entry) {
-      return NextResponse.json({ error: "Entry not found" }, { status: 404 });
+    // MCP's canvas_add_entry posts { entry_id } only — no panel_id. The UI
+    // posts both. Synthesize a stable panel_id from entry_id when missing.
+    if ((!panel_id || typeof panel_id !== "string") && typeof entry_id === "string" && entry_id.length > 0) {
+      panel_id = `entry-${entry_id}`;
     }
-  }
 
-  const { data: panel, error: insertError } = await supabase
-    .from("canvas_panels")
-    .upsert(
-      {
-        user_id: userId,
-        panel_id,
-        panel_type: panel_type || "entry",
-        entry_id: entry_id || null,
-        x: x ?? 0,
-        y: y ?? 0,
-        width: width ?? null,
-        height: height ?? null,
-        title: title || null,
-        summary: summary || null,
-        source_url: source_url || null,
-        panel_data: panel_data || {},
-      },
-      { onConflict: "user_id,panel_id", ignoreDuplicates: true }
-    )
-    .select()
-    .maybeSingle();
+    if (!panel_id || typeof panel_id !== "string") {
+      return NextResponse.json({ error: "panel_id or entry_id is required" }, { status: 400 });
+    }
 
-  if (insertError) {
-    // If ignoreDuplicates caused no row returned, fetch existing
-    const { data: existing } = await supabase
+    const VALID_PANEL_TYPES = ["entry", "chat", "connection", "browse", "cluster-brain"];
+    if (panel_type && !VALID_PANEL_TYPES.includes(panel_type)) {
+      return NextResponse.json(
+        { error: `Invalid panel_type. Must be one of: ${VALID_PANEL_TYPES.join(", ")}` },
+        { status: 400 }
+      );
+    }
+
+    if (panel_type === "entry" && entry_id) {
+      const { data: entry, error: entryError } = await supabase
+        .from("entries")
+        .select("id, status")
+        .eq("id", entry_id)
+        .single();
+
+      if (entryError || !entry) {
+        return NextResponse.json({ error: "Entry not found" }, { status: 404 });
+      }
+    }
+
+    const { data: panel, error: insertError } = await supabase
       .from("canvas_panels")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("panel_id", panel_id)
-      .single();
+      .upsert(
+        {
+          user_id: userId,
+          canvas_id: canvasId,
+          panel_id,
+          panel_type: panel_type || "entry",
+          entry_id: entry_id || null,
+          x: x ?? 0,
+          y: y ?? 0,
+          width: width ?? null,
+          height: height ?? null,
+          title: title || null,
+          summary: summary || null,
+          source_url: source_url || null,
+          panel_data: panel_data || {},
+        },
+        { onConflict: "canvas_id,panel_id", ignoreDuplicates: true }
+      )
+      .select()
+      .maybeSingle();
 
-    if (existing) {
-      return NextResponse.json({ panel: existing, created: false });
+    if (insertError) {
+      const { data: existing } = await supabase
+        .from("canvas_panels")
+        .select("*")
+        .eq("canvas_id", canvasId)
+        .eq("panel_id", panel_id)
+        .single();
+
+      if (existing) {
+        return NextResponse.json({ panel: existing, created: false });
+      }
+
+      return NextResponse.json({ error: insertError.message }, { status: 500 });
     }
 
-    return NextResponse.json({ error: insertError.message }, { status: 500 });
-  }
-
-  return NextResponse.json({ panel, created: true }, { status: 201 });
-});
+    return NextResponse.json({ panel, created: true }, { status: 201 });
+  },
+  { minRole: "editor" }
+);

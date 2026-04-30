@@ -283,6 +283,13 @@ function withDoplStatus(handler, client) {
 }
 function createServer(client, options = {}) {
     const isAdmin = options.isAdmin === true;
+    // Active canvas (workspace) for this MCP session — fixed at startup
+    // by index.ts after the handshake. The slug threads into skill-writer
+    // calls so on-disk SKILL.md paths get scoped per canvas. Default slug
+    // preserves the legacy single-canvas paths so existing users don't
+    // see every skill rename on first upgrade.
+    const canvasContext = { slug: options.canvas?.slug ?? "default" };
+    void options.role;
     const server = new mcp_js_1.McpServer({
         name: "dopl",
         version: "0.1.0",
@@ -511,7 +518,7 @@ function createServer(client, options = {}) {
         for (const cluster of clusters) {
             try {
                 // Check if skill already exists
-                if (!force && await (0, skill_writer_js_1.skillExists)(cluster.slug, skillTarget)) {
+                if (!force && await (0, skill_writer_js_1.skillExists)(canvasContext, cluster.slug, skillTarget)) {
                     results.push(`- **${cluster.name}** — skipped (already exists)`);
                     // Still collect summary for global files
                     const detail = await client.getCluster(cluster.slug);
@@ -534,7 +541,7 @@ function createServer(client, options = {}) {
                 catch {
                     brainEmpty = true;
                 }
-                await (0, skill_writer_js_1.writeClusterSkill)(cluster.slug, cluster.name, brain, detail.entries, skillTarget);
+                await (0, skill_writer_js_1.writeClusterSkill)(canvasContext, cluster.slug, cluster.name, brain, detail.entries, skillTarget);
                 if (brainEmpty) {
                     results.push(`- **${cluster.name}** — wrote thin-pointer skill (⚠️ brain is empty — synthesize it with \`get_skill_template\` → \`update_cluster_brain("${cluster.slug}", …)\`)`);
                 }
@@ -550,16 +557,19 @@ function createServer(client, options = {}) {
         }
         // Write global files (always overwrite these)
         try {
-            await (0, skill_writer_js_1.writeGlobalCanvasSkill)(clusterSummaries, skillTarget);
+            await (0, skill_writer_js_1.writeGlobalCanvasSkill)(canvasContext, clusterSummaries, skillTarget);
             const targetLabel = skillTarget === "openclaw" ? "~/.openclaw/workspace/data/dopl" : "~/.claude/skills";
-            results.push(`\nGlobal canvas skill: wrote ${targetLabel}/dopl-canvas/SKILL.md`);
+            const globalDir = canvasContext.slug === "default"
+                ? "dopl-canvas"
+                : `dopl-canvas-${canvasContext.slug}`;
+            results.push(`\nGlobal canvas skill: wrote ${targetLabel}/${globalDir}/SKILL.md`);
         }
         catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             results.push(`\nGlobal canvas skill: ERROR — ${msg}`);
         }
         try {
-            await (0, skill_writer_js_1.writeGlobalClaudemd)(clusterSummaries, skillTarget);
+            await (0, skill_writer_js_1.writeGlobalClaudemd)(canvasContext, clusterSummaries, skillTarget);
             const indexLabel = skillTarget === "openclaw" ? "~/.openclaw/workspace/data/dopl/INDEX.md" : "~/.claude/CLAUDE.md";
             results.push(`Index: updated ${indexLabel}`);
         }
@@ -578,10 +588,14 @@ function createServer(client, options = {}) {
     registerTool("save_cluster_memory", "**Call this proactively** after any user turn that carries durable signal about a cluster — do NOT wait for 'remember this' phrasing. Write silently in the same turn, before composing your reply. Three categories fire this tool: (1) **Preferences / env facts** — 'I prefer X over Y', 'always use Z', 'skip that step', 'for my setup …', 'in my environment …', 'from now on …', 'my <env var / value> is …'. (2) **Soft corrections** — 'no', 'actually …', 'that's not right', 'you got X backwards', 'the answer is Y, not Z' (even without canonical wrong-phrasing). (3) **Outcome dissatisfaction** — 'I tried that, it didn't work', 'the output wasn't what I wanted', 'ran it and got the wrong result', 'this approach gave me garbage', 'that didn't produce X'. Category 3 is the highest-signal — the skill led the agent astray and the user is telling you; capture the lesson as a memory describing the gotcha. Memories override the base instructions in future sessions. Routing: use `update_cluster_memory` instead if a near-duplicate memory exists (call `get_cluster_brain` first to check IDs); escalate to `update_cluster_brain` if the issue is structural to the workflow itself rather than a single fact.", {
         slug: zod_1.z.string().describe("Cluster slug"),
         memory: zod_1.z.string().describe("The preference or correction to remember, e.g. 'User prefers Resend over SendGrid for email' or 'Skip the Slack notification step'"),
-    }, async ({ slug, memory }) => {
+        scope: zod_1.z
+            .enum(["workspace", "personal"])
+            .optional()
+            .describe("Visibility scope. Default 'workspace' — every member of this canvas sees the memory and the skill embeds it for everyone. Use 'personal' when the user says 'for my setup', 'in my env', 'on my machine', or shares a fact only meaningful to themselves (their API key path, their preferred local tool, their personal alias). Personal memories are visible only to the author and never written to the shared canvas brain panel."),
+    }, async ({ slug, memory, scope }) => {
         let result;
         try {
-            result = await client.saveClusterMemory(slug, memory);
+            result = await client.saveClusterMemory(slug, memory, scope);
         }
         catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
@@ -595,20 +609,27 @@ function createServer(client, options = {}) {
                 isError: true,
             };
         }
-        // Also append to on-disk SKILL.md (non-fatal)
+        // Also append to on-disk SKILL.md (non-fatal). Tag personal
+        // memories inline so the agent can see at a glance when reading
+        // the file that an entry is private to the current user.
         let diskNote = "";
         try {
-            await (0, skill_writer_js_1.appendMemoryToSkill)(slug, memory);
-            diskNote = `\n(Also updated ~/.claude/skills/dopl-${slug}/SKILL.md)`;
+            const onDiskMemory = result.scope === "personal" ? `${memory} _(personal)_` : memory;
+            await (0, skill_writer_js_1.appendMemoryToSkill)(canvasContext, slug, onDiskMemory);
+            const dirName = canvasContext.slug === "default"
+                ? `dopl-${slug}`
+                : `dopl-${canvasContext.slug}-${slug}`;
+            diskNote = `\n(Also updated ~/.claude/skills/${dirName}/SKILL.md)`;
         }
         catch (err) {
             console.error(`[Dopl] Failed to update skill file for ${slug}:`, err);
         }
+        const scopeLabel = result.scope === "personal" ? " (personal)" : "";
         return {
             content: [
                 {
                     type: "text",
-                    text: `Saved memory for cluster "${slug}": "${result.content}"${diskNote}`,
+                    text: `Saved memory${scopeLabel} for cluster "${slug}": "${result.content}"${diskNote}`,
                 },
             ],
         };
@@ -933,7 +954,7 @@ function createServer(client, options = {}) {
         // If the slug changed (due to rename), clean up old skill dir
         if (result.slug !== slug) {
             try {
-                await (0, skill_writer_js_1.removeClusterSkill)(slug);
+                await (0, skill_writer_js_1.removeClusterSkill)(canvasContext, slug);
             }
             catch (err) {
                 console.error(`[Dopl] Failed to remove old skill dir for ${slug}:`, err);
@@ -1079,7 +1100,7 @@ function createServer(client, options = {}) {
         try {
             const detail = await client.getCluster(slug);
             const brain = await client.getClusterBrain(slug);
-            await (0, skill_writer_js_1.writeClusterSkill)(slug, detail.name, brain, detail.entries);
+            await (0, skill_writer_js_1.writeClusterSkill)(canvasContext, slug, detail.name, brain, detail.entries);
             diskNote = `\n(Also updated ~/.claude/skills/dopl-${slug}/SKILL.md)`;
         }
         catch (err) {
@@ -1275,7 +1296,7 @@ function createServer(client, options = {}) {
         try {
             const updatedDetail = await client.getCluster(slug);
             const currentBrain = await client.getClusterBrain(slug);
-            await (0, skill_writer_js_1.writeClusterSkill)(slug, detail.name, currentBrain, updatedDetail.entries);
+            await (0, skill_writer_js_1.writeClusterSkill)(canvasContext, slug, detail.name, currentBrain, updatedDetail.entries);
             skillNote = " Skill file updated with the new entry list.";
         }
         catch (err) {

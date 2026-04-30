@@ -26,6 +26,7 @@ import {
   ChatConversationsProvider,
   type ServerConversation,
 } from "../use-conversation-sync";
+import { CanvasScopeContext } from "./context";
 import { CANVAS_STORAGE_KEY_PREFIX, CANVAS_ACTIVE_USER_KEY } from "@/config";
 
 const SAVE_DEBOUNCE_MS = 500;
@@ -58,6 +59,13 @@ interface CanvasProviderProps {
   children: ReactNode;
   userId?: string;
   /**
+   * Active canvas (workspace) scope. Required for "user" sync mode —
+   * threads through every fetch as `X-Canvas-Id` and into the
+   * realtime subscription filters. Omit for shared / read-only views.
+   */
+  canvasId?: string;
+  canvasSlug?: string;
+  /**
    * Server-rendered canvas state. Fetched by the `/canvas` server
    * component (see src/app/canvas/page.tsx) and supplied here as a prop
    * so `useReducer` has real data on first render — no hydration step.
@@ -88,12 +96,18 @@ interface CanvasProviderProps {
 export function CanvasProvider({
   children,
   userId,
+  canvasId,
+  canvasSlug,
   initialState,
   initialConversations,
   syncStrategy = "user",
   capabilities,
   onPanelsMove,
 }: CanvasProviderProps) {
+  const scope = useMemo(
+    () => (canvasId && canvasSlug ? { canvasId, canvasSlug } : null),
+    [canvasId, canvasSlug]
+  );
   const [state, dispatch] = useReducer(
     reducer,
     { userId, initialState },
@@ -146,25 +160,27 @@ export function CanvasProvider({
   const effectiveCapabilities = capabilities ?? DEFAULT_CAPABILITIES;
 
   return (
-    <CanvasContext.Provider value={{ state, dispatch }}>
-      <PanelsContext.Provider value={panelsCtx}>
-        <CanvasStateRefContext.Provider value={stateRef}>
-          <CapabilitiesContext.Provider value={effectiveCapabilities}>
-            <ChatConversationsProvider initialConversations={initialConversations}>
-              {syncStrategy === "user" && <CanvasDbSyncBridge />}
-              {syncStrategy === "user" && <ConversationSyncBridge />}
-              {syncStrategy === "user" && <EntriesRealtimeBridge />}
-              {syncStrategy === "user" && <ClustersRealtimeBridge />}
-              {syncStrategy === "user" && <AutoFocusNewPanelBridge />}
-              {syncStrategy === "shared" && (
-                <SharedPanelMoveBridge onPanelsMove={onPanelsMove} />
-              )}
-              {children}
-            </ChatConversationsProvider>
-          </CapabilitiesContext.Provider>
-        </CanvasStateRefContext.Provider>
-      </PanelsContext.Provider>
-    </CanvasContext.Provider>
+    <CanvasScopeContext.Provider value={scope}>
+      <CanvasContext.Provider value={{ state, dispatch }}>
+        <PanelsContext.Provider value={panelsCtx}>
+          <CanvasStateRefContext.Provider value={stateRef}>
+            <CapabilitiesContext.Provider value={effectiveCapabilities}>
+              <ChatConversationsProvider initialConversations={initialConversations}>
+                {syncStrategy === "user" && <CanvasDbSyncBridge />}
+                {syncStrategy === "user" && <ConversationSyncBridge />}
+                {syncStrategy === "user" && <EntriesRealtimeBridge />}
+                {syncStrategy === "user" && <ClustersRealtimeBridge />}
+                {syncStrategy === "user" && <AutoFocusNewPanelBridge />}
+                {syncStrategy === "shared" && (
+                  <SharedPanelMoveBridge onPanelsMove={onPanelsMove} />
+                )}
+                {children}
+              </ChatConversationsProvider>
+            </CapabilitiesContext.Provider>
+          </CanvasStateRefContext.Provider>
+        </PanelsContext.Provider>
+      </CanvasContext.Provider>
+    </CanvasScopeContext.Provider>
   );
 }
 

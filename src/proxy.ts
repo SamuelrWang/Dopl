@@ -1,7 +1,23 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
-const PUBLIC_ROUTES = ["/login", "/auth/callback", "/api/og/tweet", "/api/og/github", "/api/billing/webhook", "/terms", "/privacy", "/pricing", "/docs"];
+const PUBLIC_ROUTES = [
+  "/login",
+  "/auth/callback",
+  "/api/og/tweet",
+  "/api/og/github",
+  "/api/billing/webhook",
+  "/terms",
+  "/privacy",
+  "/pricing",
+  "/docs",
+  // Canvas invite acceptance — invitee may not be signed in yet. The
+  // landing page shows what they're being invited to; the underlying
+  // accept POST is still auth-gated by withUserAuth, so non-members
+  // still bounce to /login at the click.
+  "/invite/",
+  "/api/canvases/invitations/",
+];
 
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });

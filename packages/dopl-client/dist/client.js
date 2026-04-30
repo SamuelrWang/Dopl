@@ -14,6 +14,17 @@ class DoplClient {
     getBaseUrl() {
         return this.transport.getBaseUrl();
     }
+    /**
+     * Active canvas (workspace) for this client. When set, every request
+     * carries an `X-Canvas-Id` header so the server scopes data
+     * accordingly. Set null to clear.
+     */
+    setCanvasId(canvasId) {
+        this.transport.setCanvasId(canvasId);
+    }
+    getCanvasId() {
+        return this.transport.getCanvasId();
+    }
     entryUrl(slug) {
         if (!slug)
             return null;
@@ -109,6 +120,24 @@ class DoplClient {
             body: { query, max_results: maxResults ?? 5 },
         });
     }
+    // ── Canvases (workspaces) ─────────────────────────────────────────
+    async listCanvases() {
+        return this.transport.request("/api/canvases", { toolName: "list_canvases" });
+    }
+    async getCanvas(slug) {
+        return this.transport.request(`/api/canvases/${encodeURIComponent(slug)}`, { toolName: "get_canvas" });
+    }
+    /**
+     * Resolve the active canvas — the one currently set on the transport
+     * via `setCanvasId(...)` or `X-Canvas-Id`. Used by the MCP server's
+     * startup handshake to confirm the requested canvas exists and the
+     * caller is a member.
+     */
+    async getActiveCanvas() {
+        return this.transport.request("/api/canvases/me", {
+            toolName: "get_active_canvas",
+        });
+    }
     async pingMcpStatus() {
         const res = await this.transport.request("/api/user/mcp-status", { method: "POST", toolName: "_mcp_status_ping", body: {} });
         return { is_admin: res.is_admin === true };
@@ -116,11 +145,11 @@ class DoplClient {
     async getClusterBrain(slug) {
         return this.transport.request(`/api/clusters/${encodeURIComponent(slug)}/brain`, { toolName: "get_cluster_brain" });
     }
-    async saveClusterMemory(slug, content) {
+    async saveClusterMemory(slug, content, scope) {
         return this.transport.request(`/api/clusters/${encodeURIComponent(slug)}/brain/memories`, {
             method: "POST",
             toolName: "save_cluster_memory",
-            body: { content },
+            body: { content, ...(scope ? { scope } : {}) },
         });
     }
     async getSkillTemplate() {

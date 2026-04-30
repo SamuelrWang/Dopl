@@ -17,7 +17,7 @@
  */
 
 import { useCallback, useRef, useState } from "react";
-import { useCanvas, computeNewPanelPosition } from "@/features/canvas/canvas-store";
+import { useCanvas, useCanvasScope, computeNewPanelPosition } from "@/features/canvas/canvas-store";
 import type { ChatMessage, ChatAttachment } from "@/features/ingestion/components/chat-message";
 import type { ChatPanelData } from "@/features/canvas/types";
 import { ENTRY_PANEL_SIZE } from "@/features/canvas/types";
@@ -31,6 +31,8 @@ interface UseChatOptions {
 
 export function useChat({ panel }: UseChatOptions) {
   const { state, dispatch } = useCanvas();
+  const scope = useCanvasScope();
+  const canvasId = scope?.canvasId ?? null;
   const [isStreaming, setIsStreaming] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   // Latest state snapshot — the SSE loop needs to read the current
@@ -98,9 +100,13 @@ export function useChat({ panel }: UseChatOptions) {
       }
 
       try {
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+        };
+        if (canvasId) headers["X-Canvas-Id"] = canvasId;
         const response = await fetch("/api/chat", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers,
           body: JSON.stringify({
             messages: history,
             canvasContext,

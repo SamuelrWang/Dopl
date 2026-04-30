@@ -11,7 +11,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useCanvas } from "./canvas-store";
+import { useCanvas, useCanvasScope } from "./canvas-store";
 import type { ChatPanelData } from "./types";
 import { MarkdownMessage } from "@/shared/design";
 
@@ -29,6 +29,8 @@ const SIDEBAR_WIDTH = 480;
 
 export function FixedChatSidebar() {
   const { state, dispatch } = useCanvas();
+  const scope = useCanvasScope();
+  const canvasId = scope?.canvasId ?? null;
   const [selectedPanelId, setSelectedPanelId] = useState<string | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   // Track open state in a ref — never triggers re-render
@@ -78,12 +80,14 @@ export function FixedChatSidebar() {
     );
     localStorage.setItem(SIDEBAR_STORAGE_KEY, next ? "1" : "0");
     // Sync to DB (fire-and-forget)
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (canvasId) headers["X-Canvas-Id"] = canvasId;
     fetch("/api/canvas/state", {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({ sidebar_open: next }),
     }).catch(() => {});
-  }, []);
+  }, [canvasId]);
 
   const chatPanels = useMemo(
     () =>

@@ -14,31 +14,21 @@
  *   - cluster_brains: INSERT and UPDATE → live brain instructions update
  *     in the brain panel.
  *   - cluster_brain_memories: any event → refetch the cluster's full
- *     memories list and replace atomically. Canvas state stores
- *     memories as plain strings (no IDs), so we can't apply per-event
- *     index math; refetch-and-replace keeps the local view consistent.
+ *     memories list and replace atomically.
  *
- * Scale considerations:
- *   - One channel per user covering all three tables (one websocket).
- *   - Filtered by `user_id=eq.<userId>` at the publication so users
- *     only receive their own events (security + bandwidth).
- *   - Echo-suppressed: incoming text/state is compared against current
- *     panel content; identical payloads are dropped so the local
- *     reducer (e.g. brain editor) doesn't re-render after its own
- *     write echoes back through realtime.
- *   - Per-cluster debounce on the brain-text refresh: rapid
- *     surgical-edit bursts collapse into one dispatch within 150ms.
- *   - On channel reconnect, refetch all known cluster brains once to
- *     recover any events missed during the disconnect window.
+ * Reconnect: a watchdog re-subscribes on `CHANNEL_ERROR` / `TIMED_OUT`
+ * / `CLOSED` with capped exponential backoff. The first SUBSCRIBED on
+ * a fresh channel triggers a memories refetch so events that fired
+ * during the disconnect window are picked up.
  */
 
 import { useEffect, useRef } from "react";
 import { getSupabaseBrowser } from "@/shared/supabase/browser";
-import { useCanvas } from "./canvas-store";
+import { useCanvas, useCanvasScope } from "./canvas-store";
 
 type ClustersRow = {
   id: string;
-  user_id: string;
+  canvas_id: string;
   name: string;
   slug: string;
 };
@@ -46,7 +36,7 @@ type ClustersRow = {
 type BrainRow = {
   id: string;
   cluster_id: string;
-  user_id: string;
+  canvas_id: string;
   instructions: string;
 };
 
@@ -54,29 +44,36 @@ type MemoryRow = {
   id: string;
   cluster_brain_id: string;
   cluster_id: string;
-  user_id: string;
+  canvas_id: string;
   content: string;
 };
 
 const BRAIN_TEXT_DEBOUNCE_MS = 150;
+const RECONNECT_DELAYS_MS = [500, 1000, 2000, 4000, 8000, 15000];
+
+type ChannelStatus = "SUBSCRIBED" | "CHANNEL_ERROR" | "TIMED_OUT" | "CLOSED";
 
 export function useClustersRealtime() {
   const { state, dispatch } = useCanvas();
+  const scope = useCanvasScope();
+  const canvasId = scope?.canvasId ?? null;
 
-  // Stable refs so the channel doesn't re-subscribe on every state
-  // change (the dispatch identity is stable; state is not). The handler
-  // closures read from these refs instead of capturing state directly.
   const stateRef = useRef(state);
   stateRef.current = state;
 
   useEffect(() => {
+    if (!canvasId) return;
+    const canvasIdNarrowed: string = canvasId;
+
     const supabase = getSupabaseBrowser();
-    let unsub = () => {};
-    let cancelled = false;
     const brainTextDebouncers = new Map<string, ReturnType<typeof setTimeout>>();
 
-    // Helpers — resolve a realtime payload's UUIDs to local canvas
-    // state. Refs are read fresh on each event.
+    let cancelled = false;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let activeChannel: any = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let reconnectAttempt = 0;
+
     function findClusterByDbId(dbId: string) {
       return stateRef.current.clusters.find((c) => c.dbId === dbId) ?? null;
     }
@@ -84,12 +81,6 @@ export function useClustersRealtime() {
     function findBrainPanelByClusterDbId(clusterDbId: string) {
       const cluster = findClusterByDbId(clusterDbId);
       if (!cluster) return null;
-      // Brain panels are inserted with id = `brain-<cluster.dbId>` by
-      // both the MCP-create path (clusters/service.ts) and the canvas
-      // selection-menu path. We could lookup via panelIds + type
-      // filter, but the prefix match is faster and tolerates the rare
-      // case where the brain panel hasn't been added to the cluster's
-      // panelIds yet (e.g. during initial hydration).
       const expectedId = `brain-${clusterDbId}`;
       return (
         stateRef.current.panels.find(
@@ -98,10 +89,6 @@ export function useClustersRealtime() {
       );
     }
 
-    // Refetch the brain memories for one cluster and dispatch a
-    // SET_CLUSTER_BRAIN_MEMORIES with the canonical list. Used as the
-    // single response to all memory events — INSERT/UPDATE/DELETE all
-    // collapse into "show me the current truth."
     async function refetchMemoriesForCluster(clusterDbId: string) {
       const cluster = findClusterByDbId(clusterDbId);
       if (!cluster?.slug) return;
@@ -110,7 +97,10 @@ export function useClustersRealtime() {
       try {
         const res = await fetch(
           `/api/clusters/${encodeURIComponent(cluster.slug)}/brain`,
-          { credentials: "include" }
+          {
+            credentials: "include",
+            headers: { "X-Canvas-Id": canvasIdNarrowed },
+          }
         );
         if (!res.ok) return;
         const body = (await res.json()) as {
@@ -128,165 +118,184 @@ export function useClustersRealtime() {
       }
     }
 
-    supabase.auth
-      .getUser()
-      .then((res: { data: { user: { id: string } | null } }) => {
-        if (cancelled) return;
-        const userId = res.data.user?.id;
-        if (!userId) return;
+    function scheduleReconnect() {
+      if (cancelled || reconnectTimer) return;
+      const delay =
+        RECONNECT_DELAYS_MS[
+          Math.min(reconnectAttempt, RECONNECT_DELAYS_MS.length - 1)
+        ];
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        reconnectAttempt++;
+        connect();
+      }, delay);
+    }
 
-        // The Supabase JS .on("postgres_changes", …) overload is loosely
-        // typed at runtime; cast through any so TS doesn't complain
-        // about the handler signature.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const chan = supabase.channel(`canvas-realtime-${userId}`) as any;
+    function connect() {
+      if (cancelled) return;
 
-        const channel = chan
-          // ── clusters ─────────────────────────────────────────────
-          .on(
-            "postgres_changes",
-            {
-              event: "*",
-              schema: "public",
-              table: "clusters",
-              filter: `user_id=eq.${userId}`,
-            },
-            (payload: {
-              eventType: "INSERT" | "UPDATE" | "DELETE";
-              new: ClustersRow | null;
-              old: ClustersRow | null;
-            }) => {
-              if (payload.eventType === "INSERT") {
-                // We can't reconstruct the cluster's panelIds from a
-                // single clusters row — those live in canvas_state. The
-                // create flow already updates that JSON server-side, so
-                // a fresh page load shows the cluster correctly. Live
-                // INSERT handling would require a parallel
-                // canvas_state subscription or a soft refetch; deferred.
-                return;
+      // Tear down any prior channel first — a CHANNEL_ERROR can leave
+      // the old subscription registered, which then keeps emitting
+      // dead-letter events that we'd handle alongside the live ones.
+      if (activeChannel) {
+        try {
+          supabase.removeChannel(activeChannel);
+        } catch {
+          // Ignore — already torn down.
+        }
+        activeChannel = null;
+      }
+
+      // The Supabase JS .on("postgres_changes", …) overload is loosely
+      // typed at runtime; cast through any so TS doesn't complain
+      // about the handler signatures.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const chan = supabase.channel(`canvas-realtime-${canvasIdNarrowed}`) as any;
+
+      const channel = chan
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "clusters",
+            filter: `canvas_id=eq.${canvasIdNarrowed}`,
+          },
+          (payload: {
+            eventType: "INSERT" | "UPDATE" | "DELETE";
+            new: ClustersRow | null;
+            old: ClustersRow | null;
+          }) => {
+            if (payload.eventType === "INSERT") return;
+            if (payload.eventType === "UPDATE" && payload.new) {
+              const cluster = findClusterByDbId(payload.new.id);
+              if (!cluster) return;
+              if (cluster.name !== payload.new.name) {
+                dispatch({
+                  type: "UPDATE_CLUSTER_NAME",
+                  clusterId: cluster.id,
+                  name: payload.new.name,
+                });
               }
-              if (payload.eventType === "UPDATE" && payload.new) {
-                const cluster = findClusterByDbId(payload.new.id);
-                if (!cluster) return;
-                if (cluster.name !== payload.new.name) {
-                  dispatch({
-                    type: "UPDATE_CLUSTER_NAME",
-                    clusterId: cluster.id,
-                    name: payload.new.name,
-                  });
-                }
-                return;
-              }
-              if (payload.eventType === "DELETE" && payload.old) {
-                const cluster = findClusterByDbId(payload.old.id);
-                if (!cluster) return;
-                dispatch({ type: "DELETE_CLUSTER", clusterId: cluster.id });
-              }
+              return;
             }
-          )
-          // ── cluster_brains ───────────────────────────────────────
-          .on(
-            "postgres_changes",
-            {
-              event: "*",
-              schema: "public",
-              table: "cluster_brains",
-              filter: `user_id=eq.${userId}`,
-            },
-            (payload: {
-              eventType: "INSERT" | "UPDATE" | "DELETE";
-              new: BrainRow | null;
-              old: BrainRow | null;
-            }) => {
-              const row = payload.new ?? payload.old;
-              if (!row) return;
-              const brainPanel = findBrainPanelByClusterDbId(row.cluster_id);
-              if (!brainPanel) return;
+            if (payload.eventType === "DELETE" && payload.old) {
+              const cluster = findClusterByDbId(payload.old.id);
+              if (!cluster) return;
+              dispatch({ type: "DELETE_CLUSTER", clusterId: cluster.id });
+            }
+          }
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "cluster_brains",
+            filter: `canvas_id=eq.${canvasIdNarrowed}`,
+          },
+          (payload: {
+            eventType: "INSERT" | "UPDATE" | "DELETE";
+            new: BrainRow | null;
+            old: BrainRow | null;
+          }) => {
+            const row = payload.new ?? payload.old;
+            if (!row) return;
+            const brainPanel = findBrainPanelByClusterDbId(row.cluster_id);
+            if (!brainPanel) return;
+            if (
+              payload.eventType === "INSERT" ||
+              payload.eventType === "UPDATE"
+            ) {
+              const incoming = payload.new?.instructions ?? "";
               if (
-                payload.eventType === "INSERT" ||
-                payload.eventType === "UPDATE"
+                brainPanel.type === "cluster-brain" &&
+                brainPanel.instructions === incoming
               ) {
-                const incoming = payload.new?.instructions ?? "";
-                // Echo-suppress: identical text means this is our own
-                // write coming back. Skip to avoid a redundant dispatch
-                // (which would re-trigger the brain editor's own save
-                // flow if it's open).
-                if (
-                  brainPanel.type === "cluster-brain" &&
-                  brainPanel.instructions === incoming
-                ) {
-                  return;
-                }
-                // Per-cluster debounce — agents doing multiple
-                // surgical edits in a burst collapse into one render.
-                const existing = brainTextDebouncers.get(row.cluster_id);
-                if (existing) clearTimeout(existing);
-                const timer = setTimeout(() => {
-                  brainTextDebouncers.delete(row.cluster_id);
-                  dispatch({
-                    type: "UPDATE_CLUSTER_BRAIN_INSTRUCTIONS_TEXT",
-                    panelId: brainPanel.id,
-                    instructions: incoming,
-                  });
-                }, BRAIN_TEXT_DEBOUNCE_MS);
-                brainTextDebouncers.set(row.cluster_id, timer);
+                return;
               }
-              // DELETE is rare for brains (they live as long as the
-              // cluster); the cluster DELETE handler already removes
-              // the cluster outline, and the brain panel goes with the
-              // cluster's panelIds.
+              const existing = brainTextDebouncers.get(row.cluster_id);
+              if (existing) clearTimeout(existing);
+              const timer = setTimeout(() => {
+                brainTextDebouncers.delete(row.cluster_id);
+                dispatch({
+                  type: "UPDATE_CLUSTER_BRAIN_INSTRUCTIONS_TEXT",
+                  panelId: brainPanel.id,
+                  instructions: incoming,
+                });
+              }, BRAIN_TEXT_DEBOUNCE_MS);
+              brainTextDebouncers.set(row.cluster_id, timer);
             }
-          )
-          // ── cluster_brain_memories ───────────────────────────────
-          .on(
-            "postgres_changes",
-            {
-              event: "*",
-              schema: "public",
-              table: "cluster_brain_memories",
-              filter: `user_id=eq.${userId}`,
-            },
-            (payload: {
-              eventType: "INSERT" | "UPDATE" | "DELETE";
-              new: MemoryRow | null;
-              old: MemoryRow | null;
-            }) => {
-              const row = payload.new ?? payload.old;
-              if (!row?.cluster_id) return;
-              // All memory events collapse into "refetch the canonical
-              // list and replace." Cheap (one GET, returns short
-              // memory rows), and it sidesteps the canvas state's
-              // missing memory-ID column.
-              void refetchMemoriesForCluster(row.cluster_id);
-            }
-          )
-          .subscribe(
-            (status: "SUBSCRIBED" | "CHANNEL_ERROR" | "TIMED_OUT" | "CLOSED") => {
-              // On (re)connect, refetch every known cluster's memory
-              // list once so any events that fired during the
-              // disconnect window are picked up. Brain text refresh is
-              // covered by the same UPDATE channel — when the next
-              // edit lands we'll catch it; missing the text update
-              // until then is acceptable since the panel won't be
-              // wrong, just stale by one revision.
-              if (status === "SUBSCRIBED") {
-                for (const c of stateRef.current.clusters) {
-                  if (c.dbId) void refetchMemoriesForCluster(c.dbId);
-                }
-              }
-            }
-          );
+          }
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "cluster_brain_memories",
+            filter: `canvas_id=eq.${canvasIdNarrowed}`,
+          },
+          (payload: {
+            eventType: "INSERT" | "UPDATE" | "DELETE";
+            new: MemoryRow | null;
+            old: MemoryRow | null;
+          }) => {
+            const row = payload.new ?? payload.old;
+            if (!row?.cluster_id) return;
+            void refetchMemoriesForCluster(row.cluster_id);
+          }
+        )
+        .subscribe((status: ChannelStatus) => {
+          if (cancelled) return;
 
-        unsub = () => {
-          for (const t of brainTextDebouncers.values()) clearTimeout(t);
-          brainTextDebouncers.clear();
-          supabase.removeChannel(channel);
-        };
-      });
+          if (status === "SUBSCRIBED") {
+            // Healthy connection — reset backoff and refetch any
+            // memories events we may have missed during the
+            // disconnect window. Brain-text and cluster-rename
+            // refreshes ride on the next live UPDATE; staleness until
+            // then is acceptable since the panel won't be wrong, just
+            // one revision behind.
+            reconnectAttempt = 0;
+            for (const c of stateRef.current.clusters) {
+              if (c.dbId) void refetchMemoriesForCluster(c.dbId);
+            }
+            return;
+          }
+
+          if (
+            status === "CHANNEL_ERROR" ||
+            status === "TIMED_OUT" ||
+            status === "CLOSED"
+          ) {
+            // CLOSED also fires on intentional teardown via the
+            // cleanup function — the `cancelled` guard inside
+            // scheduleReconnect prevents reconnecting in that case.
+            scheduleReconnect();
+          }
+        });
+
+      activeChannel = channel;
+    }
+
+    connect();
 
     return () => {
       cancelled = true;
-      unsub();
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+      for (const t of brainTextDebouncers.values()) clearTimeout(t);
+      brainTextDebouncers.clear();
+      if (activeChannel) {
+        try {
+          supabase.removeChannel(activeChannel);
+        } catch {
+          // Ignore.
+        }
+        activeChannel = null;
+      }
     };
-  }, [dispatch]);
+  }, [canvasId, dispatch]);
 }

@@ -69,6 +69,23 @@ export interface ClusterRow {
   panel_count: number;
 }
 
+export interface CanvasSummary {
+  id: string;
+  ownerId: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type CanvasRole = "owner" | "admin" | "editor" | "viewer";
+
+export interface ResolvedCanvas {
+  canvas: CanvasSummary;
+  role: CanvasRole;
+}
+
 export interface ClusterDetailEntry {
   entry_id: string;
   slug: string | null;
@@ -116,14 +133,27 @@ export interface ClusterQueryResult {
   }[];
 }
 
+export type MemoryScope = "workspace" | "personal";
+
 export interface BrainMemory {
   id: string;
   content: string;
+  scope?: MemoryScope;
+  /** True when the memory was authored by the calling user. */
+  is_mine?: boolean;
 }
 
 export interface BrainData {
   instructions: string;
   memories: BrainMemory[];
+  /**
+   * Monotonic counter bumped on every brain `instructions` change.
+   * `sync_skills` writes this version next to the skill on disk and
+   * skips re-writing when the on-disk and server versions match.
+   * Defaults to 1 for newly-minted brains, 0 for "no brain row exists
+   * yet" (an empty/thin-pointer skill).
+   */
+  brain_version?: number;
 }
 
 export interface ClusterSkillParams {

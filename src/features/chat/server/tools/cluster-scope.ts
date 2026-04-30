@@ -9,8 +9,9 @@ const supabase = supabaseAdmin();
  *   - From a chat panel inside a cluster (scope === "cluster").
  *     The tool's cluster_slug argument must match canvasContext.clusterSlug.
  *   - If the chat is canvas-scoped (or context is missing), the AI can
- *     edit any cluster the user owns. Ownership is enforced inside each
- *     brain endpoint via cluster.user_id checks.
+ *     edit any cluster within the active canvas. Membership is enforced
+ *     by the caller (via withCanvasAuth) and the cluster lookup below
+ *     filters by canvas_id.
  *
  * Returns a string error message if the call should be rejected, or null
  * if it's allowed to proceed.
@@ -34,11 +35,13 @@ export function enforceClusterEditScope(
 }
 
 /**
- * Fetch a cluster row scoped to the owner, or return an error string.
+ * Fetch a cluster row scoped to the active canvas, or return an error
+ * string. Caller must have already proven membership in the canvas via
+ * `withCanvasAuth`.
  */
-export async function getClusterForUser(
+export async function getClusterForCanvas(
   slug: string,
-  userId: string
+  canvasId: string
 ): Promise<
   | { ok: true; cluster: { id: string; slug: string; name: string } }
   | { ok: false; error: string }
@@ -47,7 +50,7 @@ export async function getClusterForUser(
     .from("clusters")
     .select("id, slug, name")
     .eq("slug", slug)
-    .eq("user_id", userId)
+    .eq("canvas_id", canvasId)
     .single();
   if (error || !data) return { ok: false, error: `Cluster "${slug}" not found.` };
   return { ok: true, cluster: data };

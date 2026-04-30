@@ -21,7 +21,7 @@
  */
 
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { useCanvas } from "./canvas-store";
+import { useCanvas, useCanvasScope } from "./canvas-store";
 import type { ChatPanelData } from "./types";
 import type { ChatMessage, ChatAttachment } from "@/features/ingestion/components/chat-message";
 
@@ -151,6 +151,8 @@ function panelSnapshotKey(panel: ChatPanelData): string {
 
 export function useConversationSync() {
   const { state } = useCanvas();
+  const scope = useCanvasScope();
+  const canvasId = scope?.canvasId ?? null;
   const { setConversations } = useChatConversations();
   const syncedRef = useRef(false);
   const debounceTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(
@@ -236,9 +238,13 @@ export function useConversationSync() {
           const messages = messagesToPersistFormat(latest.messages);
           if (messages.length === 0) return;
 
+          const headers: Record<string, string> = {
+            "Content-Type": "application/json",
+          };
+          if (canvasId) headers["X-Canvas-Id"] = canvasId;
           fetch("/api/conversations", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers,
             body: JSON.stringify({
               panel_id: panelId,
               title: latest.title,

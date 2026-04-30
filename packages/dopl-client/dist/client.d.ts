@@ -1,5 +1,5 @@
 import type { PendingStatus } from "./types.js";
-import type { BuildResult, CanvasPanel, ClusterDetail, ClusterQueryResult, ClusterRow, DoplEntry, ListResult, Pack, PackFile, PackFileMeta, PrepareIngestResult, SearchResult, SubmitIngestedEntryInput, SubmitIngestedEntryResult } from "./types.js";
+import type { BuildResult, CanvasPanel, CanvasSummary, ClusterDetail, ClusterQueryResult, ClusterRow, DoplEntry, ListResult, Pack, PackFile, PackFileMeta, PrepareIngestResult, ResolvedCanvas, SearchResult, SubmitIngestedEntryInput, SubmitIngestedEntryResult } from "./types.js";
 import { DoplTransport } from "./transport.js";
 export type { DoplTransportOptions as DoplClientOptions } from "./transport.js";
 export { parseRetryAfter } from "./retry.js";
@@ -8,6 +8,13 @@ export declare class DoplClient {
     private pendingCache;
     constructor(baseUrl: string, apiKey: string, opts?: ConstructorParameters<typeof DoplTransport>[2]);
     getBaseUrl(): string;
+    /**
+     * Active canvas (workspace) for this client. When set, every request
+     * carries an `X-Canvas-Id` header so the server scopes data
+     * accordingly. Set null to clear.
+     */
+    setCanvasId(canvasId: string | null): void;
+    getCanvasId(): string | null;
     entryUrl(slug: string | null | undefined): string | null;
     searchSetups(params: {
         query: string;
@@ -55,19 +62,37 @@ export declare class DoplClient {
     }>;
     getCluster(slug: string): Promise<ClusterDetail>;
     queryCluster(slug: string, query: string, maxResults?: number): Promise<ClusterQueryResult>;
+    listCanvases(): Promise<{
+        canvases: CanvasSummary[];
+    }>;
+    getCanvas(slug: string): Promise<ResolvedCanvas>;
+    /**
+     * Resolve the active canvas — the one currently set on the transport
+     * via `setCanvasId(...)` or `X-Canvas-Id`. Used by the MCP server's
+     * startup handshake to confirm the requested canvas exists and the
+     * caller is a member.
+     */
+    getActiveCanvas(): Promise<ResolvedCanvas>;
     pingMcpStatus(): Promise<{
         is_admin: boolean;
     }>;
     getClusterBrain(slug: string): Promise<{
         instructions: string;
+        brain_version?: number;
         memories: {
             id: string;
             content: string;
+            scope?: "workspace" | "personal";
+            author_id?: string;
+            is_mine?: boolean;
         }[];
     }>;
-    saveClusterMemory(slug: string, content: string): Promise<{
+    saveClusterMemory(slug: string, content: string, scope?: "workspace" | "personal"): Promise<{
         id: string;
         content: string;
+        scope: "workspace" | "personal";
+        author_id: string;
+        is_mine: boolean;
     }>;
     getSkillTemplate(): Promise<{
         version: string;

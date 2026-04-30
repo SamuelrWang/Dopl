@@ -22,6 +22,13 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 export interface DoplTransportOptions {
   toolHeaderName?: string;
   clientIdentifier?: string;
+  /**
+   * Active canvas (workspace) for this transport. When set, every
+   * request emits an `X-Canvas-Id` header so the server scopes data to
+   * that canvas. When unset, the server falls back to the user's
+   * default canvas.
+   */
+  canvasId?: string;
 }
 
 export interface RequestOptions {
@@ -37,12 +44,26 @@ export class DoplTransport {
   private readonly apiKey: string;
   private readonly toolHeaderName: string;
   private readonly clientIdentifier: string | null;
+  private canvasId: string | null;
 
   constructor(baseUrl: string, apiKey: string, opts: DoplTransportOptions = {}) {
     this.baseUrl = baseUrl.replace(/\/$/, "");
     this.apiKey = apiKey;
     this.toolHeaderName = opts.toolHeaderName ?? "X-MCP-Tool";
     this.clientIdentifier = opts.clientIdentifier ?? null;
+    this.canvasId = opts.canvasId ?? null;
+  }
+
+  /**
+   * Update the active canvas after construction (e.g. CLI flow where
+   * the user runs `dopl canvas use <slug>` mid-session).
+   */
+  setCanvasId(canvasId: string | null): void {
+    this.canvasId = canvasId;
+  }
+
+  getCanvasId(): string | null {
+    return this.canvasId;
   }
 
   getBaseUrl(): string {
@@ -157,6 +178,7 @@ export class DoplTransport {
     if (withJsonBody) headers["Content-Type"] = "application/json";
     if (toolName) headers[this.toolHeaderName] = toolName;
     if (this.clientIdentifier) headers["X-Dopl-Client"] = this.clientIdentifier;
+    if (this.canvasId) headers["X-Canvas-Id"] = this.canvasId;
     return headers;
   }
 

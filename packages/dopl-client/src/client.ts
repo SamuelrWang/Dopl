@@ -2,6 +2,7 @@ import type { PendingStatus } from "./types.js";
 import type {
   BuildResult,
   CanvasPanel,
+  CanvasSummary,
   ClusterDetail,
   ClusterQueryResult,
   ClusterRow,
@@ -11,6 +12,7 @@ import type {
   PackFile,
   PackFileMeta,
   PrepareIngestResult,
+  ResolvedCanvas,
   SearchResult,
   SubmitIngestedEntryInput,
   SubmitIngestedEntryResult,
@@ -36,6 +38,19 @@ export class DoplClient {
 
   getBaseUrl(): string {
     return this.transport.getBaseUrl();
+  }
+
+  /**
+   * Active canvas (workspace) for this client. When set, every request
+   * carries an `X-Canvas-Id` header so the server scopes data
+   * accordingly. Set null to clear.
+   */
+  setCanvasId(canvasId: string | null): void {
+    this.transport.setCanvasId(canvasId);
+  }
+
+  getCanvasId(): string | null {
+    return this.transport.getCanvasId();
   }
 
   entryUrl(slug: string | null | undefined): string | null {
@@ -202,6 +217,34 @@ export class DoplClient {
     );
   }
 
+  // ── Canvases (workspaces) ─────────────────────────────────────────
+
+  async listCanvases(): Promise<{ canvases: CanvasSummary[] }> {
+    return this.transport.request<{ canvases: CanvasSummary[] }>(
+      "/api/canvases",
+      { toolName: "list_canvases" }
+    );
+  }
+
+  async getCanvas(slug: string): Promise<ResolvedCanvas> {
+    return this.transport.request<ResolvedCanvas>(
+      `/api/canvases/${encodeURIComponent(slug)}`,
+      { toolName: "get_canvas" }
+    );
+  }
+
+  /**
+   * Resolve the active canvas — the one currently set on the transport
+   * via `setCanvasId(...)` or `X-Canvas-Id`. Used by the MCP server's
+   * startup handshake to confirm the requested canvas exists and the
+   * caller is a member.
+   */
+  async getActiveCanvas(): Promise<ResolvedCanvas> {
+    return this.transport.request<ResolvedCanvas>("/api/canvases/me", {
+      toolName: "get_active_canvas",
+    });
+  }
+
   async pingMcpStatus(): Promise<{ is_admin: boolean }> {
     const res = await this.transport.request<{ ok: boolean; is_admin?: boolean }>(
       "/api/user/mcp-status",
@@ -212,7 +255,14 @@ export class DoplClient {
 
   async getClusterBrain(slug: string): Promise<{
     instructions: string;
-    memories: { id: string; content: string }[];
+    brain_version?: number;
+    memories: {
+      id: string;
+      content: string;
+      scope?: "workspace" | "personal";
+      author_id?: string;
+      is_mine?: boolean;
+    }[];
   }> {
     return this.transport.request(
       `/api/clusters/${encodeURIComponent(slug)}/brain`,
@@ -222,14 +272,21 @@ export class DoplClient {
 
   async saveClusterMemory(
     slug: string,
-    content: string
-  ): Promise<{ id: string; content: string }> {
+    content: string,
+    scope?: "workspace" | "personal"
+  ): Promise<{
+    id: string;
+    content: string;
+    scope: "workspace" | "personal";
+    author_id: string;
+    is_mine: boolean;
+  }> {
     return this.transport.request(
       `/api/clusters/${encodeURIComponent(slug)}/brain/memories`,
       {
         method: "POST",
         toolName: "save_cluster_memory",
-        body: { content },
+        body: { content, ...(scope ? { scope } : {}) },
       }
     );
   }

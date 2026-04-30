@@ -10,9 +10,10 @@
 import { redirect } from "next/navigation";
 import { getUser } from "@/shared/supabase/server";
 import {
+  loadCanvasConversations,
   loadCanvasInitialState,
-  loadUserConversations,
 } from "@/features/canvas/server/load-server-state";
+import { ensureDefaultCanvas } from "@/features/canvases/server/service";
 import BuildClientShell from "./build-client-shell";
 
 export const dynamic = "force-dynamic";
@@ -21,12 +22,17 @@ export default async function BuildPage() {
   const user = await getUser();
   if (!user) redirect("/login");
 
-  const conversations = await loadUserConversations(user.id);
-  const initialState = await loadCanvasInitialState(user.id, conversations);
+  const canvas = await ensureDefaultCanvas(user.id);
+  const scope = { userId: user.id, canvasId: canvas.id };
+
+  const conversations = await loadCanvasConversations(scope);
+  const initialState = await loadCanvasInitialState(scope, conversations);
 
   return (
     <BuildClientShell
       userId={user.id}
+      canvasId={canvas.id}
+      canvasSlug={canvas.slug}
       initialState={initialState}
       initialConversations={conversations}
     />

@@ -10,6 +10,7 @@ const os_1 = require("os");
 const path_1 = require("path");
 const promises_1 = require("fs/promises");
 const templates_js_1 = require("./templates.js");
+const DEFAULT_CANVAS_SLUG = "default";
 function resolveTarget() {
     const env = process.env.DOPL_SKILL_TARGET?.toLowerCase();
     if (env === "openclaw")
@@ -35,13 +36,86 @@ function resolvePaths(target) {
 }
 const DOPL_START = "<!-- DOPL:START -->";
 const DOPL_END = "<!-- DOPL:END -->";
+function clusterDirName(canvas, clusterSlug) {
+    if (!canvas.slug || canvas.slug === DEFAULT_CANVAS_SLUG) {
+        return `dopl-${clusterSlug}`;
+    }
+    return `dopl-${canvas.slug}-${clusterSlug}`;
+}
+function globalCanvasDirName(canvas) {
+    if (!canvas.slug || canvas.slug === DEFAULT_CANVAS_SLUG) {
+        return "dopl-canvas";
+    }
+    return `dopl-canvas-${canvas.slug}`;
+}
 /**
- * Check if a cluster skill directory already exists on disk.
+ * Atomic file write — write the new content to a temp file in the same
+ * directory and rename into place. Crash mid-write leaves the previous
+ * file intact rather than half-written. Same-directory rename is atomic
+ * on every supported platform.
  */
-async function skillExists(slug, target) {
+async function atomicWriteFile(path, content) {
+    const tmpPath = `${path}.${process.pid}.tmp`;
+    await (0, promises_1.writeFile)(tmpPath, content, "utf-8");
+    await (0, promises_1.rename)(tmpPath, path);
+}
+/**
+ * Tiny advisory lock for the CLAUDE.md / INDEX.md mutator. Two parallel
+ * `sync_skills` runs would otherwise read-modify-write the same file
+ * and the slower one would clobber the faster one's edit. We poll-loop
+ * up to LOCK_TIMEOUT_MS waiting for a stale lock to clear; if we time
+ * out we proceed without the lock (better to occasionally lose a write
+ * than to deadlock the user's tool call).
+ */
+const LOCK_TIMEOUT_MS = 5000;
+const LOCK_POLL_MS = 50;
+const LOCK_STALE_MS = 30_000;
+async function acquireLock(target) {
+    const lockPath = `${target}.lock`;
+    const deadline = Date.now() + LOCK_TIMEOUT_MS;
+    while (Date.now() < deadline) {
+        try {
+            await (0, promises_1.writeFile)(lockPath, `${process.pid}@${Date.now()}`, {
+                flag: "wx",
+            });
+            return async () => {
+                try {
+                    await (0, promises_1.unlink)(lockPath);
+                }
+                catch {
+                    // Already gone — fine.
+                }
+            };
+        }
+        catch {
+            // Existing lock — check staleness so a crashed sibling doesn't
+            // wedge us forever.
+            try {
+                const raw = await (0, promises_1.readFile)(lockPath, "utf-8");
+                const ts = Number(raw.split("@")[1] ?? 0);
+                if (ts && Date.now() - ts > LOCK_STALE_MS) {
+                    await (0, promises_1.unlink)(lockPath).catch(() => { });
+                    continue;
+                }
+            }
+            catch {
+                // Lock file disappeared between attempts — try again.
+            }
+            await new Promise((resolve) => setTimeout(resolve, LOCK_POLL_MS));
+        }
+    }
+    // Timed out — proceed unlocked. The file may end up wrong; better
+    // than blocking the caller indefinitely.
+    return async () => { };
+}
+/**
+ * Check if a cluster skill directory already exists on disk for the
+ * given canvas.
+ */
+async function skillExists(canvas, clusterSlug, target) {
     const { skillsDir } = resolvePaths(target);
     try {
-        await (0, promises_1.access)((0, path_1.join)(skillsDir, `dopl-${slug}`, "SKILL.md"));
+        await (0, promises_1.access)((0, path_1.join)(skillsDir, clusterDirName(canvas, clusterSlug), "SKILL.md"));
         return true;
     }
     catch {
@@ -49,96 +123,117 @@ async function skillExists(slug, target) {
     }
 }
 /**
- * Write a per-cluster SKILL.md and its references/ directory.
+ * Write a per-cluster SKILL.md and its references/ directory. Atomic:
+ * SKILL.md and every reference file land via `<file>.tmp` + rename so
+ * a crash mid-write never leaves a torn skill.
  */
-async function writeClusterSkill(slug, name, brain, entries, target) {
+async function writeClusterSkill(canvas, clusterSlug, name, brain, entries, target) {
     const { skillsDir } = resolvePaths(target);
-    const skillDir = (0, path_1.join)(skillsDir, `dopl-${slug}`);
+    const skillDir = (0, path_1.join)(skillsDir, clusterDirName(canvas, clusterSlug));
     const refsDir = (0, path_1.join)(skillDir, "references");
     await (0, promises_1.mkdir)(refsDir, { recursive: true });
-    // Write SKILL.md
-    const skillContent = (0, templates_js_1.renderClusterSkillMd)({ slug, name, brain, entries });
-    await (0, promises_1.writeFile)((0, path_1.join)(skillDir, "SKILL.md"), skillContent, "utf-8");
-    // Write reference files for each entry
+    const skillContent = (0, templates_js_1.renderClusterSkillMd)({
+        slug: clusterSlug,
+        name,
+        brain,
+        entries,
+    });
+    await atomicWriteFile((0, path_1.join)(skillDir, "SKILL.md"), skillContent);
     const usedSlugs = new Map();
     for (const entry of entries) {
         let entrySlug = (0, templates_js_1.slugifyTitle)(entry.title || "untitled");
-        // Handle slug collisions
         const count = usedSlugs.get(entrySlug) || 0;
-        if (count > 0) {
+        if (count > 0)
             entrySlug = `${entrySlug}-${count + 1}`;
-        }
         usedSlugs.set(entrySlug, count + 1);
         const refContent = (0, templates_js_1.renderEntryReferenceMd)(entry);
-        await (0, promises_1.writeFile)((0, path_1.join)(refsDir, `${entrySlug}.md`), refContent, "utf-8");
+        await atomicWriteFile((0, path_1.join)(refsDir, `${entrySlug}.md`), refContent);
     }
 }
 /**
- * Write the global canvas SKILL.md for cross-cluster routing.
+ * Write the global cross-cluster routing SKILL.md. One per canvas — so
+ * `dopl-canvas-<canvasSlug>` for every non-default canvas, and the
+ * legacy `dopl-canvas` for the default canvas.
  */
-async function writeGlobalCanvasSkill(clusters, target) {
+async function writeGlobalCanvasSkill(canvas, clusters, target) {
     const { skillsDir } = resolvePaths(target);
-    const skillDir = (0, path_1.join)(skillsDir, "dopl-canvas");
+    const skillDir = (0, path_1.join)(skillsDir, globalCanvasDirName(canvas));
     await (0, promises_1.mkdir)(skillDir, { recursive: true });
     const content = (0, templates_js_1.renderGlobalCanvasSkillMd)(clusters);
-    await (0, promises_1.writeFile)((0, path_1.join)(skillDir, "SKILL.md"), content, "utf-8");
+    await atomicWriteFile((0, path_1.join)(skillDir, "SKILL.md"), content);
 }
 /**
- * Update the Dopl section in ~/.claude/CLAUDE.md.
- * Uses sentinel markers to replace only the Dopl section, preserving user content.
+ * Update the per-canvas Dopl section in `~/.claude/CLAUDE.md`. Each
+ * canvas owns its own sentinel-bracketed block (`<!-- DOPL:START:slug
+ * -->` … `<!-- DOPL:END:slug -->`) so concurrent syncs from different
+ * canvases don't overwrite each other. Acquires an advisory file lock
+ * for the duration of the read-modify-write cycle.
  */
-async function writeGlobalClaudemd(clusters, target) {
+async function writeGlobalClaudemd(canvas, clusters, target) {
     const { indexPath } = resolvePaths(target);
     const indexDir = (0, path_1.join)(indexPath, "..");
     await (0, promises_1.mkdir)(indexDir, { recursive: true });
-    const sieSection = `${DOPL_START}\n${(0, templates_js_1.renderGlobalClaudeMdSection)(clusters)}\n${DOPL_END}`;
-    let existing = "";
+    const release = await acquireLock(indexPath);
     try {
-        existing = await (0, promises_1.readFile)(indexPath, "utf-8");
+        const slugTag = canvas.slug || DEFAULT_CANVAS_SLUG;
+        const startMarker = slugTag === DEFAULT_CANVAS_SLUG
+            ? DOPL_START
+            : `<!-- DOPL:START:${slugTag} -->`;
+        const endMarker = slugTag === DEFAULT_CANVAS_SLUG
+            ? DOPL_END
+            : `<!-- DOPL:END:${slugTag} -->`;
+        const sieSection = `${startMarker}\n${(0, templates_js_1.renderGlobalClaudeMdSection)(clusters)}\n${endMarker}`;
+        let existing = "";
+        try {
+            existing = await (0, promises_1.readFile)(indexPath, "utf-8");
+        }
+        catch {
+            // File doesn't exist yet
+        }
+        const startIdx = existing.indexOf(startMarker);
+        const endIdx = existing.indexOf(endMarker);
+        let next;
+        if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+            const before = existing.slice(0, startIdx);
+            const after = existing.slice(endIdx + endMarker.length);
+            next = before + sieSection + after;
+        }
+        else if (startIdx !== -1 || endIdx !== -1) {
+            const cleaned = existing
+                .replace(startMarker, "")
+                .replace(endMarker, "")
+                .trimEnd();
+            next = cleaned + "\n\n" + sieSection + "\n";
+        }
+        else if (existing) {
+            next = existing.trimEnd() + "\n\n" + sieSection + "\n";
+        }
+        else {
+            next = sieSection + "\n";
+        }
+        await atomicWriteFile(indexPath, next);
     }
-    catch {
-        // File doesn't exist yet
-    }
-    const startIdx = existing.indexOf(DOPL_START);
-    const endIdx = existing.indexOf(DOPL_END);
-    if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
-        const before = existing.slice(0, startIdx);
-        const after = existing.slice(endIdx + DOPL_END.length);
-        await (0, promises_1.writeFile)(indexPath, before + sieSection + after, "utf-8");
-    }
-    else if (startIdx !== -1 || endIdx !== -1) {
-        const cleaned = existing
-            .replace(DOPL_START, "")
-            .replace(DOPL_END, "")
-            .trimEnd();
-        await (0, promises_1.writeFile)(indexPath, cleaned + "\n\n" + sieSection + "\n", "utf-8");
-    }
-    else if (existing) {
-        await (0, promises_1.writeFile)(indexPath, existing.trimEnd() + "\n\n" + sieSection + "\n", "utf-8");
-    }
-    else {
-        await (0, promises_1.writeFile)(indexPath, sieSection + "\n", "utf-8");
+    finally {
+        await release();
     }
 }
 /**
- * Append a single memory line to an existing cluster SKILL.md.
- * Targeted edit — does not rewrite the rest of the file.
+ * Append a single memory line to an existing cluster SKILL.md. Targeted
+ * edit — does not rewrite the rest of the file. Atomic write on save.
  */
-async function appendMemoryToSkill(slug, memory, target) {
+async function appendMemoryToSkill(canvas, clusterSlug, memory, target) {
     const { skillsDir } = resolvePaths(target);
-    const skillPath = (0, path_1.join)(skillsDir, `dopl-${slug}`, "SKILL.md");
+    const skillPath = (0, path_1.join)(skillsDir, clusterDirName(canvas, clusterSlug), "SKILL.md");
     let content;
     try {
         content = await (0, promises_1.readFile)(skillPath, "utf-8");
     }
     catch {
-        // Skill file doesn't exist yet — nothing to update
         return;
     }
     const memoriesHeader = "## User Memories";
     const headerIndex = content.indexOf(memoriesHeader);
     if (headerIndex === -1) {
-        // No memories section — insert before ## References or ## Self-Maintenance
         const insertBefore = content.indexOf("## References") !== -1
             ? content.indexOf("## References")
             : content.indexOf("## Self-Maintenance") !== -1
@@ -146,38 +241,34 @@ async function appendMemoryToSkill(slug, memory, target) {
                 : content.length;
         const newSection = `${memoriesHeader}\n\n1. ${memory}\n\n`;
         const updated = content.slice(0, insertBefore) + newSection + content.slice(insertBefore);
-        await (0, promises_1.writeFile)(skillPath, updated, "utf-8");
+        await atomicWriteFile(skillPath, updated);
         return;
     }
-    // Find the end of the memories section (next ## heading or end of file)
     const afterHeader = content.slice(headerIndex + memoriesHeader.length);
     const nextHeadingMatch = afterHeader.match(/\n## /);
     const sectionEnd = nextHeadingMatch
         ? headerIndex + memoriesHeader.length + nextHeadingMatch.index
         : content.length;
     const memoriesSection = content.slice(headerIndex + memoriesHeader.length, sectionEnd);
-    // Count existing numbered items
     const existingItems = memoriesSection.match(/^\d+\./gm);
     const nextNumber = existingItems ? existingItems.length + 1 : 1;
-    // Remove the placeholder if present
     const cleanedSection = memoriesSection.replace(/\n_No memories yet[^_]*_\n?/, "\n");
-    // Append the new memory
     const updatedSection = cleanedSection.trimEnd() + `\n${nextNumber}. ${memory}\n\n`;
     const updated = content.slice(0, headerIndex + memoriesHeader.length) +
         updatedSection +
         content.slice(sectionEnd);
-    await (0, promises_1.writeFile)(skillPath, updated, "utf-8");
+    await atomicWriteFile(skillPath, updated);
 }
 /**
- * Remove a cluster skill directory from disk.
+ * Remove a cluster skill directory from disk for the given canvas.
  */
-async function removeClusterSkill(slug, target) {
+async function removeClusterSkill(canvas, clusterSlug, target) {
     const { skillsDir } = resolvePaths(target);
-    const skillDir = (0, path_1.join)(skillsDir, `dopl-${slug}`);
+    const skillDir = (0, path_1.join)(skillsDir, clusterDirName(canvas, clusterSlug));
     try {
         await (0, promises_1.rm)(skillDir, { recursive: true, force: true });
     }
     catch {
-        // Directory may not exist
+        // Already gone — fine.
     }
 }

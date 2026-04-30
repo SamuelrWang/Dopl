@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState, useRef, useEffect } from "react";
-import { useCanvas } from "@/features/canvas/canvas-store";
+import { useCanvas, useCanvasScope } from "@/features/canvas/canvas-store";
 import type { Cluster } from "@/features/canvas/types";
 import {
   DEFAULT_PANEL_SIZE,
@@ -20,6 +20,8 @@ export function BuilderSidebar({
   compact,
 }: BuilderSidebarProps) {
   const { state, dispatch } = useCanvas();
+  const scope = useCanvasScope();
+  const canvasId = scope?.canvasId ?? null;
   const { panels, clusters } = state;
 
   const handleCreateCluster = useCallback(() => {
@@ -58,9 +60,11 @@ export function BuilderSidebar({
       initialStatus: "ready",
     });
 
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (canvasId) headers["X-Canvas-Id"] = canvasId;
     fetch("/api/clusters", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({ name: "New Cluster", entry_ids: [] }),
     })
       .then((res) => res.json())
@@ -77,7 +81,7 @@ export function BuilderSidebar({
       .catch(() => {});
 
     onSelectCluster(clusterId);
-  }, [state, dispatch, onSelectCluster]);
+  }, [state, dispatch, onSelectCluster, canvasId]);
 
   if (compact) {
     return (

@@ -165,11 +165,19 @@ export function renderClusterSkillMd(params: ClusterSkillParams): string {
   sections.push("");
 
   // User Memories
+  // The brain's memories array is already visibility-filtered by the
+  // server (workspace memories visible to every member, personal
+  // memories only to the author of *this* MCP session). Personal rows
+  // get an inline `(personal)` marker so the agent — and a human
+  // skimming the file — can tell at a glance which entries are
+  // private.
   sections.push(`## User Memories`);
   sections.push("");
   if (brain.memories.length > 0) {
     for (let i = 0; i < brain.memories.length; i++) {
-      sections.push(`${i + 1}. ${brain.memories[i].content}`);
+      const m = brain.memories[i];
+      const marker = m.scope === "personal" ? " _(personal)_" : "";
+      sections.push(`${i + 1}. ${m.content}${marker}`);
     }
   } else {
     sections.push(`_No memories yet. Add corrections and preferences here as you work._`);

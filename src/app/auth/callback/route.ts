@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { startTrialIfNew } from "@/features/billing/server/subscriptions";
 import { logConversionEvent, hasFiredEvent } from "@/features/analytics/server/conversion-events";
 import { forkPublishedCluster } from "@/features/community/server/service";
+import { ensureDefaultCanvas } from "@/features/canvases/server/service";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -51,7 +52,8 @@ export async function GET(request: NextRequest) {
           // still land on /canvas and the cluster is there.
           if (installCluster) {
             try {
-              await forkPublishedCluster(installCluster, user.id);
+              const canvas = await ensureDefaultCanvas(user.id);
+              await forkPublishedCluster(installCluster, user.id, canvas.id);
             } catch (err) {
               const msg = err instanceof Error ? err.message : String(err);
               if (

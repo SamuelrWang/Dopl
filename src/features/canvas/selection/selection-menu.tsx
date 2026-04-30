@@ -20,7 +20,7 @@
  * accidentally start a marquee or clear the selection.
  */
 
-import { useCanvas } from "../canvas-store";
+import { useCanvas, useCanvasScope } from "../canvas-store";
 import type { Cluster } from "../types";
 import { isPanelClusterable, isPanelDeletable } from "../types";
 import { computeClusterLayout } from "../clusters/cluster-layout";
@@ -31,6 +31,8 @@ interface SelectionMenuProps {
 
 export function SelectionMenu({ cursorPos }: SelectionMenuProps) {
   const { state, dispatch } = useCanvas();
+  const scope = useCanvasScope();
+  const canvasId = scope?.canvasId ?? null;
 
   function handleCluster() {
     // Freeze the current selection ids so later dispatches can see it.
@@ -119,9 +121,11 @@ export function SelectionMenu({ cursorPos }: SelectionMenuProps) {
     const entryIds = clusterCandidates
       .filter((p) => p.type === "entry")
       .map((p) => (p as { entryId: string }).entryId);
+    const headers: Record<string, string> = { "content-type": "application/json" };
+    if (canvasId) headers["X-Canvas-Id"] = canvasId;
     fetch("/api/clusters", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers,
       body: JSON.stringify({ name: cluster.name, entry_ids: entryIds }),
     })
       .then((res) => res.json())

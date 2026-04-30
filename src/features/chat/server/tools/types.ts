@@ -15,11 +15,12 @@ export interface ToolResult {
 /**
  * Signature shared by every tool handler. userId is optional for
  * parity with the original dispatcher signature (each handler still
- * guards explicitly on auth when needed), though in practice the
- * caller in the chat route is always authenticated via withUserAuth.
+ * guards explicitly on auth when needed). canvasId is the active
+ * workspace scope; cluster-aware tools use it to filter cluster lookups.
  */
 export type ToolHandler = (
   input: Record<string, unknown>,
   userId?: string,
-  canvasContext?: CanvasContextPayload
+  canvasContext?: CanvasContextPayload,
+  canvasId?: string
 ) => Promise<ToolResult>;

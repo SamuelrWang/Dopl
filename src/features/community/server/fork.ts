@@ -19,7 +19,8 @@ import type { Cluster } from "@/features/canvas/types";
  */
 export async function forkPublishedCluster(
   slug: string,
-  userId: string
+  userId: string,
+  canvasId: string
 ): Promise<{ clusterSlug: string; entryIds: string[] }> {
   const db = supabaseAdmin();
 
@@ -92,11 +93,12 @@ export async function forkPublishedCluster(
   }
   const brain = brainRes.data;
 
-  // Create the user's new cluster row.
+  // Create a new cluster scoped to the active canvas. Slug uniqueness
+  // is per-canvas — two canvases can each hold a "my-fork" cluster.
   const { data: existingSlugs, error: slugsError } = await db
     .from("clusters")
     .select("slug")
-    .eq("user_id", userId);
+    .eq("canvas_id", canvasId);
   if (slugsError) throw slugsError;
 
   const slugList = (existingSlugs ?? []).map((r) => r.slug);
@@ -108,6 +110,7 @@ export async function forkPublishedCluster(
       name: pc.title,
       slug: newSlug,
       user_id: userId,
+      canvas_id: canvasId,
       forked_from_slug: pc.slug,
       forked_from_title: pc.title,
     })
@@ -146,6 +149,7 @@ export async function forkPublishedCluster(
       const { error } = await db.from("canvas_panels").upsert(
         {
           user_id: userId,
+          canvas_id: canvasId,
           panel_id: panelId,
           panel_type: "entry",
           entry_id: panel.entry_id,
@@ -170,7 +174,7 @@ export async function forkPublishedCluster(
             createdAt: new Date().toISOString(),
           },
         },
-        { onConflict: "user_id,entry_id" }
+        { onConflict: "canvas_id,panel_id" }
       );
       if (error) throw error;
     }
@@ -180,6 +184,7 @@ export async function forkPublishedCluster(
     const { error: brainErr } = await db.from("cluster_brains").insert({
       cluster_id: newCluster.id,
       user_id: userId,
+      canvas_id: canvasId,
       instructions: brain.instructions,
     });
     if (brainErr) throw brainErr;
@@ -192,7 +197,7 @@ export async function forkPublishedCluster(
   const { data: csRow, error: csReadError } = await db
     .from("canvas_state")
     .select("clusters")
-    .eq("user_id", userId)
+    .eq("canvas_id", canvasId)
     .maybeSingle();
   if (csReadError) throw csReadError;
 
@@ -214,10 +219,11 @@ export async function forkPublishedCluster(
     .upsert(
       {
         user_id: userId,
+        canvas_id: canvasId,
         clusters: [...existingClusters, newClusterEntry],
         updated_at: new Date().toISOString(),
       },
-      { onConflict: "user_id" }
+      { onConflict: "canvas_id" }
     );
   if (csError) throw csError;
 

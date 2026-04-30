@@ -1,7 +1,7 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import type { CanvasContextPayload } from "../canvas-context";
-import { enforceClusterEditScope, getClusterForUser } from "./cluster-scope";
+import { enforceClusterEditScope, getClusterForCanvas } from "./cluster-scope";
 import type { ToolResult } from "./types";
 
 const supabase = supabaseAdmin();
@@ -9,13 +9,17 @@ const supabase = supabaseAdmin();
 /** Tool: list_user_clusters — returns slug/name/panel_count per cluster. */
 export async function executeListUserClusters(
   _input: Record<string, unknown>,
-  userId?: string
+  _userId?: string,
+  _canvasContext?: CanvasContextPayload,
+  canvasId?: string
 ): Promise<ToolResult> {
-  if (!userId) return { result: JSON.stringify({ error: "Not authenticated." }) };
+  if (!canvasId) {
+    return { result: JSON.stringify({ error: "Canvas not resolved." }) };
+  }
   const { data, error } = await supabase
     .from("clusters")
     .select("id, slug, name, panel_ids")
-    .eq("user_id", userId)
+    .eq("canvas_id", canvasId)
     .order("created_at", { ascending: false });
   if (error) {
     return { result: JSON.stringify({ error: error.message }) };
@@ -32,14 +36,17 @@ export async function executeListUserClusters(
 export async function executeListClusterBrainMemories(
   input: Record<string, unknown>,
   userId?: string,
-  canvasContext?: CanvasContextPayload
+  canvasContext?: CanvasContextPayload,
+  canvasId?: string
 ): Promise<ToolResult> {
-  if (!userId) return { result: JSON.stringify({ error: "Not authenticated." }) };
+  if (!userId || !canvasId) {
+    return { result: JSON.stringify({ error: "Not authenticated." }) };
+  }
   const clusterSlug = input.cluster_slug as string;
   const scopeError = enforceClusterEditScope(clusterSlug, canvasContext);
   if (scopeError) return { result: JSON.stringify({ error: scopeError }) };
 
-  const clusterRes = await getClusterForUser(clusterSlug, userId);
+  const clusterRes = await getClusterForCanvas(clusterSlug, canvasId);
   if (!clusterRes.ok) return { result: JSON.stringify({ error: clusterRes.error }) };
 
   const { data: brain } = await supabase
@@ -58,17 +65,25 @@ export async function executeListClusterBrainMemories(
     };
   }
 
+  // Visibility filter: workspace memories visible to every member,
+  // personal memories visible only to their author.
   const { data: memories } = await supabase
     .from("cluster_brain_memories")
-    .select("id, content, created_at")
+    .select("id, content, created_at, scope, author_id")
     .eq("cluster_brain_id", brain.id)
+    .or(`scope.eq.workspace,author_id.eq.${userId}`)
     .order("created_at", { ascending: true });
 
   return {
     result: JSON.stringify({
       cluster: { slug: clusterRes.cluster.slug, name: clusterRes.cluster.name },
       instructions: brain.instructions || "",
-      memories: (memories || []).map((m) => ({ id: m.id, content: m.content })),
+      memories: (memories || []).map((m) => ({
+        id: m.id,
+        content: m.content,
+        scope: m.scope,
+        is_mine: m.author_id === userId,
+      })),
     }),
   };
 }
@@ -77,33 +92,40 @@ export async function executeListClusterBrainMemories(
 export async function executeAddClusterBrainMemory(
   input: Record<string, unknown>,
   userId?: string,
-  canvasContext?: CanvasContextPayload
+  canvasContext?: CanvasContextPayload,
+  canvasId?: string
 ): Promise<ToolResult> {
-  if (!userId) return { result: JSON.stringify({ error: "Not authenticated." }) };
+  if (!userId || !canvasId) {
+    return { result: JSON.stringify({ error: "Not authenticated." }) };
+  }
   const clusterSlug = input.cluster_slug as string;
   const content = input.content as string;
+  const scope: "workspace" | "personal" =
+    input.scope === "personal" ? "personal" : "workspace";
   if (!content || typeof content !== "string") {
     return { result: JSON.stringify({ error: "content (string) is required" }) };
   }
   const scopeError = enforceClusterEditScope(clusterSlug, canvasContext);
   if (scopeError) return { result: JSON.stringify({ error: scopeError }) };
 
-  const clusterRes = await getClusterForUser(clusterSlug, userId);
+  const clusterRes = await getClusterForCanvas(clusterSlug, canvasId);
   if (!clusterRes.ok) return { result: JSON.stringify({ error: clusterRes.error }) };
 
-  // Get-or-create the brain row.
   const { data: upserted, error: brainErr } = await supabase
     .from("cluster_brains")
     .upsert(
-      { cluster_id: clusterRes.cluster.id, instructions: "" },
+      {
+        cluster_id: clusterRes.cluster.id,
+        user_id: userId,
+        canvas_id: canvasId,
+        instructions: "",
+      },
       { onConflict: "cluster_id", ignoreDuplicates: true }
     )
     .select("id")
     .single();
   let brainId: string | undefined = upserted?.id;
   if (!brainId) {
-    // ignoreDuplicates returns no row when the brain already existed;
-    // fetch it explicitly.
     const { data: existing } = await supabase
       .from("cluster_brains")
       .select("id")
@@ -121,8 +143,16 @@ export async function executeAddClusterBrainMemory(
 
   const { data: memory, error } = await supabase
     .from("cluster_brain_memories")
-    .insert({ cluster_brain_id: brainId, content })
-    .select("id, content")
+    .insert({
+      cluster_brain_id: brainId,
+      cluster_id: clusterRes.cluster.id,
+      user_id: userId,
+      canvas_id: canvasId,
+      author_id: userId,
+      scope,
+      content,
+    })
+    .select("id, content, scope")
     .single();
   if (error || !memory) {
     return { result: JSON.stringify({ error: error?.message || "Failed to save memory" }) };
@@ -140,9 +170,12 @@ export async function executeAddClusterBrainMemory(
 export async function executeUpdateClusterBrainMemory(
   input: Record<string, unknown>,
   userId?: string,
-  canvasContext?: CanvasContextPayload
+  canvasContext?: CanvasContextPayload,
+  canvasId?: string
 ): Promise<ToolResult> {
-  if (!userId) return { result: JSON.stringify({ error: "Not authenticated." }) };
+  if (!userId || !canvasId) {
+    return { result: JSON.stringify({ error: "Not authenticated." }) };
+  }
   const clusterSlug = input.cluster_slug as string;
   const memoryId = input.memory_id as string;
   const content = input.content as string;
@@ -155,11 +188,9 @@ export async function executeUpdateClusterBrainMemory(
   const scopeError = enforceClusterEditScope(clusterSlug, canvasContext);
   if (scopeError) return { result: JSON.stringify({ error: scopeError }) };
 
-  const clusterRes = await getClusterForUser(clusterSlug, userId);
+  const clusterRes = await getClusterForCanvas(clusterSlug, canvasId);
   if (!clusterRes.ok) return { result: JSON.stringify({ error: clusterRes.error }) };
 
-  // Verify the memory actually belongs to this cluster's brain —
-  // prevents cross-cluster edits when scope is "canvas".
   const { data: memRow } = await supabase
     .from("cluster_brain_memories")
     .select("id, cluster_brains!inner(cluster_id)")
@@ -198,9 +229,12 @@ export async function executeUpdateClusterBrainMemory(
 export async function executeRemoveClusterBrainMemory(
   input: Record<string, unknown>,
   userId?: string,
-  canvasContext?: CanvasContextPayload
+  canvasContext?: CanvasContextPayload,
+  canvasId?: string
 ): Promise<ToolResult> {
-  if (!userId) return { result: JSON.stringify({ error: "Not authenticated." }) };
+  if (!userId || !canvasId) {
+    return { result: JSON.stringify({ error: "Not authenticated." }) };
+  }
   const clusterSlug = input.cluster_slug as string;
   const memoryId = input.memory_id as string;
   if (!memoryId || typeof memoryId !== "string") {
@@ -209,7 +243,7 @@ export async function executeRemoveClusterBrainMemory(
   const scopeError = enforceClusterEditScope(clusterSlug, canvasContext);
   if (scopeError) return { result: JSON.stringify({ error: scopeError }) };
 
-  const clusterRes = await getClusterForUser(clusterSlug, userId);
+  const clusterRes = await getClusterForCanvas(clusterSlug, canvasId);
   if (!clusterRes.ok) return { result: JSON.stringify({ error: clusterRes.error }) };
 
   const { data: memRow } = await supabase
@@ -248,9 +282,12 @@ export async function executeRemoveClusterBrainMemory(
 export async function executeRewriteClusterBrainInstructions(
   input: Record<string, unknown>,
   userId?: string,
-  canvasContext?: CanvasContextPayload
+  canvasContext?: CanvasContextPayload,
+  canvasId?: string
 ): Promise<ToolResult> {
-  if (!userId) return { result: JSON.stringify({ error: "Not authenticated." }) };
+  if (!userId || !canvasId) {
+    return { result: JSON.stringify({ error: "Not authenticated." }) };
+  }
   const clusterSlug = input.cluster_slug as string;
   const instructions = input.instructions as string;
   if (typeof instructions !== "string") {
@@ -259,7 +296,7 @@ export async function executeRewriteClusterBrainInstructions(
   const scopeError = enforceClusterEditScope(clusterSlug, canvasContext);
   if (scopeError) return { result: JSON.stringify({ error: scopeError }) };
 
-  const clusterRes = await getClusterForUser(clusterSlug, userId);
+  const clusterRes = await getClusterForCanvas(clusterSlug, canvasId);
   if (!clusterRes.ok) return { result: JSON.stringify({ error: clusterRes.error }) };
 
   const now = new Date().toISOString();
@@ -282,6 +319,8 @@ export async function executeRewriteClusterBrainInstructions(
       .from("cluster_brains")
       .insert({
         cluster_id: clusterRes.cluster.id,
+        user_id: userId,
+        canvas_id: canvasId,
         instructions,
         updated_at: now,
       });

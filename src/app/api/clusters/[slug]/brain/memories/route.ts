@@ -3,58 +3,110 @@
  * PATCH  /api/clusters/[slug]/brain/memories — update a memory's content by id
  * DELETE /api/clusters/[slug]/brain/memories — remove a memory by id
  *
- * All operations require the authenticated user to own the target cluster.
+ * All operations require the caller to be an active member (≥ editor)
+ * of the canvas that owns the target cluster.
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { supabaseAdmin } from "@/shared/supabase/admin";
-import { withUserAuth } from "@/shared/auth/with-auth";
+import { withCanvasAuth } from "@/shared/auth/with-canvas-auth";
+import { parseJson } from "@/shared/api/parse-json";
+import { HttpError } from "@/shared/lib/http-error";
+import type { Role } from "@/features/canvases/types";
 
 export const dynamic = "force-dynamic";
 
+interface Ctx {
+  userId: string;
+  canvasId: string;
+  role: Role;
+  params?: Record<string, string>;
+}
+
+const MemoryCreateSchema = z.object({
+  content: z.string().min(1, "content is required").max(4000),
+  scope: z.enum(["workspace", "personal"]).optional(),
+});
+
+const MemoryUpdateSchema = z
+  .object({
+    memory_id: z.string().uuid(),
+    content: z.string().min(1).max(4000).optional(),
+    scope: z.enum(["workspace", "personal"]).optional(),
+  })
+  .refine((d) => d.content !== undefined || d.scope !== undefined, {
+    message: "Provide content and/or scope",
+  });
+
+const MemoryDeleteSchema = z.object({
+  memory_id: z.string().uuid(),
+});
+
+function toErrorResponse(err: unknown): NextResponse {
+  if (err instanceof HttpError) {
+    return NextResponse.json(err.toResponseBody(), { status: err.status });
+  }
+  const message = err instanceof Error ? err.message : "Unknown error";
+  return NextResponse.json(
+    { error: { code: "INTERNAL_ERROR", message } },
+    { status: 500 },
+  );
+}
+
 // ── Helpers ─────────────────────────────────────────────────────────
 
-// Scoped cluster lookup: returns null if the user doesn't own it.
-async function getClusterBySlugForUser(slug: string, userId: string) {
+async function getClusterBySlugForCanvas(slug: string, canvasId: string) {
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("clusters")
     .select("id, slug, name")
     .eq("slug", slug)
-    .eq("user_id", userId)
+    .eq("canvas_id", canvasId)
     .single();
-
   if (error || !data) return null;
   return data;
 }
 
-// Verify a memory belongs to a cluster owned by the given user.
-async function memoryBelongsToUser(
+// Verify a memory belongs to the active canvas. Joins memory → brain →
+// cluster and matches `clusters.canvas_id`. Returns the cluster_id so
+// callers can re-sync the brain panel without a second lookup.
+async function memoryClusterIdForCanvas(
   memoryId: string,
-  userId: string
-): Promise<boolean> {
+  canvasId: string
+): Promise<string | null> {
   const db = supabaseAdmin();
-  // Join: memory → brain → cluster; filter by cluster.user_id.
   const { data, error } = await db
     .from("cluster_brain_memories")
-    .select("id, cluster_brains!inner(cluster_id, clusters!inner(user_id))")
+    .select("cluster_id, cluster_brains!inner(clusters!inner(canvas_id))")
     .eq("id", memoryId)
     .single();
-  if (error || !data) return false;
-  // Supabase typings aren't precise for nested inner joins; cast defensively.
-  const brains = (data as unknown as {
-    cluster_brains?: { clusters?: { user_id?: string } };
-  }).cluster_brains;
-  return brains?.clusters?.user_id === userId;
+  if (error || !data) return null;
+  const brains = (
+    data as unknown as {
+      cluster_id: string;
+      cluster_brains?: { clusters?: { canvas_id?: string } };
+    }
+  );
+  if (brains.cluster_brains?.clusters?.canvas_id !== canvasId) return null;
+  return brains.cluster_id;
 }
 
-async function getOrCreateBrain(clusterId: string, userId: string): Promise<string> {
+async function getOrCreateBrain(
+  clusterId: string,
+  userId: string,
+  canvasId: string
+): Promise<string> {
   const db = supabaseAdmin();
-
   const { data: brain, error } = await db
     .from("cluster_brains")
     .upsert(
-      { cluster_id: clusterId, user_id: userId, instructions: "" },
+      {
+        cluster_id: clusterId,
+        user_id: userId,
+        canvas_id: canvasId,
+        instructions: "",
+      },
       { onConflict: "cluster_id", ignoreDuplicates: true }
     )
     .select("id")
@@ -63,31 +115,40 @@ async function getOrCreateBrain(clusterId: string, userId: string): Promise<stri
   if (error || !brain) {
     throw error || new Error("Failed to get or create cluster brain");
   }
-
   return brain.id;
 }
 
-// Re-read the full memory list for a cluster and mirror it into the
-// canvas_panels brain panel's panel_data.memories array. The canvas UI
-// hydrates memories from panel_data, not from cluster_brain_memories,
-// so without this write-through the visible list never updates even
-// though the DB is correct. Kept as an array of plain content strings
-// because that's the shape the panel renderer expects today.
-async function syncMemoriesToPanel(clusterId: string, userId: string) {
+// Re-read the workspace-scoped memory list and mirror it into the
+// brain panel's `panel_data.memories` array. The canvas UI hydrates
+// memories from panel_data, not directly from cluster_brain_memories,
+// so without this write-through the visible list never updates.
+//
+// Personal memories are deliberately NOT written to panel_data — that
+// JSON is shared across every viewer of the canvas, so any personal
+// content there would leak. Personal memories are surfaced through the
+// brain GET endpoint instead, which applies the per-user visibility
+// filter.
+async function syncMemoriesToPanel(clusterId: string, canvasId: string) {
   const db = supabaseAdmin();
   const { data: memories } = await db
     .from("cluster_brain_memories")
-    .select("content, created_at")
+    .select("id, content, scope, author_id, created_at")
     .eq("cluster_id", clusterId)
+    .eq("scope", "workspace")
     .order("created_at", { ascending: true });
 
-  const contents = (memories ?? []).map((m) => m.content as string);
+  const rows = (memories ?? []).map((m) => ({
+    id: m.id as string,
+    content: m.content as string,
+    scope: "workspace" as const,
+    author_id: m.author_id as string,
+  }));
 
   const brainPanelId = `brain-${clusterId}`;
   const { data: panel } = await db
     .from("canvas_panels")
     .select("panel_data")
-    .eq("user_id", userId)
+    .eq("canvas_id", canvasId)
     .eq("panel_id", brainPanelId)
     .eq("panel_type", "cluster-brain")
     .maybeSingle();
@@ -97,43 +158,98 @@ async function syncMemoriesToPanel(clusterId: string, userId: string) {
   const currentData = (panel.panel_data as Record<string, unknown>) ?? {};
   await db
     .from("canvas_panels")
-    .update({
-      panel_data: { ...currentData, memories: contents },
-    })
-    .eq("user_id", userId)
+    .update({ panel_data: { ...currentData, memories: rows } })
+    .eq("canvas_id", canvasId)
     .eq("panel_id", brainPanelId);
 }
 
 // ── POST ────────────────────────────────────────────────────────────
 
-async function handlePost(
-  request: NextRequest,
-  { userId, params }: { userId: string; params?: Record<string, string> }
-) {
+/**
+ * Normalize content for cheap dedup matching. Lowercase, trim, collapse
+ * whitespace, drop trailing punctuation. Catches the common "I said the
+ * same thing twice" case (rephrased capitalization, extra space, period
+ * vs no period) without the cost of embeddings or Levenshtein.
+ */
+function normalizeForDedup(content: string): string {
+  return content
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/[.!?,;:]+$/g, "");
+}
+
+async function findDuplicateMemory(
+  brainId: string,
+  scope: "workspace" | "personal",
+  authorId: string,
+  content: string,
+): Promise<{ id: string; content: string } | null> {
+  const normalized = normalizeForDedup(content);
+  if (!normalized) return null;
+  const db = supabaseAdmin();
+  // Pull the same-scope memories the new one would land alongside —
+  // workspace memories collide with workspace, personal-mine collides
+  // only with the same author's personal pool. Cap at 100 since brains
+  // with thousands of memories are an anti-pattern we'd push back on
+  // separately.
+  let query = db
+    .from("cluster_brain_memories")
+    .select("id, content")
+    .eq("cluster_brain_id", brainId)
+    .eq("scope", scope)
+    .order("created_at", { ascending: false })
+    .limit(100);
+  if (scope === "personal") {
+    query = query.eq("author_id", authorId);
+  }
+  const { data } = await query;
+  for (const row of data ?? []) {
+    if (
+      typeof row.content === "string" &&
+      normalizeForDedup(row.content) === normalized
+    ) {
+      return { id: row.id as string, content: row.content };
+    }
+  }
+  return null;
+}
+
+async function handlePost(request: NextRequest, { userId, canvasId, params }: Ctx) {
   try {
     const slug = params?.slug;
     if (!slug) {
-      return NextResponse.json({ error: "slug required" }, { status: 400 });
+      throw new HttpError(400, "BAD_REQUEST", "slug required");
     }
-    const cluster = await getClusterBySlugForUser(slug, userId);
+    const cluster = await getClusterBySlugForCanvas(slug, canvasId);
     if (!cluster) {
-      return NextResponse.json(
-        { error: `Cluster not found: ${slug}` },
-        { status: 404 }
-      );
+      throw new HttpError(404, "CLUSTER_NOT_FOUND", `Cluster not found: ${slug}`);
     }
 
-    const body = await request.json();
-    const { content } = body;
+    const input = await parseJson(request, MemoryCreateSchema);
+    const content = input.content;
+    const scope: "workspace" | "personal" = input.scope ?? "workspace";
 
-    if (!content || typeof content !== "string") {
+    const brainId = await getOrCreateBrain(cluster.id, userId, canvasId);
+
+    // Dedup — if a near-identical memory already exists in the same
+    // scope, skip the insert and return the existing row so the caller
+    // (UI or agent) can decide whether to update it instead. Returns
+    // 200 with `was_duplicate: true` instead of 201.
+    const duplicate = await findDuplicateMemory(brainId, scope, userId, content);
+    if (duplicate) {
       return NextResponse.json(
-        { error: "content (string) is required" },
-        { status: 400 }
+        {
+          id: duplicate.id,
+          content: duplicate.content,
+          scope,
+          author_id: userId,
+          is_mine: true,
+          was_duplicate: true,
+        },
+        { status: 200 },
       );
     }
-
-    const brainId = await getOrCreateBrain(cluster.id, userId);
 
     const db = supabaseAdmin();
     const { data: memory, error } = await db
@@ -142,144 +258,173 @@ async function handlePost(
         cluster_brain_id: brainId,
         cluster_id: cluster.id,
         user_id: userId,
+        canvas_id: canvasId,
+        author_id: userId,
+        scope,
         content,
       })
-      .select("id, content, created_at")
+      .select("id, content, created_at, scope, author_id")
       .single();
 
     if (error || !memory) {
       throw error || new Error("Failed to create memory");
     }
 
-    // Mirror to canvas_panels so the UI shows the new memory without
-    // a reload. Non-fatal — the memory itself is saved.
-    try {
-      await syncMemoriesToPanel(cluster.id, userId);
-    } catch (err) {
-      console.error("[memories POST] panel sync failed:", err);
+    // Only re-sync the panel when the new row is workspace-scope —
+    // personal memories never appear in the shared panel_data.
+    if (scope === "workspace") {
+      try {
+        await syncMemoriesToPanel(cluster.id, canvasId);
+      } catch (err) {
+        console.error("[memories POST] panel sync failed:", err);
+      }
     }
 
-    return NextResponse.json(memory, { status: 201 });
-  } catch (error) {
-    console.error("[memories POST] Error saving cluster memory:", error);
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json(
+      { ...memory, is_mine: true, was_duplicate: false },
+      { status: 201 }
+    );
+  } catch (err) {
+    if (!(err instanceof HttpError)) {
+      console.error("[memories POST] Error saving cluster memory:", err);
+    }
+    return toErrorResponse(err);
   }
 }
 
 // ── PATCH ────────────────────────────────────────────────────────────
 
-async function handlePatch(
-  request: NextRequest,
-  { userId }: { userId: string }
-) {
+async function handlePatch(request: NextRequest, { userId, role, canvasId }: Ctx) {
   try {
-    const body = await request.json();
-    const { memory_id, content } = body;
+    const input = await parseJson(request, MemoryUpdateSchema);
+    const memoryId = input.memory_id;
+    const content = input.content ?? null;
+    const scope = input.scope ?? null;
 
-    if (!memory_id || typeof memory_id !== "string") {
-      return NextResponse.json(
-        { error: "memory_id (string) is required" },
-        { status: 400 }
-      );
-    }
-    if (!content || typeof content !== "string") {
-      return NextResponse.json(
-        { error: "content (string) is required" },
-        { status: 400 }
-      );
-    }
-
-    if (!(await memoryBelongsToUser(memory_id, userId))) {
-      return NextResponse.json({ error: "Memory not found" }, { status: 404 });
+    const clusterId = await memoryClusterIdForCanvas(memoryId, canvasId);
+    if (!clusterId) {
+      throw new HttpError(404, "MEMORY_NOT_FOUND", "Memory not found");
     }
 
     const db = supabaseAdmin();
-    const { data: updated, error } = await db
+    const { data: existing, error: existingError } = await db
       .from("cluster_brain_memories")
-      .update({ content })
-      .eq("id", memory_id)
-      .select("id, content, cluster_id")
+      .select("id, scope, author_id")
+      .eq("id", memoryId)
       .single();
+    if (existingError || !existing) {
+      throw new HttpError(404, "MEMORY_NOT_FOUND", "Memory not found");
+    }
 
-    if (error || !updated) {
-      return NextResponse.json(
-        { error: error?.message || "Memory not found" },
-        { status: 404 }
+    // Permission gate: editors can edit workspace memories; only the
+    // author can edit personal ones; only admin+ can promote a personal
+    // memory to workspace; only the author can demote a workspace
+    // memory back to personal (and only if they wrote it).
+    const isAuthor = existing.author_id === userId;
+    const isAdmin = role === "admin" || role === "owner";
+    if (existing.scope === "personal" && !isAuthor) {
+      throw new HttpError(
+        403,
+        "MEMORY_AUTHOR_ONLY",
+        "Only the author can edit a personal memory",
+      );
+    }
+    if (scope === "workspace" && existing.scope !== "workspace" && !isAdmin) {
+      throw new HttpError(
+        403,
+        "MEMORY_PROMOTE_FORBIDDEN",
+        "Only admins can promote a memory to workspace scope",
+      );
+    }
+    if (scope === "personal" && existing.scope === "workspace" && !isAuthor) {
+      throw new HttpError(
+        403,
+        "MEMORY_DEMOTE_FORBIDDEN",
+        "Only the author can demote a workspace memory",
       );
     }
 
-    // Re-sync the panel's memory list so the edited content is
-    // visible on canvas without a reload.
-    const clusterId = (updated as unknown as { cluster_id: string })
-      .cluster_id;
-    if (clusterId) {
-      try {
-        await syncMemoriesToPanel(clusterId, userId);
-      } catch (err) {
-        console.error("[memories PATCH] panel sync failed:", err);
-      }
+    const update: Record<string, unknown> = {};
+    if (content !== null) update.content = content;
+    if (scope !== null) update.scope = scope;
+
+    const { data: updated, error } = await db
+      .from("cluster_brain_memories")
+      .update(update)
+      .eq("id", memoryId)
+      .select("id, content, cluster_id, scope, author_id")
+      .single();
+
+    if (error || !updated) {
+      throw new HttpError(
+        404,
+        "MEMORY_NOT_FOUND",
+        error?.message || "Memory not found",
+      );
     }
 
-    return NextResponse.json(updated);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    try {
+      await syncMemoriesToPanel(clusterId, canvasId);
+    } catch (err) {
+      console.error("[memories PATCH] panel sync failed:", err);
+    }
+
+    return NextResponse.json({
+      ...updated,
+      is_mine: updated.author_id === userId,
+    });
+  } catch (err) {
+    return toErrorResponse(err);
   }
 }
 
 // ── DELETE ───────────────────────────────────────────────────────────
 
-async function handleDelete(
-  request: NextRequest,
-  { userId }: { userId: string }
-) {
+async function handleDelete(request: NextRequest, { userId, canvasId }: Ctx) {
   try {
-    const body = await request.json();
-    const { memory_id } = body;
+    const input = await parseJson(request, MemoryDeleteSchema);
+    const memoryId = input.memory_id;
 
-    if (!memory_id || typeof memory_id !== "string") {
-      return NextResponse.json(
-        { error: "memory_id (string) is required" },
-        { status: 400 }
-      );
-    }
-
-    if (!(await memoryBelongsToUser(memory_id, userId))) {
-      return NextResponse.json({ error: "Memory not found" }, { status: 404 });
+    const clusterId = await memoryClusterIdForCanvas(memoryId, canvasId);
+    if (!clusterId) {
+      throw new HttpError(404, "MEMORY_NOT_FOUND", "Memory not found");
     }
 
     const db = supabaseAdmin();
-    // Pull cluster_id before delete so we can resync the panel.
-    const { data: toDelete } = await db
+    const { data: existing } = await db
       .from("cluster_brain_memories")
-      .select("cluster_id")
-      .eq("id", memory_id)
-      .maybeSingle();
+      .select("scope, author_id")
+      .eq("id", memoryId)
+      .single();
+    // Personal memories are author-only — even an admin can't reach
+    // into someone else's private notes.
+    if (existing?.scope === "personal" && existing.author_id !== userId) {
+      throw new HttpError(
+        403,
+        "MEMORY_AUTHOR_ONLY",
+        "Only the author can delete a personal memory",
+      );
+    }
 
     const { error } = await db
       .from("cluster_brain_memories")
       .delete()
-      .eq("id", memory_id);
+      .eq("id", memoryId);
 
     if (error) throw error;
 
-    const clusterId = (toDelete as { cluster_id?: string } | null)?.cluster_id;
-    if (clusterId) {
-      try {
-        await syncMemoriesToPanel(clusterId, userId);
-      } catch (err) {
-        console.error("[memories DELETE] panel sync failed:", err);
-      }
+    try {
+      await syncMemoriesToPanel(clusterId, canvasId);
+    } catch (err) {
+      console.error("[memories DELETE] panel sync failed:", err);
     }
 
     return NextResponse.json({ success: true });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+  } catch (err) {
+    return toErrorResponse(err);
   }
 }
 
-export const POST = withUserAuth(handlePost);
-export const PATCH = withUserAuth(handlePatch);
-export const DELETE = withUserAuth(handleDelete);
+export const POST = withCanvasAuth(handlePost, { minRole: "editor" });
+export const PATCH = withCanvasAuth(handlePatch, { minRole: "editor" });
+export const DELETE = withCanvasAuth(handleDelete, { minRole: "editor" });

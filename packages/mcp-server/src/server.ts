@@ -1,13 +1,19 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z, type ZodRawShape } from "zod";
 import { DoplClient } from "@dopl/client";
-import type { ClusterSummary, BrainData, CanvasPanel } from "@dopl/client";
+import type {
+  ClusterSummary,
+  BrainData,
+  CanvasPanel,
+  CanvasRole,
+  CanvasSummary,
+} from "@dopl/client";
 import {
   writeClusterSkill,
   writeGlobalCanvasSkill,
   writeGlobalClaudemd,
   appendMemoryToSkill,
-  skillExists,
+  skillIsCurrent,
   removeClusterSkill,
   type SkillTarget,
 } from "./skill-writer.js";
@@ -311,9 +317,20 @@ function withDoplStatus<A extends object>(
 
 export function createServer(
   client: DoplClient,
-  options: { isAdmin?: boolean } = {},
+  options: {
+    isAdmin?: boolean;
+    canvas?: CanvasSummary | null;
+    role?: CanvasRole | null;
+  } = {},
 ): McpServer {
   const isAdmin = options.isAdmin === true;
+  // Active canvas (workspace) for this MCP session — fixed at startup
+  // by index.ts after the handshake. The slug threads into skill-writer
+  // calls so on-disk SKILL.md paths get scoped per canvas. Default slug
+  // preserves the legacy single-canvas paths so existing users don't
+  // see every skill rename on first upgrade.
+  const canvasContext = { slug: options.canvas?.slug ?? "default" };
+  void options.role;
   const server = new McpServer(
     {
       name: "dopl",
@@ -622,7 +639,7 @@ export function createServer(
   // ── sync_skills ─────────────────────────────────────────────────────
   registerTool(
     "sync_skills",
-    "Write Dopl cluster skill files to disk so Claude Code can invoke them as real skills. Default target is Claude Code (`~/.claude/skills/`); pass target='openclaw' for `~/.openclaw/workspace/data/dopl/`. Call this AFTER any material change to a cluster — creating it, adding/removing entries, editing the brain, saving a memory — so the on-disk skill matches the DB state. Safe to call repeatedly; skips clusters that already have an up-to-date file unless force=true.",
+    "Write Dopl cluster skill files to disk so Claude Code can invoke them as real skills. Default target is Claude Code (`~/.claude/skills/`); pass target='openclaw' for `~/.openclaw/workspace/data/dopl/`. Call this AFTER any material change to a cluster — creating it, adding/removing entries, editing the brain, saving a memory — so the on-disk skill matches the DB state. Safe to call repeatedly: each skill dir tracks the server brain version in `.dopl-meta.json`, so clusters whose brain hasn't changed since the last sync are skipped automatically. Pass force=true to rewrite every skill regardless of version (useful when debugging or after manually editing a SKILL.md). Orphan reference files for entries that have left a cluster are pruned on every rewrite.",
     {
       force: z.boolean().optional().describe("Overwrite existing skill files (default: false, skips existing)"),
       target: z.enum(["claude", "openclaw"]).optional().describe("Target platform: 'claude' (default) writes to ~/.claude/skills/, 'openclaw' writes to ~/.openclaw/workspace/data/dopl/"),
@@ -635,22 +652,14 @@ export function createServer(
 
       for (const cluster of clusters) {
         try {
-          // Check if skill already exists
-          if (!force && await skillExists(cluster.slug, skillTarget)) {
-            results.push(`- **${cluster.name}** — skipped (already exists)`);
-            // Still collect summary for global files
-            const detail = await client.getCluster(cluster.slug);
-            clusterSummaries.push(buildClusterSummary(cluster.slug, cluster.name, detail.entries));
-            continue;
-          }
-
-          const detail = await client.getCluster(cluster.slug);
-
-          // Client-only synthesis: the server does NOT auto-synthesize
-          // missing brains anymore. If a brain is missing or empty, we
-          // still write the skill file (so trigger-matching works) but
-          // flag the cluster so the agent can synthesize it.
-          let brain: BrainData = { instructions: "", memories: [] };
+          // Pull the brain first so we know its server-side version.
+          // The version is the gate for skipping — if the on-disk meta
+          // file matches, we don't need to refetch entries or rewrite.
+          let brain: BrainData = {
+            instructions: "",
+            memories: [],
+            brain_version: 0,
+          };
           let brainEmpty = false;
           try {
             brain = await client.getClusterBrain(cluster.slug);
@@ -660,15 +669,55 @@ export function createServer(
           } catch {
             brainEmpty = true;
           }
+          const serverVersion = brain.brain_version ?? 0;
 
-          await writeClusterSkill(cluster.slug, cluster.name, brain, detail.entries, skillTarget);
-          if (brainEmpty) {
-            results.push(`- **${cluster.name}** — wrote thin-pointer skill (⚠️ brain is empty — synthesize it with \`get_skill_template\` → \`update_cluster_brain("${cluster.slug}", …)\`)`);
-          } else {
-            results.push(`- **${cluster.name}** — wrote skill with ${detail.entries.length} entries`);
+          // Version-aware skip — the on-disk `.dopl-meta.json` records
+          // the brain version this skill reflects. Skip the rewrite
+          // only when versions match. Replaces the legacy "if file
+          // exists, skip" heuristic, which silently missed every
+          // server-side brain edit.
+          if (
+            !force &&
+            (await skillIsCurrent(
+              canvasContext,
+              cluster.slug,
+              serverVersion,
+              skillTarget,
+            ))
+          ) {
+            results.push(
+              `- **${cluster.name}** — skipped (up to date, brain v${serverVersion})`,
+            );
+            const detail = await client.getCluster(cluster.slug);
+            clusterSummaries.push(
+              buildClusterSummary(cluster.slug, cluster.name, detail.entries),
+            );
+            continue;
           }
 
-          clusterSummaries.push(buildClusterSummary(cluster.slug, cluster.name, detail.entries));
+          const detail = await client.getCluster(cluster.slug);
+
+          await writeClusterSkill(
+            canvasContext,
+            cluster.slug,
+            cluster.name,
+            brain,
+            detail.entries,
+            skillTarget,
+          );
+          if (brainEmpty) {
+            results.push(
+              `- **${cluster.name}** — wrote thin-pointer skill (⚠️ brain is empty — synthesize it with \`get_skill_template\` → \`update_cluster_brain("${cluster.slug}", …)\`)`,
+            );
+          } else {
+            results.push(
+              `- **${cluster.name}** — wrote skill v${serverVersion} with ${detail.entries.length} entries`,
+            );
+          }
+
+          clusterSummaries.push(
+            buildClusterSummary(cluster.slug, cluster.name, detail.entries),
+          );
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           results.push(`- **${cluster.name}** — ERROR: ${msg}`);
@@ -677,16 +726,19 @@ export function createServer(
 
       // Write global files (always overwrite these)
       try {
-        await writeGlobalCanvasSkill(clusterSummaries, skillTarget);
+        await writeGlobalCanvasSkill(canvasContext, clusterSummaries, skillTarget);
         const targetLabel = skillTarget === "openclaw" ? "~/.openclaw/workspace/data/dopl" : "~/.claude/skills";
-        results.push(`\nGlobal canvas skill: wrote ${targetLabel}/dopl-canvas/SKILL.md`);
+        const globalDir = canvasContext.slug === "default"
+          ? "dopl-canvas"
+          : `dopl-canvas-${canvasContext.slug}`;
+        results.push(`\nGlobal canvas skill: wrote ${targetLabel}/${globalDir}/SKILL.md`);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         results.push(`\nGlobal canvas skill: ERROR — ${msg}`);
       }
 
       try {
-        await writeGlobalClaudemd(clusterSummaries, skillTarget);
+        await writeGlobalClaudemd(canvasContext, clusterSummaries, skillTarget);
         const indexLabel = skillTarget === "openclaw" ? "~/.openclaw/workspace/data/dopl/INDEX.md" : "~/.claude/CLAUDE.md";
         results.push(`Index: updated ${indexLabel}`);
       } catch (err) {
@@ -710,11 +762,21 @@ export function createServer(
     {
       slug: z.string().describe("Cluster slug"),
       memory: z.string().describe("The preference or correction to remember, e.g. 'User prefers Resend over SendGrid for email' or 'Skip the Slack notification step'"),
+      scope: z
+        .enum(["workspace", "personal"])
+        .optional()
+        .describe(
+          "Visibility scope. Default 'workspace' — every member of this canvas sees the memory and the skill embeds it for everyone. Use 'personal' when the user says 'for my setup', 'in my env', 'on my machine', or shares a fact only meaningful to themselves (their API key path, their preferred local tool, their personal alias). Personal memories are visible only to the author and never written to the shared canvas brain panel."
+        ),
     },
-    async ({ slug, memory }) => {
-      let result: { id: string; content: string };
+    async ({ slug, memory, scope }) => {
+      let result: {
+        id: string;
+        content: string;
+        scope: "workspace" | "personal";
+      };
       try {
-        result = await client.saveClusterMemory(slug, memory);
+        result = await client.saveClusterMemory(slug, memory, scope);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         return {
@@ -728,20 +790,28 @@ export function createServer(
         };
       }
 
-      // Also append to on-disk SKILL.md (non-fatal)
+      // Also append to on-disk SKILL.md (non-fatal). Tag personal
+      // memories inline so the agent can see at a glance when reading
+      // the file that an entry is private to the current user.
       let diskNote = "";
       try {
-        await appendMemoryToSkill(slug, memory);
-        diskNote = `\n(Also updated ~/.claude/skills/dopl-${slug}/SKILL.md)`;
+        const onDiskMemory =
+          result.scope === "personal" ? `${memory} _(personal)_` : memory;
+        await appendMemoryToSkill(canvasContext, slug, onDiskMemory);
+        const dirName = canvasContext.slug === "default"
+          ? `dopl-${slug}`
+          : `dopl-${canvasContext.slug}-${slug}`;
+        diskNote = `\n(Also updated ~/.claude/skills/${dirName}/SKILL.md)`;
       } catch (err) {
         console.error(`[Dopl] Failed to update skill file for ${slug}:`, err);
       }
 
+      const scopeLabel = result.scope === "personal" ? " (personal)" : "";
       return {
         content: [
           {
             type: "text" as const,
-            text: `Saved memory for cluster "${slug}": "${result.content}"${diskNote}`,
+            text: `Saved memory${scopeLabel} for cluster "${slug}": "${result.content}"${diskNote}`,
           },
         ],
       };
@@ -1131,7 +1201,7 @@ export function createServer(
       // If the slug changed (due to rename), clean up old skill dir
       if (result.slug !== slug) {
         try {
-          await removeClusterSkill(slug);
+          await removeClusterSkill(canvasContext, slug);
         } catch (err) {
           console.error(`[Dopl] Failed to remove old skill dir for ${slug}:`, err);
         }
@@ -1328,7 +1398,7 @@ export function createServer(
       try {
         const detail = await client.getCluster(slug);
         const brain = await client.getClusterBrain(slug);
-        await writeClusterSkill(slug, detail.name, brain, detail.entries);
+        await writeClusterSkill(canvasContext, slug, detail.name, brain, detail.entries);
         diskNote = `\n(Also updated ~/.claude/skills/dopl-${slug}/SKILL.md)`;
       } catch (err) {
         console.error(`[Dopl] Failed to sync skill for ${slug}:`, err);
@@ -1567,7 +1637,7 @@ export function createServer(
       try {
         const updatedDetail = await client.getCluster(slug);
         const currentBrain = await client.getClusterBrain(slug);
-        await writeClusterSkill(slug, detail.name, currentBrain, updatedDetail.entries);
+        await writeClusterSkill(canvasContext, slug, detail.name, currentBrain, updatedDetail.entries);
         skillNote = " Skill file updated with the new entry list.";
       } catch (err) {
         console.error(`[Dopl] Skill sync failed for ${slug}:`, err);

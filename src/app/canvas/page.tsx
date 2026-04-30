@@ -1,41 +1,37 @@
 /**
- * /canvas — server component entry point.
+ * /canvas — redirect entry point.
  *
- * Fetches the user's full canvas state + conversations from Supabase
- * BEFORE sending HTML to the browser, so the client reducer receives
- * real data on first render. No loading flash, no hydration race.
- *
- * Both loaders (loadCanvasInitialState, loadUserConversations) wrap
- * their queries in try/catch and return empty-but-valid state on any
- * failure, so a transient Supabase hiccup degrades to "first-time user
- * experience" rather than breaking the page.
+ * Resolves the user's last-active canvas from a cookie (set by
+ * /canvas/[slug] on every visit) and redirects there. Falls back to the
+ * user's default canvas, which is created on demand if missing — this
+ * covers brand-new sign-ups whose default-canvas backfill row hasn't
+ * landed yet.
  */
 
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { getUser } from "@/shared/supabase/server";
 import {
-  loadCanvasInitialState,
-  loadUserConversations,
-} from "@/features/canvas/server/load-server-state";
-import CanvasClientShell from "./canvas-client-shell";
+  ensureDefaultCanvas,
+  findCanvasBySlugForUser,
+} from "@/features/canvases/server/service";
 
-// Per-request evaluation — never cache user canvas HTML across users.
+const ACTIVE_CANVAS_COOKIE = "dopl_active_canvas";
+
 export const dynamic = "force-dynamic";
 
-export default async function CanvasPage() {
+export default async function CanvasIndexPage() {
   const user = await getUser();
   if (!user) redirect("/login");
 
-  // Load conversations first so we can stitch messages into chat panels
-  // before the reducer ever sees the state.
-  const conversations = await loadUserConversations(user.id);
-  const initialState = await loadCanvasInitialState(user.id, conversations);
+  const cookieJar = await cookies();
+  const lastSlug = cookieJar.get(ACTIVE_CANVAS_COOKIE)?.value;
 
-  return (
-    <CanvasClientShell
-      userId={user.id}
-      initialState={initialState}
-      initialConversations={conversations}
-    />
-  );
+  if (lastSlug) {
+    const canvas = await findCanvasBySlugForUser(user.id, lastSlug);
+    if (canvas) redirect(`/canvas/${canvas.slug}`);
+  }
+
+  const canvas = await ensureDefaultCanvas(user.id);
+  redirect(`/canvas/${canvas.slug}`);
 }

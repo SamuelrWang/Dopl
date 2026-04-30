@@ -7,11 +7,17 @@ export interface ResolvedCredentials {
   apiKey: string;
   baseUrl: string;
   source: "flag" | "env" | "config";
+  /** Active canvas UUID, if any. */
+  canvasId?: string;
+  /** Active canvas slug, if any (for display). */
+  canvasSlug?: string;
 }
 
 export interface GlobalFlags {
   apiKey?: string;
   baseUrl?: string;
+  /** Override the active canvas for a single command (slug or UUID). */
+  canvas?: string;
 }
 
 export class MissingApiKeyError extends Error {
@@ -60,13 +66,29 @@ export async function resolveCredentials(
     nonEmpty(cfg.baseUrl) ??
     defaultBaseUrl();
 
-  return { apiKey, baseUrl, source };
+  // Canvas resolution priority:
+  //   --canvas flag (UUID; slug-flag handling lives in the canvas
+  //     command which resolves to UUID before constructing the client)
+  //   DOPL_CANVAS_ID env var (UUID)
+  //   config file canvasId
+  //   nothing → server falls back to the user's default canvas
+  const canvasId =
+    nonEmpty(flags.canvas) ??
+    nonEmpty(process.env.DOPL_CANVAS_ID) ??
+    nonEmpty(cfg.canvasId);
+  const canvasSlug =
+    flags.canvas && flags.canvas === cfg.canvasId
+      ? cfg.canvasSlug
+      : nonEmpty(cfg.canvasSlug);
+
+  return { apiKey, baseUrl, source, canvasId, canvasSlug };
 }
 
 export async function createClient(flags: GlobalFlags): Promise<DoplClient> {
-  const { apiKey, baseUrl } = await resolveCredentials(flags);
+  const { apiKey, baseUrl, canvasId } = await resolveCredentials(flags);
   return new DoplClient(baseUrl, apiKey, {
     toolHeaderName: "X-Dopl-Cli",
     clientIdentifier,
+    canvasId,
   });
 }

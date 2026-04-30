@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { UserMenu } from "./user-menu";
+import { CanvasSwitcher } from "@/features/canvases/components/canvas-switcher";
 
 const navItems: { href: string; label: string }[] = [
   { href: "/canvas", label: "Canvas" },
@@ -74,6 +75,11 @@ export function Header() {
 
         {/* Credit balance */}
         <CreditBadge />
+
+        {/* Canvas switcher (only on /canvas* / /canvases* routes) */}
+        <div className="shrink-0 ml-1">
+          <CanvasSwitcher />
+        </div>
 
         {/* User menu */}
         <div className="shrink-0 ml-1">

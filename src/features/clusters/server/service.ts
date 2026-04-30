@@ -2,6 +2,10 @@ import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { slugifyClusterName } from "../slug";
 import { CONTEXT_CHAR_BUDGET_PER_FIELD } from "@/config";
+import {
+  spawnClusterBrainPanel,
+  tearDownClusterCanvasArtifacts,
+} from "./canvas-side-effects";
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -37,18 +41,29 @@ export interface ClusterUpdateRequest {
   entry_ids?: string[];
 }
 
+/**
+ * Scope identifying the active workspace + the calling user. `canvasId`
+ * is the new scope key; `userId` is retained for entry-access checks
+ * (which are user-level) and for the legacy `user_id` column on cluster
+ * rows used for attribution and analytics.
+ */
+export interface ClusterScope {
+  canvasId: string;
+  userId: string;
+}
+
 // ── CRUD ─────────────────────────────────────────────────────────────
 //
-// IMPORTANT: `userId` is REQUIRED on all cluster CRUD. Clusters are
-// per-user — callers must scope by the authenticated user. Never drop
-// this check, even for "public" viewing (there are no public clusters).
+// All cluster CRUD scopes by `canvasId`. Members of the canvas can read
+// and (subject to role checks at the route layer) write. `userId` is
+// passed through for entry-access filtering — entry visibility is a
+// user-level concern, not a workspace one.
 
 /**
  * Filter a list of entry IDs down to those the given user is allowed to
  * place in a cluster — either entries they ingested themselves, or
- * approved (public-visible) entries. This prevents an IDOR where a user
- * adds a stranger's pending/denied entry to their cluster and then reads
- * the contents via the cluster query endpoint.
+ * approved (public-visible) entries. Prevents an IDOR where someone
+ * adds a stranger's pending/denied entry to their cluster.
  */
 async function filterEntryIdsAccessible(
   entryIds: string[],
@@ -69,12 +84,12 @@ async function filterEntryIdsAccessible(
   return entryIds.filter((id) => allowed.has(id));
 }
 
-export async function listClusters(opts: { userId: string }): Promise<ClusterRow[]> {
+export async function listClusters(scope: ClusterScope): Promise<ClusterRow[]> {
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("clusters")
     .select("id, slug, name, created_at, updated_at")
-    .eq("user_id", opts.userId)
+    .eq("canvas_id", scope.canvasId)
     .order("created_at", { ascending: false });
 
   if (error) throw error;
@@ -105,14 +120,14 @@ export async function listClusters(opts: { userId: string }): Promise<ClusterRow
 
 export async function getCluster(
   slug: string,
-  opts: { userId: string }
+  scope: ClusterScope
 ): Promise<ClusterDetail> {
   const db = supabaseAdmin();
   const { data: cluster, error } = await db
     .from("clusters")
     .select("id, slug, name, created_at, updated_at")
     .eq("slug", slug)
-    .eq("user_id", opts.userId)
+    .eq("canvas_id", scope.canvasId)
     .single();
 
   if (error || !cluster) {
@@ -160,185 +175,55 @@ export async function getCluster(
 
 export async function createCluster(
   req: ClusterCreateRequest,
-  opts: { userId: string }
+  scope: ClusterScope
 ): Promise<ClusterRow> {
   const db = supabaseAdmin();
 
-  // Pre-check whether this will be the user's first cluster (for the
-  // first_cluster_built conversion event). Cheap indexed count.
+  // First-cluster signal for the conversion event. Counted at the user
+  // level (a user's first cluster, regardless of canvas) — matches the
+  // pre-overhaul semantics so analytics dashboards stay continuous.
   const { count: priorCount } = await db
     .from("clusters")
     .select("id", { count: "exact", head: true })
-    .eq("user_id", opts.userId);
+    .eq("user_id", scope.userId);
   const isFirstCluster = (priorCount ?? 0) === 0;
 
-  // Generate unique slug scoped to this user's existing clusters.
+  // Generate unique slug scoped to this canvas's existing clusters.
   const { data: existing } = await db
     .from("clusters")
     .select("slug")
-    .eq("user_id", opts.userId);
+    .eq("canvas_id", scope.canvasId);
   const existingSlugs = (existing || []).map((r) => r.slug);
   const slug = slugifyClusterName(req.name, existingSlugs);
-
-  const { data: cluster, error } = await db
-    .from("clusters")
-    .insert({ name: req.name, slug, user_id: opts.userId })
-    .select("id, slug, name, created_at, updated_at")
-    .single();
-
-  if (error || !cluster) throw error || new Error("Failed to create cluster");
 
   // Strip out any entry_ids the user doesn't have access to (someone
   // else's pending/denied entry, etc). Silent filter — don't reveal
   // which ids were rejected.
   const safeEntryIds = await filterEntryIdsAccessible(
     req.entry_ids,
-    opts.userId
+    scope.userId
   );
 
-  if (safeEntryIds.length > 0) {
-    const rows = safeEntryIds.map((eid) => ({
-      cluster_id: cluster.id,
-      entry_id: eid,
-    }));
-    const { error: panelError } = await db
-      .from("cluster_panels")
-      .insert(rows);
-    if (panelError) throw panelError;
-  }
-
-  // ── Spawn a cluster-brain canvas panel ────────────────────────────
-  // The UI's selection-menu path (create cluster by selecting entries
-  // on the canvas) dispatches CREATE_CLUSTER_BRAIN_PANEL to Redux and
-  // syncs to the DB via the canvas panel-save cycle. The MCP path
-  // (`canvas_create_cluster` tool) hits this service directly without
-  // going through the client, so without this block the cluster would
-  // exist in the DB but have NO canvas panel — the user reloads and
-  // sees no cluster box. Creating the brain panel here makes both
-  // entry points behave identically.
-  //
-  // Positioning: if any of the member entries are already on the
-  // canvas, place the brain panel to the right of the rightmost entry
-  // at the topmost entry's y — matching the selection-menu's layout.
-  // Otherwise default to origin so the user can drag it later.
-  if (safeEntryIds.length > 0) {
-    const { data: entryPanels } = await db
-      .from("canvas_panels")
-      .select("x, y, width")
-      .eq("user_id", opts.userId)
-      .eq("panel_type", "entry")
-      .in("entry_id", safeEntryIds);
-
-    let brainX = 0;
-    let brainY = 0;
-    if (entryPanels && entryPanels.length > 0) {
-      const panels = entryPanels as { x: number; y: number; width: number }[];
-      const rightmostX = Math.max(...panels.map((p) => p.x + (p.width ?? 380)));
-      const topY = Math.min(...panels.map((p) => p.y));
-      brainX = rightmostX + 40;
-      brainY = topY;
+  // Atomic cluster + cluster_panels insert via RPC. Either both rows
+  // land or neither does — no more orphan cluster rows on partial
+  // failure. The brain-panel + canvas_state hydration that follows
+  // stays in TS because they're already non-fatal (failure logs but
+  // doesn't reject the user's request) and tolerate partial success.
+  const { data: rpcRows, error: rpcError } = await db.rpc(
+    "create_cluster_with_entries",
+    {
+      p_canvas_id: scope.canvasId,
+      p_user_id: scope.userId,
+      p_name: req.name,
+      p_slug: slug,
+      p_entry_ids: safeEntryIds,
     }
+  );
+  if (rpcError) throw rpcError;
+  const cluster = Array.isArray(rpcRows) ? rpcRows[0] : rpcRows;
+  if (!cluster) throw new Error("Failed to create cluster");
 
-    const brainPanelId = `brain-${cluster.id}`;
-    const { error: brainPanelError } = await db
-      .from("canvas_panels")
-      .insert({
-        user_id: opts.userId,
-        panel_id: brainPanelId,
-        panel_type: "cluster-brain",
-        x: brainX,
-        y: brainY,
-        width: 480,
-        height: 400,
-        panel_data: {
-          clusterId: cluster.id,
-          clusterName: cluster.name,
-          instructions:
-            "_Brain not synthesized yet._\n\nAsk your connected Claude Code (or any Dopl-MCP-enabled agent) to call `get_skill_template` and run synthesis against this cluster's entries, then `update_cluster_brain` to save the result. Server-side auto-synthesis has been removed so you control exactly what lands in your skill.",
-          memories: [],
-          status: "ready",
-          errorMessage: null,
-        },
-      });
-    // Non-fatal: if the brain-panel insert fails, the cluster still
-    // exists and is usable via MCP; the user just won't see the panel
-    // on the canvas until they retry or add it manually. Logging the
-    // error lets ops see this in the health dashboard.
-    if (brainPanelError) {
-      console.error(
-        `[clusters] Failed to spawn brain panel for cluster ${cluster.slug}:`,
-        brainPanelError.message
-      );
-    }
-
-    // ── Hydrate canvas_state.clusters ────────────────────────────────
-    // The visual grouping on the canvas — the box around member panels
-    // plus the cluster name header — is driven by `canvas_state.clusters`
-    // (a JSON array), NOT by the `clusters` table. The UI's selection-
-    // menu path updates this via Redux + a debounced PATCH to
-    // /api/canvas/state. MCP-initiated cluster creation bypasses the
-    // client entirely, so without this block the grouping visual never
-    // appears on reload — the cluster exists in the DB, has a brain
-    // panel, but no box is drawn around the member entries.
-    //
-    // Panel IDs are the LOCAL panel_id strings on canvas_panels
-    // (e.g. "panel-7", "brain-<uuid>"), NOT entry UUIDs. Lookup the
-    // entries' panel_ids, add the brain panel's id, and persist.
-    const { data: entryPanelRows } = await db
-      .from("canvas_panels")
-      .select("panel_id, entry_id")
-      .eq("user_id", opts.userId)
-      .eq("panel_type", "entry")
-      .in("entry_id", safeEntryIds);
-
-    const entryPanelIds = (entryPanelRows ?? []).map(
-      (r) => (r as { panel_id: string }).panel_id
-    );
-
-    const memberPanelIds = [...entryPanelIds, brainPanelId];
-
-    const { data: stateRow } = await db
-      .from("canvas_state")
-      .select("clusters")
-      .eq("user_id", opts.userId)
-      .maybeSingle();
-
-    const existingClusters = Array.isArray(stateRow?.clusters)
-      ? ((stateRow as { clusters: unknown[] }).clusters as Record<string, unknown>[])
-      : [];
-
-    const newClusterEntry = {
-      // Prefix with `cluster-` to match the client's string-id convention
-      // for MCP-created clusters. The client reducer treats id as an
-      // opaque string; no parseInt assumptions.
-      id: `cluster-${cluster.id}`,
-      name: cluster.name,
-      panelIds: memberPanelIds,
-      createdAt: new Date().toISOString(),
-      dbId: cluster.id,
-      slug: cluster.slug,
-    };
-
-    const { error: stateError } = await db
-      .from("canvas_state")
-      .upsert(
-        {
-          user_id: opts.userId,
-          clusters: [...existingClusters, newClusterEntry],
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "user_id" }
-      );
-
-    // Non-fatal for the same reason as the brain-panel insert — the
-    // cluster data is intact; only the visual grouping is missing.
-    if (stateError) {
-      console.error(
-        `[clusters] Failed to hydrate canvas_state.clusters for cluster ${cluster.slug}:`,
-        stateError.message
-      );
-    }
-  }
+  await spawnClusterBrainPanel(scope, cluster, safeEntryIds);
 
   // Fire first_cluster_built event (analytics). Fire-and-forget; dynamic
   // import so this module stays import-free of the analytics tree in
@@ -347,7 +232,7 @@ export async function createCluster(
     import("@/features/analytics/server/conversion-events")
       .then(({ logConversionEvent }) =>
         logConversionEvent({
-          userId: opts.userId,
+          userId: scope.userId,
           eventType: "first_cluster_built",
           metadata: { cluster_id: cluster.id, slug: cluster.slug },
         })
@@ -361,17 +246,15 @@ export async function createCluster(
 export async function updateCluster(
   slug: string,
   req: ClusterUpdateRequest,
-  opts: { userId: string }
+  scope: ClusterScope
 ): Promise<ClusterRow> {
   const db = supabaseAdmin();
 
-  // Look up cluster scoped to the owner — if not found, the caller either
-  // doesn't own it or it doesn't exist. Either way, treat as not-found.
   const { data: cluster, error: lookupError } = await db
     .from("clusters")
     .select("id, slug, name, created_at, updated_at")
     .eq("slug", slug)
-    .eq("user_id", opts.userId)
+    .eq("canvas_id", scope.canvasId)
     .single();
 
   if (lookupError || !cluster) {
@@ -384,7 +267,7 @@ export async function updateCluster(
     const { data: existing } = await db
       .from("clusters")
       .select("slug")
-      .eq("user_id", opts.userId);
+      .eq("canvas_id", scope.canvasId);
     const existingSlugs = (existing || [])
       .map((r) => r.slug)
       .filter((s) => s !== cluster.slug);
@@ -392,15 +275,19 @@ export async function updateCluster(
 
     const { error: updateError } = await db
       .from("clusters")
-      .update({ name: req.name, slug: newSlug, updated_at: new Date().toISOString() })
+      .update({
+        name: req.name,
+        slug: newSlug,
+        updated_at: new Date().toISOString(),
+      })
       .eq("id", cluster.id)
-      .eq("user_id", opts.userId);
+      .eq("canvas_id", scope.canvasId);
     if (updateError) throw updateError;
   }
 
   let safeEntryIds: string[] | undefined;
   if (req.entry_ids) {
-    safeEntryIds = await filterEntryIdsAccessible(req.entry_ids, opts.userId);
+    safeEntryIds = await filterEntryIdsAccessible(req.entry_ids, scope.userId);
 
     const { error: delError } = await db
       .from("cluster_panels")
@@ -434,84 +321,27 @@ export async function updateCluster(
 
 export async function deleteCluster(
   slug: string,
-  opts: { userId: string }
+  scope: ClusterScope
 ): Promise<void> {
   const db = supabaseAdmin();
 
-  // Look up the cluster first so we know its id for cascade cleanup.
-  // A missing cluster is not an error here — delete is idempotent and
-  // we still want to clean orphan canvas rows from a prior broken state.
+  // Look up first so we know the id for cascade cleanup. Missing is OK
+  // — delete is idempotent and we still want to clear orphaned canvas
+  // rows from any prior broken state.
   const { data: cluster } = await db
     .from("clusters")
     .select("id")
     .eq("slug", slug)
-    .eq("user_id", opts.userId)
+    .eq("canvas_id", scope.canvasId)
     .maybeSingle();
 
-  // ── Cascade: remove the cluster-brain canvas panel ────────────────
-  // Without this, delete+recreate leaves an orphan `canvas_panels` row
-  // whose `cluster_id` points at a now-dead cluster. The client
-  // hydrator renders it as an "Untitled" floating panel and a recreate
-  // spawns a second brain panel next to it.
-  if (cluster) {
-    const { error: brainPanelError } = await db
-      .from("canvas_panels")
-      .delete()
-      .eq("user_id", opts.userId)
-      .eq("panel_type", "cluster-brain")
-      .eq("panel_id", `brain-${cluster.id}`);
-    if (brainPanelError) {
-      console.error(
-        `[clusters] Failed to delete brain panel for cluster ${slug}:`,
-        brainPanelError.message
-      );
-    }
-  }
+  await tearDownClusterCanvasArtifacts(scope, cluster, slug);
 
-  // ── Cascade: prune canvas_state.clusters[] JSON entry ─────────────
-  // Same reason — stale JSON entries keep their ghost outline on the
-  // canvas and their `panelIds` still point at deleted panels.
-  const { data: stateRow } = await db
-    .from("canvas_state")
-    .select("clusters")
-    .eq("user_id", opts.userId)
-    .maybeSingle();
-
-  if (stateRow && Array.isArray((stateRow as { clusters: unknown[] }).clusters)) {
-    const existing = (stateRow as { clusters: Record<string, unknown>[] }).clusters;
-    const pruned = existing.filter((c) => {
-      const entrySlug = typeof c.slug === "string" ? c.slug : null;
-      const entryDbId = typeof c.dbId === "string" ? c.dbId : null;
-      if (entrySlug === slug) return false;
-      if (cluster && entryDbId === cluster.id) return false;
-      return true;
-    });
-    if (pruned.length !== existing.length) {
-      const { error: stateError } = await db
-        .from("canvas_state")
-        .upsert(
-          {
-            user_id: opts.userId,
-            clusters: pruned,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "user_id" }
-        );
-      if (stateError) {
-        console.error(
-          `[clusters] Failed to prune canvas_state.clusters for cluster ${slug}:`,
-          stateError.message
-        );
-      }
-    }
-  }
-
-  // Finally, delete the cluster row itself. cluster_panels FK cascades.
   const { error } = await db
     .from("clusters")
     .delete()
     .eq("slug", slug)
-    .eq("user_id", opts.userId);
+    .eq("canvas_id", scope.canvasId);
 
   if (error) throw error;
 }

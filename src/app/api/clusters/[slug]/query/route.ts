@@ -2,7 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { withMcpCredits } from "@/shared/auth/with-auth";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { searchEntries } from "@/features/entries/server/retrieval/search";
+import { resolveActiveCanvas } from "@/features/canvases/server/service";
+import { HttpError } from "@/shared/lib/http-error";
 
+/**
+ * Cluster vector-search endpoint. Resolves the active canvas inline
+ * because `withMcpCredits` only injects user context, not canvas — and
+ * this is currently the only MCP-gated cluster-scoped route. If more
+ * MCP-only canvas routes appear, lift this into a `withCanvasMcpAccess`
+ * wrapper instead of repeating the logic.
+ */
 async function handlePost(
   request: NextRequest,
   context: { userId: string; params?: Record<string, string> }
@@ -16,21 +25,31 @@ async function handlePost(
     const { query, max_results } = body;
 
     if (!query || typeof query !== "string") {
-      return NextResponse.json(
-        { error: "query is required" },
-        { status: 400 }
+      return NextResponse.json({ error: "query is required" }, { status: 400 });
+    }
+
+    let canvasId: string;
+    try {
+      const headerCanvasId = request.headers.get("x-canvas-id");
+      const { canvas } = await resolveActiveCanvas(
+        context.userId,
+        headerCanvasId
       );
+      canvasId = canvas.id;
+    } catch (err) {
+      if (err instanceof HttpError) {
+        return NextResponse.json(err.toResponseBody(), { status: err.status });
+      }
+      throw err;
     }
 
     const db = supabaseAdmin();
 
-    // Resolve slug → cluster → entry IDs, scoped to the authenticated user.
-    // Any cross-user lookup returns 404 (not 403) so we don't leak existence.
     const { data: cluster, error: clusterError } = await db
       .from("clusters")
       .select("id")
       .eq("slug", slug)
-      .eq("user_id", context.userId)
+      .eq("canvas_id", canvasId)
       .single();
 
     if (clusterError || !cluster) {
@@ -50,10 +69,7 @@ async function handlePost(
     const entryIds = (panels || []).map((p) => p.entry_id);
 
     if (entryIds.length === 0) {
-      return NextResponse.json({
-        cluster_slug: slug,
-        results: [],
-      });
+      return NextResponse.json({ cluster_slug: slug, results: [] });
     }
 
     const results = await searchEntries(query, {

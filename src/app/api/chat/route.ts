@@ -9,6 +9,8 @@ import {
   type CanvasContextPayload,
 } from "@/features/chat/server/canvas-context";
 import { TOOLS, executeTool } from "@/features/chat/server/tools";
+import { resolveActiveCanvas } from "@/features/canvases/server/service";
+import { HttpError } from "@/shared/lib/http-error";
 import { config } from "dotenv";
 import { resolve } from "path";
 
@@ -75,6 +77,25 @@ async function handlePost(
         JSON.stringify({ error: "Messages array is required" }),
         { status: 400, headers: { "Content-Type": "application/json" } }
       );
+    }
+
+    // Resolve active canvas — header > user default. Cluster-scoped
+    // tools (list/edit memories, rewrite brain) need this to filter
+    // canvas-aware queries; non-canvas tools (search KB, ingest URL)
+    // ignore it.
+    let canvasId: string;
+    try {
+      const headerCanvasId = request.headers.get("x-canvas-id");
+      const { canvas } = await resolveActiveCanvas(userId, headerCanvasId);
+      canvasId = canvas.id;
+    } catch (err) {
+      if (err instanceof HttpError) {
+        return new Response(JSON.stringify(err.toResponseBody()), {
+          status: err.status,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      throw err;
     }
 
     // Access gate: trialing or paid. Expired trials 402.
@@ -178,7 +199,8 @@ async function handlePost(
                 block.name,
                 block.input as Record<string, unknown>,
                 userId,
-                canvasContext
+                canvasContext,
+                canvasId
               );
 
               // Emit ingest_started for ingest_url tool so the frontend

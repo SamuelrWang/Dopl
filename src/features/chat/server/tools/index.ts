@@ -85,12 +85,18 @@ export const TOOLS: Anthropic.Tool[] = [
   {
     name: "add_cluster_brain_memory",
     description:
-      "Append a new memory to a cluster's brain. Use for preferences/corrections the user tells you to remember about this cluster's domain (e.g., 'prefer Resend over SendGrid', 'always ask before scraping'). Keep the memory short and imperative.",
+      "Append a new memory to a cluster's brain. Use for preferences/corrections the user tells you to remember about this cluster's domain (e.g., 'prefer Resend over SendGrid', 'always ask before scraping'). Keep the memory short and imperative. Set scope='personal' when the memory is private to this user (their own setup, env, machine, alias) — those memories are visible only to them and never written to the shared canvas brain panel; default scope='workspace' shares with every member of the canvas.",
     input_schema: {
       type: "object" as const,
       properties: {
         cluster_slug: { type: "string", description: "The cluster's slug." },
         content: { type: "string", description: "The memory text. Short, imperative." },
+        scope: {
+          type: "string",
+          enum: ["workspace", "personal"],
+          description:
+            "Visibility scope. 'workspace' (default) shares with every member; 'personal' is private to the calling user.",
+        },
       },
       required: ["cluster_slug", "content"],
     },
@@ -158,9 +164,10 @@ export async function executeTool(
   name: string,
   input: Record<string, unknown>,
   userId?: string,
-  canvasContext?: CanvasContextPayload
+  canvasContext?: CanvasContextPayload,
+  canvasId?: string
 ): Promise<ToolResult> {
   const handler = HANDLERS[name];
   if (!handler) return { result: `Unknown tool: ${name}` };
-  return handler(input, userId, canvasContext);
+  return handler(input, userId, canvasContext, canvasId);
 }

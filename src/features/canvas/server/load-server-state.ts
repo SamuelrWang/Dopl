@@ -71,7 +71,7 @@ export interface ServerConversation {
  *     dispatch on mount.
  */
 export async function loadCanvasInitialState(
-  userId: string,
+  scope: { userId: string; canvasId: string },
   conversations?: ServerConversation[]
 ): Promise<CanvasState> {
   const empty: CanvasState = {
@@ -87,17 +87,17 @@ export async function loadCanvasInitialState(
       supabase
         .from("canvas_state")
         .select("*")
-        .eq("user_id", userId)
+        .eq("canvas_id", scope.canvasId)
         .maybeSingle(),
-      supabase.from("canvas_panels").select("*").eq("user_id", userId),
-      // Load the user's published clusters so each local cluster can
-      // carry its `publishedSlug` — drives the "Copy share link" menu
-      // item on the canvas cluster header. Cheap: index on user_id,
-      // typically <50 rows per user.
+      supabase.from("canvas_panels").select("*").eq("canvas_id", scope.canvasId),
+      // Published clusters stay user-scoped — publishing is a user-level
+      // action and the gallery is global. We still filter by user so the
+      // local cluster's `publishedSlug` resolves to *this* user's
+      // published copy. Indexed lookup, ≪50 rows per user typically.
       supabase
         .from("published_clusters")
         .select("cluster_id, slug")
-        .eq("user_id", userId)
+        .eq("user_id", scope.userId)
         .eq("status", "published"),
     ]);
 
@@ -222,9 +222,10 @@ export async function loadCanvasInitialState(
  *
  * Returns an empty array on any failure.
  */
-export async function loadUserConversations(
-  userId: string
-): Promise<ServerConversation[]> {
+export async function loadCanvasConversations(scope: {
+  userId: string;
+  canvasId: string;
+}): Promise<ServerConversation[]> {
   try {
     const supabase = supabaseAdmin();
 
@@ -233,7 +234,7 @@ export async function loadUserConversations(
     const { data: expiring } = await supabase
       .from("conversations")
       .select("id, panel_id")
-      .eq("user_id", userId)
+      .eq("canvas_id", scope.canvasId)
       .eq("pinned", false)
       .lt("expires_at", new Date().toISOString());
 
@@ -241,10 +242,12 @@ export async function loadUserConversations(
       const panelIds = expiring.map(
         (c: { panel_id: string }) => c.panel_id
       );
+      // chat_attachments still scoped by user_id — ok during P0/P1 since
+      // each user has 1 canvas. Migrate to canvas_id with attachments.
       const { data: attachments } = await supabase
         .from("chat_attachments")
         .select("storage_path")
-        .eq("user_id", userId)
+        .eq("user_id", scope.userId)
         .in("panel_id", panelIds);
 
       if (attachments && attachments.length > 0) {
@@ -255,14 +258,14 @@ export async function loadUserConversations(
         await supabase
           .from("chat_attachments")
           .delete()
-          .eq("user_id", userId)
+          .eq("user_id", scope.userId)
           .in("panel_id", panelIds);
       }
 
       await supabase
         .from("conversations")
         .delete()
-        .eq("user_id", userId)
+        .eq("canvas_id", scope.canvasId)
         .eq("pinned", false)
         .lt("expires_at", new Date().toISOString());
     }
@@ -272,7 +275,7 @@ export async function loadUserConversations(
       .select(
         "id, panel_id, title, messages, pinned, expires_at, created_at, updated_at"
       )
-      .eq("user_id", userId)
+      .eq("canvas_id", scope.canvasId)
       .order("updated_at", { ascending: false });
 
     if (error || !data) return [];
@@ -280,7 +283,7 @@ export async function loadUserConversations(
     const conversations = data as ServerConversation[];
 
     // Batch-sign any attachment URLs so the client has them ready to use.
-    await resolveAttachmentUrls(userId, conversations);
+    await resolveAttachmentUrls(scope.userId, conversations);
 
     return conversations;
   } catch {

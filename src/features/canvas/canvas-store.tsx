@@ -29,7 +29,9 @@ export {
   usePanelsContext,
   useCanvasStateRef,
   useCapabilities,
+  useCanvasScope,
   type CanvasCapabilities,
+  type CanvasScope,
 } from "./canvas-store/context";
 
 // Provider + sync-strategy types
