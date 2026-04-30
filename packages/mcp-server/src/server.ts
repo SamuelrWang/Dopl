@@ -5,8 +5,8 @@ import type {
   ClusterSummary,
   BrainData,
   CanvasPanel,
-  CanvasRole,
-  CanvasSummary,
+  WorkspaceRole,
+  WorkspaceSummary,
 } from "@dopl/client";
 import {
   writeClusterSkill,
@@ -319,17 +319,17 @@ export function createServer(
   client: DoplClient,
   options: {
     isAdmin?: boolean;
-    canvas?: CanvasSummary | null;
-    role?: CanvasRole | null;
+    workspace?: WorkspaceSummary | null;
+    role?: WorkspaceRole | null;
   } = {},
 ): McpServer {
   const isAdmin = options.isAdmin === true;
-  // Active canvas (workspace) for this MCP session — fixed at startup
-  // by index.ts after the handshake. The slug threads into skill-writer
-  // calls so on-disk SKILL.md paths get scoped per canvas. Default slug
-  // preserves the legacy single-canvas paths so existing users don't
+  // Active workspace for this MCP session — fixed at startup by index.ts
+  // after the handshake. The slug threads into skill-writer calls so
+  // on-disk SKILL.md paths get scoped per workspace. Default slug
+  // preserves the legacy single-workspace paths so existing users don't
   // see every skill rename on first upgrade.
-  const canvasContext = { slug: options.canvas?.slug ?? "default" };
+  const canvasContext = { slug: options.workspace?.slug ?? "default" };
   void options.role;
   const server = new McpServer(
     {

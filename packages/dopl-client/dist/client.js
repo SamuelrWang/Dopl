@@ -16,14 +16,14 @@ class DoplClient {
     }
     /**
      * Active canvas (workspace) for this client. When set, every request
-     * carries an `X-Canvas-Id` header so the server scopes data
+     * carries an `X-Workspace-Id` header so the server scopes data
      * accordingly. Set null to clear.
      */
-    setCanvasId(canvasId) {
-        this.transport.setCanvasId(canvasId);
+    setWorkspaceId(workspaceId) {
+        this.transport.setWorkspaceId(workspaceId);
     }
-    getCanvasId() {
-        return this.transport.getCanvasId();
+    getWorkspaceId() {
+        return this.transport.getWorkspaceId();
     }
     entryUrl(slug) {
         if (!slug)
@@ -120,22 +120,22 @@ class DoplClient {
             body: { query, max_results: maxResults ?? 5 },
         });
     }
-    // ── Canvases (workspaces) ─────────────────────────────────────────
-    async listCanvases() {
-        return this.transport.request("/api/canvases", { toolName: "list_canvases" });
+    // ── Workspaces ────────────────────────────────────────────────────
+    async listWorkspaces() {
+        return this.transport.request("/api/workspaces", { toolName: "list_workspaces" });
     }
-    async getCanvas(slug) {
-        return this.transport.request(`/api/canvases/${encodeURIComponent(slug)}`, { toolName: "get_canvas" });
+    async getWorkspace(slug) {
+        return this.transport.request(`/api/workspaces/${encodeURIComponent(slug)}`, { toolName: "get_workspace" });
     }
     /**
-     * Resolve the active canvas — the one currently set on the transport
-     * via `setCanvasId(...)` or `X-Canvas-Id`. Used by the MCP server's
-     * startup handshake to confirm the requested canvas exists and the
+     * Resolve the active workspace — the one currently set on the transport
+     * via `setWorkspaceId(...)` or `X-Workspace-Id`. Used by the MCP server's
+     * startup handshake to confirm the requested workspace exists and the
      * caller is a member.
      */
-    async getActiveCanvas() {
-        return this.transport.request("/api/canvases/me", {
-            toolName: "get_active_canvas",
+    async getActiveWorkspace() {
+        return this.transport.request("/api/workspaces/me", {
+            toolName: "get_active_workspace",
         });
     }
     async pingMcpStatus() {

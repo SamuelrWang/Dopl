@@ -32,7 +32,7 @@ interface SelectionMenuProps {
 export function SelectionMenu({ cursorPos }: SelectionMenuProps) {
   const { state, dispatch } = useCanvas();
   const scope = useCanvasScope();
-  const canvasId = scope?.canvasId ?? null;
+  const workspaceId = scope?.workspaceId ?? null;
 
   function handleCluster() {
     // Freeze the current selection ids so later dispatches can see it.
@@ -122,7 +122,7 @@ export function SelectionMenu({ cursorPos }: SelectionMenuProps) {
       .filter((p) => p.type === "entry")
       .map((p) => (p as { entryId: string }).entryId);
     const headers: Record<string, string> = { "content-type": "application/json" };
-    if (canvasId) headers["X-Canvas-Id"] = canvasId;
+    if (workspaceId) headers["X-Workspace-Id"] = workspaceId;
     fetch("/api/clusters", {
       method: "POST",
       headers,

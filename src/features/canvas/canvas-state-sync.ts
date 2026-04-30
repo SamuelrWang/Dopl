@@ -14,14 +14,14 @@ interface VersionRef {
   current: number | null;
 }
 
-function buildHeaders(canvasId: string | null): HeadersInit {
+function buildHeaders(workspaceId: string | null): HeadersInit {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (canvasId) headers["X-Canvas-Id"] = canvasId;
+  if (workspaceId) headers["X-Workspace-Id"] = workspaceId;
   return headers;
 }
 
 export async function patchCanvasState(
-  canvasId: string | null,
+  workspaceId: string | null,
   versionRef: VersionRef,
   body: Record<string, unknown>,
   opts: { keepalive?: boolean } = {},
@@ -33,7 +33,7 @@ export async function patchCanvasState(
   try {
     const res = await fetch("/api/canvas/state", {
       method: "PATCH",
-      headers: buildHeaders(canvasId),
+      headers: buildHeaders(workspaceId),
       keepalive: opts.keepalive ?? false,
       body: JSON.stringify(payload),
     });
@@ -54,7 +54,7 @@ export async function patchCanvasState(
       }
       try {
         const fresh = await fetch("/api/canvas/state", {
-          headers: canvasId ? { "X-Canvas-Id": canvasId } : undefined,
+          headers: workspaceId ? { "X-Workspace-Id": workspaceId } : undefined,
         });
         if (fresh.ok) {
           const data = (await fresh.json()) as {
@@ -92,11 +92,11 @@ export async function patchCanvasState(
  * has no state row yet (the first PATCH will create it).
  */
 export async function fetchCurrentVersion(
-  canvasId: string,
+  workspaceId: string,
 ): Promise<number | null> {
   try {
     const res = await fetch("/api/canvas/state", {
-      headers: { "X-Canvas-Id": canvasId },
+      headers: { "X-Workspace-Id": workspaceId },
     });
     if (!res.ok) return null;
     const body = (await res.json()) as {

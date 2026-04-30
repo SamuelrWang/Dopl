@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { withMcpCredits } from "@/shared/auth/with-auth";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { searchEntries } from "@/features/entries/server/retrieval/search";
-import { resolveActiveCanvas } from "@/features/canvases/server/service";
+import { resolveActiveWorkspace } from "@/features/workspaces/server/service";
 import { HttpError } from "@/shared/lib/http-error";
 
 /**
@@ -28,14 +28,14 @@ async function handlePost(
       return NextResponse.json({ error: "query is required" }, { status: 400 });
     }
 
-    let canvasId: string;
+    let workspaceId: string;
     try {
-      const headerCanvasId = request.headers.get("x-canvas-id");
-      const { canvas } = await resolveActiveCanvas(
+      const headerWorkspaceId = request.headers.get("x-workspace-id");
+      const { workspace } = await resolveActiveWorkspace(
         context.userId,
-        headerCanvasId
+        headerWorkspaceId
       );
-      canvasId = canvas.id;
+      workspaceId = workspace.id;
     } catch (err) {
       if (err instanceof HttpError) {
         return NextResponse.json(err.toResponseBody(), { status: err.status });
@@ -49,7 +49,7 @@ async function handlePost(
       .from("clusters")
       .select("id")
       .eq("slug", slug)
-      .eq("canvas_id", canvasId)
+      .eq("workspace_id", workspaceId)
       .single();
 
     if (clusterError || !cluster) {

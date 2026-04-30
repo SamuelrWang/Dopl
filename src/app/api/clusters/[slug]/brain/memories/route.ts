@@ -10,16 +10,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { supabaseAdmin } from "@/shared/supabase/admin";
-import { withCanvasAuth } from "@/shared/auth/with-canvas-auth";
+import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
 import { parseJson } from "@/shared/api/parse-json";
 import { HttpError } from "@/shared/lib/http-error";
-import type { Role } from "@/features/canvases/types";
+import type { Role } from "@/features/workspaces/types";
 
 export const dynamic = "force-dynamic";
 
 interface Ctx {
   userId: string;
-  canvasId: string;
+  workspaceId: string;
   role: Role;
   params?: Record<string, string>;
 }
@@ -56,46 +56,46 @@ function toErrorResponse(err: unknown): NextResponse {
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
-async function getClusterBySlugForCanvas(slug: string, canvasId: string) {
+async function getClusterBySlugForCanvas(slug: string, workspaceId: string) {
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("clusters")
     .select("id, slug, name")
     .eq("slug", slug)
-    .eq("canvas_id", canvasId)
+    .eq("workspace_id", workspaceId)
     .single();
   if (error || !data) return null;
   return data;
 }
 
 // Verify a memory belongs to the active canvas. Joins memory → brain →
-// cluster and matches `clusters.canvas_id`. Returns the cluster_id so
+// cluster and matches `clusters.workspace_id`. Returns the cluster_id so
 // callers can re-sync the brain panel without a second lookup.
 async function memoryClusterIdForCanvas(
   memoryId: string,
-  canvasId: string
+  workspaceId: string
 ): Promise<string | null> {
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("cluster_brain_memories")
-    .select("cluster_id, cluster_brains!inner(clusters!inner(canvas_id))")
+    .select("cluster_id, cluster_brains!inner(clusters!inner(workspace_id))")
     .eq("id", memoryId)
     .single();
   if (error || !data) return null;
   const brains = (
     data as unknown as {
       cluster_id: string;
-      cluster_brains?: { clusters?: { canvas_id?: string } };
+      cluster_brains?: { clusters?: { workspace_id?: string } };
     }
   );
-  if (brains.cluster_brains?.clusters?.canvas_id !== canvasId) return null;
+  if (brains.cluster_brains?.clusters?.workspace_id !== workspaceId) return null;
   return brains.cluster_id;
 }
 
 async function getOrCreateBrain(
   clusterId: string,
   userId: string,
-  canvasId: string
+  workspaceId: string
 ): Promise<string> {
   const db = supabaseAdmin();
   // Upsert with ignoreDuplicates returns ZERO rows when a brain already
@@ -107,7 +107,7 @@ async function getOrCreateBrain(
       {
         cluster_id: clusterId,
         user_id: userId,
-        canvas_id: canvasId,
+        workspace_id: workspaceId,
         instructions: "",
       },
       { onConflict: "cluster_id", ignoreDuplicates: true }
@@ -138,7 +138,7 @@ async function getOrCreateBrain(
 // content there would leak. Personal memories are surfaced through the
 // brain GET endpoint instead, which applies the per-user visibility
 // filter.
-async function syncMemoriesToPanel(clusterId: string, canvasId: string) {
+async function syncMemoriesToPanel(clusterId: string, workspaceId: string) {
   const db = supabaseAdmin();
   const { data: memories } = await db
     .from("cluster_brain_memories")
@@ -158,7 +158,7 @@ async function syncMemoriesToPanel(clusterId: string, canvasId: string) {
   const { data: panel } = await db
     .from("canvas_panels")
     .select("panel_data")
-    .eq("canvas_id", canvasId)
+    .eq("workspace_id", workspaceId)
     .eq("panel_id", brainPanelId)
     .eq("panel_type", "cluster-brain")
     .maybeSingle();
@@ -169,7 +169,7 @@ async function syncMemoriesToPanel(clusterId: string, canvasId: string) {
   await db
     .from("canvas_panels")
     .update({ panel_data: { ...currentData, memories: rows } })
-    .eq("canvas_id", canvasId)
+    .eq("workspace_id", workspaceId)
     .eq("panel_id", brainPanelId);
 }
 
@@ -225,13 +225,13 @@ async function findDuplicateMemory(
   return null;
 }
 
-async function handlePost(request: NextRequest, { userId, canvasId, params }: Ctx) {
+async function handlePost(request: NextRequest, { userId, workspaceId, params }: Ctx) {
   try {
     const slug = params?.slug;
     if (!slug) {
       throw new HttpError(400, "BAD_REQUEST", "slug required");
     }
-    const cluster = await getClusterBySlugForCanvas(slug, canvasId);
+    const cluster = await getClusterBySlugForCanvas(slug, workspaceId);
     if (!cluster) {
       throw new HttpError(404, "CLUSTER_NOT_FOUND", `Cluster not found: ${slug}`);
     }
@@ -240,7 +240,7 @@ async function handlePost(request: NextRequest, { userId, canvasId, params }: Ct
     const content = input.content;
     const scope: "workspace" | "personal" = input.scope ?? "workspace";
 
-    const brainId = await getOrCreateBrain(cluster.id, userId, canvasId);
+    const brainId = await getOrCreateBrain(cluster.id, userId, workspaceId);
 
     // Dedup — if a near-identical memory already exists in the same
     // scope, skip the insert and return the existing row so the caller
@@ -268,7 +268,7 @@ async function handlePost(request: NextRequest, { userId, canvasId, params }: Ct
         cluster_brain_id: brainId,
         cluster_id: cluster.id,
         user_id: userId,
-        canvas_id: canvasId,
+        workspace_id: workspaceId,
         author_id: userId,
         scope,
         content,
@@ -284,7 +284,7 @@ async function handlePost(request: NextRequest, { userId, canvasId, params }: Ct
     // personal memories never appear in the shared panel_data.
     if (scope === "workspace") {
       try {
-        await syncMemoriesToPanel(cluster.id, canvasId);
+        await syncMemoriesToPanel(cluster.id, workspaceId);
       } catch (err) {
         console.error("[memories POST] panel sync failed:", err);
       }
@@ -304,14 +304,14 @@ async function handlePost(request: NextRequest, { userId, canvasId, params }: Ct
 
 // ── PATCH ────────────────────────────────────────────────────────────
 
-async function handlePatch(request: NextRequest, { userId, role, canvasId }: Ctx) {
+async function handlePatch(request: NextRequest, { userId, role, workspaceId }: Ctx) {
   try {
     const input = await parseJson(request, MemoryUpdateSchema);
     const memoryId = input.memory_id;
     const content = input.content ?? null;
     const scope = input.scope ?? null;
 
-    const clusterId = await memoryClusterIdForCanvas(memoryId, canvasId);
+    const clusterId = await memoryClusterIdForCanvas(memoryId, workspaceId);
     if (!clusterId) {
       throw new HttpError(404, "MEMORY_NOT_FOUND", "Memory not found");
     }
@@ -374,7 +374,7 @@ async function handlePatch(request: NextRequest, { userId, role, canvasId }: Ctx
     }
 
     try {
-      await syncMemoriesToPanel(clusterId, canvasId);
+      await syncMemoriesToPanel(clusterId, workspaceId);
     } catch (err) {
       console.error("[memories PATCH] panel sync failed:", err);
     }
@@ -390,12 +390,12 @@ async function handlePatch(request: NextRequest, { userId, role, canvasId }: Ctx
 
 // ── DELETE ───────────────────────────────────────────────────────────
 
-async function handleDelete(request: NextRequest, { userId, canvasId }: Ctx) {
+async function handleDelete(request: NextRequest, { userId, workspaceId }: Ctx) {
   try {
     const input = await parseJson(request, MemoryDeleteSchema);
     const memoryId = input.memory_id;
 
-    const clusterId = await memoryClusterIdForCanvas(memoryId, canvasId);
+    const clusterId = await memoryClusterIdForCanvas(memoryId, workspaceId);
     if (!clusterId) {
       throw new HttpError(404, "MEMORY_NOT_FOUND", "Memory not found");
     }
@@ -424,7 +424,7 @@ async function handleDelete(request: NextRequest, { userId, canvasId }: Ctx) {
     if (error) throw error;
 
     try {
-      await syncMemoriesToPanel(clusterId, canvasId);
+      await syncMemoriesToPanel(clusterId, workspaceId);
     } catch (err) {
       console.error("[memories DELETE] panel sync failed:", err);
     }
@@ -435,6 +435,6 @@ async function handleDelete(request: NextRequest, { userId, canvasId }: Ctx) {
   }
 }
 
-export const POST = withCanvasAuth(handlePost, { minRole: "editor" });
-export const PATCH = withCanvasAuth(handlePatch, { minRole: "editor" });
-export const DELETE = withCanvasAuth(handleDelete, { minRole: "editor" });
+export const POST = withWorkspaceAuth(handlePost, { minRole: "editor" });
+export const PATCH = withWorkspaceAuth(handlePatch, { minRole: "editor" });
+export const DELETE = withWorkspaceAuth(handleDelete, { minRole: "editor" });

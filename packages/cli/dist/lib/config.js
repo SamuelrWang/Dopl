@@ -32,6 +32,10 @@ async function readConfig() {
             out.apiKey = cfg.apiKey;
         if (typeof cfg.baseUrl === "string")
             out.baseUrl = cfg.baseUrl;
+        if (typeof cfg.workspaceId === "string")
+            out.workspaceId = cfg.workspaceId;
+        if (typeof cfg.workspaceSlug === "string")
+            out.workspaceSlug = cfg.workspaceSlug;
         return out;
     }
     catch (err) {

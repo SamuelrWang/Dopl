@@ -69,7 +69,7 @@ export interface ClusterRow {
   panel_count: number;
 }
 
-export interface CanvasSummary {
+export interface WorkspaceSummary {
   id: string;
   ownerId: string;
   name: string;
@@ -79,11 +79,11 @@ export interface CanvasSummary {
   updatedAt: string;
 }
 
-export type CanvasRole = "owner" | "admin" | "editor" | "viewer";
+export type WorkspaceRole = "owner" | "admin" | "editor" | "viewer";
 
-export interface ResolvedCanvas {
-  canvas: CanvasSummary;
-  role: CanvasRole;
+export interface ResolvedWorkspace {
+  workspace: WorkspaceSummary;
+  role: WorkspaceRole;
 }
 
 export interface ClusterDetailEntry {

@@ -1,37 +1,26 @@
 /**
- * /canvas — redirect entry point.
+ * /canvas — legacy redirect.
  *
- * Resolves the user's last-active canvas from a cookie (set by
- * /canvas/[slug] on every visit) and redirects there. Falls back to the
- * user's default canvas, which is created on demand if missing — this
- * covers brand-new sign-ups whose default-canvas backfill row hasn't
- * landed yet.
+ * Resolves the user's default workspace + main canvas and redirects
+ * there. Kept around so all the historic `redirect("/canvas")` and
+ * `<Link href="/canvas">` references in marketing / pricing / welcome
+ * pages keep working without having to thread a workspace slug through
+ * every call site. New code should link directly to
+ * `/{workspaceSlug}/{canvasSlug}` instead of relying on this redirect.
  */
 
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
 import { getUser } from "@/shared/supabase/server";
-import {
-  ensureDefaultCanvas,
-  findCanvasBySlugForUser,
-} from "@/features/canvases/server/service";
-
-const ACTIVE_CANVAS_COOKIE = "dopl_active_canvas";
+import { ensureDefaultWorkspace } from "@/features/workspaces/server/service";
+import { ensureDefaultCanvas } from "@/features/workspaces/server/canvases";
 
 export const dynamic = "force-dynamic";
 
-export default async function CanvasIndexPage() {
+export default async function CanvasLegacyRedirectPage() {
   const user = await getUser();
   if (!user) redirect("/login");
 
-  const cookieJar = await cookies();
-  const lastSlug = cookieJar.get(ACTIVE_CANVAS_COOKIE)?.value;
-
-  if (lastSlug) {
-    const canvas = await findCanvasBySlugForUser(user.id, lastSlug);
-    if (canvas) redirect(`/canvas/${canvas.slug}`);
-  }
-
-  const canvas = await ensureDefaultCanvas(user.id);
-  redirect(`/canvas/${canvas.slug}`);
+  const workspace = await ensureDefaultWorkspace(user.id);
+  const canvas = await ensureDefaultCanvas(workspace.id);
+  redirect(`/${workspace.slug}/${canvas.slug}`);
 }

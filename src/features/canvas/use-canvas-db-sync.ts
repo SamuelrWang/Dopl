@@ -29,9 +29,9 @@ import {
  * active canvas id so the server can scope the write to the correct
  * workspace. Falls back to user-default if no canvas id is set.
  */
-function syncHeaders(canvasId: string | null): HeadersInit {
+function syncHeaders(workspaceId: string | null): HeadersInit {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (canvasId) headers["X-Canvas-Id"] = canvasId;
+  if (workspaceId) headers["X-Workspace-Id"] = workspaceId;
   return headers;
 }
 
@@ -77,7 +77,7 @@ function panelIdSet(panels: Panel[]): Set<string> {
 export function useCanvasDbSync() {
   const { state } = useCanvas();
   const scope = useCanvasScope();
-  const canvasId = scope?.canvasId ?? null;
+  const workspaceId = scope?.workspaceId ?? null;
   const syncedRef = useRef(false);
   const prevCameraRef = useRef("");
   const prevPanelIdsRef = useRef<Set<string>>(new Set());
@@ -96,21 +96,21 @@ export function useCanvasDbSync() {
   // tab races resolve as 409 + refetch instead of silent overwrites.
   const stateVersionRef = useRef<number | null>(null);
 
-  // Mount-time version hydration. Runs once per canvasId — if the
+  // Mount-time version hydration. Runs once per workspaceId — if the
   // canvas changes (Phase 2 switcher), we re-fetch so the next PATCH
   // doesn't carry a stale baseline. Result null is fine — the first
   // PATCH will create the row and learn the server's version then.
   useEffect(() => {
-    if (!canvasId) return;
+    if (!workspaceId) return;
     let cancelled = false;
-    fetchCurrentVersion(canvasId).then((v) => {
+    fetchCurrentVersion(workspaceId).then((v) => {
       if (cancelled) return;
       if (v !== null) stateVersionRef.current = v;
     });
     return () => {
       cancelled = true;
     };
-  }, [canvasId]);
+  }, [workspaceId]);
 
   // Seed tracking refs SYNCHRONOUSLY from the server-rendered initial
   // state — not inside a useEffect — so the write-through effects below
@@ -151,7 +151,7 @@ export function useCanvasDbSync() {
     if (currentCamera !== prevCameraRef.current || currentCounters !== prevCountersRef.current) {
       if (cameraTimerRef.current) clearTimeout(cameraTimerRef.current);
       cameraTimerRef.current = setTimeout(() => {
-        void patchCanvasState(canvasId, stateVersionRef, {
+        void patchCanvasState(workspaceId, stateVersionRef, {
           camera_x: state.camera.x,
           camera_y: state.camera.y,
           camera_zoom: state.camera.zoom,
@@ -177,7 +177,7 @@ export function useCanvasDbSync() {
         const row = panelToDbRow(panel);
         fetch("/api/canvas/panels", {
           method: "POST",
-          headers: syncHeaders(canvasId),
+          headers: syncHeaders(workspaceId),
           body: JSON.stringify(row),
         }).then(() => setLocalSaveTimestamp()).catch((err) => console.error("[canvas-sync] panel create failed:", err));
       }
@@ -188,7 +188,7 @@ export function useCanvasDbSync() {
       if (!currentPanelIds.has(prevId)) {
         fetch(`/api/canvas/panels/${encodeURIComponent(prevId)}`, {
           method: "DELETE",
-          headers: canvasId ? { "X-Canvas-Id": canvasId } : undefined,
+          headers: workspaceId ? { "X-Workspace-Id": workspaceId } : undefined,
         }).catch((err) => console.error("[canvas-sync] panel delete failed:", err));
       }
     }
@@ -210,7 +210,7 @@ export function useCanvasDbSync() {
         }));
         fetch("/api/canvas/panels/batch", {
           method: "PATCH",
-          headers: syncHeaders(canvasId),
+          headers: syncHeaders(workspaceId),
           body: JSON.stringify({ updates }),
         }).catch((err) => console.error("[canvas-sync] position batch update failed:", err));
         positionTimerRef.current = null;
@@ -238,7 +238,7 @@ export function useCanvasDbSync() {
       titleTimerRef.current = setTimeout(() => {
         fetch("/api/canvas/panels/batch", {
           method: "PATCH",
-          headers: syncHeaders(canvasId),
+          headers: syncHeaders(workspaceId),
           body: JSON.stringify({ updates: changedTitles }),
         }).catch((err) => console.error("[canvas-sync] title batch update failed:", err));
         titleTimerRef.current = null;
@@ -254,7 +254,7 @@ export function useCanvasDbSync() {
     if (currentClustersKey !== prevClustersRef.current) {
       if (clusterTimerRef.current) clearTimeout(clusterTimerRef.current);
       clusterTimerRef.current = setTimeout(() => {
-        void patchCanvasState(canvasId, stateVersionRef, {
+        void patchCanvasState(workspaceId, stateVersionRef, {
           clusters: state.clusters,
         }).then(() => setLocalSaveTimestamp());
         clusterTimerRef.current = null;
@@ -282,7 +282,7 @@ export function useCanvasDbSync() {
       panelDataTimerRef.current = setTimeout(() => {
         fetch("/api/canvas/panels/batch", {
           method: "PATCH",
-          headers: syncHeaders(canvasId),
+          headers: syncHeaders(workspaceId),
           body: JSON.stringify({ updates: panelDataUpdates }),
         }).then(() => setLocalSaveTimestamp())
           .catch((err) => console.error("[canvas-sync] panel_data batch update failed:", err));
@@ -334,7 +334,7 @@ export function useCanvasDbSync() {
         clearTimeout(cameraTimerRef.current);
         cameraTimerRef.current = null;
         void patchCanvasState(
-          canvasId,
+          workspaceId,
           stateVersionRef,
           {
             camera_x: s.camera.x,
@@ -364,7 +364,7 @@ export function useCanvasDbSync() {
         });
         fetch("/api/canvas/panels/batch", {
           method: "PATCH",
-          headers: syncHeaders(canvasId),
+          headers: syncHeaders(workspaceId),
           keepalive: true,
           body: JSON.stringify({ updates }),
         }).catch(() => {});
@@ -386,7 +386,7 @@ export function useCanvasDbSync() {
         if (titleUpdates.length > 0) {
           fetch("/api/canvas/panels/batch", {
             method: "PATCH",
-            headers: syncHeaders(canvasId),
+            headers: syncHeaders(workspaceId),
             keepalive: true,
             body: JSON.stringify({ updates: titleUpdates }),
           }).catch(() => {});
@@ -398,7 +398,7 @@ export function useCanvasDbSync() {
         clearTimeout(clusterTimerRef.current);
         clusterTimerRef.current = null;
         void patchCanvasState(
-          canvasId,
+          workspaceId,
           stateVersionRef,
           { clusters: s.clusters },
           { keepalive: true },

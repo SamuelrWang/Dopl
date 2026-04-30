@@ -30,7 +30,7 @@ const SIDEBAR_WIDTH = 480;
 export function FixedChatSidebar() {
   const { state, dispatch } = useCanvas();
   const scope = useCanvasScope();
-  const canvasId = scope?.canvasId ?? null;
+  const workspaceId = scope?.workspaceId ?? null;
   const [selectedPanelId, setSelectedPanelId] = useState<string | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   // Track open state in a ref — never triggers re-render
@@ -81,13 +81,13 @@ export function FixedChatSidebar() {
     localStorage.setItem(SIDEBAR_STORAGE_KEY, next ? "1" : "0");
     // Sync to DB (fire-and-forget)
     const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (canvasId) headers["X-Canvas-Id"] = canvasId;
+    if (workspaceId) headers["X-Workspace-Id"] = workspaceId;
     fetch("/api/canvas/state", {
       method: "PATCH",
       headers,
       body: JSON.stringify({ sidebar_open: next }),
     }).catch(() => {});
-  }, [canvasId]);
+  }, [workspaceId]);
 
   const chatPanels = useMemo(
     () =>

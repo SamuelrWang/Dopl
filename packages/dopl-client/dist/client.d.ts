@@ -1,5 +1,5 @@
 import type { PendingStatus } from "./types.js";
-import type { BuildResult, CanvasPanel, CanvasSummary, ClusterDetail, ClusterQueryResult, ClusterRow, DoplEntry, ListResult, Pack, PackFile, PackFileMeta, PrepareIngestResult, ResolvedCanvas, SearchResult, SubmitIngestedEntryInput, SubmitIngestedEntryResult } from "./types.js";
+import type { BuildResult, CanvasPanel, WorkspaceSummary, ClusterDetail, ClusterQueryResult, ClusterRow, DoplEntry, ListResult, Pack, PackFile, PackFileMeta, PrepareIngestResult, ResolvedWorkspace, SearchResult, SubmitIngestedEntryInput, SubmitIngestedEntryResult } from "./types.js";
 import { DoplTransport } from "./transport.js";
 export type { DoplTransportOptions as DoplClientOptions } from "./transport.js";
 export { parseRetryAfter } from "./retry.js";
@@ -10,11 +10,11 @@ export declare class DoplClient {
     getBaseUrl(): string;
     /**
      * Active canvas (workspace) for this client. When set, every request
-     * carries an `X-Canvas-Id` header so the server scopes data
+     * carries an `X-Workspace-Id` header so the server scopes data
      * accordingly. Set null to clear.
      */
-    setCanvasId(canvasId: string | null): void;
-    getCanvasId(): string | null;
+    setWorkspaceId(workspaceId: string | null): void;
+    getWorkspaceId(): string | null;
     entryUrl(slug: string | null | undefined): string | null;
     searchSetups(params: {
         query: string;
@@ -62,17 +62,17 @@ export declare class DoplClient {
     }>;
     getCluster(slug: string): Promise<ClusterDetail>;
     queryCluster(slug: string, query: string, maxResults?: number): Promise<ClusterQueryResult>;
-    listCanvases(): Promise<{
-        canvases: CanvasSummary[];
+    listWorkspaces(): Promise<{
+        workspaces: WorkspaceSummary[];
     }>;
-    getCanvas(slug: string): Promise<ResolvedCanvas>;
+    getWorkspace(slug: string): Promise<ResolvedWorkspace>;
     /**
-     * Resolve the active canvas — the one currently set on the transport
-     * via `setCanvasId(...)` or `X-Canvas-Id`. Used by the MCP server's
-     * startup handshake to confirm the requested canvas exists and the
+     * Resolve the active workspace — the one currently set on the transport
+     * via `setWorkspaceId(...)` or `X-Workspace-Id`. Used by the MCP server's
+     * startup handshake to confirm the requested workspace exists and the
      * caller is a member.
      */
-    getActiveCanvas(): Promise<ResolvedCanvas>;
+    getActiveWorkspace(): Promise<ResolvedWorkspace>;
     pingMcpStatus(): Promise<{
         is_admin: boolean;
     }>;

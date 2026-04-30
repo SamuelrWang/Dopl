@@ -31,7 +31,7 @@ export {
   useCapabilities,
   useCanvasScope,
   type CanvasCapabilities,
-  type CanvasScope,
+  type WorkspaceScope,
 } from "./canvas-store/context";
 
 // Provider + sync-strategy types

@@ -32,7 +32,7 @@ interface UseChatOptions {
 export function useChat({ panel }: UseChatOptions) {
   const { state, dispatch } = useCanvas();
   const scope = useCanvasScope();
-  const canvasId = scope?.canvasId ?? null;
+  const workspaceId = scope?.workspaceId ?? null;
   const [isStreaming, setIsStreaming] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   // Latest state snapshot — the SSE loop needs to read the current
@@ -103,7 +103,7 @@ export function useChat({ panel }: UseChatOptions) {
         const headers: Record<string, string> = {
           "Content-Type": "application/json",
         };
-        if (canvasId) headers["X-Canvas-Id"] = canvasId;
+        if (workspaceId) headers["X-Workspace-Id"] = workspaceId;
         const response = await fetch("/api/chat", {
           method: "POST",
           headers,

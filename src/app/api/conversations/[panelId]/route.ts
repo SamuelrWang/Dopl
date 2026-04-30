@@ -1,17 +1,17 @@
-import { NextRequest, NextResponse } from "next/server";
-import { withCanvasAuth } from "@/shared/auth/with-canvas-auth";
+import { NextResponse } from "next/server";
+import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 
 const supabase = supabaseAdmin();
 
 /**
  * DELETE /api/conversations/[panelId] — delete a conversation by panel_id
- * within the active canvas. Also cleans up associated chat attachments
- * (still scoped by user_id today; canvas_id will be denormalized onto
- * chat_attachments in a future migration).
+ * within the active workspace. Also cleans up associated chat attachments
+ * (now scoped by workspace_id, so deletes fan out across all members'
+ * uploads on the same panel).
  */
-export const DELETE = withCanvasAuth(
-  async (_request, { userId, canvasId, params }) => {
+export const DELETE = withWorkspaceAuth(
+  async (_request, { workspaceId, params }) => {
     const panelId = params?.panelId;
 
     if (!panelId) {
@@ -21,7 +21,7 @@ export const DELETE = withCanvasAuth(
     const { data: attachments } = await supabase
       .from("chat_attachments")
       .select("storage_path")
-      .eq("user_id", userId)
+      .eq("workspace_id", workspaceId)
       .eq("panel_id", panelId);
 
     if (attachments && attachments.length > 0) {
@@ -30,14 +30,14 @@ export const DELETE = withCanvasAuth(
       await supabase
         .from("chat_attachments")
         .delete()
-        .eq("user_id", userId)
+        .eq("workspace_id", workspaceId)
         .eq("panel_id", panelId);
     }
 
     const { error } = await supabase
       .from("conversations")
       .delete()
-      .eq("canvas_id", canvasId)
+      .eq("workspace_id", workspaceId)
       .eq("panel_id", panelId);
 
     if (error) {

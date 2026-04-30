@@ -11,34 +11,34 @@ import { clientIdentifier } from "./version.js";
 interface BootArgs {
   apiKey: string;
   baseUrl: string;
-  canvasId?: string;
+  workspaceId?: string;
 }
 
 function parseArgs(): BootArgs {
   const args = process.argv.slice(2);
   let apiKey = process.env.DOPL_API_KEY || "";
   let baseUrl = process.env.DOPL_BASE_URL || "https://www.usedopl.com";
-  let canvasId = process.env.DOPL_CANVAS_ID || "";
+  let workspaceId = process.env.DOPL_WORKSPACE_ID || "";
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--api-key" && args[i + 1]) {
       apiKey = args[++i];
     } else if (args[i] === "--base-url" && args[i + 1]) {
       baseUrl = args[++i];
-    } else if (args[i] === "--canvas-id" && args[i + 1]) {
-      canvasId = args[++i];
+    } else if (args[i] === "--workspace-id" && args[i + 1]) {
+      workspaceId = args[++i];
     } else if (args[i] === "--help" || args[i] === "-h") {
       console.error(`
 Dopl MCP Server
 
-Usage: dopl-mcp --api-key <key> [--base-url <url>] [--canvas-id <uuid>]
+Usage: dopl-mcp --api-key <key> [--base-url <url>] [--workspace-id <uuid>]
 
 Options:
   --api-key <key>     Dopl API key (or set DOPL_API_KEY)
   --base-url <url>    Dopl API base URL (default: https://www.usedopl.com,
                       or set DOPL_BASE_URL)
-  --canvas-id <uuid>  Active canvas (workspace) for this session. If unset,
-                      falls back to ~/.config/dopl/config.json's canvasId
+  --workspace-id <uuid>  Active canvas (workspace) for this session. If unset,
+                      falls back to ~/.config/dopl/config.json's workspaceId
                       and finally to your account's default canvas.
   --help, -h          Show this help
 
@@ -50,7 +50,7 @@ Claude Code config example:
         "args": ["@dopl/mcp-server", "--api-key", "sk-dopl-xxxxx"],
         "env": {
           "DOPL_BASE_URL": "https://your-site.vercel.app",
-          "DOPL_CANVAS_ID": "<paste from \`dopl canvas current\`>"
+          "DOPL_WORKSPACE_ID": "<paste from \`dopl canvas current\`>"
         }
       }
     }
@@ -71,20 +71,20 @@ Claude Code config example:
   return {
     apiKey,
     baseUrl,
-    canvasId: canvasId.trim() || undefined,
+    workspaceId: workspaceId.trim() || undefined,
   };
 }
 
 /**
  * Read the CLI config file (`~/.config/dopl/config.json` on Unix,
  * `%APPDATA%/dopl/config.json` on Windows) and return the stored
- * canvasId/slug if any. Used as a fallback when no env/flag is set so
+ * workspaceId/slug if any. Used as a fallback when no env/flag is set so
  * `dopl canvas use <slug>` works for both the CLI and any MCP server
  * launched without explicit canvas args.
  */
-async function readConfigCanvas(): Promise<{
-  canvasId?: string;
-  canvasSlug?: string;
+async function readConfigWorkspace(): Promise<{
+  workspaceId?: string;
+  workspaceSlug?: string;
 }> {
   const override = process.env.DOPL_CONFIG_PATH;
   let path: string;
@@ -101,10 +101,10 @@ async function readConfigCanvas(): Promise<{
     const raw = await readFile(path, "utf8");
     const parsed = JSON.parse(raw) as Record<string, unknown>;
     return {
-      canvasId:
-        typeof parsed.canvasId === "string" ? parsed.canvasId : undefined,
-      canvasSlug:
-        typeof parsed.canvasSlug === "string" ? parsed.canvasSlug : undefined,
+      workspaceId:
+        typeof parsed.workspaceId === "string" ? parsed.workspaceId : undefined,
+      workspaceSlug:
+        typeof parsed.workspaceSlug === "string" ? parsed.workspaceSlug : undefined,
     };
   } catch {
     return {};
@@ -112,21 +112,21 @@ async function readConfigCanvas(): Promise<{
 }
 
 async function main() {
-  const { apiKey, baseUrl, canvasId: argCanvasId } = parseArgs();
+  const { apiKey, baseUrl, workspaceId: argWorkspaceId } = parseArgs();
 
-  // Resolve canvasId: explicit arg/env > config file > nothing (server
+  // Resolve workspaceId: explicit arg/env > config file > nothing (server
   // falls back to default canvas).
-  let canvasId = argCanvasId;
-  let canvasSlug: string | undefined;
-  if (!canvasId) {
-    const fromConfig = await readConfigCanvas();
-    canvasId = fromConfig.canvasId;
-    canvasSlug = fromConfig.canvasSlug;
+  let workspaceId = argWorkspaceId;
+  let workspaceSlug: string | undefined;
+  if (!workspaceId) {
+    const fromConfig = await readConfigWorkspace();
+    workspaceId = fromConfig.workspaceId;
+    workspaceSlug = fromConfig.workspaceSlug;
   }
 
   const client = new DoplClient(baseUrl, apiKey, {
     clientIdentifier,
-    canvasId,
+    workspaceId,
   });
 
   // Block on the first status ping so we know whether this caller is the
@@ -140,11 +140,11 @@ async function main() {
   // Canvas handshake — confirm the requested canvas exists and the
   // caller is an active member. Failure is fatal: we'd rather refuse to
   // start than write skill files into the wrong workspace.
-  const handshake = await resolveCanvas(client, canvasId, canvasSlug);
+  const handshake = await resolveWorkspace(client, workspaceId, workspaceSlug);
   if (handshake) {
-    client.setCanvasId(handshake.canvas.id);
+    client.setWorkspaceId(handshake.workspace.id);
     console.error(
-      `[dopl-mcp] Active canvas: ${handshake.canvas.name} (${handshake.canvas.slug}, role=${handshake.role})`
+      `[dopl-mcp] Active canvas: ${handshake.workspace.name} (${handshake.workspace.slug}, role=${handshake.role})`
     );
   } else {
     console.error(
@@ -154,7 +154,7 @@ async function main() {
 
   const server = createServer(client, {
     isAdmin: is_admin,
-    canvas: handshake?.canvas ?? null,
+    workspace: handshake?.workspace ?? null,
     role: handshake?.role ?? null,
   });
 
@@ -183,13 +183,13 @@ async function pingWithRetry(
   return { is_admin: false };
 }
 
-async function resolveCanvas(
+async function resolveWorkspace(
   client: DoplClient,
-  canvasId: string | undefined,
-  canvasSlug: string | undefined
+  workspaceId: string | undefined,
+  workspaceSlug: string | undefined
 ) {
   try {
-    const res = await client.getActiveCanvas();
+    const res = await client.getActiveWorkspace();
     return res;
   } catch (err) {
     const detail =
@@ -198,10 +198,10 @@ async function resolveCanvas(
         : err instanceof Error
           ? err.message
           : String(err);
-    const target = canvasId
-      ? `canvasId=${canvasId}`
-      : canvasSlug
-        ? `canvasSlug=${canvasSlug}`
+    const target = workspaceId
+      ? `workspaceId=${workspaceId}`
+      : workspaceSlug
+        ? `workspaceSlug=${workspaceSlug}`
         : "default canvas";
     console.error(
       `[dopl-mcp] Canvas handshake failed (${target}): ${detail}`

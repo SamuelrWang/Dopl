@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { withCanvasAuth } from "@/shared/auth/with-canvas-auth";
+import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
 import { parseJson } from "@/shared/api/parse-json";
 import { HttpError } from "@/shared/lib/http-error";
 import { createCluster, listClusters } from "@/features/clusters/server/service";
@@ -23,10 +23,10 @@ function toErrorResponse(err: unknown): NextResponse {
 
 async function handleGet(
   _request: NextRequest,
-  { userId, canvasId }: { userId: string; canvasId: string }
+  { userId, workspaceId }: { userId: string; workspaceId: string }
 ) {
   try {
-    const clusters = await listClusters({ userId, canvasId });
+    const clusters = await listClusters({ userId, workspaceId });
     return NextResponse.json({ clusters });
   } catch (err) {
     return toErrorResponse(err);
@@ -35,13 +35,13 @@ async function handleGet(
 
 async function handlePost(
   request: NextRequest,
-  { userId, canvasId }: { userId: string; canvasId: string }
+  { userId, workspaceId }: { userId: string; workspaceId: string }
 ) {
   try {
     const input = await parseJson(request, ClusterCreateSchema);
     const cluster = await createCluster(
       { name: input.name, entry_ids: input.entry_ids },
-      { userId, canvasId }
+      { userId, workspaceId }
     );
     return NextResponse.json(cluster, { status: 201 });
   } catch (err) {
@@ -49,5 +49,5 @@ async function handlePost(
   }
 }
 
-export const GET = withCanvasAuth(handleGet);
-export const POST = withCanvasAuth(handlePost, { minRole: "editor" });
+export const GET = withWorkspaceAuth(handleGet);
+export const POST = withWorkspaceAuth(handlePost, { minRole: "editor" });

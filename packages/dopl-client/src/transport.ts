@@ -24,11 +24,11 @@ export interface DoplTransportOptions {
   clientIdentifier?: string;
   /**
    * Active canvas (workspace) for this transport. When set, every
-   * request emits an `X-Canvas-Id` header so the server scopes data to
+   * request emits an `X-Workspace-Id` header so the server scopes data to
    * that canvas. When unset, the server falls back to the user's
    * default canvas.
    */
-  canvasId?: string;
+  workspaceId?: string;
 }
 
 export interface RequestOptions {
@@ -44,26 +44,26 @@ export class DoplTransport {
   private readonly apiKey: string;
   private readonly toolHeaderName: string;
   private readonly clientIdentifier: string | null;
-  private canvasId: string | null;
+  private workspaceId: string | null;
 
   constructor(baseUrl: string, apiKey: string, opts: DoplTransportOptions = {}) {
     this.baseUrl = baseUrl.replace(/\/$/, "");
     this.apiKey = apiKey;
     this.toolHeaderName = opts.toolHeaderName ?? "X-MCP-Tool";
     this.clientIdentifier = opts.clientIdentifier ?? null;
-    this.canvasId = opts.canvasId ?? null;
+    this.workspaceId = opts.workspaceId ?? null;
   }
 
   /**
    * Update the active canvas after construction (e.g. CLI flow where
    * the user runs `dopl canvas use <slug>` mid-session).
    */
-  setCanvasId(canvasId: string | null): void {
-    this.canvasId = canvasId;
+  setWorkspaceId(workspaceId: string | null): void {
+    this.workspaceId = workspaceId;
   }
 
-  getCanvasId(): string | null {
-    return this.canvasId;
+  getWorkspaceId(): string | null {
+    return this.workspaceId;
   }
 
   getBaseUrl(): string {
@@ -178,7 +178,7 @@ export class DoplTransport {
     if (withJsonBody) headers["Content-Type"] = "application/json";
     if (toolName) headers[this.toolHeaderName] = toolName;
     if (this.clientIdentifier) headers["X-Dopl-Client"] = this.clientIdentifier;
-    if (this.canvasId) headers["X-Canvas-Id"] = this.canvasId;
+    if (this.workspaceId) headers["X-Workspace-Id"] = this.workspaceId;
     return headers;
   }
 

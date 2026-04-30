@@ -16,7 +16,7 @@ const PUBLIC_ROUTES = [
   // accept POST is still auth-gated by withUserAuth, so non-members
   // still bounce to /login at the click.
   "/invite/",
-  "/api/canvases/invitations/",
+  "/api/workspaces/invitations/",
 ];
 
 export async function proxy(request: NextRequest) {

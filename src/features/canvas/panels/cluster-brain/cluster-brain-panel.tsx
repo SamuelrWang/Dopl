@@ -18,7 +18,7 @@ export function ClusterBrainPanel({
 }) {
   const { state, dispatch } = useCanvas();
   const scope = useCanvasScope();
-  const canvasId = scope?.canvasId ?? null;
+  const workspaceId = scope?.workspaceId ?? null;
 
   // Look up the cluster slug for this brain panel — needed to POST
   // personal memories to /api/clusters/[slug]/brain/memories. Falls
@@ -44,11 +44,11 @@ export function ClusterBrainPanel({
   // panel.memories via the realtime sync and render only the personal
   // subset locally.
   useEffect(() => {
-    if (!clusterSlug || !canvasId) return;
+    if (!clusterSlug || !workspaceId) return;
     let cancelled = false;
     fetch(`/api/clusters/${encodeURIComponent(clusterSlug)}/brain`, {
       credentials: "include",
-      headers: { "X-Canvas-Id": canvasId },
+      headers: { "X-Workspace-Id": workspaceId },
     })
       .then((r) => (r.ok ? r.json() : null))
       .then(
@@ -77,7 +77,7 @@ export function ClusterBrainPanel({
     return () => {
       cancelled = true;
     };
-  }, [clusterSlug, canvasId, panel.memories.length]);
+  }, [clusterSlug, workspaceId, panel.memories.length]);
 
   // Keep the committed ref in sync when instructions change externally
   if (lastCommittedRef.current !== panel.instructions && document.activeElement !== instructionsRef.current) {
@@ -119,7 +119,7 @@ export function ClusterBrainPanel({
         const headers: Record<string, string> = {
           "Content-Type": "application/json",
         };
-        if (canvasId) headers["X-Canvas-Id"] = canvasId;
+        if (workspaceId) headers["X-Workspace-Id"] = workspaceId;
         const res = await fetch(
           `/api/clusters/${encodeURIComponent(clusterSlug)}/brain/memories`,
           {
@@ -165,7 +165,7 @@ export function ClusterBrainPanel({
       memory: trimmed,
     });
     setNewMemory("");
-  }, [dispatch, panel.id, newMemory, scopeChoice, clusterSlug, canvasId]);
+  }, [dispatch, panel.id, newMemory, scopeChoice, clusterSlug, workspaceId]);
 
   const handleRemoveMemory = useCallback(
     (index: number) => {
@@ -184,7 +184,7 @@ export function ClusterBrainPanel({
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
       };
-      if (canvasId) headers["X-Canvas-Id"] = canvasId;
+      if (workspaceId) headers["X-Workspace-Id"] = workspaceId;
       try {
         const res = await fetch(
           `/api/clusters/${encodeURIComponent(clusterSlug)}/brain/memories`,
@@ -201,7 +201,7 @@ export function ClusterBrainPanel({
         // Silent — caller can retry. Surface an error via a toast in v2.
       }
     },
-    [clusterSlug, canvasId],
+    [clusterSlug, workspaceId],
   );
 
   const handleRegenerate = useCallback(() => {

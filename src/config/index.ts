@@ -45,3 +45,36 @@ export const CONTENT_PREVIEW_LENGTH = 500;
 // ── Canvas storage keys ─────────────────────────────────────────────
 export const CANVAS_STORAGE_KEY_PREFIX = "dopl:canvas:state";
 export const CANVAS_ACTIVE_USER_KEY = "dopl:canvas:active-user";
+
+// ── Reserved workspace slugs ────────────────────────────────────────
+// Workspace slugs share the URL root with every top-level static route.
+// `slugifyWorkspaceName` consults this list and refuses any base slug
+// that would collide; collisions get the numeric `-2`, `-3`, ... suffix
+// the dedupe loop already applies for in-user collisions.
+//
+// Add any new top-level route directory here when you create it. Next.js
+// resolves static segments before dynamic ones, so a collision wouldn't
+// 500 — it would silently route to the static page and the workspace
+// becomes unreachable. Cheaper to forbid the collision at creation time.
+export const RESERVED_WORKSPACE_SLUGS: ReadonlySet<string> = new Set([
+  "admin",
+  "api",
+  "auth",
+  "browse",
+  "build",
+  "canvas",
+  "community",
+  "design",
+  "docs",
+  "e",
+  "entries",
+  "invite",
+  "login",
+  "pricing",
+  "privacy",
+  "settings",
+  "signup",
+  "terms",
+  "welcome",
+  "workspaces",
+]);

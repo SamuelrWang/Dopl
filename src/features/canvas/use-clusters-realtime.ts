@@ -28,7 +28,7 @@ import { useCanvas, useCanvasScope } from "./canvas-store";
 
 type ClustersRow = {
   id: string;
-  canvas_id: string;
+  workspace_id: string;
   name: string;
   slug: string;
 };
@@ -36,7 +36,7 @@ type ClustersRow = {
 type BrainRow = {
   id: string;
   cluster_id: string;
-  canvas_id: string;
+  workspace_id: string;
   instructions: string;
 };
 
@@ -44,7 +44,7 @@ type MemoryRow = {
   id: string;
   cluster_brain_id: string;
   cluster_id: string;
-  canvas_id: string;
+  workspace_id: string;
   content: string;
 };
 
@@ -56,14 +56,14 @@ type ChannelStatus = "SUBSCRIBED" | "CHANNEL_ERROR" | "TIMED_OUT" | "CLOSED";
 export function useClustersRealtime() {
   const { state, dispatch } = useCanvas();
   const scope = useCanvasScope();
-  const canvasId = scope?.canvasId ?? null;
+  const workspaceId = scope?.workspaceId ?? null;
 
   const stateRef = useRef(state);
   stateRef.current = state;
 
   useEffect(() => {
-    if (!canvasId) return;
-    const canvasIdNarrowed: string = canvasId;
+    if (!workspaceId) return;
+    const wsId: string = workspaceId;
 
     const supabase = getSupabaseBrowser();
     const brainTextDebouncers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -99,7 +99,7 @@ export function useClustersRealtime() {
           `/api/clusters/${encodeURIComponent(cluster.slug)}/brain`,
           {
             credentials: "include",
-            headers: { "X-Canvas-Id": canvasIdNarrowed },
+            headers: { "X-Workspace-Id": wsId },
           }
         );
         if (!res.ok) return;
@@ -150,7 +150,7 @@ export function useClustersRealtime() {
       // typed at runtime; cast through any so TS doesn't complain
       // about the handler signatures.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const chan = supabase.channel(`canvas-realtime-${canvasIdNarrowed}`) as any;
+      const chan = supabase.channel(`workspace-realtime-${wsId}`) as any;
 
       const channel = chan
         .on(
@@ -159,7 +159,7 @@ export function useClustersRealtime() {
             event: "*",
             schema: "public",
             table: "clusters",
-            filter: `canvas_id=eq.${canvasIdNarrowed}`,
+            filter: `workspace_id=eq.${wsId}`,
           },
           (payload: {
             eventType: "INSERT" | "UPDATE" | "DELETE";
@@ -192,7 +192,7 @@ export function useClustersRealtime() {
             event: "*",
             schema: "public",
             table: "cluster_brains",
-            filter: `canvas_id=eq.${canvasIdNarrowed}`,
+            filter: `workspace_id=eq.${wsId}`,
           },
           (payload: {
             eventType: "INSERT" | "UPDATE" | "DELETE";
@@ -234,7 +234,7 @@ export function useClustersRealtime() {
             event: "*",
             schema: "public",
             table: "cluster_brain_memories",
-            filter: `canvas_id=eq.${canvasIdNarrowed}`,
+            filter: `workspace_id=eq.${wsId}`,
           },
           (payload: {
             eventType: "INSERT" | "UPDATE" | "DELETE";
@@ -297,5 +297,5 @@ export function useClustersRealtime() {
         activeChannel = null;
       }
     };
-  }, [canvasId, dispatch]);
+  }, [workspaceId, dispatch]);
 }

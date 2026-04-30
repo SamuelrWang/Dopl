@@ -4,7 +4,8 @@ import { cookies } from "next/headers";
 import { startTrialIfNew } from "@/features/billing/server/subscriptions";
 import { logConversionEvent, hasFiredEvent } from "@/features/analytics/server/conversion-events";
 import { forkPublishedCluster } from "@/features/community/server/service";
-import { ensureDefaultCanvas } from "@/features/canvases/server/service";
+import { ensureDefaultWorkspace } from "@/features/workspaces/server/service";
+import { ensureDefaultCanvas } from "@/features/workspaces/server/canvases";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -47,13 +48,20 @@ export async function GET(request: NextRequest) {
             });
           }
 
+          // Provision a default workspace + canvas for every signed-in
+          // user. Both helpers are idempotent — a returning user just
+          // pays two cheap SELECTs. New users land here on first sign-in
+          // and get the workspace + canvas they'll use as soon as they
+          // hit /canvas.
+          const workspace = await ensureDefaultWorkspace(user.id);
+          await ensureDefaultCanvas(workspace.id);
+
           // Fulfil install intent. Self-fork and "already imported"
           // failures are silent successes from the visitor's POV — they
           // still land on /canvas and the cluster is there.
           if (installCluster) {
             try {
-              const canvas = await ensureDefaultCanvas(user.id);
-              await forkPublishedCluster(installCluster, user.id, canvas.id);
+              await forkPublishedCluster(installCluster, user.id, workspace.id);
             } catch (err) {
               const msg = err instanceof Error ? err.message : String(err);
               if (

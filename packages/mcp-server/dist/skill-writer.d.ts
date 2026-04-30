@@ -34,7 +34,7 @@ export declare function skillIsCurrent(canvas: CanvasContext, clusterSlug: strin
 export declare function writeClusterSkill(canvas: CanvasContext, clusterSlug: string, name: string, brain: BrainData, entries: ClusterDetailEntry[], target?: SkillTarget): Promise<void>;
 /**
  * Write the global cross-cluster routing SKILL.md. One per canvas — so
- * `dopl-canvas-<canvasSlug>` for every non-default canvas, and the
+ * `dopl-canvas-<workspaceSlug>` for every non-default canvas, and the
  * legacy `dopl-canvas` for the default canvas.
  */
 export declare function writeGlobalCanvasSkill(canvas: CanvasContext, clusters: ClusterSummary[], target?: SkillTarget): Promise<void>;

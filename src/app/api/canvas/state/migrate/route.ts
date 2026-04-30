@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withCanvasAuth } from "@/shared/auth/with-canvas-auth";
+import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 
 const supabase = supabaseAdmin();
@@ -22,15 +22,15 @@ interface MigratePanel {
  * POST /api/canvas/state/migrate — bulk import from localStorage into
  * the active canvas. Idempotent (upserts).
  */
-export const POST = withCanvasAuth(
-  async (request, { userId, canvasId }) => {
+export const POST = withWorkspaceAuth(
+  async (request, { userId, workspaceId }) => {
     try {
       const body = await request.json();
 
       const { error: stateError } = await supabase.from("canvas_state").upsert(
         {
           user_id: userId,
-          canvas_id: canvasId,
+          workspace_id: workspaceId,
           camera_x: body.camera_x ?? 0,
           camera_y: body.camera_y ?? 0,
           camera_zoom: body.camera_zoom ?? 1,
@@ -40,7 +40,7 @@ export const POST = withCanvasAuth(
           clusters: body.clusters ?? [],
           updated_at: new Date().toISOString(),
         },
-        { onConflict: "canvas_id" }
+        { onConflict: "workspace_id" }
       );
 
       if (stateError) {
@@ -51,7 +51,7 @@ export const POST = withCanvasAuth(
       if (panels.length > 0) {
         const rows = panels.map((p) => ({
           user_id: userId,
-          canvas_id: canvasId,
+          workspace_id: workspaceId,
           panel_id: p.panel_id,
           panel_type: p.panel_type || "entry",
           entry_id: p.entry_id || null,
@@ -67,7 +67,7 @@ export const POST = withCanvasAuth(
 
         const { error: panelsError } = await supabase
           .from("canvas_panels")
-          .upsert(rows, { onConflict: "canvas_id,panel_id", ignoreDuplicates: true });
+          .upsert(rows, { onConflict: "workspace_id,panel_id", ignoreDuplicates: true });
 
         if (panelsError) {
           console.error("[migrate] Panel insert error:", panelsError);

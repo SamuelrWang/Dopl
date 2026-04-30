@@ -13,7 +13,7 @@ import {
   loadCanvasConversations,
   loadCanvasInitialState,
 } from "@/features/canvas/server/load-server-state";
-import { ensureDefaultCanvas } from "@/features/canvases/server/service";
+import { ensureDefaultWorkspace } from "@/features/workspaces/server/service";
 import BuildClientShell from "./build-client-shell";
 
 export const dynamic = "force-dynamic";
@@ -22,8 +22,8 @@ export default async function BuildPage() {
   const user = await getUser();
   if (!user) redirect("/login");
 
-  const canvas = await ensureDefaultCanvas(user.id);
-  const scope = { userId: user.id, canvasId: canvas.id };
+  const canvas = await ensureDefaultWorkspace(user.id);
+  const scope = { userId: user.id, workspaceId: canvas.id };
 
   const conversations = await loadCanvasConversations(scope);
   const initialState = await loadCanvasInitialState(scope, conversations);
@@ -31,7 +31,7 @@ export default async function BuildPage() {
   return (
     <BuildClientShell
       userId={user.id}
-      canvasId={canvas.id}
+      workspaceId={canvas.id}
       canvasSlug={canvas.slug}
       initialState={initialState}
       initialConversations={conversations}

@@ -9,7 +9,7 @@ import {
   type CanvasContextPayload,
 } from "@/features/chat/server/canvas-context";
 import { TOOLS, executeTool } from "@/features/chat/server/tools";
-import { resolveActiveCanvas } from "@/features/canvases/server/service";
+import { resolveActiveWorkspace } from "@/features/workspaces/server/service";
 import { HttpError } from "@/shared/lib/http-error";
 import { config } from "dotenv";
 import { resolve } from "path";
@@ -83,11 +83,11 @@ async function handlePost(
     // tools (list/edit memories, rewrite brain) need this to filter
     // canvas-aware queries; non-canvas tools (search KB, ingest URL)
     // ignore it.
-    let canvasId: string;
+    let workspaceId: string;
     try {
-      const headerCanvasId = request.headers.get("x-canvas-id");
-      const { canvas } = await resolveActiveCanvas(userId, headerCanvasId);
-      canvasId = canvas.id;
+      const headerWorkspaceId = request.headers.get("x-workspace-id");
+      const { workspace } = await resolveActiveWorkspace(userId, headerWorkspaceId);
+      workspaceId = workspace.id;
     } catch (err) {
       if (err instanceof HttpError) {
         return new Response(JSON.stringify(err.toResponseBody()), {
@@ -200,7 +200,7 @@ async function handlePost(
                 block.input as Record<string, unknown>,
                 userId,
                 canvasContext,
-                canvasId
+                workspaceId
               );
 
               // Emit ingest_started for ingest_url tool so the frontend

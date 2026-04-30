@@ -5,8 +5,8 @@ export interface GlobalOptions {
   apiKey?: string;
   baseUrl?: string;
   verbose?: boolean;
-  /** Active canvas (workspace) for this invocation. UUID. */
-  canvas?: string;
+  /** Active workspace for this invocation. UUID. */
+  workspace?: string;
 }
 
 export function getGlobalOpts(cmd: Command): GlobalOptions {

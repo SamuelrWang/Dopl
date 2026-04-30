@@ -21,7 +21,7 @@ export function BuilderSidebar({
 }: BuilderSidebarProps) {
   const { state, dispatch } = useCanvas();
   const scope = useCanvasScope();
-  const canvasId = scope?.canvasId ?? null;
+  const workspaceId = scope?.workspaceId ?? null;
   const { panels, clusters } = state;
 
   const handleCreateCluster = useCallback(() => {
@@ -61,7 +61,7 @@ export function BuilderSidebar({
     });
 
     const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (canvasId) headers["X-Canvas-Id"] = canvasId;
+    if (workspaceId) headers["X-Workspace-Id"] = workspaceId;
     fetch("/api/clusters", {
       method: "POST",
       headers,
@@ -81,7 +81,7 @@ export function BuilderSidebar({
       .catch(() => {});
 
     onSelectCluster(clusterId);
-  }, [state, dispatch, onSelectCluster, canvasId]);
+  }, [state, dispatch, onSelectCluster, workspaceId]);
 
   if (compact) {
     return (

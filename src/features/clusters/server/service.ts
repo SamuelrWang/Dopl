@@ -42,19 +42,19 @@ export interface ClusterUpdateRequest {
 }
 
 /**
- * Scope identifying the active workspace + the calling user. `canvasId`
+ * Scope identifying the active workspace + the calling user. `workspaceId`
  * is the new scope key; `userId` is retained for entry-access checks
  * (which are user-level) and for the legacy `user_id` column on cluster
  * rows used for attribution and analytics.
  */
 export interface ClusterScope {
-  canvasId: string;
+  workspaceId: string;
   userId: string;
 }
 
 // ── CRUD ─────────────────────────────────────────────────────────────
 //
-// All cluster CRUD scopes by `canvasId`. Members of the canvas can read
+// All cluster CRUD scopes by `workspaceId`. Members of the canvas can read
 // and (subject to role checks at the route layer) write. `userId` is
 // passed through for entry-access filtering — entry visibility is a
 // user-level concern, not a workspace one.
@@ -89,7 +89,7 @@ export async function listClusters(scope: ClusterScope): Promise<ClusterRow[]> {
   const { data, error } = await db
     .from("clusters")
     .select("id, slug, name, created_at, updated_at")
-    .eq("canvas_id", scope.canvasId)
+    .eq("workspace_id", scope.workspaceId)
     .order("created_at", { ascending: false });
 
   if (error) throw error;
@@ -127,7 +127,7 @@ export async function getCluster(
     .from("clusters")
     .select("id, slug, name, created_at, updated_at")
     .eq("slug", slug)
-    .eq("canvas_id", scope.canvasId)
+    .eq("workspace_id", scope.workspaceId)
     .single();
 
   if (error || !cluster) {
@@ -192,7 +192,7 @@ export async function createCluster(
   const { data: existing } = await db
     .from("clusters")
     .select("slug")
-    .eq("canvas_id", scope.canvasId);
+    .eq("workspace_id", scope.workspaceId);
   const existingSlugs = (existing || []).map((r) => r.slug);
   const slug = slugifyClusterName(req.name, existingSlugs);
 
@@ -212,7 +212,7 @@ export async function createCluster(
   const { data: rpcRows, error: rpcError } = await db.rpc(
     "create_cluster_with_entries",
     {
-      p_canvas_id: scope.canvasId,
+      p_workspace_id: scope.workspaceId,
       p_user_id: scope.userId,
       p_name: req.name,
       p_slug: slug,
@@ -254,7 +254,7 @@ export async function updateCluster(
     .from("clusters")
     .select("id, slug, name, created_at, updated_at")
     .eq("slug", slug)
-    .eq("canvas_id", scope.canvasId)
+    .eq("workspace_id", scope.workspaceId)
     .single();
 
   if (lookupError || !cluster) {
@@ -267,7 +267,7 @@ export async function updateCluster(
     const { data: existing } = await db
       .from("clusters")
       .select("slug")
-      .eq("canvas_id", scope.canvasId);
+      .eq("workspace_id", scope.workspaceId);
     const existingSlugs = (existing || [])
       .map((r) => r.slug)
       .filter((s) => s !== cluster.slug);
@@ -281,7 +281,7 @@ export async function updateCluster(
         updated_at: new Date().toISOString(),
       })
       .eq("id", cluster.id)
-      .eq("canvas_id", scope.canvasId);
+      .eq("workspace_id", scope.workspaceId);
     if (updateError) throw updateError;
   }
 
@@ -332,7 +332,7 @@ export async function deleteCluster(
     .from("clusters")
     .select("id")
     .eq("slug", slug)
-    .eq("canvas_id", scope.canvasId)
+    .eq("workspace_id", scope.workspaceId)
     .maybeSingle();
 
   await tearDownClusterCanvasArtifacts(scope, cluster, slug);
@@ -341,7 +341,7 @@ export async function deleteCluster(
     .from("clusters")
     .delete()
     .eq("slug", slug)
-    .eq("canvas_id", scope.canvasId);
+    .eq("workspace_id", scope.workspaceId);
 
   if (error) throw error;
 }

@@ -11,6 +11,7 @@ const client_factory_js_1 = require("../lib/client-factory.js");
 const global_options_js_1 = require("../lib/global-options.js");
 const output_js_1 = require("../lib/output.js");
 const auth_js_1 = require("../commands/auth.js");
+const workspace_js_1 = require("../commands/workspace.js");
 const packs_js_1 = require("../commands/packs.js");
 const update_check_js_1 = require("../lib/update-check.js");
 const version_js_1 = require("../lib/version.js");
@@ -27,6 +28,7 @@ async function run() {
         .version(version_js_1.packageVersion)
         .option("--api-key <key>", "Dopl API key (overrides env + config)")
         .option("--base-url <url>", "API base URL (overrides env + config)")
+        .option("--workspace <id>", "Active workspace UUID (overrides env + config). To pick by slug, run `dopl workspace use <slug>` first.")
         .option("--json", "Emit JSON instead of human-readable output", false)
         .option("--verbose", "Log request/response trace to stderr", false)
         .option("--no-update-notifier", "Skip the once-a-day npm update check")
@@ -38,6 +40,7 @@ async function run() {
         cliLog("command=%s verbose=%s json=%s", actionCommand.name(), opts.verbose ? "yes" : "no", opts.json ? "yes" : "no");
     });
     (0, auth_js_1.registerAuthCommands)(program);
+    (0, workspace_js_1.registerWorkspaceCommands)(program);
     (0, packs_js_1.registerPacksCommands)(program);
     await program.parseAsync(process.argv);
 }

@@ -3,10 +3,16 @@ export interface ResolvedCredentials {
     apiKey: string;
     baseUrl: string;
     source: "flag" | "env" | "config";
+    /** Active workspace UUID, if any. */
+    workspaceId?: string;
+    /** Active workspace slug, if any (for display). */
+    workspaceSlug?: string;
 }
 export interface GlobalFlags {
     apiKey?: string;
     baseUrl?: string;
+    /** Override the active workspace for a single command (slug or UUID). */
+    workspace?: string;
 }
 export declare class MissingApiKeyError extends Error {
     constructor();

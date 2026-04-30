@@ -45,12 +45,25 @@ async function resolveCredentials(flags) {
         nonEmpty(process.env.DOPL_BASE_URL) ??
         nonEmpty(cfg.baseUrl) ??
         (0, config_js_1.defaultBaseUrl)();
-    return { apiKey, baseUrl, source };
+    // Workspace resolution priority:
+    //   --workspace flag (UUID; slug-flag handling lives in the workspace
+    //     command which resolves to UUID before constructing the client)
+    //   DOPL_WORKSPACE_ID env var (UUID)
+    //   config file workspaceId
+    //   nothing → server falls back to the user's default workspace
+    const workspaceId = nonEmpty(flags.workspace) ??
+        nonEmpty(process.env.DOPL_WORKSPACE_ID) ??
+        nonEmpty(cfg.workspaceId);
+    const workspaceSlug = flags.workspace && flags.workspace === cfg.workspaceId
+        ? cfg.workspaceSlug
+        : nonEmpty(cfg.workspaceSlug);
+    return { apiKey, baseUrl, source, workspaceId, workspaceSlug };
 }
 async function createClient(flags) {
-    const { apiKey, baseUrl } = await resolveCredentials(flags);
+    const { apiKey, baseUrl, workspaceId } = await resolveCredentials(flags);
     return new client_1.DoplClient(baseUrl, apiKey, {
         toolHeaderName: "X-Dopl-Cli",
         clientIdentifier: version_js_1.clientIdentifier,
+        workspaceId,
     });
 }

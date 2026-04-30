@@ -7,7 +7,7 @@ import type { ServerConversation } from "@/features/canvas/use-conversation-sync
 
 interface Props {
   userId: string;
-  canvasId: string;
+  workspaceId: string;
   canvasSlug: string;
   initialState: CanvasState;
   initialConversations: ServerConversation[];
@@ -15,7 +15,7 @@ interface Props {
 
 export default function BuildClientShell({
   userId,
-  canvasId,
+  workspaceId,
   canvasSlug,
   initialState,
   initialConversations,
@@ -23,7 +23,7 @@ export default function BuildClientShell({
   return (
     <CanvasProvider
       userId={userId}
-      canvasId={canvasId}
+      workspaceId={workspaceId}
       canvasSlug={canvasSlug}
       initialState={initialState}
       initialConversations={initialConversations}

@@ -8,14 +8,14 @@ All notable changes to `@dopl/client` are documented here. Format follows [Keep 
 
 ### Added
 - Canvas (workspace) selection on the transport. New
-  `DoplClientOptions.canvasId` and `DoplClient.setCanvasId(id)` /
-  `getCanvasId()`. When set, every request emits an `X-Canvas-Id`
+  `DoplClientOptions.canvasId` and `DoplClient.setWorkspaceId(id)` /
+  `getWorkspaceId()`. When set, every request emits an `X-Canvas-Id`
   header so the server scopes data to that canvas. When unset, the
   server falls back to the user's default canvas.
-- `client.listCanvases()` — list every canvas the caller is an active
+- `client.listWorkspaces()` — list every canvas the caller is an active
   member of.
-- `client.getCanvas(slug)` — fetch one canvas + caller's role.
-- `client.getActiveCanvas()` — resolve the canvas this transport is
+- `client.getWorkspace(slug)` — fetch one canvas + caller's role.
+- `client.getActiveWorkspace()` — resolve the canvas this transport is
   currently scoped to (used by the MCP server's startup handshake).
 - `client.saveClusterMemory(slug, content, scope?)` — the optional
   `scope` arg (`workspace` | `personal`) routes the write through the
@@ -25,7 +25,7 @@ All notable changes to `@dopl/client` are documented here. Format follows [Keep 
   `instructions` change.
 - `BrainMemory.scope` and `BrainMemory.is_mine` carried through on
   every memory returned by `getClusterBrain`.
-- New types: `CanvasSummary`, `CanvasRole`, `ResolvedCanvas`,
+- New types: `WorkspaceSummary`, `WorkspaceRole`, `ResolvedWorkspace`,
   `MemoryScope`.
 
 ### Changed

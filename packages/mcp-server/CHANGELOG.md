@@ -15,15 +15,15 @@ All notable changes to `@dopl/mcp-server` are documented here. Format follows [K
 ## [0.7.0] — 2026-04-30
 
 ### Added
-- Canvas (workspace) selection. The server reads `--canvas-id <uuid>` /
-  `DOPL_CANVAS_ID` env var / `~/.config/dopl/config.json`'s `canvasId`
-  in that order, hand-shakes against `/api/canvases/me` on startup,
+- Canvas (workspace) selection. The server reads `--workspace-id <uuid>` /
+  `DOPL_WORKSPACE_ID` env var / `~/.config/dopl/config.json`'s `canvasId`
+  in that order, hand-shakes against `/api/workspaces/me` on startup,
   and stamps every API call with `X-Canvas-Id`. A session is now
   bound to one canvas at a time.
 - `save_cluster_memory` accepts an optional `scope` arg
   (`workspace` | `personal`). Personal memories are visible only to
   the author and are tagged `_(personal)_` inline in the SKILL.md.
-- Per-canvas skill paths: `~/.claude/skills/dopl-<canvasSlug>-<clusterSlug>/`
+- Per-canvas skill paths: `~/.claude/skills/dopl-<workspaceSlug>-<clusterSlug>/`
   for non-default canvases. The default canvas keeps the legacy
   `dopl-<clusterSlug>/` path so existing single-canvas users see no
   file renames on first sync after upgrade.

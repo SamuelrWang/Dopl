@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withCanvasAuth } from "@/shared/auth/with-canvas-auth";
+import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 
 const supabase = supabaseAdmin();
@@ -7,11 +7,11 @@ const supabase = supabaseAdmin();
 /**
  * GET /api/canvas/panels — list all panels on the active canvas.
  */
-export const GET = withCanvasAuth(async (_request, { canvasId }) => {
+export const GET = withWorkspaceAuth(async (_request, { workspaceId }) => {
   const { data, error } = await supabase
     .from("canvas_panels")
     .select("*")
-    .eq("canvas_id", canvasId)
+    .eq("workspace_id", workspaceId)
     .order("added_at", { ascending: false });
 
   if (error) {
@@ -56,8 +56,8 @@ export const GET = withCanvasAuth(async (_request, { canvasId }) => {
  * Supports all panel types: entry, chat, connection, browse, cluster-brain.
  * Body: { panel_id, panel_type, entry_id?, x, y, width?, height?, title?, summary?, source_url?, panel_data? }
  */
-export const POST = withCanvasAuth(
-  async (request, { userId, canvasId }) => {
+export const POST = withWorkspaceAuth(
+  async (request, { userId, workspaceId }) => {
     const body = await request.json();
     const { panel_type, entry_id, x, y, width, height, title, summary, source_url, panel_data } = body;
     let { panel_id } = body;
@@ -97,7 +97,7 @@ export const POST = withCanvasAuth(
       .upsert(
         {
           user_id: userId,
-          canvas_id: canvasId,
+          workspace_id: workspaceId,
           panel_id,
           panel_type: panel_type || "entry",
           entry_id: entry_id || null,
@@ -110,7 +110,7 @@ export const POST = withCanvasAuth(
           source_url: source_url || null,
           panel_data: panel_data || {},
         },
-        { onConflict: "canvas_id,panel_id", ignoreDuplicates: true }
+        { onConflict: "workspace_id,panel_id", ignoreDuplicates: true }
       )
       .select()
       .maybeSingle();
@@ -119,7 +119,7 @@ export const POST = withCanvasAuth(
       const { data: existing } = await supabase
         .from("canvas_panels")
         .select("*")
-        .eq("canvas_id", canvasId)
+        .eq("workspace_id", workspaceId)
         .eq("panel_id", panel_id)
         .single();
 

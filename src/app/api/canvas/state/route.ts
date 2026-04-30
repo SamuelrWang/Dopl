@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withCanvasAuth } from "@/shared/auth/with-canvas-auth";
+import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 
 const supabase = supabaseAdmin();
@@ -11,11 +11,11 @@ const supabase = supabaseAdmin();
  * `version` so the client can stamp PATCHes with `if_version` and the
  * server can reject stale writes with 409.
  */
-export const GET = withCanvasAuth(async (_request, { canvasId }) => {
+export const GET = withWorkspaceAuth(async (_request, { workspaceId }) => {
   const { data: canvasState, error: stateError } = await supabase
     .from("canvas_state")
     .select("*")
-    .eq("canvas_id", canvasId)
+    .eq("workspace_id", workspaceId)
     .maybeSingle();
 
   if (stateError) {
@@ -29,7 +29,7 @@ export const GET = withCanvasAuth(async (_request, { canvasId }) => {
   const { data: panels, error: panelsError } = await supabase
     .from("canvas_panels")
     .select("*")
-    .eq("canvas_id", canvasId);
+    .eq("workspace_id", workspaceId);
 
   if (panelsError) {
     return NextResponse.json({ error: panelsError.message }, { status: 500 });
@@ -47,8 +47,8 @@ export const GET = withCanvasAuth(async (_request, { canvasId }) => {
  * gates the write: if the current row's version doesn't match, return
  * 409 and the latest snapshot so the client can refetch + retry.
  */
-export const PATCH = withCanvasAuth(
-  async (request, { userId, canvasId }) => {
+export const PATCH = withWorkspaceAuth(
+  async (request, { userId, workspaceId }) => {
     const body = await request.json();
     const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
 
@@ -72,13 +72,13 @@ export const PATCH = withCanvasAuth(
       const { data: current } = await supabase
         .from("canvas_state")
         .select("version")
-        .eq("canvas_id", canvasId)
+        .eq("workspace_id", workspaceId)
         .maybeSingle();
       if (current && current.version !== expectedVersion) {
         const { data: fresh } = await supabase
           .from("canvas_state")
           .select("*")
-          .eq("canvas_id", canvasId)
+          .eq("workspace_id", workspaceId)
           .maybeSingle();
         return NextResponse.json(
           {
@@ -97,8 +97,8 @@ export const PATCH = withCanvasAuth(
     const { data: updated, error } = await supabase
       .from("canvas_state")
       .upsert(
-        { user_id: userId, canvas_id: canvasId, ...update },
-        { onConflict: "canvas_id" }
+        { user_id: userId, workspace_id: workspaceId, ...update },
+        { onConflict: "workspace_id" }
       )
       .select("version")
       .maybeSingle();

@@ -9,8 +9,8 @@
 
 import { notFound } from "next/navigation";
 import { getUser } from "@/shared/supabase/server";
-import { getInvitationByToken } from "@/features/canvases/server/invitations";
-import { AcceptInviteCard } from "@/features/canvases/components/accept-invite-card";
+import { getInvitationByToken } from "@/features/workspaces/server/invitations";
+import { AcceptInviteCard } from "@/features/workspaces/components/accept-invite-card";
 
 export const dynamic = "force-dynamic";
 

@@ -11,15 +11,15 @@ export async function executeListUserClusters(
   _input: Record<string, unknown>,
   _userId?: string,
   _canvasContext?: CanvasContextPayload,
-  canvasId?: string
+  workspaceId?: string
 ): Promise<ToolResult> {
-  if (!canvasId) {
+  if (!workspaceId) {
     return { result: JSON.stringify({ error: "Canvas not resolved." }) };
   }
   const { data, error } = await supabase
     .from("clusters")
     .select("id, slug, name, panel_ids")
-    .eq("canvas_id", canvasId)
+    .eq("workspace_id", workspaceId)
     .order("created_at", { ascending: false });
   if (error) {
     return { result: JSON.stringify({ error: error.message }) };
@@ -37,16 +37,16 @@ export async function executeListClusterBrainMemories(
   input: Record<string, unknown>,
   userId?: string,
   canvasContext?: CanvasContextPayload,
-  canvasId?: string
+  workspaceId?: string
 ): Promise<ToolResult> {
-  if (!userId || !canvasId) {
+  if (!userId || !workspaceId) {
     return { result: JSON.stringify({ error: "Not authenticated." }) };
   }
   const clusterSlug = input.cluster_slug as string;
   const scopeError = enforceClusterEditScope(clusterSlug, canvasContext);
   if (scopeError) return { result: JSON.stringify({ error: scopeError }) };
 
-  const clusterRes = await getClusterForCanvas(clusterSlug, canvasId);
+  const clusterRes = await getClusterForCanvas(clusterSlug, workspaceId);
   if (!clusterRes.ok) return { result: JSON.stringify({ error: clusterRes.error }) };
 
   const { data: brain } = await supabase
@@ -93,9 +93,9 @@ export async function executeAddClusterBrainMemory(
   input: Record<string, unknown>,
   userId?: string,
   canvasContext?: CanvasContextPayload,
-  canvasId?: string
+  workspaceId?: string
 ): Promise<ToolResult> {
-  if (!userId || !canvasId) {
+  if (!userId || !workspaceId) {
     return { result: JSON.stringify({ error: "Not authenticated." }) };
   }
   const clusterSlug = input.cluster_slug as string;
@@ -108,7 +108,7 @@ export async function executeAddClusterBrainMemory(
   const scopeError = enforceClusterEditScope(clusterSlug, canvasContext);
   if (scopeError) return { result: JSON.stringify({ error: scopeError }) };
 
-  const clusterRes = await getClusterForCanvas(clusterSlug, canvasId);
+  const clusterRes = await getClusterForCanvas(clusterSlug, workspaceId);
   if (!clusterRes.ok) return { result: JSON.stringify({ error: clusterRes.error }) };
 
   const { data: upserted, error: brainErr } = await supabase
@@ -117,7 +117,7 @@ export async function executeAddClusterBrainMemory(
       {
         cluster_id: clusterRes.cluster.id,
         user_id: userId,
-        canvas_id: canvasId,
+        workspace_id: workspaceId,
         instructions: "",
       },
       { onConflict: "cluster_id", ignoreDuplicates: true }
@@ -147,7 +147,7 @@ export async function executeAddClusterBrainMemory(
       cluster_brain_id: brainId,
       cluster_id: clusterRes.cluster.id,
       user_id: userId,
-      canvas_id: canvasId,
+      workspace_id: workspaceId,
       author_id: userId,
       scope,
       content,
@@ -171,9 +171,9 @@ export async function executeUpdateClusterBrainMemory(
   input: Record<string, unknown>,
   userId?: string,
   canvasContext?: CanvasContextPayload,
-  canvasId?: string
+  workspaceId?: string
 ): Promise<ToolResult> {
-  if (!userId || !canvasId) {
+  if (!userId || !workspaceId) {
     return { result: JSON.stringify({ error: "Not authenticated." }) };
   }
   const clusterSlug = input.cluster_slug as string;
@@ -188,7 +188,7 @@ export async function executeUpdateClusterBrainMemory(
   const scopeError = enforceClusterEditScope(clusterSlug, canvasContext);
   if (scopeError) return { result: JSON.stringify({ error: scopeError }) };
 
-  const clusterRes = await getClusterForCanvas(clusterSlug, canvasId);
+  const clusterRes = await getClusterForCanvas(clusterSlug, workspaceId);
   if (!clusterRes.ok) return { result: JSON.stringify({ error: clusterRes.error }) };
 
   const { data: memRow } = await supabase
@@ -230,9 +230,9 @@ export async function executeRemoveClusterBrainMemory(
   input: Record<string, unknown>,
   userId?: string,
   canvasContext?: CanvasContextPayload,
-  canvasId?: string
+  workspaceId?: string
 ): Promise<ToolResult> {
-  if (!userId || !canvasId) {
+  if (!userId || !workspaceId) {
     return { result: JSON.stringify({ error: "Not authenticated." }) };
   }
   const clusterSlug = input.cluster_slug as string;
@@ -243,7 +243,7 @@ export async function executeRemoveClusterBrainMemory(
   const scopeError = enforceClusterEditScope(clusterSlug, canvasContext);
   if (scopeError) return { result: JSON.stringify({ error: scopeError }) };
 
-  const clusterRes = await getClusterForCanvas(clusterSlug, canvasId);
+  const clusterRes = await getClusterForCanvas(clusterSlug, workspaceId);
   if (!clusterRes.ok) return { result: JSON.stringify({ error: clusterRes.error }) };
 
   const { data: memRow } = await supabase
@@ -283,9 +283,9 @@ export async function executeRewriteClusterBrainInstructions(
   input: Record<string, unknown>,
   userId?: string,
   canvasContext?: CanvasContextPayload,
-  canvasId?: string
+  workspaceId?: string
 ): Promise<ToolResult> {
-  if (!userId || !canvasId) {
+  if (!userId || !workspaceId) {
     return { result: JSON.stringify({ error: "Not authenticated." }) };
   }
   const clusterSlug = input.cluster_slug as string;
@@ -296,7 +296,7 @@ export async function executeRewriteClusterBrainInstructions(
   const scopeError = enforceClusterEditScope(clusterSlug, canvasContext);
   if (scopeError) return { result: JSON.stringify({ error: scopeError }) };
 
-  const clusterRes = await getClusterForCanvas(clusterSlug, canvasId);
+  const clusterRes = await getClusterForCanvas(clusterSlug, workspaceId);
   if (!clusterRes.ok) return { result: JSON.stringify({ error: clusterRes.error }) };
 
   const now = new Date().toISOString();
@@ -320,7 +320,7 @@ export async function executeRewriteClusterBrainInstructions(
       .insert({
         cluster_id: clusterRes.cluster.id,
         user_id: userId,
-        canvas_id: canvasId,
+        workspace_id: workspaceId,
         instructions,
         updated_at: now,
       });

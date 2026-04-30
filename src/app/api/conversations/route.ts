@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
-import { withCanvasAuth } from "@/shared/auth/with-canvas-auth";
+import { NextResponse } from "next/server";
+import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 
 const supabase = supabaseAdmin();
@@ -9,26 +9,23 @@ const supabase = supabaseAdmin();
  * Also cleans up expired unpinned conversations and their attachments
  * on each fetch.
  */
-export const GET = withCanvasAuth(async (_request, { userId, canvasId }) => {
+export const GET = withWorkspaceAuth(async (_request, { workspaceId }) => {
   // Find expired unpinned conversations before deleting (need panel_ids
   // for attachment cleanup).
   const { data: expiring } = await supabase
     .from("conversations")
     .select("id, panel_id")
-    .eq("canvas_id", canvasId)
+    .eq("workspace_id", workspaceId)
     .eq("pinned", false)
     .lt("expires_at", new Date().toISOString());
 
   if (expiring && expiring.length > 0) {
     const panelIds = expiring.map((c: { panel_id: string }) => c.panel_id);
 
-    // Storage attachments are still keyed by user_id today; safe because
-    // each user has one canvas during P0/P1. Migrate to canvas_id when
-    // chat_attachments gets a denorm column.
     const { data: attachments } = await supabase
       .from("chat_attachments")
       .select("storage_path")
-      .eq("user_id", userId)
+      .eq("workspace_id", workspaceId)
       .in("panel_id", panelIds);
 
     if (attachments && attachments.length > 0) {
@@ -39,14 +36,14 @@ export const GET = withCanvasAuth(async (_request, { userId, canvasId }) => {
       await supabase
         .from("chat_attachments")
         .delete()
-        .eq("user_id", userId)
+        .eq("workspace_id", workspaceId)
         .in("panel_id", panelIds);
     }
 
     await supabase
       .from("conversations")
       .delete()
-      .eq("canvas_id", canvasId)
+      .eq("workspace_id", workspaceId)
       .eq("pinned", false)
       .lt("expires_at", new Date().toISOString());
   }
@@ -54,7 +51,7 @@ export const GET = withCanvasAuth(async (_request, { userId, canvasId }) => {
   const { data, error } = await supabase
     .from("conversations")
     .select("id, panel_id, title, messages, pinned, expires_at, created_at, updated_at")
-    .eq("canvas_id", canvasId)
+    .eq("workspace_id", workspaceId)
     .order("updated_at", { ascending: false });
 
   if (error) {
@@ -68,8 +65,8 @@ export const GET = withCanvasAuth(async (_request, { userId, canvasId }) => {
  * POST /api/conversations — upsert a conversation.
  * Body: { panel_id, title, messages, pinned? }
  */
-export const POST = withCanvasAuth(
-  async (request, { userId, canvasId }) => {
+export const POST = withWorkspaceAuth(
+  async (request, { userId, workspaceId }) => {
     const body = await request.json();
     const { panel_id, title, messages, pinned } = body;
 
@@ -92,7 +89,7 @@ export const POST = withCanvasAuth(
       .upsert(
         {
           user_id: userId,
-          canvas_id: canvasId,
+          workspace_id: workspaceId,
           panel_id,
           title: title || "New Chat",
           messages,
@@ -100,7 +97,7 @@ export const POST = withCanvasAuth(
           updated_at: now.toISOString(),
           expires_at: expiresAt.toISOString(),
         },
-        { onConflict: "canvas_id,panel_id" }
+        { onConflict: "workspace_id,panel_id" }
       )
       .select(
         "id, panel_id, title, messages, pinned, expires_at, created_at, updated_at"

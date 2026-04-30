@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withCanvasAuth } from "@/shared/auth/with-canvas-auth";
+import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
 import { forkPublishedCluster } from "@/features/community/server/service";
 
 /**
@@ -8,12 +8,12 @@ import { forkPublishedCluster } from "@/features/community/server/service";
  * brain. Tracks lineage. Caller must have ≥ editor role on the active
  * canvas (forks are creative writes).
  */
-const handlePost = withCanvasAuth(
+const handlePost = withWorkspaceAuth(
   async (
     _request: NextRequest,
     context: {
       userId: string;
-      canvasId: string;
+      workspaceId: string;
       params?: Record<string, string>;
     }
   ) => {
@@ -26,7 +26,7 @@ const handlePost = withCanvasAuth(
       const result = await forkPublishedCluster(
         slug,
         context.userId,
-        context.canvasId
+        context.workspaceId
       );
 
       return NextResponse.json(result, { status: 201 });

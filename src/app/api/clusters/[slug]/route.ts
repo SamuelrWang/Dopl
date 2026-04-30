@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withCanvasAuth } from "@/shared/auth/with-canvas-auth";
+import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
 import {
   deleteCluster,
   getCluster,
@@ -8,17 +8,17 @@ import {
 
 interface Ctx {
   userId: string;
-  canvasId: string;
+  workspaceId: string;
   params?: Record<string, string>;
 }
 
-async function handleGet(_request: NextRequest, { userId, canvasId, params }: Ctx) {
+async function handleGet(_request: NextRequest, { userId, workspaceId, params }: Ctx) {
   try {
     const slug = params?.slug;
     if (!slug) {
       return NextResponse.json({ error: "slug required" }, { status: 400 });
     }
-    const cluster = await getCluster(slug, { userId, canvasId });
+    const cluster = await getCluster(slug, { userId, workspaceId });
     return NextResponse.json(cluster);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
@@ -27,7 +27,7 @@ async function handleGet(_request: NextRequest, { userId, canvasId, params }: Ct
   }
 }
 
-async function handlePatch(request: NextRequest, { userId, canvasId, params }: Ctx) {
+async function handlePatch(request: NextRequest, { userId, workspaceId, params }: Ctx) {
   try {
     const slug = params?.slug;
     if (!slug) {
@@ -37,7 +37,7 @@ async function handlePatch(request: NextRequest, { userId, canvasId, params }: C
     const cluster = await updateCluster(
       slug,
       { name: body.name, entry_ids: body.entry_ids },
-      { userId, canvasId }
+      { userId, workspaceId }
     );
     return NextResponse.json(cluster);
   } catch (error) {
@@ -47,13 +47,13 @@ async function handlePatch(request: NextRequest, { userId, canvasId, params }: C
   }
 }
 
-async function handleDelete(_request: NextRequest, { userId, canvasId, params }: Ctx) {
+async function handleDelete(_request: NextRequest, { userId, workspaceId, params }: Ctx) {
   try {
     const slug = params?.slug;
     if (!slug) {
       return NextResponse.json({ error: "slug required" }, { status: 400 });
     }
-    await deleteCluster(slug, { userId, canvasId });
+    await deleteCluster(slug, { userId, workspaceId });
     return new NextResponse(null, { status: 204 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
@@ -61,6 +61,6 @@ async function handleDelete(_request: NextRequest, { userId, canvasId, params }:
   }
 }
 
-export const GET = withCanvasAuth(handleGet);
-export const PATCH = withCanvasAuth(handlePatch, { minRole: "editor" });
-export const DELETE = withCanvasAuth(handleDelete, { minRole: "editor" });
+export const GET = withWorkspaceAuth(handleGet);
+export const PATCH = withWorkspaceAuth(handlePatch, { minRole: "editor" });
+export const DELETE = withWorkspaceAuth(handleDelete, { minRole: "editor" });

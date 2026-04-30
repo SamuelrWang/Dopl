@@ -165,9 +165,9 @@ export async function executeTool(
   input: Record<string, unknown>,
   userId?: string,
   canvasContext?: CanvasContextPayload,
-  canvasId?: string
+  workspaceId?: string
 ): Promise<ToolResult> {
   const handler = HANDLERS[name];
   if (!handler) return { result: `Unknown tool: ${name}` };
-  return handler(input, userId, canvasContext, canvasId);
+  return handler(input, userId, canvasContext, workspaceId);
 }

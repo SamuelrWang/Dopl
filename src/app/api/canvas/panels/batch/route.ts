@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withCanvasAuth } from "@/shared/auth/with-canvas-auth";
+import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 
 const supabase = supabaseAdmin();
@@ -8,8 +8,8 @@ const supabase = supabaseAdmin();
  * PATCH /api/canvas/panels/batch — batch update panel fields.
  * Body: { updates: [{ panel_id, x?, y?, title?, panel_data? }] }
  */
-export const PATCH = withCanvasAuth(
-  async (request, { canvasId }) => {
+export const PATCH = withWorkspaceAuth(
+  async (request, { workspaceId }) => {
     const body = await request.json();
     const updates: Array<{
       panel_id: string;
@@ -34,7 +34,7 @@ export const PATCH = withCanvasAuth(
         return supabase
           .from("canvas_panels")
           .update(fields)
-          .eq("canvas_id", canvasId)
+          .eq("workspace_id", workspaceId)
           .eq("panel_id", u.panel_id);
       })
     );

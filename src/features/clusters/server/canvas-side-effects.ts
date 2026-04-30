@@ -16,8 +16,8 @@ export interface ClusterRef {
   name: string;
 }
 
-interface CanvasScope {
-  canvasId: string;
+interface WorkspaceScope {
+  workspaceId: string;
   userId: string;
 }
 
@@ -31,7 +31,7 @@ const BRAIN_PANEL_PLACEHOLDER =
  * box around member entries depends on them.
  */
 export async function spawnClusterBrainPanel(
-  scope: CanvasScope,
+  scope: WorkspaceScope,
   cluster: ClusterRef,
   safeEntryIds: string[]
 ): Promise<void> {
@@ -42,7 +42,7 @@ export async function spawnClusterBrainPanel(
   const { data: entryPanels } = await db
     .from("canvas_panels")
     .select("x, y, width")
-    .eq("canvas_id", scope.canvasId)
+    .eq("workspace_id", scope.workspaceId)
     .eq("panel_type", "entry")
     .in("entry_id", safeEntryIds);
 
@@ -57,7 +57,7 @@ export async function spawnClusterBrainPanel(
   const brainPanelId = `brain-${cluster.id}`;
   const { error: brainPanelError } = await db.from("canvas_panels").insert({
     user_id: scope.userId,
-    canvas_id: scope.canvasId,
+    workspace_id: scope.workspaceId,
     panel_id: brainPanelId,
     panel_type: "cluster-brain",
     x: brainX,
@@ -85,7 +85,7 @@ export async function spawnClusterBrainPanel(
   const { data: entryPanelRows } = await db
     .from("canvas_panels")
     .select("panel_id, entry_id")
-    .eq("canvas_id", scope.canvasId)
+    .eq("workspace_id", scope.workspaceId)
     .eq("panel_type", "entry")
     .in("entry_id", safeEntryIds);
 
@@ -97,7 +97,7 @@ export async function spawnClusterBrainPanel(
   const { data: stateRow } = await db
     .from("canvas_state")
     .select("clusters")
-    .eq("canvas_id", scope.canvasId)
+    .eq("workspace_id", scope.workspaceId)
     .maybeSingle();
 
   const existingClusters = Array.isArray(stateRow?.clusters)
@@ -119,11 +119,11 @@ export async function spawnClusterBrainPanel(
     .upsert(
       {
         user_id: scope.userId,
-        canvas_id: scope.canvasId,
+        workspace_id: scope.workspaceId,
         clusters: [...existingClusters, newClusterEntry],
         updated_at: new Date().toISOString(),
       },
-      { onConflict: "canvas_id" }
+      { onConflict: "workspace_id" }
     );
 
   if (stateError) {
@@ -140,7 +140,7 @@ export async function spawnClusterBrainPanel(
  * panel/state entry never existed.
  */
 export async function tearDownClusterCanvasArtifacts(
-  scope: CanvasScope,
+  scope: WorkspaceScope,
   cluster: { id: string } | null,
   slug: string
 ): Promise<void> {
@@ -150,7 +150,7 @@ export async function tearDownClusterCanvasArtifacts(
     const { error: brainPanelError } = await db
       .from("canvas_panels")
       .delete()
-      .eq("canvas_id", scope.canvasId)
+      .eq("workspace_id", scope.workspaceId)
       .eq("panel_type", "cluster-brain")
       .eq("panel_id", `brain-${cluster.id}`);
     if (brainPanelError) {
@@ -164,7 +164,7 @@ export async function tearDownClusterCanvasArtifacts(
   const { data: stateRow } = await db
     .from("canvas_state")
     .select("clusters")
-    .eq("canvas_id", scope.canvasId)
+    .eq("workspace_id", scope.workspaceId)
     .maybeSingle();
 
   if (!stateRow || !Array.isArray((stateRow as { clusters: unknown[] }).clusters)) {
@@ -186,11 +186,11 @@ export async function tearDownClusterCanvasArtifacts(
     .upsert(
       {
         user_id: scope.userId,
-        canvas_id: scope.canvasId,
+        workspace_id: scope.workspaceId,
         clusters: pruned,
         updated_at: new Date().toISOString(),
       },
-      { onConflict: "canvas_id" }
+      { onConflict: "workspace_id" }
     );
   if (stateError) {
     console.error(

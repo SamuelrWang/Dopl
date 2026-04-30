@@ -152,7 +152,7 @@ function panelSnapshotKey(panel: ChatPanelData): string {
 export function useConversationSync() {
   const { state } = useCanvas();
   const scope = useCanvasScope();
-  const canvasId = scope?.canvasId ?? null;
+  const workspaceId = scope?.workspaceId ?? null;
   const { setConversations } = useChatConversations();
   const syncedRef = useRef(false);
   const debounceTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(
@@ -241,7 +241,7 @@ export function useConversationSync() {
           const headers: Record<string, string> = {
             "Content-Type": "application/json",
           };
-          if (canvasId) headers["X-Canvas-Id"] = canvasId;
+          if (workspaceId) headers["X-Workspace-Id"] = workspaceId;
           fetch("/api/conversations", {
             method: "POST",
             headers,

@@ -5,7 +5,11 @@ import { useRouter } from "next/navigation";
 import { getSupabaseBrowser } from "@/shared/supabase/browser";
 import type { User } from "@supabase/supabase-js";
 
-export function UserMenu() {
+type UserMenuProps = {
+  dropdownDirection?: "down" | "up";
+};
+
+export function UserMenu({ dropdownDirection = "down" }: UserMenuProps = {}) {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [open, setOpen] = useState(false);
@@ -66,9 +70,11 @@ export function UserMenu() {
 
       {open && (
         <div
-          className="absolute right-0 top-full mt-2 w-48 rounded-lg overflow-hidden
-            bg-[oklch(0.16_0_0)] border border-white/[0.1]
-            shadow-[0_8px_32px_rgba(0,0,0,0.5)]"
+          className={
+            dropdownDirection === "up"
+              ? "absolute left-0 bottom-full mb-2 w-48 rounded-lg overflow-hidden bg-[oklch(0.16_0_0)] border border-white/[0.1] shadow-[0_8px_32px_rgba(0,0,0,0.5)]"
+              : "absolute right-0 top-full mt-2 w-48 rounded-lg overflow-hidden bg-[oklch(0.16_0_0)] border border-white/[0.1] shadow-[0_8px_32px_rgba(0,0,0,0.5)]"
+          }
         >
           <div className="px-3 py-2 border-b border-white/[0.06]">
             <p className="text-xs text-text-secondary truncate">{user.email}</p>

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withCanvasAuth } from "@/shared/auth/with-canvas-auth";
+import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { deleteFailedEntry } from "@/features/ingestion/server/pipeline";
 
@@ -41,8 +41,8 @@ async function cleanupOrphanDeniedEntry(entryId: string): Promise<void> {
 /**
  * PATCH /api/canvas/panels/[panelId] — update a panel's position, size, or data.
  */
-export const PATCH = withCanvasAuth(
-  async (request, { canvasId, params }) => {
+export const PATCH = withWorkspaceAuth(
+  async (request, { workspaceId, params }) => {
     const panelId = params?.panelId;
     if (!panelId) {
       return NextResponse.json({ error: "panelId is required" }, { status: 400 });
@@ -65,7 +65,7 @@ export const PATCH = withCanvasAuth(
     const { error } = await supabase
       .from("canvas_panels")
       .update(update)
-      .eq("canvas_id", canvasId)
+      .eq("workspace_id", workspaceId)
       .eq("panel_id", panelId);
 
     if (error) {
@@ -85,8 +85,8 @@ export const PATCH = withCanvasAuth(
  */
 const UUID_REGEX = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
-export const DELETE = withCanvasAuth(
-  async (_request, { canvasId, params }) => {
+export const DELETE = withWorkspaceAuth(
+  async (_request, { workspaceId, params }) => {
     const panelId = params?.panelId;
     if (!panelId) {
       return NextResponse.json({ error: "panelId is required" }, { status: 400 });
@@ -95,7 +95,7 @@ export const DELETE = withCanvasAuth(
     const { data: byPanelId, error: err1 } = await supabase
       .from("canvas_panels")
       .delete()
-      .eq("canvas_id", canvasId)
+      .eq("workspace_id", workspaceId)
       .eq("panel_id", panelId)
       .select("id, entry_id");
 
@@ -127,7 +127,7 @@ export const DELETE = withCanvasAuth(
     const { data: byEntryId, error: err2 } = await supabase
       .from("canvas_panels")
       .delete()
-      .eq("canvas_id", canvasId)
+      .eq("workspace_id", workspaceId)
       .eq("entry_id", entryIdForFallback)
       .select("id, entry_id");
 

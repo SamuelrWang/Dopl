@@ -2,8 +2,10 @@
 
 import { usePathname } from "next/navigation";
 import { useEffect } from "react";
-import { Header } from "./header";
+import { Sidebar } from "./sidebar";
 import { FlushGrid } from "@/shared/design";
+
+const NO_SIDEBAR_PATHS = new Set(["/login", "/terms", "/privacy"]);
 
 export function LayoutShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -16,10 +18,12 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
   // the bars. Wider max-width than the default `container` class.
   // Matches /browse, /browse/entries, /browse/clusters.
   const isBrowse = pathname === "/browse" || pathname.startsWith("/browse/");
+  const isNoChrome = isLanding || isCommunityDetail || isDocs;
+  const isNoSidebar = NO_SIDEBAR_PATHS.has(pathname);
 
   // Toggle mosaic-bg on body: remove for landing, ensure present elsewhere
   useEffect(() => {
-    if (isLanding || isCommunityDetail || isDocs) {
+    if (isNoChrome) {
       document.body.classList.remove("mosaic-bg");
       document.body.classList.add("landing-active");
       document.body.style.backgroundColor = "#000";
@@ -33,25 +37,36 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
       document.body.classList.add("mosaic-bg");
       document.body.style.backgroundColor = "";
     };
-  }, [isLanding, isDocs]);
+  }, [isNoChrome]);
 
-  if (isLanding || isCommunityDetail || isDocs) {
+  if (isNoChrome) {
     return <>{children}</>;
+  }
+
+  if (isNoSidebar) {
+    return (
+      <>
+        <FlushGrid />
+        <main className="relative z-[2] container mx-auto px-4 py-8">
+          {children}
+        </main>
+      </>
+    );
   }
 
   return (
     <>
       <FlushGrid />
-      <div className="relative z-[2] pointer-events-none">
-        <Header />
+      <div className="relative z-[2] flex h-screen pointer-events-none">
+        <Sidebar />
         <main
           className={
             // /browse goes full-viewport-width: chat rail flushes to
             // the left edge, grid fills the rest. No mx-auto + no
             // max-width so wide monitors don't get empty side gutters.
             isBrowse
-              ? "w-full pl-3 pr-3 pt-12 pb-3 pointer-events-auto"
-              : "container mx-auto px-4 py-8 pointer-events-auto"
+              ? "flex-1 overflow-auto pl-3 pr-3 pt-3 pb-3 pointer-events-auto"
+              : "flex-1 overflow-auto px-8 py-8 pointer-events-auto"
           }
         >
           {children}

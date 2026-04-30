@@ -2,7 +2,7 @@ import type { PendingStatus } from "./types.js";
 import type {
   BuildResult,
   CanvasPanel,
-  CanvasSummary,
+  WorkspaceSummary,
   ClusterDetail,
   ClusterQueryResult,
   ClusterRow,
@@ -12,7 +12,7 @@ import type {
   PackFile,
   PackFileMeta,
   PrepareIngestResult,
-  ResolvedCanvas,
+  ResolvedWorkspace,
   SearchResult,
   SubmitIngestedEntryInput,
   SubmitIngestedEntryResult,
@@ -42,15 +42,15 @@ export class DoplClient {
 
   /**
    * Active canvas (workspace) for this client. When set, every request
-   * carries an `X-Canvas-Id` header so the server scopes data
+   * carries an `X-Workspace-Id` header so the server scopes data
    * accordingly. Set null to clear.
    */
-  setCanvasId(canvasId: string | null): void {
-    this.transport.setCanvasId(canvasId);
+  setWorkspaceId(workspaceId: string | null): void {
+    this.transport.setWorkspaceId(workspaceId);
   }
 
-  getCanvasId(): string | null {
-    return this.transport.getCanvasId();
+  getWorkspaceId(): string | null {
+    return this.transport.getWorkspaceId();
   }
 
   entryUrl(slug: string | null | undefined): string | null {
@@ -217,31 +217,31 @@ export class DoplClient {
     );
   }
 
-  // ── Canvases (workspaces) ─────────────────────────────────────────
+  // ── Workspaces ────────────────────────────────────────────────────
 
-  async listCanvases(): Promise<{ canvases: CanvasSummary[] }> {
-    return this.transport.request<{ canvases: CanvasSummary[] }>(
-      "/api/canvases",
-      { toolName: "list_canvases" }
+  async listWorkspaces(): Promise<{ workspaces: WorkspaceSummary[] }> {
+    return this.transport.request<{ workspaces: WorkspaceSummary[] }>(
+      "/api/workspaces",
+      { toolName: "list_workspaces" }
     );
   }
 
-  async getCanvas(slug: string): Promise<ResolvedCanvas> {
-    return this.transport.request<ResolvedCanvas>(
-      `/api/canvases/${encodeURIComponent(slug)}`,
-      { toolName: "get_canvas" }
+  async getWorkspace(slug: string): Promise<ResolvedWorkspace> {
+    return this.transport.request<ResolvedWorkspace>(
+      `/api/workspaces/${encodeURIComponent(slug)}`,
+      { toolName: "get_workspace" }
     );
   }
 
   /**
-   * Resolve the active canvas — the one currently set on the transport
-   * via `setCanvasId(...)` or `X-Canvas-Id`. Used by the MCP server's
-   * startup handshake to confirm the requested canvas exists and the
+   * Resolve the active workspace — the one currently set on the transport
+   * via `setWorkspaceId(...)` or `X-Workspace-Id`. Used by the MCP server's
+   * startup handshake to confirm the requested workspace exists and the
    * caller is a member.
    */
-  async getActiveCanvas(): Promise<ResolvedCanvas> {
-    return this.transport.request<ResolvedCanvas>("/api/canvases/me", {
-      toolName: "get_active_canvas",
+  async getActiveWorkspace(): Promise<ResolvedWorkspace> {
+    return this.transport.request<ResolvedWorkspace>("/api/workspaces/me", {
+      toolName: "get_active_workspace",
     });
   }
 

@@ -322,7 +322,7 @@ export async function writeClusterSkill(
 
 /**
  * Write the global cross-cluster routing SKILL.md. One per canvas — so
- * `dopl-canvas-<canvasSlug>` for every non-default canvas, and the
+ * `dopl-canvas-<workspaceSlug>` for every non-default canvas, and the
  * legacy `dopl-canvas` for the default canvas.
  */
 export async function writeGlobalCanvasSkill(

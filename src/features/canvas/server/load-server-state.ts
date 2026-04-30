@@ -71,7 +71,7 @@ export interface ServerConversation {
  *     dispatch on mount.
  */
 export async function loadCanvasInitialState(
-  scope: { userId: string; canvasId: string },
+  scope: { userId: string; workspaceId: string },
   conversations?: ServerConversation[]
 ): Promise<CanvasState> {
   const empty: CanvasState = {
@@ -87,9 +87,9 @@ export async function loadCanvasInitialState(
       supabase
         .from("canvas_state")
         .select("*")
-        .eq("canvas_id", scope.canvasId)
+        .eq("workspace_id", scope.workspaceId)
         .maybeSingle(),
-      supabase.from("canvas_panels").select("*").eq("canvas_id", scope.canvasId),
+      supabase.from("canvas_panels").select("*").eq("workspace_id", scope.workspaceId),
       // Published clusters stay user-scoped — publishing is a user-level
       // action and the gallery is global. We still filter by user so the
       // local cluster's `publishedSlug` resolves to *this* user's
@@ -224,7 +224,7 @@ export async function loadCanvasInitialState(
  */
 export async function loadCanvasConversations(scope: {
   userId: string;
-  canvasId: string;
+  workspaceId: string;
 }): Promise<ServerConversation[]> {
   try {
     const supabase = supabaseAdmin();
@@ -234,7 +234,7 @@ export async function loadCanvasConversations(scope: {
     const { data: expiring } = await supabase
       .from("conversations")
       .select("id, panel_id")
-      .eq("canvas_id", scope.canvasId)
+      .eq("workspace_id", scope.workspaceId)
       .eq("pinned", false)
       .lt("expires_at", new Date().toISOString());
 
@@ -242,12 +242,10 @@ export async function loadCanvasConversations(scope: {
       const panelIds = expiring.map(
         (c: { panel_id: string }) => c.panel_id
       );
-      // chat_attachments still scoped by user_id — ok during P0/P1 since
-      // each user has 1 canvas. Migrate to canvas_id with attachments.
       const { data: attachments } = await supabase
         .from("chat_attachments")
         .select("storage_path")
-        .eq("user_id", scope.userId)
+        .eq("workspace_id", scope.workspaceId)
         .in("panel_id", panelIds);
 
       if (attachments && attachments.length > 0) {
@@ -258,14 +256,14 @@ export async function loadCanvasConversations(scope: {
         await supabase
           .from("chat_attachments")
           .delete()
-          .eq("user_id", scope.userId)
+          .eq("workspace_id", scope.workspaceId)
           .in("panel_id", panelIds);
       }
 
       await supabase
         .from("conversations")
         .delete()
-        .eq("canvas_id", scope.canvasId)
+        .eq("workspace_id", scope.workspaceId)
         .eq("pinned", false)
         .lt("expires_at", new Date().toISOString());
     }
@@ -275,7 +273,7 @@ export async function loadCanvasConversations(scope: {
       .select(
         "id, panel_id, title, messages, pinned, expires_at, created_at, updated_at"
       )
-      .eq("canvas_id", scope.canvasId)
+      .eq("workspace_id", scope.workspaceId)
       .order("updated_at", { ascending: false });
 
     if (error || !data) return [];

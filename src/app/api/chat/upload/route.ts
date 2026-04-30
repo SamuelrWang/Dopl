@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { fileTypeFromBuffer } from "file-type";
 import { withUserAuth } from "@/shared/auth/with-auth";
 import { supabaseAdmin } from "@/shared/supabase/admin";
+import { resolveActiveWorkspace } from "@/features/workspaces/server/service";
+import { HttpError } from "@/shared/lib/http-error";
 import {
   MAX_CHAT_ATTACHMENT_SIZE,
   MAX_CHAT_ATTACHMENTS_PER_MESSAGE,
@@ -111,6 +113,20 @@ export const POST = withUserAuth(async (request: NextRequest, { userId }) => {
     );
   }
 
+  // Resolve the active workspace so the attachment row can be scoped
+  // to it. Header > user default — same shape as `/api/chat`.
+  let workspaceId: string;
+  try {
+    const headerWorkspaceId = request.headers.get("x-workspace-id");
+    const { workspace } = await resolveActiveWorkspace(userId, headerWorkspaceId);
+    workspaceId = workspace.id;
+  } catch (err) {
+    if (err instanceof HttpError) {
+      return NextResponse.json(err.toResponseBody(), { status: err.status });
+    }
+    throw err;
+  }
+
   const files = formData.getAll("files") as File[];
 
   if (files.length === 0) {
@@ -199,6 +215,7 @@ export const POST = withUserAuth(async (request: NextRequest, { userId }) => {
       .insert({
         id,
         user_id: userId,
+        workspace_id: workspaceId,
         panel_id: panelId,
         file_name: file.name,
         file_size: file.size,

@@ -52,16 +52,16 @@ export const CapabilitiesContext = createContext<CanvasCapabilities>(DEFAULT_CAP
 
 /**
  * Active canvas (workspace) scope. Carries the canvas id + slug so
- * client-side fetches can stamp every request with `X-Canvas-Id`. Null
+ * client-side fetches can stamp every request with `X-Workspace-Id`. Null
  * inside shared-cluster / read-only views, which don't have a canvas
  * scope of their own.
  */
-export interface CanvasScope {
-  canvasId: string;
+export interface WorkspaceScope {
+  workspaceId: string;
   canvasSlug: string;
 }
 
-export const CanvasScopeContext = createContext<CanvasScope | null>(null);
+export const CanvasScopeContext = createContext<WorkspaceScope | null>(null);
 
 // ── Hooks ────────────────────────────────────────────────────────
 
@@ -74,7 +74,7 @@ export function useCapabilities(): CanvasCapabilities {
  * is rendered outside a canvas scope (e.g. shared-cluster viewer); UI
  * code should treat that as "no scope, skip canvas-id-keyed fetches".
  */
-export function useCanvasScope(): CanvasScope | null {
+export function useCanvasScope(): WorkspaceScope | null {
   return useContext(CanvasScopeContext);
 }
 

@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/shared/supabase/admin";
-import { withCanvasAuth } from "@/shared/auth/with-canvas-auth";
+import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
 import { validateBrainStructure } from "@/shared/prompts/skill-template";
 
 export const dynamic = "force-dynamic";
@@ -15,13 +15,13 @@ export const dynamic = "force-dynamic";
 // Look up a cluster by slug, scoped to the active canvas. Returns null
 // if the cluster doesn't exist in this canvas — the caller returns 404
 // so existence isn't leaked across canvases.
-async function getClusterBySlugForCanvas(slug: string, canvasId: string) {
+async function getClusterBySlugForCanvas(slug: string, workspaceId: string) {
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("clusters")
     .select("id, slug, name")
     .eq("slug", slug)
-    .eq("canvas_id", canvasId)
+    .eq("workspace_id", workspaceId)
     .single();
 
   if (error || !data) {
@@ -36,16 +36,16 @@ async function handleGet(
   _request: NextRequest,
   {
     userId,
-    canvasId,
+    workspaceId,
     params,
-  }: { userId: string; canvasId: string; params?: Record<string, string> }
+  }: { userId: string; workspaceId: string; params?: Record<string, string> }
 ) {
   try {
     const slug = params?.slug;
     if (!slug) {
       return NextResponse.json({ error: "slug required" }, { status: 400 });
     }
-    const cluster = await getClusterBySlugForCanvas(slug, canvasId);
+    const cluster = await getClusterBySlugForCanvas(slug, workspaceId);
     if (!cluster) {
       return NextResponse.json(
         { error: `Cluster not found: ${slug}` },
@@ -129,16 +129,16 @@ async function handlePatch(
   request: NextRequest,
   {
     userId,
-    canvasId,
+    workspaceId,
     params,
-  }: { userId: string; canvasId: string; params?: Record<string, string> }
+  }: { userId: string; workspaceId: string; params?: Record<string, string> }
 ) {
   try {
     const slug = params?.slug;
     if (!slug) {
       return NextResponse.json({ error: "slug required" }, { status: 400 });
     }
-    const cluster = await getClusterBySlugForCanvas(slug, canvasId);
+    const cluster = await getClusterBySlugForCanvas(slug, workspaceId);
     if (!cluster) {
       return NextResponse.json(
         { error: `Cluster not found: ${slug}` },
@@ -190,7 +190,7 @@ async function handlePatch(
         .insert({
           cluster_id: cluster.id,
           user_id: userId,
-          canvas_id: canvasId,
+          workspace_id: workspaceId,
           instructions,
           updated_at: now,
         })
@@ -217,7 +217,7 @@ async function handlePatch(
       const { data: existingPanel } = await db
         .from("canvas_panels")
         .select("panel_data")
-        .eq("canvas_id", canvasId)
+        .eq("workspace_id", workspaceId)
         .eq("panel_id", brainPanelId)
         .eq("panel_type", "cluster-brain")
         .maybeSingle();
@@ -235,7 +235,7 @@ async function handlePatch(
               errorMessage: null,
             },
           })
-          .eq("canvas_id", canvasId)
+          .eq("workspace_id", workspaceId)
           .eq("panel_id", brainPanelId);
       }
     } catch (syncErr) {
@@ -286,5 +286,5 @@ async function handlePatch(
   }
 }
 
-export const GET = withCanvasAuth(handleGet);
-export const PATCH = withCanvasAuth(handlePatch, { minRole: "editor" });
+export const GET = withWorkspaceAuth(handleGet);
+export const PATCH = withWorkspaceAuth(handlePatch, { minRole: "editor" });

@@ -60,10 +60,10 @@ interface CanvasProviderProps {
   userId?: string;
   /**
    * Active canvas (workspace) scope. Required for "user" sync mode —
-   * threads through every fetch as `X-Canvas-Id` and into the
+   * threads through every fetch as `X-Workspace-Id` and into the
    * realtime subscription filters. Omit for shared / read-only views.
    */
-  canvasId?: string;
+  workspaceId?: string;
   canvasSlug?: string;
   /**
    * Server-rendered canvas state. Fetched by the `/canvas` server
@@ -96,7 +96,7 @@ interface CanvasProviderProps {
 export function CanvasProvider({
   children,
   userId,
-  canvasId,
+  workspaceId,
   canvasSlug,
   initialState,
   initialConversations,
@@ -105,8 +105,8 @@ export function CanvasProvider({
   onPanelsMove,
 }: CanvasProviderProps) {
   const scope = useMemo(
-    () => (canvasId && canvasSlug ? { canvasId, canvasSlug } : null),
-    [canvasId, canvasSlug]
+    () => (workspaceId && canvasSlug ? { workspaceId, canvasSlug } : null),
+    [workspaceId, canvasSlug]
   );
   const [state, dispatch] = useReducer(
     reducer,
