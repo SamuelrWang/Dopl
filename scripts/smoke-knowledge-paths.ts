@@ -15,8 +15,22 @@ import { resolve } from "path";
 
 dotenv.config({ path: resolve(__dirname, "../.env.local") });
 
-const WORKSPACE_ID = "46090e9c-e033-452b-a77b-dda54d9c9da6";
-const USER_ID = "e95bd11c-32b9-42ab-b754-ffe93787de0a";
+// Audit fix #18: identify the smoke-test workspace + user via env vars
+// instead of hardcoded UUIDs, so other engineers can run this script
+// against their own dev workspace. Set SMOKE_WORKSPACE_ID and
+// SMOKE_USER_ID in .env.local.
+function envOrFail(name: string): string {
+  const v = process.env[name];
+  if (!v) {
+    console.error(
+      `[smoke] Missing ${name}. Set it in .env.local to a UUID from your Supabase project.`
+    );
+    process.exit(1);
+  }
+  return v;
+}
+const WORKSPACE_ID = envOrFail("SMOKE_WORKSPACE_ID");
+const USER_ID = envOrFail("SMOKE_USER_ID");
 
 async function main() {
   const {
