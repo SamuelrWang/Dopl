@@ -1,7 +1,12 @@
 import { createHash, randomBytes } from "crypto";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { API_KEY_PREFIX } from "@/config";
-const supabase = supabaseAdmin();
+
+// Audit fix #27: was `const supabase = supabaseAdmin()` at module load —
+// fails fast on missing SUPABASE_SERVICE_ROLE_KEY before any call site
+// runs, and makes test isolation harder. Each function below now grabs
+// the admin client lazily, matching the convention in every other
+// repository file.
 
 /**
  * Generate a new API key. Returns the plaintext key (shown once) and its hash.
@@ -36,6 +41,7 @@ export async function validateApiKey(
 } | null> {
   if (!key.startsWith(API_KEY_PREFIX)) return null;
 
+  const supabase = supabaseAdmin();
   const hash = hashApiKey(key);
   const { data, error } = await supabase
     .from("api_keys")
@@ -70,6 +76,7 @@ export async function checkAndRecordRateLimit(
   rpm: number,
   endpoint: string
 ): Promise<boolean> {
+  const supabase = supabaseAdmin();
   const { data, error } = await supabase.rpc("check_and_record_rate_limit", {
     p_api_key_id: keyId,
     p_rpm: rpm,
@@ -89,6 +96,7 @@ export async function checkAndRecordRateLimit(
  * old usage records. Fire-and-forget — never blocks the caller.
  */
 export function touchApiKey(keyId: string): void {
+  const supabase = supabaseAdmin();
   supabase
     .from("api_keys")
     .update({ last_used_at: new Date().toISOString() })
@@ -134,6 +142,7 @@ export function touchMcpStatus(userId: string): void {
   if (now - last < MCP_STATUS_TOUCH_INTERVAL_MS) return;
   mcpStatusLastTouched.set(userId, now);
 
+  const supabase = supabaseAdmin();
   supabase
     .from("profiles")
     .update({ mcp_connected_at: new Date(now).toISOString() })
@@ -166,6 +175,7 @@ export async function createApiKey(
   if (userId) row.user_id = userId;
   if (workspaceId) row.workspace_id = workspaceId;
 
+  const supabase = supabaseAdmin();
   const { data, error } = await supabase
     .from("api_keys")
     .insert(row)
@@ -189,6 +199,7 @@ export async function revokeApiKey(
   id: string,
   opts: { userId?: string; workspaceId?: string } = {}
 ): Promise<void> {
+  const supabase = supabaseAdmin();
   let query = supabase
     .from("api_keys")
     .update({ revoked_at: new Date().toISOString() })
@@ -236,6 +247,7 @@ export async function listApiKeys(opts?: {
     revoked_at: string | null;
   }[]
 > {
+  const supabase = supabaseAdmin();
   let query = supabase
     .from("api_keys")
     .select(
