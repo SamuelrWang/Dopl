@@ -19,9 +19,15 @@ export function toKnowledgeErrorResponse(err: unknown): NextResponse {
   if (err instanceof HttpError) {
     return NextResponse.json(err.toResponseBody(), { status: err.status });
   }
-  const message = err instanceof Error ? err.message : "Unknown error";
+  // Don't leak the raw error message to the client — could expose DB
+  // internals, file paths, or PII inside dynamic SQL strings (ENGINEERING
+  // §9). The full error gets logged via the auth wrapper's 5xx
+  // system_events trail; clients see a generic 500.
+  if (err instanceof Error) {
+    console.error("[knowledge-route] unmapped error:", err);
+  }
   return NextResponse.json(
-    { error: { code: "INTERNAL_ERROR", message } },
+    { error: { code: "INTERNAL_ERROR", message: "Internal server error" } },
     { status: 500 }
   );
 }
