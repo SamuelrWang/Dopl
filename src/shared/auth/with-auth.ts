@@ -128,12 +128,19 @@ export function withExternalAuth(
  * Required for per-user resources (canvas panels, user-scoped clusters).
  *
  * - API key auth: uses user_id from the api_keys table. Returns 403 if key has no user_id.
- * - Session auth: uses user.id from Supabase session.
+ *   When the API key carries a `workspace_id` (Item 4 — workspace-scoped keys),
+ *   it's surfaced via `apiKeyWorkspaceId` for `withWorkspaceAuth` to enforce.
+ * - Session auth: uses user.id from Supabase session. `apiKeyWorkspaceId` is undefined.
  */
 export function withUserAuth(
   handler: (
     request: NextRequest,
-    context: { userId: string; apiKeyId?: string; params?: Record<string, string> }
+    context: {
+      userId: string;
+      apiKeyId?: string;
+      apiKeyWorkspaceId?: string | null;
+      params?: Record<string, string>;
+    }
   ) => Promise<Response | NextResponse>
 ) {
   return async (
@@ -196,6 +203,7 @@ export function withUserAuth(
           handler(request, {
             userId,
             apiKeyId: keyRecord.id,
+            apiKeyWorkspaceId: keyRecord.workspace_id,
             params: resolvedParams,
           }),
         { endpoint, userId }

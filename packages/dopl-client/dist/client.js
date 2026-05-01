@@ -1,7 +1,41 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DoplClient = exports.parseRetryAfter = void 0;
 const transport_js_1 = require("./transport.js");
+const kb = __importStar(require("./knowledge.js"));
 var retry_js_1 = require("./retry.js");
 Object.defineProperty(exports, "parseRetryAfter", { enumerable: true, get: function () { return retry_js_1.parseRetryAfter; } });
 const PENDING_CACHE_TTL_MS = 5_000;
@@ -266,6 +300,61 @@ class DoplClient {
     }
     async kbGet(pack, path) {
         return this.transport.request(`/api/knowledge/packs/${encodeURIComponent(pack)}/file?path=${encodeURIComponent(path)}`, { toolName: "kb_get" });
+    }
+    // ─── User knowledge bases (Item 4) ────────────────────────────────
+    // Distinct from Dopl knowledge packs above: these are user-authored,
+    // editable knowledge bases. Path-based methods accept a base id and
+    // a "/"-separated path; the server resolves to folder/entry rows.
+    listKbBases() {
+        return kb.listKbBases(this.transport);
+    }
+    getKbBase(baseId) {
+        return kb.getKbBase(this.transport, baseId);
+    }
+    getKbTree(baseId) {
+        return kb.getKbTree(this.transport, baseId);
+    }
+    createKbBase(input) {
+        return kb.createKbBase(this.transport, input);
+    }
+    updateKbBase(baseId, patch) {
+        return kb.updateKbBase(this.transport, baseId, patch);
+    }
+    deleteKbBase(baseId) {
+        return kb.deleteKbBase(this.transport, baseId);
+    }
+    restoreKbBase(baseId) {
+        return kb.restoreKbBase(this.transport, baseId);
+    }
+    readKbFileByPath(baseId, path) {
+        return kb.readKbFileByPath(this.transport, baseId, path);
+    }
+    writeKbFileByPath(baseId, path, input = {}) {
+        return kb.writeKbFileByPath(this.transport, baseId, path, input);
+    }
+    listKbDirByPath(baseId, path = "") {
+        return kb.listKbDirByPath(this.transport, baseId, path);
+    }
+    createKbFolderByPath(baseId, path) {
+        return kb.createKbFolderByPath(this.transport, baseId, path);
+    }
+    deleteKbByPath(baseId, path) {
+        return kb.deleteKbByPath(this.transport, baseId, path);
+    }
+    moveKbByPath(baseId, fromPath, toPath) {
+        return kb.moveKbByPath(this.transport, baseId, fromPath, toPath);
+    }
+    listKbTrash(baseId) {
+        return kb.listKbTrash(this.transport, baseId);
+    }
+    restoreKbFolder(folderId) {
+        return kb.restoreKbFolder(this.transport, folderId);
+    }
+    restoreKbEntry(entryId) {
+        return kb.restoreKbEntry(this.transport, entryId);
+    }
+    searchKb(query, opts = {}) {
+        return kb.searchKb(this.transport, query, opts);
     }
 }
 exports.DoplClient = DoplClient;

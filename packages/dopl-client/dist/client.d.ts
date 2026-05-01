@@ -1,6 +1,7 @@
 import type { PendingStatus } from "./types.js";
 import type { BuildResult, CanvasPanel, WorkspaceSummary, ClusterDetail, ClusterQueryResult, ClusterRow, DoplEntry, ListResult, Pack, PackFile, PackFileMeta, PrepareIngestResult, ResolvedWorkspace, SearchResult, SubmitIngestedEntryInput, SubmitIngestedEntryResult } from "./types.js";
 import { DoplTransport } from "./transport.js";
+import type { KnowledgeBase, KnowledgeBaseCreateInput, KnowledgeBaseUpdateInput, KnowledgeDirListing, KnowledgeEntry, KnowledgeFolder, KnowledgePathOpResult, KnowledgeSearchHit, KnowledgeTrashSnapshot, KnowledgeTreeSnapshot, KnowledgeWriteFileInput } from "./knowledge-types.js";
 export type { DoplTransportOptions as DoplClientOptions } from "./transport.js";
 export { parseRetryAfter } from "./retry.js";
 export declare class DoplClient {
@@ -167,4 +168,24 @@ export declare class DoplClient {
     kbGet(pack: string, path: string): Promise<{
         file: PackFile;
     }>;
+    listKbBases(): Promise<KnowledgeBase[]>;
+    getKbBase(baseId: string): Promise<KnowledgeBase>;
+    getKbTree(baseId: string): Promise<KnowledgeTreeSnapshot>;
+    createKbBase(input: KnowledgeBaseCreateInput): Promise<KnowledgeBase>;
+    updateKbBase(baseId: string, patch: KnowledgeBaseUpdateInput): Promise<KnowledgeBase>;
+    deleteKbBase(baseId: string): Promise<void>;
+    restoreKbBase(baseId: string): Promise<KnowledgeBase>;
+    readKbFileByPath(baseId: string, path: string): Promise<KnowledgeEntry>;
+    writeKbFileByPath(baseId: string, path: string, input?: KnowledgeWriteFileInput): Promise<KnowledgeEntry>;
+    listKbDirByPath(baseId: string, path?: string): Promise<KnowledgeDirListing>;
+    createKbFolderByPath(baseId: string, path: string): Promise<KnowledgeFolder>;
+    deleteKbByPath(baseId: string, path: string): Promise<KnowledgePathOpResult>;
+    moveKbByPath(baseId: string, fromPath: string, toPath: string): Promise<KnowledgePathOpResult>;
+    listKbTrash(baseId?: string): Promise<KnowledgeTrashSnapshot>;
+    restoreKbFolder(folderId: string): Promise<KnowledgeFolder>;
+    restoreKbEntry(entryId: string): Promise<KnowledgeEntry>;
+    searchKb(query: string, opts?: {
+        baseSlug?: string;
+        limit?: number;
+    }): Promise<KnowledgeSearchHit[]>;
 }

@@ -5,6 +5,7 @@ const mcp_js_1 = require("@modelcontextprotocol/sdk/server/mcp.js");
 const zod_1 = require("zod");
 const skill_writer_js_1 = require("./skill-writer.js");
 const templates_js_1 = require("./templates.js");
+const knowledge_js_1 = require("./tools/knowledge.js");
 const CONTEXT_CHAR_BUDGET = 2000;
 const SERVER_INSTRUCTIONS = `You are connected to **Dopl** — a knowledge base of proven AI and automation implementations including agent workflows, n8n automations, Claude skills, API integrations, and more.
 
@@ -1551,6 +1552,9 @@ function createServer(client, options = {}) {
         lines.push(file.body);
         return { content: [{ type: "text", text: lines.join("\n") }] };
     });
+    // ── User knowledge bases (Item 4) ──────────────────────────────────
+    // 17 kb_* tools wrapping the user's own folder/file tree.
+    (0, knowledge_js_1.registerKnowledgeTools)(registerTool, client);
     return server;
 }
 /**

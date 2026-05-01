@@ -18,6 +18,8 @@ Stack: Next.js 16 (App Router) · React 19 · TypeScript (strict) · Supabase ·
 
 See [docs/REFACTOR-FINDINGS.md](REFACTOR-FINDINGS.md) for the current list of open findings (`F-NNN` ids). At a glance: pre-existing lint errors (F-006), chrome-extension PascalCase filenames (F-007), a few files still over the 500-line cap (§2), the canvas store still syncs server data it should push out to a query library (§7). None block shipping; all are tracked.
 
+Client-side data fetching uses `useEffect + fetch + useState` (e.g. `useWorkspaces` in `src/shared/layout/sidebar.tsx`, `useKnowledgeBases` in `src/features/knowledge/client/hooks.ts`). Worth evaluating React Query / SWR in a future polish pass for cache, optimistic updates, and revalidation on focus.
+
 ---
 
 ## 1. Project Structure

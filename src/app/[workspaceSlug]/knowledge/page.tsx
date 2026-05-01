@@ -1,14 +1,19 @@
 /**
  * /[workspaceSlug]/knowledge — knowledge base list.
  *
- * Hardcoded UI for now. The sidebar dropdown navigates straight to a
- * specific KB; this page is the index when you click the parent
- * "Knowledge" label or the "New knowledge base" link.
+ * Server component. Resolves the workspace from the slug, then calls
+ * the service to fetch real DB-backed knowledge bases. Passes them as
+ * props to the (client) list component for rendering. Lazy seeding
+ * happens inside the service for brand-new workspaces.
  */
 
 import { notFound, redirect } from "next/navigation";
 import { getUser } from "@/shared/supabase/server";
 import { findWorkspaceForMember } from "@/features/workspaces/server/service";
+import {
+  buildKnowledgeContext,
+  listBases,
+} from "@/features/knowledge/server/service";
 import { KnowledgeBasesList } from "@/features/knowledge/components/knowledge-bases-list";
 
 export const dynamic = "force-dynamic";
@@ -24,5 +29,18 @@ export default async function KnowledgePage({ params }: PageProps) {
   const workspace = await findWorkspaceForMember(user.id, workspaceSlug);
   if (!workspace) notFound();
 
-  return <KnowledgeBasesList workspaceSlug={workspace.slug} />;
+  const ctx = buildKnowledgeContext({
+    userId: user.id,
+    workspaceId: workspace.id,
+    apiKeyId: null,
+  });
+  const bases = await listBases(ctx);
+
+  return (
+    <KnowledgeBasesList
+      workspaceSlug={workspace.slug}
+      workspaceId={workspace.id}
+      bases={bases}
+    />
+  );
 }

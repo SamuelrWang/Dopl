@@ -12,7 +12,7 @@
  *   {section:Heading}          → renders an inline section header
  */
 
-import type { SourceProvider, SourceConnection } from "@/features/knowledge/data";
+import type { SourceProvider, SourceConnection } from "@/features/knowledge/source-types";
 
 export type SkillStatus = "active" | "draft";
 

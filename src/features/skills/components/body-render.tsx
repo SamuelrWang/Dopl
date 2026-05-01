@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { BookOpen } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
-import { findKnowledgeBase } from "@/features/knowledge/data";
+import { findKnowledgeBase } from "@/features/skills/lib/legacy-kb-lookup";
 import { SourceIcon } from "@/features/knowledge/components/source-icon";
-import type { SourceProvider } from "@/features/knowledge/data";
+import type { SourceProvider } from "@/features/knowledge/source-types";
 
 interface Props {
   body: string;

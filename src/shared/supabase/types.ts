@@ -54,6 +54,7 @@ export type Database = {
           rate_limit_rpm: number | null
           revoked_at: string | null
           user_id: string | null
+          workspace_id: string | null
         }
         Insert: {
           created_at?: string | null
@@ -65,6 +66,7 @@ export type Database = {
           rate_limit_rpm?: number | null
           revoked_at?: string | null
           user_id?: string | null
+          workspace_id?: string | null
         }
         Update: {
           created_at?: string | null
@@ -76,8 +78,17 @@ export type Database = {
           rate_limit_rpm?: number | null
           revoked_at?: string | null
           user_id?: string | null
+          workspace_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "api_keys_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       canvas_panels: {
         Row: {
@@ -780,6 +791,190 @@ export type Database = {
             columns: ["entry_id"]
             isOneToOne: false
             referencedRelation: "entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      knowledge_bases: {
+        Row: {
+          agent_write_enabled: boolean
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          description: string | null
+          id: string
+          name: string
+          slug: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          agent_write_enabled?: boolean
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          slug: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          agent_write_enabled?: boolean
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          slug?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_bases_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      knowledge_entries: {
+        Row: {
+          body: string
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          entry_type: string
+          excerpt: string | null
+          folder_id: string | null
+          id: string
+          knowledge_base_id: string
+          last_edited_by: string | null
+          last_edited_source: string
+          position: number
+          title: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          body?: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          entry_type?: string
+          excerpt?: string | null
+          folder_id?: string | null
+          id?: string
+          knowledge_base_id: string
+          last_edited_by?: string | null
+          last_edited_source?: string
+          position?: number
+          title: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          entry_type?: string
+          excerpt?: string | null
+          folder_id?: string | null
+          id?: string
+          knowledge_base_id?: string
+          last_edited_by?: string | null
+          last_edited_source?: string
+          position?: number
+          title?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_entries_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_folders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_entries_knowledge_base_id_fkey"
+            columns: ["knowledge_base_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_bases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_entries_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      knowledge_folders: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          id: string
+          knowledge_base_id: string
+          name: string
+          parent_id: string | null
+          position: number
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          id?: string
+          knowledge_base_id: string
+          name: string
+          parent_id?: string | null
+          position?: number
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          id?: string
+          knowledge_base_id?: string
+          name?: string
+          parent_id?: string | null
+          position?: number
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_folders_knowledge_base_id_fkey"
+            columns: ["knowledge_base_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_bases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_folders_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_folders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_folders_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
             referencedColumns: ["id"]
           },
         ]
@@ -1811,3 +2006,4 @@ export const Constants = {
     },
   },
 } as const
+

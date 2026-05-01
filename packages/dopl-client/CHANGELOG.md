@@ -4,6 +4,29 @@ All notable changes to `@dopl/client` are documented here. Format follows [Keep 
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-05-01
+
+### Added
+- User knowledge bases — 17 surface methods on `DoplClient` covering
+  bases (`listKbBases`, `getKbBase`, `getKbTree`, `createKbBase`,
+  `updateKbBase`, `deleteKbBase`, `restoreKbBase`), path-based file/folder
+  ops (`readKbFileByPath`, `writeKbFileByPath`, `listKbDirByPath`,
+  `createKbFolderByPath`, `deleteKbByPath`, `moveKbByPath`), trash
+  (`listKbTrash`, `restoreKbFolder`, `restoreKbEntry`), and full-text
+  search (`searchKb`).
+- New types in `knowledge-types.ts`: `KnowledgeBase`, `KnowledgeFolder`,
+  `KnowledgeEntry`, `KnowledgeEntryType`, `KnowledgeWriteSource`,
+  `KnowledgeTreeSnapshot`, `KnowledgeDirListing`, `KnowledgeTrashSnapshot`,
+  `KnowledgeBaseCreateInput`, `KnowledgeBaseUpdateInput`,
+  `KnowledgeWriteFileInput`, `KnowledgePathOpResult`, `KnowledgeSearchHit`.
+
+### Changed (breaking)
+- `createKbFolderByPath` now returns `Promise<KnowledgeFolder>` directly
+  instead of the wrapping `Promise<{ folder: KnowledgeFolder }>` envelope.
+  Aligns with every other unwrapping method (`getKbBase`, `restoreKbFolder`,
+  etc.). Callers were either destructuring `{folder}` immediately or were
+  broken; update to use the result directly.
+
 ## [0.2.0] — 2026-04-30
 
 ### Added
@@ -45,6 +68,7 @@ Initial extraction from `@dopl/mcp-server`. Shared HTTP client consumed by `@dop
 - `debug` namespace `dopl:client` — logs method, path, status, duration, and retry count. No secrets or response bodies.
 - `engines.node >=18.17` (Node 18+ ships stable `fetch`).
 
-[Unreleased]: https://github.com/SamuelrSun/usedopl/compare/client-v0.2.0...HEAD
+[Unreleased]: https://github.com/SamuelrSun/usedopl/compare/client-v0.3.0...HEAD
+[0.3.0]: https://github.com/SamuelrSun/usedopl/releases/tag/client-v0.3.0
 [0.2.0]: https://github.com/SamuelrSun/usedopl/releases/tag/client-v0.2.0
 [0.1.0]: https://github.com/SamuelrSun/usedopl/releases/tag/client-v0.1.0

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { BookOpen, Plus, Sparkles } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { PageTopBar } from "@/shared/layout/page-top-bar";
-import { findKnowledgeBase } from "@/features/knowledge/data";
+import { findKnowledgeBase } from "@/features/skills/lib/legacy-kb-lookup";
 import { SourceIcon } from "@/features/knowledge/components/source-icon";
 import { HARDCODED_SKILLS } from "../data";
 import type { Skill, SkillStatus } from "../data";

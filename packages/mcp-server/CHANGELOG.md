@@ -4,6 +4,25 @@ All notable changes to `@dopl/mcp-server` are documented here. Format follows [K
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-05-01
+
+### Added
+- 17 user-knowledge-base tools wrapping the new `kb_*` surface in the
+  Dopl API. The agent talks to a base like a filesystem: `kb_list_bases`,
+  `kb_get_tree`, `kb_create_base`, `kb_update_base`, `kb_delete_base`,
+  `kb_restore_base`, `kb_list_dir`, `kb_create_folder`, `kb_delete_folder`,
+  `kb_move_folder`, `kb_read_file`, `kb_write_file`, `kb_delete_file`,
+  `kb_move_file`, `kb_list_trash`, `kb_restore_folder`, `kb_restore_file`,
+  `kb_search`. Bases addressed by slug or UUID; folders/entries by
+  `/`-separated path. Distinct from the existing read-only
+  `kb_list_packs` / `kb_list` / `kb_get` tools (Dopl-curated specialist
+  packs).
+
+### Changed
+- Bumped `@dopl/client` peer to `^0.3.0` for the new knowledge surface
+  and the `createKbFolderByPath` shape fix (now returns
+  `KnowledgeFolder` directly).
+
 ## [0.7.1] — 2026-04-30
 
 ### Fixed
@@ -60,7 +79,8 @@ All notable changes to `@dopl/mcp-server` are documented here. Format follows [K
 - Inherits structured error parsing from `@dopl/client` — server `{ error: { code, message } }` shapes surface in error messages.
 - `engines.node >=18.17`.
 
-[Unreleased]: https://github.com/SamuelrSun/usedopl/compare/mcp-server-v0.7.1...HEAD
+[Unreleased]: https://github.com/SamuelrSun/usedopl/compare/mcp-server-v0.8.0...HEAD
+[0.8.0]: https://github.com/SamuelrSun/usedopl/releases/tag/mcp-server-v0.8.0
 [0.7.1]: https://github.com/SamuelrSun/usedopl/releases/tag/mcp-server-v0.7.1
 [0.7.0]: https://github.com/SamuelrSun/usedopl/releases/tag/mcp-server-v0.7.0
 [0.6.2]: https://github.com/SamuelrSun/usedopl/releases/tag/mcp-server-v0.6.2

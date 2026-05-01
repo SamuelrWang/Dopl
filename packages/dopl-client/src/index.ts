@@ -34,3 +34,18 @@ export type {
   SubmitIngestedEntryInput,
   SubmitIngestedEntryResult,
 } from "./types.js";
+export type {
+  KnowledgeBase,
+  KnowledgeBaseCreateInput,
+  KnowledgeBaseUpdateInput,
+  KnowledgeDirListing,
+  KnowledgeEntry,
+  KnowledgeEntryType,
+  KnowledgeFolder,
+  KnowledgePathOpResult,
+  KnowledgeSearchHit,
+  KnowledgeTrashSnapshot,
+  KnowledgeTreeSnapshot,
+  KnowledgeWriteFileInput,
+  KnowledgeWriteSource,
+} from "./knowledge-types.js";

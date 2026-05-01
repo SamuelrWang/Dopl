@@ -8,7 +8,7 @@ import {
   NotebookPen,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import type { SourceProvider } from "../data";
+import type { SourceProvider } from "../source-types";
 
 interface ProviderConfig {
   icon: LucideIcon;
@@ -33,6 +33,10 @@ interface Props {
  * lucide icon that connotes the integration type. We deliberately
  * avoid trademarked brand-icon SVGs for now — the colored background
  * + suggestive icon reads as the brand at the size we render at.
+ *
+ * Renders as `<span>` with `inline-flex` so it's valid inside a `<p>`
+ * (which a `<div>` is not). The fixed w/h means it still occupies its
+ * box regardless of inline vs block flow.
  */
 export function SourceIcon({ provider, size = "md" }: Props) {
   const config = CONFIG[provider];
@@ -40,11 +44,11 @@ export function SourceIcon({ provider, size = "md" }: Props) {
   const dimension = size === "sm" ? "w-6 h-6" : "w-8 h-8";
   const iconSize = size === "sm" ? 12 : 14;
   return (
-    <div
-      className={`${dimension} rounded-md flex items-center justify-center shrink-0`}
+    <span
+      className={`${dimension} rounded-md inline-flex items-center justify-center shrink-0 align-middle`}
       style={{ backgroundColor: config.bg }}
     >
       <Icon size={iconSize} className="text-white" />
-    </div>
+    </span>
   );
 }

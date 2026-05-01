@@ -20,6 +20,10 @@ export function hashApiKey(key: string): string {
 
 /**
  * Validate an API key. Returns the key record if valid, null if invalid/revoked.
+ *
+ * `workspace_id` (added in Item 4) is non-null when the key is locked to a
+ * specific workspace. Auth wrappers use it to override the
+ * `X-Workspace-Id` header — see `with-workspace-auth.ts`.
  */
 export async function validateApiKey(
   key: string
@@ -28,13 +32,14 @@ export async function validateApiKey(
   name: string;
   rate_limit_rpm: number;
   user_id: string | null;
+  workspace_id: string | null;
 } | null> {
   if (!key.startsWith(API_KEY_PREFIX)) return null;
 
   const hash = hashApiKey(key);
   const { data, error } = await supabase
     .from("api_keys")
-    .select("id, name, rate_limit_rpm, revoked_at, user_id")
+    .select("id, name, rate_limit_rpm, revoked_at, user_id, workspace_id")
     .eq("key_hash", hash)
     .single();
 
@@ -46,6 +51,7 @@ export async function validateApiKey(
     name: data.name,
     rate_limit_rpm: data.rate_limit_rpm,
     user_id: data.user_id,
+    workspace_id: data.workspace_id,
   };
 }
 
@@ -139,10 +145,16 @@ export function touchMcpStatus(userId: string): void {
 
 /**
  * Create a new API key. Returns the plaintext key (shown ONCE).
+ *
+ * Pass `workspaceId` to lock the key to a single workspace — used by
+ * MCP clients that should only ever operate on one workspace. When
+ * unset (the default), the key behaves like a user-scoped key and
+ * resolves to the user's default workspace per the existing flow.
  */
 export async function createApiKey(
   name: string,
-  userId?: string
+  userId?: string,
+  workspaceId?: string
 ): Promise<{ key: string; id: string; name: string; prefix: string }> {
   const { key, hash, prefix } = generateApiKey();
 
@@ -152,6 +164,7 @@ export async function createApiKey(
     name,
   };
   if (userId) row.user_id = userId;
+  if (workspaceId) row.workspace_id = workspaceId;
 
   const { data, error } = await supabase
     .from("api_keys")
@@ -167,16 +180,25 @@ export async function createApiKey(
 }
 
 /**
- * Revoke an API key. If userId is provided, ensures the key belongs to that user.
+ * Revoke an API key. If `userId` is provided, ensures the key belongs
+ * to that user. If `workspaceId` is provided, ensures the key is
+ * locked to that workspace — used by the workspace-scoped revoke
+ * endpoint to prevent cross-workspace tampering.
  */
-export async function revokeApiKey(id: string, userId?: string): Promise<void> {
+export async function revokeApiKey(
+  id: string,
+  opts: { userId?: string; workspaceId?: string } = {}
+): Promise<void> {
   let query = supabase
     .from("api_keys")
     .update({ revoked_at: new Date().toISOString() })
     .eq("id", id);
 
-  if (userId) {
-    query = query.eq("user_id", userId);
+  if (opts.userId) {
+    query = query.eq("user_id", opts.userId);
+  }
+  if (opts.workspaceId) {
+    query = query.eq("workspace_id", opts.workspaceId);
   }
 
   const { error, count } = await query.select("id").then((res) => ({
@@ -188,20 +210,27 @@ export async function revokeApiKey(id: string, userId?: string): Promise<void> {
     throw new Error(`Failed to revoke API key: ${error.message}`);
   }
 
-  if (userId && count === 0) {
+  if ((opts.userId || opts.workspaceId) && count === 0) {
     throw new Error("API key not found or not owned by you");
   }
 }
 
 /**
- * List API keys (never returns hashes). Optionally filter by user.
+ * List API keys (never returns hashes). Optionally filter by user
+ * and/or workspace. When `workspaceId` is provided, only keys locked
+ * to that workspace are returned (`workspace_id IS NOT NULL` AND
+ * matching).
  */
-export async function listApiKeys(opts?: { userId?: string }): Promise<
+export async function listApiKeys(opts?: {
+  userId?: string;
+  workspaceId?: string;
+}): Promise<
   {
     id: string;
     key_prefix: string;
     name: string;
     rate_limit_rpm: number;
+    workspace_id: string | null;
     created_at: string;
     last_used_at: string | null;
     revoked_at: string | null;
@@ -210,12 +239,15 @@ export async function listApiKeys(opts?: { userId?: string }): Promise<
   let query = supabase
     .from("api_keys")
     .select(
-      "id, key_prefix, name, rate_limit_rpm, created_at, last_used_at, revoked_at"
+      "id, key_prefix, name, rate_limit_rpm, workspace_id, created_at, last_used_at, revoked_at"
     )
     .order("created_at", { ascending: false });
 
   if (opts?.userId) {
     query = query.eq("user_id", opts.userId);
+  }
+  if (opts?.workspaceId) {
+    query = query.eq("workspace_id", opts.workspaceId);
   }
 
   const { data, error } = await query;

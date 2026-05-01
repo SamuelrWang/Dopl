@@ -1,15 +1,20 @@
 /**
  * /[workspaceSlug]/overview — workspace overview / home page.
  *
- * Stub for now. Will host workspace-level summary (recent canvases,
- * skill activity, KB updates, member presence) when the dashboard
- * slice ships.
+ * Item 5.B: workspace summary + API keys (for MCP/CLI) + connectors.
+ * KB activity + member presence land here in a later pass.
  */
 
 import { notFound, redirect } from "next/navigation";
 import { getUser } from "@/shared/supabase/server";
-import { findWorkspaceForMember } from "@/features/workspaces/server/service";
+import {
+  findWorkspaceForMember,
+  resolveMembershipOrThrow,
+} from "@/features/workspaces/server/service";
+import { meetsMinRole } from "@/features/workspaces/types";
 import { PageTopBar } from "@/shared/layout/page-top-bar";
+import { WorkspaceKeysSection } from "@/features/api-keys/components/workspace-keys-section";
+import { ConnectorsSection } from "@/features/api-keys/components/connectors-section";
 
 export const dynamic = "force-dynamic";
 
@@ -23,23 +28,34 @@ export default async function OverviewPage({ params }: PageProps) {
   if (!user) redirect("/login");
   const workspace = await findWorkspaceForMember(user.id, workspaceSlug);
   if (!workspace) notFound();
+  const { membership } = await resolveMembershipOrThrow(workspace.id, user.id);
+  const canCreateKeys = meetsMinRole(membership.role, "admin");
 
   return (
     <>
       <PageTopBar title="Overview" />
-      <div className="container mx-auto max-w-6xl px-6 pt-[68px] pb-8 pointer-events-auto">
+      <div className="container mx-auto max-w-4xl px-6 pt-[68px] pb-12 pointer-events-auto space-y-5">
         <div
-          className="rounded-xl border border-white/[0.06] p-8"
+          className="rounded-xl border border-white/[0.06] p-5"
           style={{ backgroundColor: "oklch(0.13 0 0)" }}
         >
-          <p className="text-sm text-text-secondary">
-            Workspace overview for{" "}
-            <span className="text-text-primary font-medium">
-              {workspace.name}
-            </span>{" "}
-            — recent canvases, skill activity, and KB updates land here.
+          <p className="text-xs uppercase tracking-wider text-text-secondary/60 mb-1">
+            Workspace
+          </p>
+          <h1 className="text-xl font-semibold text-text-primary">
+            {workspace.name}
+          </h1>
+          <p className="mt-1 text-xs text-text-secondary font-mono">
+            /{workspace.slug}
           </p>
         </div>
+
+        <WorkspaceKeysSection
+          workspaceSlug={workspace.slug}
+          canCreate={canCreateKeys}
+        />
+
+        <ConnectorsSection />
       </div>
     </>
   );

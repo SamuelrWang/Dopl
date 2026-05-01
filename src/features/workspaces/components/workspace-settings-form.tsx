@@ -59,9 +59,10 @@ export function WorkspaceSettingsForm({ workspace, role }: Props) {
       const { workspace: updated } = (await res.json()) as { workspace: Workspace };
       setSuccess("Saved.");
       // Slug may have changed if the name changed; redirect to the new
-      // settings URL so subsequent saves hit the right route.
+      // settings URL so subsequent saves hit the right route. Settings
+      // live at /[workspaceSlug]/settings — no `/workspaces/` prefix.
       if (updated.slug !== workspace.slug) {
-        router.push(`/workspaces/${updated.slug}/settings`);
+        router.push(`/${updated.slug}/settings`);
       } else {
         router.refresh();
       }

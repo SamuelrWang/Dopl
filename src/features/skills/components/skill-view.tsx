@@ -16,7 +16,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { PageTopBar } from "@/shared/layout/page-top-bar";
-import { findKnowledgeBase } from "@/features/knowledge/data";
+import { findKnowledgeBase } from "@/features/skills/lib/legacy-kb-lookup";
 import { SourceIcon } from "@/features/knowledge/components/source-icon";
 import type { Skill } from "../data";
 import { SkillBodyRender } from "./body-render";

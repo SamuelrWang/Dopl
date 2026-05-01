@@ -18,6 +18,20 @@ import type {
   SubmitIngestedEntryResult,
 } from "./types.js";
 import { DoplTransport } from "./transport.js";
+import * as kb from "./knowledge.js";
+import type {
+  KnowledgeBase,
+  KnowledgeBaseCreateInput,
+  KnowledgeBaseUpdateInput,
+  KnowledgeDirListing,
+  KnowledgeEntry,
+  KnowledgeFolder,
+  KnowledgePathOpResult,
+  KnowledgeSearchHit,
+  KnowledgeTrashSnapshot,
+  KnowledgeTreeSnapshot,
+  KnowledgeWriteFileInput,
+} from "./knowledge-types.js";
 
 export type { DoplTransportOptions as DoplClientOptions } from "./transport.js";
 export { parseRetryAfter } from "./retry.js";
@@ -521,5 +535,98 @@ export class DoplClient {
       `/api/knowledge/packs/${encodeURIComponent(pack)}/file?path=${encodeURIComponent(path)}`,
       { toolName: "kb_get" }
     );
+  }
+
+  // ─── User knowledge bases (Item 4) ────────────────────────────────
+  // Distinct from Dopl knowledge packs above: these are user-authored,
+  // editable knowledge bases. Path-based methods accept a base id and
+  // a "/"-separated path; the server resolves to folder/entry rows.
+
+  listKbBases(): Promise<KnowledgeBase[]> {
+    return kb.listKbBases(this.transport);
+  }
+
+  getKbBase(baseId: string): Promise<KnowledgeBase> {
+    return kb.getKbBase(this.transport, baseId);
+  }
+
+  getKbTree(baseId: string): Promise<KnowledgeTreeSnapshot> {
+    return kb.getKbTree(this.transport, baseId);
+  }
+
+  createKbBase(input: KnowledgeBaseCreateInput): Promise<KnowledgeBase> {
+    return kb.createKbBase(this.transport, input);
+  }
+
+  updateKbBase(
+    baseId: string,
+    patch: KnowledgeBaseUpdateInput
+  ): Promise<KnowledgeBase> {
+    return kb.updateKbBase(this.transport, baseId, patch);
+  }
+
+  deleteKbBase(baseId: string): Promise<void> {
+    return kb.deleteKbBase(this.transport, baseId);
+  }
+
+  restoreKbBase(baseId: string): Promise<KnowledgeBase> {
+    return kb.restoreKbBase(this.transport, baseId);
+  }
+
+  readKbFileByPath(baseId: string, path: string): Promise<KnowledgeEntry> {
+    return kb.readKbFileByPath(this.transport, baseId, path);
+  }
+
+  writeKbFileByPath(
+    baseId: string,
+    path: string,
+    input: KnowledgeWriteFileInput = {}
+  ): Promise<KnowledgeEntry> {
+    return kb.writeKbFileByPath(this.transport, baseId, path, input);
+  }
+
+  listKbDirByPath(
+    baseId: string,
+    path: string = ""
+  ): Promise<KnowledgeDirListing> {
+    return kb.listKbDirByPath(this.transport, baseId, path);
+  }
+
+  createKbFolderByPath(baseId: string, path: string): Promise<KnowledgeFolder> {
+    return kb.createKbFolderByPath(this.transport, baseId, path);
+  }
+
+  deleteKbByPath(
+    baseId: string,
+    path: string
+  ): Promise<KnowledgePathOpResult> {
+    return kb.deleteKbByPath(this.transport, baseId, path);
+  }
+
+  moveKbByPath(
+    baseId: string,
+    fromPath: string,
+    toPath: string
+  ): Promise<KnowledgePathOpResult> {
+    return kb.moveKbByPath(this.transport, baseId, fromPath, toPath);
+  }
+
+  listKbTrash(baseId?: string): Promise<KnowledgeTrashSnapshot> {
+    return kb.listKbTrash(this.transport, baseId);
+  }
+
+  restoreKbFolder(folderId: string): Promise<KnowledgeFolder> {
+    return kb.restoreKbFolder(this.transport, folderId);
+  }
+
+  restoreKbEntry(entryId: string): Promise<KnowledgeEntry> {
+    return kb.restoreKbEntry(this.transport, entryId);
+  }
+
+  searchKb(
+    query: string,
+    opts: { baseSlug?: string; limit?: number } = {}
+  ): Promise<KnowledgeSearchHit[]> {
+    return kb.searchKb(this.transport, query, opts);
   }
 }

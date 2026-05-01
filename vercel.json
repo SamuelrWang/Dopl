@@ -7,6 +7,10 @@
     {
       "path": "/api/ingest/cleanup-pending",
       "schedule": "17 4 * * *"
+    },
+    {
+      "path": "/api/cron/knowledge-trash-purge",
+      "schedule": "0 5 * * *"
     }
   ]
 }

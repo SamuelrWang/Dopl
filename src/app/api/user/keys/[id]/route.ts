@@ -14,7 +14,7 @@ export async function DELETE(
   const { id } = await params;
 
   try {
-    await revokeApiKey(id, user.id);
+    await revokeApiKey(id, { userId: user.id });
     return NextResponse.json({ success: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to revoke key";

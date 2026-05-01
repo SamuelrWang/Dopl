@@ -20,10 +20,17 @@ const REACTIVATION_DELAY_MS = 48 * 60 * 60 * 1000;
 
 export async function GET(request: NextRequest) {
   // Simple shared-secret auth. Set CRON_SECRET in env; Vercel Cron will
-  // send it as Authorization: Bearer <secret>.
+  // send it as Authorization: Bearer <secret>. Fail closed when unset
+  // so an unconfigured env can't silently expose a destructive cron.
   const auth = request.headers.get("authorization");
-  const expected = process.env.CRON_SECRET;
-  if (expected && auth !== `Bearer ${expected}`) {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) {
+    return NextResponse.json(
+      { error: "CRON_SECRET not configured" },
+      { status: 503 }
+    );
+  }
+  if (auth !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 

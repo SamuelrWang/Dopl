@@ -18,6 +18,11 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
   // the bars. Wider max-width than the default `container` class.
   // Matches /browse, /browse/entries, /browse/clusters.
   const isBrowse = pathname === "/browse" || pathname.startsWith("/browse/");
+  // Full-bleed routes opt out of the centered container so panels can
+  // sit flush against the workspace sidebar + page top bar (no padding
+  // gap that lets the mosaic grid bleed through).
+  const isFullBleed =
+    /^\/[^/]+\/knowledge\/[^/]+\/?$/.test(pathname);
   const isNoChrome = isLanding || isCommunityDetail || isDocs;
   const isNoSidebar = NO_SIDEBAR_PATHS.has(pathname);
 
@@ -75,7 +80,9 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
             // max-width so wide monitors don't get empty side gutters.
             isBrowse
               ? "w-full pl-3 pr-3 pt-3 pb-3 pointer-events-auto"
-              : "container mx-auto px-4 py-8 pointer-events-auto"
+              : isFullBleed
+                ? "pointer-events-auto"
+                : "container mx-auto px-4 py-8 pointer-events-auto"
           }
         >
           {children}

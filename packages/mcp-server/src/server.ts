@@ -18,6 +18,7 @@ import {
   type SkillTarget,
 } from "./skill-writer.js";
 import { brainProtocolPreamble } from "./templates.js";
+import { registerKnowledgeTools } from "./tools/knowledge.js";
 
 const CONTEXT_CHAR_BUDGET = 2000;
 
@@ -1942,6 +1943,10 @@ export function createServer(
       return { content: [{ type: "text" as const, text: lines.join("\n") }] };
     }
   );
+
+  // ── User knowledge bases (Item 4) ──────────────────────────────────
+  // 17 kb_* tools wrapping the user's own folder/file tree.
+  registerKnowledgeTools(registerTool, client);
 
   return server;
 }

@@ -20,8 +20,8 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { RESERVED_WORKSPACE_SLUGS } from "@/config";
-import { HARDCODED_KBS } from "@/features/knowledge/data";
 import { HARDCODED_SKILLS } from "@/features/skills/data";
+import { useKnowledgeBases } from "@/features/knowledge/client/hooks";
 import { UserMenu } from "./user-menu";
 
 interface WorkspaceLike {
@@ -121,6 +121,7 @@ export function Sidebar() {
         <SidebarNav
           pathname={pathname}
           workspaceSlug={currentWorkspace?.slug ?? slug}
+          workspaceId={currentWorkspace?.id ?? null}
         />
       </div>
       <div className="px-3 py-3 border-t border-white/[0.06]">
@@ -282,9 +283,10 @@ function SidebarSearchRow() {
 interface NavProps {
   pathname: string;
   workspaceSlug: string | null;
+  workspaceId: string | null;
 }
 
-function SidebarNav({ pathname, workspaceSlug }: NavProps) {
+function SidebarNav({ pathname, workspaceSlug, workspaceId }: NavProps) {
   const segments = pathname.split("/").filter(Boolean);
   const lastSegment = segments[segments.length - 1] ?? "";
 
@@ -301,6 +303,7 @@ function SidebarNav({ pathname, workspaceSlug }: NavProps) {
               key={item.section}
               pathname={pathname}
               workspaceSlug={workspaceSlug}
+              workspaceId={workspaceId}
             />
           );
         }
@@ -310,6 +313,7 @@ function SidebarNav({ pathname, workspaceSlug }: NavProps) {
               key={item.section}
               pathname={pathname}
               workspaceSlug={workspaceSlug}
+              workspaceId={workspaceId}
             />
           );
         }
@@ -366,7 +370,7 @@ function SidebarNav({ pathname, workspaceSlug }: NavProps) {
  * navigation: clicking the row label routes to the KB index page,
  * clicking the chevron expands/collapses without navigating.
  */
-function KnowledgeNavSection({ pathname, workspaceSlug }: NavProps) {
+function KnowledgeNavSection({ pathname, workspaceSlug, workspaceId }: NavProps) {
   const segments = pathname.split("/").filter(Boolean);
   const isOnKnowledge =
     segments.length >= 2 &&
@@ -375,6 +379,10 @@ function KnowledgeNavSection({ pathname, workspaceSlug }: NavProps) {
   const currentKbSlug = isOnKnowledge ? segments[2] ?? null : null;
 
   const [expanded, setExpanded] = useState(isOnKnowledge);
+  // One cheap query per workspace — fetch eagerly so the section is
+  // already populated when the user expands it.
+  const { data: bases, status } = useKnowledgeBases(workspaceId ?? undefined);
+  const kbsForRender = bases ?? [];
 
   const rowClassName = cn(
     "flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-sm transition-colors cursor-pointer",
@@ -424,7 +432,12 @@ function KnowledgeNavSection({ pathname, workspaceSlug }: NavProps) {
 
       {expanded && (
         <div className="ml-4 mt-0.5 mb-1 flex flex-col gap-0.5 border-l border-white/[0.06] pl-2">
-          {HARDCODED_KBS.map((kb) => {
+          {status === "loading" && kbsForRender.length === 0 ? (
+            <div className="px-2 py-1 text-xs text-text-secondary/60">
+              Loading…
+            </div>
+          ) : null}
+          {kbsForRender.map((kb) => {
             const itemActive = kb.slug === currentKbSlug;
             const itemClass = cn(
               "block px-2 py-1 rounded-md text-xs transition-colors cursor-pointer truncate",
