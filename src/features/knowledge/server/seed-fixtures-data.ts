@@ -16,7 +16,13 @@
  * the service consumes.
  */
 
-import "server-only";
+// Audit fix #19 (partial): no `import "server-only"`. This file is
+// pure data — string literals + types — with no server APIs, no env
+// access, no secrets. The directive forced
+// scripts/smoke-knowledge-md-roundtrip.ts to run with
+// NODE_OPTIONS='--conditions=react-server' even though the script is
+// pure-Node. Removing the directive matches ENGINEERING.md §10:
+// "Shared code (types, pure utilities) has no directive."
 
 export type LegacyKnowledgeEntryType =
   | "note"
