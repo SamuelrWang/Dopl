@@ -88,7 +88,6 @@ export function registerKnowledgeTools(
         "",
       ];
       // Build a tree view by walking parent_id / folder_id.
-      const folderById = new Map(tree.folders.map((f) => [f.id, f]));
       const childFolders = new Map<string | null, typeof tree.folders>();
       for (const f of tree.folders) {
         const arr = childFolders.get(f.parentId) ?? [];
@@ -115,9 +114,6 @@ export function registerKnowledgeTools(
         }
       }
       dump(null, "");
-      // Defensive: if a folder's parent was filtered out somehow,
-      // the recursion above misses it. Drop a hint.
-      void folderById;
       return ok(lines.join("\n"));
     }
   );
