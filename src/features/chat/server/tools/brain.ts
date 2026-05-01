@@ -53,7 +53,7 @@ export async function executeListClusterBrainMemories(
     .from("cluster_brains")
     .select("id, instructions")
     .eq("cluster_id", clusterRes.cluster.id)
-    .single();
+    .maybeSingle();
 
   if (!brain) {
     return {
@@ -123,14 +123,14 @@ export async function executeAddClusterBrainMemory(
       { onConflict: "cluster_id", ignoreDuplicates: true }
     )
     .select("id")
-    .single();
+    .maybeSingle();
   let brainId: string | undefined = upserted?.id;
   if (!brainId) {
     const { data: existing } = await supabase
       .from("cluster_brains")
       .select("id")
       .eq("cluster_id", clusterRes.cluster.id)
-      .single();
+      .maybeSingle();
     brainId = existing?.id;
   }
   if (!brainId) {
@@ -304,7 +304,7 @@ export async function executeRewriteClusterBrainInstructions(
     .from("cluster_brains")
     .select("id")
     .eq("cluster_id", clusterRes.cluster.id)
-    .single();
+    .maybeSingle();
 
   if (existing) {
     const { error } = await supabase

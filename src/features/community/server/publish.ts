@@ -180,12 +180,14 @@ export async function publishCluster(
     if (panelInsertError) throw panelInsertError;
   }
 
-  // Snapshot brain instructions
+  // Snapshot brain instructions. maybeSingle so a cluster being
+  // published before any brain text was written returns null instead
+  // of 406 — the `if (brain?.instructions)` guard handles both.
   const { data: brain } = await db
     .from("cluster_brains")
     .select("instructions")
     .eq("cluster_id", clusterId)
-    .single();
+    .maybeSingle();
 
   if (brain?.instructions) {
     const { error: brainError } = await db

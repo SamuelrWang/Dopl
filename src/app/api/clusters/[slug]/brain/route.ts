@@ -55,12 +55,15 @@ async function handleGet(
 
     const db = supabaseAdmin();
 
-    // Look up the brain
+    // Look up the brain. maybeSingle so a cluster with no brain row
+    // (zero-state) returns null instead of a 406 PGRST116 — both are
+    // handled identically by the caller, but maybeSingle avoids the
+    // 4xx noise in PostgREST logs.
     const { data: brain, error: brainError } = await db
       .from("cluster_brains")
       .select("id, instructions, brain_version, created_at, updated_at")
       .eq("cluster_id", cluster.id)
-      .single();
+      .maybeSingle();
 
     if (brainError || !brain) {
       return NextResponse.json({
@@ -165,12 +168,13 @@ async function handlePatch(
     const db = supabaseAdmin();
     const now = new Date().toISOString();
 
-    // Upsert: insert if not exists, update if exists
+    // Upsert: insert if not exists, update if exists. maybeSingle so
+    // the no-brain-yet path returns null instead of a 406.
     const { data: existing } = await db
       .from("cluster_brains")
       .select("id")
       .eq("cluster_id", cluster.id)
-      .single();
+      .maybeSingle();
 
     let brain;
 
