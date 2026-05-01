@@ -6,7 +6,6 @@ import type {
   KnowledgeFolder,
   KnowledgeEntry,
   KnowledgeContext,
-  WriteSource,
 } from "../types";
 import type {
   KnowledgeBaseCreateInput,
@@ -797,10 +796,6 @@ export async function listDirByPath(
   return { folder, folders, entries };
 }
 
-// Re-export the resolver so callers can use ResolvedPath shape.
-export { resolvePath };
-export type { ResolvedPath };
-
 // ─── Trash ──────────────────────────────────────────────────────────
 
 export async function listTrash(
@@ -963,5 +958,3 @@ async function fetchWorkspaceCreatedAt(
   return new Date((data as { created_at: string }).created_at);
 }
 
-// Re-export so callers don't need to also import from repository.
-export type { WriteSource };
