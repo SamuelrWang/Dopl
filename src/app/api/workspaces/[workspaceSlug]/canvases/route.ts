@@ -15,16 +15,16 @@ interface Ctx {
 }
 
 /**
- * GET /api/workspaces/[slug]/canvases — list every canvas (page) inside
+ * GET /api/workspaces/[workspaceSlug]/canvases — list every canvas (page) inside
  * the workspace identified by slug. Caller must be an active member.
  */
 export const GET = withUserAuth(async (_request: NextRequest, { userId, params }: Ctx) => {
   try {
-    const slug = params?.slug;
-    if (!slug) {
-      return NextResponse.json({ error: "slug required" }, { status: 400 });
+    const workspaceSlug = params?.slug;
+    if (!workspaceSlug) {
+      return NextResponse.json({ error: "workspaceSlug required" }, { status: 400 });
     }
-    const workspace = await findWorkspaceForMember(userId, slug);
+    const workspace = await findWorkspaceForMember(userId, workspaceSlug);
     if (!workspace) {
       return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
     }
@@ -40,17 +40,17 @@ export const GET = withUserAuth(async (_request: NextRequest, { userId, params }
 });
 
 /**
- * POST /api/workspaces/[slug]/canvases — add a new canvas inside the
+ * POST /api/workspaces/[workspaceSlug]/canvases — add a new canvas inside the
  * workspace. Membership-only for now (any active member can create);
  * tighten to editor+ if/when free-for-all becomes a problem.
  */
 export const POST = withUserAuth(async (request: NextRequest, { userId, params }: Ctx) => {
   try {
-    const slug = params?.slug;
-    if (!slug) {
-      return NextResponse.json({ error: "slug required" }, { status: 400 });
+    const workspaceSlug = params?.slug;
+    if (!workspaceSlug) {
+      return NextResponse.json({ error: "workspaceSlug required" }, { status: 400 });
     }
-    const workspace = await findWorkspaceForMember(userId, slug);
+    const workspace = await findWorkspaceForMember(userId, workspaceSlug);
     if (!workspace) {
       return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
     }

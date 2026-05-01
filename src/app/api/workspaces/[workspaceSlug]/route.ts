@@ -16,22 +16,22 @@ interface Ctx {
 }
 
 /**
- * GET /api/workspaces/[slug] — fetch one workspace by slug, scoped to the
+ * GET /api/workspaces/[workspaceSlug] — fetch one workspace by slug, scoped to the
  * caller. Looks up by (owner_id, slug) first; if not found, falls back
  * to membership-by-slug across workspaces the caller is a member of.
  */
 export const GET = withUserAuth(async (_request: NextRequest, { userId, params }: Ctx) => {
   try {
-    const slug = params?.slug;
-    if (!slug) {
-      return NextResponse.json({ error: "slug required" }, { status: 400 });
+    const workspaceSlug = params?.slug;
+    if (!workspaceSlug) {
+      return NextResponse.json({ error: "workspaceSlug required" }, { status: 400 });
     }
 
     // Owner-side lookup is the fast path. Most calls hit a workspace the
     // caller owns. Membership lookup (workspaces owned by other users that
     // the caller has been invited to) lands in Phase 4 and joins through
     // workspace_members.
-    const workspace = await findWorkspaceForMember(userId, slug);
+    const workspace = await findWorkspaceForMember(userId, workspaceSlug);
     if (!workspace) {
       return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
     }
@@ -47,16 +47,16 @@ export const GET = withUserAuth(async (_request: NextRequest, { userId, params }
 });
 
 /**
- * PATCH /api/workspaces/[slug] — rename / edit description. Admin+ only;
+ * PATCH /api/workspaces/[workspaceSlug] — rename / edit description. Admin+ only;
  * `renameWorkspace` enforces the role gate.
  */
 export const PATCH = withUserAuth(async (request: NextRequest, { userId, params }: Ctx) => {
   try {
-    const slug = params?.slug;
-    if (!slug) {
-      return NextResponse.json({ error: "slug required" }, { status: 400 });
+    const workspaceSlug = params?.slug;
+    if (!workspaceSlug) {
+      return NextResponse.json({ error: "workspaceSlug required" }, { status: 400 });
     }
-    const workspace = await findWorkspaceForMember(userId, slug);
+    const workspace = await findWorkspaceForMember(userId, workspaceSlug);
     if (!workspace) {
       return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
     }
@@ -73,16 +73,16 @@ export const PATCH = withUserAuth(async (request: NextRequest, { userId, params 
 });
 
 /**
- * DELETE /api/workspaces/[slug] — owner-only. Cascades clusters / panels /
+ * DELETE /api/workspaces/[workspaceSlug] — owner-only. Cascades clusters / panels /
  * brain / memberships / invitations via FK ON DELETE CASCADE.
  */
 export const DELETE = withUserAuth(async (_request: NextRequest, { userId, params }: Ctx) => {
   try {
-    const slug = params?.slug;
-    if (!slug) {
-      return NextResponse.json({ error: "slug required" }, { status: 400 });
+    const workspaceSlug = params?.slug;
+    if (!workspaceSlug) {
+      return NextResponse.json({ error: "workspaceSlug required" }, { status: 400 });
     }
-    const workspace = await findWorkspaceForMember(userId, slug);
+    const workspace = await findWorkspaceForMember(userId, workspaceSlug);
     if (!workspace) {
       return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
     }

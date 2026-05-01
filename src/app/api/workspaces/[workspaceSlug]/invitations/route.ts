@@ -15,17 +15,17 @@ interface Ctx {
 }
 
 /**
- * GET /api/workspaces/[slug]/invitations — list pending invitations.
+ * GET /api/workspaces/[workspaceSlug]/invitations — list pending invitations.
  * Admin+ only (enforced inside `listWorkspaceInvitations`).
  */
 export const GET = withUserAuth(
   async (_request: NextRequest, { userId, params }: Ctx) => {
     try {
-      const slug = params?.slug;
-      if (!slug) {
-        return NextResponse.json({ error: "slug required" }, { status: 400 });
+      const workspaceSlug = params?.slug;
+      if (!workspaceSlug) {
+        return NextResponse.json({ error: "workspaceSlug required" }, { status: 400 });
       }
-      const workspace = await findWorkspaceForMember(userId, slug);
+      const workspace = await findWorkspaceForMember(userId, workspaceSlug);
       if (!workspace) {
         return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
       }
@@ -42,7 +42,7 @@ export const GET = withUserAuth(
 );
 
 /**
- * POST /api/workspaces/[slug]/invitations — create a new invitation.
+ * POST /api/workspaces/[workspaceSlug]/invitations — create a new invitation.
  * Admin+ only (enforced inside `createInvitation`). Returns the
  * invitation row including the magic-link token; the inviter is
  * expected to copy the resulting URL until email send is wired.
@@ -50,11 +50,11 @@ export const GET = withUserAuth(
 export const POST = withUserAuth(
   async (request: NextRequest, { userId, params }: Ctx) => {
     try {
-      const slug = params?.slug;
-      if (!slug) {
-        return NextResponse.json({ error: "slug required" }, { status: 400 });
+      const workspaceSlug = params?.slug;
+      if (!workspaceSlug) {
+        return NextResponse.json({ error: "workspaceSlug required" }, { status: 400 });
       }
-      const workspace = await findWorkspaceForMember(userId, slug);
+      const workspace = await findWorkspaceForMember(userId, workspaceSlug);
       if (!workspace) {
         return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
       }

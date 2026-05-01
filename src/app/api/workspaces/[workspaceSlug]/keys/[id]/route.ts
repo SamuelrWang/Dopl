@@ -8,7 +8,7 @@ import { meetsMinRole } from "@/features/workspaces/types";
 import { revokeApiKey } from "@/shared/auth/api-keys";
 
 interface RouteContext {
-  params: Promise<{ slug: string; id: string }>;
+  params: Promise<{ workspaceSlug: string; id: string }>;
 }
 
 export async function DELETE(_request: NextRequest, context: RouteContext) {
@@ -16,8 +16,8 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const { slug, id } = await context.params;
-  const workspace = await findWorkspaceForMember(user.id, slug);
+  const { workspaceSlug, id } = await context.params;
+  const workspace = await findWorkspaceForMember(user.id, workspaceSlug);
   if (!workspace) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }

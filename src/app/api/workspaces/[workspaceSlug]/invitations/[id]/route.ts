@@ -9,7 +9,7 @@ interface Ctx {
 }
 
 /**
- * DELETE /api/workspaces/[slug]/invitations/[id] — revoke a pending
+ * DELETE /api/workspaces/[workspaceSlug]/invitations/[id] — revoke a pending
  * invitation. Admin+ only (enforced inside `revokeInvitation` via the
  * workspace membership lookup it does for the invitation's workspace_id).
  */

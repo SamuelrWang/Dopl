@@ -19,18 +19,18 @@ interface Ctx {
 }
 
 /**
- * PATCH /api/workspaces/[slug]/members/[userId] — change a member's role.
+ * PATCH /api/workspaces/[workspaceSlug]/members/[userId] — change a member's role.
  * Admin+ only. Last-owner protection enforced inside `updateMemberRole`.
  */
 export const PATCH = withUserAuth(
   async (request: NextRequest, { userId, params }: Ctx) => {
     try {
-      const slug = params?.slug;
+      const workspaceSlug = params?.slug;
       const targetUserId = params?.userId;
-      if (!slug || !targetUserId) {
-        return NextResponse.json({ error: "slug + userId required" }, { status: 400 });
+      if (!workspaceSlug || !targetUserId) {
+        return NextResponse.json({ error: "workspaceSlug + userId required" }, { status: 400 });
       }
-      const workspace = await findWorkspaceForMember(userId, slug);
+      const workspace = await findWorkspaceForMember(userId, workspaceSlug);
       if (!workspace) {
         return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
       }
@@ -48,18 +48,18 @@ export const PATCH = withUserAuth(
 );
 
 /**
- * DELETE /api/workspaces/[slug]/members/[userId] — remove a member.
+ * DELETE /api/workspaces/[workspaceSlug]/members/[userId] — remove a member.
  * Admin+ only. Cannot remove last owner.
  */
 export const DELETE = withUserAuth(
   async (_request: NextRequest, { userId, params }: Ctx) => {
     try {
-      const slug = params?.slug;
+      const workspaceSlug = params?.slug;
       const targetUserId = params?.userId;
-      if (!slug || !targetUserId) {
-        return NextResponse.json({ error: "slug + userId required" }, { status: 400 });
+      if (!workspaceSlug || !targetUserId) {
+        return NextResponse.json({ error: "workspaceSlug + userId required" }, { status: 400 });
       }
-      const workspace = await findWorkspaceForMember(userId, slug);
+      const workspace = await findWorkspaceForMember(userId, workspaceSlug);
       if (!workspace) {
         return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
       }

@@ -13,18 +13,18 @@ interface Ctx {
 }
 
 /**
- * GET /api/workspaces/[slug]/members — list members of a workspace. Any
+ * GET /api/workspaces/[workspaceSlug]/members — list members of a workspace. Any
  * active member can read. Hydrates each row with the member's email +
  * display name so the UI can render without a second hop.
  */
 export const GET = withUserAuth(
   async (_request: NextRequest, { userId, params }: Ctx) => {
     try {
-      const slug = params?.slug;
-      if (!slug) {
-        return NextResponse.json({ error: "slug required" }, { status: 400 });
+      const workspaceSlug = params?.slug;
+      if (!workspaceSlug) {
+        return NextResponse.json({ error: "workspaceSlug required" }, { status: 400 });
       }
-      const workspace = await findWorkspaceForMember(userId, slug);
+      const workspace = await findWorkspaceForMember(userId, workspaceSlug);
       if (!workspace) {
         return NextResponse.json(
           { error: "Workspace not found" },

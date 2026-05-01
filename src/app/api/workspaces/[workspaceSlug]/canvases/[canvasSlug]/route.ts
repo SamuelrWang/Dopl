@@ -10,21 +10,21 @@ interface Ctx {
 }
 
 /**
- * GET /api/workspaces/[slug]/canvases/[canvasSlug] — fetch a single
+ * GET /api/workspaces/[workspaceSlug]/canvases/[canvasSlug] — fetch a single
  * canvas by slug, scoped to the workspace. 404 on either workspace or
  * canvas miss.
  */
 export const GET = withUserAuth(async (_request: NextRequest, { userId, params }: Ctx) => {
   try {
-    const slug = params?.slug;
+    const workspaceSlug = params?.slug;
     const canvasSlug = params?.canvasSlug;
-    if (!slug || !canvasSlug) {
+    if (!workspaceSlug || !canvasSlug) {
       return NextResponse.json(
-        { error: "slug and canvasSlug required" },
+        { error: "workspaceSlug and canvasSlug required" },
         { status: 400 }
       );
     }
-    const workspace = await findWorkspaceForMember(userId, slug);
+    const workspace = await findWorkspaceForMember(userId, workspaceSlug);
     if (!workspace) {
       return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
     }

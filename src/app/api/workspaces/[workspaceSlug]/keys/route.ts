@@ -20,7 +20,7 @@ import { createApiKey, listApiKeys } from "@/shared/auth/api-keys";
  */
 
 interface RouteContext {
-  params: Promise<{ slug: string }>;
+  params: Promise<{ workspaceSlug: string }>;
 }
 
 export async function GET(_request: NextRequest, context: RouteContext) {
@@ -28,8 +28,8 @@ export async function GET(_request: NextRequest, context: RouteContext) {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const { slug } = await context.params;
-  const workspace = await findWorkspaceForMember(user.id, slug);
+  const { workspaceSlug } = await context.params;
+  const workspace = await findWorkspaceForMember(user.id, workspaceSlug);
   if (!workspace) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
@@ -44,8 +44,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const { slug } = await context.params;
-  const workspace = await findWorkspaceForMember(user.id, slug);
+  const { workspaceSlug } = await context.params;
+  const workspace = await findWorkspaceForMember(user.id, workspaceSlug);
   if (!workspace) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
