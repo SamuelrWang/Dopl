@@ -38,6 +38,26 @@ interface Options {
  * Routes that scope per-workspace should use this in place of
  * `withUserAuth`. Routes that operate user-globally (settings, billing,
  * the global entry KB, admin) keep `withUserAuth`.
+ *
+ * MCP / paid-gating policy (audit decision #8) — withWorkspaceAuth
+ * intentionally does NOT call `withMcpAccess`. The reasoning:
+ *   - Unlike the read-only Dopl knowledge packs (`kb_list_packs` /
+ *     `kb_list` / `kb_get` use `withMcpAccess` to gate by trial/paid
+ *     status), the user's OWN workspace + knowledge bases are first-
+ *     class data the user creates — gating them behind a paywall would
+ *     hold their content hostage.
+ *   - The agent-write toggle (`agent_write_enabled` per knowledge base)
+ *     is the per-resource gate that protects against unwanted MCP
+ *     mutations. Read access for an agent stays free; writes require
+ *     the user to flip the toggle in settings.
+ *   - Rate-limit + analytics for MCP traffic still happen at the
+ *     `withUserAuth` layer (the wrapper inside `withWorkspaceAuth`),
+ *     so we don't lose observability.
+ *
+ * If a future product decision requires gating user-data MCP calls,
+ * compose `withMcpAccess` inside the handler signature instead of
+ * altering this default — see `app/api/query/route.ts` for the
+ * gated-MCP pattern on read-only KB tools.
  */
 export function withWorkspaceAuth(
   handler: (
