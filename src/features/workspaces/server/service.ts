@@ -79,6 +79,15 @@ export async function resolveActiveWorkspace(
  * Idempotent: creates the user's default workspace if it doesn't exist yet.
  * Called from `resolveActiveWorkspace` and from signup hooks (Phase 2).
  *
+ * Audit fix S-15: derives the slug via `slugifyWorkspaceName` instead
+ * of hardcoding "default". Existing users with the legacy "default"
+ * slug still resolve through `findDefaultWorkspaceForUser` (which
+ * checks "default" first, then falls back to the user's oldest
+ * workspace). New users get a kebab slug from the workspace name —
+ * stays consistent with how rename / new-workspace flow already pick
+ * slugs, and unblocks the future workspace-globally-unique migration
+ * (audit finding S-4).
+ *
  * Two concurrent calls for a brand-new user can both pass the existence
  * check and race to INSERT — the second hits the (owner_id, slug)
  * unique constraint and 500s. We catch that error code (Postgres 23505)
@@ -87,11 +96,13 @@ export async function resolveActiveWorkspace(
 export async function ensureDefaultWorkspace(userId: string): Promise<Workspace> {
   const existing = await findDefaultWorkspaceForUser(userId);
   if (existing) return existing;
+  const name = "My Workspace";
+  const slug = slugifyWorkspaceName(name, []);
   try {
     return await insertWorkspaceWithOwnerMembership({
       ownerId: userId,
-      name: "My Workspace",
-      slug: "default",
+      name,
+      slug,
     });
   } catch (err) {
     const code =

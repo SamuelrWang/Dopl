@@ -62,15 +62,33 @@ export async function findMemberWorkspaceBySlug(
 }
 
 /**
- * Default workspace resolver — every user has one workspace with slug='default'
- * (created by the P0 backfill). Returns null only if a brand-new user
- * predates the trigger that should create one for them on signup. Phase 1
- * code paths fall back to this when no `X-Workspace-Id` header is provided.
+ * Default workspace resolver — used when no X-Workspace-Id header is
+ * provided. Tries (in order):
+ *   1. The literal slug "default" (legacy path — pre-S-15 backfill).
+ *   2. The user's oldest owned workspace, by created_at ASC.
+ *
+ * Audit fix S-15 unblocks the eventual `slugifyWorkspaceName`-based
+ * default slug (e.g. "my-workspace" instead of the literal "default")
+ * by not requiring the slug be the string "default" anymore. Existing
+ * users with `slug='default'` still resolve via step 1; new users
+ * created after S-15 lands will resolve via step 2.
  */
 export async function findDefaultWorkspaceForUser(
   userId: string
 ): Promise<Workspace | null> {
-  return findWorkspaceBySlug(userId, "default");
+  const legacy = await findWorkspaceBySlug(userId, "default");
+  if (legacy) return legacy;
+
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("workspaces")
+    .select(WORKSPACE_COLS)
+    .eq("owner_id", userId)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? mapWorkspaceRow(data as WorkspaceRow) : null;
 }
 
 export async function listWorkspacesForUser(userId: string): Promise<Workspace[]> {
