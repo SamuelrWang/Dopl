@@ -87,8 +87,11 @@ export async function listBasesForWorkspace(
 
 /**
  * Read-only — used by slug-collision checks in the service. Returns
- * both active and deleted slugs so a freshly-deleted slug can't be
- * recycled until the trash row is purged.
+ * only ACTIVE slugs (deleted_at IS NULL). Audit fix S-6: matches the
+ * partial-unique index added in migration 20260501070000, which makes
+ * trashed slugs immediately recyclable instead of holding them for
+ * the 30-day cron purge window. The service layer's 23505 catch-and-
+ * retry remains as the backstop against concurrent inserts.
  */
 export async function listBaseSlugsForWorkspace(
   workspaceId: string
@@ -97,7 +100,8 @@ export async function listBaseSlugsForWorkspace(
   const { data, error } = await db
     .from("knowledge_bases")
     .select("slug")
-    .eq("workspace_id", workspaceId);
+    .eq("workspace_id", workspaceId)
+    .is("deleted_at", null);
   if (error) throw error;
   return ((data ?? []) as Array<{ slug: string }>).map((r) => r.slug);
 }
