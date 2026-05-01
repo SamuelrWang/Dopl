@@ -18,9 +18,20 @@
  *
  * Output matches ^[a-z0-9-]+$ (MCP prompt name constraint),
  * matching the existing slugifyClusterName contract.
+ *
+ * Suffix entropy comes from crypto.randomBytes (audit fix S-9). Older
+ * Math.random() was technically sufficient (slugs aren't secrets) but
+ * the same pattern will get reused for workspace-slug global-uniqueness
+ * (S-4) where mild guess-resistance matters more.
  */
 
+import { randomBytes } from "node:crypto";
+
 const SUFFIX_LENGTH = 4;
+// Pool of 32 base36 digits — generates a base36-equivalent suffix from
+// crypto-strong bytes via index-modulo. Avoids the leading-zero loop
+// the Math.random()-based version needed.
+const BASE36 = "0123456789abcdefghijklmnopqrstuvwxyz";
 
 export function generatePublishedSlug(title: string): string {
   const base =
@@ -36,12 +47,10 @@ export function generatePublishedSlug(title: string): string {
  * only the suffix without re-computing the base on every attempt.
  */
 export function randomSuffix(): string {
-  // Math.random().toString(36).slice(2) can be short (e.g. "a" if the
-  // fractional part starts with 0 after decoding). Loop until we have
-  // enough entropy. Fast in practice — typically one pass.
-  let s = "";
-  while (s.length < SUFFIX_LENGTH) {
-    s += Math.random().toString(36).slice(2);
+  const bytes = randomBytes(SUFFIX_LENGTH);
+  let out = "";
+  for (let i = 0; i < SUFFIX_LENGTH; i++) {
+    out += BASE36[bytes[i] % BASE36.length];
   }
-  return s.slice(0, SUFFIX_LENGTH);
+  return out;
 }
