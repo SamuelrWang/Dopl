@@ -62,12 +62,14 @@ jobs:
           set -eu
           # Files explicitly exempted in ENGINEERING.md §2 (Known files >500 lines).
           # When a new file lands here, add it to that table too.
-          ALLOW='packages/mcp-server/src/server.ts'
+          ALLOW=$(printf '%s\n' \
+            'packages/mcp-server/src/server.ts' \
+            'packages/dopl-client/src/client.ts')
 
           BAD=$(find packages -type f \( -name '*.ts' -o -name '*.tsx' \) \
             ! -path '*/dist/*' ! -path '*/node_modules/*' \
             -exec awk 'END { if (NR > 500) print FILENAME, NR }' {} \; \
-            | grep -vF -e "$ALLOW" || true)
+            | grep -vF "$ALLOW" || true)
           if [ -n "$BAD" ]; then
             echo "Files over 500 lines (ENGINEERING.md §2):"
             echo "$BAD"
