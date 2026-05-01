@@ -199,6 +199,64 @@ async function main() {
   } finally {
     await softDeleteBase(userCtx, cascadeBase.id);
   }
+
+  // PROBE 8: stale-precondition write (audit fix #9)
+  // Models the unmount-flush race: an in-flight save with a stale
+  // expectedUpdatedAt must be rejected with KnowledgeStaleVersionError
+  // (HTTP 412) — preventing silent overwrite of a parallel writer's edits.
+  console.log("\nPROBE 8: stale precondition rejected (no silent overwrite)");
+  const raceBase = await createBase(userCtx, {
+    name: `412 race probe ${new Date().toISOString()}`,
+    agentWriteEnabled: true,
+  });
+  try {
+    const { updateEntry } = await import(
+      "@/features/knowledge/server/service"
+    );
+    const { KnowledgeStaleVersionError } = await import(
+      "@/features/knowledge/server/errors"
+    );
+
+    // Create entry, capture its initial updated_at as the "stale" token.
+    const entry = await writeFileByPath(userCtx, raceBase.id, "race.md", {
+      body: "v1",
+    });
+    const staleUpdatedAt = entry.updatedAt;
+
+    // Simulate a parallel writer landing — bumps updated_at server-side.
+    await updateEntry(userCtx, entry.id, { body: "v2 (parallel writer)" });
+
+    // Now the equivalent of the unmount-flush save: fire with the
+    // CACHED stale token. Must throw KnowledgeStaleVersionError.
+    let threw412 = false;
+    try {
+      await updateEntry(
+        userCtx,
+        entry.id,
+        { body: "v3 (in-flight unmount)" },
+        staleUpdatedAt
+      );
+    } catch (err) {
+      threw412 = err instanceof KnowledgeStaleVersionError;
+      if (!threw412) {
+        console.log(
+          `  ❌ wrong error class: ${(err as Error).name} (${(err as Error).message})`
+        );
+      }
+    }
+    console.log(
+      `  ${threw412 ? "✅" : "❌"} stale precondition → KnowledgeStaleVersionError: ${threw412}`
+    );
+
+    // Confirm the parallel writer's body survived (no overwrite).
+    const final = await updateEntry(userCtx, entry.id, {});
+    const survived = final.body === "v2 (parallel writer)";
+    console.log(
+      `  ${survived ? "✅" : "❌"} parallel writer's body survived: ${survived}`
+    );
+  } finally {
+    await softDeleteBase(userCtx, raceBase.id);
+  }
 }
 
 main().catch((err) => {

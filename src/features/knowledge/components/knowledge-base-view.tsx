@@ -482,6 +482,16 @@ function DocPane({ entry, workspaceId, onSaved, onStaleVersion }: DocPaneProps) 
   // DocPane, so unmount fires on every entry switch), fire a final
   // save in the background — otherwise edits made within the 1.5s
   // debounce window get lost.
+  //
+  // Audit fix #9: pass the same `expectedUpdatedAt` precondition the
+  // scheduled-save path uses. Without it, an unmount-flush whose
+  // ref is stale (because a parallel tab/agent edited the entry
+  // between the user's last save and the unmount) would silently
+  // overwrite the parallel edit with the user's older state. With
+  // the precondition, the server returns 412 and the in-flight
+  // unmount edits are dropped — losing ~1.5s of unsaved typing in
+  // a rare race is strictly better than silently losing the
+  // parallel writer's edits.
   useEffect(() => {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
@@ -489,10 +499,27 @@ function DocPane({ entry, workspaceId, onSaved, onStaleVersion }: DocPaneProps) 
       const { title: t, body: b } = latestRef.current;
       const last = lastSaved.current;
       if (t !== last.title || b !== last.body) {
-        // Fire-and-forget — we're unmounting, can't surface errors.
-        apiUpdateEntry(entry.id, { title: t, body: b }, workspaceId).catch(
-          () => {}
-        );
+        const expectedUpdatedAt = expectedUpdatedAtRef.current;
+        apiUpdateEntry(
+          entry.id,
+          { title: t, body: b },
+          workspaceId,
+          expectedUpdatedAt
+        ).catch((err: unknown) => {
+          if (err instanceof KnowledgeApiError && err.status === 412) {
+            // Stale precondition — parallel writer won. Surface a
+            // breadcrumb in devtools so the dropped-on-unmount case
+            // is observable. Cannot toast: component is unmounting.
+            console.warn(
+              "[knowledge] unmount autosave dropped (412 stale)",
+              { entryId: entry.id }
+            );
+            return;
+          }
+          // Other errors (network, 5xx) — fire-and-forget, can't
+          // surface during unmount. Already logged server-side via
+          // the route handler's system_events trail.
+        });
       }
     };
     // entry.id and workspaceId are stable for this mount (parent uses
