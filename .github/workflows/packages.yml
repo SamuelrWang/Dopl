@@ -7,6 +7,10 @@ on:
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/packages.yml"
+      # Audit fix #12: type-drift check covers the SDK ↔ server types
+      # mirror. The source-of-truth file lives outside packages/.
+      - "src/features/knowledge/types.ts"
+      - "scripts/check-knowledge-type-drift.ts"
   push:
     branches: [main, master]
     paths:
@@ -14,6 +18,8 @@ on:
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/packages.yml"
+      - "src/features/knowledge/types.ts"
+      - "scripts/check-knowledge-type-drift.ts"
 
 jobs:
   build-test:
@@ -76,3 +82,20 @@ jobs:
             exit 1
           fi
           echo "All files within the 500-line cap."
+
+  type-drift:
+    name: knowledge type-drift check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Diff knowledge types between server and SDK
+        run: npx tsx scripts/check-knowledge-type-drift.ts
