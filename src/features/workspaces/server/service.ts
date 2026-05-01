@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
 import type { Workspace, WorkspaceMembership, Role } from "../types";
 import { meetsMinRole } from "../types";
 import { slugifyWorkspaceName } from "../slug";
+import { RESERVED_WORKSPACE_SLUGS } from "@/config";
 import {
   deleteWorkspace,
   findWorkspaceById,
@@ -131,7 +132,7 @@ export async function createWorkspaceForUser(
 export async function renameWorkspace(
   workspaceId: string,
   userId: string,
-  patch: { name?: string; description?: string | null }
+  patch: { name?: string; description?: string | null; slug?: string }
 ): Promise<Workspace> {
   const { workspace, membership } = await resolveMembershipOrThrow(workspaceId, userId);
   if (!meetsMinRole(membership.role, "admin")) {
@@ -144,17 +145,50 @@ export async function renameWorkspace(
 
   const update: { name?: string; slug?: string; description?: string | null } = {};
   if (patch.description !== undefined) update.description = patch.description;
-  if (patch.name && patch.name !== workspace.name) {
-    update.name = patch.name;
+  if (patch.name && patch.name !== workspace.name) update.name = patch.name;
+
+  // Audit fix S-11: caller can override the slug explicitly. Validate
+  // against the same rules slugifyWorkspaceName enforces — owner-scoped
+  // uniqueness + RESERVED_WORKSPACE_SLUGS — so we surface a clean 4xx
+  // instead of a Postgres 23505 on the (owner_id, slug) UNIQUE.
+  // Owner-scoped slug list is loaded only once even if both branches
+  // below need it.
+  let slugTaken: string[] | null = null;
+  const loadSlugTaken = async (): Promise<string[]> => {
+    if (slugTaken !== null) return slugTaken;
     const db = supabaseAdmin();
     const { data: existing } = await db
       .from("workspaces")
       .select("slug")
       .eq("owner_id", workspace.ownerId)
       .neq("id", workspaceId);
-    const taken = (existing ?? []).map((r) => (r as { slug: string }).slug);
-    update.slug = slugifyWorkspaceName(patch.name, taken);
+    slugTaken = (existing ?? []).map((r) => (r as { slug: string }).slug);
+    return slugTaken;
+  };
+
+  if (patch.slug && patch.slug !== workspace.slug) {
+    const taken = await loadSlugTaken();
+    if (taken.includes(patch.slug)) {
+      throw new HttpError(
+        409,
+        "WORKSPACE_SLUG_TAKEN",
+        `You already own a workspace with slug "${patch.slug}".`
+      );
+    }
+    if (RESERVED_WORKSPACE_SLUGS.has(patch.slug)) {
+      throw new HttpError(
+        409,
+        "WORKSPACE_SLUG_RESERVED",
+        `"${patch.slug}" is reserved (collides with a top-level route).`
+      );
+    }
+    update.slug = patch.slug;
+  } else if (update.name) {
+    // Name changed without an explicit slug override — re-derive.
+    const taken = await loadSlugTaken();
+    update.slug = slugifyWorkspaceName(update.name, taken);
   }
+
   if (Object.keys(update).length === 0) return workspace;
   return updateWorkspace(workspaceId, update);
 }
