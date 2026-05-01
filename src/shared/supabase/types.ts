@@ -856,6 +856,7 @@ export type Database = {
           last_edited_by: string | null
           last_edited_source: string
           position: number
+          search_tsv: unknown
           title: string
           updated_at: string
           workspace_id: string
@@ -873,6 +874,7 @@ export type Database = {
           last_edited_by?: string | null
           last_edited_source?: string
           position?: number
+          search_tsv?: unknown
           title: string
           updated_at?: string
           workspace_id: string
@@ -890,6 +892,7 @@ export type Database = {
           last_edited_by?: string | null
           last_edited_source?: string
           position?: number
+          search_tsv?: unknown
           title?: string
           updated_at?: string
           workspace_id?: string
@@ -1738,6 +1741,19 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      cascade_restore_base: { Args: { p_base_id: string }; Returns: undefined }
+      cascade_restore_folder: {
+        Args: { p_folder_id: string }
+        Returns: undefined
+      }
+      cascade_soft_delete_base: {
+        Args: { p_base_id: string; p_deleted_at: string }
+        Returns: undefined
+      }
+      cascade_soft_delete_folder: {
+        Args: { p_deleted_at: string; p_folder_id: string }
+        Returns: undefined
+      }
       check_and_record_rate_limit: {
         Args: { p_api_key_id: string; p_endpoint: string; p_rpm: number }
         Returns: boolean
@@ -1849,6 +1865,24 @@ export type Database = {
           summary: string
           title: string
           use_case: string
+        }[]
+      }
+      search_knowledge_entries: {
+        Args: {
+          p_base_id?: string
+          p_limit?: number
+          p_query: string
+          p_workspace_id: string
+        }
+        Returns: {
+          entry_id: string
+          excerpt: string
+          folder_id: string
+          knowledge_base_id: string
+          rank: number
+          snippet: string
+          title: string
+          updated_at: string
         }[]
       }
       search_published_clusters: {
@@ -2006,4 +2040,3 @@ export const Constants = {
     },
   },
 } as const
-

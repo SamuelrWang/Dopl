@@ -33,6 +33,17 @@ export interface SearchOpts {
   limit?: number;
 }
 
+/**
+ * The shape of one row returned by `search_knowledge_entries`. The
+ * regenerated supabase types in `src/shared/supabase/types.ts` declare
+ * this RPC, but `supabaseAdmin()` returns an untyped `SupabaseClient`
+ * (no `Database` generic), so every `.rpc(...)` call falls back to
+ * `unknown`. Until the admin client is typed (tracked as a follow-up
+ * finding — 240+ call sites would need to compile), keep this manual
+ * shape for the local cast. Note: gen types declare `excerpt` /
+ * `folder_id` as non-null because RETURN TABLE doesn't preserve
+ * nullability — the real columns are nullable.
+ */
 interface RpcRow {
   entry_id: string;
   knowledge_base_id: string;
