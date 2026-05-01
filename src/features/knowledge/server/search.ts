@@ -71,6 +71,10 @@ export async function searchKnowledgeEntries(
   }
 
   const db = supabaseAdmin();
+  // SECURITY: `p_workspace_id` MUST come from the auth context
+  // (`ctx.workspaceId`), never from client-controllable input. The RPC is
+  // SECURITY INVOKER but the admin client bypasses RLS, so the function
+  // trusts whatever workspace_id we pass. Audit fix #11.
   const { data, error } = await db.rpc("search_knowledge_entries", {
     p_workspace_id: ctx.workspaceId,
     p_query: trimmed,
