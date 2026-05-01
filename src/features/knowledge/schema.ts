@@ -23,6 +23,13 @@ const slugRegex = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 const noSlashRegex = /^[^/]+$/;
 const noSlashMessage = "Cannot contain '/'";
 
+// Cap body size to 1 MB (audit fix #26). Without this an agent could
+// upload arbitrarily large markdown that blows up the search_tsv
+// generated column and the per-entry payload. Generous enough that
+// real markdown documents fit; tight enough to bound DoS surface.
+const MAX_BODY_BYTES = 1_048_576;
+const bodyMaxMessage = "Body must be 1 MB or less";
+
 export const KnowledgeEntryTypeSchema = z.enum([
   "note",
   "doc",
@@ -34,7 +41,9 @@ export const KnowledgeEntryTypeSchema = z.enum([
 
 export const KnowledgeBaseCreateSchema = z.object({
   name: z.string().min(1, "Name is required").max(120),
-  description: z.string().max(2000).optional(),
+  // `nullable().optional()` for parity with KnowledgeBaseUpdateSchema —
+  // both `undefined` (omit) and `null` (explicit clear) are valid.
+  description: z.string().max(2000).nullable().optional(),
   slug: z
     .string()
     .min(1)
@@ -101,7 +110,7 @@ export const KnowledgeEntryCreateSchema = z.object({
     .max(300)
     .regex(noSlashRegex, noSlashMessage),
   excerpt: z.string().max(1000).nullable().optional(),
-  body: z.string().optional(),
+  body: z.string().max(MAX_BODY_BYTES, bodyMaxMessage).optional(),
   entryType: KnowledgeEntryTypeSchema.optional(),
   position: z.number().int().min(0).optional(),
 });
@@ -112,7 +121,7 @@ export type KnowledgeEntryCreateInput = z.infer<
 export const KnowledgeEntryUpdateSchema = z.object({
   title: z.string().min(1).max(300).regex(noSlashRegex, noSlashMessage).optional(),
   excerpt: z.string().max(1000).nullable().optional(),
-  body: z.string().optional(),
+  body: z.string().max(MAX_BODY_BYTES, bodyMaxMessage).optional(),
   entryType: KnowledgeEntryTypeSchema.optional(),
   position: z.number().int().min(0).optional(),
 });

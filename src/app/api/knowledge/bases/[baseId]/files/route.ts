@@ -29,10 +29,17 @@ function requirePathParam(request: NextRequest): string {
   return path;
 }
 
+// `title` cannot contain '/' — same constraint as
+// KnowledgeEntryUpdateSchema in features/knowledge/schema.ts. Without
+// this, a kb_write_file with `title: "a/b.md"` produces an entry whose
+// title has a slash and is unreachable via the path resolver.
+// `body` capped at 1 MB to match the entry-create / entry-update zod.
+const NO_SLASH = /^[^/]+$/;
+const MAX_BODY_BYTES = 1_048_576;
 const WriteFileSchema = z.object({
   path: z.string(),
-  body: z.string().optional(),
-  title: z.string().min(1).max(300).optional(),
+  body: z.string().max(MAX_BODY_BYTES, "Body must be 1 MB or less").optional(),
+  title: z.string().min(1).max(300).regex(NO_SLASH, "Cannot contain '/'").optional(),
 });
 
 async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
