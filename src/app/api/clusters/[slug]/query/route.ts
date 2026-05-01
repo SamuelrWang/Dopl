@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withMcpCredits } from "@/shared/auth/with-auth";
+import { withMcpAccess } from "@/shared/auth/with-auth";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { searchEntries } from "@/features/entries/server/retrieval/search";
 import { resolveActiveWorkspace } from "@/features/workspaces/server/service";
@@ -7,7 +7,7 @@ import { HttpError } from "@/shared/lib/http-error";
 
 /**
  * Cluster vector-search endpoint. Resolves the active canvas inline
- * because `withMcpCredits` only injects user context, not canvas — and
+ * because `withMcpAccess` only injects user context, not canvas — and
  * this is currently the only MCP-gated cluster-scoped route. If more
  * MCP-only canvas routes appear, lift this into a `withCanvasMcpAccess`
  * wrapper instead of repeating the logic.
@@ -96,4 +96,4 @@ async function handlePost(
   }
 }
 
-export const POST = withMcpCredits("mcp_cluster_query", handlePost);
+export const POST = withMcpAccess("mcp_cluster_query", handlePost);

@@ -392,16 +392,6 @@ export function withMcpAccess(
 }
 
 /**
- * @deprecated Old credit-based wrapper. Kept as an alias for withMcpAccess
- * so existing import sites compile; all credit-deduction logic is gone.
- * Cleanup pass will rename call sites and delete this alias.
- */
-export const withMcpCredits = (
-  action: string,
-  handler: Parameters<typeof withMcpAccess>[1]
-) => withMcpAccess(action, handler);
-
-/**
  * Returns true if the given user ID is the designated admin.
  * Admin is bound to a single Supabase auth UUID via ADMIN_USER_ID env var.
  */

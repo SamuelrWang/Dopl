@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 const supabase = supabaseAdmin();
-import { withMcpCredits } from "@/shared/auth/with-auth";
+import { withMcpAccess } from "@/shared/auth/with-auth";
 
 async function handleGet(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -50,4 +50,4 @@ async function handleGet(request: NextRequest) {
   });
 }
 
-export const GET = withMcpCredits("mcp_list", handleGet);
+export const GET = withMcpAccess("mcp_list", handleGet);

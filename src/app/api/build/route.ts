@@ -14,7 +14,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { BuildRequestSchema } from "@/types/api";
 import { buildBuilderBundle } from "@/features/entries/server/retrieval/builder";
-import { withMcpCredits } from "@/shared/auth/with-auth";
+import { withMcpAccess } from "@/shared/auth/with-auth";
 
 async function handlePost(
   request: NextRequest,
@@ -49,4 +49,4 @@ async function handlePost(
 
 // Credit cost dropped from 5 → 1 (see CREDIT_COSTS.mcp_build): the only
 // remaining server work is embedding-search retrieval; no LLM spend.
-export const POST = withMcpCredits("mcp_build", handlePost);
+export const POST = withMcpAccess("mcp_build", handlePost);

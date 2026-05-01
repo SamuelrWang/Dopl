@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { EntryUpdateSchema } from "@/types/api";
-import { withUserAuth, withMcpCredits, isAdmin } from "@/shared/auth/with-auth";
+import { withUserAuth, withMcpAccess, isAdmin } from "@/shared/auth/with-auth";
 import { CONTENT_PREVIEW_LENGTH } from "@/config";
 import type { SubscriptionTier } from "@/features/billing/server/subscriptions";
 import { resolveEntryId } from "@/features/entries/server/resolver";
@@ -164,6 +164,6 @@ async function handleDelete(
   return NextResponse.json({ success: true });
 }
 
-export const GET = withMcpCredits("mcp_get_entry", handleGet);
+export const GET = withMcpAccess("mcp_get_entry", handleGet);
 export const PATCH = withUserAuth(handlePatch);
 export const DELETE = withUserAuth(handleDelete);

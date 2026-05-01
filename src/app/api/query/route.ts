@@ -13,7 +13,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { QueryRequestSchema } from "@/types/api";
 import { searchEntries } from "@/features/entries/server/retrieval/search";
-import { withMcpCredits } from "@/shared/auth/with-auth";
+import { withMcpAccess } from "@/shared/auth/with-auth";
 import { CONTENT_PREVIEW_LENGTH } from "@/config";
 import type { SubscriptionTier } from "@/features/billing/server/subscriptions";
 
@@ -80,4 +80,4 @@ async function handlePost(
   }
 }
 
-export const POST = withMcpCredits("mcp_search", handlePost);
+export const POST = withMcpAccess("mcp_search", handlePost);
