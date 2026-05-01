@@ -171,32 +171,57 @@ export async function storeSources(
 
 /**
  * Generate a URL-safe slug for an entry.
- * - Slugifies the title and resolves collisions against the existing slugs
- *   in the `entries` table (excluding the current row, so re-ingestion of
- *   an existing entry keeps its slug if possible).
- * - Falls back to entry-<short uuid> when the title is empty/missing.
+ *
+ * Slugifies the title, then resolves collisions via numeric suffix
+ * (`foo`, `foo-2`, `foo-3`, ...). The collision lookup is **prefix-
+ * scoped** via `ilike("slug", "${base}%")` so we never pull the entire
+ * `entries` table — that pattern already mirrors `generateSkeletonSlug`
+ * in features/ingestion/server/skeleton.ts.
+ *
+ * The unique constraint on `entries.slug` is the final backstop against
+ * a concurrent insert that lands the same slug between our prefix
+ * lookup and our INSERT. Audit findings S-5 + S-10.
+ *
+ * Falls back to entry-<short uuid> when the title is empty/missing.
  */
 export async function generateEntrySlug(
   entryId: string,
   title: string
 ): Promise<string> {
+  const cleanTitle = title?.trim() ?? "";
+
+  if (!cleanTitle || cleanTitle === "Untitled") {
+    // UUID-derived fallback. Collisions only on shared 8-char UUID
+    // prefixes (astronomically rare). Prefix-scoped lookup still cheap.
+    const fallback = fallbackSlugFromId(entryId);
+    const { data: existing } = await supabase
+      .from("entries")
+      .select("slug")
+      .neq("id", entryId)
+      .ilike("slug", `${fallback}%`);
+    const existingSlugs = (existing || [])
+      .map((r) => (r as { slug: string | null }).slug)
+      .filter((s): s is string => typeof s === "string" && s.length > 0);
+    if (!existingSlugs.includes(fallback)) return fallback;
+    return slugifyEntryTitle(fallback, existingSlugs);
+  }
+
+  // Compute the base separately from slugifyEntryTitle (which does the
+  // same kebab transform internally) so we can prefix-scope the query.
+  const base = cleanTitle
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "") || "entry";
+
   const { data: existing } = await supabase
     .from("entries")
     .select("slug")
-    .neq("id", entryId);
+    .neq("id", entryId)
+    .ilike("slug", `${base}%`);
 
   const existingSlugs = (existing || [])
     .map((r) => (r as { slug: string | null }).slug)
     .filter((s): s is string => typeof s === "string" && s.length > 0);
 
-  if (!title || title.trim() === "" || title === "Untitled") {
-    const fallback = fallbackSlugFromId(entryId);
-    // The UUID-derived fallback is deterministic; collisions only happen if
-    // a previous row shared the exact same 8-char prefix, which is astronomically
-    // unlikely but handle it anyway.
-    if (!existingSlugs.includes(fallback)) return fallback;
-    return slugifyEntryTitle(fallback, existingSlugs);
-  }
-
-  return slugifyEntryTitle(title, existingSlugs);
+  return slugifyEntryTitle(cleanTitle, existingSlugs);
 }
