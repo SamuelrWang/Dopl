@@ -73,7 +73,8 @@ export const RESERVED_WORKSPACE_SLUGS: ReadonlySet<string> = new Set([
   "pricing",
   "privacy",
   "settings",
-  "signup",
+  // `signup` removed in audit fix S-13 — no top-level /signup route
+  // exists. Re-add here if a public signup page lands.
   "terms",
   "welcome",
   "workspaces",
