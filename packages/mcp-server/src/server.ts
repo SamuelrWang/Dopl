@@ -19,6 +19,7 @@ import {
 } from "./skill-writer.js";
 import { brainProtocolPreamble } from "./templates.js";
 import { registerKnowledgeTools } from "./tools/knowledge.js";
+import { packageVersion } from "./version.js";
 
 const CONTEXT_CHAR_BUDGET = 2000;
 
@@ -335,7 +336,10 @@ export function createServer(
   const server = new McpServer(
     {
       name: "dopl",
-      version: "0.1.0",
+      // Source of truth is package.json — read via version.ts so the
+      // MCP handshake and any analytics that key on server version stay
+      // accurate across publishes (audit fix #24).
+      version: packageVersion,
     },
     {
       instructions: SERVER_INSTRUCTIONS,
