@@ -8,7 +8,11 @@ import { RESERVED_WORKSPACE_SLUGS } from "@/config";
  * behavior is consistent across features.
  */
 export function slugifyWorkspaceName(name: string, existing: string[]): string {
+  // Audit fix S-16: NFKC-normalize before the strip so full-width or
+  // confusable characters produce the same slug as their ASCII analogs
+  // instead of collapsing to the fallback.
   const base = name
+    .normalize("NFKC")
     .toLowerCase()
     .trim()
     .replace(/[^a-z0-9\s-]/g, "")

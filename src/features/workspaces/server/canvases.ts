@@ -34,7 +34,10 @@ const RESERVED_CANVAS_SLUGS: ReadonlySet<string> = new Set([
  * fallback word.
  */
 function slugifyCanvasName(name: string, existing: string[]): string {
+  // Audit fix S-16: NFKC-normalize before the strip — see slugify.ts
+  // and slugifyWorkspaceName for design rationale.
   const base = name
+    .normalize("NFKC")
     .toLowerCase()
     .trim()
     .replace(/[^a-z0-9\s-]/g, "")
