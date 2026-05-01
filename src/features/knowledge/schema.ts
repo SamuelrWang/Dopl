@@ -16,12 +16,29 @@ import { z } from "zod";
 
 const slugRegex = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 
-// Folder/entry names cannot contain `/` — the path-addressing layer
-// (Item 4) treats `/` as a separator, so a name with one would be
-// unreachable via path. Item 5 polish adds this guard at the schema
-// level so neither user nor agent can create such names.
-const noSlashRegex = /^[^/]+$/;
-const noSlashMessage = "Cannot contain '/'";
+// Folder / entry names — design notes (audit fix #14):
+//
+//   Path-addressing (`/foo/bar/baz.md`) is **case-sensitive** and
+//   **byte-exact**. `Foo.md` and `foo.md` coexist as distinct entries;
+//   the agent must spell paths exactly as the user does. Filesystem
+//   semantics. The URL-side handles the case-insensitive ergonomics —
+//   `proxy.ts` lowercase-redirects mixed-case URLs (audit fix S-8) so
+//   workspace / KB slugs don't suffer from typo case mismatches.
+//
+//   At the schema level we enforce:
+//     - no '/' (would be unreachable via the path resolver)
+//     - no leading or trailing whitespace (visual collisions like " foo"
+//       vs "foo" are confusing and break filesystem-style mental models)
+//     - no control / zero-width characters (would render identically
+//       to a sibling and let an agent or attacker hide a duplicate)
+//
+const NAME_RE = /^(?!\s)(?!.*\s$)[^/\u0000-\u001F\u007F\u200B-\u200F\u2028-\u202F\u2060-\u206F\uFEFF]+$/;
+const NAME_INVALID_MESSAGE =
+  "Cannot contain '/', control characters, zero-width characters, or leading/trailing whitespace";
+
+// Backwards-compat aliases — kept so existing import sites don't churn.
+const noSlashRegex = NAME_RE;
+const noSlashMessage = NAME_INVALID_MESSAGE;
 
 // Cap body size to 1 MB (audit fix #26). Without this an agent could
 // upload arbitrarily large markdown that blows up the search_tsv
