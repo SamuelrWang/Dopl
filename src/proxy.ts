@@ -50,6 +50,30 @@ export async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
+  // Audit fix S-8: redirect mixed-case URLs to lowercase. Slugs in this
+  // app (workspaces, canvases, knowledge bases, entries, clusters) are
+  // generated lowercase, but Next's router is case-sensitive — so a
+  // pasted `/Default/knowledge` 404s instead of resolving to the same
+  // workspace as `/default/knowledge`. 308 redirects so the canonical
+  // lowercase form is the one search engines and history remember.
+  //
+  // Skip: API routes (path may include case-sensitive UUIDs / tokens
+  // / signatures); /_next; OG/twitter image routes; /invite/<token>
+  // (signed token); /auth/callback (may carry case-sensitive code).
+  if (
+    /[A-Z]/.test(pathname) &&
+    !pathname.startsWith("/api/") &&
+    !pathname.startsWith("/_next/") &&
+    !pathname.startsWith("/invite/") &&
+    !pathname.startsWith("/auth/") &&
+    !pathname.endsWith("/opengraph-image") &&
+    !pathname.endsWith("/twitter-image")
+  ) {
+    const url = request.nextUrl.clone();
+    url.pathname = pathname.toLowerCase();
+    return NextResponse.redirect(url, 308);
+  }
+
   // Allow OG / Twitter image routes through for social crawlers that
   // have no session. Convention-based route files like
   // /community/[slug]/opengraph-image resolve to paths ending in
