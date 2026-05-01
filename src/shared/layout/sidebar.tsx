@@ -8,7 +8,10 @@ import {
   Activity,
   BookOpen,
   ChevronDown,
+  ChevronRight,
+  Home,
   LayoutGrid,
+  MessageSquare,
   Plus,
   Search,
   Settings,
@@ -17,6 +20,8 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { RESERVED_WORKSPACE_SLUGS } from "@/config";
+import { HARDCODED_KBS } from "@/features/knowledge/data";
+import { HARDCODED_SKILLS } from "@/features/skills/data";
 import { UserMenu } from "./user-menu";
 
 interface WorkspaceLike {
@@ -25,7 +30,14 @@ interface WorkspaceLike {
   slug: string;
 }
 
-type NavSection = "canvas" | "knowledge" | "skills" | "activity";
+type NavSection =
+  | "overview"
+  | "canvas"
+  | "chat"
+  | "knowledge"
+  | "skills"
+  | "activity"
+  | "settings";
 
 interface NavItem {
   label: string;
@@ -34,10 +46,25 @@ interface NavItem {
 }
 
 const navItems: ReadonlyArray<NavItem> = [
+  { label: "Overview", icon: Home, section: "overview" },
   { label: "Canvas", icon: LayoutGrid, section: "canvas" },
+  { label: "Chat", icon: MessageSquare, section: "chat" },
   { label: "Knowledge", icon: BookOpen, section: "knowledge" },
   { label: "Skills", icon: Sparkles, section: "skills" },
   { label: "Activity", icon: Activity, section: "activity" },
+  { label: "Settings", icon: Settings, section: "settings" },
+];
+
+/** Static workspace sub-routes — anything matching `/{ws}/<one of these>`
+ * is a named sub-page, not a canvas slug. Used by `isCanvasPath` to
+ * keep the Canvas nav item from claiming the active state on these. */
+const NAMED_WORKSPACE_SUBROUTES: ReadonlyArray<string> = [
+  "overview",
+  "chat",
+  "knowledge",
+  "skills",
+  "activity",
+  "settings",
 ];
 
 /**
@@ -62,7 +89,7 @@ function isCanvasPath(pathname: string): boolean {
   // workspace sub-routes.
   if (segments.length < 2) return false;
   if (RESERVED_WORKSPACE_SLUGS.has(segments[0])) return false;
-  return !["knowledge", "skills", "activity", "settings"].includes(segments[1]);
+  return !NAMED_WORKSPACE_SUBROUTES.includes(segments[1]);
 }
 
 function sectionPathFor(slug: string, section: NavSection): string {
@@ -78,7 +105,7 @@ export function Sidebar() {
 
   return (
     <aside
-      className="hidden md:flex h-screen w-64 shrink-0 flex-col border-r border-white/[0.06] pointer-events-auto"
+      className="hidden md:flex fixed inset-y-0 left-0 w-64 z-10 flex-col overflow-hidden border-r border-white/[0.06] pointer-events-auto"
       style={{ backgroundColor: "oklch(0.13 0 0)" }}
     >
       <SidebarHeader
@@ -87,11 +114,16 @@ export function Sidebar() {
         workspaces={workspaces}
       />
       <SidebarSearchRow />
-      <SidebarNav
-        pathname={pathname}
-        workspaceSlug={currentWorkspace?.slug ?? slug}
-      />
-      <div className="mt-auto px-3 py-3 border-t border-white/[0.06]">
+      {/* Nav region claims the remaining height and scrolls internally
+          when the list of expanded KBs / skills overflows. min-h-0 is
+          required for overflow-y to work inside a flex column. */}
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <SidebarNav
+          pathname={pathname}
+          workspaceSlug={currentWorkspace?.slug ?? slug}
+        />
+      </div>
+      <div className="px-3 py-3 border-t border-white/[0.06]">
         <UserMenu dropdownDirection="up" />
       </div>
     </aside>
@@ -206,14 +238,6 @@ function SidebarHeader({ currentSlug, currentName, workspaces }: SidebarHeaderPr
           )}
           <div className="border-t border-white/[0.06] py-1">
             <Link
-              href={`/${currentSlug}/settings`}
-              onClick={() => setOpen(false)}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm text-text-secondary hover:bg-white/[0.04] hover:text-text-primary transition-colors cursor-pointer"
-            >
-              <Settings size={13} className="shrink-0" />
-              Workspace settings
-            </Link>
-            <Link
               href="/workspaces"
               onClick={() => setOpen(false)}
               className="flex items-center gap-2 px-3 py-1.5 text-sm text-text-secondary hover:bg-white/[0.04] hover:text-text-primary transition-colors cursor-pointer"
@@ -268,6 +292,28 @@ function SidebarNav({ pathname, workspaceSlug }: NavProps) {
     <nav className="flex flex-col gap-0.5 px-2 py-2">
       {navItems.map((item) => {
         const Icon = item.icon;
+
+        // Knowledge + Skills get their own collapsible sub-lists. The
+        // other sections render as plain links / disabled buttons.
+        if (item.section === "knowledge") {
+          return (
+            <KnowledgeNavSection
+              key={item.section}
+              pathname={pathname}
+              workspaceSlug={workspaceSlug}
+            />
+          );
+        }
+        if (item.section === "skills") {
+          return (
+            <SkillsNavSection
+              key={item.section}
+              pathname={pathname}
+              workspaceSlug={workspaceSlug}
+            />
+          );
+        }
+
         const active =
           item.section === "canvas"
             ? isCanvasPath(pathname)
@@ -310,5 +356,218 @@ function SidebarNav({ pathname, workspaceSlug }: NavProps) {
         );
       })}
     </nav>
+  );
+}
+
+/**
+ * Knowledge nav row + collapsible KB list. Auto-expands when the user
+ * is currently on a /knowledge/* path so the nested KB they're viewing
+ * is visible as the active row. The chevron toggles independently of
+ * navigation: clicking the row label routes to the KB index page,
+ * clicking the chevron expands/collapses without navigating.
+ */
+function KnowledgeNavSection({ pathname, workspaceSlug }: NavProps) {
+  const segments = pathname.split("/").filter(Boolean);
+  const isOnKnowledge =
+    segments.length >= 2 &&
+    !RESERVED_WORKSPACE_SLUGS.has(segments[0]) &&
+    segments[1] === "knowledge";
+  const currentKbSlug = isOnKnowledge ? segments[2] ?? null : null;
+
+  const [expanded, setExpanded] = useState(isOnKnowledge);
+
+  const rowClassName = cn(
+    "flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-sm transition-colors cursor-pointer",
+    isOnKnowledge
+      ? "bg-white/[0.06] text-text-primary"
+      : "text-text-secondary hover:bg-white/[0.04] hover:text-text-primary",
+  );
+
+  const labelInner = (
+    <>
+      <BookOpen size={15} className="shrink-0" />
+      <span className="flex-1 text-left">Knowledge</span>
+    </>
+  );
+
+  return (
+    <>
+      <div className={cn(rowClassName, "pr-1")}>
+        {workspaceSlug ? (
+          <Link
+            href={`/${workspaceSlug}/knowledge`}
+            className="flex items-center gap-2.5 flex-1 min-w-0"
+          >
+            {labelInner}
+          </Link>
+        ) : (
+          <span className="flex items-center gap-2.5 flex-1 opacity-60">
+            {labelInner}
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setExpanded((v) => !v);
+          }}
+          aria-label={expanded ? "Collapse knowledge bases" : "Expand knowledge bases"}
+          className="shrink-0 w-5 h-5 rounded flex items-center justify-center hover:bg-white/[0.06] transition-colors cursor-pointer"
+        >
+          {expanded ? (
+            <ChevronDown size={13} className="text-text-secondary/60" />
+          ) : (
+            <ChevronRight size={13} className="text-text-secondary/60" />
+          )}
+        </button>
+      </div>
+
+      {expanded && (
+        <div className="ml-4 mt-0.5 mb-1 flex flex-col gap-0.5 border-l border-white/[0.06] pl-2">
+          {HARDCODED_KBS.map((kb) => {
+            const itemActive = kb.slug === currentKbSlug;
+            const itemClass = cn(
+              "block px-2 py-1 rounded-md text-xs transition-colors cursor-pointer truncate",
+              itemActive
+                ? "bg-white/[0.06] text-text-primary"
+                : "text-text-secondary hover:bg-white/[0.04] hover:text-text-primary",
+            );
+            const itemInner = <span className="truncate">{kb.name}</span>;
+            if (workspaceSlug) {
+              return (
+                <Link
+                  key={kb.slug}
+                  href={`/${workspaceSlug}/knowledge/${kb.slug}`}
+                  className={itemClass}
+                >
+                  {itemInner}
+                </Link>
+              );
+            }
+            return (
+              <span key={kb.slug} className={cn(itemClass, "opacity-60")}>
+                {itemInner}
+              </span>
+            );
+          })}
+
+          {workspaceSlug ? (
+            <Link
+              href={`/${workspaceSlug}/knowledge`}
+              className="flex items-center gap-2 px-2 py-1 rounded-md text-xs text-text-secondary/70 hover:bg-white/[0.04] hover:text-text-primary transition-colors cursor-pointer"
+            >
+              <Plus size={11} className="shrink-0" />
+              New knowledge base
+            </Link>
+          ) : null}
+        </div>
+      )}
+    </>
+  );
+}
+
+/**
+ * Skills nav row + collapsible list. Mirrors KnowledgeNavSection —
+ * auto-expands when on /skills/*, label routes to the skills index,
+ * chevron toggles expansion. Children are the workspace's skills,
+ * each linking to its detail page.
+ */
+function SkillsNavSection({ pathname, workspaceSlug }: NavProps) {
+  const segments = pathname.split("/").filter(Boolean);
+  const isOnSkills =
+    segments.length >= 2 &&
+    !RESERVED_WORKSPACE_SLUGS.has(segments[0]) &&
+    segments[1] === "skills";
+  const currentSkillSlug = isOnSkills ? segments[2] ?? null : null;
+
+  const [expanded, setExpanded] = useState(isOnSkills);
+
+  const rowClassName = cn(
+    "flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-sm transition-colors cursor-pointer",
+    isOnSkills
+      ? "bg-white/[0.06] text-text-primary"
+      : "text-text-secondary hover:bg-white/[0.04] hover:text-text-primary",
+  );
+
+  const labelInner = (
+    <>
+      <Sparkles size={15} className="shrink-0" />
+      <span className="flex-1 text-left">Skills</span>
+    </>
+  );
+
+  return (
+    <>
+      <div className={cn(rowClassName, "pr-1")}>
+        {workspaceSlug ? (
+          <Link
+            href={`/${workspaceSlug}/skills`}
+            className="flex items-center gap-2.5 flex-1 min-w-0"
+          >
+            {labelInner}
+          </Link>
+        ) : (
+          <span className="flex items-center gap-2.5 flex-1 opacity-60">
+            {labelInner}
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setExpanded((v) => !v);
+          }}
+          aria-label={expanded ? "Collapse skills" : "Expand skills"}
+          className="shrink-0 w-5 h-5 rounded flex items-center justify-center hover:bg-white/[0.06] transition-colors cursor-pointer"
+        >
+          {expanded ? (
+            <ChevronDown size={13} className="text-text-secondary/60" />
+          ) : (
+            <ChevronRight size={13} className="text-text-secondary/60" />
+          )}
+        </button>
+      </div>
+
+      {expanded && (
+        <div className="ml-4 mt-0.5 mb-1 flex flex-col gap-0.5 border-l border-white/[0.06] pl-2">
+          {HARDCODED_SKILLS.map((skill) => {
+            const itemActive = skill.slug === currentSkillSlug;
+            const itemClass = cn(
+              "block px-2 py-1 rounded-md text-xs transition-colors cursor-pointer truncate",
+              itemActive
+                ? "bg-white/[0.06] text-text-primary"
+                : "text-text-secondary hover:bg-white/[0.04] hover:text-text-primary",
+            );
+            const itemInner = <span className="truncate">{skill.name}</span>;
+            if (workspaceSlug) {
+              return (
+                <Link
+                  key={skill.slug}
+                  href={`/${workspaceSlug}/skills/${skill.slug}`}
+                  className={itemClass}
+                >
+                  {itemInner}
+                </Link>
+              );
+            }
+            return (
+              <span key={skill.slug} className={cn(itemClass, "opacity-60")}>
+                {itemInner}
+              </span>
+            );
+          })}
+
+          {workspaceSlug ? (
+            <Link
+              href={`/${workspaceSlug}/skills`}
+              className="flex items-center gap-2 px-2 py-1 rounded-md text-xs text-text-secondary/70 hover:bg-white/[0.04] hover:text-text-primary transition-colors cursor-pointer"
+            >
+              <Plus size={11} className="shrink-0" />
+              New skill
+            </Link>
+          ) : null}
+        </div>
+      )}
+    </>
   );
 }

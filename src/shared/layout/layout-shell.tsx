@@ -54,19 +54,28 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
     );
   }
 
+  // Sidebar is `fixed` so it doesn't constrain `<main>` to viewport
+  // height. That matters for the canvas page: the canvas portals itself
+  // to document.body at `fixed inset-0 z-[1]`, and a full-height
+  // `<main>` with `pointer-events-auto` would sit on top of it and
+  // swallow drag/click events even though it has no painted content.
+  // With sidebar fixed-positioned, main returns to natural block flow:
+  // it only takes up as much height as its (mostly empty) children
+  // need, leaving the rest of the viewport free for the canvas to
+  // receive pointer events.
   return (
     <>
       <FlushGrid />
-      <div className="relative z-[2] flex h-screen pointer-events-none">
-        <Sidebar />
+      <Sidebar />
+      <div className="relative z-[2] pointer-events-none md:pl-64">
         <main
           className={
             // /browse goes full-viewport-width: chat rail flushes to
             // the left edge, grid fills the rest. No mx-auto + no
             // max-width so wide monitors don't get empty side gutters.
             isBrowse
-              ? "flex-1 overflow-auto pl-3 pr-3 pt-3 pb-3 pointer-events-auto"
-              : "flex-1 overflow-auto px-8 py-8 pointer-events-auto"
+              ? "w-full pl-3 pr-3 pt-3 pb-3 pointer-events-auto"
+              : "container mx-auto px-4 py-8 pointer-events-auto"
           }
         >
           {children}
