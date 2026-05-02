@@ -32,8 +32,12 @@ const slugRegex = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 //     - no control / zero-width characters (would render identically
 //       to a sibling and let an agent or attacker hide a duplicate)
 //
-const NAME_RE = /^(?!\s)(?!.*\s$)[^/\u0000-\u001F\u007F\u200B-\u200F\u2028-\u202F\u2060-\u206F\uFEFF]+$/;
-const NAME_INVALID_MESSAGE =
+// Exported so non-zod call sites (e.g. WriteFileSchema in the
+// path-write route) can validate against the same constraint without
+// re-declaring the literal — single source of truth for folder / entry
+// name validation.
+export const NAME_RE = /^(?!\s)(?!.*\s$)[^/\u0000-\u001F\u007F\u200B-\u200F\u2028-\u202F\u2060-\u206F\uFEFF]+$/;
+export const NAME_INVALID_MESSAGE =
   "Cannot contain '/', control characters, zero-width characters, or leading/trailing whitespace";
 
 // Backwards-compat aliases — kept so existing import sites don't churn.

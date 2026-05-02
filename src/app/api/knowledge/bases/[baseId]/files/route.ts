@@ -9,6 +9,10 @@ import {
   readFileByPath,
   writeFileByPath,
 } from "@/features/knowledge/server/service";
+import {
+  NAME_RE,
+  NAME_INVALID_MESSAGE,
+} from "@/features/knowledge/schema";
 
 /**
  * Path-based file CRUD. Used by MCP tools (`kb_read_file`, `kb_write_file`)
@@ -29,16 +33,10 @@ function requirePathParam(request: NextRequest): string {
   return path;
 }
 
-// `title` constraints match KnowledgeEntryUpdateSchema in
-// features/knowledge/schema.ts (audit fix #14): no '/', no
-// leading/trailing whitespace, no control / zero-width characters.
-// Path-addressing is case-sensitive and byte-exact (filesystem
-// semantics) — see schema.ts for design rationale.
-//
-// `body` capped at 1 MB to match the entry-create / entry-update zod.
-const NAME_RE = /^(?!\s)(?!.*\s$)[^/\u0000-\u001F\u007F\u200B-\u200F\u2028-\u202F\u2060-\u206F\uFEFF]+$/;
-const NAME_INVALID_MESSAGE =
-  "Cannot contain '/', control characters, zero-width characters, or leading/trailing whitespace";
+// `title` constraints + 1 MB body cap mirror KnowledgeEntryUpdateSchema
+// in features/knowledge/schema.ts. NAME_RE / NAME_INVALID_MESSAGE are
+// imported from the schema module so the literal lives in exactly one
+// place (audit cohesion fix F-2).
 const MAX_BODY_BYTES = 1_048_576;
 const WriteFileSchema = z.object({
   path: z.string(),

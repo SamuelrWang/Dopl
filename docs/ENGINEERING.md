@@ -109,9 +109,13 @@ These are allowed under the exceptions above OR scheduled for a future split. If
 | `src/features/canvas/canvas-store/reducer.ts` | ~800 | Exception: cohesive state-machine reducer |
 | `src/features/canvas/canvas.tsx` | ~720 | Scheduled: imperative pointer/wheel handlers await extraction into `use-viewport` + `use-interactions` hooks |
 | `src/features/canvas/use-panel-ingestion.ts` | ~820 | Scheduled: split into glue hook + pure `ingestion-client` |
-| `src/features/clusters/server/service.ts` | ~520 | Scheduled: cluster-brain canvas-panel spawn logic would split cleanly |
-| `packages/mcp-server/src/server.ts` | ~1900 | Scheduled: split per-tool registrations into per-domain modules (packs, clusters, canvas, ingest) — see CLI as the precedent |
-| `packages/dopl-client/src/client.ts` | ~630 | Scheduled: split into per-domain method groups (knowledge.ts already extracted; canvas/clusters/ingest next) |
+| `packages/mcp-server/src/server.ts` | ~2000 | Scheduled: split per-tool registrations into per-domain modules (packs, clusters, canvas, ingest) — see CLI as the precedent. Tracked in [TRACKED-DEBT.md](TRACKED-DEBT.md#20). |
+| `packages/dopl-client/src/client.ts` | ~640 | Scheduled: split into per-domain method groups (knowledge.ts already extracted; canvas/clusters/ingest next). |
+| `src/features/knowledge/server/service.ts` | ~960 | Scheduled: split per-domain (`bases.ts` / `folders.ts` / `entries.ts` / `path-ops.ts` / `trash.ts`). Tracked in [TRACKED-DEBT.md](TRACKED-DEBT.md#19). |
+| `src/features/knowledge/server/repository.ts` | ~695 | Scheduled: mirror the service split. Tracked in [TRACKED-DEBT.md](TRACKED-DEBT.md#19). |
+| `src/features/knowledge/server/seed-fixtures-data.ts` | ~670 | Exception: pure data table (string literals + types) — qualifies under the §2 "Pure data/config tables" carve-out. |
+| `src/features/knowledge/components/knowledge-tree.tsx` | ~640 | Scheduled: extract drag-drop hook + `TreeNode` sub-component. Tracked in [TRACKED-DEBT.md](TRACKED-DEBT.md#19). |
+| `src/features/knowledge/components/knowledge-base-view.tsx` | ~630 | Scheduled: extract `DocPane` to its own file. Tracked in [TRACKED-DEBT.md](TRACKED-DEBT.md#19). |
 
 ---
 

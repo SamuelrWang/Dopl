@@ -89,3 +89,25 @@ export interface KnowledgeTreeSnapshot {
   folders: KnowledgeFolder[];
   entries: KnowledgeEntry[];
 }
+
+// ─── Source provider types ──────────────────────────────────────────
+//
+// Used by the connector badges in the workspace overview and (legacy)
+// by the skills feature. Folded here from `source-types.ts` for parity
+// with the §3 layout (audit cohesion fix F-3); `source-types.ts` now
+// re-exports these for the existing consumers (mostly the in-progress
+// skills feature) and can be deleted once those imports are updated.
+
+export type SourceProvider =
+  | "slack"
+  | "google-drive"
+  | "gmail"
+  | "notion"
+  | "github";
+
+export interface SourceConnection {
+  provider: SourceProvider;
+  name: string;
+  status: "connected" | "available";
+  meta?: string;
+}
