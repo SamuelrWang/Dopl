@@ -1,6 +1,6 @@
 {
   "name": "@dopl/client",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Shared HTTP client for the Dopl API — consumed by @dopl/mcp-server and @dopl/cli",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -26,7 +26,6 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "@dopl/client": "^0.5.0",
     "debug": "^4.4.3"
   },
   "publishConfig": {

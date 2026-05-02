@@ -103,7 +103,7 @@ export default function RootLayout({
             isNoChrome in layout-shell.tsx. */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var p=location.pathname;if(p==='/'||p==='/landing-v2'||p.indexOf('/docs')===0){document.body.classList.remove('mosaic-bg');document.body.classList.add('landing-active');}}catch(e){}})();`,
+            __html: `(function(){try{var p=location.pathname;if(p==='/'||p.indexOf('/docs')===0){document.body.classList.remove('mosaic-bg');document.body.classList.add('landing-active');}}catch(e){}})();`,
           }}
         />
         <LayoutShell>{children}</LayoutShell>

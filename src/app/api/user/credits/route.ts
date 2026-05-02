@@ -20,7 +20,6 @@ async function handleGet(
     cycleCreditsGranted: null,
     dailyBonus: null,
     dailyBonusAvailable: false,
-    earlySupporterGrantedAt: null,
     deprecated: true,
     replaced_by: "/api/billing/access",
   });
