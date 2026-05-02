@@ -16,7 +16,7 @@ interface Ctx {
  */
 export const GET = withUserAuth(async (_request: NextRequest, { userId, params }: Ctx) => {
   try {
-    const workspaceSlug = params?.slug;
+    const workspaceSlug = params?.workspaceSlug;
     const canvasSlug = params?.canvasSlug;
     if (!workspaceSlug || !canvasSlug) {
       return NextResponse.json(

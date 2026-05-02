@@ -20,7 +20,7 @@ interface Ctx {
 export const GET = withUserAuth(
   async (_request: NextRequest, { userId, params }: Ctx) => {
     try {
-      const workspaceSlug = params?.slug;
+      const workspaceSlug = params?.workspaceSlug;
       if (!workspaceSlug) {
         return NextResponse.json({ error: "workspaceSlug required" }, { status: 400 });
       }

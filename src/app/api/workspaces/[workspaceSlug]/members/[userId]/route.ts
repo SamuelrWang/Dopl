@@ -25,7 +25,7 @@ interface Ctx {
 export const PATCH = withUserAuth(
   async (request: NextRequest, { userId, params }: Ctx) => {
     try {
-      const workspaceSlug = params?.slug;
+      const workspaceSlug = params?.workspaceSlug;
       const targetUserId = params?.userId;
       if (!workspaceSlug || !targetUserId) {
         return NextResponse.json({ error: "workspaceSlug + userId required" }, { status: 400 });
@@ -54,7 +54,7 @@ export const PATCH = withUserAuth(
 export const DELETE = withUserAuth(
   async (_request: NextRequest, { userId, params }: Ctx) => {
     try {
-      const workspaceSlug = params?.slug;
+      const workspaceSlug = params?.workspaceSlug;
       const targetUserId = params?.userId;
       if (!workspaceSlug || !targetUserId) {
         return NextResponse.json({ error: "workspaceSlug + userId required" }, { status: 400 });
