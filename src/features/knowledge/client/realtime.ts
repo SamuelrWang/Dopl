@@ -14,7 +14,7 @@
  * the server filters events to rows the user can read.
  */
 
-import { useEffect, useRef } from "react";
+import { useEffect, useId, useRef } from "react";
 import { getSupabaseBrowser } from "@/shared/supabase/browser";
 
 const RECONNECT_DELAYS_MS = [500, 1000, 2000, 4000, 8000, 15000];
@@ -31,6 +31,16 @@ export function useKnowledgeRealtime(
   useEffect(() => {
     onChangeRef.current = onChange;
   });
+
+  // Per-instance channel topic. Multiple components can mount this
+  // hook for the same workspaceId (workspace browser + each open
+  // single-KB panel). If we used a shared topic name like
+  // `knowledge-realtime-${wsId}`, the second subscriber's `.on(...)`
+  // calls would arrive AFTER the first subscriber's `.subscribe()`,
+  // and Supabase v2 throws — taking down the page. Including
+  // React's stable per-instance id keeps each subscriber on its
+  // own topic.
+  const instanceId = useId();
 
   useEffect(() => {
     if (!workspaceId) return;
@@ -75,7 +85,9 @@ export function useKnowledgeRealtime(
       // The Supabase JS .on("postgres_changes", …) handler signature is
       // loosely typed at runtime — cast through any.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const chan = supabase.channel(`knowledge-realtime-${wsId}`) as any;
+      const chan = supabase.channel(
+        `knowledge-realtime-${wsId}-${instanceId}`
+      ) as any;
 
       const channel = chan
         .on(
@@ -147,5 +159,5 @@ export function useKnowledgeRealtime(
         activeChannel = null;
       }
     };
-  }, [workspaceId]);
+  }, [workspaceId, instanceId]);
 }

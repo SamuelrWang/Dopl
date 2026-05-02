@@ -8,7 +8,7 @@
  * lost. RLS still applies — the client connects under the user's auth.
  */
 
-import { useEffect, useRef } from "react";
+import { useEffect, useId, useRef } from "react";
 import { getSupabaseBrowser } from "@/shared/supabase/browser";
 
 const RECONNECT_DELAYS_MS = [500, 1000, 2000, 4000, 8000, 15000];
@@ -23,6 +23,13 @@ export function useSkillsRealtime(
   useEffect(() => {
     onChangeRef.current = onChange;
   });
+
+  // Per-instance channel topic so multiple subscribers (workspace
+  // skills browser + each open single-skill panel) don't collide on
+  // a shared topic name. Supabase v2 throws if a second subscriber
+  // tries to attach `.on(...)` after the first has already called
+  // `.subscribe()`.
+  const instanceId = useId();
 
   useEffect(() => {
     if (!workspaceId) return;
@@ -65,7 +72,9 @@ export function useSkillsRealtime(
       }
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const chan = supabase.channel(`skills-realtime-${wsId}`) as any;
+      const chan = supabase.channel(
+        `skills-realtime-${wsId}-${instanceId}`
+      ) as any;
 
       const channel = chan
         .on(
@@ -124,5 +133,5 @@ export function useSkillsRealtime(
         activeChannel = null;
       }
     };
-  }, [workspaceId]);
+  }, [workspaceId, instanceId]);
 }

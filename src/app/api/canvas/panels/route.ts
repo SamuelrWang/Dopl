@@ -53,7 +53,8 @@ export const GET = withWorkspaceAuth(async (_request, { workspaceId }) => {
 
 /**
  * POST /api/canvas/panels — add a panel to the active canvas.
- * Supports all panel types: entry, chat, connection, browse, cluster-brain.
+ * Supported panel types: entry, chat, connection, browse, cluster-brain,
+ * knowledge, skills, knowledge-base, skill.
  * Body: { panel_id, panel_type, entry_id?, x, y, width?, height?, title?, summary?, source_url?, panel_data? }
  */
 export const POST = withWorkspaceAuth(
@@ -72,7 +73,20 @@ export const POST = withWorkspaceAuth(
       return NextResponse.json({ error: "panel_id or entry_id is required" }, { status: 400 });
     }
 
-    const VALID_PANEL_TYPES = ["entry", "chat", "connection", "browse", "cluster-brain"];
+    // Allow-list MUST mirror the discriminated union in
+    // src/features/canvas/types.ts and the cases in panel-dto.ts.
+    // When adding a new panel type, update all three sites.
+    const VALID_PANEL_TYPES = [
+      "entry",
+      "chat",
+      "connection",
+      "browse",
+      "cluster-brain",
+      "knowledge",
+      "skills",
+      "knowledge-base",
+      "skill",
+    ];
     if (panel_type && !VALID_PANEL_TYPES.includes(panel_type)) {
       return NextResponse.json(
         { error: `Invalid panel_type. Must be one of: ${VALID_PANEL_TYPES.join(", ")}` },
