@@ -97,7 +97,13 @@ export async function ensureDefaultWorkspace(userId: string): Promise<Workspace>
   const existing = await findDefaultWorkspaceForUser(userId);
   if (existing) return existing;
   const name = "My Workspace";
-  const slug = slugifyWorkspaceName(name, []);
+  // S-4 follow-up: workspace slugs are GLOBALLY unique, not owner-
+  // scoped. Two users signing up at the same time both need
+  // disambiguated default slugs. We probe with `slugifyWorkspaceName`
+  // against globally-taken slugs first; on the off chance a parallel
+  // insert wins the race, we catch the 23505 and retry with a hash
+  // suffix until insertion succeeds.
+  const slug = await pickGloballyUniqueSlug(name);
   try {
     return await insertWorkspaceWithOwnerMembership({
       ownerId: userId,
@@ -105,16 +111,44 @@ export async function ensureDefaultWorkspace(userId: string): Promise<Workspace>
       slug,
     });
   } catch (err) {
-    const code =
-      err && typeof err === "object" && "code" in err
-        ? (err as { code?: string }).code
-        : null;
+    const code = pgErrorCode(err);
     if (code === "23505") {
+      // Either another tab created the user's default first, OR a
+      // different user grabbed our chosen slug between probe and
+      // insert. Re-resolve in that order.
       const winner = await findDefaultWorkspaceForUser(userId);
       if (winner) return winner;
+      // Different-user collision — retry with a fresh suffix.
+      const fallback = await pickGloballyUniqueSlug(name);
+      return await insertWorkspaceWithOwnerMembership({
+        ownerId: userId,
+        name,
+        slug: fallback,
+      });
     }
     throw err;
   }
+}
+
+/**
+ * Loads every existing workspace slug and runs `slugifyWorkspaceName`
+ * against the global set. Workspace count is small enough that a full
+ * slug list is cheap; if the table grows past ~10k a single-row
+ * existence-probe + retry-with-suffix loop is the next iteration.
+ */
+async function pickGloballyUniqueSlug(name: string): Promise<string> {
+  const db = supabaseAdmin();
+  const { data, error } = await db.from("workspaces").select("slug");
+  if (error) throw error;
+  const taken = (data ?? []).map((r) => (r as { slug: string }).slug);
+  return slugifyWorkspaceName(name, taken);
+}
+
+function pgErrorCode(err: unknown): string | null {
+  if (err && typeof err === "object" && "code" in err) {
+    return (err as { code?: string }).code ?? null;
+  }
+  return null;
 }
 
 export async function listMyWorkspaces(userId: string): Promise<Workspace[]> {
@@ -125,19 +159,31 @@ export async function createWorkspaceForUser(
   userId: string,
   input: { name: string; description?: string | null }
 ): Promise<Workspace> {
-  const db = supabaseAdmin();
-  const { data: existing } = await db
-    .from("workspaces")
-    .select("slug")
-    .eq("owner_id", userId);
-  const taken = (existing ?? []).map((r) => (r as { slug: string }).slug);
-  const slug = slugifyWorkspaceName(input.name, taken);
-  return insertWorkspaceWithOwnerMembership({
-    ownerId: userId,
-    name: input.name,
-    slug,
-    description: input.description ?? null,
-  });
+  // Globally unique slugs (S-4 follow-up). Owner-scoped dedupe was
+  // letting two users share the same slug, which made shared-workspace
+  // URLs ambiguous for invitees. On 23505 race with a parallel writer,
+  // retry once with a fresh suffix derived against the now-current
+  // slug list.
+  const slug = await pickGloballyUniqueSlug(input.name);
+  try {
+    return await insertWorkspaceWithOwnerMembership({
+      ownerId: userId,
+      name: input.name,
+      slug,
+      description: input.description ?? null,
+    });
+  } catch (err) {
+    if (pgErrorCode(err) === "23505") {
+      const fallback = await pickGloballyUniqueSlug(input.name);
+      return await insertWorkspaceWithOwnerMembership({
+        ownerId: userId,
+        name: input.name,
+        slug: fallback,
+        description: input.description ?? null,
+      });
+    }
+    throw err;
+  }
 }
 
 export async function renameWorkspace(
@@ -158,12 +204,11 @@ export async function renameWorkspace(
   if (patch.description !== undefined) update.description = patch.description;
   if (patch.name && patch.name !== workspace.name) update.name = patch.name;
 
-  // Audit fix S-11: caller can override the slug explicitly. Validate
-  // against the same rules slugifyWorkspaceName enforces — owner-scoped
-  // uniqueness + RESERVED_WORKSPACE_SLUGS — so we surface a clean 4xx
-  // instead of a Postgres 23505 on the (owner_id, slug) UNIQUE.
-  // Owner-scoped slug list is loaded only once even if both branches
-  // below need it.
+  // S-4 follow-up: slug uniqueness is GLOBAL now, not owner-scoped.
+  // Validate explicit slug overrides + name-derived slugs against
+  // every existing workspace's slug (excluding ourselves), so we
+  // surface a clean 4xx instead of a Postgres 23505 from the global
+  // unique constraint.
   let slugTaken: string[] | null = null;
   const loadSlugTaken = async (): Promise<string[]> => {
     if (slugTaken !== null) return slugTaken;
@@ -171,7 +216,6 @@ export async function renameWorkspace(
     const { data: existing } = await db
       .from("workspaces")
       .select("slug")
-      .eq("owner_id", workspace.ownerId)
       .neq("id", workspaceId);
     slugTaken = (existing ?? []).map((r) => (r as { slug: string }).slug);
     return slugTaken;
@@ -183,7 +227,7 @@ export async function renameWorkspace(
       throw new HttpError(
         409,
         "WORKSPACE_SLUG_TAKEN",
-        `You already own a workspace with slug "${patch.slug}".`
+        `Slug "${patch.slug}" is already in use.`
       );
     }
     if (RESERVED_WORKSPACE_SLUGS.has(patch.slug)) {
