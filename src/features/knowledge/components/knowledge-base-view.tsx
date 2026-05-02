@@ -24,9 +24,12 @@ import {
   updateEntry as apiUpdateEntry,
   updateFolder as apiUpdateFolder,
 } from "../client/api";
+// `KnowledgeApiError` is still used by `reportError` below (rename /
+// move / delete handlers); the autosave-side usage moved out with
+// DocPane to ./doc-pane.tsx.
 import { useKnowledgeEntry } from "../client/hooks";
 import { useKnowledgeRealtime } from "../client/realtime";
-import { DocEditor, SaveStatusIndicator, type SaveStatus } from "./doc-editor";
+import { DocPane } from "./doc-pane";
 import { KnowledgeSearch } from "./knowledge-search";
 import { KnowledgeTree } from "./knowledge-tree";
 import { MoveToDialog } from "./move-to-dialog";
@@ -40,8 +43,6 @@ interface Props {
   folders: KnowledgeFolder[];
   entries: KnowledgeEntry[];
 }
-
-const AUTOSAVE_DELAY_MS = 1500;
 
 export function KnowledgeBaseView({
   workspaceSlug,
@@ -337,6 +338,13 @@ export function KnowledgeBaseView({
                   refetchEntry();
                   refresh();
                 }}
+                onFocusRefetch={() => {
+                  // Tab regained focus and the editor isn't dirty —
+                  // pull the latest tree + entry body so the user sees
+                  // changes another tab/agent saved while away.
+                  refetchEntry();
+                  refresh();
+                }}
               />
             ) : (
               <EmptyState />
@@ -426,192 +434,6 @@ function EmptyState() {
         No entries yet. Click &ldquo;Add entry&rdquo; to create one.
       </p>
     </div>
-  );
-}
-
-// ── Right pane — selected entry with autosave ───────────────────────
-
-interface DocPaneProps {
-  entry: KnowledgeEntry;
-  workspaceId: string;
-  /** Called after a successful save — the parent refetches the tree
-   *  to pick up updated metadata (title, updated_at). */
-  onSaved: () => void;
-  /** Called when the server returns 412 (stale updated_at). Parent
-   *  should refetch the entry's full body so the next save isn't
-   *  rejected on the same precondition. Item 5 audit fix. */
-  onStaleVersion: () => void;
-}
-
-/**
- * Document view of a single entry. Title + body are debounce-saved
- * to the API ~1.5s after the user stops typing. Status indicator in
- * the header transitions: idle → dirty → saving → saved → idle.
- */
-function DocPane({ entry, workspaceId, onSaved, onStaleVersion }: DocPaneProps) {
-  const [title, setTitle] = useState(entry.title);
-  const [body, setBody] = useState(entry.body);
-  const [status, setStatus] = useState<SaveStatus>("idle");
-  // Track the last successfully saved values so we don't fire a save
-  // for content that already matches what's in the DB.
-  const lastSaved = useRef({ title: entry.title, body: entry.body });
-  // The `updated_at` we last observed — sent as the
-  // `X-Updated-At` precondition on the next PATCH (Item 5.A.3). When
-  // the server returns 412 we refetch and reset this to the fresh value.
-  const expectedUpdatedAtRef = useRef(entry.updatedAt);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // "Saved → idle" reset timer; cleared on unmount.
-  const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Mirror of the latest in-memory values, so the unmount-flush save
-  // sees current edits even if React state is stale within cleanup.
-  const latestRef = useRef({ title, body });
-  useEffect(() => {
-    latestRef.current = { title, body };
-  });
-
-  // Reset when switching entries — the parent passes a `key` so the
-  // component remounts, but seed lastSaved here to avoid an immediate
-  // save on first mount.
-  useEffect(() => {
-    lastSaved.current = { title: entry.title, body: entry.body };
-    expectedUpdatedAtRef.current = entry.updatedAt;
-  }, [entry.id, entry.title, entry.body, entry.updatedAt]);
-
-  // Cleanup + flush on unmount. If there are unsaved edits when the
-  // user switches entries (the parent uses `key={entry.id}` to remount
-  // DocPane, so unmount fires on every entry switch), fire a final
-  // save in the background — otherwise edits made within the 1.5s
-  // debounce window get lost.
-  //
-  // Audit fix #9: pass the same `expectedUpdatedAt` precondition the
-  // scheduled-save path uses. Without it, an unmount-flush whose
-  // ref is stale (because a parallel tab/agent edited the entry
-  // between the user's last save and the unmount) would silently
-  // overwrite the parallel edit with the user's older state. With
-  // the precondition, the server returns 412 and the in-flight
-  // unmount edits are dropped — losing ~1.5s of unsaved typing in
-  // a rare race is strictly better than silently losing the
-  // parallel writer's edits.
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-      if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
-      const { title: t, body: b } = latestRef.current;
-      const last = lastSaved.current;
-      if (t !== last.title || b !== last.body) {
-        const expectedUpdatedAt = expectedUpdatedAtRef.current;
-        apiUpdateEntry(
-          entry.id,
-          { title: t, body: b },
-          workspaceId,
-          expectedUpdatedAt
-        ).catch((err: unknown) => {
-          if (err instanceof KnowledgeApiError && err.status === 412) {
-            // Stale precondition — parallel writer won. Surface a
-            // breadcrumb in devtools so the dropped-on-unmount case
-            // is observable. Cannot toast: component is unmounting.
-            console.warn(
-              "[knowledge] unmount autosave dropped (412 stale)",
-              { entryId: entry.id }
-            );
-            return;
-          }
-          // Other errors (network, 5xx) — fire-and-forget, can't
-          // surface during unmount. Already logged server-side via
-          // the route handler's system_events trail.
-        });
-      }
-    };
-    // entry.id and workspaceId are stable for this mount (parent uses
-    // key=entry.id). Empty deps array intentionally — captures values
-    // at mount time which is exactly what we want to save.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const scheduleSave = useCallback(
-    (nextTitle: string, nextBody: string) => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-      setStatus("dirty");
-      timerRef.current = setTimeout(async () => {
-        if (
-          nextTitle === lastSaved.current.title &&
-          nextBody === lastSaved.current.body
-        ) {
-          setStatus("idle");
-          return;
-        }
-        setStatus("saving");
-        try {
-          const saved = await apiUpdateEntry(
-            entry.id,
-            { title: nextTitle, body: nextBody },
-            workspaceId,
-            expectedUpdatedAtRef.current
-          );
-          lastSaved.current = { title: nextTitle, body: nextBody };
-          // Track the new server-side updated_at for the NEXT PATCH's
-          // precondition; if a parallel write landed between now and
-          // the next save, the server will reject with 412.
-          expectedUpdatedAtRef.current = saved.updatedAt;
-          setStatus("saved");
-          onSaved();
-          // Drop "Saved" back to idle after a short window — store
-          // in a ref so unmount cleanup can clear it.
-          if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
-          resetTimerRef.current = setTimeout(() => {
-            setStatus((prev) => (prev === "saved" ? "idle" : prev));
-          }, 2000);
-        } catch (err) {
-          // 412 — another tab/agent edited this entry. Refresh both
-          // the tree (for metadata + new updated_at) AND the entry's
-          // full body so the autosave's `expectedUpdatedAtRef` resyncs
-          // on the entry-prop effect. Without the body refetch we'd
-          // 412 on every subsequent save with the same stale ref.
-          // User's in-progress local title/body state is preserved —
-          // the next save sends their edits with the fresh precondition.
-          if (err instanceof KnowledgeApiError && err.status === 412) {
-            toast({
-              title: "Edited in another tab",
-              description:
-                "Reloaded the latest version — try saving again.",
-            });
-            onStaleVersion();
-            setStatus("error");
-            return;
-          }
-          setStatus("error");
-          reportError(err, "Couldn't save entry");
-        }
-      }, AUTOSAVE_DELAY_MS);
-    },
-    [entry.id, workspaceId, onSaved, onStaleVersion]
-  );
-
-  return (
-    <article className="flex flex-col">
-      <div className="max-w-3xl px-6 pt-7 pb-3 flex items-center gap-3">
-        <input
-          type="text"
-          value={title}
-          onChange={(e) => {
-            const next = e.target.value;
-            setTitle(next);
-            scheduleSave(next, body);
-          }}
-          placeholder="Untitled"
-          className="flex-1 bg-transparent text-[20px] font-semibold text-text-primary tracking-tight focus:outline-none placeholder:text-text-secondary/40"
-        />
-        <SaveStatusIndicator state={status} />
-      </div>
-      <DocEditor
-        initialMarkdown={entry.body}
-        resetKey={entry.id}
-        onChange={(md) => {
-          setBody(md);
-          scheduleSave(title, md);
-        }}
-      />
-    </article>
   );
 }
 

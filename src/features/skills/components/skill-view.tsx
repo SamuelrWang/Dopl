@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { PageTopBar } from "@/shared/layout/page-top-bar";
+import { useRefetchOnFocus } from "@/shared/hooks/use-refetch-on-focus";
 import { toast } from "@/shared/ui/toast";
 // Cross-feature imports: DocEditor + SourceIcon live in features/knowledge
 // today. They're generic enough to belong in shared/ — moving is a future
@@ -32,6 +33,7 @@ import { parseSkillBody } from "@/features/skills/skill-body";
 import {
   createSkillFile,
   deleteSkillFile,
+  fetchSkill,
   renameSkillFile,
   writeSkillFile,
 } from "@/features/skills/client/api";
@@ -163,6 +165,28 @@ export function SkillView({ resolved, workspaceKbs, workspaceSlug }: Props) {
       pending.clear();
     };
   }, []);
+
+  // When the user switches back to this tab AND nothing is mid-save,
+  // pull the freshest version of the skill so changes another tab or
+  // an MCP agent saved while away show up automatically. The skip
+  // check stops us from clobbering keystrokes the user has buffered.
+  useRefetchOnFocus(
+    async () => {
+      const fresh = await fetchSkill(slugRef.current).catch(() => null);
+      if (!fresh) return;
+      setFiles(sortFiles(fresh.files));
+      // If the active tab still exists in the new payload, keep it;
+      // otherwise fall back to SKILL.md (or the first file).
+      setActiveFileId((prev) => {
+        if (fresh.files.some((f) => f.id === prev)) return prev;
+        return primaryFileId(fresh.files) ?? fresh.files[0]?.id ?? prev;
+      });
+    },
+    {
+      skip: () =>
+        timersRef.current.size > 0 || pendingBodiesRef.current.size > 0,
+    }
+  );
 
   const updateActiveBody = useCallback(
     (body: string) => {
