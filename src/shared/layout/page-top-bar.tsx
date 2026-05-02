@@ -4,7 +4,12 @@ import type { ReactNode } from "react";
 import { cn } from "@/shared/lib/utils";
 
 interface Props {
-  title: string;
+  /**
+   * Title to display. When a string, rendered with the standard
+   * truncated heading style. When a ReactNode, rendered verbatim —
+   * use this for inline-editable titles (e.g. EditableTitle below).
+   */
+  title: string | ReactNode;
   /** Optional inline icon shown to the left of the title. */
   leading?: ReactNode;
   /** Optional content (buttons, status) on the right side. */
@@ -33,9 +38,13 @@ export function PageTopBar({ title, leading, trailing, className }: Props) {
       style={{ backgroundColor: "oklch(0.13 0 0)" }}
     >
       {leading}
-      <span className="text-sm font-medium text-text-primary truncate">
-        {title}
-      </span>
+      {typeof title === "string" ? (
+        <span className="text-sm font-medium text-text-primary truncate">
+          {title}
+        </span>
+      ) : (
+        title
+      )}
       {trailing && <div className="ml-auto flex items-center gap-2">{trailing}</div>}
     </div>
   );

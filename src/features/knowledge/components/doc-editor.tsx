@@ -150,10 +150,36 @@ export function DocEditor({ initialMarkdown, resetKey, onChange, readOnly }: Pro
 
   if (!editor) return null;
 
+  // Tiptap's contenteditable only handles clicks landing inside the
+  // prose. Clicks on the surrounding "page" area (below the last
+  // line, or to the right of the constrained max-width column) are
+  // ignored, which feels broken — users expect any click on the
+  // visible page to position the caret. Wire an onClick on the
+  // wrapper that focuses the editor at end IF the click target is
+  // the wrapper itself (not an element inside the prose). Bumping
+  // the min-height ensures there's a generous click target even
+  // when content is short.
   return (
-    <div className="flex flex-col">
+    <div
+      className="flex flex-col"
+      onClick={(e) => {
+        if (readOnly) return;
+        if (e.target !== e.currentTarget) return;
+        editor.commands.focus("end");
+      }}
+    >
       <Toolbar editor={editor} />
-      <div className="max-w-3xl px-6 pb-10">
+      <div
+        className="max-w-3xl px-6 pb-10 min-h-[60vh] cursor-text"
+        onClick={(e) => {
+          if (readOnly) return;
+          // Only fire when the click landed on this wrapper (not on
+          // the prose itself, which Tiptap handles natively to
+          // position the caret at the click point).
+          if (e.target !== e.currentTarget) return;
+          editor.commands.focus("end");
+        }}
+      >
         <EditorContent editor={editor} />
       </div>
     </div>

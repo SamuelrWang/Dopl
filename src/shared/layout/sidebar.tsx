@@ -22,8 +22,45 @@ import type { LucideIcon } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { RESERVED_WORKSPACE_SLUGS } from "@/config";
 import { useSkills } from "@/features/skills/client/hooks";
+import {
+  createSkill as apiCreateSkill,
+} from "@/features/skills/client/api";
+import { useSkillsRealtime } from "@/features/skills/client/realtime";
 import { useKnowledgeBases } from "@/features/knowledge/client/hooks";
+import {
+  createBase as apiCreateBase,
+  createEntry as apiCreateEntry,
+} from "@/features/knowledge/client/api";
+import { useKnowledgeRealtime } from "@/features/knowledge/client/realtime";
+import { toast } from "@/shared/ui/toast";
 import { UserMenu } from "./user-menu";
+
+/**
+ * Default body seeded into the first entry of every KB created from
+ * the sidebar "+ New knowledge base" affordance. Nudges the user
+ * toward connecting an agent and tells them where to find the
+ * agent-write toggle.
+ */
+const DEFAULT_KB_README_BODY = `# Welcome to your knowledge base
+
+This is your first entry. You can edit it directly here, or connect your agent to read, edit, and create entries automatically.
+
+To enable agent edits, open this knowledge base's settings and turn on **Agent: write** for the base.
+`;
+
+/**
+ * Default body for the SKILL.md of every skill created from the
+ * sidebar. Mirrors the KB README in tone — point the user at the
+ * agent-edit pathway from the start.
+ */
+const DEFAULT_SKILL_BODY = `# When to use this skill
+
+Describe the situations where the agent should invoke this skill.
+
+## Procedure
+
+Step-by-step instructions for the agent. You can edit this directly here, or connect your agent to refine it as you work together.
+`;
 
 interface WorkspaceLike {
   id: string;
@@ -497,6 +534,7 @@ function SidebarNav({ pathname, workspaceSlug, workspaceId }: NavProps) {
  * its detail page.
  */
 function KnowledgeNavSection({ pathname, workspaceSlug, workspaceId }: NavProps) {
+  const router = useRouter();
   const segments = pathname.split("/").filter(Boolean);
   const isOnKnowledge =
     segments.length >= 2 &&
@@ -505,8 +543,59 @@ function KnowledgeNavSection({ pathname, workspaceSlug, workspaceId }: NavProps)
   const currentKbSlug = isOnKnowledge ? segments[2] ?? null : null;
 
   const [expanded, setExpanded] = useState(isOnKnowledge);
-  const { data: bases, status } = useKnowledgeBases(workspaceId ?? undefined);
+  const [creating, setCreating] = useState(false);
+  const { data: bases, status, refetch } = useKnowledgeBases(
+    workspaceId ?? undefined
+  );
+  // Live-update on KB renames / creates / deletes anywhere in the
+  // workspace (e.g. inline rename on the detail page) so the
+  // sidebar reflects the change without a page reload.
+  useKnowledgeRealtime(workspaceId ?? undefined, refetch);
   const kbsForRender = bases ?? [];
+
+  /**
+   * Instant-create a base named "Untitled", seed a README so the tree
+   * isn't empty, and route the user to the new KB's detail page where
+   * they can rename inline. Failure of the README seed is non-fatal —
+   * the base still exists and is renamable.
+   */
+  async function handleAddNew() {
+    if (!workspaceSlug || !workspaceId || creating) return;
+    setCreating(true);
+    try {
+      const base = await apiCreateBase(
+        { name: "Untitled", description: null, agentWriteEnabled: false },
+        workspaceId
+      );
+      try {
+        await apiCreateEntry(
+          base.id,
+          {
+            folderId: null,
+            title: "README",
+            excerpt: null,
+            body: DEFAULT_KB_README_BODY,
+            entryType: "note",
+            position: 0,
+          },
+          workspaceId
+        );
+      } catch {
+        // Non-fatal — base creation succeeded, user can add entries
+        // manually from the detail page.
+      }
+      refetch();
+      setExpanded(true);
+      router.push(`/${workspaceSlug}/knowledge/${base.slug}`);
+    } catch (err) {
+      toast({
+        title: "Couldn't create knowledge base",
+        description: err instanceof Error ? err.message : "Unknown error",
+      });
+    } finally {
+      setCreating(false);
+    }
+  }
 
   const rowClassName = cn(
     "w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-sm transition-colors cursor-pointer text-left",
@@ -539,11 +628,6 @@ function KnowledgeNavSection({ pathname, workspaceSlug, workspaceId }: NavProps)
               Loading…
             </div>
           ) : null}
-          {kbsForRender.length === 0 && status !== "loading" && (
-            <div className="px-2 py-1 text-xs text-text-secondary/50">
-              No knowledge bases yet.
-            </div>
-          )}
           {kbsForRender.map((kb) => {
             const itemActive = kb.slug === currentKbSlug;
             const itemClass = cn(
@@ -570,6 +654,23 @@ function KnowledgeNavSection({ pathname, workspaceSlug, workspaceId }: NavProps)
               </span>
             );
           })}
+          {workspaceSlug && (
+            <button
+              type="button"
+              onClick={handleAddNew}
+              disabled={creating || !workspaceId}
+              className={cn(
+                "flex items-center gap-1.5 px-2 py-1 rounded-md text-xs transition-colors cursor-pointer text-left",
+                "text-text-secondary/70 hover:bg-white/[0.04] hover:text-text-primary",
+                "disabled:opacity-50 disabled:cursor-default disabled:hover:bg-transparent",
+              )}
+            >
+              <Plus size={11} className="shrink-0" />
+              <span className="truncate">
+                {creating ? "Creating…" : "Add new knowledge base"}
+              </span>
+            </button>
+          )}
         </div>
       )}
     </>
@@ -583,6 +684,7 @@ function KnowledgeNavSection({ pathname, workspaceSlug, workspaceId }: NavProps)
  * each linking to its detail page.
  */
 function SkillsNavSection({ pathname, workspaceSlug, workspaceId }: NavProps) {
+  const router = useRouter();
   const segments = pathname.split("/").filter(Boolean);
   const isOnSkills =
     segments.length >= 2 &&
@@ -591,8 +693,47 @@ function SkillsNavSection({ pathname, workspaceSlug, workspaceId }: NavProps) {
   const currentSkillSlug = isOnSkills ? segments[2] ?? null : null;
 
   const [expanded, setExpanded] = useState(isOnSkills);
-  const { data: skills, status } = useSkills(workspaceId ?? undefined);
+  const [creating, setCreating] = useState(false);
+  const { data: skills, status, refetch } = useSkills(workspaceId ?? undefined);
+  // Live-update on skill renames / creates / deletes.
+  useSkillsRealtime(workspaceId ?? undefined, refetch);
   const skillsForRender = skills ?? [];
+
+  /**
+   * Instant-create a skill named "Untitled" in `draft` state with a
+   * default SKILL.md body, then route to the detail page where the
+   * user can rename inline.
+   */
+  async function handleAddNew() {
+    if (!workspaceSlug || !workspaceId || creating) return;
+    setCreating(true);
+    try {
+      // SkillCreateSchema requires non-empty `description` and
+      // `whenToUse` (min 1 char). Seed both with placeholder text the
+      // user is expected to overwrite — better than rejecting the
+      // create with a 400 just because the user clicked + Add new.
+      const result = await apiCreateSkill(
+        {
+          name: "Untitled",
+          description: "Describe what this skill does.",
+          whenToUse: "Describe when the agent should invoke this skill.",
+          status: "draft",
+          body: DEFAULT_SKILL_BODY,
+        },
+        workspaceId
+      );
+      refetch();
+      setExpanded(true);
+      router.push(`/${workspaceSlug}/skills/${result.skill.slug}`);
+    } catch (err) {
+      toast({
+        title: "Couldn't create skill",
+        description: err instanceof Error ? err.message : "Unknown error",
+      });
+    } finally {
+      setCreating(false);
+    }
+  }
 
   const rowClassName = cn(
     "w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-sm transition-colors cursor-pointer text-left",
@@ -625,11 +766,6 @@ function SkillsNavSection({ pathname, workspaceSlug, workspaceId }: NavProps) {
               Loading…
             </div>
           ) : null}
-          {skillsForRender.length === 0 && status !== "loading" && (
-            <div className="px-2 py-1 text-xs text-text-secondary/50">
-              No skills yet.
-            </div>
-          )}
           {skillsForRender.map((skill) => {
             const itemActive = skill.slug === currentSkillSlug;
             const itemClass = cn(
@@ -656,6 +792,23 @@ function SkillsNavSection({ pathname, workspaceSlug, workspaceId }: NavProps) {
               </span>
             );
           })}
+          {workspaceSlug && (
+            <button
+              type="button"
+              onClick={handleAddNew}
+              disabled={creating || !workspaceId}
+              className={cn(
+                "flex items-center gap-1.5 px-2 py-1 rounded-md text-xs transition-colors cursor-pointer text-left",
+                "text-text-secondary/70 hover:bg-white/[0.04] hover:text-text-primary",
+                "disabled:opacity-50 disabled:cursor-default disabled:hover:bg-transparent",
+              )}
+            >
+              <Plus size={11} className="shrink-0" />
+              <span className="truncate">
+                {creating ? "Creating…" : "Add new skill"}
+              </span>
+            </button>
+          )}
         </div>
       )}
     </>

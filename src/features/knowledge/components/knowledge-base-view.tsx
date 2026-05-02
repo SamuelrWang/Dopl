@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { MoreHorizontal, Plus, Settings, Trash2 } from "lucide-react";
 import { PageTopBar } from "@/shared/layout/page-top-bar";
+import { EditableTitle } from "@/shared/layout/editable-title";
 import { toast } from "@/shared/ui/toast";
 import type {
   KnowledgeBase,
@@ -21,6 +22,7 @@ import {
   moveFolder as apiMoveFolder,
   restoreEntry as apiRestoreEntry,
   restoreFolder as apiRestoreFolder,
+  updateBase as apiUpdateBase,
   updateEntry as apiUpdateEntry,
   updateFolder as apiUpdateFolder,
 } from "../client/api";
@@ -56,6 +58,13 @@ export function KnowledgeBaseView({
   const [selectedId, setSelectedId] = useState<string>(
     initialEntries[0]?.id ?? ""
   );
+  // Inline-editable display name. Prop is the source of truth on
+  // navigation / hard refresh; local state takes over after a rename
+  // so the user sees their edit immediately without a route reload.
+  const [displayedName, setDisplayedName] = useState(base.name);
+  useEffect(() => {
+    setDisplayedName(base.name);
+  }, [base.name]);
 
   const selectedMeta = useMemo(
     () => entries.find((e) => e.id === selectedId) ?? entries[0] ?? null,
@@ -249,7 +258,21 @@ export function KnowledgeBaseView({
   return (
     <>
       <PageTopBar
-        title={base.name}
+        title={
+          <EditableTitle
+            value={displayedName}
+            onSave={async (next) => {
+              const updated = await apiUpdateBase(
+                base.id,
+                { name: next },
+                workspaceId
+              );
+              setDisplayedName(updated.name);
+            }}
+            onError={(err) => reportError(err, "Couldn't rename")}
+            placeholder="Untitled knowledge base"
+          />
+        }
         trailing={
           <>
             <div className="w-56 hidden md:block">

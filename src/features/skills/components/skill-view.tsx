@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { PageTopBar } from "@/shared/layout/page-top-bar";
+import { EditableTitle } from "@/shared/layout/editable-title";
 import { useRefetchOnFocus } from "@/shared/hooks/use-refetch-on-focus";
 import { toast } from "@/shared/ui/toast";
 import { AlertTriangle } from "lucide-react";
@@ -38,6 +39,7 @@ import {
   fetchSkill,
   readSkillFile,
   renameSkillFile,
+  updateSkill,
   writeSkillFile,
 } from "@/features/skills/client/api";
 import { FileTabs } from "./skill-file-tabs";
@@ -81,6 +83,14 @@ const AUTOSAVE_DELAY_MS = 1500;
  */
 export function SkillView({ resolved, workspaceKbs, workspaceSlug }: Props) {
   const { skill } = resolved;
+
+  // Inline-editable display name. Mirror the prop until the user
+  // commits a rename, then drive from local state so the bar updates
+  // immediately without a route reload.
+  const [displayedName, setDisplayedName] = useState(skill.name);
+  useEffect(() => {
+    setDisplayedName(skill.name);
+  }, [skill.name]);
 
   const [files, setFiles] = useState<SkillFile[]>(() =>
     sortFiles(resolved.files)
@@ -469,7 +479,19 @@ export function SkillView({ resolved, workspaceKbs, workspaceSlug }: Props) {
   return (
     <>
       <PageTopBar
-        title={skill.name}
+        title={
+          <EditableTitle
+            value={displayedName}
+            onSave={async (next) => {
+              const saved = await updateSkill(skill.slug, { name: next });
+              setDisplayedName(saved.name);
+            }}
+            onError={(err) =>
+              toast({ title: "Couldn't rename", description: errMessage(err) })
+            }
+            placeholder="Untitled skill"
+          />
+        }
         trailing={
           <>
             <SaveStatusIndicator state={saveStatus} />
