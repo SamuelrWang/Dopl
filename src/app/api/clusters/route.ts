@@ -23,10 +23,14 @@ function toErrorResponse(err: unknown): NextResponse {
 
 async function handleGet(
   _request: NextRequest,
-  { userId, workspaceId }: { userId: string; workspaceId: string }
+  { userId, workspaceId, apiKeyId }: { userId: string; workspaceId: string; apiKeyId?: string }
 ) {
   try {
-    const clusters = await listClusters({ userId, workspaceId });
+    const clusters = await listClusters({
+      userId,
+      workspaceId,
+      source: apiKeyId ? "agent" : "user",
+    });
     return NextResponse.json({ clusters });
   } catch (err) {
     return toErrorResponse(err);
@@ -35,13 +39,13 @@ async function handleGet(
 
 async function handlePost(
   request: NextRequest,
-  { userId, workspaceId }: { userId: string; workspaceId: string }
+  { userId, workspaceId, apiKeyId }: { userId: string; workspaceId: string; apiKeyId?: string }
 ) {
   try {
     const input = await parseJson(request, ClusterCreateSchema);
     const cluster = await createCluster(
       { name: input.name, entry_ids: input.entry_ids },
-      { userId, workspaceId }
+      { userId, workspaceId, source: apiKeyId ? "agent" : "user" }
     );
     return NextResponse.json(cluster, { status: 201 });
   } catch (err) {

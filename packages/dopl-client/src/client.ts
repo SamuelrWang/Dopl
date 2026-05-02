@@ -4,6 +4,8 @@ import type {
   CanvasPanel,
   WorkspaceSummary,
   ClusterDetail,
+  ClusterKnowledgeEntry,
+  ClusterSkillFull,
   ClusterQueryResult,
   ClusterRow,
   DoplEntry,
@@ -234,6 +236,27 @@ export class DoplClient {
         toolName: "query_cluster",
         body: { query, max_results: maxResults ?? 5 },
       }
+    );
+  }
+
+  async getClusterKnowledgeEntry(
+    clusterSlug: string,
+    kbId: string,
+    entryId: string
+  ): Promise<ClusterKnowledgeEntry> {
+    return this.transport.request<ClusterKnowledgeEntry>(
+      `/api/clusters/${encodeURIComponent(clusterSlug)}/knowledge-bases/${encodeURIComponent(kbId)}/entries/${encodeURIComponent(entryId)}`,
+      { toolName: "read_cluster_knowledge_entry" }
+    );
+  }
+
+  async getClusterSkill(
+    clusterSlug: string,
+    skillId: string
+  ): Promise<ClusterSkillFull> {
+    return this.transport.request<ClusterSkillFull>(
+      `/api/clusters/${encodeURIComponent(clusterSlug)}/skills/${encodeURIComponent(skillId)}/full`,
+      { toolName: "read_cluster_skill" }
     );
   }
 

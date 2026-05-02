@@ -16,6 +16,7 @@ import {
   Search,
   Settings,
   Sparkles,
+  Users,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
@@ -46,6 +47,7 @@ type NavSection =
   | "knowledge"
   | "skills"
   | "activity"
+  | "members"
   | "settings";
 
 interface NavItem {
@@ -61,6 +63,7 @@ const navItems: ReadonlyArray<NavItem> = [
   { label: "Knowledge", icon: BookOpen, section: "knowledge" },
   { label: "Skills", icon: Sparkles, section: "skills" },
   { label: "Activity", icon: Activity, section: "activity" },
+  { label: "Members", icon: Users, section: "members" },
   { label: "Settings", icon: Settings, section: "settings" },
 ];
 
@@ -488,11 +491,10 @@ function SidebarNav({ pathname, workspaceSlug, workspaceId }: NavProps) {
 }
 
 /**
- * Knowledge nav row + collapsible KB list. Auto-expands when the user
- * is currently on a /knowledge/* path so the nested KB they're viewing
- * is visible as the active row. The chevron toggles independently of
- * navigation: clicking the row label routes to the KB index page,
- * clicking the chevron expands/collapses without navigating.
+ * Knowledge nav row + collapsible KB list. The whole row toggles the
+ * dropdown; there's no longer a root `/knowledge` index page to
+ * navigate to. The user picks a specific KB from the dropdown to enter
+ * its detail page.
  */
 function KnowledgeNavSection({ pathname, workspaceSlug, workspaceId }: NavProps) {
   const segments = pathname.split("/").filter(Boolean);
@@ -503,56 +505,32 @@ function KnowledgeNavSection({ pathname, workspaceSlug, workspaceId }: NavProps)
   const currentKbSlug = isOnKnowledge ? segments[2] ?? null : null;
 
   const [expanded, setExpanded] = useState(isOnKnowledge);
-  // One cheap query per workspace — fetch eagerly so the section is
-  // already populated when the user expands it.
   const { data: bases, status } = useKnowledgeBases(workspaceId ?? undefined);
   const kbsForRender = bases ?? [];
 
   const rowClassName = cn(
-    "flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-sm transition-colors cursor-pointer",
+    "w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-sm transition-colors cursor-pointer text-left",
     isOnKnowledge
       ? "bg-white/[0.06] text-text-primary"
       : "text-text-secondary hover:bg-white/[0.04] hover:text-text-primary",
   );
 
-  const labelInner = (
-    <>
-      <BookOpen size={15} className="shrink-0" />
-      <span className="flex-1 text-left">Knowledge</span>
-    </>
-  );
-
   return (
     <>
-      <div className={cn(rowClassName, "pr-1")}>
-        {workspaceSlug ? (
-          <Link
-            href={`/${workspaceSlug}/knowledge`}
-            className="flex items-center gap-2.5 flex-1 min-w-0"
-          >
-            {labelInner}
-          </Link>
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+        className={rowClassName}
+      >
+        <BookOpen size={15} className="shrink-0" />
+        <span className="flex-1 text-left">Knowledge</span>
+        {expanded ? (
+          <ChevronDown size={13} className="text-text-secondary/60 shrink-0" />
         ) : (
-          <span className="flex items-center gap-2.5 flex-1 opacity-60">
-            {labelInner}
-          </span>
+          <ChevronRight size={13} className="text-text-secondary/60 shrink-0" />
         )}
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            setExpanded((v) => !v);
-          }}
-          aria-label={expanded ? "Collapse knowledge bases" : "Expand knowledge bases"}
-          className="shrink-0 w-5 h-5 rounded flex items-center justify-center hover:bg-white/[0.06] transition-colors cursor-pointer"
-        >
-          {expanded ? (
-            <ChevronDown size={13} className="text-text-secondary/60" />
-          ) : (
-            <ChevronRight size={13} className="text-text-secondary/60" />
-          )}
-        </button>
-      </div>
+      </button>
 
       {expanded && (
         <div className="ml-4 mt-0.5 mb-1 flex flex-col gap-0.5 border-l border-white/[0.06] pl-2">
@@ -561,6 +539,11 @@ function KnowledgeNavSection({ pathname, workspaceSlug, workspaceId }: NavProps)
               Loading…
             </div>
           ) : null}
+          {kbsForRender.length === 0 && status !== "loading" && (
+            <div className="px-2 py-1 text-xs text-text-secondary/50">
+              No knowledge bases yet.
+            </div>
+          )}
           {kbsForRender.map((kb) => {
             const itemActive = kb.slug === currentKbSlug;
             const itemClass = cn(
@@ -587,16 +570,6 @@ function KnowledgeNavSection({ pathname, workspaceSlug, workspaceId }: NavProps)
               </span>
             );
           })}
-
-          {workspaceSlug ? (
-            <Link
-              href={`/${workspaceSlug}/knowledge`}
-              className="flex items-center gap-2 px-2 py-1 rounded-md text-xs text-text-secondary/70 hover:bg-white/[0.04] hover:text-text-primary transition-colors cursor-pointer"
-            >
-              <Plus size={11} className="shrink-0" />
-              New knowledge base
-            </Link>
-          ) : null}
         </div>
       )}
     </>
@@ -618,57 +591,46 @@ function SkillsNavSection({ pathname, workspaceSlug, workspaceId }: NavProps) {
   const currentSkillSlug = isOnSkills ? segments[2] ?? null : null;
 
   const [expanded, setExpanded] = useState(isOnSkills);
-  const { data: skills } = useSkills(workspaceId ?? undefined);
+  const { data: skills, status } = useSkills(workspaceId ?? undefined);
+  const skillsForRender = skills ?? [];
 
   const rowClassName = cn(
-    "flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-sm transition-colors cursor-pointer",
+    "w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-sm transition-colors cursor-pointer text-left",
     isOnSkills
       ? "bg-white/[0.06] text-text-primary"
       : "text-text-secondary hover:bg-white/[0.04] hover:text-text-primary",
   );
 
-  const labelInner = (
-    <>
-      <Sparkles size={15} className="shrink-0" />
-      <span className="flex-1 text-left">Skills</span>
-    </>
-  );
-
   return (
     <>
-      <div className={cn(rowClassName, "pr-1")}>
-        {workspaceSlug ? (
-          <Link
-            href={`/${workspaceSlug}/skills`}
-            className="flex items-center gap-2.5 flex-1 min-w-0"
-          >
-            {labelInner}
-          </Link>
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+        className={rowClassName}
+      >
+        <Sparkles size={15} className="shrink-0" />
+        <span className="flex-1 text-left">Skills</span>
+        {expanded ? (
+          <ChevronDown size={13} className="text-text-secondary/60 shrink-0" />
         ) : (
-          <span className="flex items-center gap-2.5 flex-1 opacity-60">
-            {labelInner}
-          </span>
+          <ChevronRight size={13} className="text-text-secondary/60 shrink-0" />
         )}
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            setExpanded((v) => !v);
-          }}
-          aria-label={expanded ? "Collapse skills" : "Expand skills"}
-          className="shrink-0 w-5 h-5 rounded flex items-center justify-center hover:bg-white/[0.06] transition-colors cursor-pointer"
-        >
-          {expanded ? (
-            <ChevronDown size={13} className="text-text-secondary/60" />
-          ) : (
-            <ChevronRight size={13} className="text-text-secondary/60" />
-          )}
-        </button>
-      </div>
+      </button>
 
       {expanded && (
         <div className="ml-4 mt-0.5 mb-1 flex flex-col gap-0.5 border-l border-white/[0.06] pl-2">
-          {(skills ?? []).map((skill) => {
+          {status === "loading" && skillsForRender.length === 0 ? (
+            <div className="px-2 py-1 text-xs text-text-secondary/60">
+              Loading…
+            </div>
+          ) : null}
+          {skillsForRender.length === 0 && status !== "loading" && (
+            <div className="px-2 py-1 text-xs text-text-secondary/50">
+              No skills yet.
+            </div>
+          )}
+          {skillsForRender.map((skill) => {
             const itemActive = skill.slug === currentSkillSlug;
             const itemClass = cn(
               "block px-2 py-1 rounded-md text-xs transition-colors cursor-pointer truncate",
@@ -694,16 +656,6 @@ function SkillsNavSection({ pathname, workspaceSlug, workspaceId }: NavProps) {
               </span>
             );
           })}
-
-          {workspaceSlug ? (
-            <Link
-              href={`/${workspaceSlug}/skills`}
-              className="flex items-center gap-2 px-2 py-1 rounded-md text-xs text-text-secondary/70 hover:bg-white/[0.04] hover:text-text-primary transition-colors cursor-pointer"
-            >
-              <Plus size={11} className="shrink-0" />
-              New skill
-            </Link>
-          ) : null}
         </div>
       )}
     </>

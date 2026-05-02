@@ -21,6 +21,10 @@ import { ConnectionPanelBody } from "./panels/connection-panel";
 import { EntryPanelBody } from "./panels/entry-panel";
 import { BrowsePanelBody } from "./panels/browse/browse-panel";
 import { ClusterBrainPanel } from "./panels/cluster-brain/cluster-brain-panel";
+import { KnowledgePanelBody } from "./panels/knowledge/knowledge-panel";
+import { SkillsPanelBody } from "./panels/skills/skills-panel";
+import { KnowledgeBasePanelBody } from "./panels/knowledge-base/knowledge-base-panel";
+import { SkillPanelBody } from "./panels/skill/skill-panel";
 import { useOnboardingContext } from "@/features/onboarding/components/onboarding-provider";
 import { ChatExpiryBar } from "./canvas-panel-expiry";
 import { useCanvasPanelDrag } from "./use-canvas-panel-drag";
@@ -98,7 +102,15 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
             ? "Browse Entries"
             : panel.type === "cluster-brain"
               ? `Brain · ${panel.clusterName}`
-              : "Panel";
+              : panel.type === "knowledge"
+                ? "Knowledge Bases"
+                : panel.type === "skills"
+                  ? "Skills"
+                  : panel.type === "knowledge-base"
+                    ? `KB · ${panel.name}`
+                    : panel.type === "skill"
+                      ? `Skill · ${panel.name}`
+                      : "Panel";
 
   return (
     <div
@@ -258,6 +270,10 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
         {panel.type === "entry" && <EntryPanelBody panel={panel} />}
         {panel.type === "browse" && <BrowsePanelBody panel={panel} />}
         {panel.type === "cluster-brain" && <ClusterBrainPanel panel={panel} />}
+        {panel.type === "knowledge" && <KnowledgePanelBody panel={panel} />}
+        {panel.type === "skills" && <SkillsPanelBody panel={panel} />}
+        {panel.type === "knowledge-base" && <KnowledgeBasePanelBody panel={panel} />}
+        {panel.type === "skill" && <SkillPanelBody panel={panel} />}
       </div>
 
       {/* Confirmation dialog for closing chat panels with messages */}

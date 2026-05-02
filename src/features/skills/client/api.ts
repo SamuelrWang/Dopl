@@ -23,12 +23,19 @@ interface RequestOpts {
   workspaceId?: string;
   body?: unknown;
   method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
+  /**
+   * Optimistic-concurrency precondition. When set, the server
+   * compares against the row's current `updated_at` and returns 412
+   * `SKILL_STALE_VERSION` on mismatch. Mirrors the knowledge feature.
+   */
+  expectedUpdatedAt?: string;
 }
 
 async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
   const headers: Record<string, string> = {};
   if (opts.workspaceId) headers["x-workspace-id"] = opts.workspaceId;
   if (opts.body !== undefined) headers["content-type"] = "application/json";
+  if (opts.expectedUpdatedAt) headers["x-updated-at"] = opts.expectedUpdatedAt;
   const res = await fetch(path, {
     headers,
     method: opts.method ?? "GET",
@@ -106,12 +113,14 @@ export interface UpdateSkillPatch {
 export async function updateSkill(
   slug: string,
   patch: UpdateSkillPatch,
-  workspaceId?: string
+  workspaceId?: string,
+  expectedUpdatedAt?: string
 ): Promise<Skill> {
   const data = await request<{ skill: Skill }>(`/api/skills/${enc(slug)}`, {
     method: "PATCH",
     body: patch,
     workspaceId,
+    expectedUpdatedAt,
   });
   return data.skill;
 }
@@ -167,11 +176,12 @@ export async function writeSkillFile(
   slug: string,
   fileName: string,
   body: string,
-  workspaceId?: string
+  workspaceId?: string,
+  expectedUpdatedAt?: string
 ): Promise<SkillFile> {
   const data = await request<{ file: SkillFile }>(
     `/api/skills/${enc(slug)}/files/${enc(fileName)}`,
-    { method: "PUT", body: { body }, workspaceId }
+    { method: "PUT", body: { body }, workspaceId, expectedUpdatedAt }
   );
   return data.file;
 }

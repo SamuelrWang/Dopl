@@ -123,10 +123,24 @@ export function DocEditor({ initialMarkdown, resetKey, onChange, readOnly }: Pro
   // When the parent passes a new resetKey (i.e. a different entry was
   // selected), reload the content. Pass `emitUpdate: false` so the
   // load doesn't trigger our `onUpdate` and bubble a spurious save.
+  //
+  // Defense-in-depth: skip the call entirely when the new HTML
+  // round-trips to the same markdown the editor already holds. The
+  // parent (DocPane) only changes `initialMarkdown` on mount and on
+  // explicit user-driven reload, but we want a hard guarantee that no
+  // accidental prop churn can blow away unsaved edits.
+  const lastSeededHtmlRef = useRef<string | null>(null);
   useEffect(() => {
     if (!editor) return;
+    if (lastSeededHtmlRef.current === initialHtml) return;
+    const currentMd = turndown.turndown(editor.getHTML());
+    if (currentMd === initialMarkdown) {
+      lastSeededHtmlRef.current = initialHtml;
+      return;
+    }
     editor.commands.setContent(initialHtml, { emitUpdate: false });
-  }, [editor, resetKey, initialHtml]);
+    lastSeededHtmlRef.current = initialHtml;
+  }, [editor, resetKey, initialHtml, initialMarkdown, turndown]);
 
   // Sync editable mode if readOnly toggles.
   useEffect(() => {

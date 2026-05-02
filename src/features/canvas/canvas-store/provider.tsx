@@ -19,6 +19,7 @@ import {
 } from "./context";
 import { reducer } from "./reducer";
 import { useCanvasDbSync } from "../use-canvas-db-sync";
+import { useClusterAttachmentSync } from "../use-cluster-attachment-sync";
 import { useEntriesRealtime } from "../use-entries-realtime";
 import { useClustersRealtime } from "../use-clusters-realtime";
 import {
@@ -170,6 +171,7 @@ export function CanvasProvider({
                 {syncStrategy === "user" && <ConversationSyncBridge />}
                 {syncStrategy === "user" && <EntriesRealtimeBridge />}
                 {syncStrategy === "user" && <ClustersRealtimeBridge />}
+                {syncStrategy === "user" && <ClusterAttachmentSyncBridge />}
                 {syncStrategy === "user" && <AutoFocusNewPanelBridge />}
                 {syncStrategy === "shared" && (
                   <SharedPanelMoveBridge onPanelsMove={onPanelsMove} />
@@ -272,6 +274,16 @@ function EntriesRealtimeBridge() {
  */
 function ClustersRealtimeBridge() {
   useClustersRealtime();
+  return null;
+}
+
+/**
+ * Bridge for keeping the cluster_knowledge_bases / cluster_skills
+ * junction tables in sync with the canvas's KB/Skill panel cluster
+ * membership.
+ */
+function ClusterAttachmentSyncBridge() {
+  useClusterAttachmentSync();
   return null;
 }
 

@@ -7,14 +7,22 @@ import type {
   ClusterBrainPanelData,
   ConnectionPanelData,
   EntryPanelData,
+  KnowledgeBasePanelData,
+  KnowledgePanelData,
   Panel,
+  SkillPanelData,
+  SkillsPanelData,
 } from "../types";
 import {
   BROWSE_PANEL_SIZE,
   CLUSTER_BRAIN_PANEL_SIZE,
   CONNECTION_PANEL_SIZE,
   ENTRY_PANEL_SIZE,
+  KNOWLEDGE_BASE_PANEL_SIZE,
+  KNOWLEDGE_PANEL_SIZE,
   MIN_CLUSTER_SIZE,
+  SKILL_PANEL_SIZE,
+  SKILLS_PANEL_SIZE,
   isPanelDeletable,
 } from "../types";
 import { stripFromClusters } from "@/features/canvas/server/defaults";
@@ -681,6 +689,108 @@ export function reducer(state: CanvasState, action: CanvasAction): CanvasState {
         y,
         width: BROWSE_PANEL_SIZE.width,
         height: BROWSE_PANEL_SIZE.height,
+      };
+      return {
+        ...state,
+        panels: [...state.panels, newPanel],
+        nextPanelId: state.nextPanelId + 1,
+      };
+    }
+
+    case "CREATE_KNOWLEDGE_PANEL": {
+      const { x, y } = findNonOverlappingPosition(
+        action.x,
+        action.y,
+        KNOWLEDGE_PANEL_SIZE.width,
+        KNOWLEDGE_PANEL_SIZE.height,
+        state.panels
+      );
+      const newPanel: KnowledgePanelData = {
+        id: action.id,
+        type: "knowledge",
+        x,
+        y,
+        width: KNOWLEDGE_PANEL_SIZE.width,
+        height: KNOWLEDGE_PANEL_SIZE.height,
+      };
+      return {
+        ...state,
+        panels: [...state.panels, newPanel],
+        nextPanelId: state.nextPanelId + 1,
+      };
+    }
+
+    case "CREATE_SKILLS_PANEL": {
+      const { x, y } = findNonOverlappingPosition(
+        action.x,
+        action.y,
+        SKILLS_PANEL_SIZE.width,
+        SKILLS_PANEL_SIZE.height,
+        state.panels
+      );
+      const newPanel: SkillsPanelData = {
+        id: action.id,
+        type: "skills",
+        x,
+        y,
+        width: SKILLS_PANEL_SIZE.width,
+        height: SKILLS_PANEL_SIZE.height,
+      };
+      return {
+        ...state,
+        panels: [...state.panels, newPanel],
+        nextPanelId: state.nextPanelId + 1,
+      };
+    }
+
+    case "CREATE_KNOWLEDGE_BASE_PANEL": {
+      const { x, y } = findNonOverlappingPosition(
+        action.x,
+        action.y,
+        KNOWLEDGE_BASE_PANEL_SIZE.width,
+        KNOWLEDGE_BASE_PANEL_SIZE.height,
+        state.panels
+      );
+      const newPanel: KnowledgeBasePanelData = {
+        id: action.id,
+        type: "knowledge-base",
+        x,
+        y,
+        width: KNOWLEDGE_BASE_PANEL_SIZE.width,
+        height: KNOWLEDGE_BASE_PANEL_SIZE.height,
+        knowledgeBaseId: action.knowledgeBaseId,
+        slug: action.slug,
+        name: action.name,
+        description: action.description,
+        agentWriteEnabled: action.agentWriteEnabled,
+      };
+      return {
+        ...state,
+        panels: [...state.panels, newPanel],
+        nextPanelId: state.nextPanelId + 1,
+      };
+    }
+
+    case "CREATE_SKILL_PANEL": {
+      const { x, y } = findNonOverlappingPosition(
+        action.x,
+        action.y,
+        SKILL_PANEL_SIZE.width,
+        SKILL_PANEL_SIZE.height,
+        state.panels
+      );
+      const newPanel: SkillPanelData = {
+        id: action.id,
+        type: "skill",
+        x,
+        y,
+        width: SKILL_PANEL_SIZE.width,
+        height: SKILL_PANEL_SIZE.height,
+        skillId: action.skillId,
+        slug: action.slug,
+        name: action.name,
+        description: action.description,
+        status: action.status,
       };
       return {
         ...state,

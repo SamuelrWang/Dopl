@@ -1,5 +1,5 @@
 import type { PendingStatus } from "./types.js";
-import type { BuildResult, CanvasPanel, WorkspaceSummary, ClusterDetail, ClusterQueryResult, ClusterRow, DoplEntry, ListResult, Pack, PackFile, PackFileMeta, PrepareIngestResult, ResolvedWorkspace, SearchResult, SubmitIngestedEntryInput, SubmitIngestedEntryResult } from "./types.js";
+import type { BuildResult, CanvasPanel, WorkspaceSummary, ClusterDetail, ClusterKnowledgeEntry, ClusterSkillFull, ClusterQueryResult, ClusterRow, DoplEntry, ListResult, Pack, PackFile, PackFileMeta, PrepareIngestResult, ResolvedWorkspace, SearchResult, SubmitIngestedEntryInput, SubmitIngestedEntryResult } from "./types.js";
 import { DoplTransport } from "./transport.js";
 import type { KnowledgeBase, KnowledgeBaseCreateInput, KnowledgeBaseUpdateInput, KnowledgeDirListing, KnowledgeEntry, KnowledgeFolder, KnowledgePathOpResult, KnowledgeSearchHit, KnowledgeTrashSnapshot, KnowledgeTreeSnapshot, KnowledgeWriteFileInput } from "./knowledge-types.js";
 import type { CreateSkillInput, UpdateSkillPatch as SkillUpdatePatch } from "./skills.js";
@@ -65,6 +65,8 @@ export declare class DoplClient {
     }>;
     getCluster(slug: string): Promise<ClusterDetail>;
     queryCluster(slug: string, query: string, maxResults?: number): Promise<ClusterQueryResult>;
+    getClusterKnowledgeEntry(clusterSlug: string, kbId: string, entryId: string): Promise<ClusterKnowledgeEntry>;
+    getClusterSkill(clusterSlug: string, skillId: string): Promise<ClusterSkillFull>;
     listWorkspaces(): Promise<{
         workspaces: WorkspaceSummary[];
     }>;

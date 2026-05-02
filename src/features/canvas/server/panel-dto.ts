@@ -15,6 +15,10 @@ import type {
   EntryPanelData,
   ConnectionPanelData,
   ClusterBrainPanelData,
+  KnowledgeBasePanelData,
+  KnowledgePanelData,
+  SkillPanelData,
+  SkillsPanelData,
 } from "@/features/canvas/types";
 
 /** Serialize a panel into the shape the `canvas_panels` DB row expects. */
@@ -76,6 +80,28 @@ export function panelToDbRow(panel: Panel) {
       break;
     case "browse":
       break;
+    case "knowledge":
+      break;
+    case "skills":
+      break;
+    case "knowledge-base":
+      base.title = panel.name;
+      base.panel_data = {
+        knowledgeBaseId: panel.knowledgeBaseId,
+        slug: panel.slug,
+        description: panel.description,
+        agentWriteEnabled: panel.agentWriteEnabled,
+      };
+      break;
+    case "skill":
+      base.title = panel.name;
+      base.panel_data = {
+        skillId: panel.skillId,
+        slug: panel.slug,
+        description: panel.description,
+        status: panel.status,
+      };
+      break;
   }
 
   return base;
@@ -134,6 +160,30 @@ export function dbRowToPanel(row: Record<string, unknown>): Panel | null {
       } as ConnectionPanelData;
     case "browse":
       return { ...base, type: "browse" };
+    case "knowledge":
+      return { ...base, type: "knowledge" } as KnowledgePanelData;
+    case "skills":
+      return { ...base, type: "skills" } as SkillsPanelData;
+    case "knowledge-base":
+      return {
+        ...base,
+        type: "knowledge-base",
+        knowledgeBaseId: (data.knowledgeBaseId as string) || "",
+        slug: (data.slug as string) || "",
+        name: (row.title as string) || "Untitled",
+        description: (data.description as string) || null,
+        agentWriteEnabled: (data.agentWriteEnabled as boolean) || false,
+      } as KnowledgeBasePanelData;
+    case "skill":
+      return {
+        ...base,
+        type: "skill",
+        skillId: (data.skillId as string) || "",
+        slug: (data.slug as string) || "",
+        name: (row.title as string) || "Untitled",
+        description: (data.description as string) || "",
+        status: (data.status as "active" | "draft") || "draft",
+      } as SkillPanelData;
     case "cluster-brain":
       return {
         ...base,

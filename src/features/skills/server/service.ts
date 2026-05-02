@@ -25,6 +25,7 @@ import {
   SkillNotFoundError,
   SkillPrimaryFileImmutableError,
   SkillSlugConflictError,
+  SkillStaleVersionError,
 } from "./errors";
 import * as repo from "./repository";
 import { buildSeedSkills } from "./seed";
@@ -209,7 +210,8 @@ export async function createSkill(
 export async function updateSkill(
   ctx: SkillContext,
   slug: string,
-  patch: SkillUpdateInput
+  patch: SkillUpdateInput,
+  expectedUpdatedAt?: string
 ): Promise<Skill> {
   const skill = await getSkillBySlug(ctx, slug);
   // Agents can't flip the toggle itself, regardless of current state.
@@ -218,6 +220,9 @@ export async function updateSkill(
   }
   if (ctx.source === "agent" && !skill.agentWriteEnabled) {
     throw new SkillAgentWriteDisabledError(slug);
+  }
+  if (expectedUpdatedAt && skill.updatedAt !== expectedUpdatedAt) {
+    throw new SkillStaleVersionError(expectedUpdatedAt, skill.updatedAt);
   }
   if (patch.slug && patch.slug !== skill.slug) {
     const taken = await repo.listSlugsForWorkspace(ctx.workspaceId);
@@ -293,12 +298,16 @@ export async function writeFile(
   ctx: SkillContext,
   slug: string,
   fileName: string,
-  input: SkillFileWriteInput
+  input: SkillFileWriteInput,
+  expectedUpdatedAt?: string
 ): Promise<SkillFile> {
   const skill = await getSkillBySlug(ctx, slug);
   await assertAgentWriteAllowed(ctx, skill);
   const file = await repo.findFileByName(skill.id, fileName);
   if (!file) throw new SkillFileNotFoundError(slug, fileName);
+  if (expectedUpdatedAt && file.updatedAt !== expectedUpdatedAt) {
+    throw new SkillStaleVersionError(expectedUpdatedAt, file.updatedAt);
+  }
   return repo.updateFileRow(file.id, {
     body: input.body,
     lastEditedBy: ctx.userId,

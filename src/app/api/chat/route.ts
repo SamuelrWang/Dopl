@@ -9,6 +9,7 @@ import {
   type CanvasContextPayload,
 } from "@/features/chat/server/canvas-context";
 import { TOOLS, executeTool } from "@/features/chat/server/tools";
+import { getCluster } from "@/features/clusters/server/service";
 import { resolveActiveWorkspace } from "@/features/workspaces/server/service";
 import { HttpError } from "@/shared/lib/http-error";
 import { config } from "dotenv";
@@ -65,7 +66,7 @@ function toolSummary(
 
 async function handlePost(
   request: NextRequest,
-  { userId }: { userId: string }
+  { userId, apiKeyId }: { userId: string; apiKeyId?: string }
 ) {
   try {
     const body = await request.json();
@@ -118,9 +119,56 @@ async function handlePost(
     const client = new Anthropic({ apiKey: key });
     const encoder = new TextEncoder();
 
+    // Server-side enrichment: when the chat is inside a synced cluster,
+    // attach the cluster's KBs + skills so the system prompt has real
+    // context. Failures are non-fatal — chat still works without the
+    // enrichment.
+    let enriched: CanvasContextPayload | undefined = canvasContext;
+    if (
+      canvasContext &&
+      canvasContext.scope === "cluster" &&
+      canvasContext.clusterSlug
+    ) {
+      try {
+        const detail = await getCluster(canvasContext.clusterSlug, {
+          userId,
+          workspaceId,
+          source: apiKeyId ? "agent" : "user",
+        });
+        enriched = {
+          ...canvasContext,
+          knowledgeBases: detail.knowledge_bases.map((kb) => ({
+            knowledgeBaseId: kb.knowledge_base_id,
+            slug: kb.slug,
+            name: kb.name,
+            description: kb.description,
+            agentWriteEnabled: kb.agent_write_enabled,
+            entriesIndex: kb.entries_index.map((e) => ({
+              entryId: e.entry_id,
+              title: e.title,
+              folderPath: e.folder_path,
+            })),
+          })),
+          skills: detail.skills.map((sk) => ({
+            skillId: sk.skill_id,
+            slug: sk.slug,
+            name: sk.name,
+            description: sk.description,
+            whenToUse: sk.when_to_use,
+            status: sk.status,
+            body: sk.body,
+          })),
+        };
+      } catch (err) {
+        // Non-fatal: skip enrichment but keep the original payload.
+        // eslint-disable-next-line no-console
+        console.warn("chat: cluster enrichment failed", err);
+      }
+    }
+
     // Compose system prompt: canvas context (if any) + builder prompt.
-    const systemPrompt = canvasContext
-      ? buildCanvasContextPrefix(canvasContext) + BUILDER_CHAT_SYSTEM_PROMPT
+    const systemPrompt = enriched
+      ? buildCanvasContextPrefix(enriched) + BUILDER_CHAT_SYSTEM_PROMPT
       : BUILDER_CHAT_SYSTEM_PROMPT;
 
     const stream = new ReadableStream({

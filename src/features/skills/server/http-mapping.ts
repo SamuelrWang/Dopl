@@ -8,6 +8,7 @@ import {
   SkillNotFoundError,
   SkillPrimaryFileImmutableError,
   SkillSlugConflictError,
+  SkillStaleVersionError,
 } from "./errors";
 
 /**
@@ -35,6 +36,12 @@ export function mapSkillError(err: unknown): HttpError | null {
   }
   if (err instanceof SkillPrimaryFileImmutableError) {
     return new HttpError(409, "SKILL_PRIMARY_FILE_IMMUTABLE", err.message);
+  }
+  if (err instanceof SkillStaleVersionError) {
+    return new HttpError(412, "SKILL_STALE_VERSION", err.message, {
+      expected: err.expected,
+      actual: err.actual,
+    });
   }
   return null;
 }

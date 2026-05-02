@@ -6,6 +6,12 @@ import {
   spawnClusterBrainPanel,
   tearDownClusterCanvasArtifacts,
 } from "./canvas-side-effects";
+import {
+  listAttachedKnowledgeBasesById,
+  listAttachedSkillsById,
+  type ClusterAttachedKnowledgeBase,
+  type ClusterAttachedSkill,
+} from "./attachments";
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -29,6 +35,8 @@ export interface ClusterDetailEntry {
 
 export interface ClusterDetail extends ClusterRow {
   entries: ClusterDetailEntry[];
+  knowledge_bases: ClusterAttachedKnowledgeBase[];
+  skills: ClusterAttachedSkill[];
 }
 
 export interface ClusterCreateRequest {
@@ -45,11 +53,15 @@ export interface ClusterUpdateRequest {
  * Scope identifying the active workspace + the calling user. `workspaceId`
  * is the new scope key; `userId` is retained for entry-access checks
  * (which are user-level) and for the legacy `user_id` column on cluster
- * rows used for attribution and analytics.
+ * rows used for attribution and analytics. `source` distinguishes
+ * agent-origin (API key auth) from user-origin (session auth) calls,
+ * mirroring `KnowledgeContext.source`. Agent-origin attach/detach is
+ * gated by the per-KB / per-skill `agent_write_enabled` toggle.
  */
 export interface ClusterScope {
   workspaceId: string;
   userId: string;
+  source: "user" | "agent";
 }
 
 // ── CRUD ─────────────────────────────────────────────────────────────
@@ -166,10 +178,17 @@ export async function getCluster(
     }));
   }
 
+  const [knowledge_bases, skills] = await Promise.all([
+    listAttachedKnowledgeBasesById(cluster.id, scope),
+    listAttachedSkillsById(cluster.id, scope),
+  ]);
+
   return {
     ...cluster,
     panel_count: entryIds.length,
     entries,
+    knowledge_bases,
+    skills,
   };
 }
 

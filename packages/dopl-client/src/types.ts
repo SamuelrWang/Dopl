@@ -95,8 +95,56 @@ export interface ClusterDetailEntry {
   agents_md: string | null;
 }
 
+export interface ClusterAttachedKnowledgeBase {
+  knowledge_base_id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  agent_write_enabled: boolean;
+  added_at: string;
+  entries_index: Array<{
+    entry_id: string;
+    title: string;
+    folder_path: string | null;
+  }>;
+}
+
+export interface ClusterAttachedSkill {
+  skill_id: string;
+  slug: string;
+  name: string;
+  description: string;
+  status: "active" | "draft";
+  when_to_use: string;
+  body: string;
+  added_at: string;
+}
+
 export interface ClusterDetail extends ClusterRow {
   entries: ClusterDetailEntry[];
+  knowledge_bases: ClusterAttachedKnowledgeBase[];
+  skills: ClusterAttachedSkill[];
+}
+
+export interface ClusterKnowledgeEntry {
+  entry_id: string;
+  knowledge_base_slug: string;
+  title: string;
+  body: string;
+  folder_path: string | null;
+  updated_at: string;
+}
+
+export interface ClusterSkillFull {
+  skill_slug: string;
+  name: string;
+  description: string;
+  when_to_use: string;
+  status: "active" | "draft";
+  files: Array<{
+    name: string;
+    body: string;
+  }>;
 }
 
 export type CanvasPanelType =

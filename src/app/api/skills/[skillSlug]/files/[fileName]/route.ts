@@ -48,7 +48,18 @@ async function handlePut(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const ctx = buildSkillContext(auth);
     const input = await parseJson(request, SkillFileWriteSchema);
-    const file = await writeFile(ctx, requireSlug(auth), requireFileName(auth), input);
+    // Optimistic-concurrency precondition on the file row's
+    // updated_at. Mismatch → 412 SKILL_STALE_VERSION; client surfaces
+    // conflict resolution.
+    const expectedUpdatedAt =
+      request.headers.get("x-updated-at") ?? undefined;
+    const file = await writeFile(
+      ctx,
+      requireSlug(auth),
+      requireFileName(auth),
+      input,
+      expectedUpdatedAt
+    );
     return NextResponse.json({ file });
   } catch (err) {
     return toSkillErrorResponse(err);

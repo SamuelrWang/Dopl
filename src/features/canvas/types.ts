@@ -127,13 +127,61 @@ export interface ClusterBrainPanelData extends BasePanelData {
   errorMessage: string | null;
 }
 
+/**
+ * KnowledgePanelData — workspace-scoped knowledge-bases browser. Hardcoded UI
+ * for now; will sync with /api/knowledge/* in a later pass.
+ */
+export interface KnowledgePanelData extends BasePanelData {
+  type: "knowledge";
+}
+
+/**
+ * SkillsPanelData — workspace-scoped skills browser. Hardcoded UI for now;
+ * will sync with /api/skills/* in a later pass.
+ */
+export interface SkillsPanelData extends BasePanelData {
+  type: "skills";
+}
+
+/**
+ * KnowledgeBasePanelData — a single knowledge base in panel form, suitable
+ * for joining clusters. Spawned by clicking a card in the workspace
+ * KnowledgePanel browser. Hardcoded UI for now; the `knowledgeBaseId` /
+ * `slug` are the future hooks for real data.
+ */
+export interface KnowledgeBasePanelData extends BasePanelData {
+  type: "knowledge-base";
+  knowledgeBaseId: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  agentWriteEnabled: boolean;
+}
+
+/**
+ * SkillPanelData — a single skill in panel form, suitable for joining
+ * clusters. Spawned by clicking a row in the workspace SkillsPanel browser.
+ */
+export interface SkillPanelData extends BasePanelData {
+  type: "skill";
+  skillId: string;
+  slug: string;
+  name: string;
+  description: string;
+  status: "active" | "draft";
+}
+
 /** Discriminated union — add more panel types here later */
 export type Panel =
   | ChatPanelData
   | ConnectionPanelData
   | EntryPanelData
   | BrowsePanelData
-  | ClusterBrainPanelData;
+  | ClusterBrainPanelData
+  | KnowledgePanelData
+  | SkillsPanelData
+  | KnowledgeBasePanelData
+  | SkillPanelData;
 
 /** Returns true if the user is allowed to close this panel. */
 export function isPanelDeletable(panel: Panel): boolean {
@@ -142,7 +190,12 @@ export function isPanelDeletable(panel: Panel): boolean {
 
 /** Returns true if this panel type can participate in clusters. */
 export function isPanelClusterable(panel: Panel): boolean {
-  return panel.type !== "connection" && panel.type !== "browse";
+  return (
+    panel.type !== "connection" &&
+    panel.type !== "browse" &&
+    panel.type !== "knowledge" &&
+    panel.type !== "skills"
+  );
 }
 
 /**
@@ -192,6 +245,26 @@ export const BROWSE_PANEL_SIZE = {
 } as const;
 
 export const CLUSTER_BRAIN_PANEL_SIZE = {
+  width: 520,
+  height: 700,
+} as const;
+
+export const KNOWLEDGE_PANEL_SIZE = {
+  width: 1000,
+  height: 700,
+} as const;
+
+export const SKILLS_PANEL_SIZE = {
+  width: 1000,
+  height: 700,
+} as const;
+
+export const KNOWLEDGE_BASE_PANEL_SIZE = {
+  width: 560,
+  height: 720,
+} as const;
+
+export const SKILL_PANEL_SIZE = {
   width: 520,
   height: 700,
 } as const;
@@ -566,6 +639,44 @@ export type CanvasAction =
       id: string;
       x: number;
       y: number;
+    }
+  | {
+      /** Spawn a knowledge panel at (x, y). */
+      type: "CREATE_KNOWLEDGE_PANEL";
+      id: string;
+      x: number;
+      y: number;
+    }
+  | {
+      /** Spawn a skills panel at (x, y). */
+      type: "CREATE_SKILLS_PANEL";
+      id: string;
+      x: number;
+      y: number;
+    }
+  | {
+      /** Spawn a single-KB panel at (x, y), pre-populated with the given KB. */
+      type: "CREATE_KNOWLEDGE_BASE_PANEL";
+      id: string;
+      x: number;
+      y: number;
+      knowledgeBaseId: string;
+      slug: string;
+      name: string;
+      description: string | null;
+      agentWriteEnabled: boolean;
+    }
+  | {
+      /** Spawn a single-skill panel at (x, y), pre-populated with the given skill. */
+      type: "CREATE_SKILL_PANEL";
+      id: string;
+      x: number;
+      y: number;
+      skillId: string;
+      slug: string;
+      name: string;
+      description: string;
+      status: "active" | "draft";
     }
   | {
       /** Attach DB-generated id and slug to a cluster after API sync. */

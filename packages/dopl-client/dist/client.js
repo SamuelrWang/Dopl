@@ -155,6 +155,12 @@ class DoplClient {
             body: { query, max_results: maxResults ?? 5 },
         });
     }
+    async getClusterKnowledgeEntry(clusterSlug, kbId, entryId) {
+        return this.transport.request(`/api/clusters/${encodeURIComponent(clusterSlug)}/knowledge-bases/${encodeURIComponent(kbId)}/entries/${encodeURIComponent(entryId)}`, { toolName: "read_cluster_knowledge_entry" });
+    }
+    async getClusterSkill(clusterSlug, skillId) {
+        return this.transport.request(`/api/clusters/${encodeURIComponent(clusterSlug)}/skills/${encodeURIComponent(skillId)}/full`, { toolName: "read_cluster_skill" });
+    }
     // ── Workspaces ────────────────────────────────────────────────────
     async listWorkspaces() {
         return this.transport.request("/api/workspaces", { toolName: "list_workspaces" });

@@ -11,6 +11,7 @@ import { cn } from "@/shared/lib/utils";
 import { PageTopBar } from "@/shared/layout/page-top-bar";
 import { useRefetchOnFocus } from "@/shared/hooks/use-refetch-on-focus";
 import { toast } from "@/shared/ui/toast";
+import { AlertTriangle } from "lucide-react";
 // Cross-feature imports: DocEditor + SourceIcon live in features/knowledge
 // today. They're generic enough to belong in shared/ — moving is a future
 // refactor (per ENGINEERING.md §3 / §16). Keeping the imports as-is for
@@ -31,9 +32,11 @@ import {
 } from "@/features/skills/types";
 import { parseSkillBody } from "@/features/skills/skill-body";
 import {
+  SkillApiError,
   createSkillFile,
   deleteSkillFile,
   fetchSkill,
+  readSkillFile,
   renameSkillFile,
   writeSkillFile,
 } from "@/features/skills/client/api";
@@ -86,6 +89,15 @@ export function SkillView({ resolved, workspaceKbs, workspaceSlug }: Props) {
     () => primaryFileId(resolved.files) ?? resolved.files[0]?.id ?? ""
   );
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  // 412 surfaced from the autosave path. While set, the conflicting
+  // file's editor shows a banner with explicit Save mine / Discard
+  // mine buttons; debounced autosave is paused for that file.
+  const [conflict, setConflict] = useState<{
+    fileId: string;
+    fileName: string;
+    serverBody: string;
+    serverUpdatedAt: string;
+  } | null>(null);
 
   const activeFile = useMemo(
     () => files.find((f) => f.id === activeFileId) ?? files[0],
@@ -99,27 +111,84 @@ export function SkillView({ resolved, workspaceKbs, workspaceSlug }: Props) {
     new Map()
   );
   const pendingBodiesRef = useRef<Map<string, string>>(new Map());
+  // Filename + baseline updatedAt tracked per file so the unmount-flush
+  // can use the freshest precondition without going through React
+  // state. Updated on every successful save.
+  const fileMetaRef = useRef<
+    Map<string, { name: string; updatedAt: string }>
+  >(new Map());
+  useEffect(() => {
+    for (const f of files) {
+      fileMetaRef.current.set(f.id, { name: f.name, updatedAt: f.updatedAt });
+    }
+  }, [files]);
   const slugRef = useRef(skill.slug);
   useEffect(() => {
     slugRef.current = skill.slug;
   }, [skill.slug]);
+  const conflictRef = useRef<typeof conflict>(null);
+  conflictRef.current = conflict;
 
   const flushSave = useCallback(
     async (fileId: string, fileName: string, body: string) => {
+      // Don't fire while this exact file is in conflict — autosave
+      // would just 412 again.
+      if (conflictRef.current && conflictRef.current.fileId === fileId) {
+        return;
+      }
       pendingBodiesRef.current.delete(fileId);
+      const baseline = fileMetaRef.current.get(fileId)?.updatedAt;
       setSaveStatus("saving");
       try {
-        const updated = await writeSkillFile(slugRef.current, fileName, body);
+        const updated = await writeSkillFile(
+          slugRef.current,
+          fileName,
+          body,
+          undefined,
+          baseline
+        );
+        fileMetaRef.current.set(updated.id, {
+          name: updated.name,
+          updatedAt: updated.updatedAt,
+        });
         setFiles((prev) =>
           prev.map((f) => (f.id === fileId ? updated : f))
         );
         setSaveStatus("saved");
-        // Reset the indicator after a short window unless another edit
-        // has already moved it back to "dirty".
         setTimeout(() => {
           setSaveStatus((prev) => (prev === "saved" ? "idle" : prev));
         }, 1800);
       } catch (err) {
+        if (err instanceof SkillApiError && err.status === 412) {
+          // Pull the server's current state so the user can decide
+          // (Save mine / Discard mine). Re-buffer their typing for
+          // the "Save mine" path.
+          pendingBodiesRef.current.set(fileId, body);
+          try {
+            const fresh = await readSkillFile(
+              slugRef.current,
+              fileName
+            );
+            fileMetaRef.current.set(fresh.id, {
+              name: fresh.name,
+              updatedAt: fresh.updatedAt,
+            });
+            setConflict({
+              fileId,
+              fileName,
+              serverBody: fresh.body,
+              serverUpdatedAt: fresh.updatedAt,
+            });
+          } catch {
+            toast({
+              title: "Edited elsewhere",
+              description:
+                "Couldn't load the latest server version — please refresh.",
+            });
+          }
+          setSaveStatus("error");
+          return;
+        }
         setSaveStatus("error");
         toast({ title: "Couldn't save", description: errMessage(err) });
       }
@@ -146,24 +215,118 @@ export function SkillView({ resolved, workspaceKbs, workspaceSlug }: Props) {
 
   // Cleanup any pending timers on unmount. Fire-and-forget the final
   // PUTs so an entry-switch or page nav doesn't drop the last 1.5s of
-  // typing. We can't surface errors here — component is unmounting —
-  // so they end up in the dev console only.
+  // typing. Each PUT carries the file's baseline updatedAt so a
+  // racing concurrent writer 412s us instead of getting silently
+  // overwritten — same precondition the live autosave uses. The
+  // dropped 412s end up in the dev console only (the component is
+  // unmounting, no UI to surface a banner into).
   useEffect(() => {
     const timers = timersRef.current;
     const pending = pendingBodiesRef.current;
+    const meta = fileMetaRef.current;
     return () => {
       const slug = slugRef.current;
+      const conflictedId = conflictRef.current?.fileId;
       for (const [fileId, timer] of timers) {
         clearTimeout(timer);
+        // Skip files that are mid-conflict — silent unmount-saves
+        // while the user was about to choose would overwrite their
+        // resolution intent.
+        if (fileId === conflictedId) continue;
         const body = pending.get(fileId);
-        const fileName = pending.get(`__name:${fileId}`);
-        if (body !== undefined && fileName !== undefined) {
-          writeSkillFile(slug, fileName, body).catch(() => {});
+        const m = meta.get(fileId);
+        if (body !== undefined && m) {
+          writeSkillFile(slug, m.name, body, undefined, m.updatedAt).catch(
+            (err: unknown) => {
+              if (err instanceof SkillApiError && err.status === 412) {
+                console.warn(
+                  "[skills] unmount autosave dropped (412 stale)",
+                  { slug, file: m.name }
+                );
+              }
+            }
+          );
         }
       }
       timers.clear();
       pending.clear();
     };
+  }, []);
+
+  // Conflict resolution: keep the user's local edits, force-save over
+  // the server using the latest known precondition. If yet another
+  // writer slipped in between fetch and PATCH, we 412 again and refresh
+  // the conflict — never silently overwrite an unseen newer version.
+  const handleKeepMine = useCallback(async () => {
+    const c = conflictRef.current;
+    if (!c) return;
+    const body = pendingBodiesRef.current.get(c.fileId);
+    if (body === undefined) return;
+    setSaveStatus("saving");
+    try {
+      const saved = await writeSkillFile(
+        slugRef.current,
+        c.fileName,
+        body,
+        undefined,
+        c.serverUpdatedAt
+      );
+      fileMetaRef.current.set(saved.id, {
+        name: saved.name,
+        updatedAt: saved.updatedAt,
+      });
+      setFiles((prev) => prev.map((f) => (f.id === saved.id ? saved : f)));
+      pendingBodiesRef.current.delete(c.fileId);
+      setConflict(null);
+      setSaveStatus("saved");
+      setTimeout(() => {
+        setSaveStatus((prev) => (prev === "saved" ? "idle" : prev));
+      }, 1800);
+    } catch (err) {
+      if (err instanceof SkillApiError && err.status === 412) {
+        try {
+          const fresh = await readSkillFile(slugRef.current, c.fileName);
+          fileMetaRef.current.set(fresh.id, {
+            name: fresh.name,
+            updatedAt: fresh.updatedAt,
+          });
+          setConflict({
+            fileId: c.fileId,
+            fileName: c.fileName,
+            serverBody: fresh.body,
+            serverUpdatedAt: fresh.updatedAt,
+          });
+        } catch {
+          // Network blip — leave the existing conflict snapshot in
+          // place; user can retry.
+        }
+        setSaveStatus("error");
+        return;
+      }
+      setSaveStatus("error");
+      toast({ title: "Couldn't save", description: errMessage(err) });
+    }
+  }, []);
+
+  // Conflict resolution: discard the user's local typing, reload the
+  // server's content into the editor.
+  const handleDiscardMine = useCallback(() => {
+    const c = conflictRef.current;
+    if (!c) return;
+    pendingBodiesRef.current.delete(c.fileId);
+    fileMetaRef.current.set(c.fileId, {
+      name: c.fileName,
+      updatedAt: c.serverUpdatedAt,
+    });
+    setFiles((prev) =>
+      prev.map((f) =>
+        f.id === c.fileId
+          ? { ...f, body: c.serverBody, updatedAt: c.serverUpdatedAt }
+          : f
+      )
+    );
+    setConflict(null);
+    setSaveStatus("idle");
   }, []);
 
   // When the user switches back to this tab AND nothing is mid-save,
@@ -194,9 +357,9 @@ export function SkillView({ resolved, workspaceKbs, workspaceSlug }: Props) {
       setFiles((prev) =>
         prev.map((f) => (f.id === activeFile.id ? { ...f, body } : f))
       );
-      // Track filename alongside the pending body so unmount-flush can
-      // resolve the URL even if local state changes mid-save.
-      pendingBodiesRef.current.set(`__name:${activeFile.id}`, activeFile.name);
+      // fileMetaRef (above) is the canonical filename + updatedAt
+      // source for the unmount-flush — no parallel pending-name
+      // tracking needed.
       scheduleSave(activeFile.id, activeFile.name, body);
     },
     [activeFile, scheduleSave]
@@ -344,11 +507,53 @@ export function SkillView({ resolved, workspaceKbs, workspaceSlug }: Props) {
               onRename={handleRenameFile}
             />
             <div className="flex-1 min-h-0 overflow-y-auto">
+              {activeFile && conflict && conflict.fileId === activeFile.id && (
+                <div
+                  role="alert"
+                  className="flex flex-wrap items-center gap-2 border-b border-amber-500/20 bg-amber-500/[0.06] px-4 py-2 text-[12px] leading-relaxed text-amber-100/90"
+                >
+                  <AlertTriangle
+                    size={13}
+                    className="shrink-0 text-amber-300/90"
+                  />
+                  <span className="min-w-0 flex-1">
+                    <strong className="font-semibold">
+                      Edited elsewhere.
+                    </strong>{" "}
+                    The server has a newer version of this file — your edits
+                    are preserved until you choose.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleDiscardMine}
+                    disabled={saveStatus === "saving"}
+                    className="rounded-md border border-white/[0.1] bg-white/[0.02] px-2.5 py-1 text-[11px] text-white/70 transition-colors hover:bg-white/[0.06] hover:text-white/95 disabled:opacity-40"
+                  >
+                    Discard mine, reload
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleKeepMine}
+                    disabled={saveStatus === "saving"}
+                    className="rounded-md border border-amber-400/30 bg-amber-400/10 px-2.5 py-1 text-[11px] text-amber-100/95 transition-colors hover:bg-amber-400/15 disabled:opacity-40"
+                  >
+                    {saveStatus === "saving"
+                      ? "Saving…"
+                      : "Save mine, overwrite"}
+                  </button>
+                </div>
+              )}
               {activeFile && (
                 <DocEditor
                   key={activeFile.id}
                   initialMarkdown={activeFile.body}
-                  resetKey={activeFile.id}
+                  // Including `updatedAt` in resetKey forces DocEditor
+                  // to re-seed Tiptap when the user picks "Discard mine,
+                  // reload" (which mutates the file's body+updatedAt
+                  // in-place). Editor still skips redundant setContent
+                  // calls thanks to the content-equality guard inside
+                  // DocEditor.
+                  resetKey={`${activeFile.id}:${activeFile.updatedAt}`}
                   onChange={updateActiveBody}
                 />
               )}

@@ -9,16 +9,25 @@ import {
 interface Ctx {
   userId: string;
   workspaceId: string;
+  apiKeyId?: string;
   params?: Record<string, string>;
 }
 
-async function handleGet(_request: NextRequest, { userId, workspaceId, params }: Ctx) {
+function scopeOf(ctx: Ctx) {
+  return {
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+    source: ctx.apiKeyId ? ("agent" as const) : ("user" as const),
+  };
+}
+
+async function handleGet(_request: NextRequest, ctx: Ctx) {
   try {
-    const slug = params?.slug;
+    const slug = ctx.params?.slug;
     if (!slug) {
       return NextResponse.json({ error: "slug required" }, { status: 400 });
     }
-    const cluster = await getCluster(slug, { userId, workspaceId });
+    const cluster = await getCluster(slug, scopeOf(ctx));
     return NextResponse.json(cluster);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
@@ -27,9 +36,9 @@ async function handleGet(_request: NextRequest, { userId, workspaceId, params }:
   }
 }
 
-async function handlePatch(request: NextRequest, { userId, workspaceId, params }: Ctx) {
+async function handlePatch(request: NextRequest, ctx: Ctx) {
   try {
-    const slug = params?.slug;
+    const slug = ctx.params?.slug;
     if (!slug) {
       return NextResponse.json({ error: "slug required" }, { status: 400 });
     }
@@ -37,7 +46,7 @@ async function handlePatch(request: NextRequest, { userId, workspaceId, params }
     const cluster = await updateCluster(
       slug,
       { name: body.name, entry_ids: body.entry_ids },
-      { userId, workspaceId }
+      scopeOf(ctx)
     );
     return NextResponse.json(cluster);
   } catch (error) {
@@ -47,13 +56,13 @@ async function handlePatch(request: NextRequest, { userId, workspaceId, params }
   }
 }
 
-async function handleDelete(_request: NextRequest, { userId, workspaceId, params }: Ctx) {
+async function handleDelete(_request: NextRequest, ctx: Ctx) {
   try {
-    const slug = params?.slug;
+    const slug = ctx.params?.slug;
     if (!slug) {
       return NextResponse.json({ error: "slug required" }, { status: 400 });
     }
-    await deleteCluster(slug, { userId, workspaceId });
+    await deleteCluster(slug, scopeOf(ctx));
     return new NextResponse(null, { status: 204 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";

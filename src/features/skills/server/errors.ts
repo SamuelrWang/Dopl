@@ -66,3 +66,23 @@ export class SkillPrimaryFileImmutableError extends Error {
     this.name = "SkillPrimaryFileImmutableError";
   }
 }
+
+/**
+ * Thrown when a PATCH/PUT carries an `expectedUpdatedAt` precondition
+ * that doesn't match the row's current `updated_at`. Maps to 412 — the
+ * client should refetch and surface a conflict resolution UI rather
+ * than silently overwriting the parallel writer's content.
+ */
+export class SkillStaleVersionError extends Error {
+  readonly code = "SKILL_STALE_VERSION";
+  readonly expected: string;
+  readonly actual: string;
+  constructor(expected: string, actual: string) {
+    super(
+      `Stale write rejected — row was modified at ${actual} but the request expected ${expected}. Refetch and retry.`
+    );
+    this.name = "SkillStaleVersionError";
+    this.expected = expected;
+    this.actual = actual;
+  }
+}

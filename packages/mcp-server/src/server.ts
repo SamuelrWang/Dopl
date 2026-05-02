@@ -576,7 +576,7 @@ export function createServer(
   // ── get_cluster ────────────────────────────────────────────────────
   registerTool(
     "get_cluster",
-    "Retrieve a cluster's metadata plus its member entries (summaries + truncated READMEs). Use this when the user wants to see what's in a cluster, or when you need the member list before operating on the cluster. If you don't have a slug yet, call `list_clusters` first. For searching inside a cluster's entries, use `query_cluster`.",
+    "Retrieve a cluster's metadata plus its member entries, attached knowledge bases, and attached skills. Use this when the user wants to see what's in a cluster, or when you need to know what KBs / skills the cluster has access to before answering. KB attachments include an entries_index — to read a specific entry's body call `read_cluster_knowledge_entry`. Skill bodies are returned truncated; for the full procedure call `read_cluster_skill`. For searching inside a cluster's entries, use `query_cluster`.",
     {
       slug: z.string().describe("Cluster slug from list_clusters"),
     },
@@ -586,25 +586,127 @@ export function createServer(
       const lines: string[] = [];
       lines.push(`# Cluster: ${cluster.name}`);
       lines.push(`Slug: \`${cluster.slug}\``);
-      lines.push(`Entries: ${cluster.entries.length}\n`);
+      lines.push(`Entries: ${cluster.entries.length}`);
+      lines.push(`Knowledge bases: ${cluster.knowledge_bases.length}`);
+      lines.push(`Skills: ${cluster.skills.length}\n`);
 
-      for (const e of cluster.entries) {
-        const title = e.title || "Untitled";
-        const url = client.entryUrl(e.slug);
-        const heading = url ? `[${title}](${url})` : title;
-        lines.push(`### ${heading}`);
-        if (e.summary) lines.push(e.summary);
-        if (e.readme) {
-          lines.push(`\nREADME:\n${e.readme.slice(0, CONTEXT_CHAR_BUDGET)}`);
+      if (cluster.entries.length > 0) {
+        lines.push(`## Entries\n`);
+        for (const e of cluster.entries) {
+          const title = e.title || "Untitled";
+          const url = client.entryUrl(e.slug);
+          const heading = url ? `[${title}](${url})` : title;
+          lines.push(`### ${heading}`);
+          if (e.summary) lines.push(e.summary);
+          if (e.readme) {
+            lines.push(`\nREADME:\n${e.readme.slice(0, CONTEXT_CHAR_BUDGET)}`);
+          }
+          if (e.agents_md) {
+            lines.push(
+              `\nagents.md:\n${e.agents_md.slice(0, CONTEXT_CHAR_BUDGET)}`
+            );
+          }
+          lines.push("");
         }
-        if (e.agents_md) {
-          lines.push(
-            `\nagents.md:\n${e.agents_md.slice(0, CONTEXT_CHAR_BUDGET)}`
-          );
-        }
-        lines.push("");
       }
 
+      if (cluster.knowledge_bases.length > 0) {
+        lines.push(`## Attached Knowledge Bases\n`);
+        for (const kb of cluster.knowledge_bases) {
+          lines.push(`### Knowledge: ${kb.name}`);
+          lines.push(
+            `slug: \`${kb.slug}\` · id: \`${kb.knowledge_base_id}\` · agent_write: ${kb.agent_write_enabled ? "on" : "off"}`
+          );
+          if (kb.description) lines.push(kb.description);
+          if (kb.entries_index.length > 0) {
+            lines.push(`\nEntries (${kb.entries_index.length}):`);
+            for (const e of kb.entries_index.slice(0, 50)) {
+              const path = e.folder_path ? `${e.folder_path}/${e.title}` : e.title;
+              lines.push(`- ${path}  \`(entry_id: ${e.entry_id})\``);
+            }
+            if (kb.entries_index.length > 50) {
+              lines.push(`- … ${kb.entries_index.length - 50} more`);
+            }
+            lines.push(
+              `\nTo read a specific entry: \`read_cluster_knowledge_entry({ cluster_slug: "${cluster.slug}", knowledge_base_id: "${kb.knowledge_base_id}", entry_id: "<entry_id>" })\``
+            );
+          }
+          lines.push("");
+        }
+      }
+
+      if (cluster.skills.length > 0) {
+        lines.push(`## Attached Skills\n`);
+        for (const sk of cluster.skills) {
+          lines.push(`### Skill: ${sk.name}`);
+          lines.push(
+            `slug: \`${sk.slug}\` · id: \`${sk.skill_id}\` · status: ${sk.status}`
+          );
+          if (sk.description) lines.push(sk.description);
+          if (sk.when_to_use) {
+            lines.push(`\n**When to use:** ${sk.when_to_use}`);
+          }
+          if (sk.body) {
+            lines.push(`\nProcedure (truncated):\n${sk.body}`);
+            lines.push(
+              `\nFor the full body across all skill files: \`read_cluster_skill({ cluster_slug: "${cluster.slug}", skill_id: "${sk.skill_id}" })\``
+            );
+          }
+          lines.push("");
+        }
+      }
+
+      return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+    }
+  );
+
+  // ── read_cluster_knowledge_entry ───────────────────────────────────
+  registerTool(
+    "read_cluster_knowledge_entry",
+    "Read the full body of one entry inside a knowledge base attached to the given cluster. Returns 404 if the KB isn't attached or the entry doesn't exist. Find the (kb id, entry id) pair via `get_cluster` first.",
+    {
+      cluster_slug: z.string().describe("Cluster slug"),
+      knowledge_base_id: z.string().describe("Knowledge base UUID"),
+      entry_id: z.string().describe("Knowledge entry UUID"),
+    },
+    async ({ cluster_slug, knowledge_base_id, entry_id }) => {
+      const e = await client.getClusterKnowledgeEntry(
+        cluster_slug,
+        knowledge_base_id,
+        entry_id
+      );
+      const path = e.folder_path ? `${e.folder_path}/${e.title}` : e.title;
+      const text = [
+        `# ${e.title}`,
+        `KB: \`${e.knowledge_base_slug}\` · path: \`${path}\``,
+        ``,
+        e.body,
+      ].join("\n");
+      return { content: [{ type: "text" as const, text }] };
+    }
+  );
+
+  // ── read_cluster_skill ─────────────────────────────────────────────
+  registerTool(
+    "read_cluster_skill",
+    "Read the full body of every file (SKILL.md + supplementary files) for a skill attached to the given cluster. Returns 404 if the skill isn't attached. Find the skill_id via `get_cluster` first. Use this when the truncated body in `get_cluster` isn't enough — typically because the skill body references entries / connectors / sub-procedures the agent needs to act on.",
+    {
+      cluster_slug: z.string().describe("Cluster slug"),
+      skill_id: z.string().describe("Skill UUID"),
+    },
+    async ({ cluster_slug, skill_id }) => {
+      const sk = await client.getClusterSkill(cluster_slug, skill_id);
+      const lines: string[] = [];
+      lines.push(`# Skill: ${sk.name}`);
+      lines.push(`slug: \`${sk.skill_slug}\` · status: ${sk.status}`);
+      if (sk.description) lines.push(sk.description);
+      if (sk.when_to_use) lines.push(`\n**When to use:** ${sk.when_to_use}`);
+      lines.push("");
+      for (const f of sk.files) {
+        lines.push(`## ${f.name}\n`);
+        lines.push(f.body);
+        lines.push("");
+      }
       return { content: [{ type: "text" as const, text: lines.join("\n") }] };
     }
   );

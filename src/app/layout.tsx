@@ -96,6 +96,16 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} ${playfairDisplay.variable} ${inter.variable} antialiased mosaic-bg min-h-screen`}
       >
+        {/* Pre-hydration: strip mosaic-bg before first paint on no-chrome
+            routes so the grid pattern never flashes. Inline scripts in
+            <body> are render-blocking, so this runs before the browser
+            paints body's class-driven background. Must stay in sync with
+            isNoChrome in layout-shell.tsx. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var p=location.pathname;if(p==='/'||p==='/landing-v2'||p.indexOf('/docs')===0){document.body.classList.remove('mosaic-bg');document.body.classList.add('landing-active');}}catch(e){}})();`,
+          }}
+        />
         <LayoutShell>{children}</LayoutShell>
         <ToastHost />
       </body>

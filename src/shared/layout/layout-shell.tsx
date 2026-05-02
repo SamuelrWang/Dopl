@@ -9,7 +9,7 @@ const NO_SIDEBAR_PATHS = new Set(["/login", "/terms", "/privacy"]);
 
 export function LayoutShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const isLanding = pathname === "/";
+  const isLanding = pathname === "/" || pathname === "/landing-v2";
   const isDocs = pathname.startsWith("/docs");
   // Community detail pages use their own full-screen layout
   const isCommunityDetail = pathname.startsWith("/community/") && !pathname.endsWith("/posts");

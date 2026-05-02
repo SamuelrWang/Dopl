@@ -85,7 +85,9 @@ export function BaseSettingsForm({ workspaceId, workspaceSlug, base }: Props) {
     try {
       await deleteBase(base.id, workspaceId);
       toast({ title: `"${base.name}" deleted` });
-      router.replace(`/${workspaceSlug}/knowledge`);
+      // The /knowledge index page no longer exists — bounce to the
+      // workspace home; the user can pick another KB from the sidebar.
+      router.replace(`/${workspaceSlug}`);
       router.refresh();
     } catch (err) {
       const msg =

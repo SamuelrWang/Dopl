@@ -329,13 +329,12 @@ export function KnowledgeBaseView({
                 workspaceId={workspaceId}
                 onSaved={refresh}
                 onStaleVersion={() => {
-                  // 412 recovery: refresh both the tree (folder/entry
-                  // metadata, including the new updatedAt) and the
-                  // current entry's full body via the hook's refetch.
-                  // DocPane's effect picks up the fresh updatedAt and
-                  // resyncs `expectedUpdatedAtRef`, so the next save
-                  // doesn't loop on the same stale precondition.
-                  refetchEntry();
+                  // DocPane now owns 412 recovery — it fetches the
+                  // server's current state into a local conflict
+                  // banner so the user's unsaved edits in the editor
+                  // can never be silently overwritten. We only refresh
+                  // the surrounding tree here so the metadata
+                  // (titles, timestamps) reflects the latest.
                   refresh();
                 }}
                 onFocusRefetch={() => {

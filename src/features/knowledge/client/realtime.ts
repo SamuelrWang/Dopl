@@ -83,6 +83,16 @@ export function useKnowledgeRealtime(
           {
             event: "*",
             schema: "public",
+            table: "knowledge_bases",
+            filter: `workspace_id=eq.${wsId}`,
+          },
+          fire
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
             table: "knowledge_folders",
             filter: `workspace_id=eq.${wsId}`,
           },
