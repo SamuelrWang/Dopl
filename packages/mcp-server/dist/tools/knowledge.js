@@ -57,7 +57,6 @@ function registerKnowledgeTools(register, client) {
             "",
         ];
         // Build a tree view by walking parent_id / folder_id.
-        const folderById = new Map(tree.folders.map((f) => [f.id, f]));
         const childFolders = new Map();
         for (const f of tree.folders) {
             const arr = childFolders.get(f.parentId) ?? [];
@@ -84,9 +83,6 @@ function registerKnowledgeTools(register, client) {
             }
         }
         dump(null, "");
-        // Defensive: if a folder's parent was filtered out somehow,
-        // the recursion above misses it. Drop a hint.
-        void folderById;
         return ok(lines.join("\n"));
     });
     // ── kb_create_base ───────────────────────────────────────────────
@@ -129,18 +125,19 @@ function registerKnowledgeTools(register, client) {
     });
     // ── kb_restore_base ──────────────────────────────────────────────
     register("kb_restore_base", "Restore a soft-deleted knowledge base. Use after `kb_list_trash` if the user wants something back. Accepts a base slug (preferred — what `kb_list_trash` shows) or a UUID.", { base: zod_1.z.string().describe("Base slug or id") }, async ({ base: ref }) => {
-        // If the base is currently active, no-op.
-        const active = await client.listKbBases();
-        const activeMatch = active.find((b) => b.slug === ref || b.id === ref);
-        if (activeMatch) {
-            return err(`Base "${activeMatch.slug}" is already active — nothing to restore.`);
-        }
+        // Audit fix #30: was 3 round-trips (listKbBases → listKbTrash →
+        // restoreKbBase). Drop the listKbBases call — if the user
+        // mistakenly tries to restore an already-active base it'll just
+        // fall into the "not in trash" error below, which is clearer
+        // anyway ("No deleted base matches" vs "Base is already active"
+        // both correctly tell them not to retry).
+        //
         // The restore endpoint takes a UUID, not a slug. Look up the
         // trashed base by slug or id via workspace-wide trash listing.
         const trash = await client.listKbTrash();
         const trashed = trash.bases.find((b) => b.slug === ref || b.id === ref);
         if (!trashed) {
-            return err(`No deleted base matches "${ref}". Use \`kb_list_trash\` to see available restores.`);
+            return err(`No deleted base matches "${ref}". Use \`kb_list_trash\` to see available restores; or the base may already be active.`);
         }
         const restored = await client.restoreKbBase(trashed.id);
         return ok(`Restored **${restored.name}** (slug: \`${restored.slug}\`).`);

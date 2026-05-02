@@ -1,11 +1,18 @@
 /**
- * /[workspaceSlug]/skills — index of all skills in the workspace,
- * exposed to connected agents over MCP. Hardcoded UI for now.
+ * /[workspaceSlug]/skills — workspace skill index.
+ *
+ * Server component. Resolves the workspace, fetches skills via the
+ * service (which lazy-seeds for fresh workspaces), passes them to the
+ * library-card list. Mirrors the knowledge index shape.
  */
 
 import { notFound, redirect } from "next/navigation";
 import { getUser } from "@/shared/supabase/server";
 import { findWorkspaceForMember } from "@/features/workspaces/server/service";
+import {
+  buildSkillContext,
+  listSkills,
+} from "@/features/skills/server/service";
 import { SkillsList } from "@/features/skills/components/skills-list";
 
 export const dynamic = "force-dynamic";
@@ -21,5 +28,12 @@ export default async function SkillsPage({ params }: PageProps) {
   const workspace = await findWorkspaceForMember(user.id, workspaceSlug);
   if (!workspace) notFound();
 
-  return <SkillsList workspaceSlug={workspace.slug} />;
+  const ctx = buildSkillContext({
+    userId: user.id,
+    workspaceId: workspace.id,
+    apiKeyId: null,
+  });
+  const skills = await listSkills(ctx);
+
+  return <SkillsList workspaceSlug={workspace.slug} skills={skills} />;
 }

@@ -2,6 +2,8 @@ import type { PendingStatus } from "./types.js";
 import type { BuildResult, CanvasPanel, WorkspaceSummary, ClusterDetail, ClusterQueryResult, ClusterRow, DoplEntry, ListResult, Pack, PackFile, PackFileMeta, PrepareIngestResult, ResolvedWorkspace, SearchResult, SubmitIngestedEntryInput, SubmitIngestedEntryResult } from "./types.js";
 import { DoplTransport } from "./transport.js";
 import type { KnowledgeBase, KnowledgeBaseCreateInput, KnowledgeBaseUpdateInput, KnowledgeDirListing, KnowledgeEntry, KnowledgeFolder, KnowledgePathOpResult, KnowledgeSearchHit, KnowledgeTrashSnapshot, KnowledgeTreeSnapshot, KnowledgeWriteFileInput } from "./knowledge-types.js";
+import type { CreateSkillInput, UpdateSkillPatch as SkillUpdatePatch } from "./skills.js";
+import type { ResolvedSkill, Skill, SkillFile } from "./skill-types.js";
 export type { DoplTransportOptions as DoplClientOptions } from "./transport.js";
 export { parseRetryAfter } from "./retry.js";
 export declare class DoplClient {
@@ -188,4 +190,21 @@ export declare class DoplClient {
         baseSlug?: string;
         limit?: number;
     }): Promise<KnowledgeSearchHit[]>;
+    listSkills(): Promise<Skill[]>;
+    getSkill(slug: string): Promise<ResolvedSkill>;
+    createSkill(input: CreateSkillInput): Promise<{
+        skill: Skill;
+        primaryFile: SkillFile;
+    }>;
+    updateSkill(slug: string, patch: SkillUpdatePatch): Promise<Skill>;
+    deleteSkill(slug: string): Promise<void>;
+    listSkillFiles(slug: string): Promise<SkillFile[]>;
+    readSkillFile(slug: string, fileName: string): Promise<SkillFile>;
+    createSkillFile(slug: string, input: {
+        name: string;
+        body?: string;
+    }): Promise<SkillFile>;
+    writeSkillFile(slug: string, fileName: string, body: string): Promise<SkillFile>;
+    renameSkillFile(slug: string, currentName: string, newName: string): Promise<SkillFile>;
+    deleteSkillFile(slug: string, fileName: string): Promise<void>;
 }

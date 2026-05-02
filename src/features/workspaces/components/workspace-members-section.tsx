@@ -160,7 +160,7 @@ export function WorkspaceMembersSection({ workspaceSlug, myUserId, myRole }: Pro
   }
 
   return (
-    <section className="rounded-lg bg-white/[0.03] border border-white/[0.08] p-5">
+    <section className="rounded-2xl bg-[var(--panel-surface)] border border-white/[0.1] p-5">
       <div className="flex items-start justify-between mb-4">
         <div>
           <h2 className="text-sm font-medium text-white">Members</h2>

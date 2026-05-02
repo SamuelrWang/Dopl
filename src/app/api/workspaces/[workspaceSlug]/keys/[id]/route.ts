@@ -4,13 +4,17 @@ import {
   findWorkspaceForMember,
   resolveMembershipOrThrow,
 } from "@/features/workspaces/server/service";
-import { meetsMinRole } from "@/features/workspaces/types";
 import { revokeApiKey } from "@/shared/auth/api-keys";
 
 interface RouteContext {
   params: Promise<{ workspaceSlug: string; id: string }>;
 }
 
+/**
+ * Revoke one of the current user's own keys for this workspace. The
+ * `userId` + `workspaceId` filter on `revokeApiKey` ensures a member
+ * can't revoke another member's key by guessing its id.
+ */
 export async function DELETE(_request: NextRequest, context: RouteContext) {
   const user = await getUser();
   if (!user) {
@@ -21,24 +25,10 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
   if (!workspace) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-  const { membership } = await resolveMembershipOrThrow(
-    workspace.id,
-    user.id
-  );
-  if (!meetsMinRole(membership.role, "admin")) {
-    return NextResponse.json(
-      {
-        error: {
-          code: "WORKSPACE_FORBIDDEN",
-          message: "Only admins can revoke workspace API keys",
-        },
-      },
-      { status: 403 }
-    );
-  }
+  await resolveMembershipOrThrow(workspace.id, user.id);
 
   try {
-    await revokeApiKey(id, { workspaceId: workspace.id });
+    await revokeApiKey(id, { userId: user.id, workspaceId: workspace.id });
     return new NextResponse(null, { status: 204 });
   } catch (error) {
     const message =

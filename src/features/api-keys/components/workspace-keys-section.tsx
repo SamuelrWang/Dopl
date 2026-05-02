@@ -23,11 +23,9 @@ interface ApiKey {
 
 interface Props {
   workspaceSlug: string;
-  /** When false, hide the "Create" button. Use viewer-role check from caller. */
-  canCreate?: boolean;
 }
 
-export function WorkspaceKeysSection({ workspaceSlug, canCreate = true }: Props) {
+export function WorkspaceKeysSection({ workspaceSlug }: Props) {
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -105,7 +103,7 @@ export function WorkspaceKeysSection({ workspaceSlug, canCreate = true }: Props)
   }
 
   return (
-    <section className="rounded-xl border border-white/[0.06] p-5 bg-white/[0.02]">
+    <section className="rounded-2xl border border-white/[0.1] p-5 bg-[var(--panel-surface)]">
       <div className="flex items-center justify-between mb-3">
         <div>
           <p className="text-sm font-medium text-text-primary flex items-center gap-2">
@@ -113,9 +111,9 @@ export function WorkspaceKeysSection({ workspaceSlug, canCreate = true }: Props)
             API keys
           </p>
           <p className="mt-0.5 text-xs text-text-secondary">
-            Workspace-scoped keys for connecting your agent (Claude Code,
-            CLI, MCP). Locked to this workspace — keys can&rsquo;t be reused
-            across workspaces.
+            Your personal keys for this workspace. Each one acts as you —
+            same role, same permissions — so revoke one if a device is
+            lost or a session leaks.
           </p>
         </div>
       </div>
@@ -151,26 +149,24 @@ export function WorkspaceKeysSection({ workspaceSlug, canCreate = true }: Props)
         </div>
       ) : null}
 
-      {canCreate ? (
-        <div className="flex items-center gap-2 mb-3">
-          <input
-            type="text"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder="e.g. Claude Code on laptop"
-            className="flex-1 h-8 px-3 rounded-md bg-white/[0.06] border border-white/[0.12] text-sm text-text-primary placeholder:text-text-secondary/50 outline-none focus:border-white/[0.25]"
-          />
-          <button
-            type="button"
-            onClick={handleCreate}
-            disabled={creating || !newName.trim()}
-            className="shrink-0 h-8 px-3 rounded-md bg-white text-black text-xs font-medium hover:bg-white/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
-          >
-            <Plus size={11} />
-            {creating ? "Creating…" : "Generate"}
-          </button>
-        </div>
-      ) : null}
+      <div className="flex items-center gap-2 mb-3">
+        <input
+          type="text"
+          value={newName}
+          onChange={(e) => setNewName(e.target.value)}
+          placeholder="e.g. Claude Code on laptop"
+          className="flex-1 h-8 px-3 rounded-md bg-white/[0.06] border border-white/[0.12] text-sm text-text-primary placeholder:text-text-secondary/50 outline-none focus:border-white/[0.25]"
+        />
+        <button
+          type="button"
+          onClick={handleCreate}
+          disabled={creating || !newName.trim()}
+          className="shrink-0 h-8 px-3 rounded-md bg-white text-black text-xs font-medium hover:bg-white/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
+        >
+          <Plus size={11} />
+          {creating ? "Creating…" : "Generate"}
+        </button>
+      </div>
 
       {loading ? (
         <p className="text-xs text-text-secondary">Loading…</p>
@@ -191,16 +187,14 @@ export function WorkspaceKeysSection({ workspaceSlug, canCreate = true }: Props)
                     : " · never used"}
                 </p>
               </div>
-              {canCreate ? (
-                <button
-                  type="button"
-                  onClick={() => handleRevoke(k.id, k.name)}
-                  className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-md text-xs text-red-400 hover:bg-red-500/[0.08] cursor-pointer"
-                >
-                  <Trash2 size={11} />
-                  Revoke
-                </button>
-              ) : null}
+              <button
+                type="button"
+                onClick={() => handleRevoke(k.id, k.name)}
+                className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-md text-xs text-red-400 hover:bg-red-500/[0.08] cursor-pointer"
+              >
+                <Trash2 size={11} />
+                Revoke
+              </button>
             </div>
           ))}
         </div>

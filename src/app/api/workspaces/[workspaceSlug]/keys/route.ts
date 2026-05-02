@@ -4,19 +4,18 @@ import {
   findWorkspaceForMember,
   resolveMembershipOrThrow,
 } from "@/features/workspaces/server/service";
-import { meetsMinRole } from "@/features/workspaces/types";
 import { createApiKey, listApiKeys } from "@/shared/auth/api-keys";
 
 /**
- * Workspace-scoped API keys (Item 5.B).
+ * Per-member workspace API keys.
  *
- * GET → list keys locked to this workspace.
- * POST → create a new workspace-scoped key. Returns plaintext once.
+ * Each member has their own keys scoped to a workspace. The MCP server
+ * authenticates as the *member* who owns the key, inheriting their
+ * role + audit trail. Admins do not see other members' keys.
  *
- * Membership requirements:
- *   - GET: viewer+ (any active member can see what keys exist)
- *   - POST: admin+ (creating a key grants automation access; should
- *     be limited to admins so editors can't auto-provision MCP keys)
+ * GET → current user's own keys for this workspace.
+ * POST → create a new key bound to the current user + workspace.
+ *        Any active member can self-provision.
  */
 
 interface RouteContext {
@@ -35,7 +34,10 @@ export async function GET(_request: NextRequest, context: RouteContext) {
   }
   await resolveMembershipOrThrow(workspace.id, user.id);
 
-  const keys = await listApiKeys({ workspaceId: workspace.id });
+  const keys = await listApiKeys({
+    userId: user.id,
+    workspaceId: workspace.id,
+  });
   return NextResponse.json({ keys });
 }
 
@@ -49,21 +51,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
   if (!workspace) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-  const { membership } = await resolveMembershipOrThrow(
-    workspace.id,
-    user.id
-  );
-  if (!meetsMinRole(membership.role, "admin")) {
-    return NextResponse.json(
-      {
-        error: {
-          code: "WORKSPACE_FORBIDDEN",
-          message: "Only admins can create workspace API keys",
-        },
-      },
-      { status: 403 }
-    );
-  }
+  await resolveMembershipOrThrow(workspace.id, user.id);
 
   const body = await request.json().catch(() => ({}));
   const name = typeof body.name === "string" ? body.name.trim() : "";

@@ -32,6 +32,12 @@ import type {
   KnowledgeTreeSnapshot,
   KnowledgeWriteFileInput,
 } from "./knowledge-types.js";
+import * as skills from "./skills.js";
+import type {
+  CreateSkillInput,
+  UpdateSkillPatch as SkillUpdatePatch,
+} from "./skills.js";
+import type { ResolvedSkill, Skill, SkillFile } from "./skill-types.js";
 
 export type { DoplTransportOptions as DoplClientOptions } from "./transport.js";
 export { parseRetryAfter } from "./retry.js";
@@ -628,5 +634,68 @@ export class DoplClient {
     opts: { baseSlug?: string; limit?: number } = {}
   ): Promise<KnowledgeSearchHit[]> {
     return kb.searchKb(this.transport, query, opts);
+  }
+
+  // ─── Skills ─────────────────────────────────────────────────────────
+  // Read paths are unrestricted; write paths are gated server-side by
+  // the per-skill `agent_write_enabled` toggle for API-key (agent)
+  // callers. Skills are folders of `.md` files; SKILL.md is the
+  // canonical procedure.
+
+  listSkills(): Promise<Skill[]> {
+    return skills.listSkills(this.transport);
+  }
+
+  getSkill(slug: string): Promise<ResolvedSkill> {
+    return skills.getSkill(this.transport, slug);
+  }
+
+  createSkill(
+    input: CreateSkillInput
+  ): Promise<{ skill: Skill; primaryFile: SkillFile }> {
+    return skills.createSkill(this.transport, input);
+  }
+
+  updateSkill(slug: string, patch: SkillUpdatePatch): Promise<Skill> {
+    return skills.updateSkill(this.transport, slug, patch);
+  }
+
+  deleteSkill(slug: string): Promise<void> {
+    return skills.deleteSkill(this.transport, slug);
+  }
+
+  listSkillFiles(slug: string): Promise<SkillFile[]> {
+    return skills.listSkillFiles(this.transport, slug);
+  }
+
+  readSkillFile(slug: string, fileName: string): Promise<SkillFile> {
+    return skills.readSkillFile(this.transport, slug, fileName);
+  }
+
+  createSkillFile(
+    slug: string,
+    input: { name: string; body?: string }
+  ): Promise<SkillFile> {
+    return skills.createSkillFile(this.transport, slug, input);
+  }
+
+  writeSkillFile(
+    slug: string,
+    fileName: string,
+    body: string
+  ): Promise<SkillFile> {
+    return skills.writeSkillFile(this.transport, slug, fileName, body);
+  }
+
+  renameSkillFile(
+    slug: string,
+    currentName: string,
+    newName: string
+  ): Promise<SkillFile> {
+    return skills.renameSkillFile(this.transport, slug, currentName, newName);
+  }
+
+  deleteSkillFile(slug: string, fileName: string): Promise<void> {
+    return skills.deleteSkillFile(this.transport, slug, fileName);
   }
 }

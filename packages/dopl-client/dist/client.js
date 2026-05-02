@@ -36,6 +36,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.DoplClient = exports.parseRetryAfter = void 0;
 const transport_js_1 = require("./transport.js");
 const kb = __importStar(require("./knowledge.js"));
+const skills = __importStar(require("./skills.js"));
 var retry_js_1 = require("./retry.js");
 Object.defineProperty(exports, "parseRetryAfter", { enumerable: true, get: function () { return retry_js_1.parseRetryAfter; } });
 const PENDING_CACHE_TTL_MS = 5_000;
@@ -355,6 +356,44 @@ class DoplClient {
     }
     searchKb(query, opts = {}) {
         return kb.searchKb(this.transport, query, opts);
+    }
+    // ─── Skills ─────────────────────────────────────────────────────────
+    // Read paths are unrestricted; write paths are gated server-side by
+    // the per-skill `agent_write_enabled` toggle for API-key (agent)
+    // callers. Skills are folders of `.md` files; SKILL.md is the
+    // canonical procedure.
+    listSkills() {
+        return skills.listSkills(this.transport);
+    }
+    getSkill(slug) {
+        return skills.getSkill(this.transport, slug);
+    }
+    createSkill(input) {
+        return skills.createSkill(this.transport, input);
+    }
+    updateSkill(slug, patch) {
+        return skills.updateSkill(this.transport, slug, patch);
+    }
+    deleteSkill(slug) {
+        return skills.deleteSkill(this.transport, slug);
+    }
+    listSkillFiles(slug) {
+        return skills.listSkillFiles(this.transport, slug);
+    }
+    readSkillFile(slug, fileName) {
+        return skills.readSkillFile(this.transport, slug, fileName);
+    }
+    createSkillFile(slug, input) {
+        return skills.createSkillFile(this.transport, slug, input);
+    }
+    writeSkillFile(slug, fileName, body) {
+        return skills.writeSkillFile(this.transport, slug, fileName, body);
+    }
+    renameSkillFile(slug, currentName, newName) {
+        return skills.renameSkillFile(this.transport, slug, currentName, newName);
+    }
+    deleteSkillFile(slug, fileName) {
+        return skills.deleteSkillFile(this.transport, slug, fileName);
     }
 }
 exports.DoplClient = DoplClient;

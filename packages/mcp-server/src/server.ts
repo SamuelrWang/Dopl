@@ -19,6 +19,8 @@ import {
 } from "./skill-writer.js";
 import { brainProtocolPreamble } from "./templates.js";
 import { registerKnowledgeTools } from "./tools/knowledge.js";
+import { registerSkillTools } from "./tools/skills.js";
+import { SKILL_AUTHORING_GUIDE } from "./prompts/skill-authoring-guide.js";
 import { packageVersion } from "./version.js";
 
 const CONTEXT_CHAR_BUDGET = 2000;
@@ -130,6 +132,7 @@ Tell the user you're upgrading so they know why there's a pause.
 - **Canvas** — Manage the user's workspace: add entries, organize into clusters, browse saved items
 - **Brain** — Read and edit cluster brains (synthesized instructions + memories) to capture durable preferences and corrections
 - **Skills** — Cluster knowledge can be synced as skill files. Run \`sync_skills\` to write them to ~/.claude/skills/ (Claude Code) or pass target='openclaw' to write to ~/.openclaw/workspace/data/dopl/
+- **Workspace skills** — Procedural prompts the user authored in their workspace (distinct from cluster skill files above). Each workspace skill is a folder of \`.md\` files; \`SKILL.md\` is the canonical procedure. Call \`skill_list\` at task boundaries to see if any apply, then \`skill_get\` to load the bundle and follow SKILL.md. Skill bodies reference KBs via \`[label](dopl://kb/<slug>)\` markdown links — load the referenced KB content with \`kb_read_file\` when you actually need it. **Authoring**: when the user asks you to build a skill, call \`skill_authoring_guide\` first to load the framework, then \`skill_create\` (with strong metadata) and \`skill_write_file\`. All write tools are gated by the per-skill \`agent_write_enabled\` toggle — they 403 with \`SKILL_AGENT_WRITE_DISABLED\` until the user enables it from the website.
 
 ## Linking entries
 
@@ -214,7 +217,11 @@ Beyond the open KB, Dopl ships **knowledge packs**: curated, version-pinned refe
 - General AI/automation questions — those are \`search_setups\` territory
 - Domains with no installed pack — say so plainly, don't fabricate
 
-Packs and KB entries are independent surfaces; don't conflate them. A pack is a maintained doc set, not a single ingested entry.`;
+Packs and KB entries are independent surfaces; don't conflate them. A pack is a maintained doc set, not a single ingested entry.
+
+---
+
+${SKILL_AUTHORING_GUIDE}`;
 
 /**
  * Tool-response shape the MCP SDK accepts. We re-declare it locally to
@@ -1951,6 +1958,12 @@ export function createServer(
   // ── User knowledge bases (Item 4) ──────────────────────────────────
   // 17 kb_* tools wrapping the user's own folder/file tree.
   registerKnowledgeTools(registerTool, client);
+
+  // ── User skills ────────────────────────────────────────────────────
+  // Two read-only tools — skill_list + skill_get. Skills are procedural
+  // prompts the agent reads and follows; KBs referenced from inside a
+  // skill body are loaded via the kb_* tools.
+  registerSkillTools(registerTool, client);
 
   return server;
 }

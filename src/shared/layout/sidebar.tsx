@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   BookOpen,
@@ -20,7 +20,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { RESERVED_WORKSPACE_SLUGS } from "@/config";
-import { HARDCODED_SKILLS } from "@/features/skills/data";
+import { useSkills } from "@/features/skills/client/hooks";
 import { useKnowledgeBases } from "@/features/knowledge/client/hooks";
 import { UserMenu } from "./user-menu";
 
@@ -28,6 +28,15 @@ interface WorkspaceLike {
   id: string;
   name: string;
   slug: string;
+}
+
+interface PendingInvitation {
+  token: string;
+  invitedRole: string;
+  workspaceId: string;
+  workspaceSlug: string;
+  workspaceName: string;
+  createdAt: string;
 }
 
 type NavSection =
@@ -100,7 +109,10 @@ function sectionPathFor(slug: string, section: NavSection): string {
 export function Sidebar() {
   const pathname = usePathname();
   const slug = workspaceSlugFromPath(pathname);
-  const { workspaces, currentWorkspace } = useWorkspaces(slug);
+  const { workspaces, currentWorkspace, refresh: refreshWorkspaces } =
+    useWorkspaces(slug);
+  const { invitations, refresh: refreshInvitations } =
+    usePendingInvitations();
   const fallbackName = currentWorkspace?.name ?? "Workspace";
 
   return (
@@ -112,6 +124,11 @@ export function Sidebar() {
         currentSlug={currentWorkspace?.slug ?? slug ?? "default"}
         currentName={fallbackName}
         workspaces={workspaces}
+        invitations={invitations}
+        onAccepted={() => {
+          refreshInvitations();
+          refreshWorkspaces();
+        }}
       />
       <SidebarSearchRow />
       {/* Nav region claims the remaining height and scrolls internally
@@ -133,6 +150,7 @@ export function Sidebar() {
 
 function useWorkspaces(activeSlug: string | null) {
   const [workspaces, setWorkspaces] = useState<WorkspaceLike[] | null>(null);
+  const [tick, setTick] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -147,7 +165,9 @@ function useWorkspaces(activeSlug: string | null) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [tick]);
+
+  const refresh = useCallback(() => setTick((t) => t + 1), []);
 
   const currentWorkspace = useMemo(() => {
     if (!workspaces || workspaces.length === 0) return null;
@@ -158,18 +178,52 @@ function useWorkspaces(activeSlug: string | null) {
     return workspaces[0];
   }, [workspaces, activeSlug]);
 
-  return { workspaces: workspaces ?? [], currentWorkspace };
+  return { workspaces: workspaces ?? [], currentWorkspace, refresh };
+}
+
+function usePendingInvitations() {
+  const [invitations, setInvitations] = useState<PendingInvitation[]>([]);
+  const [tick, setTick] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/invitations/pending")
+      .then((r) => (r.ok ? r.json() : { invitations: [] }))
+      .then((body: { invitations?: PendingInvitation[] }) => {
+        if (!cancelled) setInvitations(body.invitations ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setInvitations([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tick]);
+
+  const refresh = useCallback(() => setTick((t) => t + 1), []);
+  return { invitations, refresh };
 }
 
 interface SidebarHeaderProps {
   currentSlug: string;
   currentName: string;
   workspaces: WorkspaceLike[];
+  invitations: PendingInvitation[];
+  onAccepted: () => void;
 }
 
-function SidebarHeader({ currentSlug, currentName, workspaces }: SidebarHeaderProps) {
+function SidebarHeader({
+  currentSlug,
+  currentName,
+  workspaces,
+  invitations,
+  onAccepted,
+}: SidebarHeaderProps) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [acceptingToken, setAcceptingToken] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+  const hasInvites = invitations.length > 0;
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -180,6 +234,33 @@ function SidebarHeader({ currentSlug, currentName, workspaces }: SidebarHeaderPr
     if (open) document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [open]);
+
+  async function handleAccept(invite: PendingInvitation) {
+    if (acceptingToken) return;
+    setAcceptingToken(invite.token);
+    try {
+      const res = await fetch(
+        `/api/workspaces/invitations/${encodeURIComponent(invite.token)}/accept`,
+        { method: "POST" },
+      );
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(
+          body?.error?.message || body?.error || "Couldn't accept",
+        );
+      }
+      onAccepted();
+      setOpen(false);
+      router.push(`/${invite.workspaceSlug}`);
+      router.refresh();
+    } catch {
+      // Refresh anyway — invite may have been revoked / expired since
+      // last poll. The list will reconcile.
+      onAccepted();
+    } finally {
+      setAcceptingToken(null);
+    }
+  }
 
   return (
     <div
@@ -202,19 +283,27 @@ function SidebarHeader({ currentSlug, currentName, workspaces }: SidebarHeaderPr
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex-1 flex items-center justify-between gap-2 px-2 py-1 rounded-md hover:bg-white/[0.04] transition-colors text-left cursor-pointer"
+        className="relative flex-1 flex items-center justify-between gap-2 px-2 py-1 rounded-md hover:bg-white/[0.04] transition-colors text-left cursor-pointer"
       >
         <span className="text-sm font-medium text-text-primary truncate">
           {currentName}
         </span>
-        <ChevronDown size={14} className="text-text-secondary/60 shrink-0" />
+        <span className="flex items-center gap-1.5 shrink-0">
+          {hasInvites && (
+            <span
+              aria-label={`${invitations.length} pending invitation${invitations.length === 1 ? "" : "s"}`}
+              className="w-1.5 h-1.5 rounded-full bg-red-500"
+            />
+          )}
+          <ChevronDown size={14} className="text-text-secondary/60" />
+        </span>
       </button>
 
       {open && (
         <div
           className="absolute left-3 right-3 top-full mt-1 rounded-md overflow-hidden bg-[oklch(0.16_0_0)] border border-white/[0.1] shadow-[0_8px_32px_rgba(0,0,0,0.5)] z-10"
         >
-          {workspaces.length === 0 ? (
+          {workspaces.length === 0 && !hasInvites ? (
             <div className="px-3 py-2 text-xs text-text-secondary">
               Loading workspaces…
             </div>
@@ -237,6 +326,41 @@ function SidebarHeader({ currentSlug, currentName, workspaces }: SidebarHeaderPr
               ))}
             </div>
           )}
+
+          {hasInvites && (
+            <div className="border-t border-white/[0.06] py-1">
+              <p className="px-3 pt-1 pb-1 text-[10px] uppercase tracking-wider text-text-secondary/60">
+                Invitations
+              </p>
+              {invitations.map((inv) => {
+                const accepting = acceptingToken === inv.token;
+                return (
+                  <div
+                    key={inv.token}
+                    className="flex items-center gap-2 px-3 py-1.5"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-text-primary truncate">
+                        {inv.workspaceName}
+                      </p>
+                      <p className="text-[10px] uppercase tracking-wider text-text-secondary/50">
+                        Invited as {inv.invitedRole}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleAccept(inv)}
+                      disabled={accepting}
+                      className="shrink-0 h-6 px-2 rounded-md bg-white text-black text-[11px] font-medium hover:bg-white/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                    >
+                      {accepting ? "…" : "Accept"}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           <div className="border-t border-white/[0.06] py-1">
             <Link
               href="/workspaces"
@@ -485,7 +609,7 @@ function KnowledgeNavSection({ pathname, workspaceSlug, workspaceId }: NavProps)
  * chevron toggles expansion. Children are the workspace's skills,
  * each linking to its detail page.
  */
-function SkillsNavSection({ pathname, workspaceSlug }: NavProps) {
+function SkillsNavSection({ pathname, workspaceSlug, workspaceId }: NavProps) {
   const segments = pathname.split("/").filter(Boolean);
   const isOnSkills =
     segments.length >= 2 &&
@@ -494,6 +618,7 @@ function SkillsNavSection({ pathname, workspaceSlug }: NavProps) {
   const currentSkillSlug = isOnSkills ? segments[2] ?? null : null;
 
   const [expanded, setExpanded] = useState(isOnSkills);
+  const { data: skills } = useSkills(workspaceId ?? undefined);
 
   const rowClassName = cn(
     "flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-sm transition-colors cursor-pointer",
@@ -543,7 +668,7 @@ function SkillsNavSection({ pathname, workspaceSlug }: NavProps) {
 
       {expanded && (
         <div className="ml-4 mt-0.5 mb-1 flex flex-col gap-0.5 border-l border-white/[0.06] pl-2">
-          {HARDCODED_SKILLS.map((skill) => {
+          {(skills ?? []).map((skill) => {
             const itemActive = skill.slug === currentSkillSlug;
             const itemClass = cn(
               "block px-2 py-1 rounded-md text-xs transition-colors cursor-pointer truncate",

@@ -295,6 +295,62 @@ export async function acceptInvitationByToken(
   return { workspaceSlug: status.workspace.slug };
 }
 
+export interface PendingInvitationForUser {
+  token: string;
+  invitedRole: InvitedRole;
+  workspaceId: string;
+  workspaceSlug: string;
+  workspaceName: string;
+  createdAt: string;
+}
+
+/**
+ * List the live (unaccepted, unrevoked, unexpired) invitations addressed
+ * to a given email. Used by the sidebar to surface "you've been invited"
+ * notifications + accept buttons.
+ */
+export async function listPendingInvitationsForUser(
+  email: string
+): Promise<PendingInvitationForUser[]> {
+  const normalized = email.trim().toLowerCase();
+  if (!normalized) return [];
+
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("workspace_invitations")
+    .select(
+      `${INVITATION_COLS}, workspace:workspaces!inner(id, slug, name)`
+    )
+    .eq("email", normalized)
+    .is("accepted_at", null)
+    .is("revoked_at", null)
+    .gt("expires_at", new Date().toISOString())
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+
+  type Row = InvitationRow & {
+    workspace:
+      | { id: string; slug: string; name: string }
+      | { id: string; slug: string; name: string }[]
+      | null;
+  };
+
+  return ((data ?? []) as unknown as Row[])
+    .map((r) => {
+      const ws = Array.isArray(r.workspace) ? r.workspace[0] : r.workspace;
+      if (!ws) return null;
+      return {
+        token: r.token,
+        invitedRole: r.invited_role,
+        workspaceId: ws.id,
+        workspaceSlug: ws.slug,
+        workspaceName: ws.name,
+        createdAt: r.created_at,
+      };
+    })
+    .filter((r): r is PendingInvitationForUser => r !== null);
+}
+
 /**
  * Update a member's role. Owner can promote/demote anyone (including
  * themselves), admin can manage editor/viewer but never owners or

@@ -6,6 +6,9 @@ const zod_1 = require("zod");
 const skill_writer_js_1 = require("./skill-writer.js");
 const templates_js_1 = require("./templates.js");
 const knowledge_js_1 = require("./tools/knowledge.js");
+const skills_js_1 = require("./tools/skills.js");
+const skill_authoring_guide_js_1 = require("./prompts/skill-authoring-guide.js");
+const version_js_1 = require("./version.js");
 const CONTEXT_CHAR_BUDGET = 2000;
 const SERVER_INSTRUCTIONS = `You are connected to **Dopl** — a knowledge base of proven AI and automation implementations including agent workflows, n8n automations, Claude skills, API integrations, and more.
 
@@ -114,6 +117,7 @@ Tell the user you're upgrading so they know why there's a pause.
 - **Canvas** — Manage the user's workspace: add entries, organize into clusters, browse saved items
 - **Brain** — Read and edit cluster brains (synthesized instructions + memories) to capture durable preferences and corrections
 - **Skills** — Cluster knowledge can be synced as skill files. Run \`sync_skills\` to write them to ~/.claude/skills/ (Claude Code) or pass target='openclaw' to write to ~/.openclaw/workspace/data/dopl/
+- **Workspace skills** — Procedural prompts the user authored in their workspace (distinct from cluster skill files above). Each workspace skill is a folder of \`.md\` files; \`SKILL.md\` is the canonical procedure. Call \`skill_list\` at task boundaries to see if any apply, then \`skill_get\` to load the bundle and follow SKILL.md. Skill bodies reference KBs via \`[label](dopl://kb/<slug>)\` markdown links — load the referenced KB content with \`kb_read_file\` when you actually need it. **Authoring**: when the user asks you to build a skill, call \`skill_authoring_guide\` first to load the framework, then \`skill_create\` (with strong metadata) and \`skill_write_file\`. All write tools are gated by the per-skill \`agent_write_enabled\` toggle — they 403 with \`SKILL_AGENT_WRITE_DISABLED\` until the user enables it from the website.
 
 ## Linking entries
 
@@ -198,7 +202,11 @@ Beyond the open KB, Dopl ships **knowledge packs**: curated, version-pinned refe
 - General AI/automation questions — those are \`search_setups\` territory
 - Domains with no installed pack — say so plainly, don't fabricate
 
-Packs and KB entries are independent surfaces; don't conflate them. A pack is a maintained doc set, not a single ingested entry.`;
+Packs and KB entries are independent surfaces; don't conflate them. A pack is a maintained doc set, not a single ingested entry.
+
+---
+
+${skill_authoring_guide_js_1.SKILL_AUTHORING_GUIDE}`;
 /**
  * Human-readable label for non-entry canvas panel types. The backend
  * stores `panel_type` in `canvas_panels` but the MCP tool output used
@@ -293,7 +301,10 @@ function createServer(client, options = {}) {
     void options.role;
     const server = new mcp_js_1.McpServer({
         name: "dopl",
-        version: "0.1.0",
+        // Source of truth is package.json — read via version.ts so the
+        // MCP handshake and any analytics that key on server version stay
+        // accurate across publishes (audit fix #24).
+        version: version_js_1.packageVersion,
     }, {
         instructions: SERVER_INSTRUCTIONS,
     });
@@ -1555,6 +1566,11 @@ function createServer(client, options = {}) {
     // ── User knowledge bases (Item 4) ──────────────────────────────────
     // 17 kb_* tools wrapping the user's own folder/file tree.
     (0, knowledge_js_1.registerKnowledgeTools)(registerTool, client);
+    // ── User skills ────────────────────────────────────────────────────
+    // Two read-only tools — skill_list + skill_get. Skills are procedural
+    // prompts the agent reads and follows; KBs referenced from inside a
+    // skill body are loaded via the kb_* tools.
+    (0, skills_js_1.registerSkillTools)(registerTool, client);
     return server;
 }
 /**

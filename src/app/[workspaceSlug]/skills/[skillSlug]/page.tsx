@@ -1,13 +1,20 @@
 /**
- * /[workspaceSlug]/skills/[skillSlug] — single skill detail page.
- * Hardcoded data; will swap to a Supabase-backed lookup when the
- * skills schema lands.
+ * /[workspaceSlug]/skills/[skillSlug] — single skill detail.
+ *
+ * Server component. Resolves the workspace, fetches the skill +
+ * reference availability + workspace KB list (for the picker rail),
+ * hands all three to `SkillView`.
  */
 
 import { notFound, redirect } from "next/navigation";
 import { getUser } from "@/shared/supabase/server";
 import { findWorkspaceForMember } from "@/features/workspaces/server/service";
-import { findSkill } from "@/features/skills/data";
+import {
+  buildSkillContext,
+  listWorkspaceKnowledgeBases,
+  resolveSkillBody,
+} from "@/features/skills/server/service";
+import { SkillNotFoundError } from "@/features/skills/server/errors";
 import { SkillView } from "@/features/skills/components/skill-view";
 
 export const dynamic = "force-dynamic";
@@ -23,8 +30,26 @@ export default async function SkillDetailPage({ params }: PageProps) {
   const workspace = await findWorkspaceForMember(user.id, workspaceSlug);
   if (!workspace) notFound();
 
-  const skill = findSkill(skillSlug);
-  if (!skill) notFound();
+  const ctx = buildSkillContext({
+    userId: user.id,
+    workspaceId: workspace.id,
+    apiKeyId: null,
+  });
 
-  return <SkillView skill={skill} workspaceSlug={workspace.slug} />;
+  const [resolved, workspaceKbs] = await Promise.all([
+    resolveSkillBody(ctx, skillSlug).catch((err) => {
+      if (err instanceof SkillNotFoundError) return null;
+      throw err;
+    }),
+    listWorkspaceKnowledgeBases(ctx),
+  ]);
+  if (!resolved) notFound();
+
+  return (
+    <SkillView
+      resolved={resolved}
+      workspaceKbs={workspaceKbs}
+      workspaceSlug={workspace.slug}
+    />
+  );
 }

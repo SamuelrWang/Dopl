@@ -49,3 +49,14 @@ export type {
   KnowledgeWriteFileInput,
   KnowledgeWriteSource,
 } from "./knowledge-types.js";
+export type {
+  ResolvedSkill,
+  ResolvedSkillReference,
+  Skill,
+  SkillConnector,
+  SkillExample,
+  SkillProvider,
+  SkillRun,
+  SkillStatus,
+  SkillWriteSource,
+} from "./skill-types.js";

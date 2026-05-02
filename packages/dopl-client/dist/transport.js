@@ -80,27 +80,56 @@ class DoplTransport {
         }
         throw lastError ?? new errors_js_1.DoplNetworkError(`Exhausted retries: ${method} ${path}`);
     }
+    /**
+     * 204-expected request (DELETE, etc.). Audit fix #28: now goes
+     * through the same retry / backoff path as `request<T>()`. DELETE is
+     * in IDEMPOTENT_METHODS so the default retry budget applies; on
+     * RETRIABLE_STATUS responses or transient network errors we retry
+     * with jittered backoff just like GET. 401/403 still short-circuit;
+     * a successful response (`res.ok || 204`) returns void.
+     */
     async requestNoContent(path, method, toolName, body) {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
-        try {
-            const res = await fetch(`${this.baseUrl}${path}`, {
-                method,
-                headers: this.buildHeaders(toolName, body !== undefined),
-                body: body !== undefined ? JSON.stringify(body) : undefined,
-                signal: controller.signal,
-            });
-            if (!res.ok && res.status !== 204) {
+        const maxAttempts = 1 + (retry_js_1.IDEMPOTENT_METHODS.has(method) ? retry_js_1.DEFAULT_GET_RETRIES : 0);
+        let lastError = null;
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+            try {
+                const res = await this.doFetch(path, method, body, DEFAULT_TIMEOUT_MS, toolName);
+                if (res.ok || res.status === 204) {
+                    log("%s %s → %d", method, path, res.status);
+                    return;
+                }
                 const text = await res.text();
+                log("%s %s → %d (attempt %d/%d)", method, path, res.status, attempt + 1, maxAttempts);
                 if (res.status === 401 || res.status === 403) {
                     throw new errors_js_1.DoplAuthError(res.status, text);
                 }
+                if (retry_js_1.RETRIABLE_STATUS.has(res.status) && attempt < maxAttempts - 1) {
+                    const waitMs = (0, retry_js_1.waitForStatus)(res, attempt);
+                    log("retrying after %dms", waitMs);
+                    await (0, retry_js_1.sleep)(waitMs);
+                    lastError = new errors_js_1.DoplApiError(res.status, text);
+                    continue;
+                }
                 throw new errors_js_1.DoplApiError(res.status, text);
             }
+            catch (error) {
+                if (error instanceof errors_js_1.DoplApiError)
+                    throw error;
+                if (error instanceof errors_js_1.DoplAuthError)
+                    throw error;
+                const networkError = wrapNetworkError(method, path, DEFAULT_TIMEOUT_MS, error);
+                log("%s %s network error: %s (attempt %d/%d)", method, path, networkError.message, attempt + 1, maxAttempts);
+                if (attempt < maxAttempts - 1) {
+                    const waitMs = (0, retry_js_1.computeBackoff)(attempt);
+                    log("retrying after %dms", waitMs);
+                    await (0, retry_js_1.sleep)(waitMs);
+                    lastError = networkError;
+                    continue;
+                }
+                throw networkError;
+            }
         }
-        finally {
-            clearTimeout(timeout);
-        }
+        throw lastError ?? new errors_js_1.DoplNetworkError(`Exhausted retries: ${method} ${path}`);
     }
     buildHeaders(toolName, withJsonBody = true) {
         const headers = {

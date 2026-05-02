@@ -15,7 +15,6 @@ import {
 import { WorkspaceSettingsForm } from "@/features/workspaces/components/workspace-settings-form";
 import { WorkspaceMembersSection } from "@/features/workspaces/components/workspace-members-section";
 import { WorkspaceKeysSection } from "@/features/api-keys/components/workspace-keys-section";
-import { meetsMinRole } from "@/features/workspaces/types";
 
 export const dynamic = "force-dynamic";
 
@@ -54,10 +53,7 @@ export default async function WorkspaceSettingsPage({ params }: PageProps) {
           myUserId={user.id}
           myRole={membership.role}
         />
-        <WorkspaceKeysSection
-          workspaceSlug={workspace.slug}
-          canCreate={meetsMinRole(membership.role, "admin")}
-        />
+        <WorkspaceKeysSection workspaceSlug={workspace.slug} />
       </div>
     </div>
   );

@@ -22,7 +22,9 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
   // sit flush against the workspace sidebar + page top bar (no padding
   // gap that lets the mosaic grid bleed through).
   const isFullBleed =
-    /^\/[^/]+\/knowledge\/[^/]+\/?$/.test(pathname);
+    /^\/[^/]+\/knowledge\/[^/]+\/?$/.test(pathname) ||
+    /^\/[^/]+\/chat\/?$/.test(pathname) ||
+    /^\/[^/]+\/overview\/?$/.test(pathname);
   const isNoChrome = isLanding || isCommunityDetail || isDocs;
   const isNoSidebar = NO_SIDEBAR_PATHS.has(pathname);
 

@@ -3,163 +3,142 @@
 import Link from "next/link";
 import { BookOpen } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
-import { findKnowledgeBase } from "@/features/skills/lib/legacy-kb-lookup";
 import { SourceIcon } from "@/features/knowledge/components/source-icon";
 import type { SourceProvider } from "@/features/knowledge/source-types";
+import {
+  parseSkillBody,
+  type Inline,
+  type SkillBlock,
+} from "@/features/skills/skill-body";
 
 interface Props {
   body: string;
   workspaceSlug: string;
 }
 
+const KNOWN_PROVIDERS = new Set<SourceProvider>([
+  "slack",
+  "google-drive",
+  "gmail",
+  "notion",
+  "github",
+]);
+
+function isKnownProvider(provider: string): provider is SourceProvider {
+  return KNOWN_PROVIDERS.has(provider as SourceProvider);
+}
+
 /**
- * Render the skill body, which uses a tiny template syntax:
+ * Renders a skill body. Markdown links with the `dopl://` URI scheme
+ * become typed chips; `## Heading` lines become section headers; plain
+ * text is preserved as paragraphs.
  *
- *   {kb:slug}                  → KB chip linking to /{ws}/knowledge/{slug}
- *   {connector:provider}       → connector chip
- *   {connector:provider.field} → connector chip with sub-field rendered as
- *                                a small monospaced suffix
- *   {section:Heading}          → inline section header
- *
- * Anything outside `{...}` is plain text. Empty lines split paragraphs.
+ * Anything outside the recognized syntax (links to other URIs, inline
+ * formatting) is currently rendered as raw text — by design for v1.
+ * The full markdown renderer can swap in once the editor lands.
  */
 export function SkillBodyRender({ body, workspaceSlug }: Props) {
-  const blocks = splitBlocks(body);
-
+  const { blocks } = parseSkillBody(body);
   return (
     <div className="space-y-3">
-      {blocks.map((block, i) => {
-        if (block.kind === "section") {
-          return (
-            <h3
-              key={i}
-              className="pt-3 text-[11px] font-mono uppercase tracking-wider text-text-secondary/70"
-            >
-              {block.heading}
-            </h3>
-          );
-        }
-        return (
-          <p
-            key={i}
-            className="text-sm leading-relaxed text-text-primary/90"
-          >
-            {renderInline(block.text, workspaceSlug)}
-          </p>
-        );
-      })}
+      {blocks.map((block, i) => (
+        <BlockRender key={i} block={block} workspaceSlug={workspaceSlug} />
+      ))}
     </div>
   );
 }
 
-// ── Token + block parsing ──────────────────────────────────────────
-
-interface ParagraphBlock {
-  kind: "paragraph";
-  text: string;
-}
-
-interface SectionBlock {
-  kind: "section";
-  heading: string;
-}
-
-type Block = ParagraphBlock | SectionBlock;
-
-function splitBlocks(body: string): Block[] {
-  const paragraphs = body.split(/\n\n+/).map((p) => p.trim()).filter(Boolean);
-  const blocks: Block[] = [];
-  for (const p of paragraphs) {
-    const sectionMatch = p.match(/^\{section:([^}]+)\}$/);
-    if (sectionMatch) {
-      blocks.push({ kind: "section", heading: sectionMatch[1].trim() });
-    } else {
-      blocks.push({ kind: "paragraph", text: p });
-    }
+function BlockRender({
+  block,
+  workspaceSlug,
+}: {
+  block: SkillBlock;
+  workspaceSlug: string;
+}) {
+  if (block.kind === "section") {
+    return (
+      <h3 className="pt-3 text-[11px] font-mono uppercase tracking-wider text-text-secondary/70">
+        {block.heading}
+      </h3>
+    );
   }
-  return blocks;
+  return (
+    <p className="text-sm leading-relaxed text-text-primary/90">
+      {block.inlines.map((inline, i) => (
+        <InlineRender key={i} inline={inline} workspaceSlug={workspaceSlug} />
+      ))}
+    </p>
+  );
 }
 
-const TOKEN_PATTERN = /\{(kb|connector):([^}]+)\}/g;
-
-function renderInline(text: string, workspaceSlug: string) {
-  const parts: React.ReactNode[] = [];
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-  let key = 0;
-  TOKEN_PATTERN.lastIndex = 0;
-  while ((match = TOKEN_PATTERN.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push(
-        <span key={key++}>{text.slice(lastIndex, match.index)}</span>,
-      );
-    }
-    const [, kind, payload] = match;
-    if (kind === "kb") {
-      parts.push(
-        <KbChip key={key++} slug={payload} workspaceSlug={workspaceSlug} />,
-      );
-    } else if (kind === "connector") {
-      const [provider, ...fieldParts] = payload.split(".");
-      parts.push(
-        <ConnectorChip
-          key={key++}
-          provider={provider as SourceProvider}
-          field={fieldParts.length > 0 ? fieldParts.join(".") : undefined}
-        />,
-      );
-    }
-    lastIndex = match.index + match[0].length;
+function InlineRender({
+  inline,
+  workspaceSlug,
+}: {
+  inline: Inline;
+  workspaceSlug: string;
+}) {
+  if (inline.kind === "text") {
+    return <span>{inline.text}</span>;
   }
-  if (lastIndex < text.length) {
-    parts.push(<span key={key++}>{text.slice(lastIndex)}</span>);
+  if (inline.kind === "kb") {
+    return (
+      <KbChip slug={inline.slug} label={inline.label} workspaceSlug={workspaceSlug} />
+    );
   }
-  return parts;
+  return (
+    <ConnectorChip
+      provider={inline.provider}
+      field={inline.field}
+      label={inline.label}
+    />
+  );
 }
-
-// ── Chip components ───────────────────────────────────────────────
 
 interface KbChipProps {
   slug: string;
+  label: string;
   workspaceSlug: string;
 }
 
-export function KbChip({ slug, workspaceSlug }: KbChipProps) {
-  const kb = findKnowledgeBase(slug);
-  const name = kb?.name ?? slug;
+export function KbChip({ slug, label, workspaceSlug }: KbChipProps) {
   return (
     <Link
       href={`/${workspaceSlug}/knowledge/${slug}`}
       className={cn(
         "inline-flex items-baseline gap-1 align-baseline px-1.5 py-px rounded",
         "bg-violet-500/10 border border-violet-500/20 text-violet-300",
-        "text-[12.5px] font-medium hover:bg-violet-500/20 transition-colors cursor-pointer",
+        "text-[12.5px] font-medium hover:bg-violet-500/20 transition-colors cursor-pointer"
       )}
     >
       <BookOpen size={10} className="self-center text-violet-300/80" />
-      {name}
+      {label || slug}
     </Link>
   );
 }
 
 interface ConnectorChipProps {
-  provider: SourceProvider;
+  provider: string;
   field?: string;
+  label: string;
 }
 
-export function ConnectorChip({ provider, field }: ConnectorChipProps) {
+export function ConnectorChip({ provider, field, label }: ConnectorChipProps) {
+  const showIcon = isKnownProvider(provider);
   return (
     <span
       className={cn(
         "inline-flex items-baseline gap-1 align-baseline px-1.5 py-px rounded",
         "bg-white/[0.04] border border-white/[0.08] text-text-primary",
-        "text-[12.5px] font-medium",
+        "text-[12.5px] font-medium"
       )}
     >
-      <span className="self-center">
-        <SourceIcon provider={provider} size="sm" />
-      </span>
-      <span>{provider === "google-drive" ? "Drive" : capitalize(provider)}</span>
+      {showIcon && (
+        <span className="self-center">
+          <SourceIcon provider={provider as SourceProvider} size="sm" />
+        </span>
+      )}
+      <span>{label || provider}</span>
       {field && (
         <span className="font-mono text-[11px] text-text-secondary/70">
           .{field}
@@ -167,8 +146,4 @@ export function ConnectorChip({ provider, field }: ConnectorChipProps) {
       )}
     </span>
   );
-}
-
-function capitalize(s: string) {
-  return s.charAt(0).toUpperCase() + s.slice(1);
 }
