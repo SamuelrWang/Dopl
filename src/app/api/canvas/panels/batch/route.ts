@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
 import { supabaseAdmin } from "@/shared/supabase/admin";
+import { denyIfNoCanvasWrite } from "@/features/members/server/access";
 
 const supabase = supabaseAdmin();
 
@@ -9,7 +10,10 @@ const supabase = supabaseAdmin();
  * Body: { updates: [{ panel_id, x?, y?, title?, panel_data? }] }
  */
 export const PATCH = withWorkspaceAuth(
-  async (request, { workspaceId }) => {
+  async (request, { userId, workspaceId, apiKeyId }) => {
+    const denied = await denyIfNoCanvasWrite({ apiKeyId, userId, workspaceId });
+    if (denied) return denied;
+
     const body = await request.json();
     const updates: Array<{
       panel_id: string;
@@ -47,5 +51,5 @@ export const PATCH = withWorkspaceAuth(
       failed: failCount,
     });
   },
-  { minRole: "editor" }
+  { minRole: "member" }
 );

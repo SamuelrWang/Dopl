@@ -35,4 +35,4 @@ async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-export const POST = withWorkspaceAuth(handlePost, { minRole: "editor" });
+export const POST = withWorkspaceAuth(handlePost, { minRole: "member" });

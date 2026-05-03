@@ -7,14 +7,11 @@
 
 import { notFound, redirect } from "next/navigation";
 import { getUser } from "@/shared/supabase/server";
-import {
-  findWorkspaceForMember,
-  resolveMembershipOrThrow,
-} from "@/features/workspaces/server/service";
+import { findWorkspaceForMember } from "@/features/workspaces/server/service";
 import { PageTopBar } from "@/shared/layout/page-top-bar";
 import { ConnectAppSection } from "@/features/api-keys/components/connect-app-section";
 import { WorkspaceKeysSection } from "@/features/api-keys/components/workspace-keys-section";
-import { WorkspaceMembersSection } from "@/features/workspaces/components/workspace-members-section";
+import { MembersWidget } from "@/features/members/components/members-widget";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +25,6 @@ export default async function OverviewPage({ params }: PageProps) {
   if (!user) redirect("/login");
   const workspace = await findWorkspaceForMember(user.id, workspaceSlug);
   if (!workspace) notFound();
-  const { membership } = await resolveMembershipOrThrow(workspace.id, user.id);
 
   return (
     <>
@@ -47,11 +43,7 @@ export default async function OverviewPage({ params }: PageProps) {
             </p>
           </section>
 
-          <WorkspaceMembersSection
-            workspaceSlug={workspace.slug}
-            myUserId={user.id}
-            myRole={membership.role}
-          />
+          <MembersWidget workspaceSlug={workspace.slug} />
 
           <WorkspaceKeysSection workspaceSlug={workspace.slug} />
 

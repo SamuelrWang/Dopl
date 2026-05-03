@@ -42,7 +42,7 @@ const handlePost = withWorkspaceAuth(
       return NextResponse.json({ error: message }, { status });
     }
   },
-  { minRole: "editor" }
+  { minRole: "member" }
 );
 
 export const POST = handlePost;

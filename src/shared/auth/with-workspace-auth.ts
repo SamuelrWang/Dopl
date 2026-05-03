@@ -17,7 +17,7 @@ export interface WorkspaceAuthContext {
 interface Options {
   /**
    * Minimum membership role required to call this route. Defaults to
-   * "viewer" — any active member can access. Use "editor" for writes,
+   * "viewer" — any active member can access. Use "member" for writes,
    * "admin" for invitations / settings, "owner" for delete.
    */
   minRole?: Role;

@@ -66,8 +66,8 @@ export interface CreateInvitationInput {
  * Create a pending invitation. Caller must be admin or owner of the
  * workspace. Idempotent on (workspace_id, email): if a non-revoked, non-
  * expired invitation already exists for this email, return it instead
- * of creating a duplicate. Email send isn't wired in v1 — the inviter
- * copies the magic link from the response.
+ * of creating a duplicate. The invitee picks up the invite via the
+ * sidebar (email-matched) — no email send is wired.
  */
 export async function createInvitation(
   input: CreateInvitationInput
@@ -353,9 +353,9 @@ export async function listPendingInvitationsForUser(
 
 /**
  * Update a member's role. Owner can promote/demote anyone (including
- * themselves), admin can manage editor/viewer but never owners or
- * admins. Refuses to demote the last remaining owner (the workspace would
- * be unrecoverable).
+ * themselves), admin can manage member/viewer but never owners, other
+ * admins, or themselves. Refuses to demote the last remaining owner
+ * (the workspace would be unrecoverable).
  */
 export async function updateMemberRole(
   workspaceId: string,
@@ -370,12 +370,23 @@ export async function updateMemberRole(
     throw new HttpError(404, "MEMBER_NOT_FOUND", "Member not found");
   }
 
+  // Self-demote block: an admin cannot change their own role. They must
+  // be demoted by another admin or the owner. Owners can still change
+  // their own role (last-owner protection below catches the unsafe case).
+  if (callerRole === "admin" && targetUserId === callerId) {
+    throw new HttpError(
+      403,
+      "WORKSPACE_FORBIDDEN",
+      "You cannot change your own role — ask another admin or the owner"
+    );
+  }
+
   // Admin cannot touch owners or other admins.
   if (callerRole === "admin" && (target.role === "owner" || target.role === "admin")) {
     throw new HttpError(
       403,
       "WORKSPACE_FORBIDDEN",
-      "Admins can only change editor / viewer roles"
+      "Admins can only change member / viewer roles"
     );
   }
   // Admin cannot promote anyone to owner or admin.
@@ -410,7 +421,8 @@ export async function updateMemberRole(
 
 /**
  * Remove a member. Owner can remove anyone (including themselves, with
- * last-owner protection). Admin can remove editor/viewer only.
+ * last-owner protection). Admin can remove member/viewer only — not
+ * owners, other admins, or themselves.
  */
 export async function removeMember(
   workspaceId: string,

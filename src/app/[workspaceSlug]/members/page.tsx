@@ -1,14 +1,9 @@
-/**
- * /[workspaceSlug]/members — workspace members + teams.
- *
- * Static UI pass — all data is hardcoded in features/members/data.ts
- * for now. Wires to real workspace_members + a new workspace_teams
- * table when the role-based access feature lands.
- */
-
 import { notFound, redirect } from "next/navigation";
 import { getUser } from "@/shared/supabase/server";
-import { findWorkspaceForMember } from "@/features/workspaces/server/service";
+import {
+  findWorkspaceForMember,
+  resolveMembershipOrThrow,
+} from "@/features/workspaces/server/service";
 import { MembersView } from "@/features/members/components/members-view";
 
 export const dynamic = "force-dynamic";
@@ -23,5 +18,14 @@ export default async function MembersPage({ params }: PageProps) {
   if (!user) redirect("/login");
   const workspace = await findWorkspaceForMember(user.id, workspaceSlug);
   if (!workspace) notFound();
-  return <MembersView />;
+  const { membership } = await resolveMembershipOrThrow(workspace.id, user.id);
+
+  return (
+    <MembersView
+      workspaceSlug={workspace.slug}
+      workspaceId={workspace.id}
+      currentUserId={user.id}
+      myRole={membership.role}
+    />
+  );
 }

@@ -46,5 +46,5 @@ export const DELETE = withWorkspaceAuth(
 
     return new NextResponse(null, { status: 204 });
   },
-  { minRole: "editor" }
+  { minRole: "member" }
 );

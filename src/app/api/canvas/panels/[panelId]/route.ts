@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
 import { supabaseAdmin } from "@/shared/supabase/admin";
+import { denyIfNoCanvasWrite } from "@/features/members/server/access";
 import { deleteFailedEntry } from "@/features/ingestion/server/pipeline";
 
 const supabase = supabaseAdmin();
@@ -42,7 +43,10 @@ async function cleanupOrphanDeniedEntry(entryId: string): Promise<void> {
  * PATCH /api/canvas/panels/[panelId] — update a panel's position, size, or data.
  */
 export const PATCH = withWorkspaceAuth(
-  async (request, { workspaceId, params }) => {
+  async (request, { userId, workspaceId, apiKeyId, params }) => {
+    const denied = await denyIfNoCanvasWrite({ apiKeyId, userId, workspaceId });
+    if (denied) return denied;
+
     const panelId = params?.panelId;
     if (!panelId) {
       return NextResponse.json({ error: "panelId is required" }, { status: 400 });
@@ -74,7 +78,7 @@ export const PATCH = withWorkspaceAuth(
 
     return NextResponse.json({ success: true });
   },
-  { minRole: "editor" }
+  { minRole: "member" }
 );
 
 /**
@@ -86,7 +90,10 @@ export const PATCH = withWorkspaceAuth(
 const UUID_REGEX = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
 export const DELETE = withWorkspaceAuth(
-  async (_request, { workspaceId, params }) => {
+  async (_request, { userId, workspaceId, apiKeyId, params }) => {
+    const denied = await denyIfNoCanvasWrite({ apiKeyId, userId, workspaceId });
+    if (denied) return denied;
+
     const panelId = params?.panelId;
     if (!panelId) {
       return NextResponse.json({ error: "panelId is required" }, { status: 400 });
@@ -144,5 +151,5 @@ export const DELETE = withWorkspaceAuth(
 
     return new NextResponse(null, { status: 204 });
   },
-  { minRole: "editor" }
+  { minRole: "member" }
 );

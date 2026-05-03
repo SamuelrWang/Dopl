@@ -23,7 +23,7 @@ export type WorkspaceUpdateInput = z.infer<typeof WorkspaceUpdateSchema>;
 
 export const InvitationCreateSchema = z.object({
   email: z.string().email(),
-  role: z.enum(["admin", "editor", "viewer"]),
+  role: z.enum(["admin", "member", "viewer"]),
 });
 export type InvitationCreateInput = z.infer<typeof InvitationCreateSchema>;
 

@@ -1,6 +1,6 @@
-export type Role = "owner" | "admin" | "editor" | "viewer";
+export type Role = "owner" | "admin" | "member" | "viewer";
 
-export type InvitedRole = "admin" | "editor" | "viewer";
+export type InvitedRole = "admin" | "member" | "viewer";
 
 export type MembershipStatus = "pending" | "active" | "revoked";
 
@@ -72,11 +72,11 @@ export interface WorkspaceMembership {
 
 /**
  * Numeric ranking used by `withWorkspaceAuth({ minRole })` to gate routes.
- * Higher = more privileges. owner > admin > editor > viewer.
+ * Higher = more privileges. owner > admin > member > viewer.
  */
 export const ROLE_RANK: Record<Role, number> = {
   viewer: 0,
-  editor: 1,
+  member: 1,
   admin: 2,
   owner: 3,
 };

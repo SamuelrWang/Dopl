@@ -34,23 +34,42 @@ export const GET = withUserAuth(
 
       const members = await listWorkspaceMembers(workspace.id, userId);
 
-      // Batch-fetch emails so the UI can show "alice@example.com (admin)".
-      // auth.admin.getUserById is one call per user; n is small so no
-      // batching is needed yet, but we cap at 100 just in case.
+      // Hydrate email + display name + avatar from auth.users so the UI
+      // can render real names and profile pics. auth.admin.getUserById
+      // is one call per user; n is small so no batching is needed yet,
+      // but we cap at 100 just in case.
       const db = supabaseAdmin();
       const emails = new Map<string, string | null>();
+      const displayNames = new Map<string, string | null>();
+      const avatarUrls = new Map<string, string | null>();
       for (const m of members.slice(0, 100)) {
         try {
           const { data } = await db.auth.admin.getUserById(m.userId);
-          emails.set(m.userId, data?.user?.email ?? null);
+          const u = data?.user;
+          const meta = (u?.user_metadata ?? {}) as {
+            display_name?: string;
+            full_name?: string;
+            name?: string;
+            avatar_url?: string;
+          };
+          emails.set(m.userId, u?.email ?? null);
+          displayNames.set(
+            m.userId,
+            meta.display_name ?? meta.full_name ?? meta.name ?? null
+          );
+          avatarUrls.set(m.userId, meta.avatar_url ?? null);
         } catch {
           emails.set(m.userId, null);
+          displayNames.set(m.userId, null);
+          avatarUrls.set(m.userId, null);
         }
       }
 
       const hydrated = members.map((m) => ({
         ...m,
         email: emails.get(m.userId) ?? null,
+        displayName: displayNames.get(m.userId) ?? null,
+        avatarUrl: avatarUrls.get(m.userId) ?? null,
       }));
 
       return NextResponse.json({ members: hydrated });

@@ -54,4 +54,4 @@ async function handlePost(
 }
 
 export const GET = withWorkspaceAuth(handleGet);
-export const POST = withWorkspaceAuth(handlePost, { minRole: "editor" });
+export const POST = withWorkspaceAuth(handlePost, { minRole: "member" });

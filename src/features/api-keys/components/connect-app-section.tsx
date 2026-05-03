@@ -82,6 +82,14 @@ export function ConnectAppSection({ workspaceSlug }: Props) {
   // visible placeholder the user knows to swap.
   const keyForCommand = apiKey ?? "<YOUR_API_KEY>";
   const addCmd = `claude mcp add dopl --scope user --transport stdio -- npx @dopl/mcp-server --api-key ${keyForCommand}`;
+  // Remote MCP URL for Claude.ai's "Add custom connector" dialog and any
+  // other MCP client that consumes a hosted server URL. We derive it from
+  // window.location.origin so dev/staging/prod each show their own host.
+  const [origin, setOrigin] = useState<string>("");
+  useEffect(() => {
+    setOrigin(window.location.origin);
+  }, []);
+  const mcpServerUrl = `${origin || "https://www.usedopl.com"}/mcp/${workspaceSlug}`;
   const skillsCmd = `npx dopl skill install <name>`;
 
   const prompt = [
@@ -165,6 +173,19 @@ export function ConnectAppSection({ workspaceSlug }: Props) {
 
         <Step
           n={3}
+          title="Or connect from Claude.ai (custom connector)"
+          description="Use this URL in Claude.ai's “Add custom connector” dialog, or any MCP client that takes a remote server URL."
+        >
+          <div className="space-y-1.5">
+            <p className="text-[11px] text-text-secondary leading-snug">
+              MCP server URL
+            </p>
+            <CodeRow code={mcpServerUrl} />
+          </div>
+        </Step>
+
+        <Step
+          n={4}
           title="Install Agent Skills (Optional)"
           description="Skills give your agent ready-made instructions and resources for working with this workspace more accurately."
           last

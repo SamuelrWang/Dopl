@@ -3,37 +3,96 @@
 import { useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
-import type { Member, MemberRole } from "../data";
+import type { MemberRole, AssignableRole } from "../types";
 
-const ROLE_OPTIONS: Array<{ value: MemberRole; label: string; description: string }> = [
-  { value: "owner", label: "Owner", description: "Full workspace control + billing" },
-  { value: "admin", label: "Admin", description: "Manage members + all resources" },
-  { value: "manager", label: "Manager", description: "Lead a team, edit team resources" },
-  { value: "member", label: "Member", description: "Standard contributor access" },
-  { value: "viewer", label: "Viewer", description: "Read-only access to granted resources" },
+const ROLE_OPTIONS: Array<{
+  value: AssignableRole;
+  label: string;
+  description: string;
+}> = [
+  { value: "admin", label: "Admin", description: "Full access, manage members + workspace" },
+  { value: "member", label: "Member", description: "Use everything: KBs, skills, canvas" },
+  { value: "viewer", label: "Viewer", description: "Read-only access" },
 ];
 
-/** Gradient avatar with first-initial fallback. */
+const AVATAR_GRADIENTS = [
+  "from-violet-500 to-fuchsia-500",
+  "from-emerald-500 to-cyan-500",
+  "from-pink-500 to-rose-500",
+  "from-orange-500 to-amber-500",
+  "from-blue-500 to-indigo-500",
+  "from-teal-500 to-emerald-500",
+  "from-fuchsia-500 to-pink-500",
+  "from-cyan-500 to-blue-500",
+  "from-purple-500 to-violet-500",
+  "from-red-500 to-pink-500",
+];
+
+function gradientFor(seed: string): string {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) {
+    hash = (hash * 31 + seed.charCodeAt(i)) | 0;
+  }
+  return AVATAR_GRADIENTS[Math.abs(hash) % AVATAR_GRADIENTS.length];
+}
+
+function initialFor(name: string | null, email: string | null): string {
+  const source = (name || email || "?").trim();
+  return source.charAt(0).toUpperCase() || "?";
+}
+
+export interface AvatarPerson {
+  userId: string;
+  email: string | null;
+  displayName: string | null;
+  avatarUrl: string | null;
+}
+
+/**
+ * Avatar with profile-pic preference + gradient initial fallback.
+ * Falls back to an initials-on-gradient circle when no avatarUrl exists,
+ * picking the gradient deterministically from the user id so the same
+ * person always gets the same color.
+ */
 export function Avatar({
-  member,
+  person,
   size = "sm",
   className,
 }: {
-  member: Member;
-  size?: "xs" | "sm";
+  person: AvatarPerson;
+  size?: "xs" | "sm" | "md";
   className?: string;
 }) {
-  const dim = size === "xs" ? "w-6 h-6 text-[10px]" : "w-8 h-8 text-[12px]";
+  const dim =
+    size === "xs"
+      ? "w-6 h-6 text-[10px]"
+      : size === "md"
+        ? "w-10 h-10 text-[14px]"
+        : "w-8 h-8 text-[12px]";
+
+  if (person.avatarUrl) {
+    return (
+      <span className={cn("shrink-0 rounded-full overflow-hidden", dim, className)}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={person.avatarUrl}
+          alt={person.displayName || person.email || "Member"}
+          className="w-full h-full object-cover"
+        />
+      </span>
+    );
+  }
+
   return (
     <span
       className={cn(
         "shrink-0 rounded-full flex items-center justify-center font-semibold text-white bg-gradient-to-br",
-        member.avatarGradient,
+        gradientFor(person.userId),
         dim,
         className
       )}
     >
-      {member.initial}
+      {initialFor(person.displayName, person.email)}
     </span>
   );
 }
@@ -41,7 +100,6 @@ export function Avatar({
 const ROLE_STYLE: Record<MemberRole, string> = {
   owner: "bg-violet-500/15 border-violet-500/25 text-violet-200",
   admin: "bg-emerald-500/10 border-emerald-500/20 text-emerald-200",
-  manager: "bg-amber-500/10 border-amber-500/20 text-amber-200",
   member: "bg-white/[0.04] border-white/[0.08] text-text-secondary",
   viewer: "bg-white/[0.03] border-white/[0.06] text-text-secondary/70",
 };
@@ -60,17 +118,18 @@ export function RolePill({ role }: { role: MemberRole }) {
 }
 
 /**
- * Editable role chip — looks like the pill but opens a popover so the
- * user can change it. Static UI: change is local state only, no API.
- * Click is stopped from bubbling so it doesn't trip the row-expand
- * toggle on the parent.
+ * Editable role chip — only assignable roles (admin/member/viewer) appear
+ * in the popover. Owner is excluded by the AssignableRole type. Click is
+ * stopped from bubbling so it doesn't trigger row-level handlers.
  */
 export function RoleSelect({
   value,
   onChange,
+  disabled,
 }: {
-  value: MemberRole;
-  onChange: (next: MemberRole) => void;
+  value: AssignableRole;
+  onChange: (next: AssignableRole) => void;
+  disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -80,19 +139,22 @@ export function RoleSelect({
     >
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => !disabled && setOpen((v) => !v)}
+        disabled={disabled}
         aria-haspopup="listbox"
         aria-expanded={open}
         className={cn(
-          "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider border cursor-pointer transition-colors",
+          "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider border transition-colors",
           ROLE_STYLE[value],
-          "hover:brightness-110"
+          disabled
+            ? "opacity-60 cursor-not-allowed"
+            : "cursor-pointer hover:brightness-110"
         )}
       >
         <span>{value}</span>
-        <ChevronDown size={10} className="opacity-70" />
+        {!disabled && <ChevronDown size={10} className="opacity-70" />}
       </button>
-      {open && (
+      {open && !disabled && (
         <>
           <div
             className="fixed inset-0 z-10"
@@ -117,9 +179,7 @@ export function RoleSelect({
                   }}
                   className={cn(
                     "w-full text-left px-3 py-2 cursor-pointer transition-colors flex items-start gap-2",
-                    active
-                      ? "bg-white/[0.04]"
-                      : "hover:bg-white/[0.04]"
+                    active ? "bg-white/[0.04]" : "hover:bg-white/[0.04]"
                   )}
                 >
                   <Check

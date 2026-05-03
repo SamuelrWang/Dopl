@@ -72,4 +72,4 @@ async function handlePut(request: NextRequest, auth: WorkspaceAuthContext) {
 }
 
 export const GET = withWorkspaceAuth(handleGet);
-export const PUT = withWorkspaceAuth(handlePut, { minRole: "editor" });
+export const PUT = withWorkspaceAuth(handlePut, { minRole: "member" });

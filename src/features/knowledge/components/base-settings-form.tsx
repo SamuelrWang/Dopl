@@ -57,9 +57,9 @@ export function BaseSettingsForm({ workspaceId, workspaceSlug, base }: Props) {
         workspaceId
       );
       toast({ title: "Saved" });
-      // If the slug changed, redirect to the new URL.
+      // If the slug changed, redirect so the URL stays in sync.
       if (next.slug !== base.slug) {
-        router.replace(`/${workspaceSlug}/knowledge/${next.slug}/settings`);
+        router.replace(`/${workspaceSlug}/knowledge/${next.slug}`);
       } else {
         router.refresh();
       }

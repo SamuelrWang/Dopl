@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
 import { supabaseAdmin } from "@/shared/supabase/admin";
+import { denyIfNoCanvasWrite } from "@/features/members/server/access";
 
 const supabase = supabaseAdmin();
 
@@ -23,8 +24,11 @@ interface MigratePanel {
  * the active canvas. Idempotent (upserts).
  */
 export const POST = withWorkspaceAuth(
-  async (request, { userId, workspaceId }) => {
+  async (request, { userId, workspaceId, apiKeyId }) => {
     try {
+      const denied = await denyIfNoCanvasWrite({ apiKeyId, userId, workspaceId });
+      if (denied) return denied;
+
       const body = await request.json();
 
       const { error: stateError } = await supabase.from("canvas_state").upsert(
@@ -81,5 +85,5 @@ export const POST = withWorkspaceAuth(
       return NextResponse.json({ error: message }, { status: 500 });
     }
   },
-  { minRole: "editor" }
+  { minRole: "member" }
 );

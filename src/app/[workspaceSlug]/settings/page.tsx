@@ -13,7 +13,6 @@ import {
   resolveMembershipOrThrow,
 } from "@/features/workspaces/server/service";
 import { WorkspaceSettingsForm } from "@/features/workspaces/components/workspace-settings-form";
-import { WorkspaceMembersSection } from "@/features/workspaces/components/workspace-members-section";
 import { WorkspaceKeysSection } from "@/features/api-keys/components/workspace-keys-section";
 
 export const dynamic = "force-dynamic";
@@ -48,11 +47,6 @@ export default async function WorkspaceSettingsPage({ params }: PageProps) {
       </div>
       <div className="space-y-8">
         <WorkspaceSettingsForm workspace={workspace} role={membership.role} />
-        <WorkspaceMembersSection
-          workspaceSlug={workspace.slug}
-          myUserId={user.id}
-          myRole={membership.role}
-        />
         <WorkspaceKeysSection workspaceSlug={workspace.slug} />
       </div>
     </div>

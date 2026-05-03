@@ -1,6 +1,7 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { slugify } from "@/shared/lib/slug/slugify";
+import { requireResourceAccess } from "@/features/members/server/access";
 import { PRIMARY_SKILL_FILE_NAME } from "../types";
 import type {
   ResolvedSkill,
@@ -218,9 +219,7 @@ export async function updateSkill(
   if (ctx.source === "agent" && patch.agentWriteEnabled !== undefined) {
     throw new SkillAgentWriteDisabledError(slug);
   }
-  if (ctx.source === "agent" && !skill.agentWriteEnabled) {
-    throw new SkillAgentWriteDisabledError(slug);
-  }
+  await assertAgentWriteAllowed(ctx, skill);
   if (expectedUpdatedAt && skill.updatedAt !== expectedUpdatedAt) {
     throw new SkillStaleVersionError(expectedUpdatedAt, skill.updatedAt);
   }
@@ -253,9 +252,7 @@ export async function deleteSkill(
   slug: string
 ): Promise<void> {
   const skill = await getSkillBySlug(ctx, slug);
-  if (ctx.source === "agent" && !skill.agentWriteEnabled) {
-    throw new SkillAgentWriteDisabledError(slug);
-  }
+  await assertAgentWriteAllowed(ctx, skill);
   await repo.markSkillDeleted(skill.id);
 }
 
@@ -397,14 +394,29 @@ async function resolveReference(
 
 // ─── Agent-write enforcement ────────────────────────────────────────
 
+/**
+ * Gate for agent-origin skill writes. The per-(member, skill) access
+ * matrix is now the single source of truth — owner/admin always pass,
+ * member/viewer pass when their matrix entry is `edit`. The legacy
+ * skill-level `agent_write_enabled` toggle is no longer consulted:
+ * admins manage agent access centrally from the members page.
+ *
+ * `SkillAgentWriteDisabledError` is still thrown when an agent tries
+ * to flip `agentWriteEnabled` itself in updateSkill — that path
+ * doesn't call here.
+ */
 export async function assertAgentWriteAllowed(
   ctx: SkillContext,
   skill: Skill
 ): Promise<void> {
   if (ctx.source !== "agent") return;
-  if (!skill.agentWriteEnabled) {
-    throw new SkillAgentWriteDisabledError(skill.slug);
-  }
+  await requireResourceAccess(
+    ctx.userId,
+    ctx.workspaceId,
+    "skill",
+    skill.id,
+    "edit"
+  );
 }
 
 // ─── Seeding ────────────────────────────────────────────────────────

@@ -1,8 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
-import { MoreHorizontal, Plus, Settings, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Settings } from "lucide-react";
 import { PageTopBar } from "@/shared/layout/page-top-bar";
 import { EditableTitle } from "@/shared/layout/editable-title";
 import { toast } from "@/shared/ui/toast";
@@ -26,16 +25,13 @@ import {
   updateEntry as apiUpdateEntry,
   updateFolder as apiUpdateFolder,
 } from "../client/api";
-// `KnowledgeApiError` is still used by `reportError` below (rename /
-// move / delete handlers); the autosave-side usage moved out with
-// DocPane to ./doc-pane.tsx.
 import { useKnowledgeEntry } from "../client/hooks";
 import { useKnowledgeRealtime } from "../client/realtime";
+import { BaseSettingsModal } from "./base-settings-modal";
 import { DocPane } from "./doc-pane";
 import { KnowledgeSearch } from "./knowledge-search";
 import { KnowledgeTree } from "./knowledge-tree";
 import { MoveToDialog } from "./move-to-dialog";
-import { TrashModal } from "./trash-modal";
 import type { ContextMenuItem } from "./tree-context-menu";
 
 interface Props {
@@ -44,6 +40,9 @@ interface Props {
   base: KnowledgeBase;
   folders: KnowledgeFolder[];
   entries: KnowledgeEntry[];
+  /** SSR-fetched body for the initially-selected entry. When provided,
+   *  the entry hook seeds from this and skips the first network fetch. */
+  initialEntry: KnowledgeEntry | null;
 }
 
 export function KnowledgeBaseView({
@@ -52,6 +51,7 @@ export function KnowledgeBaseView({
   base,
   folders: initialFolders,
   entries: initialEntries,
+  initialEntry,
 }: Props) {
   const [folders, setFolders] = useState(initialFolders);
   const [entries, setEntries] = useState(initialEntries);
@@ -73,9 +73,15 @@ export function KnowledgeBaseView({
 
   // Body comes from a per-entry fetch — tree omits bodies for size.
   // Expose `refetch` so the autosave path can recover from a 412.
+  // `initialEntry` is the server-fetched body for the first-selected
+  // entry; the hook seeds from it and skips the initial fetch so the
+  // page paints with content on reload (no client-side waterfall).
   const { data: fullEntry, refetch: refetchEntry } = useKnowledgeEntry(
     selectedMeta?.id,
-    workspaceId
+    workspaceId,
+    initialEntry
+      ? { initialData: initialEntry, initialEntryId: initialEntry.id }
+      : undefined
   );
   const displayEntry = fullEntry ?? selectedMeta;
 
@@ -167,8 +173,7 @@ export function KnowledgeBaseView({
   // ── Context-menu actions ─────────────────────────────────────────
 
   const [moveTarget, setMoveTarget] = useState<ContextMenuItem | null>(null);
-  const [trashOpen, setTrashOpen] = useState(false);
-  const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const handleRename = useCallback(
     async (item: ContextMenuItem) => {
@@ -284,36 +289,12 @@ export function KnowledgeBaseView({
             </div>
             <button
               type="button"
-              onClick={async () => {
-                const title = window.prompt("Entry title");
-                if (title?.trim()) await handleCreateEntry(null, title.trim());
-              }}
+              onClick={() => setSettingsOpen(true)}
               className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white text-black text-xs font-medium hover:bg-white/90 transition-colors cursor-pointer"
             >
-              <Plus size={12} />
-              Add entry
+              <Settings size={12} />
+              Settings
             </button>
-            <div className="relative">
-              <button
-                type="button"
-                aria-label="More"
-                onClick={() => setHeaderMenuOpen((v) => !v)}
-                className="shrink-0 w-7 h-7 rounded-md flex items-center justify-center hover:bg-white/[0.04] transition-colors cursor-pointer"
-              >
-                <MoreHorizontal size={13} className="text-text-secondary" />
-              </button>
-              {headerMenuOpen ? (
-                <HeaderMenu
-                  workspaceSlug={workspaceSlug}
-                  baseSlug={base.slug}
-                  onOpenTrash={() => {
-                    setHeaderMenuOpen(false);
-                    setTrashOpen(true);
-                  }}
-                  onClose={() => setHeaderMenuOpen(false)}
-                />
-              ) : null}
-            </div>
           </>
         }
       />
@@ -389,61 +370,14 @@ export function KnowledgeBaseView({
         />
       ) : null}
 
-      <TrashModal
-        open={trashOpen}
-        onOpenChange={setTrashOpen}
+      <BaseSettingsModal
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
         workspaceId={workspaceId}
-        baseId={base.id}
-        onRestored={refresh}
+        workspaceSlug={workspaceSlug}
+        base={base}
       />
     </>
-  );
-}
-
-// ── Header more-menu ────────────────────────────────────────────────
-
-function HeaderMenu({
-  workspaceSlug,
-  baseSlug,
-  onOpenTrash,
-  onClose,
-}: {
-  workspaceSlug: string;
-  baseSlug: string;
-  onOpenTrash: () => void;
-  onClose: () => void;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    function handle(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
-    }
-    document.addEventListener("mousedown", handle);
-    return () => document.removeEventListener("mousedown", handle);
-  }, [onClose]);
-  return (
-    <div
-      ref={ref}
-      role="menu"
-      className="absolute right-0 top-full mt-1 min-w-[160px] rounded-md border border-white/[0.1] bg-[oklch(0.16_0_0)] shadow-2xl shadow-black/60 py-1 z-50"
-    >
-      <Link
-        href={`/${workspaceSlug}/knowledge/${baseSlug}/settings`}
-        onClick={onClose}
-        className="flex items-center gap-2 px-3 py-1.5 text-xs text-text-secondary hover:bg-white/[0.04] hover:text-text-primary cursor-pointer"
-      >
-        <Settings size={12} />
-        Settings
-      </Link>
-      <button
-        type="button"
-        onClick={onOpenTrash}
-        className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-text-secondary hover:bg-white/[0.04] hover:text-text-primary cursor-pointer"
-      >
-        <Trash2 size={12} />
-        Trash
-      </button>
-    </div>
   );
 }
 

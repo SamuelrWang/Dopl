@@ -1,54 +1,56 @@
 "use client";
 
 import { useState } from "react";
-import { MoreHorizontal, Plus, Sparkles, Users } from "lucide-react";
+import { Plus } from "lucide-react";
 import { PageTopBar } from "@/shared/layout/page-top-bar";
-import { MEMBERS, TEAMS } from "../data";
-import { TabButton } from "./member-bits";
+import { meetsMinRole } from "@/features/workspaces/types";
+import type { MemberRole } from "../types";
+import { useMembers } from "../hooks/use-members";
+import { useInvitations } from "../hooks/use-invitations";
 import { MembersTable } from "./members-table";
-import { TeamsPane } from "./teams-pane";
+import { InviteDialog } from "./invite-dialog";
+import { PendingInvitations } from "./pending-invitations";
 
-type Tab = "members" | "teams";
+interface Props {
+  workspaceSlug: string;
+  workspaceId: string;
+  currentUserId: string;
+  myRole: MemberRole;
+}
 
 /**
- * Members + Teams page shell.
- *
- * Two top-level tabs:
- *   Members → table of every member, click a row to expand the per-
- *             member access matrix (KB and skill grants, individually
- *             scoped to none/read/edit).
- *   Teams   → split pane: team list on the left, team detail on the
- *             right with the team's roster + the same access matrix.
- *             Members of a team inherit the team's grants by default.
- *
- * Static visual pass — every interaction is local useState, no API
- * calls. When this graduates, members come from `workspace_members`
- * and teams from a new `workspace_teams` table.
+ * Members page shell. Single flat list (no teams) with an Invite button
+ * for admins, a search + role-filter toolbar, and a pending-invitations
+ * footer that only renders when the current user can manage the workspace.
  */
-export function MembersView() {
-  const [tab, setTab] = useState<Tab>("members");
+export function MembersView({ workspaceSlug, workspaceId, currentUserId, myRole }: Props) {
+  const canManage = meetsMinRole(myRole, "admin");
+  const [inviteOpen, setInviteOpen] = useState(false);
+
+  const { members, loading, refresh: refreshMembers } = useMembers(workspaceSlug);
+  const {
+    invitations,
+    refresh: refreshInvitations,
+  } = useInvitations(workspaceSlug, canManage);
+
+  const memberList = members ?? [];
+  const inviteList = invitations ?? [];
 
   return (
     <>
       <PageTopBar
         title="Members"
         trailing={
-          <>
+          canManage && (
             <button
               type="button"
+              onClick={() => setInviteOpen(true)}
               className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-white/[0.08] hover:bg-white/[0.04] transition-colors text-xs text-text-primary cursor-pointer"
             >
               <Plus size={12} />
-              {tab === "members" ? "Add member" : "Add team"}
+              Add member
             </button>
-            <button
-              type="button"
-              aria-label="More"
-              className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-white/[0.04] transition-colors cursor-pointer"
-            >
-              <MoreHorizontal size={13} className="text-text-secondary" />
-            </button>
-          </>
+          )
         }
       />
 
@@ -57,28 +59,38 @@ export function MembersView() {
           className="h-full rounded-2xl border border-white/[0.1] overflow-hidden flex flex-col"
           style={{ backgroundColor: "oklch(0.13 0 0)" }}
         >
-          <div className="flex items-center gap-1 border-b border-white/[0.06] px-3">
-            <TabButton active={tab === "members"} onClick={() => setTab("members")}>
-              <Users size={13} />
-              Members
-              <span className="ml-1 text-[11px] font-mono text-text-secondary/60">
-                {MEMBERS.length}
-              </span>
-            </TabButton>
-            <TabButton active={tab === "teams"} onClick={() => setTab("teams")}>
-              <Sparkles size={13} />
-              Teams
-              <span className="ml-1 text-[11px] font-mono text-text-secondary/60">
-                {TEAMS.length}
-              </span>
-            </TabButton>
-          </div>
-
-          <div className="flex-1 min-h-0 overflow-hidden">
-            {tab === "members" ? <MembersTable /> : <TeamsPane />}
+          <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+            <div className="flex-1 min-h-0">
+              <MembersTable
+                workspaceSlug={workspaceSlug}
+                workspaceId={workspaceId}
+                currentUserId={currentUserId}
+                myRole={myRole}
+                members={memberList}
+                loading={loading}
+                onChanged={refreshMembers}
+              />
+            </div>
+            {canManage && inviteList.length > 0 && (
+              <PendingInvitations
+                workspaceSlug={workspaceSlug}
+                invitations={inviteList}
+                onRevoked={refreshInvitations}
+              />
+            )}
           </div>
         </div>
       </div>
+
+      <InviteDialog
+        workspaceSlug={workspaceSlug}
+        open={inviteOpen}
+        onOpenChange={setInviteOpen}
+        onInvited={() => {
+          refreshInvitations();
+          refreshMembers();
+        }}
+      />
     </>
   );
 }

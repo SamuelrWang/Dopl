@@ -14,6 +14,7 @@ import {
   buildKnowledgeContext,
   getBaseBySlug,
   getBaseTree,
+  getEntry,
 } from "@/features/knowledge/server/service";
 import { KnowledgeBaseNotFoundError } from "@/features/knowledge/server/errors";
 import { KnowledgeBaseView } from "@/features/knowledge/components/knowledge-base-view";
@@ -47,6 +48,14 @@ export default async function KnowledgeBaseDetailPage({ params }: PageProps) {
 
   const { folders, entries } = await getBaseTree(ctx, base.id);
 
+  // SSR the first entry's body so reload paints with content instead of
+  // waiting on a client-side fetch after hydration. Tree responses strip
+  // bodies for size; this targeted second query brings the user's
+  // initially-selected entry onto the wire alongside the shell.
+  const initialEntry = entries[0]
+    ? await getEntry(ctx, entries[0].id)
+    : null;
+
   return (
     <KnowledgeBaseView
       workspaceSlug={workspace.slug}
@@ -54,6 +63,7 @@ export default async function KnowledgeBaseDetailPage({ params }: PageProps) {
       base={base}
       folders={folders}
       entries={entries}
+      initialEntry={initialEntry}
     />
   );
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
 import { supabaseAdmin } from "@/shared/supabase/admin";
+import { denyIfNoCanvasWrite } from "@/features/members/server/access";
 
 const supabase = supabaseAdmin();
 
@@ -58,7 +59,10 @@ export const GET = withWorkspaceAuth(async (_request, { workspaceId }) => {
  * Body: { panel_id, panel_type, entry_id?, x, y, width?, height?, title?, summary?, source_url?, panel_data? }
  */
 export const POST = withWorkspaceAuth(
-  async (request, { userId, workspaceId }) => {
+  async (request, { userId, workspaceId, apiKeyId }) => {
+    const denied = await denyIfNoCanvasWrite({ apiKeyId, userId, workspaceId });
+    if (denied) return denied;
+
     const body = await request.json();
     const { panel_type, entry_id, x, y, width, height, title, summary, source_url, panel_data } = body;
     let { panel_id } = body;
@@ -146,5 +150,5 @@ export const POST = withWorkspaceAuth(
 
     return NextResponse.json({ panel, created: true }, { status: 201 });
   },
-  { minRole: "editor" }
+  { minRole: "member" }
 );

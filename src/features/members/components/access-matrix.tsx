@@ -1,133 +1,165 @@
 "use client";
 
-import { BookOpen, Sparkles } from "lucide-react";
+import { Database, FileCode, Layout } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import {
-  KNOWLEDGE_BASES,
-  SKILLS,
-  type AccessGrant,
+  defaultLevelForRole,
   type AccessLevel,
-} from "../data";
+  type ResourceType,
+} from "../access-defaults";
+import { useMemberAccess, type ResourceEntry } from "../hooks/use-member-access";
+import type { MemberRole } from "../types";
+
+interface Props {
+  workspaceSlug: string;
+  workspaceId: string;
+  targetUserId: string;
+  /** Member's role — used to compute the default access when no override exists. */
+  targetRole: MemberRole;
+  /** Whether to actually fetch (only when expanded). */
+  enabled: boolean;
+}
+
+const ICONS: Record<ResourceType, typeof Database> = {
+  knowledge_base: Database,
+  skill: FileCode,
+  canvas: Layout,
+};
+
+const SECTION_LABELS: Record<ResourceType, string> = {
+  knowledge_base: "Knowledge bases",
+  skill: "Skills",
+  canvas: "Canvases",
+};
 
 /**
- * Per-member / per-team access matrix. Two columns side-by-side —
- * knowledge bases on the left, skills on the right. Each row shows
- * the resource name + a None / Read / Edit segmented control.
- *
- * `inheritFrom` is rendered as a subtle hint when a member's grants
- * come from their team's defaults rather than overrides.
+ * Per-resource read/edit matrix for one member. Owner/admin members
+ * don't render this — their access is implicit edit and not configurable.
  */
 export function AccessMatrix({
-  knowledgeAccess,
-  skillAccess,
-  inheritFrom,
-}: {
-  knowledgeAccess: AccessGrant[];
-  skillAccess: AccessGrant[];
-  inheritFrom: string | null;
-}) {
+  workspaceSlug,
+  workspaceId,
+  targetUserId,
+  targetRole,
+  enabled,
+}: Props) {
+  // Skip the resource fetch for owner/admin — their matrix isn't
+  // configurable, so the data would just be discarded.
+  const fetchEnabled =
+    enabled && targetRole !== "owner" && targetRole !== "admin";
+  const { data, loading, error, setLevel } = useMemberAccess(
+    workspaceSlug,
+    workspaceId,
+    targetUserId,
+    fetchEnabled
+  );
+
+  if (targetRole === "owner" || targetRole === "admin") {
+    return (
+      <p className="px-12 py-3 text-[11px] text-text-secondary/60">
+        Admins and owners have full edit access on every resource.
+      </p>
+    );
+  }
+
+  if (!enabled) return null;
+
+  if (loading && !data) {
+    return (
+      <p className="px-12 py-3 text-[11px] text-text-secondary/60">
+        Loading access…
+      </p>
+    );
+  }
+
+  const resources = data?.resources ?? [];
+  const overrides = data?.overrides ?? new Map<string, AccessLevel>();
+  const defaultLevel = defaultLevelForRole(targetRole);
+
+  const grouped: Record<ResourceType, ResourceEntry[]> = {
+    knowledge_base: [],
+    skill: [],
+    canvas: [],
+  };
+  for (const r of resources) grouped[r.type].push(r);
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-      <AccessColumn
-        title="Knowledge bases"
-        icon={<BookOpen size={11} className="text-violet-300/80" />}
-        items={KNOWLEDGE_BASES.map((kb) => ({
-          slug: kb.slug,
-          name: kb.name,
-          level: levelFor(knowledgeAccess, kb.slug),
-        }))}
-        inheritFrom={inheritFrom}
-      />
-      <AccessColumn
-        title="Skills"
-        icon={<Sparkles size={11} className="text-amber-300/80" />}
-        items={SKILLS.map((s) => ({
-          slug: s.slug,
-          name: s.name,
-          level: levelFor(skillAccess, s.slug),
-        }))}
-        inheritFrom={inheritFrom}
-      />
+    <div className="px-12 pb-4 pt-1 space-y-4">
+      {error && <p className="text-xs text-red-400">{error}</p>}
+      {(["knowledge_base", "skill", "canvas"] as ResourceType[]).map((type) => {
+        const items = grouped[type];
+        if (items.length === 0) return null;
+        const Icon = ICONS[type];
+        return (
+          <section key={type}>
+            <h4 className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-text-secondary/60 mb-2">
+              <Icon size={11} />
+              {SECTION_LABELS[type]} · {items.length}
+            </h4>
+            <ul className="rounded-lg border border-white/[0.06] divide-y divide-white/[0.04] overflow-hidden">
+              {items.map((r) => {
+                const key = `${r.type}:${r.id}`;
+                const current = overrides.get(key) ?? defaultLevel;
+                return (
+                  <li
+                    key={key}
+                    className="flex items-center justify-between gap-3 px-3 py-2"
+                  >
+                    <span className="text-sm text-text-primary truncate">
+                      {r.name}
+                    </span>
+                    <LevelToggle
+                      value={current}
+                      onChange={(next) => void setLevel(r.type, r.id, next)}
+                    />
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        );
+      })}
+      {resources.length === 0 && !loading && (
+        <p className="text-[11px] text-text-secondary/60">
+          No resources in this workspace yet.
+        </p>
+      )}
     </div>
   );
 }
 
-function AccessColumn({
-  title,
-  icon,
-  items,
-  inheritFrom,
+function LevelToggle({
+  value,
+  onChange,
 }: {
-  title: string;
-  icon: React.ReactNode;
-  items: { slug: string; name: string; level: AccessLevel }[];
-  inheritFrom: string | null;
+  value: AccessLevel;
+  onChange: (next: AccessLevel) => void;
 }) {
   return (
-    <div>
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-[10px] font-mono uppercase tracking-wider text-text-secondary/70">
-          {title}
-        </span>
-        {inheritFrom && (
-          <span className="text-[10px] font-mono text-text-secondary/40">
-            inherits from {inheritFrom}
-          </span>
-        )}
-      </div>
-      <div className="rounded-lg border border-white/[0.06] divide-y divide-white/[0.04] overflow-hidden">
-        {items.map((it) => (
-          <div
-            key={it.slug}
-            className="flex items-center justify-between gap-3 px-3 py-2"
-          >
-            <div className="flex items-center gap-2 min-w-0">
-              {icon}
-              <span className="text-[13px] text-text-primary/90 truncate">
-                {it.name}
-              </span>
-            </div>
-            <AccessSegmented value={it.level} />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function AccessSegmented({ value }: { value: AccessLevel }) {
-  const options: Array<{ key: AccessLevel; label: string }> = [
-    { key: "none", label: "None" },
-    { key: "read", label: "Read" },
-    { key: "edit", label: "Edit" },
-  ];
-  return (
-    <div className="flex items-center bg-white/[0.03] border border-white/[0.06] rounded-md p-0.5">
-      {options.map((opt) => {
-        const active = opt.key === value;
+    <div
+      role="radiogroup"
+      className="inline-flex items-center rounded-md border border-white/[0.08] overflow-hidden"
+    >
+      {(["read", "edit"] as AccessLevel[]).map((level) => {
+        const active = value === level;
         return (
           <button
-            key={opt.key}
+            key={level}
             type="button"
+            role="radio"
+            aria-checked={active}
+            onClick={() => !active && onChange(level)}
             className={cn(
-              "px-2 py-0.5 text-[11px] font-medium rounded transition-colors cursor-pointer",
+              "px-2.5 py-1 text-[10px] font-mono uppercase tracking-wider transition-colors cursor-pointer",
               active
-                ? opt.key === "edit"
-                  ? "bg-emerald-500/15 text-emerald-200"
-                  : opt.key === "read"
-                    ? "bg-violet-500/15 text-violet-200"
-                    : "bg-white/[0.06] text-text-secondary"
-                : "text-text-secondary/50 hover:text-text-secondary"
+                ? "bg-white/[0.08] text-text-primary"
+                : "text-text-secondary/60 hover:text-text-primary hover:bg-white/[0.04]"
             )}
           >
-            {opt.label}
+            {level}
           </button>
         );
       })}
     </div>
   );
-}
-
-function levelFor(grants: AccessGrant[], slug: string): AccessLevel {
-  return grants.find((g) => g.slug === slug)?.level ?? "none";
 }

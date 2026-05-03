@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
 import { supabaseAdmin } from "@/shared/supabase/admin";
+import { denyIfNoCanvasWrite } from "@/features/members/server/access";
 
 const supabase = supabaseAdmin();
 
@@ -48,7 +49,10 @@ export const GET = withWorkspaceAuth(async (_request, { workspaceId }) => {
  * 409 and the latest snapshot so the client can refetch + retry.
  */
 export const PATCH = withWorkspaceAuth(
-  async (request, { userId, workspaceId }) => {
+  async (request, { userId, workspaceId, apiKeyId }) => {
+    const denied = await denyIfNoCanvasWrite({ apiKeyId, userId, workspaceId });
+    if (denied) return denied;
+
     const body = await request.json();
     const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
 
@@ -112,5 +116,5 @@ export const PATCH = withWorkspaceAuth(
       version: updated?.version ?? null,
     });
   },
-  { minRole: "editor" }
+  { minRole: "member" }
 );

@@ -37,6 +37,18 @@ interface Result<T> {
   refetch: () => void;
 }
 
+/**
+ * Optional SSR seed. When the parent has already loaded the data on the
+ * server (e.g. a Next.js server component fetched the first entry), it
+ * can pass it in to skip the initial client-side fetch — the hook seeds
+ * `data` and consumes the seed once. Subsequent key changes (or
+ * explicit `refetch()`) hit the network normally.
+ */
+interface UseFetchOptions<T> {
+  initialData?: T;
+  initialKey?: string;
+}
+
 function toApiError(err: unknown): KnowledgeApiError {
   if (err instanceof KnowledgeApiError) return err;
   return new KnowledgeApiError(
@@ -52,6 +64,10 @@ function toApiError(err: unknown): KnowledgeApiError {
  *
  * - `key`: cache key. When falsy, the hook sits idle and never fires.
  * - `loader`: closure called when key/tick changes.
+ * - `options.initialData` + `options.initialKey`: optional SSR seed —
+ *   if both are provided AND `key === initialKey` on first effect run,
+ *   the seed is consumed and the initial fetch is skipped. Subsequent
+ *   key changes or explicit `refetch()` calls fetch normally.
  *
  * Status is *derived* from `data`/`error` to avoid the React 19
  * `setState-in-effect` lint that fires on a synchronous status
@@ -60,9 +76,21 @@ function toApiError(err: unknown): KnowledgeApiError {
  */
 function useFetch<T>(
   key: string | null | undefined,
-  loader: () => Promise<T>
+  loader: () => Promise<T>,
+  options?: UseFetchOptions<T>
 ): Result<T> {
-  const [data, setData] = useState<T | null>(null);
+  // Capture the seed once at mount. Refs survive React 19 StrictMode's
+  // double-invoke of effects, so the consume-flag below works correctly
+  // in dev too.
+  const initialDataRef = useRef(options?.initialData);
+  const initialKeyRef = useRef(options?.initialKey);
+  const seedConsumedRef = useRef(false);
+
+  const [data, setData] = useState<T | null>(
+    initialDataRef.current !== undefined && initialKeyRef.current === key
+      ? initialDataRef.current
+      : null
+  );
   const [error, setError] = useState<KnowledgeApiError | null>(null);
   // Bump to force a refetch.
   const [tick, setTick] = useState(0);
@@ -76,6 +104,16 @@ function useFetch<T>(
 
   useEffect(() => {
     if (!key) return;
+    // First effect run after mount with an SSR seed for THIS key —
+    // skip the network round-trip; `data` was already seeded above.
+    if (
+      !seedConsumedRef.current &&
+      initialDataRef.current !== undefined &&
+      initialKeyRef.current === key
+    ) {
+      seedConsumedRef.current = true;
+      return;
+    }
     let cancelled = false;
     loaderRef
       .current()
@@ -131,11 +169,18 @@ export function useKnowledgeTree(
 
 export function useKnowledgeEntry(
   entryId: string | null | undefined,
-  workspaceId?: string
+  workspaceId?: string,
+  options?: { initialData?: KnowledgeEntry; initialEntryId?: string }
 ): Result<KnowledgeEntry> {
+  const key = entryId ? `${workspaceId ?? "default"}:${entryId}` : null;
+  const initialKey =
+    options?.initialEntryId !== undefined
+      ? `${workspaceId ?? "default"}:${options.initialEntryId}`
+      : undefined;
   return useFetch(
-    entryId ? `${workspaceId ?? "default"}:${entryId}` : null,
-    () => fetchEntry(entryId as string, workspaceId)
+    key,
+    () => fetchEntry(entryId as string, workspaceId),
+    { initialData: options?.initialData, initialKey }
   );
 }
 

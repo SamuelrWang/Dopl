@@ -5,12 +5,14 @@ import { parseJson } from "@/shared/api/parse-json";
 import { HttpError } from "@/shared/lib/http-error";
 import { findWorkspaceForMember } from "@/features/workspaces/server/service";
 import {
-  removeMember,
-  updateMemberRole,
-} from "@/features/workspaces/server/invitations";
+  listMemberOverrides,
+  setResourceAccessOverride,
+} from "@/features/members/server/access";
 
-const RoleUpdateSchema = z.object({
-  role: z.enum(["admin", "member", "viewer"]),
+const SetAccessSchema = z.object({
+  resourceType: z.enum(["knowledge_base", "skill", "canvas"]),
+  resourceId: z.string().uuid(),
+  level: z.enum(["read", "edit"]),
 });
 
 interface Ctx {
@@ -19,24 +21,28 @@ interface Ctx {
 }
 
 /**
- * PATCH /api/workspaces/[workspaceSlug]/members/[userId] — change a member's role.
- * Admin+ only. Last-owner protection enforced inside `updateMemberRole`.
+ * GET /api/workspaces/[slug]/members/[userId]/access — list access
+ * overrides for a single member. Admin+ only. The caller composes the
+ * full matrix client-side by joining this list against the workspace's
+ * KBs / skills / canvases.
  */
-export const PATCH = withUserAuth(
-  async (request: NextRequest, { userId, params }: Ctx) => {
+export const GET = withUserAuth(
+  async (_request: NextRequest, { userId, params }: Ctx) => {
     try {
       const workspaceSlug = params?.workspaceSlug;
       const targetUserId = params?.userId;
       if (!workspaceSlug || !targetUserId) {
-        return NextResponse.json({ error: "workspaceSlug + userId required" }, { status: 400 });
+        return NextResponse.json(
+          { error: "workspaceSlug + userId required" },
+          { status: 400 }
+        );
       }
       const workspace = await findWorkspaceForMember(userId, workspaceSlug);
       if (!workspace) {
         return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
       }
-      const { role } = await parseJson(request, RoleUpdateSchema);
-      await updateMemberRole(workspace.id, userId, targetUserId, role);
-      return NextResponse.json({ ok: true });
+      const overrides = await listMemberOverrides(workspace.id, userId, targetUserId);
+      return NextResponse.json({ overrides });
     } catch (err) {
       if (err instanceof HttpError) {
         return NextResponse.json(err.toResponseBody(), { status: err.status });
@@ -48,23 +54,34 @@ export const PATCH = withUserAuth(
 );
 
 /**
- * DELETE /api/workspaces/[workspaceSlug]/members/[userId] — remove a member.
- * Admin+ only. Cannot remove last owner.
+ * PUT /api/workspaces/[slug]/members/[userId]/access — set a single
+ * override. Idempotent on (resourceType, resourceId).
  */
-export const DELETE = withUserAuth(
-  async (_request: NextRequest, { userId, params }: Ctx) => {
+export const PUT = withUserAuth(
+  async (request: NextRequest, { userId, params }: Ctx) => {
     try {
       const workspaceSlug = params?.workspaceSlug;
       const targetUserId = params?.userId;
       if (!workspaceSlug || !targetUserId) {
-        return NextResponse.json({ error: "workspaceSlug + userId required" }, { status: 400 });
+        return NextResponse.json(
+          { error: "workspaceSlug + userId required" },
+          { status: 400 }
+        );
       }
       const workspace = await findWorkspaceForMember(userId, workspaceSlug);
       if (!workspace) {
         return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
       }
-      await removeMember(workspace.id, userId, targetUserId);
-      return new NextResponse(null, { status: 204 });
+      const input = await parseJson(request, SetAccessSchema);
+      await setResourceAccessOverride(
+        workspace.id,
+        userId,
+        targetUserId,
+        input.resourceType,
+        input.resourceId,
+        input.level
+      );
+      return NextResponse.json({ ok: true });
     } catch (err) {
       if (err instanceof HttpError) {
         return NextResponse.json(err.toResponseBody(), { status: err.status });

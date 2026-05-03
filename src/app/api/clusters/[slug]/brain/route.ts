@@ -291,4 +291,4 @@ async function handlePatch(
 }
 
 export const GET = withWorkspaceAuth(handleGet);
-export const PATCH = withWorkspaceAuth(handlePatch, { minRole: "editor" });
+export const PATCH = withWorkspaceAuth(handlePatch, { minRole: "member" });

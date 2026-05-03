@@ -1,6 +1,7 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { slugify } from "@/shared/lib/slug/slugify";
+import { requireResourceAccess } from "@/features/members/server/access";
 import type {
   KnowledgeBase,
   KnowledgeFolder,
@@ -180,9 +181,7 @@ export async function updateBase(
   if (ctx.source === "agent" && patch.agentWriteEnabled !== undefined) {
     throw new AgentWriteDisabledError(base.id);
   }
-  if (ctx.source === "agent" && !base.agentWriteEnabled) {
-    throw new AgentWriteDisabledError(base.id);
-  }
+  await assertAgentWriteAllowed(ctx, base);
   if (patch.slug && patch.slug !== base.slug) {
     const taken = await repo.listBaseSlugsForWorkspace(ctx.workspaceId);
     if (taken.includes(patch.slug)) {
@@ -212,9 +211,7 @@ export async function softDeleteBase(
   id: string
 ): Promise<void> {
   const base = await getBaseById(ctx, id);
-  if (ctx.source === "agent" && !base.agentWriteEnabled) {
-    throw new AgentWriteDisabledError(base.id);
-  }
+  await assertAgentWriteAllowed(ctx, base);
   await repo.markBaseDeleted(id);
 }
 
@@ -225,9 +222,7 @@ export async function restoreBase(
   const base = await repo.findBaseById(id, true);
   if (!base) throw new KnowledgeBaseNotFoundError(id);
   assertSameWorkspace(base.workspaceId, ctx.workspaceId, `knowledge base ${id}`);
-  if (ctx.source === "agent" && !base.agentWriteEnabled) {
-    throw new AgentWriteDisabledError(base.id);
-  }
+  await assertAgentWriteAllowed(ctx, base);
   return repo.restoreBaseRow(id);
 }
 
@@ -834,20 +829,28 @@ export async function purgeTrashOlderThan(
 // ─── Agent-write enforcement ────────────────────────────────────────
 
 /**
- * Throws `AgentWriteDisabledError` when the caller is acting as an
- * agent and the base's toggle is off. User-origin callers always pass.
+ * Gate for agent-origin KB writes. The per-(member, KB) access matrix
+ * is now the single source of truth — owner/admin members always pass,
+ * member/viewer pass when their matrix entry is `edit`. The legacy
+ * KB-level `agent_write_enabled` toggle is no longer consulted here:
+ * admins manage agent access centrally from the members page.
  *
- * Centralized so every write goes through one check — never inline the
- * `ctx.source === "agent" && !base.agentWriteEnabled` test elsewhere.
+ * `AgentWriteDisabledError` is still thrown when an agent tries to flip
+ * `agentWriteEnabled` itself in updateBase — that path doesn't call
+ * here.
  */
 export async function assertAgentWriteAllowed(
   ctx: KnowledgeContext,
   base: KnowledgeBase
 ): Promise<void> {
   if (ctx.source !== "agent") return;
-  if (!base.agentWriteEnabled) {
-    throw new AgentWriteDisabledError(base.id);
-  }
+  await requireResourceAccess(
+    ctx.userId,
+    ctx.workspaceId,
+    "knowledge_base",
+    base.id,
+    "edit"
+  );
 }
 
 // ─── Seeding ────────────────────────────────────────────────────────

@@ -456,7 +456,7 @@ const PROSE_CLASSES = [
   // prose-p's my-3. Strip those vertical margins so list items are tight.
   "[&_li>p]:my-0 [&_li>p]:leading-[1.65]",
   // Inline code
-  "prose-code:text-[12.5px] prose-code:bg-white/[0.06] prose-code:border prose-code:border-white/[0.06]",
+  "prose-code:text-[12.5px] prose-code:text-text-primary prose-code:bg-white/[0.06] prose-code:border prose-code:border-white/[0.06]",
   "prose-code:px-1 prose-code:py-px prose-code:rounded prose-code:font-mono",
   "prose-code:before:content-none prose-code:after:content-none",
   // Code blocks

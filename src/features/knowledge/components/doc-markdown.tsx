@@ -42,7 +42,7 @@ export function DocMarkdown({ content, className }: Props) {
         "prose-ul:pl-5 prose-ol:pl-5",
         "[&_li::marker]:text-text-secondary/50",
         // Inline code
-        "prose-code:text-[12.5px] prose-code:bg-white/[0.06] prose-code:border prose-code:border-white/[0.06]",
+        "prose-code:text-[12.5px] prose-code:text-text-primary prose-code:bg-white/[0.06] prose-code:border prose-code:border-white/[0.06]",
         "prose-code:px-1 prose-code:py-px prose-code:rounded prose-code:font-mono",
         "prose-code:before:content-none prose-code:after:content-none",
         // Code blocks

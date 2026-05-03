@@ -110,5 +110,5 @@ export const POST = withWorkspaceAuth(
 
     return NextResponse.json({ conversation: data });
   },
-  { minRole: "editor" }
+  { minRole: "member" }
 );

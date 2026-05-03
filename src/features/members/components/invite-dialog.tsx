@@ -9,45 +9,40 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/shared/ui/dialog";
-import type { Invitation } from "../types";
+import type { AssignableRole } from "../types";
 
 interface Props {
   workspaceSlug: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onCreated?: (invitation: Invitation) => void;
+  /** Called after a successful invite so the parent can refresh lists. */
+  onInvited?: (email: string) => void;
 }
 
-const ROLES: Array<{ value: "admin" | "editor" | "viewer"; label: string; hint: string }> = [
+const ROLES: Array<{ value: AssignableRole; label: string; hint: string }> = [
   { value: "viewer", label: "Viewer", hint: "Read-only access" },
-  { value: "editor", label: "Editor", hint: "Can edit clusters, brain, and chats" },
-  { value: "admin", label: "Admin", hint: "Editor + invite + workspace settings" },
+  { value: "member", label: "Member", hint: "Use everything: KBs, skills, canvas" },
+  { value: "admin", label: "Admin", hint: "Full access, manage members + workspace" },
 ];
 
 /**
- * Invite a new member to a workspace. Sends a POST that mints a token,
- * then surfaces the magic-link URL so the inviter can paste it into
- * email/Slack/etc until automated email send lands.
+ * Invite a new member to a workspace by email. The invitee picks up
+ * the invite via the sidebar dropdown when they next log in (matched
+ * by email) — no link copy or email send is needed. Dialog confirms
+ * "Invitation sent" on success and closes.
  */
-export function InviteMemberDialog({
-  workspaceSlug,
-  open,
-  onOpenChange,
-  onCreated,
-}: Props) {
+export function InviteDialog({ workspaceSlug, open, onOpenChange, onInvited }: Props) {
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState<"admin" | "editor" | "viewer">("editor");
+  const [role, setRole] = useState<AssignableRole>("member");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [linkUrl, setLinkUrl] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [sentTo, setSentTo] = useState<string | null>(null);
 
   function reset() {
     setEmail("");
-    setRole("editor");
+    setRole("member");
     setError(null);
-    setLinkUrl(null);
-    setCopied(false);
+    setSentTo(null);
     setSubmitting(false);
   }
 
@@ -69,26 +64,12 @@ export function InviteMemberDialog({
         const body = await res.json().catch(() => ({}));
         throw new Error(body?.error?.message || body?.error || "Failed to invite");
       }
-      const { invitation } = (await res.json()) as { invitation: Invitation };
-      const url = `${window.location.origin}/invite/${invitation.token}`;
-      setLinkUrl(url);
-      onCreated?.(invitation);
+      setSentTo(trimmed);
+      onInvited?.(trimmed);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setSubmitting(false);
-    }
-  }
-
-  async function copyLink() {
-    if (!linkUrl) return;
-    try {
-      await navigator.clipboard.writeText(linkUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      // Clipboard API can be unavailable on http origins; fall back to
-      // letting the user select the text manually.
     }
   }
 
@@ -104,34 +85,18 @@ export function InviteMemberDialog({
         <DialogHeader>
           <DialogTitle className="text-white">Invite to workspace</DialogTitle>
           <DialogDescription className="text-white/50">
-            Send the magic link to your invitee. Until automated email is
-            wired, copy the link and share it manually.
+            They'll see the invite in their sidebar the next time they log in.
           </DialogDescription>
         </DialogHeader>
 
-        {linkUrl ? (
-          <div className="flex flex-col gap-3 py-2">
-            <p className="text-xs text-white/60">
-              Invitation created. Share this link with{" "}
-              <span className="text-white">{email.trim()}</span>:
+        {sentTo ? (
+          <div className="flex flex-col gap-2 py-4">
+            <p className="text-sm text-white">
+              Invitation sent to <span className="text-white">{sentTo}</span>.
             </p>
-            <div className="flex items-center gap-2">
-              <input
-                readOnly
-                value={linkUrl}
-                onFocus={(e) => e.currentTarget.select()}
-                className="flex-1 h-9 px-3 rounded-md bg-white/[0.06] border border-white/[0.12] text-xs text-white outline-none font-mono"
-              />
-              <button
-                type="button"
-                onClick={copyLink}
-                className="h-9 px-3 rounded-md bg-white text-black text-xs font-medium hover:bg-white/90 transition-colors shrink-0"
-              >
-                {copied ? "Copied" : "Copy"}
-              </button>
-            </div>
-            <p className="text-[10px] uppercase tracking-wider text-white/30">
-              Link expires in 7 days
+            <p className="text-xs text-white/50">
+              They'll see it in their sidebar dropdown the next time they log in
+              and can accept from there. The invite expires in 7 days.
             </p>
           </div>
         ) : (
@@ -178,7 +143,7 @@ export function InviteMemberDialog({
         )}
 
         <DialogFooter className="bg-transparent border-white/[0.08]">
-          {linkUrl ? (
+          {sentTo ? (
             <button
               type="button"
               onClick={() => onOpenChange(false)}
@@ -201,7 +166,7 @@ export function InviteMemberDialog({
                 disabled={submitting || !email.trim()}
                 className="h-8 px-4 rounded-md bg-white text-black text-xs font-medium hover:bg-white/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
-                {submitting ? "Creating..." : "Create invite"}
+                {submitting ? "Sending..." : "Send invite"}
               </button>
             </>
           )}

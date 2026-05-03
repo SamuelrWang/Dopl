@@ -68,5 +68,5 @@ async function handleDelete(request: NextRequest, auth: WorkspaceAuthContext) {
 }
 
 export const GET = withWorkspaceAuth(handleGet);
-export const POST = withWorkspaceAuth(handlePost, { minRole: "editor" });
-export const DELETE = withWorkspaceAuth(handleDelete, { minRole: "editor" });
+export const POST = withWorkspaceAuth(handlePost, { minRole: "member" });
+export const DELETE = withWorkspaceAuth(handleDelete, { minRole: "member" });
