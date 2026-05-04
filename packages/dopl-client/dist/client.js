@@ -37,6 +37,7 @@ exports.DoplClient = exports.parseRetryAfter = void 0;
 const transport_js_1 = require("./transport.js");
 const kb = __importStar(require("./knowledge.js"));
 const skills = __importStar(require("./skills.js"));
+const integrations = __importStar(require("./integrations.js"));
 var retry_js_1 = require("./retry.js");
 Object.defineProperty(exports, "parseRetryAfter", { enumerable: true, get: function () { return retry_js_1.parseRetryAfter; } });
 const PENDING_CACHE_TTL_MS = 5_000;
@@ -407,6 +408,19 @@ class DoplClient {
     }
     deleteSkillFile(slug, fileName) {
         return skills.deleteSkillFile(this.transport, slug, fileName);
+    }
+    // ── Integrations (Notion / Gmail / Drive / …) ────────────────────
+    connectIntegration(provider) {
+        return integrations.connectIntegration(this.transport, provider);
+    }
+    getIntegrationStatus(provider) {
+        return integrations.getIntegrationStatus(this.transport, provider);
+    }
+    listIntegrationObjects(provider, input = {}) {
+        return integrations.listIntegrationObjects(this.transport, provider, input);
+    }
+    prepareFromIntegration(input) {
+        return integrations.prepareFromIntegration(this.transport, input);
     }
 }
 exports.DoplClient = DoplClient;

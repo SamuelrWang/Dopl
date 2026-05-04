@@ -7,6 +7,7 @@ const client_1 = require("@dopl/client");
 const templates_js_1 = require("./templates.js");
 const knowledge_js_1 = require("./tools/knowledge.js");
 const skills_js_1 = require("./tools/skills.js");
+const integrations_js_1 = require("./tools/integrations.js");
 const skill_authoring_guide_js_1 = require("./prompts/skill-authoring-guide.js");
 const version_js_1 = require("./version.js");
 const CONTEXT_CHAR_BUDGET = 2000;
@@ -1752,5 +1753,11 @@ function createServer(client, options = {}) {
     // prompts the agent reads and follows; KBs referenced from inside a
     // skill body are loaded via the kb_* tools.
     (0, skills_js_1.registerSkillTools)(registerTool, client);
+    // ── Third-party integrations (Notion / Gmail / Drive) ─────────────
+    // Four tools that let the agent connect a provider, list its
+    // objects, and ingest them through the existing prepare→submit
+    // pipeline. Branding: tool descriptions never name the OAuth
+    // broker; the user only ever sees Dopl-branded surfaces.
+    (0, integrations_js_1.registerIntegrationTools)(registerTool, client);
     return server;
 }
