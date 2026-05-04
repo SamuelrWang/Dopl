@@ -98,6 +98,33 @@ export type ChatMessage =
       role: "ai";
       type: "trial_expired";
       message: string;
+    }
+  | {
+      /**
+       * Private-chat artifact: copy-pasteable prompt for the user's
+       * executing agent (Claude Code, etc.). Rendered as an inline
+       * card with copy + promote-to-canvas buttons.
+       */
+      role: "ai";
+      type: "agent_prompt_artifact";
+      artifactId: string;
+      title: string;
+      prompt: string;
+      /** Set after the user promotes this artifact to a canvas panel. */
+      promotedPanelId?: string;
+    }
+  | {
+      /**
+       * Private-chat artifact: synthesized markdown bundle assembled
+       * from workspace KBs / skills / clusters. Rendered as an inline
+       * card with copy + download + promote-to-canvas buttons.
+       */
+      role: "ai";
+      type: "context_file_artifact";
+      artifactId: string;
+      title: string;
+      markdown: string;
+      promotedPanelId?: string;
     };
 
 const eventTypeConfig: Record<

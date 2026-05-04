@@ -90,6 +90,7 @@ export const POST = withWorkspaceAuth(
       "skills",
       "knowledge-base",
       "skill",
+      "artifact",
     ];
     if (panel_type && !VALID_PANEL_TYPES.includes(panel_type)) {
       return NextResponse.json(

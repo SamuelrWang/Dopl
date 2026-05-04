@@ -21,12 +21,12 @@ export default async function ChatPage({ params }: PageProps) {
   const { workspaceSlug } = await params;
   const user = await getUser();
   if (!user) redirect("/login");
-  await resolvePageWorkspace(workspaceSlug, user.id, "chat");
+  const workspace = await resolvePageWorkspace(workspaceSlug, user.id, "chat");
 
   return (
     <>
       <PageTopBar title="Chat" />
-      <ChatShell />
+      <ChatShell workspaceId={workspace.id} />
     </>
   );
 }

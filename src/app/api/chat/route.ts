@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
+import { randomUUID } from "crypto";
 import Anthropic from "@anthropic-ai/sdk";
 import { BUILDER_CHAT_SYSTEM_PROMPT } from "@/shared/prompts/chat-system";
+import { PRIVATE_CHAT_SYSTEM_PROMPT } from "@/shared/prompts/private-chat-system";
 import { withUserAuth } from "@/shared/auth/with-auth";
 import { hasActiveAccess, accessDeniedBody } from "@/features/billing/server/access";
 import { logSystemEvent } from "@/features/analytics/server/system-events";
@@ -8,7 +10,14 @@ import {
   buildCanvasContextPrefix,
   type CanvasContextPayload,
 } from "@/features/chat/server/canvas-context";
-import { TOOLS, executeTool } from "@/features/chat/server/tools";
+import {
+  WORKSPACE_TOOLS,
+  PRIVATE_TOOLS,
+  executeTool,
+  type ChatMode,
+  type ChatScopeFilters,
+} from "@/features/chat/server/tools";
+import { buildArtifactFromToolCall } from "@/features/chat/server/tools/artifacts";
 import { getCluster } from "@/features/clusters/server/service";
 import { resolveActiveWorkspace } from "@/features/workspaces/server/service";
 import { HttpError } from "@/shared/lib/http-error";
@@ -46,8 +55,37 @@ function toolSummary(
     }
     return "Queued for ingestion";
   }
+  if (name === "search_workspace_knowledge") {
+    try {
+      const parsed = JSON.parse(toolOutput.result);
+      const n = Array.isArray(parsed?.matches) ? parsed.matches.length : 0;
+      return `Found ${n} match(es) in workspace knowledge`;
+    } catch {
+      return "Searched workspace knowledge";
+    }
+  }
+  if (name === "list_workspace_knowledge_bases") {
+    try {
+      const parsed = JSON.parse(toolOutput.result);
+      const n = Array.isArray(parsed?.knowledge_bases)
+        ? parsed.knowledge_bases.length
+        : 0;
+      return `${n} knowledge base${n === 1 ? "" : "s"}`;
+    } catch {
+      return "Listed knowledge bases";
+    }
+  }
+  if (name === "list_workspace_skills") {
+    try {
+      const parsed = JSON.parse(toolOutput.result);
+      const n = Array.isArray(parsed?.skills) ? parsed.skills.length : 0;
+      return `${n} skill${n === 1 ? "" : "s"}`;
+    } catch {
+      return "Listed skills";
+    }
+  }
   switch (name) {
-    case "list_user_clusters":
+    case "list_workspace_clusters":
       return "Listed clusters";
     case "list_cluster_brain_memories":
       return "Read cluster brain";
@@ -59,6 +97,14 @@ function toolSummary(
       return "Removed cluster brain memory";
     case "rewrite_cluster_brain_instructions":
       return "Rewrote cluster brain instructions";
+    case "read_knowledge_entry":
+      return "Read knowledge entry";
+    case "read_skill_file":
+      return "Read skill file";
+    case "emit_agent_prompt":
+      return "Drafted an agent prompt";
+    case "emit_context_file":
+      return "Synthesized a context file";
     default:
       return "Retrieved implementation details";
   }
@@ -72,6 +118,12 @@ async function handlePost(
     const body = await request.json();
     const messages: Anthropic.MessageParam[] = body.messages || [];
     const canvasContext: CanvasContextPayload | undefined = body.canvasContext;
+    const requestedMode = body.mode === "private" ? "private" : "workspace";
+    const mode: ChatMode = requestedMode;
+    const scopeFilters: ChatScopeFilters | undefined =
+      mode === "private" && body.scopeFilters && typeof body.scopeFilters === "object"
+        ? (body.scopeFilters as ChatScopeFilters)
+        : undefined;
 
     if (messages.length === 0) {
       return new Response(
@@ -80,7 +132,7 @@ async function handlePost(
       );
     }
 
-    // Resolve active canvas — header > user default. Cluster-scoped
+    // Resolve active workspace — header > user default. Cluster-scoped
     // tools (list/edit memories, rewrite brain) need this to filter
     // canvas-aware queries; non-canvas tools (search KB, ingest URL)
     // ignore it.
@@ -122,9 +174,11 @@ async function handlePost(
     // Server-side enrichment: when the chat is inside a synced cluster,
     // attach the cluster's KBs + skills so the system prompt has real
     // context. Failures are non-fatal — chat still works without the
-    // enrichment.
+    // enrichment. Skipped in private mode since the private chat doesn't
+    // run inside a cluster.
     let enriched: CanvasContextPayload | undefined = canvasContext;
     if (
+      mode === "workspace" &&
       canvasContext &&
       canvasContext.scope === "cluster" &&
       canvasContext.clusterSlug
@@ -161,15 +215,21 @@ async function handlePost(
         };
       } catch (err) {
         // Non-fatal: skip enrichment but keep the original payload.
-        // eslint-disable-next-line no-console
         console.warn("chat: cluster enrichment failed", err);
       }
     }
 
-    // Compose system prompt: canvas context (if any) + builder prompt.
-    const systemPrompt = enriched
-      ? buildCanvasContextPrefix(enriched) + BUILDER_CHAT_SYSTEM_PROMPT
-      : BUILDER_CHAT_SYSTEM_PROMPT;
+    // Compose system prompt + tool set per mode.
+    const baseSystemPrompt =
+      mode === "private"
+        ? PRIVATE_CHAT_SYSTEM_PROMPT
+        : BUILDER_CHAT_SYSTEM_PROMPT;
+    const systemPrompt =
+      mode === "workspace" && enriched
+        ? buildCanvasContextPrefix(enriched) + baseSystemPrompt
+        : baseSystemPrompt;
+    const toolSet =
+      mode === "private" ? PRIVATE_TOOLS : WORKSPACE_TOOLS;
 
     const stream = new ReadableStream({
       async start(controller) {
@@ -202,7 +262,7 @@ async function handlePost(
               model: process.env.LLM_MODEL || "claude-sonnet-4-20250514",
               max_tokens: 8192,
               system: systemPrompt,
-              tools: TOOLS,
+              tools: toolSet,
               messages: currentMessages,
             });
 
@@ -248,7 +308,8 @@ async function handlePost(
                 block.input as Record<string, unknown>,
                 userId,
                 canvasContext,
-                workspaceId
+                workspaceId,
+                { mode, scopeFilters }
               );
 
               // Emit ingest_started for ingest_url tool so the frontend
@@ -272,6 +333,26 @@ async function handlePost(
                   }
                 } catch {
                   // Failed to parse — skip the event
+                }
+              }
+
+              // Artifact emission — private mode only. The tool itself
+              // returned a no-op "rendered" payload to Claude; the
+              // browser-facing artifact event carries the actual
+              // title/prompt/markdown so the renderer can draw the card.
+              if (
+                mode === "private" &&
+                (block.name === "emit_agent_prompt" ||
+                  block.name === "emit_context_file")
+              ) {
+                const artifactId = randomUUID();
+                const artifact = buildArtifactFromToolCall(
+                  block.name,
+                  block.input as Record<string, unknown>,
+                  artifactId
+                );
+                if (artifact) {
+                  send({ type: "artifact", artifact });
                 }
               }
 

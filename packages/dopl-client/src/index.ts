@@ -66,3 +66,12 @@ export type {
   SkillStatus,
   SkillWriteSource,
 } from "./skill-types.js";
+export type {
+  ConnectResponse,
+  IntegrationListResponse,
+  IntegrationObjectSummary,
+  IntegrationProvider,
+  IntegrationStatusResponse,
+  IntegrationStatusValue,
+  PrepareFromIntegrationResponse,
+} from "./integration-types.js";

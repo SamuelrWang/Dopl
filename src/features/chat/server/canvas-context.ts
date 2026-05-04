@@ -178,7 +178,7 @@ export function buildCanvasContextPrefix(ctx: CanvasContextPayload): string {
     }
   } else {
     blocks.push(
-      "You can edit any of the user's clusters' brains via the cluster-brain tools. Call list_user_clusters to see available cluster slugs. Before calling update/remove tools, use list_cluster_brain_memories to learn memory IDs. When the user asks you to 'remember' something for a specific cluster, use add_cluster_brain_memory. Prefer add over rewrite — rewriting replaces everything and is rarely the right move."
+      "You can edit any of the workspace's clusters' brains via the cluster-brain tools. Call list_workspace_clusters to see available cluster slugs. Before calling update/remove tools, use list_cluster_brain_memories to learn memory IDs. When the user asks you to 'remember' something for a specific cluster, use add_cluster_brain_memory. Prefer add over rewrite — rewriting replaces everything and is rarely the right move."
     );
   }
 

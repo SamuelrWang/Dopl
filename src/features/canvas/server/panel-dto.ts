@@ -11,6 +11,7 @@
 
 import type {
   Panel,
+  ArtifactPanelData,
   ChatPanelData,
   EntryPanelData,
   ConnectionPanelData,
@@ -100,6 +101,14 @@ export function panelToDbRow(panel: Panel) {
         slug: panel.slug,
         description: panel.description,
         status: panel.status,
+      };
+      break;
+    case "artifact":
+      base.title = panel.title;
+      base.panel_data = {
+        markdown: panel.markdown,
+        sourceConversationId: panel.sourceConversationId,
+        sourceMessageId: panel.sourceMessageId,
       };
       break;
   }
@@ -195,6 +204,16 @@ export function dbRowToPanel(row: Record<string, unknown>): Panel | null {
         status: (data.status as "generating" | "ready" | "error") || "ready",
         errorMessage: (data.errorMessage as string) || null,
       } as ClusterBrainPanelData;
+    case "artifact":
+      return {
+        ...base,
+        type: "artifact",
+        title: (row.title as string) || "Untitled artifact",
+        markdown: (data.markdown as string) || "",
+        sourceConversationId:
+          (data.sourceConversationId as string) || undefined,
+        sourceMessageId: (data.sourceMessageId as string) || undefined,
+      } as ArtifactPanelData;
     default:
       return null;
   }

@@ -14,6 +14,7 @@ import {
   Home,
   LayoutGrid,
   MessageSquare,
+  Plug,
   Plus,
   Search,
   Settings,
@@ -97,6 +98,7 @@ type NavSection =
   | "chat"
   | "knowledge"
   | "skills"
+  | "integrations"
   | "activity"
   | "members"
   | "settings";
@@ -113,6 +115,7 @@ const navItems: ReadonlyArray<NavItem> = [
   { label: "Chat", icon: MessageSquare, section: "chat" },
   { label: "Knowledge", icon: BookOpen, section: "knowledge" },
   { label: "Skills", icon: Sparkles, section: "skills" },
+  { label: "Integrations", icon: Plug, section: "integrations" },
   { label: "Activity", icon: Activity, section: "activity" },
   { label: "Members", icon: Users, section: "members" },
   { label: "Settings", icon: Settings, section: "settings" },
@@ -126,6 +129,7 @@ const NAMED_WORKSPACE_SUBROUTES: ReadonlyArray<string> = [
   "chat",
   "knowledge",
   "skills",
+  "integrations",
   "activity",
   "settings",
 ];

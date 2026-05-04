@@ -6,8 +6,8 @@ import type { ToolResult } from "./types";
 
 const supabase = supabaseAdmin();
 
-/** Tool: list_user_clusters — returns slug/name/panel_count per cluster. */
-export async function executeListUserClusters(
+/** Tool: list_workspace_clusters — returns slug/name/panel_count per cluster. */
+export async function executeListWorkspaceClusters(
   _input: Record<string, unknown>,
   _userId?: string,
   _canvasContext?: CanvasContextPayload,

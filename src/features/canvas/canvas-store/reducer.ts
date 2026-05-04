@@ -1,4 +1,5 @@
 import type {
+  ArtifactPanelData,
   BrowsePanelData,
   CanvasAction,
   CanvasState,
@@ -14,6 +15,7 @@ import type {
   SkillsPanelData,
 } from "../types";
 import {
+  ARTIFACT_PANEL_SIZE,
   BROWSE_PANEL_SIZE,
   CLUSTER_BRAIN_PANEL_SIZE,
   CONNECTION_PANEL_SIZE,
@@ -798,6 +800,53 @@ export function reducer(state: CanvasState, action: CanvasAction): CanvasState {
         nextPanelId: state.nextPanelId + 1,
       };
     }
+
+    case "CREATE_ARTIFACT_PANEL": {
+      const { x, y } = findNonOverlappingPosition(
+        action.x,
+        action.y,
+        ARTIFACT_PANEL_SIZE.width,
+        ARTIFACT_PANEL_SIZE.height,
+        state.panels
+      );
+      const newPanel: ArtifactPanelData = {
+        id: action.id,
+        type: "artifact",
+        x,
+        y,
+        width: ARTIFACT_PANEL_SIZE.width,
+        height: ARTIFACT_PANEL_SIZE.height,
+        title: action.title,
+        markdown: action.markdown,
+        sourceConversationId: action.sourceConversationId,
+        sourceMessageId: action.sourceMessageId,
+      };
+      return {
+        ...state,
+        panels: [...state.panels, newPanel],
+        nextPanelId: state.nextPanelId + 1,
+      };
+    }
+
+    case "UPDATE_ARTIFACT_MARKDOWN":
+      return {
+        ...state,
+        panels: state.panels.map((p) =>
+          p.id === action.panelId && p.type === "artifact"
+            ? { ...p, markdown: action.markdown }
+            : p
+        ),
+      };
+
+    case "UPDATE_ARTIFACT_TITLE":
+      return {
+        ...state,
+        panels: state.panels.map((p) =>
+          p.id === action.panelId && p.type === "artifact"
+            ? { ...p, title: action.title }
+            : p
+        ),
+      };
 
     // ── Cluster brain panel actions ─────────────────────────────────
 

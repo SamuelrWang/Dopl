@@ -171,6 +171,22 @@ export interface SkillPanelData extends BasePanelData {
   status: "active" | "draft";
 }
 
+/**
+ * ArtifactPanelData — workspace-shared markdown document spawned by
+ * promoting a private-chat artifact (Agent Prompt or Context File) onto
+ * the canvas. Editable in place via the same MarkdownMessage renderer
+ * the rest of the app uses. Visibility flips from private → shared at
+ * the moment of promotion.
+ */
+export interface ArtifactPanelData extends BasePanelData {
+  type: "artifact";
+  title: string;
+  markdown: string;
+  /** Where the promotion came from (private chat conversation + message). */
+  sourceConversationId?: string;
+  sourceMessageId?: string;
+}
+
 /** Discriminated union — add more panel types here later */
 export type Panel =
   | ChatPanelData
@@ -181,7 +197,8 @@ export type Panel =
   | KnowledgePanelData
   | SkillsPanelData
   | KnowledgeBasePanelData
-  | SkillPanelData;
+  | SkillPanelData
+  | ArtifactPanelData;
 
 /** Returns true if the user is allowed to close this panel. */
 export function isPanelDeletable(panel: Panel): boolean {
@@ -267,6 +284,11 @@ export const KNOWLEDGE_BASE_PANEL_SIZE = {
 export const SKILL_PANEL_SIZE = {
   width: 520,
   height: 700,
+} as const;
+
+export const ARTIFACT_PANEL_SIZE = {
+  width: 560,
+  height: 720,
 } as const;
 
 export const BROWSE_PANEL_MIN_SIZE = {
@@ -677,6 +699,34 @@ export type CanvasAction =
       name: string;
       description: string;
       status: "active" | "draft";
+    }
+  | {
+      /**
+       * Spawn an artifact panel at (x, y) with synthesized markdown.
+       * Used by the private-chat "Promote to canvas" flow. Caller picks
+       * (x, y) — typically the canvas viewport center via
+       * computeNewPanelPosition.
+       */
+      type: "CREATE_ARTIFACT_PANEL";
+      id: string;
+      x: number;
+      y: number;
+      title: string;
+      markdown: string;
+      sourceConversationId?: string;
+      sourceMessageId?: string;
+    }
+  | {
+      /** In-place edit of an artifact panel's markdown body. */
+      type: "UPDATE_ARTIFACT_MARKDOWN";
+      panelId: string;
+      markdown: string;
+    }
+  | {
+      /** Rename an artifact panel. */
+      type: "UPDATE_ARTIFACT_TITLE";
+      panelId: string;
+      title: string;
     }
   | {
       /** Attach DB-generated id and slug to a cluster after API sync. */

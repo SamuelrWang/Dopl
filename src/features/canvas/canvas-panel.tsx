@@ -25,6 +25,7 @@ import { KnowledgePanelBody } from "./panels/knowledge/knowledge-panel";
 import { SkillsPanelBody } from "./panels/skills/skills-panel";
 import { KnowledgeBasePanelBody } from "./panels/knowledge-base/knowledge-base-panel";
 import { SkillPanelBody } from "./panels/skill/skill-panel";
+import { ArtifactPanelBody } from "./panels/artifact/artifact-panel";
 import { useOnboardingContext } from "@/features/onboarding/components/onboarding-provider";
 import { ChatExpiryBar } from "./canvas-panel-expiry";
 import { useCanvasPanelDrag } from "./use-canvas-panel-drag";
@@ -110,7 +111,9 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
                     ? `KB · ${panel.name}`
                     : panel.type === "skill"
                       ? `Skill · ${panel.name}`
-                      : "Panel";
+                      : panel.type === "artifact"
+                        ? `Artifact · ${panel.title}`
+                        : "Panel";
 
   return (
     <div
@@ -274,6 +277,7 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
         {panel.type === "skills" && <SkillsPanelBody panel={panel} />}
         {panel.type === "knowledge-base" && <KnowledgeBasePanelBody panel={panel} />}
         {panel.type === "skill" && <SkillPanelBody panel={panel} />}
+        {panel.type === "artifact" && <ArtifactPanelBody panel={panel} dispatch={dispatch} />}
       </div>
 
       {/* Confirmation dialog for closing chat panels with messages */}

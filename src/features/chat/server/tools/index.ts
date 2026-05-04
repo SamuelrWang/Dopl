@@ -4,24 +4,52 @@ import type { CanvasContextPayload } from "../canvas-context";
 import type { ToolHandler, ToolResult } from "./types";
 import { executeSearchKnowledgeBase, executeGetEntryDetails } from "./search";
 import {
-  executeListUserClusters,
+  executeListWorkspaceClusters,
   executeListClusterBrainMemories,
   executeAddClusterBrainMemory,
   executeUpdateClusterBrainMemory,
   executeRemoveClusterBrainMemory,
   executeRewriteClusterBrainInstructions,
 } from "./brain";
+import {
+  executeListWorkspaceKnowledgeBases,
+  executeSearchWorkspaceKnowledge,
+  executeReadKnowledgeEntry,
+  type KnowledgeScopeFilters,
+} from "./knowledge";
+import {
+  executeListWorkspaceSkills,
+  executeReadSkillFile,
+  type SkillsScopeFilters,
+} from "./skills";
+import {
+  executeEmitAgentPrompt,
+  executeEmitContextFile,
+} from "./artifacts";
 
 /**
- * Tool schemas sent to Claude. Order here is cosmetic — Claude picks a
- * tool by name, not position. When adding a tool, also register its
- * handler in HANDLERS below.
+ * Per-chat scope filters the user picks via the ClusterScopePicker. The
+ * route handler reads this off the conversation row and passes it
+ * through to every tool dispatch so each tool can narrow its query.
+ *
+ * Currently consumed by the workspace-knowledge and skills tools. The
+ * cluster-brain tools accept it for future parity (no-op today).
  */
-export const TOOLS: Anthropic.Tool[] = [
+export interface ChatScopeFilters
+  extends KnowledgeScopeFilters,
+    SkillsScopeFilters {
+  clusterIds?: string[];
+}
+
+export type ChatMode = "workspace" | "private";
+
+// ── Tool catalogue ─────────────────────────────────────────────────
+
+const SEARCH_TOOLS: Anthropic.Tool[] = [
   {
     name: "search_knowledge_base",
     description:
-      "Search the Dopl knowledge base for AI/automation setups matching a query. Returns ranked results with titles, summaries, and similarity scores.",
+      "Search the public Dopl catalog for AI/automation setups matching a query. Use this for ideas, patterns, and reference implementations from the wider community — NOT for the user's own workspace data. Returns ranked results with titles and summaries.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -34,7 +62,7 @@ export const TOOLS: Anthropic.Tool[] = [
   {
     name: "get_entry_details",
     description:
-      "Get full details of a specific setup entry including README, agents.md, manifest, and tags. Use this when you need implementation details from a specific setup.",
+      "Get full details (README, agents.md, manifest, tags) of one Dopl catalog entry. Use after search_knowledge_base when you need implementation specifics from a result.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -43,14 +71,13 @@ export const TOOLS: Anthropic.Tool[] = [
       required: ["entry_id"],
     },
   },
-  // ── Cluster brain editing ────────────────────────────────────────
-  // When the chat is inside a cluster, `cluster_slug` must match the
-  // enclosing cluster's slug — enforced server-side. When the chat is
-  // on the open canvas, the user can target any cluster they own.
+];
+
+const CLUSTER_READ_TOOLS: Anthropic.Tool[] = [
   {
-    name: "list_user_clusters",
+    name: "list_workspace_clusters",
     description:
-      "List the clusters the user owns, with names, slugs, and panel counts. Use this when the user asks you to edit a cluster by name and you need to look up the slug. If the chat is already inside a cluster, you already know the target — no need to call this.",
+      "List the workspace's clusters with names, slugs, and panel counts. Use this when you need to know what clusters exist before reading their brain memories or referencing them in a synthesis.",
     input_schema: {
       type: "object" as const,
       properties: {},
@@ -60,7 +87,7 @@ export const TOOLS: Anthropic.Tool[] = [
   {
     name: "list_cluster_brain_memories",
     description:
-      "Fetch a cluster's current brain — instructions text and the list of memories with their IDs. Call this before updating or removing specific memories so you know their IDs, or before rewriting instructions so you can preserve useful context.",
+      "Fetch a cluster's brain — the synthesized instructions text plus the list of memories (workspace-shared and the calling user's personal memories). Use this when synthesizing context about a cluster's domain.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -69,10 +96,13 @@ export const TOOLS: Anthropic.Tool[] = [
       required: ["cluster_slug"],
     },
   },
+];
+
+const CLUSTER_WRITE_TOOLS: Anthropic.Tool[] = [
   {
     name: "add_cluster_brain_memory",
     description:
-      "Append a new memory to a cluster's brain. Use for preferences/corrections the user tells you to remember about this cluster's domain (e.g., 'prefer Resend over SendGrid', 'always ask before scraping'). Keep the memory short and imperative. Set scope='personal' when the memory is private to this user (their own setup, env, machine, alias) — those memories are visible only to them and never written to the shared canvas brain panel; default scope='workspace' shares with every member of the canvas.",
+      "Append a new memory to a cluster's brain. Use for preferences/corrections the user tells you to remember about this cluster's domain (e.g., 'prefer Resend over SendGrid', 'always ask before scraping'). Keep the memory short and imperative. Set scope='personal' when the memory is private to this user (their own setup, env, machine, alias) — those memories are visible only to them and never written to the shared canvas brain panel; default scope='workspace' shares with every member of the workspace.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -130,10 +160,159 @@ export const TOOLS: Anthropic.Tool[] = [
   },
 ];
 
+const WORKSPACE_KB_TOOLS: Anthropic.Tool[] = [
+  {
+    name: "list_workspace_knowledge_bases",
+    description:
+      "List the workspace's knowledge bases with their slugs, names, and descriptions. The user's own knowledge bases — different from the public Dopl catalog covered by search_knowledge_base.",
+    input_schema: {
+      type: "object" as const,
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: "search_workspace_knowledge",
+    description:
+      "Full-text search across the workspace's knowledge-base entries. Returns matching entries with snippets + the KB they belong to. Use this when the user asks about something they 'have' or 'know' — their own writing/notes — rather than the public catalog.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        query: { type: "string", description: "Search query (free-text)." },
+        max_results: { type: "number", description: "Max results (default 8)." },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "read_knowledge_entry",
+    description:
+      "Read the full body of a workspace knowledge-base entry. Address by entry_id (preferred — get this from search_workspace_knowledge), OR by knowledge_base_slug + title for direct lookups.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        entry_id: { type: "string", description: "Entry UUID (preferred)." },
+        knowledge_base_slug: {
+          type: "string",
+          description: "KB slug, used with `title` when entry_id isn't known.",
+        },
+        title: {
+          type: "string",
+          description: "Entry title, used with `knowledge_base_slug`.",
+        },
+      },
+      required: [],
+    },
+  },
+];
+
+const WORKSPACE_SKILLS_TOOLS: Anthropic.Tool[] = [
+  {
+    name: "list_workspace_skills",
+    description:
+      "List the workspace's skills (procedural prompt templates) with name, description, and when_to_use. Includes private skills the calling user authored.",
+    input_schema: {
+      type: "object" as const,
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: "read_skill_file",
+    description:
+      "Read one file inside a skill (defaults to SKILL.md, the canonical body). Use this when synthesizing context that should include skill procedures.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        skill_id: { type: "string", description: "Skill UUID (preferred)." },
+        skill_slug: {
+          type: "string",
+          description: "Skill slug, used when skill_id isn't known.",
+        },
+        file_name: {
+          type: "string",
+          description: "File name to read. Defaults to 'SKILL.md'.",
+        },
+      },
+      required: [],
+    },
+  },
+];
+
+const ARTIFACT_TOOLS: Anthropic.Tool[] = [
+  {
+    name: "emit_agent_prompt",
+    description:
+      "Render a copy-pasteable Agent Prompt artifact in the chat. Use ONLY when the user has asked for an action you cannot perform yourself — wrap the action as a self-contained prompt the user can paste into their executing agent (Claude Code, Cursor, etc.). The prompt must include all the context the agent needs: target cluster/KB/skill names, constraints, and the exact action.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        title: { type: "string", description: "Short title for the artifact card (≤60 chars)." },
+        prompt: {
+          type: "string",
+          description:
+            "Self-contained markdown prompt for the user's agent. Must work without this conversation as context.",
+        },
+      },
+      required: ["title", "prompt"],
+    },
+  },
+  {
+    name: "emit_context_file",
+    description:
+      "Render a synthesized Context File artifact in the chat — a focused markdown bundle the user can copy or download to drop into an agent session. Use when the user asks for a summary / synthesis / 'context file' / 'everything about X'. Pull bits from across read tools (search_workspace_knowledge, read_skill_file, list_cluster_brain_memories, etc.) and curate; don't dump.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        title: { type: "string", description: "Short title for the artifact card (≤60 chars)." },
+        markdown: {
+          type: "string",
+          description:
+            "The synthesized markdown bundle. Cite sources by name inline.",
+        },
+      },
+      required: ["title", "markdown"],
+    },
+  },
+];
+
+/**
+ * Workspace-mode tool set — preserves the canvas chat surface (search +
+ * cluster reads + cluster brain mutations).
+ */
+export const WORKSPACE_TOOLS: Anthropic.Tool[] = [
+  ...SEARCH_TOOLS,
+  ...CLUSTER_READ_TOOLS,
+  ...CLUSTER_WRITE_TOOLS,
+];
+
+/**
+ * Private-mode tool set — read-only across every workspace data family
+ * + the artifact-emit tools. Crucially: NO write tools. The system
+ * prompt redirects action requests to `emit_agent_prompt` rather than
+ * letting the model call a write tool.
+ */
+export const PRIVATE_TOOLS: Anthropic.Tool[] = [
+  ...SEARCH_TOOLS,
+  ...CLUSTER_READ_TOOLS,
+  ...WORKSPACE_KB_TOOLS,
+  ...WORKSPACE_SKILLS_TOOLS,
+  ...ARTIFACT_TOOLS,
+];
+
+/**
+ * Backwards-compat alias — the old `TOOLS` export pointed at the
+ * workspace toolset. Existing callers that haven't been updated to
+ * pass `mode` get the same behaviour as before.
+ */
+export const TOOLS = WORKSPACE_TOOLS;
+
+// ── Dispatch ───────────────────────────────────────────────────────
+
 const HANDLERS: Record<string, ToolHandler> = {
   search_knowledge_base: executeSearchKnowledgeBase,
   get_entry_details: executeGetEntryDetails,
-  list_user_clusters: executeListUserClusters,
+  list_workspace_clusters: executeListWorkspaceClusters,
   list_cluster_brain_memories: executeListClusterBrainMemories,
   add_cluster_brain_memory: executeAddClusterBrainMemory,
   update_cluster_brain_memory: executeUpdateClusterBrainMemory,
@@ -142,18 +321,61 @@ const HANDLERS: Record<string, ToolHandler> = {
 };
 
 /**
- * Dispatch a single tool call to its handler. Returns a ToolResult with
- * a text blob for Claude and an optional `entries` array the route
- * streams back to the UI as entry cards.
+ * Tool handlers that need scopeFilters threaded in. The standard
+ * ToolHandler signature stops at workspaceId, so these get a sibling
+ * dispatch path with the extra arg.
+ */
+type ScopedToolHandler = (
+  input: Record<string, unknown>,
+  userId?: string,
+  canvasContext?: CanvasContextPayload,
+  workspaceId?: string,
+  scopeFilters?: ChatScopeFilters
+) => Promise<ToolResult>;
+
+const SCOPED_HANDLERS: Record<string, ScopedToolHandler> = {
+  list_workspace_knowledge_bases: executeListWorkspaceKnowledgeBases,
+  search_workspace_knowledge: executeSearchWorkspaceKnowledge,
+  read_knowledge_entry: executeReadKnowledgeEntry,
+  list_workspace_skills: executeListWorkspaceSkills,
+  read_skill_file: executeReadSkillFile,
+  emit_agent_prompt: (input) => executeEmitAgentPrompt(input),
+  emit_context_file: (input) => executeEmitContextFile(input),
+};
+
+/**
+ * Dispatch a single tool call to its handler. When a tool isn't allowed
+ * in the active mode, we return an error string rather than throwing —
+ * Claude treats it as a normal failed tool result and recovers.
  */
 export async function executeTool(
   name: string,
   input: Record<string, unknown>,
   userId?: string,
   canvasContext?: CanvasContextPayload,
-  workspaceId?: string
+  workspaceId?: string,
+  options?: { mode?: ChatMode; scopeFilters?: ChatScopeFilters }
 ): Promise<ToolResult> {
+  const mode: ChatMode = options?.mode ?? "workspace";
+  const allowed = isToolAllowed(name, mode);
+  if (!allowed) {
+    return {
+      result: JSON.stringify({
+        error: `Tool '${name}' is not available in ${mode} chat mode.`,
+      }),
+    };
+  }
+
+  const scoped = SCOPED_HANDLERS[name];
+  if (scoped) {
+    return scoped(input, userId, canvasContext, workspaceId, options?.scopeFilters);
+  }
   const handler = HANDLERS[name];
   if (!handler) return { result: `Unknown tool: ${name}` };
   return handler(input, userId, canvasContext, workspaceId);
+}
+
+function isToolAllowed(name: string, mode: ChatMode): boolean {
+  const set = mode === "private" ? PRIVATE_TOOLS : WORKSPACE_TOOLS;
+  return set.some((t) => t.name === name);
 }

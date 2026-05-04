@@ -11,6 +11,7 @@ import type {
 } from "../types";
 import { Avatar, RolePill, RoleSelect, SelectFilter } from "./member-bits";
 import { AccessMatrix } from "./access-matrix";
+import { MembersTableSkeleton } from "./members-skeleton";
 
 type RoleFilter = MemberRole | "all";
 
@@ -172,11 +173,7 @@ export function MembersTable({
       )}
 
       <div className="flex-1 min-h-0 overflow-y-auto">
-        {loading && members.length === 0 && (
-          <div className="px-4 py-10 text-center text-sm text-text-secondary/60">
-            Loading members…
-          </div>
-        )}
+        {loading && members.length === 0 && <MembersTableSkeleton />}
         {!loading && visibleMembers.length === 0 && (
           <div className="px-4 py-10 text-center text-sm text-text-secondary/60">
             {members.length === 0

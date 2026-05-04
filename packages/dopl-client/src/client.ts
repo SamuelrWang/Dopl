@@ -41,6 +41,14 @@ import type {
   UpdateSkillPatch as SkillUpdatePatch,
 } from "./skills.js";
 import type { ResolvedSkill, Skill, SkillFile } from "./skill-types.js";
+import * as integrations from "./integrations.js";
+import type {
+  ConnectResponse,
+  IntegrationListResponse,
+  IntegrationProvider,
+  IntegrationStatusResponse,
+  PrepareFromIntegrationResponse,
+} from "./integration-types.js";
 
 export type { DoplTransportOptions as DoplClientOptions } from "./transport.js";
 export { parseRetryAfter } from "./retry.js";
@@ -729,5 +737,29 @@ export class DoplClient {
 
   deleteSkillFile(slug: string, fileName: string): Promise<void> {
     return skills.deleteSkillFile(this.transport, slug, fileName);
+  }
+
+  // ── Integrations (Notion / Gmail / Drive / …) ────────────────────
+  connectIntegration(provider: IntegrationProvider): Promise<ConnectResponse> {
+    return integrations.connectIntegration(this.transport, provider);
+  }
+  getIntegrationStatus(
+    provider: IntegrationProvider
+  ): Promise<IntegrationStatusResponse> {
+    return integrations.getIntegrationStatus(this.transport, provider);
+  }
+  listIntegrationObjects(
+    provider: IntegrationProvider,
+    input: { query?: string; cursor?: string; limit?: number } = {}
+  ): Promise<IntegrationListResponse> {
+    return integrations.listIntegrationObjects(this.transport, provider, input);
+  }
+  prepareFromIntegration(input: {
+    provider: IntegrationProvider;
+    object_id: string;
+    kb_id?: string;
+    cluster_id?: string;
+  }): Promise<PrepareFromIntegrationResponse> {
+    return integrations.prepareFromIntegration(this.transport, input);
   }
 }

@@ -10,6 +10,7 @@ import type {
 import { brainProtocolPreamble } from "./templates.js";
 import { registerKnowledgeTools } from "./tools/knowledge.js";
 import { registerSkillTools } from "./tools/skills.js";
+import { registerIntegrationTools } from "./tools/integrations.js";
 import { SKILL_AUTHORING_GUIDE } from "./prompts/skill-authoring-guide.js";
 import { packageVersion } from "./version.js";
 
@@ -2197,6 +2198,13 @@ export function createServer(
   // prompts the agent reads and follows; KBs referenced from inside a
   // skill body are loaded via the kb_* tools.
   registerSkillTools(registerTool, client);
+
+  // ── Third-party integrations (Notion / Gmail / Drive) ─────────────
+  // Four tools that let the agent connect a provider, list its
+  // objects, and ingest them through the existing prepare→submit
+  // pipeline. Branding: tool descriptions never name the OAuth
+  // broker; the user only ever sees Dopl-branded surfaces.
+  registerIntegrationTools(registerTool, client);
 
   return server;
 }
