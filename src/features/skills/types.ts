@@ -36,6 +36,13 @@ export interface SkillConnector extends SourceConnection {
   usedFor: string;
 }
 
+/**
+ * Per-resource visibility (M-10). Mirrors the KB type — see
+ * src/features/knowledge/types.ts for the full doc. Once-public-stays-
+ * public: no path from `'public'` back to `'private'`.
+ */
+export type Visibility = "public" | "private";
+
 export interface Skill {
   id: string;
   workspaceId: string;
@@ -51,6 +58,7 @@ export interface Skill {
   totalInvocations: number;
   status: SkillStatus;
   agentWriteEnabled: boolean;
+  visibility: Visibility;
   createdBy: string | null;
   lastEditedBy: string | null;
   lastEditedSource: SkillWriteSource;
@@ -105,6 +113,7 @@ export interface SkillSummary {
   whenNotToUse: string | null;
   status: SkillStatus;
   agentWriteEnabled: boolean;
+  visibility: Visibility;
   totalInvocations: number;
   updatedAt: string;
 }
@@ -139,6 +148,12 @@ export interface SkillContext {
   workspaceId: string;
   userId: string;
   source: SkillWriteSource;
+  /**
+   * Same semantics as `KnowledgeContext.apiKeyWorkspaceId` — non-null
+   * only when the request used a workspace-scoped API key. Service
+   * layer treats these callers as "no private visibility" per M-10.
+   */
+  apiKeyWorkspaceId?: string | null;
 }
 
 export type { SourceProvider };

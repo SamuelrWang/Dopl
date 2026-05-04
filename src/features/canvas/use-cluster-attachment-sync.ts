@@ -37,6 +37,7 @@
 import { useEffect, useRef } from "react";
 import { useCanvas, useCanvasScope } from "./canvas-store";
 import type { Cluster, Panel } from "./types";
+import { toast } from "@/shared/ui/toast";
 
 type OpKind = "attach-kb" | "detach-kb" | "attach-skill" | "detach-skill";
 
@@ -59,6 +60,19 @@ const pairQueues = new Map<string, Promise<unknown>>();
 function pairKey(op: PendingOp): string {
   const side = op.kind === "attach-kb" || op.kind === "detach-kb" ? "kb" : "skill";
   return `${side}:${op.clusterId}:${op.refId}`;
+}
+
+function describeOp(op: PendingOp): string {
+  switch (op.kind) {
+    case "attach-kb":
+      return "Couldn't attach knowledge base to cluster";
+    case "detach-kb":
+      return "Couldn't detach knowledge base from cluster";
+    case "attach-skill":
+      return "Couldn't attach skill to cluster";
+    case "detach-skill":
+      return "Couldn't detach skill from cluster";
+  }
 }
 
 export function useClusterAttachmentSync(): void {
@@ -129,6 +143,17 @@ export function useClusterAttachmentSync(): void {
         const previous = side === "kb" ? previousKb : previousSkill;
         rollbackPair(lastRef.current, previous, op.clusterId, op.refId);
       }
+      // Surface a single toast for the batch — only one toast can be
+      // active at a time, so we summarize rather than fire one per op.
+      // The UI has already rolled back, so the user sees the panel snap
+      // out of the cluster; the toast explains why.
+      toast({
+        title: failed.length === 1 ? describeOp(failed[0]) : "Cluster sync failed",
+        description:
+          failed.length === 1
+            ? "The change was rolled back. It will retry on your next edit."
+            : `${failed.length} attachment changes failed and were rolled back.`,
+      });
     });
   }, [state.panels, state.clusters, scope?.workspaceId]);
 }

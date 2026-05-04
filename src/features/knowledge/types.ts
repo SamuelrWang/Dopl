@@ -25,6 +25,19 @@ export type KnowledgeEntryType = "note" | "doc" | "transcript" | "imported";
  */
 export type WriteSource = "user" | "agent";
 
+/**
+ * Per-resource visibility (M-10). `public` rows are visible to every
+ * workspace member at their role's default access level; `private`
+ * rows are owner-only — invisible in lists, search, and the canvas
+ * for non-owners (RLS enforces, service layer is belt-and-suspenders).
+ *
+ * Once-public-stays-public: there's no path from `'public'` to
+ * `'private'` in the API. New items default to `'private'` from the
+ * app code (DB column default is `'public'` so existing rows stay
+ * visible, but `createBase` / `createSkill` override).
+ */
+export type Visibility = "public" | "private";
+
 export interface KnowledgeBase {
   id: string;
   workspaceId: string;
@@ -33,6 +46,7 @@ export interface KnowledgeBase {
   publicId: string;
   description: string | null;
   agentWriteEnabled: boolean;
+  visibility: Visibility;
   createdBy: string | null;
   createdAt: string;
   updatedAt: string;
@@ -78,6 +92,15 @@ export interface KnowledgeContext {
   workspaceId: string;
   userId: string;
   source: WriteSource;
+  /**
+   * If the request is authenticated via a workspace-scoped API key,
+   * this is the workspace it's locked to. `null` for session callers
+   * and personal API keys. Service layer reads this to enforce M-10:
+   * workspace-scoped keys must NOT see private items, even ones
+   * owned by the calling user — those keys may be shared between
+   * humans and we don't want a teammate's draft leaking.
+   */
+  apiKeyWorkspaceId?: string | null;
 }
 
 /**

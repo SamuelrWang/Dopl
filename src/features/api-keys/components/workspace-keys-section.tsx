@@ -111,9 +111,22 @@ export function WorkspaceKeysSection({ workspaceSlug }: Props) {
             API keys
           </p>
           <p className="mt-0.5 text-xs text-text-secondary">
-            Your personal keys for this workspace. Each one acts as you —
-            same role, same permissions — so revoke one if a device is
-            lost or a session leaks.
+            <strong className="text-text-primary">Workspace-scoped</strong> keys —
+            locked to this workspace only, with the role you have here. Best
+            for service accounts and CI runners that should never see other
+            workspaces. Each key acts as you — same role, same permissions —
+            so revoke one if a device is lost or a session leaks.
+          </p>
+          <p className="mt-1 text-[11px] text-text-tertiary">
+            For your own laptop / agent that should follow you across
+            workspaces, generate a personal key from{" "}
+            <a
+              href="/settings/keys"
+              className="text-accent-primary hover:underline"
+            >
+              account settings
+            </a>{" "}
+            instead — it can switch between every workspace you join.
           </p>
         </div>
       </div>

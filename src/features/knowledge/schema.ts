@@ -72,6 +72,13 @@ export const KnowledgeBaseCreateSchema = z.object({
     .regex(slugRegex, "Slug must be kebab-case")
     .optional(),
   agentWriteEnabled: z.boolean().optional(),
+  /**
+   * Optional visibility at creation. Service-level `createBase`
+   * defaults to `'private'` when omitted (start drafty, opt to
+   * publish later). The full enum is accepted here so a future "+ New
+   * public KB" affordance can plumb `'public'` without schema churn.
+   */
+  visibility: z.enum(["public", "private"]).optional(),
 });
 export type KnowledgeBaseCreateInput = z.infer<typeof KnowledgeBaseCreateSchema>;
 
@@ -80,6 +87,13 @@ export const KnowledgeBaseUpdateSchema = z.object({
   description: z.string().max(2000).nullable().optional(),
   slug: z.string().min(1).max(80).regex(slugRegex).optional(),
   agentWriteEnabled: z.boolean().optional(),
+  /**
+   * Visibility update is one-way: only `'public'` is accepted here, so
+   * a private item can be promoted to public but never the reverse.
+   * The service layer additionally checks the prior state — once
+   * public, always public. (M-10 product decision.)
+   */
+  visibility: z.literal("public").optional(),
 });
 export type KnowledgeBaseUpdateInput = z.infer<typeof KnowledgeBaseUpdateSchema>;
 

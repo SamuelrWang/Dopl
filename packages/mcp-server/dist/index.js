@@ -8,6 +8,7 @@ const promises_1 = require("fs/promises");
 const client_1 = require("@dopl/client");
 const server_js_1 = require("./server.js");
 const version_js_1 = require("./version.js");
+const orphan_skill_cleanup_js_1 = require("./orphan-skill-cleanup.js");
 function parseArgs() {
     const args = process.argv.slice(2);
     let apiKey = process.env.DOPL_API_KEY || "";
@@ -139,6 +140,12 @@ async function main() {
     });
     const transport = new stdio_js_1.StdioServerTransport();
     await server.connect(transport);
+    // Fire-and-forget cleanup of stale `~/.claude/skills/dopl-*/` dirs
+    // from previous server versions or workspaces the user has left.
+    // Must NOT block boot or serve — failures log and move on.
+    void (0, orphan_skill_cleanup_js_1.cleanupOrphanSkills)(client).catch((err) => {
+        console.error(`[dopl-mcp] Orphan skill cleanup failed: ${err instanceof Error ? err.message : String(err)}`);
+    });
 }
 async function pingWithRetry(client) {
     const delays = [1000, 2000, 4000];

@@ -68,19 +68,40 @@ export interface AuthLike {
   userId: string;
   workspaceId: string;
   apiKeyId?: string | null;
+  apiKeyWorkspaceId?: string | null;
 }
 
 /**
  * Translates a `withWorkspaceAuth` (or MCP equivalent) auth result into
  * a `KnowledgeContext`. Source is derived from the presence of an API
- * key — session callers are users; API-key callers are agents.
+ * key — session callers are users; API-key callers are agents. The
+ * key's workspace lock (if any) is forwarded so the service layer can
+ * enforce M-10 visibility rules.
  */
 export function buildKnowledgeContext(auth: AuthLike): KnowledgeContext {
   return {
     workspaceId: auth.workspaceId,
     userId: auth.userId,
     source: auth.apiKeyId ? "agent" : "user",
+    apiKeyWorkspaceId: auth.apiKeyWorkspaceId ?? null,
   };
+}
+
+/**
+ * M-10 visibility filter — true if the caller can see this KB based
+ * on its visibility, ownership, and the API-key scope:
+ *   - Public items: always visible.
+ *   - Private items via session or personal API key: owner-only.
+ *   - Private items via workspace-scoped API key: never visible
+ *     (those keys may be shared between humans).
+ *
+ * Used both as a row-level filter (`listBases`) and as a 404 gate
+ * (`getBaseById` / `getBaseBySlug` / `getBaseByPublicId`).
+ */
+function canSeeBase(ctx: KnowledgeContext, base: KnowledgeBase): boolean {
+  if (base.visibility === "public") return true;
+  if (ctx.apiKeyWorkspaceId) return false;
+  return base.createdBy === ctx.userId;
 }
 
 // ─── Base reads ─────────────────────────────────────────────────────
@@ -95,17 +116,19 @@ export function buildKnowledgeContext(auth: AuthLike): KnowledgeContext {
 export async function listBases(
   ctx: KnowledgeContext
 ): Promise<KnowledgeBase[]> {
-  const existing = await repo.listBasesForWorkspace(ctx.workspaceId, false);
-  if (existing.length > 0) return existing;
+  const all = await repo.listBasesForWorkspace(ctx.workspaceId, false);
+  const visible = all.filter((b) => canSeeBase(ctx, b));
+  if (visible.length > 0) return visible;
   const workspaceCreatedAt = await fetchWorkspaceCreatedAt(ctx.workspaceId);
   if (
     workspaceCreatedAt !== null &&
     Date.now() - workspaceCreatedAt.getTime() < TWENTY_FOUR_HOURS_MS
   ) {
     await seedWorkspace(ctx);
-    return repo.listBasesForWorkspace(ctx.workspaceId, false);
+    const seeded = await repo.listBasesForWorkspace(ctx.workspaceId, false);
+    return seeded.filter((b) => canSeeBase(ctx, b));
   }
-  return existing;
+  return visible;
 }
 
 export async function getBaseById(
@@ -115,6 +138,9 @@ export async function getBaseById(
   const base = await repo.findBaseById(id, false);
   if (!base) throw new KnowledgeBaseNotFoundError(id);
   assertSameWorkspace(base.workspaceId, ctx.workspaceId, `knowledge base ${id}`);
+  // Hide private items from non-owners and workspace-scoped keys —
+  // 404 is the right shape so visibility itself isn't an oracle.
+  if (!canSeeBase(ctx, base)) throw new KnowledgeBaseNotFoundError(id);
   return base;
 }
 
@@ -124,6 +150,7 @@ export async function getBaseBySlug(
 ): Promise<KnowledgeBase> {
   const base = await repo.findBaseBySlug(ctx.workspaceId, slug, false);
   if (!base) throw new KnowledgeBaseNotFoundError(slug);
+  if (!canSeeBase(ctx, base)) throw new KnowledgeBaseNotFoundError(slug);
   return base;
 }
 
@@ -133,6 +160,7 @@ export async function getBaseByPublicId(
 ): Promise<KnowledgeBase> {
   const base = await repo.findBaseByPublicId(ctx.workspaceId, publicId, false);
   if (!base) throw new KnowledgeBaseNotFoundError(publicId);
+  if (!canSeeBase(ctx, base)) throw new KnowledgeBaseNotFoundError(publicId);
   return base;
 }
 
@@ -161,6 +189,11 @@ export async function createBase(
         slug: baseSlug,
         description: input.description ?? null,
         agentWriteEnabled: input.agentWriteEnabled ?? false,
+        // M-10: new items default to private. Owner immediately sees
+        // it (RLS allows owner-on-private); they "Make public" from
+        // the settings UI when ready to share. The DB column default
+        // is 'public' so existing rows are unaffected.
+        visibility: input.visibility ?? "private",
         createdBy: ctx.userId,
       });
     } catch (err) {
@@ -190,6 +223,25 @@ export async function updateBase(
   if (ctx.source === "agent" && patch.agentWriteEnabled !== undefined) {
     throw new AgentWriteDisabledError(base.id);
   }
+  // M-10: Visibility flips are owner-only and one-way (private →
+  // public). The schema already restricts the value to "public", so
+  // here we just check the prior state + caller is the owner.
+  // Agents are NEVER allowed to publish a private item — that's a
+  // human-only decision (matches how agents can't flip
+  // agent_write_enabled either).
+  if (patch.visibility !== undefined) {
+    if (ctx.source === "agent") {
+      throw new AgentWriteDisabledError(base.id);
+    }
+    if (base.createdBy !== ctx.userId) {
+      throw new KnowledgeBaseNotFoundError(id);
+    }
+    if (base.visibility === "public") {
+      // Already public — no-op. Don't error since the UI may double-
+      // submit; just elide the field from the patch.
+      patch = { ...patch, visibility: undefined };
+    }
+  }
   await assertAgentWriteAllowed(ctx, base);
   if (patch.slug && patch.slug !== base.slug) {
     const taken = await repo.listBaseSlugsForWorkspace(ctx.workspaceId);
@@ -203,6 +255,7 @@ export async function updateBase(
       slug: patch.slug,
       description: patch.description,
       agentWriteEnabled: patch.agentWriteEnabled,
+      visibility: patch.visibility,
     });
   } catch (err) {
     if (errorCode(err) === "23505" && patch.slug) {

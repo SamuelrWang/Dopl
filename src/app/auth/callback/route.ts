@@ -10,10 +10,10 @@ import { ensureDefaultCanvas } from "@/features/workspaces/server/canvases";
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
-  // Default to /welcome so first-time users hit the onboarding flow.
-  // /welcome itself server-redirects to /canvas for already-onboarded
-  // users, so returning sign-ins cost one extra redirect and nothing else.
-  const redirectTo = searchParams.get("redirectTo") || "/welcome";
+  // Workspace + canvas are provisioned below before redirect, so a
+  // first-time user lands directly in their workspace with nothing to
+  // walk through. Deep links override via ?redirectTo=.
+  const redirectTo = searchParams.get("redirectTo") || "/canvas";
   // Optional "install this cluster on landing" intent. Set by the
   // shared-cluster page's "Log in to install" CTA so the visitor lands
   // on /canvas with the cluster already imported, no extra click.

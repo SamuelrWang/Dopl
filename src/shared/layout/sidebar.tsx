@@ -9,6 +9,8 @@ import {
   BookOpen,
   ChevronDown,
   ChevronRight,
+  Edit2,
+  Eye,
   Home,
   LayoutGrid,
   MessageSquare,
@@ -33,6 +35,8 @@ import {
   createEntry as apiCreateEntry,
 } from "@/features/knowledge/client/api";
 import { useKnowledgeRealtime } from "@/features/knowledge/client/realtime";
+import { useMyAccess } from "@/features/members/hooks/use-my-access";
+import type { AccessLevel } from "@/features/members/access-defaults";
 import { toast } from "@/shared/ui/toast";
 import { UserMenu } from "./user-menu";
 
@@ -582,6 +586,12 @@ function KnowledgeNavSection({ pathname, workspaceSegment, workspaceId }: NavPro
   // workspace (e.g. inline rename on the detail page) so the
   // sidebar reflects the change without a page reload.
   useKnowledgeRealtime(workspaceId ?? undefined, refetch);
+  // Access info for read/edit badges. One fetch per workspace, shared
+  // across both nav sections via the parent re-render — the fetch is
+  // idempotent and Cloudflare/browser caches dedupe it. (If we add
+  // more access-aware sections in the future, hoist the hook into the
+  // shared sidebar parent.)
+  const { resolve: resolveAccess } = useMyAccess(workspaceSegment ?? null);
   const kbsForRender = bases ?? [];
 
   /**
@@ -666,12 +676,18 @@ function KnowledgeNavSection({ pathname, workspaceSegment, workspaceId }: NavPro
               ? kb.publicId === currentKbPublicId
               : kb.slug === currentKbSegment;
             const itemClass = cn(
-              "block px-2 py-1 rounded-md text-xs transition-colors cursor-pointer truncate",
+              "flex items-center gap-1.5 px-2 py-1 rounded-md text-xs transition-colors cursor-pointer",
               itemActive
                 ? "bg-white/[0.06] text-text-primary"
                 : "text-text-secondary hover:bg-white/[0.04] hover:text-text-primary",
             );
-            const itemInner = <span className="truncate">{kb.name}</span>;
+            const level = resolveAccess("knowledge_base", kb.id);
+            const itemInner = (
+              <>
+                <span className="truncate flex-1">{kb.name}</span>
+                <AccessIcon level={level} />
+              </>
+            );
             if (workspaceSegment) {
               return (
                 <Link
@@ -735,6 +751,9 @@ function SkillsNavSection({ pathname, workspaceSegment, workspaceId }: NavProps)
   const { data: skills, status, refetch } = useSkills(workspaceId ?? undefined);
   // Live-update on skill renames / creates / deletes.
   useSkillsRealtime(workspaceId ?? undefined, refetch);
+  // Access info for read/edit badges (see KnowledgeNavSection for the
+  // dedupe reasoning).
+  const { resolve: resolveAccess } = useMyAccess(workspaceSegment ?? null);
   const skillsForRender = skills ?? [];
 
   /**
@@ -811,12 +830,18 @@ function SkillsNavSection({ pathname, workspaceSegment, workspaceId }: NavProps)
               ? skill.publicId === currentSkillPublicId
               : skill.slug === currentSkillSegment;
             const itemClass = cn(
-              "block px-2 py-1 rounded-md text-xs transition-colors cursor-pointer truncate",
+              "flex items-center gap-1.5 px-2 py-1 rounded-md text-xs transition-colors cursor-pointer",
               itemActive
                 ? "bg-white/[0.06] text-text-primary"
                 : "text-text-secondary hover:bg-white/[0.04] hover:text-text-primary",
             );
-            const itemInner = <span className="truncate">{skill.name}</span>;
+            const level = resolveAccess("skill", skill.id);
+            const itemInner = (
+              <>
+                <span className="truncate flex-1">{skill.name}</span>
+                <AccessIcon level={level} />
+              </>
+            );
             if (workspaceSegment) {
               return (
                 <Link
@@ -854,5 +879,36 @@ function SkillsNavSection({ pathname, workspaceSegment, workspaceId }: NavProps)
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * Tiny right-aligned read/edit indicator on each KB / skill sidebar row.
+ * Eye icon for read-only, pencil for editable. Hidden until the access
+ * fetch resolves so we don't flash the wrong state. Owners and admins
+ * always render the pencil (the my-access endpoint short-circuits them
+ * to "edit"). Native `title` tooltip — keeps zero new dependencies.
+ */
+function AccessIcon({ level }: { level: AccessLevel | null }) {
+  if (!level) return null;
+  if (level === "edit") {
+    return (
+      <span
+        className="shrink-0 inline-flex items-center text-text-secondary/40 cursor-default"
+        title="You can edit this"
+        aria-label="You can edit this"
+      >
+        <Edit2 size={10} />
+      </span>
+    );
+  }
+  return (
+    <span
+      className="shrink-0 inline-flex items-center text-text-secondary/40 cursor-default"
+      title="Read-only — ask an admin for edit access"
+      aria-label="Read-only"
+    >
+      <Eye size={10} />
+    </span>
   );
 }

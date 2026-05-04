@@ -10,6 +10,7 @@ import {
 import { cn } from "@/shared/lib/utils";
 import { PageTopBar } from "@/shared/layout/page-top-bar";
 import { EditableTitle } from "@/shared/layout/editable-title";
+import { VisibilityPill, MakePublicAction } from "@/shared/ui/visibility-pill";
 import { useRefetchOnFocus } from "@/shared/hooks/use-refetch-on-focus";
 import { toast } from "@/shared/ui/toast";
 import { AlertTriangle } from "lucide-react";
@@ -55,6 +56,9 @@ interface Props {
   resolved: ResolvedSkill;
   workspaceKbs: WorkspaceKbSummary[];
   workspaceSlug: string;
+  /** True if the current user is the skill's owner — gates the inline
+   *  "Make public" button next to the visibility pill. */
+  isOwner: boolean;
 }
 
 const KNOWN_PROVIDERS = new Set<SourceProvider>([
@@ -81,7 +85,12 @@ const AUTOSAVE_DELAY_MS = 1500;
  * are immediately visible. Per-file debounce timers fire a PUT after
  * 1.5s of inactivity.
  */
-export function SkillView({ resolved, workspaceKbs, workspaceSlug }: Props) {
+export function SkillView({
+  resolved,
+  workspaceKbs,
+  workspaceSlug,
+  isOwner,
+}: Props) {
   const { skill } = resolved;
 
   // Inline-editable display name. Mirror the prop until the user
@@ -91,6 +100,12 @@ export function SkillView({ resolved, workspaceKbs, workspaceSlug }: Props) {
   useEffect(() => {
     setDisplayedName(skill.name);
   }, [skill.name]);
+  const [displayedVisibility, setDisplayedVisibility] = useState(
+    skill.visibility,
+  );
+  useEffect(() => {
+    setDisplayedVisibility(skill.visibility);
+  }, [skill.visibility]);
 
   const [files, setFiles] = useState<SkillFile[]>(() =>
     sortFiles(resolved.files)
@@ -480,17 +495,37 @@ export function SkillView({ resolved, workspaceKbs, workspaceSlug }: Props) {
     <>
       <PageTopBar
         title={
-          <EditableTitle
-            value={displayedName}
-            onSave={async (next) => {
-              const saved = await updateSkill(skill.slug, { name: next });
-              setDisplayedName(saved.name);
-            }}
-            onError={(err) =>
-              toast({ title: "Couldn't rename", description: errMessage(err) })
-            }
-            placeholder="Untitled skill"
-          />
+          <div className="flex items-center gap-2 min-w-0">
+            <EditableTitle
+              value={displayedName}
+              onSave={async (next) => {
+                const saved = await updateSkill(skill.slug, { name: next });
+                setDisplayedName(saved.name);
+              }}
+              onError={(err) =>
+                toast({ title: "Couldn't rename", description: errMessage(err) })
+              }
+              placeholder="Untitled skill"
+            />
+            <VisibilityPill visibility={displayedVisibility} />
+            {displayedVisibility === "private" && isOwner ? (
+              <MakePublicAction
+                resourceType="skill"
+                onConfirm={async () => {
+                  try {
+                    await updateSkill(skill.slug, { visibility: "public" });
+                    setDisplayedVisibility("public");
+                    toast({ title: "Skill is now public" });
+                  } catch (err) {
+                    toast({
+                      title: "Couldn't publish",
+                      description: errMessage(err),
+                    });
+                  }
+                }}
+              />
+            ) : null}
+          </div>
         }
         trailing={
           <>

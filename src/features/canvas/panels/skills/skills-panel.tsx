@@ -13,6 +13,7 @@ import { useSkills } from "@/features/skills/client/hooks";
 import { useSkillsRealtime } from "@/features/skills/client/realtime";
 import { createSkill } from "@/features/skills/client/api";
 import type { Skill } from "@/features/skills/types";
+import { Skeleton } from "@/shared/ui/skeleton";
 
 export function SkillsPanelBody({ panel }: { panel: SkillsPanelData }) {
   const { state, dispatch } = useCanvas();
@@ -128,17 +129,22 @@ export function SkillsPanelBody({ panel }: { panel: SkillsPanelData }) {
       )}
 
       <div className="flex-1 overflow-y-auto px-5 py-3">
-        {status === "loading" && !skills && (
-          <div className="text-xs text-white/40">Loading…</div>
-        )}
+        {status === "loading" && !skills && <SkillRowSkeletonList />}
         {status === "error" && (
-          <div className="text-xs text-red-400">
+          <div className="rounded-lg border border-red-400/20 bg-red-500/5 p-4 text-xs text-red-400">
             {error?.message || "Failed to load skills"}
           </div>
         )}
         {skills && skills.length === 0 && (
-          <div className="rounded-lg border border-dashed border-white/[0.12] p-8 text-center text-xs text-white/45">
-            No skills yet. Click <strong>+ New skill</strong> to add one.
+          <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-white/[0.12] px-6 py-12 text-center">
+            <Sparkles size={20} className="text-white/30" />
+            <div>
+              <div className="text-xs text-white/60">No skills yet</div>
+              <div className="mt-1 text-[11px] text-white/40">
+                Click <strong className="text-white/60">+ New skill</strong> to
+                add one.
+              </div>
+            </div>
           </div>
         )}
         {skills && skills.length > 0 && (
@@ -154,6 +160,31 @@ export function SkillsPanelBody({ panel }: { panel: SkillsPanelData }) {
         )}
       </div>
     </div>
+  );
+}
+
+function SkillRowSkeletonList() {
+  return (
+    <ul
+      className="divide-y divide-white/[0.04]"
+      aria-label="Loading skills"
+    >
+      {[0, 1, 2].map((i) => (
+        <li key={i} className="py-3">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 flex-1 space-y-2">
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-3.5 w-32 bg-white/[0.06]" />
+                <Skeleton className="h-3.5 w-12 rounded-full bg-white/[0.06]" />
+              </div>
+              <Skeleton className="h-3 w-full bg-white/[0.04]" />
+              <Skeleton className="h-3 w-3/4 bg-white/[0.04]" />
+            </div>
+            <Skeleton className="h-3 w-16 bg-white/[0.04]" />
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }
 

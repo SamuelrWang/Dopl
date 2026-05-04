@@ -3,6 +3,7 @@ import type {
   BuildResult,
   CanvasPanel,
   WorkspaceSummary,
+  WorkspaceListItem,
   ClusterDetail,
   ClusterKnowledgeEntry,
   ClusterSkillFull,
@@ -262,8 +263,8 @@ export class DoplClient {
 
   // ── Workspaces ────────────────────────────────────────────────────
 
-  async listWorkspaces(): Promise<{ workspaces: WorkspaceSummary[] }> {
-    return this.transport.request<{ workspaces: WorkspaceSummary[] }>(
+  async listWorkspaces(): Promise<{ workspaces: WorkspaceListItem[] }> {
+    return this.transport.request<{ workspaces: WorkspaceListItem[] }>(
       "/api/workspaces",
       { toolName: "list_workspaces" }
     );

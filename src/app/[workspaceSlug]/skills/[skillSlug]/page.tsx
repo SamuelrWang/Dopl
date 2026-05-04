@@ -51,6 +51,7 @@ export default async function SkillDetailPage({ params }: PageProps) {
       resolved={resolved}
       workspaceKbs={workspaceKbs}
       workspaceSlug={workspaceSegment(workspace)}
+      isOwner={skill.createdBy === user.id}
     />
   );
 }

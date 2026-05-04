@@ -8,6 +8,16 @@ import { withUserAuth } from "./with-auth";
 export interface WorkspaceAuthContext {
   userId: string;
   apiKeyId?: string;
+  /**
+   * If the request is authenticated via a workspace-scoped API key
+   * (`api_keys.workspace_id IS NOT NULL`), this is the workspace it's
+   * locked to. `null` for session callers and user-scoped (personal)
+   * API keys. Service layer reads this to enforce M-10's "private
+   * items are hidden from workspace-scoped keys" rule — those keys
+   * may be shared across humans (CI runners, service accounts), so
+   * leaking a teammate's private content through them is unsafe.
+   */
+  apiKeyWorkspaceId?: string | null;
   workspaceId: string;
   workspaceSlug: string;
   workspacePublicId: string;
@@ -107,6 +117,7 @@ export function withWorkspaceAuth(
       return handler(request, {
         userId: ctx.userId,
         apiKeyId: ctx.apiKeyId,
+        apiKeyWorkspaceId: ctx.apiKeyWorkspaceId ?? null,
         workspaceId: workspace.id,
         workspaceSlug: workspace.slug,
         workspacePublicId: workspace.publicId,

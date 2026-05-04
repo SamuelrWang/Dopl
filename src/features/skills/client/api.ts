@@ -108,6 +108,9 @@ export interface UpdateSkillPatch {
   slug?: string;
   status?: "active" | "draft";
   agentWriteEnabled?: boolean;
+  /** Promote a private skill to public. M-10 product rule: this is a
+   *  one-way street; the server rejects `'private'` here. */
+  visibility?: "public";
 }
 
 export async function updateSkill(

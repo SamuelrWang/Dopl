@@ -13,6 +13,7 @@ import { useKnowledgeBases } from "@/features/knowledge/client/hooks";
 import { useKnowledgeRealtime } from "@/features/knowledge/client/realtime";
 import { createBase } from "@/features/knowledge/client/api";
 import type { KnowledgeBase } from "@/features/knowledge/types";
+import { Skeleton } from "@/shared/ui/skeleton";
 
 export function KnowledgePanelBody({ panel }: { panel: KnowledgePanelData }) {
   const { state, dispatch } = useCanvas();
@@ -127,18 +128,22 @@ export function KnowledgePanelBody({ panel }: { panel: KnowledgePanelData }) {
       )}
 
       <div className="flex-1 overflow-y-auto p-5">
-        {status === "loading" && !bases && (
-          <div className="text-xs text-white/40">Loading…</div>
-        )}
+        {status === "loading" && !bases && <KnowledgeCardSkeletonGrid />}
         {status === "error" && (
-          <div className="text-xs text-red-400">
+          <div className="rounded-lg border border-red-400/20 bg-red-500/5 p-4 text-xs text-red-400">
             {error?.message || "Failed to load knowledge bases"}
           </div>
         )}
         {bases && bases.length === 0 && (
-          <div className="rounded-lg border border-dashed border-white/[0.12] p-8 text-center text-xs text-white/45">
-            No knowledge bases yet. Click <strong>+ New base</strong> to create
-            one.
+          <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-white/[0.12] px-6 py-12 text-center">
+            <BookOpen size={20} className="text-white/30" />
+            <div>
+              <div className="text-xs text-white/60">No knowledge bases yet</div>
+              <div className="mt-1 text-[11px] text-white/40">
+                Click <strong className="text-white/60">+ New base</strong> to
+                create one.
+              </div>
+            </div>
           </div>
         )}
         {bases && bases.length > 0 && (
@@ -153,6 +158,30 @@ export function KnowledgePanelBody({ panel }: { panel: KnowledgePanelData }) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function KnowledgeCardSkeletonGrid() {
+  return (
+    <div
+      className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3"
+      aria-label="Loading knowledge bases"
+    >
+      {[0, 1, 2].map((i) => (
+        <div
+          key={i}
+          className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-4"
+        >
+          <div className="mb-2 flex items-start justify-between gap-2">
+            <Skeleton className="h-4 w-24 bg-white/[0.06]" />
+            <Skeleton className="h-4 w-14 rounded-full bg-white/[0.06]" />
+          </div>
+          <Skeleton className="mb-1.5 h-3 w-full bg-white/[0.04]" />
+          <Skeleton className="mb-3 h-3 w-2/3 bg-white/[0.04]" />
+          <Skeleton className="h-2.5 w-16 bg-white/[0.04]" />
+        </div>
+      ))}
     </div>
   );
 }

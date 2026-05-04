@@ -18,7 +18,7 @@ import type {
  */
 
 export const SKILL_COLS =
-  "id, workspace_id, slug, public_id, name, description, when_to_use, when_not_to_use, connectors, examples, recent_runs, total_invocations, status, agent_write_enabled, created_by, last_edited_by, last_edited_source, created_at, updated_at, deleted_at";
+  "id, workspace_id, slug, public_id, name, description, when_to_use, when_not_to_use, connectors, examples, recent_runs, total_invocations, status, agent_write_enabled, visibility, created_by, last_edited_by, last_edited_source, created_at, updated_at, deleted_at";
 
 /**
  * Lighter projection for `skill_list` and the index page row — drops
@@ -26,7 +26,7 @@ export const SKILL_COLS =
  * camelCase domain shape stays consistent.
  */
 export const SKILL_SUMMARY_COLS =
-  "id, workspace_id, slug, public_id, name, description, when_to_use, when_not_to_use, status, agent_write_enabled, total_invocations, created_by, last_edited_by, last_edited_source, created_at, updated_at, deleted_at";
+  "id, workspace_id, slug, public_id, name, description, when_to_use, when_not_to_use, status, agent_write_enabled, visibility, total_invocations, created_by, last_edited_by, last_edited_source, created_at, updated_at, deleted_at";
 
 export const SKILL_FILE_COLS =
   "id, workspace_id, skill_id, name, body, position, created_by, last_edited_by, last_edited_source, created_at, updated_at, deleted_at";
@@ -49,6 +49,7 @@ export interface SkillRow {
   total_invocations: number;
   status: string;
   agent_write_enabled: boolean;
+  visibility: "public" | "private";
   created_by: string | null;
   last_edited_by: string | null;
   last_edited_source: string;
@@ -95,6 +96,7 @@ export function mapSkillRow(row: SkillRow): Skill {
     totalInvocations: row.total_invocations,
     status: row.status as SkillStatus,
     agentWriteEnabled: row.agent_write_enabled,
+    visibility: row.visibility,
     createdBy: row.created_by,
     lastEditedBy: row.last_edited_by,
     lastEditedSource: row.last_edited_source as SkillWriteSource,

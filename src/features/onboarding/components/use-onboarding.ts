@@ -16,10 +16,10 @@ export interface OnboardingStep {
   autoAdvance: boolean;
 }
 
-// Post-welcome canvas tour. These three steps are shown as popup coach
-// cards on top of /canvas right after the user finishes /welcome (signaled
-// via ?fromWelcome=1). MCP connection and intro copy already happened on
-// /welcome, so the tour is just a short orientation.
+// First-run canvas tour. Shown as popup coach cards on top of /canvas
+// for fresh accounts that haven't dismissed it. MCP connection lives on
+// /settings/keys; the tour is a short orientation pointing the user at
+// the Canvas surfaces.
 export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     key: "canvas_intro",

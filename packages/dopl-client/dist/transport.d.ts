@@ -1,3 +1,22 @@
+import { AsyncLocalStorage } from "node:async_hooks";
+/**
+ * Per-async-call workspace override propagated through the call stack
+ * via Node's AsyncLocalStorage. The MCP server uses this to route a
+ * single tool call to a different workspace without mutating the
+ * transport's stored `workspaceId` (which is the SESSION default).
+ *
+ * Resolution order in `buildHeaders()`:
+ *   1. Explicit `workspaceIdOverride` on RequestOptions (per-call,
+ *      visible at the call site).
+ *   2. AsyncLocalStorage value (per-tool-call, set by the MCP
+ *      `registerTool` wrapper — invisible to client.method() callers).
+ *   3. Transport's stored `workspaceId` (session default).
+ *   4. None — server falls back to user's default workspace.
+ *
+ * Exported so callers in `@dopl/mcp-server` can wrap a handler in
+ * `workspaceContext.run(id, fn)`.
+ */
+export declare const workspaceContext: AsyncLocalStorage<string>;
 export interface DoplTransportOptions {
     toolHeaderName?: string;
     clientIdentifier?: string;
@@ -15,6 +34,14 @@ export interface RequestOptions {
     timeoutMs?: number;
     toolName?: string;
     retries?: number;
+    /**
+     * Per-call workspace id, overriding both the AsyncLocalStorage value
+     * (if any) and the transport's stored `workspaceId`. Lets a caller
+     * direct a single request to a specific workspace without flipping
+     * session-level state. The id must be a UUID — slug resolution
+     * happens at the MCP layer before this point.
+     */
+    workspaceIdOverride?: string;
 }
 export declare class DoplTransport {
     private readonly baseUrl;
@@ -39,7 +66,7 @@ export declare class DoplTransport {
      * with jittered backoff just like GET. 401/403 still short-circuit;
      * a successful response (`res.ok || 204`) returns void.
      */
-    requestNoContent(path: string, method: string, toolName: string, body?: unknown): Promise<void>;
-    buildHeaders(toolName?: string, withJsonBody?: boolean): Record<string, string>;
+    requestNoContent(path: string, method: string, toolName: string, body?: unknown, workspaceIdOverride?: string): Promise<void>;
+    buildHeaders(toolName?: string, withJsonBody?: boolean, workspaceIdOverride?: string): Record<string, string>;
     private doFetch;
 }

@@ -78,7 +78,15 @@ export interface WorkspaceSummary {
     createdAt: string;
     updatedAt: string;
 }
-export type WorkspaceRole = "owner" | "admin" | "editor" | "viewer";
+/**
+ * Workspace summary plus the caller's role on it. Returned by
+ * `client.listWorkspaces()` so the agent can pick a workspace to switch
+ * into without a second round trip to discover the role.
+ */
+export interface WorkspaceListItem extends WorkspaceSummary {
+    role: WorkspaceRole;
+}
+export type WorkspaceRole = "owner" | "admin" | "member" | "viewer";
 export interface ResolvedWorkspace {
     workspace: WorkspaceSummary;
     role: WorkspaceRole;

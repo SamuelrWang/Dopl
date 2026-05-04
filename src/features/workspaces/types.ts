@@ -47,6 +47,15 @@ export interface Workspace {
 }
 
 /**
+ * Workspace row paired with the calling user's effective role on it.
+ * Used by `GET /api/workspaces` and the MCP `list_workspaces` tool so
+ * the agent can pick a workspace to switch into without a second query.
+ */
+export interface WorkspaceWithRole extends Workspace {
+  role: Role;
+}
+
+/**
  * A canvas is a page/view inside a workspace. Today every workspace has
  * exactly one (slug='main'); the table is in place so multi-canvas can
  * land later without a schema migration. Distinct from the infinite-

@@ -86,6 +86,52 @@ export async function requireResourceAccess(
 }
 
 /**
+ * Resolve the calling user's effective access on every resource in the
+ * workspace, in one round trip. Returns:
+ *   - `defaultLevel` derived from their role (admin+ → "edit"), and
+ *   - per-resource overrides where they exist.
+ *
+ * The sidebar uses this to badge each KB/skill row with a read/edit
+ * icon without firing N `getResourceAccess` calls. Owners/admins
+ * short-circuit to "edit" with no override fetch — overrides don't
+ * apply to them anyway.
+ *
+ * Returns null if the caller isn't an active member of the workspace.
+ */
+export async function listMyAccess(
+  workspaceId: string,
+  userId: string
+): Promise<{
+  defaultLevel: AccessLevel;
+  overrides: AccessOverrideRow[];
+} | null> {
+  const membership = await findMembership(workspaceId, userId);
+  if (!membership || membership.status !== "active") return null;
+
+  if (meetsMinRole(membership.role, "admin")) {
+    // Admin+ is unconditionally "edit" — overrides don't apply.
+    return { defaultLevel: "edit", overrides: [] };
+  }
+
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("workspace_resource_access")
+    .select("resource_type, resource_id, level")
+    .eq("workspace_id", workspaceId)
+    .eq("user_id", userId);
+  if (error) throw error;
+
+  return {
+    defaultLevel: defaultLevelForRole(membership.role),
+    overrides: ((data ?? []) as OverrideRow[]).map((r) => ({
+      resourceType: r.resource_type,
+      resourceId: r.resource_id,
+      level: r.level,
+    })),
+  };
+}
+
+/**
  * List every override row for a single member. Used by the matrix UI
  * to render their current toggles. The UI joins these against the full
  * resource list (KBs, skills, canvases) it fetches separately, falling

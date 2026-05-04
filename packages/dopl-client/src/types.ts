@@ -80,7 +80,20 @@ export interface WorkspaceSummary {
   updatedAt: string;
 }
 
-export type WorkspaceRole = "owner" | "admin" | "editor" | "viewer";
+/**
+ * Workspace summary plus the caller's role on it. Returned by
+ * `client.listWorkspaces()` so the agent can pick a workspace to switch
+ * into without a second round trip to discover the role.
+ */
+export interface WorkspaceListItem extends WorkspaceSummary {
+  role: WorkspaceRole;
+}
+
+// Mirrors the DB enum on `workspace_members.role` post the editor →
+// member rename (migration 20260502130000_editor_to_member). Older
+// builds of this client typed the middle role as "editor"; the value
+// has been migrated in-place server-side.
+export type WorkspaceRole = "owner" | "admin" | "member" | "viewer";
 
 export interface ResolvedWorkspace {
   workspace: WorkspaceSummary;

@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-  type ReactNode,
-} from "react";
-import { useRouter } from "next/navigation";
+import { createContext, useContext, type ReactNode } from "react";
 import { useOnboarding } from "./use-onboarding";
 import { OnboardingCoachCard } from "./onboarding-tour";
 
@@ -32,28 +25,13 @@ export function useOnboardingContext() {
 }
 
 /* ------------------------------------------------------------------ */
-/*  ?fromWelcome=1 gate                                                */
-/*                                                                      */
-/*  The coach-card tour runs only on the very first landing from the   */
-/*  /welcome flow, identified by ?fromWelcome=1 in the URL. We read it */
-/*  via window.location to avoid forcing a Suspense boundary on        */
-/*  useSearchParams() in the root layout. Once the tour ends (or was   */
-/*  already dismissed), the param is stripped so a refresh doesn't     */
-/*  re-show it.                                                         */
-/* ------------------------------------------------------------------ */
-
-function useFromWelcomeFlag(): boolean {
-  const [fromWelcome, setFromWelcome] = useState(false);
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
-    setFromWelcome(params.get("fromWelcome") === "1");
-  }, []);
-  return fromWelcome;
-}
-
-/* ------------------------------------------------------------------ */
 /*  Provider                                                            */
+/*                                                                      */
+/*  After the /welcome flow was ripped out (M-7), the coach-card tour  */
+/*  is gated purely on the persisted onboarding state from             */
+/*  useOnboarding — a fresh user lands directly on /canvas and the     */
+/*  tour fires until they complete or dismiss it. There is no longer  */
+/*  a URL flag in front of it.                                          */
 /* ------------------------------------------------------------------ */
 
 interface OnboardingProviderProps {
@@ -65,8 +43,6 @@ export function OnboardingProvider({
   userId,
   children,
 }: OnboardingProviderProps) {
-  const router = useRouter();
-  const fromWelcome = useFromWelcomeFlag();
   const {
     isActive,
     currentStep,
@@ -79,21 +55,7 @@ export function OnboardingProvider({
     dismiss,
   } = useOnboarding(userId);
 
-  const showCoachCard = fromWelcome && isActive && currentStepDef;
-
-  // Clean the ?fromWelcome=1 flag once the tour wraps up (either completed
-  // or dismissed) so a refresh doesn't try to re-activate anything.
-  useEffect(() => {
-    if (!fromWelcome) return;
-    if (isActive) return;
-    if (typeof window === "undefined") return;
-    const url = new URL(window.location.href);
-    if (url.searchParams.has("fromWelcome")) {
-      url.searchParams.delete("fromWelcome");
-      const next = url.pathname + (url.search ? url.search : "") + url.hash;
-      router.replace(next);
-    }
-  }, [fromWelcome, isActive, router]);
+  const showCoachCard = isActive && currentStepDef;
 
   return (
     <OnboardingContext.Provider value={{ completeStep, highlightPanelType }}>

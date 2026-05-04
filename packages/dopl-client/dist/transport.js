@@ -3,12 +3,31 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.DoplTransport = void 0;
+exports.DoplTransport = exports.workspaceContext = void 0;
 const debug_1 = __importDefault(require("debug"));
+const node_async_hooks_1 = require("node:async_hooks");
 const errors_js_1 = require("./errors.js");
 const retry_js_1 = require("./retry.js");
 const log = (0, debug_1.default)("dopl:client");
 const DEFAULT_TIMEOUT_MS = 30_000;
+/**
+ * Per-async-call workspace override propagated through the call stack
+ * via Node's AsyncLocalStorage. The MCP server uses this to route a
+ * single tool call to a different workspace without mutating the
+ * transport's stored `workspaceId` (which is the SESSION default).
+ *
+ * Resolution order in `buildHeaders()`:
+ *   1. Explicit `workspaceIdOverride` on RequestOptions (per-call,
+ *      visible at the call site).
+ *   2. AsyncLocalStorage value (per-tool-call, set by the MCP
+ *      `registerTool` wrapper — invisible to client.method() callers).
+ *   3. Transport's stored `workspaceId` (session default).
+ *   4. None — server falls back to user's default workspace.
+ *
+ * Exported so callers in `@dopl/mcp-server` can wrap a handler in
+ * `workspaceContext.run(id, fn)`.
+ */
+exports.workspaceContext = new node_async_hooks_1.AsyncLocalStorage();
 class DoplTransport {
     baseUrl;
     apiKey;
@@ -36,14 +55,14 @@ class DoplTransport {
         return this.baseUrl;
     }
     async request(path, options = {}) {
-        const { method = "GET", body, timeoutMs = DEFAULT_TIMEOUT_MS, toolName, retries, } = options;
+        const { method = "GET", body, timeoutMs = DEFAULT_TIMEOUT_MS, toolName, retries, workspaceIdOverride, } = options;
         const maxAttempts = 1 +
             (retries ?? (retry_js_1.IDEMPOTENT_METHODS.has(method) ? retry_js_1.DEFAULT_GET_RETRIES : 0));
         let lastError = null;
         for (let attempt = 0; attempt < maxAttempts; attempt++) {
             const started = Date.now();
             try {
-                const res = await this.doFetch(path, method, body, timeoutMs, toolName);
+                const res = await this.doFetch(path, method, body, timeoutMs, toolName, workspaceIdOverride);
                 const duration = Date.now() - started;
                 if (res.ok) {
                     log("%s %s → %d in %dms", method, path, res.status, duration);
@@ -88,12 +107,12 @@ class DoplTransport {
      * with jittered backoff just like GET. 401/403 still short-circuit;
      * a successful response (`res.ok || 204`) returns void.
      */
-    async requestNoContent(path, method, toolName, body) {
+    async requestNoContent(path, method, toolName, body, workspaceIdOverride) {
         const maxAttempts = 1 + (retry_js_1.IDEMPOTENT_METHODS.has(method) ? retry_js_1.DEFAULT_GET_RETRIES : 0);
         let lastError = null;
         for (let attempt = 0; attempt < maxAttempts; attempt++) {
             try {
-                const res = await this.doFetch(path, method, body, DEFAULT_TIMEOUT_MS, toolName);
+                const res = await this.doFetch(path, method, body, DEFAULT_TIMEOUT_MS, toolName, workspaceIdOverride);
                 if (res.ok || res.status === 204) {
                     log("%s %s → %d", method, path, res.status);
                     return;
@@ -131,7 +150,7 @@ class DoplTransport {
         }
         throw lastError ?? new errors_js_1.DoplNetworkError(`Exhausted retries: ${method} ${path}`);
     }
-    buildHeaders(toolName, withJsonBody = true) {
+    buildHeaders(toolName, withJsonBody = true, workspaceIdOverride) {
         const headers = {
             Authorization: `Bearer ${this.apiKey}`,
         };
@@ -141,17 +160,22 @@ class DoplTransport {
             headers[this.toolHeaderName] = toolName;
         if (this.clientIdentifier)
             headers["X-Dopl-Client"] = this.clientIdentifier;
-        if (this.workspaceId)
-            headers["X-Workspace-Id"] = this.workspaceId;
+        // Resolution order: explicit per-call override > AsyncLocalStorage
+        // (set by the MCP `registerTool` wrapper for one tool call) > the
+        // transport's stored workspaceId (session default). Falling through
+        // omits the header so the server picks the user's default workspace.
+        const effectiveWorkspaceId = workspaceIdOverride ?? exports.workspaceContext.getStore() ?? this.workspaceId;
+        if (effectiveWorkspaceId)
+            headers["X-Workspace-Id"] = effectiveWorkspaceId;
         return headers;
     }
-    async doFetch(path, method, body, timeoutMs, toolName) {
+    async doFetch(path, method, body, timeoutMs, toolName, workspaceIdOverride) {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), timeoutMs);
         try {
             return await fetch(`${this.baseUrl}${path}`, {
                 method,
-                headers: this.buildHeaders(toolName),
+                headers: this.buildHeaders(toolName, true, workspaceIdOverride),
                 body: body ? JSON.stringify(body) : undefined,
                 signal: controller.signal,
             });

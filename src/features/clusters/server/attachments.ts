@@ -88,7 +88,7 @@ async function assertKbWritable(
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("knowledge_bases")
-    .select("id, agent_write_enabled")
+    .select("id, agent_write_enabled, visibility")
     .eq("id", knowledgeBaseId)
     .eq("workspace_id", scope.workspaceId)
     .is("deleted_at", null)
@@ -99,6 +99,16 @@ async function assertKbWritable(
       404,
       "KNOWLEDGE_BASE_NOT_FOUND",
       "Knowledge base not found in this workspace"
+    );
+  }
+  // M-10: clusters live on the workspace-shared canvas, so attaching a
+  // private KB would expose it to every member. Refuse the attach with
+  // a clear message — the user has to "Make public" first.
+  if (data.visibility === "private") {
+    throw new HttpError(
+      403,
+      "PRIVATE_RESOURCE",
+      "This knowledge base is private. Make it public from its settings before adding it to a cluster."
     );
   }
   if (scope.source === "agent" && !data.agent_write_enabled) {
@@ -117,7 +127,7 @@ async function assertSkillWritable(
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("skills")
-    .select("id, agent_write_enabled")
+    .select("id, agent_write_enabled, visibility")
     .eq("id", skillId)
     .eq("workspace_id", scope.workspaceId)
     .is("deleted_at", null)
@@ -128,6 +138,14 @@ async function assertSkillWritable(
       404,
       "SKILL_NOT_FOUND",
       "Skill not found in this workspace"
+    );
+  }
+  // M-10: same canvas-leakage reasoning as for KBs.
+  if (data.visibility === "private") {
+    throw new HttpError(
+      403,
+      "PRIVATE_RESOURCE",
+      "This skill is private. Make it public from its settings before adding it to a cluster."
     );
   }
   if (scope.source === "agent" && !data.agent_write_enabled) {

@@ -11,6 +11,12 @@
  */
 export type KnowledgeEntryType = "note" | "doc" | "transcript" | "imported";
 export type KnowledgeWriteSource = "user" | "agent";
+/**
+ * Per-resource visibility (M-10). `'public'` rows are visible to every
+ * workspace member at their role's default access; `'private'` rows
+ * are owner-only.
+ */
+export type KnowledgeVisibility = "public" | "private";
 export interface KnowledgeBase {
     id: string;
     workspaceId: string;
@@ -19,6 +25,7 @@ export interface KnowledgeBase {
     publicId: string;
     description: string | null;
     agentWriteEnabled: boolean;
+    visibility: KnowledgeVisibility;
     createdBy: string | null;
     createdAt: string;
     updatedAt: string;

@@ -9,6 +9,12 @@
 export type SkillStatus = "active" | "draft";
 export type SkillWriteSource = "user" | "agent";
 
+/**
+ * Per-resource visibility (M-10). Mirrors KnowledgeVisibility — see
+ * knowledge-types.ts for the full doc.
+ */
+export type SkillVisibility = "public" | "private";
+
 export type SkillProvider =
   | "slack"
   | "google-drive"
@@ -55,6 +61,7 @@ export interface Skill {
   totalInvocations: number;
   status: SkillStatus;
   agentWriteEnabled: boolean;
+  visibility: SkillVisibility;
   createdBy: string | null;
   lastEditedBy: string | null;
   lastEditedSource: SkillWriteSource;

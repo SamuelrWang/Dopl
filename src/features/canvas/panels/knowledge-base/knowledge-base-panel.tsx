@@ -26,11 +26,14 @@ import {
   fetchEntry,
   updateBase,
   updateEntry,
+  updateFolder,
 } from "@/features/knowledge/client/api";
 import type {
   KnowledgeEntry,
   KnowledgeFolder,
 } from "@/features/knowledge/types";
+import { Skeleton } from "@/shared/ui/skeleton";
+import { InlineEditableRow } from "@/shared/ui/inline-editable-row";
 
 interface Props {
   panel: KnowledgeBasePanelData;
@@ -47,6 +50,17 @@ export function KnowledgeBasePanelBody({ panel }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set(["__root__"]));
   const [agentToggling, setAgentToggling] = useState(false);
   const [agentEnabled, setAgentEnabled] = useState(panel.agentWriteEnabled);
+  /**
+   * Inline create-then-rename state. When the user hits "+", we create
+   * the row server-side with a default name ("Untitled folder" /
+   * "Untitled entry") and stash its id here. The matching tree row
+   * renders <InlineEditableRow> instead of the static label, with the
+   * default name pre-selected so typing replaces it. Commit issues the
+   * rename; Escape on an untouched stub deletes it.
+   */
+  const [editing, setEditing] = useState<
+    { kind: "folder" | "entry"; id: string } | null
+  >(null);
 
   useEffect(() => {
     setAgentEnabled(panel.agentWriteEnabled);
@@ -73,27 +87,27 @@ export function KnowledgeBasePanelBody({ panel }: Props) {
   }
 
   async function handleAddFolder(parentId: string | null) {
-    const name = window.prompt("Folder name");
-    if (!name || !name.trim()) return;
     try {
-      await createFolder(panel.knowledgeBaseId, {
+      const folder = await createFolder(panel.knowledgeBaseId, {
         parentId,
-        name: name.trim(),
+        name: "Untitled folder",
         position: 0,
       });
       refetch();
+      if (parentId) {
+        setExpanded((prev) => new Set(prev).add(parentId));
+      }
+      setEditing({ kind: "folder", id: folder.id });
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to create folder");
     }
   }
 
   async function handleAddEntry(folderId: string | null) {
-    const title = window.prompt("Entry title");
-    if (!title || !title.trim()) return;
     try {
       const entry = await createEntry(panel.knowledgeBaseId, {
         folderId,
-        title: title.trim(),
+        title: "Untitled entry",
         excerpt: null,
         body: "",
         entryType: "note",
@@ -104,9 +118,41 @@ export function KnowledgeBasePanelBody({ panel }: Props) {
       if (folderId) {
         setExpanded((prev) => new Set(prev).add(folderId));
       }
+      setEditing({ kind: "entry", id: entry.id });
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to create entry");
     }
+  }
+
+  async function handleCommitRename(
+    kind: "folder" | "entry",
+    id: string,
+    next: string
+  ) {
+    if (kind === "folder") {
+      await updateFolder(id, { name: next });
+    } else {
+      await updateEntry(id, { title: next });
+    }
+    refetch();
+    setEditing(null);
+  }
+
+  async function handleCancelStub(kind: "folder" | "entry", id: string) {
+    // Delete the just-created stub on Escape so the user isn't left with
+    // an "Untitled folder" they didn't actually want.
+    try {
+      if (kind === "folder") {
+        await deleteFolder(id);
+      } else {
+        await deleteEntry(id);
+        if (selectedEntryId === id) setSelectedEntryId(null);
+      }
+    } catch {
+      // Best effort — refetch will reconcile if delete failed.
+    }
+    refetch();
+    setEditing(null);
   }
 
   async function handleDeleteEntry(entry: KnowledgeEntry) {
@@ -186,9 +232,7 @@ export function KnowledgeBasePanelBody({ panel }: Props) {
       <div className="flex flex-1 min-h-0">
         {/* Tree */}
         <div className="w-[210px] shrink-0 overflow-y-auto border-r border-white/[0.06] py-2">
-          {status === "loading" && !data && (
-            <div className="px-3 text-[11px] text-white/40">Loading…</div>
-          )}
+          {status === "loading" && !data && <TreePaneSkeleton />}
           {data && (
             <TreeNodes
               nodes={tree.rootChildren}
@@ -200,6 +244,9 @@ export function KnowledgeBasePanelBody({ panel }: Props) {
               onAddFolder={handleAddFolder}
               onDeleteEntry={handleDeleteEntry}
               onDeleteFolder={handleDeleteFolder}
+              editing={editing}
+              onCommitRename={handleCommitRename}
+              onCancelStub={handleCancelStub}
               depth={0}
             />
           )}
@@ -241,6 +288,23 @@ export function KnowledgeBasePanelBody({ panel }: Props) {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function TreePaneSkeleton() {
+  return (
+    <div className="space-y-1.5 px-3 py-1" aria-label="Loading entries">
+      {[
+        "w-32",
+        "w-24 ml-3",
+        "w-28 ml-3",
+        "w-20",
+        "w-36 ml-3",
+        "w-24",
+      ].map((w, i) => (
+        <Skeleton key={i} className={`h-3 ${w} bg-white/[0.05]`} />
+      ))}
     </div>
   );
 }
@@ -319,6 +383,14 @@ interface TreeNodesProps {
   onAddFolder: (parentId: string | null) => void;
   onDeleteEntry: (entry: KnowledgeEntry) => void;
   onDeleteFolder: (folder: KnowledgeFolder) => void;
+  /** Node currently in inline-edit mode (set by add-then-rename flow). */
+  editing: { kind: "folder" | "entry"; id: string } | null;
+  onCommitRename: (
+    kind: "folder" | "entry",
+    id: string,
+    next: string
+  ) => Promise<void>;
+  onCancelStub: (kind: "folder" | "entry", id: string) => Promise<void>;
   depth: number;
 }
 
@@ -339,49 +411,69 @@ function TreeNodes(props: TreeNodesProps) {
 function FolderRow({ node, ...props }: { node: TreeNode } & TreeNodesProps) {
   const isOpen = props.expanded.has(node.id);
   const padding = 8 + props.depth * 12;
+  const isEditing =
+    props.editing?.kind === "folder" && props.editing.id === node.id;
   return (
     <div className="px-1">
       <div
         className="group flex items-center gap-1 rounded text-[12px] text-white/80 transition-colors hover:bg-white/[0.04]"
         style={{ paddingLeft: padding }}
       >
-        <button
-          type="button"
-          onClick={() => props.onToggle(node.id)}
-          className="flex flex-1 items-center gap-1 py-1 text-left"
-        >
-          {isOpen ? (
-            <ChevronDown size={11} className="shrink-0 text-white/45" />
-          ) : (
+        {isEditing ? (
+          <div className="flex flex-1 items-center gap-1 py-1">
             <ChevronRight size={11} className="shrink-0 text-white/45" />
-          )}
-          {isOpen ? (
-            <FolderOpen size={12} className="shrink-0 text-white/55" />
-          ) : (
             <Folder size={12} className="shrink-0 text-white/55" />
-          )}
-          <span className="truncate">{node.name}</span>
-        </button>
-        <div className="hidden shrink-0 items-center gap-0.5 pr-1 group-hover:flex">
-          <IconButton
-            label="New entry"
-            onClick={(e) => {
-              e.stopPropagation();
-              props.onAddEntry(node.id);
-            }}
+            <InlineEditableRow
+              value={node.name}
+              selectAllOnMount
+              onCommit={(next) =>
+                props.onCommitRename("folder", node.id, next)
+              }
+              onCancel={() => props.onCancelStub("folder", node.id)}
+              className="flex-1"
+            />
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => props.onToggle(node.id)}
+            className="flex flex-1 items-center gap-1 py-1 text-left"
           >
-            <Plus size={10} />
-          </IconButton>
-          <IconButton
-            label="Delete folder"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (node.folder) props.onDeleteFolder(node.folder);
-            }}
-          >
-            <Trash2 size={10} />
-          </IconButton>
-        </div>
+            {isOpen ? (
+              <ChevronDown size={11} className="shrink-0 text-white/45" />
+            ) : (
+              <ChevronRight size={11} className="shrink-0 text-white/45" />
+            )}
+            {isOpen ? (
+              <FolderOpen size={12} className="shrink-0 text-white/55" />
+            ) : (
+              <Folder size={12} className="shrink-0 text-white/55" />
+            )}
+            <span className="truncate">{node.name}</span>
+          </button>
+        )}
+        {!isEditing && (
+          <div className="hidden shrink-0 items-center gap-0.5 pr-1 group-hover:flex">
+            <IconButton
+              label="New entry"
+              onClick={(e) => {
+                e.stopPropagation();
+                props.onAddEntry(node.id);
+              }}
+            >
+              <Plus size={10} />
+            </IconButton>
+            <IconButton
+              label="Delete folder"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (node.folder) props.onDeleteFolder(node.folder);
+              }}
+            >
+              <Trash2 size={10} />
+            </IconButton>
+          </div>
+        )}
       </div>
       {isOpen && node.children && node.children.length > 0 && (
         <TreeNodes {...props} nodes={node.children} depth={props.depth + 1} />
@@ -393,6 +485,8 @@ function FolderRow({ node, ...props }: { node: TreeNode } & TreeNodesProps) {
 function EntryRow({ node, ...props }: { node: TreeNode } & TreeNodesProps) {
   const padding = 22 + props.depth * 12;
   const active = props.selectedEntryId === node.id;
+  const isEditing =
+    props.editing?.kind === "entry" && props.editing.id === node.id;
   return (
     <div className="px-1">
       <div
@@ -403,25 +497,42 @@ function EntryRow({ node, ...props }: { node: TreeNode } & TreeNodesProps) {
         }`}
         style={{ paddingLeft: padding }}
       >
-        <button
-          type="button"
-          onClick={() => props.onSelectEntry(node.id)}
-          className="flex flex-1 items-center gap-1.5 py-1 text-left"
-        >
-          <FileText size={10} className="shrink-0 text-white/40" />
-          <span className="truncate">{node.name}</span>
-        </button>
-        <div className="hidden shrink-0 items-center gap-0.5 pr-1 group-hover:flex">
-          <IconButton
-            label="Delete entry"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (node.entry) props.onDeleteEntry(node.entry);
-            }}
+        {isEditing ? (
+          <div className="flex flex-1 items-center gap-1.5 py-1">
+            <FileText size={10} className="shrink-0 text-white/40" />
+            <InlineEditableRow
+              value={node.name}
+              selectAllOnMount
+              onCommit={(next) =>
+                props.onCommitRename("entry", node.id, next)
+              }
+              onCancel={() => props.onCancelStub("entry", node.id)}
+              className="flex-1"
+            />
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => props.onSelectEntry(node.id)}
+            className="flex flex-1 items-center gap-1.5 py-1 text-left"
           >
-            <Trash2 size={10} />
-          </IconButton>
-        </div>
+            <FileText size={10} className="shrink-0 text-white/40" />
+            <span className="truncate">{node.name}</span>
+          </button>
+        )}
+        {!isEditing && (
+          <div className="hidden shrink-0 items-center gap-0.5 pr-1 group-hover:flex">
+            <IconButton
+              label="Delete entry"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (node.entry) props.onDeleteEntry(node.entry);
+              }}
+            >
+              <Trash2 size={10} />
+            </IconButton>
+          </div>
+        )}
       </div>
     </div>
   );

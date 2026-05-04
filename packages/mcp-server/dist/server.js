@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.createServer = createServer;
 const mcp_js_1 = require("@modelcontextprotocol/sdk/server/mcp.js");
 const zod_1 = require("zod");
+const client_1 = require("@dopl/client");
 const templates_js_1 = require("./templates.js");
 const knowledge_js_1 = require("./tools/knowledge.js");
 const skills_js_1 = require("./tools/skills.js");
@@ -32,6 +33,16 @@ You do NOT need to re-run these on every turn. Once per session is enough, with 
 - **Unrelated turns** → don't refresh. The session-start load covers you.
 
 **Canvas/clusters > local files as source of truth.** If a user's \`CLAUDE.md\` or a \`~/.claude/skills/\` file implies they have a different set of clusters than what \`list_clusters\` returns, trust the MCP result and flag the drift. Local skill files are caches that can fall out of sync; the canvas is canonical.
+
+## Workspaces — the agent can switch on the fly
+
+This MCP server can target any workspace the authenticated user is a member of, not just the one set at startup. The currently active workspace appears in the \`_dopl_status\` footer of every tool response (\`active_workspace: "Name" (slug=..., role=...)\`). You have three controls:
+
+1. **\`list_workspaces\`** — see every workspace the user is in, with role on each. Cached for ~60s.
+2. **\`set_workspace(workspace=<slug_or_id>)\`** — sticky switch: changes the session default for every subsequent tool call.
+3. **\`workspace=<slug_or_id>\` arg on any tool** — single-call override that does not change the session default. Available on every tool.
+
+When the user mentions a workspace by name ("in my acme workspace, …"), prefer the per-call \`workspace=\` arg unless they're settling in for a multi-turn conversation in that workspace — then \`set_workspace\` is cleaner. After \`set_workspace\`, call \`current_workspace\` once to confirm and tell the user.
 
 ## Decision tree — which tool first
 
@@ -234,19 +245,20 @@ function systemPanelDetail(panel) {
     }
 }
 /**
- * Append a pending-ingestion status footer to a tool response so the
- * user's connected agent notices URLs they queued from the Dopl website
- * chat. Fires on every tool response (see the `tool()` helper below).
+ * Append a pending-ingestion + active-workspace status footer to a
+ * tool response. Fires on every tool response so the agent sees both
+ * its current workspace context (M-4) and any ingestion queue
+ * (existing behavior).
  *
  * Skips the footer when:
  *   - the handler returned isError: true (don't muddy error messages)
- *   - the user has zero pending ingestions (keep successful responses
- *     clean when there's nothing to surface)
+ *   - there's nothing useful to report (no pending ingestions AND no
+ *     active workspace — rare, only on a misconfigured session)
  *
  * The pending status is cached inside DoplClient for 5s; ingest_url
  * invalidates the cache so the footer reflects a just-claimed row.
  */
-async function appendDoplStatus(response, client) {
+async function appendDoplStatus(response, client, getActiveWorkspace) {
     if (response.isError)
         return response;
     let status;
@@ -254,12 +266,24 @@ async function appendDoplStatus(response, client) {
         status = await client.getPendingStatus();
     }
     catch {
-        return response;
+        // Pending lookup failed — still surface the active workspace if
+        // we have one, so the agent always knows its context.
+        status = null;
     }
-    if (!status || status.pending_ingestions <= 0)
+    const active = getActiveWorkspace();
+    const pending = status?.pending_ingestions ?? 0;
+    if (pending <= 0 && !active)
         return response;
-    const hint = `Call \`list_pending_ingests\` to see queued URLs, then \`ingest_url(url)\` to claim and process.`;
-    const footer = `\n\n---\n_dopl_status:\n  pending_ingestions: ${status.pending_ingestions}\n  hint: "${hint}"`;
+    const lines = ["", "", "---", "_dopl_status:"];
+    if (active) {
+        lines.push(`  active_workspace: "${active.name}" (slug=${active.slug}, role=${active.role})`);
+    }
+    if (pending > 0) {
+        const hint = `Call \`list_pending_ingests\` to see queued URLs, then \`ingest_url(url)\` to claim and process.`;
+        lines.push(`  pending_ingestions: ${pending}`);
+        lines.push(`  hint: "${hint}"`);
+    }
+    const footer = lines.join("\n");
     // Append to the final text block so the agent sees the footer at the
     // end of a rendered response. If the response has no text content
     // (rare — tools always return text), add a new block.
@@ -280,21 +304,82 @@ async function appendDoplStatus(response, client) {
  * Wrap a tool handler so every successful response ends with the
  * `_dopl_status` footer. Handlers stay unaware of the mechanism.
  */
-function withDoplStatus(handler, client) {
+function withDoplStatus(handler, client, getActiveWorkspace) {
     return async (args) => {
         const result = await handler(args);
-        return appendDoplStatus(result, client);
+        return appendDoplStatus(result, client, getActiveWorkspace);
     };
 }
+/**
+ * Optional per-call `workspace` argument injected into every tool
+ * schema by `registerTool`. Either a workspace slug or UUID. When set,
+ * the tool call routes to that workspace via the transport's
+ * AsyncLocalStorage override; the session default is unchanged.
+ *
+ * Defined as a const so its description renders verbatim in every
+ * tool's MCP introspection — keeps the prompt advice consistent.
+ */
+const WORKSPACE_ARG_SHAPE = {
+    workspace: zod_1.z
+        .string()
+        .optional()
+        .describe("Optional workspace slug or UUID to target for this single call. Defaults to the session's active workspace (see `current_workspace`). Use this when the user mentions a workspace by name; for sticky switching across multiple calls, use `set_workspace` instead."),
+};
+/**
+ * UUID v4-ish detector — good enough to distinguish a workspace id
+ * from a slug for `resolveWorkspaceRef`. Slugs are kebab-case ASCII
+ * and never contain hyphens in this 8-4-4-4-12 layout.
+ */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function createServer(client, options = {}) {
     const isAdmin = options.isAdmin === true;
-    // Active workspace for this MCP session — fixed at startup by index.ts
-    // after the handshake. The slug threads into skill-writer calls so
-    // on-disk SKILL.md paths get scoped per workspace. Default slug
-    // preserves the legacy single-workspace paths so existing users don't
-    // see every skill rename on first upgrade.
+    // Active workspace for this MCP session — seeded from the startup
+    // handshake (index.ts) and mutated by `set_workspace` mid-session.
+    // The slug threads into skill-writer calls so on-disk SKILL.md paths
+    // get scoped per workspace. Default slug preserves the legacy
+    // single-workspace paths so existing users don't see every skill
+    // rename on first upgrade.
     const canvasContext = { slug: options.workspace?.slug ?? "default" };
-    void options.role;
+    let activeWorkspace = options.workspace
+        ? {
+            id: options.workspace.id,
+            slug: options.workspace.slug,
+            name: options.workspace.name,
+            role: options.role ?? "viewer",
+        }
+        : null;
+    /**
+     * Cache of the user's workspace memberships for slug→id resolution.
+     * Refreshed on demand and after a brief TTL. `set_workspace` does
+     * not invalidate it (memberships don't change just because the user
+     * switched the active default).
+     */
+    const WORKSPACE_CACHE_TTL_MS = 60_000;
+    let workspaceListCache = null;
+    async function getWorkspaceList() {
+        if (workspaceListCache &&
+            Date.now() - workspaceListCache.loadedAt < WORKSPACE_CACHE_TTL_MS) {
+            return workspaceListCache.workspaces;
+        }
+        const result = await client.listWorkspaces();
+        workspaceListCache = {
+            workspaces: result.workspaces,
+            loadedAt: Date.now(),
+        };
+        return result.workspaces;
+    }
+    async function resolveWorkspaceRef(ref) {
+        let list = await getWorkspaceList();
+        let match = list.find((w) => UUID_RE.test(ref) ? w.id === ref : w.slug === ref || w.id === ref);
+        if (match)
+            return match;
+        // Force-refresh once — covers the case where the user was added to
+        // a new workspace mid-session and the cache hasn't ticked over.
+        workspaceListCache = null;
+        list = await getWorkspaceList();
+        match = list.find((w) => w.id === ref || w.slug === ref);
+        return match ?? null;
+    }
     const server = new mcp_js_1.McpServer({
         name: "dopl",
         // Source of truth is package.json — read via version.ts so the
@@ -305,14 +390,152 @@ function createServer(client, options = {}) {
         instructions: SERVER_INSTRUCTIONS,
     });
     // ── Tool registration helper ─────────────────────────────────────
-    // Every call funnels through here so the _dopl_status footer is
-    // attached uniformly. Matches the MCP SDK's own zod-inference
-    // signature so handler arg types come through correctly.
+    // Every call funnels through here so:
+    //   1. An optional `workspace` arg is auto-injected on every tool
+    //      (M-1). When provided, the call runs inside a transport-level
+    //      AsyncLocalStorage override so client.* requests carry the
+    //      right `X-Workspace-Id` header — without changing the session
+    //      default.
+    //   2. The response gets the `_dopl_status` footer (active workspace
+    //      + pending ingestions, M-4) uniformly.
+    // Matches the MCP SDK's own zod-inference signature so handler arg
+    // types come through correctly.
     function registerTool(name, description, schema, handler) {
+        // Spread the workspace arg into the published schema so the agent
+        // sees it on every tool's introspection without having to author
+        // it per-tool. Strip it out before calling the original handler so
+        // existing handler signatures keep working.
+        const enhancedSchema = { ...schema, ...WORKSPACE_ARG_SHAPE };
+        const wrapped = async (args) => {
+            const { workspace: workspaceRef, ...rest } = args;
+            const innerArgs = rest;
+            if (workspaceRef) {
+                const resolved = await resolveWorkspaceRef(workspaceRef);
+                if (!resolved) {
+                    return {
+                        isError: true,
+                        content: [
+                            {
+                                type: "text",
+                                text: `Workspace not found: \`${workspaceRef}\`. Call \`list_workspaces\` to see workspaces you have access to, or pass a slug or UUID from there.`,
+                            },
+                        ],
+                    };
+                }
+                // Run the handler inside the AsyncLocalStorage scope so any
+                // client.* call inside it transparently picks up the override
+                // workspace id in its X-Workspace-Id header. Returns to the
+                // session default (or no override) the moment this scope exits.
+                return client_1.workspaceContext.run(resolved.id, () => handler(innerArgs));
+            }
+            return handler(innerArgs);
+        };
+        server.tool(name, description, enhancedSchema, 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        withDoplStatus(wrapped, client, () => activeWorkspace));
+    }
+    // Meta-tools (workspace switcher) skip the auto-injected `workspace`
+    // arg — passing a workspace into "set my workspace" doesn't make
+    // sense, and routing list_workspaces / current_workspace through
+    // ALS adds noise to the description without changing behavior
+    // (membership lookup is user-scoped, not workspace-scoped).
+    function registerMetaTool(name, description, schema, handler) {
         server.tool(name, description, schema, 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        withDoplStatus(handler, client));
+        withDoplStatus(handler, client, () => activeWorkspace));
     }
+    // ── Workspace switcher tools (M-2) ────────────────────────────────
+    // Three small tools that let the agent discover and switch
+    // workspaces at runtime, eliminating the old "one MCP process per
+    // workspace" workaround. Combined with the per-call `workspace` arg
+    // injected by `registerTool` (M-1), the agent has both a sticky
+    // switch (`set_workspace`) and a single-call override (`workspace=...`).
+    registerMetaTool("list_workspaces", "List every workspace the authenticated user is an active member of, with the user's role on each (owner/admin/member/viewer). Use before `set_workspace` when the user mentions a workspace by name and you don't know its slug, or when reporting available workspaces. Result is cached per-session for ~60s.", {}, async () => {
+        const list = await getWorkspaceList();
+        if (list.length === 0) {
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: "You're not an active member of any workspaces yet.",
+                    },
+                ],
+            };
+        }
+        const lines = ["Workspaces you have access to:", ""];
+        for (const w of list) {
+            const star = w.id === activeWorkspace?.id ? " ★" : "";
+            lines.push(`- **${w.name}** (slug: \`${w.slug}\`, role: ${w.role})${star}`);
+        }
+        lines.push("");
+        if (activeWorkspace)
+            lines.push("★ = currently active");
+        lines.push("Use `set_workspace(workspace=<slug_or_id>)` to switch the session default, or pass `workspace=<slug>` on a single tool call.");
+        return {
+            content: [{ type: "text", text: lines.join("\n") }],
+        };
+    });
+    registerMetaTool("set_workspace", "Switch the session's active workspace. Subsequent tool calls without a `workspace` arg target this one. Accepts a slug or UUID from `list_workspaces`. Use when the user wants to work in a different workspace for several turns. For a single call, prefer the `workspace=<slug>` arg on that tool — no switch needed.", {
+        workspace: zod_1.z
+            .string()
+            .min(1)
+            .describe("Workspace slug or UUID, from `list_workspaces`. The currently-active workspace's slug is shown in the `_dopl_status` footer."),
+    }, async ({ workspace: ref }) => {
+        const resolved = await resolveWorkspaceRef(ref);
+        if (!resolved) {
+            return {
+                isError: true,
+                content: [
+                    {
+                        type: "text",
+                        text: `Workspace not found: \`${ref}\`. Call \`list_workspaces\` to see what's available.`,
+                    },
+                ],
+            };
+        }
+        // Two writes: the transport stores the workspace id (so every
+        // future client.* call carries it as the session default), and
+        // the local activeWorkspace state powers the status footer.
+        // canvasContext.slug also follows along for any skill-writer
+        // path scoping that reads it later.
+        client.setWorkspaceId(resolved.id);
+        activeWorkspace = {
+            id: resolved.id,
+            slug: resolved.slug,
+            name: resolved.name,
+            role: resolved.role,
+        };
+        canvasContext.slug = resolved.slug;
+        return {
+            content: [
+                {
+                    type: "text",
+                    text: `Active workspace set to **${resolved.name}** (slug: \`${resolved.slug}\`, role: ${resolved.role}). Subsequent tool calls target this workspace by default.`,
+                },
+            ],
+        };
+    });
+    registerMetaTool("current_workspace", "Return the session's currently active workspace (id, slug, name, role). Use after `set_workspace` to confirm the switch landed, or whenever the user asks 'which workspace am I in?'. Cheap — no DB hit if the session already knows.", {}, async () => {
+        if (!activeWorkspace) {
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: "No active workspace yet. Call `list_workspaces` to see what's available, then `set_workspace(workspace=<slug_or_id>)`.",
+                    },
+                ],
+            };
+        }
+        const lines = [
+            `**${activeWorkspace.name}**`,
+            `- slug: \`${activeWorkspace.slug}\``,
+            `- id: \`${activeWorkspace.id}\``,
+            `- your role: ${activeWorkspace.role}`,
+        ];
+        return {
+            content: [{ type: "text", text: lines.join("\n") }],
+        };
+    });
     // ── search_setups ──────────────────────────────────────────────────
     registerTool("search_setups", "Search the Dopl knowledge base for AI/automation setups. Returns ranked results with summaries. Use this for ANY user request that's AI/automation-shaped — 'how would I build X', 'find me patterns for Y', 'what's a good way to Z' — before synthesizing from scratch. Formatting recommendations / picking the best hit is YOUR job now (server no longer runs Claude synthesis); weigh similarity, read the summaries, and compose in your own context. For scoped search inside one cluster, use `query_cluster` instead.", {
         query: zod_1.z.string().describe("Natural language search query, e.g. 'AI agent for job applications' or 'n8n automation with Supabase'"),

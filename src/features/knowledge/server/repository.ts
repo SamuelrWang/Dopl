@@ -129,6 +129,10 @@ export interface InsertBaseArgs {
   slug: string;
   description?: string | null;
   agentWriteEnabled?: boolean;
+  /** Persisted as `'public'` if omitted (matches DB column default).
+   *  App code passes `'private'` for new items so they start as drafts;
+   *  see `createBase` in service.ts. */
+  visibility?: "public" | "private";
   createdBy: string | null;
 }
 
@@ -143,6 +147,7 @@ export async function insertBase(args: InsertBaseArgs): Promise<KnowledgeBase> {
       public_id: generatePublicId(),
       description: args.description ?? null,
       agent_write_enabled: args.agentWriteEnabled ?? false,
+      visibility: args.visibility ?? "public",
       created_by: args.createdBy,
     })
     .select(KNOWLEDGE_BASE_COLS)
@@ -156,6 +161,10 @@ export interface UpdateBasePatch {
   slug?: string;
   description?: string | null;
   agentWriteEnabled?: boolean;
+  /** Visibility is one-way private → public. The service layer rejects
+   *  any patch that tries to flip back to private; this repo function
+   *  takes whatever it's given and trusts the caller. */
+  visibility?: "public" | "private";
 }
 
 export async function updateBaseRow(
@@ -169,6 +178,7 @@ export async function updateBaseRow(
   if (patch.description !== undefined) update.description = patch.description;
   if (patch.agentWriteEnabled !== undefined)
     update.agent_write_enabled = patch.agentWriteEnabled;
+  if (patch.visibility !== undefined) update.visibility = patch.visibility;
   const { data, error } = await db
     .from("knowledge_bases")
     .update(update)

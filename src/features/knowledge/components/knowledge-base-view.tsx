@@ -5,6 +5,7 @@ import { Settings } from "lucide-react";
 import { PageTopBar } from "@/shared/layout/page-top-bar";
 import { EditableTitle } from "@/shared/layout/editable-title";
 import { toast } from "@/shared/ui/toast";
+import { VisibilityPill, MakePublicAction } from "@/shared/ui/visibility-pill";
 import type {
   KnowledgeBase,
   KnowledgeEntry,
@@ -43,6 +44,9 @@ interface Props {
   /** SSR-fetched body for the initially-selected entry. When provided,
    *  the entry hook seeds from this and skips the first network fetch. */
   initialEntry: KnowledgeEntry | null;
+  /** True if the current user is the KB's owner — gates the inline
+   *  "Make public" button next to the visibility pill. */
+  isOwner: boolean;
 }
 
 export function KnowledgeBaseView({
@@ -52,6 +56,7 @@ export function KnowledgeBaseView({
   folders: initialFolders,
   entries: initialEntries,
   initialEntry,
+  isOwner,
 }: Props) {
   const [folders, setFolders] = useState(initialFolders);
   const [entries, setEntries] = useState(initialEntries);
@@ -65,6 +70,15 @@ export function KnowledgeBaseView({
   useEffect(() => {
     setDisplayedName(base.name);
   }, [base.name]);
+  // Local mirror of base.visibility so the inline "Make public"
+  // affordance updates the pill immediately without waiting for the
+  // next page render. Stays in sync if the prop changes externally.
+  const [displayedVisibility, setDisplayedVisibility] = useState(
+    base.visibility,
+  );
+  useEffect(() => {
+    setDisplayedVisibility(base.visibility);
+  }, [base.visibility]);
 
   const selectedMeta = useMemo(
     () => entries.find((e) => e.id === selectedId) ?? entries[0] ?? null,
@@ -101,19 +115,25 @@ export function KnowledgeBaseView({
   useKnowledgeRealtime(workspaceId, refresh);
 
   const handleCreateFolder = useCallback(
-    async (parentId: string | null, name: string) => {
+    async (parentId: string | null, name: string): Promise<string> => {
       try {
-        await apiCreateFolder(base.id, { parentId, name }, workspaceId);
+        const folder = await apiCreateFolder(
+          base.id,
+          { parentId, name },
+          workspaceId
+        );
         await refresh();
+        return folder.id;
       } catch (err) {
         reportError(err, "Couldn't create folder");
+        throw err;
       }
     },
     [base.id, workspaceId, refresh]
   );
 
   const handleCreateEntry = useCallback(
-    async (folderId: string | null, title: string) => {
+    async (folderId: string | null, title: string): Promise<string> => {
       try {
         const entry = await apiCreateEntry(
           base.id,
@@ -122,8 +142,10 @@ export function KnowledgeBaseView({
         );
         await refresh();
         setSelectedId(entry.id);
+        return entry.id;
       } catch (err) {
         reportError(err, "Couldn't create entry");
+        throw err;
       }
     },
     [base.id, workspaceId, refresh]
@@ -174,15 +196,20 @@ export function KnowledgeBaseView({
 
   const [moveTarget, setMoveTarget] = useState<ContextMenuItem | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  /**
+   * Id of the tree row currently in inline-rename mode. Set by:
+   *   - handleRename (context-menu "Rename") for an existing row
+   *   - tree's "+" / "New folder" affordance after a successful create
+   * Cleared by KnowledgeTree once the inline editor commits or cancels.
+   */
+  const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
 
-  const handleRename = useCallback(
-    async (item: ContextMenuItem) => {
-      const next = window.prompt(
-        item.type === "folder" ? "Folder name" : "Entry title",
-        item.label
-      );
-      if (!next || !next.trim() || next.trim() === item.label) return;
-      const name = next.trim();
+  const handleRename = useCallback((item: ContextMenuItem) => {
+    setEditingNodeId(item.id);
+  }, []);
+
+  const handleCommitRename = useCallback(
+    async (item: ContextMenuItem, name: string) => {
       try {
         if (item.type === "folder") {
           await apiUpdateFolder(item.id, { name }, workspaceId);
@@ -192,10 +219,37 @@ export function KnowledgeBaseView({
         await refresh();
       } catch (err) {
         reportError(err, "Couldn't rename");
+        throw err;
+      } finally {
+        setEditingNodeId(null);
       }
     },
     [workspaceId, refresh]
   );
+
+  const handleCancelStub = useCallback(
+    async (item: ContextMenuItem) => {
+      try {
+        if (item.type === "folder") {
+          await apiDeleteFolder(item.id, workspaceId);
+        } else {
+          await apiDeleteEntry(item.id, workspaceId);
+        }
+        await refresh();
+      } catch {
+        // Best-effort: stub delete failures are silent — the row stays
+        // around named "Untitled folder/entry" and the user can rename
+        // or trash it manually.
+      } finally {
+        setEditingNodeId(null);
+      }
+    },
+    [workspaceId, refresh]
+  );
+
+  const handleClearEditing = useCallback(() => {
+    setEditingNodeId(null);
+  }, []);
 
   const handleDelete = useCallback(
     async (item: ContextMenuItem) => {
@@ -264,19 +318,40 @@ export function KnowledgeBaseView({
     <>
       <PageTopBar
         title={
-          <EditableTitle
-            value={displayedName}
-            onSave={async (next) => {
-              const updated = await apiUpdateBase(
-                base.id,
-                { name: next },
-                workspaceId
-              );
-              setDisplayedName(updated.name);
-            }}
-            onError={(err) => reportError(err, "Couldn't rename")}
-            placeholder="Untitled knowledge base"
-          />
+          <div className="flex items-center gap-2 min-w-0">
+            <EditableTitle
+              value={displayedName}
+              onSave={async (next) => {
+                const updated = await apiUpdateBase(
+                  base.id,
+                  { name: next },
+                  workspaceId
+                );
+                setDisplayedName(updated.name);
+              }}
+              onError={(err) => reportError(err, "Couldn't rename")}
+              placeholder="Untitled knowledge base"
+            />
+            <VisibilityPill visibility={displayedVisibility} />
+            {displayedVisibility === "private" && isOwner ? (
+              <MakePublicAction
+                resourceType="knowledge base"
+                onConfirm={async () => {
+                  try {
+                    await apiUpdateBase(
+                      base.id,
+                      { visibility: "public" },
+                      workspaceId,
+                    );
+                    setDisplayedVisibility("public");
+                    toast({ title: "Knowledge base is now public" });
+                  } catch (err) {
+                    reportError(err, "Couldn't publish");
+                  }
+                }}
+              />
+            ) : null}
+          </div>
         }
         trailing={
           <>
@@ -320,6 +395,10 @@ export function KnowledgeBaseView({
               onRename={handleRename}
               onRequestMove={handleRequestMove}
               onDelete={handleDelete}
+              editingNodeId={editingNodeId}
+              onCommitRename={handleCommitRename}
+              onCancelStub={handleCancelStub}
+              onClearEditing={handleClearEditing}
             />
           </aside>
           <div

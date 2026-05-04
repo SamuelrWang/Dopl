@@ -42,6 +42,13 @@ export const SkillCreateSchema = z.object({
   agentWriteEnabled: z.boolean().optional(),
   /** Optional initial body for SKILL.md. Defaults to empty. */
   body: z.string().max(MAX_BODY_BYTES, bodyMaxMessage).optional(),
+  /**
+   * Optional visibility. Service-level `createSkill` defaults to
+   * `'private'` when omitted (start drafty, opt to publish later).
+   * The full enum is accepted so a future "+ New public skill"
+   * affordance can plumb `'public'` without schema churn.
+   */
+  visibility: z.enum(["public", "private"]).optional(),
 });
 export type SkillCreateInput = z.infer<typeof SkillCreateSchema>;
 
@@ -53,6 +60,12 @@ export const SkillUpdateSchema = z.object({
   slug: z.string().min(1).max(80).regex(slugRegex).optional(),
   status: SkillStatusSchema.optional(),
   agentWriteEnabled: z.boolean().optional(),
+  /**
+   * One-way visibility update: only `'public'` is accepted, so a
+   * private skill can be promoted to public but never the reverse.
+   * (M-10 product decision: once public, always public.)
+   */
+  visibility: z.literal("public").optional(),
 });
 export type SkillUpdateInput = z.infer<typeof SkillUpdateSchema>;
 

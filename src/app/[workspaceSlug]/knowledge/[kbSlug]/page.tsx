@@ -61,6 +61,7 @@ export default async function KnowledgeBaseDetailPage({ params }: PageProps) {
       folders={folders}
       entries={entries}
       initialEntry={initialEntry}
+      isOwner={base.createdBy === user.id}
     />
   );
 }

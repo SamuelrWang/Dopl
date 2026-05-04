@@ -7,6 +7,7 @@ import { readFile } from "fs/promises";
 import { DoplClient, DoplApiError } from "@dopl/client";
 import { createServer } from "./server.js";
 import { clientIdentifier } from "./version.js";
+import { cleanupOrphanSkills } from "./orphan-skill-cleanup.js";
 
 interface BootArgs {
   apiKey: string;
@@ -160,6 +161,17 @@ async function main() {
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
+
+  // Fire-and-forget cleanup of stale `~/.claude/skills/dopl-*/` dirs
+  // from previous server versions or workspaces the user has left.
+  // Must NOT block boot or serve — failures log and move on.
+  void cleanupOrphanSkills(client).catch((err) => {
+    console.error(
+      `[dopl-mcp] Orphan skill cleanup failed: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+  });
 }
 
 async function pingWithRetry(

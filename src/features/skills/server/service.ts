@@ -51,6 +51,7 @@ export interface AuthLike {
   userId: string;
   workspaceId: string;
   apiKeyId?: string | null;
+  apiKeyWorkspaceId?: string | null;
 }
 
 export function buildSkillContext(auth: AuthLike): SkillContext {
@@ -58,23 +59,39 @@ export function buildSkillContext(auth: AuthLike): SkillContext {
     workspaceId: auth.workspaceId,
     userId: auth.userId,
     source: auth.apiKeyId ? "agent" : "user",
+    apiKeyWorkspaceId: auth.apiKeyWorkspaceId ?? null,
   };
+}
+
+/**
+ * M-10 visibility filter for skills — see `canSeeBase` in
+ * features/knowledge/server/service.ts for the matching rationale.
+ *   - Public: always.
+ *   - Private via session or personal API key: owner-only.
+ *   - Private via workspace-scoped API key: never.
+ */
+function canSeeSkill(ctx: SkillContext, skill: Skill): boolean {
+  if (skill.visibility === "public") return true;
+  if (ctx.apiKeyWorkspaceId) return false;
+  return skill.createdBy === ctx.userId;
 }
 
 // ─── Skill reads ────────────────────────────────────────────────────
 
 export async function listSkills(ctx: SkillContext): Promise<Skill[]> {
-  const existing = await repo.listSkillsForWorkspace(ctx.workspaceId);
-  if (existing.length > 0) return existing;
+  const all = await repo.listSkillsForWorkspace(ctx.workspaceId);
+  const visible = all.filter((s) => canSeeSkill(ctx, s));
+  if (visible.length > 0) return visible;
   const workspaceCreatedAt = await fetchWorkspaceCreatedAt(ctx.workspaceId);
   if (
     workspaceCreatedAt !== null &&
     Date.now() - workspaceCreatedAt.getTime() < TWENTY_FOUR_HOURS_MS
   ) {
     await seedWorkspace(ctx);
-    return repo.listSkillsForWorkspace(ctx.workspaceId);
+    const seeded = await repo.listSkillsForWorkspace(ctx.workspaceId);
+    return seeded.filter((s) => canSeeSkill(ctx, s));
   }
-  return existing;
+  return visible;
 }
 
 export async function getSkillBySlug(
@@ -83,6 +100,7 @@ export async function getSkillBySlug(
 ): Promise<Skill> {
   const skill = await repo.findSkillBySlug(ctx.workspaceId, slug);
   if (!skill) throw new SkillNotFoundError(slug);
+  if (!canSeeSkill(ctx, skill)) throw new SkillNotFoundError(slug);
   return skill;
 }
 
@@ -92,6 +110,7 @@ export async function getSkillByPublicId(
 ): Promise<Skill> {
   const skill = await repo.findSkillByPublicId(ctx.workspaceId, publicId);
   if (!skill) throw new SkillNotFoundError(publicId);
+  if (!canSeeSkill(ctx, skill)) throw new SkillNotFoundError(publicId);
   return skill;
 }
 
@@ -174,6 +193,9 @@ export async function createSkill(
         whenNotToUse: input.whenNotToUse ?? null,
         status: input.status ?? "active",
         agentWriteEnabled: input.agentWriteEnabled ?? false,
+        // M-10: new skills default to private. See createBase in
+        // features/knowledge/server/service.ts for the rationale.
+        visibility: input.visibility ?? "private",
         createdBy: ctx.userId,
         source: ctx.source,
       });
@@ -228,6 +250,22 @@ export async function updateSkill(
   if (ctx.source === "agent" && patch.agentWriteEnabled !== undefined) {
     throw new SkillAgentWriteDisabledError(slug);
   }
+  // M-10: visibility flips are owner-only and one-way (private →
+  // public). Schema already restricts to "public"; here we check the
+  // prior state + caller is the owner. Agents can never publish.
+  let effectiveVisibility = patch.visibility;
+  if (effectiveVisibility !== undefined) {
+    if (ctx.source === "agent") {
+      throw new SkillAgentWriteDisabledError(slug);
+    }
+    if (skill.createdBy !== ctx.userId) {
+      throw new SkillNotFoundError(slug);
+    }
+    if (skill.visibility === "public") {
+      // Already public — no-op (UI may double-submit).
+      effectiveVisibility = undefined;
+    }
+  }
   await assertAgentWriteAllowed(ctx, skill);
   if (expectedUpdatedAt && skill.updatedAt !== expectedUpdatedAt) {
     throw new SkillStaleVersionError(expectedUpdatedAt, skill.updatedAt);
@@ -245,6 +283,7 @@ export async function updateSkill(
       slug: patch.slug,
       status: patch.status,
       agentWriteEnabled: patch.agentWriteEnabled,
+      visibility: effectiveVisibility,
       lastEditedBy: ctx.userId,
       lastEditedSource: ctx.source,
     });

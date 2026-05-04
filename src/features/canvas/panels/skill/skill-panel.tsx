@@ -12,11 +12,14 @@ import {
   deleteSkillFile,
   fetchSkill,
   readSkillFile,
+  renameSkillFile,
   updateSkill,
   writeSkillFile,
 } from "@/features/skills/client/api";
 import type { ResolvedSkill, SkillFile } from "@/features/skills/types";
 import { PRIMARY_SKILL_FILE_NAME } from "@/features/skills/types";
+import { Skeleton } from "@/shared/ui/skeleton";
+import { InlineEditableRow } from "@/shared/ui/inline-editable-row";
 
 interface Props {
   panel: SkillPanelData;
@@ -31,6 +34,9 @@ export function SkillPanelBody({ panel }: Props) {
   const [loading, setLoading] = useState(true);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
+  /** Name of the file currently in inline-rename mode (set by the
+   *  add-then-rename flow). */
+  const [editingFileName, setEditingFileName] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -58,11 +64,7 @@ export function SkillPanelBody({ panel }: Props) {
   useSkillsRealtime(scope?.workspaceId, refetch);
 
   if (loading && !resolved) {
-    return (
-      <div className="flex h-full items-center justify-center text-xs text-white/40">
-        Loading…
-      </div>
-    );
+    return <SkillPanelSkeleton />;
   }
 
   if (!resolved) {
@@ -98,17 +100,56 @@ export function SkillPanelBody({ panel }: Props) {
       <FileTabs
         files={files}
         active={activeFile?.name ?? null}
+        editingFileName={editingFileName}
         onSelect={(n) => setActiveFileName(n)}
         onAdd={async () => {
-          const name = window.prompt("File name (.md)");
-          if (!name) return;
+          // Pick a stub name that doesn't collide with an existing file —
+          // the create endpoint 409s on duplicates.
+          const stubName = nextUntitledFileName(files.map((f) => f.name));
           try {
-            const file = await createSkillFile(skill.slug, { name, body: "" });
+            const file = await createSkillFile(skill.slug, {
+              name: stubName,
+              body: "",
+            });
             setActiveFileName(file.name);
             refetch();
+            setEditingFileName(file.name);
           } catch (err) {
             alert(err instanceof Error ? err.message : "Failed to create");
           }
+        }}
+        onCommitRename={async (currentName, next) => {
+          // Server rejects names that don't end in .md.
+          const finalName = next.endsWith(".md") ? next : `${next}.md`;
+          try {
+            const renamed = await renameSkillFile(
+              skill.slug,
+              currentName,
+              finalName
+            );
+            if (activeFileName === currentName) {
+              setActiveFileName(renamed.name);
+            }
+            refetch();
+          } catch (err) {
+            alert(err instanceof Error ? err.message : "Rename failed");
+          } finally {
+            setEditingFileName(null);
+          }
+        }}
+        onCancelStub={async (currentName) => {
+          // Cancel = delete the just-created stub so the tab list isn't
+          // littered with "untitled.md".
+          try {
+            await deleteSkillFile(skill.slug, currentName);
+          } catch {
+            // best-effort
+          }
+          if (activeFileName === currentName) {
+            setActiveFileName(PRIMARY_SKILL_FILE_NAME);
+          }
+          refetch();
+          setEditingFileName(null);
         }}
         onDelete={async (file) => {
           if (file.name === PRIMARY_SKILL_FILE_NAME) return;
@@ -450,14 +491,24 @@ function SkillHeader({
 function FileTabs({
   files,
   active,
+  editingFileName,
   onSelect,
   onAdd,
+  onCommitRename,
+  onCancelStub,
   onDelete,
 }: {
   files: SkillFile[];
   active: string | null;
+  /** Name of the tab in inline-rename mode, or null. */
+  editingFileName: string | null;
   onSelect: (name: string) => void;
   onAdd: () => void;
+  /** Commit an inline rename. Receives the current (stub) name and the
+   *  user-typed new name. */
+  onCommitRename: (currentName: string, next: string) => Promise<void>;
+  /** Cancel + delete the just-created stub. */
+  onCancelStub: (currentName: string) => Promise<void>;
   onDelete: (file: SkillFile) => void;
 }) {
   return (
@@ -465,6 +516,7 @@ function FileTabs({
       {files.map((f) => {
         const isActive = f.name === active;
         const pinned = f.name === PRIMARY_SKILL_FILE_NAME;
+        const isEditing = editingFileName === f.name;
         return (
           <div
             key={f.id}
@@ -474,15 +526,28 @@ function FileTabs({
                 : "border-transparent text-white/45 hover:text-white/75"
             }`}
           >
-            <button
-              type="button"
-              onClick={() => onSelect(f.name)}
-              className="inline-flex items-center gap-1.5"
-            >
-              <FileText size={10} />
-              <span className="truncate">{f.name}</span>
-            </button>
-            {!pinned && isActive && (
+            {isEditing ? (
+              <div className="inline-flex items-center gap-1.5">
+                <FileText size={10} />
+                <InlineEditableRow
+                  value={f.name}
+                  selectAllOnMount
+                  onCommit={(next) => onCommitRename(f.name, next)}
+                  onCancel={() => onCancelStub(f.name)}
+                  inputClassName="font-mono text-[11px] py-0"
+                />
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onSelect(f.name)}
+                className="inline-flex items-center gap-1.5"
+              >
+                <FileText size={10} />
+                <span className="truncate">{f.name}</span>
+              </button>
+            )}
+            {!isEditing && !pinned && isActive && (
               <button
                 type="button"
                 aria-label={`Delete ${f.name}`}
@@ -492,7 +557,7 @@ function FileTabs({
                 <X size={9} />
               </button>
             )}
-            {pinned && (
+            {!isEditing && pinned && (
               <span className="text-[9px] text-white/35">·pinned</span>
             )}
           </div>
@@ -508,6 +573,21 @@ function FileTabs({
       </button>
     </div>
   );
+}
+
+/**
+ * Pick a unique "untitled-N.md" name that doesn't collide with an
+ * existing file. The skill-file create endpoint 409s on duplicates,
+ * so we precompute a free slot client-side instead of catch-and-retry.
+ */
+function nextUntitledFileName(existing: string[]): string {
+  const taken = new Set(existing);
+  if (!taken.has("untitled.md")) return "untitled.md";
+  for (let i = 2; i < 100; i++) {
+    const candidate = `untitled-${i}.md`;
+    if (!taken.has(candidate)) return candidate;
+  }
+  return `untitled-${Date.now()}.md`;
 }
 
 // ── File editor ──────────────────────────────────────────────────────
@@ -734,6 +814,37 @@ function FileEditor({
         className="flex-1 min-h-0 resize-none bg-transparent px-4 py-3 font-mono text-[12px] leading-relaxed text-white/85 placeholder:text-white/25 focus:outline-none"
         placeholder="Write markdown here…"
       />
+    </div>
+  );
+}
+
+function SkillPanelSkeleton() {
+  return (
+    <div
+      className="flex h-full w-full flex-col"
+      aria-label="Loading skill"
+    >
+      {/* Header */}
+      <div className="border-b border-white/[0.06] px-4 py-3">
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-4 w-4 rounded bg-white/[0.06]" />
+          <Skeleton className="h-4 w-40 bg-white/[0.06]" />
+          <Skeleton className="ml-auto h-4 w-16 rounded-full bg-white/[0.06]" />
+        </div>
+        <Skeleton className="mt-2 h-3 w-3/4 bg-white/[0.04]" />
+      </div>
+      {/* File tabs */}
+      <div className="flex gap-1 border-b border-white/[0.06] px-2 py-1.5">
+        <Skeleton className="h-5 w-24 rounded bg-white/[0.05]" />
+        <Skeleton className="h-5 w-20 rounded bg-white/[0.04]" />
+      </div>
+      {/* Body */}
+      <div className="flex-1 space-y-2 px-4 py-3">
+        <Skeleton className="h-3 w-full bg-white/[0.04]" />
+        <Skeleton className="h-3 w-11/12 bg-white/[0.04]" />
+        <Skeleton className="h-3 w-4/5 bg-white/[0.04]" />
+        <Skeleton className="h-3 w-2/3 bg-white/[0.04]" />
+      </div>
     </div>
   );
 }

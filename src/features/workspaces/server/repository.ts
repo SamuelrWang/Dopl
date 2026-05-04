@@ -1,7 +1,12 @@
 import "server-only";
 import { generatePublicId } from "@/shared/lib/id/public-id";
 import { supabaseAdmin } from "@/shared/supabase/admin";
-import type { Workspace, WorkspaceMembership, Role } from "../types";
+import type {
+  Workspace,
+  WorkspaceMembership,
+  WorkspaceWithRole,
+  Role,
+} from "../types";
 import {
   type WorkspaceMemberRow,
   type WorkspaceRow,
@@ -124,6 +129,38 @@ export async function listWorkspacesForUser(userId: string): Promise<Workspace[]
     if (c) workspaces.push(mapWorkspaceRow(c));
   }
   return workspaces.sort(
+    (a, b) =>
+      new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+  );
+}
+
+/**
+ * Same shape as `listWorkspacesForUser` but additionally projects the
+ * member's role on each workspace, so a single query gets both. Used
+ * by `GET /api/workspaces` (response shape) and the MCP
+ * `list_workspaces` tool. Filtered to active memberships only —
+ * pending invitations don't count, revoked members are excluded.
+ */
+export async function listWorkspacesWithRoleForUser(
+  userId: string
+): Promise<WorkspaceWithRole[]> {
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("workspace_members")
+    .select(`role, workspace:workspaces!inner(${WORKSPACE_COLS})`)
+    .eq("user_id", userId)
+    .eq("status", "active");
+  if (error) throw error;
+  const rows = (data ?? []) as unknown as Array<{
+    role: Role;
+    workspace: WorkspaceRow | WorkspaceRow[];
+  }>;
+  const out: WorkspaceWithRole[] = [];
+  for (const row of rows) {
+    const c = Array.isArray(row.workspace) ? row.workspace[0] : row.workspace;
+    if (c) out.push({ ...mapWorkspaceRow(c), role: row.role });
+  }
+  return out.sort(
     (a, b) =>
       new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
   );

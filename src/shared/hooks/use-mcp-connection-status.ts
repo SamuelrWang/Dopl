@@ -1,14 +1,14 @@
 "use client";
 
 /**
- * useMcpConnectionStatus — shared polling hook for the onboarding flows.
+ * useMcpConnectionStatus — shared polling hook for MCP connection UI.
  *
  * Polls GET /api/user/mcp-status every 3s while `enabled` is true. Fires
  * `onConnected` exactly once when the server first reports connected.
  *
- * Consolidates the identical polling loops previously duplicated in:
- *   - src/app/welcome/welcome-mcp-step.tsx
- *   - src/features/onboarding/components/mcp-connect-step.tsx
+ * Used by:
+ *   - src/app/settings/keys/page.tsx (post-rip-out home for MCP install)
+ *   - src/features/onboarding/components/mcp-connect-step.tsx (coach card)
  *
  * The hook does NOT delay the onConnected callback — callers control
  * the "show success state for N ms before advancing" behavior by

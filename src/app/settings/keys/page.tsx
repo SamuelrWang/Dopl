@@ -95,8 +95,17 @@ export default function ApiKeysPage() {
       <h1 className="text-xl font-medium text-text-primary mb-2">
         Connect to Claude
       </h1>
-      <p className="text-sm text-text-tertiary mb-6">
+      <p className="text-sm text-text-tertiary mb-1">
         Connect your Claude to Dopl in one step.
+      </p>
+      <p className="text-xs text-text-tertiary/80 mb-6 leading-relaxed">
+        Keys generated here are <strong className="text-text-secondary">personal</strong> —
+        scoped to your user account, with access to{" "}
+        <strong className="text-text-secondary">every workspace</strong> you join (now and
+        in the future). Your agent can switch between them with the{" "}
+        <code className="text-[11px] bg-black/[0.3] px-1 py-0.5 rounded">set_workspace</code>{" "}
+        tool. For service accounts or CI runners, prefer a workspace-scoped key
+        from that workspace&apos;s settings.
       </p>
 
       {/* Step 1: Generate key */}

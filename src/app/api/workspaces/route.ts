@@ -5,15 +5,18 @@ import { HttpError } from "@/shared/lib/http-error";
 import { WorkspaceCreateSchema } from "@/features/workspaces/schema";
 import {
   createWorkspaceForUser,
-  listMyWorkspaces,
+  listMyWorkspacesWithRole,
 } from "@/features/workspaces/server/service";
 
 /**
- * GET /api/workspaces — list every workspace the caller is an active member of.
+ * GET /api/workspaces — list every workspace the caller is an active
+ * member of, with the caller's role on each. Response shape is a
+ * superset of the pre-role version (existing clients ignore the new
+ * field), and the MCP `list_workspaces` tool reads it directly.
  */
 export const GET = withUserAuth(async (_request, { userId }) => {
   try {
-    const workspaces = await listMyWorkspaces(userId);
+    const workspaces = await listMyWorkspacesWithRole(userId);
     return NextResponse.json({ workspaces });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";

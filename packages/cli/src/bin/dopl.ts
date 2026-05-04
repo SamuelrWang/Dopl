@@ -13,6 +13,7 @@ import { writeError } from "../lib/output.js";
 import { registerAuthCommands } from "../commands/auth.js";
 import { registerWorkspaceCommands } from "../commands/workspace.js";
 import { registerPacksCommands } from "../commands/packs.js";
+import { registerMcpCommands } from "../commands/mcp.js";
 import { maybeNotifyOfUpdate } from "../lib/update-check.js";
 import { packageVersion } from "../lib/version.js";
 
@@ -55,6 +56,7 @@ async function run(): Promise<void> {
   registerAuthCommands(program);
   registerWorkspaceCommands(program);
   registerPacksCommands(program);
+  registerMcpCommands(program);
 
   await program.parseAsync(process.argv);
 }

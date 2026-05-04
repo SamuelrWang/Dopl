@@ -15,11 +15,10 @@ export default function LoginPage() {
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  // Default to /welcome so first-time users hit the onboarding flow.
-  // /welcome itself server-redirects to /canvas for already-onboarded
-  // users, so returning sign-ins cost one extra redirect and nothing else.
-  // Deep links that pass an explicit ?redirectTo= override this.
-  const redirectTo = searchParams.get("redirectTo") || "/welcome";
+  // Workspace + canvas are auto-provisioned in /auth/callback before
+  // redirect, so first-time users land directly in their workspace.
+  // Deep links override via an explicit ?redirectTo=.
+  const redirectTo = searchParams.get("redirectTo") || "/canvas";
   // Optional "install this cluster after sign-in" intent. Threaded
   // through to /auth/callback so OAuth + email-confirm flows can run
   // the fork server-side; on the email/password path we run it from

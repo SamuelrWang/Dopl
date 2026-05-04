@@ -1,5 +1,6 @@
 export { DoplClient } from "./client.js";
 export type { DoplClientOptions } from "./client.js";
+export { workspaceContext } from "./transport.js";
 export {
   DoplApiError,
   DoplAuthError,
@@ -14,6 +15,7 @@ export type {
   CanvasPanelType,
   WorkspaceRole,
   WorkspaceSummary,
+  WorkspaceListItem,
   ClusterAttachedKnowledgeBase,
   ClusterAttachedSkill,
   ClusterDetail,

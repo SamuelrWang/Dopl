@@ -121,12 +121,11 @@ export function touchApiKey(keyId: string): void {
 /**
  * Refresh profiles.mcp_connected_at for the owner of an API key. Fire-and-forget.
  *
- * Every authenticated MCP call touches this timestamp, which means the
- * welcome-step connection detector auto-advances as soon as the user's
- * agent makes any tool call — not just on MCP server boot. This fixes
- * the common failure mode where the MCP server was already running
- * before the user reached /welcome (the one-shot boot ping was stale
- * and the UI waited forever).
+ * Every authenticated MCP call touches this timestamp. The settings/keys
+ * page polls it to confirm a freshly-issued key has actually been used
+ * by the user's agent (any tool call advances the timestamp, not just
+ * MCP server boot — fixes the failure mode where the MCP server was
+ * already running before the user landed on the page).
  *
  * In-process debounce: only writes once every 30s per user, since
  * the client polls every 3s and tolerates 5 minutes of staleness.

@@ -17,7 +17,7 @@
  * `KNOWLEDGE_FOLDER_CYCLE`). The UI surfaces it as a toast.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -44,6 +44,7 @@ import type {
   KnowledgeFolder,
 } from "../types";
 import { TreeContextMenu, type ContextMenuItem } from "./tree-context-menu";
+import { InlineEditableRow } from "@/shared/ui/inline-editable-row";
 
 interface Props {
   baseId: string;
@@ -51,14 +52,49 @@ interface Props {
   entries: KnowledgeEntry[];
   selectedEntryId: string | null;
   onSelect: (entryId: string) => void;
-  onCreateFolder: (parentId: string | null, name: string) => Promise<void>;
-  onCreateEntry: (folderId: string | null, title: string) => Promise<void>;
+  /** Create a folder. Tree calls with the default name; parent issues
+   *  the API call and returns the new id. The tree then drops the
+   *  newly-rendered row into inline-rename mode so the user can rename
+   *  it without a modal prompt. */
+  onCreateFolder: (parentId: string | null, name: string) => Promise<string>;
+  onCreateEntry: (folderId: string | null, title: string) => Promise<string>;
   onMoveFolder: (folderId: string, newParentId: string | null) => Promise<void>;
   onMoveEntry: (entryId: string, newFolderId: string | null) => Promise<void>;
-  /** Context-menu actions — opened by right-click or "More" button. */
+  /** Context-menu actions — opened by right-click or "More" button.
+   *  `onRename` should set the parent's editing state so the matching
+   *  row picks up inline-edit mode; the tree no longer fires a prompt. */
   onRename: (item: ContextMenuItem) => void;
   onRequestMove: (item: ContextMenuItem) => void;
   onDelete: (item: ContextMenuItem) => void;
+  /** Id of the row currently in inline-rename mode, or null. */
+  editingNodeId: string | null;
+  /** Tree calls this with the user-typed name when the inline editor
+   *  commits. Parent issues the rename API call and clears editingNodeId. */
+  onCommitRename: (item: ContextMenuItem, name: string) => Promise<void>;
+  /** Called on Escape for a fresh-create stub — parent should DELETE
+   *  the row and clear editingNodeId. */
+  onCancelStub: (item: ContextMenuItem) => Promise<void>;
+  /** Tree-internal — resets parent's editingNodeId to null without any
+   *  side effect (used after a successful commit, or by Escape on a
+   *  rename that wasn't a fresh stub). */
+  onClearEditing: () => void;
+}
+
+interface InlineEditCtxValue {
+  editingId: string | null;
+  isStub: (id: string) => boolean;
+  beginStubEdit: (id: string) => void;
+  commitRename: (item: ContextMenuItem, name: string) => Promise<void>;
+  cancelStub: (item: ContextMenuItem) => Promise<void>;
+  clearEditing: () => void;
+}
+
+const InlineEditCtx = createContext<InlineEditCtxValue | null>(null);
+
+function useInlineEdit(): InlineEditCtxValue {
+  const v = useContext(InlineEditCtx);
+  if (!v) throw new Error("useInlineEdit outside KnowledgeTree provider");
+  return v;
 }
 
 interface DragItem {
@@ -80,6 +116,10 @@ export function KnowledgeTree({
   onRename,
   onRequestMove,
   onDelete,
+  editingNodeId,
+  onCommitRename,
+  onCancelStub,
+  onClearEditing,
 }: Props) {
   const [expanded, setExpanded] = useExpandedFolders(baseId);
   const [active, setActive] = useState<DragItem | null>(null);
@@ -88,6 +128,49 @@ export function KnowledgeTree({
     y: number;
     item: ContextMenuItem;
   } | null>(null);
+  /**
+   * Track which editing sessions came from a fresh "+ create" so Escape
+   * can call `onCancelStub` (which deletes the stub) vs a regular
+   * rename via context menu where Escape just exits.
+   */
+  const [stubIds, setStubIds] = useState<Set<string>>(() => new Set());
+
+  const inlineEditCtx: InlineEditCtxValue = useMemo(
+    () => ({
+      editingId: editingNodeId,
+      isStub: (id: string) => stubIds.has(id),
+      beginStubEdit: (id: string) => {
+        setStubIds((prev) => {
+          if (prev.has(id)) return prev;
+          const next = new Set(prev);
+          next.add(id);
+          return next;
+        });
+      },
+      commitRename: async (item, name) => {
+        await onCommitRename(item, name);
+        setStubIds((prev) => {
+          if (!prev.has(item.id)) return prev;
+          const next = new Set(prev);
+          next.delete(item.id);
+          return next;
+        });
+      },
+      cancelStub: async (item) => {
+        await onCancelStub(item);
+        setStubIds((prev) => {
+          if (!prev.has(item.id)) return prev;
+          const next = new Set(prev);
+          next.delete(item.id);
+          return next;
+        });
+      },
+      clearEditing: () => {
+        onClearEditing();
+      },
+    }),
+    [editingNodeId, stubIds, onCommitRename, onCancelStub, onClearEditing]
+  );
 
   // Index for cheap lookups during rendering / drag handling.
   const childFolders = useMemo(() => indexByParent(folders), [folders]);
@@ -151,6 +234,7 @@ export function KnowledgeTree({
   }
 
   return (
+    <InlineEditCtx.Provider value={inlineEditCtx}>
     <DndContext
       sensors={sensors}
       onDragStart={handleDragStart}
@@ -199,6 +283,7 @@ export function KnowledgeTree({
         />
       ) : null}
     </DndContext>
+    </InlineEditCtx.Provider>
   );
 }
 
@@ -232,8 +317,8 @@ interface FolderChildrenProps {
   toggle: (id: string) => void;
   selectedEntryId: string | null;
   onSelect: (entryId: string) => void;
-  onCreateFolder: (parentId: string | null, name: string) => Promise<void>;
-  onCreateEntry: (folderId: string | null, title: string) => Promise<void>;
+  onCreateFolder: (parentId: string | null, name: string) => Promise<string>;
+  onCreateEntry: (folderId: string | null, title: string) => Promise<string>;
   openMenu: (e: React.MouseEvent, item: ContextMenuItem) => void;
 }
 
@@ -314,8 +399,8 @@ interface FolderRowProps {
   depth: number;
   isOpen: boolean;
   onToggle: () => void;
-  onCreateFolder: (parentId: string, name: string) => Promise<void>;
-  onCreateEntry: (folderId: string, title: string) => Promise<void>;
+  onCreateFolder: (parentId: string, name: string) => Promise<string>;
+  onCreateEntry: (folderId: string, title: string) => Promise<string>;
   openMenu: (e: React.MouseEvent, item: ContextMenuItem) => void;
   children?: React.ReactNode;
 }
@@ -338,6 +423,8 @@ function FolderRow({
   const dragId = `folder:${folder.id}`;
   const drag = useDraggable({ id: dragId });
   const drop = useDroppable({ id: dragId });
+  const inline = useInlineEdit();
+  const isEditing = inline.editingId === folder.id;
 
   const dragStyle: React.CSSProperties = drag.transform
     ? {
@@ -361,8 +448,8 @@ function FolderRow({
             : "text-text-secondary hover:bg-white/[0.04] hover:text-text-primary"
         )}
         onContextMenu={(e) => openMenu(e, ctxItem)}
-        {...drag.listeners}
-        {...drag.attributes}
+        {...(isEditing ? {} : drag.listeners)}
+        {...(isEditing ? {} : drag.attributes)}
       >
         <button
           type="button"
@@ -385,13 +472,35 @@ function FolderRow({
         ) : (
           <Folder size={12} className="shrink-0 text-text-secondary/70" />
         )}
-        <span className="truncate flex-1">{folder.name}</span>
-        <FolderRowActions
-          folderId={folder.id}
-          onCreateFolder={onCreateFolder}
-          onCreateEntry={onCreateEntry}
-          onMore={(e) => openMenu(e, ctxItem)}
-        />
+        {isEditing ? (
+          <InlineEditableRow
+            value={folder.name}
+            selectAllOnMount
+            onCommit={async (next) => {
+              await inline.commitRename(ctxItem, next);
+              inline.clearEditing();
+            }}
+            onCancel={
+              inline.isStub(folder.id)
+                ? async () => {
+                    await inline.cancelStub(ctxItem);
+                    inline.clearEditing();
+                  }
+                : () => inline.clearEditing()
+            }
+            className="flex-1"
+          />
+        ) : (
+          <span className="truncate flex-1">{folder.name}</span>
+        )}
+        {!isEditing && (
+          <FolderRowActions
+            folderId={folder.id}
+            onCreateFolder={onCreateFolder}
+            onCreateEntry={onCreateEntry}
+            onMore={(e) => openMenu(e, ctxItem)}
+          />
+        )}
       </div>
       {children}
     </>
@@ -405,10 +514,11 @@ function FolderRowActions({
   onMore,
 }: {
   folderId: string;
-  onCreateFolder: (parentId: string, name: string) => Promise<void>;
-  onCreateEntry: (folderId: string, title: string) => Promise<void>;
+  onCreateFolder: (parentId: string, name: string) => Promise<string>;
+  onCreateEntry: (folderId: string, title: string) => Promise<string>;
   onMore: (e: React.MouseEvent) => void;
 }) {
+  const inline = useInlineEdit();
   return (
     <div className="shrink-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100">
       <button
@@ -417,8 +527,12 @@ function FolderRowActions({
         onPointerDown={(e) => e.stopPropagation()}
         onClick={async (e) => {
           e.stopPropagation();
-          const title = window.prompt("Entry title");
-          if (title?.trim()) await onCreateEntry(folderId, title.trim());
+          try {
+            const newId = await onCreateEntry(folderId, "Untitled entry");
+            inline.beginStubEdit(newId);
+          } catch {
+            // Parent already toasts; nothing to do here.
+          }
         }}
         className="w-5 h-5 rounded flex items-center justify-center hover:bg-white/[0.06]"
       >
@@ -430,8 +544,12 @@ function FolderRowActions({
         onPointerDown={(e) => e.stopPropagation()}
         onClick={async (e) => {
           e.stopPropagation();
-          const name = window.prompt("Folder name");
-          if (name?.trim()) await onCreateFolder(folderId, name.trim());
+          try {
+            const newId = await onCreateFolder(folderId, "Untitled folder");
+            inline.beginStubEdit(newId);
+          } catch {
+            // Parent already toasts.
+          }
         }}
         className="w-5 h-5 rounded flex items-center justify-center hover:bg-white/[0.06]"
       >
@@ -467,6 +585,8 @@ function EntryRow({ entry, depth, isSelected, onSelect, openMenu }: EntryRowProp
   const { setNodeRef, listeners, attributes, transform } = useDraggable({
     id: `entry:${entry.id}`,
   });
+  const inline = useInlineEdit();
+  const isEditing = inline.editingId === entry.id;
   const dragStyle: React.CSSProperties = transform
     ? {
         transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
@@ -489,10 +609,10 @@ function EntryRow({ entry, depth, isSelected, onSelect, openMenu }: EntryRowProp
           ? "bg-white/[0.06] text-text-primary"
           : "text-text-secondary hover:bg-white/[0.04] hover:text-text-primary"
       )}
-      onClick={onSelect}
+      onClick={isEditing ? undefined : onSelect}
       onContextMenu={(e) => openMenu(e, ctxItem)}
-      {...listeners}
-      {...attributes}
+      {...(isEditing ? {} : listeners)}
+      {...(isEditing ? {} : attributes)}
     >
       <FileText
         size={12}
@@ -501,19 +621,41 @@ function EntryRow({ entry, depth, isSelected, onSelect, openMenu }: EntryRowProp
           isSelected ? "text-violet-300" : "text-text-secondary/60"
         )}
       />
-      <span className="truncate flex-1">{entry.title}</span>
-      <button
-        type="button"
-        aria-label="More"
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={(e) => {
-          e.stopPropagation();
-          openMenu(e, ctxItem);
-        }}
-        className="shrink-0 w-5 h-5 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-white/[0.06] transition-opacity cursor-pointer"
-      >
-        <MoreHorizontal size={10} className="text-text-secondary/70" />
-      </button>
+      {isEditing ? (
+        <InlineEditableRow
+          value={entry.title}
+          selectAllOnMount
+          onCommit={async (next) => {
+            await inline.commitRename(ctxItem, next);
+            inline.clearEditing();
+          }}
+          onCancel={
+            inline.isStub(entry.id)
+              ? async () => {
+                  await inline.cancelStub(ctxItem);
+                  inline.clearEditing();
+                }
+              : () => inline.clearEditing()
+          }
+          className="flex-1"
+        />
+      ) : (
+        <span className="truncate flex-1">{entry.title}</span>
+      )}
+      {!isEditing && (
+        <button
+          type="button"
+          aria-label="More"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            openMenu(e, ctxItem);
+          }}
+          className="shrink-0 w-5 h-5 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-white/[0.06] transition-opacity cursor-pointer"
+        >
+          <MoreHorizontal size={10} className="text-text-secondary/70" />
+        </button>
+      )}
     </div>
   );
 }
@@ -528,18 +670,23 @@ function AddRowAffordance({
 }: {
   depth: number;
   parentFolderId: string | null;
-  onCreateFolder: (parentId: string | null, name: string) => Promise<void>;
-  onCreateEntry: (folderId: string | null, title: string) => Promise<void>;
+  onCreateFolder: (parentId: string | null, name: string) => Promise<string>;
+  onCreateEntry: (folderId: string | null, title: string) => Promise<string>;
 }) {
   // Only show at root level — folder rows have their own "+" buttons.
   if (depth > 0) return null;
+  const inline = useInlineEdit();
   return (
     <div className="flex items-center gap-1 px-2 py-1.5">
       <button
         type="button"
         onClick={async () => {
-          const title = window.prompt("Entry title");
-          if (title?.trim()) await onCreateEntry(parentFolderId, title.trim());
+          try {
+            const newId = await onCreateEntry(parentFolderId, "Untitled entry");
+            inline.beginStubEdit(newId);
+          } catch {
+            // Parent toasts.
+          }
         }}
         className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-text-secondary/70 hover:text-text-primary hover:bg-white/[0.04] cursor-pointer"
       >
@@ -549,8 +696,12 @@ function AddRowAffordance({
       <button
         type="button"
         onClick={async () => {
-          const name = window.prompt("Folder name");
-          if (name?.trim()) await onCreateFolder(parentFolderId, name.trim());
+          try {
+            const newId = await onCreateFolder(parentFolderId, "Untitled folder");
+            inline.beginStubEdit(newId);
+          } catch {
+            // Parent toasts.
+          }
         }}
         className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-text-secondary/70 hover:text-text-primary hover:bg-white/[0.04] cursor-pointer"
       >

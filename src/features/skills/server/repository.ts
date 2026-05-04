@@ -113,6 +113,9 @@ export interface InsertSkillArgs {
   totalInvocations?: number;
   status?: "active" | "draft";
   agentWriteEnabled?: boolean;
+  /** Defaults to `'public'` (matches DB column default). App-level
+   *  `createSkill` passes `'private'` for new items. */
+  visibility?: "public" | "private";
   createdBy: string | null;
   source: SkillWriteSource;
 }
@@ -135,6 +138,7 @@ export async function insertSkill(args: InsertSkillArgs): Promise<Skill> {
       total_invocations: args.totalInvocations ?? 0,
       status: args.status ?? "active",
       agent_write_enabled: args.agentWriteEnabled ?? false,
+      visibility: args.visibility ?? "public",
       created_by: args.createdBy,
       last_edited_by: args.createdBy,
       last_edited_source: args.source,
@@ -153,6 +157,9 @@ export interface UpdateSkillPatch {
   slug?: string;
   status?: "active" | "draft";
   agentWriteEnabled?: boolean;
+  /** Visibility is one-way private → public. Service layer rejects
+   *  the reverse; this repo trusts whatever it gets. */
+  visibility?: "public" | "private";
   lastEditedBy?: string | null;
   lastEditedSource?: SkillWriteSource;
 }
@@ -171,6 +178,7 @@ export async function updateSkillRow(
   if (patch.status !== undefined) update.status = patch.status;
   if (patch.agentWriteEnabled !== undefined)
     update.agent_write_enabled = patch.agentWriteEnabled;
+  if (patch.visibility !== undefined) update.visibility = patch.visibility;
   if (patch.lastEditedBy !== undefined) update.last_edited_by = patch.lastEditedBy;
   if (patch.lastEditedSource !== undefined)
     update.last_edited_source = patch.lastEditedSource;

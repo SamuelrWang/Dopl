@@ -13,6 +13,7 @@ const output_js_1 = require("../lib/output.js");
 const auth_js_1 = require("../commands/auth.js");
 const workspace_js_1 = require("../commands/workspace.js");
 const packs_js_1 = require("../commands/packs.js");
+const mcp_js_1 = require("../commands/mcp.js");
 const update_check_js_1 = require("../lib/update-check.js");
 const version_js_1 = require("../lib/version.js");
 const cliLog = (0, debug_1.default)("dopl:cli");
@@ -42,6 +43,7 @@ async function run() {
     (0, auth_js_1.registerAuthCommands)(program);
     (0, workspace_js_1.registerWorkspaceCommands)(program);
     (0, packs_js_1.registerPacksCommands)(program);
+    (0, mcp_js_1.registerMcpCommands)(program);
     await program.parseAsync(process.argv);
 }
 function formatApiError(err) {

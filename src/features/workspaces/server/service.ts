@@ -1,6 +1,11 @@
 import "server-only";
 import { HttpError } from "@/shared/lib/http-error";
-import type { Workspace, WorkspaceMembership, Role } from "../types";
+import type {
+  Workspace,
+  WorkspaceMembership,
+  WorkspaceWithRole,
+  Role,
+} from "../types";
 import { meetsMinRole } from "../types";
 import { slugifyWorkspaceName } from "../slug";
 import { RESERVED_WORKSPACE_SLUGS } from "@/config";
@@ -14,6 +19,7 @@ import {
   findMembership,
   insertWorkspaceWithOwnerMembership,
   listWorkspacesForUser,
+  listWorkspacesWithRoleForUser,
   listMembers,
   updateWorkspace,
 } from "./repository";
@@ -84,7 +90,7 @@ export async function resolveActiveWorkspace(
 export async function ensureDefaultWorkspace(userId: string): Promise<Workspace> {
   const existing = await findDefaultWorkspaceForUser(userId);
   if (existing) return existing;
-  const name = "My Workspace";
+  const name = "Untitled";
   return insertWorkspaceWithOwnerMembership({
     ownerId: userId,
     name,
@@ -94,6 +100,19 @@ export async function ensureDefaultWorkspace(userId: string): Promise<Workspace>
 
 export async function listMyWorkspaces(userId: string): Promise<Workspace[]> {
   return listWorkspacesForUser(userId);
+}
+
+/**
+ * Same as `listMyWorkspaces` but each row carries the caller's role on
+ * the workspace. Used by `GET /api/workspaces` (so the agent's
+ * `list_workspaces` MCP tool gets `{id, slug, name, role, ...}` in one
+ * round trip) and the workspace switcher UI. Both behaviors are
+ * additive — the role-less callers can ignore the new field.
+ */
+export async function listMyWorkspacesWithRole(
+  userId: string
+): Promise<WorkspaceWithRole[]> {
+  return listWorkspacesWithRoleForUser(userId);
 }
 
 export async function createWorkspaceForUser(
