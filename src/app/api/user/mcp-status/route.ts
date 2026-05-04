@@ -25,10 +25,13 @@ export const POST = withUserAuth(async (_request, { userId }) => {
   if (error) {
     // If the column doesn't exist yet, try a raw approach — store in metadata
     // For now just acknowledge the ping
-    return NextResponse.json({ ok: true, connected_at: now, is_admin });
+    return NextResponse.json({ ok: true, connected_at: now, is_admin, user_id: userId });
   }
 
-  return NextResponse.json({ ok: true, connected_at: now, is_admin });
+  // user_id is returned so the MCP server's startup can scope its
+  // local skill-dir cleanup to dirs it owns — see Audit B7 in
+  // packages/mcp-server/src/orphan-skill-cleanup.ts.
+  return NextResponse.json({ ok: true, connected_at: now, is_admin, user_id: userId });
 });
 
 /**

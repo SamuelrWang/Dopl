@@ -51,6 +51,14 @@ interface Props {
   folders: KnowledgeFolder[];
   entries: KnowledgeEntry[];
   selectedEntryId: string | null;
+  /**
+   * Caller's effective access on this KB. When `false`, write
+   * affordances (rename context menu, "+ New folder/entry") are
+   * hidden — the server rejects them anyway, so a button that always
+   * 403s is bad UX. Defaults to `true` for back-compat with callers
+   * that don't yet plumb access info.
+   */
+  canEdit?: boolean;
   onSelect: (entryId: string) => void;
   /** Create a folder. Tree calls with the default name; parent issues
    *  the API call and returns the new id. The tree then drops the
@@ -87,6 +95,9 @@ interface InlineEditCtxValue {
   commitRename: (item: ContextMenuItem, name: string) => Promise<void>;
   cancelStub: (item: ContextMenuItem) => Promise<void>;
   clearEditing: () => void;
+  /** Read from the access provider — gates write affordances inside
+   *  the tree (FolderRowActions create buttons, AddRowAffordance). */
+  canEdit: boolean;
 }
 
 const InlineEditCtx = createContext<InlineEditCtxValue | null>(null);
@@ -108,6 +119,7 @@ export function KnowledgeTree({
   folders,
   entries,
   selectedEntryId,
+  canEdit = true,
   onSelect,
   onCreateFolder,
   onCreateEntry,
@@ -168,8 +180,9 @@ export function KnowledgeTree({
       clearEditing: () => {
         onClearEditing();
       },
+      canEdit,
     }),
-    [editingNodeId, stubIds, onCommitRename, onCancelStub, onClearEditing]
+    [editingNodeId, stubIds, onCommitRename, onCancelStub, onClearEditing, canEdit]
   );
 
   // Index for cheap lookups during rendering / drag handling.
@@ -280,6 +293,7 @@ export function KnowledgeTree({
           onMove={onRequestMove}
           onDelete={onDelete}
           onClose={() => setMenu(null)}
+          canEdit={canEdit}
         />
       ) : null}
     </DndContext>
@@ -476,6 +490,8 @@ function FolderRow({
           <InlineEditableRow
             value={folder.name}
             selectAllOnMount
+            maxLength={200}
+            ariaLabel="Folder name"
             onCommit={async (next) => {
               await inline.commitRename(ctxItem, next);
               inline.clearEditing();
@@ -519,42 +535,62 @@ function FolderRowActions({
   onMore: (e: React.MouseEvent) => void;
 }) {
   const inline = useInlineEdit();
+  // Audit A-016: a slow create + a fast double-click would issue two
+  // POSTs back-to-back. Disable the buttons while one is in flight.
+  const [busy, setBusy] = useState(false);
+  // Audit A-005: hide the inline create buttons from read-only members.
+  // The "More" button stays visible for context-menu access (delete is
+  // gated separately in TreeContextMenu).
   return (
     <div className="shrink-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100">
-      <button
-        type="button"
-        title="New entry"
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={async (e) => {
-          e.stopPropagation();
-          try {
-            const newId = await onCreateEntry(folderId, "Untitled entry");
-            inline.beginStubEdit(newId);
-          } catch {
-            // Parent already toasts; nothing to do here.
-          }
-        }}
-        className="w-5 h-5 rounded flex items-center justify-center hover:bg-white/[0.06]"
-      >
-        <Plus size={10} className="text-text-secondary/70" />
-      </button>
-      <button
-        type="button"
-        title="New folder"
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={async (e) => {
-          e.stopPropagation();
-          try {
-            const newId = await onCreateFolder(folderId, "Untitled folder");
-            inline.beginStubEdit(newId);
-          } catch {
-            // Parent already toasts.
-          }
-        }}
-        className="w-5 h-5 rounded flex items-center justify-center hover:bg-white/[0.06]"
-      >
-        <Folder size={10} className="text-text-secondary/70" />
-      </button>
+      {inline.canEdit && (
+        <>
+          <button
+            type="button"
+            title="New entry"
+            disabled={busy}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={async (e) => {
+              e.stopPropagation();
+              if (busy) return;
+              setBusy(true);
+              try {
+                const newId = await onCreateEntry(folderId, "Untitled entry");
+                inline.beginStubEdit(newId);
+              } catch {
+                // Parent already toasts; nothing to do here.
+              } finally {
+                setBusy(false);
+              }
+            }}
+            className="w-5 h-5 rounded flex items-center justify-center hover:bg-white/[0.06] disabled:opacity-50 disabled:cursor-default"
+          >
+            <Plus size={10} className="text-text-secondary/70" />
+          </button>
+          <button
+            type="button"
+            title="New folder"
+            disabled={busy}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={async (e) => {
+              e.stopPropagation();
+              if (busy) return;
+              setBusy(true);
+              try {
+                const newId = await onCreateFolder(folderId, "Untitled folder");
+                inline.beginStubEdit(newId);
+              } catch {
+                // Parent already toasts.
+              } finally {
+                setBusy(false);
+              }
+            }}
+            className="w-5 h-5 rounded flex items-center justify-center hover:bg-white/[0.06] disabled:opacity-50 disabled:cursor-default"
+          >
+            <Folder size={10} className="text-text-secondary/70" />
+          </button>
+        </>
+      )}
       <button
         type="button"
         title="More"
@@ -625,6 +661,8 @@ function EntryRow({ entry, depth, isSelected, onSelect, openMenu }: EntryRowProp
         <InlineEditableRow
           value={entry.title}
           selectAllOnMount
+          maxLength={300}
+          ariaLabel="Entry title"
           onCommit={async (next) => {
             await inline.commitRename(ctxItem, next);
             inline.clearEditing();
@@ -676,34 +714,49 @@ function AddRowAffordance({
   // Only show at root level — folder rows have their own "+" buttons.
   if (depth > 0) return null;
   const inline = useInlineEdit();
+  // Audit A-016: prevent double-create on fast repeat clicks.
+  const [busy, setBusy] = useState(false);
+  // Audit A-005: read-only members never see the root-level "+ New
+  // entry/folder" affordances either.
+  if (!inline.canEdit) return null;
   return (
     <div className="flex items-center gap-1 px-2 py-1.5">
       <button
         type="button"
+        disabled={busy}
         onClick={async () => {
+          if (busy) return;
+          setBusy(true);
           try {
             const newId = await onCreateEntry(parentFolderId, "Untitled entry");
             inline.beginStubEdit(newId);
           } catch {
             // Parent toasts.
+          } finally {
+            setBusy(false);
           }
         }}
-        className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-text-secondary/70 hover:text-text-primary hover:bg-white/[0.04] cursor-pointer"
+        className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-text-secondary/70 hover:text-text-primary hover:bg-white/[0.04] cursor-pointer disabled:opacity-50 disabled:cursor-default"
       >
         <Plus size={10} />
         New entry
       </button>
       <button
         type="button"
+        disabled={busy}
         onClick={async () => {
+          if (busy) return;
+          setBusy(true);
           try {
             const newId = await onCreateFolder(parentFolderId, "Untitled folder");
             inline.beginStubEdit(newId);
           } catch {
             // Parent toasts.
+          } finally {
+            setBusy(false);
           }
         }}
-        className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-text-secondary/70 hover:text-text-primary hover:bg-white/[0.04] cursor-pointer"
+        className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-text-secondary/70 hover:text-text-primary hover:bg-white/[0.04] cursor-pointer disabled:opacity-50 disabled:cursor-default"
       >
         <Folder size={10} />
         New folder

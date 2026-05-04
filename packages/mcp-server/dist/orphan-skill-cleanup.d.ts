@@ -33,6 +33,20 @@
  * ambiguous (workspace foo + cluster bar, or default-canvas cluster
  * foo-bar). The cleanup is permissive: if EITHER interpretation
  * matches something live, we keep the dir.
+ *
+ * Safety (Audit B7) — multi-user OS account guard: when a meta
+ * sidecar carries a `userId` field, we only delete dirs whose userId
+ * matches the booting MCP server's user. Legacy meta files without
+ * `userId` are LEFT ALONE (we can't prove they're ours). The skill-
+ * writer is expected to stamp `userId` going forward; until then
+ * cleanup is conservative on legacy data.
+ *
+ * Concurrency (Audit B12) — we cap parallel `listClusters` calls so a
+ * user with many workspaces doesn't fan out an N-wide HTTP burst at
+ * boot. Six in flight at once is plenty for the dozens-of-workspaces
+ * case without tripping rate limiters.
  */
 import type { DoplClient } from "@dopl/client";
-export declare function cleanupOrphanSkills(client: DoplClient): Promise<void>;
+export declare function cleanupOrphanSkills(client: DoplClient, options?: {
+    userId?: string | null;
+}): Promise<void>;

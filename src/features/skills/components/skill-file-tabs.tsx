@@ -32,6 +32,9 @@ function sanitizeFileName(input: string): string | null {
 interface FileTabsProps {
   files: SkillFile[];
   activeId: string;
+  /** Audit A-005 / A-013: gate "+ Add file" / delete / rename on
+   *  effective access. Read-only members can still switch tabs. */
+  canEdit?: boolean;
   onSelect: (id: string) => void;
   onAdd: () => void;
   onRemove: (file: SkillFile) => void;
@@ -47,6 +50,7 @@ interface FileTabsProps {
 export function FileTabs({
   files,
   activeId,
+  canEdit = true,
   onSelect,
   onAdd,
   onRemove,
@@ -59,19 +63,22 @@ export function FileTabs({
           key={file.id}
           file={file}
           active={file.id === activeId}
+          canEdit={canEdit}
           onSelect={() => onSelect(file.id)}
           onRemove={() => onRemove(file)}
           onRename={(name) => onRename(file, name)}
         />
       ))}
-      <button
-        type="button"
-        onClick={onAdd}
-        className="ml-1 my-1.5 flex items-center gap-1 px-2 py-1 rounded-md text-[11px] text-text-secondary/70 hover:bg-white/[0.04] hover:text-text-primary transition-colors cursor-pointer"
-      >
-        <Plus size={11} />
-        Add file
-      </button>
+      {canEdit && (
+        <button
+          type="button"
+          onClick={onAdd}
+          className="ml-1 my-1.5 flex items-center gap-1 px-2 py-1 rounded-md text-[11px] text-text-secondary/70 hover:bg-white/[0.04] hover:text-text-primary transition-colors cursor-pointer"
+        >
+          <Plus size={11} />
+          Add file
+        </button>
+      )}
     </div>
   );
 }
@@ -79,12 +86,14 @@ export function FileTabs({
 function FileTab({
   file,
   active,
+  canEdit,
   onSelect,
   onRemove,
   onRename,
 }: {
   file: SkillFile;
   active: boolean;
+  canEdit: boolean;
   onSelect: () => void;
   onRemove: () => void;
   onRename: (name: string) => void;
@@ -128,13 +137,26 @@ function FileTab({
         <span className="flex items-center gap-1.5">
           <input
             autoFocus
+            // Audit A-017: select-all on focus so typing replaces the
+            // current name without ⌘A. Matches InlineEditableRow's
+            // `selectAllOnMount` behavior. The bespoke input here
+            // (rather than the shared component) is preserved so the
+            // sanitize-and-keep-draft inline-error UX can stay.
+            onFocus={(e) => e.currentTarget.select()}
             value={draft}
+            // Audit A-015: cap at the server's `SkillFileNameSchema` max.
+            maxLength={120}
+            aria-label="Skill file name"
             onChange={(e) => {
               setDraft(e.target.value);
               if (error) setError(null);
             }}
             onBlur={commitRename}
             onKeyDown={(e) => {
+              // Audit A-006: skip Enter / Escape while a CJK IME is
+              // composing — those keys are for candidate selection,
+              // not for our rename flow.
+              if (e.nativeEvent.isComposing || e.keyCode === 229) return;
               if (e.key === "Enter") {
                 e.preventDefault();
                 commitRename();
@@ -164,6 +186,9 @@ function FileTab({
           className="text-[12px] font-mono py-2"
           onDoubleClick={(e) => {
             if (isPrimary) return;
+            // Audit A-013: read-only members can't double-click to
+            // rename — server would reject anyway.
+            if (!canEdit) return;
             e.stopPropagation();
             setDraft(file.name);
             setRenaming(true);
@@ -172,7 +197,7 @@ function FileTab({
           {file.name}
         </span>
       )}
-      {!isPrimary && !renaming && (
+      {!isPrimary && !renaming && canEdit && (
         <button
           type="button"
           onClick={(e) => {

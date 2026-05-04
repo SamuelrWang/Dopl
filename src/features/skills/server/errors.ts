@@ -86,3 +86,19 @@ export class SkillStaleVersionError extends Error {
     this.actual = actual;
   }
 }
+
+/**
+ * Thrown when a workspace-scoped API key tries to create a private
+ * skill. Mirrors `WorkspaceKeyPrivateVisibilityError` in the
+ * knowledge feature — see that doc for the rationale (Audit B6).
+ */
+export class WorkspaceKeyPrivateSkillError extends Error {
+  readonly code = "WORKSPACE_KEY_PRIVATE_VISIBILITY";
+  constructor() {
+    super(
+      "Workspace-scoped API keys cannot create or own private skills. " +
+        "Use a personal API key (from Account Settings → Keys) for private items."
+    );
+    this.name = "WorkspaceKeyPrivateSkillError";
+  }
+}

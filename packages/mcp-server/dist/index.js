@@ -121,7 +121,7 @@ async function main() {
     // retry. If the backend is unreachable, we default to non-admin —
     // safe-default: admin loses skeleton_ingest until restart, non-admins
     // are unaffected.
-    const { is_admin } = await pingWithRetry(client);
+    const { is_admin, user_id } = await pingWithRetry(client);
     // Canvas handshake — confirm the requested canvas exists and the
     // caller is an active member. Failure is fatal: we'd rather refuse to
     // start than write skill files into the wrong workspace.
@@ -142,8 +142,10 @@ async function main() {
     await server.connect(transport);
     // Fire-and-forget cleanup of stale `~/.claude/skills/dopl-*/` dirs
     // from previous server versions or workspaces the user has left.
-    // Must NOT block boot or serve — failures log and move on.
-    void (0, orphan_skill_cleanup_js_1.cleanupOrphanSkills)(client).catch((err) => {
+    // Must NOT block boot or serve — failures log and move on. Pass
+    // user_id from the ping so the cleanup can scope deletions to dirs
+    // it owns (Audit B7 — multi-user OS account safety).
+    void (0, orphan_skill_cleanup_js_1.cleanupOrphanSkills)(client, { userId: user_id }).catch((err) => {
         console.error(`[dopl-mcp] Orphan skill cleanup failed: ${err instanceof Error ? err.message : String(err)}`);
     });
 }
@@ -157,12 +159,12 @@ async function pingWithRetry(client) {
             const msg = err instanceof Error ? err.message : String(err);
             if (attempt === delays.length) {
                 console.error(`[dopl-mcp] Initial status ping failed after ${delays.length + 1} attempts: ${msg}`);
-                return { is_admin: false };
+                return { is_admin: false, user_id: null };
             }
             await new Promise((resolve) => setTimeout(resolve, delays[attempt]));
         }
     }
-    return { is_admin: false };
+    return { is_admin: false, user_id: null };
 }
 async function resolveWorkspace(client, workspaceId, workspaceSlug) {
     try {

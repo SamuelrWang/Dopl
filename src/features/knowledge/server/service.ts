@@ -29,6 +29,7 @@ import {
   KnowledgePathConflictError,
   KnowledgeStaleVersionError,
   PathTraversalError,
+  WorkspaceKeyPrivateVisibilityError,
 } from "./errors";
 import {
   ensureFolderPath,
@@ -119,6 +120,12 @@ export async function listBases(
   const all = await repo.listBasesForWorkspace(ctx.workspaceId, false);
   const visible = all.filter((b) => canSeeBase(ctx, b));
   if (visible.length > 0) return visible;
+  // CRITICAL: seed only when the workspace has NO bases at all, not
+  // when the *caller* sees zero — otherwise a member who joins a
+  // workspace whose only bases are someone else's private items would
+  // re-trigger seed on every list call. (seedWorkspace's own guard
+  // would early-return, but we shouldn't even try.)
+  if (all.length > 0) return visible;
   const workspaceCreatedAt = await fetchWorkspaceCreatedAt(ctx.workspaceId);
   if (
     workspaceCreatedAt !== null &&
@@ -178,6 +185,25 @@ export async function createBase(
   // Slug uniqueness within workspace is preserved here so MCP `kb_*`
   // tools that address bases by slug stay unambiguous. PublicId is
   // the URL routing key; slug stays the agent-facing handle.
+  // Audit B6 + B15: visibility default depends on the caller.
+  //   • Workspace-scoped API key  → must be 'public'. Workspace keys
+  //     may be shared among humans, and `canSeeBase` blocks them from
+  //     reading their own private rows back, so creating a private one
+  //     would strand the resource. Reject explicit 'private' loudly
+  //     and default to 'public'.
+  //   • Session caller / personal key  → default 'private'. The owner
+  //     opts to publish via the "Make public" button when ready.
+  const fromWorkspaceKey = ctx.apiKeyWorkspaceId != null;
+  let resolvedVisibility = input.visibility;
+  if (fromWorkspaceKey) {
+    if (resolvedVisibility === "private") {
+      throw new WorkspaceKeyPrivateVisibilityError();
+    }
+    resolvedVisibility = resolvedVisibility ?? "public";
+  } else {
+    resolvedVisibility = resolvedVisibility ?? "private";
+  }
+
   let attempt = 0;
   let baseSlug =
     input.slug ?? deriveSlug(input.name, await listSlugs(ctx.workspaceId));
@@ -189,11 +215,7 @@ export async function createBase(
         slug: baseSlug,
         description: input.description ?? null,
         agentWriteEnabled: input.agentWriteEnabled ?? false,
-        // M-10: new items default to private. Owner immediately sees
-        // it (RLS allows owner-on-private); they "Make public" from
-        // the settings UI when ready to share. The DB column default
-        // is 'public' so existing rows are unaffected.
-        visibility: input.visibility ?? "private",
+        visibility: resolvedVisibility,
         createdBy: ctx.userId,
       });
     } catch (err) {
@@ -938,6 +960,11 @@ export async function seedWorkspace(
       slug,
       description: fixture.description,
       agentWriteEnabled: fixture.agentWriteEnabled ?? false,
+      // Seeded fixtures are workspace starter content — public so
+      // every member sees them. (Owner-explicit `createBase` calls
+      // default to private; this is the one path where public is
+      // semantically correct.)
+      visibility: "public",
       createdBy: ctx.userId,
     });
     basesCreated += 1;

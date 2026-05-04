@@ -180,8 +180,15 @@ class DoplClient {
         });
     }
     async pingMcpStatus() {
-        const res = await this.transport.request("/api/user/mcp-status", { method: "POST", toolName: "_mcp_status_ping", body: {} });
-        return { is_admin: res.is_admin === true };
+        const res = await this.transport.request("/api/user/mcp-status", {
+            method: "POST",
+            toolName: "_mcp_status_ping",
+            body: {},
+        });
+        return {
+            is_admin: res.is_admin === true,
+            user_id: typeof res.user_id === "string" ? res.user_id : null,
+        };
     }
     async getClusterBrain(slug) {
         return this.transport.request(`/api/clusters/${encodeURIComponent(slug)}/brain`, { toolName: "get_cluster_brain" });

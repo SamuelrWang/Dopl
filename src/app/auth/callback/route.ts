@@ -6,14 +6,16 @@ import { logConversionEvent, hasFiredEvent } from "@/features/analytics/server/c
 import { forkPublishedCluster } from "@/features/community/server/service";
 import { ensureDefaultWorkspace } from "@/features/workspaces/server/service";
 import { ensureDefaultCanvas } from "@/features/workspaces/server/canvases";
+import { safeRedirect } from "@/shared/lib/url/safe-redirect";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   // Workspace + canvas are provisioned below before redirect, so a
-  // first-time user lands directly in their workspace with nothing to
-  // walk through. Deep links override via ?redirectTo=.
-  const redirectTo = searchParams.get("redirectTo") || "/canvas";
+  // first-time user lands directly in their workspace. Deep links
+  // override via ?redirectTo= but only if same-origin path (open
+  // redirect guard — see safeRedirect doc).
+  const redirectTo = safeRedirect(searchParams.get("redirectTo"));
   // Optional "install this cluster on landing" intent. Set by the
   // shared-cluster page's "Log in to install" CTA so the visitor lands
   // on /canvas with the cluster already imported, no extra click.

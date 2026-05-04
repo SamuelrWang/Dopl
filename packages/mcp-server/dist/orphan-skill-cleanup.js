@@ -34,6 +34,18 @@
  * ambiguous (workspace foo + cluster bar, or default-canvas cluster
  * foo-bar). The cleanup is permissive: if EITHER interpretation
  * matches something live, we keep the dir.
+ *
+ * Safety (Audit B7) — multi-user OS account guard: when a meta
+ * sidecar carries a `userId` field, we only delete dirs whose userId
+ * matches the booting MCP server's user. Legacy meta files without
+ * `userId` are LEFT ALONE (we can't prove they're ours). The skill-
+ * writer is expected to stamp `userId` going forward; until then
+ * cleanup is conservative on legacy data.
+ *
+ * Concurrency (Audit B12) — we cap parallel `listClusters` calls so a
+ * user with many workspaces doesn't fan out an N-wide HTTP burst at
+ * boot. Six in flight at once is plenty for the dozens-of-workspaces
+ * case without tripping rate limiters.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.cleanupOrphanSkills = cleanupOrphanSkills;
@@ -45,7 +57,9 @@ const SKILL_ROOTS = [
     () => (0, node_path_1.join)((0, node_os_1.homedir)(), ".claude", "skills"),
     () => (0, node_path_1.join)((0, node_os_1.homedir)(), ".openclaw", "workspace", "data", "dopl"),
 ];
-async function cleanupOrphanSkills(client) {
+const LIST_CLUSTERS_CONCURRENCY = 6;
+async function cleanupOrphanSkills(client, options = {}) {
+    const callerUserId = options.userId ?? null;
     // Build the set of dir names we expect to find on disk based on the
     // user's actual memberships + clusters. Anything else with a meta
     // sidecar is an orphan.
@@ -66,20 +80,24 @@ async function cleanupOrphanSkills(client) {
     // from disk which workspace is "default," so we accept this name
     // unconditionally as long as it's Dopl-managed.
     validDirs.add("dopl-canvas");
-    // Iterate workspaces and pull per-workspace cluster slugs in
-    // parallel. Use the M-1 AsyncLocalStorage override so each
-    // listClusters call carries the right X-Workspace-Id header without
-    // mutating the session default.
-    const clusterSlugsByWs = await Promise.all(workspaces.map(async (ws) => {
-        try {
-            const result = await client_1.workspaceContext.run(ws.id, () => client.listClusters());
-            return { wsSlug: ws.slug, clusters: result.clusters };
-        }
-        catch {
-            // Don't fail the whole pass on one bad workspace.
-            return { wsSlug: ws.slug, clusters: [] };
-        }
-    }));
+    // Iterate workspaces and pull per-workspace cluster slugs in chunks
+    // so we don't fan out an N-wide HTTP burst. Each chunk runs in
+    // parallel via Promise.all; chunks run sequentially.
+    const clusterSlugsByWs = [];
+    for (let i = 0; i < workspaces.length; i += LIST_CLUSTERS_CONCURRENCY) {
+        const chunk = workspaces.slice(i, i + LIST_CLUSTERS_CONCURRENCY);
+        const results = await Promise.all(chunk.map(async (ws) => {
+            try {
+                const result = await client_1.workspaceContext.run(ws.id, () => client.listClusters());
+                return { wsSlug: ws.slug, clusters: result.clusters };
+            }
+            catch {
+                // Don't fail the whole pass on one bad workspace.
+                return { wsSlug: ws.slug, clusters: [] };
+            }
+        }));
+        clusterSlugsByWs.push(...results);
+    }
     for (const { wsSlug, clusters } of clusterSlugsByWs) {
         validDirs.add(`dopl-canvas-${wsSlug}`);
         for (const cluster of clusters) {
@@ -91,6 +109,7 @@ async function cleanupOrphanSkills(client) {
         }
     }
     let deleted = 0;
+    let skippedForOwnership = 0;
     for (const rootFn of SKILL_ROOTS) {
         const root = rootFn();
         let entries;
@@ -111,11 +130,40 @@ async function cleanupOrphanSkills(client) {
                 continue;
             const childPath = (0, node_path_1.join)(root, name);
             const metaPath = (0, node_path_1.join)(childPath, ".dopl-meta.json");
+            let meta = null;
             try {
-                await (0, promises_1.access)(metaPath);
+                const raw = await (0, promises_1.readFile)(metaPath, "utf8");
+                const parsed = JSON.parse(raw);
+                if (parsed && typeof parsed === "object") {
+                    meta = parsed;
+                }
+                else {
+                    meta = {};
+                }
             }
-            catch {
-                // No meta sidecar = user-authored or unrelated, don't touch.
+            catch (err) {
+                if (err instanceof Error &&
+                    "code" in err &&
+                    err.code === "ENOENT") {
+                    // No meta sidecar = user-authored or unrelated, don't touch.
+                    continue;
+                }
+                // Any other read/parse failure: skip this dir defensively.
+                continue;
+            }
+            // Audit B7: when meta carries a `userId`, only delete if it
+            // matches the booting user. When meta has no `userId` (legacy
+            // writers), conservatively skip — a shared OS account would
+            // otherwise have one user wipe another's dirs.
+            if (typeof meta.userId === "string") {
+                if (!callerUserId || meta.userId !== callerUserId) {
+                    skippedForOwnership += 1;
+                    continue;
+                }
+            }
+            else {
+                // Legacy unattributed dir — don't risk it.
+                skippedForOwnership += 1;
                 continue;
             }
             if (validDirs.has(name))
@@ -133,5 +181,10 @@ async function cleanupOrphanSkills(client) {
     if (deleted > 0) {
         const noun = deleted === 1 ? "directory" : "directories";
         console.error(`[dopl-mcp] Orphan skill cleanup: removed ${deleted} stale ${noun}.`);
+    }
+    if (skippedForOwnership > 0) {
+        console.error(`[dopl-mcp] Orphan skill cleanup: skipped ${skippedForOwnership} ` +
+            `unattributable director${skippedForOwnership === 1 ? "y" : "ies"} ` +
+            `(no userId in .dopl-meta.json — left in place for safety).`);
     }
 }

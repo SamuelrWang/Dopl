@@ -369,8 +369,13 @@ function createServer(client, options = {}) {
         return result.workspaces;
     }
     async function resolveWorkspaceRef(ref) {
+        // Audit B11: a workspace slug shaped like a UUID (lowercase hex
+        // with hyphens) is theoretically possible. The UUID_RE branch
+        // would only check `w.id === ref` and miss the slug match,
+        // forcing a wasteful refresh on the second pass. Cheap to also
+        // try the slug path on the first pass.
         let list = await getWorkspaceList();
-        let match = list.find((w) => UUID_RE.test(ref) ? w.id === ref : w.slug === ref || w.id === ref);
+        let match = list.find((w) => w.id === ref || w.slug === ref);
         if (match)
             return match;
         // Force-refresh once — covers the case where the user was added to
@@ -410,7 +415,25 @@ function createServer(client, options = {}) {
             const { workspace: workspaceRef, ...rest } = args;
             const innerArgs = rest;
             if (workspaceRef) {
-                const resolved = await resolveWorkspaceRef(workspaceRef);
+                // Audit B8: resolveWorkspaceRef calls listWorkspaces, which
+                // can throw on network / auth failures. Catch and surface a
+                // friendly isError instead of letting the throw propagate
+                // (which the MCP framework would expose as an opaque error).
+                let resolved;
+                try {
+                    resolved = await resolveWorkspaceRef(workspaceRef);
+                }
+                catch (err) {
+                    return {
+                        isError: true,
+                        content: [
+                            {
+                                type: "text",
+                                text: `Couldn't validate the \`workspace\` argument (${err instanceof Error ? err.message : String(err)}). Try again, or call without \`workspace=\` to use the session's active workspace.`,
+                            },
+                        ],
+                    };
+                }
                 if (!resolved) {
                     return {
                         isError: true,

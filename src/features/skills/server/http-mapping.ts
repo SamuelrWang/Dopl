@@ -9,6 +9,7 @@ import {
   SkillPrimaryFileImmutableError,
   SkillSlugConflictError,
   SkillStaleVersionError,
+  WorkspaceKeyPrivateSkillError,
 } from "./errors";
 
 /**
@@ -42,6 +43,9 @@ export function mapSkillError(err: unknown): HttpError | null {
       expected: err.expected,
       actual: err.actual,
     });
+  }
+  if (err instanceof WorkspaceKeyPrivateSkillError) {
+    return new HttpError(403, "WORKSPACE_KEY_PRIVATE_VISIBILITY", err.message);
   }
   return null;
 }

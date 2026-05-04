@@ -3,6 +3,7 @@
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getSupabaseBrowser } from "@/shared/supabase/browser";
+import { safeRedirect } from "@/shared/lib/url/safe-redirect";
 
 export default function LoginPage() {
   return (
@@ -17,8 +18,9 @@ function LoginForm() {
   const searchParams = useSearchParams();
   // Workspace + canvas are auto-provisioned in /auth/callback before
   // redirect, so first-time users land directly in their workspace.
-  // Deep links override via an explicit ?redirectTo=.
-  const redirectTo = searchParams.get("redirectTo") || "/canvas";
+  // Deep links override via an explicit ?redirectTo= but only if
+  // same-origin (open redirect guard — see safeRedirect doc).
+  const redirectTo = safeRedirect(searchParams.get("redirectTo"));
   // Optional "install this cluster after sign-in" intent. Threaded
   // through to /auth/callback so OAuth + email-confirm flows can run
   // the fork server-side; on the email/password path we run it from

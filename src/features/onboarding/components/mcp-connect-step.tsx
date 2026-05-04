@@ -48,7 +48,14 @@ export function McpConnectStep({ onConnected }: McpConnectStepProps) {
           const genRes = await fetch("/api/user/keys", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name: "Onboarding MCP" }),
+            // Audit A-022: previous hardcoded name produced duplicate
+            // "Onboarding MCP" rows on every component re-render.
+            // Append a date stamp so the user can tell their keys
+            // apart in account settings. Matches the convention in
+            // `connect-app-section.tsx`.
+            body: JSON.stringify({
+              name: `Onboarding MCP · ${new Date().toLocaleDateString()}`,
+            }),
           });
           if (genRes.ok) {
             const genData = await genRes.json();
@@ -59,7 +66,14 @@ export function McpConnectStep({ onConnected }: McpConnectStepProps) {
           const genRes = await fetch("/api/user/keys", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name: "Onboarding MCP" }),
+            // Audit A-022: previous hardcoded name produced duplicate
+            // "Onboarding MCP" rows on every component re-render.
+            // Append a date stamp so the user can tell their keys
+            // apart in account settings. Matches the convention in
+            // `connect-app-section.tsx`.
+            body: JSON.stringify({
+              name: `Onboarding MCP · ${new Date().toLocaleDateString()}`,
+            }),
           });
           if (genRes.ok) {
             const genData = await genRes.json();

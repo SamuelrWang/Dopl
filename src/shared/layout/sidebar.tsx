@@ -23,6 +23,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { parseSegment } from "@/shared/lib/url/parse-segment";
+import { workspaceSegmentFromPath } from "@/shared/lib/url/workspace-segment";
 import { RESERVED_WORKSPACE_SLUGS } from "@/config";
 import { useSkills } from "@/features/skills/client/hooks";
 import {
@@ -35,9 +36,11 @@ import {
   createEntry as apiCreateEntry,
 } from "@/features/knowledge/client/api";
 import { useKnowledgeRealtime } from "@/features/knowledge/client/realtime";
-import { useMyAccess } from "@/features/members/hooks/use-my-access";
+import { useMyAccessContext } from "@/features/members/hooks/use-my-access";
 import type { AccessLevel } from "@/features/members/access-defaults";
+import { meetsLevel } from "@/features/members/access-defaults";
 import { toast } from "@/shared/ui/toast";
+import { Tooltip } from "@/shared/ui/tooltip";
 import { UserMenu } from "./user-menu";
 
 /**
@@ -127,19 +130,9 @@ const NAMED_WORKSPACE_SUBROUTES: ReadonlyArray<string> = [
   "settings",
 ];
 
-/**
- * Pull the workspace handle out of the first path segment. Returns
- * the canonical `{slug}-{publicId}` segment, or — for legacy URLs
- * before the publicId migration — the bare slug. Null for top-level
- * static routes (`/login`, `/settings`, ...) and the legacy `/canvas`.
- */
-function workspaceSegmentFromPath(pathname: string): string | null {
-  const segments = pathname.split("/").filter(Boolean);
-  if (segments.length === 0) return null;
-  const first = segments[0];
-  if (RESERVED_WORKSPACE_SLUGS.has(first)) return null;
-  return first;
-}
+// `workspaceSegmentFromPath` moved to `@/shared/lib/url/workspace-segment`
+// so the layout shell + sidebar agree on what "the current workspace"
+// is and the my-access provider can mount with the same scope.
 
 /**
  * Match a path's first segment to a workspace in the user's list.
@@ -586,12 +579,18 @@ function KnowledgeNavSection({ pathname, workspaceSegment, workspaceId }: NavPro
   // workspace (e.g. inline rename on the detail page) so the
   // sidebar reflects the change without a page reload.
   useKnowledgeRealtime(workspaceId ?? undefined, refetch);
-  // Access info for read/edit badges. One fetch per workspace, shared
-  // across both nav sections via the parent re-render — the fetch is
-  // idempotent and Cloudflare/browser caches dedupe it. (If we add
-  // more access-aware sections in the future, hoist the hook into the
-  // shared sidebar parent.)
-  const { resolve: resolveAccess } = useMyAccess(workspaceSegment ?? null);
+  // Access info for read/edit badges. The provider lives in the
+  // layout shell so the request is shared across both nav sections,
+  // the canvas panels, and the detail pages — single round trip per
+  // workspace load. (Audit A-008.)
+  const access = useMyAccessContext();
+  const resolveAccess = access.resolve;
+  // Read-only members shouldn't see the "Add new knowledge base"
+  // affordance — clicking it would just hit a 403. defaultLevel is
+  // null until the access fetch resolves; treat as "edit" then so
+  // the button isn't briefly hidden then re-shown for owners/admins.
+  const canCreate =
+    access.data == null ? true : meetsLevel(access.data.defaultLevel, "edit");
   const kbsForRender = bases ?? [];
 
   /**
@@ -626,6 +625,10 @@ function KnowledgeNavSection({ pathname, workspaceSegment, workspaceId }: NavPro
         // manually from the detail page.
       }
       refetch();
+      // Audit A-009: kick the access cache so the new KB's badge
+      // reflects the resolved level rather than flashing the cached
+      // default until the next workspace nav.
+      access.refetch();
       setExpanded(true);
       router.push(
         `/${workspaceSegment}/knowledge/${base.slug}-${base.publicId}`
@@ -705,7 +708,12 @@ function KnowledgeNavSection({ pathname, workspaceSegment, workspaceId }: NavPro
               </span>
             );
           })}
-          {workspaceSegment && (
+          {/* Audit A-005: hide the create affordance from read-only
+           * members. Server enforces (creates 403), but a button that
+           * always 403s is bad UX. canCreate falls open to true while
+           * access is still loading so admins/owners don't see a flash
+           * of the button missing. */}
+          {workspaceSegment && canCreate && (
             <button
               type="button"
               onClick={handleAddNew}
@@ -751,9 +759,12 @@ function SkillsNavSection({ pathname, workspaceSegment, workspaceId }: NavProps)
   const { data: skills, status, refetch } = useSkills(workspaceId ?? undefined);
   // Live-update on skill renames / creates / deletes.
   useSkillsRealtime(workspaceId ?? undefined, refetch);
-  // Access info for read/edit badges (see KnowledgeNavSection for the
-  // dedupe reasoning).
-  const { resolve: resolveAccess } = useMyAccess(workspaceSegment ?? null);
+  // Access info via the shared layout-shell provider — no duplicate
+  // fetch with KnowledgeNavSection. (Audit A-008.)
+  const access = useMyAccessContext();
+  const resolveAccess = access.resolve;
+  const canCreate =
+    access.data == null ? true : meetsLevel(access.data.defaultLevel, "edit");
   const skillsForRender = skills ?? [];
 
   /**
@@ -780,6 +791,10 @@ function SkillsNavSection({ pathname, workspaceSegment, workspaceId }: NavProps)
         workspaceId
       );
       refetch();
+      // Audit A-009: keep the access cache in sync so the new skill
+      // gets a correct badge instead of falling back to the cached
+      // default level.
+      access.refetch();
       setExpanded(true);
       router.push(
         `/${workspaceSegment}/skills/${result.skill.slug}-${result.skill.publicId}`
@@ -859,7 +874,10 @@ function SkillsNavSection({ pathname, workspaceSegment, workspaceId }: NavProps)
               </span>
             );
           })}
-          {workspaceSegment && (
+          {/* Audit A-005: hide from read-only members. canCreate
+           * stays true while access is loading — see KnowledgeNavSection
+           * for the same reasoning. */}
+          {workspaceSegment && canCreate && (
             <button
               type="button"
               onClick={handleAddNew}
@@ -887,28 +905,32 @@ function SkillsNavSection({ pathname, workspaceSegment, workspaceId }: NavProps)
  * Eye icon for read-only, pencil for editable. Hidden until the access
  * fetch resolves so we don't flash the wrong state. Owners and admins
  * always render the pencil (the my-access endpoint short-circuits them
- * to "edit"). Native `title` tooltip — keeps zero new dependencies.
+ * to "edit"). Audit A-020 fix: switched from native `title=` (mouse-
+ * hover only) to the shared <Tooltip> component, which fires on both
+ * hover and keyboard focus.
  */
 function AccessIcon({ level }: { level: AccessLevel | null }) {
   if (!level) return null;
   if (level === "edit") {
     return (
-      <span
-        className="shrink-0 inline-flex items-center text-text-secondary/40 cursor-default"
-        title="You can edit this"
-        aria-label="You can edit this"
+      <Tooltip
+        label="You can edit this"
+        className="shrink-0 text-text-secondary/40"
       >
-        <Edit2 size={10} />
-      </span>
+        <span aria-label="You can edit this">
+          <Edit2 size={10} />
+        </span>
+      </Tooltip>
     );
   }
   return (
-    <span
-      className="shrink-0 inline-flex items-center text-text-secondary/40 cursor-default"
-      title="Read-only — ask an admin for edit access"
-      aria-label="Read-only"
+    <Tooltip
+      label="Read-only — ask an admin for edit access"
+      className="shrink-0 text-text-secondary/40"
     >
-      <Eye size={10} />
-    </span>
+      <span aria-label="Read-only">
+        <Eye size={10} />
+      </span>
+    </Tooltip>
   );
 }

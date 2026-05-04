@@ -196,7 +196,10 @@ export function withUserAuth(
       // Locally bind narrowed userId so the closure sees a non-null value.
       const userId = keyRecord.user_id;
       // Every authenticated MCP call acts as a heartbeat for the
-      // welcome-step connection detector. Debounced to ~30s.
+      // onboarding tour's MCP-connection detector (mcp-connect-step
+      // polls /api/user/mcp-status). Debounced to ~30s. Audit A-012:
+      // formerly described as "welcome-step" — that flow is gone, but
+      // the tour still uses the same detector.
       touchMcpStatus(userId);
       return runAndLog5xx(
         () =>

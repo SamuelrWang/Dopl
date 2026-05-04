@@ -289,12 +289,20 @@ export class DoplClient {
     });
   }
 
-  async pingMcpStatus(): Promise<{ is_admin: boolean }> {
-    const res = await this.transport.request<{ ok: boolean; is_admin?: boolean }>(
-      "/api/user/mcp-status",
-      { method: "POST", toolName: "_mcp_status_ping", body: {} }
-    );
-    return { is_admin: res.is_admin === true };
+  async pingMcpStatus(): Promise<{ is_admin: boolean; user_id: string | null }> {
+    const res = await this.transport.request<{
+      ok: boolean;
+      is_admin?: boolean;
+      user_id?: string;
+    }>("/api/user/mcp-status", {
+      method: "POST",
+      toolName: "_mcp_status_ping",
+      body: {},
+    });
+    return {
+      is_admin: res.is_admin === true,
+      user_id: typeof res.user_id === "string" ? res.user_id : null,
+    };
   }
 
   async getClusterBrain(slug: string): Promise<{

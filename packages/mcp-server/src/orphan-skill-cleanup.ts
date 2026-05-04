@@ -33,11 +33,23 @@
  * ambiguous (workspace foo + cluster bar, or default-canvas cluster
  * foo-bar). The cleanup is permissive: if EITHER interpretation
  * matches something live, we keep the dir.
+ *
+ * Safety (Audit B7) — multi-user OS account guard: when a meta
+ * sidecar carries a `userId` field, we only delete dirs whose userId
+ * matches the booting MCP server's user. Legacy meta files without
+ * `userId` are LEFT ALONE (we can't prove they're ours). The skill-
+ * writer is expected to stamp `userId` going forward; until then
+ * cleanup is conservative on legacy data.
+ *
+ * Concurrency (Audit B12) — we cap parallel `listClusters` calls so a
+ * user with many workspaces doesn't fan out an N-wide HTTP burst at
+ * boot. Six in flight at once is plenty for the dozens-of-workspaces
+ * case without tripping rate limiters.
  */
 
 import { join } from "node:path";
 import { homedir } from "node:os";
-import { access, readdir, rm } from "node:fs/promises";
+import { access, readdir, readFile, rm } from "node:fs/promises";
 import { workspaceContext } from "@dopl/client";
 import type { DoplClient, ClusterRow, WorkspaceListItem } from "@dopl/client";
 
@@ -46,7 +58,20 @@ const SKILL_ROOTS = [
   () => join(homedir(), ".openclaw", "workspace", "data", "dopl"),
 ];
 
-export async function cleanupOrphanSkills(client: DoplClient): Promise<void> {
+const LIST_CLUSTERS_CONCURRENCY = 6;
+
+interface DoplSkillMeta {
+  /** Optional — present on dirs written by post-B7 skill-writers.
+   *  Used for the multi-user-OS-account safety check. */
+  userId?: string;
+}
+
+export async function cleanupOrphanSkills(
+  client: DoplClient,
+  options: { userId?: string | null } = {},
+): Promise<void> {
+  const callerUserId = options.userId ?? null;
+
   // Build the set of dir names we expect to find on disk based on the
   // user's actual memberships + clusters. Anything else with a meta
   // sidecar is an orphan.
@@ -72,23 +97,30 @@ export async function cleanupOrphanSkills(client: DoplClient): Promise<void> {
   // unconditionally as long as it's Dopl-managed.
   validDirs.add("dopl-canvas");
 
-  // Iterate workspaces and pull per-workspace cluster slugs in
-  // parallel. Use the M-1 AsyncLocalStorage override so each
-  // listClusters call carries the right X-Workspace-Id header without
-  // mutating the session default.
-  const clusterSlugsByWs = await Promise.all(
-    workspaces.map(async (ws) => {
-      try {
-        const result = await workspaceContext.run(ws.id, () =>
-          client.listClusters(),
-        );
-        return { wsSlug: ws.slug, clusters: result.clusters as ClusterRow[] };
-      } catch {
-        // Don't fail the whole pass on one bad workspace.
-        return { wsSlug: ws.slug, clusters: [] as ClusterRow[] };
-      }
-    }),
-  );
+  // Iterate workspaces and pull per-workspace cluster slugs in chunks
+  // so we don't fan out an N-wide HTTP burst. Each chunk runs in
+  // parallel via Promise.all; chunks run sequentially.
+  const clusterSlugsByWs: Array<{
+    wsSlug: string;
+    clusters: ClusterRow[];
+  }> = [];
+  for (let i = 0; i < workspaces.length; i += LIST_CLUSTERS_CONCURRENCY) {
+    const chunk = workspaces.slice(i, i + LIST_CLUSTERS_CONCURRENCY);
+    const results = await Promise.all(
+      chunk.map(async (ws) => {
+        try {
+          const result = await workspaceContext.run(ws.id, () =>
+            client.listClusters(),
+          );
+          return { wsSlug: ws.slug, clusters: result.clusters as ClusterRow[] };
+        } catch {
+          // Don't fail the whole pass on one bad workspace.
+          return { wsSlug: ws.slug, clusters: [] as ClusterRow[] };
+        }
+      }),
+    );
+    clusterSlugsByWs.push(...results);
+  }
 
   for (const { wsSlug, clusters } of clusterSlugsByWs) {
     validDirs.add(`dopl-canvas-${wsSlug}`);
@@ -102,6 +134,7 @@ export async function cleanupOrphanSkills(client: DoplClient): Promise<void> {
   }
 
   let deleted = 0;
+  let skippedForOwnership = 0;
   for (const rootFn of SKILL_ROOTS) {
     const root = rootFn();
     let entries;
@@ -121,10 +154,41 @@ export async function cleanupOrphanSkills(client: DoplClient): Promise<void> {
 
       const childPath = join(root, name);
       const metaPath = join(childPath, ".dopl-meta.json");
+
+      let meta: DoplSkillMeta | null = null;
       try {
-        await access(metaPath);
-      } catch {
-        // No meta sidecar = user-authored or unrelated, don't touch.
+        const raw = await readFile(metaPath, "utf8");
+        const parsed: unknown = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") {
+          meta = parsed as DoplSkillMeta;
+        } else {
+          meta = {};
+        }
+      } catch (err) {
+        if (
+          err instanceof Error &&
+          "code" in err &&
+          (err as NodeJS.ErrnoException).code === "ENOENT"
+        ) {
+          // No meta sidecar = user-authored or unrelated, don't touch.
+          continue;
+        }
+        // Any other read/parse failure: skip this dir defensively.
+        continue;
+      }
+
+      // Audit B7: when meta carries a `userId`, only delete if it
+      // matches the booting user. When meta has no `userId` (legacy
+      // writers), conservatively skip — a shared OS account would
+      // otherwise have one user wipe another's dirs.
+      if (typeof meta.userId === "string") {
+        if (!callerUserId || meta.userId !== callerUserId) {
+          skippedForOwnership += 1;
+          continue;
+        }
+      } else {
+        // Legacy unattributed dir — don't risk it.
+        skippedForOwnership += 1;
         continue;
       }
 
@@ -150,6 +214,13 @@ export async function cleanupOrphanSkills(client: DoplClient): Promise<void> {
     const noun = deleted === 1 ? "directory" : "directories";
     console.error(
       `[dopl-mcp] Orphan skill cleanup: removed ${deleted} stale ${noun}.`,
+    );
+  }
+  if (skippedForOwnership > 0) {
+    console.error(
+      `[dopl-mcp] Orphan skill cleanup: skipped ${skippedForOwnership} ` +
+        `unattributable director${skippedForOwnership === 1 ? "y" : "ies"} ` +
+        `(no userId in .dopl-meta.json — left in place for safety).`,
     );
   }
 }

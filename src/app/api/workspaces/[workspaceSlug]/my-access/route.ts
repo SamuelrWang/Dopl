@@ -25,31 +25,56 @@ export const GET = withUserAuth(
       const workspaceSlug = params?.workspaceSlug;
       if (!workspaceSlug) {
         return NextResponse.json(
-          { error: "workspaceSlug required" },
-          { status: 400 }
+          {
+            error: {
+              code: "MISSING_WORKSPACE_SLUG",
+              message: "workspaceSlug required",
+            },
+          },
+          { status: 400 },
         );
       }
       const workspace = await resolveApiWorkspace(workspaceSlug, userId);
       if (!workspace) {
         return NextResponse.json(
-          { error: "Workspace not found" },
-          { status: 404 }
+          {
+            error: {
+              code: "WORKSPACE_NOT_FOUND",
+              message: "Workspace not found",
+            },
+          },
+          { status: 404 },
         );
       }
       const result = await listMyAccess(workspace.id, userId);
       if (!result) {
         return NextResponse.json(
-          { error: "Not a member" },
-          { status: 403 }
+          {
+            error: {
+              code: "NOT_A_MEMBER",
+              message: "Not an active member of this workspace",
+            },
+          },
+          { status: 403 },
         );
       }
-      return NextResponse.json(result);
+      // Audit A-010: this is per-user data; never let a CDN cache it
+      // by URL alone. Vercel's authenticated-route default is usually
+      // safe but explicit beats implicit on a privacy-adjacent payload.
+      return NextResponse.json(result, {
+        headers: { "Cache-Control": "private, no-store" },
+      });
     } catch (err) {
       if (err instanceof HttpError) {
         return NextResponse.json(err.toResponseBody(), { status: err.status });
       }
       const message = err instanceof Error ? err.message : "Unknown error";
-      return NextResponse.json({ error: message }, { status: 500 });
+      return NextResponse.json(
+        {
+          error: { code: "INTERNAL_ERROR", message },
+        },
+        { status: 500 },
+      );
     }
   }
 );

@@ -87,6 +87,8 @@ To build a cluster:
 
 A great brain reads like a how-to for a single procedure, not a directory listing of entries.
 
+**Heads up: private knowledge bases and skills cannot be attached to clusters.** A cluster is a workspace-shared surface; a private item attached to one would either leak to teammates or render as a broken reference. The attach API rejects with `403 PRIVATE_RESOURCE` and the user must "Make public" from the resource's settings before it can be added. If you hit this on `canvas_create_cluster` or related attach calls, tell the user that specific resource is private and stop — don't auto-publish.
+
 ### 5. Capture corrections and preferences (brain protocol)
 
 Dopl's killer feature is durable agent learning. Three reflexive moves while a cluster skill is in scope:

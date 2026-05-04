@@ -2,19 +2,33 @@
 
 /**
  * useMyAccess — single-fetch hook that returns the caller's effective
- * access on every resource in a workspace, used by the sidebar to badge
- * each KB/skill row with a read-vs-edit icon.
+ * access on every resource in a workspace.
  *
  * Backed by GET /api/workspaces/[slug]/my-access. The response carries a
  * role-derived `defaultLevel` plus any per-resource `overrides`. Look
  * up a specific resource via the returned `resolve()` helper rather
  * than indexing the array yourself.
  *
+ * Use the `MyAccessProvider` + `useMyAccessContext` flow at the
+ * application shell so multiple consumers (sidebar nav, KB/skill
+ * detail pages, canvas panels) share one fetch instead of duplicating.
+ * The bare `useMyAccess(workspaceSegment)` hook is still exported for
+ * tests or one-off callers who don't have a provider in scope.
+ *
  * Pattern matches the existing client hooks (useEffect + fetch +
  * cancelled flag, `tick`-based refresh).
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import type {
   AccessLevel,
   ResourceType,
@@ -106,4 +120,59 @@ export function useMyAccess(workspaceSegment: string | null): UseMyAccessResult 
   const refetch = useCallback(() => setTick((t) => t + 1), []);
 
   return { data, loading, resolve, refetch };
+}
+
+// ── Context-based shared instance ──────────────────────────────────────
+
+const MyAccessCtx = createContext<UseMyAccessResult | null>(null);
+
+/**
+ * App-shell provider — call once at the top of the chrome layout
+ * (`layout-shell.tsx`). All descendants that need access info should
+ * read via `useMyAccessContext()` so the request is shared. Without
+ * the provider, `useMyAccessContext` returns a no-op shape (data null,
+ * resolve always null, refetch a no-op) so consumers don't crash on
+ * pages that don't have a workspace in scope.
+ *
+ * Audit A-021: refetches automatically when the window regains focus,
+ * so an admin change in another tab is reflected without a hard
+ * reload. The ideal would be a Supabase realtime subscription on
+ * `workspace_resource_access` but the focus pattern is enough for
+ * v1 (access changes are rare; same-tab admin actions already call
+ * `access.refetch()` explicitly).
+ */
+export function MyAccessProvider({
+  workspaceSegment,
+  children,
+}: {
+  workspaceSegment: string | null;
+  children: ReactNode;
+}) {
+  const value = useMyAccess(workspaceSegment);
+  const refetchRef = useRef(value.refetch);
+  useEffect(() => {
+    refetchRef.current = value.refetch;
+  });
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    function onFocus() {
+      refetchRef.current();
+    }
+    window.addEventListener("focus", onFocus);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+    };
+  }, []);
+  return <MyAccessCtx.Provider value={value}>{children}</MyAccessCtx.Provider>;
+}
+
+const NO_OP_RESULT: UseMyAccessResult = {
+  data: null,
+  loading: false,
+  resolve: () => null,
+  refetch: () => {},
+};
+
+export function useMyAccessContext(): UseMyAccessResult {
+  return useContext(MyAccessCtx) ?? NO_OP_RESULT;
 }

@@ -6,6 +6,8 @@ import { PageTopBar } from "@/shared/layout/page-top-bar";
 import { EditableTitle } from "@/shared/layout/editable-title";
 import { toast } from "@/shared/ui/toast";
 import { VisibilityPill, MakePublicAction } from "@/shared/ui/visibility-pill";
+import { useMyAccessContext } from "@/features/members/hooks/use-my-access";
+import { meetsLevel } from "@/features/members/access-defaults";
 import type {
   KnowledgeBase,
   KnowledgeEntry,
@@ -63,6 +65,13 @@ export function KnowledgeBaseView({
   const [selectedId, setSelectedId] = useState<string>(
     initialEntries[0]?.id ?? ""
   );
+  // Audit A-005 / A-013: gate write affordances (rename context menu,
+  // "+ New folder/entry") on the caller's effective access. Falls open
+  // to `true` while the access fetch is loading so admins/owners don't
+  // see a flicker of disabled UI.
+  const access = useMyAccessContext();
+  const accessLevel = access.resolve("knowledge_base", base.id);
+  const canEdit = accessLevel == null ? true : meetsLevel(accessLevel, "edit");
   // Inline-editable display name. Prop is the source of truth on
   // navigation / hard refresh; local state takes over after a rename
   // so the user sees their edit immediately without a route reload.
@@ -236,12 +245,15 @@ export function KnowledgeBaseView({
           await apiDeleteEntry(item.id, workspaceId);
         }
         await refresh();
-      } catch {
-        // Best-effort: stub delete failures are silent — the row stays
-        // around named "Untitled folder/entry" and the user can rename
-        // or trash it manually.
-      } finally {
         setEditingNodeId(null);
+      } catch (err) {
+        // Audit A-004: stub delete failures used to be silently
+        // swallowed, leaving an "Untitled" row stuck in the tree
+        // forever. Surface the failure so the user knows the cleanup
+        // didn't land — they can rename or trash the row manually.
+        reportError(err, "Couldn't remove the unsaved row");
+        setEditingNodeId(null);
+        throw err;
       }
     },
     [workspaceId, refresh]
@@ -387,6 +399,7 @@ export function KnowledgeBaseView({
               folders={folders}
               entries={entries}
               selectedEntryId={displayEntry?.id ?? null}
+              canEdit={canEdit}
               onSelect={(id) => setSelectedId(id)}
               onCreateFolder={handleCreateFolder}
               onCreateEntry={handleCreateEntry}

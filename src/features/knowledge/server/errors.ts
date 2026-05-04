@@ -51,6 +51,25 @@ export class AgentWriteDisabledError extends Error {
 }
 
 /**
+ * Thrown when a workspace-scoped API key (`api_keys.workspace_id IS
+ * NOT NULL`) tries to create a private resource. Workspace keys may be
+ * shared between humans (CI runners, service accounts) — letting them
+ * create private resources would either leak between humans (if RLS
+ * exposed them) or strand the resource (the same key can't read it
+ * back via `canSeeBase`'s key-scope filter). Audit B6.
+ */
+export class WorkspaceKeyPrivateVisibilityError extends Error {
+  readonly code = "WORKSPACE_KEY_PRIVATE_VISIBILITY";
+  constructor() {
+    super(
+      "Workspace-scoped API keys cannot create or own private resources. " +
+        "Use a personal API key (from Account Settings → Keys) for private items."
+    );
+    this.name = "WorkspaceKeyPrivateVisibilityError";
+  }
+}
+
+/**
  * Thrown when a folder move would create an A→B→…→A cycle. The DB
  * trigger `prevent_knowledge_folder_cycle` is the safety net; the
  * service pre-checks via `listFolderAncestors` so the user gets this

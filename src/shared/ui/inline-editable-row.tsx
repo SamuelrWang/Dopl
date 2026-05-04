@@ -21,6 +21,10 @@
  * In both flows: Enter / blur commit, Escape cancels. The component
  * leaves nothing focused after committing or cancelling — the parent
  * can react by clearing its `editing` state.
+ *
+ * IME safety (audit A-006): Enter / Escape are no-ops while a CJK
+ * IME composition is in flight. Otherwise pressing Enter to select a
+ * Pinyin / kana candidate would commit a partial transliteration.
  */
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -43,6 +47,14 @@ interface Props {
    * leave undefined — the component just exits editing.
    */
   onCancel?: () => Promise<void> | void;
+  /**
+   * Surface a friendly error to the user. Fires when `onCommit` throws
+   * (so the parent can toast) and when `onCancel` throws (so a stub
+   * delete that fails doesn't silently leave an "Untitled" row stuck).
+   * If omitted, errors are swallowed by the component (the draft still
+   * reverts on commit failure so editing stays usable).
+   */
+  onError?: (err: unknown, action: "commit" | "cancel") => void;
   /** Select the entire value on mount (default: false). Ideal for
    *  create flows where the placeholder name is meant to be replaced. */
   selectAllOnMount?: boolean;
@@ -54,17 +66,29 @@ interface Props {
   iconBefore?: React.ReactNode;
   /** Tailwind size override for the input. Default sized for tree rows. */
   inputClassName?: string;
+  /**
+   * Server-side max length for this resource's name. Hard-cap on the
+   * native input so the user can't paste a 5000-character string and
+   * blow up the row layout. Match the server's validator (KB names:
+   * 120, entries: 300, skill files: 120, etc.).
+   */
+  maxLength?: number;
+  /** Optional aria-label for screen readers when there's no visual label. */
+  ariaLabel?: string;
 }
 
 export function InlineEditableRow({
   value,
   onCommit,
   onCancel,
+  onError,
   selectAllOnMount = false,
   placeholder,
   className,
   iconBefore,
   inputClassName,
+  maxLength,
+  ariaLabel,
 }: Props) {
   const [draft, setDraft] = useState(value);
   const [busy, setBusy] = useState(false);
@@ -78,6 +102,15 @@ export function InlineEditableRow({
   /** Set true while the cancel callback is running so onBlur doesn't
    *  also try to commit the in-flight Escape. */
   const cancellingRef = useRef(false);
+  /** Set true while a commit is in flight (between setBusy(true) and
+   *  the final settle) so a fast Enter→Escape can't fire a cancel
+   *  delete that races the in-flight rename. (Audit A-014.) */
+  const committingRef = useRef(false);
+  /** Tracks whether an IME (CJK input method) is currently composing.
+   *  Updated via composition events; the keydown handler skips Enter
+   *  when this is true so committing a candidate selection doesn't
+   *  trigger commit on a partial transliteration. (Audit A-006.) */
+  const composingRef = useRef(false);
 
   // Autofocus + optional select-all on mount. Use useLayoutEffect so
   // the focus happens before paint and the user doesn't see a flash
@@ -103,7 +136,15 @@ export function InlineEditableRow({
   }, [value]);
 
   async function commit() {
-    if (settledRef.current || cancellingRef.current) return;
+    // Bail if already settled, currently cancelling, or a previous
+    // commit is still in flight (Audit A-014).
+    if (
+      settledRef.current ||
+      cancellingRef.current ||
+      committingRef.current
+    ) {
+      return;
+    }
     const next = draft.trim();
     if (!next || next === value.trim()) {
       // Nothing meaningful changed — treat as a no-op cancel. We do
@@ -111,28 +152,56 @@ export function InlineEditableRow({
       settledRef.current = true;
       return;
     }
+    committingRef.current = true;
     setBusy(true);
     try {
       await onCommit(next);
       settledRef.current = true;
-    } catch {
+    } catch (err) {
       // Stay in editing mode; revert draft to the original value so the
-      // user can retry or escape out.
+      // user can retry or escape out, and surface the error so the
+      // parent can toast.
       setDraft(value);
+      onError?.(err, "commit");
     } finally {
+      committingRef.current = false;
       setBusy(false);
     }
   }
 
   async function cancel() {
-    if (settledRef.current) return;
+    if (
+      settledRef.current ||
+      cancellingRef.current ||
+      committingRef.current
+    ) {
+      return;
+    }
     cancellingRef.current = true;
     try {
       if (onCancel) await onCancel();
+    } catch (err) {
+      // A-004: stub delete failure was previously swallowed, leaving
+      // an "Untitled" row in the tree forever. Surface it so the
+      // parent can toast and the user knows the cleanup didn't land.
+      onError?.(err, "cancel");
     } finally {
       settledRef.current = true;
       cancellingRef.current = false;
     }
+  }
+
+  function isImeKey(e: React.KeyboardEvent<HTMLInputElement>): boolean {
+    // Modern browsers expose `isComposing` on the native event for any
+    // key delivered while an IME is active. Older Safari / Chrome
+    // reported keyCode 229 instead. Either signal means "this Enter is
+    // for the IME, not for us." Composition events update composingRef
+    // for the same purpose; check both.
+    return (
+      composingRef.current ||
+      e.nativeEvent.isComposing ||
+      e.keyCode === 229
+    );
   }
 
   return (
@@ -144,8 +213,17 @@ export function InlineEditableRow({
         value={draft}
         placeholder={placeholder}
         disabled={busy}
+        maxLength={maxLength}
+        aria-label={ariaLabel}
         onChange={(e) => setDraft(e.target.value)}
+        onCompositionStart={() => {
+          composingRef.current = true;
+        }}
+        onCompositionEnd={() => {
+          composingRef.current = false;
+        }}
         onKeyDown={(e) => {
+          if (isImeKey(e)) return;
           if (e.key === "Enter") {
             e.preventDefault();
             inputRef.current?.blur();

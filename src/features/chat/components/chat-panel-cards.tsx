@@ -15,33 +15,46 @@ export function McpSetupCard() {
   const [copied, setCopied] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/user/keys")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (!data) return;
+    // Audit A-022: previous logic fired TWO unconditional POSTs to
+    // /api/user/keys on every mount, plus a third inside the list
+    // callback if the list was empty — so each tab/card re-render
+    // accumulated 1–3 duplicate "Onboarding MCP" rows. Replace with
+    // a single conditional flow:
+    //   1. Fetch existing keys.
+    //   2. If at least one active key exists, leave it alone (we
+    //      can't show the full key after creation anyway, so the
+    //      onboarding card just falls back to the YOUR_API_KEY
+    //      placeholder — same UX the user gets on second visit).
+    //   3. If none, mint exactly one with a date-stamped name so
+    //      multiple onboarding sessions don't collide on key name.
+    let cancelled = false;
+    (async () => {
+      try {
+        const listRes = await fetch("/api/user/keys");
+        if (!listRes.ok || cancelled) return;
+        const data = await listRes.json();
         const active = (data.keys || []).filter(
           (k: { revoked_at: string | null }) => !k.revoked_at
         );
-        if (active.length > 0) return; // key exists, generate new
-        return fetch("/api/user/keys", {
+        if (active.length > 0 || cancelled) return;
+        const genRes = await fetch("/api/user/keys", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: "Onboarding MCP" }),
-        })
-          .then((r) => (r.ok ? r.json() : null))
-          .then((d) => d && setApiKey(d.key));
-      })
-      .catch(() => {});
-
-    // Also try to generate if no keys found
-    fetch("/api/user/keys", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: "Onboarding MCP" }),
-    })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => d && setApiKey(d.key))
-      .catch(() => {});
+          body: JSON.stringify({
+            name: `Onboarding MCP · ${new Date().toLocaleDateString()}`,
+          }),
+        });
+        if (!genRes.ok || cancelled) return;
+        const gen = await genRes.json();
+        if (gen?.key) setApiKey(gen.key);
+      } catch {
+        // Network / parse failures fall through; the placeholder
+        // YOUR_API_KEY still renders so the user can manually paste.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   function copy(text: string, id: string) {

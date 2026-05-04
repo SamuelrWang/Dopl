@@ -27,6 +27,7 @@ import {
   SkillPrimaryFileImmutableError,
   SkillSlugConflictError,
   SkillStaleVersionError,
+  WorkspaceKeyPrivateSkillError,
 } from "./errors";
 import * as repo from "./repository";
 import { buildSeedSkills } from "./seed";
@@ -82,6 +83,9 @@ export async function listSkills(ctx: SkillContext): Promise<Skill[]> {
   const all = await repo.listSkillsForWorkspace(ctx.workspaceId);
   const visible = all.filter((s) => canSeeSkill(ctx, s));
   if (visible.length > 0) return visible;
+  // CRITICAL: same reasoning as `listBases` — seed only when the
+  // workspace has NO skills at all, not when the caller sees zero.
+  if (all.length > 0) return visible;
   const workspaceCreatedAt = await fetchWorkspaceCreatedAt(ctx.workspaceId);
   if (
     workspaceCreatedAt !== null &&
@@ -176,6 +180,20 @@ export async function createSkill(
   // Supabase JS doesn't expose transactions outside RPCs; this rollback
   // pattern is the next-best thing.
 
+  // Audit B6 + B15: visibility default depends on the caller. Same
+  // rules as createBase — workspace-scoped keys default to public and
+  // can't create private; everyone else defaults to private.
+  const fromWorkspaceKey = ctx.apiKeyWorkspaceId != null;
+  let resolvedVisibility = input.visibility;
+  if (fromWorkspaceKey) {
+    if (resolvedVisibility === "private") {
+      throw new WorkspaceKeyPrivateSkillError();
+    }
+    resolvedVisibility = resolvedVisibility ?? "public";
+  } else {
+    resolvedVisibility = resolvedVisibility ?? "private";
+  }
+
   let attempt = 0;
   let baseSlug =
     input.slug ??
@@ -193,9 +211,7 @@ export async function createSkill(
         whenNotToUse: input.whenNotToUse ?? null,
         status: input.status ?? "active",
         agentWriteEnabled: input.agentWriteEnabled ?? false,
-        // M-10: new skills default to private. See createBase in
-        // features/knowledge/server/service.ts for the rationale.
-        visibility: input.visibility ?? "private",
+        visibility: resolvedVisibility,
         createdBy: ctx.userId,
         source: ctx.source,
       });
@@ -489,6 +505,10 @@ export async function seedWorkspace(
       recentRuns: fixture.recentRuns,
       totalInvocations: fixture.totalInvocations,
       status: fixture.status,
+      // Seeded fixtures are starter content — public so every member
+      // can see and run them. Owner-explicit `createSkill` defaults
+      // to private; only the seed path overrides.
+      visibility: "public",
       createdBy: ctx.userId,
       source: "user",
     });

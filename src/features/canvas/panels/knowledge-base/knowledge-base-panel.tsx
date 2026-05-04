@@ -34,6 +34,10 @@ import type {
 } from "@/features/knowledge/types";
 import { Skeleton } from "@/shared/ui/skeleton";
 import { InlineEditableRow } from "@/shared/ui/inline-editable-row";
+import { toast } from "@/shared/ui/toast";
+import { useMyAccessContext } from "@/features/members/hooks/use-my-access";
+import { meetsLevel } from "@/features/members/access-defaults";
+import { VisibilityPill } from "@/shared/ui/visibility-pill";
 
 interface Props {
   panel: KnowledgeBasePanelData;
@@ -46,6 +50,11 @@ export function KnowledgeBasePanelBody({ panel }: Props) {
     scope?.workspaceId
   );
   useKnowledgeRealtime(scope?.workspaceId, refetch);
+  // Audit A-005 / A-013: hide write affordances from read-only members.
+  // Falls open to true while the access fetch is loading.
+  const access = useMyAccessContext();
+  const accessLevel = access.resolve("knowledge_base", panel.knowledgeBaseId);
+  const canEdit = accessLevel == null ? true : meetsLevel(accessLevel, "edit");
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set(["__root__"]));
   const [agentToggling, setAgentToggling] = useState(false);
@@ -129,13 +138,24 @@ export function KnowledgeBasePanelBody({ panel }: Props) {
     id: string,
     next: string
   ) {
-    if (kind === "folder") {
-      await updateFolder(id, { name: next });
-    } else {
-      await updateEntry(id, { title: next });
+    try {
+      if (kind === "folder") {
+        await updateFolder(id, { name: next });
+      } else {
+        await updateEntry(id, { title: next });
+      }
+      refetch();
+      setEditing(null);
+    } catch (err) {
+      // Audit A-007: surface the failure so the user knows their typed
+      // name reverted. Re-throw so InlineEditableRow rolls back to the
+      // original value and stays in edit mode for retry.
+      toast({
+        title: "Couldn't rename",
+        description: err instanceof Error ? err.message : "Unknown error",
+      });
+      throw err;
     }
-    refetch();
-    setEditing(null);
   }
 
   async function handleCancelStub(kind: "folder" | "entry", id: string) {
@@ -148,11 +168,20 @@ export function KnowledgeBasePanelBody({ panel }: Props) {
         await deleteEntry(id);
         if (selectedEntryId === id) setSelectedEntryId(null);
       }
-    } catch {
-      // Best effort — refetch will reconcile if delete failed.
+      refetch();
+      setEditing(null);
+    } catch (err) {
+      // Audit A-004: stub delete failure was silently swallowed,
+      // leaving "Untitled folder/entry" rows stuck in the tree.
+      // Surface so the user knows + clear the editing state regardless
+      // (they pressed Escape, they don't want to keep typing).
+      toast({
+        title: "Couldn't remove the unsaved row",
+        description: err instanceof Error ? err.message : "Unknown error",
+      });
+      setEditing(null);
+      throw err;
     }
-    refetch();
-    setEditing(null);
   }
 
   async function handleDeleteEntry(entry: KnowledgeEntry) {
@@ -200,6 +229,13 @@ export function KnowledgeBasePanelBody({ panel }: Props) {
             <h2 className="truncate text-sm font-semibold text-white/90">
               {data?.base.name ?? panel.name}
             </h2>
+            {/* Audit B10: visibility pill on the canvas KB panel
+             * header for parity with the full-page detail. The owner
+             * can promote-to-public from the full-page settings; the
+             * canvas panel is read-only on visibility. */}
+            {data?.base.visibility && (
+              <VisibilityPill visibility={data.base.visibility} />
+            )}
             <button
               type="button"
               onClick={handleAgentToggle}
@@ -247,27 +283,30 @@ export function KnowledgeBasePanelBody({ panel }: Props) {
               editing={editing}
               onCommitRename={handleCommitRename}
               onCancelStub={handleCancelStub}
+              canEdit={canEdit}
               depth={0}
             />
           )}
-          <div className="mt-2 flex flex-col gap-1 border-t border-white/[0.04] px-2 pt-2">
-            <button
-              type="button"
-              onClick={() => handleAddEntry(null)}
-              className="flex w-full items-center gap-1.5 rounded px-2 py-1 text-[11px] text-white/50 transition-colors hover:bg-white/[0.03] hover:text-white/85"
-            >
-              <Plus size={10} />
-              Add entry
-            </button>
-            <button
-              type="button"
-              onClick={() => handleAddFolder(null)}
-              className="flex w-full items-center gap-1.5 rounded px-2 py-1 text-[11px] text-white/50 transition-colors hover:bg-white/[0.03] hover:text-white/85"
-            >
-              <Plus size={10} />
-              Add folder
-            </button>
-          </div>
+          {canEdit && (
+            <div className="mt-2 flex flex-col gap-1 border-t border-white/[0.04] px-2 pt-2">
+              <button
+                type="button"
+                onClick={() => handleAddEntry(null)}
+                className="flex w-full items-center gap-1.5 rounded px-2 py-1 text-[11px] text-white/50 transition-colors hover:bg-white/[0.03] hover:text-white/85"
+              >
+                <Plus size={10} />
+                Add entry
+              </button>
+              <button
+                type="button"
+                onClick={() => handleAddFolder(null)}
+                className="flex w-full items-center gap-1.5 rounded px-2 py-1 text-[11px] text-white/50 transition-colors hover:bg-white/[0.03] hover:text-white/85"
+              >
+                <Plus size={10} />
+                Add folder
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Editor pane */}
@@ -391,6 +430,9 @@ interface TreeNodesProps {
     next: string
   ) => Promise<void>;
   onCancelStub: (kind: "folder" | "entry", id: string) => Promise<void>;
+  /** Audit A-005 — gates the in-row "+ entry" / "delete" affordances.
+   *  Read-only members render labels only. */
+  canEdit: boolean;
   depth: number;
 }
 
@@ -426,6 +468,8 @@ function FolderRow({ node, ...props }: { node: TreeNode } & TreeNodesProps) {
             <InlineEditableRow
               value={node.name}
               selectAllOnMount
+              maxLength={200}
+              ariaLabel="Folder name"
               onCommit={(next) =>
                 props.onCommitRename("folder", node.id, next)
               }
@@ -452,7 +496,7 @@ function FolderRow({ node, ...props }: { node: TreeNode } & TreeNodesProps) {
             <span className="truncate">{node.name}</span>
           </button>
         )}
-        {!isEditing && (
+        {!isEditing && props.canEdit && (
           <div className="hidden shrink-0 items-center gap-0.5 pr-1 group-hover:flex">
             <IconButton
               label="New entry"
@@ -503,6 +547,8 @@ function EntryRow({ node, ...props }: { node: TreeNode } & TreeNodesProps) {
             <InlineEditableRow
               value={node.name}
               selectAllOnMount
+              maxLength={300}
+              ariaLabel="Entry title"
               onCommit={(next) =>
                 props.onCommitRename("entry", node.id, next)
               }
@@ -520,7 +566,7 @@ function EntryRow({ node, ...props }: { node: TreeNode } & TreeNodesProps) {
             <span className="truncate">{node.name}</span>
           </button>
         )}
-        {!isEditing && (
+        {!isEditing && props.canEdit && (
           <div className="hidden shrink-0 items-center gap-0.5 pr-1 group-hover:flex">
             <IconButton
               label="Delete entry"

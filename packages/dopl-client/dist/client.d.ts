@@ -80,6 +80,7 @@ export declare class DoplClient {
     getActiveWorkspace(): Promise<ResolvedWorkspace>;
     pingMcpStatus(): Promise<{
         is_admin: boolean;
+        user_id: string | null;
     }>;
     getClusterBrain(slug: string): Promise<{
         instructions: string;

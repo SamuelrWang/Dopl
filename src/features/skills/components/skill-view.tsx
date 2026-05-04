@@ -11,6 +11,8 @@ import { cn } from "@/shared/lib/utils";
 import { PageTopBar } from "@/shared/layout/page-top-bar";
 import { EditableTitle } from "@/shared/layout/editable-title";
 import { VisibilityPill, MakePublicAction } from "@/shared/ui/visibility-pill";
+import { useMyAccessContext } from "@/features/members/hooks/use-my-access";
+import { meetsLevel } from "@/features/members/access-defaults";
 import { useRefetchOnFocus } from "@/shared/hooks/use-refetch-on-focus";
 import { toast } from "@/shared/ui/toast";
 import { AlertTriangle } from "lucide-react";
@@ -106,6 +108,12 @@ export function SkillView({
   useEffect(() => {
     setDisplayedVisibility(skill.visibility);
   }, [skill.visibility]);
+
+  // Audit A-005 / A-013: gate write affordances on the caller's
+  // effective access. Falls open to true while access is loading.
+  const access = useMyAccessContext();
+  const accessLevel = access.resolve("skill", skill.id);
+  const canEdit = accessLevel == null ? true : meetsLevel(accessLevel, "edit");
 
   const [files, setFiles] = useState<SkillFile[]>(() =>
     sortFiles(resolved.files)
@@ -558,6 +566,7 @@ export function SkillView({
             <FileTabs
               files={files}
               activeId={activeFile?.id ?? ""}
+              canEdit={canEdit}
               onSelect={setActiveFileId}
               onAdd={handleAddFile}
               onRemove={handleRemoveFile}

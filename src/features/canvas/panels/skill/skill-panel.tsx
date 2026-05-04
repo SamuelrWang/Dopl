@@ -20,6 +20,10 @@ import type { ResolvedSkill, SkillFile } from "@/features/skills/types";
 import { PRIMARY_SKILL_FILE_NAME } from "@/features/skills/types";
 import { Skeleton } from "@/shared/ui/skeleton";
 import { InlineEditableRow } from "@/shared/ui/inline-editable-row";
+import { toast } from "@/shared/ui/toast";
+import { useMyAccessContext } from "@/features/members/hooks/use-my-access";
+import { meetsLevel } from "@/features/members/access-defaults";
+import { VisibilityPill } from "@/shared/ui/visibility-pill";
 
 interface Props {
   panel: SkillPanelData;
@@ -82,6 +86,13 @@ export function SkillPanelBody({ panel }: Props) {
     files[0] ??
     null;
 
+  // Audit A-005: gate "+ Add file" / "Delete file" / inline rename
+  // on the caller's effective access. Falls open to true while the
+  // access fetch is loading so admins/owners don't see a flash.
+  const access = useMyAccessContext();
+  const accessLevel = access.resolve("skill", skill.id);
+  const canEdit = accessLevel == null ? true : meetsLevel(accessLevel, "edit");
+
   return (
     <div className="flex h-full w-full flex-col">
       <ClusterAttachmentBanner panelId={panel.id} />
@@ -101,6 +112,7 @@ export function SkillPanelBody({ panel }: Props) {
         files={files}
         active={activeFile?.name ?? null}
         editingFileName={editingFileName}
+        canEdit={canEdit}
         onSelect={(n) => setActiveFileName(n)}
         onAdd={async () => {
           // Pick a stub name that doesn't collide with an existing file —
@@ -131,10 +143,17 @@ export function SkillPanelBody({ panel }: Props) {
               setActiveFileName(renamed.name);
             }
             refetch();
-          } catch (err) {
-            alert(err instanceof Error ? err.message : "Rename failed");
-          } finally {
             setEditingFileName(null);
+          } catch (err) {
+            // Audit A-007: surface the failure (was a blocking
+            // window.alert, replaced with toast) and re-throw so
+            // InlineEditableRow reverts the draft + stays in edit
+            // mode for retry.
+            toast({
+              title: "Couldn't rename file",
+              description: err instanceof Error ? err.message : "Unknown error",
+            });
+            throw err;
           }
         }}
         onCancelStub={async (currentName) => {
@@ -142,14 +161,25 @@ export function SkillPanelBody({ panel }: Props) {
           // littered with "untitled.md".
           try {
             await deleteSkillFile(skill.slug, currentName);
-          } catch {
-            // best-effort
+            if (activeFileName === currentName) {
+              setActiveFileName(PRIMARY_SKILL_FILE_NAME);
+            }
+            refetch();
+            setEditingFileName(null);
+          } catch (err) {
+            // Audit A-004: stub delete failure used to be silently
+            // swallowed. Surface to the user; clear editing state
+            // regardless (they pressed Escape, they're done editing).
+            toast({
+              title: "Couldn't remove the unsaved file",
+              description: err instanceof Error ? err.message : "Unknown error",
+            });
+            if (activeFileName === currentName) {
+              setActiveFileName(PRIMARY_SKILL_FILE_NAME);
+            }
+            setEditingFileName(null);
+            throw err;
           }
-          if (activeFileName === currentName) {
-            setActiveFileName(PRIMARY_SKILL_FILE_NAME);
-          }
-          refetch();
-          setEditingFileName(null);
         }}
         onDelete={async (file) => {
           if (file.name === PRIMARY_SKILL_FILE_NAME) return;
@@ -426,6 +456,9 @@ function SkillHeader({
               className="min-w-0 flex-1 truncate bg-transparent font-mono text-[13px] text-white/95 placeholder:text-white/25 focus:outline-none"
               placeholder="skill-slug"
             />
+            {/* Audit B10: visibility pill on the canvas skill panel
+             * header for parity with the full-page detail. */}
+            <VisibilityPill visibility={skill.visibility} />
             <button
               type="button"
               onClick={() => {
@@ -492,6 +525,7 @@ function FileTabs({
   files,
   active,
   editingFileName,
+  canEdit,
   onSelect,
   onAdd,
   onCommitRename,
@@ -502,6 +536,10 @@ function FileTabs({
   active: string | null;
   /** Name of the tab in inline-rename mode, or null. */
   editingFileName: string | null;
+  /** Audit A-005: gate "+ Add file" / inline rename / delete on the
+   *  caller's effective access. Read-only members can still switch
+   *  tabs and read content. */
+  canEdit: boolean;
   onSelect: (name: string) => void;
   onAdd: () => void;
   /** Commit an inline rename. Receives the current (stub) name and the
@@ -532,6 +570,8 @@ function FileTabs({
                 <InlineEditableRow
                   value={f.name}
                   selectAllOnMount
+                  maxLength={120}
+                  ariaLabel="Skill file name"
                   onCommit={(next) => onCommitRename(f.name, next)}
                   onCancel={() => onCancelStub(f.name)}
                   inputClassName="font-mono text-[11px] py-0"
@@ -547,7 +587,7 @@ function FileTabs({
                 <span className="truncate">{f.name}</span>
               </button>
             )}
-            {!isEditing && !pinned && isActive && (
+            {!isEditing && !pinned && isActive && canEdit && (
               <button
                 type="button"
                 aria-label={`Delete ${f.name}`}
@@ -563,14 +603,16 @@ function FileTabs({
           </div>
         );
       })}
-      <button
-        type="button"
-        onClick={onAdd}
-        className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[10px] text-white/40 transition-colors hover:text-white/70"
-      >
-        <Plus size={9} />
-        Add file
-      </button>
+      {canEdit && (
+        <button
+          type="button"
+          onClick={onAdd}
+          className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[10px] text-white/40 transition-colors hover:text-white/70"
+        >
+          <Plus size={9} />
+          Add file
+        </button>
+      )}
     </div>
   );
 }

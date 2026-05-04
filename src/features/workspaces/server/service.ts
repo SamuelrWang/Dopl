@@ -83,19 +83,49 @@ export async function resolveActiveWorkspace(
 
 /**
  * Idempotent: creates the user's default workspace if it doesn't exist yet.
- * Called from `resolveActiveWorkspace` and from signup hooks. Slug
- * uniqueness is no longer required (publicId is the unique routing
- * key), so this is a single insert with no retry loop.
+ * Called from `resolveActiveWorkspace` (used by the auth callback +
+ * any first-time route hit) and from signup hooks. Slug uniqueness is
+ * no longer required (publicId is the unique routing key), but the
+ * SELECT-then-INSERT shape is racy: a fast OAuth round-trip can land
+ * on `/canvas` while the callback is still inserting, both call
+ * `ensureDefaultWorkspace`, both see "no existing," and both try to
+ * insert. The second insert blew up with a unique-constraint or
+ * left two "Untitled" rows depending on which constraint fired.
+ *
+ * Fix (Audit A-019): catch the unique-constraint violation on the
+ * second concurrent insert and resolve via a re-fetch — the first
+ * caller already created the row we wanted. No advisory lock needed
+ * since the unique constraint already serialises us; we just need to
+ * recover gracefully.
  */
 export async function ensureDefaultWorkspace(userId: string): Promise<Workspace> {
   const existing = await findDefaultWorkspaceForUser(userId);
   if (existing) return existing;
   const name = "Untitled";
-  return insertWorkspaceWithOwnerMembership({
-    ownerId: userId,
-    name,
-    slug: slugifyWorkspaceName(name),
-  });
+  try {
+    return await insertWorkspaceWithOwnerMembership({
+      ownerId: userId,
+      name,
+      slug: slugifyWorkspaceName(name),
+    });
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      const after = await findDefaultWorkspaceForUser(userId);
+      if (after) return after;
+    }
+    throw err;
+  }
+}
+
+function isUniqueViolation(err: unknown): boolean {
+  // Postgres SQLSTATE 23505 = unique_violation. Supabase JS surfaces it
+  // either as `{ code }` on the error object or wrapped in a message;
+  // check both shapes defensively.
+  if (!err || typeof err !== "object") return false;
+  const code = (err as { code?: unknown }).code;
+  if (typeof code === "string" && code === "23505") return true;
+  const message = (err as { message?: unknown }).message;
+  return typeof message === "string" && message.includes("23505");
 }
 
 export async function listMyWorkspaces(userId: string): Promise<Workspace[]> {

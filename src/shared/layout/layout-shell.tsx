@@ -4,6 +4,8 @@ import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 import { Sidebar } from "./sidebar";
 import { FlushGrid } from "@/shared/design";
+import { MyAccessProvider } from "@/features/members/hooks/use-my-access";
+import { workspaceSegmentFromPath } from "@/shared/lib/url/workspace-segment";
 
 const NO_SIDEBAR_PATHS = new Set(["/login", "/terms", "/privacy"]);
 
@@ -70,8 +72,16 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
   // it only takes up as much height as its (mostly empty) children
   // need, leaving the rest of the viewport free for the canvas to
   // receive pointer events.
+  // Workspace segment derived once at the shell level so the
+  // my-access provider, the sidebar, and any descendant page (KB
+  // detail, skill detail, canvas panels) all agree on which workspace
+  // they're scoped to. Audit A-008: hosting the access fetch here
+  // dedups what was previously two parallel calls (one per nav
+  // section) plus on-demand calls per detail page.
+  const workspaceSegment = workspaceSegmentFromPath(pathname);
+
   return (
-    <>
+    <MyAccessProvider workspaceSegment={workspaceSegment}>
       <FlushGrid />
       <Sidebar />
       <div className="relative z-[2] pointer-events-none md:pl-64">
@@ -90,6 +100,6 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
           {children}
         </main>
       </div>
-    </>
+    </MyAccessProvider>
   );
 }

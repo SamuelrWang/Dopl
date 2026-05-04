@@ -11,6 +11,7 @@ import {
   KnowledgePathConflictError,
   KnowledgeStaleVersionError,
   PathTraversalError,
+  WorkspaceKeyPrivateVisibilityError,
 } from "./errors";
 
 /**
@@ -51,6 +52,9 @@ export function mapKnowledgeError(err: unknown): HttpError | null {
       expected: err.expected,
       actual: err.actual,
     });
+  }
+  if (err instanceof WorkspaceKeyPrivateVisibilityError) {
+    return new HttpError(403, "WORKSPACE_KEY_PRIVATE_VISIBILITY", err.message);
   }
   return null;
 }

@@ -178,6 +178,15 @@ See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture and [plan 
 - Proposed resolution: defer — delete the legacy branch (and `findWorkspaceBySlug` / `findMemberWorkspaceBySlug` if still only used here) once the `legacy_slug_redirect` event drops to zero hits over 14 consecutive days.
 - Status: open
 
+### F-018: `is_workspace_member` 'editor' → 'member' fix bundled into M-10 migration
+- Location: `supabase/migrations/20260504030000_visibility_private_resources.sql` (the function rewrite at the top), originally introduced by `20260502130000_editor_to_member.sql` which forgot to update the function
+- Found during: M-10 audit
+- Severity: bug (latent — silently denied member-role users from ALL session-based RLS-enforced reads/writes)
+- Description: The editor → member rename migration updated the role values in `workspace_members` but did NOT update the `is_workspace_member` SECURITY DEFINER function, which still hard-coded `'editor'` in its rank table. Any user with `role='member'` was being treated as `-1` by the function and denied by every RLS policy that passed `'editor'` as the min role. Symptom: member-role users saw empty KB / skill / cluster lists via the web UI (admin paths via `supabaseAdmin` bypassed RLS so the bug was hidden in most flows).
+- Resolution: migration `20260504030000` patches the function to recognize both `'member'` and `'editor'` (legacy alias) as rank-1. Bundled into the M-10 migration because both touch the same RLS surface, but the function fix is independently applicable. Behavior change: member-role users in shared workspaces will newly see resources they couldn't before — but those were resources they were always intended to see; the function bug was masking correct intent.
+- Proposed resolution: ✅ fixed-in-20260504030000. Track here so the bundling is visible — future migrations should keep `is_workspace_member` in sync if the role enum changes again.
+- Status: fixed-in-20260504030000
+
 ### F-012: Grandfathered 500-line violators touched during P2 relocations
 - Location: `src/features/ingestion/server/skeleton.ts` (850 lines after relocation; was 847), `src/features/clusters/server/service.ts` (517 after; was 516), `src/lib/ingestion/pipeline.ts` (1212, untouched but over), `src/app/page.tsx` (823 after P2.5 extractions; was 1114)
 - Found during: P2 post-phase audit, after user set a 500-line hard cap

@@ -18,6 +18,12 @@ interface Props {
   onMove: (item: ContextMenuItem) => void;
   onDelete: (item: ContextMenuItem) => void;
   onClose: () => void;
+  /** When false, hide write actions (Rename / Move / Delete) entirely
+   *  — the user is read-only on this resource and the server would
+   *  reject the call anyway. (Audit A-013.) When the access fetch is
+   *  still pending, treat as `true` so admins/owners don't see a
+   *  flash of an actions-less menu. */
+  canEdit?: boolean;
 }
 
 /**
@@ -36,6 +42,7 @@ export function TreeContextMenu({
   onMove,
   onDelete,
   onClose,
+  canEdit = true,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null);
 
@@ -61,32 +68,40 @@ export function TreeContextMenu({
       style={{ left: x, top: y }}
       className="fixed z-[1000] min-w-[160px] rounded-md border border-white/[0.1] bg-[oklch(0.16_0_0)] shadow-2xl shadow-black/60 py-1"
     >
-      <MenuItem
-        icon={<Edit2 size={12} />}
-        label="Rename"
-        onClick={() => {
-          onClose();
-          onRename(item);
-        }}
-      />
-      <MenuItem
-        icon={<FolderInput size={12} />}
-        label="Move to…"
-        onClick={() => {
-          onClose();
-          onMove(item);
-        }}
-      />
-      <div className="my-1 mx-1 h-px bg-white/[0.06]" />
-      <MenuItem
-        icon={<Trash2 size={12} />}
-        label="Delete"
-        onClick={() => {
-          onClose();
-          onDelete(item);
-        }}
-        destructive
-      />
+      {canEdit ? (
+        <>
+          <MenuItem
+            icon={<Edit2 size={12} />}
+            label="Rename"
+            onClick={() => {
+              onClose();
+              onRename(item);
+            }}
+          />
+          <MenuItem
+            icon={<FolderInput size={12} />}
+            label="Move to…"
+            onClick={() => {
+              onClose();
+              onMove(item);
+            }}
+          />
+          <div className="my-1 mx-1 h-px bg-white/[0.06]" />
+          <MenuItem
+            icon={<Trash2 size={12} />}
+            label="Delete"
+            onClick={() => {
+              onClose();
+              onDelete(item);
+            }}
+            destructive
+          />
+        </>
+      ) : (
+        <div className="px-3 py-1.5 text-[11px] text-text-secondary/70">
+          Read-only — ask an admin for edit access.
+        </div>
+      )}
     </div>
   );
 }
