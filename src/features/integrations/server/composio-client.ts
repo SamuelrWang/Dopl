@@ -113,11 +113,14 @@ export function createComposioClient(opts: {
       response = await sdk.tools.execute(slug, {
         connectedAccountId: brokerConnectionId,
         arguments: args,
-        // Pin to "latest" so the SDK doesn't reject a request when the
-        // auth config has been upgraded server-side and the cached
-        // version on disk is older. Composio recommends this for
-        // server-side execute calls — see SDK docs on version param.
-        version: "latest",
+        // Composio rejects `version: "latest"` at runtime even though
+        // the SDK type allows it ("Toolkit version not specified. For
+        // manual execution of the tool please pass a specific toolkit
+        // version"). The documented escape hatch is to set
+        // `dangerouslySkipVersionCheck` — fine for our use case
+        // because we're not pinning toolkit versions; we want
+        // whatever's current on Composio's side.
+        dangerouslySkipVersionCheck: true,
       });
     } catch (err) {
       throw new IntegrationFetchError(
