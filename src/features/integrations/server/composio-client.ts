@@ -40,6 +40,21 @@ export interface ComposioClient {
    */
   deleteConnection(brokerConnectionId: string): Promise<void>;
 
+  /**
+   * Delete every broker connected_account belonging to the given
+   * (entityId, authConfigId) pair. Called before `initiateConnection`
+   * to self-heal from stuck multi-connection state — Composio rejects
+   * fresh initiates when more than one account already exists for the
+   * pair, and a previous disconnect that didn't reach the broker (or a
+   * partial OAuth handshake) can leave orphans behind.
+   *
+   * Returns the count purged so the caller can log when it had work to do.
+   */
+  purgeAccountsFor(input: {
+    entityId: string;
+    authConfigId: string;
+  }): Promise<number>;
+
   listObjects(input: {
     brokerConnectionId: string;
     provider: IntegrationProvider;
@@ -178,6 +193,35 @@ export function createComposioClient(opts: {
           throw new IntegrationFetchError("notion", message);
         }
       }
+    },
+
+    async purgeAccountsFor({ entityId, authConfigId }) {
+      let response: { items?: Array<{ id: string }> };
+      try {
+        response = await sdk.connectedAccounts.list({
+          userIds: [entityId],
+          authConfigIds: [authConfigId],
+        });
+      } catch (err) {
+        // If we can't list, don't block initiate — the caller will
+        // surface the real failure on its own attempt. Best-effort.
+        const message = err instanceof Error ? err.message : String(err);
+        if (!/not.?found/i.test(message)) {
+          throw new IntegrationFetchError("notion", message);
+        }
+        return 0;
+      }
+      const items = response.items ?? [];
+      let purged = 0;
+      for (const item of items) {
+        try {
+          await sdk.connectedAccounts.delete(item.id);
+          purged += 1;
+        } catch {
+          // Skip individual delete failures — already gone is fine.
+        }
+      }
+      return purged;
     },
 
     async listObjects({ brokerConnectionId, provider, listInput }) {

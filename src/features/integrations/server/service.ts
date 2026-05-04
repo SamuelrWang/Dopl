@@ -103,9 +103,20 @@ export async function startBrokerOAuth(
   }
 
   const authConfigId = resolveAuthConfigId(ctx.provider);
+  const entityId = brokerEntityId(ctx.workspaceId, ctx.userId);
   const callbackUrl = `${appBaseUrl()}/api/integrations/${ctx.provider}/callback?workspace_id=${encodeURIComponent(ctx.workspaceId)}&user_id=${encodeURIComponent(ctx.userId)}`;
+
+  // Self-heal: purge any orphan broker accounts for this
+  // (entity, authConfig) before initiating. Composio rejects fresh
+  // initiates when more than one connected_account already exists for
+  // the pair (the "Multiple connected accounts found … allowMultiple"
+  // error). Orphans accumulate when a previous disconnect didn't
+  // reach the broker, or when an OAuth handshake stalled mid-flow.
+  // Cheap if there are zero — a single LIST call.
+  await broker.purgeAccountsFor({ entityId, authConfigId });
+
   const init = await broker.initiateConnection({
-    entityId: brokerEntityId(ctx.workspaceId, ctx.userId),
+    entityId,
     authConfigId,
     callbackUrl,
   });
