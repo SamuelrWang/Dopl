@@ -322,16 +322,27 @@ export async function listIntegrationsForUser(
 }
 
 /**
- * Disconnect a provider for the caller. Deletes the row (and the
- * broker connection alongside it). Subsequent `connect_integration`
- * calls start fresh.
+ * Disconnect a provider for the caller. Deletes the broker-side
+ * connected account first (so the next `initiateConnection` for the
+ * same entity+auth-config isn't rejected by Composio's default
+ * `allowMultiple=false`), then removes the local row. Best-effort on
+ * the broker side — local deletion always proceeds.
  */
 export async function disconnectIntegration(
   ctx: { workspaceId: string; userId: string; provider: IntegrationProvider },
   deps: IntegrationsServiceDeps = {}
 ): Promise<void> {
   const db = deps.db ?? supabaseAdmin();
+  const broker = deps.broker ?? defaultComposioClient();
   const found = await findConnectionWithBrokerId(db, ctx);
   if (!found) return;
+  try {
+    await broker.deleteConnection(found.brokerConnectionId);
+  } catch {
+    // Best-effort. If broker delete fails, we still purge our row —
+    // the user shouldn't be stuck with a connection they can't shed.
+    // Reconnect from scratch will surface a fresh error if the broker
+    // really is wedged.
+  }
   await deleteConnection(db, found.connection.id);
 }

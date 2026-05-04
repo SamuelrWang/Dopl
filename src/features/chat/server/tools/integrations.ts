@@ -11,6 +11,7 @@ import {
 import { getProviderConfig } from "@/features/integrations/server/providers";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { ProviderSchema } from "@/features/integrations/schema";
+import { logSystemEvent } from "@/features/analytics/server/system-events";
 import type { ToolResult } from "./types";
 
 /**
@@ -72,6 +73,15 @@ export async function executeListIntegrationObjects(
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    void logSystemEvent({
+      severity: "error",
+      category: "other",
+      source: "chat.tools.list_integration_objects",
+      message: `list_integration_objects failed: ${message}`,
+      fingerprintKeys: ["integrations_list_failed", provider.data],
+      metadata: { provider: provider.data, error: message },
+      userId,
+    });
     return {
       result: JSON.stringify({
         error: message,
@@ -139,6 +149,19 @@ export async function executeReadIntegrationObject(
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    void logSystemEvent({
+      severity: "error",
+      category: "other",
+      source: "chat.tools.read_integration_object",
+      message: `read_integration_object failed: ${message}`,
+      fingerprintKeys: ["integrations_read_failed", provider.data],
+      metadata: {
+        provider: provider.data,
+        object_id: objectId,
+        error: message,
+      },
+      userId,
+    });
     return { result: JSON.stringify({ error: message }) };
   }
 }

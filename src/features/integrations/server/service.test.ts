@@ -116,6 +116,7 @@ function makeFakeBroker(overrides: Partial<ComposioClient> = {}): ComposioClient
       body: "body",
       lastModified: null,
     }),
+    deleteConnection: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }

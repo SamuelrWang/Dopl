@@ -32,6 +32,14 @@ export interface ComposioClient {
 
   getConnectionStatus(brokerConnectionId: string): Promise<{ status: BrokerStatus }>;
 
+  /**
+   * Delete the broker-side connected account. Called from
+   * `disconnectIntegration` so a subsequent `initiateConnection` for
+   * the same entity+auth-config doesn't get rejected by Composio's
+   * `allowMultiple=false` default.
+   */
+  deleteConnection(brokerConnectionId: string): Promise<void>;
+
   listObjects(input: {
     brokerConnectionId: string;
     provider: IntegrationProvider;
@@ -90,6 +98,11 @@ export function createComposioClient(opts: {
       response = await sdk.tools.execute(slug, {
         connectedAccountId: brokerConnectionId,
         arguments: args,
+        // Pin to "latest" so the SDK doesn't reject a request when the
+        // auth config has been upgraded server-side and the cached
+        // version on disk is older. Composio recommends this for
+        // server-side execute calls — see SDK docs on version param.
+        version: "latest",
       });
     } catch (err) {
       throw new IntegrationFetchError(
@@ -151,6 +164,20 @@ export function createComposioClient(opts: {
         );
       }
       return { status: mapBrokerStatus(account.status) };
+    },
+
+    async deleteConnection(brokerConnectionId) {
+      try {
+        await sdk.connectedAccounts.delete(brokerConnectionId);
+      } catch (err) {
+        // Swallow — the broker-side cleanup is best-effort, and an
+        // already-deleted connection shouldn't block the user from
+        // disconnecting locally. Log via the caller, not here.
+        const message = err instanceof Error ? err.message : String(err);
+        if (!/not.?found|already/i.test(message)) {
+          throw new IntegrationFetchError("notion", message);
+        }
+      }
     },
 
     async listObjects({ brokerConnectionId, provider, listInput }) {

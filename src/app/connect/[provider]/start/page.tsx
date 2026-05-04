@@ -4,6 +4,7 @@ import { resolveActiveWorkspace } from "@/features/workspaces/server/service";
 import { ProviderSchema } from "@/features/integrations/schema";
 import { startBrokerOAuth } from "@/features/integrations/server/service";
 import { PROVIDER_DISPLAY_NAMES } from "@/features/integrations/constants";
+import { logSystemEvent } from "@/features/analytics/server/system-events";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +34,20 @@ export default async function ConnectStartPage({
       userId: user.id,
       provider,
     });
-  } catch {
+  } catch (err) {
+    // Re-throw `redirect()`'s internal NEXT_REDIRECT signal so Next can
+    // process it instead of treating it like an integration failure.
+    if (err && typeof err === "object" && "digest" in err) throw err;
+    const message = err instanceof Error ? err.message : String(err);
+    void logSystemEvent({
+      severity: "error",
+      category: "other",
+      source: "GET /connect/[provider]/start",
+      message: `Initiate failed: ${message}`,
+      fingerprintKeys: ["integrations_initiate_failed", provider],
+      metadata: { provider, error: message },
+      userId: user.id,
+    });
     redirect(`/connect/${provider}/error?reason=initiate_failed`);
   }
 

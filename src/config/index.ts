@@ -64,6 +64,7 @@ export const RESERVED_WORKSPACE_SLUGS: ReadonlySet<string> = new Set([
   "build",
   "canvas",
   "community",
+  "connect",
   "design",
   "docs",
   "e",
