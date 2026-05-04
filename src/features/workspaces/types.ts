@@ -23,6 +23,7 @@ export interface InvitationStatus {
   workspace: {
     id: string;
     slug: string;
+    publicId: string;
     name: string;
   };
   inviter: {
@@ -39,6 +40,7 @@ export interface Workspace {
   ownerId: string;
   name: string;
   slug: string;
+  publicId: string;
   description: string | null;
   createdAt: string;
   updatedAt: string;

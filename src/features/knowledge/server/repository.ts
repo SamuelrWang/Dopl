@@ -1,4 +1,5 @@
 import "server-only";
+import { generatePublicId } from "@/shared/lib/id/public-id";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import type {
   KnowledgeBase,
@@ -69,6 +70,23 @@ export async function findBaseBySlug(
   return data ? mapBaseRow(data as KnowledgeBaseRow) : null;
 }
 
+export async function findBaseByPublicId(
+  workspaceId: string,
+  publicId: string,
+  includeDeleted = false
+): Promise<KnowledgeBase | null> {
+  const db = supabaseAdmin();
+  let query = db
+    .from("knowledge_bases")
+    .select(KNOWLEDGE_BASE_COLS)
+    .eq("workspace_id", workspaceId)
+    .eq("public_id", publicId);
+  if (!includeDeleted) query = query.is("deleted_at", null);
+  const { data, error } = await query.maybeSingle();
+  if (error) throw error;
+  return data ? mapBaseRow(data as KnowledgeBaseRow) : null;
+}
+
 export async function listBasesForWorkspace(
   workspaceId: string,
   includeDeleted = false
@@ -87,11 +105,10 @@ export async function listBasesForWorkspace(
 
 /**
  * Read-only — used by slug-collision checks in the service. Returns
- * only ACTIVE slugs (deleted_at IS NULL). Audit fix S-6: matches the
- * partial-unique index added in migration 20260501070000, which makes
- * trashed slugs immediately recyclable instead of holding them for
- * the 30-day cron purge window. The service layer's 23505 catch-and-
- * retry remains as the backstop against concurrent inserts.
+ * only ACTIVE slugs (deleted_at IS NULL) to match the partial-unique
+ * index that's still in place — slug uniqueness within a workspace
+ * survives the publicId rollout because MCP tools (`kb_*`) address
+ * bases by slug.
  */
 export async function listBaseSlugsForWorkspace(
   workspaceId: string
@@ -123,6 +140,7 @@ export async function insertBase(args: InsertBaseArgs): Promise<KnowledgeBase> {
       workspace_id: args.workspaceId,
       name: args.name,
       slug: args.slug,
+      public_id: generatePublicId(),
       description: args.description ?? null,
       agent_write_enabled: args.agentWriteEnabled ?? false,
       created_by: args.createdBy,

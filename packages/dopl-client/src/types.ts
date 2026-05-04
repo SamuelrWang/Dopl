@@ -74,6 +74,7 @@ export interface WorkspaceSummary {
   ownerId: string;
   name: string;
   slug: string;
+  publicId: string;
   description: string | null;
   createdAt: string;
   updatedAt: string;
@@ -196,10 +197,9 @@ export interface BrainData {
   memories: BrainMemory[];
   /**
    * Monotonic counter bumped on every brain `instructions` change.
-   * `sync_skills` writes this version next to the skill on disk and
-   * skips re-writing when the on-disk and server versions match.
+   * Used by clients to detect stale local caches of the brain.
    * Defaults to 1 for newly-minted brains, 0 for "no brain row exists
-   * yet" (an empty/thin-pointer skill).
+   * yet" (an empty brain).
    */
   brain_version?: number;
 }

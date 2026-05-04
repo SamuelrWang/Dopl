@@ -162,6 +162,22 @@ See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture and [plan 
 - Proposed resolution: fix-now (removed during the strategy extraction, same commit).
 - Status: fixed-in-5ef0198
 
+### F-017: PublicId rollout skipped for clusters
+- Location: `src/features/clusters/`, `src/features/community/server/published-slug.ts`
+- Found during: PR #4 scope review (publicId rollout)
+- Severity: smell
+- Description: PRs #1–#3 added `public_id` to workspaces, knowledge bases, and skills as the URL routing handle. Clusters were originally on the same list, but the plan was based on a wrong assumption that clusters had a user-facing standalone page route. They don't — clusters are canvas panels accessed via `/[workspaceSlug]/canvas`, and the only public surface is `/community/[slug]` which already uses a hybrid slug-with-random-suffix scheme via `generatePublishedSlug`. Internal `clusters` slugs are MCP-addressed and workspace-scoped-unique, which is already adequate.
+- Proposed resolution: defer — revisit only if a future product surface needs cluster URLs to be enumeration-resistant or rename-stable in a way the current scheme doesn't already provide. If we reach for it, the workspaces / KB / skills recipe applies.
+- Status: open
+
+### F-016: Legacy slug-only workspace URL fallback awaiting deletion
+- Location: `src/features/workspaces/server/segment.ts` (`resolveWorkspaceSegmentForUser` legacy branch)
+- Found during: workspace publicId rollout (PR #1)
+- Severity: smell
+- Description: After workspaces moved to `{slug}-{publicId}` URLs, the resolver still falls back to slug-only lookup so pre-migration bookmarks (`/dopl-team-workspace/members`) keep working. Each fallback hit logs a `legacy_slug_redirect` system event.
+- Proposed resolution: defer — delete the legacy branch (and `findWorkspaceBySlug` / `findMemberWorkspaceBySlug` if still only used here) once the `legacy_slug_redirect` event drops to zero hits over 14 consecutive days.
+- Status: open
+
 ### F-012: Grandfathered 500-line violators touched during P2 relocations
 - Location: `src/features/ingestion/server/skeleton.ts` (850 lines after relocation; was 847), `src/features/clusters/server/service.ts` (517 after; was 516), `src/lib/ingestion/pipeline.ts` (1212, untouched but over), `src/app/page.tsx` (823 after P2.5 extractions; was 1114)
 - Found during: P2 post-phase audit, after user set a 500-line hard cap

@@ -202,6 +202,7 @@ export async function getInvitationByToken(
     workspace: {
       id: workspace.id,
       slug: workspace.slug,
+      publicId: workspace.publicId,
       name: workspace.name,
     },
     inviter: {
@@ -217,13 +218,13 @@ export async function getInvitationByToken(
 /**
  * Accept an invitation. The caller must be authenticated; we use their
  * authenticated identity to populate `accepted_by` and the resulting
- * `workspace_members` row. Returns the joined workspace slug so the caller
- * can redirect to `/workspace/<slug>`.
+ * `workspace_members` row. Returns `{ workspaceSlug, workspacePublicId }`
+ * so the caller can build the canonical `/<slug>-<publicId>` redirect.
  */
 export async function acceptInvitationByToken(
   token: string,
   userId: string
-): Promise<{ workspaceSlug: string }> {
+): Promise<{ workspaceSlug: string; workspacePublicId: string }> {
   const status = await getInvitationByToken(token);
   if (!status) {
     throw new HttpError(404, "INVITATION_NOT_FOUND", "Invitation not found");
@@ -238,7 +239,10 @@ export async function acceptInvitationByToken(
     // Already accepted — if the caller is the same user, treat as a
     // no-op success so a duplicate click doesn't 410.
     if (status.invitation.acceptedBy === userId) {
-      return { workspaceSlug: status.workspace.slug };
+      return {
+        workspaceSlug: status.workspace.slug,
+        workspacePublicId: status.workspace.publicId,
+      };
     }
     throw new HttpError(
       410,
@@ -263,7 +267,10 @@ export async function acceptInvitationByToken(
         accepted_by: userId,
       })
       .eq("id", status.invitation.id);
-    return { workspaceSlug: status.workspace.slug };
+    return {
+      workspaceSlug: status.workspace.slug,
+      workspacePublicId: status.workspace.publicId,
+    };
   }
 
   // Insert (or revive) the membership row. Use upsert keyed on
@@ -292,7 +299,10 @@ export async function acceptInvitationByToken(
     .eq("id", status.invitation.id);
   if (invError) throw invError;
 
-  return { workspaceSlug: status.workspace.slug };
+  return {
+    workspaceSlug: status.workspace.slug,
+    workspacePublicId: status.workspace.publicId,
+  };
 }
 
 export interface PendingInvitationForUser {
@@ -300,6 +310,7 @@ export interface PendingInvitationForUser {
   invitedRole: InvitedRole;
   workspaceId: string;
   workspaceSlug: string;
+  workspacePublicId: string;
   workspaceName: string;
   createdAt: string;
 }
@@ -319,7 +330,7 @@ export async function listPendingInvitationsForUser(
   const { data, error } = await db
     .from("workspace_invitations")
     .select(
-      `${INVITATION_COLS}, workspace:workspaces!inner(id, slug, name)`
+      `${INVITATION_COLS}, workspace:workspaces!inner(id, slug, public_id, name)`
     )
     .eq("email", normalized)
     .is("accepted_at", null)
@@ -328,11 +339,14 @@ export async function listPendingInvitationsForUser(
     .order("created_at", { ascending: false });
   if (error) throw error;
 
+  type WorkspaceJoin = {
+    id: string;
+    slug: string;
+    public_id: string;
+    name: string;
+  };
   type Row = InvitationRow & {
-    workspace:
-      | { id: string; slug: string; name: string }
-      | { id: string; slug: string; name: string }[]
-      | null;
+    workspace: WorkspaceJoin | WorkspaceJoin[] | null;
   };
 
   return ((data ?? []) as unknown as Row[])
@@ -344,6 +358,7 @@ export async function listPendingInvitationsForUser(
         invitedRole: r.invited_role,
         workspaceId: ws.id,
         workspaceSlug: ws.slug,
+        workspacePublicId: ws.public_id,
         workspaceName: ws.name,
         createdAt: r.created_at,
       };

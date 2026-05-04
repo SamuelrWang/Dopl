@@ -7,7 +7,6 @@ import { IngestionSection, TOC as ingestionToc } from "./sections/ingestion";
 import { ClustersSection, TOC as clustersToc } from "./sections/clusters";
 import { SearchBuildSection, TOC as searchToc } from "./sections/search-build";
 import { McpServerSection, TOC as mcpToc } from "./sections/mcp-server";
-import { ChromeExtensionSection, TOC as extensionToc } from "./sections/chrome-extension";
 import { CommunitySection, TOC as communityToc } from "./sections/community";
 
 export type { TocEntry };
@@ -24,6 +23,5 @@ export const SECTIONS: Record<string, SectionDef> = {
   "clusters": { toc: clustersToc, component: ClustersSection },
   "search-and-build": { toc: searchToc, component: SearchBuildSection },
   "mcp-server": { toc: mcpToc, component: McpServerSection },
-  "chrome-extension": { toc: extensionToc, component: ChromeExtensionSection },
   "community": { toc: communityToc, component: CommunitySection },
 };

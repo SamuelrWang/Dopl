@@ -6,9 +6,10 @@
  * canvas or render a workspace-level overview.
  */
 
-import { notFound, redirect } from "next/navigation";
+import { redirect } from "next/navigation";
 import { getUser } from "@/shared/supabase/server";
-import { findWorkspaceForMember } from "@/features/workspaces/server/service";
+import { resolvePageWorkspace } from "@/features/workspaces/server/segment";
+import { workspaceSegment } from "@/features/workspaces/url";
 import { ensureDefaultCanvas } from "@/features/workspaces/server/canvases";
 
 export const dynamic = "force-dynamic";
@@ -23,9 +24,7 @@ export default async function WorkspaceRootPage({ params }: PageProps) {
   const user = await getUser();
   if (!user) redirect("/login");
 
-  const workspace = await findWorkspaceForMember(user.id, workspaceSlug);
-  if (!workspace) notFound();
-
+  const workspace = await resolvePageWorkspace(workspaceSlug, user.id);
   const canvas = await ensureDefaultCanvas(workspace.id);
-  redirect(`/${workspace.slug}/${canvas.slug}`);
+  redirect(`/${workspaceSegment(workspace)}/${canvas.slug}`);
 }

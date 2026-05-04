@@ -56,7 +56,7 @@ export async function extractForAgent(
   );
 
   // Collect all child links the primary extractors discovered.
-  // When link-following is disabled (the default for prepare_ingest),
+  // When link-following is disabled (the default for ingest_url),
   // these come back to the caller as `detectedLinks` so the agent can
   // review them AFTER the primary entry is submitted, filter out
   // noise, and offer any distinct external sources to the user as
@@ -81,7 +81,7 @@ export async function extractForAgent(
   // into-the-same-entry follow path exposed to clients. The
   // `options.followLinks` flag remains for internal callers (e.g.
   // batch ingestion scripts) that need the old recursive behavior;
-  // `prepare_ingest` never sets it.
+  // `ingest_url` never sets it.
   if (options.followLinks) {
     const strategy = PIPELINE_STRATEGIES.setup;
     const linkResult = await stepLinkFollowing(
@@ -117,7 +117,7 @@ export async function extractForAgent(
  * Leaves `status` as "processing" — caller flips it to "complete" after
  * embeddings finish (same split the legacy pipeline uses).
  *
- * Throws on DB failure so the caller can refund credits + delete the entry.
+ * Throws on DB failure so the caller can clean up the entry.
  */
 export async function persistAgentArtifacts(args: {
   entryId: string;

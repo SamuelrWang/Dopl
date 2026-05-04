@@ -1,4 +1,5 @@
 import "server-only";
+import { generatePublicId } from "@/shared/lib/id/public-id";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import type { Skill, SkillFile, SkillWriteSource } from "../types";
 import {
@@ -47,6 +48,22 @@ export async function findSkillBySlug(
     .select(SKILL_COLS)
     .eq("workspace_id", workspaceId)
     .eq("slug", slug)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? mapSkillRow(data as SkillRow) : null;
+}
+
+export async function findSkillByPublicId(
+  workspaceId: string,
+  publicId: string
+): Promise<Skill | null> {
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("skills")
+    .select(SKILL_COLS)
+    .eq("workspace_id", workspaceId)
+    .eq("public_id", publicId)
     .is("deleted_at", null)
     .maybeSingle();
   if (error) throw error;
@@ -107,6 +124,7 @@ export async function insertSkill(args: InsertSkillArgs): Promise<Skill> {
     .insert({
       workspace_id: args.workspaceId,
       slug: args.slug,
+      public_id: generatePublicId(),
       name: args.name,
       description: args.description,
       when_to_use: args.whenToUse,

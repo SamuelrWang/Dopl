@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from "@/shared/ui/dialog";
 import { KnowledgeApiError, createBase } from "../client/api";
+import { knowledgeBaseSegment } from "../url";
 
 interface Props {
   open: boolean;
@@ -55,7 +56,7 @@ export function CreateBaseDialog({
       );
       onOpenChange(false);
       reset();
-      router.push(`/${workspaceSlug}/knowledge/${base.slug}`);
+      router.push(`/${workspaceSlug}/knowledge/${knowledgeBaseSegment(base)}`);
       router.refresh();
     } catch (err) {
       const msg =

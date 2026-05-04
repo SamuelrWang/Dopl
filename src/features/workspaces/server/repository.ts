@@ -1,4 +1,5 @@
 import "server-only";
+import { generatePublicId } from "@/shared/lib/id/public-id";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import type { Workspace, WorkspaceMembership, Role } from "../types";
 import {
@@ -8,7 +9,8 @@ import {
   mapMemberRow,
 } from "./dto";
 
-const WORKSPACE_COLS = "id, owner_id, name, slug, description, created_at, updated_at";
+const WORKSPACE_COLS =
+  "id, owner_id, name, slug, public_id, description, created_at, updated_at";
 const MEMBER_COLS =
   "workspace_id, user_id, role, status, joined_at, invited_by, invited_at";
 
@@ -39,26 +41,40 @@ export async function findWorkspaceBySlug(
 }
 
 /**
- * Membership-aware slug lookup. Walks every workspace the user is an
- * active member of, returns the one whose slug matches. Used by the
- * workspace page + settings routes so invited members can reach a workspace
- * they don't own. Returns null if no membership-by-slug match.
- *
- * Slugs are unique per (owner, slug) — two different owners could each
- * have a workspace with the same slug (e.g. "default"). Users joining
- * workspaces from multiple owners would in principle hit a collision; we
- * resolve by preferring the workspace the caller themselves owns, then
- * fall back to the first non-owned membership match. Callers that need
- * stricter resolution should pass a workspace UUID, not slug, to the API.
+ * Primary routing lookup. `public_id` is globally unique, so no
+ * owner/membership filter is needed at this layer — authz happens in
+ * the service via `resolveMembershipOrThrow`.
+ */
+export async function findWorkspaceByPublicId(
+  publicId: string
+): Promise<Workspace | null> {
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("workspaces")
+    .select(WORKSPACE_COLS)
+    .eq("public_id", publicId)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? mapWorkspaceRow(data as WorkspaceRow) : null;
+}
+
+/**
+ * Membership-aware slug lookup, used only by the legacy slug-only URL
+ * fallback during the publicId migration window. Returns null if zero
+ * OR more-than-one of the user's active-member workspaces match — slug
+ * uniqueness is no longer enforced post-publicId, so an ambiguous
+ * legacy URL is forced to 404 rather than silently routing to the
+ * wrong workspace. Canonical URLs (`{slug}-{publicId}`) bypass this
+ * function entirely.
  */
 export async function findMemberWorkspaceBySlug(
   userId: string,
   slug: string
 ): Promise<Workspace | null> {
-  const owned = await findWorkspaceBySlug(userId, slug);
-  if (owned) return owned;
   const memberships = await listWorkspacesForUser(userId);
-  return memberships.find((c) => c.slug === slug) ?? null;
+  const matches = memberships.filter((c) => c.slug === slug);
+  if (matches.length !== 1) return null;
+  return matches[0];
 }
 
 /**
@@ -156,6 +172,7 @@ export async function insertWorkspaceWithOwnerMembership(
       owner_id: args.ownerId,
       name: args.name,
       slug: args.slug,
+      public_id: generatePublicId(),
       description: args.description ?? null,
     })
     .select(WORKSPACE_COLS)

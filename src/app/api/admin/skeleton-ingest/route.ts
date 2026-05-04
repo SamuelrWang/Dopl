@@ -10,10 +10,9 @@ import { logSystemEvent } from "@/features/analytics/server/system-events";
  * Admin-only skeleton ingestion.
  *
  * Runs the lightweight descriptor pipeline in features/ingestion/server/skeleton.ts
- * for mass-indexing public GitHub repos. Bypasses credits (admin), skips
- * moderation queue (auto-approved), and skips the user-scoped dedup
- * filter because admin ingests are the canonical source for skeleton
- * entries.
+ * for mass-indexing public GitHub repos. Skips the moderation queue
+ * (auto-approved) and the user-scoped dedup filter because admin
+ * ingests are the canonical source for skeleton entries.
  *
  * Admin gating is handled by withAdminAuth, which reads ADMIN_USER_ID
  * (same env var the moderation admin routes use). Non-admin callers

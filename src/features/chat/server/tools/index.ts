@@ -3,7 +3,6 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { CanvasContextPayload } from "../canvas-context";
 import type { ToolHandler, ToolResult } from "./types";
 import { executeSearchKnowledgeBase, executeGetEntryDetails } from "./search";
-import { executeIngestUrl } from "./ingest";
 import {
   executeListUserClusters,
   executeListClusterBrainMemories,
@@ -42,18 +41,6 @@ export const TOOLS: Anthropic.Tool[] = [
         entry_id: { type: "string", description: "Entry UUID from search results" },
       },
       required: ["entry_id"],
-    },
-  },
-  {
-    name: "ingest_url",
-    description:
-      "Ingest a URL into the knowledge base. Use this when a user shares a link they want to add — a blog post, GitHub repo, tweet, etc. Starts background processing that extracts content and generates README, agents.md, and manifest.",
-    input_schema: {
-      type: "object" as const,
-      properties: {
-        url: { type: "string", description: "The URL to ingest" },
-      },
-      required: ["url"],
     },
   },
   // ── Cluster brain editing ────────────────────────────────────────
@@ -146,7 +133,6 @@ export const TOOLS: Anthropic.Tool[] = [
 const HANDLERS: Record<string, ToolHandler> = {
   search_knowledge_base: executeSearchKnowledgeBase,
   get_entry_details: executeGetEntryDetails,
-  ingest_url: executeIngestUrl,
   list_user_clusters: executeListUserClusters,
   list_cluster_brain_memories: executeListClusterBrainMemories,
   add_cluster_brain_memory: executeAddClusterBrainMemory,

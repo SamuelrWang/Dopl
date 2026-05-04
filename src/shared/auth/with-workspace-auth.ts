@@ -10,6 +10,7 @@ export interface WorkspaceAuthContext {
   apiKeyId?: string;
   workspaceId: string;
   workspaceSlug: string;
+  workspacePublicId: string;
   role: Role;
   params?: Record<string, string>;
 }
@@ -108,6 +109,7 @@ export function withWorkspaceAuth(
         apiKeyId: ctx.apiKeyId,
         workspaceId: workspace.id,
         workspaceSlug: workspace.slug,
+        workspacePublicId: workspace.publicId,
         role: membership.role,
         params: ctx.params,
       });

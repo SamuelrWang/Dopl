@@ -1,9 +1,8 @@
-import { notFound, redirect } from "next/navigation";
+import { redirect } from "next/navigation";
 import { getUser } from "@/shared/supabase/server";
-import {
-  findWorkspaceForMember,
-  resolveMembershipOrThrow,
-} from "@/features/workspaces/server/service";
+import { resolveMembershipOrThrow } from "@/features/workspaces/server/service";
+import { resolvePageWorkspace } from "@/features/workspaces/server/segment";
+import { workspaceSegment } from "@/features/workspaces/url";
 import { MembersView } from "@/features/members/components/members-view";
 
 export const dynamic = "force-dynamic";
@@ -16,13 +15,12 @@ export default async function MembersPage({ params }: PageProps) {
   const { workspaceSlug } = await params;
   const user = await getUser();
   if (!user) redirect("/login");
-  const workspace = await findWorkspaceForMember(user.id, workspaceSlug);
-  if (!workspace) notFound();
+  const workspace = await resolvePageWorkspace(workspaceSlug, user.id, "members");
   const { membership } = await resolveMembershipOrThrow(workspace.id, user.id);
 
   return (
     <MembersView
-      workspaceSlug={workspace.slug}
+      workspaceSlug={workspaceSegment(workspace)}
       workspaceId={workspace.id}
       currentUserId={user.id}
       myRole={membership.role}

@@ -83,20 +83,6 @@ export function ClustersSection() {
         interactions.
       </P>
 
-      <H2 id="skill-files">Skill files</H2>
-      <P>
-        Export a cluster as a Claude Code skill using the MCP server&apos;s <Code>sync_skills</Code>{" "}
-        tool. This creates files in <Code>~/.claude/skills/</Code>:
-      </P>
-      <UL>
-        <li>A <Code>SKILL.md</Code> file with the cluster brain instructions and entry references.</li>
-        <li>A <Code>references/</Code> directory with individual markdown files per entry (README + agents.md).</li>
-        <li>An update to <Code>~/.claude/CLAUDE.md</Code> indexing the cluster for discovery.</li>
-      </UL>
-      <P>
-        Once synced, Claude Code can find and use the skill automatically when working on
-        related tasks.
-      </P>
     </div>
   );
 }

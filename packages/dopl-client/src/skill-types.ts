@@ -44,6 +44,7 @@ export interface Skill {
   id: string;
   workspaceId: string;
   slug: string;
+  publicId: string;
   name: string;
   description: string;
   whenToUse: string;

@@ -9,6 +9,7 @@ import {
   updateBase,
 } from "../client/api";
 import type { KnowledgeBase } from "../types";
+import { knowledgeBaseSegment } from "../url";
 import { AgentWriteToggle } from "./agent-write-toggle";
 
 interface Props {
@@ -57,9 +58,13 @@ export function BaseSettingsForm({ workspaceId, workspaceSlug, base }: Props) {
         workspaceId
       );
       toast({ title: "Saved" });
-      // If the slug changed, redirect so the URL stays in sync.
+      // Slug change keeps the same publicId — the route resolver will
+      // 301 the old URL anyway, but we replace eagerly so the address
+      // bar reflects the new canonical immediately.
       if (next.slug !== base.slug) {
-        router.replace(`/${workspaceSlug}/knowledge/${next.slug}`);
+        router.replace(
+          `/${workspaceSlug}/knowledge/${knowledgeBaseSegment(next)}`
+        );
       } else {
         router.refresh();
       }

@@ -78,10 +78,3 @@ function ClusterWithHeader({
   );
 }
 
-// ── Screen-space layer (kept as no-op for backward compat) ───────
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function ClusterScreenLayer(_props: { camera: { x: number; y: number; zoom: number } }) {
-  // Header tabs are now rendered in the world layer. This is a no-op.
-  return null;
-}

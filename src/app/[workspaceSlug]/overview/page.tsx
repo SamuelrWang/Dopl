@@ -5,9 +5,10 @@
  * Full-bleed dark surface, matching the chat page chrome.
  */
 
-import { notFound, redirect } from "next/navigation";
+import { redirect } from "next/navigation";
 import { getUser } from "@/shared/supabase/server";
-import { findWorkspaceForMember } from "@/features/workspaces/server/service";
+import { resolvePageWorkspace } from "@/features/workspaces/server/segment";
+import { workspaceSegment } from "@/features/workspaces/url";
 import { PageTopBar } from "@/shared/layout/page-top-bar";
 import { ConnectAppSection } from "@/features/api-keys/components/connect-app-section";
 import { WorkspaceKeysSection } from "@/features/api-keys/components/workspace-keys-section";
@@ -23,8 +24,8 @@ export default async function OverviewPage({ params }: PageProps) {
   const { workspaceSlug } = await params;
   const user = await getUser();
   if (!user) redirect("/login");
-  const workspace = await findWorkspaceForMember(user.id, workspaceSlug);
-  if (!workspace) notFound();
+  const workspace = await resolvePageWorkspace(workspaceSlug, user.id, "overview");
+  const segment = workspaceSegment(workspace);
 
   return (
     <>
@@ -43,11 +44,11 @@ export default async function OverviewPage({ params }: PageProps) {
             </p>
           </section>
 
-          <MembersWidget workspaceSlug={workspace.slug} />
+          <MembersWidget workspaceSlug={segment} />
 
-          <WorkspaceKeysSection workspaceSlug={workspace.slug} />
+          <WorkspaceKeysSection workspaceSlug={segment} />
 
-          <ConnectAppSection workspaceSlug={workspace.slug} />
+          <ConnectAppSection workspaceSlug={segment} />
         </div>
       </div>
     </>

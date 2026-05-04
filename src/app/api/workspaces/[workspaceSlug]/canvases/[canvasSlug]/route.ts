@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withUserAuth } from "@/shared/auth/with-auth";
 import { HttpError } from "@/shared/lib/http-error";
-import { findWorkspaceForMember } from "@/features/workspaces/server/service";
+import { resolveApiWorkspace } from "@/features/workspaces/server/segment";
 import { findCanvasBySlug } from "@/features/workspaces/server/canvases";
 
 interface Ctx {
@@ -24,7 +24,7 @@ export const GET = withUserAuth(async (_request: NextRequest, { userId, params }
         { status: 400 }
       );
     }
-    const workspace = await findWorkspaceForMember(userId, workspaceSlug);
+    const workspace = await resolveApiWorkspace(workspaceSlug, userId);
     if (!workspace) {
       return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
     }

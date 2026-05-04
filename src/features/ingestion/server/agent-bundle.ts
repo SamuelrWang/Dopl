@@ -164,7 +164,7 @@ export function buildAgentIngestBundle(input: {
 }
 
 /**
- * Step-by-step instructions the agent follows after calling prepare_ingest.
+ * Step-by-step instructions the agent follows after calling ingest_url.
  * Rendered verbatim into the prepare response so every client sees the same
  * playbook regardless of its version of the MCP server.
  */
@@ -192,7 +192,7 @@ one now with these properties:
 - **MCP tool access**: subagent needs \`get_ingest_content\` and
   \`submit_ingested_entry\`. In Claude Code these inherit from the
   parent; in other clients verify before spawning.
-- **Task description**: paste the prepare_ingest response fields the
+- **Task description**: paste the ingest_url response fields the
   subagent needs (\`entry_id\`, \`source_url\`, \`sources\`,
   \`fetch_warnings\`, the full \`prompts\` object, and any \`images\`)
   plus steps 1-8 below verbatim. The subagent follows the steps, calls
@@ -308,7 +308,7 @@ can mention by slug.
    > 2. **[title]** — [description from describe_link]
    > ..."
 5. **Wait for explicit user approval.** On approval, call
-   \`prepare_ingest(url)\` for each chosen URL — normal flow,
+   \`ingest_url(url)\` for each chosen URL — normal flow,
    becomes its own entry. Mention the originating entry's slug in
    the new entry's README prose so the two are cross-referenced
    editorially.
@@ -334,7 +334,7 @@ about the project, independently searchable and reusable.
 Call \`submit_ingested_entry\` at the end of the flow UNLESS one of
 these two conditions holds:
 
-1. The \`sources[]\` inventory from prepare_ingest is empty. Only
+1. The \`sources[]\` inventory from ingest_url is empty. Only
    successful extractions appear in \`sources[]\`; if it's empty and
    \`fetch_warnings[]\` is non-empty, every attempted URL failed. No
    content to ingest — report the failure (summarize what's in
@@ -348,7 +348,7 @@ are out of scope for you and will cause the ingest to stall
 unnecessarily:
 
 - **Source URL looks suspicious.** Unfamiliar snowflake IDs,
-  high numeric values, unusual paths, etc. If \`prepare_ingest\`
+  high numeric values, unusual paths, etc. If \`ingest_url\`
   accepted the URL and returned usable content via
   \`get_ingest_content\`, the URL is real. The server's fetcher
   already validated it at request time. Do not second-guess.

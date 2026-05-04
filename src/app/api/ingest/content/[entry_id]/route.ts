@@ -44,7 +44,7 @@ const MAX_CONTENT_CHARS = 60_000;
 
 /**
  * Entry-ID validator. The `entry_id` path param is supposed to be a
- * UUID written by `prepare_ingest`. A non-UUID string reaching the
+ * UUID written by `ingest_url`. A non-UUID string reaching the
  * Supabase query would surface as a 500 (`invalid input syntax for
  * type uuid`) — confusing diagnostic noise and a vector for probes.
  * Returning 400 up front keeps the 500 surface clean for real errors.

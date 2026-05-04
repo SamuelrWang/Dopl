@@ -47,6 +47,4 @@ async function handlePost(
   }
 }
 
-// Credit cost dropped from 5 → 1 (see CREDIT_COSTS.mcp_build): the only
-// remaining server work is embedding-search retrieval; no LLM spend.
 export const POST = withMcpAccess("mcp_build", handlePost);

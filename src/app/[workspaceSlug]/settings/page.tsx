@@ -5,13 +5,12 @@
  * zone (delete) for owners.
  */
 
-import { notFound, redirect } from "next/navigation";
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getUser } from "@/shared/supabase/server";
-import {
-  findWorkspaceForMember,
-  resolveMembershipOrThrow,
-} from "@/features/workspaces/server/service";
+import { resolveMembershipOrThrow } from "@/features/workspaces/server/service";
+import { resolvePageWorkspace } from "@/features/workspaces/server/segment";
+import { workspaceSegment } from "@/features/workspaces/url";
 import { WorkspaceSettingsForm } from "@/features/workspaces/components/workspace-settings-form";
 import { WorkspaceKeysSection } from "@/features/api-keys/components/workspace-keys-section";
 
@@ -27,8 +26,7 @@ export default async function WorkspaceSettingsPage({ params }: PageProps) {
   const user = await getUser();
   if (!user) redirect("/login");
 
-  const workspace = await findWorkspaceForMember(user.id, workspaceSlug);
-  if (!workspace) notFound();
+  const workspace = await resolvePageWorkspace(workspaceSlug, user.id, "settings");
   const { membership } = await resolveMembershipOrThrow(workspace.id, user.id);
 
   return (
@@ -47,7 +45,7 @@ export default async function WorkspaceSettingsPage({ params }: PageProps) {
       </div>
       <div className="space-y-8">
         <WorkspaceSettingsForm workspace={workspace} role={membership.role} />
-        <WorkspaceKeysSection workspaceSlug={workspace.slug} />
+        <WorkspaceKeysSection workspaceSlug={workspaceSegment(workspace)} />
       </div>
     </div>
   );

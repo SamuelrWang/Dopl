@@ -36,25 +36,6 @@ export async function getUserSubscription(
   };
 }
 
-/**
- * @deprecated Use hasActiveAccess() from lib/billing/access.ts instead.
- * Kept as a no-throw compatibility shim for a few legacy callers; returns
- * true ONLY for active Stripe subs (NOT for trialing users — callers that
- * need trial access should migrate to hasActiveAccess).
- */
-export async function isProUser(userId: string): Promise<boolean> {
-  return isPaidUser(userId);
-}
-
-/**
- * @deprecated Use hasActiveAccess() from lib/billing/access.ts instead.
- * Returns true only for active paid Stripe subs.
- */
-export async function isPaidUser(userId: string): Promise<boolean> {
-  const sub = await getUserSubscription(userId);
-  return sub.status === "active";
-}
-
 export async function updateSubscription(
   userId: string,
   updates: Partial<{

@@ -3,7 +3,7 @@
  *
  * Historical context: this file used to be the 1200-line monolith that
  * ran the entire server-side Claude pipeline. After the pivot to
- * agent-driven ingest (prepare_ingest + submit_ingested_entry), the
+ * agent-driven ingest (ingest_url + submit_ingested_entry), the
  * orchestration shrunk to a handful of step helpers plus three
  * agent-facing entrypoints. P3a of the refactor split those into
  * topic-focused sub-modules under `./pipeline/`:

@@ -377,7 +377,7 @@ export class DoplClient {
       "/api/ingest/prepare",
       {
         method: "POST",
-        toolName: "prepare_ingest",
+        toolName: "ingest_url",
         body: { url, content: content || {} },
         timeoutMs: 120_000,
       }

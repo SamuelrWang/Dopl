@@ -37,7 +37,7 @@ export async function buildBuilderBundle(
       entries: [],
       prompt: "",
       instructions:
-        "No entries in the knowledge base matched this brief. Tell the user the KB doesn't have relevant prior art yet; suggest ingesting a few URLs (via `prepare_ingest`) related to the brief, then retry `build_solution`.",
+        "No entries in the knowledge base matched this brief. Tell the user the KB doesn't have relevant prior art yet; suggest ingesting a few URLs (via `ingest_url`) related to the brief, then retry `build_solution`.",
     };
   }
 
@@ -76,7 +76,7 @@ export async function buildBuilderBundle(
       "Run the `prompt` field against your own model context.",
       "The prompt expects JSON output: `{ composite_readme, composite_agents_md, source_attribution, confidence }`.",
       "Present the composite README + agents.md to the user in your reply. Link each source entry with its public URL (derive from slug: `<host>/e/<slug>`).",
-      "Nothing is persisted server-side — this is a synthesis-only tool. If the user wants the composite saved as a new KB entry, run `prepare_ingest` on the final artifacts separately.",
+      "Nothing is persisted server-side — this is a synthesis-only tool. If the user wants the composite saved as a new KB entry, run `ingest_url` on the final artifacts separately.",
     ].join(" "),
   };
 }

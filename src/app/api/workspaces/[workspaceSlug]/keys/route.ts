@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUser } from "@/shared/supabase/server";
-import {
-  findWorkspaceForMember,
-  resolveMembershipOrThrow,
-} from "@/features/workspaces/server/service";
+import { resolveMembershipOrThrow } from "@/features/workspaces/server/service";
+import { resolveApiWorkspace } from "@/features/workspaces/server/segment";
 import { createApiKey, listApiKeys } from "@/shared/auth/api-keys";
 
 /**
@@ -28,7 +26,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { workspaceSlug } = await context.params;
-  const workspace = await findWorkspaceForMember(user.id, workspaceSlug);
+  const workspace = await resolveApiWorkspace(workspaceSlug, user.id);
   if (!workspace) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
@@ -47,7 +45,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { workspaceSlug } = await context.params;
-  const workspace = await findWorkspaceForMember(user.id, workspaceSlug);
+  const workspace = await resolveApiWorkspace(workspaceSlug, user.id);
   if (!workspace) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }

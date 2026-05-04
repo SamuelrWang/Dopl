@@ -5,10 +5,10 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
  * Analytics logger for MCP-originated tool calls.
  *
  * Writes to the `mcp_events` table (migration 032). This complements
- * `credit_ledger` (billing) and `api_key_usage` (rate limits) by capturing
- * the full request payload — for natural-language tools (`search_setups`,
- * `build_solution`, `query_cluster`, `ingest_url`, `save_cluster_memory`)
- * the arguments ARE the user's intent, verbatim.
+ * `api_key_usage` (rate limits) by capturing the full request payload —
+ * for natural-language tools (`search_setups`, `build_solution`,
+ * `query_cluster`, `ingest_url`, `save_cluster_memory`) the arguments
+ * ARE the user's intent, verbatim.
  *
  * MCP is a tool protocol, not a conversation protocol — the server cannot
  * see the user's prompt to their LLM or the LLM's response. Tool arguments
@@ -66,8 +66,7 @@ function deriveSessionId(apiKeyId: string | null): string | null {
 
 /**
  * Fire-and-forget logger. Never throws — analytics must not break a
- * user-facing request. Errors swallowed silently (we have the credit_ledger
- * as a fallback audit trail if mcp_events drops a row).
+ * user-facing request. Errors swallowed silently.
  */
 export async function logMcpEvent(event: McpEventInput): Promise<void> {
   try {

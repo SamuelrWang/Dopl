@@ -7,16 +7,16 @@
  * for selection state and (eventually) mutations.
  */
 
-import { notFound, redirect } from "next/navigation";
+import { redirect } from "next/navigation";
 import { getUser } from "@/shared/supabase/server";
-import { findWorkspaceForMember } from "@/features/workspaces/server/service";
+import { resolvePageWorkspace } from "@/features/workspaces/server/segment";
+import { workspaceSegment } from "@/features/workspaces/url";
 import {
   buildKnowledgeContext,
-  getBaseBySlug,
   getBaseTree,
   getEntry,
 } from "@/features/knowledge/server/service";
-import { KnowledgeBaseNotFoundError } from "@/features/knowledge/server/errors";
+import { resolvePageKbWithWorkspace } from "@/features/knowledge/server/segment";
 import { KnowledgeBaseView } from "@/features/knowledge/components/knowledge-base-view";
 
 export const dynamic = "force-dynamic";
@@ -29,8 +29,11 @@ export default async function KnowledgeBaseDetailPage({ params }: PageProps) {
   const { workspaceSlug, kbSlug } = await params;
   const user = await getUser();
   if (!user) redirect("/login");
-  const workspace = await findWorkspaceForMember(user.id, workspaceSlug);
-  if (!workspace) notFound();
+  const workspace = await resolvePageWorkspace(
+    workspaceSlug,
+    user.id,
+    `knowledge/${kbSlug}`
+  );
 
   const ctx = buildKnowledgeContext({
     userId: user.id,
@@ -38,13 +41,7 @@ export default async function KnowledgeBaseDetailPage({ params }: PageProps) {
     apiKeyId: null,
   });
 
-  let base;
-  try {
-    base = await getBaseBySlug(ctx, kbSlug);
-  } catch (err) {
-    if (err instanceof KnowledgeBaseNotFoundError) notFound();
-    throw err;
-  }
+  const base = await resolvePageKbWithWorkspace(ctx, workspace, kbSlug);
 
   const { folders, entries } = await getBaseTree(ctx, base.id);
 
@@ -58,7 +55,7 @@ export default async function KnowledgeBaseDetailPage({ params }: PageProps) {
 
   return (
     <KnowledgeBaseView
-      workspaceSlug={workspace.slug}
+      workspaceSlug={workspaceSegment(workspace)}
       workspaceId={workspace.id}
       base={base}
       folders={folders}

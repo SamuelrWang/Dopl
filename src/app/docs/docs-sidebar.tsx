@@ -62,15 +62,6 @@ export const DOC_SECTIONS: DocSection[] = [
     ],
   },
   {
-    id: "chrome-extension",
-    title: "Chrome Extension",
-    items: [
-      { id: "extension-install", title: "Installation" },
-      { id: "omnibox", title: "Omnibox search" },
-      { id: "context-menu", title: "Context menu" },
-    ],
-  },
-  {
     id: "community",
     title: "Community",
     items: [

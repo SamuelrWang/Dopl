@@ -94,7 +94,7 @@ export interface EntryPanelData extends BasePanelData {
    * for the user's connected MCP agent to pick it up. Rendered as an
    * amber glow + "Waiting for your agent" banner. Flips to
    * isIngesting=true via the entries realtime subscription when the
-   * agent claims it through prepare_ingest.
+   * agent claims it through ingest_url.
    */
   isPendingIngestion?: boolean;
   /** Live ingestion log events for the attached log header */

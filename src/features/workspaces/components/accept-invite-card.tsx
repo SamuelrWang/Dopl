@@ -57,8 +57,11 @@ export function AcceptInviteCard({ status, token, needsAuth }: Props) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body?.error?.message || body?.error || "Failed to accept");
       }
-      const { workspaceSlug } = (await res.json()) as { workspaceSlug: string };
-      router.push(`/workspace/${workspaceSlug}`);
+      const { workspaceSlug, workspacePublicId } = (await res.json()) as {
+        workspaceSlug: string;
+        workspacePublicId: string;
+      };
+      router.push(`/${workspaceSlug}-${workspacePublicId}`);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");

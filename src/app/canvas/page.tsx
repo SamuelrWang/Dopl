@@ -12,6 +12,7 @@
 import { redirect } from "next/navigation";
 import { getUser } from "@/shared/supabase/server";
 import { ensureDefaultWorkspace } from "@/features/workspaces/server/service";
+import { workspaceSegment } from "@/features/workspaces/url";
 import { ensureDefaultCanvas } from "@/features/workspaces/server/canvases";
 
 export const dynamic = "force-dynamic";
@@ -22,5 +23,5 @@ export default async function CanvasLegacyRedirectPage() {
 
   const workspace = await ensureDefaultWorkspace(user.id);
   const canvas = await ensureDefaultCanvas(workspace.id);
-  redirect(`/${workspace.slug}/${canvas.slug}`);
+  redirect(`/${workspaceSegment(workspace)}/${canvas.slug}`);
 }

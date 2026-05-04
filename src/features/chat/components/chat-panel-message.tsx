@@ -5,7 +5,7 @@ import { MarkdownMessage } from "@/shared/design";
 import { ArtifactsPanel } from "@/features/ingestion/components/artifacts-panel";
 import type { ChatMessage } from "@/features/ingestion/components/chat-message";
 import { SentAttachmentPreview } from "./chat-attachments";
-import { McpSetupCard, ChromeExtensionCard } from "./chat-panel-cards";
+import { McpSetupCard } from "./chat-panel-cards";
 
 /**
  * Render one message from the shared `ChatMessage` union. Handles the
@@ -116,12 +116,11 @@ export function RenderedMessage({
     );
   }
 
-  // Onboarding cards — inline interactive cards for MCP setup, Chrome extension, etc.
+  // Onboarding cards — inline interactive cards for MCP setup.
   if (message.role === "ai" && message.type === "onboarding_card") {
     return (
       <div className="max-w-[95%] mr-auto">
         {message.cardType === "mcp_setup" && <McpSetupCard />}
-        {message.cardType === "chrome_extension" && <ChromeExtensionCard />}
       </div>
     );
   }

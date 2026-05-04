@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
+import { parseSegment } from "@/shared/lib/url/parse-segment";
 import { RESERVED_WORKSPACE_SLUGS } from "@/config";
 import { useSkills } from "@/features/skills/client/hooks";
 import {
@@ -66,6 +67,11 @@ interface WorkspaceLike {
   id: string;
   name: string;
   slug: string;
+  publicId: string;
+}
+
+function workspaceLikeSegment(ws: WorkspaceLike): string {
+  return `${ws.slug}-${ws.publicId}`;
 }
 
 interface PendingInvitation {
@@ -73,6 +79,7 @@ interface PendingInvitation {
   invitedRole: string;
   workspaceId: string;
   workspaceSlug: string;
+  workspacePublicId: string;
   workspaceName: string;
   createdAt: string;
 }
@@ -117,12 +124,12 @@ const NAMED_WORKSPACE_SUBROUTES: ReadonlyArray<string> = [
 ];
 
 /**
- * Pull the workspace slug out of a pathname like `/{wsSlug}/main` or
- * `/{wsSlug}/knowledge`. Returns null for top-level static routes
- * (`/login`, `/settings`, ...) and the legacy `/canvas` redirect, since
- * neither has a workspace context yet.
+ * Pull the workspace handle out of the first path segment. Returns
+ * the canonical `{slug}-{publicId}` segment, or — for legacy URLs
+ * before the publicId migration — the bare slug. Null for top-level
+ * static routes (`/login`, `/settings`, ...) and the legacy `/canvas`.
  */
-function workspaceSlugFromPath(pathname: string): string | null {
+function workspaceSegmentFromPath(pathname: string): string | null {
   const segments = pathname.split("/").filter(Boolean);
   if (segments.length === 0) return null;
   const first = segments[0];
@@ -130,30 +137,51 @@ function workspaceSlugFromPath(pathname: string): string | null {
   return first;
 }
 
+/**
+ * Match a path's first segment to a workspace in the user's list.
+ * Prefers publicId match (canonical URLs), falls back to slug match
+ * (legacy URLs during the deletion window).
+ */
+function matchWorkspace(
+  workspaces: WorkspaceLike[],
+  pathSegment: string | null
+): WorkspaceLike | null {
+  if (!pathSegment || workspaces.length === 0) return null;
+  const parsed = parseSegment(pathSegment);
+  if (parsed) {
+    const byId = workspaces.find((w) => w.publicId === parsed.publicId);
+    if (byId) return byId;
+  }
+  return workspaces.find((w) => w.slug === pathSegment) ?? null;
+}
+
 function isCanvasPath(pathname: string): boolean {
   if (pathname === "/canvas" || pathname.startsWith("/canvas/")) return true;
   const segments = pathname.split("/").filter(Boolean);
-  // /{wsSlug}/{canvasSlug} when the first segment is a workspace slug
-  // (i.e. not reserved) and the second segment isn't one of the named
-  // workspace sub-routes.
+  // /{wsSegment}/{canvasSlug} when the first segment is a workspace
+  // handle (i.e. not reserved) and the second segment isn't one of the
+  // named workspace sub-routes.
   if (segments.length < 2) return false;
   if (RESERVED_WORKSPACE_SLUGS.has(segments[0])) return false;
   return !NAMED_WORKSPACE_SUBROUTES.includes(segments[1]);
 }
 
-function sectionPathFor(slug: string, section: NavSection): string {
-  if (section === "canvas") return `/${slug}`;
-  return `/${slug}/${section}`;
+function sectionPathFor(segment: string, section: NavSection): string {
+  if (section === "canvas") return `/${segment}`;
+  return `/${segment}/${section}`;
 }
 
 export function Sidebar() {
   const pathname = usePathname();
-  const slug = workspaceSlugFromPath(pathname);
+  const pathSegment = workspaceSegmentFromPath(pathname);
   const { workspaces, currentWorkspace, refresh: refreshWorkspaces } =
-    useWorkspaces(slug);
+    useWorkspaces(pathSegment);
   const { invitations, refresh: refreshInvitations } =
     usePendingInvitations();
   const fallbackName = currentWorkspace?.name ?? "Workspace";
+  const currentSegment = currentWorkspace
+    ? workspaceLikeSegment(currentWorkspace)
+    : pathSegment;
 
   return (
     <aside
@@ -161,7 +189,7 @@ export function Sidebar() {
       style={{ backgroundColor: "oklch(0.13 0 0)" }}
     >
       <SidebarHeader
-        currentSlug={currentWorkspace?.slug ?? slug ?? "default"}
+        currentSegment={currentSegment ?? "default"}
         currentName={fallbackName}
         workspaces={workspaces}
         invitations={invitations}
@@ -177,7 +205,7 @@ export function Sidebar() {
       <div className="flex-1 min-h-0 overflow-y-auto">
         <SidebarNav
           pathname={pathname}
-          workspaceSlug={currentWorkspace?.slug ?? slug}
+          workspaceSegment={currentSegment}
           workspaceId={currentWorkspace?.id ?? null}
         />
       </div>
@@ -188,7 +216,7 @@ export function Sidebar() {
   );
 }
 
-function useWorkspaces(activeSlug: string | null) {
+function useWorkspaces(activeSegment: string | null) {
   const [workspaces, setWorkspaces] = useState<WorkspaceLike[] | null>(null);
   const [tick, setTick] = useState(0);
 
@@ -211,12 +239,9 @@ function useWorkspaces(activeSlug: string | null) {
 
   const currentWorkspace = useMemo(() => {
     if (!workspaces || workspaces.length === 0) return null;
-    if (activeSlug) {
-      const match = workspaces.find((w) => w.slug === activeSlug);
-      if (match) return match;
-    }
-    return workspaces[0];
-  }, [workspaces, activeSlug]);
+    const match = matchWorkspace(workspaces, activeSegment);
+    return match ?? workspaces[0];
+  }, [workspaces, activeSegment]);
 
   return { workspaces: workspaces ?? [], currentWorkspace, refresh };
 }
@@ -245,7 +270,7 @@ function usePendingInvitations() {
 }
 
 interface SidebarHeaderProps {
-  currentSlug: string;
+  currentSegment: string;
   currentName: string;
   workspaces: WorkspaceLike[];
   invitations: PendingInvitation[];
@@ -253,7 +278,7 @@ interface SidebarHeaderProps {
 }
 
 function SidebarHeader({
-  currentSlug,
+  currentSegment,
   currentName,
   workspaces,
   invitations,
@@ -291,7 +316,7 @@ function SidebarHeader({
       }
       onAccepted();
       setOpen(false);
-      router.push(`/${invite.workspaceSlug}`);
+      router.push(`/${invite.workspaceSlug}-${invite.workspacePublicId}`);
       router.refresh();
     } catch {
       // Refresh anyway — invite may have been revoked / expired since
@@ -308,7 +333,7 @@ function SidebarHeader({
       className="relative flex items-center gap-2 px-3 py-3 border-b border-white/[0.06]"
     >
       <Link
-        href={`/${currentSlug}`}
+        href={`/${currentSegment}`}
         aria-label="Dopl"
         className="shrink-0 flex items-center justify-center w-7 h-7 rounded-md overflow-hidden"
       >
@@ -349,21 +374,24 @@ function SidebarHeader({
             </div>
           ) : (
             <div className="py-1 max-h-72 overflow-auto">
-              {workspaces.map((w) => (
-                <Link
-                  key={w.id}
-                  href={`/${w.slug}`}
-                  onClick={() => setOpen(false)}
-                  className={cn(
-                    "block px-3 py-1.5 text-sm transition-colors cursor-pointer truncate",
-                    w.slug === currentSlug
-                      ? "bg-white/[0.06] text-text-primary"
-                      : "text-text-secondary hover:bg-white/[0.04] hover:text-text-primary",
-                  )}
-                >
-                  {w.name}
-                </Link>
-              ))}
+              {workspaces.map((w) => {
+                const segment = workspaceLikeSegment(w);
+                return (
+                  <Link
+                    key={w.id}
+                    href={`/${segment}`}
+                    onClick={() => setOpen(false)}
+                    className={cn(
+                      "block px-3 py-1.5 text-sm transition-colors cursor-pointer truncate",
+                      segment === currentSegment
+                        ? "bg-white/[0.06] text-text-primary"
+                        : "text-text-secondary hover:bg-white/[0.04] hover:text-text-primary",
+                    )}
+                  >
+                    {w.name}
+                  </Link>
+                );
+              })}
             </div>
           )}
 
@@ -446,11 +474,11 @@ function SidebarSearchRow() {
 
 interface NavProps {
   pathname: string;
-  workspaceSlug: string | null;
+  workspaceSegment: string | null;
   workspaceId: string | null;
 }
 
-function SidebarNav({ pathname, workspaceSlug, workspaceId }: NavProps) {
+function SidebarNav({ pathname, workspaceSegment, workspaceId }: NavProps) {
   const segments = pathname.split("/").filter(Boolean);
   const lastSegment = segments[segments.length - 1] ?? "";
 
@@ -466,7 +494,7 @@ function SidebarNav({ pathname, workspaceSlug, workspaceId }: NavProps) {
             <KnowledgeNavSection
               key={item.section}
               pathname={pathname}
-              workspaceSlug={workspaceSlug}
+              workspaceSegment={workspaceSegment}
               workspaceId={workspaceId}
             />
           );
@@ -476,7 +504,7 @@ function SidebarNav({ pathname, workspaceSlug, workspaceId }: NavProps) {
             <SkillsNavSection
               key={item.section}
               pathname={pathname}
-              workspaceSlug={workspaceSlug}
+              workspaceSegment={workspaceSegment}
               workspaceId={workspaceId}
             />
           );
@@ -499,11 +527,11 @@ function SidebarNav({ pathname, workspaceSlug, workspaceId }: NavProps) {
           </>
         );
 
-        if (workspaceSlug) {
+        if (workspaceSegment) {
           return (
             <Link
               key={item.section}
-              href={sectionPathFor(workspaceSlug, item.section)}
+              href={sectionPathFor(workspaceSegment, item.section)}
               className={className}
             >
               {inner}
@@ -533,14 +561,17 @@ function SidebarNav({ pathname, workspaceSlug, workspaceId }: NavProps) {
  * navigate to. The user picks a specific KB from the dropdown to enter
  * its detail page.
  */
-function KnowledgeNavSection({ pathname, workspaceSlug, workspaceId }: NavProps) {
+function KnowledgeNavSection({ pathname, workspaceSegment, workspaceId }: NavProps) {
   const router = useRouter();
   const segments = pathname.split("/").filter(Boolean);
   const isOnKnowledge =
     segments.length >= 2 &&
     !RESERVED_WORKSPACE_SLUGS.has(segments[0]) &&
     segments[1] === "knowledge";
-  const currentKbSlug = isOnKnowledge ? segments[2] ?? null : null;
+  const currentKbSegment = isOnKnowledge ? segments[2] ?? null : null;
+  const currentKbPublicId = currentKbSegment
+    ? parseSegment(currentKbSegment)?.publicId ?? null
+    : null;
 
   const [expanded, setExpanded] = useState(isOnKnowledge);
   const [creating, setCreating] = useState(false);
@@ -560,7 +591,7 @@ function KnowledgeNavSection({ pathname, workspaceSlug, workspaceId }: NavProps)
    * the base still exists and is renamable.
    */
   async function handleAddNew() {
-    if (!workspaceSlug || !workspaceId || creating) return;
+    if (!workspaceSegment || !workspaceId || creating) return;
     setCreating(true);
     try {
       const base = await apiCreateBase(
@@ -586,7 +617,9 @@ function KnowledgeNavSection({ pathname, workspaceSlug, workspaceId }: NavProps)
       }
       refetch();
       setExpanded(true);
-      router.push(`/${workspaceSlug}/knowledge/${base.slug}`);
+      router.push(
+        `/${workspaceSegment}/knowledge/${base.slug}-${base.publicId}`
+      );
     } catch (err) {
       toast({
         title: "Couldn't create knowledge base",
@@ -629,7 +662,9 @@ function KnowledgeNavSection({ pathname, workspaceSlug, workspaceId }: NavProps)
             </div>
           ) : null}
           {kbsForRender.map((kb) => {
-            const itemActive = kb.slug === currentKbSlug;
+            const itemActive = currentKbPublicId
+              ? kb.publicId === currentKbPublicId
+              : kb.slug === currentKbSegment;
             const itemClass = cn(
               "block px-2 py-1 rounded-md text-xs transition-colors cursor-pointer truncate",
               itemActive
@@ -637,11 +672,11 @@ function KnowledgeNavSection({ pathname, workspaceSlug, workspaceId }: NavProps)
                 : "text-text-secondary hover:bg-white/[0.04] hover:text-text-primary",
             );
             const itemInner = <span className="truncate">{kb.name}</span>;
-            if (workspaceSlug) {
+            if (workspaceSegment) {
               return (
                 <Link
-                  key={kb.slug}
-                  href={`/${workspaceSlug}/knowledge/${kb.slug}`}
+                  key={kb.id}
+                  href={`/${workspaceSegment}/knowledge/${kb.slug}-${kb.publicId}`}
                   className={itemClass}
                 >
                   {itemInner}
@@ -649,12 +684,12 @@ function KnowledgeNavSection({ pathname, workspaceSlug, workspaceId }: NavProps)
               );
             }
             return (
-              <span key={kb.slug} className={cn(itemClass, "opacity-60")}>
+              <span key={kb.id} className={cn(itemClass, "opacity-60")}>
                 {itemInner}
               </span>
             );
           })}
-          {workspaceSlug && (
+          {workspaceSegment && (
             <button
               type="button"
               onClick={handleAddNew}
@@ -683,14 +718,17 @@ function KnowledgeNavSection({ pathname, workspaceSlug, workspaceId }: NavProps)
  * chevron toggles expansion. Children are the workspace's skills,
  * each linking to its detail page.
  */
-function SkillsNavSection({ pathname, workspaceSlug, workspaceId }: NavProps) {
+function SkillsNavSection({ pathname, workspaceSegment, workspaceId }: NavProps) {
   const router = useRouter();
   const segments = pathname.split("/").filter(Boolean);
   const isOnSkills =
     segments.length >= 2 &&
     !RESERVED_WORKSPACE_SLUGS.has(segments[0]) &&
     segments[1] === "skills";
-  const currentSkillSlug = isOnSkills ? segments[2] ?? null : null;
+  const currentSkillSegment = isOnSkills ? segments[2] ?? null : null;
+  const currentSkillPublicId = currentSkillSegment
+    ? parseSegment(currentSkillSegment)?.publicId ?? null
+    : null;
 
   const [expanded, setExpanded] = useState(isOnSkills);
   const [creating, setCreating] = useState(false);
@@ -705,7 +743,7 @@ function SkillsNavSection({ pathname, workspaceSlug, workspaceId }: NavProps) {
    * user can rename inline.
    */
   async function handleAddNew() {
-    if (!workspaceSlug || !workspaceId || creating) return;
+    if (!workspaceSegment || !workspaceId || creating) return;
     setCreating(true);
     try {
       // SkillCreateSchema requires non-empty `description` and
@@ -724,7 +762,9 @@ function SkillsNavSection({ pathname, workspaceSlug, workspaceId }: NavProps) {
       );
       refetch();
       setExpanded(true);
-      router.push(`/${workspaceSlug}/skills/${result.skill.slug}`);
+      router.push(
+        `/${workspaceSegment}/skills/${result.skill.slug}-${result.skill.publicId}`
+      );
     } catch (err) {
       toast({
         title: "Couldn't create skill",
@@ -767,7 +807,9 @@ function SkillsNavSection({ pathname, workspaceSlug, workspaceId }: NavProps) {
             </div>
           ) : null}
           {skillsForRender.map((skill) => {
-            const itemActive = skill.slug === currentSkillSlug;
+            const itemActive = currentSkillPublicId
+              ? skill.publicId === currentSkillPublicId
+              : skill.slug === currentSkillSegment;
             const itemClass = cn(
               "block px-2 py-1 rounded-md text-xs transition-colors cursor-pointer truncate",
               itemActive
@@ -775,11 +817,11 @@ function SkillsNavSection({ pathname, workspaceSlug, workspaceId }: NavProps) {
                 : "text-text-secondary hover:bg-white/[0.04] hover:text-text-primary",
             );
             const itemInner = <span className="truncate">{skill.name}</span>;
-            if (workspaceSlug) {
+            if (workspaceSegment) {
               return (
                 <Link
-                  key={skill.slug}
-                  href={`/${workspaceSlug}/skills/${skill.slug}`}
+                  key={skill.id}
+                  href={`/${workspaceSegment}/skills/${skill.slug}-${skill.publicId}`}
                   className={itemClass}
                 >
                   {itemInner}
@@ -787,12 +829,12 @@ function SkillsNavSection({ pathname, workspaceSlug, workspaceId }: NavProps) {
               );
             }
             return (
-              <span key={skill.slug} className={cn(itemClass, "opacity-60")}>
+              <span key={skill.id} className={cn(itemClass, "opacity-60")}>
                 {itemInner}
               </span>
             );
           })}
-          {workspaceSlug && (
+          {workspaceSegment && (
             <button
               type="button"
               onClick={handleAddNew}

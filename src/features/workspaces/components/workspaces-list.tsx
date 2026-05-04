@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CreateWorkspaceDialog } from "./create-workspace-dialog";
 import type { Workspace } from "../types";
+import { workspaceSegment } from "../url";
 
 /**
  * Client-side workspace list. Server-rendered version would be cleaner but
@@ -71,12 +72,13 @@ export function WorkspacesList({ initial }: { initial: Workspace[] }) {
 }
 
 function WorkspaceCard({ workspace }: { workspace: Workspace }) {
+  const segment = workspaceSegment(workspace);
   return (
     <div className="rounded-lg bg-white/[0.03] border border-white/[0.08] p-4 hover:bg-white/[0.05] hover:border-white/[0.15] transition-colors">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <Link
-            href={`/workspace/${workspace.slug}`}
+            href={`/${segment}`}
             className="block text-sm font-medium text-white truncate hover:underline"
           >
             {workspace.name}
@@ -92,13 +94,13 @@ function WorkspaceCard({ workspace }: { workspace: Workspace }) {
         </div>
         <div className="flex flex-col items-end gap-1 shrink-0">
           <Link
-            href={`/workspace/${workspace.slug}`}
+            href={`/${segment}`}
             className="h-7 px-3 rounded-md text-[10px] uppercase tracking-wider font-medium text-white/70 bg-white/[0.06] border border-white/[0.12] hover:bg-white/[0.1] hover:text-white transition-colors"
           >
             Open
           </Link>
           <Link
-            href={`/workspaces/${workspace.slug}/settings`}
+            href={`/${segment}/settings`}
             className="text-[10px] uppercase tracking-wider text-white/40 hover:text-white/70 transition-colors"
           >
             Settings

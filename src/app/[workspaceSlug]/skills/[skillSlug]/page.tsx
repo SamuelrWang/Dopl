@@ -6,15 +6,16 @@
  * hands all three to `SkillView`.
  */
 
-import { notFound, redirect } from "next/navigation";
+import { redirect } from "next/navigation";
 import { getUser } from "@/shared/supabase/server";
-import { findWorkspaceForMember } from "@/features/workspaces/server/service";
+import { resolvePageWorkspace } from "@/features/workspaces/server/segment";
+import { workspaceSegment } from "@/features/workspaces/url";
 import {
   buildSkillContext,
   listWorkspaceKnowledgeBases,
   resolveSkillBody,
 } from "@/features/skills/server/service";
-import { SkillNotFoundError } from "@/features/skills/server/errors";
+import { resolvePageSkill } from "@/features/skills/server/segment";
 import { SkillView } from "@/features/skills/components/skill-view";
 
 export const dynamic = "force-dynamic";
@@ -27,8 +28,11 @@ export default async function SkillDetailPage({ params }: PageProps) {
   const { workspaceSlug, skillSlug } = await params;
   const user = await getUser();
   if (!user) redirect("/login");
-  const workspace = await findWorkspaceForMember(user.id, workspaceSlug);
-  if (!workspace) notFound();
+  const workspace = await resolvePageWorkspace(
+    workspaceSlug,
+    user.id,
+    `skills/${skillSlug}`
+  );
 
   const ctx = buildSkillContext({
     userId: user.id,
@@ -36,20 +40,17 @@ export default async function SkillDetailPage({ params }: PageProps) {
     apiKeyId: null,
   });
 
+  const skill = await resolvePageSkill(ctx, workspace, skillSlug);
   const [resolved, workspaceKbs] = await Promise.all([
-    resolveSkillBody(ctx, skillSlug).catch((err) => {
-      if (err instanceof SkillNotFoundError) return null;
-      throw err;
-    }),
+    resolveSkillBody(ctx, skill.slug),
     listWorkspaceKnowledgeBases(ctx),
   ]);
-  if (!resolved) notFound();
 
   return (
     <SkillView
       resolved={resolved}
       workspaceKbs={workspaceKbs}
-      workspaceSlug={workspace.slug}
+      workspaceSlug={workspaceSegment(workspace)}
     />
   );
 }

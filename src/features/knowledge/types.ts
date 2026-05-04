@@ -30,6 +30,7 @@ export interface KnowledgeBase {
   workspaceId: string;
   name: string;
   slug: string;
+  publicId: string;
   description: string | null;
   agentWriteEnabled: boolean;
   createdBy: string | null;

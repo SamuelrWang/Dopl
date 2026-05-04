@@ -1,6 +1,5 @@
 import "server-only";
 import { HttpError } from "@/shared/lib/http-error";
-import { supabaseAdmin } from "@/shared/supabase/admin";
 import type { Workspace, WorkspaceMembership, Role } from "../types";
 import { meetsMinRole } from "../types";
 import { slugifyWorkspaceName } from "../slug";
@@ -8,6 +7,7 @@ import { RESERVED_WORKSPACE_SLUGS } from "@/config";
 import {
   deleteWorkspace,
   findWorkspaceById,
+  findWorkspaceByPublicId,
   findWorkspaceBySlug,
   findDefaultWorkspaceForUser,
   findMemberWorkspaceBySlug,
@@ -77,78 +77,19 @@ export async function resolveActiveWorkspace(
 
 /**
  * Idempotent: creates the user's default workspace if it doesn't exist yet.
- * Called from `resolveActiveWorkspace` and from signup hooks (Phase 2).
- *
- * Audit fix S-15: derives the slug via `slugifyWorkspaceName` instead
- * of hardcoding "default". Existing users with the legacy "default"
- * slug still resolve through `findDefaultWorkspaceForUser` (which
- * checks "default" first, then falls back to the user's oldest
- * workspace). New users get a kebab slug from the workspace name —
- * stays consistent with how rename / new-workspace flow already pick
- * slugs, and unblocks the future workspace-globally-unique migration
- * (audit finding S-4).
- *
- * Two concurrent calls for a brand-new user can both pass the existence
- * check and race to INSERT — the second hits the (owner_id, slug)
- * unique constraint and 500s. We catch that error code (Postgres 23505)
- * and re-read the row, returning whichever insert won.
+ * Called from `resolveActiveWorkspace` and from signup hooks. Slug
+ * uniqueness is no longer required (publicId is the unique routing
+ * key), so this is a single insert with no retry loop.
  */
 export async function ensureDefaultWorkspace(userId: string): Promise<Workspace> {
   const existing = await findDefaultWorkspaceForUser(userId);
   if (existing) return existing;
   const name = "My Workspace";
-  // S-4 follow-up: workspace slugs are GLOBALLY unique, not owner-
-  // scoped. Two users signing up at the same time both need
-  // disambiguated default slugs. We probe with `slugifyWorkspaceName`
-  // against globally-taken slugs first; on the off chance a parallel
-  // insert wins the race, we catch the 23505 and retry with a hash
-  // suffix until insertion succeeds.
-  const slug = await pickGloballyUniqueSlug(name);
-  try {
-    return await insertWorkspaceWithOwnerMembership({
-      ownerId: userId,
-      name,
-      slug,
-    });
-  } catch (err) {
-    const code = pgErrorCode(err);
-    if (code === "23505") {
-      // Either another tab created the user's default first, OR a
-      // different user grabbed our chosen slug between probe and
-      // insert. Re-resolve in that order.
-      const winner = await findDefaultWorkspaceForUser(userId);
-      if (winner) return winner;
-      // Different-user collision — retry with a fresh suffix.
-      const fallback = await pickGloballyUniqueSlug(name);
-      return await insertWorkspaceWithOwnerMembership({
-        ownerId: userId,
-        name,
-        slug: fallback,
-      });
-    }
-    throw err;
-  }
-}
-
-/**
- * Loads every existing workspace slug and runs `slugifyWorkspaceName`
- * against the global set. Workspace count is small enough that a full
- * slug list is cheap; if the table grows past ~10k a single-row
- * existence-probe + retry-with-suffix loop is the next iteration.
- */
-async function pickGloballyUniqueSlug(name: string): Promise<string> {
-  const db = supabaseAdmin();
-  const { data, error } = await db.from("workspaces").select("slug");
-  if (error) throw error;
-  const taken = (data ?? []).map((r) => (r as { slug: string }).slug);
-  return slugifyWorkspaceName(name, taken);
-}
-
-function pgErrorCode(err: unknown): string | null {
-  if (err && typeof err === "object" && "code" in err) {
-    return (err as { code?: string }).code ?? null;
-  }
-  return null;
+  return insertWorkspaceWithOwnerMembership({
+    ownerId: userId,
+    name,
+    slug: slugifyWorkspaceName(name),
+  });
 }
 
 export async function listMyWorkspaces(userId: string): Promise<Workspace[]> {
@@ -159,31 +100,12 @@ export async function createWorkspaceForUser(
   userId: string,
   input: { name: string; description?: string | null }
 ): Promise<Workspace> {
-  // Globally unique slugs (S-4 follow-up). Owner-scoped dedupe was
-  // letting two users share the same slug, which made shared-workspace
-  // URLs ambiguous for invitees. On 23505 race with a parallel writer,
-  // retry once with a fresh suffix derived against the now-current
-  // slug list.
-  const slug = await pickGloballyUniqueSlug(input.name);
-  try {
-    return await insertWorkspaceWithOwnerMembership({
-      ownerId: userId,
-      name: input.name,
-      slug,
-      description: input.description ?? null,
-    });
-  } catch (err) {
-    if (pgErrorCode(err) === "23505") {
-      const fallback = await pickGloballyUniqueSlug(input.name);
-      return await insertWorkspaceWithOwnerMembership({
-        ownerId: userId,
-        name: input.name,
-        slug: fallback,
-        description: input.description ?? null,
-      });
-    }
-    throw err;
-  }
+  return insertWorkspaceWithOwnerMembership({
+    ownerId: userId,
+    name: input.name,
+    slug: slugifyWorkspaceName(input.name),
+    description: input.description ?? null,
+  });
 }
 
 export async function renameWorkspace(
@@ -204,32 +126,12 @@ export async function renameWorkspace(
   if (patch.description !== undefined) update.description = patch.description;
   if (patch.name && patch.name !== workspace.name) update.name = patch.name;
 
-  // S-4 follow-up: slug uniqueness is GLOBAL now, not owner-scoped.
-  // Validate explicit slug overrides + name-derived slugs against
-  // every existing workspace's slug (excluding ourselves), so we
-  // surface a clean 4xx instead of a Postgres 23505 from the global
-  // unique constraint.
-  let slugTaken: string[] | null = null;
-  const loadSlugTaken = async (): Promise<string[]> => {
-    if (slugTaken !== null) return slugTaken;
-    const db = supabaseAdmin();
-    const { data: existing } = await db
-      .from("workspaces")
-      .select("slug")
-      .neq("id", workspaceId);
-    slugTaken = (existing ?? []).map((r) => (r as { slug: string }).slug);
-    return slugTaken;
-  };
-
+  // Slug is purely cosmetic now (publicId is the URL identity), so
+  // there's no uniqueness check. We still gate against reserved
+  // top-level route names so a workspace can't visually claim
+  // `/login`, `/settings`, etc., even though the route resolver
+  // wouldn't actually serve it from there.
   if (patch.slug && patch.slug !== workspace.slug) {
-    const taken = await loadSlugTaken();
-    if (taken.includes(patch.slug)) {
-      throw new HttpError(
-        409,
-        "WORKSPACE_SLUG_TAKEN",
-        `Slug "${patch.slug}" is already in use.`
-      );
-    }
     if (RESERVED_WORKSPACE_SLUGS.has(patch.slug)) {
       throw new HttpError(
         409,
@@ -239,9 +141,7 @@ export async function renameWorkspace(
     }
     update.slug = patch.slug;
   } else if (update.name) {
-    // Name changed without an explicit slug override — re-derive.
-    const taken = await loadSlugTaken();
-    update.slug = slugifyWorkspaceName(update.name, taken);
+    update.slug = slugifyWorkspaceName(update.name);
   }
 
   if (Object.keys(update).length === 0) return workspace;
@@ -298,4 +198,21 @@ export function findWorkspaceForMember(
   slug: string
 ): Promise<Workspace | null> {
   return findMemberWorkspaceBySlug(userId, slug);
+}
+
+/**
+ * Membership-aware publicId lookup. Returns the workspace if and only
+ * if the caller is an active member. Used by the route resolver to
+ * surface 404 (not 403) for workspaces the user can't access — the
+ * existence of a workspace at a given publicId is not an oracle.
+ */
+export async function findWorkspaceForMemberByPublicId(
+  userId: string,
+  publicId: string
+): Promise<Workspace | null> {
+  const workspace = await findWorkspaceByPublicId(publicId);
+  if (!workspace) return null;
+  const membership = await findMembership(workspace.id, userId);
+  if (!membership || membership.status !== "active") return null;
+  return workspace;
 }

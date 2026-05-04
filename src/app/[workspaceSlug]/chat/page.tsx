@@ -5,9 +5,9 @@
  * in a single shared shell (knowledge-detail-style layout).
  */
 
-import { notFound, redirect } from "next/navigation";
+import { redirect } from "next/navigation";
 import { getUser } from "@/shared/supabase/server";
-import { findWorkspaceForMember } from "@/features/workspaces/server/service";
+import { resolvePageWorkspace } from "@/features/workspaces/server/segment";
 import { PageTopBar } from "@/shared/layout/page-top-bar";
 import { ChatShell } from "@/features/chat/components/chat-shell";
 
@@ -21,8 +21,7 @@ export default async function ChatPage({ params }: PageProps) {
   const { workspaceSlug } = await params;
   const user = await getUser();
   if (!user) redirect("/login");
-  const workspace = await findWorkspaceForMember(user.id, workspaceSlug);
-  if (!workspace) notFound();
+  await resolvePageWorkspace(workspaceSlug, user.id, "chat");
 
   return (
     <>

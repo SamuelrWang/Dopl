@@ -40,6 +40,7 @@ export interface Skill {
   id: string;
   workspaceId: string;
   slug: string;
+  publicId: string;
   name: string;
   description: string;
   whenToUse: string;
@@ -97,6 +98,7 @@ export interface WorkspaceKbSummary {
 export interface SkillSummary {
   id: string;
   slug: string;
+  publicId: string;
   name: string;
   description: string;
   whenToUse: string;

@@ -18,10 +18,8 @@ import {
   loadCanvasConversations,
   loadCanvasInitialState,
 } from "@/features/canvas/server/load-server-state";
-import {
-  findWorkspaceForMember,
-  resolveMembershipOrThrow,
-} from "@/features/workspaces/server/service";
+import { resolveMembershipOrThrow } from "@/features/workspaces/server/service";
+import { resolvePageWorkspace } from "@/features/workspaces/server/segment";
 import { findCanvasBySlug } from "@/features/workspaces/server/canvases";
 import CanvasClientShell from "@/features/canvas/canvas-client-shell";
 
@@ -37,8 +35,7 @@ export default async function WorkspaceCanvasPage({ params }: PageProps) {
   const user = await getUser();
   if (!user) redirect("/login");
 
-  const workspace = await findWorkspaceForMember(user.id, workspaceSlug);
-  if (!workspace) notFound();
+  const workspace = await resolvePageWorkspace(workspaceSlug, user.id, canvasSlug);
   await resolveMembershipOrThrow(workspace.id, user.id);
 
   const canvas = await findCanvasBySlug(workspace.id, canvasSlug);

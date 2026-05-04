@@ -3,7 +3,7 @@ import { z } from "zod";
 import { withUserAuth } from "@/shared/auth/with-auth";
 import { parseJson } from "@/shared/api/parse-json";
 import { HttpError } from "@/shared/lib/http-error";
-import { findWorkspaceForMember } from "@/features/workspaces/server/service";
+import { resolveApiWorkspace } from "@/features/workspaces/server/segment";
 import {
   removeMember,
   updateMemberRole,
@@ -30,7 +30,7 @@ export const PATCH = withUserAuth(
       if (!workspaceSlug || !targetUserId) {
         return NextResponse.json({ error: "workspaceSlug + userId required" }, { status: 400 });
       }
-      const workspace = await findWorkspaceForMember(userId, workspaceSlug);
+      const workspace = await resolveApiWorkspace(workspaceSlug, userId);
       if (!workspace) {
         return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
       }
@@ -59,7 +59,7 @@ export const DELETE = withUserAuth(
       if (!workspaceSlug || !targetUserId) {
         return NextResponse.json({ error: "workspaceSlug + userId required" }, { status: 400 });
       }
-      const workspace = await findWorkspaceForMember(userId, workspaceSlug);
+      const workspace = await resolveApiWorkspace(workspaceSlug, userId);
       if (!workspace) {
         return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
       }

@@ -303,7 +303,7 @@ async function handlePost(
     // that reference DISTINCT external sources — the agent presents
     // those to the user after submit, and on explicit approval
     // prepares each as a separate entry. No silent link-follow.
-    // This also keeps prepare_ingest bounded to ~15s regardless of
+    // This also keeps ingest_url bounded to ~15s regardless of
     // how many external docs the source references.
     const { gatheredContent, thumbnailUrl, sourcePlatform, detectedLinks } =
       await extractForAgent(entryId, {

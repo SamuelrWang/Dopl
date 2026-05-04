@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withUserAuth } from "@/shared/auth/with-auth";
 import { HttpError } from "@/shared/lib/http-error";
-import {
-  findWorkspaceForMember,
-  listWorkspaceMembers,
-} from "@/features/workspaces/server/service";
+import { listWorkspaceMembers } from "@/features/workspaces/server/service";
+import { resolveApiWorkspace } from "@/features/workspaces/server/segment";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 
 interface Ctx {
@@ -24,7 +22,7 @@ export const GET = withUserAuth(
       if (!workspaceSlug) {
         return NextResponse.json({ error: "workspaceSlug required" }, { status: 400 });
       }
-      const workspace = await findWorkspaceForMember(userId, workspaceSlug);
+      const workspace = await resolveApiWorkspace(workspaceSlug, userId);
       if (!workspace) {
         return NextResponse.json(
           { error: "Workspace not found" },

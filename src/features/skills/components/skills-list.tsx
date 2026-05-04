@@ -13,6 +13,7 @@ import { PageTopBar } from "@/shared/layout/page-top-bar";
 import { SourceIcon } from "@/features/knowledge/components/source-icon";
 import type { SourceProvider } from "@/features/knowledge/source-types";
 import type { Skill, SkillStatus } from "@/features/skills/types";
+import { skillSegment } from "@/features/skills/url";
 
 interface Props {
   workspaceSlug: string;
@@ -187,7 +188,7 @@ function ExpandedDetail({
       )}
       <div className="lg:col-span-2 flex justify-end">
         <Link
-          href={`/${workspaceSlug}/skills/${skill.slug}`}
+          href={`/${workspaceSlug}/skills/${skillSegment(skill)}`}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white text-black text-xs font-medium hover:bg-white/90 transition-colors cursor-pointer"
         >
           Open

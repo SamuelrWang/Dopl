@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from "@/shared/ui/dialog";
 import type { Workspace, Role } from "../types";
+import { workspaceSegment } from "../url";
 
 interface Props {
   workspace: Workspace;
@@ -38,13 +39,15 @@ export function WorkspaceSettingsForm({ workspace, role }: Props) {
     name.trim() !== workspace.name ||
     (description.trim() || null) !== (workspace.description ?? null);
 
+  const segment = workspaceSegment(workspace);
+
   async function handleSave() {
     if (!canEdit) return;
     setSaving(true);
     setError(null);
     setSuccess(null);
     try {
-      const res = await fetch(`/api/workspaces/${workspace.slug}`, {
+      const res = await fetch(`/api/workspaces/${segment}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -59,10 +62,9 @@ export function WorkspaceSettingsForm({ workspace, role }: Props) {
       const { workspace: updated } = (await res.json()) as { workspace: Workspace };
       setSuccess("Saved.");
       // Slug may have changed if the name changed; redirect to the new
-      // settings URL so subsequent saves hit the right route. Settings
-      // live at /[workspaceSlug]/settings — no `/workspaces/` prefix.
+      // canonical settings URL so subsequent saves hit the right route.
       if (updated.slug !== workspace.slug) {
-        router.push(`/${updated.slug}/settings`);
+        router.push(`/${workspaceSegment(updated)}/settings`);
       } else {
         router.refresh();
       }
@@ -78,7 +80,7 @@ export function WorkspaceSettingsForm({ workspace, role }: Props) {
     setDeleting(true);
     setError(null);
     try {
-      const res = await fetch(`/api/workspaces/${workspace.slug}`, {
+      const res = await fetch(`/api/workspaces/${segment}`, {
         method: "DELETE",
       });
       if (!res.ok && res.status !== 204) {

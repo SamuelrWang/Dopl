@@ -3,7 +3,7 @@ import { withUserAuth } from "@/shared/auth/with-auth";
 import { parseJson } from "@/shared/api/parse-json";
 import { HttpError } from "@/shared/lib/http-error";
 import { InvitationCreateSchema } from "@/features/workspaces/schema";
-import { findWorkspaceForMember } from "@/features/workspaces/server/service";
+import { resolveApiWorkspace } from "@/features/workspaces/server/segment";
 import {
   createInvitation,
   listWorkspaceInvitations,
@@ -25,7 +25,7 @@ export const GET = withUserAuth(
       if (!workspaceSlug) {
         return NextResponse.json({ error: "workspaceSlug required" }, { status: 400 });
       }
-      const workspace = await findWorkspaceForMember(userId, workspaceSlug);
+      const workspace = await resolveApiWorkspace(workspaceSlug, userId);
       if (!workspace) {
         return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
       }
@@ -54,7 +54,7 @@ export const POST = withUserAuth(
       if (!workspaceSlug) {
         return NextResponse.json({ error: "workspaceSlug required" }, { status: 400 });
       }
-      const workspace = await findWorkspaceForMember(userId, workspaceSlug);
+      const workspace = await resolveApiWorkspace(workspaceSlug, userId);
       if (!workspace) {
         return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
       }

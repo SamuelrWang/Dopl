@@ -127,6 +127,15 @@ export async function getBaseBySlug(
   return base;
 }
 
+export async function getBaseByPublicId(
+  ctx: KnowledgeContext,
+  publicId: string
+): Promise<KnowledgeBase> {
+  const base = await repo.findBaseByPublicId(ctx.workspaceId, publicId, false);
+  if (!base) throw new KnowledgeBaseNotFoundError(publicId);
+  return base;
+}
+
 // ─── Base writes ────────────────────────────────────────────────────
 
 export async function createBase(
@@ -137,11 +146,13 @@ export async function createBase(
   // toggle is per-base — it doesn't apply to creation. (You can't have
   // a base with the toggle off until that base exists.) Agent-origin
   // creates are allowed by default; tighten in Item 4 if needed.
-
+  //
+  // Slug uniqueness within workspace is preserved here so MCP `kb_*`
+  // tools that address bases by slug stay unambiguous. PublicId is
+  // the URL routing key; slug stays the agent-facing handle.
   let attempt = 0;
   let baseSlug =
     input.slug ?? deriveSlug(input.name, await listSlugs(ctx.workspaceId));
-
   while (true) {
     try {
       return await repo.insertBase({
@@ -159,8 +170,6 @@ export async function createBase(
         baseSlug = deriveSlug(input.name, await listSlugs(ctx.workspaceId));
         continue;
       }
-      // Retries exhausted on slug collision — surface a clean 409
-      // rather than a raw Postgres error.
       if (code === "23505") {
         throw new KnowledgeBaseSlugConflictError(baseSlug);
       }
@@ -192,13 +201,10 @@ export async function updateBase(
     return await repo.updateBaseRow(id, {
       name: patch.name,
       slug: patch.slug,
-      // Pass through as-is: undefined skips the column, null clears it.
       description: patch.description,
       agentWriteEnabled: patch.agentWriteEnabled,
     });
   } catch (err) {
-    // Catch the rare race where two concurrent PATCHes both passed
-    // the pre-check and one collides on UPDATE.
     if (errorCode(err) === "23505" && patch.slug) {
       throw new KnowledgeBaseSlugConflictError(patch.slug);
     }

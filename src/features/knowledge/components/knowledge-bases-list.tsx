@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 import { PageTopBar } from "@/shared/layout/page-top-bar";
 import type { KnowledgeBase } from "../types";
+import { knowledgeBaseSegment } from "../url";
 import { CreateBaseDialog } from "./create-base-dialog";
 
 interface Props {
@@ -44,7 +45,7 @@ export function KnowledgeBasesList({
           {bases.map((kb) => (
             <Link
               key={kb.id}
-              href={`/${workspaceSlug}/knowledge/${kb.slug}`}
+              href={`/${workspaceSlug}/knowledge/${knowledgeBaseSegment(kb)}`}
               className="group block rounded-xl border border-white/[0.06] p-5 hover:border-white/[0.15] hover:bg-white/[0.02] transition-colors cursor-pointer"
               style={{ backgroundColor: "oklch(0.13 0 0)" }}
             >

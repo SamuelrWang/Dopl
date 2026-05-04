@@ -108,7 +108,6 @@ export function McpServerSection() {
           ["list_clusters", "List all your clusters."],
           ["get_cluster", "Get cluster details with member entries, READMEs, and brain."],
           ["query_cluster", "Semantic search scoped to a single cluster."],
-          ["sync_skills", "Export all clusters as skill files to ~/.claude/skills/ or ~/.openclaw/workspace/data/dopl/."],
           ["save_cluster_memory", "Save a preference or correction to a cluster brain."],
           ["canvas_add_entry", "Add a knowledge base entry to your canvas."],
           ["canvas_search_and_add", "Search and add top results to your canvas in one step."],

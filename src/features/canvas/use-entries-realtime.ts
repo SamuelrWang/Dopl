@@ -4,7 +4,7 @@
  * use-entries-realtime.ts — subscribe to Supabase realtime on the
  * `entries` table so amber pending tiles on the canvas flip to the
  * ingesting state the instant the user's connected MCP agent claims
- * the row via `prepare_ingest`.
+ * the row via `ingest_url`.
  *
  * Scope: filtered to rows ingested by the current authed user, so we
  * only get notified about the user's own queue.

@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from "@/shared/ui/dialog";
 import type { Workspace } from "../types";
+import { workspaceSegment } from "../url";
 
 interface Props {
   open: boolean;
@@ -69,7 +70,7 @@ export function CreateWorkspaceDialog({
       reset();
       onCreated?.(workspace);
       if (!skipRedirect) {
-        router.push(`/workspace/${workspace.slug}`);
+        router.push(`/${workspaceSegment(workspace)}`);
         router.refresh();
       }
     } catch (err) {

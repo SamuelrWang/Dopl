@@ -22,7 +22,7 @@
 export function slugify(
   name: string,
   fallback: string,
-  existingSlugs: string[]
+  existingSlugs: string[] = []
 ): string {
   let base = name
     .normalize("NFKC")

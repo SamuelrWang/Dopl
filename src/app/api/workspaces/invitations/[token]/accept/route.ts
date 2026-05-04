@@ -20,8 +20,8 @@ export const POST = withUserAuth(
       if (!token) {
         return NextResponse.json({ error: "token required" }, { status: 400 });
       }
-      const { workspaceSlug } = await acceptInvitationByToken(token, userId);
-      return NextResponse.json({ workspaceSlug });
+      const result = await acceptInvitationByToken(token, userId);
+      return NextResponse.json(result);
     } catch (err) {
       if (err instanceof HttpError) {
         return NextResponse.json(err.toResponseBody(), { status: err.status });

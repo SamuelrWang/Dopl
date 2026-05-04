@@ -5,10 +5,10 @@ import { HttpError } from "@/shared/lib/http-error";
 import { WorkspaceUpdateSchema } from "@/features/workspaces/schema";
 import {
   deleteWorkspaceForUser,
-  findWorkspaceForMember,
   renameWorkspace,
   resolveMembershipOrThrow,
 } from "@/features/workspaces/server/service";
+import { resolveApiWorkspace } from "@/features/workspaces/server/segment";
 
 interface Ctx {
   userId: string;
@@ -31,7 +31,7 @@ export const GET = withUserAuth(async (_request: NextRequest, { userId, params }
     // caller owns. Membership lookup (workspaces owned by other users that
     // the caller has been invited to) lands in Phase 4 and joins through
     // workspace_members.
-    const workspace = await findWorkspaceForMember(userId, workspaceSlug);
+    const workspace = await resolveApiWorkspace(workspaceSlug, userId);
     if (!workspace) {
       return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
     }
@@ -56,7 +56,7 @@ export const PATCH = withUserAuth(async (request: NextRequest, { userId, params 
     if (!workspaceSlug) {
       return NextResponse.json({ error: "workspaceSlug required" }, { status: 400 });
     }
-    const workspace = await findWorkspaceForMember(userId, workspaceSlug);
+    const workspace = await resolveApiWorkspace(workspaceSlug, userId);
     if (!workspace) {
       return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
     }
@@ -82,7 +82,7 @@ export const DELETE = withUserAuth(async (_request: NextRequest, { userId, param
     if (!workspaceSlug) {
       return NextResponse.json({ error: "workspaceSlug required" }, { status: 400 });
     }
-    const workspace = await findWorkspaceForMember(userId, workspaceSlug);
+    const workspace = await resolveApiWorkspace(workspaceSlug, userId);
     if (!workspace) {
       return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
     }

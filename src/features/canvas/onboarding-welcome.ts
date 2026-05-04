@@ -46,20 +46,6 @@ Here's how to set it up:`,
     {
       role: "ai",
       type: "text",
-      content: `**Chrome Extension**
-
-The Dopl Chrome extension lets you ingest pages as you browse — just right-click and send it to your knowledge base. It's especially useful for paywalled or login-gated content that can't be reached by a URL alone.
-
-It only extracts or ingests when you explicitly tell it to — it never reads pages on its own. You also get address bar search and a side panel for quick access.`,
-    },
-    {
-      role: "ai",
-      type: "onboarding_card",
-      cardType: "chrome_extension",
-    },
-    {
-      role: "ai",
-      type: "text",
       content: `That's the quick tour! So — what would you like to build, or is there anything you'd like to explore? You can also just paste a URL to something interesting and I'll break it down for you.
 
 I'm always here if you have questions about anything — just ask anytime.`,

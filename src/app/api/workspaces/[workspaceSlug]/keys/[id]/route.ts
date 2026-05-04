@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUser } from "@/shared/supabase/server";
-import {
-  findWorkspaceForMember,
-  resolveMembershipOrThrow,
-} from "@/features/workspaces/server/service";
+import { resolveMembershipOrThrow } from "@/features/workspaces/server/service";
+import { resolveApiWorkspace } from "@/features/workspaces/server/segment";
 import { revokeApiKey } from "@/shared/auth/api-keys";
 
 interface RouteContext {
@@ -21,7 +19,7 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { workspaceSlug, id } = await context.params;
-  const workspace = await findWorkspaceForMember(user.id, workspaceSlug);
+  const workspace = await resolveApiWorkspace(workspaceSlug, user.id);
   if (!workspace) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }

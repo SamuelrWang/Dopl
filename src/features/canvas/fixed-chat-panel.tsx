@@ -12,7 +12,6 @@ import {
   usePanelsContext,
   useCanvas,
   computeNewPanelPosition,
-  nextPanelIdString,
 } from "./canvas-store";
 import { useChatDrawer } from "./chat-drawer-context";
 import { ChatPanelBody } from "@/features/chat/components/chat-panel";
@@ -213,10 +212,6 @@ export function FixedChatPanel() {
     },
     [dispatch, state]
   );
-
-  // Suppress unused warning on nextPanelIdString — imported for future
-  // use but current restore path reuses the conversation's own panel_id.
-  void nextPanelIdString;
 
   const selectedPanel = useMemo(
     () => chatPanels.find((p) => p.id === selectedPanelId) ?? null,

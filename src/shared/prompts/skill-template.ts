@@ -112,8 +112,7 @@ export function buildSkillTemplatePayload(): string {
     "",
     "## After generating",
     "",
-    "1. Call `update_cluster_brain(slug, <your output>)` to persist.",
-    "2. Call `sync_skills` so the thin-pointer SKILL.md on disk reflects the new brain.",
+    "Call `update_cluster_brain(slug, <your output>)` to persist. The brain is the canonical surface — agents fetch it on demand via `get_cluster_brain`, so no separate file-sync step is needed.",
   ].join("\n");
 }
 

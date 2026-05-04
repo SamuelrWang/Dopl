@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { IngestSubmitSchema } from "@/types/api";
 import { withUserAuth } from "@/shared/auth/with-auth";
 import { supabaseAdmin } from "@/shared/supabase/admin";
-// Credits removed — access is gated at prepare; submit does no credit math.
 import {
   deleteFailedEntry,
   stepGatherContent,
@@ -33,8 +32,7 @@ import type { ExtractedSource } from "@/features/ingestion/server/types";
  *   6. Chunks + embeds content via chunkAndEmbed (OpenAI).
  *   7. Flips status to "complete".
  *
- * On failure, the entry is deleted and the 1-credit prepare deduction is
- * refunded so the user isn't charged for a busted round trip.
+ * On failure, the entry is deleted so the user can retry cleanly.
  */
 async function handlePost(
   request: NextRequest,
@@ -117,7 +115,7 @@ async function handlePost(
           error: "Entry not in submittable state",
           status: diag.status,
           message:
-            "Only entries in 'processing' state can receive a submit. Start a fresh ingest with prepare_ingest.",
+            "Only entries in 'processing' state can receive a submit. Start a fresh ingest with ingest_url.",
         },
         { status: 409 }
       );

@@ -14,6 +14,7 @@ export interface WorkspaceRow {
   owner_id: string;
   name: string;
   slug: string;
+  public_id: string;
   description: string | null;
   created_at: string;
   updated_at: string;
@@ -35,6 +36,7 @@ export function mapWorkspaceRow(row: WorkspaceRow): Workspace {
     ownerId: row.owner_id,
     name: row.name,
     slug: row.slug,
+    publicId: row.public_id,
     description: row.description,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

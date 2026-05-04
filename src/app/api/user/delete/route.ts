@@ -90,7 +90,7 @@ export async function DELETE() {
 
     // Delete the auth user — all per-user data cascades automatically:
     // profiles, api_keys, canvas_panels, user-scoped clusters, chat_attachments,
-    // user_credits, credit_ledger, user_preferences
+    // user_preferences
     // entries.ingested_by is SET NULL (preserves global entries)
     // mcp_events.user_id / system_events.user_id are SET NULL (analytics retained)
     const { error } = await admin.auth.admin.deleteUser(user.id);

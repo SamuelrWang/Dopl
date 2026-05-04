@@ -220,18 +220,6 @@ export async function listAttachedKnowledgeBasesById(
   scope: ClusterScope
 ): Promise<ClusterAttachedKnowledgeBase[]> {
   const db = supabaseAdmin();
-  const { data: links, error } = await db
-    .from("cluster_knowledge_bases")
-    .select(
-      `added_at,
-       knowledge_base_id,
-       knowledge_base:knowledge_bases!inner(
-         id, slug, name, description, agent_write_enabled, deleted_at
-       )`
-    )
-    .eq("cluster_id", clusterId)
-    .eq("workspace_id", scope.workspaceId);
-  if (error) throw error;
 
   type KbRel = {
     id: string;
@@ -241,23 +229,46 @@ export async function listAttachedKnowledgeBasesById(
     agent_write_enabled: boolean;
     deleted_at: string | null;
   };
-  type RawRow = {
-    added_at: string;
-    knowledge_base_id: string;
-    knowledge_base: KbRel | KbRel[] | null;
-  };
   type Row = {
     added_at: string;
     knowledge_base_id: string;
     knowledge_base: KbRel | null;
   };
-  const rawRows = (links as unknown as RawRow[] | null) ?? [];
-  const rows: Row[] = rawRows.map((r) => ({
+
+  // Manual join: PostgREST `!inner` embedded-resource resolution was
+  // returning opaque HTTP 500s on cluster reads after the May 2026
+  // workspace_id denormalization (migrations 20260502100000 +
+  // 20260502100100). Two explicit queries are robust regardless of
+  // PostgREST's schema cache state.
+  const { data: linkRows, error: linkErr } = await db
+    .from("cluster_knowledge_bases")
+    .select("added_at, knowledge_base_id")
+    .eq("cluster_id", clusterId)
+    .eq("workspace_id", scope.workspaceId);
+  if (linkErr) throw linkErr;
+
+  const kbIdList = (linkRows ?? []).map((r) => r.knowledge_base_id);
+  const kbsById = new Map<string, KbRel>();
+  if (kbIdList.length > 0) {
+    // Defense-in-depth: scope the lookup by workspace_id even though the
+    // FK + the link query's workspace_id filter make this redundant in
+    // theory. Guards against any future bug or direct-DB write that
+    // could leave a junction row pointing at a cross-workspace KB.
+    const { data: kbRows, error: kbErr } = await db
+      .from("knowledge_bases")
+      .select("id, slug, name, description, agent_write_enabled, deleted_at")
+      .in("id", kbIdList)
+      .eq("workspace_id", scope.workspaceId);
+    if (kbErr) throw kbErr;
+    for (const kb of kbRows ?? []) {
+      kbsById.set(kb.id, kb as KbRel);
+    }
+  }
+
+  const rows: Row[] = (linkRows ?? []).map((r) => ({
     added_at: r.added_at,
     knowledge_base_id: r.knowledge_base_id,
-    knowledge_base: Array.isArray(r.knowledge_base)
-      ? r.knowledge_base[0] ?? null
-      : r.knowledge_base,
+    knowledge_base: kbsById.get(r.knowledge_base_id) ?? null,
   }));
   const liveRows = rows.filter(
     (r) => r.knowledge_base && r.knowledge_base.deleted_at === null
@@ -567,18 +578,6 @@ export async function listAttachedSkillsById(
   scope: ClusterScope
 ): Promise<ClusterAttachedSkill[]> {
   const db = supabaseAdmin();
-  const { data: links, error } = await db
-    .from("cluster_skills")
-    .select(
-      `added_at,
-       skill_id,
-       skill:skills!inner(
-         id, slug, name, description, status, when_to_use, body, deleted_at
-       )`
-    )
-    .eq("cluster_id", clusterId)
-    .eq("workspace_id", scope.workspaceId);
-  if (error) throw error;
 
   type SkillRel = {
     id: string;
@@ -590,16 +589,37 @@ export async function listAttachedSkillsById(
     body: string;
     deleted_at: string | null;
   };
-  type RawRow = {
-    added_at: string;
-    skill_id: string;
-    skill: SkillRel | SkillRel[] | null;
-  };
-  const rawRows = (links as unknown as RawRow[] | null) ?? [];
-  const rows = rawRows.map((r) => ({
+
+  // Manual join — see the matching block in listAttachedKnowledgeBasesById
+  // for the rationale (PostgREST !inner returned opaque 500s after the
+  // May 2026 workspace_id denormalization migrations).
+  const { data: linkRows, error: linkErr } = await db
+    .from("cluster_skills")
+    .select("added_at, skill_id")
+    .eq("cluster_id", clusterId)
+    .eq("workspace_id", scope.workspaceId);
+  if (linkErr) throw linkErr;
+
+  const skillIdList = (linkRows ?? []).map((r) => r.skill_id);
+  const skillsById = new Map<string, SkillRel>();
+  if (skillIdList.length > 0) {
+    // Defense-in-depth workspace_id filter — see the matching block in
+    // listAttachedKnowledgeBasesById for the rationale.
+    const { data: skillRows, error: skillErr } = await db
+      .from("skills")
+      .select("id, slug, name, description, status, when_to_use, body, deleted_at")
+      .in("id", skillIdList)
+      .eq("workspace_id", scope.workspaceId);
+    if (skillErr) throw skillErr;
+    for (const s of skillRows ?? []) {
+      skillsById.set(s.id, s as SkillRel);
+    }
+  }
+
+  const rows = (linkRows ?? []).map((r) => ({
     added_at: r.added_at,
     skill_id: r.skill_id,
-    skill: Array.isArray(r.skill) ? r.skill[0] ?? null : r.skill,
+    skill: skillsById.get(r.skill_id) ?? null,
   }));
 
   return rows

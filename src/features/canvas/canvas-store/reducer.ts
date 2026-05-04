@@ -562,7 +562,7 @@ export function reducer(state: CanvasState, action: CanvasAction): CanvasState {
       // Driven by the entries realtime subscription. Only touches the
       // two visual flags; leaves artifacts/metadata alone so an
       // in-flight ingestion render isn't clobbered. When the agent
-      // finishes a prepare_ingest → submit flow, the resulting
+      // finishes a ingest_url → submit flow, the resulting
       // complete-entry payload arrives via the existing SSE pipeline
       // (or a separate fetch on panel open), not this action.
       return {

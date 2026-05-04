@@ -4,9 +4,9 @@
  * resolves cleanly.
  */
 
-import { notFound, redirect } from "next/navigation";
+import { redirect } from "next/navigation";
 import { getUser } from "@/shared/supabase/server";
-import { findWorkspaceForMember } from "@/features/workspaces/server/service";
+import { resolvePageWorkspace } from "@/features/workspaces/server/segment";
 
 export const dynamic = "force-dynamic";
 
@@ -18,8 +18,7 @@ export default async function ActivityPage({ params }: PageProps) {
   const { workspaceSlug } = await params;
   const user = await getUser();
   if (!user) redirect("/login");
-  const workspace = await findWorkspaceForMember(user.id, workspaceSlug);
-  if (!workspace) notFound();
+  const workspace = await resolvePageWorkspace(workspaceSlug, user.id, "activity");
 
   return (
     <div className="container mx-auto px-4 pt-24 pb-16 max-w-3xl">
