@@ -140,6 +140,11 @@ export function usePrivateChat({
 
       function ensureStreamingBubble() {
         streamingActive = true;
+        // Snapshot the closure variable BEFORE scheduling the state
+        // update — the updater function runs later (React batches state
+        // dispatches), and `streamingText` may have been mutated by
+        // subsequent SSE events by the time React invokes the updater.
+        const snapshot = streamingText;
         setMessages((prev) => {
           const last = prev[prev.length - 1];
           if (last && last.role === "ai" && last.type === "streaming") {
@@ -147,18 +152,23 @@ export function usePrivateChat({
             next[next.length - 1] = {
               role: "ai",
               type: "streaming",
-              content: streamingText,
+              content: snapshot,
             };
             return next;
           }
           return [
             ...prev,
-            { role: "ai", type: "streaming", content: streamingText },
+            { role: "ai", type: "streaming", content: snapshot },
           ];
         });
       }
       function finaliseBubble() {
         if (!streamingActive) return;
+        // Same snapshot dance as ensureStreamingBubble. Without this
+        // the updater closure read `streamingText` AFTER the
+        // `streamingText = ""` line below ran, so finalised messages
+        // landed in state (and persisted to the DB) as empty strings.
+        const snapshot = streamingText;
         setMessages((prev) => {
           const last = prev[prev.length - 1];
           if (!last || last.role !== "ai" || last.type !== "streaming") {
@@ -168,7 +178,7 @@ export function usePrivateChat({
           next[next.length - 1] = {
             role: "ai",
             type: "text",
-            content: streamingText,
+            content: snapshot,
           };
           return next;
         });
