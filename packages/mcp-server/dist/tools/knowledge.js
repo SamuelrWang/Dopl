@@ -49,7 +49,7 @@ function registerKnowledgeTools(register, client) {
     register("kb_get_tree", "Get the full folder/entry tree for a knowledge base — metadata only, bodies stripped. Use as the first call when exploring a base. For an entry's body, follow up with `kb_read_file`.", { base: zod_1.z.string().describe("Base slug or id") }, async ({ base: ref }) => {
         const base = await resolveBase(client, ref);
         if (!base)
-            return err(`Knowledge base not found: ${ref}`);
+            return err(`Knowledge base not found: ${ref}. If you may have deleted it, check \`kb_list_trash\` and restore with \`kb_restore_base\`.`);
         const tree = await client.getKbTree(base.id);
         const lines = [
             `## ${tree.base.name} \`${tree.base.slug}\``,
@@ -105,7 +105,7 @@ function registerKnowledgeTools(register, client) {
     }, async ({ base: ref, name, description, slug, agent_write_enabled }) => {
         const base = await resolveBase(client, ref);
         if (!base)
-            return err(`Knowledge base not found: ${ref}`);
+            return err(`Knowledge base not found: ${ref}. If you may have deleted it, check \`kb_list_trash\` and restore with \`kb_restore_base\`.`);
         const updated = await client.updateKbBase(base.id, {
             name,
             description,
@@ -119,7 +119,7 @@ function registerKnowledgeTools(register, client) {
     register("kb_delete_base", "Soft-delete a knowledge base. The base + its folders + entries become invisible but remain restorable from trash via `kb_restore_base`. Confirm with the user before calling — this is destructive from the user's perspective.", { base: zod_1.z.string().describe("Base slug or id") }, async ({ base: ref }) => {
         const base = await resolveBase(client, ref);
         if (!base)
-            return err(`Knowledge base not found: ${ref}`);
+            return err(`Knowledge base not found: ${ref}. If you may have deleted it, check \`kb_list_trash\` and restore with \`kb_restore_base\`.`);
         await client.deleteKbBase(base.id);
         return ok(`Deleted **${base.name}** (slug: \`${base.slug}\`). Restore with \`kb_restore_base\`.`);
     });
@@ -149,7 +149,7 @@ function registerKnowledgeTools(register, client) {
     }, async ({ base: ref, path }) => {
         const base = await resolveBase(client, ref);
         if (!base)
-            return err(`Knowledge base not found: ${ref}`);
+            return err(`Knowledge base not found: ${ref}. If you may have deleted it, check \`kb_list_trash\` and restore with \`kb_restore_base\`.`);
         const listing = await client.listKbDirByPath(base.id, path ?? "");
         const lines = [];
         const where = listing.folder ? listing.folder.name : "(root)";
@@ -172,7 +172,7 @@ function registerKnowledgeTools(register, client) {
     }, async ({ base: ref, path }) => {
         const base = await resolveBase(client, ref);
         if (!base)
-            return err(`Knowledge base not found: ${ref}`);
+            return err(`Knowledge base not found: ${ref}. If you may have deleted it, check \`kb_list_trash\` and restore with \`kb_restore_base\`.`);
         const folder = await client.createKbFolderByPath(base.id, path);
         return ok(`Folder ready at \`${path}\` (id: \`${folder.id}\`).`);
     });
@@ -183,7 +183,7 @@ function registerKnowledgeTools(register, client) {
     }, async ({ base: ref, path }) => {
         const base = await resolveBase(client, ref);
         if (!base)
-            return err(`Knowledge base not found: ${ref}`);
+            return err(`Knowledge base not found: ${ref}. If you may have deleted it, check \`kb_list_trash\` and restore with \`kb_restore_base\`.`);
         const result = await client.deleteKbByPath(base.id, path);
         if (result.kind !== "folder") {
             return err(`Path "${path}" resolved to a ${result.kind}, not a folder. ` +
@@ -199,7 +199,7 @@ function registerKnowledgeTools(register, client) {
     }, async ({ base: ref, from_path, to_path }) => {
         const base = await resolveBase(client, ref);
         if (!base)
-            return err(`Knowledge base not found: ${ref}`);
+            return err(`Knowledge base not found: ${ref}. If you may have deleted it, check \`kb_list_trash\` and restore with \`kb_restore_base\`.`);
         const result = await client.moveKbByPath(base.id, from_path, to_path);
         if (result.kind !== "folder") {
             return err(`Path "${from_path}" resolved to a ${result.kind}, not a folder.`);
@@ -213,7 +213,7 @@ function registerKnowledgeTools(register, client) {
     }, async ({ base: ref, path }) => {
         const base = await resolveBase(client, ref);
         if (!base)
-            return err(`Knowledge base not found: ${ref}`);
+            return err(`Knowledge base not found: ${ref}. If you may have deleted it, check \`kb_list_trash\` and restore with \`kb_restore_base\`.`);
         const entry = await client.readKbFileByPath(base.id, path);
         const lines = [
             `# ${entry.title}`,
@@ -226,7 +226,7 @@ function registerKnowledgeTools(register, client) {
         return ok(lines.join("\n"));
     });
     // ── kb_write_file ────────────────────────────────────────────────
-    register("kb_write_file", "Upsert an entry at the given path. If the path resolves to an existing entry, body (and optional title) are updated. If the path doesn't exist, parent folders are created (mkdir -p) and a fresh entry is inserted with the leaf segment as its title (overridable). Returns the entry's new state.", {
+    register("kb_write_file", "Upsert an entry. The `path` argument is the storage path (used to resolve an existing entry to update); for **new** entries, the entry's title becomes its addressable path going forward — pass `title` explicitly when you want a clean human-readable title (the leaf path segment is a fallback when no title is given). Parent folders are created mkdir-p. After creation, address the entry by its title for subsequent reads/moves. Returns the entry's new state.", {
         base: zod_1.z.string().describe("Base slug or id"),
         path: zod_1.z
             .string()
@@ -242,7 +242,7 @@ function registerKnowledgeTools(register, client) {
     }, async ({ base: ref, path, body, title }) => {
         const base = await resolveBase(client, ref);
         if (!base)
-            return err(`Knowledge base not found: ${ref}`);
+            return err(`Knowledge base not found: ${ref}. If you may have deleted it, check \`kb_list_trash\` and restore with \`kb_restore_base\`.`);
         const entry = await client.writeKbFileByPath(base.id, path, {
             body,
             title,
@@ -256,7 +256,7 @@ function registerKnowledgeTools(register, client) {
     }, async ({ base: ref, path }) => {
         const base = await resolveBase(client, ref);
         if (!base)
-            return err(`Knowledge base not found: ${ref}`);
+            return err(`Knowledge base not found: ${ref}. If you may have deleted it, check \`kb_list_trash\` and restore with \`kb_restore_base\`.`);
         const result = await client.deleteKbByPath(base.id, path);
         if (result.kind !== "entry") {
             return err(`Path "${path}" resolved to a ${result.kind}, not an entry. ` +
@@ -272,7 +272,7 @@ function registerKnowledgeTools(register, client) {
     }, async ({ base: ref, from_path, to_path }) => {
         const base = await resolveBase(client, ref);
         if (!base)
-            return err(`Knowledge base not found: ${ref}`);
+            return err(`Knowledge base not found: ${ref}. If you may have deleted it, check \`kb_list_trash\` and restore with \`kb_restore_base\`.`);
         const result = await client.moveKbByPath(base.id, from_path, to_path);
         if (result.kind !== "entry") {
             return err(`Path "${from_path}" resolved to a ${result.kind}, not an entry.`);
@@ -285,7 +285,7 @@ function registerKnowledgeTools(register, client) {
         if (ref) {
             const base = await resolveBase(client, ref);
             if (!base)
-                return err(`Knowledge base not found: ${ref}`);
+                return err(`Knowledge base not found: ${ref}. If you may have deleted it, check \`kb_list_trash\` and restore with \`kb_restore_base\`.`);
             baseId = base.id;
         }
         const trash = await client.listKbTrash(baseId);

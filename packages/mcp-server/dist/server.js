@@ -3,7 +3,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.createServer = createServer;
 const mcp_js_1 = require("@modelcontextprotocol/sdk/server/mcp.js");
 const zod_1 = require("zod");
-const skill_writer_js_1 = require("./skill-writer.js");
 const templates_js_1 = require("./templates.js");
 const knowledge_js_1 = require("./tools/knowledge.js");
 const skills_js_1 = require("./tools/skills.js");
@@ -51,8 +50,8 @@ Every Dopl tool response carries a \`_dopl_status\` footer with \`pending_ingest
 **When the footer shows \`pending_ingestions > 0\`:**
 
 1. Tell the user: "You have N URL(s) queued on Dopl — want me to process them?"
-2. On yes: call \`list_pending_ingests\` to see the URLs, then call \`prepare_ingest(url)\` for each. \`prepare_ingest\` transparently claims the pending skeleton (flips it to processing) — you do NOT need a special parameter; pass the same URL that's in the queue.
-3. Follow the normal \`prepare_ingest\` → run prompts → \`submit_ingested_entry\` flow. The amber tile on the user's canvas updates live as you progress.
+2. On yes: call \`list_pending_ingests\` to see the URLs, then call \`ingest_url(url)\` for each. \`ingest_url\` transparently claims the pending skeleton (flips it to processing) — you do NOT need a special parameter; pass the same URL that's in the queue.
+3. Follow the normal \`ingest_url\` → run prompts → \`submit_ingested_entry\` flow. The amber tile on the user's canvas updates live as you progress.
 
 Don't nag the user repeatedly in a single session. If they decline once, drop it until they bring it up or a new item appears.
 
@@ -82,7 +81,7 @@ how to build like it — **upgrade it to full tier before presenting.**
 The skeleton descriptor is too thin for serious use; a full-tier
 version will have README, agents.md, detailed manifest, and richer tags.
 
-To upgrade: call \`prepare_ingest(url)\` with the skeleton entry's
+To upgrade: call \`ingest_url(url)\` with the skeleton entry's
 \`source_url\`. The server detects the existing skeleton, atomically
 claims it, and runs the same agent-driven full-ingestion flow as a
 fresh URL. The entry UUID is preserved; the slug regenerates from the
@@ -116,7 +115,6 @@ Tell the user you're upgrading so they know why there's a pause.
 - **Build** — Compose a complete solution by combining patterns from multiple implementations
 - **Canvas** — Manage the user's workspace: add entries, organize into clusters, browse saved items
 - **Brain** — Read and edit cluster brains (synthesized instructions + memories) to capture durable preferences and corrections
-- **Skills** — Cluster knowledge can be synced as skill files. Run \`sync_skills\` to write them to ~/.claude/skills/ (Claude Code) or pass target='openclaw' to write to ~/.openclaw/workspace/data/dopl/
 - **Workspace skills** — Procedural prompts the user authored in their workspace (distinct from cluster skill files above). Each workspace skill is a folder of \`.md\` files; \`SKILL.md\` is the canonical procedure. Call \`skill_list\` at task boundaries to see if any apply, then \`skill_get\` to load the bundle and follow SKILL.md. Skill bodies reference KBs via \`[label](dopl://kb/<slug>)\` markdown links — load the referenced KB content with \`kb_read_file\` when you actually need it. **Authoring**: when the user asks you to build a skill, call \`skill_authoring_guide\` first to load the framework, then \`skill_create\` (with strong metadata) and \`skill_write_file\`. All write tools are gated by the per-skill \`agent_write_enabled\` toggle — they 403 with \`SKILL_AGENT_WRITE_DISABLED\` until the user enables it from the website.
 
 ## Linking entries
@@ -172,8 +170,6 @@ Use \`update_cluster_memory\` instead when a near-duplicate memory already exist
 - "let's also include…" / "add X to the skill" → brain edit
 - "remove the part about…" / "that's wrong" → brain edit
 - "I just added <repo> to my canvas, update the <cluster> skill" → \`add_entry_to_cluster\` + brain edit
-
-After any brain or memory write, call \`sync_skills\` so the thin-pointer \`SKILL.md\` on disk reflects the canonical state.
 
 ## Behavior
 
@@ -247,7 +243,7 @@ function systemPanelDetail(panel) {
  *   - the user has zero pending ingestions (keep successful responses
  *     clean when there's nothing to surface)
  *
- * The pending status is cached inside DoplClient for 5s; prepare_ingest
+ * The pending status is cached inside DoplClient for 5s; ingest_url
  * invalidates the cache so the footer reflects a just-claimed row.
  */
 async function appendDoplStatus(response, client) {
@@ -262,7 +258,7 @@ async function appendDoplStatus(response, client) {
     }
     if (!status || status.pending_ingestions <= 0)
         return response;
-    const hint = `Call \`list_pending_ingests\` to see queued URLs, then \`prepare_ingest(url)\` to claim and process.`;
+    const hint = `Call \`list_pending_ingests\` to see queued URLs, then \`ingest_url(url)\` to claim and process.`;
     const footer = `\n\n---\n_dopl_status:\n  pending_ingestions: ${status.pending_ingestions}\n  hint: "${hint}"`;
     // Append to the final text block so the agent sees the footer at the
     // end of a rendered response. If the response has no text content
@@ -598,92 +594,6 @@ function createServer(client, options = {}) {
         }
         return { content: [{ type: "text", text: lines.join("\n") }] };
     });
-    // ── sync_skills ─────────────────────────────────────────────────────
-    registerTool("sync_skills", "Write Dopl cluster skill files to disk so Claude Code can invoke them as real skills. Default target is Claude Code (`~/.claude/skills/`); pass target='openclaw' for `~/.openclaw/workspace/data/dopl/`. Call this AFTER any material change to a cluster — creating it, adding/removing entries, editing the brain, saving a memory — so the on-disk skill matches the DB state. Safe to call repeatedly: each skill dir tracks the server brain version in `.dopl-meta.json`, so clusters whose brain hasn't changed since the last sync are skipped automatically. Pass force=true to rewrite every skill regardless of version (useful when debugging or after manually editing a SKILL.md). Orphan reference files for entries that have left a cluster are pruned on every rewrite.", {
-        force: zod_1.z.boolean().optional().describe("Overwrite existing skill files (default: false, skips existing)"),
-        target: zod_1.z.enum(["claude", "openclaw"]).optional().describe("Target platform: 'claude' (default) writes to ~/.claude/skills/, 'openclaw' writes to ~/.openclaw/workspace/data/dopl/"),
-    }, async ({ force, target }) => {
-        const skillTarget = target;
-        const { clusters } = await client.listClusters();
-        const results = [];
-        const clusterSummaries = [];
-        for (const cluster of clusters) {
-            try {
-                // Pull the brain first so we know its server-side version.
-                // The version is the gate for skipping — if the on-disk meta
-                // file matches, we don't need to refetch entries or rewrite.
-                let brain = {
-                    instructions: "",
-                    memories: [],
-                    brain_version: 0,
-                };
-                let brainEmpty = false;
-                try {
-                    brain = await client.getClusterBrain(cluster.slug);
-                    if (!brain.instructions || brain.instructions.trim().length === 0) {
-                        brainEmpty = true;
-                    }
-                }
-                catch {
-                    brainEmpty = true;
-                }
-                const serverVersion = brain.brain_version ?? 0;
-                // Version-aware skip — the on-disk `.dopl-meta.json` records
-                // the brain version this skill reflects. Skip the rewrite
-                // only when versions match. Replaces the legacy "if file
-                // exists, skip" heuristic, which silently missed every
-                // server-side brain edit.
-                if (!force &&
-                    (await (0, skill_writer_js_1.skillIsCurrent)(canvasContext, cluster.slug, serverVersion, skillTarget))) {
-                    results.push(`- **${cluster.name}** — skipped (up to date, brain v${serverVersion})`);
-                    const detail = await client.getCluster(cluster.slug);
-                    clusterSummaries.push(buildClusterSummary(cluster.slug, cluster.name, detail.entries));
-                    continue;
-                }
-                const detail = await client.getCluster(cluster.slug);
-                await (0, skill_writer_js_1.writeClusterSkill)(canvasContext, cluster.slug, cluster.name, brain, detail.entries, skillTarget);
-                if (brainEmpty) {
-                    results.push(`- **${cluster.name}** — wrote thin-pointer skill (⚠️ brain is empty — synthesize it with \`get_skill_template\` → \`update_cluster_brain("${cluster.slug}", …)\`)`);
-                }
-                else {
-                    results.push(`- **${cluster.name}** — wrote skill v${serverVersion} with ${detail.entries.length} entries`);
-                }
-                clusterSummaries.push(buildClusterSummary(cluster.slug, cluster.name, detail.entries));
-            }
-            catch (err) {
-                const msg = err instanceof Error ? err.message : String(err);
-                results.push(`- **${cluster.name}** — ERROR: ${msg}`);
-            }
-        }
-        // Write global files (always overwrite these)
-        try {
-            await (0, skill_writer_js_1.writeGlobalCanvasSkill)(canvasContext, clusterSummaries, skillTarget);
-            const targetLabel = skillTarget === "openclaw" ? "~/.openclaw/workspace/data/dopl" : "~/.claude/skills";
-            const globalDir = canvasContext.slug === "default"
-                ? "dopl-canvas"
-                : `dopl-canvas-${canvasContext.slug}`;
-            results.push(`\nGlobal canvas skill: wrote ${targetLabel}/${globalDir}/SKILL.md`);
-        }
-        catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            results.push(`\nGlobal canvas skill: ERROR — ${msg}`);
-        }
-        try {
-            await (0, skill_writer_js_1.writeGlobalClaudemd)(canvasContext, clusterSummaries, skillTarget);
-            const indexLabel = skillTarget === "openclaw" ? "~/.openclaw/workspace/data/dopl/INDEX.md" : "~/.claude/CLAUDE.md";
-            results.push(`Index: updated ${indexLabel}`);
-        }
-        catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            results.push(`Global CLAUDE.md: ERROR — ${msg}`);
-        }
-        return {
-            content: [{
-                    type: "text",
-                    text: `## Skills Synced\n\n${results.join("\n")}`,
-                }],
-        };
-    });
     // ── save_cluster_memory ───────────────────────────────────────────
     registerTool("save_cluster_memory", "**Call this proactively** after any user turn that carries durable signal about a cluster — do NOT wait for 'remember this' phrasing. Write silently in the same turn, before composing your reply. Three categories fire this tool: (1) **Preferences / env facts** — 'I prefer X over Y', 'always use Z', 'skip that step', 'for my setup …', 'in my environment …', 'from now on …', 'my <env var / value> is …'. (2) **Soft corrections** — 'no', 'actually …', 'that's not right', 'you got X backwards', 'the answer is Y, not Z' (even without canonical wrong-phrasing). (3) **Outcome dissatisfaction** — 'I tried that, it didn't work', 'the output wasn't what I wanted', 'ran it and got the wrong result', 'this approach gave me garbage', 'that didn't produce X'. Category 3 is the highest-signal — the skill led the agent astray and the user is telling you; capture the lesson as a memory describing the gotcha. Memories override the base instructions in future sessions. Routing: use `update_cluster_memory` instead if a near-duplicate memory exists (call `get_cluster_brain` first to check IDs); escalate to `update_cluster_brain` if the issue is structural to the workflow itself rather than a single fact.", {
         slug: zod_1.z.string().describe("Cluster slug"),
@@ -709,27 +619,12 @@ function createServer(client, options = {}) {
                 isError: true,
             };
         }
-        // Also append to on-disk SKILL.md (non-fatal). Tag personal
-        // memories inline so the agent can see at a glance when reading
-        // the file that an entry is private to the current user.
-        let diskNote = "";
-        try {
-            const onDiskMemory = result.scope === "personal" ? `${memory} _(personal)_` : memory;
-            await (0, skill_writer_js_1.appendMemoryToSkill)(canvasContext, slug, onDiskMemory);
-            const dirName = canvasContext.slug === "default"
-                ? `dopl-${slug}`
-                : `dopl-${canvasContext.slug}-${slug}`;
-            diskNote = `\n(Also updated ~/.claude/skills/${dirName}/SKILL.md)`;
-        }
-        catch (err) {
-            console.error(`[Dopl] Failed to update skill file for ${slug}:`, err);
-        }
         const scopeLabel = result.scope === "personal" ? " (personal)" : "";
         return {
             content: [
                 {
                     type: "text",
-                    text: `Saved memory${scopeLabel} for cluster "${slug}": "${result.content}"${diskNote}`,
+                    text: `Saved memory${scopeLabel} for cluster "${slug}": "${result.content}"`,
                 },
             ],
         };
@@ -738,9 +633,9 @@ function createServer(client, options = {}) {
     // URLs the user pasted into the Dopl website chat that are waiting
     // for their connected agent to process. Read by the agent when the
     // `_dopl_status` footer (attached to every tool response) shows a
-    // non-zero pending count. After listing, call `prepare_ingest(url)`
+    // non-zero pending count. After listing, call `ingest_url(url)`
     // per URL — the dedup logic transparently claims the pending row.
-    registerTool("list_pending_ingests", "List the URLs the user queued from the Dopl website chat that are waiting to be ingested. Call this when the `_dopl_status` footer on a previous tool response showed `pending_ingestions > 0` and the user has agreed to process them. Returns one line per pending URL with its queue time. After listing, call `prepare_ingest(url)` for each — the dedup logic transparently claims the pending skeleton (no special parameter).", {}, async () => {
+    registerTool("list_pending_ingests", "List the URLs the user queued from the Dopl website chat that are waiting to be ingested. Call this when the `_dopl_status` footer on a previous tool response showed `pending_ingestions > 0` and the user has agreed to process them. Returns one line per pending URL with its queue time. After listing, call `ingest_url(url)` for each — the dedup logic transparently claims the pending skeleton (no special parameter).", {}, async () => {
         // Always bypass the cache so the list reflects the DB right now.
         client.invalidatePendingCache();
         const status = await client.getPendingStatus();
@@ -767,15 +662,16 @@ function createServer(client, options = {}) {
                     : `${Math.round(mins / 1440)}d ago`;
             lines.push(`- ${item.url} — queued ${ageLabel}`);
         }
-        lines.push(`\nCall \`prepare_ingest(url)\` with any of these to claim and process them.`);
+        lines.push(`\nCall \`ingest_url(url)\` with any of these to claim and process them.`);
         return {
             content: [{ type: "text", text: lines.join("\n") }],
         };
     });
-    // ── prepare_ingest ─────────────────────────────────────────────────
-    // Step 1 of the agent-driven ingest flow. Server fetches + extracts content;
-    // we run the AI generation prompts locally; then call submit_ingested_entry.
-    registerTool("prepare_ingest", "Start agent-driven ingestion. The server fetches the URL + follows links (no AI on their side), and returns the raw content + the exact prompts YOU run in your own Claude context. After running the prompts (content_type classify → manifest → README → agents.md → tags, plus vision for any images), call `submit_ingested_entry` with the artifacts. Costs 1 credit total (vs 7 for the legacy `ingest_url`). Prefer this over `ingest_url` for every URL the user wants to save.\n\nThe response includes a complete `instructions` field — follow it step-by-step. If the URL was already ingested, status=\"already_exists\" is returned and you can call `get_setup` directly.", {
+    // ── ingest_url ─────────────────────────────────────────────────────
+    // The canonical full-ingest entry point. Server fetches + extracts
+    // content; the agent runs the synthesis prompts locally; then calls
+    // submit_ingested_entry to commit.
+    registerTool("ingest_url", "Ingest a URL (blog post, GitHub repo, tweet, docs page, etc.) into the user's knowledge base. **This is the canonical full-ingest entry point.** The server fetches the URL + follows links and returns the raw content + the exact prompts YOU run in your own Claude context to synthesize the entry. After running the prompts (content_type classify → manifest → README → agents.md → tags, plus vision for any images), call `submit_ingested_entry` with the artifacts to commit. The response includes a complete `instructions` field — follow it step-by-step. If the URL was already ingested, status=\"already_exists\" is returned and you can call `get_setup` directly.", {
         url: zod_1.z.string().describe("URL to ingest (blog post, GitHub repo, tweet, docs page, etc.)"),
         text: zod_1.z.string().optional().describe("Optional pre-extracted text content (e.g. from a browser extension that already grabbed the page)."),
         links: zod_1.z.array(zod_1.z.string()).optional().describe("Optional additional URLs to follow and include in the gathered content."),
@@ -816,9 +712,9 @@ function createServer(client, options = {}) {
     });
     // ── submit_ingested_entry ───────────────────────────────────────────
     // Step 2 of the agent-driven ingest flow. Call this with the artifacts you
-    // generated after running the prompts from `prepare_ingest`.
-    registerTool("submit_ingested_entry", "Finalize an agent-driven ingest. Submit the artifacts YOU generated after running the prompts returned by `prepare_ingest`. The server validates the shape, runs embeddings (the only AI call still on our side), persists the entries/tags/chunks rows, and marks status='complete'. Returns { entry_id, slug, title, use_case, complexity, content_type }.\n\nRequired fields come from the steps in the prepare response's `instructions`. Fields are:\n  - entry_id: from prepare response\n  - content_type: from step 1 (content_type classifier)\n  - source_type: from step 1\n  - manifest: entire JSON from step 3\n  - readme: markdown from step 4\n  - agents_md: markdown from step 5 (empty string for content_type='resource')\n  - tags: array from step 6 ({ tag_type, tag_value })\n  - image_analyses: array from step 7 (omit if no images)\n  - content_classification: JSON from step 2 (omit for non-setup/tutorial)\n\nOn success the entry is visible at `<host>/e/<slug>` and searchable by other agents.", {
-        entry_id: zod_1.z.string().uuid().describe("Entry ID from the prepare_ingest response."),
+    // generated after running the prompts from `ingest_url`.
+    registerTool("submit_ingested_entry", "Finalize an agent-driven ingest. Submit the artifacts YOU generated after running the prompts returned by `ingest_url`. The server validates the shape, runs embeddings (the only AI call still on our side), persists the entries/tags/chunks rows, and marks status='complete'. Returns { entry_id, slug, title, use_case, complexity, content_type }.\n\nRequired fields come from the steps in the prepare response's `instructions`. Fields are:\n  - entry_id: from prepare response\n  - content_type: from step 1 (content_type classifier)\n  - source_type: from step 1\n  - manifest: entire JSON from step 3\n  - readme: markdown from step 4\n  - agents_md: markdown from step 5 (empty string for content_type='resource')\n  - tags: array from step 6 ({ tag_type, tag_value })\n  - image_analyses: array from step 7 (omit if no images)\n  - content_classification: JSON from step 2 (omit for non-setup/tutorial)\n\nOn success the entry is visible at `<host>/e/<slug>` and searchable by other agents.", {
+        entry_id: zod_1.z.string().uuid().describe("Entry ID from the ingest_url response."),
         content_type: zod_1.z
             .enum([
             "setup",
@@ -919,7 +815,7 @@ function createServer(client, options = {}) {
     });
     // ── get_ingest_content ─────────────────────────────────────────────
     // Pull extracted content for an in-progress (or completed) ingestion.
-    // Called between `prepare_ingest` and `submit_ingested_entry` to
+    // Called between `ingest_url` and `submit_ingested_entry` to
     // retrieve the body the agent substitutes into prompt
     // `{ALL_RAW_CONTENT}` / `{POST_TEXT}` placeholders.
     //
@@ -930,12 +826,12 @@ function createServer(client, options = {}) {
     // inventory + slim templates, and the agent calls this tool per-prompt
     // to retrieve content (optionally narrowed to a single source to save
     // tokens on steps that only need the README).
-    registerTool("get_ingest_content", "Retrieve the extracted content for an in-progress ingestion (between prepare_ingest and submit_ingested_entry). Returns the aggregated text from all successful sources, or — when `source_url` is passed — just that one source. Use this before running each prompt from the prepare_ingest response: substitute the returned `content` into the `{ALL_RAW_CONTENT}` / `{POST_TEXT}` placeholders. Pass `source_url` matching a `sources[].url` entry from the prepare response to fetch only that source (saves tokens on narrow steps like the content_type classifier that only need the README). Returns `{ content, chars, truncated }` — if `truncated` is true, the content exceeds the ~60KB per-response cap and you should switch to per-source fetches for the remaining prompts by passing `source_url` on each subsequent call. Per-source fetches are also the preferred pattern for large repos regardless of truncation: each prompt step only needs the content relevant to it, so you save tokens by narrowing.", {
-        entry_id: zod_1.z.string().describe("Entry UUID from the prepare_ingest response"),
+    registerTool("get_ingest_content", "Retrieve the extracted content for an in-progress ingestion (between ingest_url and submit_ingested_entry). Returns the aggregated text from all successful sources, or — when `source_url` is passed — just that one source. Use this before running each prompt from the ingest_url response: substitute the returned `content` into the `{ALL_RAW_CONTENT}` / `{POST_TEXT}` placeholders. Pass `source_url` matching a `sources[].url` entry from the prepare response to fetch only that source (saves tokens on narrow steps like the content_type classifier that only need the README). Returns `{ content, chars, truncated }` — if `truncated` is true, the content exceeds the ~60KB per-response cap and you should switch to per-source fetches for the remaining prompts by passing `source_url` on each subsequent call. Per-source fetches are also the preferred pattern for large repos regardless of truncation: each prompt step only needs the content relevant to it, so you save tokens by narrowing.", {
+        entry_id: zod_1.z.string().describe("Entry UUID from the ingest_url response"),
         source_url: zod_1.z
             .string()
             .optional()
-            .describe("Optional: fetch only the content for one source (must match a `sources[].url` from prepare_ingest). Omit to get all sources concatenated."),
+            .describe("Optional: fetch only the content for one source (must match a `sources[].url` from ingest_url). Omit to get all sources concatenated."),
     }, async ({ entry_id, source_url }) => {
         const result = await client.getIngestContent(entry_id, source_url);
         const suffix = result.truncated
@@ -968,7 +864,7 @@ function createServer(client, options = {}) {
     registerTool("describe_link", "Fetch the self-description metadata for a URL — the link's own authoritative one-liner (GitHub repo description, og:description on web pages, arxiv abstract, etc.) — without running a full extraction. Use this during the post-submit `detected_links` review flow: after filtering out noise (badges, self-refs, translations) locally, call this per surviving candidate before offering them to the user as separate-entry ingests. The returned `description` is the source's authoritative self-description, more reliable than guessing from surrounding README text. Bounded ~1s per URL. Returns `{ url, type, title, description, metadata, error? }` — when `error` is set, the URL couldn't be fetched (timeout, 404, etc.) and the agent should exclude it from the offer list or note it as \"couldn't describe\" to the user.", {
         url: zod_1.z
             .string()
-            .describe("URL to describe. Typically pulled from `detected_links[]` in a prepare_ingest response after local filtering."),
+            .describe("URL to describe. Typically pulled from `detected_links[]` in a ingest_url response after local filtering."),
     }, async ({ url }) => {
         const result = await client.describeLink(url);
         const lines = [];
@@ -1002,10 +898,6 @@ function createServer(client, options = {}) {
             content: [{ type: "text", text: lines.join("\n") }],
         };
     });
-    // ── ingest_url — RETIRED ────────────────────────────────────────────
-    // The legacy server-side ingestion tool has been removed. Use
-    // `prepare_ingest` + `submit_ingested_entry` instead. The backend
-    // POST /api/ingest returns 410 Gone for any lingering external callers.
     // ── skeleton_ingest ────────────────────────────────────────────────
     // Admin-only. Runs the lightweight descriptor-only pipeline for mass
     // indexing public GitHub repos. Backend is gated by withAdminAuth
@@ -1051,15 +943,6 @@ function createServer(client, options = {}) {
         if (entry_ids)
             updates.entry_ids = entry_ids;
         const result = await client.updateCluster(slug, updates);
-        // If the slug changed (due to rename), clean up old skill dir
-        if (result.slug !== slug) {
-            try {
-                await (0, skill_writer_js_1.removeClusterSkill)(canvasContext, slug);
-            }
-            catch (err) {
-                console.error(`[Dopl] Failed to remove old skill dir for ${slug}:`, err);
-            }
-        }
         return {
             content: [{
                     type: "text",
@@ -1118,7 +1001,7 @@ function createServer(client, options = {}) {
         };
     });
     // ── get_cluster_brain ──────────────────────────────────────────────
-    registerTool("get_cluster_brain", "Read the current brain for a cluster — synthesized instructions plus numbered user memories. **Call this on first invocation per session of a cluster's skill** so the body you execute against reflects edits made via the web UI or other agents since the last `sync_skills`. Also call before `update_cluster_brain` (so surgical edits preserve existing text), before `update_cluster_memory` / `delete_cluster_memory` (to get memory IDs), and any time you want to know what durable knowledge already exists for a cluster before adding more.", {
+    registerTool("get_cluster_brain", "Read the current brain for a cluster — synthesized instructions plus numbered user memories. **Call this on first invocation per session of a cluster's skill** so the body you execute against reflects edits made via the web UI or other agents since the last fetch. Also call before `update_cluster_brain` (so surgical edits preserve existing text), before `update_cluster_memory` / `delete_cluster_memory` (to get memory IDs), and any time you want to know what durable knowledge already exists for a cluster before adding more.", {
         slug: zod_1.z.string().describe("Cluster slug from list_clusters"),
     }, async ({ slug }) => {
         const brain = await client.getClusterBrain(slug);
@@ -1133,11 +1016,9 @@ function createServer(client, options = {}) {
         sections.push("");
         sections.push(`> Canonical skill body for cluster \`${slug}\`, fetched from Dopl. Treat this as the full SKILL.md body — execute against it directly. If you need to modify it, call \`update_cluster_brain\` for structural changes or \`save_cluster_memory\` for short preferences.`);
         sections.push("");
-        // Inject the same self-maintenance protocol carried at the top of
-        // every on-disk SKILL.md. Belt-and-suspenders: even if the user's
-        // local file is stale (no `sync_skills` since the protocol rolled
-        // out), a fresh `get_cluster_brain` still re-injects the protocol
-        // so the executing agent gets the discipline either way.
+        // Inject the self-maintenance protocol so the executing agent
+        // always has the canonical routing rules (when to save_cluster_memory
+        // vs update_cluster_brain) on first contact with the cluster.
         sections.push((0, templates_js_1.brainProtocolPreamble)(slug));
         if (brain.instructions && brain.instructions.trim().length > 0) {
             // If the brain already has the canonical section headings, pass
@@ -1195,17 +1076,6 @@ function createServer(client, options = {}) {
             .describe("New brain instructions (markdown). This REPLACES the previous instructions — include everything you want kept."),
     }, async ({ slug, instructions }) => {
         const result = await client.updateClusterBrain(slug, instructions);
-        // Keep the on-disk skill file in sync with the new brain.
-        let diskNote = "";
-        try {
-            const detail = await client.getCluster(slug);
-            const brain = await client.getClusterBrain(slug);
-            await (0, skill_writer_js_1.writeClusterSkill)(canvasContext, slug, detail.name, brain, detail.entries);
-            diskNote = `\n(Also updated ~/.claude/skills/dopl-${slug}/SKILL.md)`;
-        }
-        catch (err) {
-            console.error(`[Dopl] Failed to sync skill for ${slug}:`, err);
-        }
         // Surface the backend's advisory structure check so the agent learns
         // what a proper brain looks like and self-corrects next time.
         let warningNote = "";
@@ -1218,7 +1088,7 @@ function createServer(client, options = {}) {
         return {
             content: [{
                     type: "text",
-                    text: `Updated brain for cluster "${slug}" (${instructions.length} chars).${diskNote}${warningNote}`,
+                    text: `Updated brain for cluster "${slug}" (${instructions.length} chars).${warningNote}`,
                 }],
         };
     });
@@ -1317,7 +1187,7 @@ function createServer(client, options = {}) {
         };
     });
     // ── check_cluster_updates ──────────────────────────────────────────
-    registerTool("check_cluster_updates", "Bulk-check every GitHub-sourced entry in a cluster for upstream changes. Use this when the user asks 'has anything in my cluster changed?', 'is my stack still current?', or before running `sync_skills` so the refreshed brain reflects reality. For a single entry, use `check_entry_updates`. Non-GitHub entries are skipped.", {
+    registerTool("check_cluster_updates", "Bulk-check every GitHub-sourced entry in a cluster for upstream changes. Use this when the user asks 'has anything in my cluster changed?' or 'is my stack still current?'. For a single entry, use `check_entry_updates`. Non-GitHub entries are skipped.", {
         slug: zod_1.z.string().describe("Cluster slug from list_clusters"),
     }, async ({ slug }) => {
         const detail = await client.getCluster(slug);
@@ -1389,24 +1259,10 @@ function createServer(client, options = {}) {
         // Add entry to cluster membership.
         const updatedIds = [...existingIds, newEntryId];
         await client.updateCluster(slug, { entry_ids: updatedIds });
-        // Refresh the on-disk skill file so the entry list stays in sync, but
-        // leave brain.instructions ALONE — auto-synthesis after initial creation
-        // risks wiping edits the user has made.
-        let skillNote = "";
-        try {
-            const updatedDetail = await client.getCluster(slug);
-            const currentBrain = await client.getClusterBrain(slug);
-            await (0, skill_writer_js_1.writeClusterSkill)(canvasContext, slug, detail.name, currentBrain, updatedDetail.entries);
-            skillNote = " Skill file updated with the new entry list.";
-        }
-        catch (err) {
-            console.error(`[Dopl] Skill sync failed for ${slug}:`, err);
-            skillNote = " (Skill file not refreshed — run `sync_skills` to fix.)";
-        }
         return {
             content: [{
                     type: "text",
-                    text: `Added **${label}** to cluster "${slug}" (now ${updatedIds.length} entries). Brain unchanged — if this entry introduces new patterns you want reflected in the cluster brain, edit it with \`update_cluster_brain\`.${skillNote}`,
+                    text: `Added **${label}** to cluster "${slug}" (now ${updatedIds.length} entries). Brain unchanged — if this entry introduces new patterns you want reflected in the cluster brain, edit it with \`update_cluster_brain\`.`,
                 }],
         };
     });
@@ -1426,7 +1282,7 @@ function createServer(client, options = {}) {
         const entryPanels = panels.filter((p) => p.panel_type === "entry");
         const systemPanels = panels.filter((p) => p.panel_type !== "entry");
         const lines = [];
-        lines.push(`## Your Canvas — ${entryPanels.length} entry${entryPanels.length === 1 ? "" : "ies"}${systemPanels.length > 0 ? ` + ${systemPanels.length} system panel${systemPanels.length === 1 ? "" : "s"}` : ""}\n`);
+        lines.push(`## Your Canvas — ${entryPanels.length} ${entryPanels.length === 1 ? "entry" : "entries"}${systemPanels.length > 0 ? ` + ${systemPanels.length} system panel${systemPanels.length === 1 ? "" : "s"}` : ""}\n`);
         if (entryPanels.length > 0) {
             lines.push("### Entries");
             for (const p of entryPanels) {
@@ -1532,7 +1388,7 @@ function createServer(client, options = {}) {
         return { content: [{ type: "text", text: lines.join("\n") }] };
     });
     // ── canvas_create_cluster ─────────────────────────────────────────
-    registerTool("canvas_create_cluster", "Create a new cluster from entries already on the user's canvas. Use when the user says 'group these into a skill', 'make a cluster for X', or when the set of canvas panels has grown to a point where clustering would help. **Creates the cluster only — brain synthesis is YOUR job now; the server does not run it.** The tool response includes the exact next-step chain (get template → synthesize → update brain → sync_skills). For adding a single entry to an existing cluster, use `add_entry_to_cluster`.", {
+    registerTool("canvas_create_cluster", "Create a new cluster from entries already on the user's canvas. Use when the user says 'group these into a skill', 'make a cluster for X', or when the set of canvas panels has grown to a point where clustering would help. **Creates the cluster only — brain synthesis is YOUR job now; the server does not run it.** The tool response includes the exact next-step chain (get template → synthesize → update brain). For adding a single entry to an existing cluster, use `add_entry_to_cluster`.", {
         name: zod_1.z.string().min(1, "Cluster name cannot be empty").describe("Cluster name, e.g. 'AI Agent Stack'"),
         entries: zod_1.z
             .array(zod_1.z.string())
@@ -1574,7 +1430,6 @@ function createServer(client, options = {}) {
         lines.push(`2. Call \`get_cluster("${slug}")\` to pull the member entries' agents.md content (the raw material).`);
         lines.push(`3. Run the synthesis prompt against that content IN YOUR CONTEXT. Produce a brain body in the canonical structure (When to use / Instructions / Step-by-step / Examples / Anti-patterns / References).`);
         lines.push(`4. Call \`update_cluster_brain("${slug}", <your synthesized body>)\` to save it.`);
-        lines.push(`5. Call \`sync_skills\` so the thin-pointer \`SKILL.md\` on disk reflects the new brain.`);
         lines.push("");
         lines.push(`Do not skip step 3 — a brain saved without structure will trigger a validation warning and produce a weak skill at invocation time.`);
         return {
@@ -1652,33 +1507,4 @@ function createServer(client, options = {}) {
     // skill body are loaded via the kb_* tools.
     (0, skills_js_1.registerSkillTools)(registerTool, client);
     return server;
-}
-/**
- * Build a ClusterSummary from entry data for use in global skill/CLAUDE.md files.
- */
-function buildClusterSummary(slug, name, entries) {
-    const tools = [];
-    const summaryParts = [];
-    for (const entry of entries) {
-        if (entry.title) {
-            // Extract tool-like words from titles
-            for (const word of entry.title.split(/[\s:—–\-|/,]+/)) {
-                const clean = word.trim();
-                if (clean.length > 2 && /^[A-Z]/.test(clean)) {
-                    tools.push(clean);
-                }
-            }
-        }
-        if (entry.summary) {
-            summaryParts.push(entry.summary.split(/[.!?]/)[0] || "");
-        }
-    }
-    const oneLiner = summaryParts.slice(0, 2).join("; ").slice(0, 120) ||
-        `${entries.length} entries`;
-    return {
-        slug,
-        name,
-        oneLiner,
-        tools: [...new Set(tools)].slice(0, 10),
-    };
 }

@@ -190,17 +190,55 @@ Goal: one MCP server instance can serve all workspaces the user has access to, w
 
 ---
 
+## M-11 — Comprehensive hand-authored "Dopl" master skill
+
+**Why:** Nothing in the install today teaches a new agent *how to use Dopl effectively* as a meta-skill. What exists:
+
+- `SERVER_INSTRUCTIONS` ([packages/mcp-server/src/server.ts:17-115](packages/mcp-server/src/server.ts)) — ~100 lines of operational rules loaded into every MCP handshake. Decision trees and tool-picking guidance, not a walkthrough.
+- Per-cluster auto-generated `SKILL.md` files written to `~/.claude/skills/dopl-{slug}/` by the skill-writer ([packages/mcp-server/dist/skill-writer.js](packages/mcp-server/dist/skill-writer.js)) — domain-specific (one per cluster), not a master guide.
+- The `skill_authoring_guide` MCP tool ([packages/mcp-server/src/prompts/skill-authoring-guide.ts](packages/mcp-server/src/prompts/skill-authoring-guide.ts)) — teaches users to write *their own* skills, not how to use Dopl.
+
+The missing piece: a single, hand-authored `SKILL.md` the user installs once into `~/.claude/skills/dopl/` that makes their agent fluent in Dopl's search → discovery → adoption → composition cycle. Analogous to Anthropic's public `pdf` / `xlsx` / `docx` skills — one comprehensive entry point.
+
+**Shape:**
+
+- **One `SKILL.md`** at `packages/mcp-server/skills/dopl/SKILL.md` (source of truth, version-controlled), copied to `~/.claude/skills/dopl/SKILL.md` at install time.
+- **Frontmatter description** must trigger reliably. Something like: *"Use whenever the user asks to discover, build, or architect AI/automation systems. Covers Dopl's knowledge base of proven setups, cluster brains, the search → adoption → composition workflow, and contributing back via ingest."* Not "use when the user mentions Dopl" — the agent should reach for it on the *intent shape*, not the brand name.
+- **Body sections** (in order — matches the public Anthropic skills convention):
+  1. **Overview** — what Dopl is (a searchable catalog of proven AI/automation patterns), what it isn't (a chat tool, a code generator).
+  2. **When to use / when not to use** — trigger boundaries. Specifically: skip for general programming, ML training, non-AI/automation tasks.
+  3. **Core workflows** (numbered, imperative):
+     - Searching for patterns (query phrasing, when to refine, when to broaden)
+     - Reading an entry (manifest, agents.md, README layers — what to extract vs skim)
+     - Adopting a pattern into a workspace
+     - Composing a custom solution by synthesizing across multiple entries
+     - Building a cluster + brain (when, why, what makes a good brain)
+     - Ingesting new content (skeleton → full tier upgrade path)
+  4. **Examples** — 2–3 worked "I want to build X" walkthroughs showing the full cycle.
+  5. **Common mistakes** — e.g., treating search results as final recommendations rather than raw material; writing cluster brains that are too generic to be useful; skipping skeleton-tier upgrade.
+  6. **References** — pointer to `SERVER_INSTRUCTIONS` (don't duplicate), pointer to the cluster brain editing tools, pointer to the skill-authoring guide.
+
+- **Layering with auto-generated cluster skills:** master skill is meta-guidance ("how to use Dopl"); cluster skills are domain knowledge ("how to do X with n8n"). They should complement, not overlap. The master skill should explicitly *reference* the cluster-skill mechanism so the agent knows that workspace-specific skills will appear in the same `~/.claude/skills/dopl-*/` family of directories.
+- **Distribution:** ship via the `dopl mcp config` CLI command (M-6). On `--write`, drop the master `SKILL.md` into `~/.claude/skills/dopl/` alongside the mcp.json edit. Versioned: subsequent `dopl mcp config` runs overwrite if the bundled version is newer than what's on disk (check a version comment in the file or a sidecar `.version`).
+
+**Tradeoff to acknowledge:** this is primarily a writing exercise, not an engineering one. The mechanical pieces (file in repo, copy at install) are trivial. The value comes entirely from how well the prose teaches an agent to use Dopl. Budget the time accordingly — this is one careful day of writing + iteration against real agent sessions, not a quick task.
+
+**How to validate it's working:** A/B test a fresh Claude Code session with vs without the skill installed. Give both the same vague prompt ("help me build an automation that does X"). Without the skill, the agent should default to writing code from scratch. With the skill, it should reach for `search_setups` first, then synthesize. If that's not what you observe after the first draft, the skill description or the workflow section needs more iteration — not a feature flag.
+
+---
+
 ## Sequencing
 
 1. **M-7** — independent of the multi-workspace work; smallest, highest user-visible impact. Do first.
 2. **M-9** — pure UX win, no backend dependency, unblocks `M-8` rename behavior staying consistent.
 3. **M-8** — small additive UI on top of an existing data model.
-4. **M-1** — unblocks the rest of multi-workspace. Pure additive change, no breaking shape.
-5. **M-3** — needed before M-2 *and* M-10 are safe (M-10 depends on user-scoped keys existing for the MCP boundary).
-6. **M-2** — exposes the discoverability the agent needs.
-7. **M-10** — private/public visibility. Land after M-3 so the MCP-exposure rules can be enforced cleanly; can land in parallel with M-2/M-4.
-8. **M-4** — small polish on top of M-1+M-2.
-9. **M-6** — UX onramp for new users; do after the single-instance flow is real.
-10. **M-5** — cleanup, not blocking.
+4. **M-11** — pure writing exercise, no backend dependency. Can land in parallel with anything. Higher leverage if it lands before M-6 so the install can ship with the skill bundled in.
+5. **M-1** — unblocks the rest of multi-workspace. Pure additive change, no breaking shape.
+6. **M-3** — needed before M-2 *and* M-10 are safe (M-10 depends on user-scoped keys existing for the MCP boundary).
+7. **M-2** — exposes the discoverability the agent needs.
+8. **M-10** — private/public visibility. Land after M-3 so the MCP-exposure rules can be enforced cleanly; can land in parallel with M-2/M-4.
+9. **M-4** — small polish on top of M-1+M-2.
+10. **M-6** — UX onramp for new users; do after the single-instance flow is real *and* M-11 exists (so the install bundles the skill).
+11. **M-5** — cleanup, not blocking.
 
-M-7, M-8, M-9 are each one PR on their own. M-1 is one PR on its own. M-2/M-3/M-4 could land together as the "personal key + workspace switcher" PR. M-10 is its own PR (schema + RLS + UI is enough to want a focused review). M-5/M-6 are independent followups.
+M-7, M-8, M-9, M-11 are each one PR on their own (M-11 is a writing PR — single file, big leverage). M-1 is one PR on its own. M-2/M-3/M-4 could land together as the "personal key + workspace switcher" PR. M-10 is its own PR (schema + RLS + UI is enough to want a focused review). M-5/M-6 are independent followups.

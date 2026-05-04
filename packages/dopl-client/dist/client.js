@@ -209,7 +209,7 @@ class DoplClient {
     async prepareIngest(url, content) {
         const result = await this.transport.request("/api/ingest/prepare", {
             method: "POST",
-            toolName: "prepare_ingest",
+            toolName: "ingest_url",
             body: { url, content: content || {} },
             timeoutMs: 120_000,
         });
