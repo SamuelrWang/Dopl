@@ -1,4 +1,4 @@
-import { PUBLIC_ID_LENGTH } from "@/shared/lib/id/public-id";
+import { PUBLIC_ID_LENGTH } from "@/shared/lib/id/constants";
 
 export interface ParsedSegment {
   slug: string;

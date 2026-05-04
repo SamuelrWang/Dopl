@@ -1,9 +1,10 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
+import { PUBLIC_ID_LENGTH } from "./constants";
+
+export { PUBLIC_ID_LENGTH };
 
 const ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyz";
-
-export const PUBLIC_ID_LENGTH = 12;
 
 /**
  * Generate a 12-character lowercase base36 opaque ID (~62 bits of entropy).
