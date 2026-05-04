@@ -184,6 +184,7 @@ export async function listIntegrationObjects(
 
   const result = await broker.listObjects({
     brokerConnectionId: found.brokerConnectionId,
+    entityId: brokerEntityId(ctx.workspaceId, ctx.userId),
     provider: ctx.provider,
     listInput: {
       query: input.query,
@@ -212,6 +213,7 @@ export async function prepareFromIntegration(
   const cfg = getProviderConfig(ctx.provider);
   const fetched = await broker.fetchObject({
     brokerConnectionId: found.brokerConnectionId,
+    entityId: brokerEntityId(ctx.workspaceId, ctx.userId),
     provider: ctx.provider,
     fetchInput: { objectId: input.objectId },
   });

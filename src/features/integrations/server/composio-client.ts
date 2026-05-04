@@ -57,12 +57,14 @@ export interface ComposioClient {
 
   listObjects(input: {
     brokerConnectionId: string;
+    entityId: string;
     provider: IntegrationProvider;
     listInput: ProviderListInput;
   }): Promise<{ objects: IntegrationObject[]; nextCursor: string | null }>;
 
   fetchObject(input: {
     brokerConnectionId: string;
+    entityId: string;
     provider: IntegrationProvider;
     fetchInput: ProviderFetchInput;
   }): Promise<{
@@ -106,20 +108,22 @@ export function createComposioClient(opts: {
     provider: IntegrationProvider,
     slug: string,
     brokerConnectionId: string,
+    entityId: string,
     args: Record<string, unknown>
   ): Promise<Record<string, unknown>> {
     let response: { data: Record<string, unknown>; error: string | null; successful: boolean };
     try {
       response = await sdk.tools.execute(slug, {
+        // Composio requires BOTH connectedAccountId and userId on
+        // execute — error 1811 ("User ID is required with connected
+        // account") fires when only the connection id is passed.
+        // Our entityId is `${workspaceId}:${userId}`.
         connectedAccountId: brokerConnectionId,
+        userId: entityId,
         arguments: args,
-        // Composio rejects `version: "latest"` at runtime even though
-        // the SDK type allows it ("Toolkit version not specified. For
-        // manual execution of the tool please pass a specific toolkit
-        // version"). The documented escape hatch is to set
-        // `dangerouslySkipVersionCheck` — fine for our use case
-        // because we're not pinning toolkit versions; we want
-        // whatever's current on Composio's side.
+        // `version: "latest"` is type-allowed but rejected at runtime;
+        // the documented escape hatch is `dangerouslySkipVersionCheck`.
+        // We don't pin toolkit versions; we want whatever's current.
         dangerouslySkipVersionCheck: true,
       });
     } catch (err) {
@@ -227,17 +231,29 @@ export function createComposioClient(opts: {
       return purged;
     },
 
-    async listObjects({ brokerConnectionId, provider, listInput }) {
+    async listObjects({ brokerConnectionId, entityId, provider, listInput }) {
       const cfg = getProviderConfig(provider);
       const args = cfg.buildListArgs(listInput);
-      const data = await execute(provider, cfg.listActionSlug, brokerConnectionId, args);
+      const data = await execute(
+        provider,
+        cfg.listActionSlug,
+        brokerConnectionId,
+        entityId,
+        args
+      );
       return cfg.parseListResponse(data);
     },
 
-    async fetchObject({ brokerConnectionId, provider, fetchInput }) {
+    async fetchObject({ brokerConnectionId, entityId, provider, fetchInput }) {
       const cfg = getProviderConfig(provider);
       const args = cfg.buildFetchArgs(fetchInput);
-      const data = await execute(provider, cfg.fetchActionSlug, brokerConnectionId, args);
+      const data = await execute(
+        provider,
+        cfg.fetchActionSlug,
+        brokerConnectionId,
+        entityId,
+        args
+      );
       return cfg.parseFetchResponse(data);
     },
   };

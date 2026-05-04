@@ -309,6 +309,7 @@ describe("listIntegrationObjects", () => {
     expect(list).toHaveBeenCalledWith(
       expect.objectContaining({
         brokerConnectionId: "cc_live",
+        entityId: "ws-1:user-1",
         provider: "notion",
         listInput: expect.objectContaining({
           query: "design system",

@@ -133,6 +133,7 @@ export async function executeReadIntegrationObject(
   try {
     const fetched = await defaultComposioClient().fetchObject({
       brokerConnectionId: found.brokerConnectionId,
+      entityId: `${workspaceId}:${userId}`,
       provider: provider.data,
       fetchInput: { objectId },
     });
