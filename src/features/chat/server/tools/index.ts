@@ -26,6 +26,11 @@ import {
   executeEmitAgentPrompt,
   executeEmitContextFile,
 } from "./artifacts";
+import {
+  executeListIntegrationObjects,
+  executeReadIntegrationObject,
+  executeIntegrationStatus,
+} from "./integrations";
 
 /**
  * Per-chat scope filters the user picks via the ClusterScopePicker. The
@@ -239,6 +244,75 @@ const WORKSPACE_SKILLS_TOOLS: Anthropic.Tool[] = [
   },
 ];
 
+const INTEGRATION_TOOLS: Anthropic.Tool[] = [
+  {
+    name: "integration_status",
+    description:
+      "Check whether a third-party service (Notion, Gmail, Google Drive) is connected for this workspace. Returns one of: connected, needs_auth, error, disconnected. Call this first when the user asks about external content; if not connected, tell them to visit /<workspace>/integrations to connect.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        provider: {
+          type: "string",
+          enum: ["notion", "gmail", "google_drive"],
+          description: "Which third-party service to check.",
+        },
+      },
+      required: ["provider"],
+    },
+  },
+  {
+    name: "list_integration_objects",
+    description:
+      "Search/list objects from a connected third-party service. For Notion this returns pages matching the query; for Gmail this returns thread previews (snippet + thread id); for Google Drive this returns files. Use the returned `id` with `read_integration_object` to fetch full content. Returns `{ objects: [{ id, title, url, lastModified }], next_cursor }`.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        provider: {
+          type: "string",
+          enum: ["notion", "gmail", "google_drive"],
+          description: "Which third-party service to search.",
+        },
+        query: {
+          type: "string",
+          description:
+            "Free-text query. For Gmail use Gmail search syntax (e.g. 'from:foo subject:bar after:2026/01/01'). For Notion this is a title search. Optional.",
+        },
+        cursor: {
+          type: "string",
+          description: "Pagination cursor from a previous response.",
+        },
+        limit: {
+          type: "number",
+          description: "Max objects to return (default 10, max 50).",
+        },
+      },
+      required: ["provider"],
+    },
+  },
+  {
+    name: "read_integration_object",
+    description:
+      "Fetch the full content of one object from a connected third-party service. For Notion this returns the page rendered as markdown; for Gmail this returns the full thread (every message body, in chronological order); for Google Drive this returns the file's text content. Use after `list_integration_objects` to drill into a specific result. Returns `{ title, url, last_modified, body }`.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        provider: {
+          type: "string",
+          enum: ["notion", "gmail", "google_drive"],
+          description: "Which third-party service the object lives in.",
+        },
+        object_id: {
+          type: "string",
+          description:
+            "The id from `list_integration_objects` (page id, thread id, file id).",
+        },
+      },
+      required: ["provider", "object_id"],
+    },
+  },
+];
+
 const ARTIFACT_TOOLS: Anthropic.Tool[] = [
   {
     name: "emit_agent_prompt",
@@ -297,6 +371,7 @@ export const PRIVATE_TOOLS: Anthropic.Tool[] = [
   ...CLUSTER_READ_TOOLS,
   ...WORKSPACE_KB_TOOLS,
   ...WORKSPACE_SKILLS_TOOLS,
+  ...INTEGRATION_TOOLS,
   ...ARTIFACT_TOOLS,
 ];
 
@@ -341,6 +416,12 @@ const SCOPED_HANDLERS: Record<string, ScopedToolHandler> = {
   read_skill_file: executeReadSkillFile,
   emit_agent_prompt: (input) => executeEmitAgentPrompt(input),
   emit_context_file: (input) => executeEmitContextFile(input),
+  integration_status: (input, userId, canvasContext, workspaceId) =>
+    executeIntegrationStatus(input, userId, canvasContext, workspaceId),
+  list_integration_objects: (input, userId, canvasContext, workspaceId) =>
+    executeListIntegrationObjects(input, userId, canvasContext, workspaceId),
+  read_integration_object: (input, userId, canvasContext, workspaceId) =>
+    executeReadIntegrationObject(input, userId, canvasContext, workspaceId),
 };
 
 /**

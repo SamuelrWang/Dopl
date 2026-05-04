@@ -1,0 +1,171 @@
+import "server-only";
+import {
+  getIntegrationStatus,
+  listIntegrationObjects,
+} from "@/features/integrations/server/service";
+import { defaultComposioClient } from "@/features/integrations/server/composio-client";
+import {
+  findConnectionWithBrokerId,
+  touchConnection,
+} from "@/features/integrations/server/repository";
+import { getProviderConfig } from "@/features/integrations/server/providers";
+import { supabaseAdmin } from "@/shared/supabase/admin";
+import { ProviderSchema } from "@/features/integrations/schema";
+import type { ToolResult } from "./types";
+
+/**
+ * Read-only chat tools for the user's connected third-party services.
+ * Mirrors the MCP-side `list_integration_objects` /
+ * `ingest_from_integration` surface, but stripped of the
+ * entry-creation step — the chat agent doesn't ingest, it just reads
+ * and synthesizes.
+ *
+ * Available providers come from `INTEGRATION_PROVIDERS`. Status checks
+ * are implicit: each tool fetches the connection row first; if it's
+ * not `connected`, we return a structured error the model handles
+ * gracefully.
+ */
+
+export async function executeListIntegrationObjects(
+  input: Record<string, unknown>,
+  userId?: string,
+  _canvasContext?: unknown,
+  workspaceId?: string
+): Promise<ToolResult> {
+  if (!userId || !workspaceId) {
+    return { result: JSON.stringify({ error: "Not authenticated." }) };
+  }
+  const provider = ProviderSchema.safeParse(input.provider);
+  if (!provider.success) {
+    return {
+      result: JSON.stringify({
+        error: "Unknown provider. Supported: notion, gmail, google_drive.",
+      }),
+    };
+  }
+
+  const query =
+    typeof input.query === "string" && input.query.length > 0
+      ? input.query
+      : undefined;
+  const cursor =
+    typeof input.cursor === "string" && input.cursor.length > 0
+      ? input.cursor
+      : undefined;
+  const limitInput = input.limit;
+  const limit =
+    typeof limitInput === "number" && limitInput >= 1 && limitInput <= 50
+      ? limitInput
+      : 10;
+
+  try {
+    const result = await listIntegrationObjects(
+      { workspaceId, userId, provider: provider.data },
+      { query, cursor, limit }
+    );
+    return {
+      result: JSON.stringify({
+        provider: provider.data,
+        objects: result.objects,
+        next_cursor: result.nextCursor,
+      }),
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return {
+      result: JSON.stringify({
+        error: message,
+        hint: `Check the integration's status with the chat asking the user to connect ${provider.data} from /<workspace>/integrations.`,
+      }),
+    };
+  }
+}
+
+export async function executeReadIntegrationObject(
+  input: Record<string, unknown>,
+  userId?: string,
+  _canvasContext?: unknown,
+  workspaceId?: string
+): Promise<ToolResult> {
+  if (!userId || !workspaceId) {
+    return { result: JSON.stringify({ error: "Not authenticated." }) };
+  }
+  const provider = ProviderSchema.safeParse(input.provider);
+  if (!provider.success) {
+    return {
+      result: JSON.stringify({
+        error: "Unknown provider. Supported: notion, gmail, google_drive.",
+      }),
+    };
+  }
+  const objectId =
+    typeof input.object_id === "string" ? input.object_id : null;
+  if (!objectId) {
+    return { result: JSON.stringify({ error: "object_id is required." }) };
+  }
+
+  const db = supabaseAdmin();
+  const found = await findConnectionWithBrokerId(db, {
+    workspaceId,
+    userId,
+    provider: provider.data,
+  });
+  if (!found || found.connection.status !== "connected") {
+    return {
+      result: JSON.stringify({
+        error: `${provider.data} is not connected for this workspace.`,
+        hint: "Ask the user to connect from /<workspace>/integrations first.",
+      }),
+    };
+  }
+
+  const cfg = getProviderConfig(provider.data);
+  try {
+    const fetched = await defaultComposioClient().fetchObject({
+      brokerConnectionId: found.brokerConnectionId,
+      provider: provider.data,
+      fetchInput: { objectId },
+    });
+    await touchConnection(db, found.connection.id);
+    return {
+      result: JSON.stringify({
+        provider: provider.data,
+        object_id: objectId,
+        title: fetched.title,
+        url: fetched.url ?? cfg.urlBuilder(objectId),
+        last_modified: fetched.lastModified,
+        body: fetched.body,
+      }),
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { result: JSON.stringify({ error: message }) };
+  }
+}
+
+export async function executeIntegrationStatus(
+  input: Record<string, unknown>,
+  userId?: string,
+  _canvasContext?: unknown,
+  workspaceId?: string
+): Promise<ToolResult> {
+  if (!userId || !workspaceId) {
+    return { result: JSON.stringify({ error: "Not authenticated." }) };
+  }
+  const provider = ProviderSchema.safeParse(input.provider);
+  if (!provider.success) {
+    return {
+      result: JSON.stringify({
+        error: "Unknown provider. Supported: notion, gmail, google_drive.",
+      }),
+    };
+  }
+  const status = await getIntegrationStatus({
+    workspaceId,
+    userId,
+    provider: provider.data,
+  });
+  return {
+    result: JSON.stringify({ provider: provider.data, status: status.status }),
+  };
+}
