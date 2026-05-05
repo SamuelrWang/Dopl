@@ -26,7 +26,8 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
   const isFullBleed =
     /^\/[^/]+\/knowledge\/[^/]+\/?$/.test(pathname) ||
     /^\/[^/]+\/chat\/?$/.test(pathname) ||
-    /^\/[^/]+\/overview\/?$/.test(pathname);
+    /^\/[^/]+\/overview\/?$/.test(pathname) ||
+    /^\/settings\/integrations\/?$/.test(pathname);
   const isNoChrome = isLanding || isCommunityDetail || isDocs;
   const isNoSidebar = NO_SIDEBAR_PATHS.has(pathname);
 

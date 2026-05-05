@@ -93,7 +93,6 @@ export type ChatMessage =
       summary?: string;
     }
   | { role: "ai"; type: "entry_cards"; entries: EntryReference[] }
-  | { role: "ai"; type: "onboarding_card"; cardType: "mcp_setup" }
   | {
       role: "ai";
       type: "trial_expired";

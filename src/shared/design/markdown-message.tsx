@@ -112,9 +112,13 @@ export function MarkdownMessage({ content, className, entryNames }: MarkdownMess
         // over-saturating. Default prose link color is too muted.
         "prose-a:text-sky-300/90 prose-a:underline prose-a:decoration-sky-300/30",
         "hover:prose-a:decoration-sky-300/80",
-        // Inline code
-        "prose-code:text-xs prose-code:bg-white/[0.08]",
+        // Inline code — explicit text color (default prose-code is near-black,
+        // unreadable on our dark surface). `before:`/`after:content-none`
+        // strips Tailwind Typography's default backtick pseudo-elements.
+        "prose-code:text-xs prose-code:font-mono prose-code:text-white/90",
+        "prose-code:bg-white/[0.08] prose-code:border prose-code:border-white/[0.08]",
         "prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded",
+        "prose-code:before:content-none prose-code:after:content-none",
         // Code blocks
         "prose-pre:bg-white/[0.06] prose-pre:rounded-lg",
         // Lists

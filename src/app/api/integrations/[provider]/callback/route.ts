@@ -7,14 +7,16 @@ import { logSystemEvent } from "@/features/analytics/server/system-events";
  * GET /api/integrations/[provider]/callback
  *
  * Public endpoint hit after the broker finishes the provider's OAuth
- * flow. Our `callbackUrl` (configured at `initiate` time) carries
- * `workspace_id` and `user_id` as query params — those identify which
- * `oauth_connections` row to mark as connected. The broker connection
- * id is already on the row (we wrote it during initiate), so the
- * service re-verifies status against the broker and flips the row.
+ * flow. The broker passes its `connectedAccountId` as
+ * `?status=...&connectedAccountId=...` (Composio's standard callback
+ * shape). We look up the row keyed by the broker id, finalize status,
+ * derive alias from the broker's account email, and auto-grant every
+ * workspace the user belongs to.
  *
- * On success: 302 to /connect/[provider]/done (Dopl-branded).
- * On failure: 302 to /connect/[provider]/error?reason=...
+ * On success: redirect to /connect/[provider]/popup-success which
+ * sends a postMessage to the opener and closes the popup.
+ * On failure: redirect to /connect/[provider]/popup-error with the
+ * same self-close behavior.
  */
 export async function GET(
   request: NextRequest,
@@ -24,22 +26,25 @@ export async function GET(
   const parsed = ProviderSchema.safeParse(rawProvider);
   if (!parsed.success) {
     return NextResponse.redirect(
-      new URL(`/connect/unknown/error?reason=unknown_provider`, request.url)
+      new URL(
+        `/connect/unknown/popup-error?reason=unknown_provider`,
+        request.url
+      )
     );
   }
   const provider = parsed.data;
   const search = request.nextUrl.searchParams;
-  const workspaceId = search.get("workspace_id");
-  const userId = search.get("user_id");
+  const brokerConnectionId =
+    search.get("connectedAccountId") ?? search.get("connection_id");
 
-  if (!workspaceId || !userId) {
+  if (!brokerConnectionId) {
     return NextResponse.redirect(
-      new URL(`/connect/${provider}/error?reason=missing_params`, request.url)
+      new URL(`/connect/${provider}/popup-error?reason=missing_params`, request.url)
     );
   }
 
   try {
-    await finalizeConnectionCallback({ workspaceId, userId, provider });
+    await finalizeConnectionCallback({ brokerConnectionId });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     void logSystemEvent({
@@ -48,15 +53,14 @@ export async function GET(
       source: "GET /api/integrations/[provider]/callback",
       message: `Callback finalize failed: ${message}`,
       fingerprintKeys: ["integrations_callback_failed", provider],
-      metadata: { provider, error: message },
-      userId,
+      metadata: { provider, error: message, brokerConnectionId },
     });
     return NextResponse.redirect(
-      new URL(`/connect/${provider}/error?reason=finalize_failed`, request.url)
+      new URL(`/connect/${provider}/popup-error?reason=finalize_failed`, request.url)
     );
   }
 
   return NextResponse.redirect(
-    new URL(`/connect/${provider}/done`, request.url)
+    new URL(`/connect/${provider}/popup-success`, request.url)
   );
 }

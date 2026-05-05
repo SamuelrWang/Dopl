@@ -7,12 +7,28 @@ export type IntegrationProvider = "notion" | "gmail" | "google_drive" | "github"
 export type IntegrationStatusValue = "connected" | "needs_auth" | "error" | "disconnected";
 export type ConnectResponse = {
     status: "connected";
+    connection_id: string;
 } | {
     status: "needs_auth";
     auth_url: string;
+    connection_id: string;
 };
 export type IntegrationStatusResponse = {
     status: IntegrationStatusValue;
+};
+/** One user-level connection summary returned by /api/integrations/connections. */
+export type IntegrationConnectionSummary = {
+    id: string;
+    provider: IntegrationProvider;
+    alias: string;
+    status: IntegrationStatusValue;
+    account_email: string | null;
+    account_label: string | null;
+    last_used_at: string | null;
+    granted_workspace_ids: string[];
+};
+export type IntegrationConnectionsResponse = {
+    connections: IntegrationConnectionSummary[];
 };
 export type IntegrationObjectSummary = {
     id: string;

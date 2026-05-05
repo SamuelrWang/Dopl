@@ -212,3 +212,49 @@ export async function deleteSkillFile(
     { method: "DELETE", workspaceId }
   );
 }
+
+// ─── Trash ──────────────────────────────────────────────────────────
+
+export interface SkillsTrash {
+  skills: Skill[];
+  files: SkillFile[];
+}
+
+export async function fetchSkillsTrash(
+  workspaceId?: string
+): Promise<SkillsTrash> {
+  return request<SkillsTrash>("/api/skills/trash", { workspaceId });
+}
+
+export async function restoreSkill(
+  skillId: string,
+  workspaceId?: string
+): Promise<Skill> {
+  const data = await request<{ skill: Skill }>(
+    `/api/skills/restore/${enc(skillId)}`,
+    { method: "POST", workspaceId }
+  );
+  return data.skill;
+}
+
+export async function restoreSkillFile(
+  fileId: string,
+  workspaceId?: string
+): Promise<SkillFile> {
+  const data = await request<{ file: SkillFile }>(
+    `/api/skills/files/restore/${enc(fileId)}`,
+    { method: "POST", workspaceId }
+  );
+  return data.file;
+}
+
+export async function purgeSkillsTrash(
+  beforeIso: string,
+  workspaceId?: string
+): Promise<{ deleted: number }> {
+  return request<{ deleted: number }>("/api/skills/trash/purge", {
+    method: "POST",
+    body: { beforeIso },
+    workspaceId,
+  });
+}

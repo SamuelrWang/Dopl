@@ -3,11 +3,13 @@ import { mapOAuthConnectionRow, type OAuthConnectionRow } from "./dto";
 
 const baseRow: OAuthConnectionRow = {
   id: "11111111-1111-1111-1111-111111111111",
-  workspace_id: "ws-1",
   user_id: "user-1",
   provider: "notion",
+  alias: "user@example.com",
   composio_connection_id: "cc_secret_abc123",
   status: "connected",
+  account_email: "user@example.com",
+  account_label: null,
   scopes: ["read_pages"],
   last_used_at: "2026-05-04T00:00:00Z",
   created_at: "2026-05-04T00:00:00Z",
@@ -19,10 +21,12 @@ describe("mapOAuthConnectionRow", () => {
     const result = mapOAuthConnectionRow(baseRow);
     expect(result).toEqual({
       id: baseRow.id,
-      workspaceId: "ws-1",
       userId: "user-1",
       provider: "notion",
+      alias: "user@example.com",
       status: "connected",
+      accountEmail: "user@example.com",
+      accountLabel: null,
       scopes: ["read_pages"],
       lastUsedAt: baseRow.last_used_at,
       createdAt: baseRow.created_at,

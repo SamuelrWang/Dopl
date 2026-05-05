@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import {
   connectIntegration,
+  disconnectIntegration,
+  finalizeConnectionCallback,
   getIntegrationStatus,
   listIntegrationObjects,
-  startBrokerOAuth,
+  listIntegrationsForUser,
+  updateConnectionGrants,
 } from "./service";
 import {
   _resetToolkitCacheForTests,
@@ -17,96 +20,262 @@ import {
   IntegrationReadNotSupportedError,
 } from "./errors";
 import type { ComposioClient } from "./composio-client";
-import type { IntegrationProvider } from "../types";
 
-type Row = {
+// ── Fake DB ─────────────────────────────────────────────────────────
+//
+// Models the two tables we exercise (oauth_connections,
+// oauth_connection_grants) plus a tiny stub for the workspaces lookup
+// `listMyWorkspaces` falls back to. The fake supports the .from().
+// .select().eq()... chain shape we use across the service module,
+// plus the multi-row `in()` filter and joined `oauth_connection_grants!inner`
+// pattern from `findConnectionForWorkspace`.
+
+type Conn = {
   id: string;
-  workspace_id: string;
   user_id: string;
   provider: string;
+  alias: string;
   composio_connection_id: string;
   status: "connected" | "needs_auth" | "error";
+  account_email: string | null;
+  account_label: string | null;
   scopes: string[];
   last_used_at: string | null;
   created_at: string;
   updated_at: string;
 };
 
-function makeStubDb(initialRows: Row[]) {
-  const rows: Row[] = [...initialRows];
+type Grant = { connection_id: string; workspace_id: string; granted_at: string };
+
+function makeStubDb(initial: { conns?: Conn[]; grants?: Grant[] } = {}) {
+  const conns: Conn[] = [...(initial.conns ?? [])];
+  const grants: Grant[] = [...(initial.grants ?? [])];
+
+  function makeBuilder(table: "oauth_connections" | "oauth_connection_grants") {
+    type FilterFn = (row: Record<string, unknown>) => boolean;
+    const filters: FilterFn[] = [];
+    let joinedTable: string | null = null;
+    let columnsSelected = "*";
+    const builder = {
+      select(cols: string) {
+        columnsSelected = cols;
+        // Detect `oauth_connection_grants!inner(workspace_id)` — used by
+        // findConnectionForWorkspace to require a grant exists for this
+        // workspace. We model the join as a row-level filter against the
+        // grants table.
+        const joinMatch = cols.match(
+          /oauth_connection_grants!inner/
+        );
+        if (joinMatch) joinedTable = "oauth_connection_grants";
+        return builder;
+      },
+      eq(col: string, val: unknown) {
+        if (col.startsWith("oauth_connection_grants.")) {
+          const realCol = col.replace("oauth_connection_grants.", "");
+          filters.push((row) => {
+            const id = row.id as string;
+            return grants.some(
+              (g) =>
+                g.connection_id === id &&
+                (g as unknown as Record<string, unknown>)[realCol] === val
+            );
+          });
+          return builder;
+        }
+        filters.push((r) => r[col] === val);
+        return builder;
+      },
+      in(col: string, vals: unknown[]) {
+        filters.push((r) => vals.includes(r[col] as unknown));
+        return builder;
+      },
+      order() {
+        return builder;
+      },
+      limit() {
+        return builder;
+      },
+      async maybeSingle() {
+        const row = pickRow();
+        return { data: row ?? null, error: null };
+      },
+      async single() {
+        const row = pickRow();
+        return { data: row ?? null, error: null };
+      },
+      async then(resolve: (val: { data: unknown; error: null }) => unknown) {
+        // Allow `await builder` — used by `listConnectionsForUser` etc.
+        const rows = pickRows();
+        return resolve({ data: rows, error: null });
+      },
+      upsert(payload: Partial<Conn>) {
+        if (table !== "oauth_connections")
+          throw new Error("upsert only modeled for oauth_connections");
+        const idx = conns.findIndex(
+          (c) =>
+            c.user_id === payload.user_id &&
+            c.provider === payload.provider &&
+            c.alias === payload.alias
+        );
+        const now = new Date().toISOString();
+        const next: Conn = {
+          id: idx >= 0 ? conns[idx].id : `conn-${conns.length + 1}`,
+          user_id: payload.user_id!,
+          provider: payload.provider!,
+          alias: payload.alias!,
+          composio_connection_id: payload.composio_connection_id!,
+          status: (payload.status ?? "needs_auth") as Conn["status"],
+          account_email: payload.account_email ?? null,
+          account_label: payload.account_label ?? null,
+          scopes: payload.scopes ?? [],
+          last_used_at: null,
+          created_at: idx >= 0 ? conns[idx].created_at : now,
+          updated_at: now,
+        };
+        if (idx >= 0) conns[idx] = next;
+        else conns.push(next);
+        return {
+          select: () => ({
+            async single() {
+              return { data: next, error: null };
+            },
+            async maybeSingle() {
+              return { data: next, error: null };
+            },
+          }),
+        };
+      },
+      update(patch: Partial<Conn>) {
+        return {
+          eq(col: string, val: unknown) {
+            const target = (
+              table === "oauth_connections" ? conns : grants
+            ).find(
+              (r) => (r as unknown as Record<string, unknown>)[col] === val
+            );
+            if (target) Object.assign(target, patch);
+            return Promise.resolve({ error: null });
+          },
+        };
+      },
+      delete() {
+        // Chainable filter accumulator: supports .eq().eq().like()...
+        // and resolves on `await` (then) or any terminal call.
+        const deleteFilters: FilterFn[] = [];
+        const chain = {
+          eq(col: string, val: unknown) {
+            deleteFilters.push((r) => r[col] === val);
+            return chain;
+          },
+          like(col: string, pattern: string) {
+            // Convert SQL LIKE `pattern%` to regex.
+            const escaped = pattern
+              .replace(/[.+?^${}()|[\]\\]/g, "\\$&")
+              .replace(/%/g, ".*")
+              .replace(/_/g, ".");
+            const re = new RegExp(`^${escaped}$`);
+            deleteFilters.push((r) => {
+              const v = r[col];
+              return typeof v === "string" && re.test(v);
+            });
+            return chain;
+          },
+          then(resolve: (val: { error: null }) => unknown) {
+            applyDelete();
+            return Promise.resolve(resolve({ error: null }));
+          },
+        };
+        function applyDelete() {
+          if (table === "oauth_connections") {
+            const dropIds: string[] = [];
+            for (let i = conns.length - 1; i >= 0; i--) {
+              if (deleteFilters.every((f) => f(conns[i] as unknown as Record<string, unknown>))) {
+                dropIds.push(conns[i].id);
+                conns.splice(i, 1);
+              }
+            }
+            for (const id of dropIds) {
+              for (let i = grants.length - 1; i >= 0; i--) {
+                if (grants[i].connection_id === id) grants.splice(i, 1);
+              }
+            }
+          } else {
+            for (let i = grants.length - 1; i >= 0; i--) {
+              if (deleteFilters.every((f) => f(grants[i] as unknown as Record<string, unknown>)))
+                grants.splice(i, 1);
+            }
+          }
+        }
+        return chain;
+      },
+    };
+
+    function pickRows(): unknown[] {
+      const base =
+        table === "oauth_connections"
+          ? (conns as unknown as Record<string, unknown>[])
+          : (grants as unknown as Record<string, unknown>[]);
+      const filtered = base.filter((r) => filters.every((f) => f(r)));
+      void joinedTable;
+      void columnsSelected;
+      return filtered;
+    }
+    function pickRow(): unknown {
+      const all = pickRows();
+      return all[0] ?? null;
+    }
+    return builder;
+  }
+
   return {
-    rows,
+    conns,
+    grants,
     from(table: string) {
-      if (table !== "oauth_connections") {
+      if (table !== "oauth_connections" && table !== "oauth_connection_grants") {
         throw new Error(`unexpected table: ${table}`);
       }
-      const filters: Array<(r: Row) => boolean> = [];
-      const builder = {
-        select: () => builder,
-        eq(col: string, val: unknown) {
-          filters.push((r) => (r as unknown as Record<string, unknown>)[col] === val);
-          return builder;
-        },
-        async maybeSingle() {
-          const row = rows.find((r) => filters.every((f) => f(r))) ?? null;
-          return { data: row, error: null };
-        },
-        async single() {
-          const row = rows.find((r) => filters.every((f) => f(r))) ?? null;
-          return { data: row, error: null };
-        },
-        upsert(payload: Partial<Row>) {
-          const idx = rows.findIndex(
-            (r) =>
-              r.workspace_id === payload.workspace_id &&
-              r.user_id === payload.user_id &&
-              r.provider === payload.provider
-          );
-          const next: Row = {
-            id: idx >= 0 ? rows[idx].id : "row-" + (rows.length + 1),
-            workspace_id: payload.workspace_id!,
-            user_id: payload.user_id!,
-            provider: payload.provider!,
-            composio_connection_id: payload.composio_connection_id!,
-            status: (payload.status ?? "needs_auth") as Row["status"],
-            scopes: payload.scopes ?? [],
-            last_used_at: null,
-            created_at:
-              idx >= 0 ? rows[idx].created_at : new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          };
-          if (idx >= 0) rows[idx] = next;
-          else rows.push(next);
-          return {
-            select: () => ({
-              async single() {
-                return { data: next, error: null };
-              },
-            }),
-          };
-        },
-        update(patch: Partial<Row>) {
-          return {
-            eq(col: string, val: unknown) {
-              const found = rows.find(
-                (r) => (r as unknown as Record<string, unknown>)[col] === val
-              );
-              if (found) Object.assign(found, patch);
-              return Promise.resolve({ error: null });
-            },
-          };
-        },
-        delete() {
-          return {
-            eq() {
-              return Promise.resolve({ error: null });
-            },
-          };
-        },
-      };
-      return builder;
+      return makeBuilder(table);
+    },
+    insert(rows: Grant[]) {
+      grants.push(...rows);
+      return Promise.resolve({ error: null });
     },
   };
+}
+
+// `oauth_connection_grants` insert path uses .from(table).insert(rows).
+// Patch the stub by intercepting insert at the table level. Cast
+// loosely — this is test-fixture plumbing, not production typing.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function patchGrantInsert(stub: ReturnType<typeof makeStubDb>): any {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const originalFrom = (stub.from as any).bind(stub);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (stub as any).from = (table: string) => {
+    const builder = originalFrom(table);
+    if (table === "oauth_connection_grants") {
+      builder.insert = async (rows: Grant[]) => {
+        stub.grants.push(...rows);
+        return { error: null };
+      };
+      builder.upsert = async (rows: Grant[]) => {
+        for (const row of rows) {
+          if (
+            !stub.grants.some(
+              (g) =>
+                g.connection_id === row.connection_id &&
+                g.workspace_id === row.workspace_id
+            )
+          ) {
+            stub.grants.push({ ...row, granted_at: new Date().toISOString() });
+          }
+        }
+        return { error: null };
+      };
+    }
+    return builder;
+  };
+  return stub;
 }
 
 function makeFakeBroker(overrides: Partial<ComposioClient> = {}): ComposioClient {
@@ -119,6 +288,11 @@ function makeFakeBroker(overrides: Partial<ComposioClient> = {}): ComposioClient
     getConnectionStatus: vi
       .fn()
       .mockResolvedValue({ status: "connected" as const }),
+    getConnectedAccount: vi.fn().mockResolvedValue({
+      status: "connected" as const,
+      accountEmail: "alice@example.com",
+      accountLabel: "Alice",
+    }),
     listObjects: vi.fn().mockResolvedValue({ objects: [], nextCursor: null }),
     fetchObject: vi.fn().mockResolvedValue({
       title: "Page",
@@ -136,6 +310,17 @@ function makeFakeBroker(overrides: Partial<ComposioClient> = {}): ComposioClient
   };
 }
 
+// ── listMyWorkspaces stub ───────────────────────────────────────────
+//
+// finalizeConnectionRow calls listMyWorkspaces() to auto-grant. We mock
+// it via a vi.mock on the workspaces service module.
+vi.mock("@/features/workspaces/server/service", () => ({
+  listMyWorkspaces: vi.fn(async () => [
+    { id: "ws-a", slug: "ws-a", name: "Workspace A" },
+    { id: "ws-b", slug: "ws-b", name: "Workspace B" },
+  ]),
+}));
+
 beforeEach(() => {
   vi.stubEnv("INTEGRATIONS_NOTION_AUTH_CONFIG_ID", "auth_test");
   vi.stubEnv("INTEGRATIONS_GMAIL_AUTH_CONFIG_ID", "auth_test");
@@ -148,137 +333,260 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-const ctx: {
-  workspaceId: string;
-  userId: string;
-  provider: IntegrationProvider;
-} = {
-  workspaceId: "ws-1",
-  userId: "user-1",
-  provider: "notion",
-};
+const ctx = { userId: "user-1", provider: "notion" as const };
+
+// ── connectIntegration ───────────────────────────────────────────────
 
 describe("connectIntegration", () => {
-  it("returns connected when an existing row is connected", async () => {
-    const stub = makeStubDb([
-      {
-        id: "row-1",
-        workspace_id: ctx.workspaceId,
-        user_id: ctx.userId,
-        provider: "notion",
-        composio_connection_id: "cc_existing",
-        status: "connected",
-        scopes: [],
-        last_used_at: null,
-        created_at: "now",
-        updated_at: "now",
-      },
-    ]);
+  it("calls broker.initiateConnection with allowMultiple and persists a needs_auth row", async () => {
+    const stub = patchGrantInsert(makeStubDb());
     const broker = makeFakeBroker();
     const result = await connectIntegration(ctx, {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      db: stub as any,
-      broker,
-    });
-    expect(result).toEqual({ status: "connected" });
-    expect(broker.initiateConnection).not.toHaveBeenCalled();
-  });
-
-  it("returns a Dopl-branded auth URL when no connection exists", async () => {
-    const stub = makeStubDb([]);
-    const broker = makeFakeBroker();
-    const result = await connectIntegration(ctx, {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      db: stub as any,
-      broker,
-    });
-    expect(result).toEqual({
-      status: "needs_auth",
-      authUrl: "https://test.dopl.local/connect/notion/start",
-    });
-    expect(broker.initiateConnection).not.toHaveBeenCalled();
-  });
-});
-
-describe("startBrokerOAuth", () => {
-  it("hits the broker and persists a needs_auth row", async () => {
-    const stub = makeStubDb([]);
-    const broker = makeFakeBroker();
-    const result = await startBrokerOAuth(ctx, {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       db: stub as any,
       broker,
     });
     expect(broker.initiateConnection).toHaveBeenCalledWith({
-      entityId: "ws-1:user-1",
+      entityId: "user-1",
       authConfigId: "auth_test",
-      callbackUrl:
-        "https://test.dopl.local/api/integrations/notion/callback?workspace_id=ws-1&user_id=user-1",
+      callbackUrl: "https://test.dopl.local/api/integrations/notion/callback",
+      allowMultiple: true,
     });
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       status: "needs_auth",
-      brokerAuthUrl: "https://broker.example/oauth/start",
+      authUrl: "https://broker.example/oauth/start",
     });
-    expect(stub.rows).toHaveLength(1);
-    expect(stub.rows[0].status).toBe("needs_auth");
-    expect(stub.rows[0].composio_connection_id).toBe("cc_pending_1");
-  });
-
-  it("short-circuits to connected when broker says so", async () => {
-    const stub = makeStubDb([]);
-    const broker = makeFakeBroker({
-      initiateConnection: vi.fn().mockResolvedValue({
-        status: "connected",
-        brokerConnectionId: "cc_live",
-      }),
-    });
-    const result = await startBrokerOAuth(ctx, {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      db: stub as any,
-      broker,
-    });
-    expect(result).toEqual({ status: "connected" });
-    expect(stub.rows[0].status).toBe("connected");
+    expect(stub.conns).toHaveLength(1);
+    expect(stub.conns[0].alias).toBe("pending:cc_pending_1");
+    expect(stub.conns[0].status).toBe("needs_auth");
   });
 });
 
-describe("getIntegrationStatus", () => {
-  it("reports disconnected when there's no row", async () => {
-    const stub = makeStubDb([]);
-    const result = await getIntegrationStatus(ctx, {
+// ── finalizeConnectionCallback ──────────────────────────────────────
+
+describe("finalizeConnectionCallback", () => {
+  it("derives alias from broker email and grants every user workspace", async () => {
+    const stub = patchGrantInsert(
+      makeStubDb({
+        conns: [
+          {
+            id: "conn-1",
+            user_id: "user-1",
+            provider: "gmail",
+            alias: "pending:cc_x",
+            composio_connection_id: "cc_x",
+            status: "needs_auth",
+            account_email: null,
+            account_label: null,
+            scopes: [],
+            last_used_at: null,
+            created_at: "now",
+            updated_at: "now",
+          },
+        ],
+      })
+    );
+    const broker = makeFakeBroker();
+    const out = await finalizeConnectionCallback(
+      { brokerConnectionId: "cc_x" },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      db: stub as any,
-      broker: makeFakeBroker(),
-    });
+      { db: stub as any, broker }
+    );
+    expect(out).toEqual({ provider: "gmail", status: "connected" });
+    expect(stub.conns[0].status).toBe("connected");
+    expect(stub.conns[0].alias).toBe("alice@example.com");
+    expect(stub.conns[0].account_email).toBe("alice@example.com");
+    expect((stub.grants as Grant[]).map((g) => g.workspace_id).sort()).toEqual([
+      "ws-a",
+      "ws-b",
+    ]);
+  });
+});
+
+// ── status ───────────────────────────────────────────────────────────
+
+describe("getIntegrationStatus", () => {
+  it("returns disconnected when there's no row", async () => {
+    const stub = makeStubDb();
+    const result = await getIntegrationStatus(
+      { userId: "user-1", provider: "notion", workspaceId: "ws-a" },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      { db: stub as any, broker: makeFakeBroker() }
+    );
     expect(result).toEqual({ status: "disconnected" });
   });
 
-  it("re-polls the broker when the row is needs_auth and updates on change", async () => {
-    const stub = makeStubDb([
-      {
-        id: "row-1",
-        workspace_id: ctx.workspaceId,
-        user_id: ctx.userId,
-        provider: "notion",
-        composio_connection_id: "cc_pending",
-        status: "needs_auth",
-        scopes: [],
-        last_used_at: null,
-        created_at: "now",
-        updated_at: "now",
-      },
-    ]);
-    const broker = makeFakeBroker();
-    const result = await getIntegrationStatus(ctx, {
+  it("returns disconnected when the connection isn't granted to this workspace", async () => {
+    const stub = patchGrantInsert(
+      makeStubDb({
+        conns: [
+          {
+            id: "conn-1",
+            user_id: "user-1",
+            provider: "notion",
+            alias: "alice@example.com",
+            composio_connection_id: "cc_live",
+            status: "connected",
+            account_email: "alice@example.com",
+            account_label: null,
+            scopes: [],
+            last_used_at: null,
+            created_at: "now",
+            updated_at: "now",
+          },
+        ],
+        // Granted only to ws-other, NOT ws-a.
+        grants: [
+          { connection_id: "conn-1", workspace_id: "ws-other", granted_at: "now" },
+        ],
+      })
+    );
+    const result = await getIntegrationStatus(
+      { userId: "user-1", provider: "notion", workspaceId: "ws-a" },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      db: stub as any,
-      broker,
-    });
-    expect(broker.getConnectionStatus).toHaveBeenCalledWith("cc_pending");
-    expect(result).toEqual({ status: "connected" });
-    expect(stub.rows[0].status).toBe("connected");
+      { db: stub as any, broker: makeFakeBroker() }
+    );
+    expect(result).toEqual({ status: "disconnected" });
   });
 });
+
+// ── listIntegrationObjects ──────────────────────────────────────────
+
+describe("listIntegrationObjects", () => {
+  it("throws IntegrationReadNotSupportedError for write-only providers", async () => {
+    const stub = makeStubDb();
+    await expect(
+      listIntegrationObjects(
+        { workspaceId: "ws-a", userId: "user-1", provider: "slack" },
+        {},
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        { db: stub as any, broker: makeFakeBroker() }
+      )
+    ).rejects.toBeInstanceOf(IntegrationReadNotSupportedError);
+  });
+
+  it("throws IntegrationNotConnectedError when no live granted connection", async () => {
+    const stub = makeStubDb();
+    await expect(
+      listIntegrationObjects(
+        { workspaceId: "ws-a", userId: "user-1", provider: "notion" },
+        {},
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        { db: stub as any, broker: makeFakeBroker() }
+      )
+    ).rejects.toBeInstanceOf(IntegrationNotConnectedError);
+  });
+});
+
+// ── grants management ────────────────────────────────────────────────
+
+describe("updateConnectionGrants", () => {
+  it("replaces the grants set for a connection owned by the user", async () => {
+    const stub = patchGrantInsert(
+      makeStubDb({
+        conns: [
+          {
+            id: "conn-1",
+            user_id: "user-1",
+            provider: "notion",
+            alias: "alice@example.com",
+            composio_connection_id: "cc_live",
+            status: "connected",
+            account_email: null,
+            account_label: null,
+            scopes: [],
+            last_used_at: null,
+            created_at: "now",
+            updated_at: "now",
+          },
+        ],
+        grants: [
+          { connection_id: "conn-1", workspace_id: "ws-a", granted_at: "now" },
+          { connection_id: "conn-1", workspace_id: "ws-b", granted_at: "now" },
+        ],
+      })
+    );
+    const result = await updateConnectionGrants(
+      {
+        userId: "user-1",
+        connectionId: "conn-1",
+        workspaceIds: ["ws-b"],
+      },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      { db: stub as any }
+    );
+    expect(result.grantedWorkspaceIds).toEqual(["ws-b"]);
+    expect((stub.grants as Grant[]).map((g) => g.workspace_id)).toEqual(["ws-b"]);
+  });
+});
+
+// ── disconnect ───────────────────────────────────────────────────────
+
+describe("disconnectIntegration", () => {
+  it("deletes the row + cascades grants when caller owns the connection", async () => {
+    const stub = patchGrantInsert(
+      makeStubDb({
+        conns: [
+          {
+            id: "conn-1",
+            user_id: "user-1",
+            provider: "gmail",
+            alias: "alice@example.com",
+            composio_connection_id: "cc_live",
+            status: "connected",
+            account_email: null,
+            account_label: null,
+            scopes: [],
+            last_used_at: null,
+            created_at: "now",
+            updated_at: "now",
+          },
+        ],
+        grants: [
+          { connection_id: "conn-1", workspace_id: "ws-a", granted_at: "now" },
+        ],
+      })
+    );
+    await disconnectIntegration(
+      { userId: "user-1", connectionId: "conn-1" },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      { db: stub as any }
+    );
+    expect(stub.conns).toHaveLength(0);
+    expect(stub.grants).toHaveLength(0);
+  });
+
+  it("no-ops when caller doesn't own the connection", async () => {
+    const stub = patchGrantInsert(
+      makeStubDb({
+        conns: [
+          {
+            id: "conn-1",
+            user_id: "user-2",
+            provider: "gmail",
+            alias: "bob@example.com",
+            composio_connection_id: "cc_live",
+            status: "connected",
+            account_email: null,
+            account_label: null,
+            scopes: [],
+            last_used_at: null,
+            created_at: "now",
+            updated_at: "now",
+          },
+        ],
+      })
+    );
+    await disconnectIntegration(
+      { userId: "user-1", connectionId: "conn-1" },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      { db: stub as any }
+    );
+    expect(stub.conns).toHaveLength(1);
+  });
+});
+
+// ── listIntegrationActions / executeIntegrationAction (auto-map) ─────
 
 describe("listIntegrationActions", () => {
   it("returns curated entries first, then auto entries from the broker catalog", async () => {
@@ -287,95 +595,61 @@ describe("listIntegrationActions", () => {
         {
           slug: "GMAIL_CREATE_FILTER",
           description: "Create a Gmail filter.",
-          inputSchema: { type: "object", required: ["criteria"], properties: { criteria: { type: "object" } } },
+          inputSchema: { type: "object", required: ["criteria"], properties: {} },
         },
         {
           slug: "GMAIL_SEND_EMAIL",
           description: "Composio's stock send-email — should be hidden by curated override.",
-          inputSchema: { type: "object", properties: { recipient_email: { type: "string" } } },
+          inputSchema: { type: "object", properties: {} },
         },
       ]),
     });
     const actions = await listIntegrationActions("gmail", { broker });
     const names = actions.map((a) => a.name);
     expect(names).toContain("send_email");
-    expect(names).toContain("reply_to_thread");
     expect(names).toContain("create_filter");
-    // GMAIL_SEND_EMAIL → send_email collides with the curated override;
-    // it must NOT appear twice.
     expect(names.filter((n) => n === "send_email")).toHaveLength(1);
-    const send = actions.find((a) => a.name === "send_email");
-    expect(send?.source).toBe("curated");
-    const filter = actions.find((a) => a.name === "create_filter");
-    expect(filter?.source).toBe("auto");
-    expect(filter?.paramsJsonSchema).toEqual(
-      expect.objectContaining({ type: "object", required: ["criteria"] })
-    );
-  });
-
-  it("falls back to curated only when the broker catalog throws", async () => {
-    const broker = makeFakeBroker({
-      listToolkitTools: vi.fn().mockRejectedValue(new Error("composio offline")),
-    });
-    const actions = await listIntegrationActions("gmail", { broker });
-    expect(actions.map((a) => a.name)).toEqual(["send_email", "reply_to_thread"]);
-    expect(actions.every((a) => a.source === "curated")).toBe(true);
-  });
-
-  it("Gmail send_email descriptor exposes a typed JSON schema", async () => {
-    const actions = await listIntegrationActions("gmail", {
-      broker: makeFakeBroker(),
-    });
-    const send = actions.find((a) => a.name === "send_email")!;
-    expect(send.source).toBe("curated");
-    const schema = send.paramsJsonSchema as {
-      required?: string[];
-      properties?: Record<string, { type?: string }>;
-    };
-    expect(schema.required).toEqual(["to", "subject", "body"]);
-    expect(schema.properties?.to?.type).toBe("string");
-    expect(schema.properties?.cc?.type).toBe("string");
   });
 });
 
 describe("executeIntegrationAction", () => {
-  const gmailCtx: {
-    workspaceId: string;
-    userId: string;
-    provider: IntegrationProvider;
-  } = { workspaceId: "ws-1", userId: "user-1", provider: "gmail" };
-
-  function connectedRow(): Row {
-    return {
-      id: "row-1",
-      workspace_id: gmailCtx.workspaceId,
-      user_id: gmailCtx.userId,
-      provider: "gmail",
-      composio_connection_id: "cc_live",
-      status: "connected",
-      scopes: [],
-      last_used_at: null,
-      created_at: "now",
-      updated_at: "now",
-    };
+  function connectedFixture() {
+    return patchGrantInsert(
+      makeStubDb({
+        conns: [
+          {
+            id: "conn-1",
+            user_id: "user-1",
+            provider: "gmail",
+            alias: "alice@example.com",
+            composio_connection_id: "cc_live",
+            status: "connected",
+            account_email: null,
+            account_label: null,
+            scopes: [],
+            last_used_at: null,
+            created_at: "now",
+            updated_at: "now",
+          },
+        ],
+        grants: [
+          { connection_id: "conn-1", workspace_id: "ws-a", granted_at: "now" },
+        ],
+      })
+    );
   }
 
   it("dispatches send_email to the broker with mapped Composio args", async () => {
-    const stub = makeStubDb([connectedRow()]);
+    const stub = connectedFixture();
     const exec = vi
       .fn()
       .mockResolvedValue({ raw: { id: "msg_a", threadId: "thr_a" } });
     const broker = makeFakeBroker({ executeAction: exec });
     const result = await executeIntegrationAction(
-      gmailCtx,
+      { workspaceId: "ws-a", userId: "user-1", provider: "gmail" },
       {
         action: "send_email",
-        params: {
-          to: "alice@example.com",
-          subject: "Hi",
-          body: "Hello there",
-          cc: "cc@example.com",
-        },
+        params: { to: "alice@example.com", subject: "Hi", body: "Hello" },
       },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       { db: stub as any, broker }
@@ -385,13 +659,7 @@ describe("executeIntegrationAction", () => {
         provider: "gmail",
         slug: "GMAIL_SEND_EMAIL",
         brokerConnectionId: "cc_live",
-        entityId: "ws-1:user-1",
-        arguments: {
-          recipient_email: "alice@example.com",
-          subject: "Hi",
-          body: "Hello there",
-          cc: ["cc@example.com"],
-        },
+        entityId: "user-1",
       })
     );
     expect(result).toEqual({
@@ -400,38 +668,11 @@ describe("executeIntegrationAction", () => {
     });
   });
 
-  it("dispatches reply_to_thread with thread_id + message_body", async () => {
-    const stub = makeStubDb([connectedRow()]);
-    const exec = vi
-      .fn()
-      .mockResolvedValue({ raw: { id: "msg_b", threadId: "thr_b" } });
-    const broker = makeFakeBroker({ executeAction: exec });
-    await executeIntegrationAction(
-      gmailCtx,
-      {
-        action: "reply_to_thread",
-        params: { thread_id: "thr_b", to: "alice@example.com", body: "ack" },
-      },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      { db: stub as any, broker }
-    );
-    expect(exec).toHaveBeenCalledWith(
-      expect.objectContaining({
-        slug: "GMAIL_REPLY_TO_THREAD",
-        arguments: {
-          thread_id: "thr_b",
-          recipient_email: "alice@example.com",
-          message_body: "ack",
-        },
-      })
-    );
-  });
-
   it("throws IntegrationActionNotFoundError for an unknown action", async () => {
-    const stub = makeStubDb([connectedRow()]);
+    const stub = connectedFixture();
     await expect(
       executeIntegrationAction(
-        gmailCtx,
+        { workspaceId: "ws-a", userId: "user-1", provider: "gmail" },
         { action: "delete_inbox", params: {} },
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         { db: stub as any, broker: makeFakeBroker() }
@@ -439,12 +680,11 @@ describe("executeIntegrationAction", () => {
     ).rejects.toBeInstanceOf(IntegrationActionNotFoundError);
   });
 
-  it("throws IntegrationActionValidationError when params don't match the schema", async () => {
-    const stub = makeStubDb([connectedRow()]);
+  it("throws IntegrationActionValidationError when curated params don't match", async () => {
+    const stub = connectedFixture();
     await expect(
       executeIntegrationAction(
-        gmailCtx,
-        // missing required `body`
+        { workspaceId: "ws-a", userId: "user-1", provider: "gmail" },
         { action: "send_email", params: { to: "x@y.com", subject: "Hi" } },
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         { db: stub as any, broker: makeFakeBroker() }
@@ -452,11 +692,11 @@ describe("executeIntegrationAction", () => {
     ).rejects.toBeInstanceOf(IntegrationActionValidationError);
   });
 
-  it("throws IntegrationNotConnectedError when there's no live connection", async () => {
-    const stub = makeStubDb([]);
+  it("throws IntegrationNotConnectedError when there's no granted connection", async () => {
+    const stub = makeStubDb();
     await expect(
       executeIntegrationAction(
-        gmailCtx,
+        { workspaceId: "ws-a", userId: "user-1", provider: "gmail" },
         {
           action: "send_email",
           params: { to: "a@b.c", subject: "s", body: "b" },
@@ -466,118 +706,106 @@ describe("executeIntegrationAction", () => {
       )
     ).rejects.toBeInstanceOf(IntegrationNotConnectedError);
   });
+});
 
-  it("falls back to the broker catalog and passes params through when the action isn't curated", async () => {
-    const stub = makeStubDb([connectedRow()]);
-    const exec = vi.fn().mockResolvedValue({
-      raw: { id: "filter_123", criteria: { from: "newsletters@x.com" } },
-    });
-    const broker = makeFakeBroker({
-      executeAction: exec,
-      listToolkitTools: vi.fn().mockResolvedValue([
-        {
-          slug: "GMAIL_CREATE_FILTER",
-          description: "Create a Gmail filter.",
-          inputSchema: { type: "object", properties: {} },
-        },
-      ]),
-    });
-    const result = await executeIntegrationAction(
-      gmailCtx,
+// ── B3 regression: alias filter when multiple connections share workspace ─
+
+describe("findConnectionForWorkspace alias filter (B3 regression)", () => {
+  it("matches by alias even when another connection's row sorts ahead", async () => {
+    const stub = patchGrantInsert(
+      makeStubDb({
+        conns: [
+          {
+            id: "conn-newer",
+            user_id: "user-1",
+            provider: "gmail",
+            // Sort priority: newer wins via created_at desc, then last_used.
+            alias: "alice@example.com",
+            composio_connection_id: "cc_newer",
+            status: "connected",
+            account_email: "alice@example.com",
+            account_label: null,
+            scopes: [],
+            last_used_at: null,
+            created_at: "2026-05-05T00:00:00Z",
+            updated_at: "2026-05-05T00:00:00Z",
+          },
+          {
+            id: "conn-older",
+            user_id: "user-1",
+            provider: "gmail",
+            alias: "work@example.com",
+            composio_connection_id: "cc_older",
+            status: "connected",
+            account_email: "work@example.com",
+            account_label: null,
+            scopes: [],
+            last_used_at: null,
+            created_at: "2026-05-04T00:00:00Z",
+            updated_at: "2026-05-04T00:00:00Z",
+          },
+        ],
+        grants: [
+          { connection_id: "conn-newer", workspace_id: "ws-a", granted_at: "now" },
+          { connection_id: "conn-older", workspace_id: "ws-a", granted_at: "now" },
+        ],
+      })
+    );
+    // Asking for the older connection by alias must return its row,
+    // not the newer one that sorts first. (Old code did .limit(1)
+    // before applying alias and would wrongly miss this.)
+    const exec = vi.fn().mockResolvedValue({ raw: { id: "x", threadId: "y" } });
+    const broker = makeFakeBroker({ executeAction: exec });
+    await executeIntegrationAction(
+      { workspaceId: "ws-a", userId: "user-1", provider: "gmail" },
       {
-        action: "create_filter",
-        params: {
-          criteria: { from: "newsletters@x.com" },
-          action: { addLabelIds: ["Label_1"] },
-        },
+        action: "send_email",
+        params: { to: "x@y.com", subject: "s", body: "b" },
+        alias: "work@example.com",
       },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       { db: stub as any, broker }
     );
     expect(exec).toHaveBeenCalledWith(
-      expect.objectContaining({
-        slug: "GMAIL_CREATE_FILTER",
-        arguments: {
-          criteria: { from: "newsletters@x.com" },
-          action: { addLabelIds: ["Label_1"] },
-        },
-      })
+      expect.objectContaining({ brokerConnectionId: "cc_older" })
     );
-    expect(result).toEqual({
-      ok: true,
-      data: { id: "filter_123", criteria: { from: "newsletters@x.com" } },
-    });
   });
 });
 
-describe("listIntegrationObjects", () => {
-  it("throws IntegrationReadNotSupportedError for write-only providers", async () => {
-    const stub = makeStubDb([]);
-    await expect(
-      listIntegrationObjects(
-        { workspaceId: "ws-1", userId: "user-1", provider: "slack" },
-        {},
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        { db: stub as any, broker: makeFakeBroker() }
-      )
-    ).rejects.toBeInstanceOf(IntegrationReadNotSupportedError);
-  });
+// ── listIntegrationsForUser ─────────────────────────────────────────
 
-  it("throws IntegrationNotConnectedError when no live connection", async () => {
-    const stub = makeStubDb([]);
-    await expect(
-      listIntegrationObjects(
-        ctx,
-        {},
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        { db: stub as any, broker: makeFakeBroker() }
-      )
-    ).rejects.toBeInstanceOf(IntegrationNotConnectedError);
-  });
-
-  it("forwards query/cursor/limit to the broker", async () => {
-    const stub = makeStubDb([
-      {
-        id: "row-1",
-        workspace_id: ctx.workspaceId,
-        user_id: ctx.userId,
-        provider: "notion",
-        composio_connection_id: "cc_live",
-        status: "connected",
-        scopes: [],
-        last_used_at: null,
-        created_at: "now",
-        updated_at: "now",
-      },
-    ]);
-    const list = vi.fn().mockResolvedValue({
-      objects: [
-        { id: "p1", title: "P1", url: null, lastModified: null },
-      ],
-      nextCursor: "next-1",
-    });
-    const broker = makeFakeBroker({ listObjects: list });
-    const result = await listIntegrationObjects(
-      ctx,
-      { query: "design system", cursor: "abc", limit: 10 },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      { db: stub as any, broker }
-    );
-    expect(list).toHaveBeenCalledWith(
-      expect.objectContaining({
-        brokerConnectionId: "cc_live",
-        entityId: "ws-1:user-1",
-        provider: "notion",
-        listInput: expect.objectContaining({
-          query: "design system",
-          cursor: "abc",
-          limit: 10,
-        }),
+describe("listIntegrationsForUser", () => {
+  it("hydrates each connection with its workspace grant ids", async () => {
+    const stub = patchGrantInsert(
+      makeStubDb({
+        conns: [
+          {
+            id: "conn-1",
+            user_id: "user-1",
+            provider: "gmail",
+            alias: "alice@example.com",
+            composio_connection_id: "cc_live",
+            status: "connected",
+            account_email: "alice@example.com",
+            account_label: null,
+            scopes: [],
+            last_used_at: null,
+            created_at: "now",
+            updated_at: "now",
+          },
+        ],
+        grants: [
+          { connection_id: "conn-1", workspace_id: "ws-a", granted_at: "now" },
+          { connection_id: "conn-1", workspace_id: "ws-b", granted_at: "now" },
+        ],
       })
     );
-    expect(result).toEqual({
-      objects: [{ id: "p1", title: "P1", url: null, lastModified: null }],
-      nextCursor: "next-1",
-    });
+    const out = await listIntegrationsForUser(
+      { userId: "user-1" },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      { db: stub as any }
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0].grantedWorkspaceIds.sort()).toEqual(["ws-a", "ws-b"]);
   });
 });

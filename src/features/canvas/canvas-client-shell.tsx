@@ -20,7 +20,6 @@ import { FixedInputBar } from "@/features/canvas/fixed-input-bar";
 import { FixedChatPanel } from "@/features/canvas/fixed-chat-panel";
 import { FixedBrainPanel } from "@/features/canvas/fixed-brain-panel";
 import { DrawerProvider } from "@/features/canvas/chat-drawer-context";
-import { OnboardingProvider } from "@/features/onboarding/components/onboarding-provider";
 import { PaywallGate } from "@/features/billing/components/paywall-gate";
 import type { CanvasState } from "@/features/canvas/types";
 import type { ServerConversation } from "@/features/canvas/use-conversation-sync";
@@ -54,6 +53,7 @@ function CanvasPortal() {
 interface Props {
   userId: string;
   workspaceId: string;
+  workspaceSlug: string;
   canvasSlug: string;
   initialState: CanvasState;
   initialConversations: ServerConversation[];
@@ -62,6 +62,7 @@ interface Props {
 export default function CanvasClientShell({
   userId,
   workspaceId,
+  workspaceSlug,
   canvasSlug,
   initialState,
   initialConversations,
@@ -75,21 +76,28 @@ export default function CanvasClientShell({
       initialConversations={initialConversations}
     >
       <DrawerProvider>
-        <OnboardingProvider userId={userId}>
-          <CanvasGridSync />
-          <LayoutSnapshotSync canvasSlug={canvasSlug} />
-          <CanvasPortal />
-          <FixedInputBar />
-          <FixedChatPanel />
-          <FixedBrainPanel />
-          <PaywallGate />
-        </OnboardingProvider>
+        <CanvasGridSync />
+        <LayoutSnapshotSync
+          workspaceSlug={workspaceSlug}
+          canvasSlug={canvasSlug}
+        />
+        <CanvasPortal />
+        <FixedInputBar />
+        <FixedChatPanel />
+        <FixedBrainPanel />
+        <PaywallGate />
       </DrawerProvider>
     </CanvasProvider>
   );
 }
 
-function LayoutSnapshotSync({ canvasSlug }: { canvasSlug: string }) {
-  useLayoutSnapshot(canvasSlug);
+function LayoutSnapshotSync({
+  workspaceSlug,
+  canvasSlug,
+}: {
+  workspaceSlug: string;
+  canvasSlug: string;
+}) {
+  useLayoutSnapshot(workspaceSlug, canvasSlug);
   return null;
 }

@@ -25,12 +25,42 @@ export interface ComposioClient {
     entityId: string;
     authConfigId: string;
     callbackUrl: string;
+    /**
+     * When true, Composio allows multiple connected accounts for the
+     * same (entityId, authConfigId) — required so users can connect
+     * e.g. two Gmail accounts. Default in our flow.
+     */
+    allowMultiple?: boolean;
+    /**
+     * Optional human-readable label Composio attaches to the
+     * connected account. We pass through whatever the user typed (or
+     * a sentinel like "pending" before the OAuth completes); the
+     * actual account-email-derived alias is filled in post-callback.
+     */
+    alias?: string;
   }): Promise<
     | { status: "connected"; brokerConnectionId: string }
     | { status: "needs_auth"; authUrl: string; brokerConnectionId: string }
   >;
 
   getConnectionStatus(brokerConnectionId: string): Promise<{ status: BrokerStatus }>;
+
+  /**
+   * Pull the broker's view of one connected account, including the
+   * provider-specific state blob (which carries the authenticated
+   * email address for Google providers, workspace info for Slack,
+   * etc.). Used at callback time to derive a stable alias from the
+   * account's email instead of asking the user to name it.
+   *
+   * Returns null fields when the broker doesn't expose an email/label
+   * for the toolkit (rare but possible — some providers' state blobs
+   * are opaque). Caller falls back to the connection id in that case.
+   */
+  getConnectedAccount(brokerConnectionId: string): Promise<{
+    status: BrokerStatus;
+    accountEmail: string | null;
+    accountLabel: string | null;
+  }>;
 
   /**
    * Delete the broker-side connected account. Called from
@@ -164,16 +194,27 @@ export function createComposioClient(opts: {
   }
 
   return {
-    async initiateConnection({ entityId, authConfigId, callbackUrl }) {
+    async initiateConnection({
+      entityId,
+      authConfigId,
+      callbackUrl,
+      allowMultiple,
+      alias,
+    }) {
+      const opts: Record<string, unknown> = { callbackUrl };
+      if (allowMultiple !== undefined) opts.allowMultiple = allowMultiple;
+      if (alias !== undefined) opts.alias = alias;
       let request: {
         id: string;
         status?: string;
         redirectUrl?: string | null;
       };
       try {
-        request = await sdk.connectedAccounts.initiate(entityId, authConfigId, {
-          callbackUrl,
-        });
+        request = await sdk.connectedAccounts.initiate(
+          entityId,
+          authConfigId,
+          opts
+        );
       } catch (err) {
         throw new IntegrationFetchError(
           "notion",
@@ -208,6 +249,52 @@ export function createComposioClient(opts: {
         );
       }
       return { status: mapBrokerStatus(account.status) };
+    },
+
+    async getConnectedAccount(brokerConnectionId) {
+      let account: {
+        status?: string;
+        // The broker's response carries provider-specific account
+        // metadata in `state.val` (sometimes also `data` /
+        // `accountData`). We probe a small set of common keys; if
+        // none are populated, callers fall back to `null`.
+        state?: { val?: Record<string, unknown> };
+        data?: Record<string, unknown>;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        [key: string]: any;
+      };
+      try {
+        account = await sdk.connectedAccounts.get(brokerConnectionId);
+      } catch (err) {
+        throw new IntegrationFetchError(
+          "notion",
+          err instanceof Error ? err.message : String(err)
+        );
+      }
+      const stateVal = (account.state?.val ?? {}) as Record<string, unknown>;
+      const data = (account.data ?? {}) as Record<string, unknown>;
+      const probe = (key: string): string | null => {
+        for (const bag of [stateVal, data, account]) {
+          const v = bag[key];
+          if (typeof v === "string" && v.length > 0) return v;
+        }
+        return null;
+      };
+      const accountEmail =
+        probe("email") ??
+        probe("emailAddress") ??
+        probe("user_email") ??
+        probe("userEmail");
+      const accountLabel =
+        probe("name") ??
+        probe("displayName") ??
+        probe("user_name") ??
+        probe("login");
+      return {
+        status: mapBrokerStatus(account.status),
+        accountEmail,
+        accountLabel,
+      };
     },
 
     async deleteConnection(brokerConnectionId) {

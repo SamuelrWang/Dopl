@@ -9,6 +9,7 @@ import {
 } from "../access-defaults";
 import { useMemberAccess, type ResourceEntry } from "../hooks/use-member-access";
 import type { MemberRole } from "../types";
+import { AccessMatrixSkeleton } from "./members-skeleton";
 
 interface Props {
   workspaceSlug: string;
@@ -65,11 +66,7 @@ export function AccessMatrix({
   if (!enabled) return null;
 
   if (loading && !data) {
-    return (
-      <p className="px-12 py-3 text-[11px] text-text-secondary/60">
-        Loading access…
-      </p>
-    );
+    return <AccessMatrixSkeleton />;
   }
 
   const resources = data?.resources ?? [];

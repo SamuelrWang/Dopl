@@ -5,13 +5,12 @@ import { MarkdownMessage } from "@/shared/design";
 import { ArtifactsPanel } from "@/features/ingestion/components/artifacts-panel";
 import type { ChatMessage } from "@/features/ingestion/components/chat-message";
 import { SentAttachmentPreview } from "./chat-attachments";
-import { McpSetupCard } from "./chat-panel-cards";
 
 /**
  * Render one message from the shared `ChatMessage` union. Handles the
  * full set of variants: user-text, AI text, streaming, progress events,
- * artifact cards, tool-activity badges, entry-card results, inline
- * onboarding cards, and the legacy URL-ingest progress/artifact flow.
+ * artifact cards, tool-activity badges, entry-card results, and the
+ * legacy URL-ingest progress/artifact flow.
  *
  * Display-only — all state is driven by the parent `ChatPanelBody`.
  */
@@ -112,15 +111,6 @@ export function RenderedMessage({
             )}
           </Link>
         ))}
-      </div>
-    );
-  }
-
-  // Onboarding cards — inline interactive cards for MCP setup.
-  if (message.role === "ai" && message.type === "onboarding_card") {
-    return (
-      <div className="max-w-[95%] mr-auto">
-        {message.cardType === "mcp_setup" && <McpSetupCard />}
       </div>
     );
   }

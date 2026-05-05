@@ -27,6 +27,7 @@ import type {
 } from "@/features/ingestion/components/chat-message";
 import { messagesToApiHistory } from "./chat-message-types";
 import type { ScopeFilters } from "./cluster-scope-picker";
+import { attachPanelToCluster } from "./attach-panel-to-cluster";
 
 interface UsePrivateChatOptions {
   workspaceId: string;
@@ -455,13 +456,27 @@ export function usePrivateChat({
             return m;
           })
         );
+        // If the chat is scoped to exactly one cluster, drop the
+        // freshly-promoted artifact into that cluster on the canvas.
+        // Multiple-cluster scope is ambiguous — let the user place it
+        // by hand. Failure here is non-fatal; the panel still exists.
+        const scopedClusterIds = scopeFilters?.clusterIds ?? [];
+        if (scopedClusterIds.length === 1) {
+          void attachPanelToCluster({
+            workspaceId,
+            clusterDbId: scopedClusterIds[0],
+            panelId: newPanelId,
+          }).catch((err) => {
+            console.warn("attach to cluster failed", err);
+          });
+        }
         return newPanelId;
       } catch (err) {
         console.warn("promote artifact failed", err);
         return undefined;
       }
     },
-    [panelId, workspaceId]
+    [panelId, scopeFilters, workspaceId]
   );
 
   return {

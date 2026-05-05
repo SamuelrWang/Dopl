@@ -11,6 +11,10 @@
  * camera transform — so it's cheap to serialize and harmless if a
  * different user signs in (the worst case is a brief mismatch before
  * the real canvas paints over it).
+ *
+ * Storage key includes the workspace id so two workspaces with
+ * canvases that happen to share a slug don't trash each other's
+ * snapshots in localStorage.
  */
 
 import { useEffect } from "react";
@@ -36,13 +40,27 @@ export interface LayoutSnapshot {
   savedAt: number;
 }
 
-export function useLayoutSnapshot(canvasSlug: string) {
+/**
+ * Build the localStorage key. Reader (loading.tsx) and writer
+ * (useLayoutSnapshot) must agree, so both derive the key from URL
+ * slugs (which are available before the workspaceId resolves).
+ */
+export function layoutSnapshotKey(
+  workspaceSlug: string | null | undefined,
+  canvasSlug: string | null | undefined
+): string | null {
+  if (!workspaceSlug || !canvasSlug) return null;
+  return `${LAYOUT_SNAPSHOT_PREFIX}${workspaceSlug}:${canvasSlug}`;
+}
+
+export function useLayoutSnapshot(workspaceSlug: string, canvasSlug: string) {
   const { state } = useCanvas();
   const { camera, panels } = state;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (!canvasSlug) return;
+    const key = layoutSnapshotKey(workspaceSlug, canvasSlug);
+    if (!key) return;
 
     const handle = window.setTimeout(() => {
       try {
@@ -59,10 +77,7 @@ export function useLayoutSnapshot(canvasSlug: string) {
           })),
           savedAt: Date.now(),
         };
-        window.localStorage.setItem(
-          `${LAYOUT_SNAPSHOT_PREFIX}${canvasSlug}`,
-          JSON.stringify(snapshot)
-        );
+        window.localStorage.setItem(key, JSON.stringify(snapshot));
       } catch {
         // localStorage may be full / disabled; the skeleton is a
         // progressive enhancement, so silently drop.
@@ -70,5 +85,5 @@ export function useLayoutSnapshot(canvasSlug: string) {
     }, DEBOUNCE_MS);
 
     return () => window.clearTimeout(handle);
-  }, [canvasSlug, camera.x, camera.y, camera.zoom, panels]);
+  }, [workspaceSlug, canvasSlug, camera.x, camera.y, camera.zoom, panels]);
 }

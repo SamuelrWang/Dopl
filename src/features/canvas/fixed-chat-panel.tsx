@@ -7,7 +7,7 @@
  * for consolidated viewing.
  */
 
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useMemo, useState, useCallback } from "react";
 import {
   usePanelsContext,
   useCanvas,
@@ -15,12 +15,7 @@ import {
 } from "./canvas-store";
 import { useChatDrawer } from "./chat-drawer-context";
 import { ChatPanelBody } from "@/features/chat/components/chat-panel";
-import { createWelcomeMessages } from "./onboarding-welcome";
-import {
-  BROWSE_PANEL_SIZE,
-  CONNECTION_PANEL_SIZE,
-  type ChatPanelData,
-} from "./types";
+import { type ChatPanelData } from "./types";
 import {
   useChatConversations,
   type ServerConversation,
@@ -39,8 +34,6 @@ function formatTimeShort(expiresAt: string): string {
   if (days > 0) return `${days}d`;
   return `${hours}h`;
 }
-
-const ONBOARDING_KEY = "dopl-onboarding-chat-done";
 
 /**
  * Convert a server-stored conversation's messages into the client
@@ -76,62 +69,12 @@ function serverMessagesToChatMessages(
 }
 
 export function FixedChatPanel() {
-  const { isOpen, close, open } = useChatDrawer();
+  const { isOpen, close } = useChatDrawer();
   const { panels, dispatch } = usePanelsContext();
   const { state } = useCanvas();
   const { conversations } = useChatConversations();
   const [selectedPanelId, setSelectedPanelId] = useState<string | null>(null);
   const [listOpen, setListOpen] = useState(true);
-  const onboardingRan = useRef(false);
-
-  // First-load onboarding: create welcome conversation and open drawer.
-  //
-  // State is now server-rendered, so it's always real on first render —
-  // no hydration gate needed. We guard against re-creating the welcome
-  // panel if one already exists (returning user, or fresh browser with
-  // no localStorage flag but the panel is in the DB). The id prefix
-  // `chat-welcome-` is a stable marker.
-  useEffect(() => {
-    if (onboardingRan.current) return;
-    if (typeof window === "undefined") return;
-    if (localStorage.getItem(ONBOARDING_KEY) === "1") return;
-    if (panels.some((p) => p.id.startsWith("chat-welcome-"))) {
-      // Already have one from a prior session — don't spawn another.
-      onboardingRan.current = true;
-      localStorage.setItem(ONBOARDING_KEY, "1");
-      return;
-    }
-    onboardingRan.current = true;
-
-    // Position the welcome panel below the default connection + browse
-    // panels so it's visible on the canvas AND doesn't bloat bounds.
-    // Previously this was (-9999, -9999), which made computePanelsBounds
-    // include a point ~10k units away, massively inflating canvas size.
-    const welcomeX = 40;
-    const welcomeY = 40 + Math.max(CONNECTION_PANEL_SIZE.height, BROWSE_PANEL_SIZE.height) + 32;
-
-    const panelId = `chat-welcome-${Date.now()}`;
-    dispatch({
-      type: "CREATE_CHAT_PANEL",
-      id: panelId,
-      x: welcomeX,
-      y: welcomeY,
-      title: "Welcome to Dopl!",
-    });
-
-    // Hydrate with welcome messages
-    const messages = createWelcomeMessages();
-    // Small delay so the panel exists in state before hydrating
-    setTimeout(() => {
-      for (const msg of messages) {
-        dispatch({ type: "APPEND_MESSAGE", panelId, message: msg });
-      }
-      setSelectedPanelId(panelId);
-      open();
-    }, 100);
-
-    localStorage.setItem(ONBOARDING_KEY, "1");
-  }, [dispatch, open, panels]);
 
   const chatPanels = useMemo(() => {
     // Rank by most-recent activity. Server conversations carry updated_at;

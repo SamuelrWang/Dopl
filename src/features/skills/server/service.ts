@@ -428,6 +428,63 @@ export async function deleteFile(
   await repo.markFileDeleted(file.id);
 }
 
+// ─── Trash ──────────────────────────────────────────────────────────
+
+/**
+ * Returns every soft-deleted skill and skill_file row in the workspace,
+ * sorted newest-deletion-first. Used by the trash modal. Mirrors
+ * `listTrash` in the knowledge service.
+ */
+export async function listTrash(
+  ctx: SkillContext
+): Promise<repo.DeletedSkillRows> {
+  return repo.listDeletedForWorkspace(ctx.workspaceId);
+}
+
+export async function restoreSkill(
+  ctx: SkillContext,
+  id: string
+): Promise<Skill> {
+  const skill = await repo.findSkillById(ctx.workspaceId, id, true);
+  if (!skill) throw new SkillNotFoundError(id);
+  await assertAgentWriteAllowed(ctx, skill);
+  return repo.restoreSkillRow(id);
+}
+
+export async function restoreSkillFile(
+  ctx: SkillContext,
+  id: string
+): Promise<SkillFile> {
+  const file = await repo.findFileById(id, true);
+  if (!file) throw new SkillFileNotFoundError("(unknown)", id);
+  // Workspace scope — files don't carry workspace_id directly in code-
+  // path but the column exists; cross-check via the parent skill so a
+  // forged id from another workspace still 404s.
+  const skill = await repo.findSkillById(ctx.workspaceId, file.skillId, true);
+  if (!skill) throw new SkillNotFoundError(file.skillId);
+  await assertAgentWriteAllowed(ctx, skill);
+  return repo.restoreFileRow(id);
+}
+
+/**
+ * Hard-delete every soft-deleted skill / file in the workspace older
+ * than `beforeIso`. Idempotent. Agents are blocked — purge is a
+ * destructive admin-only action with no UI undo.
+ */
+export async function purgeTrashOlderThan(
+  ctx: SkillContext,
+  beforeIso: string
+): Promise<{ deleted: number }> {
+  if (ctx.source === "agent") {
+    throw new SkillAgentWriteDisabledError("trash");
+  }
+  const counts = await repo.hardDeleteForWorkspaceOlderThan(
+    ctx.workspaceId,
+    beforeIso
+  );
+  return { deleted: counts.skills + counts.files };
+}
+
 // ─── Workspace KB list ──────────────────────────────────────────────
 
 export async function listWorkspaceKnowledgeBases(

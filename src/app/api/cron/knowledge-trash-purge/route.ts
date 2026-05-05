@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { hardDeleteOlderThanGlobal } from "@/features/knowledge/server/repository";
+import { hardDeleteOlderThanGlobal as purgeKnowledge } from "@/features/knowledge/server/repository";
+import { hardDeleteOlderThanGlobal as purgeSkills } from "@/features/skills/server/repository";
 import { logSystemEvent } from "@/features/analytics/server/system-events";
 
 /**
- * Daily cron (vercel.json) — hard-deletes knowledge-base rows that
- * have been soft-deleted for ≥ 30 days. Item 5.C.
+ * Daily cron (vercel.json) — hard-deletes knowledge-base AND skill
+ * rows that have been soft-deleted for ≥ 30 days. The endpoint is
+ * still named `knowledge-trash-purge` for backwards compatibility
+ * with the vercel.json schedule entry; the body now sweeps both
+ * features in a single run so trash retention stays uniform across
+ * the workspace.
  *
  * Protected by CRON_SECRET header check, same as the existing trial
  * and ingest-cleanup crons.
@@ -34,21 +39,34 @@ export async function GET(request: NextRequest) {
   ).toISOString();
 
   try {
-    const counts = await hardDeleteOlderThanGlobal(beforeIso);
-    const total = counts.entries + counts.folders + counts.bases;
+    const [kb, sk] = await Promise.all([
+      purgeKnowledge(beforeIso),
+      purgeSkills(beforeIso),
+    ]);
+    const counts = {
+      entries: kb.entries,
+      folders: kb.folders,
+      bases: kb.bases,
+      skills: sk.skills,
+      skill_files: sk.files,
+    };
+    const total =
+      counts.entries +
+      counts.folders +
+      counts.bases +
+      counts.skills +
+      counts.skill_files;
 
     void logSystemEvent({
       // Always "info" — even a no-op run is a healthy heartbeat to log.
       severity: "info",
       category: "other",
       source: "cron.knowledge-trash-purge",
-      message: `Purged ${total} knowledge rows older than ${TRASH_RETENTION_DAYS}d`,
+      message: `Purged ${total} rows older than ${TRASH_RETENTION_DAYS}d (knowledge + skills)`,
       fingerprintKeys: ["cron", "knowledge-trash-purge", String(total)],
       metadata: {
         before: beforeIso,
-        entries: counts.entries,
-        folders: counts.folders,
-        bases: counts.bases,
+        ...counts,
       },
       userId: null,
     });

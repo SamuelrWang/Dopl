@@ -471,6 +471,28 @@ export async function removeMember(
   }
 
   const db = supabaseAdmin();
+
+  // Clear the member's per-resource access overrides for this workspace
+  // FIRST. There's no FK from workspace_resource_access to
+  // workspace_members (only to workspaces and auth.users), so the row-
+  // delete below doesn't cascade these. Without this, re-inviting the
+  // same user later silently restores their old per-KB / per-skill /
+  // per-canvas grants. Deleting before the membership keeps the
+  // table consistent if the member-delete fails. Best-effort: log and
+  // continue if it errors — the membership delete is the load-bearing
+  // change.
+  const { error: accessError } = await db
+    .from("workspace_resource_access")
+    .delete()
+    .eq("workspace_id", workspaceId)
+    .eq("user_id", targetUserId);
+  if (accessError) {
+    console.error(
+      `[members] Failed to clear access overrides for ${targetUserId} in workspace ${workspaceId}:`,
+      accessError.message
+    );
+  }
+
   const { error } = await db
     .from("workspace_members")
     .delete()

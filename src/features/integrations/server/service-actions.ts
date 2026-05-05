@@ -7,7 +7,7 @@ import {
   type ComposioClient,
 } from "./composio-client";
 import {
-  findConnectionWithBrokerId,
+  findConnectionForWorkspace,
   touchConnection,
 } from "./repository";
 import {
@@ -45,8 +45,8 @@ export type ActionsServiceDeps = {
   broker?: ComposioClient;
 };
 
-function brokerEntityId(workspaceId: string, userId: string): string {
-  return `${workspaceId}:${userId}`;
+function brokerEntityId(userId: string): string {
+  return userId;
 }
 
 /**
@@ -153,7 +153,7 @@ export async function listIntegrationActions(
  */
 export async function executeIntegrationAction(
   ctx: { workspaceId: string; userId: string; provider: IntegrationProvider },
-  input: { action: string; params: Record<string, unknown> },
+  input: { action: string; params: Record<string, unknown>; alias?: string },
   deps: ActionsServiceDeps = {}
 ): Promise<IntegrationActionResult> {
   const db = deps.db ?? supabaseAdmin();
@@ -199,14 +199,19 @@ export async function executeIntegrationAction(
     parseResponse = (raw) => ({ ok: true, data: raw });
   }
 
-  const found = await findConnectionWithBrokerId(db, ctx);
+  const found = await findConnectionForWorkspace(db, {
+    userId: ctx.userId,
+    provider: ctx.provider,
+    workspaceId: ctx.workspaceId,
+    alias: input.alias,
+  });
   if (!found || found.connection.status !== "connected") {
     throw new IntegrationNotConnectedError(ctx.provider);
   }
 
   const { raw } = await broker.executeAction({
     brokerConnectionId: found.brokerConnectionId,
-    entityId: brokerEntityId(ctx.workspaceId, ctx.userId),
+    entityId: brokerEntityId(ctx.userId),
     provider: ctx.provider,
     slug: composioSlug,
     arguments: brokerArgs,

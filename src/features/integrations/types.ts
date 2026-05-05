@@ -5,6 +5,11 @@
  * snake_case and contains a `composio_connection_id` that NEVER
  * appears here — it's stripped at the repository boundary in
  * `server/dto.ts`.
+ *
+ * Connections are USER-LEVEL: one OAuth handshake per (user, provider,
+ * alias). Workspace access is a separate `oauth_connection_grants`
+ * table — see `OAuthConnectionGrant` below — so a user connects once
+ * and chooses which workspaces can use the connection.
  */
 
 import type { AgentIngestBundle } from "@/features/ingestion/server/agent-bundle";
@@ -25,14 +30,34 @@ export type IntegrationStatus = "connected" | "needs_auth" | "error";
 
 export type OAuthConnection = {
   id: string;
-  workspaceId: string;
   userId: string;
   provider: IntegrationProvider;
+  /** Auto-derived from the connected account's email at finalize time. */
+  alias: string;
   status: IntegrationStatus;
+  /** Email of the connected provider account, if the broker exposed it. */
+  accountEmail: string | null;
+  /** Human-readable label override (e.g. "Personal Gmail"). null = use alias. */
+  accountLabel: string | null;
   scopes: string[];
   lastUsedAt: string | null;
   createdAt: string;
   updatedAt: string;
+};
+
+/** Workspaces this connection has been granted access to. */
+export type OAuthConnectionGrant = {
+  connectionId: string;
+  workspaceId: string;
+  grantedAt: string;
+};
+
+/**
+ * Connection enriched with the workspace grants list — what the
+ * /settings/integrations page renders per row.
+ */
+export type OAuthConnectionWithGrants = OAuthConnection & {
+  grantedWorkspaceIds: string[];
 };
 
 /** Thin index entry returned by `list_integration_objects`. */
@@ -57,9 +82,16 @@ export type ReadIntegrationObjectResult = {
   body: string;
 };
 
+/**
+ * Result of `connectIntegration`. The auth URL is the BROKER's URL
+ * (Composio's hosted OAuth handoff) — frontend opens this directly
+ * in a popup. Earlier the API returned a Dopl-internal redirect URL
+ * (/connect/[provider]/start); we cut out that hop now that the
+ * connect call does the broker initiate inline.
+ */
 export type ConnectInitiation =
-  | { status: "connected" }
-  | { status: "needs_auth"; authUrl: string };
+  | { status: "connected"; connectionId: string }
+  | { status: "needs_auth"; authUrl: string; connectionId: string };
 
 /**
  * Wire-format descriptor returned by `list_integration_actions`. Each

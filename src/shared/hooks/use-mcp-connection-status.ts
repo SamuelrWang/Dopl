@@ -7,8 +7,7 @@
  * `onConnected` exactly once when the server first reports connected.
  *
  * Used by:
- *   - src/app/settings/keys/page.tsx (post-rip-out home for MCP install)
- *   - src/features/onboarding/components/mcp-connect-step.tsx (coach card)
+ *   - src/app/settings/keys/page.tsx (the MCP install card)
  *
  * The hook does NOT delay the onConnected callback — callers control
  * the "show success state for N ms before advancing" behavior by

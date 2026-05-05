@@ -121,17 +121,12 @@ export function touchApiKey(keyId: string): void {
 /**
  * Refresh profiles.mcp_connected_at for the owner of an API key. Fire-and-forget.
  *
- * Every authenticated MCP call touches this timestamp. The onboarding
- * tour's `mcp-connect-step` polls `/api/user/mcp-status` (every 3s
- * while the step is active) to detect when the user has connected
- * their agent — any tool call advances the timestamp, not just MCP
- * server boot, so the connection card flips to "connected" as soon as
- * the agent does anything real.
- *
- * Audit note: the welcome flow that originally consumed this was
- * deleted in M-7, but the in-canvas onboarding coach card kept the
- * detector. Don't remove `touchMcpStatus` without also updating
- * `mcp-connect-step.tsx`.
+ * Every authenticated MCP call touches this timestamp. The
+ * settings/keys page's MCP install card polls `/api/user/mcp-status`
+ * (every 3s while open) to detect when the user has connected their
+ * agent — any tool call advances the timestamp, not just MCP server
+ * boot, so the connection card flips to "connected" as soon as the
+ * agent does anything real.
  *
  * In-process debounce: only writes once every 30s per user, since
  * the client polls every 3s and tolerates 5 minutes of staleness.

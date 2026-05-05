@@ -63,6 +63,13 @@ export default async function SettingsPage() {
             <span>API Keys</span>
             <span className="text-text-tertiary">&rarr;</span>
           </Link>
+          <Link
+            href="/settings/integrations"
+            className="flex items-center justify-between text-sm text-text-secondary hover:text-text-primary transition-colors"
+          >
+            <span>Integrations</span>
+            <span className="text-text-tertiary">&rarr;</span>
+          </Link>
         </div>
       </div>
 

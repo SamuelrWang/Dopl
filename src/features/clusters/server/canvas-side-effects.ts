@@ -5,9 +5,19 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
  * Side-effect helpers that mutate canvas-scoped tables (`canvas_panels`,
  * `canvas_state`) when a cluster is created or deleted. Lifted out of
  * `service.ts` to keep that file under the 500-line cap and to keep the
- * cluster CRUD readable. All functions are non-fatal: if they fail the
- * cluster row is still consistent — only the canvas visualization may be
- * off until the next reload reconciles it.
+ * cluster CRUD readable.
+ *
+ * Create-side (`spawnClusterBrainPanel`) is non-fatal: a freshly created
+ * cluster still works via MCP without the brain panel; a partial canvas
+ * is acceptable.
+ *
+ * Delete-side (`tearDownClusterCanvasArtifacts`) THROWS on failure so
+ * the cluster row delete is held back and the user can retry. If we
+ * swallowed errors here, the cluster row would vanish while
+ * `canvas_state.clusters[]` kept a dangling entry pointing at it,
+ * surfacing as a broken card on the canvas. Both writes inside it are
+ * idempotent (DELETE-by-id and UPSERT-with-pruned-array) so retry is
+ * safe.
  */
 
 export interface ClusterRef {
@@ -154,18 +164,22 @@ export async function tearDownClusterCanvasArtifacts(
       .eq("panel_type", "cluster-brain")
       .eq("panel_id", `brain-${cluster.id}`);
     if (brainPanelError) {
-      console.error(
-        `[clusters] Failed to delete brain panel for cluster ${slug}:`,
-        brainPanelError.message
+      throw new Error(
+        `Failed to delete brain panel for cluster ${slug}: ${brainPanelError.message}`
       );
     }
   }
 
-  const { data: stateRow } = await db
+  const { data: stateRow, error: readError } = await db
     .from("canvas_state")
     .select("clusters")
     .eq("workspace_id", scope.workspaceId)
     .maybeSingle();
+  if (readError) {
+    throw new Error(
+      `Failed to read canvas_state for cluster teardown ${slug}: ${readError.message}`
+    );
+  }
 
   if (!stateRow || !Array.isArray((stateRow as { clusters: unknown[] }).clusters)) {
     return;
@@ -193,9 +207,8 @@ export async function tearDownClusterCanvasArtifacts(
       { onConflict: "workspace_id" }
     );
   if (stateError) {
-    console.error(
-      `[clusters] Failed to prune canvas_state.clusters for cluster ${slug}:`,
-      stateError.message
+    throw new Error(
+      `Failed to prune canvas_state.clusters for cluster ${slug}: ${stateError.message}`
     );
   }
 }

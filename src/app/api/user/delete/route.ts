@@ -14,6 +14,73 @@ export async function DELETE() {
 
     const admin = supabaseAdmin();
 
+    // ── Shared-workspace guard (BEFORE billing/storage so we can bail
+    // early without side effects). If the caller owns any workspace
+    // that still has other active members, refuse the delete. Cascading
+    // the workspace away here would vaporize co-members' KBs / skills /
+    // clusters / conversations along with it. Force the user to either
+    // transfer ownership or remove the other members first.
+    //
+    // Two-query manual join — PostgREST `!inner` joins have been
+    // returning opaque 500s on this schema since the May 2026
+    // workspace_id denormalization migrations (see attachments.ts:256
+    // for the rationale). Robust regardless of schema-cache state.
+    const { data: ownedWorkspaces, error: ownedError } = await admin
+      .from("workspaces")
+      .select("id, name")
+      .eq("owner_id", user.id);
+    if (ownedError) {
+      console.error(
+        `[delete-account] Failed to list owned workspaces for user ${user.id}:`,
+        ownedError
+      );
+      return NextResponse.json(
+        { error: "Failed to verify account state — please retry." },
+        { status: 500 }
+      );
+    }
+    const ownedIds = (ownedWorkspaces ?? []).map(
+      (w) => (w as { id: string }).id
+    );
+    if (ownedIds.length > 0) {
+      const { data: coMembers, error: coMembersError } = await admin
+        .from("workspace_members")
+        .select("workspace_id")
+        .in("workspace_id", ownedIds)
+        .neq("user_id", user.id)
+        .eq("status", "active");
+      if (coMembersError) {
+        console.error(
+          `[delete-account] Failed to check for co-members for user ${user.id}:`,
+          coMembersError
+        );
+        return NextResponse.json(
+          { error: "Failed to verify account state — please retry." },
+          { status: 500 }
+        );
+      }
+      const sharedIds = new Set(
+        (coMembers ?? []).map((m) => (m as { workspace_id: string }).workspace_id)
+      );
+      if (sharedIds.size > 0) {
+        const names = (ownedWorkspaces ?? [])
+          .filter((w) => sharedIds.has((w as { id: string }).id))
+          .map((w) => (w as { name: string }).name)
+          .filter(Boolean);
+        return NextResponse.json(
+          {
+            error:
+              "You still own workspaces with other members: " +
+              names.join(", ") +
+              ". Transfer ownership or remove the other members before deleting your account.",
+            code: "OWNER_HAS_SHARED_WORKSPACES",
+            workspaces: names,
+          },
+          { status: 409 }
+        );
+      }
+    }
+
     // ── Stripe subscription cancellation (FIRST, aborts on failure) ──
     // If a user deletes their account we MUST stop the recurring billing
     // first — otherwise Stripe keeps charging their card while their

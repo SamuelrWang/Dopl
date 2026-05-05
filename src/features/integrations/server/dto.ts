@@ -9,11 +9,13 @@ import { INTEGRATION_PROVIDERS } from "../types";
 /** Raw shape of an `oauth_connections` row. */
 export type OAuthConnectionRow = {
   id: string;
-  workspace_id: string;
   user_id: string;
   provider: string;
+  alias: string;
   composio_connection_id: string;
   status: string;
+  account_email: string | null;
+  account_label: string | null;
   scopes: string[] | null;
   last_used_at: string | null;
   created_at: string;
@@ -44,16 +46,18 @@ function asStatus(value: string): IntegrationStatus {
  * Map a raw row to the camelCase domain shape, dropping
  * `composio_connection_id` so it can never accidentally leak past the
  * repository. Callers that need the broker id use a dedicated
- * repository method (`getConnectionWithBrokerId`) — kept narrow so
+ * repository method (`findConnectionWithBrokerId`) — kept narrow so
  * grepping for the field name surfaces every leak path.
  */
 export function mapOAuthConnectionRow(row: OAuthConnectionRow): OAuthConnection {
   return {
     id: row.id,
-    workspaceId: row.workspace_id,
     userId: row.user_id,
     provider: asProvider(row.provider),
+    alias: row.alias,
     status: asStatus(row.status),
+    accountEmail: row.account_email,
+    accountLabel: row.account_label,
     scopes: row.scopes ?? [],
     lastUsedAt: row.last_used_at,
     createdAt: row.created_at,

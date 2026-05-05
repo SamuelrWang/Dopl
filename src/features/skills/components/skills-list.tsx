@@ -7,6 +7,7 @@ import {
   ChevronRight,
   Plus,
   Sparkles,
+  Trash2,
 } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { PageTopBar } from "@/shared/layout/page-top-bar";
@@ -14,9 +15,11 @@ import { SourceIcon } from "@/features/knowledge/components/source-icon";
 import type { SourceProvider } from "@/features/knowledge/source-types";
 import type { Skill, SkillStatus } from "@/features/skills/types";
 import { skillSegment } from "@/features/skills/url";
+import { SkillsTrashModal } from "./skills-trash-modal";
 
 interface Props {
   workspaceSlug: string;
+  workspaceId: string;
   skills: Skill[];
 }
 
@@ -36,21 +39,33 @@ const KNOWN_PROVIDERS = new Set<SourceProvider>([
  * the full detail page. Multi-expand is allowed; state is ephemeral
  * per visit (no URL).
  */
-export function SkillsList({ workspaceSlug, skills }: Props) {
+export function SkillsList({ workspaceSlug, workspaceId, skills }: Props) {
+  const [trashOpen, setTrashOpen] = useState(false);
   return (
     <>
       <PageTopBar
         title="Skills"
         trailing={
-          <button
-            type="button"
-            disabled
-            title="Skill authoring lands in the next milestone"
-            className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white/40 text-black/60 text-xs font-medium cursor-not-allowed"
-          >
-            <Plus size={12} />
-            New skill
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setTrashOpen(true)}
+              title="View recently deleted skills"
+              className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-text-secondary hover:text-text-primary hover:bg-white/[0.04] cursor-pointer"
+            >
+              <Trash2 size={12} />
+              Trash
+            </button>
+            <button
+              type="button"
+              disabled
+              title="Skill authoring lands in the next milestone"
+              className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white/40 text-black/60 text-xs font-medium cursor-not-allowed"
+            >
+              <Plus size={12} />
+              New skill
+            </button>
+          </div>
         }
       />
       <div className="container mx-auto max-w-5xl px-6 pt-[68px] pb-8 pointer-events-auto">
@@ -68,6 +83,11 @@ export function SkillsList({ workspaceSlug, skills }: Props) {
           </div>
         )}
       </div>
+      <SkillsTrashModal
+        open={trashOpen}
+        onOpenChange={setTrashOpen}
+        workspaceId={workspaceId}
+      />
     </>
   );
 }

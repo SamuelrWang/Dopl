@@ -204,6 +204,18 @@ export async function markSkillDeleted(
   if (error) throw error;
 }
 
+export async function restoreSkillRow(id: string): Promise<Skill> {
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("skills")
+    .update({ deleted_at: null })
+    .eq("id", id)
+    .select(SKILL_COLS)
+    .single();
+  if (error || !data) throw error || new Error("Failed to restore skill");
+  return mapSkillRow(data as SkillRow);
+}
+
 // ─── Skill files ────────────────────────────────────────────────────
 
 export async function listFilesForSkill(
@@ -314,6 +326,137 @@ export async function markFileDeleted(
     .update({ deleted_at: deletedAt })
     .eq("id", id);
   if (error) throw error;
+}
+
+export async function restoreFileRow(id: string): Promise<SkillFile> {
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("skill_files")
+    .update({ deleted_at: null })
+    .eq("id", id)
+    .select(SKILL_FILE_COLS)
+    .single();
+  if (error || !data) throw error || new Error("Failed to restore skill file");
+  return mapSkillFileRow(data as SkillFileRow);
+}
+
+export async function findFileById(
+  id: string,
+  includeDeleted = false
+): Promise<SkillFile | null> {
+  const db = supabaseAdmin();
+  let query = db.from("skill_files").select(SKILL_FILE_COLS).eq("id", id);
+  if (!includeDeleted) query = query.is("deleted_at", null);
+  const { data, error } = await query.maybeSingle();
+  if (error) throw error;
+  return data ? mapSkillFileRow(data as SkillFileRow) : null;
+}
+
+// ─── Trash ──────────────────────────────────────────────────────────
+
+export interface DeletedSkillRows {
+  skills: Skill[];
+  files: SkillFile[];
+}
+
+/**
+ * Returns every soft-deleted skill and skill file in the workspace.
+ * Service exposes this as the trash view. Files are returned with body
+ * stripped — the modal renders names + timestamps only.
+ */
+export async function listDeletedForWorkspace(
+  workspaceId: string
+): Promise<DeletedSkillRows> {
+  const db = supabaseAdmin();
+
+  const skillsRes = await db
+    .from("skills")
+    .select(SKILL_COLS)
+    .eq("workspace_id", workspaceId)
+    .not("deleted_at", "is", null)
+    .order("deleted_at", { ascending: false });
+  if (skillsRes.error) throw skillsRes.error;
+
+  const filesRes = await db
+    .from("skill_files")
+    .select(SKILL_FILE_META_COLS)
+    .eq("workspace_id", workspaceId)
+    .not("deleted_at", "is", null)
+    .order("deleted_at", { ascending: false });
+  if (filesRes.error) throw filesRes.error;
+
+  return {
+    skills: ((skillsRes.data ?? []) as SkillRow[]).map(mapSkillRow),
+    files: ((filesRes.data ?? []) as unknown as SkillFileMetaRow[]).map(
+      (row) => mapSkillFileRow({ ...row, body: "" })
+    ),
+  };
+}
+
+/**
+ * Hard-delete skills + skill_files trashed before `iso` for ONE
+ * workspace. Used by the in-app "Empty trash" admin action.
+ */
+export async function hardDeleteForWorkspaceOlderThan(
+  workspaceId: string,
+  iso: string
+): Promise<{ skills: number; files: number }> {
+  const db = supabaseAdmin();
+
+  const filesRes = await db
+    .from("skill_files")
+    .delete({ count: "exact" })
+    .eq("workspace_id", workspaceId)
+    .not("deleted_at", "is", null)
+    .lt("deleted_at", iso);
+  if (filesRes.error) throw filesRes.error;
+
+  const skillsRes = await db
+    .from("skills")
+    .delete({ count: "exact" })
+    .eq("workspace_id", workspaceId)
+    .not("deleted_at", "is", null)
+    .lt("deleted_at", iso);
+  if (skillsRes.error) throw skillsRes.error;
+
+  return {
+    files: filesRes.count ?? 0,
+    skills: skillsRes.count ?? 0,
+  };
+}
+
+/**
+ * Hard-delete skills + skill_files trashed before `iso` across all
+ * workspaces. Used by the nightly cron. Service-role only — bypasses
+ * RLS, must be called from a privileged context. Files are deleted
+ * first because deleting their parent skill cascade-deletes them
+ * anyway; counting files first gives accurate per-table totals.
+ *
+ * Returns counts per table for system_events logging.
+ */
+export async function hardDeleteOlderThanGlobal(
+  iso: string
+): Promise<{ skills: number; files: number }> {
+  const db = supabaseAdmin();
+
+  const filesRes = await db
+    .from("skill_files")
+    .delete({ count: "exact" })
+    .not("deleted_at", "is", null)
+    .lt("deleted_at", iso);
+  if (filesRes.error) throw filesRes.error;
+
+  const skillsRes = await db
+    .from("skills")
+    .delete({ count: "exact" })
+    .not("deleted_at", "is", null)
+    .lt("deleted_at", iso);
+  if (skillsRes.error) throw skillsRes.error;
+
+  return {
+    files: filesRes.count ?? 0,
+    skills: skillsRes.count ?? 0,
+  };
 }
 
 // ─── Knowledge bases (cross-feature avoiding) ───────────────────────

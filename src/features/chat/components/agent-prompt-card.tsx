@@ -2,6 +2,15 @@
 
 import { useState } from "react";
 import { Check, ChevronDown, ChevronRight, Copy, Send } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/shared/ui/dialog";
+import { Button } from "@/shared/ui/button";
 
 interface AgentPromptCardProps {
   title: string;
@@ -22,6 +31,11 @@ interface AgentPromptCardProps {
  * executing agent (Claude Code, Cursor, etc.); the canvas surface here
  * is intentionally NOT a chat target — that's why the promote button
  * goes to a static artifact panel rather than spawning a canvas chat.
+ *
+ * Header label is the generic "Artifact" — the kind (context file vs.
+ * agent prompt) is implicit in the styling. Promoting to canvas asks
+ * for explicit confirmation since it makes the artifact public to
+ * every workspace member.
  */
 export function AgentPromptCard({
   title,
@@ -33,7 +47,9 @@ export function AgentPromptCard({
   const [copied, setCopied] = useState(false);
   const [promoting, setPromoting] = useState(false);
   const [localPromotedId, setLocalPromotedId] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const promoted = promotedPanelId || localPromotedId;
+  const displayTitle = stripArtifactWord(title);
 
   async function handleCopy() {
     try {
@@ -45,12 +61,13 @@ export function AgentPromptCard({
     }
   }
 
-  async function handlePromote() {
+  async function handleConfirmPromote() {
     if (!onPromote || promoting || promoted) return;
+    setConfirmOpen(false);
     setPromoting(true);
     try {
-      const markdown = `# ${title}\n\n${prompt}`;
-      const newId = await onPromote({ title, markdown });
+      const markdown = `# ${displayTitle}\n\n${prompt}`;
+      const newId = await onPromote({ title: displayTitle, markdown });
       if (typeof newId === "string") setLocalPromotedId(newId);
     } finally {
       setPromoting(false);
@@ -66,17 +83,22 @@ export function AgentPromptCard({
       >
         <Send size={12} className="text-violet-300/80 shrink-0" />
         <span className="text-[10px] font-mono uppercase tracking-wider text-violet-300/80 shrink-0">
-          Agent prompt
+          Artifact
         </span>
         <span className="text-[12.5px] font-medium text-text-primary truncate">
-          {title}
+          {displayTitle}
         </span>
         <span className="ml-auto shrink-0 text-text-secondary/50">
           {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
         </span>
       </button>
-      {open && (
-        <>
+      <div
+        className={`grid transition-[grid-template-rows] duration-200 ease-out ${
+          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+        }`}
+        aria-hidden={!open}
+      >
+        <div className="overflow-hidden min-h-0">
           <pre className="px-3 py-3 max-h-[280px] overflow-y-auto text-[12px] leading-relaxed text-text-primary/90 whitespace-pre-wrap font-mono border-t border-white/[0.06]">
             {prompt}
           </pre>
@@ -92,7 +114,9 @@ export function AgentPromptCard({
             {onPromote && (
               <button
                 type="button"
-                onClick={handlePromote}
+                onClick={() => {
+                  if (!promoting && !promoted) setConfirmOpen(true);
+                }}
                 disabled={promoting || Boolean(promoted)}
                 className="ml-auto flex items-center gap-1.5 px-2 py-1 rounded text-[11.5px] text-text-secondary hover:bg-white/[0.06] hover:text-text-primary transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -108,8 +132,37 @@ export function AgentPromptCard({
               </button>
             )}
           </div>
-        </>
+        </div>
+      </div>
+      {confirmOpen && (
+        <Dialog open onOpenChange={(o) => { if (!o) setConfirmOpen(false); }}>
+          <DialogContent showCloseButton={false}>
+            <DialogHeader>
+              <DialogTitle>Promote artifact to canvas?</DialogTitle>
+              <DialogDescription>
+                Promoting puts this artifact on the workspace canvas, where
+                every member of the workspace can see and open it. Until
+                you promote, only you can see it in this private chat.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setConfirmOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleConfirmPromote}>
+                Promote to canvas
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );
+}
+
+/** Drop the literal word "Artifact" from a model-generated title — the
+ *  card already shows an "Artifact" label, so repeating the word in the
+ *  title is noise. */
+function stripArtifactWord(title: string): string {
+  return title.replace(/\bartifacts?\b/gi, "").replace(/\s+/g, " ").trim() || title;
 }

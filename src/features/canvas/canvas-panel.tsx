@@ -26,7 +26,6 @@ import { SkillsPanelBody } from "./panels/skills/skills-panel";
 import { KnowledgeBasePanelBody } from "./panels/knowledge-base/knowledge-base-panel";
 import { SkillPanelBody } from "./panels/skill/skill-panel";
 import { ArtifactPanelBody } from "./panels/artifact/artifact-panel";
-import { useOnboardingContext } from "@/features/onboarding/components/onboarding-provider";
 import { ChatExpiryBar } from "./canvas-panel-expiry";
 import { useCanvasPanelDrag } from "./use-canvas-panel-drag";
 import { useCanvasPanelResize } from "./use-canvas-panel-resize";
@@ -48,10 +47,6 @@ interface CanvasPanelProps {
 }
 
 function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
-  // Onboarding highlight — pulse glow if this panel type is the current target
-  const { highlightPanelType } = useOnboardingContext();
-  const isHighlighted = highlightPanelType === panel.type;
-
   // Viewer capabilities. On the main /canvas these are always true; on
   // the shared cluster viewer non-owners get canMove=false / canDelete=false.
   const capabilities = useCapabilities();
@@ -169,8 +164,7 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
         "relative rounded-2xl overflow-hidden bg-[var(--panel-surface)] border border-white/[0.1] flex flex-col select-text transition-[box-shadow] duration-150 " +
         (isSelected
           ? "shadow-[0_0_0_2px_rgba(255,255,255,0.5),0_4px_16px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.08)] !border-white/30"
-          : "shadow-[0_4px_16px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.08)]") +
-        (isHighlighted ? " onboarding-highlight" : "")
+          : "shadow-[0_4px_16px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.08)]")
       }
     >
       {/* Top specular highlight */}

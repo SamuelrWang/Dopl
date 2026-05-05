@@ -12,6 +12,7 @@
  * Same grid template + sizing as the real rows so the swap to live
  * data doesn't reflow the layout.
  */
+import { Database, FileCode, Layout } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 
 const ROWS = 6;
@@ -66,5 +67,53 @@ function Bar({ className }: { className?: string }) {
       aria-hidden="true"
       className={cn("animate-pulse rounded bg-white/[0.05]", className)}
     />
+  );
+}
+
+const ACCESS_SECTIONS = [
+  { type: "knowledge_base", label: "Knowledge bases", Icon: Database },
+  { type: "skill", label: "Skills", Icon: FileCode },
+  { type: "canvas", label: "Canvases", Icon: Layout },
+] as const;
+
+const ACCESS_ROWS_PER_SECTION = 3;
+
+/**
+ * Skeleton for the per-member `AccessMatrix` dropdown. Mirrors the real
+ * grid (3 sections × N rows of read/edit toggles) so the swap to live
+ * data doesn't reflow the layout. Rendered while `useMemberAccess` is
+ * fetching for the first time.
+ */
+export function AccessMatrixSkeleton() {
+  return (
+    <div
+      className="px-12 pb-4 pt-1 space-y-4"
+      aria-busy="true"
+      aria-live="polite"
+    >
+      <span className="sr-only">Loading access</span>
+      {ACCESS_SECTIONS.map(({ type, label, Icon }) => (
+        <section key={type}>
+          <h4 className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-text-secondary/60 mb-2">
+            <Icon size={11} />
+            {label}
+          </h4>
+          <ul className="rounded-lg border border-white/[0.06] divide-y divide-white/[0.04] overflow-hidden">
+            {Array.from({ length: ACCESS_ROWS_PER_SECTION }).map((_, i) => (
+              <li
+                key={i}
+                className="flex items-center justify-between gap-3 px-3 py-2"
+              >
+                <Bar className="h-3 w-40" />
+                <div className="inline-flex items-center rounded-md border border-white/[0.08] overflow-hidden h-6">
+                  <Bar className="h-full w-11 rounded-none bg-white/[0.04]" />
+                  <Bar className="h-full w-11 rounded-none bg-white/[0.04]" />
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+    </div>
   );
 }

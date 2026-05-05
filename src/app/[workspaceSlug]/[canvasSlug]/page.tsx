@@ -49,6 +49,7 @@ export default async function WorkspaceCanvasPage({ params }: PageProps) {
     <CanvasClientShell
       userId={user.id}
       workspaceId={workspace.id}
+      workspaceSlug={workspaceSlug}
       canvasSlug={canvas.slug}
       initialState={initialState}
       initialConversations={conversations}

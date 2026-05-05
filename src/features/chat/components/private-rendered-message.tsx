@@ -4,6 +4,8 @@ import { MarkdownMessage } from "@/shared/design";
 import type { ChatMessage } from "@/features/ingestion/components/chat-message";
 import { SentAttachmentPreview } from "./chat-attachments";
 import { DoplAgentGroup } from "./dopl-agent-group";
+import { DoplAgentHeader } from "./dopl-agent-header";
+import { UserMessageHeader } from "./user-message-header";
 import { AgentRow } from "./agent-row";
 import { KbResults } from "./kb-results";
 import { Lead } from "./lead";
@@ -34,6 +36,12 @@ type Block =
   | { kind: "agent-prompt"; message: Extract<ChatMessage, { type: "agent_prompt_artifact" }> }
   | { kind: "context-file"; message: Extract<ChatMessage, { type: "context_file_artifact" }> }
   | { kind: "trial-expired"; text: string };
+
+type AiBlock = Exclude<Block, { kind: "user-text" }>;
+
+type Turn =
+  | { kind: "user"; block: Extract<Block, { kind: "user-text" }> }
+  | { kind: "ai"; blocks: AiBlock[] };
 
 /**
  * Convert the raw `ChatMessage[]` log into a sequence of visual blocks.
@@ -111,12 +119,38 @@ function blockify(messages: ChatMessage[]): Block[] {
     } else if (m.role === "ai" && m.type === "trial_expired") {
       blocks.push({ kind: "trial-expired", text: m.message });
     }
-    // Other variants (progress, artifacts, onboarding_card) are
-    // canvas-chat specific and shouldn't appear here. Silently skip.
+    // Other variants (progress, artifacts) are canvas-chat specific
+    // and shouldn't appear here. Silently skip.
   }
 
   closeGroup();
   return blocks;
+}
+
+/**
+ * Group blocks into conversation turns: each user-text block stands
+ * alone; consecutive ai-side blocks bundle into a single ai turn so
+ * they render under one shared "Dopl agent" header.
+ */
+function toTurns(blocks: Block[]): Turn[] {
+  const turns: Turn[] = [];
+  let aiBuffer: AiBlock[] = [];
+  function flushAi() {
+    if (aiBuffer.length > 0) {
+      turns.push({ kind: "ai", blocks: aiBuffer });
+      aiBuffer = [];
+    }
+  }
+  for (const b of blocks) {
+    if (b.kind === "user-text") {
+      flushAi();
+      turns.push({ kind: "user", block: b });
+    } else {
+      aiBuffer.push(b);
+    }
+  }
+  flushAi();
+  return turns;
 }
 
 const TOOL_KIND_LABEL: Record<string, string> = {
@@ -133,9 +167,17 @@ const TOOL_KIND_LABEL: Record<string, string> = {
   emit_context_file: "Synthesized context file",
 };
 
+interface CurrentUser {
+  userId: string;
+  email: string | null;
+  displayName: string | null;
+  avatarUrl: string | null;
+}
+
 interface PrivateMessageListProps {
   messages: ChatMessage[];
   isStreaming: boolean;
+  currentUser: CurrentUser | null;
   onPromoteArtifact?: (input: {
     artifactId: string;
     title: string;
@@ -151,143 +193,178 @@ interface PrivateMessageListProps {
 export function PrivateMessageList({
   messages,
   isStreaming,
+  currentUser,
   onPromoteArtifact,
 }: PrivateMessageListProps) {
   const blocks = blockify(messages);
+  const turns = toTurns(blocks);
+  const lastBlock = blocks[blocks.length - 1];
+  const showStandaloneStreaming =
+    isStreaming && lastBlock?.kind !== "ai-streaming";
 
   return (
     <div className="space-y-6">
-      {blocks.map((block, i) => {
-        switch (block.kind) {
-          case "user-text":
-            return (
-              <UserBubble key={i}>
+      {turns.map((turn, ti) => {
+        if (turn.kind === "user") {
+          return (
+            <div key={`u-${ti}`} className="space-y-1.5">
+              {currentUser && (
+                <UserMessageHeader
+                  userId={currentUser.userId}
+                  email={currentUser.email}
+                  displayName={currentUser.displayName}
+                  avatarUrl={currentUser.avatarUrl}
+                />
+              )}
+              <UserBubble>
                 <p className="whitespace-pre-wrap break-words">
-                  {block.message.content}
+                  {turn.block.message.content}
                 </p>
-                {block.message.attachments &&
-                  block.message.attachments.length > 0 && (
-                    <SentAttachmentPreview attachments={block.message.attachments} />
+                {turn.block.message.attachments &&
+                  turn.block.message.attachments.length > 0 && (
+                    <SentAttachmentPreview
+                      attachments={turn.block.message.attachments}
+                    />
                   )}
               </UserBubble>
-            );
-          case "ai-text":
-            return (
-              <div key={i} className="space-y-3">
-                {/* First short paragraph reads as a Lead; markdown handles the rest. */}
-                <div className="text-[13.5px] leading-relaxed text-text-primary/90">
-                  <MarkdownMessage content={block.content} />
-                </div>
-              </div>
-            );
-          case "ai-streaming":
-            return (
-              <div key={i} className="space-y-2">
-                {block.content.length > 0 ? (
-                  <div className="text-[13.5px] leading-relaxed text-text-primary/90">
-                    <MarkdownMessage content={block.content + " ▍"} />
-                  </div>
-                ) : (
-                  <Lead>
-                    <span className="italic text-text-secondary/70">
-                      Thinking…
-                    </span>
-                  </Lead>
-                )}
-              </div>
-            );
-          case "agent-group": {
-            const lastStillCalling = block.steps.some(
-              (s) => s.status === "calling"
-            );
-            return (
-              <DoplAgentGroup key={i} streaming={lastStillCalling && isStreaming}>
-                {block.steps.map((step, j) => {
-                  const kind =
-                    TOOL_KIND_LABEL[step.toolName] ?? step.toolName;
-                  const target = step.summary ?? "…";
-                  const meta =
-                    step.status === "calling" ? "running" : undefined;
-                  const items = step.entries.map((e) => ({
-                    title: e.title || "Untitled",
-                    snippet: e.summary || "",
-                    href: e.entry_id
-                      ? `/entries/${e.entry_id}`
-                      : undefined,
-                  }));
-                  return (
-                    <AgentRow
-                      key={j}
-                      kind={kind}
-                      target={target}
-                      meta={meta}
-                      pending={step.status === "calling"}
-                      expanded={items.length > 0}
-                    >
-                      {items.length > 0 ? <KbResults items={items} /> : null}
-                    </AgentRow>
-                  );
-                })}
-              </DoplAgentGroup>
-            );
-          }
-          case "agent-prompt":
-            return (
-              <div key={i} className="max-w-[95%] mr-auto">
-                <AgentPromptCard
-                  title={block.message.title}
-                  prompt={block.message.prompt}
-                  promotedPanelId={block.message.promotedPanelId}
-                  onPromote={
-                    onPromoteArtifact
-                      ? ({ title, markdown }) =>
-                          onPromoteArtifact({
-                            artifactId: block.message.artifactId,
-                            title,
-                            markdown,
-                          })
-                      : undefined
-                  }
-                />
-              </div>
-            );
-          case "context-file":
-            return (
-              <div key={i} className="max-w-[95%] mr-auto">
-                <ContextFileCard
-                  title={block.message.title}
-                  markdown={block.message.markdown}
-                  promotedPanelId={block.message.promotedPanelId}
-                  onPromote={
-                    onPromoteArtifact
-                      ? ({ title, markdown }) =>
-                          onPromoteArtifact({
-                            artifactId: block.message.artifactId,
-                            title,
-                            markdown,
-                          })
-                      : undefined
-                  }
-                />
-              </div>
-            );
-          case "trial-expired":
-            return (
-              <div
-                key={i}
-                className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-sm text-amber-300 max-w-[95%] mr-auto"
-              >
-                {block.text}
-              </div>
-            );
-          default:
-            return null;
+            </div>
+          );
         }
+
+        const turnStreaming = turn.blocks.some(
+          (b) =>
+            b.kind === "ai-streaming" ||
+            (b.kind === "agent-group" &&
+              b.steps.some((s) => s.status === "calling"))
+        );
+
+        return (
+          <div key={`a-${ti}`} className="space-y-2">
+            <DoplAgentHeader streaming={turnStreaming && isStreaming} />
+            <div className="max-w-[640px] space-y-3">
+              {turn.blocks.map((block, bi) => {
+                switch (block.kind) {
+                  case "ai-text":
+                    return (
+                      <div
+                        key={bi}
+                        className="text-[13.5px] leading-relaxed text-text-primary/90"
+                      >
+                        <MarkdownMessage content={block.content} />
+                      </div>
+                    );
+                  case "ai-streaming":
+                    return (
+                      <div key={bi}>
+                        {block.content.length > 0 ? (
+                          <div className="text-[13.5px] leading-relaxed text-text-primary/90">
+                            <MarkdownMessage content={block.content + " ▍"} />
+                          </div>
+                        ) : (
+                          <Lead>
+                            <span className="italic text-text-secondary/70">
+                              Thinking…
+                            </span>
+                          </Lead>
+                        )}
+                      </div>
+                    );
+                  case "agent-group":
+                    return (
+                      <DoplAgentGroup key={bi}>
+                        {block.steps.map((step, j) => {
+                          const kind =
+                            TOOL_KIND_LABEL[step.toolName] ?? step.toolName;
+                          const target = step.summary ?? "…";
+                          const meta =
+                            step.status === "calling" ? "running" : undefined;
+                          const items = step.entries.map((e) => ({
+                            title: e.title || "Untitled",
+                            snippet: e.summary || "",
+                            href: e.entry_id
+                              ? `/entries/${e.entry_id}`
+                              : undefined,
+                          }));
+                          return (
+                            <AgentRow
+                              key={j}
+                              kind={kind}
+                              target={target}
+                              meta={meta}
+                              pending={step.status === "calling"}
+                              expanded={items.length > 0}
+                            >
+                              {items.length > 0 ? (
+                                <KbResults items={items} />
+                              ) : null}
+                            </AgentRow>
+                          );
+                        })}
+                      </DoplAgentGroup>
+                    );
+                  case "agent-prompt":
+                    return (
+                      <AgentPromptCard
+                        key={bi}
+                        title={block.message.title}
+                        prompt={block.message.prompt}
+                        promotedPanelId={block.message.promotedPanelId}
+                        onPromote={
+                          onPromoteArtifact
+                            ? ({ title, markdown }) =>
+                                onPromoteArtifact({
+                                  artifactId: block.message.artifactId,
+                                  title,
+                                  markdown,
+                                })
+                            : undefined
+                        }
+                      />
+                    );
+                  case "context-file":
+                    return (
+                      <ContextFileCard
+                        key={bi}
+                        title={block.message.title}
+                        markdown={block.message.markdown}
+                        promotedPanelId={block.message.promotedPanelId}
+                        onPromote={
+                          onPromoteArtifact
+                            ? ({ title, markdown }) =>
+                                onPromoteArtifact({
+                                  artifactId: block.message.artifactId,
+                                  title,
+                                  markdown,
+                                })
+                            : undefined
+                        }
+                      />
+                    );
+                  case "trial-expired":
+                    return (
+                      <div
+                        key={bi}
+                        className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-sm text-amber-300"
+                      >
+                        {block.text}
+                      </div>
+                    );
+                  default:
+                    return null;
+                }
+              })}
+            </div>
+          </div>
+        );
       })}
-      {isStreaming &&
-        blocks[blocks.length - 1]?.kind !== "ai-streaming" && (
-          <StreamingIndicator label="Thinking" />
-        )}
+      {showStandaloneStreaming && (
+        <div className="space-y-2">
+          <DoplAgentHeader streaming />
+          <div className="max-w-[640px]">
+            <StreamingIndicator label="Thinking" />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

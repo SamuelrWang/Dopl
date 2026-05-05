@@ -3,6 +3,15 @@
 import { useState } from "react";
 import { Check, ChevronDown, ChevronRight, Copy, Download, FileText } from "lucide-react";
 import { MarkdownMessage } from "@/shared/design";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/shared/ui/dialog";
+import { Button } from "@/shared/ui/button";
 
 interface ContextFileCardProps {
   title: string;
@@ -15,6 +24,11 @@ interface ContextFileCardProps {
  * Inline card rendered in the private chat when the model emits a
  * `context_file_artifact`. Curated markdown bundle the user can copy,
  * download, or promote to a workspace-shared artifact canvas panel.
+ *
+ * Header label is the generic "Artifact" — the kind (context file vs.
+ * agent prompt) is implicit in the styling. Promoting to canvas asks
+ * for explicit confirmation since it makes the artifact public to
+ * every workspace member.
  */
 export function ContextFileCard({
   title,
@@ -26,7 +40,9 @@ export function ContextFileCard({
   const [copied, setCopied] = useState(false);
   const [promoting, setPromoting] = useState(false);
   const [localPromotedId, setLocalPromotedId] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const promoted = promotedPanelId || localPromotedId;
+  const displayTitle = stripArtifactWord(title);
 
   async function handleCopy() {
     try {
@@ -43,7 +59,7 @@ export function ContextFileCard({
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    const safeName = title.replace(/[^a-z0-9-_]+/gi, "-").toLowerCase();
+    const safeName = displayTitle.replace(/[^a-z0-9-_]+/gi, "-").toLowerCase();
     a.download = `${safeName || "context"}.md`;
     document.body.appendChild(a);
     a.click();
@@ -51,11 +67,12 @@ export function ContextFileCard({
     URL.revokeObjectURL(url);
   }
 
-  async function handlePromote() {
+  async function handleConfirmPromote() {
     if (!onPromote || promoting || promoted) return;
+    setConfirmOpen(false);
     setPromoting(true);
     try {
-      const newId = await onPromote({ title, markdown });
+      const newId = await onPromote({ title: displayTitle, markdown });
       if (typeof newId === "string") setLocalPromotedId(newId);
     } finally {
       setPromoting(false);
@@ -71,17 +88,22 @@ export function ContextFileCard({
       >
         <FileText size={12} className="text-cyan-300/80 shrink-0" />
         <span className="text-[10px] font-mono uppercase tracking-wider text-cyan-300/80 shrink-0">
-          Context file
+          Artifact
         </span>
         <span className="text-[12.5px] font-medium text-text-primary truncate">
-          {title}
+          {displayTitle}
         </span>
         <span className="ml-auto shrink-0 text-text-secondary/50">
           {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
         </span>
       </button>
-      {open && (
-        <>
+      <div
+        className={`grid transition-[grid-template-rows] duration-200 ease-out ${
+          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+        }`}
+        aria-hidden={!open}
+      >
+        <div className="overflow-hidden min-h-0">
           <div className="px-3 py-3 max-h-[360px] overflow-y-auto border-t border-white/[0.06] text-[12.5px]">
             <MarkdownMessage content={markdown} />
           </div>
@@ -104,7 +126,9 @@ export function ContextFileCard({
             {onPromote && (
               <button
                 type="button"
-                onClick={handlePromote}
+                onClick={() => {
+                  if (!promoting && !promoted) setConfirmOpen(true);
+                }}
                 disabled={promoting || Boolean(promoted)}
                 className="ml-auto flex items-center gap-1.5 px-2 py-1 rounded text-[11.5px] text-text-secondary hover:bg-white/[0.06] hover:text-text-primary transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -120,8 +144,37 @@ export function ContextFileCard({
               </button>
             )}
           </div>
-        </>
+        </div>
+      </div>
+      {confirmOpen && (
+        <Dialog open onOpenChange={(o) => { if (!o) setConfirmOpen(false); }}>
+          <DialogContent showCloseButton={false}>
+            <DialogHeader>
+              <DialogTitle>Promote artifact to canvas?</DialogTitle>
+              <DialogDescription>
+                Promoting puts this artifact on the workspace canvas, where
+                every member of the workspace can see and open it. Until
+                you promote, only you can see it in this private chat.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setConfirmOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleConfirmPromote}>
+                Promote to canvas
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );
+}
+
+/** Drop the literal word "Artifact" from a model-generated title — the
+ *  card already shows an "Artifact" label, so repeating the word in the
+ *  title is noise (e.g., "Sample Context File Artifact" → "Sample Context File"). */
+function stripArtifactWord(title: string): string {
+  return title.replace(/\bartifacts?\b/gi, "").replace(/\s+/g, " ").trim() || title;
 }
