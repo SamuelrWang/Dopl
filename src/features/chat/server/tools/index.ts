@@ -261,7 +261,7 @@ const INTEGRATION_TOOLS: Anthropic.Tool[] = [
   {
     name: "integration_status",
     description:
-      "Check whether a third-party service is connected for this workspace. Returns one of: connected, needs_auth, error, disconnected. Call this first when the user asks about external content; if not connected, tell them to visit /settings/integrations to connect.",
+      "Check whether a third-party service is connected for this workspace. Returns one of: connected, needs_auth, error, disconnected. Call this first when the user asks about external content; if `connected`, follow up with `list_integration_actions(provider)` to see EVERY action the agent can run for this provider — that's how you find both read-shaped (list_*, get_*, fetch_*) and write-shaped actions for any provider, including Calendar, Sheets, Slack, GitHub, Docs. If not connected, tell them to visit /settings/integrations to connect.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -278,7 +278,7 @@ const INTEGRATION_TOOLS: Anthropic.Tool[] = [
   {
     name: "list_integration_objects",
     description:
-      "Search/list objects from a connected third-party service. **Read-shaped providers only**: notion (pages), gmail (threads), google_drive (files). For other providers (github, google_calendar, google_docs, google_sheets, slack) this returns INTEGRATION_READ_NOT_SUPPORTED — use `execute_integration_action` (MCP) for action-shaped reads on those toolkits. Use the returned `id` with `read_integration_object` to fetch full content.",
+      "**Convenience tool — works on notion (pages), gmail (threads), google_drive (files) only.** Other providers (github, google_calendar, google_docs, google_sheets, slack) return INTEGRATION_READ_NOT_SUPPORTED. **DO NOT conclude those providers are 'write-only'** — they have plenty of read actions, just not through this convenience tool. To read from them, call `list_integration_actions(provider)` and look for action names like `list_events`, `get_spreadsheet`, `fetch_history`, `get_repository`, `get_document` — then run them via `execute_integration_action`. Returns `{ objects: [{ id, title, url, lastModified }], next_cursor }`.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -328,7 +328,7 @@ const INTEGRATION_TOOLS: Anthropic.Tool[] = [
   {
     name: "list_integration_actions",
     description:
-      "Discover every action a connected provider exposes — covers all 8 supported providers. Returns `{ actions: [{ name, summary, paramsJsonSchema, source }] }`. `paramsJsonSchema` is a standard JSON Schema fragment; read it to construct the `params` object you'll pass to `execute_integration_action`. `source` is `curated` (hand-tuned) or `auto` (auto-mapped from Composio). The catalog can be large (50+ actions); narrow your reading to actions the user's request implies — search by intent in the action names (e.g. 'list_events', 'create_event' for Calendar; 'append_row', 'get_spreadsheet' for Sheets; 'post_message' for Slack).",
+      "**Use this for ANY provider** — gmail, notion, drive, github, google_calendar, google_docs, google_sheets, slack — to discover every action available, both reads and writes. Returns `{ actions: [{ name, summary, paramsJsonSchema, source }] }`. `paramsJsonSchema` is a standard JSON Schema fragment; read it to construct the `params` object for `execute_integration_action`. The catalog can be large (50+ actions per provider); scan for action names matching the user's intent — e.g. for 'find startup info in calendar' look for `list_events`/`fetch_events`/`search_events`; for sheets look for `get_spreadsheet`/`batch_get`; for docs look for `get_document`/`search`; for slack look for `fetch_history`/`list_channels`; for github look for `list_repos`/`get_issue`. **DO call this whenever a user asks to read from a provider that `list_integration_objects` doesn't support — those providers HAVE read actions; you just discover them here.**",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -344,7 +344,7 @@ const INTEGRATION_TOOLS: Anthropic.Tool[] = [
   {
     name: "execute_integration_action",
     description:
-      "Run a named action on a connected provider — works for every action Composio exposes across all 8 providers (gmail, calendar, sheets, docs, drive, notion, github, slack). ALWAYS call `list_integration_actions` first to discover the action name and exact `params` shape; missing required fields fail server-side validation. Returns `{ ok: true, data }` on success, `{ ok: false, error }` if the provider rejected the call. Side-effecting for write actions (create_*, send_*, delete_*, update_*); confirm with the user before running those. Read actions (list_*, get_*, fetch_*, search_*) are safe to call without confirmation.",
+      "Run a named action on a connected provider — covers every action Composio exposes across all 8 providers (gmail, calendar, sheets, docs, drive, notion, github, slack). Includes both reads (list events, get spreadsheet, fetch slack history) and writes (send mail, create event, post message). ALWAYS call `list_integration_actions` first to discover the action name and exact `params` shape — don't guess. Returns `{ ok: true, data }` on success, `{ ok: false, error }` if the provider rejected the call. **Read actions** (`list_*`, `get_*`, `fetch_*`, `search_*`) are safe to call without confirmation — use them freely to gather data. **Write actions** (`create_*`, `send_*`, `delete_*`, `update_*`, `post_*`) are side-effecting; confirm with the user before running.",
     input_schema: {
       type: "object" as const,
       properties: {
