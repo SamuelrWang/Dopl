@@ -32,10 +32,21 @@ export type RegisterTool = <S extends ZodRawShape>(
   handler: (args: z.infer<z.ZodObject<S>>) => Promise<ToolResponse>
 ) => void;
 
-const PROVIDERS = ["notion", "gmail", "google_drive"] as const satisfies readonly IntegrationProvider[];
+const PROVIDERS = [
+  "notion",
+  "gmail",
+  "google_drive",
+  "github",
+  "google_calendar",
+  "google_docs",
+  "google_sheets",
+  "slack",
+] as const satisfies readonly IntegrationProvider[];
 const ProviderArg = z
   .enum(PROVIDERS)
-  .describe("Third-party service to use. Supported: notion, gmail, google_drive.");
+  .describe(
+    "Third-party service to use. Supported: notion, gmail, google_drive, github, google_calendar, google_docs, google_sheets, slack."
+  );
 
 function ok(text: string): ToolResponse {
   return { content: [{ type: "text" as const, text }] };
@@ -48,7 +59,7 @@ export function registerIntegrationTools(
   // ── connect_integration ───────────────────────────────────────────
   register(
     "connect_integration",
-    "Connect a third-party service (Notion, Gmail, Google Drive) to the user's Dopl workspace. If already connected, returns `connected`. Otherwise returns `needs_auth` with an `auth_url` you should print verbatim — the user opens it, authorizes Dopl in the provider's consent screen, and is bounced back to a Dopl success page. After they authorize, call `integration_status` to confirm before pulling anything.",
+    "Connect a third-party service to the user's Dopl workspace. If already connected, returns `connected`. Otherwise returns `needs_auth` with an `auth_url` you should print verbatim — the user opens it, authorizes Dopl in the provider's consent screen, and is bounced back to a Dopl success page. After they authorize, call `integration_status` to confirm before pulling anything. Supported providers: notion, gmail, google_drive, github, google_calendar, google_docs, google_sheets, slack.",
     { provider: ProviderArg },
     async ({ provider }) => {
       const result = await client.connectIntegration(provider);
@@ -81,7 +92,7 @@ export function registerIntegrationTools(
   // ── list_integration_objects ──────────────────────────────────────
   register(
     "list_integration_objects",
-    "List or search objects in a connected provider (Notion pages, Gmail threads, Drive files). Returns `{ objects: [{ id, title, url, lastModified }], next_cursor }`. Pass a result ID to `read_integration_object` to fetch the body content, or to `ingest_from_integration` to turn it into a synthesized Dopl entry. Optional `query` narrows results by free text; `cursor` pages forward; `limit` caps page size (default 25, max 100).",
+    "List or search read-shaped objects in a connected provider. Currently supported on: notion (pages), gmail (threads), google_drive (files). Other providers (github, google_calendar, google_docs, google_sheets, slack) are write-action-only and will return `INTEGRATION_READ_NOT_SUPPORTED` — use `list_integration_actions` + `execute_integration_action` instead. Returns `{ objects: [{ id, title, url, lastModified }], next_cursor }`. Pass a result ID to `read_integration_object` to fetch body content, or to `ingest_from_integration` to turn it into a synthesized Dopl entry. Optional `query` narrows results; `cursor` pages forward; `limit` caps page size.",
     {
       provider: ProviderArg,
       query: z.string().max(200).optional().describe("Free-text search filter."),
@@ -112,7 +123,7 @@ export function registerIntegrationTools(
   // ── read_integration_object ───────────────────────────────────────
   register(
     "read_integration_object",
-    "Fetch the full content of one object from a connected provider. For Notion this returns the page rendered as markdown; for Gmail this returns the full thread (every message body, in chronological order); for Google Drive this returns the file's text content. Pure read — no Dopl entry is created. Use after `list_integration_objects` to drill into a specific result, or whenever you need to *read* external content without ingesting it. Returns `{ provider, object_id, title, url, last_modified, body }`. To turn the object into a synthesized Dopl entry instead, use `ingest_from_integration`.",
+    "Fetch the full content of one object from a connected provider. Supported on: notion (page → markdown), gmail (thread → all message bodies in order), google_drive (file → text). Other providers (github, google_calendar, google_docs, google_sheets, slack) return `INTEGRATION_READ_NOT_SUPPORTED`. Pure read — no Dopl entry is created. Use after `list_integration_objects` to drill into a specific result. Returns `{ provider, object_id, title, url, last_modified, body }`. To turn the object into a synthesized Dopl entry instead, use `ingest_from_integration`.",
     {
       provider: ProviderArg,
       object_id: z
@@ -139,26 +150,24 @@ export function registerIntegrationTools(
   // ── list_integration_actions ──────────────────────────────────────
   register(
     "list_integration_actions",
-    "Discover what write actions a connected provider exposes. Returns `{ actions: [{ name, summary, params }] }`. `params` documents each input field with `{ type, description, required }`. After picking an action, call `execute_integration_action` with `provider`, the chosen `name`, and a `params` object matching the descriptor. Read-only — no side effects, no broker call.",
+    "Discover every action a connected provider exposes. Returns `{ actions: [{ name, summary, paramsJsonSchema, source }] }`. `paramsJsonSchema` is a standard JSON Schema fragment — read it to construct the `params` object you'll pass to `execute_integration_action`. `source` is `curated` (hand-tuned by Dopl) or `auto` (auto-generated from the broker's full catalog — most actions are this); curated entries override auto entries with the same name when both exist. The catalog can be large (50+ actions per provider); narrow your reading to actions the user's request implies.",
     { provider: ProviderArg },
     async ({ provider }) => {
       const result = await client.listIntegrationActions(provider);
       if (result.actions.length === 0) {
-        return ok(`No write actions are available for **${provider}** yet.`);
+        return ok(`No actions are available for **${provider}** yet.`);
       }
-      const lines = [`## ${result.actions.length} ${provider} action(s)`, ""];
-      for (const a of result.actions) {
-        lines.push(`### \`${a.name}\``);
-        lines.push(a.summary);
-        lines.push("");
-        lines.push("Params:");
-        for (const [key, spec] of Object.entries(a.params)) {
-          const req = spec.required ? "required" : "optional";
-          lines.push(`- \`${key}\` (${spec.type}, ${req}) — ${spec.description}`);
-        }
-        lines.push("");
-      }
-      return ok(lines.join("\n"));
+      return ok(
+        [
+          `## ${result.actions.length} ${provider} action(s)`,
+          "",
+          "Each action below has a `name`, `summary`, `paramsJsonSchema` (use to build `params`), and `source` (curated|auto).",
+          "",
+          "```json",
+          JSON.stringify(result.actions, null, 2),
+          "```",
+        ].join("\n")
+      );
     }
   );
 

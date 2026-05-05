@@ -108,7 +108,7 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
                 : panel.type === "skills"
                   ? "Skills"
                   : panel.type === "knowledge-base"
-                    ? `KB · ${panel.name}`
+                    ? `Knowledge · ${panel.name}`
                     : panel.type === "skill"
                       ? `Skill · ${panel.name}`
                       : panel.type === "artifact"

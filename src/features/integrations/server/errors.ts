@@ -61,3 +61,13 @@ export class IntegrationActionValidationError extends HttpError {
     );
   }
 }
+
+export class IntegrationReadNotSupportedError extends HttpError {
+  constructor(provider: IntegrationProvider) {
+    super(
+      501,
+      "INTEGRATION_READ_NOT_SUPPORTED",
+      `${provider} doesn't expose a read/list path through Dopl. Use \`list_integration_actions\` and \`execute_integration_action\` for write operations on this provider.`
+    );
+  }
+}

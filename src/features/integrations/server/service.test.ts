@@ -1,16 +1,20 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import {
   connectIntegration,
-  executeIntegrationAction,
   getIntegrationStatus,
-  listIntegrationActions,
   listIntegrationObjects,
   startBrokerOAuth,
 } from "./service";
 import {
+  _resetToolkitCacheForTests,
+  executeIntegrationAction,
+  listIntegrationActions,
+} from "./service-actions";
+import {
   IntegrationActionNotFoundError,
   IntegrationActionValidationError,
   IntegrationNotConnectedError,
+  IntegrationReadNotSupportedError,
 } from "./errors";
 import type { ComposioClient } from "./composio-client";
 import type { IntegrationProvider } from "../types";
@@ -127,6 +131,7 @@ function makeFakeBroker(overrides: Partial<ComposioClient> = {}): ComposioClient
     executeAction: vi
       .fn()
       .mockResolvedValue({ raw: { id: "msg_1", threadId: "thr_1" } }),
+    listToolkitTools: vi.fn().mockResolvedValue([]),
     ...overrides,
   };
 }
@@ -136,6 +141,7 @@ beforeEach(() => {
   vi.stubEnv("INTEGRATIONS_GMAIL_AUTH_CONFIG_ID", "auth_test");
   vi.stubEnv("INTEGRATIONS_GOOGLE_DRIVE_AUTH_CONFIG_ID", "auth_test");
   vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://test.dopl.local");
+  _resetToolkitCacheForTests();
 });
 
 afterEach(() => {
@@ -275,25 +281,60 @@ describe("getIntegrationStatus", () => {
 });
 
 describe("listIntegrationActions", () => {
-  it("returns empty array for providers without actions", () => {
-    expect(listIntegrationActions("notion")).toEqual([]);
-    expect(listIntegrationActions("google_drive")).toEqual([]);
+  it("returns curated entries first, then auto entries from the broker catalog", async () => {
+    const broker = makeFakeBroker({
+      listToolkitTools: vi.fn().mockResolvedValue([
+        {
+          slug: "GMAIL_CREATE_FILTER",
+          description: "Create a Gmail filter.",
+          inputSchema: { type: "object", required: ["criteria"], properties: { criteria: { type: "object" } } },
+        },
+        {
+          slug: "GMAIL_SEND_EMAIL",
+          description: "Composio's stock send-email — should be hidden by curated override.",
+          inputSchema: { type: "object", properties: { recipient_email: { type: "string" } } },
+        },
+      ]),
+    });
+    const actions = await listIntegrationActions("gmail", { broker });
+    const names = actions.map((a) => a.name);
+    expect(names).toContain("send_email");
+    expect(names).toContain("reply_to_thread");
+    expect(names).toContain("create_filter");
+    // GMAIL_SEND_EMAIL → send_email collides with the curated override;
+    // it must NOT appear twice.
+    expect(names.filter((n) => n === "send_email")).toHaveLength(1);
+    const send = actions.find((a) => a.name === "send_email");
+    expect(send?.source).toBe("curated");
+    const filter = actions.find((a) => a.name === "create_filter");
+    expect(filter?.source).toBe("auto");
+    expect(filter?.paramsJsonSchema).toEqual(
+      expect.objectContaining({ type: "object", required: ["criteria"] })
+    );
   });
 
-  it("returns Gmail's send_email and reply_to_thread descriptors", () => {
-    const actions = listIntegrationActions("gmail");
+  it("falls back to curated only when the broker catalog throws", async () => {
+    const broker = makeFakeBroker({
+      listToolkitTools: vi.fn().mockRejectedValue(new Error("composio offline")),
+    });
+    const actions = await listIntegrationActions("gmail", { broker });
     expect(actions.map((a) => a.name)).toEqual(["send_email", "reply_to_thread"]);
-    const send = actions.find((a) => a.name === "send_email");
-    expect(send?.params.to).toEqual(
-      expect.objectContaining({ type: "string", required: true })
-    );
-    expect(send?.params.cc).toEqual(
-      expect.objectContaining({ required: false })
-    );
-    const reply = actions.find((a) => a.name === "reply_to_thread");
-    expect(reply?.params.thread_id).toEqual(
-      expect.objectContaining({ type: "string", required: true })
-    );
+    expect(actions.every((a) => a.source === "curated")).toBe(true);
+  });
+
+  it("Gmail send_email descriptor exposes a typed JSON schema", async () => {
+    const actions = await listIntegrationActions("gmail", {
+      broker: makeFakeBroker(),
+    });
+    const send = actions.find((a) => a.name === "send_email")!;
+    expect(send.source).toBe("curated");
+    const schema = send.paramsJsonSchema as {
+      required?: string[];
+      properties?: Record<string, { type?: string }>;
+    };
+    expect(schema.required).toEqual(["to", "subject", "body"]);
+    expect(schema.properties?.to?.type).toBe("string");
+    expect(schema.properties?.cc?.type).toBe("string");
   });
 });
 
@@ -425,9 +466,63 @@ describe("executeIntegrationAction", () => {
       )
     ).rejects.toBeInstanceOf(IntegrationNotConnectedError);
   });
+
+  it("falls back to the broker catalog and passes params through when the action isn't curated", async () => {
+    const stub = makeStubDb([connectedRow()]);
+    const exec = vi.fn().mockResolvedValue({
+      raw: { id: "filter_123", criteria: { from: "newsletters@x.com" } },
+    });
+    const broker = makeFakeBroker({
+      executeAction: exec,
+      listToolkitTools: vi.fn().mockResolvedValue([
+        {
+          slug: "GMAIL_CREATE_FILTER",
+          description: "Create a Gmail filter.",
+          inputSchema: { type: "object", properties: {} },
+        },
+      ]),
+    });
+    const result = await executeIntegrationAction(
+      gmailCtx,
+      {
+        action: "create_filter",
+        params: {
+          criteria: { from: "newsletters@x.com" },
+          action: { addLabelIds: ["Label_1"] },
+        },
+      },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      { db: stub as any, broker }
+    );
+    expect(exec).toHaveBeenCalledWith(
+      expect.objectContaining({
+        slug: "GMAIL_CREATE_FILTER",
+        arguments: {
+          criteria: { from: "newsletters@x.com" },
+          action: { addLabelIds: ["Label_1"] },
+        },
+      })
+    );
+    expect(result).toEqual({
+      ok: true,
+      data: { id: "filter_123", criteria: { from: "newsletters@x.com" } },
+    });
+  });
 });
 
 describe("listIntegrationObjects", () => {
+  it("throws IntegrationReadNotSupportedError for write-only providers", async () => {
+    const stub = makeStubDb([]);
+    await expect(
+      listIntegrationObjects(
+        { workspaceId: "ws-1", userId: "user-1", provider: "slack" },
+        {},
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        { db: stub as any, broker: makeFakeBroker() }
+      )
+    ).rejects.toBeInstanceOf(IntegrationReadNotSupportedError);
+  });
+
   it("throws IntegrationNotConnectedError when no live connection", async () => {
     const stub = makeStubDb([]);
     await expect(

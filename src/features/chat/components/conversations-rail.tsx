@@ -14,7 +14,7 @@ export interface RailConversation {
 
 interface ConversationsRailProps {
   conversations: RailConversation[];
-  activePanelId: string | null;
+  activePanelId: string;
   isLoading: boolean;
   onSelect: (panelId: string) => void;
   onNew: () => void;

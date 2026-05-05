@@ -26,7 +26,7 @@ const DrawerContext = createContext<DrawerContextValue>({
 });
 
 export function DrawerProvider({ children }: { children: React.ReactNode }) {
-  const [activeDrawer, setActiveDrawer] = useState<DrawerType>("chat");
+  const [activeDrawer, setActiveDrawer] = useState<DrawerType>(null);
 
   const openChat = useCallback(() => setActiveDrawer("chat"), []);
   const openBrain = useCallback(() => setActiveDrawer("brain"), []);

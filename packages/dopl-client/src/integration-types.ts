@@ -4,7 +4,15 @@
  * without pulling Next.js / Supabase types.
  */
 
-export type IntegrationProvider = "notion" | "gmail" | "google_drive";
+export type IntegrationProvider =
+  | "notion"
+  | "gmail"
+  | "google_drive"
+  | "github"
+  | "google_calendar"
+  | "google_docs"
+  | "google_sheets"
+  | "slack";
 
 export type IntegrationStatusValue =
   | "connected"
@@ -39,16 +47,11 @@ export type ReadIntegrationObjectResponse = {
   body: string;
 };
 
-export type IntegrationActionParamSpec = {
-  type: "string" | "number" | "boolean";
-  description: string;
-  required: boolean;
-};
-
 export type IntegrationActionDescriptor = {
   name: string;
   summary: string;
-  params: Record<string, IntegrationActionParamSpec>;
+  paramsJsonSchema: Record<string, unknown>;
+  source: "curated" | "auto";
 };
 
 export type IntegrationActionsResponse = {

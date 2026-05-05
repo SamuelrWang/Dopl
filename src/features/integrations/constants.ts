@@ -17,4 +17,9 @@ export const PROVIDER_DISPLAY_NAMES: Record<IntegrationProvider, string> = {
   notion: "Notion",
   gmail: "Gmail",
   google_drive: "Google Drive",
+  github: "GitHub",
+  google_calendar: "Google Calendar",
+  google_docs: "Google Docs",
+  google_sheets: "Google Sheets",
+  slack: "Slack",
 };

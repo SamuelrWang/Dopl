@@ -7,7 +7,7 @@ import {
   ExecuteActionInputSchema,
   ProviderSchema,
 } from "@/features/integrations/schema";
-import { executeIntegrationAction } from "@/features/integrations/server/service";
+import { executeIntegrationAction } from "@/features/integrations/server/service-actions";
 
 export const POST = withWorkspaceAuth(
   withErrorHandler(

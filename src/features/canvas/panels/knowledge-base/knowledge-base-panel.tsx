@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Bot,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   FileText,
   Folder,
@@ -38,6 +39,7 @@ import { toast } from "@/shared/ui/toast";
 import { useMyAccessContext } from "@/features/members/hooks/use-my-access";
 import { meetsLevel } from "@/features/members/access-defaults";
 import { VisibilityPill } from "@/shared/ui/visibility-pill";
+import { DocEditor } from "@/features/knowledge/components/doc-editor";
 
 interface Props {
   panel: KnowledgeBasePanelData;
@@ -57,6 +59,7 @@ export function KnowledgeBasePanelBody({ panel }: Props) {
   const canEdit = accessLevel == null ? true : meetsLevel(accessLevel, "edit");
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set(["__root__"]));
+  const [treeOpen, setTreeOpen] = useState(true);
   const [agentToggling, setAgentToggling] = useState(false);
   const [agentEnabled, setAgentEnabled] = useState(panel.agentWriteEnabled);
   /**
@@ -224,6 +227,15 @@ export function KnowledgeBasePanelBody({ panel }: Props) {
       <ClusterAttachmentBanner panelId={panel.id} />
       {/* Sub-header: KB metadata */}
       <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-3">
+        <button
+          type="button"
+          onClick={() => setTreeOpen((v) => !v)}
+          aria-label={treeOpen ? "Collapse file tree" : "Expand file tree"}
+          title={treeOpen ? "Collapse file tree" : "Expand file tree"}
+          className="mr-2 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-white/55 transition-colors hover:bg-white/[0.04] hover:text-white/85"
+        >
+          {treeOpen ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
+        </button>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h2 className="truncate text-sm font-semibold text-white/90">
@@ -267,7 +279,12 @@ export function KnowledgeBasePanelBody({ panel }: Props) {
       {/* Two-column body */}
       <div className="flex flex-1 min-h-0">
         {/* Tree */}
-        <div className="w-[210px] shrink-0 overflow-y-auto border-r border-white/[0.06] py-2">
+        <div
+          className={`shrink-0 overflow-y-auto border-r border-white/[0.06] py-2 transition-[width] duration-150 ${
+            treeOpen ? "w-[210px]" : "w-0 border-r-0 overflow-hidden"
+          }`}
+          aria-hidden={!treeOpen}
+        >
           {status === "loading" && !data && <TreePaneSkeleton />}
           {data && (
             <TreeNodes
@@ -317,6 +334,7 @@ export function KnowledgeBasePanelBody({ panel }: Props) {
               workspaceId={scope?.workspaceId}
               key={selectedEntryId}
               onSaved={refetch}
+              canEdit={canEdit}
             />
           ) : (
             <div className="flex h-full items-center justify-center text-xs text-white/40">
@@ -633,10 +651,12 @@ function EntryEditor({
   entryId,
   workspaceId,
   onSaved,
+  canEdit,
 }: {
   entryId: string;
   workspaceId: string | undefined;
   onSaved: () => void;
+  canEdit: boolean;
 }) {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
@@ -877,15 +897,17 @@ function EntryEditor({
           {errorText}
         </div>
       )}
-      <textarea
-        value={body}
-        onChange={(e) => {
-          setBody(e.target.value);
-          setDirty(true);
-        }}
-        className="flex-1 min-h-0 resize-none bg-transparent px-4 py-3 font-mono text-[12px] leading-relaxed text-white/85 placeholder:text-white/25 focus:outline-none"
-        placeholder="Write markdown here…"
-      />
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <DocEditor
+          initialMarkdown={body}
+          resetKey={entryId}
+          readOnly={!canEdit}
+          onChange={(md) => {
+            setBody(md);
+            setDirty(true);
+          }}
+        />
+      </div>
     </div>
   );
 }

@@ -9,7 +9,16 @@
 
 import type { AgentIngestBundle } from "@/features/ingestion/server/agent-bundle";
 
-export const INTEGRATION_PROVIDERS = ["notion", "gmail", "google_drive"] as const;
+export const INTEGRATION_PROVIDERS = [
+  "notion",
+  "gmail",
+  "google_drive",
+  "github",
+  "google_calendar",
+  "google_docs",
+  "google_sheets",
+  "slack",
+] as const;
 export type IntegrationProvider = (typeof INTEGRATION_PROVIDERS)[number];
 
 export type IntegrationStatus = "connected" | "needs_auth" | "error";
@@ -56,14 +65,20 @@ export type ConnectInitiation =
  * Wire-format descriptor returned by `list_integration_actions`. Each
  * field documents one named action so the agent can pick one without
  * the broker's slug ever surfacing.
+ *
+ * `paramsJsonSchema` is a standard JSON Schema fragment (object-typed)
+ * — the agent reads it natively. Composio's catalog returns this shape
+ * directly; hand-curated actions construct an equivalent literal.
+ *
+ * `source` lets the agent (and us, when debugging) tell whether the
+ * descriptor came from a hand-tuned override or the auto-generated
+ * Composio catalog.
  */
 export type IntegrationActionDescriptor = {
   name: string;
   summary: string;
-  params: Record<
-    string,
-    { type: "string" | "number" | "boolean"; description: string; required: boolean }
-  >;
+  paramsJsonSchema: Record<string, unknown>;
+  source: "curated" | "auto";
 };
 
 export type IntegrationActionResult =

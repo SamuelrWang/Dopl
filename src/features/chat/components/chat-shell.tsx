@@ -41,7 +41,13 @@ interface ConversationApiRow {
 
 export function ChatShell({ workspaceId }: ChatShellProps) {
   const [conversations, setConversations] = useState<ConversationApiRow[]>([]);
-  const [selectedPanelId, setSelectedPanelId] = useState<string | null>(null);
+  // Initialize with a fresh panelId so the page lands directly on the
+  // composer. The conversation row is only created when the user
+  // actually sends a first message (persist is gated on
+  // messages.length > 0 in usePrivateChat).
+  const [selectedPanelId, setSelectedPanelId] = useState<string>(
+    () => `priv-${cryptoRandomId()}`
+  );
   const [isLoading, setIsLoading] = useState(true);
   const [clusters, setClusters] = useState<ScopeOption[]>([]);
   const [knowledgeBases, setKnowledgeBases] = useState<ScopeOption[]>([]);
@@ -141,42 +147,19 @@ export function ChatShell({ workspaceId }: ChatShellProps) {
         </aside>
 
         <div className="flex-1 min-w-0 flex flex-col">
-          {selectedPanelId ? (
-            <ChatThread
-              key={selectedPanelId}
-              workspaceId={workspaceId}
-              panelId={selectedPanelId}
-              initialMessages={selectedConversation?.messages || []}
-              initialTitle={selectedConversation?.title || "New chat"}
-              initialScopeFilters={selectedConversation?.scope_filters ?? null}
-              clusters={clusters}
-              knowledgeBases={knowledgeBases}
-              skills={skills}
-              onFirstResponseSaved={handleFirstResponseSaved}
-            />
-          ) : (
-            <EmptyState onNew={handleNew} />
-          )}
+          <ChatThread
+            key={selectedPanelId}
+            workspaceId={workspaceId}
+            panelId={selectedPanelId}
+            initialMessages={selectedConversation?.messages || []}
+            initialTitle={selectedConversation?.title || "New chat"}
+            initialScopeFilters={selectedConversation?.scope_filters ?? null}
+            clusters={clusters}
+            knowledgeBases={knowledgeBases}
+            skills={skills}
+            onFirstResponseSaved={handleFirstResponseSaved}
+          />
         </div>
-      </div>
-    </div>
-  );
-}
-
-function EmptyState({ onNew }: { onNew: () => void }) {
-  return (
-    <div className="flex-1 flex items-center justify-center">
-      <div className="text-center space-y-3">
-        <p className="text-[13px] text-text-secondary/70">
-          Private chat — visible only to you.
-        </p>
-        <button
-          type="button"
-          onClick={onNew}
-          className="px-3 py-1.5 rounded-md text-[12px] text-text-primary border border-white/[0.1] hover:bg-white/[0.04] transition-colors"
-        >
-          Start a new chat
-        </button>
       </div>
     </div>
   );

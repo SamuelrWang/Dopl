@@ -120,18 +120,6 @@ export function ChatThread({
     void send(text);
   }
 
-  // Auto-name the chat from the first user message if it's still "New chat".
-  useEffect(() => {
-    if (title !== "New chat" && title !== "") return;
-    const firstUser = messages.find(
-      (m) => m.role === "user" && m.type === "text"
-    );
-    if (firstUser && firstUser.role === "user" && firstUser.type === "text") {
-      const candidate = firstUser.content.trim().slice(0, 60);
-      if (candidate.length > 0) setTitle(candidate);
-    }
-  }, [messages, title, setTitle]);
-
   return (
     <div className="flex flex-col h-full min-h-0">
       {/* Header */}

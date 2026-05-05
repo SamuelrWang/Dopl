@@ -64,6 +64,13 @@ export function usePrivateChat({
   const [isStreaming, setIsStreaming] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
+  // Fresh refs so callbacks below can read current state without
+  // re-creating themselves on every keystroke.
+  const titleRef = useRef(title);
+  titleRef.current = title;
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+
   // Note: when the user switches conversations, the parent component
   // re-mounts ChatThread via `key={panelId}`, so useState initializers
   // pick up the new initialMessages/initialTitle/initialScopeFilters
@@ -102,10 +109,18 @@ export function usePrivateChat({
     [panelId, workspaceId]
   );
 
-  // Debounced persist on changes.
+  // Debounced persist on changes. Skip the first run after mount so
+  // merely opening a conversation doesn't bump `updated_at` — only
+  // real mutations (sends, title edits, scope edits) should count as
+  // "interaction" for the conversations-rail timestamp.
   const persistRef = useRef(persist);
   persistRef.current = persist;
+  const mountedRef = useRef(false);
   useEffect(() => {
+    if (!mountedRef.current) {
+      mountedRef.current = true;
+      return;
+    }
     if (messages.length === 0) return;
     const handle = setTimeout(() => {
       void persistRef.current(messages, title, scopeFilters);
@@ -350,6 +365,24 @@ export function usePrivateChat({
         if (priorLength === 1) {
           // First send → notify parent so it can refresh the rail.
           onFirstResponseSaved?.(panelId);
+          // Auto-name the conversation via Claude. Fire-and-forget;
+          // the existing debounced persist will write the new title
+          // to the DB once setTitle lands.
+          if (titleRef.current === "New chat" || titleRef.current === "") {
+            void fetch("/api/conversations/title", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "X-Workspace-Id": workspaceId,
+              },
+              body: JSON.stringify({ messages: messagesRef.current }),
+            })
+              .then((r) => (r.ok ? r.json() : null))
+              .then((j: { title?: string } | null) => {
+                if (j?.title) setTitle(j.title);
+              })
+              .catch(() => {});
+          }
         }
         void priorLength;
       } catch (err) {

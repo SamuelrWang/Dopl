@@ -11,9 +11,10 @@
  */
 
 import { createPortal } from "react-dom";
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { CanvasProvider } from "@/features/canvas/canvas-store";
 import { CanvasGridSync } from "@/features/canvas/canvas-grid-sync";
+import { useLayoutSnapshot } from "@/features/canvas/use-layout-snapshot";
 import { Canvas } from "@/features/canvas/canvas";
 import { FixedInputBar } from "@/features/canvas/fixed-input-bar";
 import { FixedChatPanel } from "@/features/canvas/fixed-chat-panel";
@@ -29,9 +30,16 @@ import type { ServerConversation } from "@/features/canvas/use-conversation-sync
  * layout's <main> wrapper (which sits inside a z-[2] stacking context and
  * would otherwise intercept all pointer events, blocking marquee selection).
  */
+const noopSubscribe = () => () => {};
+
 function CanvasPortal() {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  // Browser-only render gate via useSyncExternalStore so we don't
+  // trip the no-setState-in-effect lint rule.
+  const mounted = useSyncExternalStore(
+    noopSubscribe,
+    () => true,
+    () => false
+  );
 
   if (!mounted) return null;
 
@@ -69,6 +77,7 @@ export default function CanvasClientShell({
       <DrawerProvider>
         <OnboardingProvider userId={userId}>
           <CanvasGridSync />
+          <LayoutSnapshotSync canvasSlug={canvasSlug} />
           <CanvasPortal />
           <FixedInputBar />
           <FixedChatPanel />
@@ -78,4 +87,9 @@ export default function CanvasClientShell({
       </DrawerProvider>
     </CanvasProvider>
   );
+}
+
+function LayoutSnapshotSync({ canvasSlug }: { canvasSlug: string }) {
+  useLayoutSnapshot(canvasSlug);
+  return null;
 }

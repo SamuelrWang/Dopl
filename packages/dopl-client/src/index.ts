@@ -69,7 +69,6 @@ export type {
 export type {
   ConnectResponse,
   IntegrationActionDescriptor,
-  IntegrationActionParamSpec,
   IntegrationActionResultResponse,
   IntegrationActionsResponse,
   IntegrationListResponse,

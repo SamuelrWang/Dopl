@@ -81,6 +81,20 @@ export interface ComposioClient {
     slug: string;
     arguments: Record<string, unknown>;
   }): Promise<{ raw: Record<string, unknown> }>;
+
+  /**
+   * Fetch every tool the broker exposes for one toolkit (e.g. "GMAIL").
+   * Returns the slug, human-readable description, and full JSON-Schema
+   * input shape — enough for `service.ts` to auto-generate action
+   * descriptors without per-action hand-coding.
+   */
+  listToolkitTools(toolkitSlug: string): Promise<
+    Array<{
+      slug: string;
+      description: string;
+      inputSchema: Record<string, unknown>;
+    }>
+  >;
 }
 
 /**
@@ -241,6 +255,15 @@ export function createComposioClient(opts: {
 
     async listObjects({ brokerConnectionId, entityId, provider, listInput }) {
       const cfg = getProviderConfig(provider);
+      // Service layer guards before reaching here — keep narrowing
+      // local so this stays a single source of truth on the broker
+      // boundary.
+      if (!cfg.listActionSlug || !cfg.buildListArgs || !cfg.parseListResponse) {
+        throw new IntegrationFetchError(
+          provider,
+          `${provider} does not expose a read/list action`
+        );
+      }
       const args = cfg.buildListArgs(listInput);
       const data = await execute(
         provider,
@@ -254,6 +277,12 @@ export function createComposioClient(opts: {
 
     async fetchObject({ brokerConnectionId, entityId, provider, fetchInput }) {
       const cfg = getProviderConfig(provider);
+      if (!cfg.fetchActionSlug || !cfg.buildFetchArgs || !cfg.parseFetchResponse) {
+        throw new IntegrationFetchError(
+          provider,
+          `${provider} does not expose a read/fetch action`
+        );
+      }
       const args = cfg.buildFetchArgs(fetchInput);
       const data = await execute(
         provider,
@@ -274,6 +303,38 @@ export function createComposioClient(opts: {
         args
       );
       return { raw: data };
+    },
+
+    async listToolkitTools(toolkitSlug) {
+      let tools: Array<{
+        slug?: string;
+        description?: string;
+        inputParameters?: Record<string, unknown>;
+      }>;
+      try {
+        // Hard cap; Composio's biggest toolkits (Slack, Notion) have
+        // ~80–120 actions. 500 is overhead-light and well above any
+        // current toolkit size.
+        tools = await sdk.tools.getRawComposioTools({
+          toolkits: [toolkitSlug],
+          limit: 500,
+        });
+      } catch (err) {
+        throw new IntegrationFetchError(
+          "notion",
+          `Couldn't list ${toolkitSlug} toolkit tools: ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
+      return tools
+        .filter((t) => typeof t.slug === "string")
+        .map((t) => ({
+          slug: t.slug as string,
+          description: t.description ?? "",
+          inputSchema: (t.inputParameters as Record<string, unknown> | undefined) ?? {
+            type: "object",
+            properties: {},
+          },
+        }));
     },
   };
 }

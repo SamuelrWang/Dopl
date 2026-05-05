@@ -22,16 +22,12 @@ import {
 import {
   IntegrationNotConnectedError,
   IntegrationFetchError,
-  IntegrationActionNotFoundError,
-  IntegrationActionValidationError,
+  IntegrationReadNotSupportedError,
 } from "./errors";
-import { findAction, getProviderConfig, resolveAuthConfigId } from "./providers";
+import { getProviderConfig, resolveAuthConfigId } from "./providers";
 import { DEFAULT_LIST_LIMIT } from "../constants";
-import { ZodError } from "zod";
 import type {
   ConnectInitiation,
-  IntegrationActionDescriptor,
-  IntegrationActionResult,
   IntegrationListResult,
   IntegrationProvider,
   OAuthConnection,
@@ -183,6 +179,11 @@ export async function listIntegrationObjects(
   const db = deps.db ?? supabaseAdmin();
   const broker = deps.broker ?? defaultComposioClient();
 
+  const cfg = getProviderConfig(ctx.provider);
+  if (!cfg.listActionSlug) {
+    throw new IntegrationReadNotSupportedError(ctx.provider);
+  }
+
   const found = await findConnectionWithBrokerId(db, ctx);
   if (!found || found.connection.status !== "connected") {
     throw new IntegrationNotConnectedError(ctx.provider);
@@ -218,12 +219,15 @@ export async function readIntegrationObject(
   const db = deps.db ?? supabaseAdmin();
   const broker = deps.broker ?? defaultComposioClient();
 
+  const cfg = getProviderConfig(ctx.provider);
+  if (!cfg.fetchActionSlug) {
+    throw new IntegrationReadNotSupportedError(ctx.provider);
+  }
+
   const found = await findConnectionWithBrokerId(db, ctx);
   if (!found || found.connection.status !== "connected") {
     throw new IntegrationNotConnectedError(ctx.provider);
   }
-
-  const cfg = getProviderConfig(ctx.provider);
   const fetched = await broker.fetchObject({
     brokerConnectionId: found.brokerConnectionId,
     entityId: brokerEntityId(ctx.workspaceId, ctx.userId),
@@ -250,12 +254,15 @@ export async function prepareFromIntegration(
   const db = deps.db ?? supabaseAdmin();
   const broker = deps.broker ?? defaultComposioClient();
 
+  const cfg = getProviderConfig(ctx.provider);
+  if (!cfg.fetchActionSlug) {
+    throw new IntegrationReadNotSupportedError(ctx.provider);
+  }
+
   const found = await findConnectionWithBrokerId(db, ctx);
   if (!found || found.connection.status !== "connected") {
     throw new IntegrationNotConnectedError(ctx.provider);
   }
-
-  const cfg = getProviderConfig(ctx.provider);
   const fetched = await broker.fetchObject({
     brokerConnectionId: found.brokerConnectionId,
     entityId: brokerEntityId(ctx.workspaceId, ctx.userId),
@@ -377,74 +384,6 @@ export async function listIntegrationsForUser(
 ): Promise<OAuthConnection[]> {
   const db = deps.db ?? supabaseAdmin();
   return listConnectionsForUser(db, ctx);
-}
-
-/**
- * Discovery for write actions. Returns one descriptor per action the
- * provider exposes. The agent calls this first, then picks an action
- * by name and supplies typed `params` to `executeIntegrationAction`.
- * Pure data — no broker call, no DB read. Provider must already be
- * registered in `providers.ts`.
- */
-export function listIntegrationActions(
-  provider: IntegrationProvider
-): IntegrationActionDescriptor[] {
-  return getProviderConfig(provider).actions.map((a) => ({
-    name: a.name,
-    summary: a.summary,
-    params: a.paramsDescription,
-  }));
-}
-
-/**
- * Run one named provider action with the agent-supplied params.
- * Looks up the action in the provider's registry, validates `params`
- * against its zod schema, requires an active connection, calls the
- * broker, and returns the action's parsed response. The Composio
- * action slug never appears in the response — only the action name.
- */
-export async function executeIntegrationAction(
-  ctx: { workspaceId: string; userId: string; provider: IntegrationProvider },
-  input: { action: string; params: Record<string, unknown> },
-  deps: IntegrationsServiceDeps = {}
-): Promise<IntegrationActionResult> {
-  const db = deps.db ?? supabaseAdmin();
-  const broker = deps.broker ?? defaultComposioClient();
-
-  const action = findAction(ctx.provider, input.action);
-  if (!action) {
-    throw new IntegrationActionNotFoundError(ctx.provider, input.action);
-  }
-
-  let parsedParams: Record<string, unknown>;
-  try {
-    parsedParams = action.paramsSchema.parse(input.params) as Record<string, unknown>;
-  } catch (err) {
-    const message =
-      err instanceof ZodError
-        ? err.issues.map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`).join("; ")
-        : err instanceof Error
-          ? err.message
-          : String(err);
-    throw new IntegrationActionValidationError(ctx.provider, input.action, message);
-  }
-
-  const found = await findConnectionWithBrokerId(db, ctx);
-  if (!found || found.connection.status !== "connected") {
-    throw new IntegrationNotConnectedError(ctx.provider);
-  }
-
-  const args = action.buildArgs(parsedParams);
-  const { raw } = await broker.executeAction({
-    brokerConnectionId: found.brokerConnectionId,
-    entityId: brokerEntityId(ctx.workspaceId, ctx.userId),
-    provider: ctx.provider,
-    slug: action.composioSlug,
-    arguments: args,
-  });
-  await touchConnection(db, found.connection.id);
-
-  return action.parseResponse(raw);
 }
 
 /**
