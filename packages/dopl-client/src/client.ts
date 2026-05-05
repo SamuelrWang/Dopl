@@ -44,6 +44,8 @@ import type { ResolvedSkill, Skill, SkillFile } from "./skill-types.js";
 import * as integrations from "./integrations.js";
 import type {
   ConnectResponse,
+  IntegrationActionResultResponse,
+  IntegrationActionsResponse,
   IntegrationListResponse,
   IntegrationProvider,
   IntegrationStatusResponse,
@@ -741,32 +743,18 @@ export class DoplClient {
   }
 
   // ── Integrations (Notion / Gmail / Drive / …) ────────────────────
-  connectIntegration(provider: IntegrationProvider): Promise<ConnectResponse> {
-    return integrations.connectIntegration(this.transport, provider);
-  }
-  getIntegrationStatus(
-    provider: IntegrationProvider
-  ): Promise<IntegrationStatusResponse> {
-    return integrations.getIntegrationStatus(this.transport, provider);
-  }
-  listIntegrationObjects(
-    provider: IntegrationProvider,
-    input: { query?: string; cursor?: string; limit?: number } = {}
-  ): Promise<IntegrationListResponse> {
-    return integrations.listIntegrationObjects(this.transport, provider, input);
-  }
-  readIntegrationObject(
-    provider: IntegrationProvider,
-    input: { object_id: string }
-  ): Promise<ReadIntegrationObjectResponse> {
-    return integrations.readIntegrationObject(this.transport, provider, input);
-  }
-  prepareFromIntegration(input: {
-    provider: IntegrationProvider;
-    object_id: string;
-    kb_id?: string;
-    cluster_id?: string;
-  }): Promise<PrepareFromIntegrationResponse> {
-    return integrations.prepareFromIntegration(this.transport, input);
-  }
+  connectIntegration = (p: IntegrationProvider): Promise<ConnectResponse> =>
+    integrations.connectIntegration(this.transport, p);
+  getIntegrationStatus = (p: IntegrationProvider): Promise<IntegrationStatusResponse> =>
+    integrations.getIntegrationStatus(this.transport, p);
+  listIntegrationObjects = (p: IntegrationProvider, input: { query?: string; cursor?: string; limit?: number } = {}): Promise<IntegrationListResponse> =>
+    integrations.listIntegrationObjects(this.transport, p, input);
+  readIntegrationObject = (p: IntegrationProvider, input: { object_id: string }): Promise<ReadIntegrationObjectResponse> =>
+    integrations.readIntegrationObject(this.transport, p, input);
+  prepareFromIntegration = (input: { provider: IntegrationProvider; object_id: string; kb_id?: string; cluster_id?: string }): Promise<PrepareFromIntegrationResponse> =>
+    integrations.prepareFromIntegration(this.transport, input);
+  listIntegrationActions = (p: IntegrationProvider): Promise<IntegrationActionsResponse> =>
+    integrations.listIntegrationActions(this.transport, p);
+  executeIntegrationAction = (p: IntegrationProvider, input: { action: string; params: Record<string, unknown> }): Promise<IntegrationActionResultResponse> =>
+    integrations.executeIntegrationAction(this.transport, p, input);
 }

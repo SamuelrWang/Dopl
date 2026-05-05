@@ -11,6 +11,8 @@ exports.connectIntegration = connectIntegration;
 exports.getIntegrationStatus = getIntegrationStatus;
 exports.listIntegrationObjects = listIntegrationObjects;
 exports.readIntegrationObject = readIntegrationObject;
+exports.listIntegrationActions = listIntegrationActions;
+exports.executeIntegrationAction = executeIntegrationAction;
 exports.prepareFromIntegration = prepareFromIntegration;
 const enc = encodeURIComponent;
 async function connectIntegration(t, provider) {
@@ -31,6 +33,16 @@ async function readIntegrationObject(t, provider, input) {
         method: "POST",
         body: input,
         toolName: "read_integration_object",
+    });
+}
+async function listIntegrationActions(t, provider) {
+    return t.request(`/api/integrations/${enc(provider)}/actions`, { toolName: "list_integration_actions" });
+}
+async function executeIntegrationAction(t, provider, input) {
+    return t.request(`/api/integrations/${enc(provider)}/execute`, {
+        method: "POST",
+        body: input,
+        toolName: "execute_integration_action",
     });
 }
 async function prepareFromIntegration(t, input) {

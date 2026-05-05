@@ -53,6 +53,24 @@ export type ConnectInitiation =
   | { status: "needs_auth"; authUrl: string };
 
 /**
+ * Wire-format descriptor returned by `list_integration_actions`. Each
+ * field documents one named action so the agent can pick one without
+ * the broker's slug ever surfacing.
+ */
+export type IntegrationActionDescriptor = {
+  name: string;
+  summary: string;
+  params: Record<
+    string,
+    { type: "string" | "number" | "boolean"; description: string; required: boolean }
+  >;
+};
+
+export type IntegrationActionResult =
+  | { ok: true; data: Record<string, unknown> }
+  | { ok: false; error: string };
+
+/**
  * Shape returned by `prepare-from-integration`. Mirrors the existing
  * `prepare_ingest` response so the agent can run the same synthesis
  * flow for both URL- and integration-sourced entries. The `prompts`

@@ -31,17 +31,18 @@ function ok(text) {
 }
 function registerKnowledgeTools(register, client) {
     // ── kb_list_bases ────────────────────────────────────────────────
-    register("kb_list_bases", "List the user's knowledge bases in the active workspace. Each base is a folder/file tree the user (and you, if `agent_write_enabled`) can edit. Returns slugs to address with subsequent kb_* tools.", {}, async () => {
+    register("kb_list_bases", "List the knowledge bases the caller can access in the active workspace. Each base is a folder/file tree. Returns slugs to address with subsequent kb_* tools.", {}, async () => {
         const bases = await client.listKbBases();
         if (bases.length === 0)
             return ok("No knowledge bases yet. Create one with `kb_create_base`.");
         const lines = ["## Knowledge bases\n"];
         for (const b of bases) {
-            const writeBadge = b.agentWriteEnabled
-                ? " _(agent writes enabled)_"
-                : " _(read-only for agents)_";
+            // Show visibility — that's the access signal that matters.
+            // The legacy `agent_write_enabled` column is no longer a write
+            // gate; per-resource access lives in the workspace member matrix.
+            const visBadge = b.visibility === "private" ? " _(private)_" : "";
             const desc = b.description ? `\n  ${b.description}` : "";
-            lines.push(`- **${b.name}** (slug: \`${b.slug}\`)${writeBadge}${desc}`);
+            lines.push(`- **${b.name}** (slug: \`${b.slug}\`)${visBadge}${desc}`);
         }
         return ok(lines.join("\n"));
     });
@@ -86,23 +87,23 @@ function registerKnowledgeTools(register, client) {
         return ok(lines.join("\n"));
     });
     // ── kb_create_base ───────────────────────────────────────────────
-    register("kb_create_base", "Create a new knowledge base in the active workspace. By default agent writes are disabled — the user must enable them via the website settings before you can write files.", {
+    register("kb_create_base", "Create a new knowledge base in the active workspace. New bases are private to the creator by default — only the creator (and their agent) can read or write. The creator can later publish to the whole workspace from the base's settings page.", {
         name: zod_1.z.string().min(1).max(120),
         description: zod_1.z.string().max(2000).optional(),
     }, async ({ name, description }) => {
         const base = await client.createKbBase({ name, description });
-        return ok(`Created knowledge base **${base.name}** (slug: \`${base.slug}\`). ` +
-            `Agent writes are ${base.agentWriteEnabled ? "ENABLED" : "DISABLED"} — ` +
-            `the user can toggle this in the base settings page.`);
+        const visNote = base.visibility === "private"
+            ? "Private to you — only you and your agent can see it."
+            : "Visible to the whole workspace.";
+        return ok(`Created knowledge base **${base.name}** (slug: \`${base.slug}\`). ${visNote}`);
     });
     // ── kb_update_base ───────────────────────────────────────────────
-    register("kb_update_base", "Update knowledge-base metadata: name, description, slug, or the agent-write toggle. Only the user (session-origin) can flip `agent_write_enabled`; agents calling this tool will get 403 if they try to set that field.", {
+    register("kb_update_base", "Update knowledge-base metadata: name, description, slug. Real access control (who can read/write each base) is the workspace member matrix; that's not edited here.", {
         base: zod_1.z.string().describe("Base slug or id"),
         name: zod_1.z.string().min(1).max(120).optional(),
         description: zod_1.z.string().max(2000).nullable().optional(),
         slug: zod_1.z.string().min(1).max(80).optional(),
-        agent_write_enabled: zod_1.z.boolean().optional(),
-    }, async ({ base: ref, name, description, slug, agent_write_enabled }) => {
+    }, async ({ base: ref, name, description, slug }) => {
         const base = await resolveBase(client, ref);
         if (!base)
             return err(`Knowledge base not found: ${ref}. If you may have deleted it, check \`kb_list_trash\` and restore with \`kb_restore_base\`.`);
@@ -110,10 +111,8 @@ function registerKnowledgeTools(register, client) {
             name,
             description,
             slug,
-            agentWriteEnabled: agent_write_enabled,
         });
-        return ok(`Updated **${updated.name}** (slug: \`${updated.slug}\`). ` +
-            `Agent writes: ${updated.agentWriteEnabled ? "enabled" : "disabled"}.`);
+        return ok(`Updated **${updated.name}** (slug: \`${updated.slug}\`).`);
     });
     // ── kb_delete_base ───────────────────────────────────────────────
     register("kb_delete_base", "Soft-delete a knowledge base. The base + its folders + entries become invisible but remain restorable from trash via `kb_restore_base`. Confirm with the user before calling — this is destructive from the user's perspective.", { base: zod_1.z.string().describe("Base slug or id") }, async ({ base: ref }) => {
@@ -247,7 +246,17 @@ function registerKnowledgeTools(register, client) {
             body,
             title,
         });
-        return ok(`Wrote \`${path}\` (entry id: \`${entry.id}\`, ${entry.body.length} chars).`);
+        // The addressable path's leaf is the entry's title (not the input
+        // path's leaf segment). Print it so callers can read the entry
+        // back without guessing. When `title` was passed and the slug-of-
+        // title differs from the input path's leaf, surface the canonical
+        // form explicitly.
+        const parentSegments = path.split("/").slice(0, -1).filter(Boolean);
+        const canonicalPath = [...parentSegments, entry.title].join("/");
+        const note = canonicalPath !== path
+            ? ` Address future reads/moves with path \`${canonicalPath}\`.`
+            : "";
+        return ok(`Wrote \`${canonicalPath}\` (entry id: \`${entry.id}\`, ${entry.body.length} chars).${note}`);
     });
     // ── kb_delete_file ───────────────────────────────────────────────
     register("kb_delete_file", "Soft-delete an entry at the given path. Restorable from trash. Confirm with the user before calling.", {

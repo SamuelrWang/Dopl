@@ -125,11 +125,59 @@ export async function resolvePath(
     return { kind: "entry", folder: currentFolder, entry: entryMatch };
   }
 
+  // Slug-based fallback. The strict matcher above requires exact-string
+  // title equality; this catches the common write-with-title-then-read-
+  // with-sluggy-path footgun (write `title: "LinkedIn Job Alerts"`,
+  // read `path: "linkedin-job-alerts.md"`). Implementation:
+  //   1. Slug the lookup segment with the same rules as `slugify` —
+  //      NFKC, lowercase, non-alphanumeric runs collapse to a hyphen,
+  //      trailing extension stripped.
+  //   2. List active entries in this (base, parent) bucket and find
+  //      the one whose slugified title matches.
+  //   3. Refuse to guess on slug collisions (return not_found) — titles
+  //      in a bucket are unique, but two distinct titles can collide
+  //      after slugification (e.g. "Foo Bar" vs "Foo-Bar"). Strict
+  //      lookup of the exact title remains the deterministic answer.
+  const querySlug = slugForPathSegment(lastSegment);
+  if (querySlug) {
+    const candidates = await repo.listActiveEntryTitlesIn(
+      baseId,
+      currentFolder?.id ?? null
+    );
+    const matches = candidates.filter(
+      (c) => slugForPathSegment(c.title) === querySlug
+    );
+    if (matches.length === 1) {
+      const hydrated = await repo.findActiveEntryById(matches[0].id);
+      if (hydrated) {
+        assertSameWorkspace(hydrated.workspaceId, ctx.workspaceId, "entry");
+        return { kind: "entry", folder: currentFolder, entry: hydrated };
+      }
+    }
+  }
+
   return {
     kind: "not_found",
     lastFolder: currentFolder,
     missingSegment: lastSegment,
   };
+}
+
+/**
+ * Canonical slug form for path-segment matching. Mirrors `slugify`'s
+ * normalization (NFKC + lowercase + collapse non-alphanumerics to '-')
+ * but additionally strips a trailing file-extension-shaped tail
+ * (`.md`, `.txt`, ...) so callers passing `linkedin-jobs.md` resolve to
+ * an entry titled `LinkedIn Jobs`. Returns "" for inputs that produce
+ * an empty slug — caller treats that as "no fallback possible".
+ */
+function slugForPathSegment(segment: string): string {
+  const stripped = segment.replace(/\.(md|markdown|txt)$/i, "");
+  return stripped
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
 }
 
 /**

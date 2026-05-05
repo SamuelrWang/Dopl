@@ -68,6 +68,10 @@ export type {
 } from "./skill-types.js";
 export type {
   ConnectResponse,
+  IntegrationActionDescriptor,
+  IntegrationActionParamSpec,
+  IntegrationActionResultResponse,
+  IntegrationActionsResponse,
   IntegrationListResponse,
   IntegrationObjectSummary,
   IntegrationProvider,

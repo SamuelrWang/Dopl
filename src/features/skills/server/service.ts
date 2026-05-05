@@ -210,7 +210,11 @@ export async function createSkill(
         whenToUse: input.whenToUse,
         whenNotToUse: input.whenNotToUse ?? null,
         status: input.status ?? "active",
-        agentWriteEnabled: input.agentWriteEnabled ?? false,
+        // Default true to mirror knowledge_bases — creator's agent gets
+        // write by default. Real enforcement is the access matrix in
+        // `requireResourceAccess`; this column just keeps UI/MCP
+        // messaging in sync with reality.
+        agentWriteEnabled: input.agentWriteEnabled ?? true,
         visibility: resolvedVisibility,
         createdBy: ctx.userId,
         source: ctx.source,

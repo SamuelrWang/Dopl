@@ -41,3 +41,23 @@ export class IntegrationObjectNotFoundError extends HttpError {
     );
   }
 }
+
+export class IntegrationActionNotFoundError extends HttpError {
+  constructor(provider: IntegrationProvider, action: string) {
+    super(
+      404,
+      "INTEGRATION_ACTION_NOT_FOUND",
+      `${provider} has no action "${action}". Call list_integration_actions to see what's available.`
+    );
+  }
+}
+
+export class IntegrationActionValidationError extends HttpError {
+  constructor(provider: IntegrationProvider, action: string, message: string) {
+    super(
+      400,
+      "INTEGRATION_ACTION_INVALID_PARAMS",
+      `Invalid params for ${provider} action "${action}": ${message}`
+    );
+  }
+}

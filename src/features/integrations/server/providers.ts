@@ -1,4 +1,5 @@
 import "server-only";
+import { z } from "zod";
 import type { IntegrationObject, IntegrationProvider } from "../types";
 import { ProviderNotConfiguredError } from "./errors";
 
@@ -35,6 +36,26 @@ export type ProviderFetchInput = {
   objectId: string;
 };
 
+export type ActionParamSpec = {
+  type: "string" | "number" | "boolean";
+  description: string;
+  required: boolean;
+};
+
+export type ActionResult =
+  | { ok: true; data: Record<string, unknown> }
+  | { ok: false; error: string };
+
+export type ProviderActionConfig = {
+  name: string;
+  summary: string;
+  paramsSchema: z.ZodTypeAny;
+  paramsDescription: Record<string, ActionParamSpec>;
+  composioSlug: string;
+  buildArgs: (params: Record<string, unknown>) => Record<string, unknown>;
+  parseResponse: (raw: Record<string, unknown>) => ActionResult;
+};
+
 export type ProviderConfig = {
   composioAuthConfigEnv: string;
   sourcePlatform: string;
@@ -56,6 +77,8 @@ export type ProviderConfig = {
     body: string;
     lastModified: string | null;
   };
+
+  actions: ProviderActionConfig[];
 };
 
 function asString(value: unknown): string | null {
@@ -123,6 +146,7 @@ const NOTION: ProviderConfig = {
     body: (asString(data.markdown) ?? "") as string,
     lastModified: asString(data.last_edited_time),
   }),
+  actions: [],
 };
 
 const GMAIL: ProviderConfig = {
@@ -172,7 +196,77 @@ const GMAIL: ProviderConfig = {
         ordered.length > 0 ? asString(ordered[ordered.length - 1].internalDate) : null,
     };
   },
+  actions: gmailActions(),
 };
+
+function gmailActions(): ProviderActionConfig[] {
+  const SendEmail = z.object({
+    to: z.string().min(1).max(500),
+    subject: z.string().min(0).max(500),
+    body: z.string().min(0).max(50_000),
+    cc: z.string().max(500).optional(),
+    bcc: z.string().max(500).optional(),
+  });
+  const ReplyToThread = z.object({
+    thread_id: z.string().min(1).max(500),
+    body: z.string().min(0).max(50_000),
+  });
+  return [
+    {
+      name: "send_email",
+      summary:
+        "Send a new Gmail message from the connected account. Use for fresh outbound mail; for replying within an existing thread, use `reply_to_thread`.",
+      paramsSchema: SendEmail,
+      paramsDescription: {
+        to: { type: "string", description: "Recipient address (or comma-separated list).", required: true },
+        subject: { type: "string", description: "Subject line.", required: true },
+        body: { type: "string", description: "Plain-text message body.", required: true },
+        cc: { type: "string", description: "Optional CC address(es).", required: false },
+        bcc: { type: "string", description: "Optional BCC address(es).", required: false },
+      },
+      composioSlug: "GMAIL_SEND_EMAIL",
+      buildArgs: (params) => {
+        const p = SendEmail.parse(params);
+        const args: Record<string, unknown> = {
+          recipient_email: p.to,
+          subject: p.subject,
+          body: p.body,
+        };
+        if (p.cc) args.cc = [p.cc];
+        if (p.bcc) args.bcc = [p.bcc];
+        return args;
+      },
+      parseResponse: (raw) => {
+        const id = asString(raw.id) ?? asString((raw.response_data as Record<string, unknown> | undefined)?.id);
+        const threadId = asString(raw.threadId) ?? asString((raw.response_data as Record<string, unknown> | undefined)?.threadId);
+        return { ok: true, data: { id, thread_id: threadId } };
+      },
+    },
+    {
+      name: "reply_to_thread",
+      summary:
+        "Reply to an existing Gmail thread (uses the thread id returned from `list_integration_objects` or a previous `send_email`). The reply is appended to the thread; the subject and recipients are inferred from the thread's first message.",
+      paramsSchema: ReplyToThread,
+      paramsDescription: {
+        thread_id: { type: "string", description: "Gmail thread id from list_integration_objects or send_email response.", required: true },
+        body: { type: "string", description: "Plain-text reply body.", required: true },
+      },
+      composioSlug: "GMAIL_REPLY_TO_THREAD",
+      buildArgs: (params) => {
+        const p = ReplyToThread.parse(params);
+        return {
+          thread_id: p.thread_id,
+          message_body: p.body,
+        };
+      },
+      parseResponse: (raw) => {
+        const id = asString(raw.id) ?? asString((raw.response_data as Record<string, unknown> | undefined)?.id);
+        const threadId = asString(raw.threadId) ?? asString((raw.response_data as Record<string, unknown> | undefined)?.threadId);
+        return { ok: true, data: { id, thread_id: threadId } };
+      },
+    },
+  ];
+}
 
 function gmailSubject(message: Record<string, unknown>): string | null {
   return gmailHeader(message, "Subject");
@@ -229,6 +323,7 @@ const GOOGLE_DRIVE: ProviderConfig = {
     body: (asString(data.content) ?? "") as string,
     lastModified: asString(data.modifiedTime),
   }),
+  actions: [],
 };
 
 const CONFIGS: Record<IntegrationProvider, ProviderConfig> = {
@@ -246,4 +341,11 @@ export function resolveAuthConfigId(provider: IntegrationProvider): string {
   const value = process.env[cfg.composioAuthConfigEnv];
   if (!value) throw new ProviderNotConfiguredError(provider);
   return value;
+}
+
+export function findAction(
+  provider: IntegrationProvider,
+  name: string
+): ProviderActionConfig | null {
+  return getProviderConfig(provider).actions.find((a) => a.name === name) ?? null;
 }

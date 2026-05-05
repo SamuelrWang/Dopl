@@ -9,6 +9,8 @@
 import type { DoplTransport } from "./transport.js";
 import type {
   ConnectResponse,
+  IntegrationActionResultResponse,
+  IntegrationActionsResponse,
   IntegrationListResponse,
   IntegrationProvider,
   IntegrationStatusResponse,
@@ -64,6 +66,31 @@ export async function readIntegrationObject(
       method: "POST",
       body: input,
       toolName: "read_integration_object",
+    }
+  );
+}
+
+export async function listIntegrationActions(
+  t: DoplTransport,
+  provider: IntegrationProvider
+): Promise<IntegrationActionsResponse> {
+  return t.request<IntegrationActionsResponse>(
+    `/api/integrations/${enc(provider)}/actions`,
+    { toolName: "list_integration_actions" }
+  );
+}
+
+export async function executeIntegrationAction(
+  t: DoplTransport,
+  provider: IntegrationProvider,
+  input: { action: string; params: Record<string, unknown> }
+): Promise<IntegrationActionResultResponse> {
+  return t.request<IntegrationActionResultResponse>(
+    `/api/integrations/${enc(provider)}/execute`,
+    {
+      method: "POST",
+      body: input,
+      toolName: "execute_integration_action",
     }
   );
 }

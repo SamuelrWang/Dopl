@@ -73,6 +73,14 @@ export interface ComposioClient {
     body: string;
     lastModified: string | null;
   }>;
+
+  executeAction(input: {
+    brokerConnectionId: string;
+    entityId: string;
+    provider: IntegrationProvider;
+    slug: string;
+    arguments: Record<string, unknown>;
+  }): Promise<{ raw: Record<string, unknown> }>;
 }
 
 /**
@@ -255,6 +263,17 @@ export function createComposioClient(opts: {
         args
       );
       return cfg.parseFetchResponse(data);
+    },
+
+    async executeAction({ brokerConnectionId, entityId, provider, slug, arguments: args }) {
+      const data = await execute(
+        provider,
+        slug,
+        brokerConnectionId,
+        entityId,
+        args
+      );
+      return { raw: data };
     },
   };
 }

@@ -136,6 +136,59 @@ export function registerIntegrationTools(
     }
   );
 
+  // ── list_integration_actions ──────────────────────────────────────
+  register(
+    "list_integration_actions",
+    "Discover what write actions a connected provider exposes. Returns `{ actions: [{ name, summary, params }] }`. `params` documents each input field with `{ type, description, required }`. After picking an action, call `execute_integration_action` with `provider`, the chosen `name`, and a `params` object matching the descriptor. Read-only — no side effects, no broker call.",
+    { provider: ProviderArg },
+    async ({ provider }) => {
+      const result = await client.listIntegrationActions(provider);
+      if (result.actions.length === 0) {
+        return ok(`No write actions are available for **${provider}** yet.`);
+      }
+      const lines = [`## ${result.actions.length} ${provider} action(s)`, ""];
+      for (const a of result.actions) {
+        lines.push(`### \`${a.name}\``);
+        lines.push(a.summary);
+        lines.push("");
+        lines.push("Params:");
+        for (const [key, spec] of Object.entries(a.params)) {
+          const req = spec.required ? "required" : "optional";
+          lines.push(`- \`${key}\` (${spec.type}, ${req}) — ${spec.description}`);
+        }
+        lines.push("");
+      }
+      return ok(lines.join("\n"));
+    }
+  );
+
+  // ── execute_integration_action ────────────────────────────────────
+  register(
+    "execute_integration_action",
+    "Run a named write action on a connected provider (e.g. send a Gmail message, post a Slack reply). Always call `list_integration_actions` first to see the catalog and the exact `params` shape. `params` is a JSON object whose keys/types match the descriptor; missing required fields fail validation server-side. Returns `{ ok: true, data }` on success or `{ ok: false, error }` if the provider rejected the call. Side-effecting — only call after the user has explicitly asked for the action.",
+    {
+      provider: ProviderArg,
+      action: z.string().min(1).max(100).describe("Action name from list_integration_actions (e.g. send_email)."),
+      params: z
+        .record(z.string(), z.unknown())
+        .describe("Action params, keyed per the descriptor's params shape."),
+    },
+    async ({ provider, action, params }) => {
+      const result = await client.executeIntegrationAction(provider, {
+        action,
+        params,
+      });
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
+      };
+    }
+  );
+
   // ── ingest_from_integration ───────────────────────────────────────
   register(
     "ingest_from_integration",

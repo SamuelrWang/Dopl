@@ -39,6 +39,26 @@ export type ReadIntegrationObjectResponse = {
   body: string;
 };
 
+export type IntegrationActionParamSpec = {
+  type: "string" | "number" | "boolean";
+  description: string;
+  required: boolean;
+};
+
+export type IntegrationActionDescriptor = {
+  name: string;
+  summary: string;
+  params: Record<string, IntegrationActionParamSpec>;
+};
+
+export type IntegrationActionsResponse = {
+  actions: IntegrationActionDescriptor[];
+};
+
+export type IntegrationActionResultResponse =
+  | { ok: true; data: Record<string, unknown> }
+  | { ok: false; error: string };
+
 export type PrepareFromIntegrationResponse = {
   status: "ready";
   entry_id: string;

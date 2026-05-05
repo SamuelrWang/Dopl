@@ -1,11 +1,17 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import {
   connectIntegration,
+  executeIntegrationAction,
   getIntegrationStatus,
+  listIntegrationActions,
   listIntegrationObjects,
   startBrokerOAuth,
 } from "./service";
-import { IntegrationNotConnectedError } from "./errors";
+import {
+  IntegrationActionNotFoundError,
+  IntegrationActionValidationError,
+  IntegrationNotConnectedError,
+} from "./errors";
 import type { ComposioClient } from "./composio-client";
 import type { IntegrationProvider } from "../types";
 
@@ -118,6 +124,9 @@ function makeFakeBroker(overrides: Partial<ComposioClient> = {}): ComposioClient
     }),
     deleteConnection: vi.fn().mockResolvedValue(undefined),
     purgeAccountsFor: vi.fn().mockResolvedValue(0),
+    executeAction: vi
+      .fn()
+      .mockResolvedValue({ raw: { id: "msg_1", threadId: "thr_1" } }),
     ...overrides,
   };
 }
@@ -262,6 +271,155 @@ describe("getIntegrationStatus", () => {
     expect(broker.getConnectionStatus).toHaveBeenCalledWith("cc_pending");
     expect(result).toEqual({ status: "connected" });
     expect(stub.rows[0].status).toBe("connected");
+  });
+});
+
+describe("listIntegrationActions", () => {
+  it("returns empty array for providers without actions", () => {
+    expect(listIntegrationActions("notion")).toEqual([]);
+    expect(listIntegrationActions("google_drive")).toEqual([]);
+  });
+
+  it("returns Gmail's send_email and reply_to_thread descriptors", () => {
+    const actions = listIntegrationActions("gmail");
+    expect(actions.map((a) => a.name)).toEqual(["send_email", "reply_to_thread"]);
+    const send = actions.find((a) => a.name === "send_email");
+    expect(send?.params.to).toEqual(
+      expect.objectContaining({ type: "string", required: true })
+    );
+    expect(send?.params.cc).toEqual(
+      expect.objectContaining({ required: false })
+    );
+    const reply = actions.find((a) => a.name === "reply_to_thread");
+    expect(reply?.params.thread_id).toEqual(
+      expect.objectContaining({ type: "string", required: true })
+    );
+  });
+});
+
+describe("executeIntegrationAction", () => {
+  const gmailCtx: {
+    workspaceId: string;
+    userId: string;
+    provider: IntegrationProvider;
+  } = { workspaceId: "ws-1", userId: "user-1", provider: "gmail" };
+
+  function connectedRow(): Row {
+    return {
+      id: "row-1",
+      workspace_id: gmailCtx.workspaceId,
+      user_id: gmailCtx.userId,
+      provider: "gmail",
+      composio_connection_id: "cc_live",
+      status: "connected",
+      scopes: [],
+      last_used_at: null,
+      created_at: "now",
+      updated_at: "now",
+    };
+  }
+
+  it("dispatches send_email to the broker with mapped Composio args", async () => {
+    const stub = makeStubDb([connectedRow()]);
+    const exec = vi
+      .fn()
+      .mockResolvedValue({ raw: { id: "msg_a", threadId: "thr_a" } });
+    const broker = makeFakeBroker({ executeAction: exec });
+    const result = await executeIntegrationAction(
+      gmailCtx,
+      {
+        action: "send_email",
+        params: {
+          to: "alice@example.com",
+          subject: "Hi",
+          body: "Hello there",
+          cc: "cc@example.com",
+        },
+      },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      { db: stub as any, broker }
+    );
+    expect(exec).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: "gmail",
+        slug: "GMAIL_SEND_EMAIL",
+        brokerConnectionId: "cc_live",
+        entityId: "ws-1:user-1",
+        arguments: {
+          recipient_email: "alice@example.com",
+          subject: "Hi",
+          body: "Hello there",
+          cc: ["cc@example.com"],
+        },
+      })
+    );
+    expect(result).toEqual({
+      ok: true,
+      data: { id: "msg_a", thread_id: "thr_a" },
+    });
+  });
+
+  it("dispatches reply_to_thread with thread_id + message_body", async () => {
+    const stub = makeStubDb([connectedRow()]);
+    const exec = vi
+      .fn()
+      .mockResolvedValue({ raw: { id: "msg_b", threadId: "thr_b" } });
+    const broker = makeFakeBroker({ executeAction: exec });
+    await executeIntegrationAction(
+      gmailCtx,
+      {
+        action: "reply_to_thread",
+        params: { thread_id: "thr_b", body: "ack" },
+      },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      { db: stub as any, broker }
+    );
+    expect(exec).toHaveBeenCalledWith(
+      expect.objectContaining({
+        slug: "GMAIL_REPLY_TO_THREAD",
+        arguments: { thread_id: "thr_b", message_body: "ack" },
+      })
+    );
+  });
+
+  it("throws IntegrationActionNotFoundError for an unknown action", async () => {
+    const stub = makeStubDb([connectedRow()]);
+    await expect(
+      executeIntegrationAction(
+        gmailCtx,
+        { action: "delete_inbox", params: {} },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        { db: stub as any, broker: makeFakeBroker() }
+      )
+    ).rejects.toBeInstanceOf(IntegrationActionNotFoundError);
+  });
+
+  it("throws IntegrationActionValidationError when params don't match the schema", async () => {
+    const stub = makeStubDb([connectedRow()]);
+    await expect(
+      executeIntegrationAction(
+        gmailCtx,
+        // missing required `body`
+        { action: "send_email", params: { to: "x@y.com", subject: "Hi" } },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        { db: stub as any, broker: makeFakeBroker() }
+      )
+    ).rejects.toBeInstanceOf(IntegrationActionValidationError);
+  });
+
+  it("throws IntegrationNotConnectedError when there's no live connection", async () => {
+    const stub = makeStubDb([]);
+    await expect(
+      executeIntegrationAction(
+        gmailCtx,
+        {
+          action: "send_email",
+          params: { to: "a@b.c", subject: "s", body: "b" },
+        },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        { db: stub as any, broker: makeFakeBroker() }
+      )
+    ).rejects.toBeInstanceOf(IntegrationNotConnectedError);
   });
 });
 

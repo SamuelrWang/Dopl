@@ -410,20 +410,12 @@ class DoplClient {
         return skills.deleteSkillFile(this.transport, slug, fileName);
     }
     // ── Integrations (Notion / Gmail / Drive / …) ────────────────────
-    connectIntegration(provider) {
-        return integrations.connectIntegration(this.transport, provider);
-    }
-    getIntegrationStatus(provider) {
-        return integrations.getIntegrationStatus(this.transport, provider);
-    }
-    listIntegrationObjects(provider, input = {}) {
-        return integrations.listIntegrationObjects(this.transport, provider, input);
-    }
-    readIntegrationObject(provider, input) {
-        return integrations.readIntegrationObject(this.transport, provider, input);
-    }
-    prepareFromIntegration(input) {
-        return integrations.prepareFromIntegration(this.transport, input);
-    }
+    connectIntegration = (p) => integrations.connectIntegration(this.transport, p);
+    getIntegrationStatus = (p) => integrations.getIntegrationStatus(this.transport, p);
+    listIntegrationObjects = (p, input = {}) => integrations.listIntegrationObjects(this.transport, p, input);
+    readIntegrationObject = (p, input) => integrations.readIntegrationObject(this.transport, p, input);
+    prepareFromIntegration = (input) => integrations.prepareFromIntegration(this.transport, input);
+    listIntegrationActions = (p) => integrations.listIntegrationActions(this.transport, p);
+    executeIntegrationAction = (p, input) => integrations.executeIntegrationAction(this.transport, p, input);
 }
 exports.DoplClient = DoplClient;

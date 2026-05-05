@@ -27,3 +27,9 @@ export const ReadInputSchema = z.object({
   object_id: z.string().min(1).max(500),
 });
 export type ReadInput = z.infer<typeof ReadInputSchema>;
+
+export const ExecuteActionInputSchema = z.object({
+  action: z.string().min(1).max(100),
+  params: z.record(z.string(), z.unknown()),
+});
+export type ExecuteActionInput = z.infer<typeof ExecuteActionInputSchema>;

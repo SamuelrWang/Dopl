@@ -67,10 +67,11 @@ export function registerSkillTools(
       }
       const lines = ["## Skills\n"];
       for (const s of active) {
-        const lockBadge = s.agentWriteEnabled
-          ? " _(agent writes enabled)_"
-          : " _(read-only for agents)_";
-        lines.push(`### \`${s.slug}\` — ${s.name}${lockBadge}`);
+        // Show visibility — that's the access signal that matters.
+        // Legacy `agent_write_enabled` is no longer the gate.
+        const visBadge =
+          s.visibility === "private" ? " _(private)_" : "";
+        lines.push(`### \`${s.slug}\` — ${s.name}${visBadge}`);
         lines.push(s.description);
         lines.push(`**When to use:** ${s.whenToUse}`);
         if (s.whenNotToUse) {
@@ -98,9 +99,9 @@ export function registerSkillTools(
         const lines: string[] = [];
         lines.push(`# ${skill.name} \`${skill.slug}\``);
         lines.push(`Status: ${skill.status}`);
-        lines.push(
-          `Agent writes: ${skill.agentWriteEnabled ? "enabled" : "DISABLED"}`
-        );
+        if (skill.visibility === "private") {
+          lines.push("Visibility: private");
+        }
         lines.push(`When to use: ${skill.whenToUse}`);
         if (skill.whenNotToUse) {
           lines.push(`When NOT to use: ${skill.whenNotToUse}`);
@@ -143,7 +144,7 @@ export function registerSkillTools(
   // ── skill_create ─────────────────────────────────────────────────
   register(
     "skill_create",
-    "Create a new skill. Returns the skill row + a freshly created SKILL.md primary file. Required: name, description, when_to_use. Optional: when_not_to_use, slug (auto-derived), status (defaults to active), agent_write_enabled (defaults to false), body (initial SKILL.md content). Before calling: read `skill_authoring_guide` so the description and when_to_use are written to the framework's standards.",
+    "Create a new skill. Returns the skill row + a freshly created SKILL.md primary file. New skills default to private (only the creator can read or edit; the creator can publish to the workspace later). Required: name, description, when_to_use. Optional: when_not_to_use, slug (auto-derived), status (defaults to active), body (initial SKILL.md content). Before calling: read `skill_authoring_guide` so the description and when_to_use are written to the framework's standards.",
     {
       name: z.string().min(1).max(120),
       description: z.string().min(1).max(2000),
@@ -175,11 +176,13 @@ export function registerSkillTools(
           agentWriteEnabled: agent_write_enabled,
           body,
         });
+        const visNote =
+          skill.visibility === "private"
+            ? "Private to you — only you and your agent can see it."
+            : "Visible to the whole workspace.";
         return ok(
           `Created skill **${skill.name}** (slug: \`${skill.slug}\`). ` +
-            `Status: ${skill.status}. Agent writes: ${
-              skill.agentWriteEnabled ? "enabled" : "disabled"
-            }. ` +
+            `Status: ${skill.status}. ${visNote} ` +
             `SKILL.md (${primaryFile.body.length} chars) is ready to edit with \`skill_write_file\`.`
         );
       } catch (e) {

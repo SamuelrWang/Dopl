@@ -214,7 +214,13 @@ export async function createBase(
         name: input.name,
         slug: baseSlug,
         description: input.description ?? null,
-        agentWriteEnabled: input.agentWriteEnabled ?? false,
+        // Default true: a brand-new base belongs to its creator (visibility
+        // defaults to private above), and the creator's agent should be
+        // able to write to it without an extra opt-in step. Actual write
+        // enforcement is the access-matrix in `requireResourceAccess`,
+        // not this column — keeping the column TRUE here just stops the
+        // UI/MCP messaging from misrepresenting the access state.
+        agentWriteEnabled: input.agentWriteEnabled ?? true,
         visibility: resolvedVisibility,
         createdBy: ctx.userId,
       });

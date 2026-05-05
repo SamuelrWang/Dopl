@@ -440,6 +440,44 @@ export async function findActiveEntryByTitle(
   return data ? mapEntryRow(data as KnowledgeEntryRow) : null;
 }
 
+/**
+ * List every active entry directly inside (kb, folder), title only.
+ * Used by the path resolver's slug-based fallback — when a strict title
+ * match misses, the resolver scans this bucket and slug-matches
+ * client-side. Bounded by parent folder, so the list is small.
+ */
+export async function listActiveEntryTitlesIn(
+  baseId: string,
+  folderId: string | null
+): Promise<Array<{ id: string; title: string }>> {
+  const db = supabaseAdmin();
+  let query = db
+    .from("knowledge_entries")
+    .select("id, title")
+    .eq("knowledge_base_id", baseId)
+    .is("deleted_at", null);
+  if (folderId === null) query = query.is("folder_id", null);
+  else query = query.eq("folder_id", folderId);
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data ?? []) as Array<{ id: string; title: string }>;
+}
+
+/** Hydrate a full entry by id. Used after the slug fallback identifies one. */
+export async function findActiveEntryById(
+  entryId: string
+): Promise<KnowledgeEntry | null> {
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("knowledge_entries")
+    .select(KNOWLEDGE_ENTRY_COLS)
+    .eq("id", entryId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? mapEntryRow(data as KnowledgeEntryRow) : null;
+}
+
 export async function listEntriesForBase(
   baseId: string,
   opts: ListEntriesOpts = {}

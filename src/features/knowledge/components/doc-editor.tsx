@@ -1,6 +1,6 @@
 "use client";
 
-import { useEditor, EditorContent, type Editor } from "@tiptap/react";
+import { useEditor, EditorContent } from "@tiptap/react";
 import { StarterKit } from "@tiptap/starter-kit";
 import { Underline } from "@tiptap/extension-underline";
 import { Link } from "@tiptap/extension-link";
@@ -13,24 +13,8 @@ import {
 import { marked } from "marked";
 import TurndownService from "turndown";
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  Bold,
-  Heading1,
-  Heading2,
-  Heading3,
-  Italic,
-  Link as LinkIcon,
-  List,
-  ListOrdered,
-  Quote,
-  Redo2,
-  Strikethrough,
-  Table as TableIcon,
-  Underline as UnderlineIcon,
-  Undo2,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-import { cn } from "@/shared/lib/utils";
+import { Toolbar } from "./doc-editor-toolbar";
+import { makeLinkRule, makeTableRule } from "./doc-editor-turndown";
 
 export type SaveStatus = "idle" | "dirty" | "saving" | "saved" | "error";
 
@@ -72,8 +56,15 @@ export function DocEditor({ initialMarkdown, resetKey, onChange, readOnly }: Pro
       codeBlockStyle: "fenced",
       bulletListMarker: "-",
       emDelimiter: "*",
+      linkStyle: "inlined",
     });
     td.addRule("table", makeTableRule());
+    // Force an explicit link rule. Turndown's built-in "inlineLink" works
+    // most of the time, but Tiptap's Link mark adds extra attrs (class,
+    // target) that have, in practice, caused the default rule to skip
+    // the anchor — leaving the link text behind without an href on
+    // round-trip. An explicit rule keyed only on `a[href]` is robust.
+    td.addRule("link", makeLinkRule());
     return td;
   });
 
@@ -95,10 +86,15 @@ export function DocEditor({ initialMarkdown, resetKey, onChange, readOnly }: Pro
       }),
       Underline,
       Link.configure({
-        openOnClick: false,
+        // `true` opens links on plain click; users edit the URL via
+        // the Link toolbar button (or ⌘K). For an always-editable doc
+        // this beats the silent-no-op `false` default.
+        openOnClick: true,
         autolink: true,
         HTMLAttributes: {
           class: "text-violet-300 hover:underline",
+          target: "_blank",
+          rel: "noopener noreferrer",
         },
       }),
       Table.configure({ resizable: false }),
@@ -213,216 +209,6 @@ export function SaveStatusIndicator({ state }: { state: SaveStatus }) {
     >
       {label}
     </span>
-  );
-}
-
-/**
- * Tiny custom turndown rule for tables — turndown's default leaves
- * tables as raw HTML; we want GFM pipe tables back. Inline rather
- * than pulling in `turndown-plugin-gfm` for one feature.
- */
-function makeTableRule(): TurndownService.Rule {
-  return {
-    filter: "table",
-    replacement(_content, node) {
-      const table = node as HTMLTableElement;
-      const rows: string[][] = [];
-      for (const row of Array.from(table.rows)) {
-        rows.push(
-          Array.from(row.cells).map((c) =>
-            c.textContent?.trim().replace(/\|/g, "\\|") ?? ""
-          )
-        );
-      }
-      if (rows.length === 0) return "";
-      const widths = rows[0].map(() => 3);
-      const fmt = (cells: string[]) =>
-        "| " +
-        cells.map((c, i) => c.padEnd(widths[i] ?? 3, " ")).join(" | ") +
-        " |";
-      const sep = "| " + widths.map((w) => "-".repeat(w)).join(" | ") + " |";
-      const out = [fmt(rows[0]), sep, ...rows.slice(1).map(fmt)];
-      return "\n\n" + out.join("\n") + "\n\n";
-    },
-  };
-}
-
-// ── Toolbar ─────────────────────────────────────────────────────────
-
-interface ToolbarProps {
-  editor: Editor;
-}
-
-function Toolbar({ editor }: ToolbarProps) {
-  const groups: ReadonlyArray<ReadonlyArray<ToolbarItem>> = [
-    [
-      {
-        icon: Heading1,
-        label: "Heading 1",
-        active: editor.isActive("heading", { level: 1 }),
-        run: () =>
-          editor.chain().focus().toggleHeading({ level: 1 }).run(),
-      },
-      {
-        icon: Heading2,
-        label: "Heading 2",
-        active: editor.isActive("heading", { level: 2 }),
-        run: () =>
-          editor.chain().focus().toggleHeading({ level: 2 }).run(),
-      },
-      {
-        icon: Heading3,
-        label: "Heading 3",
-        active: editor.isActive("heading", { level: 3 }),
-        run: () =>
-          editor.chain().focus().toggleHeading({ level: 3 }).run(),
-      },
-    ],
-    [
-      {
-        icon: Bold,
-        label: "Bold (⌘B)",
-        active: editor.isActive("bold"),
-        run: () => editor.chain().focus().toggleBold().run(),
-      },
-      {
-        icon: Italic,
-        label: "Italic (⌘I)",
-        active: editor.isActive("italic"),
-        run: () => editor.chain().focus().toggleItalic().run(),
-      },
-      {
-        icon: UnderlineIcon,
-        label: "Underline (⌘U)",
-        active: editor.isActive("underline"),
-        run: () => editor.chain().focus().toggleUnderline().run(),
-      },
-      {
-        icon: Strikethrough,
-        label: "Strikethrough",
-        active: editor.isActive("strike"),
-        run: () => editor.chain().focus().toggleStrike().run(),
-      },
-    ],
-    [
-      {
-        icon: List,
-        label: "Bullet list",
-        active: editor.isActive("bulletList"),
-        run: () => editor.chain().focus().toggleBulletList().run(),
-      },
-      {
-        icon: ListOrdered,
-        label: "Numbered list",
-        active: editor.isActive("orderedList"),
-        run: () => editor.chain().focus().toggleOrderedList().run(),
-      },
-      {
-        icon: Quote,
-        label: "Quote",
-        active: editor.isActive("blockquote"),
-        run: () => editor.chain().focus().toggleBlockquote().run(),
-      },
-    ],
-    [
-      {
-        icon: TableIcon,
-        label: "Insert table",
-        active: editor.isActive("table"),
-        run: () =>
-          editor
-            .chain()
-            .focus()
-            .insertTable({ rows: 3, cols: 2, withHeaderRow: true })
-            .run(),
-      },
-      {
-        icon: LinkIcon,
-        label: "Link",
-        active: editor.isActive("link"),
-        run: () => {
-          const previous = editor.getAttributes("link").href as string | undefined;
-          const url = window.prompt("Link URL", previous ?? "https://");
-          if (url === null) return;
-          if (url === "") {
-            editor.chain().focus().extendMarkRange("link").unsetLink().run();
-            return;
-          }
-          editor
-            .chain()
-            .focus()
-            .extendMarkRange("link")
-            .setLink({ href: url })
-            .run();
-        },
-      },
-    ],
-    [
-      {
-        icon: Undo2,
-        label: "Undo (⌘Z)",
-        run: () => editor.chain().focus().undo().run(),
-        disabled: !editor.can().undo(),
-      },
-      {
-        icon: Redo2,
-        label: "Redo (⇧⌘Z)",
-        run: () => editor.chain().focus().redo().run(),
-        disabled: !editor.can().redo(),
-      },
-    ],
-  ];
-
-  return (
-    <div
-      className="sticky top-0 z-[3] flex items-center gap-1 px-6 py-1.5 border-b border-white/[0.06] mb-3"
-      style={{ backgroundColor: "oklch(0.11 0 0)" }}
-    >
-      {groups.map((group, gi) => (
-        <div key={gi} className="flex items-center gap-0.5">
-          {gi > 0 && (
-            <span className="mx-1 h-4 w-px bg-white/[0.08]" aria-hidden />
-          )}
-          {group.map((item) => (
-            <ToolbarButton key={item.label} {...item} />
-          ))}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-interface ToolbarItem {
-  icon: LucideIcon;
-  label: string;
-  active?: boolean;
-  disabled?: boolean;
-  run: () => void;
-}
-
-function ToolbarButton({ icon: Icon, label, active, disabled, run }: ToolbarItem) {
-  return (
-    <button
-      type="button"
-      title={label}
-      aria-label={label}
-      onClick={(e) => {
-        e.preventDefault();
-        run();
-      }}
-      onMouseDown={(e) => e.preventDefault()}
-      disabled={disabled}
-      className={cn(
-        "w-7 h-7 rounded flex items-center justify-center transition-colors",
-        disabled
-          ? "text-text-secondary/30 cursor-not-allowed"
-          : active
-            ? "bg-white/[0.08] text-text-primary cursor-pointer"
-            : "text-text-secondary hover:bg-white/[0.04] hover:text-text-primary cursor-pointer",
-      )}
-    >
-      <Icon size={13} />
-    </button>
   );
 }
 

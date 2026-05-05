@@ -4,7 +4,7 @@ import { DoplTransport } from "./transport.js";
 import type { KnowledgeBase, KnowledgeBaseCreateInput, KnowledgeBaseUpdateInput, KnowledgeDirListing, KnowledgeEntry, KnowledgeFolder, KnowledgePathOpResult, KnowledgeSearchHit, KnowledgeTrashSnapshot, KnowledgeTreeSnapshot, KnowledgeWriteFileInput } from "./knowledge-types.js";
 import type { CreateSkillInput, UpdateSkillPatch as SkillUpdatePatch } from "./skills.js";
 import type { ResolvedSkill, Skill, SkillFile } from "./skill-types.js";
-import type { ConnectResponse, IntegrationListResponse, IntegrationProvider, IntegrationStatusResponse, PrepareFromIntegrationResponse, ReadIntegrationObjectResponse } from "./integration-types.js";
+import type { ConnectResponse, IntegrationActionResultResponse, IntegrationActionsResponse, IntegrationListResponse, IntegrationProvider, IntegrationStatusResponse, PrepareFromIntegrationResponse, ReadIntegrationObjectResponse } from "./integration-types.js";
 export type { DoplTransportOptions as DoplClientOptions } from "./transport.js";
 export { parseRetryAfter } from "./retry.js";
 export declare class DoplClient {
@@ -211,20 +211,25 @@ export declare class DoplClient {
     writeSkillFile(slug: string, fileName: string, body: string): Promise<SkillFile>;
     renameSkillFile(slug: string, currentName: string, newName: string): Promise<SkillFile>;
     deleteSkillFile(slug: string, fileName: string): Promise<void>;
-    connectIntegration(provider: IntegrationProvider): Promise<ConnectResponse>;
-    getIntegrationStatus(provider: IntegrationProvider): Promise<IntegrationStatusResponse>;
-    listIntegrationObjects(provider: IntegrationProvider, input?: {
+    connectIntegration: (p: IntegrationProvider) => Promise<ConnectResponse>;
+    getIntegrationStatus: (p: IntegrationProvider) => Promise<IntegrationStatusResponse>;
+    listIntegrationObjects: (p: IntegrationProvider, input?: {
         query?: string;
         cursor?: string;
         limit?: number;
-    }): Promise<IntegrationListResponse>;
-    readIntegrationObject(provider: IntegrationProvider, input: {
+    }) => Promise<IntegrationListResponse>;
+    readIntegrationObject: (p: IntegrationProvider, input: {
         object_id: string;
-    }): Promise<ReadIntegrationObjectResponse>;
-    prepareFromIntegration(input: {
+    }) => Promise<ReadIntegrationObjectResponse>;
+    prepareFromIntegration: (input: {
         provider: IntegrationProvider;
         object_id: string;
         kb_id?: string;
         cluster_id?: string;
-    }): Promise<PrepareFromIntegrationResponse>;
+    }) => Promise<PrepareFromIntegrationResponse>;
+    listIntegrationActions: (p: IntegrationProvider) => Promise<IntegrationActionsResponse>;
+    executeIntegrationAction: (p: IntegrationProvider, input: {
+        action: string;
+        params: Record<string, unknown>;
+    }) => Promise<IntegrationActionResultResponse>;
 }
