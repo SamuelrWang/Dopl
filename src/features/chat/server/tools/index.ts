@@ -27,9 +27,11 @@ import {
   executeEmitContextFile,
 } from "./artifacts";
 import {
+  executeExecuteIntegrationActionTool,
+  executeIntegrationStatus,
+  executeListIntegrationActionsTool,
   executeListIntegrationObjects,
   executeReadIntegrationObject,
-  executeIntegrationStatus,
 } from "./integrations";
 
 /**
@@ -244,18 +246,30 @@ const WORKSPACE_SKILLS_TOOLS: Anthropic.Tool[] = [
   },
 ];
 
+const INTEGRATION_PROVIDER_ENUM = [
+  "notion",
+  "gmail",
+  "google_drive",
+  "github",
+  "google_calendar",
+  "google_docs",
+  "google_sheets",
+  "slack",
+] as const;
+
 const INTEGRATION_TOOLS: Anthropic.Tool[] = [
   {
     name: "integration_status",
     description:
-      "Check whether a third-party service (Notion, Gmail, Google Drive) is connected for this workspace. Returns one of: connected, needs_auth, error, disconnected. Call this first when the user asks about external content; if not connected, tell them to visit /<workspace>/integrations to connect.",
+      "Check whether a third-party service is connected for this workspace. Returns one of: connected, needs_auth, error, disconnected. Call this first when the user asks about external content; if not connected, tell them to visit /settings/integrations to connect.",
     input_schema: {
       type: "object" as const,
       properties: {
         provider: {
           type: "string",
-          enum: ["notion", "gmail", "google_drive"],
-          description: "Which third-party service to check.",
+          enum: INTEGRATION_PROVIDER_ENUM,
+          description:
+            "Which third-party service to check. Supported: notion, gmail, google_drive, github, google_calendar, google_docs, google_sheets, slack.",
         },
       },
       required: ["provider"],
@@ -264,19 +278,19 @@ const INTEGRATION_TOOLS: Anthropic.Tool[] = [
   {
     name: "list_integration_objects",
     description:
-      "Search/list objects from a connected third-party service. For Notion this returns pages matching the query; for Gmail this returns thread previews (snippet + thread id); for Google Drive this returns files. Use the returned `id` with `read_integration_object` to fetch full content. Returns `{ objects: [{ id, title, url, lastModified }], next_cursor }`.",
+      "Search/list objects from a connected third-party service. **Read-shaped providers only**: notion (pages), gmail (threads), google_drive (files). For other providers (github, google_calendar, google_docs, google_sheets, slack) this returns INTEGRATION_READ_NOT_SUPPORTED — use `execute_integration_action` (MCP) for action-shaped reads on those toolkits. Use the returned `id` with `read_integration_object` to fetch full content.",
     input_schema: {
       type: "object" as const,
       properties: {
         provider: {
           type: "string",
-          enum: ["notion", "gmail", "google_drive"],
+          enum: INTEGRATION_PROVIDER_ENUM,
           description: "Which third-party service to search.",
         },
         query: {
           type: "string",
           description:
-            "Free-text query. For Gmail use Gmail search syntax (e.g. 'from:foo subject:bar after:2026/01/01'). For Notion this is a title search. Optional.",
+            "Free-text query. For Gmail use Gmail search syntax (e.g. 'from:foo subject:bar after:2026/01/01'). For Notion this is a title search.",
         },
         cursor: {
           type: "string",
@@ -293,13 +307,13 @@ const INTEGRATION_TOOLS: Anthropic.Tool[] = [
   {
     name: "read_integration_object",
     description:
-      "Fetch the full content of one object from a connected third-party service. For Notion this returns the page rendered as markdown; for Gmail this returns the full thread (every message body, in chronological order); for Google Drive this returns the file's text content. Use after `list_integration_objects` to drill into a specific result. Returns `{ title, url, last_modified, body }`.",
+      "Fetch the full content of one object from a connected provider. **Read-shaped providers only**: notion (page → markdown), gmail (thread → all messages), google_drive (file → text). Other providers return INTEGRATION_READ_NOT_SUPPORTED. Use after `list_integration_objects` to drill into a result.",
     input_schema: {
       type: "object" as const,
       properties: {
         provider: {
           type: "string",
-          enum: ["notion", "gmail", "google_drive"],
+          enum: INTEGRATION_PROVIDER_ENUM,
           description: "Which third-party service the object lives in.",
         },
         object_id: {
@@ -309,6 +323,53 @@ const INTEGRATION_TOOLS: Anthropic.Tool[] = [
         },
       },
       required: ["provider", "object_id"],
+    },
+  },
+  {
+    name: "list_integration_actions",
+    description:
+      "Discover every action a connected provider exposes — covers all 8 supported providers. Returns `{ actions: [{ name, summary, paramsJsonSchema, source }] }`. `paramsJsonSchema` is a standard JSON Schema fragment; read it to construct the `params` object you'll pass to `execute_integration_action`. `source` is `curated` (hand-tuned) or `auto` (auto-mapped from Composio). The catalog can be large (50+ actions); narrow your reading to actions the user's request implies — search by intent in the action names (e.g. 'list_events', 'create_event' for Calendar; 'append_row', 'get_spreadsheet' for Sheets; 'post_message' for Slack).",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        provider: {
+          type: "string",
+          enum: INTEGRATION_PROVIDER_ENUM,
+          description: "Which third-party service to enumerate actions for.",
+        },
+      },
+      required: ["provider"],
+    },
+  },
+  {
+    name: "execute_integration_action",
+    description:
+      "Run a named action on a connected provider — works for every action Composio exposes across all 8 providers (gmail, calendar, sheets, docs, drive, notion, github, slack). ALWAYS call `list_integration_actions` first to discover the action name and exact `params` shape; missing required fields fail server-side validation. Returns `{ ok: true, data }` on success, `{ ok: false, error }` if the provider rejected the call. Side-effecting for write actions (create_*, send_*, delete_*, update_*); confirm with the user before running those. Read actions (list_*, get_*, fetch_*, search_*) are safe to call without confirmation.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        provider: {
+          type: "string",
+          enum: INTEGRATION_PROVIDER_ENUM,
+          description: "Which third-party service to act on.",
+        },
+        action: {
+          type: "string",
+          description:
+            "Action name from `list_integration_actions` (e.g. 'send_email', 'list_events', 'append_row', 'create_issue').",
+        },
+        params: {
+          type: "object",
+          description:
+            "Action params, shape determined by the action's `paramsJsonSchema`.",
+        },
+        alias: {
+          type: "string",
+          description:
+            "Optional account alias when the user has multiple connected accounts for this provider (e.g. work + personal Gmail). Defaults to most-recently-used.",
+        },
+      },
+      required: ["provider", "action", "params"],
     },
   },
 ];
@@ -352,19 +413,26 @@ const ARTIFACT_TOOLS: Anthropic.Tool[] = [
 
 /**
  * Workspace-mode tool set — preserves the canvas chat surface (search +
- * cluster reads + cluster brain mutations).
+ * cluster reads + cluster brain mutations) and adds the integration
+ * action surface so the agent can run write actions on connected
+ * providers (e.g. send a Gmail, post a Slack message, create a
+ * Calendar event) without leaving the canvas chat.
  */
 export const WORKSPACE_TOOLS: Anthropic.Tool[] = [
   ...SEARCH_TOOLS,
   ...CLUSTER_READ_TOOLS,
   ...CLUSTER_WRITE_TOOLS,
+  ...INTEGRATION_TOOLS,
 ];
 
 /**
  * Private-mode tool set — read-only across every workspace data family
- * + the artifact-emit tools. Crucially: NO write tools. The system
- * prompt redirects action requests to `emit_agent_prompt` rather than
- * letting the model call a write tool.
+ * + the artifact-emit tools, PLUS the integration action surface so
+ * the agent can pull from any connected provider (Calendar events,
+ * Sheets rows, Slack history, GitHub issues) without us having to
+ * hand-wrap a read path per provider. Write actions are reachable
+ * here too — the system prompt nudges the agent to confirm
+ * destructive operations with the user before running them.
  */
 export const PRIVATE_TOOLS: Anthropic.Tool[] = [
   ...SEARCH_TOOLS,
@@ -422,6 +490,10 @@ const SCOPED_HANDLERS: Record<string, ScopedToolHandler> = {
     executeListIntegrationObjects(input, userId, canvasContext, workspaceId),
   read_integration_object: (input, userId, canvasContext, workspaceId) =>
     executeReadIntegrationObject(input, userId, canvasContext, workspaceId),
+  list_integration_actions: (input, userId, canvasContext, workspaceId) =>
+    executeListIntegrationActionsTool(input, userId, canvasContext, workspaceId),
+  execute_integration_action: (input, userId, canvasContext, workspaceId) =>
+    executeExecuteIntegrationActionTool(input, userId, canvasContext, workspaceId),
 };
 
 /**

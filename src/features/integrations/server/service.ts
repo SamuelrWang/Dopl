@@ -174,16 +174,20 @@ async function finalizeConnectionRow(
   const account = await broker.getConnectedAccount(brokerConnectionId);
   await updateConnectionStatus(db, { id: connectionId, status: account.status });
 
-  if (account.accountEmail || account.accountLabel) {
-    await updateConnectionAccountInfo(db, {
-      id: connectionId,
-      // Prefer email as the canonical alias — stable, user-recognisable,
-      // and avoids needing to ask the user to pick a name.
-      alias: account.accountEmail ?? `account:${brokerConnectionId.slice(-8)}`,
-      accountEmail: account.accountEmail,
-      accountLabel: account.accountLabel,
-    });
-  }
+  // Always rewrite the placeholder `pending:` alias once we've heard
+  // back from the broker. Prefer email → label → a stable
+  // fallback derived from the broker connection id. The previous
+  // version gated this whole branch on having at least one of
+  // (email, label), which left rows stuck at `pending:` for any
+  // toolkit whose Composio response shape doesn't expose either —
+  // e.g. our Google auth configs as currently set up.
+  const fallbackAlias = `account:${brokerConnectionId.slice(-8)}`;
+  await updateConnectionAccountInfo(db, {
+    id: connectionId,
+    alias: account.accountEmail ?? account.accountLabel ?? fallbackAlias,
+    accountEmail: account.accountEmail,
+    accountLabel: account.accountLabel,
+  });
 
   if (account.status === "connected") {
     const workspaces = await listMyWorkspaces(userId);

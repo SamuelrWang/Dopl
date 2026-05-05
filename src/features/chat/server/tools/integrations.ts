@@ -4,6 +4,10 @@ import {
   listIntegrationObjects,
   readIntegrationObject,
 } from "@/features/integrations/server/service";
+import {
+  executeIntegrationAction,
+  listIntegrationActions,
+} from "@/features/integrations/server/service-actions";
 import { ProviderSchema } from "@/features/integrations/schema";
 import { logSystemEvent } from "@/features/analytics/server/system-events";
 import type { ToolResult } from "./types";
@@ -34,7 +38,7 @@ export async function executeListIntegrationObjects(
   if (!provider.success) {
     return {
       result: JSON.stringify({
-        error: "Unknown provider. Supported: notion, gmail, google_drive.",
+        error: "Unknown provider. Supported: notion, gmail, google_drive, github, google_calendar, google_docs, google_sheets, slack.",
       }),
     };
   }
@@ -98,7 +102,7 @@ export async function executeReadIntegrationObject(
   if (!provider.success) {
     return {
       result: JSON.stringify({
-        error: "Unknown provider. Supported: notion, gmail, google_drive.",
+        error: "Unknown provider. Supported: notion, gmail, google_drive, github, google_calendar, google_docs, google_sheets, slack.",
       }),
     };
   }
@@ -155,7 +159,7 @@ export async function executeIntegrationStatus(
   if (!provider.success) {
     return {
       result: JSON.stringify({
-        error: "Unknown provider. Supported: notion, gmail, google_drive.",
+        error: "Unknown provider. Supported: notion, gmail, google_drive, github, google_calendar, google_docs, google_sheets, slack.",
       }),
     };
   }
@@ -167,4 +171,100 @@ export async function executeIntegrationStatus(
   return {
     result: JSON.stringify({ provider: provider.data, status: status.status }),
   };
+}
+
+/**
+ * Discovery for the connected provider's full Composio toolkit catalog
+ * + any hand-curated overrides. Returns the same shape as the MCP-side
+ * `list_integration_actions` tool: `{ actions: [{ name, summary,
+ * paramsJsonSchema, source }] }`. Used by the chat agent to find
+ * provider-specific actions (list calendar events, append a sheet
+ * row, post a Slack message, …) without per-action wrapping code.
+ */
+export async function executeListIntegrationActionsTool(
+  input: Record<string, unknown>,
+  _userId?: string,
+  _canvasContext?: unknown,
+  _workspaceId?: string
+): Promise<ToolResult> {
+  const provider = ProviderSchema.safeParse(input.provider);
+  if (!provider.success) {
+    return {
+      result: JSON.stringify({
+        error:
+          "Unknown provider. Supported: notion, gmail, google_drive, github, google_calendar, google_docs, google_sheets, slack.",
+      }),
+    };
+  }
+  try {
+    const actions = await listIntegrationActions(provider.data);
+    return {
+      result: JSON.stringify({ provider: provider.data, actions }),
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { result: JSON.stringify({ error: message }) };
+  }
+}
+
+/**
+ * Run one named action against a connected provider. Mirror of the
+ * MCP-side `execute_integration_action` so the web chat agent can
+ * call any Composio action — read or write — for any of the user's
+ * connected providers. Workspace-scoped: the connection must be
+ * granted to the active workspace (enforced inside service-actions
+ * via `findConnectionForWorkspace`).
+ *
+ * Read-shaped action names (list_*, get_*, fetch_*, search_*) are
+ * safe to call without explicit user confirmation; write-shaped ones
+ * (create_*, send_*, delete_*, update_*) should be confirmed first
+ * via the chat surface — the system prompt handles that nudge.
+ */
+export async function executeExecuteIntegrationActionTool(
+  input: Record<string, unknown>,
+  userId?: string,
+  _canvasContext?: unknown,
+  workspaceId?: string
+): Promise<ToolResult> {
+  if (!userId || !workspaceId) {
+    return { result: JSON.stringify({ error: "Not authenticated." }) };
+  }
+  const provider = ProviderSchema.safeParse(input.provider);
+  if (!provider.success) {
+    return {
+      result: JSON.stringify({
+        error:
+          "Unknown provider. Supported: notion, gmail, google_drive, github, google_calendar, google_docs, google_sheets, slack.",
+      }),
+    };
+  }
+  const action = typeof input.action === "string" ? input.action : null;
+  if (!action) {
+    return { result: JSON.stringify({ error: "action is required." }) };
+  }
+  const params =
+    input.params && typeof input.params === "object"
+      ? (input.params as Record<string, unknown>)
+      : {};
+  const alias = typeof input.alias === "string" ? input.alias : undefined;
+
+  try {
+    const result = await executeIntegrationAction(
+      { workspaceId, userId, provider: provider.data },
+      { action, params, alias }
+    );
+    return { result: JSON.stringify({ provider: provider.data, action, result }) };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    void logSystemEvent({
+      severity: "error",
+      category: "other",
+      source: "chat.tools.execute_integration_action",
+      message: `execute_integration_action failed: ${message}`,
+      fingerprintKeys: ["integrations_execute_failed", provider.data, action],
+      metadata: { provider: provider.data, action, error: message },
+      userId,
+    });
+    return { result: JSON.stringify({ error: message }) };
+  }
 }
