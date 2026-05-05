@@ -209,6 +209,7 @@ function gmailActions(): ProviderActionConfig[] {
   });
   const ReplyToThread = z.object({
     thread_id: z.string().min(1).max(500),
+    to: z.string().min(1).max(500),
     body: z.string().min(0).max(50_000),
   });
   return [
@@ -245,10 +246,11 @@ function gmailActions(): ProviderActionConfig[] {
     {
       name: "reply_to_thread",
       summary:
-        "Reply to an existing Gmail thread (uses the thread id returned from `list_integration_objects` or a previous `send_email`). The reply is appended to the thread; the subject and recipients are inferred from the thread's first message.",
+        "Reply to an existing Gmail thread (use the thread id returned from `list_integration_objects` or a previous `send_email`). The reply is appended to the thread; you must pass `to` because Gmail's reply API doesn't auto-derive it. If you don't know the recipient, call `read_integration_object` on the thread first to inspect the From header.",
       paramsSchema: ReplyToThread,
       paramsDescription: {
         thread_id: { type: "string", description: "Gmail thread id from list_integration_objects or send_email response.", required: true },
+        to: { type: "string", description: "Recipient address — typically the original From of the thread.", required: true },
         body: { type: "string", description: "Plain-text reply body.", required: true },
       },
       composioSlug: "GMAIL_REPLY_TO_THREAD",
@@ -256,6 +258,7 @@ function gmailActions(): ProviderActionConfig[] {
         const p = ReplyToThread.parse(params);
         return {
           thread_id: p.thread_id,
+          recipient_email: p.to,
           message_body: p.body,
         };
       },

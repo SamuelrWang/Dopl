@@ -53,11 +53,14 @@ describe("Gmail actions registry", () => {
     });
   });
 
-  it("reply_to_thread buildArgs maps to GMAIL_REPLY_TO_THREAD fields", () => {
+  it("reply_to_thread buildArgs maps to GMAIL_REPLY_TO_THREAD fields with explicit recipient", () => {
     const reply = findAction("gmail", "reply_to_thread");
     expect(reply?.composioSlug).toBe("GMAIL_REPLY_TO_THREAD");
-    expect(reply!.buildArgs({ thread_id: "t1", body: "ok" })).toEqual({
+    expect(
+      reply!.buildArgs({ thread_id: "t1", to: "a@b.com", body: "ok" })
+    ).toEqual({
       thread_id: "t1",
+      recipient_email: "a@b.com",
       message_body: "ok",
     });
   });

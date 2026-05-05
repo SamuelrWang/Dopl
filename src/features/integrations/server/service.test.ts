@@ -369,7 +369,7 @@ describe("executeIntegrationAction", () => {
       gmailCtx,
       {
         action: "reply_to_thread",
-        params: { thread_id: "thr_b", body: "ack" },
+        params: { thread_id: "thr_b", to: "alice@example.com", body: "ack" },
       },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       { db: stub as any, broker }
@@ -377,7 +377,11 @@ describe("executeIntegrationAction", () => {
     expect(exec).toHaveBeenCalledWith(
       expect.objectContaining({
         slug: "GMAIL_REPLY_TO_THREAD",
-        arguments: { thread_id: "thr_b", message_body: "ack" },
+        arguments: {
+          thread_id: "thr_b",
+          recipient_email: "alice@example.com",
+          message_body: "ack",
+        },
       })
     );
   });
