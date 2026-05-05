@@ -22,7 +22,7 @@ import {
   verifyConnectionOwnership,
 } from "./repository";
 import { IntegrationFetchError } from "./errors";
-import { resolveAuthConfigId } from "./providers";
+import { getProviderConfig, resolveAuthConfigId } from "./providers";
 import type {
   ConnectInitiation,
   IntegrationProvider,
@@ -121,7 +121,14 @@ export async function connectIntegration(
   if (init.status === "connected") {
     // Rare path: broker pre-authorized (e.g. token already cached).
     // Still derive alias from account info + auto-grant.
-    await finalizeConnectionRow(db, broker, row.id, init.brokerConnectionId, ctx.userId);
+    await finalizeConnectionRow(
+      db,
+      broker,
+      row.id,
+      init.brokerConnectionId,
+      ctx.userId,
+      ctx.provider
+    );
     return { status: "connected", connectionId: row.id };
   }
 
@@ -159,7 +166,8 @@ export async function finalizeConnectionCallback(
     broker,
     found.connection.id,
     args.brokerConnectionId,
-    found.connection.userId
+    found.connection.userId,
+    found.connection.provider
   );
   return { provider: found.connection.provider, status };
 }
@@ -169,24 +177,59 @@ async function finalizeConnectionRow(
   broker: ComposioClient,
   connectionId: string,
   brokerConnectionId: string,
-  userId: string
+  userId: string,
+  provider: IntegrationProvider
 ): Promise<IntegrationStatus> {
   const account = await broker.getConnectedAccount(brokerConnectionId);
   await updateConnectionStatus(db, { id: connectionId, status: account.status });
 
-  // Always rewrite the placeholder `pending:` alias once we've heard
-  // back from the broker. Prefer email → label → a stable
-  // fallback derived from the broker connection id. The previous
-  // version gated this whole branch on having at least one of
-  // (email, label), which left rows stuck at `pending:` for any
-  // toolkit whose Composio response shape doesn't expose either —
-  // e.g. our Google auth configs as currently set up.
+  // Account email / label resolution, in order of preference:
+  //   1. Whatever the broker surfaced on the connectedAccount itself
+  //      (rare — only if Composio's state.val happens to carry it).
+  //   2. A per-provider profile action (`GMAIL_GET_PROFILE`,
+  //      `GOOGLEDRIVE_GOOGLE_DRIVE_GET_ABOUT`, etc.) declared on the
+  //      ProviderConfig — most reliable for Google + GitHub.
+  //   3. Stable fallback derived from the broker connection id (e.g.
+  //      `account:vch1dWNe`) — readable but ugly. Used as last resort
+  //      so the alias unique constraint always has a non-empty value.
   const fallbackAlias = `account:${brokerConnectionId.slice(-8)}`;
+  let derivedEmail: string | null = account.accountEmail;
+  let derivedLabel: string | null = account.accountLabel;
+
+  const cfg = getProviderConfig(provider);
+  if (
+    account.status === "connected" &&
+    !derivedEmail &&
+    cfg.profileActionSlug &&
+    cfg.parseProfileResponse
+  ) {
+    try {
+      const { raw } = await broker.executeAction({
+        brokerConnectionId,
+        entityId: brokerEntityId(userId),
+        provider,
+        slug: cfg.profileActionSlug,
+        arguments: {},
+      });
+      const parsed = cfg.parseProfileResponse(raw);
+      derivedEmail = parsed.email ?? derivedEmail;
+      derivedLabel = parsed.label ?? derivedLabel;
+    } catch (err) {
+      // Profile lookup is best-effort — if Composio doesn't expose the
+      // action under this toolkit, or the call rate-limits, we fall
+      // through to the broker-id alias rather than blocking the whole
+      // OAuth flow.
+      console.warn(
+        `[integrations] profile lookup failed for ${provider} via ${cfg.profileActionSlug}: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  }
+
   await updateConnectionAccountInfo(db, {
     id: connectionId,
-    alias: account.accountEmail ?? account.accountLabel ?? fallbackAlias,
-    accountEmail: account.accountEmail,
-    accountLabel: account.accountLabel,
+    alias: derivedEmail ?? derivedLabel ?? fallbackAlias,
+    accountEmail: derivedEmail,
+    accountLabel: derivedLabel,
   });
 
   if (account.status === "connected") {

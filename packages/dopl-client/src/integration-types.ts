@@ -34,6 +34,8 @@ export type IntegrationConnectionSummary = {
   status: IntegrationStatusValue;
   account_email: string | null;
   account_label: string | null;
+  /** Gravatar URL derived from account_email (or null when no email). */
+  account_avatar_url: string | null;
   last_used_at: string | null;
   granted_workspace_ids: string[];
 };

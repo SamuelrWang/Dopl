@@ -60,6 +60,19 @@ export type ProviderConfig = {
    * `actions` entries override auto-generated ones by normalized name.
    */
   composioToolkit?: string;
+  /**
+   * Optional Composio action slug to call right after OAuth completes
+   * to derive a real account email + label for the connection. Without
+   * this, the alias falls back to a broker-id slug like
+   * `account:vch1dWNe` — usable but ugly. With it, the user sees
+   * `alice@example.com` in the integrations list. Skip for providers
+   * that don't expose a clean profile action (Slack, Notion).
+   */
+  profileActionSlug?: string;
+  parseProfileResponse?: (raw: Record<string, unknown>) => {
+    email: string | null;
+    label: string | null;
+  };
   sourcePlatform: string;
   sourceType: string;
   urlBuilder: (objectId: string) => string;
@@ -163,6 +176,11 @@ const NOTION: ProviderConfig = {
 const GMAIL: ProviderConfig = {
   composioAuthConfigEnv: "INTEGRATIONS_GMAIL_AUTH_CONFIG_ID",
   composioToolkit: "GMAIL",
+  profileActionSlug: "GMAIL_GET_PROFILE",
+  parseProfileResponse: (raw) => ({
+    email: asString(raw.emailAddress) ?? asString(raw.email),
+    label: null,
+  }),
   sourcePlatform: "gmail",
   sourceType: "gmail_thread",
   urlBuilder: (id) => `https://mail.google.com/mail/u/0/#inbox/${id}`,
@@ -326,6 +344,14 @@ function gmailBody(message: Record<string, unknown>): string {
 const GOOGLE_DRIVE: ProviderConfig = {
   composioAuthConfigEnv: "INTEGRATIONS_GOOGLE_DRIVE_AUTH_CONFIG_ID",
   composioToolkit: "GOOGLEDRIVE",
+  profileActionSlug: "GOOGLEDRIVE_GOOGLE_DRIVE_GET_ABOUT",
+  parseProfileResponse: (raw) => {
+    const user = raw.user as Record<string, unknown> | undefined;
+    return {
+      email: user ? asString(user.emailAddress) : null,
+      label: user ? asString(user.displayName) : null,
+    };
+  },
   sourcePlatform: "google_drive",
   sourceType: "google_drive_file",
   urlBuilder: (id) => `https://drive.google.com/file/d/${id}/view`,
@@ -369,6 +395,11 @@ const GOOGLE_DRIVE: ProviderConfig = {
 const GITHUB: ProviderConfig = {
   composioAuthConfigEnv: "INTEGRATIONS_GITHUB_AUTH_CONFIG_ID",
   composioToolkit: "GITHUB",
+  profileActionSlug: "GITHUB_GET_THE_AUTHENTICATED_USER",
+  parseProfileResponse: (raw) => ({
+    email: asString(raw.email),
+    label: asString(raw.login) ?? asString(raw.name),
+  }),
   sourcePlatform: "github",
   sourceType: "github_repo",
   urlBuilder: (id) => `https://github.com/${id}`,

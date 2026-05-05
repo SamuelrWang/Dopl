@@ -41,10 +41,14 @@ export const PROVIDER_TAGLINES: Record<IntegrationProvider, string> = {
 };
 
 /**
- * Provider logo URLs. Sourced from simpleicons.org's CDN — same
- * pattern dev-tooling sites use. Black-on-light variants for the
- * Notion / GitHub icons that render poorly at small sizes against
- * the light-on-dark Dopl theme.
+ * Provider logo URLs. Sourced from simpleicons.org's CDN — they
+ * serve clean SVGs that scale crisply at any DPR (the favicon API
+ * we briefly used returns 32px raster which gets blurry at retina).
+ *
+ * Color is overridden per-brand for legibility on Dopl's dark
+ * surfaces: brand color where it pops, white otherwise. simpleicons
+ * keeps brand vectors in sync with each company's official mark, so
+ * we don't have to bundle and update SVGs ourselves.
  *
  * `null` means "no logo available" — the UI falls back to a colored
  * monogram chip. Add an entry here when registering a new provider.

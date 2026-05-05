@@ -16,6 +16,7 @@ type ConnectionSummary = {
   status: "connected" | "needs_auth" | "error";
   account_email: string | null;
   account_label: string | null;
+  account_avatar_url: string | null;
   last_used_at: string | null;
   granted_workspace_ids: string[];
 };
@@ -28,6 +29,15 @@ type LoadState =
   | { kind: "error"; message: string };
 
 const POPUP_FEATURES = "width=600,height=720,menubar=no,toolbar=no,popup=yes";
+
+async function readErrorMessage(res: Response): Promise<string | null> {
+  try {
+    const body = (await res.json()) as { error?: { message?: string } };
+    return body?.error?.message ?? null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Body of /settings/integrations. Lives inside the page's full-bleed
@@ -112,7 +122,15 @@ export function IntegrationsManager() {
       );
       if (!res.ok) {
         setBusyProvider(null);
-        alert(`Couldn't start the connection (HTTP ${res.status}).`);
+        // Surface the real server-side reason when present so we don't
+        // just show "HTTP 503". The route returns `{ error: { code,
+        // message } }` per the shared error envelope.
+        const detail = await readErrorMessage(res);
+        alert(
+          detail
+            ? `Couldn't start the connection: ${detail}`
+            : `Couldn't start the connection (HTTP ${res.status}).`
+        );
         return;
       }
       const body = (await res.json()) as
@@ -229,7 +247,7 @@ export function IntegrationsManager() {
                 type="button"
                 onClick={() => handleConnect(provider)}
                 disabled={isBusy}
-                className="rounded-md bg-white text-black px-3 py-1.5 text-xs font-medium hover:bg-white/90 disabled:opacity-50"
+                className="rounded-md border border-white/[0.12] bg-transparent px-3 py-1.5 text-xs text-text-primary hover:bg-white/[0.04] disabled:opacity-50 transition-colors"
               >
                 {isBusy
                   ? "Connecting…"
@@ -264,19 +282,55 @@ export function IntegrationsManager() {
   );
 }
 
+function AccountAvatar({
+  email,
+  avatarUrl,
+}: {
+  email: string | null;
+  avatarUrl: string | null;
+}) {
+  // Toggle to swap to the initial-fallback when the gravatar 404s or
+  // returns the default silhouette and the user would rather see a
+  // colored monogram. We can't detect "is this Gravatar's default
+  // mystery-person silhouette" from the URL alone (the image is
+  // served as 200), so we just always render the URL when present.
+  // Browsers cache gravatar requests aggressively, so the perf hit
+  // is one-shot per email.
+  const [imgError, setImgError] = useState(false);
+  if (avatarUrl && !imgError) {
+    return (
+      <span className="grid place-items-center h-6 w-6 rounded-full bg-white/[0.06] shrink-0 overflow-hidden">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={avatarUrl}
+          alt=""
+          className="h-full w-full object-cover"
+          onError={() => setImgError(true)}
+        />
+      </span>
+    );
+  }
+  const initial = (email ?? "?").slice(0, 1).toUpperCase();
+  return (
+    <span className="grid place-items-center h-6 w-6 rounded-full bg-white/[0.08] text-[10px] font-medium text-text-secondary shrink-0">
+      {initial}
+    </span>
+  );
+}
+
 function ProviderLogo({ provider }: { provider: IntegrationProvider }) {
   const url = PROVIDER_LOGO_URL[provider];
   if (url) {
     return (
-      <span className="grid place-items-center h-9 w-9 rounded-lg border border-white/[0.06] bg-black/30 shrink-0">
+      <span className="grid place-items-center h-9 w-9 rounded-lg bg-white/[0.06] shrink-0 overflow-hidden">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={url} alt="" className="h-4 w-4" />
+        <img src={url} alt="" className="h-6 w-6 object-contain" />
       </span>
     );
   }
   const initial = PROVIDER_DISPLAY_NAMES[provider].slice(0, 1);
   return (
-    <span className="grid place-items-center h-9 w-9 rounded-lg border border-white/[0.06] bg-white/[0.04] text-sm font-medium text-text-secondary shrink-0">
+    <span className="grid place-items-center h-9 w-9 rounded-lg bg-white/[0.06] text-sm font-medium text-text-secondary shrink-0">
       {initial}
     </span>
   );
@@ -314,6 +368,10 @@ function ConnectionRow({
   return (
     <li className="px-4 py-2.5">
       <div className="flex items-center gap-3">
+        <AccountAvatar
+          email={connection.account_email}
+          avatarUrl={connection.account_avatar_url}
+        />
         <span
           className={`h-1.5 w-1.5 rounded-full ${STATUS_DOT[connection.status]}`}
           aria-hidden
@@ -326,7 +384,7 @@ function ConnectionRow({
           <button
             type="button"
             onClick={onDisconnect}
-            className="text-xs text-text-tertiary hover:text-text-secondary"
+            className="rounded-md border border-white/[0.1] bg-transparent px-2.5 py-1 text-[11px] text-text-secondary hover:bg-white/[0.04] hover:text-text-primary transition-colors"
           >
             Disconnect
           </button>

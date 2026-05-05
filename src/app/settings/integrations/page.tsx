@@ -41,44 +41,6 @@ export default async function IntegrationsSettingsPage() {
           className="h-full rounded-2xl border border-white/[0.1] overflow-hidden flex flex-col"
           style={{ backgroundColor: "oklch(0.13 0 0)" }}
         >
-          <header className="px-6 pt-5 pb-4 border-b border-white/[0.06]">
-            <p className="text-sm text-text-secondary leading-relaxed max-w-prose">
-              Connect a third-party service so your agent can read or write
-              on your behalf — Gmail, Notion, Slack, and more.
-            </p>
-          </header>
-
-          <section className="px-6 py-4 border-b border-white/[0.06] text-xs text-text-secondary leading-relaxed space-y-2 max-w-prose">
-            <p>
-              <span className="text-text-primary font-medium">How this works.</span>{" "}
-              We use{" "}
-              <a
-                href="https://composio.dev"
-                target="_blank"
-                rel="noreferrer"
-                className="text-text-primary underline decoration-white/20 hover:decoration-white/60"
-              >
-                Composio
-              </a>{" "}
-              as our OAuth broker — they hold the access tokens, we never see them.
-              Each Composio auth config points at our own OAuth apps with each
-              provider, so consent screens say &quot;Dopl,&quot; not &quot;Composio.&quot;
-            </p>
-            <p>
-              <span className="text-text-primary font-medium">Scoping.</span>{" "}
-              Connections are tied to <em>you</em>, not a workspace. A teammate
-              in the same workspace can&apos;t see or use your accounts. By
-              default, each connection is granted to every workspace you belong
-              to — uncheck specific workspaces below to scope tighter.
-            </p>
-            <p>
-              <span className="text-text-primary font-medium">Multiple accounts.</span>{" "}
-              You can connect more than one account per provider (e.g. work
-              Gmail + personal Gmail). The agent picks the right one based on
-              the workspace context.
-            </p>
-          </section>
-
           <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5">
             <IntegrationsManager />
           </div>
