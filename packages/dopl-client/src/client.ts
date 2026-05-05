@@ -46,6 +46,7 @@ import type {
   ConnectResponse,
   IntegrationActionResultResponse,
   IntegrationActionsResponse,
+  IntegrationConnectionsResponse,
   IntegrationListResponse,
   IntegrationProvider,
   IntegrationStatusResponse,
@@ -753,8 +754,10 @@ export class DoplClient {
     integrations.readIntegrationObject(this.transport, p, input);
   prepareFromIntegration = (input: { provider: IntegrationProvider; object_id: string; kb_id?: string; cluster_id?: string }): Promise<PrepareFromIntegrationResponse> =>
     integrations.prepareFromIntegration(this.transport, input);
-  listIntegrationActions = (p: IntegrationProvider): Promise<IntegrationActionsResponse> =>
-    integrations.listIntegrationActions(this.transport, p);
+  listIntegrationActions = (p: IntegrationProvider, options: { query?: string } = {}): Promise<IntegrationActionsResponse> =>
+    integrations.listIntegrationActions(this.transport, p, options);
   executeIntegrationAction = (p: IntegrationProvider, input: { action: string; params: Record<string, unknown> }): Promise<IntegrationActionResultResponse> =>
     integrations.executeIntegrationAction(this.transport, p, input);
+  listMyIntegrations = (): Promise<IntegrationConnectionsResponse> =>
+    integrations.listMyIntegrations(this.transport);
 }

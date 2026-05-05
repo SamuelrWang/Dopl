@@ -415,7 +415,8 @@ class DoplClient {
     listIntegrationObjects = (p, input = {}) => integrations.listIntegrationObjects(this.transport, p, input);
     readIntegrationObject = (p, input) => integrations.readIntegrationObject(this.transport, p, input);
     prepareFromIntegration = (input) => integrations.prepareFromIntegration(this.transport, input);
-    listIntegrationActions = (p) => integrations.listIntegrationActions(this.transport, p);
+    listIntegrationActions = (p, options = {}) => integrations.listIntegrationActions(this.transport, p, options);
     executeIntegrationAction = (p, input) => integrations.executeIntegrationAction(this.transport, p, input);
+    listMyIntegrations = () => integrations.listMyIntegrations(this.transport);
 }
 exports.DoplClient = DoplClient;

@@ -12,6 +12,7 @@ exports.getIntegrationStatus = getIntegrationStatus;
 exports.listIntegrationObjects = listIntegrationObjects;
 exports.readIntegrationObject = readIntegrationObject;
 exports.listIntegrationActions = listIntegrationActions;
+exports.listMyIntegrations = listMyIntegrations;
 exports.executeIntegrationAction = executeIntegrationAction;
 exports.prepareFromIntegration = prepareFromIntegration;
 const enc = encodeURIComponent;
@@ -35,8 +36,14 @@ async function readIntegrationObject(t, provider, input) {
         toolName: "read_integration_object",
     });
 }
-async function listIntegrationActions(t, provider) {
-    return t.request(`/api/integrations/${enc(provider)}/actions`, { toolName: "list_integration_actions" });
+async function listIntegrationActions(t, provider, options = {}) {
+    const qs = options.query
+        ? `?query=${encodeURIComponent(options.query)}`
+        : "";
+    return t.request(`/api/integrations/${enc(provider)}/actions${qs}`, { toolName: "list_integration_actions" });
+}
+async function listMyIntegrations(t) {
+    return t.request(`/api/integrations/connections`, { toolName: "list_my_integrations" });
 }
 async function executeIntegrationAction(t, provider, input) {
     return t.request(`/api/integrations/${enc(provider)}/execute`, {

@@ -588,6 +588,43 @@ describe("disconnectIntegration", () => {
 
 // ── listIntegrationActions / executeIntegrationAction (auto-map) ─────
 
+describe("listIntegrationActions query filter", () => {
+  it("substring-matches name and summary case-insensitively", async () => {
+    const broker = makeFakeBroker({
+      listToolkitTools: vi.fn().mockResolvedValue([
+        {
+          slug: "GMAIL_CREATE_FILTER",
+          description: "Create a Gmail filter.",
+          inputSchema: { type: "object", properties: {} },
+        },
+        {
+          slug: "GMAIL_LIST_LABELS",
+          description: "List every label.",
+          inputSchema: { type: "object", properties: {} },
+        },
+      ]),
+    });
+    const filtered = await listIntegrationActions(
+      "gmail",
+      { broker },
+      { query: "label" }
+    );
+    // Curated (send_email, reply_to_thread) drop out — query "label"
+    // matches list_labels only.
+    expect(filtered.map((a) => a.name)).toEqual(["list_labels"]);
+  });
+
+  it("returns empty array when no actions match the query", async () => {
+    const broker = makeFakeBroker();
+    const filtered = await listIntegrationActions(
+      "gmail",
+      { broker },
+      { query: "nothing-matches-this" }
+    );
+    expect(filtered).toEqual([]);
+  });
+});
+
 describe("listIntegrationActions", () => {
   it("returns curated entries first, then auto entries from the broker catalog", async () => {
     const broker = makeFakeBroker({

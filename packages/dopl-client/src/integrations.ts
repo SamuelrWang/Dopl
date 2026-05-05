@@ -11,6 +11,7 @@ import type {
   ConnectResponse,
   IntegrationActionResultResponse,
   IntegrationActionsResponse,
+  IntegrationConnectionsResponse,
   IntegrationListResponse,
   IntegrationProvider,
   IntegrationStatusResponse,
@@ -72,11 +73,24 @@ export async function readIntegrationObject(
 
 export async function listIntegrationActions(
   t: DoplTransport,
-  provider: IntegrationProvider
+  provider: IntegrationProvider,
+  options: { query?: string } = {}
 ): Promise<IntegrationActionsResponse> {
+  const qs = options.query
+    ? `?query=${encodeURIComponent(options.query)}`
+    : "";
   return t.request<IntegrationActionsResponse>(
-    `/api/integrations/${enc(provider)}/actions`,
+    `/api/integrations/${enc(provider)}/actions${qs}`,
     { toolName: "list_integration_actions" }
+  );
+}
+
+export async function listMyIntegrations(
+  t: DoplTransport
+): Promise<IntegrationConnectionsResponse> {
+  return t.request<IntegrationConnectionsResponse>(
+    `/api/integrations/connections`,
+    { toolName: "list_my_integrations" }
   );
 }
 

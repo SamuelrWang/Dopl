@@ -8,10 +8,16 @@ import { listIntegrationActions } from "@/features/integrations/server/service-a
 export const GET = withWorkspaceAuth(
   withErrorHandler(
     "GET /api/integrations/[provider]/actions",
-    async (_req, ctx) => {
+    async (req, ctx) => {
       const provider = ProviderSchema.safeParse(ctx.params?.provider);
       if (!provider.success) throw HttpError.badRequest("Unknown provider");
-      const actions = await listIntegrationActions(provider.data);
+      const url = new URL(req.url);
+      const queryParam = url.searchParams.get("query") ?? undefined;
+      const actions = await listIntegrationActions(
+        provider.data,
+        {},
+        { query: queryParam }
+      );
       return NextResponse.json({ actions });
     }
   ),

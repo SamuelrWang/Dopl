@@ -102,14 +102,51 @@ function registerIntegrationTools(register, client) {
             .join("\n");
         return ok(meta);
     });
+    // ── list_my_integrations ──────────────────────────────────────────
+    register("list_my_integrations", "Single call to see every third-party account the user has connected, across every provider, with workspace grant info. Use this FIRST whenever the user mentions 'my connectors', 'my integrations', 'across my services', or asks to pull data from external sources — instead of polling `integration_status` for each of 8 providers. Returns `{ connections: [{ provider, alias, account_email, status, granted_workspace_ids, last_used_at }] }`. After seeing what's connected, drill into each provider with `list_integration_actions(provider, query=…)` and run actions via `execute_integration_action`.", {}, async () => {
+        const result = await client.listMyIntegrations();
+        if (result.connections.length === 0) {
+            return ok("No integrations connected yet. The user needs to visit /settings/integrations and connect a provider before I can pull anything.");
+        }
+        const lines = [
+            `## ${result.connections.length} connected account(s)`,
+            "",
+        ];
+        const byProvider = new Map();
+        for (const c of result.connections) {
+            const arr = byProvider.get(c.provider) ?? [];
+            arr.push(c);
+            byProvider.set(c.provider, arr);
+        }
+        for (const [provider, accounts] of byProvider) {
+            lines.push(`### ${provider}`);
+            for (const a of accounts) {
+                const label = a.account_email ?? a.account_label ?? a.alias;
+                const grants = a.granted_workspace_ids.length;
+                lines.push(`- **${label}** (status: \`${a.status}\`, granted to ${grants} workspace${grants === 1 ? "" : "s"})`);
+            }
+            lines.push("");
+        }
+        lines.push("Next step: pick a provider and call `list_integration_actions(provider, query=<keyword>)` to find the right action — use a query to keep the response small (catalogs can be 50–100+ actions per provider).");
+        return ok(lines.join("\n"));
+    });
     // ── list_integration_actions ──────────────────────────────────────
-    register("list_integration_actions", "Discover every action a connected provider exposes. Returns `{ actions: [{ name, summary, paramsJsonSchema, source }] }`. `paramsJsonSchema` is a standard JSON Schema fragment — read it to construct the `params` object you'll pass to `execute_integration_action`. `source` is `curated` (hand-tuned by Dopl) or `auto` (auto-generated from the broker's full catalog — most actions are this); curated entries override auto entries with the same name when both exist. The catalog can be large (50+ actions per provider); narrow your reading to actions the user's request implies.", { provider: ProviderArg }, async ({ provider }) => {
-        const result = await client.listIntegrationActions(provider);
+    register("list_integration_actions", "Discover the actions a connected provider exposes. Returns `{ actions: [{ name, summary, paramsJsonSchema, source }] }`. `paramsJsonSchema` is a standard JSON Schema fragment — read it to construct the `params` object you'll pass to `execute_integration_action`. `source` is `curated` (hand-tuned by Dopl) or `auto` (auto-generated from the broker's full catalog). **Always pass `query` for big toolkits** — Calendar, Sheets, Drive, Slack, GitHub, and Notion catalogs are 50–150+ actions and the unfiltered response can be 100KB+; with a query like 'event', 'spreadsheet', 'message', the response collapses to a few KB. Search by intent: 'list_events' / 'find_event' for Calendar; 'spreadsheet' / 'get_values' for Sheets; 'message' / 'channel' for Slack; 'issue' / 'repository' for GitHub.", {
+        provider: ProviderArg,
+        query: zod_1.z
+            .string()
+            .max(200)
+            .optional()
+            .describe("Substring filter against action name + summary (case-insensitive). Strongly recommended for non-Gmail providers to avoid 100KB+ responses."),
+    }, async ({ provider, query }) => {
+        const result = await client.listIntegrationActions(provider, { query });
         if (result.actions.length === 0) {
-            return ok(`No actions are available for **${provider}** yet.`);
+            return ok(query
+                ? `No ${provider} actions match query \`${query}\`. Try a broader keyword, or call again without \`query\` to see the full catalog (warning: can be large).`
+                : `No actions are available for **${provider}** yet.`);
         }
         return ok([
-            `## ${result.actions.length} ${provider} action(s)`,
+            `## ${result.actions.length} ${provider} action(s)${query ? ` matching \`${query}\`` : ""}`,
             "",
             "Each action below has a `name`, `summary`, `paramsJsonSchema` (use to build `params`), and `source` (curated|auto).",
             "",

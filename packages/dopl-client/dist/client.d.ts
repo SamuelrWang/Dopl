@@ -4,7 +4,7 @@ import { DoplTransport } from "./transport.js";
 import type { KnowledgeBase, KnowledgeBaseCreateInput, KnowledgeBaseUpdateInput, KnowledgeDirListing, KnowledgeEntry, KnowledgeFolder, KnowledgePathOpResult, KnowledgeSearchHit, KnowledgeTrashSnapshot, KnowledgeTreeSnapshot, KnowledgeWriteFileInput } from "./knowledge-types.js";
 import type { CreateSkillInput, UpdateSkillPatch as SkillUpdatePatch } from "./skills.js";
 import type { ResolvedSkill, Skill, SkillFile } from "./skill-types.js";
-import type { ConnectResponse, IntegrationActionResultResponse, IntegrationActionsResponse, IntegrationListResponse, IntegrationProvider, IntegrationStatusResponse, PrepareFromIntegrationResponse, ReadIntegrationObjectResponse } from "./integration-types.js";
+import type { ConnectResponse, IntegrationActionResultResponse, IntegrationActionsResponse, IntegrationConnectionsResponse, IntegrationListResponse, IntegrationProvider, IntegrationStatusResponse, PrepareFromIntegrationResponse, ReadIntegrationObjectResponse } from "./integration-types.js";
 export type { DoplTransportOptions as DoplClientOptions } from "./transport.js";
 export { parseRetryAfter } from "./retry.js";
 export declare class DoplClient {
@@ -227,9 +227,12 @@ export declare class DoplClient {
         kb_id?: string;
         cluster_id?: string;
     }) => Promise<PrepareFromIntegrationResponse>;
-    listIntegrationActions: (p: IntegrationProvider) => Promise<IntegrationActionsResponse>;
+    listIntegrationActions: (p: IntegrationProvider, options?: {
+        query?: string;
+    }) => Promise<IntegrationActionsResponse>;
     executeIntegrationAction: (p: IntegrationProvider, input: {
         action: string;
         params: Record<string, unknown>;
     }) => Promise<IntegrationActionResultResponse>;
+    listMyIntegrations: () => Promise<IntegrationConnectionsResponse>;
 }

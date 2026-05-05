@@ -95,10 +95,17 @@ async function getToolkitCatalog(
  * code. Hand-curated entries override auto-generated ones by
  * normalized name (e.g. our `send_email` wraps Composio's
  * `GMAIL_SEND_EMAIL` with friendlier params).
+ *
+ * `query` does a case-insensitive substring filter against the action
+ * name + summary. Critical for big toolkits — Calendar's catalog is
+ * ~180KB unfiltered, Sheets is ~300KB. With a query like "event" or
+ * "spreadsheet" the response collapses to a few KB, which is the
+ * difference between a usable agent flow and an unusable one.
  */
 export async function listIntegrationActions(
   provider: IntegrationProvider,
-  deps: ActionsServiceDeps = {}
+  deps: ActionsServiceDeps = {},
+  options: { query?: string } = {}
 ): Promise<IntegrationActionDescriptor[]> {
   const broker = deps.broker ?? defaultComposioClient();
   const cfg = getProviderConfig(provider);
@@ -110,7 +117,7 @@ export async function listIntegrationActions(
     source: "curated",
   }));
 
-  if (!cfg.composioToolkit) return curated;
+  if (!cfg.composioToolkit) return filterByQuery(curated, options.query);
 
   let tools: CachedToolkit["tools"];
   try {
@@ -124,7 +131,7 @@ export async function listIntegrationActions(
     console.warn(
       `[integrations] catalog fetch failed for toolkit "${cfg.composioToolkit}": ${message}`
     );
-    return curated;
+    return filterByQuery(curated, options.query);
   }
 
   const curatedNames = new Set(curated.map((a) => a.name));
@@ -139,7 +146,21 @@ export async function listIntegrationActions(
       source: "auto",
     });
   }
-  return [...curated, ...auto];
+  return filterByQuery([...curated, ...auto], options.query);
+}
+
+function filterByQuery(
+  actions: IntegrationActionDescriptor[],
+  query: string | undefined
+): IntegrationActionDescriptor[] {
+  if (!query) return actions;
+  const q = query.toLowerCase().trim();
+  if (!q) return actions;
+  return actions.filter(
+    (a) =>
+      a.name.toLowerCase().includes(q) ||
+      a.summary.toLowerCase().includes(q)
+  );
 }
 
 /**

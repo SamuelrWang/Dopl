@@ -71,6 +71,8 @@ export type {
   IntegrationActionDescriptor,
   IntegrationActionResultResponse,
   IntegrationActionsResponse,
+  IntegrationConnectionSummary,
+  IntegrationConnectionsResponse,
   IntegrationListResponse,
   IntegrationObjectSummary,
   IntegrationProvider,

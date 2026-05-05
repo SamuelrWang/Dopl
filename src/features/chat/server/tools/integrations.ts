@@ -1,7 +1,9 @@
 import "server-only";
+import type Anthropic from "@anthropic-ai/sdk";
 import {
   getIntegrationStatus,
   listIntegrationObjects,
+  listIntegrationsForUser,
   readIntegrationObject,
 } from "@/features/integrations/server/service";
 import {
@@ -11,6 +13,105 @@ import {
 import { ProviderSchema } from "@/features/integrations/schema";
 import { logSystemEvent } from "@/features/analytics/server/system-events";
 import type { ToolResult } from "./types";
+
+// ── Tool definitions ───────────────────────────────────────────────
+//
+// Lives here (not in `index.ts`) so the chat-tool registry stays
+// under the §2 file-size cap and integration-related schema lives in
+// one place.
+
+const INTEGRATION_PROVIDER_ENUM = [
+  "notion",
+  "gmail",
+  "google_drive",
+  "github",
+  "google_calendar",
+  "google_docs",
+  "google_sheets",
+  "slack",
+] as const;
+
+export const INTEGRATION_TOOLS: Anthropic.Tool[] = [
+  {
+    name: "integration_status",
+    description:
+      "Check whether a third-party service is connected for this workspace. Returns one of: connected, needs_auth, error, disconnected. Call this first when the user asks about external content; if `connected`, follow up with `list_integration_actions(provider)` to see EVERY action the agent can run for this provider — that's how you find both read-shaped (list_*, get_*, fetch_*) and write-shaped actions for any provider, including Calendar, Sheets, Slack, GitHub, Docs. If not connected, tell them to visit /settings/integrations to connect.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        provider: {
+          type: "string",
+          enum: INTEGRATION_PROVIDER_ENUM,
+          description:
+            "Which third-party service to check. Supported: notion, gmail, google_drive, github, google_calendar, google_docs, google_sheets, slack.",
+        },
+      },
+      required: ["provider"],
+    },
+  },
+  {
+    name: "list_integration_objects",
+    description:
+      "**Convenience tool — works on notion (pages), gmail (threads), google_drive (files) only.** Other providers (github, google_calendar, google_docs, google_sheets, slack) return INTEGRATION_READ_NOT_SUPPORTED. **DO NOT conclude those providers are 'write-only'** — they have plenty of read actions, just not through this convenience tool. To read from them, call `list_integration_actions(provider)` and look for action names like `list_events`, `get_spreadsheet`, `fetch_history`, `get_repository`, `get_document` — then run them via `execute_integration_action`. Returns `{ objects: [{ id, title, url, lastModified }], next_cursor }`.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        provider: { type: "string", enum: INTEGRATION_PROVIDER_ENUM, description: "Which third-party service to search." },
+        query: { type: "string", description: "Free-text query. Gmail uses Gmail search syntax; Notion is a title search." },
+        cursor: { type: "string", description: "Pagination cursor from a previous response." },
+        limit: { type: "number", description: "Max objects to return (default 10, max 50)." },
+      },
+      required: ["provider"],
+    },
+  },
+  {
+    name: "read_integration_object",
+    description:
+      "Fetch the full content of one object from a connected provider. **Read-shaped providers only**: notion (page → markdown), gmail (thread → all messages), google_drive (file → text). Other providers return INTEGRATION_READ_NOT_SUPPORTED. Use after `list_integration_objects` to drill into a result.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        provider: { type: "string", enum: INTEGRATION_PROVIDER_ENUM, description: "Which third-party service the object lives in." },
+        object_id: { type: "string", description: "The id from `list_integration_objects` (page id, thread id, file id)." },
+      },
+      required: ["provider", "object_id"],
+    },
+  },
+  {
+    name: "list_my_integrations",
+    description:
+      "**Always start here when the user mentions 'my connectors', 'my integrations', 'across my services', or asks to pull from external data.** Returns every account the user has connected across every provider in one call — saves polling `integration_status` for each of 8 providers. Returns `{ connections: [{ provider, alias, account_email, status, granted_workspace_ids, ... }] }`. After seeing what's connected, drill into each provider with `list_integration_actions(provider, query=…)` and run actions via `execute_integration_action`.",
+    input_schema: { type: "object" as const, properties: {}, required: [] },
+  },
+  {
+    name: "list_integration_actions",
+    description:
+      "**Use this for ANY provider** — gmail, notion, drive, github, google_calendar, google_docs, google_sheets, slack — to discover actions available. Returns `{ actions: [{ name, summary, paramsJsonSchema, source }] }`. **Always pass `query` for big toolkits** — Calendar / Sheets / Drive / Slack catalogs are 50–150+ actions and an unfiltered call can be 100KB+; with a query like `event` / `spreadsheet` / `message` the response collapses to a few KB. Search by intent: `event` for Calendar; `spreadsheet` / `value` for Sheets; `document` for Docs; `message` / `channel` for Slack; `issue` / `repo` for GitHub. **DO call this whenever a user asks to read from a provider that `list_integration_objects` doesn't support — those providers HAVE read actions; you just discover them here.**",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        provider: { type: "string", enum: INTEGRATION_PROVIDER_ENUM, description: "Which third-party service to enumerate actions for." },
+        query: { type: "string", description: "Substring filter against action name + summary (case-insensitive). Strongly recommended for non-Gmail providers to keep responses small." },
+      },
+      required: ["provider"],
+    },
+  },
+  {
+    name: "execute_integration_action",
+    description:
+      "Run a named action on a connected provider — covers every action Composio exposes across all 8 providers (gmail, calendar, sheets, docs, drive, notion, github, slack). Includes both reads (list events, get spreadsheet, fetch slack history) and writes (send mail, create event, post message). ALWAYS call `list_integration_actions` first to discover the action name and exact `params` shape — don't guess. Returns `{ ok: true, data }` on success, `{ ok: false, error }` if the provider rejected the call. **Read actions** (`list_*`, `get_*`, `fetch_*`, `search_*`) are safe to call without confirmation — use them freely to gather data. **Write actions** (`create_*`, `send_*`, `delete_*`, `update_*`, `post_*`) are side-effecting; confirm with the user before running.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        provider: { type: "string", enum: INTEGRATION_PROVIDER_ENUM, description: "Which third-party service to act on." },
+        action: { type: "string", description: "Action name from `list_integration_actions` (e.g. 'send_email', 'list_events')." },
+        params: { type: "object", description: "Action params, shape determined by the action's `paramsJsonSchema`." },
+        alias: { type: "string", description: "Optional account alias when multiple accounts are connected for this provider." },
+      },
+      required: ["provider", "action", "params"],
+    },
+  },
+];
 
 /**
  * Read-only chat tools for the user's connected third-party services.
@@ -180,6 +281,9 @@ export async function executeIntegrationStatus(
  * paramsJsonSchema, source }] }`. Used by the chat agent to find
  * provider-specific actions (list calendar events, append a sheet
  * row, post a Slack message, …) without per-action wrapping code.
+ *
+ * `query` substring-filters action name + summary so the agent
+ * doesn't have to chew through 100KB+ of catalog for big toolkits.
  */
 export async function executeListIntegrationActionsTool(
   input: Record<string, unknown>,
@@ -196,10 +300,49 @@ export async function executeListIntegrationActionsTool(
       }),
     };
   }
+  const query = typeof input.query === "string" ? input.query : undefined;
   try {
-    const actions = await listIntegrationActions(provider.data);
+    const actions = await listIntegrationActions(provider.data, {}, { query });
     return {
       result: JSON.stringify({ provider: provider.data, actions }),
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { result: JSON.stringify({ error: message }) };
+  }
+}
+
+/**
+ * One-call summary of every connection the user owns, across all
+ * providers. Designed to be the first tool the agent reaches for when
+ * the user says "look at my connectors" / "search my services" /
+ * "across my data" — saves polling `integration_status` for each of
+ * 8 providers individually.
+ */
+export async function executeListMyIntegrationsTool(
+  _input: Record<string, unknown>,
+  userId?: string,
+  _canvasContext?: unknown,
+  _workspaceId?: string
+): Promise<ToolResult> {
+  if (!userId) {
+    return { result: JSON.stringify({ error: "Not authenticated." }) };
+  }
+  try {
+    const rows = await listIntegrationsForUser({ userId });
+    return {
+      result: JSON.stringify({
+        connections: rows.map((r) => ({
+          id: r.id,
+          provider: r.provider,
+          alias: r.alias,
+          status: r.status,
+          account_email: r.accountEmail,
+          account_label: r.accountLabel,
+          last_used_at: r.lastUsedAt,
+          granted_workspace_ids: r.grantedWorkspaceIds,
+        })),
+      }),
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
