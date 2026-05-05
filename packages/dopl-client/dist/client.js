@@ -419,6 +419,9 @@ class DoplClient {
     listIntegrationObjects(provider, input = {}) {
         return integrations.listIntegrationObjects(this.transport, provider, input);
     }
+    readIntegrationObject(provider, input) {
+        return integrations.readIntegrationObject(this.transport, provider, input);
+    }
     prepareFromIntegration(input) {
         return integrations.prepareFromIntegration(this.transport, input);
     }

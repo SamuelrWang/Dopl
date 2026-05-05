@@ -4,10 +4,12 @@
  * Drive) and pulling content from them into the user's Dopl
  * workspace as fully-synthesized entries.
  *
- * Four tools, all generic on `provider`:
+ * Five tools, all generic on `provider`:
  *   - `connect_integration`         — start (or check) the OAuth flow
  *   - `integration_status`          — re-poll connection state
  *   - `list_integration_objects`    — search/enumerate the connected service
+ *   - `read_integration_object`     — fetch one object's body content
+ *                                     (read-only; no entry/sources row).
  *   - `ingest_from_integration`     — fetch one object and produce a
  *                                     prepare-shaped bundle. Agent then
  *                                     calls existing `submit_ingested_entry`.
@@ -46,7 +48,7 @@ function registerIntegrationTools(register, client) {
         return ok(`Status for **${provider}**: \`${result.status}\``);
     });
     // ── list_integration_objects ──────────────────────────────────────
-    register("list_integration_objects", "List or search objects in a connected provider (Notion pages, Gmail threads, Drive files). Returns `{ objects: [{ id, title, url, lastModified }], next_cursor }`. Pass the result IDs to `ingest_from_integration` to pull content into the workspace. Optional `query` narrows results by free text; `cursor` pages forward; `limit` caps page size (default 25, max 100).", {
+    register("list_integration_objects", "List or search objects in a connected provider (Notion pages, Gmail threads, Drive files). Returns `{ objects: [{ id, title, url, lastModified }], next_cursor }`. Pass a result ID to `read_integration_object` to fetch the body content, or to `ingest_from_integration` to turn it into a synthesized Dopl entry. Optional `query` narrows results by free text; `cursor` pages forward; `limit` caps page size (default 25, max 100).", {
         provider: ProviderArg,
         query: zod_1.z.string().max(200).optional().describe("Free-text search filter."),
         cursor: zod_1.z.string().max(500).optional().describe("Pagination cursor from a previous response."),
@@ -69,6 +71,27 @@ function registerIntegrationTools(register, client) {
             lines.push("", `_More results available — pass cursor: \`${result.next_cursor}\`_`);
         }
         return ok(lines.join("\n"));
+    });
+    // ── read_integration_object ───────────────────────────────────────
+    register("read_integration_object", "Fetch the full content of one object from a connected provider. For Notion this returns the page rendered as markdown; for Gmail this returns the full thread (every message body, in chronological order); for Google Drive this returns the file's text content. Pure read — no Dopl entry is created. Use after `list_integration_objects` to drill into a specific result, or whenever you need to *read* external content without ingesting it. Returns `{ provider, object_id, title, url, last_modified, body }`. To turn the object into a synthesized Dopl entry instead, use `ingest_from_integration`.", {
+        provider: ProviderArg,
+        object_id: zod_1.z
+            .string()
+            .min(1)
+            .max(500)
+            .describe("ID from `list_integration_objects` (page id, thread id, file id)."),
+    }, async ({ provider, object_id }) => {
+        const result = await client.readIntegrationObject(provider, { object_id });
+        const meta = [
+            `# ${result.title}`,
+            result.url ? `Source: ${result.url}` : null,
+            result.last_modified ? `Last modified: ${result.last_modified}` : null,
+            "",
+            result.body,
+        ]
+            .filter((line) => line !== null)
+            .join("\n");
+        return ok(meta);
     });
     // ── ingest_from_integration ───────────────────────────────────────
     register("ingest_from_integration", "Fetch one object from a connected provider and turn it into a Dopl entry. Returns the same shape `ingest_url` returns: `{ entry_id, content, prompts, instructions }`. Run the prompts in your own Claude context (or delegate to a subagent) and POST the artifacts to `submit_ingested_entry` with the returned `entry_id` to commit. The agent-driven synthesis flow is unchanged — only the source has shifted from a URL to a third-party object.", {

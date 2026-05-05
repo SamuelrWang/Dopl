@@ -22,3 +22,8 @@ export const PrepareFromIntegrationInputSchema = z.object({
 export type PrepareFromIntegrationInput = z.infer<
   typeof PrepareFromIntegrationInputSchema
 >;
+
+export const ReadInputSchema = z.object({
+  object_id: z.string().min(1).max(500),
+});
+export type ReadInput = z.infer<typeof ReadInputSchema>;

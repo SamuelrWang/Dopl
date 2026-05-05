@@ -10,6 +10,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.connectIntegration = connectIntegration;
 exports.getIntegrationStatus = getIntegrationStatus;
 exports.listIntegrationObjects = listIntegrationObjects;
+exports.readIntegrationObject = readIntegrationObject;
 exports.prepareFromIntegration = prepareFromIntegration;
 const enc = encodeURIComponent;
 async function connectIntegration(t, provider) {
@@ -23,6 +24,13 @@ async function listIntegrationObjects(t, provider, input = {}) {
         method: "POST",
         body: input,
         toolName: "list_integration_objects",
+    });
+}
+async function readIntegrationObject(t, provider, input) {
+    return t.request(`/api/integrations/${enc(provider)}/read`, {
+        method: "POST",
+        body: input,
+        toolName: "read_integration_object",
     });
 }
 async function prepareFromIntegration(t, input) {

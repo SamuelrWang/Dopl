@@ -31,6 +31,7 @@ import type {
   IntegrationProvider,
   OAuthConnection,
   PrepareFromIntegrationResult,
+  ReadIntegrationObjectResult,
 } from "../types";
 
 /**
@@ -195,6 +196,45 @@ export async function listIntegrationObjects(
 
   await touchConnection(db, found.connection.id);
   return { objects: result.objects, nextCursor: result.nextCursor };
+}
+
+/**
+ * Pure read: fetch one object's full body from the connected provider
+ * without persisting an entry or sources row. Use when the agent needs
+ * to *read* content (summaries, extraction, KB writes) but should not
+ * commit it as an ingested Dopl entry. The ingestion path is
+ * `prepareFromIntegration`.
+ */
+export async function readIntegrationObject(
+  ctx: { workspaceId: string; userId: string; provider: IntegrationProvider },
+  input: { objectId: string },
+  deps: IntegrationsServiceDeps = {}
+): Promise<ReadIntegrationObjectResult> {
+  const db = deps.db ?? supabaseAdmin();
+  const broker = deps.broker ?? defaultComposioClient();
+
+  const found = await findConnectionWithBrokerId(db, ctx);
+  if (!found || found.connection.status !== "connected") {
+    throw new IntegrationNotConnectedError(ctx.provider);
+  }
+
+  const cfg = getProviderConfig(ctx.provider);
+  const fetched = await broker.fetchObject({
+    brokerConnectionId: found.brokerConnectionId,
+    entityId: brokerEntityId(ctx.workspaceId, ctx.userId),
+    provider: ctx.provider,
+    fetchInput: { objectId: input.objectId },
+  });
+  await touchConnection(db, found.connection.id);
+
+  return {
+    provider: ctx.provider,
+    objectId: input.objectId,
+    title: fetched.title,
+    url: fetched.url ?? cfg.urlBuilder(input.objectId),
+    lastModified: fetched.lastModified,
+    body: fetched.body,
+  };
 }
 
 export async function prepareFromIntegration(

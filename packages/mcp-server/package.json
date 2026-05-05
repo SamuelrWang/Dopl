@@ -1,7 +1,7 @@
 {
   "name": "@dopl/mcp-server",
-  "version": "0.12.0",
-  "description": "MCP server for Dopl — search and build from a knowledge base of AI/automation setups",
+  "version": "0.13.0",
+  "description": "MCP server for Dopl \u2014 search and build from a knowledge base of AI/automation setups",
   "main": "dist/index.js",
   "bin": {
     "dopl-mcp": "dist/bin/dopl-mcp.js"
@@ -14,7 +14,7 @@
     "dev": "tsc --watch"
   },
   "dependencies": {
-    "@dopl/client": "^0.7.0",
+    "@dopl/client": "^0.7.1",
     "@modelcontextprotocol/sdk": "^1.29.0"
   },
   "devDependencies": {

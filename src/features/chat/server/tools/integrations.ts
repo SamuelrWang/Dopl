@@ -2,14 +2,8 @@ import "server-only";
 import {
   getIntegrationStatus,
   listIntegrationObjects,
+  readIntegrationObject,
 } from "@/features/integrations/server/service";
-import { defaultComposioClient } from "@/features/integrations/server/composio-client";
-import {
-  findConnectionWithBrokerId,
-  touchConnection,
-} from "@/features/integrations/server/repository";
-import { getProviderConfig } from "@/features/integrations/server/providers";
-import { supabaseAdmin } from "@/shared/supabase/admin";
 import { ProviderSchema } from "@/features/integrations/schema";
 import { logSystemEvent } from "@/features/analytics/server/system-events";
 import type { ToolResult } from "./types";
@@ -114,38 +108,19 @@ export async function executeReadIntegrationObject(
     return { result: JSON.stringify({ error: "object_id is required." }) };
   }
 
-  const db = supabaseAdmin();
-  const found = await findConnectionWithBrokerId(db, {
-    workspaceId,
-    userId,
-    provider: provider.data,
-  });
-  if (!found || found.connection.status !== "connected") {
-    return {
-      result: JSON.stringify({
-        error: `${provider.data} is not connected for this workspace.`,
-        hint: "Ask the user to connect from /<workspace>/integrations first.",
-      }),
-    };
-  }
-
-  const cfg = getProviderConfig(provider.data);
   try {
-    const fetched = await defaultComposioClient().fetchObject({
-      brokerConnectionId: found.brokerConnectionId,
-      entityId: `${workspaceId}:${userId}`,
-      provider: provider.data,
-      fetchInput: { objectId },
-    });
-    await touchConnection(db, found.connection.id);
+    const result = await readIntegrationObject(
+      { workspaceId, userId, provider: provider.data },
+      { objectId }
+    );
     return {
       result: JSON.stringify({
-        provider: provider.data,
-        object_id: objectId,
-        title: fetched.title,
-        url: fetched.url ?? cfg.urlBuilder(objectId),
-        last_modified: fetched.lastModified,
-        body: fetched.body,
+        provider: result.provider,
+        object_id: result.objectId,
+        title: result.title,
+        url: result.url,
+        last_modified: result.lastModified,
+        body: result.body,
       }),
     };
   } catch (err) {

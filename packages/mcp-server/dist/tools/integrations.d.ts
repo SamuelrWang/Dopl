@@ -3,10 +3,12 @@
  * Drive) and pulling content from them into the user's Dopl
  * workspace as fully-synthesized entries.
  *
- * Four tools, all generic on `provider`:
+ * Five tools, all generic on `provider`:
  *   - `connect_integration`         — start (or check) the OAuth flow
  *   - `integration_status`          — re-poll connection state
  *   - `list_integration_objects`    — search/enumerate the connected service
+ *   - `read_integration_object`     — fetch one object's body content
+ *                                     (read-only; no entry/sources row).
  *   - `ingest_from_integration`     — fetch one object and produce a
  *                                     prepare-shaped bundle. Agent then
  *                                     calls existing `submit_ingested_entry`.

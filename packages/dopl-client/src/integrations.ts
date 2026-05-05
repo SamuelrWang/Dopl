@@ -13,6 +13,7 @@ import type {
   IntegrationProvider,
   IntegrationStatusResponse,
   PrepareFromIntegrationResponse,
+  ReadIntegrationObjectResponse,
 } from "./integration-types.js";
 
 const enc = encodeURIComponent;
@@ -48,6 +49,21 @@ export async function listIntegrationObjects(
       method: "POST",
       body: input,
       toolName: "list_integration_objects",
+    }
+  );
+}
+
+export async function readIntegrationObject(
+  t: DoplTransport,
+  provider: IntegrationProvider,
+  input: { object_id: string }
+): Promise<ReadIntegrationObjectResponse> {
+  return t.request<ReadIntegrationObjectResponse>(
+    `/api/integrations/${enc(provider)}/read`,
+    {
+      method: "POST",
+      body: input,
+      toolName: "read_integration_object",
     }
   );
 }

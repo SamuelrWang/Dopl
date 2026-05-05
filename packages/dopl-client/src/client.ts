@@ -48,6 +48,7 @@ import type {
   IntegrationProvider,
   IntegrationStatusResponse,
   PrepareFromIntegrationResponse,
+  ReadIntegrationObjectResponse,
 } from "./integration-types.js";
 
 export type { DoplTransportOptions as DoplClientOptions } from "./transport.js";
@@ -753,6 +754,12 @@ export class DoplClient {
     input: { query?: string; cursor?: string; limit?: number } = {}
   ): Promise<IntegrationListResponse> {
     return integrations.listIntegrationObjects(this.transport, provider, input);
+  }
+  readIntegrationObject(
+    provider: IntegrationProvider,
+    input: { object_id: string }
+  ): Promise<ReadIntegrationObjectResponse> {
+    return integrations.readIntegrationObject(this.transport, provider, input);
   }
   prepareFromIntegration(input: {
     provider: IntegrationProvider;

@@ -39,6 +39,15 @@ export type IntegrationListResult = {
   nextCursor: string | null;
 };
 
+export type ReadIntegrationObjectResult = {
+  provider: IntegrationProvider;
+  objectId: string;
+  title: string;
+  url: string | null;
+  lastModified: string | null;
+  body: string;
+};
+
 export type ConnectInitiation =
   | { status: "connected" }
   | { status: "needs_auth"; authUrl: string };

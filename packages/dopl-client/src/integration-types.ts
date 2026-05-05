@@ -30,6 +30,15 @@ export type IntegrationListResponse = {
   next_cursor: string | null;
 };
 
+export type ReadIntegrationObjectResponse = {
+  provider: IntegrationProvider;
+  object_id: string;
+  title: string;
+  url: string | null;
+  last_modified: string | null;
+  body: string;
+};
+
 export type PrepareFromIntegrationResponse = {
   status: "ready";
   entry_id: string;

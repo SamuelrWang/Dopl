@@ -4,7 +4,7 @@ import { DoplTransport } from "./transport.js";
 import type { KnowledgeBase, KnowledgeBaseCreateInput, KnowledgeBaseUpdateInput, KnowledgeDirListing, KnowledgeEntry, KnowledgeFolder, KnowledgePathOpResult, KnowledgeSearchHit, KnowledgeTrashSnapshot, KnowledgeTreeSnapshot, KnowledgeWriteFileInput } from "./knowledge-types.js";
 import type { CreateSkillInput, UpdateSkillPatch as SkillUpdatePatch } from "./skills.js";
 import type { ResolvedSkill, Skill, SkillFile } from "./skill-types.js";
-import type { ConnectResponse, IntegrationListResponse, IntegrationProvider, IntegrationStatusResponse, PrepareFromIntegrationResponse } from "./integration-types.js";
+import type { ConnectResponse, IntegrationListResponse, IntegrationProvider, IntegrationStatusResponse, PrepareFromIntegrationResponse, ReadIntegrationObjectResponse } from "./integration-types.js";
 export type { DoplTransportOptions as DoplClientOptions } from "./transport.js";
 export { parseRetryAfter } from "./retry.js";
 export declare class DoplClient {
@@ -218,6 +218,9 @@ export declare class DoplClient {
         cursor?: string;
         limit?: number;
     }): Promise<IntegrationListResponse>;
+    readIntegrationObject(provider: IntegrationProvider, input: {
+        object_id: string;
+    }): Promise<ReadIntegrationObjectResponse>;
     prepareFromIntegration(input: {
         provider: IntegrationProvider;
         object_id: string;

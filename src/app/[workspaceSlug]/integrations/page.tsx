@@ -106,7 +106,8 @@ export default async function IntegrationsPage({ params }: PageProps) {
 
       <p className="mt-8 text-xs text-white/40">
         Your agent can also drive these flows via the{" "}
-        <code className="font-mono text-white/60">connect_integration</code>{" "}
+        <code className="font-mono text-white/60">connect_integration</code>,{" "}
+        <code className="font-mono text-white/60">read_integration_object</code>,
         and{" "}
         <code className="font-mono text-white/60">ingest_from_integration</code>{" "}
         MCP tools.

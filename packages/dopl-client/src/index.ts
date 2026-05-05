@@ -74,4 +74,5 @@ export type {
   IntegrationStatusResponse,
   IntegrationStatusValue,
   PrepareFromIntegrationResponse,
+  ReadIntegrationObjectResponse,
 } from "./integration-types.js";
