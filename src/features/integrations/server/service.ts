@@ -195,11 +195,14 @@ async function finalizeConnectionRow(
   const fallbackAlias = `account:${brokerConnectionId.slice(-8)}`;
   let derivedEmail: string | null = account.accountEmail;
   let derivedLabel: string | null = account.accountLabel;
+  let derivedAvatarUrl: string | null = null;
 
   const cfg = getProviderConfig(provider);
+  // Profile lookup runs whenever a slug is configured — not just when
+  // email is missing — so the real avatar URL gets captured even for
+  // providers that already surfaced an email at broker level.
   if (
     account.status === "connected" &&
-    !derivedEmail &&
     cfg.profileActionSlug &&
     cfg.parseProfileResponse
   ) {
@@ -209,11 +212,12 @@ async function finalizeConnectionRow(
         entityId: brokerEntityId(userId),
         provider,
         slug: cfg.profileActionSlug,
-        arguments: {},
+        arguments: cfg.buildProfileArgs?.() ?? {},
       });
       const parsed = cfg.parseProfileResponse(raw);
       derivedEmail = parsed.email ?? derivedEmail;
       derivedLabel = parsed.label ?? derivedLabel;
+      derivedAvatarUrl = parsed.avatarUrl ?? derivedAvatarUrl;
     } catch (err) {
       // Profile lookup is best-effort — if Composio doesn't expose the
       // action under this toolkit, or the call rate-limits, we fall
@@ -230,6 +234,7 @@ async function finalizeConnectionRow(
     alias: derivedEmail ?? derivedLabel ?? fallbackAlias,
     accountEmail: derivedEmail,
     accountLabel: derivedLabel,
+    accountAvatarUrl: derivedAvatarUrl,
   });
 
   if (account.status === "connected") {

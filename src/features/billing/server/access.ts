@@ -24,6 +24,19 @@ export interface AccessDecision {
 export async function hasActiveAccess(
   userId: string
 ): Promise<AccessDecision> {
+  // DEMO BYPASS: paywall temporarily unwired for demo recording.
+  // Flip DEMO_PAYWALL_BYPASS to `false` (or delete this block) to
+  // restore trial/subscription gating. All gating logic below is
+  // intentionally preserved. Typed as `boolean` (not the literal
+  // `true`) so TypeScript treats the gating code below as reachable
+  // and its narrowing keeps working.
+  const DEMO_PAYWALL_BYPASS: boolean = true;
+  if (DEMO_PAYWALL_BYPASS) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    void userId;
+    return { allowed: true, reason: "paid", trial_expires_at: null };
+  }
+
   const { data } = await supabaseAdmin()
     .from("profiles")
     .select(

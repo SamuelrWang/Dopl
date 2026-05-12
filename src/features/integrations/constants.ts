@@ -22,6 +22,7 @@ export const PROVIDER_DISPLAY_NAMES: Record<IntegrationProvider, string> = {
   google_docs: "Google Docs",
   google_sheets: "Google Sheets",
   slack: "Slack",
+  attio: "Attio",
 };
 
 /**
@@ -38,6 +39,7 @@ export const PROVIDER_TAGLINES: Record<IntegrationProvider, string> = {
   google_docs: "Read, edit, and create documents.",
   google_sheets: "Read and write spreadsheet rows and ranges.",
   slack: "Messages, channels, and reactions.",
+  attio: "CRM records: companies, people, and deals.",
 };
 
 /**
@@ -62,4 +64,5 @@ export const PROVIDER_LOGO_URL: Record<IntegrationProvider, string | null> = {
   google_docs: "https://cdn.simpleicons.org/googledocs/4285F4",
   google_sheets: "https://cdn.simpleicons.org/googlesheets/0F9D58",
   slack: "https://cdn.simpleicons.org/slack",
+  attio: "https://cdn.simpleicons.org/attio/ffffff",
 };

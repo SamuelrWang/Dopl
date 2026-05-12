@@ -17,7 +17,6 @@ import {
   IntegrationActionNotFoundError,
   IntegrationActionValidationError,
   IntegrationNotConnectedError,
-  IntegrationReadNotSupportedError,
 } from "./errors";
 import type { ComposioClient } from "./composio-client";
 
@@ -453,17 +452,11 @@ describe("getIntegrationStatus", () => {
 // ── listIntegrationObjects ──────────────────────────────────────────
 
 describe("listIntegrationObjects", () => {
-  it("throws IntegrationReadNotSupportedError for write-only providers", async () => {
-    const stub = makeStubDb();
-    await expect(
-      listIntegrationObjects(
-        { workspaceId: "ws-a", userId: "user-1", provider: "slack" },
-        {},
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        { db: stub as any, broker: makeFakeBroker() }
-      )
-    ).rejects.toBeInstanceOf(IntegrationReadNotSupportedError);
-  });
+  // (The previous "throws IntegrationReadNotSupportedError for write-
+  // only providers" case was removed once read support landed for
+  // every registered provider — Slack/GitHub/Calendar/Docs/Sheets/Attio
+  // all have list+fetch slugs now. The error class remains as a
+  // defensive guard for providers added without read config.)
 
   it("throws IntegrationNotConnectedError when no live granted connection", async () => {
     const stub = makeStubDb();
