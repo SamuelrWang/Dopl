@@ -86,6 +86,12 @@ export async function listSkills(ctx: SkillContext): Promise<Skill[]> {
   // CRITICAL: same reasoning as `listBases` — seed only when the
   // workspace has NO skills at all, not when the caller sees zero.
   if (all.length > 0) return visible;
+  // DEMO BYPASS: auto-seed disabled. Mirrors the same guard in
+  // src/features/knowledge/server/service.ts `listBases`. Flip
+  // DEMO_DISABLE_AUTO_SEED to false (or delete the guard) to restore
+  // the original onboarding-seed behavior below.
+  const DEMO_DISABLE_AUTO_SEED: boolean = true;
+  if (DEMO_DISABLE_AUTO_SEED) return visible;
   const workspaceCreatedAt = await fetchWorkspaceCreatedAt(ctx.workspaceId);
   if (
     workspaceCreatedAt !== null &&

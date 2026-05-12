@@ -126,6 +126,15 @@ export async function listBases(
   // re-trigger seed on every list call. (seedWorkspace's own guard
   // would early-return, but we shouldn't even try.)
   if (all.length > 0) return visible;
+  // DEMO BYPASS: auto-seed disabled. New workspaces start empty;
+  // populate explicitly via the agent or the UI. Flip
+  // DEMO_DISABLE_AUTO_SEED to false (or delete the guard) to restore
+  // the original onboarding-seed behavior below. `seedWorkspace` is
+  // preserved as a callable function for explicit invocation paths.
+  // Typed as `boolean` (not the literal `true`) so TypeScript keeps
+  // the gating code below reachable for narrowing.
+  const DEMO_DISABLE_AUTO_SEED: boolean = true;
+  if (DEMO_DISABLE_AUTO_SEED) return visible;
   const workspaceCreatedAt = await fetchWorkspaceCreatedAt(ctx.workspaceId);
   if (
     workspaceCreatedAt !== null &&
