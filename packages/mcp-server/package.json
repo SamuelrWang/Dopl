@@ -10,8 +10,9 @@
     "node": ">=18.17"
   },
   "scripts": {
-    "build": "tsc",
-    "dev": "tsc --watch"
+    "build": "tsc && chmod +x dist/bin/dopl-mcp.js",
+    "dev": "tsc --watch",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "@dopl/client": "^0.12.0",

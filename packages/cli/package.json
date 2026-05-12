@@ -11,10 +11,11 @@
     "node": ">=18.17"
   },
   "scripts": {
-    "build": "tsc && node scripts/copy-master-skill.mjs",
+    "build": "tsc && node scripts/copy-master-skill.mjs && chmod +x dist/bin/dopl.js",
     "dev": "tsc --watch",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "@dopl/client": "^0.7.0",
