@@ -29,10 +29,11 @@ const PROVIDERS = [
     "google_docs",
     "google_sheets",
     "slack",
+    "attio",
 ];
 const ProviderArg = zod_1.z
     .enum(PROVIDERS)
-    .describe("Third-party service to use. Supported: notion, gmail, google_drive, github, google_calendar, google_docs, google_sheets, slack.");
+    .describe("Third-party service to use. Supported: notion, gmail, google_drive, github, google_calendar, google_docs, google_sheets, slack, attio.");
 function ok(text) {
     return { content: [{ type: "text", text }] };
 }

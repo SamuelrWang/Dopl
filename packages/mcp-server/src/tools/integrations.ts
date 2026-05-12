@@ -41,11 +41,12 @@ const PROVIDERS = [
   "google_docs",
   "google_sheets",
   "slack",
+  "attio",
 ] as const satisfies readonly IntegrationProvider[];
 const ProviderArg = z
   .enum(PROVIDERS)
   .describe(
-    "Third-party service to use. Supported: notion, gmail, google_drive, github, google_calendar, google_docs, google_sheets, slack."
+    "Third-party service to use. Supported: notion, gmail, google_drive, github, google_calendar, google_docs, google_sheets, slack, attio."
   );
 
 function ok(text: string): ToolResponse {

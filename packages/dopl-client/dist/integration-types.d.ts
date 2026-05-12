@@ -3,7 +3,7 @@
  * domain types but stays plain so the client can be consumed
  * without pulling Next.js / Supabase types.
  */
-export type IntegrationProvider = "notion" | "gmail" | "google_drive" | "github" | "google_calendar" | "google_docs" | "google_sheets" | "slack";
+export type IntegrationProvider = "notion" | "gmail" | "google_drive" | "github" | "google_calendar" | "google_docs" | "google_sheets" | "slack" | "attio";
 export type IntegrationStatusValue = "connected" | "needs_auth" | "error" | "disconnected";
 export type ConnectResponse = {
     status: "connected";

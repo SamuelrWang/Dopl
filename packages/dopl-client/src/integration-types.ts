@@ -12,7 +12,8 @@ export type IntegrationProvider =
   | "google_calendar"
   | "google_docs"
   | "google_sheets"
-  | "slack";
+  | "slack"
+  | "attio";
 
 export type IntegrationStatusValue =
   | "connected"
