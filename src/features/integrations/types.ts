@@ -23,6 +23,7 @@ export const INTEGRATION_PROVIDERS = [
   "google_docs",
   "google_sheets",
   "slack",
+  "attio",
 ] as const;
 export type IntegrationProvider = (typeof INTEGRATION_PROVIDERS)[number];
 
@@ -39,6 +40,15 @@ export type OAuthConnection = {
   accountEmail: string | null;
   /** Human-readable label override (e.g. "Personal Gmail"). null = use alias. */
   accountLabel: string | null;
+  /**
+   * Real avatar URL fetched from the provider's profile API at
+   * connect-time (Slack image_192, GitHub avatar_url, Notion
+   * avatar_url, Google photoLink). null when the provider didn't
+   * surface one; `/api/integrations/connections` falls back to
+   * Gravatar derived from `accountEmail` so the UI still renders
+   * something.
+   */
+  accountAvatarUrl: string | null;
   scopes: string[];
   lastUsedAt: string | null;
   createdAt: string;

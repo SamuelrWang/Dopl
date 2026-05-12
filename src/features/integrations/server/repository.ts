@@ -11,7 +11,7 @@ import { mapOAuthConnectionRow, type OAuthConnectionRow } from "./dto";
 const TABLE = "oauth_connections";
 const GRANTS_TABLE = "oauth_connection_grants";
 const COLUMNS =
-  "id, user_id, provider, alias, composio_connection_id, status, account_email, account_label, scopes, last_used_at, created_at, updated_at";
+  "id, user_id, provider, alias, composio_connection_id, status, account_email, account_label, account_avatar_url, scopes, last_used_at, created_at, updated_at";
 
 export type ConnectionWithBrokerId = {
   connection: OAuthConnection;
@@ -269,6 +269,7 @@ export async function updateConnectionAccountInfo(
     alias?: string;
     accountEmail?: string | null;
     accountLabel?: string | null;
+    accountAvatarUrl?: string | null;
   }
 ): Promise<void> {
   const patch: Record<string, unknown> = {
@@ -277,6 +278,8 @@ export async function updateConnectionAccountInfo(
   if (args.alias !== undefined) patch.alias = args.alias;
   if (args.accountEmail !== undefined) patch.account_email = args.accountEmail;
   if (args.accountLabel !== undefined) patch.account_label = args.accountLabel;
+  if (args.accountAvatarUrl !== undefined)
+    patch.account_avatar_url = args.accountAvatarUrl;
   const { error } = await client.from(TABLE).update(patch).eq("id", args.id);
   if (error)
     throw new Error(`updateConnectionAccountInfo failed: ${error.message}`);

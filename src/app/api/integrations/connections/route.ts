@@ -32,7 +32,8 @@ export const GET = withUserAuth(
         status: r.status,
         account_email: r.accountEmail,
         account_label: r.accountLabel,
-        account_avatar_url: gravatarUrlForEmail(r.accountEmail),
+        account_avatar_url:
+          r.accountAvatarUrl ?? gravatarUrlForEmail(r.accountEmail),
         last_used_at: r.lastUsedAt,
         granted_workspace_ids: r.grantedWorkspaceIds,
       })),

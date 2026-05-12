@@ -35,14 +35,15 @@ describe("getProviderConfig", () => {
     expect(drive.fetchActionSlug).toBeDefined();
   });
 
-  it("registers the 5 new write-action-only providers with composio toolkit slugs and no read path", () => {
+  it("registers the read-enabled providers with composio toolkit slugs and read paths", () => {
     const expected: Array<{
       provider:
         | "github"
         | "google_calendar"
         | "google_docs"
         | "google_sheets"
-        | "slack";
+        | "slack"
+        | "attio";
       sourcePlatform: string;
       composioToolkit: string;
       authConfigEnv: string;
@@ -77,6 +78,12 @@ describe("getProviderConfig", () => {
         composioToolkit: "SLACK",
         authConfigEnv: "INTEGRATIONS_SLACK_AUTH_CONFIG_ID",
       },
+      {
+        provider: "attio",
+        sourcePlatform: "attio",
+        composioToolkit: "ATTIO",
+        authConfigEnv: "INTEGRATIONS_ATTIO_AUTH_CONFIG_ID",
+      },
     ];
 
     for (const e of expected) {
@@ -85,8 +92,9 @@ describe("getProviderConfig", () => {
       expect(cfg.composioToolkit).toBe(e.composioToolkit);
       expect(cfg.composioAuthConfigEnv).toBe(e.authConfigEnv);
       expect(cfg.actions).toEqual([]);
-      expect(cfg.listActionSlug).toBeUndefined();
-      expect(cfg.fetchActionSlug).toBeUndefined();
+      // Read support added for the demo flow.
+      expect(cfg.listActionSlug).toBeDefined();
+      expect(cfg.fetchActionSlug).toBeDefined();
     }
   });
 });

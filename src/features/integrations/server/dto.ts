@@ -16,6 +16,7 @@ export type OAuthConnectionRow = {
   status: string;
   account_email: string | null;
   account_label: string | null;
+  account_avatar_url: string | null;
   scopes: string[] | null;
   last_used_at: string | null;
   created_at: string;
@@ -58,6 +59,7 @@ export function mapOAuthConnectionRow(row: OAuthConnectionRow): OAuthConnection 
     status: asStatus(row.status),
     accountEmail: row.account_email,
     accountLabel: row.account_label,
+    accountAvatarUrl: row.account_avatar_url,
     scopes: row.scopes ?? [],
     lastUsedAt: row.last_used_at,
     createdAt: row.created_at,
