@@ -35,6 +35,19 @@ function useFetch<T>(
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<SkillApiError | null>(null);
   const [tick, setTick] = useState(0);
+
+  // Reset cached `data` + `error` when the cache key changes so the
+  // previous workspace's skills don't leak into a new workspace's
+  // sidebar/panel. Tick-driven refetches (same key) keep their value
+  // for the no-flicker behavior. Mirrors the same fix in
+  // src/features/knowledge/client/hooks.ts.
+  const lastKeyRef = useRef(key);
+  if (lastKeyRef.current !== key) {
+    lastKeyRef.current = key;
+    setData(null);
+    setError(null);
+  }
+
   const loaderRef = useRef(loader);
   useEffect(() => {
     loaderRef.current = loader;

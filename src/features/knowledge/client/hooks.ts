@@ -71,8 +71,11 @@ function toApiError(err: unknown): KnowledgeApiError {
  *
  * Status is *derived* from `data`/`error` to avoid the React 19
  * `setState-in-effect` lint that fires on a synchronous status
- * transition at effect start. During a refetch, `data` keeps its
- * previous value until new data arrives — a feature (no flicker).
+ * transition at effect start. During a refetch (same key, bumped
+ * tick), `data` keeps its previous value until new data arrives — a
+ * feature (no flicker). On a **key change** (e.g. workspace switch),
+ * `data` is cleared so the previous context's content doesn't leak
+ * into the new one — see the `lastKeyRef` block below.
  */
 function useFetch<T>(
   key: string | null | undefined,
@@ -94,6 +97,21 @@ function useFetch<T>(
   const [error, setError] = useState<KnowledgeApiError | null>(null);
   // Bump to force a refetch.
   const [tick, setTick] = useState(0);
+
+  // Reset cached `data` + `error` when the cache key changes. The
+  // previous values belong to a different logical context (e.g. a
+  // different workspace) and would otherwise leak across the boundary —
+  // the user would see another workspace's KBs / entries until the new
+  // fetch resolved. Tick-driven refetches (same key) intentionally do
+  // NOT trigger this reset; they keep the no-flicker behavior.
+  // Pattern: React's documented "derive state from props" — set state
+  // during render, conditional on a ref-tracked previous value.
+  const lastKeyRef = useRef(key);
+  if (lastKeyRef.current !== key) {
+    lastKeyRef.current = key;
+    setData(null);
+    setError(null);
+  }
   // Hold the latest loader in a ref so the in-flight effect always
   // sees the freshest closure (caller param changes apply to refetch).
   // Updated via an effect to satisfy react-hooks/refs.
