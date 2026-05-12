@@ -1,6 +1,6 @@
 {
   "name": "@dopl/cli",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Command-line interface for the Dopl knowledge base — the shell-native companion to @dopl/mcp-server",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -17,7 +17,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@dopl/client": "^0.7.0",
+    "@dopl/client": "^0.12.1",
     "commander": "^12.1.0",
     "debug": "^4.4.3",
     "update-notifier": "^7.3.1"
