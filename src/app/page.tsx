@@ -155,7 +155,7 @@ function Hero() {
   return (
     <section className="relative overflow-hidden">
       <HeroBackground />
-      <div className="relative mx-auto max-w-[1200px] px-6 pt-24 pb-32 text-center">
+      <div className="relative z-10 mx-auto max-w-[1200px] px-6 pt-24 pb-32 text-center">
         <h1
           className="mx-auto max-w-[1000px] text-white"
           style={{
@@ -298,7 +298,7 @@ function FinalCta() {
   return (
     <section className="relative overflow-hidden">
       <HeroBackground variant="soft" />
-      <div className="relative mx-auto max-w-[1200px] px-6 py-28 text-center">
+      <div className="relative z-10 mx-auto max-w-[1200px] px-6 py-28 text-center">
         <h2
           className="mx-auto max-w-[760px] text-neutral-900"
           style={{
