@@ -15,7 +15,7 @@ import {
 } from "./dto";
 
 const WORKSPACE_COLS =
-  "id, owner_id, name, slug, public_id, description, created_at, updated_at";
+  "id, owner_id, name, slug, public_id, description, icon_url, created_at, updated_at";
 const MEMBER_COLS =
   "workspace_id, user_id, role, status, joined_at, invited_by, invited_at";
 
@@ -234,13 +234,19 @@ export async function insertWorkspaceWithOwnerMembership(
 
 export async function updateWorkspace(
   workspaceId: string,
-  patch: { name?: string; slug?: string; description?: string | null }
+  patch: {
+    name?: string;
+    slug?: string;
+    description?: string | null;
+    iconUrl?: string | null;
+  }
 ): Promise<Workspace> {
   const db = supabaseAdmin();
   const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (patch.name !== undefined) update.name = patch.name;
   if (patch.slug !== undefined) update.slug = patch.slug;
   if (patch.description !== undefined) update.description = patch.description;
+  if (patch.iconUrl !== undefined) update.icon_url = patch.iconUrl;
   const { data, error } = await db
     .from("workspaces")
     .update(update)

@@ -216,6 +216,24 @@ export function isPanelClusterable(panel: Panel): boolean {
 }
 
 /**
+ * Returns true if this panel type supports edge/corner resize. Covers the
+ * browse panel and the individual knowledge-base / skill panels (NOT the
+ * big singleton "knowledge" / "skills" library panels).
+ */
+export function isPanelResizable(panel: Panel): boolean {
+  return (
+    panel.type === "browse" ||
+    panel.type === "knowledge-base" ||
+    panel.type === "skill"
+  );
+}
+
+/** Smallest size a resizable panel can be dragged down to, by type. */
+export function panelMinSize(panel: Panel): { width: number; height: number } {
+  return panel.type === "browse" ? BROWSE_PANEL_MIN_SIZE : DEFAULT_PANEL_MIN_SIZE;
+}
+
+/**
  * Cluster — a persistent grouping of panels with a visible outline and
  * header tab. Creating a cluster auto-reorganizes the selected panels into
  * a tight grid and draws a rectilinear union outline around them.
@@ -294,6 +312,12 @@ export const ARTIFACT_PANEL_SIZE = {
 export const BROWSE_PANEL_MIN_SIZE = {
   width: 700,
   height: 400,
+} as const;
+
+/** Min resize size for the individual knowledge-base / skill panels. */
+export const DEFAULT_PANEL_MIN_SIZE = {
+  width: 360,
+  height: 320,
 } as const;
 
 /** Minimum members a cluster must have to exist. Below this → auto-dissolve. */

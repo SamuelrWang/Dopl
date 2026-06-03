@@ -2,7 +2,7 @@
 
 import React, { useCallback, useRef, useState, type Dispatch } from "react";
 import { useCanvasStateRef } from "./canvas-store";
-import { BROWSE_PANEL_MIN_SIZE, type CanvasAction, type Panel } from "./types";
+import { panelMinSize, type CanvasAction, type Panel } from "./types";
 
 export type ResizeEdge = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
 
@@ -59,8 +59,7 @@ export function useCanvasPanelResize(
       const dx = (e.clientX - origin.mouseX) / zoom;
       const dy = (e.clientY - origin.mouseY) / zoom;
       const { edge } = origin;
-      const minW = BROWSE_PANEL_MIN_SIZE.width;
-      const minH = BROWSE_PANEL_MIN_SIZE.height;
+      const { width: minW, height: minH } = panelMinSize(panel);
 
       let newX = origin.x;
       let newY = origin.y;
@@ -87,7 +86,7 @@ export function useCanvasPanelResize(
         dispatch({ type: "MOVE_PANEL", id: panel.id, x: newX, y: newY });
       }
     },
-    [dispatch, panel.id, canvasStateRef]
+    [dispatch, panel, canvasStateRef]
   );
 
   const handleEdgePointerUp = useCallback(

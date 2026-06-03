@@ -198,6 +198,28 @@ export async function renameWorkspace(
   return updateWorkspace(workspaceId, update);
 }
 
+/**
+ * Set or clear a workspace's icon URL. Admin+ only. The URL is produced
+ * server-side by the upload route (Supabase Storage public URL) or passed
+ * as null to clear — never user-supplied, so there's no URL validation
+ * here beyond the role gate.
+ */
+export async function updateWorkspaceIcon(
+  workspaceId: string,
+  userId: string,
+  iconUrl: string | null
+): Promise<Workspace> {
+  const { membership } = await resolveMembershipOrThrow(workspaceId, userId);
+  if (!meetsMinRole(membership.role, "admin")) {
+    throw new HttpError(
+      403,
+      "WORKSPACE_FORBIDDEN",
+      "Only admins can change the workspace icon"
+    );
+  }
+  return updateWorkspace(workspaceId, { iconUrl });
+}
+
 export async function deleteWorkspaceForUser(
   workspaceId: string,
   userId: string

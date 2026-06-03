@@ -16,6 +16,7 @@ export interface WorkspaceRow {
   slug: string;
   public_id: string;
   description: string | null;
+  icon_url: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -38,6 +39,7 @@ export function mapWorkspaceRow(row: WorkspaceRow): Workspace {
     slug: row.slug,
     publicId: row.public_id,
     description: row.description,
+    iconUrl: row.icon_url,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

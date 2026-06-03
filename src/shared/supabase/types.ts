@@ -1210,8 +1210,45 @@ export type Database = {
           },
         ]
       }
+      oauth_connection_grants: {
+        Row: {
+          connection_id: string
+          granted_at: string
+          workspace_id: string
+        }
+        Insert: {
+          connection_id: string
+          granted_at?: string
+          workspace_id: string
+        }
+        Update: {
+          connection_id?: string
+          granted_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "oauth_connection_grants_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "oauth_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "oauth_connection_grants_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       oauth_connections: {
         Row: {
+          account_avatar_url: string | null
+          account_email: string | null
+          account_label: string | null
+          alias: string
           composio_connection_id: string
           created_at: string
           id: string
@@ -1221,9 +1258,12 @@ export type Database = {
           status: string
           updated_at: string
           user_id: string
-          workspace_id: string
         }
         Insert: {
+          account_avatar_url?: string | null
+          account_email?: string | null
+          account_label?: string | null
+          alias: string
           composio_connection_id: string
           created_at?: string
           id?: string
@@ -1233,9 +1273,12 @@ export type Database = {
           status?: string
           updated_at?: string
           user_id: string
-          workspace_id: string
         }
         Update: {
+          account_avatar_url?: string | null
+          account_email?: string | null
+          account_label?: string | null
+          alias?: string
           composio_connection_id?: string
           created_at?: string
           id?: string
@@ -1245,17 +1288,8 @@ export type Database = {
           status?: string
           updated_at?: string
           user_id?: string
-          workspace_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "oauth_connections_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       profiles: {
         Row: {
@@ -1932,6 +1966,7 @@ export type Database = {
         Row: {
           created_at: string
           description: string | null
+          icon_url: string | null
           id: string
           name: string
           owner_id: string
@@ -1942,6 +1977,7 @@ export type Database = {
         Insert: {
           created_at?: string
           description?: string | null
+          icon_url?: string | null
           id?: string
           name: string
           owner_id: string
@@ -1952,6 +1988,7 @@ export type Database = {
         Update: {
           created_at?: string
           description?: string | null
+          icon_url?: string | null
           id?: string
           name?: string
           owner_id?: string

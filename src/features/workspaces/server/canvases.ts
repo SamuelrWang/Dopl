@@ -11,7 +11,7 @@ const DEFAULT_CANVAS_FALLBACK_SLUG = "canvas";
 
 /**
  * Reserved canvas slugs — shadowed by static workspace sub-routes
- * (`/[workspaceSlug]/settings`, `/knowledge`, `/skills`, `/activity`,
+ * (`/[workspaceSlug]/settings`, `/knowledge`, `/skills`,
  * `/chat`, `/overview`). Static segments win over dynamic in the
  * Next.js router, so a canvas with one of these slugs would be
  * unreachable via URL even though the row exists. Refuse the collision
@@ -19,7 +19,6 @@ const DEFAULT_CANVAS_FALLBACK_SLUG = "canvas";
  * here when you create it.
  */
 const RESERVED_CANVAS_SLUGS: ReadonlySet<string> = new Set([
-  "activity",
   "chat",
   "knowledge",
   "overview",

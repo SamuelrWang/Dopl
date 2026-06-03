@@ -34,6 +34,7 @@ import { MAX_ZOOM, MIN_ZOOM, computePanelsBounds, type Cluster, type Panel } fro
 import { CanvasMinimap } from "./canvas-minimap";
 import { clusterBounds } from "./clusters/cluster-geometry";
 import { SelectionMenu } from "./selection/selection-menu";
+import { CanvasContextMenu } from "./context-menu/canvas-context-menu";
 import { useEdgeScroll } from "./use-edge-scroll";
 import {
   applyCameraDirect,
@@ -64,6 +65,7 @@ export function Canvas({ showMinimap = true }: CanvasProps = {}) {
   const worldRef = useRef<HTMLDivElement>(null);
   const [marquee, setMarquee] = useState<MarqueeState | null>(null);
   const [cursorPos, setCursorPos] = useState<{ x: number; y: number } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const marqueeRef = useRef<MarqueeState | null>(null);
   // Keep ref in sync with state so handlers always see latest value.
   marqueeRef.current = marquee;
@@ -365,6 +367,20 @@ export function Canvas({ showMinimap = true }: CanvasProps = {}) {
     [dispatch]
   );
 
+  // ── Right-click / two-finger click on background → custom menu ────
+  // Only fires on empty canvas space. If the click lands inside a panel
+  // we bail and let the native menu (or the panel's own handler) run.
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      const target = e.target as HTMLElement;
+      if (target.closest("[data-panel-id]")) return;
+      e.preventDefault();
+      setMarquee(null);
+      setContextMenu({ x: e.clientX, y: e.clientY });
+    },
+    []
+  );
+
   // ── Zoom (trackpad pinch) ─────────────────────────────────────────
   // Attached once via native addEventListener so we can preventDefault.
   // Reads the latest camera from cameraRef so this effect doesn't need to
@@ -636,6 +652,7 @@ export function Canvas({ showMinimap = true }: CanvasProps = {}) {
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
+      onContextMenu={handleContextMenu}
       className="relative w-full h-full overflow-clip touch-none select-none"
       style={{ cursor: "default" }}
     >
@@ -682,6 +699,16 @@ export function Canvas({ showMinimap = true }: CanvasProps = {}) {
       {/* Floating selection menu — follows cursor when 2+ panels selected */}
       {cursorPos && state.selectedPanelIds.length >= 2 && (
         <SelectionMenu cursorPos={cursorPos} />
+      )}
+
+      {/* Custom right-click menu — replaces the native browser menu on
+          empty canvas space. */}
+      {contextMenu && (
+        <CanvasContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={() => setContextMenu(null)}
+        />
       )}
 
       {/* Marquee selection overlay — uses fixed positioning to escape the

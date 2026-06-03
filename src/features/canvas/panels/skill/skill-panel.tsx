@@ -67,6 +67,12 @@ export function SkillPanelBody({ panel }: Props) {
 
   useSkillsRealtime(scope?.workspaceId, refetch);
 
+  // Audit A-005: this hook MUST be called unconditionally, before any
+  // early return, to satisfy the rules of hooks. The derived access
+  // level (a plain method call, not a hook) is computed below once the
+  // skill has resolved.
+  const access = useMyAccessContext();
+
   if (loading && !resolved) {
     return <SkillPanelSkeleton />;
   }
@@ -89,7 +95,6 @@ export function SkillPanelBody({ panel }: Props) {
   // Audit A-005: gate "+ Add file" / "Delete file" / inline rename
   // on the caller's effective access. Falls open to true while the
   // access fetch is loading so admins/owners don't see a flash.
-  const access = useMyAccessContext();
   const accessLevel = access.resolve("skill", skill.id);
   const canEdit = accessLevel == null ? true : meetsLevel(accessLevel, "edit");
 

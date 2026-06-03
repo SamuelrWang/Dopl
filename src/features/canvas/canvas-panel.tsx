@@ -29,7 +29,7 @@ import { ArtifactPanelBody } from "./panels/artifact/artifact-panel";
 import { ChatExpiryBar } from "./canvas-panel-expiry";
 import { useCanvasPanelDrag } from "./use-canvas-panel-drag";
 import { useCanvasPanelResize } from "./use-canvas-panel-resize";
-import { isPanelDeletable, type CanvasAction, type Panel } from "./types";
+import { isPanelDeletable, isPanelResizable, type CanvasAction, type Panel } from "./types";
 import {
   Dialog,
   DialogContent,
@@ -59,7 +59,7 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
     handleRootPointerUp,
   } = useCanvasPanelDrag(panel, dispatch);
 
-  // ── Resize logic (browse panels only) ────────────────────────────
+  // ── Resize logic (browse + individual knowledge-base / skill) ─────
   const {
     isResizing,
     handleEdgePointerDown,
@@ -296,8 +296,8 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
         </Dialog>
       )}
 
-      {/* Resize edges & corners — browse panels only */}
-      {panel.type === "browse" && (
+      {/* Resize edges & corners — browse + individual knowledge-base / skill */}
+      {isPanelResizable(panel) && (
         <>
           {/* Edge zones — 6px wide invisible hit areas along each border */}
           {/* Top */}

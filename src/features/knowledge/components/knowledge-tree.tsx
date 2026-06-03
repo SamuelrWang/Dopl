@@ -711,11 +711,13 @@ function AddRowAffordance({
   onCreateFolder: (parentId: string | null, name: string) => Promise<string>;
   onCreateEntry: (folderId: string | null, title: string) => Promise<string>;
 }) {
-  // Only show at root level — folder rows have their own "+" buttons.
-  if (depth > 0) return null;
+  // Hooks must run unconditionally before any early return (rules of
+  // hooks) — the depth/access gates below are plain conditionals.
   const inline = useInlineEdit();
   // Audit A-016: prevent double-create on fast repeat clicks.
   const [busy, setBusy] = useState(false);
+  // Only show at root level — folder rows have their own "+" buttons.
+  if (depth > 0) return null;
   // Audit A-005: read-only members never see the root-level "+ New
   // entry/folder" affordances either.
   if (!inline.canEdit) return null;

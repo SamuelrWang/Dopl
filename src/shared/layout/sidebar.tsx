@@ -1,11 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Activity,
   BookOpen,
   ChevronDown,
   ChevronRight,
@@ -17,7 +15,6 @@ import {
   Plug,
   Plus,
   Search,
-  Settings,
   Sparkles,
   Users,
 } from "lucide-react";
@@ -42,7 +39,11 @@ import type { AccessLevel } from "@/features/members/access-defaults";
 import { meetsLevel } from "@/features/members/access-defaults";
 import { toast } from "@/shared/ui/toast";
 import { Tooltip } from "@/shared/ui/tooltip";
-import { UserMenu } from "./user-menu";
+import { WorkspaceSwitcher } from "./workspace-switcher";
+import type {
+  PendingInvitation,
+  WorkspaceLike,
+} from "./workspace-switcher";
 
 /**
  * Default body seeded into the first entry of every KB created from
@@ -71,25 +72,8 @@ Describe the situations where the agent should invoke this skill.
 Step-by-step instructions for the agent. You can edit this directly here, or connect your agent to refine it as you work together.
 `;
 
-interface WorkspaceLike {
-  id: string;
-  name: string;
-  slug: string;
-  publicId: string;
-}
-
 function workspaceLikeSegment(ws: WorkspaceLike): string {
   return `${ws.slug}-${ws.publicId}`;
-}
-
-interface PendingInvitation {
-  token: string;
-  invitedRole: string;
-  workspaceId: string;
-  workspaceSlug: string;
-  workspacePublicId: string;
-  workspaceName: string;
-  createdAt: string;
 }
 
 type NavSection =
@@ -99,9 +83,7 @@ type NavSection =
   | "knowledge"
   | "skills"
   | "integrations"
-  | "activity"
-  | "members"
-  | "settings";
+  | "members";
 
 interface NavItem {
   label: string;
@@ -116,9 +98,7 @@ const navItems: ReadonlyArray<NavItem> = [
   { label: "Knowledge", icon: BookOpen, section: "knowledge" },
   { label: "Skills", icon: Sparkles, section: "skills" },
   { label: "Integrations", icon: Plug, section: "integrations" },
-  { label: "Activity", icon: Activity, section: "activity" },
   { label: "Members", icon: Users, section: "members" },
-  { label: "Settings", icon: Settings, section: "settings" },
 ];
 
 /** Static workspace sub-routes — anything matching `/{ws}/<one of these>`
@@ -130,7 +110,6 @@ const NAMED_WORKSPACE_SUBROUTES: ReadonlyArray<string> = [
   "knowledge",
   "skills",
   "integrations",
-  "activity",
   "settings",
 ];
 
@@ -189,15 +168,17 @@ export function Sidebar() {
       className="hidden md:flex fixed inset-y-0 left-0 w-64 z-10 flex-col overflow-hidden border-r border-white/[0.06] pointer-events-auto"
       style={{ backgroundColor: "oklch(0.13 0 0)" }}
     >
-      <SidebarHeader
-        currentSegment={currentSegment ?? "default"}
+      <WorkspaceSwitcher
+        current={currentWorkspace}
         currentName={fallbackName}
+        currentSegment={currentSegment ?? "default"}
         workspaces={workspaces}
         invitations={invitations}
         onAccepted={() => {
           refreshInvitations();
           refreshWorkspaces();
         }}
+        onWorkspacesChanged={refreshWorkspaces}
       />
       <SidebarSearchRow />
       {/* Nav region claims the remaining height and scrolls internally
@@ -209,9 +190,6 @@ export function Sidebar() {
           workspaceSegment={currentSegment}
           workspaceId={currentWorkspace?.id ?? null}
         />
-      </div>
-      <div className="px-3 py-3 border-t border-white/[0.06]">
-        <UserMenu dropdownDirection="up" />
       </div>
     </aside>
   );
@@ -268,182 +246,6 @@ function usePendingInvitations() {
 
   const refresh = useCallback(() => setTick((t) => t + 1), []);
   return { invitations, refresh };
-}
-
-interface SidebarHeaderProps {
-  currentSegment: string;
-  currentName: string;
-  workspaces: WorkspaceLike[];
-  invitations: PendingInvitation[];
-  onAccepted: () => void;
-}
-
-function SidebarHeader({
-  currentSegment,
-  currentName,
-  workspaces,
-  invitations,
-  onAccepted,
-}: SidebarHeaderProps) {
-  const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [acceptingToken, setAcceptingToken] = useState<string | null>(null);
-  const ref = useRef<HTMLDivElement>(null);
-  const hasInvites = invitations.length > 0;
-
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    if (open) document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [open]);
-
-  async function handleAccept(invite: PendingInvitation) {
-    if (acceptingToken) return;
-    setAcceptingToken(invite.token);
-    try {
-      const res = await fetch(
-        `/api/workspaces/invitations/${encodeURIComponent(invite.token)}/accept`,
-        { method: "POST" },
-      );
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(
-          body?.error?.message || body?.error || "Couldn't accept",
-        );
-      }
-      onAccepted();
-      setOpen(false);
-      router.push(`/${invite.workspaceSlug}-${invite.workspacePublicId}`);
-      router.refresh();
-    } catch {
-      // Refresh anyway — invite may have been revoked / expired since
-      // last poll. The list will reconcile.
-      onAccepted();
-    } finally {
-      setAcceptingToken(null);
-    }
-  }
-
-  return (
-    <div
-      ref={ref}
-      className="relative flex items-center gap-2 px-3 py-3 border-b border-white/[0.06]"
-    >
-      <Link
-        href={`/${currentSegment}`}
-        aria-label="Dopl"
-        className="shrink-0 flex items-center justify-center w-7 h-7 rounded-md overflow-hidden"
-      >
-        <Image
-          src="/favicons/favicon-32x32.png"
-          alt="Dopl"
-          width={20}
-          height={20}
-          className="rounded-sm"
-        />
-      </Link>
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="relative flex-1 flex items-center justify-between gap-2 px-2 py-1 rounded-md hover:bg-white/[0.04] transition-colors text-left cursor-pointer"
-      >
-        <span className="text-sm font-medium text-text-primary truncate">
-          {currentName}
-        </span>
-        <span className="flex items-center gap-1.5 shrink-0">
-          {hasInvites && (
-            <span
-              aria-label={`${invitations.length} pending invitation${invitations.length === 1 ? "" : "s"}`}
-              className="w-1.5 h-1.5 rounded-full bg-red-500"
-            />
-          )}
-          <ChevronDown size={14} className="text-text-secondary/60" />
-        </span>
-      </button>
-
-      {open && (
-        <div
-          className="absolute left-3 right-3 top-full mt-1 rounded-md overflow-hidden bg-[oklch(0.16_0_0)] border border-white/[0.1] shadow-[0_8px_32px_rgba(0,0,0,0.5)] z-10"
-        >
-          {workspaces.length === 0 && !hasInvites ? (
-            <div className="px-3 py-2 text-xs text-text-secondary">
-              Loading workspaces…
-            </div>
-          ) : (
-            <div className="py-1 max-h-72 overflow-auto">
-              {workspaces.map((w) => {
-                const segment = workspaceLikeSegment(w);
-                return (
-                  <Link
-                    key={w.id}
-                    href={`/${segment}`}
-                    onClick={() => setOpen(false)}
-                    className={cn(
-                      "block px-3 py-1.5 text-sm transition-colors cursor-pointer truncate",
-                      segment === currentSegment
-                        ? "bg-white/[0.06] text-text-primary"
-                        : "text-text-secondary hover:bg-white/[0.04] hover:text-text-primary",
-                    )}
-                  >
-                    {w.name}
-                  </Link>
-                );
-              })}
-            </div>
-          )}
-
-          {hasInvites && (
-            <div className="border-t border-white/[0.06] py-1">
-              <p className="px-3 pt-1 pb-1 text-[10px] uppercase tracking-wider text-text-secondary/60">
-                Invitations
-              </p>
-              {invitations.map((inv) => {
-                const accepting = acceptingToken === inv.token;
-                return (
-                  <div
-                    key={inv.token}
-                    className="flex items-center gap-2 px-3 py-1.5"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm text-text-primary truncate">
-                        {inv.workspaceName}
-                      </p>
-                      <p className="text-[10px] uppercase tracking-wider text-text-secondary/50">
-                        Invited as {inv.invitedRole}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleAccept(inv)}
-                      disabled={accepting}
-                      className="shrink-0 h-6 px-2 rounded-md bg-white text-black text-[11px] font-medium hover:bg-white/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
-                    >
-                      {accepting ? "…" : "Accept"}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          <div className="border-t border-white/[0.06] py-1">
-            <Link
-              href="/workspaces"
-              onClick={() => setOpen(false)}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm text-text-secondary hover:bg-white/[0.04] hover:text-text-primary transition-colors cursor-pointer"
-            >
-              <Plus size={13} className="shrink-0" />
-              New workspace
-            </Link>
-          </div>
-        </div>
-      )}
-    </div>
-  );
 }
 
 function SidebarSearchRow() {

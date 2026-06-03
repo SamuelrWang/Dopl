@@ -42,6 +42,7 @@ export interface Workspace {
   slug: string;
   publicId: string;
   description: string | null;
+  iconUrl: string | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -13,6 +13,9 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
     "packages/*/dist/**",
+    // Claude Code worktrees contain transpiled package output that must
+    // never be linted — they add thousands of bogus errors otherwise.
+    "**/.claude/**",
   ]),
 ]);
 
