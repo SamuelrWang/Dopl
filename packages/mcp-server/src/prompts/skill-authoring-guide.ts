@@ -1,6 +1,6 @@
 /**
  * Skill-authoring framework loaded into the MCP server prompt and
- * served by the `skill_authoring_guide` tool.
+ * served by the `dopl_skill(op='authoring_guide')` tool.
  *
  * Synthesized from:
  *   - Anthropic Agent Skills spec (https://agentskills.io/specification)
@@ -127,9 +127,9 @@ When the user says "build me a skill for X":
 
 1. **Clarify intent first.** Ask the user what trigger phrases they'd use, what success looks like, and what the skill should NOT do. The first 30 seconds of clarification saves 10x debugging.
 2. **Draft the description and when_to_use FIRST**, before any body. These are 80% of the discoverability win — get them right.
-3. **Call \`skill_create\`** with the metadata + an empty body. The skill is now real and addressable.
-4. **Write SKILL.md procedurally** via \`skill_write_file\`. Follow the canonical section order. Aim for the body to be 100-300 lines.
-5. **Add supplementary files** only when SKILL.md exceeds ~500 lines or you have a reference doc that loads-on-demand. Use \`skill_create_file\`.
+3. **Call \`dopl_skill(op='create')\`** with the metadata + an empty body. The skill is now real and addressable.
+4. **Write SKILL.md procedurally** via \`dopl_skill(op='write_file')\`. Follow the canonical section order. Aim for the body to be 100-300 lines.
+5. **Add supplementary files** only when SKILL.md exceeds ~500 lines or you have a reference doc that loads-on-demand. Use \`dopl_skill(op='create_file')\`.
 6. **Self-grade against the quality checklist above.** If anything is missing, fix it before declaring done.
 7. **Verify.** Read the description aloud — would *you* trigger this skill from that description? If not, rewrite.
 

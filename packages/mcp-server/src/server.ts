@@ -2,19 +2,22 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z, type ZodRawShape } from "zod";
 import { DoplClient, workspaceContext } from "@dopl/client";
 import type {
-  CanvasPanel,
   WorkspaceListItem,
   WorkspaceRole,
   WorkspaceSummary,
 } from "@dopl/client";
-import { brainProtocolPreamble } from "./templates.js";
 import { registerKnowledgeTools } from "./tools/knowledge.js";
 import { registerSkillTools } from "./tools/skills.js";
 import { registerIntegrationTools } from "./tools/integrations.js";
+import { registerSetupsTools } from "./tools/setups.js";
+import { registerClusterTools } from "./tools/cluster.js";
+import { registerBrainTools } from "./tools/brain.js";
+import { registerEntryTools } from "./tools/entry.js";
+import { registerCanvasTools } from "./tools/canvas.js";
+import { registerIngestTools } from "./tools/ingest.js";
+import { registerPacksTools } from "./tools/packs.js";
 import { SKILL_AUTHORING_GUIDE } from "./prompts/skill-authoring-guide.js";
 import { packageVersion } from "./version.js";
-
-const CONTEXT_CHAR_BUDGET = 2000;
 
 const SERVER_INSTRUCTIONS = `You are connected to **Dopl** — a knowledge base of proven AI and automation implementations including agent workflows, n8n automations, Claude skills, API integrations, and more.
 
@@ -30,15 +33,15 @@ Same rule applies when the user asks "how would I…", "what's a good way to…"
 
 ## Session start — preload the user's workspace
 
-At the very start of every new session, before your first substantive reply, call \`list_clusters\` and \`canvas_list_panels\` **in parallel**. This loads the user's current clusters and canvas entries so questions about their workspace are grounded in real state from turn one — not in whatever stale picture their local CLAUDE.md or installed skill files might paint.
+At the very start of every new session, before your first substantive reply, call \`dopl_cluster(op='list')\` and \`dopl_canvas(op='list')\` **in parallel**. This loads the user's current clusters and canvas entries so questions about their workspace are grounded in real state from turn one — not in whatever stale picture their local CLAUDE.md or installed skill files might paint.
 
 You do NOT need to re-run these on every turn. Once per session is enough, with these exceptions:
 
 - **User asks about their workspace** ("what's on my canvas?", "which clusters do I have?", "show my setup") → **re-query first**. They may have added or removed entries via the web UI mid-session; stale data will mislead them.
-- **After your own write ops** (\`canvas_add_entry\`, \`canvas_create_cluster\`, \`delete_entry\`, \`rename_cluster\`, etc.) → trust the tool response. It already reflects the new state.
+- **After your own write ops** (\`dopl_canvas(op='add_entry')\`, \`dopl_cluster(op='create')\`, \`dopl_cluster_admin(op='delete_entry')\`, \`dopl_cluster(op='update')\`, etc.) → trust the tool response. It already reflects the new state.
 - **Unrelated turns** → don't refresh. The session-start load covers you.
 
-**Canvas/clusters > local files as source of truth.** If a user's \`CLAUDE.md\` or a \`~/.claude/skills/\` file implies they have a different set of clusters than what \`list_clusters\` returns, trust the MCP result and flag the drift. Local skill files are caches that can fall out of sync; the canvas is canonical.
+**Canvas/clusters > local files as source of truth.** If a user's \`CLAUDE.md\` or a \`~/.claude/skills/\` file implies they have a different set of clusters than what \`dopl_cluster(op='list')\` returns, trust the MCP result and flag the drift. Local skill files are caches that can fall out of sync; the canvas is canonical.
 
 ## Workspaces — the agent can switch on the fly
 
@@ -52,13 +55,13 @@ When the user mentions a workspace by name ("in my acme workspace, …"), prefer
 
 ## Decision tree — which tool first
 
-- User wants to **find or build** something AI/automation-shaped → \`search_setups\` (cross-KB) or \`query_cluster\` (if a cluster is already in scope)
-- User wants the **full details** of an entry you already have a slug/UUID for → \`get_setup\`
-- User wants to **save** a specific entry to their workspace → \`canvas_add_entry\` (one entry by slug) or \`canvas_search_and_add\` (search + batch add in one shot)
-- User wants to **group** saved entries into a reusable skill → \`canvas_create_cluster\`
-- User gives you a **durable preference or correction** ("I prefer X over Y", "skip step Z") → \`save_cluster_memory\` on the relevant cluster
+- User wants to **find or build** something AI/automation-shaped → \`search_setups\` (cross-KB) or \`dopl_cluster(op='query')\` (if a cluster is already in scope)
+- User wants the **full details** of an entry you already have a slug/UUID for → \`dopl_setups(op='get')\`
+- User wants to **save** a specific entry to their workspace → \`dopl_canvas(op='add_entry')\` (one entry by slug) or \`dopl_canvas(op='search_and_add')\` (search + batch add in one shot)
+- User wants to **group** saved entries into a reusable skill → \`dopl_cluster(op='create')\`
+- User gives you a **durable preference or correction** ("I prefer X over Y", "skip step Z") → \`dopl_brain(op='save_memory')\` on the relevant cluster
 - User wants to **compose an original solution** spanning multiple patterns → \`build_solution\`
-- User asks **has anything changed** in their saved work → \`check_cluster_updates\` (bulk) or \`check_entry_updates\` (one)
+- User asks **has anything changed** in their saved work → \`dopl_entry(op='check_cluster_updates')\` (bulk) or \`dopl_entry(op='check_updates')\` (one)
 
 ## Pending ingestions — the user's Dopl queue
 
@@ -67,8 +70,8 @@ Every Dopl tool response carries a \`_dopl_status\` footer with \`pending_ingest
 **When the footer shows \`pending_ingestions > 0\`:**
 
 1. Tell the user: "You have N URL(s) queued on Dopl — want me to process them?"
-2. On yes: call \`list_pending_ingests\` to see the URLs, then call \`ingest_url(url)\` for each. \`ingest_url\` transparently claims the pending skeleton (flips it to processing) — you do NOT need a special parameter; pass the same URL that's in the queue.
-3. Follow the normal \`ingest_url\` → run prompts → \`submit_ingested_entry\` flow. The amber tile on the user's canvas updates live as you progress.
+2. On yes: call \`dopl_ingest(op='pending')\` to see the URLs, then call \`dopl_ingest(op='url', url)\` for each. \`dopl_ingest(op='url')\` transparently claims the pending skeleton (flips it to processing) — you do NOT need a special parameter; pass the same URL that's in the queue.
+3. Follow the normal \`dopl_ingest(op='url')\` → run prompts → \`dopl_ingest(op='submit')\` flow. The amber tile on the user's canvas updates live as you progress.
 
 Don't nag the user repeatedly in a single session. If they decline once, drop it until they bring it up or a new item appears.
 
@@ -76,11 +79,11 @@ Don't nag the user repeatedly in a single session. If they decline once, drop it
 
 These tool pairs overlap and picking the wrong one wastes a round trip:
 
-- \`search_setups\` (cross-KB, broad) vs \`query_cluster\` (scoped to one cluster, narrow) — use the second only when a cluster is already the focus of the conversation.
-- \`canvas_add_entry\` (you already have the slug) vs \`canvas_search_and_add\` (search + batch) — use the second when the user's request implies discovery, not a known entry.
-- \`save_cluster_memory\` (NEW memory) vs \`update_cluster_memory\` (edit existing) — call \`get_cluster_brain\` first if you're not sure whether a matching memory already exists.
-- \`check_entry_updates\` (one entry) vs \`check_cluster_updates\` (every entry in a cluster) — use the bulk version for cluster-wide refresh.
-- \`update_cluster_brain\` (edit synthesized instructions) vs \`save_cluster_memory\` (append a short preference) — use the memory path for short corrections, the brain edit path for structural changes.
+- \`search_setups\` (cross-KB, broad) vs \`dopl_cluster(op='query')\` (scoped to one cluster, narrow) — use the second only when a cluster is already the focus of the conversation.
+- \`dopl_canvas(op='add_entry')\` (you already have the slug) vs \`dopl_canvas(op='search_and_add')\` (search + batch) — use the second when the user's request implies discovery, not a known entry.
+- \`dopl_brain(op='save_memory')\` (NEW memory) vs \`dopl_brain(op='update_memory')\` (edit existing) — call \`dopl_brain(op='get')\` first if you're not sure whether a matching memory already exists.
+- \`dopl_entry(op='check_updates')\` (one entry) vs \`dopl_entry(op='check_cluster_updates')\` (every entry in a cluster) — use the bulk version for cluster-wide refresh.
+- \`dopl_brain(op='update_instructions')\` (edit synthesized instructions) vs \`dopl_brain(op='save_memory')\` (append a short preference) — use the memory path for short corrections, the brain edit path for structural changes.
 
 ## Skeleton entries — upgrade before handing off
 
@@ -88,7 +91,7 @@ Some entries in the KB are **skeleton tier**: a short task-agnostic
 descriptor + one embedding, no README / agents.md / manifest / tags.
 They exist to populate the discovery index cheaply. In \`search_setups\`
 results they render with an \`_(skeleton)_\` badge after the match score;
-in \`get_setup\` output they have a "Descriptor (skeleton tier)" section
+in \`dopl_setups(op='get')\` output they have a "Descriptor (skeleton tier)" section
 instead of the normal README/agents.md/manifest sections and end with
 "*This is a skeleton entry…*".
 
@@ -98,7 +101,7 @@ how to build like it — **upgrade it to full tier before presenting.**
 The skeleton descriptor is too thin for serious use; a full-tier
 version will have README, agents.md, detailed manifest, and richer tags.
 
-To upgrade: call \`ingest_url(url)\` with the skeleton entry's
+To upgrade: call \`dopl_ingest(op='url', url)\` with the skeleton entry's
 \`source_url\`. The server detects the existing skeleton, atomically
 claims it, and runs the same agent-driven full-ingestion flow as a
 fresh URL. The entry UUID is preserved; the slug regenerates from the
@@ -132,7 +135,7 @@ Tell the user you're upgrading so they know why there's a pause.
 - **Build** — Compose a complete solution by combining patterns from multiple implementations
 - **Canvas** — Manage the user's workspace: add entries, organize into clusters, browse saved items
 - **Brain** — Read and edit cluster brains (synthesized instructions + memories) to capture durable preferences and corrections
-- **Workspace skills** — Procedural prompts the user authored in their workspace (distinct from cluster skill files above). Each workspace skill is a folder of \`.md\` files; \`SKILL.md\` is the canonical procedure. Call \`skill_list\` at task boundaries to see if any apply, then \`skill_get\` to load the bundle and follow SKILL.md. Skill bodies reference KBs via \`[label](dopl://kb/<slug>)\` markdown links — load the referenced KB content with \`kb_read_file\` when you actually need it. **Authoring**: when the user asks you to build a skill, call \`skill_authoring_guide\` first to load the framework, then \`skill_create\` (with strong metadata) and \`skill_write_file\`. All write tools are gated by the per-skill \`agent_write_enabled\` toggle — they 403 with \`SKILL_AGENT_WRITE_DISABLED\` until the user enables it from the website.
+- **Workspace skills** — Procedural prompts the user authored in their workspace (distinct from cluster skill files above). Each workspace skill is a folder of \`.md\` files; \`SKILL.md\` is the canonical procedure. Call \`dopl_skill(op='list')\` at task boundaries to see if any apply, then \`dopl_skill(op='get')\` to load the bundle and follow SKILL.md. Skill bodies reference KBs via \`[label](dopl://kb/<slug>)\` markdown links — load the referenced KB content with \`dopl_kb(op='read_file')\` when you actually need it. **Authoring**: when the user asks you to build a skill, call \`dopl_skill(op='authoring_guide')\` first to load the framework, then \`dopl_skill(op='create')\` (with strong metadata) and \`dopl_skill(op='write_file')\`. Write access follows the caller's per-resource access in the workspace member matrix. Destructive ops (delete a skill or a skill file) live on the separate \`dopl_skill_admin\` tool.
 
 ## Linking entries
 
@@ -153,26 +156,26 @@ The canonical brain structure mirrors Claude Code's native skill-creator format.
 \`## Anti-patterns\` — what NOT to do; wrong tools, out-of-scope uses
 \`## References\` — one line per cluster entry with its role
 
-When creating a new cluster: the tool response instructs you to call \`get_skill_template\` to fetch the synthesis prompt, run synthesis in your context against the entries' agents.md, and write the result with \`update_cluster_brain\`.
+When creating a new cluster: the tool response instructs you to call \`dopl_brain(op='template')\` to fetch the synthesis prompt, run synthesis in your context against the entries' agents.md, and write the result with \`dopl_brain(op='update_instructions')\`.
 
 ## When to edit the brain vs. save a memory vs. do nothing
 
 This is a routing decision every conversation will produce. Get it right:
 
-**Edit the brain (\`update_cluster_brain\`) when the user gives you structural, durable knowledge:**
+**Edit the brain (\`dopl_brain(op='update_instructions')\`) when the user gives you structural, durable knowledge:**
 - They correct a step in the workflow itself ("actually, step 3 is wrong — it should be X", "remove the part about Y")
-- They add a new repo/entry to the cluster that introduces a pattern the brain doesn't cover (chain with \`add_entry_to_cluster\` first)
+- They add a new repo/entry to the cluster that introduces a pattern the brain doesn't cover (chain with \`dopl_cluster(op='add_entry')\` first)
 - They describe a new use case the skill should cover ("let's also make this work for …")
 - A section is out of date or contradicts current reality
 - The correction changes the fundamental approach, not just a parameter
-Read the brain first with \`get_cluster_brain\`, then make a SURGICAL edit — replace only the affected section, keep the rest verbatim. Never rewrite from scratch; the brain often contains prior edits you'd lose.
+Read the brain first with \`dopl_brain(op='get')\`, then make a SURGICAL edit — replace only the affected section, keep the rest verbatim. Never rewrite from scratch; the brain often contains prior edits you'd lose.
 
-**Save a memory (\`save_cluster_memory\`) when the user gives you a short preference, correction, or environmental fact:**
+**Save a memory (\`dopl_brain(op='save_memory')\`) when the user gives you a short preference, correction, or environmental fact:**
 - They express a preference ("I prefer Resend over SendGrid", "always use X")
 - They reveal a setup-specific value ("my API key env var is OPENAI_KEY, not OPENAI_API_KEY")
 - They note a gotcha specific to their environment ("this step doesn't work on Windows", "skip step 2 in my case")
 - Short corrections that augment rather than replace existing brain content
-Use \`update_cluster_memory\` instead when a near-duplicate memory already exists (call \`get_cluster_brain\` first to see memory IDs).
+Use \`dopl_brain(op='update_memory')\` instead when a near-duplicate memory already exists (call \`dopl_brain(op='get')\` first to see memory IDs).
 
 **Do both when** a conversation produces both a structural correction AND a short preference. Don't cram preferences into brain instructions; memories are a separate lane for a reason.
 
@@ -186,7 +189,7 @@ Use \`update_cluster_memory\` instead when a near-duplicate memory already exist
 - "for my setup…" / "in my environment…" → memory
 - "let's also include…" / "add X to the skill" → brain edit
 - "remove the part about…" / "that's wrong" → brain edit
-- "I just added <repo> to my canvas, update the <cluster> skill" → \`add_entry_to_cluster\` + brain edit
+- "I just added <repo> to my canvas, update the <cluster> skill" → \`dopl_cluster(op='add_entry')\` + brain edit
 
 ## Behavior
 
@@ -200,15 +203,15 @@ Use \`update_cluster_memory\` instead when a near-duplicate memory already exist
 
 Beyond the open KB, Dopl ships **knowledge packs**: curated, version-pinned reference docs for specialist domains (e.g. Rokid AR glasses, Unity VR). Each pack is backed by a public GitHub repo of nested markdown files, synced into Dopl on every push. Use these when the user is doing real implementation work in a domain that has a pack — your training data may be stale or wrong; the pack is canonical.
 
-**Three tools, progressive disclosure:**
+**One tool (\`dopl_packs\`), three ops, progressive disclosure:**
 
-- \`kb_list_packs\` — discover what packs exist (cheap; run once per session if the user mentions a vertical you don't have one open for)
-- \`kb_list({ pack, category? })\` — browse a pack's file tree (cheap; metadata only, no bodies)
-- \`kb_get({ pack, path })\` — fetch one file's full markdown (use after kb_list to drill in)
+- \`dopl_packs(op='list')\` — discover what packs exist (cheap; run once per session if the user mentions a vertical you don't have one open for)
+- \`dopl_packs(op="list_files", pack, category?)\` — browse a pack's file tree (cheap; metadata only, no bodies)
+- \`dopl_packs(op="get_file", pack, path)\` — fetch one file's full markdown (use after listing files to drill in)
 
 **When to use packs:**
-- User mentions a domain that has a pack (e.g. "Rokid", "AR glasses", "YodaOS") → call \`kb_list_packs\` if you don't already know what's installed, then \`kb_list\` against the matching pack
-- Coding for that domain → reach for \`kb_get\` instead of guessing API shapes from training data
+- User mentions a domain that has a pack (e.g. "Rokid", "AR glasses", "YodaOS") → call \`dopl_packs(op='list')\` if you don't already know what's installed, then \`dopl_packs(op='list_files')\` against the matching pack
+- Coding for that domain → reach for \`dopl_packs(op='get_file')\` instead of guessing API shapes from training data
 - Always cite the file path (e.g. \`docs/sdk/camera.md\`) in code comments so the user can verify against the public repo
 
 **When NOT to use packs:**
@@ -229,37 +232,6 @@ type ToolResponse = {
   content: Array<{ type: "text"; text: string }>;
   isError?: boolean;
 };
-
-/**
- * Human-readable label for non-entry canvas panel types. The backend
- * stores `panel_type` in `canvas_panels` but the MCP tool output used
- * to render every non-entry panel as "Untitled" because the renderer
- * only looked at the entry fields (title/summary/source_url) which
- * are all null for system panels.
- */
-function systemPanelLabel(type: CanvasPanel["panel_type"]): string {
-  switch (type) {
-    case "chat": return "Chat panel";
-    case "connection": return "MCP connection panel";
-    case "browse": return "Browse panel";
-    case "cluster-brain": return "Cluster brain panel";
-    default: return "System panel";
-  }
-}
-
-function systemPanelDetail(panel: CanvasPanel): string | null {
-  // System panels occasionally carry a title (e.g. the browse panel's
-  // active filter, a chat panel's conversation topic). Surface it when
-  // present; otherwise describe the panel's purpose inline.
-  if (panel.title) return panel.title;
-  switch (panel.panel_type) {
-    case "browse": return "the KB browse surface";
-    case "connection": return "status of your connected MCP agent";
-    case "chat": return "an in-canvas chat thread";
-    case "cluster-brain": return "a cluster brain viewer";
-    default: return null;
-  }
-}
 
 /**
  * Snapshot of the session's active workspace, surfaced in the
@@ -286,7 +258,7 @@ interface ActiveWorkspaceState {
  *   - there's nothing useful to report (no pending ingestions AND no
  *     active workspace — rare, only on a misconfigured session)
  *
- * The pending status is cached inside DoplClient for 5s; ingest_url
+ * The pending status is cached inside DoplClient for 5s; dopl_ingest(op='url')
  * invalidates the cache so the footer reflects a just-claimed row.
  */
 async function appendDoplStatus(
@@ -316,7 +288,7 @@ async function appendDoplStatus(
     );
   }
   if (pending > 0) {
-    const hint = `Call \`list_pending_ingests\` to see queued URLs, then \`ingest_url(url)\` to claim and process.`;
+    const hint = `Call \`dopl_ingest(op='pending')\` to see queued URLs, then \`dopl_ingest(op='url', url)\` to claim and process.`;
     lines.push(`  pending_ingestions: ${pending}`);
     lines.push(`  hint: "${hint}"`);
   }
@@ -372,13 +344,6 @@ const WORKSPACE_ARG_SHAPE = {
 };
 type WorkspaceArgShape = typeof WORKSPACE_ARG_SHAPE;
 
-/**
- * UUID v4-ish detector — good enough to distinguish a workspace id
- * from a slug for `resolveWorkspaceRef`. Slugs are kebab-case ASCII
- * and never contain hyphens in this 8-4-4-4-12 layout.
- */
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 export function createServer(
   client: DoplClient,
   options: {
@@ -432,10 +397,9 @@ export function createServer(
     ref: string,
   ): Promise<WorkspaceListItem | null> {
     // Audit B11: a workspace slug shaped like a UUID (lowercase hex
-    // with hyphens) is theoretically possible. The UUID_RE branch
-    // would only check `w.id === ref` and miss the slug match,
-    // forcing a wasteful refresh on the second pass. Cheap to also
-    // try the slug path on the first pass.
+    // with hyphens) is theoretically possible. Matching on id alone
+    // would miss the slug, forcing a wasteful refresh on the second
+    // pass. Cheap to try both id and slug on the first pass.
     let list = await getWorkspaceList();
     let match = list.find((w) => w.id === ref || w.slug === ref);
     if (match) return match;
@@ -683,7 +647,7 @@ export function createServer(
   // ── search_setups ──────────────────────────────────────────────────
   registerTool(
     "search_setups",
-    "Search the Dopl knowledge base for AI/automation setups. Returns ranked results with summaries. Use this for ANY user request that's AI/automation-shaped — 'how would I build X', 'find me patterns for Y', 'what's a good way to Z' — before synthesizing from scratch. Formatting recommendations / picking the best hit is YOUR job now (server no longer runs Claude synthesis); weigh similarity, read the summaries, and compose in your own context. For scoped search inside one cluster, use `query_cluster` instead.",
+    "Search the Dopl knowledge base for AI/automation setups. Returns ranked results with summaries. Use this for ANY user request that's AI/automation-shaped — 'how would I build X', 'find me patterns for Y', 'what's a good way to Z' — before synthesizing from scratch. Formatting recommendations / picking the best hit is YOUR job now (server no longer runs Claude synthesis); weigh similarity, read the summaries, and compose in your own context. For scoped search inside one cluster, use `dopl_cluster(op='query')` instead.",
     {
       query: z.string().describe("Natural language search query, e.g. 'AI agent for job applications' or 'n8n automation with Supabase'"),
       tags: z.array(z.string()).optional().describe("Filter by tags, e.g. ['claude', 'playwright']"),
@@ -710,67 +674,10 @@ export function createServer(
     }
   );
 
-  // ── get_setup ──────────────────────────────────────────────────────
-  registerTool(
-    "get_setup",
-    "Retrieve full implementation details — README, agents.md, manifest, tags — for one specific entry. Use this after `search_setups` when the user wants the complete setup for a match, or when the user references an entry by slug/URL/UUID. Also the right tool to poll an entry's status after `ingest_url` or `skeleton_ingest` — check the status field. Returns null content for entries still processing.",
-    {
-      entry: z.string().describe("Entry slug or UUID (from search_setups or a prior tool response)"),
-    },
-    async ({ entry: entryRef }) => {
-      const entry = await client.getSetup(entryRef);
-
-      const lines: string[] = [];
-      const title = entry.title || "Untitled";
-      const url = client.entryUrl(entry.slug);
-      lines.push(`# ${url ? `[${title}](${url})` : title}`);
-      if (entry.summary) lines.push(`\n${entry.summary}`);
-      lines.push(`\nStatus: ${entry.status}`);
-      lines.push(`Source: ${entry.source_url}`);
-      lines.push(`Platform: ${entry.source_platform || "unknown"}`);
-      lines.push(`Complexity: ${entry.complexity || "unknown"}`);
-      lines.push(`Use case: ${entry.use_case || "unknown"}`);
-
-      if (entry.tags && entry.tags.length > 0) {
-        lines.push(`\nTags: ${entry.tags.map((t) => `${t.tag_type}:${t.tag_value}`).join(", ")}`);
-      }
-
-      // Skeleton-tier entries have no readme/agents_md/manifest — show
-      // the descriptor as their body instead. Full-tier entries show the
-      // normal README + agents.md + manifest sections.
-      if (entry.ingestion_tier === "skeleton" && entry.descriptor) {
-        lines.push("\n---\n## Descriptor (skeleton tier)\n");
-        lines.push(entry.descriptor);
-        lines.push(
-          "\n*This is a skeleton entry. Read the source repo directly for implementation details.*"
-        );
-      } else {
-        if (entry.readme) {
-          lines.push("\n---\n## README\n");
-          lines.push(entry.readme);
-        }
-
-        if (entry.agents_md) {
-          lines.push("\n---\n## agents.md (AI Setup Instructions)\n");
-          lines.push(entry.agents_md);
-        }
-
-        if (entry.manifest) {
-          lines.push("\n---\n## Manifest\n");
-          lines.push("```json");
-          lines.push(JSON.stringify(entry.manifest, null, 2));
-          lines.push("```");
-        }
-      }
-
-      return { content: [{ type: "text" as const, text: lines.join("\n") }] };
-    }
-  );
-
   // ── build_solution ─────────────────────────────────────────────────
   registerTool(
     "build_solution",
-    "Prepares a composite-solution synthesis task from the Dopl knowledge base. Returns retrieved entries + a pre-substituted synthesis prompt. YOU run the prompt in your own Claude context to produce the composite README + agents.md for the user — the server no longer runs Claude for this. Use when the user says 'design me a…', 'build me an…', 'compose a solution that…' across multiple KB patterns. For a single known entry, use `get_setup` instead.",
+    "Prepares a composite-solution synthesis task from the Dopl knowledge base. Returns retrieved entries + a pre-substituted synthesis prompt. YOU run the prompt in your own Claude context to produce the composite README + agents.md for the user — the server no longer runs Claude for this. Use when the user says 'design me a…', 'build me an…', 'compose a solution that…' across multiple KB patterns. For a single known entry, use `dopl_setups(op='get')` instead.",
     {
       brief: z.string().describe("Description of what you want to build, e.g. 'An AI agent that monitors GitHub issues and auto-triages them'"),
       preferred_tools: z.array(z.string()).optional().describe("Tools you want to use, e.g. ['claude', 'n8n']"),
@@ -824,1387 +731,21 @@ export function createServer(
     }
   );
 
-  // ── list_setups ────────────────────────────────────────────────────
-  registerTool(
-    "list_setups",
-    "Paginated browse of all entries in the knowledge base, with optional filters (use_case, complexity). Use this for open-ended exploration when the user says 'what's in here?' or 'show me what you have for X complexity' — NOT for targeted retrieval. For anything keyword-shaped or task-shaped, use `search_setups` instead; semantic ranking always beats a flat list.",
-    {
-      use_case: z.string().optional().describe("Filter by use case category"),
-      complexity: z.string().optional().describe("Filter by complexity: simple, moderate, complex, advanced"),
-      limit: z.number().optional().describe("Number of results (default 20)"),
-      offset: z.number().optional().describe("Pagination offset"),
-    },
-    async (params) => {
-      const result = await client.listSetups({
-        ...params,
-        limit: params.limit ?? 20,
-      });
-
-      const lines: string[] = [];
-      lines.push(`## Setups (${result.total} total, showing ${result.entries.length})\n`);
-
-      for (const entry of result.entries) {
-        const title = entry.title || "Untitled";
-        const url = client.entryUrl(entry.slug);
-        const label = url ? `[${title}](${url})` : title;
-        lines.push(`- **${label}** [${entry.complexity || "?"}] — ${entry.summary || "No summary"}`);
-        lines.push(`  Source: ${entry.source_url}`);
-      }
-
-      if (result.total > result.offset + result.entries.length) {
-        lines.push(`\n_Use offset=${result.offset + result.entries.length} to see more._`);
-      }
-
-      return { content: [{ type: "text" as const, text: lines.join("\n") }] };
-    }
-  );
-
-  // ── list_clusters ──────────────────────────────────────────────────
-  registerTool(
-    "list_clusters",
-    "List all clusters (curated groupings of setups) in the knowledge base. Call this when you need to discover what clusters exist — to show the user their workspace, pick a cluster before scoping a search or update, or when another tool expects a cluster slug you don't already know. Cheap metadata call; run it proactively rather than asking the user for a slug.",
-    {},
-    async () => {
-      const { clusters } = await client.listClusters();
-      const lines = clusters.map(
-        (c) =>
-          `- **${c.name}** (slug: \`${c.slug}\`) — ${c.panel_count ?? 0} entries`
-      );
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: lines.join("\n") || "No clusters found.",
-          },
-        ],
-      };
-    }
-  );
-
-  // ── get_cluster ────────────────────────────────────────────────────
-  registerTool(
-    "get_cluster",
-    "Retrieve a cluster's metadata plus its member entries, attached knowledge bases, and attached skills. Use this when the user wants to see what's in a cluster, or when you need to know what KBs / skills the cluster has access to before answering. KB attachments include an entries_index — to read a specific entry's body call `read_cluster_knowledge_entry`. Skill bodies are returned truncated; for the full procedure call `read_cluster_skill`. For searching inside a cluster's entries, use `query_cluster`.",
-    {
-      slug: z.string().describe("Cluster slug from list_clusters"),
-    },
-    async ({ slug }) => {
-      const cluster = await client.getCluster(slug);
-
-      const lines: string[] = [];
-      lines.push(`# Cluster: ${cluster.name}`);
-      lines.push(`Slug: \`${cluster.slug}\``);
-      lines.push(`Entries: ${cluster.entries.length}`);
-      lines.push(`Knowledge bases: ${cluster.knowledge_bases.length}`);
-      lines.push(`Skills: ${cluster.skills.length}\n`);
-
-      if (cluster.entries.length > 0) {
-        lines.push(`## Entries\n`);
-        for (const e of cluster.entries) {
-          const title = e.title || "Untitled";
-          const url = client.entryUrl(e.slug);
-          const heading = url ? `[${title}](${url})` : title;
-          lines.push(`### ${heading}`);
-          if (e.summary) lines.push(e.summary);
-          if (e.readme) {
-            lines.push(`\nREADME:\n${e.readme.slice(0, CONTEXT_CHAR_BUDGET)}`);
-          }
-          if (e.agents_md) {
-            lines.push(
-              `\nagents.md:\n${e.agents_md.slice(0, CONTEXT_CHAR_BUDGET)}`
-            );
-          }
-          lines.push("");
-        }
-      }
-
-      if (cluster.knowledge_bases.length > 0) {
-        lines.push(`## Attached Knowledge Bases\n`);
-        for (const kb of cluster.knowledge_bases) {
-          lines.push(`### Knowledge: ${kb.name}`);
-          lines.push(
-            `slug: \`${kb.slug}\` · id: \`${kb.knowledge_base_id}\` · agent_write: ${kb.agent_write_enabled ? "on" : "off"}`
-          );
-          if (kb.description) lines.push(kb.description);
-          if (kb.entries_index.length > 0) {
-            lines.push(`\nEntries (${kb.entries_index.length}):`);
-            for (const e of kb.entries_index.slice(0, 50)) {
-              const path = e.folder_path ? `${e.folder_path}/${e.title}` : e.title;
-              lines.push(`- ${path}  \`(entry_id: ${e.entry_id})\``);
-            }
-            if (kb.entries_index.length > 50) {
-              lines.push(`- … ${kb.entries_index.length - 50} more`);
-            }
-            lines.push(
-              `\nTo read a specific entry: \`read_cluster_knowledge_entry({ cluster_slug: "${cluster.slug}", knowledge_base_id: "${kb.knowledge_base_id}", entry_id: "<entry_id>" })\``
-            );
-          }
-          lines.push("");
-        }
-      }
-
-      if (cluster.skills.length > 0) {
-        lines.push(`## Attached Skills\n`);
-        for (const sk of cluster.skills) {
-          lines.push(`### Skill: ${sk.name}`);
-          lines.push(
-            `slug: \`${sk.slug}\` · id: \`${sk.skill_id}\` · status: ${sk.status}`
-          );
-          if (sk.description) lines.push(sk.description);
-          if (sk.when_to_use) {
-            lines.push(`\n**When to use:** ${sk.when_to_use}`);
-          }
-          if (sk.body) {
-            lines.push(`\nProcedure (truncated):\n${sk.body}`);
-            lines.push(
-              `\nFor the full body across all skill files: \`read_cluster_skill({ cluster_slug: "${cluster.slug}", skill_id: "${sk.skill_id}" })\``
-            );
-          }
-          lines.push("");
-        }
-      }
-
-      return { content: [{ type: "text" as const, text: lines.join("\n") }] };
-    }
-  );
-
-  // ── read_cluster_knowledge_entry ───────────────────────────────────
-  registerTool(
-    "read_cluster_knowledge_entry",
-    "Read the full body of one entry inside a knowledge base attached to the given cluster. Returns 404 if the KB isn't attached or the entry doesn't exist. Find the (kb id, entry id) pair via `get_cluster` first.",
-    {
-      cluster_slug: z.string().describe("Cluster slug"),
-      knowledge_base_id: z.string().describe("Knowledge base UUID"),
-      entry_id: z.string().describe("Knowledge entry UUID"),
-    },
-    async ({ cluster_slug, knowledge_base_id, entry_id }) => {
-      const e = await client.getClusterKnowledgeEntry(
-        cluster_slug,
-        knowledge_base_id,
-        entry_id
-      );
-      const path = e.folder_path ? `${e.folder_path}/${e.title}` : e.title;
-      const text = [
-        `# ${e.title}`,
-        `KB: \`${e.knowledge_base_slug}\` · path: \`${path}\``,
-        ``,
-        e.body,
-      ].join("\n");
-      return { content: [{ type: "text" as const, text }] };
-    }
-  );
-
-  // ── read_cluster_skill ─────────────────────────────────────────────
-  registerTool(
-    "read_cluster_skill",
-    "Read the full body of every file (SKILL.md + supplementary files) for a skill attached to the given cluster. Returns 404 if the skill isn't attached. Find the skill_id via `get_cluster` first. Use this when the truncated body in `get_cluster` isn't enough — typically because the skill body references entries / connectors / sub-procedures the agent needs to act on.",
-    {
-      cluster_slug: z.string().describe("Cluster slug"),
-      skill_id: z.string().describe("Skill UUID"),
-    },
-    async ({ cluster_slug, skill_id }) => {
-      const sk = await client.getClusterSkill(cluster_slug, skill_id);
-      const lines: string[] = [];
-      lines.push(`# Skill: ${sk.name}`);
-      lines.push(`slug: \`${sk.skill_slug}\` · status: ${sk.status}`);
-      if (sk.description) lines.push(sk.description);
-      if (sk.when_to_use) lines.push(`\n**When to use:** ${sk.when_to_use}`);
-      lines.push("");
-      for (const f of sk.files) {
-        lines.push(`## ${f.name}\n`);
-        lines.push(f.body);
-        lines.push("");
-      }
-      return { content: [{ type: "text" as const, text: lines.join("\n") }] };
-    }
-  );
-
-  // ── query_cluster ──────────────────────────────────────────────────
-  registerTool(
-    "query_cluster",
-    "Semantic search scoped to the entries inside one specific cluster. Use this when a cluster is already the focus of the conversation and the user wants to find something within it — NOT for broad discovery. For cross-KB search spanning every entry, use `search_setups` instead. If you don't have a cluster slug yet, call `list_clusters` first.",
-    {
-      cluster_slug: z.string().describe("Cluster slug"),
-      query: z.string().describe("Natural language search query"),
-      max_results: z
-        .number()
-        .optional()
-        .describe("Max results (default 5)"),
-    },
-    async ({ cluster_slug, query, max_results }) => {
-      const result = await client.queryCluster(
-        cluster_slug,
-        query,
-        max_results
-      );
-
-      const lines: string[] = [];
-      lines.push(
-        `## Cluster Search: "${query}" in ${result.cluster_slug} (${result.results.length} results)\n`
-      );
-
-      for (const r of result.results) {
-        const title = r.title || "Untitled";
-        const url = client.entryUrl(r.slug);
-        const heading = url ? `[${title}](${url})` : title;
-        lines.push(
-          `### ${heading} (${Math.round(r.similarity * 100)}% match)`
-        );
-        if (r.summary) lines.push(r.summary);
-        lines.push("");
-      }
-
-      return { content: [{ type: "text" as const, text: lines.join("\n") }] };
-    }
-  );
-
-  // ── save_cluster_memory ───────────────────────────────────────────
-  registerTool(
-    "save_cluster_memory",
-    "**Call this proactively** after any user turn that carries durable signal about a cluster — do NOT wait for 'remember this' phrasing. Write silently in the same turn, before composing your reply. Three categories fire this tool: (1) **Preferences / env facts** — 'I prefer X over Y', 'always use Z', 'skip that step', 'for my setup …', 'in my environment …', 'from now on …', 'my <env var / value> is …'. (2) **Soft corrections** — 'no', 'actually …', 'that's not right', 'you got X backwards', 'the answer is Y, not Z' (even without canonical wrong-phrasing). (3) **Outcome dissatisfaction** — 'I tried that, it didn't work', 'the output wasn't what I wanted', 'ran it and got the wrong result', 'this approach gave me garbage', 'that didn't produce X'. Category 3 is the highest-signal — the skill led the agent astray and the user is telling you; capture the lesson as a memory describing the gotcha. Memories override the base instructions in future sessions. Routing: use `update_cluster_memory` instead if a near-duplicate memory exists (call `get_cluster_brain` first to check IDs); escalate to `update_cluster_brain` if the issue is structural to the workflow itself rather than a single fact.",
-    {
-      slug: z.string().describe("Cluster slug"),
-      memory: z.string().describe("The preference or correction to remember, e.g. 'User prefers Resend over SendGrid for email' or 'Skip the Slack notification step'"),
-      scope: z
-        .enum(["workspace", "personal"])
-        .optional()
-        .describe(
-          "Visibility scope. Default 'workspace' — every member of this canvas sees the memory and the skill embeds it for everyone. Use 'personal' when the user says 'for my setup', 'in my env', 'on my machine', or shares a fact only meaningful to themselves (their API key path, their preferred local tool, their personal alias). Personal memories are visible only to the author and never written to the shared canvas brain panel."
-        ),
-    },
-    async ({ slug, memory, scope }) => {
-      let result: {
-        id: string;
-        content: string;
-        scope: "workspace" | "personal";
-      };
-      try {
-        result = await client.saveClusterMemory(slug, memory, scope);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Failed to save memory for cluster "${slug}": ${msg}`,
-            },
-          ],
-          isError: true,
-        };
-      }
-
-      const scopeLabel = result.scope === "personal" ? " (personal)" : "";
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: `Saved memory${scopeLabel} for cluster "${slug}": "${result.content}"`,
-          },
-        ],
-      };
-    }
-  );
-
-  // ── list_pending_ingests ───────────────────────────────────────────
-  // URLs the user pasted into the Dopl website chat that are waiting
-  // for their connected agent to process. Read by the agent when the
-  // `_dopl_status` footer (attached to every tool response) shows a
-  // non-zero pending count. After listing, call `ingest_url(url)`
-  // per URL — the dedup logic transparently claims the pending row.
-  registerTool(
-    "list_pending_ingests",
-    "List the URLs the user queued from the Dopl website chat that are waiting to be ingested. Call this when the `_dopl_status` footer on a previous tool response showed `pending_ingestions > 0` and the user has agreed to process them. Returns one line per pending URL with its queue time. After listing, call `ingest_url(url)` for each — the dedup logic transparently claims the pending skeleton (no special parameter).",
-    {},
-    async () => {
-      // Always bypass the cache so the list reflects the DB right now.
-      client.invalidatePendingCache();
-      const status = await client.getPendingStatus();
-
-      if (status.pending_ingestions === 0) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: "No pending ingestions. The user has nothing queued from the Dopl website chat.",
-            },
-          ],
-        };
-      }
-
-      const lines: string[] = [];
-      lines.push(`## Pending ingestions (${status.pending_ingestions})\n`);
-      const now = Date.now();
-      for (const item of status.recent) {
-        const ageMs = now - new Date(item.queued_at).getTime();
-        const mins = Math.max(1, Math.round(ageMs / 60_000));
-        const ageLabel =
-          mins < 60
-            ? `${mins}m ago`
-            : mins < 1440
-            ? `${Math.round(mins / 60)}h ago`
-            : `${Math.round(mins / 1440)}d ago`;
-        lines.push(`- ${item.url} — queued ${ageLabel}`);
-      }
-      lines.push(
-        `\nCall \`ingest_url(url)\` with any of these to claim and process them.`
-      );
-
-      return {
-        content: [{ type: "text" as const, text: lines.join("\n") }],
-      };
-    },
-  );
-
-  // ── ingest_url ─────────────────────────────────────────────────────
-  // The canonical full-ingest entry point. Server fetches + extracts
-  // content; the agent runs the synthesis prompts locally; then calls
-  // submit_ingested_entry to commit.
-  registerTool(
-    "ingest_url",
-    "Ingest a URL (blog post, GitHub repo, tweet, docs page, etc.) into the user's knowledge base. **This is the canonical full-ingest entry point.** The server fetches the URL + follows links and returns the raw content + the exact prompts YOU run in your own Claude context to synthesize the entry. After running the prompts (content_type classify → manifest → README → agents.md → tags, plus vision for any images), call `submit_ingested_entry` with the artifacts to commit. The response includes a complete `instructions` field — follow it step-by-step. If the URL was already ingested, status=\"already_exists\" is returned and you can call `get_setup` directly.",
-    {
-      url: z.string().describe("URL to ingest (blog post, GitHub repo, tweet, docs page, etc.)"),
-      text: z.string().optional().describe("Optional pre-extracted text content (e.g. from a browser extension that already grabbed the page)."),
-      links: z.array(z.string()).optional().describe("Optional additional URLs to follow and include in the gathered content."),
-      images: z.array(z.string()).optional().describe("Optional base64-encoded images to analyze (max 5, each ≤ 10MB)."),
-    },
-    async ({ url, text, links, images }) => {
-      const content: { text?: string; links?: string[]; images?: string[] } = {};
-      if (text) content.text = text;
-      if (links) content.links = links;
-      if (images) content.images = images;
-
-      const result = await client.prepareIngest(
-        url,
-        Object.keys(content).length > 0 ? content : undefined
-      );
-
-      if (result.status === "already_exists") {
-        const title = result.title || "Untitled";
-        const entryUrl = client.entryUrl(result.slug);
-        const label = entryUrl ? `[${title}](${entryUrl})` : title;
-        const ref = result.slug ?? result.entry_id;
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Already ingested: **${label}**\n\nUse \`get_setup("${ref}")\` to view. No prepare needed.`,
-            },
-          ],
-        };
-      }
-
-      // status === "ready" — return the full bundle as structured JSON so
-      // the agent can parse it and run the prompts.
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(result, null, 2),
-          },
-        ],
-      };
-    }
-  );
-
-  // ── submit_ingested_entry ───────────────────────────────────────────
-  // Step 2 of the agent-driven ingest flow. Call this with the artifacts you
-  // generated after running the prompts from `ingest_url`.
-  registerTool(
-    "submit_ingested_entry",
-    "Finalize an agent-driven ingest. Submit the artifacts YOU generated after running the prompts returned by `ingest_url`. The server validates the shape, runs embeddings (the only AI call still on our side), persists the entries/tags/chunks rows, and marks status='complete'. Returns { entry_id, slug, title, use_case, complexity, content_type }.\n\nRequired fields come from the steps in the prepare response's `instructions`. Fields are:\n  - entry_id: from prepare response\n  - content_type: from step 1 (content_type classifier)\n  - source_type: from step 1\n  - manifest: entire JSON from step 3\n  - readme: markdown from step 4\n  - agents_md: markdown from step 5 (empty string for content_type='resource')\n  - tags: array from step 6 ({ tag_type, tag_value })\n  - image_analyses: array from step 7 (omit if no images)\n  - content_classification: JSON from step 2 (omit for non-setup/tutorial)\n\nOn success the entry is visible at `<host>/e/<slug>` and searchable by other agents.",
-    {
-      entry_id: z.string().uuid().describe("Entry ID from the ingest_url response."),
-      content_type: z
-        .enum([
-          "setup",
-          "tutorial",
-          "knowledge",
-          "article",
-          "reference",
-          "resource",
-        ])
-        .describe("Content type you classified in step 1."),
-      source_type: z
-        .string()
-        .describe(
-          "Source type you classified in step 1 (e.g. 'blog_post', 'github_repo', 'news_article')."
-        ),
-      manifest: z
-        .object({
-          title: z
-            .string()
-            .min(1)
-            .describe("Descriptive title (non-empty, required)."),
-          description: z.string().describe("One-paragraph description (required)."),
-          use_case: z
-            .object({
-              primary: z
-                .string()
-                .min(1)
-                .describe("Main category (e.g. 'agent_system', 'data_pipeline')."),
-              secondary: z.array(z.string()).optional(),
-            })
-            .passthrough(),
-          complexity: z
-            .enum(["simple", "moderate", "complex", "advanced"])
-            .describe("Overall complexity (required)."),
-        })
-        .passthrough()
-        .describe("Full manifest JSON from step 3."),
-      readme: z.string().min(1).describe("Markdown README from step 4."),
-      agents_md: z
-        .string()
-        .describe(
-          "Markdown agents.md (or key-insights / reference-guide) from step 5. Empty string if content_type='resource'."
-        ),
-      tags: z
-        .array(
-          z.object({
-            tag_type: z.string(),
-            tag_value: z.string(),
-          })
-        )
-        .describe("Tags from step 6."),
-      image_analyses: z
-        .array(
-          z.object({
-            image_id: z.string().optional(),
-            source_type: z.enum([
-              "code_screenshot",
-              "architecture_diagram",
-              "image",
-              "other",
-            ]),
-            raw_content: z.string(),
-            extracted_content: z.string(),
-            metadata: z.record(z.string(), z.unknown()).optional(),
-          })
-        )
-        .optional()
-        .describe("Per-image vision analyses from step 7. Omit if no images."),
-      content_classification: z
-        .object({
-          sections: z
-            .array(
-              z
-                .object({
-                  title: z.string(),
-                  classification: z.enum([
-                    "EXECUTABLE",
-                    "TACTICAL",
-                    "CONTEXT",
-                    "SKIP",
-                  ]),
-                  reason: z.string(),
-                  content_preview: z.string(),
-                })
-                .passthrough()
-            )
-            .optional(),
-          stats: z.record(z.string(), z.unknown()).optional(),
-          preservation_notes: z.array(z.string()).optional(),
-        })
-        .passthrough()
-        .optional()
-        .describe(
-          "Section classification from step 2. Only for setup/tutorial content_type."
-        ),
-    },
-    async (input) => {
-      const result = await client.submitIngestedEntry(input);
-      const entryUrl = client.entryUrl(result.slug);
-      const label = entryUrl
-        ? `[${result.title}](${entryUrl})`
-        : result.title;
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: `Ingestion complete. Entry: **${label}**\n\nType: ${result.content_type}\nUse case: ${result.use_case}\nComplexity: ${result.complexity}\n\nUse \`get_setup("${result.slug}")\` to retrieve, or \`canvas_add_entry("${result.slug}")\` to pin it to the user's canvas.`,
-          },
-        ],
-      };
-    }
-  );
-
-  // ── get_ingest_content ─────────────────────────────────────────────
-  // Pull extracted content for an in-progress (or completed) ingestion.
-  // Called between `ingest_url` and `submit_ingested_entry` to
-  // retrieve the body the agent substitutes into prompt
-  // `{ALL_RAW_CONTENT}` / `{POST_TEXT}` placeholders.
-  //
-  // Why this exists: the prepare response used to inline a single fat
-  // `gathered_content` string plus 10 copies of it across prompt
-  // templates. That blew the MCP tool-response size cap for anything
-  // larger than a trivial repo. Now prepare returns a `sources[]`
-  // inventory + slim templates, and the agent calls this tool per-prompt
-  // to retrieve content (optionally narrowed to a single source to save
-  // tokens on steps that only need the README).
-  registerTool(
-    "get_ingest_content",
-    "Retrieve the extracted content for an in-progress ingestion (between ingest_url and submit_ingested_entry). Returns the aggregated text from all successful sources, or — when `source_url` is passed — just that one source. Use this before running each prompt from the ingest_url response: substitute the returned `content` into the `{ALL_RAW_CONTENT}` / `{POST_TEXT}` placeholders. Pass `source_url` matching a `sources[].url` entry from the prepare response to fetch only that source (saves tokens on narrow steps like the content_type classifier that only need the README). Returns `{ content, chars, truncated }` — if `truncated` is true, the content exceeds the ~60KB per-response cap and you should switch to per-source fetches for the remaining prompts by passing `source_url` on each subsequent call. Per-source fetches are also the preferred pattern for large repos regardless of truncation: each prompt step only needs the content relevant to it, so you save tokens by narrowing.",
-    {
-      entry_id: z.string().describe("Entry UUID from the ingest_url response"),
-      source_url: z
-        .string()
-        .optional()
-        .describe(
-          "Optional: fetch only the content for one source (must match a `sources[].url` from ingest_url). Omit to get all sources concatenated."
-        ),
-    },
-    async ({ entry_id, source_url }) => {
-      const result = await client.getIngestContent(entry_id, source_url);
-      const suffix = result.truncated
-        ? `\n\n---\n_Truncated: total ${result.chars.toLocaleString()} chars, returned first ${result.content.length.toLocaleString()}. Narrow via \`source_url\` to fetch specific sources._`
-        : "";
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: `${result.content}${suffix}`,
-          },
-        ],
-      };
-    }
-  );
-
-  // ── describe_link ──────────────────────────────────────────────────
-  // Lightweight per-URL metadata fetch. Used by the agent's post-submit
-  // `detected_links` review flow (see `AGENT_INGEST_INSTRUCTIONS`): the
-  // agent filters out noise (badges, self-refs, translations) locally,
-  // then calls this per surviving candidate to get each link's OWN
-  // self-description — GitHub repo description via the repos API,
-  // og:description on web pages, arxiv abstract snippet, etc. Those
-  // author-curated self-descriptions are always more informative than
-  // surrounding-text heuristics on the primary README (where most links
-  // are bullet-list or badge refs with no meaningful context).
-  //
-  // Bounded 5s server-side timeout per URL; no content storage; pure
-  // metadata fetch. Agent typically calls this 2-5 times per ingest —
-  // only for the candidates that pass local filtering and might be
-  // offered to the user as separate-entry ingests.
-  registerTool(
-    "describe_link",
-    "Fetch the self-description metadata for a URL — the link's own authoritative one-liner (GitHub repo description, og:description on web pages, arxiv abstract, etc.) — without running a full extraction. Use this during the post-submit `detected_links` review flow: after filtering out noise (badges, self-refs, translations) locally, call this per surviving candidate before offering them to the user as separate-entry ingests. The returned `description` is the source's authoritative self-description, more reliable than guessing from surrounding README text. Bounded ~1s per URL. Returns `{ url, type, title, description, metadata, error? }` — when `error` is set, the URL couldn't be fetched (timeout, 404, etc.) and the agent should exclude it from the offer list or note it as \"couldn't describe\" to the user.",
-    {
-      url: z
-        .string()
-        .describe(
-          "URL to describe. Typically pulled from `detected_links[]` in a ingest_url response after local filtering."
-        ),
-    },
-    async ({ url }) => {
-      const result = await client.describeLink(url);
-      const lines: string[] = [];
-      lines.push(`**${result.title ?? url}**`);
-      if (result.type !== "unknown") lines.push(`_Type: ${result.type}_`);
-      if (result.description) {
-        lines.push("");
-        lines.push(result.description);
-      }
-      if (result.metadata && Object.keys(result.metadata).length > 0) {
-        const metaBits: string[] = [];
-        if (typeof result.metadata.stars === "number") metaBits.push(`${result.metadata.stars.toLocaleString()} ★`);
-        if (typeof result.metadata.language === "string") metaBits.push(result.metadata.language);
-        if (typeof result.metadata.license === "string") metaBits.push(result.metadata.license);
-        if (typeof result.metadata.site_name === "string") metaBits.push(result.metadata.site_name);
-        if (metaBits.length > 0) {
-          lines.push("");
-          lines.push(`_${metaBits.join(" · ")}_`);
-        }
-      }
-      if (result.error) {
-        lines.push("");
-        lines.push(`_(couldn't describe: ${result.error})_`);
-      }
-      return {
-        content: [{ type: "text" as const, text: lines.join("\n") }],
-      };
-    }
-  );
-
-  // ── skeleton_ingest ────────────────────────────────────────────────
-  // Admin-only. Runs the lightweight descriptor-only pipeline for mass
-  // indexing public GitHub repos. Backend is gated by withAdminAuth
-  // (reads ADMIN_USER_ID env var) and returns 404 to non-admins. We
-  // additionally avoid advertising the tool at all to non-admin MCP
-  // sessions — `isAdmin` is determined at startup via the mcp-status
-  // ping. Non-admin clients' `tools/list` simply will not contain it.
-  if (isAdmin) {
-    registerTool(
-      "skeleton_ingest",
-      "ADMIN ONLY. Mass-index a public GitHub repo at skeleton tier — a single Sonnet call produces a task-agnostic descriptor + one embedding, no README/agents.md/manifest. Use this when the admin hands you a list of GitHub URLs to bulk-populate the discovery index. For a regular URL ingest with full generation, use `ingest_url` instead. Poll with `get_setup` — descriptor usually lands in 10–30s.",
-      {
-        url: z.string().describe("Public GitHub repo URL (e.g. https://github.com/owner/repo)"),
-      },
-      async ({ url }) => {
-        const result = await client.skeletonIngest(url);
-        const entryUrl = client.entryUrl(result.slug);
-        const label = entryUrl
-          ? `[${result.title ?? result.slug ?? result.entry_id}](${entryUrl})`
-          : result.title ?? result.slug ?? result.entry_id;
-        const ref = result.slug ?? result.entry_id;
-
-        if (result.status === "already_exists") {
-          return {
-            content: [{
-              type: "text" as const,
-              text: `Skeleton entry already exists: **${label}** (tier: ${result.tier ?? "unknown"})\nUse \`get_setup("${ref}")\` to view it.`,
-            }],
-          };
-        }
-
-        return {
-          content: [{
-            type: "text" as const,
-            text: `Skeleton ingestion started for ${url}\nEntry ID: \`${result.entry_id}\`\nStatus: ${result.status}\n\nPoll with \`get_setup("${ref}")\` — the descriptor usually lands in 10–30s.`,
-          }],
-        };
-      }
-    );
-  }
-
-  // ── update_cluster ─────────────────────────────────────────────────
-  registerTool(
-    "update_cluster",
-    "Rename a cluster or REPLACE its entry membership with a new set of entry IDs. Use this for structural changes to an existing cluster. For adding a single entry without replacing the whole set, use `add_entry_to_cluster` — it's less destructive. Note: does not regenerate the brain; follow up with `update_cluster_brain` if the membership change implies new patterns.",
-    {
-      slug: z.string().describe("Cluster slug from list_clusters"),
-      name: z.string().optional().describe("New cluster name"),
-      entry_ids: z.array(z.string()).optional().describe("New set of entry IDs (replaces existing membership)"),
-    },
-    async ({ slug, name, entry_ids }) => {
-      const updates: { name?: string; entry_ids?: string[] } = {};
-      if (name) updates.name = name;
-      if (entry_ids) updates.entry_ids = entry_ids;
-
-      const result = await client.updateCluster(slug, updates);
-
-      return {
-        content: [{
-          type: "text" as const,
-          text: `Updated cluster **${result.name}** (slug: \`${result.slug}\`) — ${result.panel_count ?? 0} entries.`,
-        }],
-      };
-    }
-  );
-
-  // ── rename_cluster ─────────────────────────────────────────────────
-  // Thin wrapper over `update_cluster` with a focused purpose so the
-  // agent reaches for it when the user explicitly asks to rename. The
-  // auto-naming route `/api/cluster/name` was deleted as part of the
-  // client-only-LLM pivot — if you (the agent) want to propose a better
-  // name for a cluster based on its contents, call this.
-  registerTool(
-    "rename_cluster",
-    "Rename a cluster. Use this when the user asks to rename, or when you decide a clearer name would help (e.g. after the user has added enough entries for the theme to be obvious). Thin wrapper over `update_cluster` — the two are interchangeable, this one just reads clearer in context. Membership and brain are untouched.",
-    {
-      slug: z.string().describe("Cluster slug (from list_clusters)"),
-      name: z.string().min(1).describe("New cluster name"),
-    },
-    async ({ slug, name }) => {
-      const result = await client.updateCluster(slug, { name });
-      return {
-        content: [{
-          type: "text" as const,
-          text: `Renamed cluster to **${result.name}** (slug: \`${result.slug}\`).`,
-        }],
-      };
-    }
-  );
-
-  // ── rename_chat ────────────────────────────────────────────────────
-  registerTool(
-    "rename_chat",
-    "Rename a chat panel on the user's canvas. Use this when the user asks to rename a chat, or when the initial auto-derived title (first user message truncated) no longer captures the conversation's topic. Purpose-named wrapper over the generic panels PATCH endpoint.",
-    {
-      panel_id: z.string().describe("Chat panel ID (e.g. 'panel-3')"),
-      title: z.string().min(1).describe("New chat title"),
-    },
-    async ({ panel_id, title }) => {
-      await client.renameChat(panel_id, title);
-      return {
-        content: [{
-          type: "text" as const,
-          text: `Renamed chat to "${title}".`,
-        }],
-      };
-    }
-  );
-
-  // ── delete_cluster ─────────────────────────────────────────────────
-  registerTool(
-    "delete_cluster",
-    "Delete a cluster grouping. Individual entries REMAIN in the KB and on the user's canvas; only the cluster (and its brain + memories) is removed. Use when the user explicitly asks to drop a cluster. Irreversible — confirm intent if the user's phrasing is ambiguous.",
-    {
-      slug: z.string().describe("Cluster slug from list_clusters"),
-    },
-    async ({ slug }) => {
-      await client.deleteCluster(slug);
-      return {
-        content: [{
-          type: "text" as const,
-          text: `Deleted cluster \`${slug}\`. Entries remain in the knowledge base.`,
-        }],
-      };
-    }
-  );
-
-  // ── get_skill_template ─────────────────────────────────────────────
-  registerTool(
-    "get_skill_template",
-    "Fetch the canonical skill synthesis prompt + expected output structure. Use this whenever you need to generate or restructure a cluster brain — e.g. right after `canvas_create_cluster` (initial synthesis), when restructuring a flat/legacy brain, or when a `update_cluster_brain` response returned a structure warning. The server does NOT run synthesis for you; paste the returned prompt into your context, feed it the entries' agents.md from `get_cluster(slug)`, produce a structured body, then call `update_cluster_brain(slug, <body>)`. No credits are charged by this tool.",
-    {},
-    async () => {
-      const tpl = await client.getSkillTemplate();
-      return {
-        content: [{ type: "text" as const, text: tpl.payload }],
-      };
-    }
-  );
-
-  // ── get_cluster_brain ──────────────────────────────────────────────
-  registerTool(
-    "get_cluster_brain",
-    "Read the current brain for a cluster — synthesized instructions plus numbered user memories. **Call this on first invocation per session of a cluster's skill** so the body you execute against reflects edits made via the web UI or other agents since the last fetch. Also call before `update_cluster_brain` (so surgical edits preserve existing text), before `update_cluster_memory` / `delete_cluster_memory` (to get memory IDs), and any time you want to know what durable knowledge already exists for a cluster before adding more.",
-    {
-      slug: z.string().describe("Cluster slug from list_clusters"),
-    },
-    async ({ slug }) => {
-      const brain = await client.getClusterBrain(slug);
-
-      // Return the brain as a complete SKILL.md body so Claude Code can
-      // treat it as the canonical skill content at invocation time —
-      // no translation or assembly step on the agent's side. If the
-      // instructions are already section-structured, they carry through;
-      // if they're flat (legacy), they render as a plain body and the
-      // consumer still gets usable content.
-      const sections: string[] = [];
-      sections.push(`# Skill: ${slug}`);
-      sections.push("");
-      sections.push(
-        `> Canonical skill body for cluster \`${slug}\`, fetched from Dopl. Treat this as the full SKILL.md body — execute against it directly. If you need to modify it, call \`update_cluster_brain\` for structural changes or \`save_cluster_memory\` for short preferences.`
-      );
-      sections.push("");
-      // Inject the self-maintenance protocol so the executing agent
-      // always has the canonical routing rules (when to save_cluster_memory
-      // vs update_cluster_brain) on first contact with the cluster.
-      sections.push(brainProtocolPreamble(slug));
-
-      if (brain.instructions && brain.instructions.trim().length > 0) {
-        // If the brain already has the canonical section headings, pass
-        // through as-is. Otherwise wrap the flat text in an Instructions
-        // section so the body still parses as a valid skill.
-        if (brain.instructions.includes("## When to use") || brain.instructions.includes("## Instructions")) {
-          sections.push(brain.instructions.trim());
-        } else {
-          sections.push("## Instructions");
-          sections.push("");
-          sections.push(brain.instructions.trim());
-        }
-        sections.push("");
-      } else {
-        sections.push("## Instructions");
-        sections.push("");
-        sections.push(
-          `_This brain is empty._ Synthesize one: call \`get_skill_template\` for the canonical prompt, run synthesis in your context against \`get_cluster("${slug}")\`, then call \`update_cluster_brain("${slug}", <result>)\`.`
-        );
-        sections.push("");
-      }
-
-      // Memories always render as their own section so the agent can
-      // distinguish durable structural guidance from user-specific
-      // overrides. IDs are kept for update/delete tool targeting.
-      if (brain.memories.length > 0) {
-        sections.push("## User Memories");
-        sections.push("");
-        sections.push(
-          "_Persistent user preferences and corrections. These override the base instructions above when they conflict._"
-        );
-        sections.push("");
-        for (let i = 0; i < brain.memories.length; i++) {
-          sections.push(`${i + 1}. ${brain.memories[i].content} _(id: \`${brain.memories[i].id}\`)_`);
-        }
-        sections.push("");
-      }
-
-      return { content: [{ type: "text" as const, text: sections.join("\n") }] };
-    }
-  );
-
-  // ── delete_cluster_memory ──────────────────────────────────────────
-  registerTool(
-    "delete_cluster_memory",
-    "Remove one specific memory from a cluster's brain by ID. Use when the user reverses a prior preference ('actually, ignore that', 'that's not true anymore') or explicitly says to drop a memory. Call `get_cluster_brain` first to get the memory ID. For REVISING an existing memory rather than deleting it, use `update_cluster_memory`.",
-    {
-      slug: z.string().describe("Cluster slug"),
-      memory_id: z.string().describe("Memory ID to delete"),
-    },
-    async ({ slug, memory_id }) => {
-      await client.deleteClusterMemory(slug, memory_id);
-      return {
-        content: [{
-          type: "text" as const,
-          text: `Deleted memory ${memory_id} from cluster "${slug}".`,
-        }],
-      };
-    }
-  );
-
-  // ── update_cluster_brain ───────────────────────────────────────────
-  registerTool(
-    "update_cluster_brain",
-    "**Call this when the user gives structural feedback** that should change the skill's instructions for future sessions — corrections to steps ('step 3 is wrong'), additions of new use cases ('let's also handle …'), removal of stale guidance ('drop the part about …'), or scope expansions tied to a new entry. Do this in the background, no permission ask. ALWAYS call `get_cluster_brain` first and edit SURGICALLY — replace only the affected section, preserve the rest verbatim. The canonical structure has these section headings: `## When to use this skill`, `## Instructions`, `## Step-by-step`, `## Examples`, `## Anti-patterns`, `## When to save a memory`, `## When to update this skill`, `## References`. Missing structural sections trigger a non-blocking warning in the response. Routing: short preferences and environment facts go through `save_cluster_memory`; revising an existing memory goes through `update_cluster_memory`. See the server instructions for the full when-to-edit-what decision rules.",
-    {
-      slug: z.string().describe("Cluster slug"),
-      instructions: z
-        .string()
-        .describe("New brain instructions (markdown). This REPLACES the previous instructions — include everything you want kept."),
-    },
-    async ({ slug, instructions }) => {
-      const result = await client.updateClusterBrain(slug, instructions);
-
-      // Surface the backend's advisory structure check so the agent learns
-      // what a proper brain looks like and self-corrects next time.
-      let warningNote = "";
-      if (result.structure_warning) {
-        warningNote =
-          `\n\n⚠️ Structure warning: brain is missing required sections: ${result.structure_warning.missing_sections.join(", ")}. ` +
-          `The write succeeded, but the skill will produce weaker results at invocation time. ` +
-          `Call \`get_skill_template\` for the canonical structure and consider re-synthesizing.`;
-      }
-
-      return {
-        content: [{
-          type: "text" as const,
-          text: `Updated brain for cluster "${slug}" (${instructions.length} chars).${warningNote}`,
-        }],
-      };
-    }
-  );
-
-  // ── update_cluster_memory ──────────────────────────────────────────
-  registerTool(
-    "update_cluster_memory",
-    "Revise the text of an EXISTING memory in place. Use this when the user refines or corrects a preference you already saved — avoids accumulating near-duplicate memories. Call `get_cluster_brain` first to get memory IDs and current text. For a genuinely new preference with no existing counterpart, use `save_cluster_memory`.",
-    {
-      slug: z.string().describe("Cluster slug"),
-      memory_id: z.string().describe("Memory ID to update"),
-      content: z.string().describe("New memory content (fully replaces the prior text)"),
-    },
-    async ({ slug, memory_id, content }) => {
-      const updated = await client.updateClusterMemory(slug, memory_id, content);
-      return {
-        content: [{
-          type: "text" as const,
-          text: `Updated memory for cluster "${slug}": "${updated.content}"`,
-        }],
-      };
-    }
-  );
-
-  // ── update_entry ───────────────────────────────────────────────────
-  registerTool(
-    "update_entry",
-    "Update an entry's editable metadata fields: title, summary, use_case, complexity. Use when the user wants to correct an entry's categorization or description. Does NOT edit README, agents.md, or the source URL — those are regenerated only via re-ingestion. Scoped to the entry's owner and admin callers.",
-    {
-      entry: z.string().describe("Entry slug or UUID"),
-      title: z.string().optional().describe("New title"),
-      summary: z.string().optional().describe("New summary"),
-      use_case: z.string().optional().describe("New use case category"),
-      complexity: z.enum(["simple", "moderate", "complex", "advanced"]).optional().describe("New complexity level"),
-    },
-    async ({ entry, title, summary, use_case, complexity }) => {
-      const updates: { title?: string; summary?: string; use_case?: string; complexity?: string } = {};
-      if (title) updates.title = title;
-      if (summary) updates.summary = summary;
-      if (use_case) updates.use_case = use_case;
-      if (complexity) updates.complexity = complexity;
-
-      const updated = await client.updateEntry(entry, updates);
-      const t = updated.title || "Untitled";
-      const url = client.entryUrl(updated.slug);
-      const label = url ? `[${t}](${url})` : t;
-      return {
-        content: [{
-          type: "text" as const,
-          text: `Updated entry **${label}**.`,
-        }],
-      };
-    }
-  );
-
-  // ── delete_entry ───────────────────────────────────────────────────
-  registerTool(
-    "delete_entry",
-    "Permanently remove an entry from the knowledge base. Use only when the user explicitly asks to delete it. Irreversible — the chunks, tags, sources, and entry row are all dropped. Does not remove canvas panels owned by other users that reference this entry (their canvases will show a missing-entry placeholder). Ask for confirmation before calling if the user's intent is at all ambiguous.",
-    {
-      entry: z.string().describe("Entry slug or UUID to delete"),
-    },
-    async ({ entry }) => {
-      await client.deleteEntry(entry);
-      return {
-        content: [{
-          type: "text" as const,
-          text: `Deleted entry from the knowledge base.`,
-        }],
-      };
-    }
-  );
-
-  // ── check_entry_updates ─────────────────────────────────────────────
-  registerTool(
-    "check_entry_updates",
-    "Check whether ONE GitHub-sourced entry has new commits since it was ingested. Use when the user asks 'is this still current?' about a specific entry. Non-GitHub entries are skipped (returns a no-op status). For checking every entry in a cluster at once, use `check_cluster_updates` — much faster than looping.",
-    {
-      entry: z.string().describe("Entry slug or UUID to check"),
-    },
-    async ({ entry }) => {
-      const result = await client.checkEntryUpdates(entry);
-
-      // The check-updates endpoint echoes back entry_id (UUID). We fetch the
-      // entry metadata so we can render a proper hyperlink via slug.
-      let url: string | null = null;
-      try {
-        const e = await client.getSetup(result.entry_id);
-        url = client.entryUrl(e.slug);
-      } catch {
-        // Non-fatal; fall back to plain title.
-      }
-      const title = result.title || "Untitled";
-      const label = url ? `[${title}](${url})` : title;
-
-      if (result.has_updates === null) {
-        return {
-          content: [{
-            type: "text" as const,
-            text: `**${label}**: ${result.reason || "Update checking not available."}`,
-          }],
-        };
-      }
-
-      if (result.has_updates) {
-        return {
-          content: [{
-            type: "text" as const,
-            text: `**${label}** (${result.repo}): Updates available.\nRepo last pushed ${result.days_since_push} day(s) ago. You ingested it ${result.days_since_ingestion} day(s) ago.\nConsider re-ingesting with \`ingest_url\`.`,
-          }],
-        };
-      }
-
-      return {
-        content: [{
-          type: "text" as const,
-          text: `**${label}** (${result.repo}): No updates since ingestion (${result.days_since_ingestion} day(s) ago).`,
-        }],
-      };
-    }
-  );
-
-  // ── check_cluster_updates ──────────────────────────────────────────
-  registerTool(
-    "check_cluster_updates",
-    "Bulk-check every GitHub-sourced entry in a cluster for upstream changes. Use this when the user asks 'has anything in my cluster changed?' or 'is my stack still current?'. For a single entry, use `check_entry_updates`. Non-GitHub entries are skipped.",
-    {
-      slug: z.string().describe("Cluster slug from list_clusters"),
-    },
-    async ({ slug }) => {
-      const detail = await client.getCluster(slug);
-
-      const updated: string[] = [];
-      const current: string[] = [];
-      const skipped: string[] = [];
-
-      for (const entry of detail.entries) {
-        const url = client.entryUrl(entry.slug);
-        const mkLabel = (title: string | null) => {
-          const t = title || entry.title || "Untitled";
-          return url ? `[${t}](${url})` : t;
-        };
-        try {
-          const result = await client.checkEntryUpdates(entry.entry_id);
-          if (result.has_updates === true) {
-            updated.push(`- **${mkLabel(result.title)}** (${result.repo}) — updated ${result.days_since_push}d ago, ingested ${result.days_since_ingestion}d ago`);
-          } else if (result.has_updates === false) {
-            current.push(`- ${mkLabel(result.title)}`);
-          } else {
-            skipped.push(`- ${mkLabel(result.title)} — ${result.reason || "not GitHub"}`);
-          }
-        } catch {
-          skipped.push(`- ${mkLabel(null)} — check failed`);
-        }
-      }
-
-      const lines: string[] = [];
-      lines.push(`## Cluster: ${detail.name} — Update Check\n`);
-
-      if (updated.length > 0) {
-        lines.push(`### Updates available (${updated.length})\n`);
-        lines.push(...updated);
-        lines.push("");
-      }
-      if (current.length > 0) {
-        lines.push(`### Up to date (${current.length})\n`);
-        lines.push(...current);
-        lines.push("");
-      }
-      if (skipped.length > 0) {
-        lines.push(`### Skipped (${skipped.length})\n`);
-        lines.push(...skipped);
-      }
-
-      return { content: [{ type: "text" as const, text: lines.join("\n") }] };
-    }
-  );
-
-  // ── add_entry_to_cluster ───────────────────────────────────────────
-  registerTool(
-    "add_entry_to_cluster",
-    "Add a single entry to an existing cluster when the user wants to expand a cluster's membership. The brain is NOT auto-regenerated (initial synthesis runs once at cluster creation; later edits are preserved). If the new entry introduces a pattern the brain should reflect, follow up with `update_cluster_brain` — otherwise the addition is silent. To create a brand-new cluster from canvas entries, use `canvas_create_cluster` instead.",
-    {
-      slug: z.string().describe("Cluster slug"),
-      entry: z.string().describe("Entry slug or UUID to add to the cluster"),
-    },
-    async ({ slug, entry: entryRef }) => {
-      // Get current cluster to build updated entry list
-      const detail = await client.getCluster(slug);
-      const existingIds = detail.entries.map((e) => e.entry_id);
-
-      // Validate entry exists and resolve slug → UUID for cluster membership.
-      const newEntry = await client.getSetup(entryRef);
-      const newEntryId = newEntry.id;
-      const title = newEntry.title || "Untitled";
-      const url = client.entryUrl(newEntry.slug);
-      const label = url ? `[${title}](${url})` : title;
-
-      if (existingIds.includes(newEntryId)) {
-        return {
-          content: [{
-            type: "text" as const,
-            text: `**${label}** is already in cluster "${slug}".`,
-          }],
-        };
-      }
-
-      // Add entry to cluster membership.
-      const updatedIds = [...existingIds, newEntryId];
-      await client.updateCluster(slug, { entry_ids: updatedIds });
-
-      return {
-        content: [{
-          type: "text" as const,
-          text: `Added **${label}** to cluster "${slug}" (now ${updatedIds.length} entries). Brain unchanged — if this entry introduces new patterns you want reflected in the cluster brain, edit it with \`update_cluster_brain\`.`,
-        }],
-      };
-    }
-  );
-
-  // ── canvas_list_panels ──────────────────────────────────────────────
-  registerTool(
-    "canvas_list_panels",
-    "List every panel currently on the user's canvas. Use this when the user asks 'what's on my canvas?', 'show me my saved setups', or before operations that need to reason about the current workspace (e.g. deciding what belongs in a new cluster). Returns a mix of entry panels (the saved KB entries — title, slug, source_url) and system panels (chat, connection, browse, cluster-brain — the UI surfaces the user placed on their canvas). Entry panels are the ones relevant for clustering/canvas_add/remove operations; system panels are display-only.",
-    {},
-    async () => {
-      const panels = await client.listCanvasPanels();
-
-      if (panels.length === 0) {
-        return {
-          content: [{ type: "text" as const, text: "Your canvas is empty. Use `canvas_add_entry` to add entries, or `search_setups` to find them first." }],
-        };
-      }
-
-      // Split by panel type so the entry list stays clean for the agent's
-      // clustering/search decisions, while system panels (chat, connection,
-      // browse, cluster-brain) render underneath as a separate group. The
-      // backend stores panel_type; before this split, system panels rendered
-      // as "Untitled" alongside real entries and confused the agent.
-      const entryPanels = panels.filter((p) => p.panel_type === "entry");
-      const systemPanels = panels.filter((p) => p.panel_type !== "entry");
-
-      const lines: string[] = [];
-      lines.push(
-        `## Your Canvas — ${entryPanels.length} ${entryPanels.length === 1 ? "entry" : "entries"}${systemPanels.length > 0 ? ` + ${systemPanels.length} system panel${systemPanels.length === 1 ? "" : "s"}` : ""}\n`
-      );
-
-      if (entryPanels.length > 0) {
-        lines.push("### Entries");
-        for (const p of entryPanels) {
-          const title = p.title || "Untitled entry";
-          const url = client.entryUrl(p.slug);
-          const label = url ? `[${title}](${url})` : title;
-          lines.push(`- **${label}**`);
-          if (p.summary) lines.push(`  ${p.summary}`);
-          if (p.source_url) lines.push(`  Source: ${p.source_url}`);
-        }
-      }
-
-      if (systemPanels.length > 0) {
-        lines.push("");
-        lines.push("### System panels (UI surfaces, not saved content)");
-        for (const p of systemPanels) {
-          const label = systemPanelLabel(p.panel_type);
-          const detail = systemPanelDetail(p);
-          lines.push(`- **${label}**${detail ? ` — ${detail}` : ""}`);
-        }
-      }
-
-      return { content: [{ type: "text" as const, text: lines.join("\n") }] };
-    }
-  );
-
-  // ── canvas_add_entry ──────────────────────────────────────────────
-  registerTool(
-    "canvas_add_entry",
-    "Add ONE known knowledge-base entry to the user's canvas by slug or UUID. Use this when you already have the exact entry the user wants to save. For search + add in one step (the common case when the user says 'save some good options for X to my canvas'), use `canvas_search_and_add` instead — it's a batch operation and much faster than looping through search hits.",
-    {
-      entry: z.string().describe("Entry slug or UUID from search results or get_setup"),
-    },
-    async ({ entry }) => {
-      const { panel, created } = await client.addCanvasPanel(entry);
-      const verb = created ? "Added" : "Already on";
-      const title = panel.title || "Untitled";
-      const url = client.entryUrl(panel.slug);
-      const label = url ? `[${title}](${url})` : title;
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: `${verb} canvas: **${label}**`,
-          },
-        ],
-      };
-    }
-  );
-
-  // ── canvas_remove_entry ───────────────────────────────────────────
-  registerTool(
-    "canvas_remove_entry",
-    "Take an entry off the user's canvas. The entry stays in the knowledge base — only the canvas panel is removed. Use when the user says 'clear this from my canvas', 'I don't need this anymore', or is pruning their workspace. For permanent deletion from the KB, use `delete_entry` instead (destructive, different scope).",
-    {
-      entry: z.string().describe("Entry slug or UUID to remove from canvas"),
-    },
-    async ({ entry }) => {
-      await client.removeCanvasPanel(entry);
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: `Removed entry from your canvas.`,
-          },
-        ],
-      };
-    }
-  );
-
-  // ── canvas_search_and_add ──────────────────────────────────────────
-  registerTool(
-    "canvas_search_and_add",
-    "Search the KB and add the top N matches to the user's canvas in one round trip. THIS is the default for 'save some good options for X to my canvas' / 'build me a starter canvas about Y' / 'find and bookmark patterns for Z' — much faster than `search_setups` followed by N `canvas_add_entry` calls. For adding a specific known entry by slug, use `canvas_add_entry`.",
-    {
-      query: z.string().describe("Natural language search query, e.g. 'marketing automations' or 'n8n workflows'"),
-      max_results: z.number().optional().describe("Number of results to add (default 5, max 10)"),
-    },
-    async ({ query, max_results }) => {
-      const limit = Math.min(max_results ?? 5, 10);
-      const searchResult = await client.searchSetups({
-        query,
-        max_results: limit,
-      });
-
-      if (searchResult.entries.length === 0) {
-        return {
-          content: [{
-            type: "text" as const,
-            text: `No results found for "${query}".`,
-          }],
-        };
-      }
-
-      const added: string[] = [];
-      const skipped: string[] = [];
-
-      for (const entry of searchResult.entries) {
-        const title = entry.title || "Untitled";
-        const url = client.entryUrl(entry.slug);
-        const label = url ? `[${title}](${url})` : title;
-        try {
-          const { created } = await client.addCanvasPanel(entry.entry_id);
-          if (created) {
-            added.push(`- **${label}** (${Math.round(entry.similarity * 100)}% match)`);
-          } else {
-            skipped.push(`- ${label} (already on canvas)`);
-          }
-        } catch {
-          skipped.push(`- ${label} (failed to add)`);
-        }
-      }
-
-      const lines: string[] = [];
-      if (added.length > 0) {
-        lines.push(`## Added to canvas (${added.length})\n`);
-        lines.push(...added);
-      }
-      if (skipped.length > 0) {
-        lines.push(`\n## Skipped (${skipped.length})\n`);
-        lines.push(...skipped);
-      }
-
-      return { content: [{ type: "text" as const, text: lines.join("\n") }] };
-    }
-  );
-
-  // ── canvas_create_cluster ─────────────────────────────────────────
-  registerTool(
-    "canvas_create_cluster",
-    "Create a new cluster from entries already on the user's canvas. Use when the user says 'group these into a skill', 'make a cluster for X', or when the set of canvas panels has grown to a point where clustering would help. **Creates the cluster only — brain synthesis is YOUR job now; the server does not run it.** The tool response includes the exact next-step chain (get template → synthesize → update brain). For adding a single entry to an existing cluster, use `add_entry_to_cluster`.",
-    {
-      name: z.string().min(1, "Cluster name cannot be empty").describe("Cluster name, e.g. 'AI Agent Stack'"),
-      entries: z
-        .array(z.string())
-        .min(1, "Must provide at least one entry")
-        .describe("Entry slugs or UUIDs to include (must be on your canvas)"),
-    },
-    async ({ name, entries }) => {
-      // Validate entries exist (and resolve slug → UUID where needed) before creating cluster.
-      const validationErrors: string[] = [];
-      const resolvedIds: string[] = [];
-      for (const ref of entries) {
-        try {
-          const entry = await client.getSetup(ref);
-          resolvedIds.push(entry.id);
-        } catch {
-          validationErrors.push(ref);
-        }
-      }
-      if (validationErrors.length > 0) {
-        return {
-          content: [{
-            type: "text" as const,
-            text: `Entries not found: ${validationErrors.join(", ")}. Use \`search_setups\` to find valid entries.`,
-          }],
-        };
-      }
-
-      const result = await client.createCluster(name, resolvedIds);
-
-      // Client-only synthesis: we no longer run the LLM server-side to
-      // populate the initial brain. The agent receives explicit next-step
-      // instructions and runs synthesis in its own context, then writes
-      // the result back via update_cluster_brain.
-      const slug = result.slug;
-      const lines: string[] = [];
-      lines.push(`Created cluster **${result.name}** (slug: \`${slug}\`) with ${result.panel_count ?? resolvedIds.length} entries.`);
-      lines.push("");
-      lines.push(`The brain is empty — synthesis is your next step. Follow this chain:`);
-      lines.push("");
-      lines.push(`1. Call \`get_skill_template\` to get the canonical synthesis prompt + expected output structure.`);
-      lines.push(`2. Call \`get_cluster("${slug}")\` to pull the member entries' agents.md content (the raw material).`);
-      lines.push(`3. Run the synthesis prompt against that content IN YOUR CONTEXT. Produce a brain body in the canonical structure (When to use / Instructions / Step-by-step / Examples / Anti-patterns / References).`);
-      lines.push(`4. Call \`update_cluster_brain("${slug}", <your synthesized body>)\` to save it.`);
-      lines.push("");
-      lines.push(`Do not skip step 3 — a brain saved without structure will trigger a validation warning and produce a weak skill at invocation time.`);
-
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: lines.join("\n"),
-          },
-        ],
-      };
-    }
-  );
-
-  // ── kb_list_packs ──────────────────────────────────────────────────
-  registerTool(
-    "kb_list_packs",
-    "List installed knowledge packs — specialist verticals (e.g. Rokid AR, Unity VR) backed by public GitHub repos. Each pack exposes nested reference docs that the agent can pull on demand via `kb_list` and `kb_get`. Call this when the user asks about a vertical you don't recognize, or to discover what specialist domains the engine covers.",
-    {},
-    async () => {
-      const { packs } = await client.listPacks();
-      if (packs.length === 0) {
-        return { content: [{ type: "text" as const, text: "No knowledge packs installed." }] };
-      }
-      const lines = packs.map((p) => {
-        const sdk = p.sdk_version ? ` (SDK ${p.sdk_version})` : "";
-        const synced = p.last_synced_at
-          ? ` — last synced ${p.last_synced_at}`
-          : " — never synced";
-        return `- **${p.name}** (id: \`${p.id}\`)${sdk}${synced}\n  ${p.description ?? "(no description)"}\n  Repo: ${p.repo_url}`;
-      });
-      return { content: [{ type: "text" as const, text: lines.join("\n") }] };
-    }
-  );
-
-  // ── kb_list ────────────────────────────────────────────────────────
-  registerTool(
-    "kb_list",
-    "List files in a knowledge pack. Returns paths + titles + summaries — cheap, no bodies. Use this to browse what's available before drilling into a specific doc with `kb_get`. Optional `category` narrows to one section (e.g. 'sdk' for /docs/sdk/*).",
-    {
-      pack: z.string().describe("Pack id from `kb_list_packs`, e.g. 'rokid'"),
-      category: z.string().optional().describe("Restrict to one /docs/<category>/ subtree"),
-      limit: z.number().optional().describe("Max results (default 50, max 500)"),
-    },
-    async ({ pack, category, limit }) => {
-      const { files } = await client.kbList(pack, { category, limit });
-      if (files.length === 0) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `No files found in pack \`${pack}\`${category ? ` for category \`${category}\`` : ""}.`,
-            },
-          ],
-        };
-      }
-      const lines: string[] = [`## ${pack} — ${files.length} files\n`];
-      for (const f of files) {
-        const cat = f.category ? `[${f.category}] ` : "";
-        const summary = f.summary ? ` — ${f.summary}` : "";
-        lines.push(`- ${cat}**${f.title ?? f.path}** \`${f.path}\`${summary}`);
-      }
-      return { content: [{ type: "text" as const, text: lines.join("\n") }] };
-    }
-  );
-
-  // ── kb_get ─────────────────────────────────────────────────────────
-  registerTool(
-    "kb_get",
-    "Fetch one file's full markdown body from a knowledge pack. Use after `kb_list` to drill into a specific doc. Always cite the returned path in your reply so the user can verify against the public repo.",
-    {
-      pack: z.string().describe("Pack id, e.g. 'rokid'"),
-      path: z.string().describe("File path within the pack, e.g. 'docs/sdk/camera.md'"),
-    },
-    async ({ pack, path }) => {
-      const { file } = await client.kbGet(pack, path);
-      const lines: string[] = [];
-      lines.push(`# ${file.title ?? file.path}`);
-      lines.push(`Pack: \`${pack}\` · Path: \`${file.path}\``);
-      if (file.tags.length > 0) lines.push(`Tags: ${file.tags.join(", ")}`);
-      if (file.summary) lines.push(`\n${file.summary}`);
-      lines.push("\n---\n");
-      lines.push(file.body);
-      return { content: [{ type: "text" as const, text: lines.join("\n") }] };
-    }
-  );
-
-  // ── User knowledge bases (Item 4) ──────────────────────────────────
-  // 17 kb_* tools wrapping the user's own folder/file tree.
-  registerKnowledgeTools(registerTool, client);
-
-  // ── User skills ────────────────────────────────────────────────────
-  // Two read-only tools — skill_list + skill_get. Skills are procedural
-  // prompts the agent reads and follows; KBs referenced from inside a
-  // skill body are loaded via the kb_* tools.
-  registerSkillTools(registerTool, client);
-
-  // ── Third-party integrations (Notion / Gmail / Drive) ─────────────
-  // Four tools that let the agent connect a provider, list its
-  // objects, and ingest them through the existing prepare→submit
-  // pipeline. Branding: tool descriptions never name the OAuth
-  // broker; the user only ever sees Dopl-branded surfaces.
-  registerIntegrationTools(registerTool, client);
+  // ── Consolidated domain tools ──────────────────────────────────────
+  // Each registrar exposes a single `dopl_<domain>` action-tool (plus a
+  // `dopl_<domain>_admin` companion where the domain has destructive ops)
+  // that dispatches on an `op` arg. `search_setups` + `build_solution`
+  // (above) and the workspace meta-tools stay standalone.
+  registerSetupsTools(registerTool, client);
+  registerClusterTools(registerTool, client); // dopl_cluster + dopl_cluster_admin
+  registerBrainTools(registerTool, client);
+  registerEntryTools(registerTool, client);
+  registerCanvasTools(registerTool, client);
+  registerIngestTools(registerTool, client, isAdmin); // op=skeleton admin-gated
+  registerPacksTools(registerTool, client); // curated read-only knowledge packs
+  registerKnowledgeTools(registerTool, client); // dopl_kb + dopl_kb_admin (user bases)
+  registerSkillTools(registerTool, client); // dopl_skill + dopl_skill_admin
+  registerIntegrationTools(registerTool, client); // dopl_integration
 
   return server;
 }

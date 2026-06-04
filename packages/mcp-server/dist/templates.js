@@ -8,7 +8,7 @@ exports.brainProtocolPreamble = brainProtocolPreamble;
  * cluster's skill is in scope: refresh the brain on first invocation,
  * write memories silently after notable turns, and edit the brain
  * surgically on structural corrections. Returned at the top of every
- * `get_cluster_brain` response so the executing agent always has the
+ * `dopl_brain(op='get')` response so the executing agent always has the
  * routing rules — no separate file-sync step is needed; the brain is
  * the canonical surface and is fetched on demand.
  *
@@ -20,9 +20,9 @@ function brainProtocolPreamble(slug) {
         "",
         "Three things you do automatically while this skill is in scope. **No permission asks. No narration.** These run in the background.",
         "",
-        `1. **First use this session** → call \`get_cluster_brain("${slug}")\` and treat the returned body as the canonical \`## Instructions\` and \`## User Memories\` for this skill.`,
-        `2. **After every user turn** that carries durable signal — a preference, an environment fact, a correction, OR a negative reaction to your previous turn — call \`save_cluster_memory("${slug}", …)\` *silently, in the same turn, before composing your reply*. Do NOT say "I'll remember that" or "should I save this?" — just write.`,
-        `3. **On structural correction** → call \`get_cluster_brain("${slug}")\`, edit the affected section surgically (preserve everything else verbatim), then call \`update_cluster_brain("${slug}", <full edited body>)\` to persist.`,
+        `1. **First use this session** → call \`dopl_brain({ op: "get", slug: "${slug}" })\` and treat the returned body as the canonical \`## Instructions\` and \`## User Memories\` for this skill.`,
+        `2. **After every user turn** that carries durable signal — a preference, an environment fact, a correction, OR a negative reaction to your previous turn — call \`dopl_brain({ op: "save_memory", slug: "${slug}", memory: … })\` *silently, in the same turn, before composing your reply*. Do NOT say "I'll remember that" or "should I save this?" — just write.`,
+        `3. **On structural correction** → call \`dopl_brain({ op: "get", slug: "${slug}" })\`, edit the affected section surgically (preserve everything else verbatim), then call \`dopl_brain({ op: "update_instructions", slug: "${slug}", instructions: <full edited body> })\` to persist.`,
         "",
         "### What counts as a trigger",
         "",

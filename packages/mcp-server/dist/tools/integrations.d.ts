@@ -1,30 +1,24 @@
 /**
  * MCP tools for connecting third-party services (Notion, Gmail,
- * Drive) and pulling content from them into the user's Dopl
+ * Drive, etc.) and pulling content from them into the user's Dopl
  * workspace as fully-synthesized entries.
  *
- * Five tools, all generic on `provider`:
- *   - `connect_integration`         — start (or check) the OAuth flow
- *   - `integration_status`          — re-poll connection state
- *   - `list_integration_objects`    — search/enumerate the connected service
- *   - `read_integration_object`     — fetch one object's body content
- *                                     (read-only; no entry/sources row).
- *   - `ingest_from_integration`     — fetch one object and produce a
- *                                     prepare-shaped bundle. Agent then
- *                                     calls existing `submit_ingested_entry`.
+ * Consolidated into ONE `op`-dispatched tool, `dopl_integration` (the
+ * canonical pattern from `setups.ts`). These are connector ops — no
+ * destructive split is needed. The op surface:
+ *   - connect      — start (or check) the OAuth flow
+ *   - status       — re-poll connection state
+ *   - list_my      — every connected account across providers, in one call
+ *   - list_objects — search/enumerate the connected service
+ *   - read_object  — fetch one object's body content (read-only; no entry row)
+ *   - list_actions — discover a provider's write actions + param schemas
+ *   - execute_action — run a named write action (side-effecting)
+ *   - ingest       — fetch one object → prepare-shaped bundle; agent then
+ *                    calls existing `dopl_ingest(op='submit')`.
  *
  * Branding note: tool descriptions never mention the OAuth broker we
  * use under the hood. The agent only sees a Dopl-branded auth URL.
  */
-import { z, type ZodRawShape } from "zod";
 import type { DoplClient } from "@dopl/client";
-type ToolResponse = {
-    content: Array<{
-        type: "text";
-        text: string;
-    }>;
-    isError?: boolean;
-};
-export type RegisterTool = <S extends ZodRawShape>(name: string, description: string, schema: S, handler: (args: z.infer<z.ZodObject<S>>) => Promise<ToolResponse>) => void;
+import { type RegisterTool } from "./respond";
 export declare function registerIntegrationTools(register: RegisterTool, client: DoplClient): void;
-export {};

@@ -1,24 +1,17 @@
 /**
- * MCP tools for managing the user's knowledge bases (Item 4).
+ * `dopl_kb` + `dopl_kb_admin` — the user's editable knowledge bases (Item 4).
  *
- * 17 tools total. The agent talks to these like a filesystem:
- * `kb_write_file`, `kb_read_file`, `kb_create_folder`, `kb_list_dir`,
- * `kb_move_file`. Bases are addressed by slug (or id — both work);
- * folders/entries by `/`-separated path.
+ * Consolidates the old 18 `kb_*` tools into two `op`-dispatched tools (the
+ * canonical consolidated pattern — see setups.ts). The agent talks to these
+ * like a filesystem; bases are addressed by slug or id, folders/entries by
+ * `/`-separated path. `dopl_kb` = read + non-destructive writes (restores are
+ * recovery, not deletion); `dopl_kb_admin` = the destructive soft-deletes,
+ * broken out so the model can't reach them without the destructive surface.
  *
- * Distinct from the read-only knowledge-pack tools (`kb_list_packs`,
- * `kb_list`, `kb_get`) in server.ts: those expose Dopl's own curated
+ * Distinct from the read-only knowledge-pack tools (`dopl_packs(op='list')`,
+ * `dopl_packs(op='list_files')`, `dopl_packs(op='get_file')`) in server.ts: those expose Dopl's own curated
  * specialist verticals; these expose the user's own editable bases.
  */
-import { z, type ZodRawShape } from "zod";
 import type { DoplClient } from "@dopl/client";
-type ToolResponse = {
-    content: Array<{
-        type: "text";
-        text: string;
-    }>;
-    isError?: boolean;
-};
-export type RegisterTool = <S extends ZodRawShape>(name: string, description: string, schema: S, handler: (args: z.infer<z.ZodObject<S>>) => Promise<ToolResponse>) => void;
+import { type RegisterTool } from "./respond";
 export declare function registerKnowledgeTools(register: RegisterTool, client: DoplClient): void;
-export {};

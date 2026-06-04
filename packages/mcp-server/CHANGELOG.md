@@ -4,6 +4,61 @@ All notable changes to `@dopl/mcp-server` are documented here. Format follows [K
 
 ## [Unreleased]
 
+## [1.0.0] — 2026-06-03
+
+### Changed — BREAKING: tool consolidation (~77 → 18)
+
+The tool surface was collapsed from ~77 individual tools into 18 — five
+standalone tools plus ten domain "action" tools (and three destructive
+`*_admin` companions) that dispatch on an `op` argument. This cuts
+per-tool permission prompts, shrinks the context the tool list consumes,
+and removes near-duplicate names. **Any MCP client re-reads the tool list
+on reconnect, so no code change is needed — but pinned tool-name
+allowlists, saved automations, or skills that reference the old names must
+be updated.** The companion fix for permission fatigue is to allowlist the
+whole server once: `"permissions": { "allow": ["mcp__dopl"] }` in
+`~/.claude/settings.json`.
+
+**Standalone (unchanged):** `search_setups`, `build_solution`,
+`list_workspaces`, `set_workspace`, `current_workspace`.
+
+**Old tool → new call:**
+
+- `list_setups` / `get_setup` → `dopl_setups(op="list"|"get")`
+- `list_clusters` / `get_cluster` / `query_cluster` / `canvas_create_cluster` /
+  `update_cluster` / `rename_cluster` / `add_entry_to_cluster` /
+  `read_cluster_knowledge_entry` / `read_cluster_skill` →
+  `dopl_cluster(op="list"|"get"|"query"|"create"|"update"|"add_entry"|"read_knowledge_entry"|"read_skill")`
+  (`rename_cluster` folded into `op="update"` and removed)
+- `delete_cluster` / `delete_cluster_memory` / `delete_entry` →
+  `dopl_cluster_admin(op="delete_cluster"|"delete_memory"|"delete_entry")`
+- `get_cluster_brain` / `update_cluster_brain` / `save_cluster_memory` /
+  `update_cluster_memory` / `get_skill_template` →
+  `dopl_brain(op="get"|"update_instructions"|"save_memory"|"update_memory"|"template")`
+- `canvas_list_panels` / `canvas_add_entry` / `canvas_remove_entry` /
+  `canvas_search_and_add` / `rename_chat` →
+  `dopl_canvas(op="list"|"add_entry"|"remove_entry"|"search_and_add"|"rename_chat")`
+- `update_entry` / `check_entry_updates` / `check_cluster_updates` →
+  `dopl_entry(op="update"|"check_updates"|"check_cluster_updates")`
+- `ingest_url` / `get_ingest_content` / `describe_link` / `list_pending_ingests` /
+  `submit_ingested_entry` / `skeleton_ingest` (admin) →
+  `dopl_ingest(op="url"|"content"|"describe_link"|"pending"|"submit"|"skeleton")`
+- `kb_list_packs` / `kb_list` / `kb_get` →
+  `dopl_packs(op="list"|"list_files"|"get_file")`
+- the 15 non-destructive `kb_*` (user bases) → `dopl_kb(op=…)`;
+  `kb_delete_base|folder|file` → `dopl_kb_admin(op="delete_base"|"delete_folder"|"delete_file")`
+- the 10 non-destructive `skill_*` → `dopl_skill(op=…)`;
+  `skill_delete` / `skill_delete_file` → `dopl_skill_admin(op="delete"|"delete_file")`
+- the 8 integration tools → `dopl_integration(op="connect"|"status"|"list_my"|"list_objects"|"read_object"|"list_actions"|"execute_action"|"ingest")`
+
+### Removed
+- `rename_cluster` — redundant with `dopl_cluster(op="update", name=…)`.
+
+### Internal
+- Split the ~2,000-line `server.ts` into per-domain modules under
+  `src/tools/` (closes tracked debt #20). Each domain tool's `op` bodies
+  are the prior handlers, lifted unchanged; behavior is preserved.
+
 ## [0.8.0] — 2026-05-01
 
 ### Added

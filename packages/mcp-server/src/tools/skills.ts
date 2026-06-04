@@ -1,45 +1,21 @@
 /**
  * MCP tools for the user's skills.
  *
- * Two reads — `skill_list` (cheap discovery), `skill_get` (resolved
- * body + per-reference availability) — plus the full write surface
- * for agent-driven authoring:
+ * Skills are folders of `.md` files; SKILL.md is the canonical procedure
+ * entry point. Writes are gated server-side by the per-skill
+ * `agent_write_enabled` toggle; calls without the toggle 403 with
+ * `SKILL_AGENT_WRITE_DISABLED`.
  *
- *   skill_create / skill_update / skill_delete
- *   skill_list_files / skill_read_file
- *   skill_create_file / skill_write_file / skill_rename_file / skill_delete_file
- *   skill_authoring_guide   — fetches the framework on demand
- *
- * Writes are gated server-side by the per-skill `agent_write_enabled`
- * toggle. Calls without the toggle 403 with `SKILL_AGENT_WRITE_DISABLED`.
- *
- * Skills are folders of `.md` files; SKILL.md is the canonical
- * procedure entry point.
+ * Consolidated into two `op`-dispatched tools (the canonical pattern from
+ * `setups.ts`):
+ *   - `dopl_skill`       — reads + non-destructive writes.
+ *   - `dopl_skill_admin` — DESTRUCTIVE deletes, split out on purpose.
  */
 
-import { z, type ZodRawShape } from "zod";
+import { z } from "zod";
 import type { DoplClient } from "@dopl/client";
+import { ok, err, missingParams, type RegisterTool, type ToolResponse } from "./respond";
 import { SKILL_AUTHORING_GUIDE } from "../prompts/skill-authoring-guide.js";
-
-type ToolResponse = {
-  content: Array<{ type: "text"; text: string }>;
-  isError?: boolean;
-};
-
-export type RegisterTool = <S extends ZodRawShape>(
-  name: string,
-  description: string,
-  schema: S,
-  handler: (args: z.infer<z.ZodObject<S>>) => Promise<ToolResponse>
-) => void;
-
-function err(message: string): ToolResponse {
-  return { content: [{ type: "text" as const, text: message }], isError: true };
-}
-
-function ok(text: string): ToolResponse {
-  return { content: [{ type: "text" as const, text }] };
-}
 
 function errorMessage(e: unknown): string {
   if (e && typeof e === "object" && "message" in e) {
@@ -48,346 +24,389 @@ function errorMessage(e: unknown): string {
   return String(e);
 }
 
+const SKILL_DESCRIPTION = `Read and author the user's skills. Each skill is a folder of \`.md\` files; the canonical procedure lives in SKILL.md. Set \`op\` to one of:
+- "list" — list the user's active skills in the active workspace with trigger metadata (name, description, when_to_use, when_not_to_use, status) so you can pick the right skill before loading bodies. Call at every new task boundary.
+- "get" — fetch a skill's resolved bundle: every file (SKILL.md + supplementary), reference availability for KBs and connectors, and metadata. Read SKILL.md first as the procedure; consult supplementary files only when SKILL.md tells you to. KB references appear as \`[label](dopl://kb/<slug>)\` — use \`dopl_kb(op='read_file')\` / \`dopl_kb(op='get_tree')\` to load that KB when you actually need it. Requires: slug.
+- "create" — create a new skill (returns the row + a fresh SKILL.md). New skills default to private. Requires: name, description, when_to_use. Optional: when_not_to_use, slug (auto-derived), status (defaults active), body (initial SKILL.md content). Before calling: use op="authoring_guide" so the description and when_to_use are written to the framework's standards.
+- "update" — update skill metadata (name, description, when_to_use, when_not_to_use, new_slug, status, agent_write_enabled). Agents cannot flip \`agent_write_enabled\` themselves — that's a session-only setting. Requires: slug.
+- "list_files" — list the files inside a skill (name + position + length each). Use op="read_file" for a specific body. Requires: slug.
+- "read_file" — read one file from a skill. SKILL.md is the canonical procedure entry point; supplementary files (e.g. \`examples.md\`, \`references/*.md\`) are referenced from SKILL.md and loaded on demand. Requires: slug, file_name.
+- "create_file" — create a new supplementary file SKILL.md links to (\`examples.md\`, \`references/<topic>.md\`, \`templates/<name>.md\`). Cannot recreate SKILL.md (created by op="create"). Names must match \`[A-Za-z0-9._-]+\\.md\` (no slashes — flat namespace). Requires: slug, file_name.
+- "write_file" — overwrite a skill file's body (PUT semantics). The whole body is replaced — read it first with op="read_file" for a partial edit. Requires: slug, file_name, body.
+- "rename_file" — rename a file inside a skill. Cannot rename SKILL.md. Requires: slug, file_name, new_name.
+- "authoring_guide" — fetch the canonical skill-authoring framework: what makes a high-quality skill, how to write description + when_to_use, the canonical body section order, anti-patterns, and a quality checklist. Call before authoring any new skill (every op="create"). The framework is also loaded into the system prompt at session start; this op is the explicit affordance to re-read it deliberately when you're about to write.
+
+Destructive deletes live in the separate \`dopl_skill_admin\` tool.`;
+
+const SKILL_ADMIN_DESCRIPTION = `DESTRUCTIVE skill operations — separated from \`dopl_skill\` on purpose. Confirm with the user before calling. Set \`op\` to one of:
+- "delete" — soft-delete an entire skill. The skill and all its files become invisible. Requires: slug.
+- "delete_file" — soft-delete one file from a skill. Cannot delete SKILL.md (every skill must keep its primary file). Requires: slug, file_name.`;
+
 export function registerSkillTools(
   register: RegisterTool,
-  client: DoplClient
+  client: DoplClient,
 ): void {
-  // ── skill_list ───────────────────────────────────────────────────
   register(
-    "skill_list",
-    "List the user's skills in the active workspace. Each skill is a folder of `.md` files; the canonical procedure lives in SKILL.md. Returns trigger metadata (name, description, when_to_use, when_not_to_use, status) so you can pick the right skill before loading bodies. Call at every new task boundary.",
-    {},
-    async () => {
-      const skills = await client.listSkills();
-      const active = skills.filter((s) => s.status === "active");
-      if (active.length === 0) {
-        return ok(
-          "No active skills in this workspace yet. Create one with `skill_create` (requires the workspace to allow agent writes)."
-        );
-      }
-      const lines = ["## Skills\n"];
-      for (const s of active) {
-        // Show visibility — that's the access signal that matters.
-        // Legacy `agent_write_enabled` is no longer the gate.
-        const visBadge =
-          s.visibility === "private" ? " _(private)_" : "";
-        lines.push(`### \`${s.slug}\` — ${s.name}${visBadge}`);
-        lines.push(s.description);
-        lines.push(`**When to use:** ${s.whenToUse}`);
-        if (s.whenNotToUse) {
-          lines.push(`**When NOT to use:** ${s.whenNotToUse}`);
-        }
-        lines.push("");
-      }
-      lines.push(
-        "Call `skill_get` with a slug to load the procedure body for the skill that fits the task."
-      );
-      return ok(lines.join("\n"));
-    }
-  );
-
-  // ── skill_get ────────────────────────────────────────────────────
-  register(
-    "skill_get",
-    "Fetch a skill's resolved bundle: every file (SKILL.md + supplementary), reference availability for KBs and connectors, and metadata. Read SKILL.md first as the procedure; consult supplementary files only when SKILL.md tells you to. References to knowledge bases appear as `[label](dopl://kb/<slug>)` — use `kb_read_file` (or `kb_get_tree`) to load that KB's content when you actually need it.",
+    "dopl_skill",
+    SKILL_DESCRIPTION,
     {
-      slug: z.string().describe("Skill slug from `skill_list`"),
+      op: z
+        .enum([
+          "list",
+          "get",
+          "create",
+          "update",
+          "list_files",
+          "read_file",
+          "create_file",
+          "write_file",
+          "rename_file",
+          "authoring_guide",
+        ])
+        .describe("Operation to perform."),
+      slug: z
+        .string()
+        .optional()
+        .describe("Skill slug. Required for get, update, list_files, read_file, create_file, write_file, rename_file."),
+      name: z.string().min(1).max(120).optional().describe("op=create (required) / op=update: skill name."),
+      description: z.string().min(1).max(2000).optional().describe("op=create (required) / op=update: skill description."),
+      when_to_use: z.string().min(1).max(2000).optional().describe("op=create (required) / op=update: when_to_use trigger."),
+      when_not_to_use: z.string().max(2000).nullable().optional().describe("op=create / op=update: when_not_to_use trigger."),
+      new_slug: z.string().min(1).max(80).optional().describe("op=update: rename the skill's slug."),
+      status: z.enum(["active", "draft"]).optional().describe("op=create / op=update: skill status (create defaults to active)."),
+      agent_write_enabled: z.boolean().optional().describe("op=create / op=update: agent-write toggle (agents cannot flip this on update)."),
+      file_name: z.string().optional().describe("File name, e.g. SKILL.md or examples.md. Required for read_file, create_file, write_file, rename_file."),
+      new_name: z.string().optional().describe("op=rename_file (required): the file's new name."),
+      body: z.string().max(1_048_576).optional().describe("op=create: initial SKILL.md content. op=create_file: optional initial body. op=write_file (required): the new full body."),
     },
-    async ({ slug }) => {
-      try {
-        const { skill, files, references } = await client.getSkill(slug);
-        const lines: string[] = [];
-        lines.push(`# ${skill.name} \`${skill.slug}\``);
-        lines.push(`Status: ${skill.status}`);
-        if (skill.visibility === "private") {
-          lines.push("Visibility: private");
+    async (args): Promise<ToolResponse> => {
+      switch (args.op) {
+        case "list":
+          return opList(client);
+        case "get": {
+          const miss = missingParams("get", args, ["slug"]);
+          if (miss) return miss;
+          return opGet(client, args.slug as string);
         }
-        lines.push(`When to use: ${skill.whenToUse}`);
-        if (skill.whenNotToUse) {
-          lines.push(`When NOT to use: ${skill.whenNotToUse}`);
+        case "create": {
+          const miss = missingParams("create", args, ["name", "description", "when_to_use"]);
+          if (miss) return miss;
+          return opCreate(client, args);
         }
-
-        if (references.length > 0) {
-          lines.push("");
-          lines.push("## References");
-          for (const ref of references) {
-            const status = ref.available ? "✓" : "✗ (not available)";
-            if (ref.kind === "kb") {
-              lines.push(
-                `- KB \`${ref.slug}\` (${ref.label}) ${status}` +
-                  (ref.available
-                    ? ""
-                    : " — broken ref; the skill mentions this KB but it isn't in the workspace.")
-              );
-            } else {
-              const fieldHint = ref.field ? `.${ref.field}` : "";
-              lines.push(
-                `- Connector \`${ref.provider}${fieldHint}\` (${ref.label}) ${status}`
-              );
-            }
-          }
+        case "update": {
+          const miss = missingParams("update", args, ["slug"]);
+          if (miss) return miss;
+          return opUpdate(client, args);
         }
-
-        for (const file of files) {
-          lines.push("");
-          lines.push(`## \`${file.name}\``);
-          lines.push("");
-          lines.push(file.body);
+        case "list_files": {
+          const miss = missingParams("list_files", args, ["slug"]);
+          if (miss) return miss;
+          return opListFiles(client, args.slug as string);
         }
-        return ok(lines.join("\n"));
-      } catch (e) {
-        return err(`Skill not found or failed to load: ${slug}. ${errorMessage(e)}`);
+        case "read_file": {
+          const miss = missingParams("read_file", args, ["slug", "file_name"]);
+          if (miss) return miss;
+          return opReadFile(client, args.slug as string, args.file_name as string);
+        }
+        case "create_file": {
+          const miss = missingParams("create_file", args, ["slug", "file_name"]);
+          if (miss) return miss;
+          return opCreateFile(client, args.slug as string, args.file_name as string, args.body);
+        }
+        case "write_file": {
+          const miss = missingParams("write_file", args, ["slug", "file_name", "body"]);
+          if (miss) return miss;
+          return opWriteFile(client, args.slug as string, args.file_name as string, args.body as string);
+        }
+        case "rename_file": {
+          const miss = missingParams("rename_file", args, ["slug", "file_name", "new_name"]);
+          if (miss) return miss;
+          return opRenameFile(client, args.slug as string, args.file_name as string, args.new_name as string);
+        }
+        case "authoring_guide":
+          return ok(SKILL_AUTHORING_GUIDE);
       }
-    }
+    },
   );
 
-  // ── skill_create ─────────────────────────────────────────────────
   register(
-    "skill_create",
-    "Create a new skill. Returns the skill row + a freshly created SKILL.md primary file. New skills default to private (only the creator can read or edit; the creator can publish to the workspace later). Required: name, description, when_to_use. Optional: when_not_to_use, slug (auto-derived), status (defaults to active), body (initial SKILL.md content). Before calling: read `skill_authoring_guide` so the description and when_to_use are written to the framework's standards.",
+    "dopl_skill_admin",
+    SKILL_ADMIN_DESCRIPTION,
     {
-      name: z.string().min(1).max(120),
-      description: z.string().min(1).max(2000),
-      when_to_use: z.string().min(1).max(2000),
-      when_not_to_use: z.string().max(2000).optional(),
-      slug: z.string().min(1).max(80).optional(),
-      status: z.enum(["active", "draft"]).optional(),
-      agent_write_enabled: z.boolean().optional(),
-      body: z.string().max(1_048_576).optional(),
+      op: z.enum(["delete", "delete_file"]).describe("DESTRUCTIVE operation to perform."),
+      slug: z.string().optional().describe("Skill slug. Required for delete and delete_file."),
+      file_name: z.string().optional().describe("op=delete_file (required): file to soft-delete (cannot be SKILL.md)."),
     },
-    async ({
-      name,
-      description,
-      when_to_use,
-      when_not_to_use,
-      slug,
-      status,
-      agent_write_enabled,
-      body,
-    }) => {
-      try {
-        const { skill, primaryFile } = await client.createSkill({
-          name,
-          description,
-          whenToUse: when_to_use,
-          whenNotToUse: when_not_to_use ?? null,
-          slug,
-          status,
-          agentWriteEnabled: agent_write_enabled,
-          body,
-        });
-        const visNote =
-          skill.visibility === "private"
-            ? "Private to you — only you and your agent can see it."
-            : "Visible to the whole workspace.";
-        return ok(
-          `Created skill **${skill.name}** (slug: \`${skill.slug}\`). ` +
-            `Status: ${skill.status}. ${visNote} ` +
-            `SKILL.md (${primaryFile.body.length} chars) is ready to edit with \`skill_write_file\`.`
-        );
-      } catch (e) {
-        return err(`Couldn't create skill: ${errorMessage(e)}`);
+    async (args): Promise<ToolResponse> => {
+      switch (args.op) {
+        case "delete": {
+          const miss = missingParams("delete", args, ["slug"]);
+          if (miss) return miss;
+          return opDelete(client, args.slug as string);
+        }
+        case "delete_file": {
+          const miss = missingParams("delete_file", args, ["slug", "file_name"]);
+          if (miss) return miss;
+          return opDeleteFile(client, args.slug as string, args.file_name as string);
+        }
       }
-    }
-  );
-
-  // ── skill_update ─────────────────────────────────────────────────
-  register(
-    "skill_update",
-    "Update skill metadata: name, description, when_to_use, when_not_to_use, slug, status, agent_write_enabled. Agents cannot flip `agent_write_enabled` themselves — that's a session-only setting.",
-    {
-      slug: z.string(),
-      name: z.string().min(1).max(120).optional(),
-      description: z.string().min(1).max(2000).optional(),
-      when_to_use: z.string().min(1).max(2000).optional(),
-      when_not_to_use: z.string().max(2000).nullable().optional(),
-      new_slug: z.string().min(1).max(80).optional(),
-      status: z.enum(["active", "draft"]).optional(),
-      agent_write_enabled: z.boolean().optional(),
     },
-    async ({
-      slug,
-      name,
-      description,
-      when_to_use,
-      when_not_to_use,
-      new_slug,
-      status,
-      agent_write_enabled,
-    }) => {
-      try {
-        const updated = await client.updateSkill(slug, {
-          name,
-          description,
-          whenToUse: when_to_use,
-          whenNotToUse: when_not_to_use,
-          slug: new_slug,
-          status,
-          agentWriteEnabled: agent_write_enabled,
-        });
-        return ok(
-          `Updated skill **${updated.name}** (slug: \`${updated.slug}\`). Status: ${updated.status}.`
-        );
-      } catch (e) {
-        return err(`Couldn't update skill \`${slug}\`: ${errorMessage(e)}`);
-      }
-    }
   );
+}
 
-  // ── skill_delete ─────────────────────────────────────────────────
-  register(
-    "skill_delete",
-    "Soft-delete a skill. The skill and its files become invisible. Confirm with the user before calling — this is destructive.",
-    { slug: z.string() },
-    async ({ slug }) => {
-      try {
-        await client.deleteSkill(slug);
-        return ok(`Deleted skill \`${slug}\`.`);
-      } catch (e) {
-        return err(`Couldn't delete skill \`${slug}\`: ${errorMessage(e)}`);
-      }
+async function opList(client: DoplClient): Promise<ToolResponse> {
+  const skills = await client.listSkills();
+  const active = skills.filter((s) => s.status === "active");
+  if (active.length === 0) {
+    return ok(
+      "No active skills in this workspace yet. Create one with `dopl_skill` op=\"create\" (requires the workspace to allow agent writes)."
+    );
+  }
+  const lines = ["## Skills\n"];
+  for (const s of active) {
+    // Show visibility — that's the access signal that matters.
+    // Legacy `agent_write_enabled` is no longer the gate.
+    const visBadge =
+      s.visibility === "private" ? " _(private)_" : "";
+    lines.push(`### \`${s.slug}\` — ${s.name}${visBadge}`);
+    lines.push(s.description);
+    lines.push(`**When to use:** ${s.whenToUse}`);
+    if (s.whenNotToUse) {
+      lines.push(`**When NOT to use:** ${s.whenNotToUse}`);
     }
+    lines.push("");
+  }
+  lines.push(
+    "Call `dopl_skill` op=\"get\" with a slug to load the procedure body for the skill that fits the task."
   );
+  return ok(lines.join("\n"));
+}
 
-  // ── skill_list_files ─────────────────────────────────────────────
-  register(
-    "skill_list_files",
-    "List the files inside a skill. Returns name + position + length for each. Use `skill_read_file` for a specific file's body.",
-    { slug: z.string() },
-    async ({ slug }) => {
-      try {
-        const files = await client.listSkillFiles(slug);
-        if (files.length === 0) return ok(`Skill \`${slug}\` has no files.`);
-        const lines = [`## \`${slug}\` files\n`];
-        for (const f of files) {
+async function opGet(client: DoplClient, slug: string): Promise<ToolResponse> {
+  try {
+    const { skill, files, references } = await client.getSkill(slug);
+    const lines: string[] = [];
+    lines.push(`# ${skill.name} \`${skill.slug}\``);
+    lines.push(`Status: ${skill.status}`);
+    if (skill.visibility === "private") {
+      lines.push("Visibility: private");
+    }
+    lines.push(`When to use: ${skill.whenToUse}`);
+    if (skill.whenNotToUse) {
+      lines.push(`When NOT to use: ${skill.whenNotToUse}`);
+    }
+
+    if (references.length > 0) {
+      lines.push("");
+      lines.push("## References");
+      for (const ref of references) {
+        const status = ref.available ? "✓" : "✗ (not available)";
+        if (ref.kind === "kb") {
           lines.push(
-            `- **\`${f.name}\`** · ${f.body.length} chars · pos ${f.position}`
+            `- KB \`${ref.slug}\` (${ref.label}) ${status}` +
+              (ref.available
+                ? ""
+                : " — broken ref; the skill mentions this KB but it isn't in the workspace.")
+          );
+        } else {
+          const fieldHint = ref.field ? `.${ref.field}` : "";
+          lines.push(
+            `- Connector \`${ref.provider}${fieldHint}\` (${ref.label}) ${status}`
           );
         }
-        return ok(lines.join("\n"));
-      } catch (e) {
-        return err(`Couldn't list files for \`${slug}\`: ${errorMessage(e)}`);
       }
     }
-  );
 
-  // ── skill_read_file ──────────────────────────────────────────────
-  register(
-    "skill_read_file",
-    "Read one file from a skill. SKILL.md is the canonical procedure entry point; supplementary files (e.g. `examples.md`, `references/*.md`) are referenced from SKILL.md and loaded on demand.",
-    {
-      slug: z.string(),
-      file_name: z.string().describe("e.g. SKILL.md or examples.md"),
-    },
-    async ({ slug, file_name }) => {
-      try {
-        const file = await client.readSkillFile(slug, file_name);
-        return ok(`# \`${slug}\` / \`${file.name}\`\n\n${file.body}`);
-      } catch (e) {
-        return err(
-          `Couldn't read \`${file_name}\` from \`${slug}\`: ${errorMessage(e)}`
-        );
-      }
+    for (const file of files) {
+      lines.push("");
+      lines.push(`## \`${file.name}\``);
+      lines.push("");
+      lines.push(file.body);
     }
-  );
+    return ok(lines.join("\n"));
+  } catch (e) {
+    return err(`Skill not found or failed to load: ${slug}. ${errorMessage(e)}`);
+  }
+}
 
-  // ── skill_create_file ────────────────────────────────────────────
-  register(
-    "skill_create_file",
-    "Create a new file in a skill. Use for supplementary content that SKILL.md links to: `examples.md`, `references/<topic>.md`, `templates/<name>.md`. Cannot be used to recreate SKILL.md (it's created by `skill_create`). File names must match `[A-Za-z0-9._-]+\\.md` (no slashes — flat namespace).",
-    {
-      slug: z.string(),
-      file_name: z.string(),
-      body: z.string().max(1_048_576).optional(),
-    },
-    async ({ slug, file_name, body }) => {
-      try {
-        const file = await client.createSkillFile(slug, {
-          name: file_name,
-          body,
-        });
-        return ok(
-          `Created \`${file.name}\` in \`${slug}\` (${file.body.length} chars).`
-        );
-      } catch (e) {
-        return err(
-          `Couldn't create \`${file_name}\` in \`${slug}\`: ${errorMessage(e)}`
-        );
-      }
+async function opCreate(
+  client: DoplClient,
+  params: {
+    name?: string;
+    description?: string;
+    when_to_use?: string;
+    when_not_to_use?: string | null;
+    slug?: string;
+    status?: "active" | "draft";
+    agent_write_enabled?: boolean;
+    body?: string;
+  },
+): Promise<ToolResponse> {
+  try {
+    const { skill, primaryFile } = await client.createSkill({
+      name: params.name as string,
+      description: params.description as string,
+      whenToUse: params.when_to_use as string,
+      whenNotToUse: params.when_not_to_use ?? null,
+      slug: params.slug,
+      status: params.status,
+      agentWriteEnabled: params.agent_write_enabled,
+      body: params.body,
+    });
+    const visNote =
+      skill.visibility === "private"
+        ? "Private to you — only you and your agent can see it."
+        : "Visible to the whole workspace.";
+    return ok(
+      `Created skill **${skill.name}** (slug: \`${skill.slug}\`). ` +
+        `Status: ${skill.status}. ${visNote} ` +
+        `SKILL.md (${primaryFile.body.length} chars) is ready to edit with \`dopl_skill\` op="write_file".`
+    );
+  } catch (e) {
+    return err(`Couldn't create skill: ${errorMessage(e)}`);
+  }
+}
+
+async function opUpdate(
+  client: DoplClient,
+  params: {
+    slug?: string;
+    name?: string;
+    description?: string;
+    when_to_use?: string;
+    when_not_to_use?: string | null;
+    new_slug?: string;
+    status?: "active" | "draft";
+    agent_write_enabled?: boolean;
+  },
+): Promise<ToolResponse> {
+  const slug = params.slug as string;
+  try {
+    const updated = await client.updateSkill(slug, {
+      name: params.name,
+      description: params.description,
+      whenToUse: params.when_to_use,
+      whenNotToUse: params.when_not_to_use,
+      slug: params.new_slug,
+      status: params.status,
+      agentWriteEnabled: params.agent_write_enabled,
+    });
+    return ok(
+      `Updated skill **${updated.name}** (slug: \`${updated.slug}\`). Status: ${updated.status}.`
+    );
+  } catch (e) {
+    return err(`Couldn't update skill \`${slug}\`: ${errorMessage(e)}`);
+  }
+}
+
+async function opDelete(client: DoplClient, slug: string): Promise<ToolResponse> {
+  try {
+    await client.deleteSkill(slug);
+    return ok(`Deleted skill \`${slug}\`.`);
+  } catch (e) {
+    return err(`Couldn't delete skill \`${slug}\`: ${errorMessage(e)}`);
+  }
+}
+
+async function opListFiles(client: DoplClient, slug: string): Promise<ToolResponse> {
+  try {
+    const files = await client.listSkillFiles(slug);
+    if (files.length === 0) return ok(`Skill \`${slug}\` has no files.`);
+    const lines = [`## \`${slug}\` files\n`];
+    for (const f of files) {
+      lines.push(
+        `- **\`${f.name}\`** · ${f.body.length} chars · pos ${f.position}`
+      );
     }
-  );
+    return ok(lines.join("\n"));
+  } catch (e) {
+    return err(`Couldn't list files for \`${slug}\`: ${errorMessage(e)}`);
+  }
+}
 
-  // ── skill_write_file ─────────────────────────────────────────────
-  register(
-    "skill_write_file",
-    "Overwrite a skill file's body (PUT semantics). Use for editing SKILL.md or any supplementary file. The whole body is replaced — load the current body with `skill_read_file` first if you want to make a partial edit.",
-    {
-      slug: z.string(),
-      file_name: z.string(),
-      body: z.string().max(1_048_576),
-    },
-    async ({ slug, file_name, body }) => {
-      try {
-        const file = await client.writeSkillFile(slug, file_name, body);
-        return ok(
-          `Wrote \`${file.name}\` in \`${slug}\` (${file.body.length} chars).`
-        );
-      } catch (e) {
-        return err(
-          `Couldn't write \`${file_name}\` in \`${slug}\`: ${errorMessage(e)}`
-        );
-      }
-    }
-  );
+async function opReadFile(
+  client: DoplClient,
+  slug: string,
+  file_name: string,
+): Promise<ToolResponse> {
+  try {
+    const file = await client.readSkillFile(slug, file_name);
+    return ok(`# \`${slug}\` / \`${file.name}\`\n\n${file.body}`);
+  } catch (e) {
+    return err(
+      `Couldn't read \`${file_name}\` from \`${slug}\`: ${errorMessage(e)}`
+    );
+  }
+}
 
-  // ── skill_rename_file ────────────────────────────────────────────
-  register(
-    "skill_rename_file",
-    "Rename a file inside a skill. Cannot rename SKILL.md.",
-    {
-      slug: z.string(),
-      file_name: z.string(),
-      new_name: z.string(),
-    },
-    async ({ slug, file_name, new_name }) => {
-      try {
-        const file = await client.renameSkillFile(slug, file_name, new_name);
-        return ok(
-          `Renamed \`${file_name}\` → \`${file.name}\` in \`${slug}\`.`
-        );
-      } catch (e) {
-        return err(
-          `Couldn't rename \`${file_name}\` in \`${slug}\`: ${errorMessage(e)}`
-        );
-      }
-    }
-  );
+async function opCreateFile(
+  client: DoplClient,
+  slug: string,
+  file_name: string,
+  body: string | undefined,
+): Promise<ToolResponse> {
+  try {
+    const file = await client.createSkillFile(slug, {
+      name: file_name,
+      body,
+    });
+    return ok(
+      `Created \`${file.name}\` in \`${slug}\` (${file.body.length} chars).`
+    );
+  } catch (e) {
+    return err(
+      `Couldn't create \`${file_name}\` in \`${slug}\`: ${errorMessage(e)}`
+    );
+  }
+}
 
-  // ── skill_delete_file ────────────────────────────────────────────
-  register(
-    "skill_delete_file",
-    "Soft-delete a file from a skill. Cannot delete SKILL.md (every skill must keep its primary file).",
-    {
-      slug: z.string(),
-      file_name: z.string(),
-    },
-    async ({ slug, file_name }) => {
-      try {
-        await client.deleteSkillFile(slug, file_name);
-        return ok(`Deleted \`${file_name}\` from \`${slug}\`.`);
-      } catch (e) {
-        return err(
-          `Couldn't delete \`${file_name}\` from \`${slug}\`: ${errorMessage(e)}`
-        );
-      }
-    }
-  );
+async function opWriteFile(
+  client: DoplClient,
+  slug: string,
+  file_name: string,
+  body: string,
+): Promise<ToolResponse> {
+  try {
+    const file = await client.writeSkillFile(slug, file_name, body);
+    return ok(
+      `Wrote \`${file.name}\` in \`${slug}\` (${file.body.length} chars).`
+    );
+  } catch (e) {
+    return err(
+      `Couldn't write \`${file_name}\` in \`${slug}\`: ${errorMessage(e)}`
+    );
+  }
+}
 
-  // ── skill_authoring_guide ────────────────────────────────────────
-  register(
-    "skill_authoring_guide",
-    "Fetch the canonical skill-authoring framework — what makes a high-quality skill, how to write the description and when_to_use fields, the canonical body section order, anti-patterns, and a quality checklist. Call this before authoring any new skill (every `skill_create` call). The framework is also loaded into the system prompt at session start; this tool is the explicit affordance to re-read it deliberately when you're about to write.",
-    {},
-    async () => ok(SKILL_AUTHORING_GUIDE)
-  );
+async function opRenameFile(
+  client: DoplClient,
+  slug: string,
+  file_name: string,
+  new_name: string,
+): Promise<ToolResponse> {
+  try {
+    const file = await client.renameSkillFile(slug, file_name, new_name);
+    return ok(
+      `Renamed \`${file_name}\` → \`${file.name}\` in \`${slug}\`.`
+    );
+  } catch (e) {
+    return err(
+      `Couldn't rename \`${file_name}\` in \`${slug}\`: ${errorMessage(e)}`
+    );
+  }
+}
+
+async function opDeleteFile(
+  client: DoplClient,
+  slug: string,
+  file_name: string,
+): Promise<ToolResponse> {
+  try {
+    await client.deleteSkillFile(slug, file_name);
+    return ok(`Deleted \`${file_name}\` from \`${slug}\`.`);
+  } catch (e) {
+    return err(
+      `Couldn't delete \`${file_name}\` from \`${slug}\`: ${errorMessage(e)}`
+    );
+  }
 }
