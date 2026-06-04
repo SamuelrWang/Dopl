@@ -4,6 +4,11 @@ All notable changes to `@dopl/cli` are documented here. Format follows [Keep a C
 
 ## [Unreleased]
 
+## [0.2.2] — 2026-06-04
+
+### Changed
+- Bundled master Dopl `SKILL.md` updated to the consolidated MCP tool names (`dopl_<domain>(op=...)`), matching `@dopl/mcp-server@1.0.0`. No CLI behavior change.
+
 ## [0.1.0] — 2026-04-24
 
 Initial release. Shell-native companion to `@dopl/mcp-server`. Phase 1 surface: pack browsing + auth.
