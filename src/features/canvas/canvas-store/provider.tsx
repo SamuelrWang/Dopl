@@ -268,9 +268,8 @@ function EntriesRealtimeBridge() {
 }
 
 /**
- * Bridge for realtime updates to clusters, brains, and brain memories.
- * Reflects MCP-agent edits (rename / delete / brain update / memory
- * write) on the canvas without a page reload.
+ * Bridge for realtime updates to clusters. Reflects MCP-agent edits
+ * (rename / delete) on the canvas without a page reload.
  */
 function ClustersRealtimeBridge() {
   useClustersRealtime();

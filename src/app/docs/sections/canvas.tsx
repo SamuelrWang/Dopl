@@ -7,7 +7,6 @@ export const TOC: TocEntry[] = [
   { id: "panel-chat", title: "Chat panel", level: 3 },
   { id: "panel-browse", title: "Browse panel", level: 3 },
   { id: "panel-connection", title: "Connection panel", level: 3 },
-  { id: "panel-brain", title: "Cluster brain panel", level: 3 },
   { id: "multi-select", title: "Multi-select", level: 2 },
   { id: "keyboard-shortcuts", title: "Keyboard shortcuts", level: 2 },
 ];
@@ -19,7 +18,6 @@ function PanelTypesIllustration() {
     { label: "Chat", icon: "M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z", color: "0.12" },
     { label: "Browse", icon: "M3 3h18v18H3V3zm2 4h14M7 3v18", color: "0.10" },
     { label: "Connect", icon: "M13 2L3 14h9l-1 8 10-12h-9l1-8z", color: "0.12" },
-    { label: "Brain", icon: "M12 2a8 8 0 018 8c0 3-1.5 5-4 6.5V20h-8v-3.5C5.5 15 4 13 4 10a8 8 0 018-8z", color: "0.15" },
   ];
   return (
     <div className="flex gap-2">
@@ -126,13 +124,6 @@ export function CanvasSection() {
         Shows your API key and MCP server connection instructions. This panel is always
         present on your canvas and cannot be deleted. It is created automatically on first
         login.
-      </P>
-
-      <H3 id="panel-brain">Cluster brain panel</H3>
-      <P>
-        The persistent brain of a cluster. Displays synthesized instructions from all
-        member entries, plus any memories you have added. Auto-spawned when you create a
-        cluster, positioned to the right of the group.
       </P>
 
       <H2 id="multi-select">Multi-select</H2>

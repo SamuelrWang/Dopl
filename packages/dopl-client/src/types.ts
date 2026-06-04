@@ -165,8 +165,7 @@ export type CanvasPanelType =
   | "entry"
   | "chat"
   | "connection"
-  | "browse"
-  | "cluster-brain";
+  | "browse";
 
 export interface CanvasPanel {
   id: string;
@@ -193,35 +192,6 @@ export interface ClusterQueryResult {
     agents_md: string | null;
     manifest: Record<string, unknown> | null;
   }[];
-}
-
-export type MemoryScope = "workspace" | "personal";
-
-export interface BrainMemory {
-  id: string;
-  content: string;
-  scope?: MemoryScope;
-  /** True when the memory was authored by the calling user. */
-  is_mine?: boolean;
-}
-
-export interface BrainData {
-  instructions: string;
-  memories: BrainMemory[];
-  /**
-   * Monotonic counter bumped on every brain `instructions` change.
-   * Used by clients to detect stale local caches of the brain.
-   * Defaults to 1 for newly-minted brains, 0 for "no brain row exists
-   * yet" (an empty brain).
-   */
-  brain_version?: number;
-}
-
-export interface ClusterSkillParams {
-  slug: string;
-  name: string;
-  brain: BrainData;
-  entries: ClusterDetailEntry[];
 }
 
 export interface ClusterSummary {

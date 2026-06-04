@@ -26,12 +26,11 @@ import {
   SKILLS_PANEL_SIZE,
 } from "./types";
 import { useSpeechRecognition } from "@/shared/hooks/use-speech-recognition";
-import { useChatDrawer, useBrainDrawer } from "./chat-drawer-context";
+import { useChatDrawer } from "./chat-drawer-context";
 
 export function FixedInputBar() {
   const { state, dispatch } = useCanvas();
   const { isOpen: chatOpen, toggle: toggleChatDrawer } = useChatDrawer();
-  const { isOpen: brainOpen, toggle: toggleBrainDrawer } = useBrainDrawer();
   const [input, setInput] = useState("");
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -326,18 +325,6 @@ export function FixedInputBar() {
                 className="inline-flex items-center h-7 px-3 font-mono text-[10px] uppercase tracking-wider text-white/60 hover:text-white/95 bg-white/[0.04] hover:bg-white/[0.09] border border-white/[0.12] hover:border-white/[0.22] rounded-full transition-colors"
               >
                 Browse
-              </button>
-              {/* BRAIN pill — opens the fixed brain drawer */}
-              <button
-                onClick={toggleBrainDrawer}
-                aria-label="Toggle brain panel"
-                className={`inline-flex items-center h-7 px-3 font-mono text-[10px] uppercase tracking-wider rounded-full transition-colors border ${
-                  brainOpen
-                    ? "text-white/90 bg-white/[0.12] border-white/[0.25]"
-                    : "text-white/60 hover:text-white/95 bg-white/[0.04] hover:bg-white/[0.09] border-white/[0.12] hover:border-white/[0.22]"
-                }`}
-              >
-                Brain
               </button>
               {/* KNOWLEDGE pill — spawns a knowledge panel */}
               <button

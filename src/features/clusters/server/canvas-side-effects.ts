@@ -7,17 +7,16 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
  * `service.ts` to keep that file under the 500-line cap and to keep the
  * cluster CRUD readable.
  *
- * Create-side (`spawnClusterBrainPanel`) is non-fatal: a freshly created
- * cluster still works via MCP without the brain panel; a partial canvas
- * is acceptable.
+ * Create-side (`hydrateClusterGrouping`) is non-fatal: a freshly created
+ * cluster still works via MCP without the on-canvas grouping box; a
+ * partial canvas is acceptable.
  *
  * Delete-side (`tearDownClusterCanvasArtifacts`) THROWS on failure so
  * the cluster row delete is held back and the user can retry. If we
  * swallowed errors here, the cluster row would vanish while
  * `canvas_state.clusters[]` kept a dangling entry pointing at it,
- * surfacing as a broken card on the canvas. Both writes inside it are
- * idempotent (DELETE-by-id and UPSERT-with-pruned-array) so retry is
- * safe.
+ * surfacing as a broken card on the canvas. The write inside it is
+ * idempotent (UPSERT-with-pruned-array) so retry is safe.
  */
 
 export interface ClusterRef {
@@ -31,16 +30,13 @@ interface WorkspaceScope {
   userId: string;
 }
 
-const BRAIN_PANEL_PLACEHOLDER =
-  "_Brain not synthesized yet._\n\nAsk your connected Claude Code (or any Dopl-MCP-enabled agent) to call `get_skill_template` and run synthesis against this cluster's entries, then `update_cluster_brain` to save the result. Server-side auto-synthesis has been removed so you control exactly what lands in your skill.";
-
 /**
- * Spawn the cluster-brain canvas panel + hydrate the visual cluster
- * grouping in `canvas_state.clusters`. Both writes are non-fatal: the
- * cluster is fully usable via MCP even if these fail; only the on-canvas
- * box around member entries depends on them.
+ * Hydrate the visual cluster grouping in `canvas_state.clusters[]` so the
+ * canvas draws a box around the cluster's member entry panels. Non-fatal:
+ * the cluster is fully usable via MCP even if this fails; only the
+ * on-canvas box depends on it.
  */
-export async function spawnClusterBrainPanel(
+export async function hydrateClusterGrouping(
   scope: WorkspaceScope,
   cluster: ClusterRef,
   safeEntryIds: string[]
@@ -48,50 +44,6 @@ export async function spawnClusterBrainPanel(
   if (safeEntryIds.length === 0) return;
   const db = supabaseAdmin();
 
-  // Position: top-aligned with member entries, immediately to the right.
-  const { data: entryPanels } = await db
-    .from("canvas_panels")
-    .select("x, y, width")
-    .eq("workspace_id", scope.workspaceId)
-    .eq("panel_type", "entry")
-    .in("entry_id", safeEntryIds);
-
-  let brainX = 0;
-  let brainY = 0;
-  if (entryPanels && entryPanels.length > 0) {
-    const panels = entryPanels as { x: number; y: number; width: number }[];
-    brainX = Math.max(...panels.map((p) => p.x + (p.width ?? 380))) + 40;
-    brainY = Math.min(...panels.map((p) => p.y));
-  }
-
-  const brainPanelId = `brain-${cluster.id}`;
-  const { error: brainPanelError } = await db.from("canvas_panels").insert({
-    user_id: scope.userId,
-    workspace_id: scope.workspaceId,
-    panel_id: brainPanelId,
-    panel_type: "cluster-brain",
-    x: brainX,
-    y: brainY,
-    width: 480,
-    height: 400,
-    panel_data: {
-      clusterId: cluster.id,
-      clusterName: cluster.name,
-      instructions: BRAIN_PANEL_PLACEHOLDER,
-      memories: [],
-      status: "ready",
-      errorMessage: null,
-    },
-  });
-  if (brainPanelError) {
-    console.error(
-      `[clusters] Failed to spawn brain panel for cluster ${cluster.slug}:`,
-      brainPanelError.message
-    );
-    return;
-  }
-
-  // Hydrate canvas_state.clusters[] — drives the visual grouping box.
   const { data: entryPanelRows } = await db
     .from("canvas_panels")
     .select("panel_id, entry_id")
@@ -99,10 +51,9 @@ export async function spawnClusterBrainPanel(
     .eq("panel_type", "entry")
     .in("entry_id", safeEntryIds);
 
-  const entryPanelIds = (entryPanelRows ?? []).map(
+  const memberPanelIds = (entryPanelRows ?? []).map(
     (r) => (r as { panel_id: string }).panel_id
   );
-  const memberPanelIds = [...entryPanelIds, brainPanelId];
 
   const { data: stateRow } = await db
     .from("canvas_state")
@@ -145,9 +96,8 @@ export async function spawnClusterBrainPanel(
 }
 
 /**
- * Remove the cluster-brain canvas panel and prune the visual grouping
- * from `canvas_state.clusters`. Idempotent — safe to call when the
- * panel/state entry never existed.
+ * Prune the visual cluster grouping from `canvas_state.clusters`.
+ * Idempotent — safe to call when the state entry never existed.
  */
 export async function tearDownClusterCanvasArtifacts(
   scope: WorkspaceScope,
@@ -155,20 +105,6 @@ export async function tearDownClusterCanvasArtifacts(
   slug: string
 ): Promise<void> {
   const db = supabaseAdmin();
-
-  if (cluster) {
-    const { error: brainPanelError } = await db
-      .from("canvas_panels")
-      .delete()
-      .eq("workspace_id", scope.workspaceId)
-      .eq("panel_type", "cluster-brain")
-      .eq("panel_id", `brain-${cluster.id}`);
-    if (brainPanelError) {
-      throw new Error(
-        `Failed to delete brain panel for cluster ${slug}: ${brainPanelError.message}`
-      );
-    }
-  }
 
   const { data: stateRow, error: readError } = await db
     .from("canvas_state")

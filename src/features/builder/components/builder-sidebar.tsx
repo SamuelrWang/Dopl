@@ -3,10 +3,7 @@
 import { useCallback, useState, useRef, useEffect } from "react";
 import { useCanvas, useCanvasScope } from "@/features/canvas/canvas-store";
 import type { Cluster } from "@/features/canvas/types";
-import {
-  DEFAULT_PANEL_SIZE,
-  computePanelsBounds,
-} from "@/features/canvas/types";
+import { computePanelsBounds } from "@/features/canvas/types";
 
 interface BuilderSidebarProps {
   activeClusterId: string | null;
@@ -27,7 +24,6 @@ export function BuilderSidebar({
   const handleCreateCluster = useCallback(() => {
     const chatPanelId = `panel-${state.nextPanelId}`;
     const clusterId = `cluster-${state.nextClusterId}`;
-    const brainPanelId = `panel-${state.nextPanelId + 1}`;
 
     const bounds = computePanelsBounds(state.panels);
     const chatPos = bounds
@@ -49,16 +45,6 @@ export function BuilderSidebar({
       createdAt: new Date().toISOString(),
     };
     dispatch({ type: "CREATE_CLUSTER", cluster, moves: [] });
-
-    dispatch({
-      type: "CREATE_CLUSTER_BRAIN_PANEL",
-      id: brainPanelId,
-      clusterId,
-      clusterName: "New Cluster",
-      x: chatPos.x + DEFAULT_PANEL_SIZE.width + 32,
-      y: chatPos.y,
-      initialStatus: "ready",
-    });
 
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (workspaceId) headers["X-Workspace-Id"] = workspaceId;

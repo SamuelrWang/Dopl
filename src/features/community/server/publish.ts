@@ -9,8 +9,7 @@ import type {
 
 /**
  * Publish a user's cluster to the community gallery. Snapshots panel
- * positions, brain instructions, and kicks off an embedding generation
- * in the background.
+ * positions and kicks off an embedding generation in the background.
  *
  * Slug collision handling: generatePublishedSlug includes 4 random base36
  * chars (~1.6M combinations) so collisions are rare; the UNIQUE constraint
@@ -178,25 +177,6 @@ export async function publishCluster(
       .insert(panelRows);
 
     if (panelInsertError) throw panelInsertError;
-  }
-
-  // Snapshot brain instructions. maybeSingle so a cluster being
-  // published before any brain text was written returns null instead
-  // of 406 — the `if (brain?.instructions)` guard handles both.
-  const { data: brain } = await db
-    .from("cluster_brains")
-    .select("instructions")
-    .eq("cluster_id", clusterId)
-    .maybeSingle();
-
-  if (brain?.instructions) {
-    const { error: brainError } = await db
-      .from("published_cluster_brains")
-      .insert({
-        published_cluster_id: published.id,
-        instructions: brain.instructions,
-      });
-    if (brainError) throw brainError;
   }
 
   // Generate embedding for semantic search (fire-and-forget)

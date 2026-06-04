@@ -157,7 +157,6 @@ const TOOL_KIND_LABEL: Record<string, string> = {
   search_knowledge_base: "Searched Dopl catalog",
   get_entry_details: "Read catalog entry",
   list_workspace_clusters: "Listed clusters",
-  list_cluster_brain_memories: "Read cluster brain",
   list_workspace_knowledge_bases: "Listed knowledge bases",
   search_workspace_knowledge: "Searched workspace knowledge",
   read_knowledge_entry: "Read knowledge entry",

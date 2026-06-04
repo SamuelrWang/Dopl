@@ -3,7 +3,7 @@
  *
  * Split from the original 861-line monolith in P3b. Four topic-focused
  * sub-modules:
- *   publish.ts  — publishCluster (snapshot panels + brain + embed)
+ *   publish.ts  — publishCluster (snapshot panels + embed)
  *   query.ts    — listMyPublishedClusters, listPublishedClusters,
  *                 getPublishedCluster, searchPublishedClusters
  *   edit.ts     — updatePublishedCluster, deletePublishedCluster,

@@ -49,9 +49,8 @@ export interface AttachedSkillDTO {
 export interface CanvasContextPayload {
   scope: "cluster" | "canvas";
   clusterName?: string;
-  /** Enclosing cluster's slug — used to enforce "cluster-scoped chat
-   * can only edit its own cluster's brain". Absent when the chat is
-   * on the open canvas or the cluster hasn't been synced yet. */
+  /** Enclosing cluster's slug. Absent when the chat is on the open
+   * canvas or the cluster hasn't been synced yet. */
   clusterSlug?: string;
   panels: ContextPanelDTO[];
   /**
@@ -162,25 +161,6 @@ export function buildCanvasContextPrefix(ctx: CanvasContextPayload): string {
       ? "When the user asks about what's on their canvas or references panels they can see, answer from the context above. You can still call search_knowledge_base and get_entry_details for entries NOT on the canvas when relevant."
       : "When the user asks about things in the cluster, prefer answering from the context above. You can still call search_knowledge_base and get_entry_details for entries OUTSIDE the cluster when relevant."
   );
-
-  // Brain-editing guidance. The tools themselves enforce scope — this
-  // just tells the model what's reachable so it doesn't refuse valid
-  // requests or try calls it can't make.
-  if (ctx.scope === "cluster") {
-    if (ctx.clusterSlug) {
-      blocks.push(
-        `You can edit this cluster's brain directly via the cluster-brain tools (add_cluster_brain_memory, update_cluster_brain_memory, remove_cluster_brain_memory, rewrite_cluster_brain_instructions, list_cluster_brain_memories). The cluster_slug argument MUST be "${ctx.clusterSlug}" — you cannot edit any other cluster from here. Before calling update/remove tools, use list_cluster_brain_memories to learn memory IDs. When the user asks you to "remember" something for this cluster, use add_cluster_brain_memory. Prefer add over rewrite — rewriting replaces everything and is rarely the right move.`
-      );
-    } else {
-      blocks.push(
-        "This cluster hasn't finished syncing to the server yet, so brain-editing tools aren't available in this chat. If the user asks you to edit the brain, let them know it will be ready momentarily."
-      );
-    }
-  } else {
-    blocks.push(
-      "You can edit any of the workspace's clusters' brains via the cluster-brain tools. Call list_workspace_clusters to see available cluster slugs. Before calling update/remove tools, use list_cluster_brain_memories to learn memory IDs. When the user asks you to 'remember' something for a specific cluster, use add_cluster_brain_memory. Prefer add over rewrite — rewriting replaces everything and is rarely the right move."
-    );
-  }
 
   return blocks.join("\n\n") + "\n\n";
 }

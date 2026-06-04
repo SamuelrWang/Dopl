@@ -29,7 +29,7 @@ export interface McpEventInput {
 }
 
 // Keep JSONB columns reasonable. ~8KB per field is plenty for analytics
-// without bloating the DB on a large ingest or brain synthesis response.
+// without bloating the DB on a large ingest response.
 const MAX_PAYLOAD_CHARS = 8_000;
 
 function truncate(value: unknown): unknown {

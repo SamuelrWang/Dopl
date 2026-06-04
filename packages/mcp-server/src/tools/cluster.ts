@@ -22,15 +22,14 @@ const CLUSTER_DESCRIPTION = `Read and non-destructively modify Dopl clusters (cu
 - "list" — discover all clusters in the knowledge base. Cheap metadata call; run it proactively to show the user their workspace or to resolve a slug another op needs, rather than asking for a slug.
 - "get" — retrieve a cluster's metadata plus member entries, attached knowledge bases, and attached skills. Use before answering what's in a cluster or what KBs/skills it can access. KB attachments include an entries_index (read a body via op="read_knowledge_entry"); skill bodies are truncated (full procedure via op="read_skill"). For searching inside a cluster, use op="query".
 - "query" — semantic search scoped to the entries inside ONE cluster. Use when a cluster is already the focus and the user wants to find something within it — NOT for broad discovery (use the \`search_setups\` tool for cross-KB search). If you lack a slug, run op="list" first.
-- "create" — create a new cluster from entries already on the user's canvas. Use on "group these into a skill", "make a cluster for X", or when canvas panels have grown enough that clustering helps. Creates the cluster only — brain synthesis is YOUR job (the response returns the next-step chain). For adding one entry to an existing cluster, use op="add_entry".
-- "update" — rename a cluster or REPLACE its entry membership with a new set of entry IDs. Covers both structural edits and plain renames (pass just \`name\`). For adding a single entry without replacing the whole set, use op="add_entry" (less destructive). Does not regenerate the brain.
-- "add_entry" — add a single entry to an existing cluster to expand its membership. Brain is NOT auto-regenerated; follow up with \`dopl_brain(op='update_instructions')\` if the entry introduces a pattern the brain should reflect. To create a brand-new cluster, use op="create".
+- "create" — create a new cluster from entries already on the user's canvas. Use on "group these into a cluster", "make a cluster for X", or when canvas panels have grown enough that clustering helps. For adding one entry to an existing cluster, use op="add_entry".
+- "update" — rename a cluster or REPLACE its entry membership with a new set of entry IDs. Covers both structural edits and plain renames (pass just \`name\`). For adding a single entry without replacing the whole set, use op="add_entry" (less destructive).
+- "add_entry" — add a single entry to an existing cluster to expand its membership. To create a brand-new cluster, use op="create".
 - "read_knowledge_entry" — read the full body of one entry inside a knowledge base attached to the cluster. Find the (kb id, entry id) pair via op="get" first. 404s if the KB isn't attached or the entry doesn't exist.
 - "read_skill" — read the full body of every file (SKILL.md + supplementary) for a skill attached to the cluster. Find the skill_id via op="get" first. Use when the truncated body from op="get" isn't enough. 404s if the skill isn't attached.`;
 
 const CLUSTER_ADMIN_DESCRIPTION = `DESTRUCTIVE cluster operations — permanent and irreversible. Each op deletes data; confirm intent if the user's phrasing is at all ambiguous. Set \`op\` to one of:
-- "delete_cluster" — permanently delete a cluster grouping (and its brain + memories). Individual entries REMAIN in the KB and on the user's canvas; only the cluster is removed. Use when the user explicitly asks to drop a cluster.
-- "delete_memory" — permanently remove one specific memory from a cluster's brain by ID. Use when the user reverses a prior preference ("ignore that", "that's not true anymore") or says to drop a memory. Get the memory ID via \`dopl_brain(op='get')\` first. To REVISE a memory instead, use \`dopl_brain(op='update_memory')\`.
+- "delete_cluster" — permanently delete a cluster grouping. Individual entries REMAIN in the KB and on the user's canvas; only the cluster is removed. Use when the user explicitly asks to drop a cluster.
 - "delete_entry" — PERMANENTLY remove an entry from the knowledge base. Use only when the user explicitly asks. Irreversible — chunks, tags, sources, and the entry row are all dropped. Canvas panels owned by other users that reference it become missing-entry placeholders. Ask for confirmation before calling if intent is ambiguous.`;
 
 export function registerClusterTools(
@@ -167,16 +166,12 @@ export function registerClusterTools(
     CLUSTER_ADMIN_DESCRIPTION,
     {
       op: z
-        .enum(["delete_cluster", "delete_memory", "delete_entry"])
+        .enum(["delete_cluster", "delete_entry"])
         .describe("Destructive operation to perform."),
       slug: z
         .string()
         .optional()
-        .describe("op=delete_cluster/delete_memory: cluster slug."),
-      memory_id: z
-        .string()
-        .optional()
-        .describe("op=delete_memory: memory ID to delete."),
+        .describe("op=delete_cluster: cluster slug."),
       entry: z
         .string()
         .optional()
@@ -188,15 +183,6 @@ export function registerClusterTools(
           const miss = missingParams("delete_cluster", args, ["slug"]);
           if (miss) return miss;
           return opDeleteCluster(client, args.slug as string);
-        }
-        case "delete_memory": {
-          const miss = missingParams("delete_memory", args, ["slug", "memory_id"]);
-          if (miss) return miss;
-          return opDeleteMemory(
-            client,
-            args.slug as string,
-            args.memory_id as string,
-          );
         }
         case "delete_entry": {
           const miss = missingParams("delete_entry", args, ["entry"]);
@@ -352,25 +338,11 @@ async function opCreate(
   }
 
   const result = await client.createCluster(name, resolvedIds);
-
-  // Client-only synthesis: we no longer run the LLM server-side to
-  // populate the initial brain. The agent receives explicit next-step
-  // instructions and runs synthesis in its own context, then writes
-  // the result back via update_cluster_brain.
   const slug = result.slug;
-  const lines: string[] = [];
-  lines.push(`Created cluster **${result.name}** (slug: \`${slug}\`) with ${result.panel_count ?? resolvedIds.length} entries.`);
-  lines.push("");
-  lines.push(`The brain is empty — synthesis is your next step. Follow this chain:`);
-  lines.push("");
-  lines.push(`1. Call \`dopl_brain(op='template')\` to get the canonical synthesis prompt + expected output structure.`);
-  lines.push(`2. Call \`dopl_cluster({ op: "get", slug: "${slug}" })\` to pull the member entries' agents.md content (the raw material).`);
-  lines.push(`3. Run the synthesis prompt against that content IN YOUR CONTEXT. Produce a brain body in the canonical structure (When to use / Instructions / Step-by-step / Examples / Anti-patterns / References).`);
-  lines.push(`4. Call \`dopl_brain({ op: "update_instructions", slug: "${slug}", instructions: <your synthesized body> })\` to save it.`);
-  lines.push("");
-  lines.push(`Do not skip step 3 — a brain saved without structure will trigger a validation warning and produce a weak skill at invocation time.`);
 
-  return ok(lines.join("\n"));
+  return ok(
+    `Created cluster **${result.name}** (slug: \`${slug}\`) with ${result.panel_count ?? resolvedIds.length} entries.`
+  );
 }
 
 async function opUpdate(
@@ -415,7 +387,7 @@ async function opAddEntry(
   await client.updateCluster(slug, { entry_ids: updatedIds });
 
   return ok(
-    `Added **${label}** to cluster "${slug}" (now ${updatedIds.length} entries). Brain unchanged — if this entry introduces new patterns you want reflected in the cluster brain, edit it with \`dopl_brain(op='update_instructions')\`.`
+    `Added **${label}** to cluster "${slug}" (now ${updatedIds.length} entries).`
   );
 }
 
@@ -468,15 +440,6 @@ async function opDeleteCluster(
 ): Promise<ToolResponse> {
   await client.deleteCluster(slug);
   return ok(`Deleted cluster \`${slug}\`. Entries remain in the knowledge base.`);
-}
-
-async function opDeleteMemory(
-  client: DoplClient,
-  slug: string,
-  memory_id: string,
-): Promise<ToolResponse> {
-  await client.deleteClusterMemory(slug, memory_id);
-  return ok(`Deleted memory ${memory_id} from cluster "${slug}".`);
 }
 
 async function opDeleteEntry(

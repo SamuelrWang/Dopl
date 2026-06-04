@@ -4,6 +4,19 @@ All notable changes to `@dopl/client` are documented here. Format follows [Keep 
 
 ## [Unreleased]
 
+## [0.13.0] — 2026-06-04
+
+### Removed — BREAKING: cluster "brain" feature
+
+The cluster brain (synthesized instructions + memories) was removed from Dopl.
+
+- Removed `DoplClient` methods: `getClusterBrain`, `updateClusterBrain`,
+  `saveClusterMemory`, `updateClusterMemory`, `deleteClusterMemory`,
+  `getSkillTemplate`.
+- Removed types: `BrainData`, `BrainMemory`, `MemoryScope`,
+  `ClusterSkillParams`. Removed `"cluster-brain"` from `CanvasPanelType`.
+- `getClusterSkill` / `ClusterSkillFull` (the skill-files path) are unaffected.
+
 ## [0.3.0] — 2026-05-01
 
 ### Added

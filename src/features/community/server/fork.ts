@@ -6,7 +6,7 @@ import type { Cluster } from "@/features/canvas/types";
 
 /**
  * Fork (import) a published cluster into the current user's workspace:
- * creates a new `clusters` row, copies panels/brain, materializes
+ * creates a new `clusters` row, copies panels, materializes
  * `canvas_panels` rows the canvas loader can deserialize, registers
  * the new cluster in `canvas_state.clusters` JSONB so the canvas
  * outlines its grouping, records the fork attribution last (UNIQUE
@@ -56,7 +56,7 @@ export async function forkPublishedCluster(
   // `dbRowToPanel` expects every field in `panel_data` (readme, manifest,
   // thumbnail, tags, ...). Without these, panels render with empty bodies
   // even when the row passes validation.
-  const [entriesRes, tagRes, brainRes] = await Promise.all([
+  const [entriesRes, tagRes] = await Promise.all([
     entryIds.length > 0
       ? db
           .from("entries")
@@ -71,16 +71,10 @@ export async function forkPublishedCluster(
           .select("entry_id, tag_type, tag_value")
           .in("entry_id", entryIds)
       : Promise.resolve({ data: [], error: null }),
-    db
-      .from("published_cluster_brains")
-      .select("instructions")
-      .eq("published_cluster_id", pc.id)
-      .maybeSingle(),
   ]);
 
   if (entriesRes.error) throw entriesRes.error;
   if (tagRes.error) throw tagRes.error;
-  if (brainRes.error) throw brainRes.error;
 
   const entryById = new Map(
     (entriesRes.data ?? []).map((e) => [e.id, e] as const)
@@ -91,7 +85,6 @@ export async function forkPublishedCluster(
     list.push({ tag_type: t.tag_type, tag_value: t.tag_value });
     tagsByEntry.set(t.entry_id, list);
   }
-  const brain = brainRes.data;
 
   // Create a new cluster scoped to the active canvas. Slug uniqueness
   // is per-canvas — two canvases can each hold a "my-fork" cluster.
@@ -178,16 +171,6 @@ export async function forkPublishedCluster(
       );
       if (error) throw error;
     }
-  }
-
-  if (brain?.instructions) {
-    const { error: brainErr } = await db.from("cluster_brains").insert({
-      cluster_id: newCluster.id,
-      user_id: userId,
-      workspace_id: workspaceId,
-      instructions: brain.instructions,
-    });
-    if (brainErr) throw brainErr;
   }
 
   // Register the cluster in canvas_state.clusters JSONB so the canvas

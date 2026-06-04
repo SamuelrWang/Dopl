@@ -106,28 +106,6 @@ export interface BrowsePanelData extends BasePanelData {
 }
 
 /**
- * ClusterBrainPanelData — the persistent "brain" of a cluster. Auto-spawned
- * when a cluster is created. Contains synthesized instructions (merged from
- * entry agents.mds) and user memories (corrections/overrides that persist
- * across sessions). The AI reads this instead of raw entry agents.mds.
- */
-export interface ClusterBrainPanelData extends BasePanelData {
-  type: "cluster-brain";
-  /** Which cluster this brain belongs to */
-  clusterId: string;
-  /** Display name (mirrors cluster name) */
-  clusterName: string;
-  /** Synthesized agents.md — merged from all entry agents.mds in the cluster */
-  instructions: string;
-  /** User corrections/overrides that supplement or override instructions */
-  memories: string[];
-  /** Generation status */
-  status: "generating" | "ready" | "error";
-  /** Error message if synthesis failed */
-  errorMessage: string | null;
-}
-
-/**
  * KnowledgePanelData — workspace-scoped knowledge-bases browser. Hardcoded UI
  * for now; will sync with /api/knowledge/* in a later pass.
  */
@@ -193,7 +171,6 @@ export type Panel =
   | ConnectionPanelData
   | EntryPanelData
   | BrowsePanelData
-  | ClusterBrainPanelData
   | KnowledgePanelData
   | SkillsPanelData
   | KnowledgeBasePanelData
@@ -276,11 +253,6 @@ export const ENTRY_PANEL_SIZE = {
 
 export const BROWSE_PANEL_SIZE = {
   width: 1200,
-  height: 700,
-} as const;
-
-export const CLUSTER_BRAIN_PANEL_SIZE = {
-  width: 520,
   height: 700,
 } as const;
 
@@ -769,60 +741,6 @@ export type CanvasAction =
       type: "UPDATE_CLUSTER_PUBLISHED_SLUG";
       clusterId: string;
       publishedSlug: string | null;
-    }
-  | {
-      /** Spawn a cluster brain panel with initial "generating" status. */
-      type: "CREATE_CLUSTER_BRAIN_PANEL";
-      id: string;
-      clusterId: string;
-      clusterName: string;
-      x: number;
-      y: number;
-      /** Override the initial status. Defaults to "generating" for canvas,
-       *  but the builder passes "ready" so the brain starts idle. */
-      initialStatus?: "generating" | "ready";
-    }
-  | {
-      /** Set synthesized instructions and mark the brain as ready. */
-      type: "UPDATE_CLUSTER_BRAIN_INSTRUCTIONS";
-      panelId: string;
-      instructions: string;
-    }
-  | {
-      /** Manually edit the instructions text. */
-      type: "UPDATE_CLUSTER_BRAIN_INSTRUCTIONS_TEXT";
-      panelId: string;
-      instructions: string;
-    }
-  | {
-      /** Append a memory to the cluster brain. */
-      type: "ADD_CLUSTER_BRAIN_MEMORY";
-      panelId: string;
-      memory: string;
-    }
-  | {
-      /** Remove a memory by index. */
-      type: "REMOVE_CLUSTER_BRAIN_MEMORY";
-      panelId: string;
-      index: number;
-    }
-  | {
-      /**
-       * Replace the entire memories array atomically. Used by the
-       * realtime bridge: on any cluster_brain_memories event we
-       * refetch the full list (canvas state doesn't store memory IDs,
-       * so per-event index math isn't reliable) and dispatch this
-       * with the result.
-       */
-      type: "SET_CLUSTER_BRAIN_MEMORIES";
-      panelId: string;
-      memories: string[];
-    }
-  | {
-      /** Mark the brain as errored. */
-      type: "SET_CLUSTER_BRAIN_ERROR";
-      panelId: string;
-      errorMessage: string;
     }
   | { type: "HYDRATE"; state: CanvasState }
   | {

@@ -74,7 +74,7 @@ export const PATCH = withUserAuth(async (request: NextRequest, { userId, params 
 
 /**
  * DELETE /api/workspaces/[workspaceSlug] — owner-only. Cascades clusters / panels /
- * brain / memberships / invitations via FK ON DELETE CASCADE.
+ * memberships / invitations via FK ON DELETE CASCADE.
  */
 export const DELETE = withUserAuth(async (_request: NextRequest, { userId, params }: Ctx) => {
   try {

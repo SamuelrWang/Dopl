@@ -14,7 +14,7 @@ import type { CanvasPanel, DoplClient } from "@dopl/client";
 import { missingParams, type RegisterTool, type ToolResponse } from "./respond";
 
 const DESCRIPTION = `Manage the user's canvas — the workspace of saved knowledge-base entries. Set \`op\` to one of:
-- "list" — list every panel currently on the user's canvas. Use this when the user asks 'what's on my canvas?', 'show me my saved setups', or before operations that need to reason about the current workspace (e.g. deciding what belongs in a new cluster). Returns a mix of entry panels (the saved KB entries — title, slug, source_url) and system panels (chat, connection, browse, cluster-brain — the UI surfaces the user placed on their canvas). Entry panels are the ones relevant for clustering/add/remove operations; system panels are display-only.
+- "list" — list every panel currently on the user's canvas. Use this when the user asks 'what's on my canvas?', 'show me my saved setups', or before operations that need to reason about the current workspace (e.g. deciding what belongs in a new cluster). Returns a mix of entry panels (the saved KB entries — title, slug, source_url) and system panels (chat, connection, browse — the UI surfaces the user placed on their canvas). Entry panels are the ones relevant for clustering/add/remove operations; system panels are display-only.
 - "add_entry" — add ONE known knowledge-base entry to the user's canvas by slug or UUID. Use this when you already have the exact entry the user wants to save. For search + add in one step (the common case when the user says 'save some good options for X to my canvas'), use op="search_and_add" instead — it's a batch operation and much faster than looping through search hits.
 - "remove_entry" — take an entry off the user's canvas. The entry stays in the knowledge base — only the canvas panel is removed. Use when the user says 'clear this from my canvas', 'I don't need this anymore', or is pruning their workspace. For permanent deletion from the KB, use \`dopl_cluster_admin(op='delete_entry')\` instead (destructive, different scope).
 - "search_and_add" — search the KB and add the top N matches to the user's canvas in one round trip. THIS is the default for 'save some good options for X to my canvas' / 'build me a starter canvas about Y' / 'find and bookmark patterns for Z' — much faster than \`search_setups\` followed by N add_entry calls. For adding a specific known entry by slug, use op="add_entry".
@@ -92,9 +92,9 @@ async function opList(client: DoplClient): Promise<ToolResponse> {
 
   // Split by panel type so the entry list stays clean for the agent's
   // clustering/search decisions, while system panels (chat, connection,
-  // browse, cluster-brain) render underneath as a separate group. The
-  // backend stores panel_type; before this split, system panels rendered
-  // as "Untitled" alongside real entries and confused the agent.
+  // browse) render underneath as a separate group. The backend stores
+  // panel_type; before this split, system panels rendered as "Untitled"
+  // alongside real entries and confused the agent.
   const entryPanels = panels.filter((p) => p.panel_type === "entry");
   const systemPanels = panels.filter((p) => p.panel_type !== "entry");
 
@@ -227,7 +227,6 @@ function systemPanelLabel(type: CanvasPanel["panel_type"]): string {
     case "chat": return "Chat panel";
     case "connection": return "MCP connection panel";
     case "browse": return "Browse panel";
-    case "cluster-brain": return "Cluster brain panel";
     default: return "System panel";
   }
 }
@@ -241,7 +240,6 @@ function systemPanelDetail(panel: CanvasPanel): string | null {
     case "browse": return "the KB browse surface";
     case "connection": return "status of your connected MCP agent";
     case "chat": return "an in-canvas chat thread";
-    case "cluster-brain": return "a cluster brain viewer";
     default: return null;
   }
 }

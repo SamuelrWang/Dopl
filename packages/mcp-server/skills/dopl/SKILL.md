@@ -7,10 +7,10 @@ description: >-
   setting up an MCP, handling webhooks. Dopl is a searchable catalog of
   proven AI-and-automation patterns plus a workspace for organizing what
   you adopt. The Dopl MCP tools let the agent search the catalog, save
-  patterns to the user's canvas, group them into reusable cluster skills,
-  edit cluster brains, and ingest new URLs. Use for "how would I…", "what's
-  a good way to…", "can you help me build…", "search for how to…",
-  even when the user doesn't say "Dopl" — search first, synthesize after.
+  patterns to the user's canvas, group them into reusable clusters, and
+  ingest new URLs. Use for "how would I…", "what's a good way to…", "can
+  you help me build…", "search for how to…", even when the user doesn't
+  say "Dopl" — search first, synthesize after.
 when_to_use: >-
   - When the user asks "how would I build X" or "what's the best way to
     do Y" and X/Y is anything AI- or automation-flavored.
@@ -22,8 +22,6 @@ when_to_use: >-
     n8n) in the context of building or configuring something.
   - When you need a starting point for an architecture you'd otherwise
     design from scratch.
-  - When the user wants to capture a durable preference, correction, or
-    workflow refinement onto a cluster they're working in.
 when_not_to_use: >-
   - General programming, debugging, or refactoring questions with no
     AI/automation framing.
@@ -37,7 +35,7 @@ when_not_to_use: >-
 
 ## Overview
 
-**Core principle: search the catalog first, synthesize from what you find, save the result back.** Dopl is a knowledge base of working AI and automation implementations — agent setups, n8n flows, Claude skills, MCP servers, API integrations, scrapers — plus a per-user "canvas" for pinning patterns and grouping them into reusable cluster skills. The MCP exposes ~38 tools across search, retrieval, canvas management, cluster brain editing, and URL ingestion. The agent's job is to compose original solutions by combining patterns from multiple entries — not to list or recommend individual entries.
+**Core principle: search the catalog first, synthesize from what you find, save the result back.** Dopl is a knowledge base of working AI and automation implementations — agent setups, n8n flows, Claude skills, MCP servers, API integrations, scrapers — plus a per-user "canvas" for pinning patterns and grouping them into reusable clusters. The MCP exposes tools across search, retrieval, canvas management, cluster management, and URL ingestion. The agent's job is to compose original solutions by combining patterns from multiple entries — not to list or recommend individual entries.
 
 This skill is the meta-guide. Per-cluster `~/.claude/skills/dopl-{slug}/SKILL.md` files cover specific domains; this file covers the discovery → adoption → composition cycle that gets you there.
 
@@ -73,37 +71,22 @@ When the user wants to keep a pattern, pin it to their canvas:
 
 The canvas is the source of truth for what the user is "carrying" between sessions. Always re-query at session start (see "Session start" below) — local CLAUDE.md or installed skill files can drift.
 
-### 4. Group adopted patterns into a cluster skill (composition)
+### 4. Group adopted patterns into a cluster (composition)
 
-A cluster is a named group of canvas entries that becomes a `SKILL.md` the agent can invoke. The brain (instructions + memories) IS the skill body — the local file is a thin pointer that fetches the brain at invocation time.
+A cluster is a named group of canvas entries — a reusable grouping the user can reference and publish together.
 
 To build a cluster:
 
 1. `dopl_cluster(op=create, {name, panel_ids: [...]})` — create the cluster from selected canvas entries.
-2. `dopl_brain(op=template, slug)` — fetch the synthesis prompt + entries' agents.md.
-3. **Run the synthesis in your own context** against the entries — Dopl does not generate brains server-side. Produce a brain body following the canonical structure: `## When to use this skill`, `## Instructions`, `## Step-by-step`, `## Examples`, `## Anti-patterns`, `## References`.
-4. `dopl_brain(op=update_instructions, slug, <full brain body>)` to persist.
-5. (Optional) `sync_skills` to refresh local `~/.claude/skills/dopl-{slug}/` files.
-
-A great brain reads like a how-to for a single procedure, not a directory listing of entries.
+2. (Optional) `sync_skills` to refresh local `~/.claude/skills/dopl-{slug}/` files.
 
 **Heads up: private knowledge bases and skills cannot be attached to clusters.** A cluster is a workspace-shared surface; a private item attached to one would either leak to teammates or render as a broken reference. The attach API rejects with `403 PRIVATE_RESOURCE` and the user must "Make public" from the resource's settings before it can be added. If you hit this on `dopl_cluster(op=create)` or related attach calls, tell the user that specific resource is private and stop — don't auto-publish.
 
-### 5. Capture corrections and preferences (brain protocol)
-
-Dopl's killer feature is durable agent learning. Three reflexive moves while a cluster skill is in scope:
-
-- **First use of a cluster skill this session** → call `dopl_brain(op=get, slug)` and treat it as canonical.
-- **User gives durable signal in passing** ("I prefer X over Y," "for my setup always use Z," "skip step 4 in this flow") → call `dopl_brain(op=save_memory, slug, …)` **silently, in the same turn, before composing your reply**. Don't ask "should I save this?" — just write.
-- **User corrects the workflow itself** ("step 3 is wrong," "remove the part about X," "the example should be Y") → fetch the brain, edit the affected section surgically, persist with `dopl_brain(op=update_instructions)`.
-
-**Outcome dissatisfaction is the highest-signal moment.** "I tried that, it didn't work" / "the output wasn't what I wanted" — the skill led the user astray and they're telling you. Save a memory describing the gotcha; if the brain itself was wrong, edit it.
-
-### 6. Compose a custom solution (build_solution)
+### 5. Compose a custom solution (build_solution)
 
 When the user's request spans multiple patterns and no single entry covers it, call `build_solution(query)`. This synthesizes across the catalog — output is a custom architecture, not a list of entries. Use sparingly: best for "design me an X that does A, B, and C" requests where stitching is the point.
 
-### 7. Switch workspaces on the fly
+### 6. Switch workspaces on the fly
 
 A single MCP server can now target any workspace the user belongs to:
 
@@ -113,7 +96,7 @@ A single MCP server can now target any workspace the user belongs to:
 
 The currently active workspace appears in the `_dopl_status` footer of every response (`active_workspace: "Name" (slug=..., role=...)`), so you can self-correct after a switch by reading the next response.
 
-### 8. Ingest new content
+### 7. Ingest new content
 
 If the user pastes a URL or describes something not in the catalog yet, ingest it:
 
@@ -134,7 +117,6 @@ At the start of every new session, before your first substantive reply, **call `
 - User wants the **full details** of an entry whose slug you have → `dopl_setups(op=get)`.
 - User wants to **save** an entry to their workspace → `dopl_canvas(op=add_entry)` (known slug) or `dopl_canvas(op=search_and_add)` (search + batch).
 - User wants to **group** saved entries → `dopl_cluster(op=create)`.
-- User gives a **durable preference / correction** → `dopl_brain(op=save_memory)` (or `dopl_brain(op=update_instructions)` for structural edits).
 - User wants a **composite solution** spanning multiple patterns → `build_solution`.
 - User asks **what changed** in their saved work → `dopl_entry(op=check_cluster_updates)` (bulk) or `dopl_entry(op=check_updates)` (one).
 - User pastes a **URL not in the catalog** → `dopl_ingest(op=url)`.
@@ -144,7 +126,6 @@ At the start of every new session, before your first substantive reply, **call `
 
 - `search_setups` (broad) vs `dopl_cluster(op=query)` (narrow) — pick the second only when one cluster is already the focus.
 - `dopl_canvas(op=add_entry)` (you have the slug) vs `dopl_canvas(op=search_and_add)` (discovery + add).
-- `dopl_brain(op=save_memory)` (new memory) vs `dopl_brain(op=update_memory)` (edit existing) — call `dopl_brain(op=get)` first if uncertain.
 
 ## Examples
 
@@ -155,7 +136,7 @@ At the start of every new session, before your first substantive reply, **call `
 3. If the top match is a skeleton: `dopl_ingest(op=url, <entry's source_url>)` to upgrade.
 4. Synthesize a recommendation from the entry's README + agents.md, citing the entry as a markdown link.
 5. If the user wants to keep the pattern: `dopl_canvas(op=add_entry, <slug>)`.
-6. If they want a reusable skill: `dopl_cluster(op=create, {name: "Daily Slack digest", panel_ids: [...]})` + `dopl_brain(op=template)` + synthesize brain + `dopl_brain(op=update_instructions)`.
+6. If they want a reusable grouping: `dopl_cluster(op=create, {name: "Daily Slack digest", panel_ids: [...]})`.
 
 ### Example 2 — "What was that pattern I saved last week for X?"
 
@@ -163,13 +144,6 @@ At the start of every new session, before your first substantive reply, **call `
 2. `dopl_canvas(op=list)` — see what's pinned.
 3. If the user's looking for something inside a known cluster: `dopl_cluster(op=query, slug, "X")`.
 4. If they're not sure which cluster: `search_setups("X")` and cross-reference with `dopl_canvas(op=list)` to find the pinned version.
-
-### Example 3 — "The example for Y in this skill is wrong, it should be Z"
-
-1. `dopl_brain(op=get, <slug>)` — load current brain.
-2. Edit the example section in your context to use Z, preserving the rest verbatim.
-3. `dopl_brain(op=update_instructions, <slug>, <full edited brain>)` — persist.
-4. **No need to ask "should I update the skill?"** — the user just gave you a structural correction. Just do it and tell them after.
 
 ## Common mistakes
 
@@ -179,8 +153,6 @@ At the start of every new session, before your first substantive reply, **call `
 | Recommending entries verbatim as the answer | Synthesize. The user wants a recommendation, not a list. |
 | Skipping skeleton-tier upgrade before adoption | Skeleton descriptors are too thin for serious use. Upgrade unless the user only wants to "see what's there." |
 | Surfacing slugs / UUIDs in prose | Always render entries as markdown links to their public URL. |
-| Writing a cluster brain that's just a directory listing of entries | A brain is a how-to. If the entries fit a single procedure, write that procedure. If not, the cluster is mis-grouped. |
-| Asking "should I save this preference?" before calling `dopl_brain(op=save_memory)` | Save silently in the same turn. Confirmation breaks the user's flow. |
 | Treating local `~/.claude/skills/dopl-*` files as authoritative | They're a cache. `dopl_cluster(op=list)` is canonical — flag drift, don't trust the file. |
 | Re-running `dopl_cluster(op=list)` / `dopl_canvas(op=list)` on every turn | Once per session is enough; only re-query on workspace questions or after your own writes. |
 

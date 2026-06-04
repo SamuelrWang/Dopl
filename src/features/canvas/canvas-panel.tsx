@@ -20,7 +20,6 @@ import { ChatPanelBody } from "@/features/chat/components/chat-panel";
 import { ConnectionPanelBody } from "./panels/connection-panel";
 import { EntryPanelBody } from "./panels/entry-panel";
 import { BrowsePanelBody } from "./panels/browse/browse-panel";
-import { ClusterBrainPanel } from "./panels/cluster-brain/cluster-brain-panel";
 import { KnowledgePanelBody } from "./panels/knowledge/knowledge-panel";
 import { SkillsPanelBody } from "./panels/skills/skills-panel";
 import { KnowledgeBasePanelBody } from "./panels/knowledge-base/knowledge-base-panel";
@@ -96,9 +95,7 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
           ? `Entry · ${panel.title}`
           : panel.type === "browse"
             ? "Browse Entries"
-            : panel.type === "cluster-brain"
-              ? `Brain · ${panel.clusterName}`
-              : panel.type === "knowledge"
+            : panel.type === "knowledge"
                 ? "Knowledge Bases"
                 : panel.type === "skills"
                   ? "Skills"
@@ -266,7 +263,6 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
         {panel.type === "connection" && <ConnectionPanelBody panel={panel} />}
         {panel.type === "entry" && <EntryPanelBody panel={panel} />}
         {panel.type === "browse" && <BrowsePanelBody panel={panel} />}
-        {panel.type === "cluster-brain" && <ClusterBrainPanel panel={panel} />}
         {panel.type === "knowledge" && <KnowledgePanelBody panel={panel} />}
         {panel.type === "skills" && <SkillsPanelBody panel={panel} />}
         {panel.type === "knowledge-base" && <KnowledgeBasePanelBody panel={panel} />}

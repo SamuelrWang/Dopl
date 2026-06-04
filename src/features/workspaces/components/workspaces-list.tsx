@@ -36,8 +36,8 @@ export function WorkspacesList({ initial }: { initial: Workspace[] }) {
         <div>
           <h1 className="text-2xl font-semibold text-white">Workspaces</h1>
           <p className="text-sm text-white/50 mt-1">
-            Each workspace is a separate workspace — its own clusters, brain,
-            and chat history.
+            Each workspace is a separate workspace — its own clusters and
+            chat history.
           </p>
         </div>
         <button
@@ -116,8 +116,8 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
     <div className="rounded-lg bg-white/[0.02] border border-dashed border-white/[0.12] p-10 flex flex-col items-center text-center">
       <h2 className="text-base font-medium text-white">No workspaces yet</h2>
       <p className="text-sm text-white/50 mt-1 max-w-sm">
-        Create your first workspace to start gathering setups, building a
-        cluster, and shaping its brain.
+        Create your first workspace to start gathering setups and building
+        clusters.
       </p>
       <button
         type="button"

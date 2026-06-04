@@ -18,7 +18,6 @@ import { useLayoutSnapshot } from "@/features/canvas/use-layout-snapshot";
 import { Canvas } from "@/features/canvas/canvas";
 import { FixedInputBar } from "@/features/canvas/fixed-input-bar";
 import { FixedChatPanel } from "@/features/canvas/fixed-chat-panel";
-import { FixedBrainPanel } from "@/features/canvas/fixed-brain-panel";
 import { DrawerProvider } from "@/features/canvas/chat-drawer-context";
 import { PaywallGate } from "@/features/billing/components/paywall-gate";
 import type { CanvasState } from "@/features/canvas/types";
@@ -84,7 +83,6 @@ export default function CanvasClientShell({
         <CanvasPortal />
         <FixedInputBar />
         <FixedChatPanel />
-        <FixedBrainPanel />
         <PaywallGate />
       </DrawerProvider>
     </CanvasProvider>

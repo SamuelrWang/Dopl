@@ -10,19 +10,19 @@ server; shipping them here just saves you the work of writing them yourself.
 
 ---
 
-## 1. Auto-sync skills after canvas/brain changes
+## 1. Auto-sync skills after canvas changes
 
-After you create a cluster, add an entry, save a memory, or edit a brain, the
-on-disk skill file at `~/.claude/skills/dopl-{slug}/SKILL.md` drifts from the
-DB state until `sync_skills` runs. This hook runs it automatically after any
-mutation that would change the skill content.
+After you create a cluster or add an entry, the on-disk skill file at
+`~/.claude/skills/dopl-{slug}/SKILL.md` drifts from the DB state until
+`sync_skills` runs. This hook runs it automatically after any mutation that
+would change the skill content.
 
 ```json
 {
   "hooks": {
     "PostToolUse": [
       {
-        "matcher": "mcp__dopl__canvas_create_cluster|mcp__dopl__add_entry_to_cluster|mcp__dopl__save_cluster_memory|mcp__dopl__update_cluster_brain|mcp__dopl__update_cluster_memory|mcp__dopl__delete_cluster_memory|mcp__dopl__update_cluster",
+        "matcher": "mcp__dopl__canvas_create_cluster|mcp__dopl__add_entry_to_cluster|mcp__dopl__update_cluster",
         "hooks": [
           {
             "type": "command",
@@ -36,8 +36,8 @@ mutation that would change the skill content.
 ```
 
 **Tradeoff:** adds a brief prompt after every cluster mutation. If that's too
-noisy, keep only the `canvas_create_cluster` and `update_cluster_brain`
-matchers — those are the two where drift hurts most.
+noisy, keep only the `canvas_create_cluster` matcher — that's where drift
+hurts most.
 
 If you prefer the hook to actually *run* `sync_skills` instead of suggesting
 it, swap the `command` for a curl call against your deployment. Be aware that
@@ -118,8 +118,8 @@ After adding any of these to your settings file:
 1. Fully restart Claude Code so hooks are re-registered (hooks are loaded at
    session start).
 2. Run a test that should trigger the hook: for hook #1, run
-   `save_cluster_memory` against any cluster. For hook #3, type a prompt
-   containing one of the keywords.
+   `canvas_create_cluster` (or add an entry to a cluster). For hook #3, type a
+   prompt containing one of the keywords.
 3. Check the hook fired by looking for the suggestion text or additional
    context in the turn's output.
 

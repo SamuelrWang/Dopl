@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
-type DrawerType = "chat" | "brain" | null;
+type DrawerType = "chat" | null;
 
 const PANEL_WIDTH = 520;
 const EDGE_GAP = 16;
@@ -10,33 +10,24 @@ const EDGE_GAP = 16;
 interface DrawerContextValue {
   activeDrawer: DrawerType;
   openChat: () => void;
-  openBrain: () => void;
   close: () => void;
   toggleChat: () => void;
-  toggleBrain: () => void;
 }
 
 const DrawerContext = createContext<DrawerContextValue>({
   activeDrawer: null,
   openChat: () => {},
-  openBrain: () => {},
   close: () => {},
   toggleChat: () => {},
-  toggleBrain: () => {},
 });
 
 export function DrawerProvider({ children }: { children: React.ReactNode }) {
   const [activeDrawer, setActiveDrawer] = useState<DrawerType>(null);
 
   const openChat = useCallback(() => setActiveDrawer("chat"), []);
-  const openBrain = useCallback(() => setActiveDrawer("brain"), []);
   const close = useCallback(() => setActiveDrawer(null), []);
   const toggleChat = useCallback(
     () => setActiveDrawer((v) => (v === "chat" ? null : "chat")),
-    [],
-  );
-  const toggleBrain = useCallback(
-    () => setActiveDrawer((v) => (v === "brain" ? null : "brain")),
     [],
   );
 
@@ -54,9 +45,7 @@ export function DrawerProvider({ children }: { children: React.ReactNode }) {
   }, [activeDrawer]);
 
   return (
-    <DrawerContext.Provider
-      value={{ activeDrawer, openChat, openBrain, close, toggleChat, toggleBrain }}
-    >
+    <DrawerContext.Provider value={{ activeDrawer, openChat, close, toggleChat }}>
       {children}
     </DrawerContext.Provider>
   );
@@ -73,20 +62,6 @@ export function useChatDrawer() {
       toggle: toggleChat,
     }),
     [activeDrawer, openChat, close, toggleChat],
-  );
-}
-
-/** Hook for the brain drawer. */
-export function useBrainDrawer() {
-  const { activeDrawer, openBrain, close, toggleBrain } = useContext(DrawerContext);
-  return useMemo(
-    () => ({
-      isOpen: activeDrawer === "brain",
-      open: openBrain,
-      close,
-      toggle: toggleBrain,
-    }),
-    [activeDrawer, openBrain, close, toggleBrain],
   );
 }
 

@@ -153,9 +153,6 @@ export default function PricingPage() {
                 <Check /> <span>Canvas, clusters, and skill sync</span>
               </li>
               <li className="flex items-start gap-2.5 text-sm text-white/75 leading-6">
-                <Check /> <span>Cluster brain synthesis</span>
-              </li>
-              <li className="flex items-start gap-2.5 text-sm text-white/75 leading-6">
                 <Check /> <span>Auto-update tracking for GitHub sources</span>
               </li>
             </ul>

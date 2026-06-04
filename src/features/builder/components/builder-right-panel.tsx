@@ -2,38 +2,24 @@
 
 import { useMemo, useState } from "react";
 import { usePanelsContext } from "@/features/canvas/canvas-store";
-import { ClusterBrainPanel } from "@/features/canvas/panels/cluster-brain/cluster-brain-panel";
 import { MarkdownMessage } from "@/shared/design/markdown-message";
-import type {
-  Cluster,
-  EntryPanelData,
-  ClusterBrainPanelData,
-} from "@/features/canvas/types";
+import type { Cluster, EntryPanelData } from "@/features/canvas/types";
 
 interface BuilderRightPanelProps {
   cluster: Cluster | null;
 }
 
-type RightTab = "brain" | "entries";
-
 export function BuilderRightPanel({ cluster }: BuilderRightPanelProps) {
   const { panels } = usePanelsContext();
-  const [activeTab, setActiveTab] = useState<RightTab>("brain");
 
-  const { entryPanels, brainPanel } = useMemo(() => {
-    if (!cluster) return { entryPanels: [], brainPanel: null };
-
+  const entryPanels = useMemo(() => {
+    if (!cluster) return [];
     const entries: EntryPanelData[] = [];
-    let brain: ClusterBrainPanelData | null = null;
-
     for (const pid of cluster.panelIds) {
       const p = panels.find((pp) => pp.id === pid);
-      if (!p) continue;
-      if (p.type === "entry") entries.push(p);
-      if (p.type === "cluster-brain") brain = p;
+      if (p?.type === "entry") entries.push(p);
     }
-
-    return { entryPanels: entries, brainPanel: brain };
+    return entries;
   }, [cluster, panels]);
 
   if (!cluster) {
@@ -46,17 +32,9 @@ export function BuilderRightPanel({ cluster }: BuilderRightPanelProps) {
     );
   }
 
-  const tabs: { key: RightTab; label: string }[] = [
-    { key: "brain", label: "Brain" },
-    {
-      key: "entries",
-      label: entryPanels.length > 0 ? `Entries (${entryPanels.length})` : "Entries",
-    },
-  ];
-
   return (
     <div className="flex flex-col h-full">
-      {/* Header: cluster name + tabs in one compact bar */}
+      {/* Header: cluster name + entry count */}
       <div className="shrink-0">
         <div
           className="h-10 flex items-center gap-4 px-4"
@@ -68,56 +46,16 @@ export function BuilderRightPanel({ cluster }: BuilderRightPanelProps) {
 
           <div className="h-3 w-px bg-white/[0.08]" />
 
-          <div className="flex items-center gap-0">
-            {tabs.map((tab) => (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                className={`relative h-10 px-2 text-[10px] font-mono uppercase tracking-wider transition-colors ${
-                  activeTab === tab.key
-                    ? "text-white/80"
-                    : "text-white/30 hover:text-white/50"
-                }`}
-              >
-                {tab.label}
-                {activeTab === tab.key && (
-                  <div className="absolute bottom-0 left-1 right-1 h-[2px] rounded-full bg-[var(--accent-primary)]" />
-                )}
-              </button>
-            ))}
-          </div>
+          <span className="font-mono text-[10px] uppercase tracking-wider text-white/80">
+            {entryPanels.length > 0 ? `Entries (${entryPanels.length})` : "Entries"}
+          </span>
         </div>
       </div>
 
       {/* Content */}
       <div className="flex-1 min-h-0 overflow-hidden">
-        {activeTab === "brain" && <BrainTab brainPanel={brainPanel} />}
-        {activeTab === "entries" && <EntriesTab entries={entryPanels} />}
+        <EntriesTab entries={entryPanels} />
       </div>
-    </div>
-  );
-}
-
-// ── Brain tab ─────────────────────────────────────────────────────
-
-function BrainTab({
-  brainPanel,
-}: {
-  brainPanel: ClusterBrainPanelData | null;
-}) {
-  if (!brainPanel) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <p className="text-[11px] text-white/25 font-mono uppercase tracking-wider">
-          No brain panel
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="h-full flex flex-col">
-      <ClusterBrainPanel panel={brainPanel} />
     </div>
   );
 }

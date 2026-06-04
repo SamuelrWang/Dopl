@@ -3,14 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { CanvasContextPayload } from "../canvas-context";
 import type { ToolHandler, ToolResult } from "./types";
 import { executeSearchKnowledgeBase, executeGetEntryDetails } from "./search";
-import {
-  executeListWorkspaceClusters,
-  executeListClusterBrainMemories,
-  executeAddClusterBrainMemory,
-  executeUpdateClusterBrainMemory,
-  executeRemoveClusterBrainMemory,
-  executeRewriteClusterBrainInstructions,
-} from "./brain";
+import { executeListWorkspaceClusters } from "./clusters";
 import {
   executeListWorkspaceKnowledgeBases,
   executeSearchWorkspaceKnowledge,
@@ -41,8 +34,7 @@ import {
  * route handler reads this off the conversation row and passes it
  * through to every tool dispatch so each tool can narrow its query.
  *
- * Currently consumed by the workspace-knowledge and skills tools. The
- * cluster-brain tools accept it for future parity (no-op today).
+ * Currently consumed by the workspace-knowledge and skills tools.
  */
 export interface ChatScopeFilters
   extends KnowledgeScopeFilters,
@@ -86,85 +78,11 @@ const CLUSTER_READ_TOOLS: Anthropic.Tool[] = [
   {
     name: "list_workspace_clusters",
     description:
-      "List the workspace's clusters with names, slugs, and panel counts. Use this when you need to know what clusters exist before reading their brain memories or referencing them in a synthesis.",
+      "List the workspace's clusters with names, slugs, and panel counts. Use this when you need to know what clusters exist before referencing them in a synthesis.",
     input_schema: {
       type: "object" as const,
       properties: {},
       required: [],
-    },
-  },
-  {
-    name: "list_cluster_brain_memories",
-    description:
-      "Fetch a cluster's brain — the synthesized instructions text plus the list of memories (workspace-shared and the calling user's personal memories). Use this when synthesizing context about a cluster's domain.",
-    input_schema: {
-      type: "object" as const,
-      properties: {
-        cluster_slug: { type: "string", description: "The cluster's slug." },
-      },
-      required: ["cluster_slug"],
-    },
-  },
-];
-
-const CLUSTER_WRITE_TOOLS: Anthropic.Tool[] = [
-  {
-    name: "add_cluster_brain_memory",
-    description:
-      "Append a new memory to a cluster's brain. Use for preferences/corrections the user tells you to remember about this cluster's domain (e.g., 'prefer Resend over SendGrid', 'always ask before scraping'). Keep the memory short and imperative. Set scope='personal' when the memory is private to this user (their own setup, env, machine, alias) — those memories are visible only to them and never written to the shared canvas brain panel; default scope='workspace' shares with every member of the workspace.",
-    input_schema: {
-      type: "object" as const,
-      properties: {
-        cluster_slug: { type: "string", description: "The cluster's slug." },
-        content: { type: "string", description: "The memory text. Short, imperative." },
-        scope: {
-          type: "string",
-          enum: ["workspace", "personal"],
-          description:
-            "Visibility scope. 'workspace' (default) shares with every member; 'personal' is private to the calling user.",
-        },
-      },
-      required: ["cluster_slug", "content"],
-    },
-  },
-  {
-    name: "update_cluster_brain_memory",
-    description:
-      "Update the text of an existing memory. Call list_cluster_brain_memories first to find the memory_id. The memory must belong to the named cluster.",
-    input_schema: {
-      type: "object" as const,
-      properties: {
-        cluster_slug: { type: "string", description: "The cluster's slug." },
-        memory_id: { type: "string", description: "UUID of the memory to update." },
-        content: { type: "string", description: "New memory text." },
-      },
-      required: ["cluster_slug", "memory_id", "content"],
-    },
-  },
-  {
-    name: "remove_cluster_brain_memory",
-    description:
-      "Permanently delete a memory from a cluster's brain. Call list_cluster_brain_memories first to find the memory_id. The memory must belong to the named cluster.",
-    input_schema: {
-      type: "object" as const,
-      properties: {
-        cluster_slug: { type: "string", description: "The cluster's slug." },
-        memory_id: { type: "string", description: "UUID of the memory to delete." },
-      },
-      required: ["cluster_slug", "memory_id"],
-    },
-  },
-  {
-    name: "rewrite_cluster_brain_instructions",
-    description:
-      "Replace the cluster brain's instructions text wholesale. Destructive — you are overwriting the entire instructions body. Prefer add_cluster_brain_memory for incremental changes; only use rewrite for major restructuring. Call list_cluster_brain_memories first to read the current instructions so you can preserve what matters.",
-    input_schema: {
-      type: "object" as const,
-      properties: {
-        cluster_slug: { type: "string", description: "The cluster's slug." },
-        instructions: { type: "string", description: "New instructions body (replaces existing)." },
-      },
-      required: ["cluster_slug", "instructions"],
     },
   },
 ];
@@ -269,7 +187,7 @@ const ARTIFACT_TOOLS: Anthropic.Tool[] = [
   {
     name: "emit_context_file",
     description:
-      "Render a synthesized Context File artifact in the chat — a focused markdown bundle the user can copy or download to drop into an agent session. Use when the user asks for a summary / synthesis / 'context file' / 'everything about X'. Pull bits from across read tools (search_workspace_knowledge, read_skill_file, list_cluster_brain_memories, etc.) and curate; don't dump.",
+      "Render a synthesized Context File artifact in the chat — a focused markdown bundle the user can copy or download to drop into an agent session. Use when the user asks for a summary / synthesis / 'context file' / 'everything about X'. Pull bits from across read tools (search_workspace_knowledge, read_skill_file, list_workspace_clusters, etc.) and curate; don't dump.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -287,15 +205,14 @@ const ARTIFACT_TOOLS: Anthropic.Tool[] = [
 
 /**
  * Workspace-mode tool set — preserves the canvas chat surface (search +
- * cluster reads + cluster brain mutations) and adds the integration
- * action surface so the agent can run write actions on connected
- * providers (e.g. send a Gmail, post a Slack message, create a
- * Calendar event) without leaving the canvas chat.
+ * cluster reads) and adds the integration action surface so the agent
+ * can run write actions on connected providers (e.g. send a Gmail, post
+ * a Slack message, create a Calendar event) without leaving the canvas
+ * chat.
  */
 export const WORKSPACE_TOOLS: Anthropic.Tool[] = [
   ...SEARCH_TOOLS,
   ...CLUSTER_READ_TOOLS,
-  ...CLUSTER_WRITE_TOOLS,
   ...INTEGRATION_TOOLS,
 ];
 
@@ -330,11 +247,6 @@ const HANDLERS: Record<string, ToolHandler> = {
   search_knowledge_base: executeSearchKnowledgeBase,
   get_entry_details: executeGetEntryDetails,
   list_workspace_clusters: executeListWorkspaceClusters,
-  list_cluster_brain_memories: executeListClusterBrainMemories,
-  add_cluster_brain_memory: executeAddClusterBrainMemory,
-  update_cluster_brain_memory: executeUpdateClusterBrainMemory,
-  remove_cluster_brain_memory: executeRemoveClusterBrainMemory,
-  rewrite_cluster_brain_instructions: executeRewriteClusterBrainInstructions,
 };
 
 /**

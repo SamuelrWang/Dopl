@@ -49,8 +49,8 @@ export function CommunitySection() {
       <H2 id="publishing">Publishing clusters</H2>
       <P>
         Share your clusters with other Dopl users by publishing them to the Community hub.
-        Published clusters include the cluster name, description, brain instructions, and
-        all member entries (READMEs and agents.md files).
+        Published clusters include the cluster name, description, and all member entries
+        (READMEs and agents.md files).
       </P>
       <P>
         You can assign a category (marketing, development, automation, etc.) and the cluster

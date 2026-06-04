@@ -5,7 +5,6 @@ import type {
   CanvasState,
   ChatPanelData,
   Cluster,
-  ClusterBrainPanelData,
   ConnectionPanelData,
   EntryPanelData,
   KnowledgeBasePanelData,
@@ -17,7 +16,6 @@ import type {
 import {
   ARTIFACT_PANEL_SIZE,
   BROWSE_PANEL_SIZE,
-  CLUSTER_BRAIN_PANEL_SIZE,
   CONNECTION_PANEL_SIZE,
   ENTRY_PANEL_SIZE,
   KNOWLEDGE_BASE_PANEL_SIZE,
@@ -844,104 +842,6 @@ export function reducer(state: CanvasState, action: CanvasAction): CanvasState {
         panels: state.panels.map((p) =>
           p.id === action.panelId && p.type === "artifact"
             ? { ...p, title: action.title }
-            : p
-        ),
-      };
-
-    // ── Cluster brain panel actions ─────────────────────────────────
-
-    case "CREATE_CLUSTER_BRAIN_PANEL": {
-      const { x, y } = findNonOverlappingPosition(
-        action.x,
-        action.y,
-        CLUSTER_BRAIN_PANEL_SIZE.width,
-        CLUSTER_BRAIN_PANEL_SIZE.height,
-        state.panels
-      );
-      const newPanel: ClusterBrainPanelData = {
-        id: action.id,
-        type: "cluster-brain",
-        clusterId: action.clusterId,
-        clusterName: action.clusterName,
-        x,
-        y,
-        width: CLUSTER_BRAIN_PANEL_SIZE.width,
-        height: CLUSTER_BRAIN_PANEL_SIZE.height,
-        instructions: "",
-        memories: [],
-        status: action.initialStatus ?? "generating",
-        errorMessage: null,
-      };
-      // Auto-join the brain panel to its cluster
-      const updatedClusters = state.clusters.map((c) =>
-        c.id === action.clusterId
-          ? { ...c, panelIds: [...c.panelIds, action.id] }
-          : c
-      );
-      return {
-        ...state,
-        panels: [...state.panels, newPanel],
-        clusters: updatedClusters,
-        nextPanelId: state.nextPanelId + 1,
-      };
-    }
-
-    case "UPDATE_CLUSTER_BRAIN_INSTRUCTIONS":
-      return {
-        ...state,
-        panels: state.panels.map((p) =>
-          p.id === action.panelId && p.type === "cluster-brain"
-            ? { ...p, instructions: action.instructions, status: "ready" as const, errorMessage: null }
-            : p
-        ),
-      };
-
-    case "UPDATE_CLUSTER_BRAIN_INSTRUCTIONS_TEXT":
-      return {
-        ...state,
-        panels: state.panels.map((p) =>
-          p.id === action.panelId && p.type === "cluster-brain"
-            ? { ...p, instructions: action.instructions }
-            : p
-        ),
-      };
-
-    case "ADD_CLUSTER_BRAIN_MEMORY":
-      return {
-        ...state,
-        panels: state.panels.map((p) =>
-          p.id === action.panelId && p.type === "cluster-brain"
-            ? { ...p, memories: [...p.memories, action.memory] }
-            : p
-        ),
-      };
-
-    case "REMOVE_CLUSTER_BRAIN_MEMORY":
-      return {
-        ...state,
-        panels: state.panels.map((p) =>
-          p.id === action.panelId && p.type === "cluster-brain"
-            ? { ...p, memories: p.memories.filter((_, i) => i !== action.index) }
-            : p
-        ),
-      };
-
-    case "SET_CLUSTER_BRAIN_MEMORIES":
-      return {
-        ...state,
-        panels: state.panels.map((p) =>
-          p.id === action.panelId && p.type === "cluster-brain"
-            ? { ...p, memories: action.memories }
-            : p
-        ),
-      };
-
-    case "SET_CLUSTER_BRAIN_ERROR":
-      return {
-        ...state,
-        panels: state.panels.map((p) =>
-          p.id === action.panelId && p.type === "cluster-brain"
-            ? { ...p, status: "error" as const, errorMessage: action.errorMessage }
             : p
         ),
       };

@@ -40,7 +40,6 @@ export const DOC_SECTIONS: DocSection[] = [
     title: "Clusters",
     items: [
       { id: "creating-clusters", title: "Creating clusters" },
-      { id: "cluster-brain", title: "Cluster brain" },
       { id: "skill-files", title: "Skill files" },
     ],
   },

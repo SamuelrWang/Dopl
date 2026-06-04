@@ -4,8 +4,8 @@ import { forkPublishedCluster } from "@/features/community/server/service";
 
 /**
  * POST /api/community/[slug]/fork — Import a published cluster into the
- * caller's active canvas. Creates a new cluster with copied entries and
- * brain. Tracks lineage. Caller must have ≥ editor role on the active
+ * caller's active canvas. Creates a new cluster with copied entries.
+ * Tracks lineage. Caller must have ≥ editor role on the active
  * canvas (forks are creative writes).
  */
 const handlePost = withWorkspaceAuth(

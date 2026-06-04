@@ -11,7 +11,6 @@ import { registerSkillTools } from "./tools/skills.js";
 import { registerIntegrationTools } from "./tools/integrations.js";
 import { registerSetupsTools } from "./tools/setups.js";
 import { registerClusterTools } from "./tools/cluster.js";
-import { registerBrainTools } from "./tools/brain.js";
 import { registerEntryTools } from "./tools/entry.js";
 import { registerCanvasTools } from "./tools/canvas.js";
 import { registerIngestTools } from "./tools/ingest.js";
@@ -58,8 +57,7 @@ When the user mentions a workspace by name ("in my acme workspace, …"), prefer
 - User wants to **find or build** something AI/automation-shaped → \`search_setups\` (cross-KB) or \`dopl_cluster(op='query')\` (if a cluster is already in scope)
 - User wants the **full details** of an entry you already have a slug/UUID for → \`dopl_setups(op='get')\`
 - User wants to **save** a specific entry to their workspace → \`dopl_canvas(op='add_entry')\` (one entry by slug) or \`dopl_canvas(op='search_and_add')\` (search + batch add in one shot)
-- User wants to **group** saved entries into a reusable skill → \`dopl_cluster(op='create')\`
-- User gives you a **durable preference or correction** ("I prefer X over Y", "skip step Z") → \`dopl_brain(op='save_memory')\` on the relevant cluster
+- User wants to **group** saved entries into a reusable cluster → \`dopl_cluster(op='create')\`
 - User wants to **compose an original solution** spanning multiple patterns → \`build_solution\`
 - User asks **has anything changed** in their saved work → \`dopl_entry(op='check_cluster_updates')\` (bulk) or \`dopl_entry(op='check_updates')\` (one)
 
@@ -81,9 +79,7 @@ These tool pairs overlap and picking the wrong one wastes a round trip:
 
 - \`search_setups\` (cross-KB, broad) vs \`dopl_cluster(op='query')\` (scoped to one cluster, narrow) — use the second only when a cluster is already the focus of the conversation.
 - \`dopl_canvas(op='add_entry')\` (you already have the slug) vs \`dopl_canvas(op='search_and_add')\` (search + batch) — use the second when the user's request implies discovery, not a known entry.
-- \`dopl_brain(op='save_memory')\` (NEW memory) vs \`dopl_brain(op='update_memory')\` (edit existing) — call \`dopl_brain(op='get')\` first if you're not sure whether a matching memory already exists.
 - \`dopl_entry(op='check_updates')\` (one entry) vs \`dopl_entry(op='check_cluster_updates')\` (every entry in a cluster) — use the bulk version for cluster-wide refresh.
-- \`dopl_brain(op='update_instructions')\` (edit synthesized instructions) vs \`dopl_brain(op='save_memory')\` (append a short preference) — use the memory path for short corrections, the brain edit path for structural changes.
 
 ## Skeleton entries — upgrade before handing off
 
@@ -134,7 +130,6 @@ Tell the user you're upgrading so they know why there's a pause.
 - **Deep dive** — Pull full implementation details (README, setup instructions, metadata) for any entry
 - **Build** — Compose a complete solution by combining patterns from multiple implementations
 - **Canvas** — Manage the user's workspace: add entries, organize into clusters, browse saved items
-- **Brain** — Read and edit cluster brains (synthesized instructions + memories) to capture durable preferences and corrections
 - **Workspace skills** — Procedural prompts the user authored in their workspace (distinct from cluster skill files above). Each workspace skill is a folder of \`.md\` files; \`SKILL.md\` is the canonical procedure. Call \`dopl_skill(op='list')\` at task boundaries to see if any apply, then \`dopl_skill(op='get')\` to load the bundle and follow SKILL.md. Skill bodies reference KBs via \`[label](dopl://kb/<slug>)\` markdown links — load the referenced KB content with \`dopl_kb(op='read_file')\` when you actually need it. **Authoring**: when the user asks you to build a skill, call \`dopl_skill(op='authoring_guide')\` first to load the framework, then \`dopl_skill(op='create')\` (with strong metadata) and \`dopl_skill(op='write_file')\`. Write access follows the caller's per-resource access in the workspace member matrix. Destructive ops (delete a skill or a skill file) live on the separate \`dopl_skill_admin\` tool.
 
 ## Linking entries
@@ -143,61 +138,11 @@ Every entry has a public URL of the form \`<host>/e/<slug>\`. Tool responses inc
 
 When a tool accepts an \`entry\` parameter, you may pass either the entry's slug or its UUID — the server resolves either.
 
-## Cluster brains are the skill itself
-
-A cluster brain IS the skill body that Claude Code executes against — the local \`SKILL.md\` file is a thin pointer that fetches the brain at invocation time. That makes brain quality = skill quality, 1:1. **All brain generation happens in YOUR context, not on Dopl's server.** The server returns prompts and templates; you run the synthesis.
-
-The canonical brain structure mirrors Claude Code's native skill-creator format. Every brain should have these sections (omit any you can't fill honestly):
-
-\`## When to use this skill\` — concrete trigger scenarios with user-prompt phrasings
-\`## Instructions\` — core guidance for executing the skill
-\`## Step-by-step\` — numbered procedure (omit if the skill isn't procedural)
-\`## Examples\` — 2–3 concrete user-intent → agent-response scenarios
-\`## Anti-patterns\` — what NOT to do; wrong tools, out-of-scope uses
-\`## References\` — one line per cluster entry with its role
-
-When creating a new cluster: the tool response instructs you to call \`dopl_brain(op='template')\` to fetch the synthesis prompt, run synthesis in your context against the entries' agents.md, and write the result with \`dopl_brain(op='update_instructions')\`.
-
-## When to edit the brain vs. save a memory vs. do nothing
-
-This is a routing decision every conversation will produce. Get it right:
-
-**Edit the brain (\`dopl_brain(op='update_instructions')\`) when the user gives you structural, durable knowledge:**
-- They correct a step in the workflow itself ("actually, step 3 is wrong — it should be X", "remove the part about Y")
-- They add a new repo/entry to the cluster that introduces a pattern the brain doesn't cover (chain with \`dopl_cluster(op='add_entry')\` first)
-- They describe a new use case the skill should cover ("let's also make this work for …")
-- A section is out of date or contradicts current reality
-- The correction changes the fundamental approach, not just a parameter
-Read the brain first with \`dopl_brain(op='get')\`, then make a SURGICAL edit — replace only the affected section, keep the rest verbatim. Never rewrite from scratch; the brain often contains prior edits you'd lose.
-
-**Save a memory (\`dopl_brain(op='save_memory')\`) when the user gives you a short preference, correction, or environmental fact:**
-- They express a preference ("I prefer Resend over SendGrid", "always use X")
-- They reveal a setup-specific value ("my API key env var is OPENAI_KEY, not OPENAI_API_KEY")
-- They note a gotcha specific to their environment ("this step doesn't work on Windows", "skip step 2 in my case")
-- Short corrections that augment rather than replace existing brain content
-Use \`dopl_brain(op='update_memory')\` instead when a near-duplicate memory already exists (call \`dopl_brain(op='get')\` first to see memory IDs).
-
-**Do both when** a conversation produces both a structural correction AND a short preference. Don't cram preferences into brain instructions; memories are a separate lane for a reason.
-
-**Ask first when** the edit is material (renaming a section, removing guidance the user previously wrote) AND the user's intent was implicit — e.g., they described a problem but didn't explicitly ask you to change the skill. Brief confirmation: "Should I update the X cluster's skill to reflect this?"
-
-**Do nothing when** the observation is transient or task-specific (debugging a one-off, current session context, questions you answered but that don't change durable guidance).
-
-**Trigger phrases to pattern-match on:**
-- "from now on…" → memory or brain edit depending on scope
-- "actually, step X is wrong…" → brain edit
-- "for my setup…" / "in my environment…" → memory
-- "let's also include…" / "add X to the skill" → brain edit
-- "remove the part about…" / "that's wrong" → brain edit
-- "I just added <repo> to my canvas, update the <cluster> skill" → \`dopl_cluster(op='add_entry')\` + brain edit
-
 ## Behavior
 
 - When the user describes what they want to build, search first, then synthesize a concrete plan
 - Focus on actionable guidance: tool recommendations with rationale, architecture decisions, integration patterns, setup steps
 - Reference specific tools, repos, and patterns — not the database entries they came from
-- Cluster skills are living documents — update them when you learn new patterns or receive user corrections
-- Never edit cluster \`SKILL.md\` files directly on disk; always go through the MCP tools so changes propagate to the brain (the canonical source)
 
 ## Knowledge Packs — specialist verticals
 
@@ -738,7 +683,6 @@ export function createServer(
   // (above) and the workspace meta-tools stay standalone.
   registerSetupsTools(registerTool, client);
   registerClusterTools(registerTool, client); // dopl_cluster + dopl_cluster_admin
-  registerBrainTools(registerTool, client);
   registerEntryTools(registerTool, client);
   registerCanvasTools(registerTool, client);
   registerIngestTools(registerTool, client, isAdmin); // op=skeleton admin-gated

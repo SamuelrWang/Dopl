@@ -191,29 +191,6 @@ class DoplClient {
             user_id: typeof res.user_id === "string" ? res.user_id : null,
         };
     }
-    async getClusterBrain(slug) {
-        return this.transport.request(`/api/clusters/${encodeURIComponent(slug)}/brain`, { toolName: "get_cluster_brain" });
-    }
-    async saveClusterMemory(slug, content, scope) {
-        return this.transport.request(`/api/clusters/${encodeURIComponent(slug)}/brain/memories`, {
-            method: "POST",
-            toolName: "save_cluster_memory",
-            body: { content, ...(scope ? { scope } : {}) },
-        });
-    }
-    async getSkillTemplate() {
-        return this.transport.request("/api/cluster/synthesize", {
-            method: "GET",
-            toolName: "get_skill_template",
-        });
-    }
-    async updateClusterBrain(slug, instructions) {
-        return this.transport.request(`/api/clusters/${encodeURIComponent(slug)}/brain`, {
-            method: "PATCH",
-            toolName: "_update_cluster_brain",
-            body: { instructions },
-        });
-    }
     async prepareIngest(url, content) {
         const result = await this.transport.request("/api/ingest/prepare", {
             method: "POST",
@@ -275,16 +252,6 @@ class DoplClient {
     }
     async deleteCluster(slug) {
         await this.transport.requestNoContent(`/api/clusters/${encodeURIComponent(slug)}`, "DELETE", "delete_cluster");
-    }
-    async updateClusterMemory(slug, memoryId, content) {
-        return this.transport.request(`/api/clusters/${encodeURIComponent(slug)}/brain/memories`, {
-            method: "PATCH",
-            toolName: "update_cluster_memory",
-            body: { memory_id: memoryId, content },
-        });
-    }
-    async deleteClusterMemory(slug, memoryId) {
-        await this.transport.requestNoContent(`/api/clusters/${encodeURIComponent(slug)}/brain/memories`, "DELETE", "delete_cluster_memory", { memory_id: memoryId });
     }
     async updateEntry(id, updates) {
         return this.transport.request(`/api/entries/${encodeURIComponent(id)}`, {

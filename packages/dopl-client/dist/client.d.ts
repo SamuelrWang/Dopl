@@ -83,40 +83,6 @@ export declare class DoplClient {
         is_admin: boolean;
         user_id: string | null;
     }>;
-    getClusterBrain(slug: string): Promise<{
-        instructions: string;
-        brain_version?: number;
-        memories: {
-            id: string;
-            content: string;
-            scope?: "workspace" | "personal";
-            author_id?: string;
-            is_mine?: boolean;
-        }[];
-    }>;
-    saveClusterMemory(slug: string, content: string, scope?: "workspace" | "personal"): Promise<{
-        id: string;
-        content: string;
-        scope: "workspace" | "personal";
-        author_id: string;
-        is_mine: boolean;
-    }>;
-    getSkillTemplate(): Promise<{
-        version: string;
-        prompt: string;
-        template: string;
-        payload: string;
-    }>;
-    updateClusterBrain(slug: string, instructions: string): Promise<{
-        id?: string;
-        cluster_id?: string;
-        instructions?: string;
-        structure_warning?: {
-            message: string;
-            missing_sections: string[];
-            suggestion: string;
-        } | null;
-    }>;
     prepareIngest(url: string, content?: {
         text?: string;
         images?: string[];
@@ -138,11 +104,6 @@ export declare class DoplClient {
     }): Promise<ClusterRow>;
     renameChat(panelId: string, title: string): Promise<void>;
     deleteCluster(slug: string): Promise<void>;
-    updateClusterMemory(slug: string, memoryId: string, content: string): Promise<{
-        id: string;
-        content: string;
-    }>;
-    deleteClusterMemory(slug: string, memoryId: string): Promise<void>;
     updateEntry(id: string, updates: {
         title?: string;
         summary?: string;

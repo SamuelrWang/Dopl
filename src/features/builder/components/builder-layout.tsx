@@ -57,8 +57,7 @@ export function BuilderLayout() {
               Create your first cluster
             </h2>
             <p className="text-xs text-white/40 leading-relaxed max-w-[280px]">
-              Clusters group entries, conversations, and a synthesized brain
-              into a single workspace.
+              Clusters group entries and conversations into a single workspace.
             </p>
           </div>
           <BuilderSidebar

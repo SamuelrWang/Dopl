@@ -3,7 +3,7 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
 import { slugifyClusterName } from "../slug";
 import { CONTEXT_CHAR_BUDGET_PER_FIELD } from "@/config";
 import {
-  spawnClusterBrainPanel,
+  hydrateClusterGrouping,
   tearDownClusterCanvasArtifacts,
 } from "./canvas-side-effects";
 import {
@@ -225,9 +225,9 @@ export async function createCluster(
 
   // Atomic cluster + cluster_panels insert via RPC. Either both rows
   // land or neither does — no more orphan cluster rows on partial
-  // failure. The brain-panel + canvas_state hydration that follows
-  // stays in TS because they're already non-fatal (failure logs but
-  // doesn't reject the user's request) and tolerate partial success.
+  // failure. The canvas_state grouping hydration that follows stays in
+  // TS because it's already non-fatal (failure logs but doesn't reject
+  // the user's request) and tolerates partial success.
   const { data: rpcRows, error: rpcError } = await db.rpc(
     "create_cluster_with_entries",
     {
@@ -242,7 +242,7 @@ export async function createCluster(
   const cluster = Array.isArray(rpcRows) ? rpcRows[0] : rpcRows;
   if (!cluster) throw new Error("Failed to create cluster");
 
-  await spawnClusterBrainPanel(scope, cluster, safeEntryIds);
+  await hydrateClusterGrouping(scope, cluster, safeEntryIds);
 
   // Fire first_cluster_built event (analytics). Fire-and-forget; dynamic
   // import so this module stays import-free of the analytics tree in

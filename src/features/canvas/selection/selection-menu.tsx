@@ -60,12 +60,11 @@ export function SelectionMenu({ cursorPos }: SelectionMenuProps) {
     // Clear the selection so the outline is the only visible affordance.
     dispatch({ type: "SET_SELECTION", panelIds: [] });
 
-    // Compute laid-out positions once (used for both chat and brain spawning)
+    // Compute laid-out positions once (used for chat spawning).
     const laidOutPanels = clusterCandidates.map((p) => {
       const move = moves.find((m) => m.id === p.id);
       return move ? { ...p, x: move.x, y: move.y } : p;
     });
-    const rightmostX = Math.max(...laidOutPanels.map((p) => p.x + p.width));
     const leftmostX = Math.min(...laidOutPanels.map((p) => p.x));
     const topY = Math.min(...laidOutPanels.map((p) => p.y));
 
@@ -85,35 +84,6 @@ export function SelectionMenu({ cursorPos }: SelectionMenuProps) {
         type: "ADD_PANEL_TO_CLUSTER",
         panelId: chatPanelId,
         clusterId: cluster.id,
-      });
-    }
-
-    // ── Auto-spawn a cluster brain panel to the right of the cluster ──
-    // Uses brain- prefix so it never collides with panel- IDs above.
-    const brainPanelId = `brain-${state.nextPanelId}`;
-    {
-
-      dispatch({
-        type: "CREATE_CLUSTER_BRAIN_PANEL",
-        id: brainPanelId,
-        clusterId: cluster.id,
-        clusterName: cluster.name,
-        x: rightmostX + 40,
-        y: topY,
-      });
-
-      // Brain synthesis moved to the client (user's Claude Code via MCP).
-      // We no longer call /api/cluster/synthesize from the web UI — the
-      // route's POST handler returns 410 Gone. Leave the brain panel
-      // with a placeholder that tells the user how to fill it.
-      dispatch({
-        type: "UPDATE_CLUSTER_BRAIN_INSTRUCTIONS",
-        panelId: brainPanelId,
-        instructions: [
-          "_Brain not synthesized yet._",
-          "",
-          "Ask your connected Claude Code (or any Dopl-MCP-enabled agent) to call `get_skill_template` and run synthesis against this cluster's entries, then `update_cluster_brain` to save the result. Server-side auto-synthesis has been removed so you control exactly what lands in your skill.",
-        ].join("\n"),
       });
     }
 

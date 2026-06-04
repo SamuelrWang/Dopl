@@ -31,8 +31,8 @@ export const dynamic = "force-dynamic";
 
 /**
  * Build a human-readable summary for the tool_result SSE event so the
- * UI can render a status badge ("Queued for ingestion", "Read cluster
- * brain", etc.) without parsing the underlying JSON.
+ * UI can render a status badge ("Queued for ingestion", "Listed
+ * clusters", etc.) without parsing the underlying JSON.
  */
 function toolSummary(
   name: string,
@@ -87,16 +87,6 @@ function toolSummary(
   switch (name) {
     case "list_workspace_clusters":
       return "Listed clusters";
-    case "list_cluster_brain_memories":
-      return "Read cluster brain";
-    case "add_cluster_brain_memory":
-      return "Added memory to cluster brain";
-    case "update_cluster_brain_memory":
-      return "Updated cluster brain memory";
-    case "remove_cluster_brain_memory":
-      return "Removed cluster brain memory";
-    case "rewrite_cluster_brain_instructions":
-      return "Rewrote cluster brain instructions";
     case "read_knowledge_entry":
       return "Read knowledge entry";
     case "read_skill_file":
@@ -133,9 +123,8 @@ async function handlePost(
     }
 
     // Resolve active workspace — header > user default. Cluster-scoped
-    // tools (list/edit memories, rewrite brain) need this to filter
-    // canvas-aware queries; non-canvas tools (search KB, ingest URL)
-    // ignore it.
+    // tools (list_workspace_clusters) need this to filter canvas-aware
+    // queries; non-canvas tools (search KB, ingest URL) ignore it.
     let workspaceId: string;
     try {
       const headerWorkspaceId = request.headers.get("x-workspace-id");

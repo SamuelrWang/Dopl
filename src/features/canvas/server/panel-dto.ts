@@ -15,7 +15,6 @@ import type {
   ChatPanelData,
   EntryPanelData,
   ConnectionPanelData,
-  ClusterBrainPanelData,
   KnowledgeBasePanelData,
   KnowledgePanelData,
   SkillPanelData,
@@ -68,16 +67,6 @@ export function panelToDbRow(panel: Panel) {
       break;
     case "connection":
       base.panel_data = { apiKey: panel.apiKey };
-      break;
-    case "cluster-brain":
-      base.panel_data = {
-        clusterId: panel.clusterId,
-        clusterName: panel.clusterName,
-        instructions: panel.instructions,
-        memories: panel.memories,
-        status: panel.status,
-        errorMessage: panel.errorMessage,
-      };
       break;
     case "browse":
       break;
@@ -193,17 +182,6 @@ export function dbRowToPanel(row: Record<string, unknown>): Panel | null {
         description: (data.description as string) || "",
         status: (data.status as "active" | "draft") || "draft",
       } as SkillPanelData;
-    case "cluster-brain":
-      return {
-        ...base,
-        type: "cluster-brain",
-        clusterId: (data.clusterId as string) || "",
-        clusterName: (data.clusterName as string) || "",
-        instructions: (data.instructions as string) || "",
-        memories: (data.memories as string[]) || [],
-        status: (data.status as "generating" | "ready" | "error") || "ready",
-        errorMessage: (data.errorMessage as string) || null,
-      } as ClusterBrainPanelData;
     case "artifact":
       return {
         ...base,

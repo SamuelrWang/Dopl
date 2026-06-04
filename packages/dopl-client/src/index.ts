@@ -8,8 +8,6 @@ export {
   DoplTimeoutError,
 } from "./errors.js";
 export type {
-  BrainData,
-  BrainMemory,
   BuildResult,
   CanvasPanel,
   CanvasPanelType,
@@ -24,11 +22,9 @@ export type {
   ClusterQueryResult,
   ClusterRow,
   ClusterSkillFull,
-  ClusterSkillParams,
   ClusterSummary,
   DoplEntry,
   ListResult,
-  MemoryScope,
   Pack,
   PackFile,
   PackFileMeta,

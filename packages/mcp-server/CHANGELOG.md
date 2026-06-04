@@ -4,6 +4,19 @@ All notable changes to `@dopl/mcp-server` are documented here. Format follows [K
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-06-04
+
+### Removed — cluster "brain" feature
+
+The cluster brain (synthesized instructions + memories) was removed from
+Dopl. Clusters are now pure groupings of entries.
+
+- Dropped the `dopl_brain` tool (`op=get|update_instructions|save_memory|update_memory|template`).
+- Dropped `dopl_cluster_admin(op=delete_memory)`.
+- Removed brain-synthesis guidance from `SERVER_INSTRUCTIONS`, the bundled
+  `skills/dopl/SKILL.md`, and `HOOKS.md`.
+- Requires `@dopl/client` ≥ 0.13.0 (brain client methods removed there).
+
 ## [1.0.0] — 2026-06-03
 
 ### Changed — BREAKING: tool consolidation (~77 → 18)

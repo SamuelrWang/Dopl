@@ -54,8 +54,8 @@ export const GET = withWorkspaceAuth(async (_request, { workspaceId }) => {
 
 /**
  * POST /api/canvas/panels — add a panel to the active canvas.
- * Supported panel types: entry, chat, connection, browse, cluster-brain,
- * knowledge, skills, knowledge-base, skill.
+ * Supported panel types: entry, chat, connection, browse,
+ * knowledge, skills, knowledge-base, skill, artifact.
  * Body: { panel_id, panel_type, entry_id?, x, y, width?, height?, title?, summary?, source_url?, panel_data? }
  */
 export const POST = withWorkspaceAuth(
@@ -85,7 +85,6 @@ export const POST = withWorkspaceAuth(
       "chat",
       "connection",
       "browse",
-      "cluster-brain",
       "knowledge",
       "skills",
       "knowledge-base",

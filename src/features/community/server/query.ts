@@ -175,13 +175,6 @@ export async function getPublishedCluster(
     .select("id, entry_id, title, summary, source_url, x, y, width, height")
     .eq("published_cluster_id", pc.id);
 
-  // Fetch brain
-  const { data: brain } = await db
-    .from("published_cluster_brains")
-    .select("instructions")
-    .eq("published_cluster_id", pc.id)
-    .single();
-
   // Fetch author profile
   const { data: profile } = await db
     .from("profiles")
@@ -263,7 +256,6 @@ export async function getPublishedCluster(
     created_at: pc.created_at,
     updated_at: pc.updated_at,
     panels: (panels || []) as PublishedPanel[],
-    brain_instructions: brain?.instructions || "",
     author: {
       id: pc.user_id,
       display_name: profile?.display_name || null,

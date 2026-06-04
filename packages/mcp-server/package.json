@@ -1,6 +1,6 @@
 {
   "name": "@dopl/mcp-server",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "MCP server for Dopl — search and build from a knowledge base of AI/automation setups",
   "main": "dist/index.js",
   "bin": {
@@ -15,7 +15,7 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@dopl/client": "^0.12.1",
+    "@dopl/client": "^0.13.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "zod": "^4.0.0"
   },

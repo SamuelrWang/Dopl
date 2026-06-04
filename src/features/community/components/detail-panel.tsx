@@ -9,9 +9,8 @@
  *   - Mono/micro font scale matching the canvas panel chrome —
  *     [10px] uppercase headers, [11px] primary text, [9px] meta
  *
- * Shows cluster info, creator profile, entries list, brain summary,
- * and the import CTA button. The Chat tab delegates to CommunityChat
- * (unchanged).
+ * Shows cluster info, creator profile, entries list, and the import
+ * CTA button. The Chat tab delegates to CommunityChat (unchanged).
  */
 
 import { useState } from "react";
@@ -175,37 +174,6 @@ function TabButton({
   );
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────
-
-// When the curator never wrote a description, fall back to the cluster
-// brain. The brain is structured as a Claude skill (frontmatter + ##
-// headers + body), so we strip the YAML frontmatter, drop heading lines,
-// and pick the first non-empty paragraph. Truncated to keep the panel
-// from ballooning. Returns "" if nothing usable can be extracted.
-function synopsisFromBrain(brain: string | null | undefined): string {
-  if (!brain) return "";
-  let text = brain;
-
-  // Strip leading YAML frontmatter (--- ... ---).
-  if (text.startsWith("---")) {
-    const end = text.indexOf("\n---", 3);
-    if (end !== -1) text = text.slice(end + 4);
-  }
-
-  // Walk paragraph by paragraph; first non-heading, non-bullet block wins.
-  const blocks = text.split(/\n\s*\n/);
-  for (const raw of blocks) {
-    const block = raw.trim();
-    if (!block) continue;
-    if (block.startsWith("#")) continue;
-    if (block.startsWith("-") || block.startsWith("*")) continue;
-    const cleaned = block.replace(/\s+/g, " ").trim();
-    if (cleaned.length < 30) continue;
-    return cleaned.length > 320 ? cleaned.slice(0, 317) + "…" : cleaned;
-  }
-  return "";
-}
-
 // ── Info body ─────────────────────────────────────────────────────────
 
 function InfoBody({
@@ -225,13 +193,7 @@ function InfoBody({
   forkError: string | null;
   onFork: () => void;
 }) {
-  // Prefer the curator-written description. If empty, synthesize a
-  // short blurb from the cluster brain — strip the structured-skill
-  // headers and pick the first meaningful paragraph so the visitor
-  // gets a real overview of what they're looking at instead of a
-  // blank section.
-  const synopsis =
-    cluster.description?.trim() || synopsisFromBrain(cluster.brain_instructions);
+  const synopsis = cluster.description?.trim() || "";
 
   return (
     <div className="px-4 py-4 space-y-5">

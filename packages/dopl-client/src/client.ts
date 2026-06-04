@@ -317,79 +317,6 @@ export class DoplClient {
     };
   }
 
-  async getClusterBrain(slug: string): Promise<{
-    instructions: string;
-    brain_version?: number;
-    memories: {
-      id: string;
-      content: string;
-      scope?: "workspace" | "personal";
-      author_id?: string;
-      is_mine?: boolean;
-    }[];
-  }> {
-    return this.transport.request(
-      `/api/clusters/${encodeURIComponent(slug)}/brain`,
-      { toolName: "get_cluster_brain" }
-    );
-  }
-
-  async saveClusterMemory(
-    slug: string,
-    content: string,
-    scope?: "workspace" | "personal"
-  ): Promise<{
-    id: string;
-    content: string;
-    scope: "workspace" | "personal";
-    author_id: string;
-    is_mine: boolean;
-  }> {
-    return this.transport.request(
-      `/api/clusters/${encodeURIComponent(slug)}/brain/memories`,
-      {
-        method: "POST",
-        toolName: "save_cluster_memory",
-        body: { content, ...(scope ? { scope } : {}) },
-      }
-    );
-  }
-
-  async getSkillTemplate(): Promise<{
-    version: string;
-    prompt: string;
-    template: string;
-    payload: string;
-  }> {
-    return this.transport.request("/api/cluster/synthesize", {
-      method: "GET",
-      toolName: "get_skill_template",
-    });
-  }
-
-  async updateClusterBrain(
-    slug: string,
-    instructions: string
-  ): Promise<{
-    id?: string;
-    cluster_id?: string;
-    instructions?: string;
-    structure_warning?: {
-      message: string;
-      missing_sections: string[];
-      suggestion: string;
-    } | null;
-  }> {
-    return this.transport.request(
-      `/api/clusters/${encodeURIComponent(slug)}/brain`,
-      {
-        method: "PATCH",
-        toolName: "_update_cluster_brain",
-        body: { instructions },
-      }
-    );
-  }
-
   async prepareIngest(
     url: string,
     content?: { text?: string; images?: string[]; links?: string[] }
@@ -489,30 +416,6 @@ export class DoplClient {
       `/api/clusters/${encodeURIComponent(slug)}`,
       "DELETE",
       "delete_cluster"
-    );
-  }
-
-  async updateClusterMemory(
-    slug: string,
-    memoryId: string,
-    content: string
-  ): Promise<{ id: string; content: string }> {
-    return this.transport.request(
-      `/api/clusters/${encodeURIComponent(slug)}/brain/memories`,
-      {
-        method: "PATCH",
-        toolName: "update_cluster_memory",
-        body: { memory_id: memoryId, content },
-      }
-    );
-  }
-
-  async deleteClusterMemory(slug: string, memoryId: string): Promise<void> {
-    await this.transport.requestNoContent(
-      `/api/clusters/${encodeURIComponent(slug)}/brain/memories`,
-      "DELETE",
-      "delete_cluster_memory",
-      { memory_id: memoryId }
     );
   }
 

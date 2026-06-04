@@ -84,10 +84,8 @@ export function GettingStartedSection() {
         headers={["Concept", "What it is"]}
         rows={[
           ["Entry", "A single piece of ingested knowledge. Has a README, agents.md, manifest, and tags."],
-          ["Panel", "A card on the canvas. Can be an entry, chat, browse window, or cluster brain."],
-          ["Cluster", "A named group of panels. Has a brain that synthesizes instructions from its members."],
-          ["Cluster brain", "AI-generated instructions that combine all agents.md files in a cluster."],
-          ["Memory", "A user correction or preference saved to a cluster brain. Persists across sessions."],
+          ["Panel", "A card on the canvas. Can be an entry, chat, or browse window."],
+          ["Cluster", "A named group of related panels you can reference and publish together."],
           ["Skill file", "A Claude Code skill exported from a cluster. Lives in ~/.claude/skills/."],
           ["MCP server", "The bridge between Dopl and AI tools like Claude Code."],
         ]}

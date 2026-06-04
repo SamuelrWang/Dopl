@@ -92,8 +92,8 @@ export function CreateWorkspaceDialog({
         <DialogHeader>
           <DialogTitle className="text-white">New workspace</DialogTitle>
           <DialogDescription className="text-white/50">
-            A workspace is a workspace for one project — its own clusters,
-            brain, and chat history. You can switch between workspaces any
+            A workspace is a workspace for one project — its own clusters
+            and chat history. You can switch between workspaces any
             time from the header.
           </DialogDescription>
         </DialogHeader>

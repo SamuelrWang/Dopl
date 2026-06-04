@@ -1,12 +1,11 @@
-import { H2, P, Code, SectionHero, UL, type TocEntry } from "../docs-primitives";
+import { H2, P, SectionHero, type TocEntry } from "../docs-primitives";
 
 export const TOC: TocEntry[] = [
   { id: "creating-clusters", title: "Creating clusters", level: 2 },
-  { id: "cluster-brain", title: "Cluster brain", level: 2 },
   { id: "skill-files", title: "Skill files", level: 2 },
 ];
 
-/* ── Cluster diagram: panels grouped with brain ────────────────── */
+/* ── Cluster diagram: entry panels grouped ─────────────────────── */
 function ClusterIllustration() {
   return (
     <svg width="200" height="110" viewBox="0 0 200 110" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -26,20 +25,8 @@ function ClusterIllustration() {
       <rect x="14" y="66" width="46" height="28" rx="3" fill="white" fillOpacity="0.04" stroke="white" strokeOpacity="0.1" />
       <rect x="19" y="71" width="18" height="2" rx="1" fill="white" fillOpacity="0.2" />
       <rect x="19" y="77" width="36" height="1.5" rx="0.75" fill="white" fillOpacity="0.07" />
-      {/* Connection line to brain */}
-      <path d="M126 58 L140 58" stroke="white" strokeOpacity="0.12" strokeWidth="1" strokeDasharray="3 2" />
-      {/* Brain panel */}
-      <rect x="142" y="28" width="52" height="60" rx="4" fill="white" fillOpacity="0.03" stroke="white" strokeOpacity="0.12" />
-      <rect x="148" y="34" width="16" height="2" rx="1" fill="white" fillOpacity="0.25" />
-      <rect x="148" y="42" width="40" height="1.5" rx="0.75" fill="white" fillOpacity="0.08" />
-      <rect x="148" y="48" width="36" height="1.5" rx="0.75" fill="white" fillOpacity="0.08" />
-      <rect x="148" y="54" width="38" height="1.5" rx="0.75" fill="white" fillOpacity="0.08" />
-      <rect x="148" y="60" width="32" height="1.5" rx="0.75" fill="white" fillOpacity="0.08" />
-      {/* Brain icon */}
-      <circle cx="188" cy="34" r="4" fill="white" fillOpacity="0.06" />
       {/* Cluster label */}
       <text x="64" y="10" textAnchor="middle" fill="white" fillOpacity="0.2" fontSize="8" fontFamily="monospace">CLUSTER</text>
-      <text x="168" y="80" textAnchor="middle" fill="white" fillOpacity="0.2" fontSize="7" fontFamily="monospace">BRAIN</text>
     </svg>
   );
 }
@@ -49,8 +36,8 @@ export function ClustersSection() {
     <div className="max-w-[720px]">
       <SectionHero
         label="Clusters"
-        title="Group and synthesize"
-        description="Organize related entries into clusters. Dopl generates a brain that merges their knowledge into one set of instructions."
+        title="Group your setups"
+        description="Organize related entries into clusters — a named group of panels you can reference and publish together."
       >
         <ClusterIllustration />
       </SectionHero>
@@ -58,8 +45,7 @@ export function ClustersSection() {
       <H2 id="creating-clusters">Creating clusters</H2>
       <P>
         Select two or more panels on the canvas, then click &quot;Cluster&quot; in the floating
-        menu. Dopl groups them with a visual outline, auto-layouts them for readability,
-        and spawns a cluster brain panel to the right.
+        menu. Dopl groups them with a visual outline and auto-layouts them for readability.
       </P>
       <P>
         Panels can belong to one cluster at a time. If you drag a panel close to a cluster,
@@ -69,20 +55,6 @@ export function ClustersSection() {
       <P>
         Connection panels and Browse panels cannot be clustered.
       </P>
-
-      <H2 id="cluster-brain">Cluster brain</H2>
-      <P>
-        When a cluster is created, Dopl reads all agents.md files from the member entries
-        and synthesizes them into a single set of cohesive instructions. This is the
-        cluster brain. You can edit these instructions directly.
-      </P>
-      <P>
-        Memories are user corrections saved to the brain. If you tell Dopl &quot;always use Resend
-        instead of SendGrid for this cluster&quot; or &quot;skip the Slack notification step,&quot; that
-        becomes a persistent memory. Memories override the base instructions in future
-        interactions.
-      </P>
-
     </div>
   );
 }

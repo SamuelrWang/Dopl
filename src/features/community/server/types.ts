@@ -38,7 +38,6 @@ export interface PublishedClusterSummary {
 export interface PublishedClusterDetail extends PublishedClusterSummary {
   cluster_id: string;
   panels: PublishedPanel[];
-  brain_instructions: string;
   author: PublishedClusterSummary["author"] & {
     bio: string | null;
     website_url: string | null;

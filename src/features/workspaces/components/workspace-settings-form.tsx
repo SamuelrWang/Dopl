@@ -173,7 +173,7 @@ export function WorkspaceSettingsForm({ workspace, role }: Props) {
             <DialogTitle className="text-white">Delete this workspace?</DialogTitle>
             <DialogDescription className="text-white/60">
               You're about to permanently delete <strong>{workspace.name}</strong>.
-              Every cluster, panel, brain, memory, and chat inside it will be
+              Every cluster, panel, and chat inside it will be
               removed. This action cannot be undone.
             </DialogDescription>
           </DialogHeader>

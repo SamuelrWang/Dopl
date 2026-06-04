@@ -203,7 +203,7 @@ The missing piece: a single, hand-authored `SKILL.md` the user installs once int
 **Shape:**
 
 - **One `SKILL.md`** at `packages/mcp-server/skills/dopl/SKILL.md` (source of truth, version-controlled), copied to `~/.claude/skills/dopl/SKILL.md` at install time.
-- **Frontmatter description** must trigger reliably. Something like: *"Use whenever the user asks to discover, build, or architect AI/automation systems. Covers Dopl's knowledge base of proven setups, cluster brains, the search → adoption → composition workflow, and contributing back via ingest."* Not "use when the user mentions Dopl" — the agent should reach for it on the *intent shape*, not the brand name.
+- **Frontmatter description** must trigger reliably. Something like: *"Use whenever the user asks to discover, build, or architect AI/automation systems. Covers Dopl's knowledge base of proven setups, the search → adoption → composition workflow, and contributing back via ingest."* Not "use when the user mentions Dopl" — the agent should reach for it on the *intent shape*, not the brand name.
 - **Body sections** (in order — matches the public Anthropic skills convention):
   1. **Overview** — what Dopl is (a searchable catalog of proven AI/automation patterns), what it isn't (a chat tool, a code generator).
   2. **When to use / when not to use** — trigger boundaries. Specifically: skip for general programming, ML training, non-AI/automation tasks.
@@ -212,11 +212,11 @@ The missing piece: a single, hand-authored `SKILL.md` the user installs once int
      - Reading an entry (manifest, agents.md, README layers — what to extract vs skim)
      - Adopting a pattern into a workspace
      - Composing a custom solution by synthesizing across multiple entries
-     - Building a cluster + brain (when, why, what makes a good brain)
+     - Grouping adopted patterns into a cluster (when, why)
      - Ingesting new content (skeleton → full tier upgrade path)
   4. **Examples** — 2–3 worked "I want to build X" walkthroughs showing the full cycle.
-  5. **Common mistakes** — e.g., treating search results as final recommendations rather than raw material; writing cluster brains that are too generic to be useful; skipping skeleton-tier upgrade.
-  6. **References** — pointer to `SERVER_INSTRUCTIONS` (don't duplicate), pointer to the cluster brain editing tools, pointer to the skill-authoring guide.
+  5. **Common mistakes** — e.g., treating search results as final recommendations rather than raw material; skipping skeleton-tier upgrade.
+  6. **References** — pointer to `SERVER_INSTRUCTIONS` (don't duplicate), pointer to the skill-authoring guide.
 
 - **Layering with auto-generated cluster skills:** master skill is meta-guidance ("how to use Dopl"); cluster skills are domain knowledge ("how to do X with n8n"). They should complement, not overlap. The master skill should explicitly *reference* the cluster-skill mechanism so the agent knows that workspace-specific skills will appear in the same `~/.claude/skills/dopl-*/` family of directories.
 - **Distribution:** ship via the `dopl mcp config` CLI command (M-6). On `--write`, drop the master `SKILL.md` into `~/.claude/skills/dopl/` alongside the mcp.json edit. Versioned: subsequent `dopl mcp config` runs overwrite if the bundled version is newer than what's on disk (check a version comment in the file or a sidecar `.version`).
