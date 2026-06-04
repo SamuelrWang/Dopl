@@ -332,7 +332,7 @@ async function gatherAllContent(entryId: string): Promise<string> {
     const typesSummary = Object.entries(droppedByType)
       .map(([type, count]) => `${count}× ${type}`)
       .join(", ");
-    result += `\n\n[TRUNCATED: ${droppedCount} source(s) omitted (~${Math.round(droppedChars / 1000)}K chars): ${typesSummary}. Budget was ${Math.round(GATHERED_CONTENT_MAX / 1000)}K chars. Use \`get_setup\` after submit or re-run prepare with a narrower URL if specific sections are needed.]`;
+    result += `\n\n[TRUNCATED: ${droppedCount} source(s) omitted (~${Math.round(droppedChars / 1000)}K chars): ${typesSummary}. Budget was ${Math.round(GATHERED_CONTENT_MAX / 1000)}K chars. Use \`dopl_setups(op=get)\` after submit or re-run prepare with a narrower URL if specific sections are needed.]`;
   }
   return result;
 }

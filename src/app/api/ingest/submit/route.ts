@@ -115,7 +115,7 @@ async function handlePost(
           error: "Entry not in submittable state",
           status: diag.status,
           message:
-            "Only entries in 'processing' state can receive a submit. Start a fresh ingest with ingest_url.",
+            "Only entries in 'processing' state can receive a submit. Start a fresh ingest with dopl_ingest(op=url).",
         },
         { status: 409 }
       );
@@ -127,7 +127,7 @@ async function handlePost(
       {
         error: "Submit already in progress",
         message:
-          "Another submit_ingested_entry call claimed this entry. Wait for it to complete, then poll with get_setup.",
+          "Another dopl_ingest(op=submit) call claimed this entry. Wait for it to complete, then poll with dopl_setups(op=get).",
       },
       { status: 409 }
     );

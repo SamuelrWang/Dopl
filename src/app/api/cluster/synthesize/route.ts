@@ -4,7 +4,7 @@
  *
  * All brain synthesis happens in the user's Claude Code (or equivalent
  * client). This endpoint exists so any client that needs the prompt —
- * MCP via get_skill_template, the web UI's brain panel, etc. — can
+ * MCP via dopl_brain(op=template), the web UI's brain panel, etc. — can
  * fetch it consistently without embedding a copy of the template in
  * multiple codebases.
  *
@@ -42,7 +42,7 @@ export async function POST() {
     {
       error: "gone",
       message:
-        "Server-side brain synthesis has been removed. Fetch the synthesis prompt via GET /api/cluster/synthesize (or the `get_skill_template` MCP tool) and run synthesis in your own client, then write the result via PATCH /api/clusters/{slug}/brain.",
+        "Server-side brain synthesis has been removed. Fetch the synthesis prompt via GET /api/cluster/synthesize (or the `dopl_brain(op=template)` MCP tool) and run synthesis in your own client, then write the result via PATCH /api/clusters/{slug}/brain.",
     },
     { status: 410 }
   );

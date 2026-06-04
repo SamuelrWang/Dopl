@@ -205,7 +205,7 @@ async function handlePost(
             slug: existing.slug ?? null,
             title: existing.title,
             message:
-              "An ingestion for this URL is already processing. Poll get_setup or wait for it to complete.",
+              "An ingestion for this URL is already processing. Poll dopl_setups(op=get) or wait for it to complete.",
           });
         }
       } else if (existing.status === "complete") {
@@ -303,7 +303,7 @@ async function handlePost(
     // that reference DISTINCT external sources — the agent presents
     // those to the user after submit, and on explicit approval
     // prepares each as a separate entry. No silent link-follow.
-    // This also keeps ingest_url bounded to ~15s regardless of
+    // This also keeps dopl_ingest(op=url) bounded to ~15s regardless of
     // how many external docs the source references.
     const { gatheredContent, thumbnailUrl, sourcePlatform, detectedLinks } =
       await extractForAgent(entryId, {
@@ -387,7 +387,7 @@ async function handlePost(
     // ── Build sources index + fetch_warnings from the DB ──
     // The extractors just wrote status='ok' / status='failed' rows to
     // `sources`. Query both back so the agent gets an inventory of
-    // what's available (drives get_ingest_content calls) AND a list
+    // what's available (drives dopl_ingest(op=content) calls) AND a list
     // of what the extractor couldn't retrieve (surfaces to the user).
     const { data: okSourceRows, error: okSourcesError } = await supabase
       .from("sources")

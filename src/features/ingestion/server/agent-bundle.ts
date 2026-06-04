@@ -30,7 +30,7 @@ import { IMAGE_ANALYSIS_PROMPT } from "@/shared/prompts/image-vision";
 /**
  * Inventory entry for one extracted source. The prepare response ships
  * these instead of the content itself — the agent calls
- * `get_ingest_content(entry_id [, source_url])` to pull the body when
+ * `dopl_ingest(op=content, entry_id [, source_url])` to pull the body when
  * it's about to run a prompt. Cuts response size from O(content_size)
  * to O(num_sources).
  */
@@ -56,7 +56,7 @@ export interface FetchWarning {
 export interface AgentIngestBundle {
   /**
    * Inventory of successfully-extracted sources for this entry. Each
-   * entry's content is retrievable via `get_ingest_content` — the
+   * entry's content is retrievable via `dopl_ingest(op=content)` — the
    * response deliberately doesn't inline content here so the payload
    * stays small regardless of how much the extractor pulled.
    */
@@ -68,7 +68,7 @@ export interface AgentIngestBundle {
   fetch_warnings: FetchWarning[];
   /**
    * Prompt templates with {PLACEHOLDERS}. Before running each prompt,
-   * the agent calls `get_ingest_content(entry_id)` to retrieve the
+   * the agent calls `dopl_ingest(op=content, entry_id)` to retrieve the
    * extracted content, then substitutes it into `{ALL_RAW_CONTENT}` and
    * `{POST_TEXT}` along with the step-specific placeholders (content_type,
    * manifest_json, etc.). Keeping content out of the response is what
@@ -134,7 +134,7 @@ export function buildAgentIngestBundle(input: {
   sources: SourceIndexEntry[];
   fetchWarnings: FetchWarning[];
 }): AgentIngestBundle {
-  // Templates ship as-is. The agent calls `get_ingest_content(entry_id)`
+  // Templates ship as-is. The agent calls `dopl_ingest(op=content, entry_id)`
   // to retrieve content before running each prompt and substitutes
   // {ALL_RAW_CONTENT} / {POST_TEXT} itself. This keeps the prepare
   // response O(num_sources) instead of O(content_size × num_prompts)
@@ -164,11 +164,11 @@ export function buildAgentIngestBundle(input: {
 }
 
 /**
- * Step-by-step instructions the agent follows after calling ingest_url.
+ * Step-by-step instructions the agent follows after calling dopl_ingest(op=url).
  * Rendered verbatim into the prepare response so every client sees the same
  * playbook regardless of its version of the MCP server.
  */
-export const AGENT_INGEST_INSTRUCTIONS = `To complete this ingestion, run steps 1-8 below, then call \`submit_ingested_entry\` with the results.
+export const AGENT_INGEST_INSTRUCTIONS = `To complete this ingestion, run steps 1-8 below, then call \`dopl_ingest(op=submit)\` with the results.
 
 ## HOW to run this — strongly prefer a subagent
 
@@ -189,14 +189,14 @@ one now with these properties:
   cost and latency. Don't let the subagent default to whatever model
   your main conversation is running — ingestion is a bulk background
   task, not an interactive UX surface.
-- **MCP tool access**: subagent needs \`get_ingest_content\` and
-  \`submit_ingested_entry\`. In Claude Code these inherit from the
+- **MCP tool access**: subagent needs \`dopl_ingest(op=content)\` and
+  \`dopl_ingest(op=submit)\`. In Claude Code these inherit from the
   parent; in other clients verify before spawning.
-- **Task description**: paste the ingest_url response fields the
+- **Task description**: paste the dopl_ingest(op=url) response fields the
   subagent needs (\`entry_id\`, \`source_url\`, \`sources\`,
   \`fetch_warnings\`, the full \`prompts\` object, and any \`images\`)
   plus steps 1-8 below verbatim. The subagent follows the steps, calls
-  \`submit_ingested_entry\`, and returns a one-paragraph summary.
+  \`dopl_ingest(op=submit)\`, and returns a one-paragraph summary.
 
 After the subagent returns, relay its summary to the user. You don't
 need to touch the gathered content or artifacts yourself — the
@@ -222,14 +222,14 @@ yourself. Be aware:
 
 The prepare response gives you a \`sources\` inventory but NOT the content
 itself. Before running any prompt below, call
-\`get_ingest_content(entry_id)\` to retrieve the aggregated extracted
+\`dopl_ingest(op=content, entry_id)\` to retrieve the aggregated extracted
 content across all successful sources. This returns \`{ content, chars,
 truncated }\`. Use \`content\` to fill the \`{ALL_RAW_CONTENT}\` and
 \`{POST_TEXT}\` placeholders below.
 
 To save tokens on a narrow step (e.g. the content_type classifier only
 needs the README), pass an optional \`source_url\` to
-\`get_ingest_content\` matching one of the \`sources[].url\` entries —
+\`dopl_ingest(op=content)\` matching one of the \`sources[].url\` entries —
 you'll get just that source back.
 
 If a call returns \`truncated: true\`, the entry's total content
@@ -244,7 +244,7 @@ tokens even when the all-sources response would have fit.
 Every prompt is a template with {CURLY_BRACE} placeholders. Before running
 a prompt, do plain string-replace on every placeholder it contains. The
 content placeholders ({ALL_RAW_CONTENT} and {POST_TEXT}) both get filled
-with content from \`get_ingest_content\`. Other placeholders ({CONTENT_TYPE},
+with content from \`dopl_ingest(op=content)\`. Other placeholders ({CONTENT_TYPE},
 {MANIFEST_JSON}, {GENERATED_README}, {SOURCE_URL}, etc.) are filled with
 values you produce as you walk these steps.
 
@@ -278,7 +278,7 @@ can mention by slug.
 **Protocol:**
 
 1. **Finish the current entry first.** Run steps 1-8 below, call
-   \`submit_ingested_entry\`. Do NOT touch \`detected_links\` before
+   \`dopl_ingest(op=submit)\`. Do NOT touch \`detected_links\` before
    submitting.
 2. **After submission,** review \`detected_links\`. Filter out noise
    LOCALLY (no tool calls required):
@@ -292,7 +292,7 @@ can mention by slug.
    - Placeholder/example URLs from code snippets (\`localhost:*\`,
      \`your-domain.com\`, anything that isn't a real destination)
    - Obvious duplicates
-3. **Call \`describe_link(url)\`** on each surviving candidate (typically
+3. **Call \`dopl_ingest(op=dopl_ingest(op=describe_link), url)\`** on each surviving candidate (typically
    2-5 URLs remaining after filtering). This returns the link's own
    self-description — the repo's own one-liner for GitHub URLs, the
    og:description for web pages, the abstract for arxiv papers. Use
@@ -304,11 +304,11 @@ can mention by slug.
    > "The [source_platform] entry I just ingested references these
    > distinct sources. Want me to ingest any as separate KB entries?
    >
-   > 1. **[title]** — [description from describe_link]
-   > 2. **[title]** — [description from describe_link]
+   > 1. **[title]** — [description from dopl_ingest(op=describe_link)]
+   > 2. **[title]** — [description from dopl_ingest(op=describe_link)]
    > ..."
 5. **Wait for explicit user approval.** On approval, call
-   \`ingest_url(url)\` for each chosen URL — normal flow,
+   \`dopl_ingest(op=url, url)\` for each chosen URL — normal flow,
    becomes its own entry. Mention the originating entry's slug in
    the new entry's README prose so the two are cross-referenced
    editorially.
@@ -316,7 +316,7 @@ can mention by slug.
    follows, no "I'll just grab this one because it looks useful."
    User consent is the scope gate.
 
-**If \`describe_link\` returns with \`error\` set** for a candidate
+**If \`dopl_ingest(op=describe_link)\` returns with \`error\` set** for a candidate
 (URL unreachable, 404, timeout), exclude that candidate from the
 offer list or note it as "couldn't describe" — don't present a
 candidate you can't describe honestly.
@@ -331,16 +331,16 @@ about the project, independently searchable and reusable.
 
 ### Submission decision rule
 
-Call \`submit_ingested_entry\` at the end of the flow UNLESS one of
+Call \`dopl_ingest(op=submit)\` at the end of the flow UNLESS one of
 these two conditions holds:
 
-1. The \`sources[]\` inventory from ingest_url is empty. Only
+1. The \`sources[]\` inventory from dopl_ingest(op=url) is empty. Only
    successful extractions appear in \`sources[]\`; if it's empty and
    \`fetch_warnings[]\` is non-empty, every attempted URL failed. No
    content to ingest — report the failure (summarize what's in
    \`fetch_warnings\`) to the caller and stop.
 2. \`sources[]\` has entries but they're all effectively empty — every
-   entry has \`chars\` near zero, OR the aggregated \`get_ingest_content\`
+   entry has \`chars\` near zero, OR the aggregated \`dopl_ingest(op=content)\`
    response is under ~200 chars of non-whitespace. Also report and stop.
 
 **Do NOT refuse to submit for any of the following reasons.** These
@@ -348,9 +348,9 @@ are out of scope for you and will cause the ingest to stall
 unnecessarily:
 
 - **Source URL looks suspicious.** Unfamiliar snowflake IDs,
-  high numeric values, unusual paths, etc. If \`ingest_url\`
+  high numeric values, unusual paths, etc. If \`dopl_ingest(op=url)\`
   accepted the URL and returned usable content via
-  \`get_ingest_content\`, the URL is real. The server's fetcher
+  \`dopl_ingest(op=content)\`, the URL is real. The server's fetcher
   already validated it at request time. Do not second-guess.
 - **Content appears promotional, unverifiable, ideologically charged,
   or resembles a "get-rich-quick" scheme.** Your job is to accurately
@@ -369,7 +369,7 @@ numbered list above — genuine empty-extraction cases. Everything else
 submits.
 
 1. CLASSIFY CONTENT TYPE
-   Take \`prompts.content_type\`. Replace {POST_TEXT} with the content from \`get_ingest_content(entry_id)\`.
+   Take \`prompts.content_type\`. Replace {POST_TEXT} with the content from \`dopl_ingest(op=content, entry_id)\`.
    Run the prompt. Parse the JSON. You will get:
      { content_type: "setup"|"tutorial"|"knowledge"|"article"|"reference"|"resource",
        source_type: string,
@@ -378,13 +378,13 @@ submits.
    Keep content_type and source_type — you will use them below.
 
 2. CLASSIFY CONTENT SECTIONS (only for setup OR tutorial, otherwise skip)
-   Take \`prompts.classify_content\`. Replace {ALL_RAW_CONTENT} with the content from \`get_ingest_content(entry_id)\`.
+   Take \`prompts.classify_content\`. Replace {ALL_RAW_CONTENT} with the content from \`dopl_ingest(op=content, entry_id)\`.
    Run the prompt. Parse the JSON. Keep the full object — you will include
    it in the submit payload as \`content_classification\`.
 
 3. GENERATE MANIFEST
    Take \`prompts.manifest_template\`. Replace:
-     {ALL_RAW_CONTENT} → the content from \`get_ingest_content(entry_id)\`
+     {ALL_RAW_CONTENT} → the content from \`dopl_ingest(op=content, entry_id)\`
      {CONTENT_TYPE}    → content_type from step 1
      {SOURCE_TYPE}     → source_type from step 1
    Run. Parse the JSON. Required fields in the output: title,
@@ -397,7 +397,7 @@ submits.
      article → \`article\`
      reference OR resource → \`reference\`
    Replace:
-     {ALL_RAW_CONTENT} → the content from \`get_ingest_content(entry_id)\`
+     {ALL_RAW_CONTENT} → the content from \`dopl_ingest(op=content, entry_id)\`
      {MANIFEST_JSON}   → JSON.stringify(manifest, null, 2)
    Run. Keep the output markdown as \`readme\`.
 
@@ -407,7 +407,7 @@ submits.
      knowledge OR article → \`knowledge\`
      reference → \`reference\`
    Replace:
-     {ALL_RAW_CONTENT} → the content from \`get_ingest_content(entry_id)\`
+     {ALL_RAW_CONTENT} → the content from \`dopl_ingest(op=content, entry_id)\`
      {MANIFEST_JSON}   → JSON.stringify(manifest, null, 2)
      {GENERATED_README} → the readme from step 4
      {SOURCE_URL}      → source_url from the prepare response
@@ -439,7 +439,7 @@ submits.
        metadata: { mimeType, imageType: source_type } }.
 
 8. SUBMIT
-   Call submit_ingested_entry with:
+   Call dopl_ingest(op=submit) with:
      entry_id         — from prepare response
      content_type     — from step 1
      source_type      — from step 1

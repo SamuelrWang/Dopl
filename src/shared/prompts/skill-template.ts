@@ -2,8 +2,8 @@
  * Canonical Dopl skill body template + synthesis prompt.
  *
  * This is what the MCP returns to the user's Claude Code via
- * `get_skill_template`. The agent fills the template in its own context
- * and writes the result back via `update_cluster_brain`. Server never
+ * `dopl_brain(op=template)`. The agent fills the template in its own context
+ * and writes the result back via `dopl_brain(op=update_instructions)`. Server never
  * runs the LLM — all synthesis happens client-side.
  *
  * The section structure mirrors Claude Code's native skill-creator output
@@ -36,10 +36,10 @@ export const SKILL_BODY_TEMPLATE = `## When to use this skill
 <What NOT to do. Common mistakes, wrong tools for the job, scale misuse. Honest about boundaries.>
 
 ## When to save a memory
-<One paragraph + bulleted trigger categories. The kinds of user statements that should fire \`save_cluster_memory\` silently in the background. Three categories: (1) preferences and environment facts ("I prefer X over Y", "for my setup …", "always use …", "skip step …", "from now on …", "in my environment …", "my <env var / value> is …"); (2) soft corrections without canonical wrong-phrasing ("no", "actually …", "that's not right", "you got X backwards", "the answer is Y, not Z"); (3) outcome dissatisfaction — the highest-signal category, where the skill led the agent astray and the user is reacting to the result ("I tried that, it didn't work", "the output wasn't what I wanted", "ran it and got the wrong result", "this approach gave me garbage", "that didn't produce X"). Capture category-3 lessons as memories describing the gotcha.>
+<One paragraph + bulleted trigger categories. The kinds of user statements that should fire \`dopl_brain(op=save_memory)\` silently in the background. Three categories: (1) preferences and environment facts ("I prefer X over Y", "for my setup …", "always use …", "skip step …", "from now on …", "in my environment …", "my <env var / value> is …"); (2) soft corrections without canonical wrong-phrasing ("no", "actually …", "that's not right", "you got X backwards", "the answer is Y, not Z"); (3) outcome dissatisfaction — the highest-signal category, where the skill led the agent astray and the user is reacting to the result ("I tried that, it didn't work", "the output wasn't what I wanted", "ran it and got the wrong result", "this approach gave me garbage", "that didn't produce X"). Capture category-3 lessons as memories describing the gotcha.>
 
 ## When to update this skill
-<One paragraph + bulleted trigger phrases. The kinds of user statements that should fire \`update_cluster_brain\` (after a \`get_cluster_brain\` read + surgical edit). Structural corrections to the workflow itself, additions of new use cases, removals of stale guidance. Trigger phrases: "step X is wrong", "remove the part about …", "let's also include …", "add Y to the skill", "from now on always …" (when scope is the workflow). Also fires on outcome dissatisfaction when the cause traces back to the brain's instructions, not a one-off setup detail — if the skill itself produced bad guidance, the skill needs to change.>
+<One paragraph + bulleted trigger phrases. The kinds of user statements that should fire \`dopl_brain(op=update_instructions)\` (after a \`dopl_brain(op=get)\` read + surgical edit). Structural corrections to the workflow itself, additions of new use cases, removals of stale guidance. Trigger phrases: "step X is wrong", "remove the part about …", "let's also include …", "add Y to the skill", "from now on always …" (when scope is the workflow). Also fires on outcome dissatisfaction when the cause traces back to the brain's instructions, not a one-off setup detail — if the skill itself produced bad guidance, the skill needs to change.>
 
 ## References
 <Each entry in this cluster with a one-line role. Format: "- [Entry title](entry-url) — what role this entry plays in the skill."  This is the provenance trail.>`;
@@ -47,7 +47,7 @@ export const SKILL_BODY_TEMPLATE = `## When to use this skill
 /**
  * The synthesis prompt. Agent loads this, pastes the raw material
  * (entries' agents.md) below it in its own context, and produces the
- * filled-in body. Result goes into `update_cluster_brain`.
+ * filled-in body. Result goes into `dopl_brain(op=update_instructions)`.
  */
 export const SKILL_SYNTHESIS_PROMPT = `You are producing a Claude Code skill body from Dopl knowledge-base entries. This body is what a user's Claude Code will fetch and execute against when the skill is invoked — treat the output as the skill itself, not a document about the skill.
 
@@ -76,10 +76,10 @@ Numbered steps, only when a sequential approach applies. Omit entirely for non-p
 Bulleted list of what NOT to do. Common mistakes, wrong tool choices, out-of-scope uses. Be honest about what this skill is not for.
 
 ## When to save a memory
-One paragraph + bulleted trigger categories. Tells future invocations of this skill which user statements fire \`save_cluster_memory\` silently in the background. Cover three categories: (1) preferences and environment facts — "I prefer X over Y", "for my setup …", "always use …", "skip step …", "from now on …", "in my environment …"; (2) soft corrections without canonical wrong-phrasing — "no", "actually …", "that's not right", "you got X backwards", "the answer is Y, not Z"; (3) outcome dissatisfaction — "I tried that, it didn't work", "the output wasn't what I wanted", "this approach gave me garbage". Category 3 is highest-signal — capture as a memory describing the specific gotcha.
+One paragraph + bulleted trigger categories. Tells future invocations of this skill which user statements fire \`dopl_brain(op=save_memory)\` silently in the background. Cover three categories: (1) preferences and environment facts — "I prefer X over Y", "for my setup …", "always use …", "skip step …", "from now on …", "in my environment …"; (2) soft corrections without canonical wrong-phrasing — "no", "actually …", "that's not right", "you got X backwards", "the answer is Y, not Z"; (3) outcome dissatisfaction — "I tried that, it didn't work", "the output wasn't what I wanted", "this approach gave me garbage". Category 3 is highest-signal — capture as a memory describing the specific gotcha.
 
 ## When to update this skill
-One paragraph + bulleted trigger phrases. Tells future invocations which user statements fire \`update_cluster_brain\` (after a \`get_cluster_brain\` read + surgical edit). Cover: structural corrections to the workflow, new use cases the skill should handle, stale guidance to remove. Trigger phrases: "step X is wrong", "remove the part about …", "let's also include …", "add Y to the skill", "from now on always …" (when scope is the workflow). Also fires on outcome dissatisfaction when the cause traces back to brain instructions rather than a one-off setup detail.
+One paragraph + bulleted trigger phrases. Tells future invocations which user statements fire \`dopl_brain(op=update_instructions)\` (after a \`dopl_brain(op=get)\` read + surgical edit). Cover: structural corrections to the workflow, new use cases the skill should handle, stale guidance to remove. Trigger phrases: "step X is wrong", "remove the part about …", "let's also include …", "add Y to the skill", "from now on always …" (when scope is the workflow). Also fires on outcome dissatisfaction when the cause traces back to brain instructions rather than a one-off setup detail.
 
 ## References
 Bulleted list of the entries in this cluster, one line each. Format: "- <entry title> — <its specific role in the skill>". This is the provenance trail.
@@ -87,7 +87,7 @@ Bulleted list of the entries in this cluster, one line each. Format: "- <entry t
 Now produce the skill body. Raw material follows:`;
 
 /**
- * Composed payload returned by the \`get_skill_template\` MCP tool.
+ * Composed payload returned by the \`dopl_brain(op=template)\` MCP tool.
  * Agents paste this directly into a synthesis context; it includes both
  * the prompt (what to do) and the template (what the output should look
  * like), so there's no separate "show me the structure" round-trip.
@@ -96,7 +96,7 @@ export function buildSkillTemplatePayload(): string {
   return [
     `# Dopl Skill Synthesis — Agent Instructions (${SKILL_TEMPLATE_VERSION})`,
     "",
-    "Use the prompt and template below to generate a cluster brain. The output of this prompt goes straight into `update_cluster_brain(slug, <output>)`. No server-side LLM call runs — you are the synthesizer.",
+    "Use the prompt and template below to generate a cluster brain. The output of this prompt goes straight into `dopl_brain(op=update_instructions, slug, <output>)`. No server-side LLM call runs — you are the synthesizer.",
     "",
     "## Prompt to run",
     "",
@@ -112,13 +112,13 @@ export function buildSkillTemplatePayload(): string {
     "",
     "## After generating",
     "",
-    "Call `update_cluster_brain(slug, <your output>)` to persist. The brain is the canonical surface — agents fetch it on demand via `get_cluster_brain`, so no separate file-sync step is needed.",
+    "Call `dopl_brain(op=update_instructions, slug, <your output>)` to persist. The brain is the canonical surface — agents fetch it on demand via `dopl_brain(op=get)`, so no separate file-sync step is needed.",
   ].join("\n");
 }
 
 /**
  * Advisory structural check — does this brain content have the minimum
- * viable sections? Used by the update_cluster_brain PATCH handler to
+ * viable sections? Used by the dopl_brain(op=update_instructions) PATCH handler to
  * return a warning in the response when the content looks flat. Not a
  * hard rejection; brains can be partial during iterative development.
  */

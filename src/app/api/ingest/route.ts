@@ -24,11 +24,11 @@ export async function POST() {
     {
       error: "gone",
       message:
-        "Legacy server-side ingestion has been removed. Use POST /api/ingest/prepare to fetch + receive synthesis prompts, run the prompts in your own client (Claude Code via the `ingest_url` + `submit_ingested_entry` MCP tools), then POST /api/ingest/submit to persist the generated artifacts.",
+        "Legacy server-side ingestion has been removed. Use POST /api/ingest/prepare to fetch + receive synthesis prompts, run the prompts in your own client (Claude Code via the `dopl_ingest(op=url)` + `dopl_ingest(op=submit)` MCP tools), then POST /api/ingest/submit to persist the generated artifacts.",
       migrate_to: {
         prepare: "POST /api/ingest/prepare",
         submit: "POST /api/ingest/submit",
-        mcp_tools: ["ingest_url", "submit_ingested_entry"],
+        mcp_tools: ["dopl_ingest(op=url)", "dopl_ingest(op=submit)"],
       },
     },
     { status: 410 }

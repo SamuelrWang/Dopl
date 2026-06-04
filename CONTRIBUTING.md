@@ -67,20 +67,98 @@ It speaks stdio. Wire it into your Claude Code or other MCP-compatible agent the
 
 ## Releasing a package
 
-1. Update the package's `CHANGELOG.md` — move entries from `[Unreleased]` to a new versioned section.
-2. Bump the version in the package's `package.json` (semver).
-3. If publishing `@dopl/client`, bump the `^X.Y.Z` range in `@dopl/cli` and `@dopl/mcp-server`'s `dependencies` if the new version is a breaking change.
-4. Commit on `master`.
-5. Tag in the form `<package>-v<version>`:
-   ```sh
-   git tag client-v0.1.0      # publishes @dopl/client
-   git tag cli-v0.1.0         # publishes @dopl/cli
-   git tag mcp-server-v0.6.2  # publishes @dopl/mcp-server
-   git push origin --tags
-   ```
-6. The `release.yml` workflow runs build + test, publishes the matching workspace to npm, then creates a GitHub release with the CHANGELOG body.
+Each package (`@dopl/client`, `@dopl/cli`, `@dopl/mcp-server`) versions and
+publishes independently. There are two publish paths — **CI** (hands-off, the
+default) and **local** (fallback when CI lacks an npm token). Both share the
+same prep.
 
-If `@dopl/client` and `@dopl/cli` both have new versions, **publish the client first**, then bump and publish the CLI. npm resolves `^X.Y.Z` against the registry at install time, not the workspace.
+### 1. Prep (always)
+
+1. Move the `[Unreleased]` notes in the package's `CHANGELOG.md` into a new
+   `## [X.Y.Z] — YYYY-MM-DD` section. (The release job extracts this section for
+   the GitHub release body and **fails if it's empty**.)
+2. Bump `version` in the package's `package.json` (semver). Note: `0.x → 1.0.0`
+   is a *forward* major bump — semver compares **major first**, so `1.0.0` is
+   newer than `0.18.1`, not older. In `0.x`, the **minor** is the breaking slot
+   (`0.18.1 → 0.19.0`) if you want to stay pre-1.0.
+3. **Sync the lockfile** — the release job runs `npm ci`, which fails if
+   `package-lock.json` doesn't match the bumped version:
+   ```sh
+   npm install --package-lock-only
+   ```
+4. If publishing `@dopl/client` with breaking changes, bump the `^X.Y.Z` range
+   in `@dopl/cli` and `@dopl/mcp-server` `dependencies`.
+5. Commit (scope the add so the release commit is just the package + lockfile):
+   ```sh
+   git add packages/<pkg> package-lock.json
+   git commit -m "<pkg>: <summary> (vX.Y.Z)"
+   git push origin master
+   ```
+
+### 2a. Publish via CI (preferred — needs the `NPM_TOKEN` secret)
+
+Tag and push; `release.yml` builds, tests, verifies the tag matches
+`package.json`, publishes, and cuts a GitHub release from the changelog section.
+
+```sh
+git tag mcp-server-v1.0.0     # form: <package>-v<version>; MUST equal package.json
+git push origin mcp-server-v1.0.0
+```
+Tags: `client-v*` → `@dopl/client`, `cli-v*` → `@dopl/cli`, `mcp-server-v*` →
+`@dopl/mcp-server`. Watch with `gh run watch`; verify with
+`npm view @dopl/<pkg> version`.
+
+**This path only works if the repo has an `NPM_TOKEN` Actions secret** with
+publish rights to the `@dopl` scope. If the "Publish to npm" step fails with
+`npm error code ENEEDAUTH` / an empty `NODE_AUTH_TOKEN`, the secret is missing or
+blank (note: not every fork/mirror of this repo has it). Fix it once:
+
+1. npmjs.com → **Access Tokens** → generate an **Automation** token (automation
+   tokens bypass npm 2FA, which classic tokens and interactive logins do not).
+2. GitHub repo → Settings → Secrets and variables → Actions → new secret named
+   **`NPM_TOKEN`**.
+3. Re-run the failed release: `gh run rerun <run-id> --failed` (the tag still
+   exists, so no re-tag needed).
+
+### 2b. Publish locally (fallback — when CI has no token)
+
+After the Prep steps, from the repo root:
+
+```sh
+npm publish -w @dopl/mcp-server
+```
+If your npm account has 2FA enabled for writes, npm prints
+`Authenticate your account at: https://www.npmjs.com/auth/cli/…` and waits —
+press ENTER, approve in the browser, and it finishes with
+`+ @dopl/mcp-server@1.0.0`. This **web-OTP flow needs a real interactive
+terminal**; a sandboxed/non-interactive shell can't open the browser and falls
+back to demanding `--otp=<code>`. Then still tag for history + the GitHub
+release record:
+```sh
+git tag mcp-server-v1.0.0 && git push origin mcp-server-v1.0.0
+```
+
+> **Agents can't run the publish for you.** Harness guards block handling npm
+> tokens and OTP codes, so a coding agent can do everything *up to* the publish
+> (prep, lockfile sync, commit, tag, push) and everything *after* (verify,
+> reload) — but **you** must run `npm publish` (or add the `NPM_TOKEN` secret and
+> let CI do it). Don't paste a token into a chat; if you must, revoke it after.
+
+If `@dopl/client` and `@dopl/cli` both have new versions, **publish the client
+first** — npm resolves `^X.Y.Z` against the registry at install time, not the
+local workspace.
+
+### 3. Reload the MCP after publishing
+
+The MCP is launched via `npx @dopl/mcp-server@<version>`, pinned in
+`~/.claude.json` (both the `dopl` and `dopl-fidaris` server entries). Bump the
+pins, then restart the client so it re-spawns the server (MCP servers start
+fresh on every launch, so the new version is picked up):
+
+```sh
+sed -i '' 's#@dopl/mcp-server@OLD#@dopl/mcp-server@NEW#g' ~/.claude.json
+# then quit Claude Code and relaunch — `/mcp` should list the new tools.
+```
 
 ## Conventions cheat sheet
 

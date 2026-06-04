@@ -102,17 +102,17 @@ export function McpServerSection() {
         headers={["Tool", "Description"]}
         rows={[
           ["search_setups", "Search the knowledge base with natural language. Returns ranked results with optional AI synthesis."],
-          ["get_setup", "Get full details for an entry: README, agents.md, manifest."],
+          ["dopl_setups(op=get)", "Get full details for an entry: README, agents.md, manifest."],
           ["build_solution", "Compose a multi-source solution from a brief description of what you want to build."],
-          ["ingest_url", "Ingest a URL into the knowledge base. Processes in the background (30 to 120 seconds)."],
-          ["list_clusters", "List all your clusters."],
-          ["get_cluster", "Get cluster details with member entries, READMEs, and brain."],
-          ["query_cluster", "Semantic search scoped to a single cluster."],
-          ["save_cluster_memory", "Save a preference or correction to a cluster brain."],
-          ["canvas_add_entry", "Add a knowledge base entry to your canvas."],
-          ["canvas_search_and_add", "Search and add top results to your canvas in one step."],
-          ["canvas_create_cluster", "Group canvas entries into a named cluster."],
-          ["check_entry_updates", "Check if a GitHub-sourced entry has upstream changes since ingestion."],
+          ["dopl_ingest(op=url)", "Ingest a URL into the knowledge base. Processes in the background (30 to 120 seconds)."],
+          ["dopl_cluster(op=list)", "List all your clusters."],
+          ["dopl_cluster(op=get)", "Get cluster details with member entries, READMEs, and brain."],
+          ["dopl_cluster(op=query)", "Semantic search scoped to a single cluster."],
+          ["dopl_brain(op=save_memory)", "Save a preference or correction to a cluster brain."],
+          ["dopl_canvas(op=add_entry)", "Add a knowledge base entry to your canvas."],
+          ["dopl_canvas(op=search_and_add)", "Search and add top results to your canvas in one step."],
+          ["dopl_cluster(op=create)", "Group canvas entries into a named cluster."],
+          ["dopl_entry(op=check_updates)", "Check if a GitHub-sourced entry has upstream changes since ingestion."],
         ]}
       />
 

@@ -135,21 +135,31 @@ function parseTarget(raw) {
     return null;
 }
 function buildMcpConfigBlock(input) {
-    const env = { DOPL_BASE_URL: input.baseUrl };
+    // A-025: pass the API key via the environment, never as a process
+    // arg. Command-line args are visible to any local user via `ps` for
+    // the entire lifetime of the long-running MCP server; env vars are
+    // not. The server reads DOPL_API_KEY (see mcp-server/src/index.ts).
+    const env = {
+        DOPL_API_KEY: input.apiKey,
+        DOPL_BASE_URL: input.baseUrl,
+    };
     if (input.workspaceId)
         env.DOPL_WORKSPACE_ID = input.workspaceId;
-    const cliEnvFlags = [`-e DOPL_BASE_URL=${input.baseUrl}`];
+    const cliEnvFlags = [
+        `-e DOPL_API_KEY=${input.apiKey}`,
+        `-e DOPL_BASE_URL=${input.baseUrl}`,
+    ];
     if (input.workspaceId)
         cliEnvFlags.push(`-e DOPL_WORKSPACE_ID=${input.workspaceId}`);
     const claudeCodeCli = `claude mcp add dopl --scope user --transport stdio ` +
-        `${cliEnvFlags.join(" ")} -- npx @dopl/mcp-server --api-key ${input.apiKey}`;
+        `${cliEnvFlags.join(" ")} -- npx @dopl/mcp-server`;
     return {
         claudeCodeCli,
         mcpJsonShape: {
             mcpServers: {
                 dopl: {
                     command: "npx",
-                    args: ["@dopl/mcp-server", "--api-key", input.apiKey],
+                    args: ["@dopl/mcp-server"],
                     env,
                 },
             },
@@ -211,7 +221,13 @@ async function installMcpConfig(target, block) {
         },
     };
     await (0, promises_1.mkdir)((0, node_path_1.dirname)(path), { recursive: true });
-    await (0, promises_1.writeFile)(path, JSON.stringify(next, null, 2) + "\n", { mode: 0o600 });
+    // A-031: atomic write. Write to a temp sibling then rename into place.
+    // A rename is atomic on the same filesystem, so an interrupted write
+    // (e.g. Ctrl-C) can never leave this file — which holds *every* MCP
+    // server the user configured, not just dopl — half-written and broken.
+    const tmp = `${path}.${process.pid}.tmp`;
+    await (0, promises_1.writeFile)(tmp, JSON.stringify(next, null, 2) + "\n", { mode: 0o600 });
+    await (0, promises_1.rename)(tmp, path);
     return path;
 }
 /**
