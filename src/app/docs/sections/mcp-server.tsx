@@ -4,7 +4,7 @@ export const TOC: TocEntry[] = [
   { id: "mcp-setup", title: "Setup", level: 2 },
   { id: "mcp-claude-code", title: "Claude Code", level: 3 },
   { id: "mcp-claude-desktop", title: "Claude Desktop", level: 3 },
-  { id: "mcp-openclaw", title: "OpenClaw", level: 3 },
+  { id: "mcp-codex", title: "Codex", level: 3 },
   { id: "mcp-tools", title: "Available tools", level: 2 },
   { id: "api-keys", title: "API keys", level: 2 },
 ];
@@ -35,7 +35,7 @@ export function McpServerSection() {
       <SectionHero
         label="MCP Server"
         title="Connect your AI tools"
-        description="The Dopl MCP server bridges your knowledge base to Claude Code, OpenClaw, and any MCP-compatible tool."
+        description="The Dopl MCP server bridges your knowledge base to Claude Code, Codex, and any MCP-compatible tool."
       >
         <ConnectionIllustration />
       </SectionHero>
@@ -72,24 +72,13 @@ export function McpServerSection() {
         Restart Claude Desktop to pick up the changes.
       </P>
 
-      <H3 id="mcp-openclaw">OpenClaw</H3>
+      <H3 id="mcp-codex">Codex</H3>
       <P>
-        Add the Dopl server to your OpenClaw MCP config:
+        Add the Dopl server to your Codex MCP config:
       </P>
-      <CodeBlock title="~/.openclaw/config/mcporter.json">{`{
-  "mcp": {
-    "servers": {
-      "dopl": {
-        "command": "npx",
-        "args": ["@dopl/mcp-server", "--api-key", "YOUR_API_KEY"]
-      }
-    }
-  }
-}`}</CodeBlock>
-      <P>
-        Or add via the OpenClaw CLI:
-      </P>
-      <CodeBlock title="Terminal">{`openclaw mcp add dopl -- npx @dopl/mcp-server --api-key YOUR_API_KEY`}</CodeBlock>
+      <CodeBlock title="~/.codex/config.toml">{`[mcp_servers.dopl]
+command = "npx"
+args = ["@dopl/mcp-server", "--api-key", "YOUR_API_KEY"]`}</CodeBlock>
       <P>
         The same tools and capabilities are available regardless of which platform you connect from.
       </P>

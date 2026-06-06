@@ -70,6 +70,7 @@ export default function CanvasClientShell({
     <CanvasProvider
       userId={userId}
       workspaceId={workspaceId}
+      workspaceSlug={workspaceSlug}
       canvasSlug={canvasSlug}
       initialState={initialState}
       initialConversations={initialConversations}

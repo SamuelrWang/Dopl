@@ -251,7 +251,8 @@ export async function createBase(
 export async function updateBase(
   ctx: KnowledgeContext,
   id: string,
-  patch: KnowledgeBaseUpdateInput
+  patch: KnowledgeBaseUpdateInput,
+  expectedUpdatedAt?: string
 ): Promise<KnowledgeBase> {
   const base = await getBaseById(ctx, id);
   // Updating the toggle itself is a settings change — agents can't
@@ -280,6 +281,9 @@ export async function updateBase(
     }
   }
   await assertAgentWriteAllowed(ctx, base);
+  if (expectedUpdatedAt && base.updatedAt !== expectedUpdatedAt) {
+    throw new KnowledgeStaleVersionError(expectedUpdatedAt, base.updatedAt);
+  }
   if (patch.slug && patch.slug !== base.slug) {
     const taken = await repo.listBaseSlugsForWorkspace(ctx.workspaceId);
     if (taken.includes(patch.slug)) {
@@ -287,13 +291,22 @@ export async function updateBase(
     }
   }
   try {
-    return await repo.updateBaseRow(id, {
-      name: patch.name,
-      slug: patch.slug,
-      description: patch.description,
-      agentWriteEnabled: patch.agentWriteEnabled,
-      visibility: patch.visibility,
-    });
+    const saved = await repo.updateBaseRow(
+      id,
+      {
+        name: patch.name,
+        slug: patch.slug,
+        description: patch.description,
+        agentWriteEnabled: patch.agentWriteEnabled,
+        visibility: patch.visibility,
+      },
+      expectedUpdatedAt
+    );
+    if (saved === null) {
+      const fresh = await getBaseById(ctx, id);
+      throw new KnowledgeStaleVersionError(expectedUpdatedAt!, fresh.updatedAt);
+    }
+    return saved;
   } catch (err) {
     if (errorCode(err) === "23505" && patch.slug) {
       throw new KnowledgeBaseSlugConflictError(patch.slug);
@@ -395,7 +408,15 @@ export async function updateFolder(
   if (expectedUpdatedAt && folder.updatedAt !== expectedUpdatedAt) {
     throw new KnowledgeStaleVersionError(expectedUpdatedAt, folder.updatedAt);
   }
-  return repo.updateFolderRow(id, patch);
+  // Atomic CAS gate (closes the read→write race the pre-check above
+  // can't): null means a concurrent write landed; re-fetch for the
+  // actual version and surface the stale conflict.
+  const saved = await repo.updateFolderRow(id, patch, expectedUpdatedAt);
+  if (saved === null) {
+    const fresh = await getFolderInternal(ctx, id, false);
+    throw new KnowledgeStaleVersionError(expectedUpdatedAt!, fresh.updatedAt);
+  }
+  return saved;
 }
 
 export async function moveFolder(
@@ -529,16 +550,27 @@ export async function updateEntry(
   if (expectedUpdatedAt && entry.updatedAt !== expectedUpdatedAt) {
     throw new KnowledgeStaleVersionError(expectedUpdatedAt, entry.updatedAt);
   }
-  return repo.updateEntryRow(id, {
-    title: patch.title,
-    // Pass through as-is: undefined skips the column, null clears it.
-    excerpt: patch.excerpt,
-    body: patch.body,
-    entryType: patch.entryType,
-    position: patch.position,
-    lastEditedBy: ctx.userId,
-    lastEditedSource: ctx.source,
-  });
+  const saved = await repo.updateEntryRow(
+    id,
+    {
+      title: patch.title,
+      // Pass through as-is: undefined skips the column, null clears it.
+      excerpt: patch.excerpt,
+      body: patch.body,
+      entryType: patch.entryType,
+      position: patch.position,
+      lastEditedBy: ctx.userId,
+      lastEditedSource: ctx.source,
+    },
+    expectedUpdatedAt
+  );
+  // null = atomic CAS lost the race (a concurrent write landed between
+  // the read above and this write). Re-fetch for the actual version.
+  if (saved === null) {
+    const fresh = await getEntry(ctx, id);
+    throw new KnowledgeStaleVersionError(expectedUpdatedAt!, fresh.updatedAt);
+  }
+  return saved;
 }
 
 export async function moveEntry(
@@ -603,6 +635,10 @@ export async function restoreEntry(
 export interface WriteFileByPathInput {
   body?: string;
   title?: string;
+  /** Optional optimistic-concurrency precondition (the entry's
+   *  `updated_at` the caller last read). Only applies when the path
+   *  resolves to an existing entry; a stale value → 412. */
+  expectedUpdatedAt?: string;
 }
 
 /**
@@ -693,15 +729,43 @@ export async function writeFileByPath(
     // Update existing. Only override title/body when explicitly
     // provided — undefined preserves the existing value. (On CREATE
     // below we default title to leafName because we need a value.)
-    return repo.updateEntryRow(resolved.entry.id, {
-      title: input.title,
-      body: input.body,
-      lastEditedBy: ctx.userId,
-      lastEditedSource: ctx.source,
-    });
+    if (
+      input.expectedUpdatedAt &&
+      resolved.entry.updatedAt !== input.expectedUpdatedAt
+    ) {
+      throw new KnowledgeStaleVersionError(
+        input.expectedUpdatedAt,
+        resolved.entry.updatedAt
+      );
+    }
+    const saved = await repo.updateEntryRow(
+      resolved.entry.id,
+      {
+        title: input.title,
+        body: input.body,
+        lastEditedBy: ctx.userId,
+        lastEditedSource: ctx.source,
+      },
+      input.expectedUpdatedAt
+    );
+    if (saved === null) {
+      const fresh = await repo.findEntryById(resolved.entry.id, false);
+      throw new KnowledgeStaleVersionError(
+        input.expectedUpdatedAt!,
+        fresh?.updatedAt ?? "concurrent"
+      );
+    }
+    return saved;
   }
 
-  // Not found — mkdir -p parents, then create.
+  // Not found — but if the caller passed a precondition it expected to
+  // overwrite an existing entry that has since vanished (deleted/renamed
+  // concurrently). Refuse rather than silently creating a duplicate.
+  if (input.expectedUpdatedAt) {
+    throw new KnowledgeStaleVersionError(input.expectedUpdatedAt, "deleted");
+  }
+
+  // mkdir -p parents, then create.
   const parentFolder = await ensureFolderPath(ctx, base.id, parentSegments);
   return repo.insertEntry({
     workspaceId: ctx.workspaceId,

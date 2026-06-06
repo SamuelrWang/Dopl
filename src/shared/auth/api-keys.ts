@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "crypto";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { API_KEY_PREFIX } from "@/config";
+import { encryptKey, decryptKey } from "./key-crypto";
 
 // Audit fix #27: was `const supabase = supabaseAdmin()` at module load —
 // fails fast on missing SUPABASE_SERVICE_ROLE_KEY before any call site
@@ -171,6 +172,9 @@ export async function createApiKey(
     key_hash: hash,
     key_prefix: prefix,
     name,
+    // Encrypted at rest so the owner can reveal it later (auth still
+    // uses key_hash only). AES-256-GCM, packed base64.
+    encrypted_key: encryptKey(key),
   };
   if (userId) row.user_id = userId;
   if (workspaceId) row.workspace_id = workspaceId;
@@ -182,11 +186,77 @@ export async function createApiKey(
     .select("id")
     .single();
 
-  if (error || !data) {
-    throw new Error(`Failed to create API key: ${error?.message}`);
-  }
+  // Propagate the raw PostgrestError so callers can branch on `.code`
+  // (e.g. 23505 unique-violation → "active key already exists").
+  if (error) throw error;
+  if (!data) throw new Error("Failed to create API key");
 
   return { key, id: data.id, name, prefix };
+}
+
+/** The current active (non-revoked) key for a (user, workspace), or null. */
+export async function findActiveWorkspaceKey(
+  userId: string,
+  workspaceId: string
+): Promise<{ id: string; key_prefix: string; name: string } | null> {
+  const keys = await listApiKeys({ userId, workspaceId });
+  const active = keys.find((k) => !k.revoked_at);
+  return active
+    ? { id: active.id, key_prefix: active.key_prefix, name: active.name }
+    : null;
+}
+
+/**
+ * Idempotent auto-generation: mint a workspace-scoped key for the
+ * (user, workspace) pair if one doesn't already exist. Safe to call on
+ * every workspace create / invite accept — a concurrent create that
+ * trips the unique index is treated as success. Lives in shared/auth so
+ * workspace lifecycle code can trigger it without a cross-feature import.
+ */
+export async function ensureWorkspaceKey(
+  userId: string,
+  workspaceId: string,
+  name: string = "Workspace key"
+): Promise<void> {
+  if (await findActiveWorkspaceKey(userId, workspaceId)) return;
+  try {
+    await createApiKey(name, userId, workspaceId);
+  } catch (e) {
+    if ((e as { code?: string })?.code === "23505") return; // race: lost
+    throw e;
+  }
+}
+
+/**
+ * Decrypt and return an API key's plaintext, gated to its owner. Pass
+ * the owner filters (userId and/or workspaceId) so a member can't
+ * reveal another member's key by guessing an id. Returns null when the
+ * key isn't found/owned OR has no stored ciphertext (pre-encryption
+ * legacy keys — those are non-revealable).
+ */
+export async function revealApiKey(
+  id: string,
+  opts: { userId?: string; workspaceId?: string } = {}
+): Promise<string | null> {
+  const supabase = supabaseAdmin();
+  let query = supabase
+    .from("api_keys")
+    .select("encrypted_key, revoked_at")
+    .eq("id", id);
+  if (opts.userId) query = query.eq("user_id", opts.userId);
+  if (opts.workspaceId) query = query.eq("workspace_id", opts.workspaceId);
+
+  const { data, error } = await query.maybeSingle();
+  if (error) throw error;
+  if (!data || data.revoked_at || !data.encrypted_key) return null;
+  try {
+    return decryptKey(data.encrypted_key);
+  } catch (e) {
+    // Corrupt ciphertext or a rotated/missing encryption secret →
+    // treat as non-revealable rather than 500ing the caller.
+    console.error("[auth] API key decrypt failed:", e);
+    return null;
+  }
 }
 
 /**

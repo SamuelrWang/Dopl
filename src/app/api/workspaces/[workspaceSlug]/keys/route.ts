@@ -2,18 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUser } from "@/shared/supabase/server";
 import { resolveMembershipOrThrow } from "@/features/workspaces/server/service";
 import { resolveApiWorkspace } from "@/features/workspaces/server/segment";
-import { createApiKey, listApiKeys } from "@/shared/auth/api-keys";
+import { listApiKeys } from "@/shared/auth/api-keys";
+import { createWorkspaceKey } from "@/features/api-keys/server/service";
+import { ActiveKeyExistsError } from "@/features/api-keys/server/errors";
 
 /**
- * Per-member workspace API keys.
+ * Per-member workspace API keys — exactly one ACTIVE key per
+ * (user, workspace). The MCP server authenticates as the member who
+ * owns the key, inheriting their role + audit trail.
  *
- * Each member has their own keys scoped to a workspace. The MCP server
- * authenticates as the *member* who owns the key, inheriting their
- * role + audit trail. Admins do not see other members' keys.
- *
- * GET → current user's own keys for this workspace.
- * POST → create a new key bound to the current user + workspace.
- *        Any active member can self-provision.
+ * GET → current user's keys for this workspace (active + revoked).
+ * POST → create the user's key for this workspace. 409 if one is
+ *        already active (the UI must revoke it first).
  */
 
 interface RouteContext {
@@ -52,25 +52,31 @@ export async function POST(request: NextRequest, context: RouteContext) {
   await resolveMembershipOrThrow(workspace.id, user.id);
 
   const body = await request.json().catch(() => ({}));
-  const name = typeof body.name === "string" ? body.name.trim() : "";
-  if (!name) {
+  const name =
+    typeof body.name === "string" && body.name.trim()
+      ? body.name.trim()
+      : "Workspace key";
+
+  try {
+    const result = await createWorkspaceKey(user.id, workspace.id, name);
     return NextResponse.json(
-      { error: { code: "BAD_REQUEST", message: "name is required" } },
-      { status: 400 }
+      {
+        key: result.key,
+        id: result.id,
+        name: result.name,
+        prefix: result.prefix,
+        workspace_id: workspace.id,
+        message: "Save this key — it will not be shown again.",
+      },
+      { status: 201 }
     );
+  } catch (err) {
+    if (err instanceof ActiveKeyExistsError) {
+      return NextResponse.json(
+        { error: { code: err.code, message: err.message } },
+        { status: 409 }
+      );
+    }
+    throw err;
   }
-
-  const result = await createApiKey(name, user.id, workspace.id);
-
-  return NextResponse.json(
-    {
-      key: result.key,
-      id: result.id,
-      name: result.name,
-      prefix: result.prefix,
-      workspace_id: workspace.id,
-      message: "Save this key — it will not be shown again.",
-    },
-    { status: 201 }
-  );
 }

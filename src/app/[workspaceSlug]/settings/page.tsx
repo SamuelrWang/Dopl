@@ -12,7 +12,7 @@ import { resolveMembershipOrThrow } from "@/features/workspaces/server/service";
 import { resolvePageWorkspace } from "@/features/workspaces/server/segment";
 import { workspaceSegment } from "@/features/workspaces/url";
 import { WorkspaceSettingsForm } from "@/features/workspaces/components/workspace-settings-form";
-import { WorkspaceKeysSection } from "@/features/api-keys/components/workspace-keys-section";
+import { ConnectionSetup } from "@/features/api-keys/components/connection-setup";
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +45,10 @@ export default async function WorkspaceSettingsPage({ params }: PageProps) {
       </div>
       <div className="space-y-8">
         <WorkspaceSettingsForm workspace={workspace} role={membership.role} />
-        <WorkspaceKeysSection workspaceSlug={workspaceSegment(workspace)} />
+        <section>
+          <h2 className="text-sm font-semibold text-white mb-3">API key &amp; setup</h2>
+          <ConnectionSetup workspaceSlug={workspaceSegment(workspace)} />
+        </section>
       </div>
     </div>
   );

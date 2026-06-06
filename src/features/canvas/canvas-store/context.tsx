@@ -58,6 +58,10 @@ export const CapabilitiesContext = createContext<CanvasCapabilities>(DEFAULT_CAP
  */
 export interface WorkspaceScope {
   workspaceId: string;
+  /** The workspace slug for workspace-scoped fetches (e.g. the API-key
+   *  setup surface). Optional: some canvas hosts (the builder) only
+   *  supply workspaceId + canvasSlug. */
+  workspaceSlug?: string;
   canvasSlug: string;
 }
 

@@ -8,6 +8,7 @@
  */
 
 import type { DoplTransport } from "./transport.js";
+import { DoplApiError } from "./errors.js";
 import type {
   ResolvedSkill,
   Skill,
@@ -134,11 +135,35 @@ export async function writeSkillFile(
   t: DoplTransport,
   slug: string,
   fileName: string,
-  body: string
+  body: string,
+  expectedVersion?: string | null
 ): Promise<SkillFile> {
+  // Optimistic concurrency, tri-state on `expectedVersion`:
+  //   - string    → atomic CAS against it (412 on mismatch).
+  //   - undefined  → safe default: read the current version first so the
+  //                  write is STILL a CAS; a concurrent edit can't be
+  //                  silently lost. 404 falls through (write surfaces it).
+  //   - null       → force: blind overwrite, no precondition.
+  let version: string | undefined;
+  if (expectedVersion === null) {
+    version = undefined;
+  } else if (expectedVersion === undefined) {
+    try {
+      version = (await readSkillFile(t, slug, fileName)).updatedAt;
+    } catch (e) {
+      if (!(e instanceof DoplApiError) || e.status !== 404) throw e;
+    }
+  } else {
+    version = expectedVersion;
+  }
   const data = await t.request<{ file: SkillFile }>(
     `/api/skills/${enc(slug)}/files/${enc(fileName)}`,
-    { method: "PUT", body: { body }, toolName: "skill_write_file" }
+    {
+      method: "PUT",
+      body: { body },
+      toolName: "skill_write_file",
+      customHeaders: version ? { "X-Updated-At": version } : undefined,
+    }
   );
   return data.file;
 }

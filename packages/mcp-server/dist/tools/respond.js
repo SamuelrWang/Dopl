@@ -8,12 +8,23 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ok = ok;
 exports.err = err;
+exports.isConflict = isConflict;
 exports.missingParams = missingParams;
 function ok(text) {
     return { content: [{ type: "text", text }] };
 }
 function err(message) {
     return { content: [{ type: "text", text: message }], isError: true };
+}
+/**
+ * True when a thrown error is an optimistic-concurrency conflict (HTTP
+ * 412) from the Dopl API. Duck-typed on `.status` so it works across the
+ * @dopl/client module boundary without importing the error class.
+ */
+function isConflict(e) {
+    return (typeof e === "object" &&
+        e !== null &&
+        e.status === 412);
 }
 /**
  * Returns an error response when any of `required` params is absent for the

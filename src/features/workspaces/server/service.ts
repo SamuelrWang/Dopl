@@ -9,6 +9,7 @@ import type {
 } from "../types";
 import { meetsMinRole } from "../types";
 import { slugifyWorkspaceName } from "../slug";
+import { ensureWorkspaceKey } from "@/shared/auth/api-keys";
 import { RESERVED_WORKSPACE_SLUGS } from "@/config";
 import {
   deleteWorkspace,
@@ -104,17 +105,35 @@ export async function ensureDefaultWorkspace(userId: string): Promise<Workspace>
   if (existing) return existing;
   const name = "Untitled";
   try {
-    return await insertWorkspaceWithOwnerMembership({
+    const workspace = await insertWorkspaceWithOwnerMembership({
       ownerId: userId,
       name,
       slug: slugifyWorkspaceName(name),
     });
+    await autoGenWorkspaceKey(userId, workspace.id);
+    return workspace;
   } catch (err) {
     if (isUniqueViolation(err)) {
       const after = await findDefaultWorkspaceForUser(userId);
       if (after) return after;
     }
     throw err;
+  }
+}
+
+/**
+ * Best-effort: pre-generate the owner/member's workspace API key so the
+ * setup surface shows a ready-to-use key with zero friction. Never fails
+ * the workspace flow — a missing key is recoverable from the UI.
+ */
+async function autoGenWorkspaceKey(
+  userId: string,
+  workspaceId: string
+): Promise<void> {
+  try {
+    await ensureWorkspaceKey(userId, workspaceId);
+  } catch (e) {
+    console.error("[workspaces] auto-generate API key failed:", e);
   }
 }
 
@@ -150,12 +169,14 @@ export async function createWorkspaceForUser(
   userId: string,
   input: { name: string; description?: string | null }
 ): Promise<Workspace> {
-  return insertWorkspaceWithOwnerMembership({
+  const workspace = await insertWorkspaceWithOwnerMembership({
     ownerId: userId,
     name: input.name,
     slug: slugifyWorkspaceName(input.name),
     description: input.description ?? null,
   });
+  await autoGenWorkspaceKey(userId, workspace.id);
+  return workspace;
 }
 
 export async function renameWorkspace(

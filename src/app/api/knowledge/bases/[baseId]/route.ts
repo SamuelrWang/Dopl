@@ -32,7 +32,8 @@ async function handlePatch(request: NextRequest, auth: WorkspaceAuthContext) {
     const id = requireBaseId(auth);
     const patch = await parseJson(request, KnowledgeBaseUpdateSchema);
     const ctx = buildKnowledgeContext(auth);
-    const base = await updateBase(ctx, id, patch);
+    const expectedUpdatedAt = request.headers.get("x-updated-at") ?? undefined;
+    const base = await updateBase(ctx, id, patch, expectedUpdatedAt);
     return NextResponse.json({ base });
   } catch (err) {
     return toKnowledgeErrorResponse(err);

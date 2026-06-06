@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { useRefetchOnFocus } from "@/shared/hooks/use-refetch-on-focus";
+import { useCurrentProfile } from "@/shared/auth/use-current-profile";
+import { usePresence } from "@/shared/realtime/use-presence";
+import { AvatarStack } from "@/shared/ui/avatar-stack";
 import { toast } from "@/shared/ui/toast";
 import {
   KnowledgeApiError,
@@ -113,6 +116,17 @@ export function DocPane({
   const statusRef = useRef<SaveStatus>("idle");
   conflictRef.current = conflict;
   statusRef.current = status;
+
+  // Presence: who else has this entry open, and whether they're editing.
+  const selfProfile = useCurrentProfile();
+  const presencePeers = usePresence(
+    `presence:kb-entry:${entry.id}`,
+    selfProfile,
+    status === "dirty" || status === "saving"
+  );
+  const otherEditors = presencePeers.filter(
+    (p) => p.userId !== selfProfile?.userId
+  );
 
   // Re-seed local state from the parent's `entry` prop ONLY when the
   // editor is in a safe state (no unsaved edits, no pending conflict).
@@ -335,6 +349,7 @@ export function DocPane({
           placeholder="Untitled"
           className="flex-1 bg-transparent text-[20px] font-semibold text-text-primary tracking-tight focus:outline-none placeholder:text-text-secondary/40"
         />
+        <AvatarStack users={otherEditors} />
         <SaveStatusIndicator state={status} />
       </div>
       <DocEditor

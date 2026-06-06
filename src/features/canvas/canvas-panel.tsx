@@ -260,7 +260,7 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
       {/* Body — routes by panel type */}
       <div className="flex-1 min-h-0 flex flex-col">
         {panel.type === "chat" && <ChatPanelBody panel={panel} />}
-        {panel.type === "connection" && <ConnectionPanelBody panel={panel} />}
+        {panel.type === "connection" && <ConnectionPanelBody />}
         {panel.type === "entry" && <EntryPanelBody panel={panel} />}
         {panel.type === "browse" && <BrowsePanelBody panel={panel} />}
         {panel.type === "knowledge" && <KnowledgePanelBody panel={panel} />}

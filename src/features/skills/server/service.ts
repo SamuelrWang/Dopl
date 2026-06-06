@@ -301,18 +301,28 @@ export async function updateSkill(
     if (taken.includes(patch.slug)) throw new SkillSlugConflictError(patch.slug);
   }
   try {
-    return await repo.updateSkillRow(skill.id, {
-      name: patch.name,
-      description: patch.description,
-      whenToUse: patch.whenToUse,
-      whenNotToUse: patch.whenNotToUse,
-      slug: patch.slug,
-      status: patch.status,
-      agentWriteEnabled: patch.agentWriteEnabled,
-      visibility: effectiveVisibility,
-      lastEditedBy: ctx.userId,
-      lastEditedSource: ctx.source,
-    });
+    const saved = await repo.updateSkillRow(
+      skill.id,
+      {
+        name: patch.name,
+        description: patch.description,
+        whenToUse: patch.whenToUse,
+        whenNotToUse: patch.whenNotToUse,
+        slug: patch.slug,
+        status: patch.status,
+        agentWriteEnabled: patch.agentWriteEnabled,
+        visibility: effectiveVisibility,
+        lastEditedBy: ctx.userId,
+        lastEditedSource: ctx.source,
+      },
+      expectedUpdatedAt
+    );
+    // null = atomic CAS lost the race; re-fetch for the actual version.
+    if (saved === null) {
+      const fresh = await getSkillBySlug(ctx, slug);
+      throw new SkillStaleVersionError(expectedUpdatedAt!, fresh.updatedAt);
+    }
+    return saved;
   } catch (err) {
     if (repo.pgErrorCode(err) === "23505" && patch.slug) {
       throw new SkillSlugConflictError(patch.slug);
@@ -379,11 +389,24 @@ export async function writeFile(
   if (expectedUpdatedAt && file.updatedAt !== expectedUpdatedAt) {
     throw new SkillStaleVersionError(expectedUpdatedAt, file.updatedAt);
   }
-  return repo.updateFileRow(file.id, {
-    body: input.body,
-    lastEditedBy: ctx.userId,
-    lastEditedSource: ctx.source,
-  });
+  const saved = await repo.updateFileRow(
+    file.id,
+    {
+      body: input.body,
+      lastEditedBy: ctx.userId,
+      lastEditedSource: ctx.source,
+    },
+    expectedUpdatedAt
+  );
+  // null = atomic CAS lost the race; re-fetch for the actual version.
+  if (saved === null) {
+    const fresh = await repo.findFileByName(skill.id, fileName);
+    throw new SkillStaleVersionError(
+      expectedUpdatedAt!,
+      fresh?.updatedAt ?? "concurrent"
+    );
+  }
+  return saved;
 }
 
 export async function renameFile(

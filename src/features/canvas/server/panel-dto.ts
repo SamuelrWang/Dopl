@@ -66,7 +66,6 @@ export function panelToDbRow(panel: Panel) {
       };
       break;
     case "connection":
-      base.panel_data = { apiKey: panel.apiKey };
       break;
     case "browse":
       break;
@@ -151,11 +150,7 @@ export function dbRowToPanel(row: Record<string, unknown>): Panel | null {
         expiresAt: (data.expiresAt as string) || undefined,
       } as ChatPanelData;
     case "connection":
-      return {
-        ...base,
-        type: "connection",
-        apiKey: (data.apiKey as string) || null,
-      } as ConnectionPanelData;
+      return { ...base, type: "connection" } as ConnectionPanelData;
     case "browse":
       return { ...base, type: "browse" };
     case "knowledge":

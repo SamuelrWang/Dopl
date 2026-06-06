@@ -533,9 +533,16 @@ export class DoplClient {
   writeKbFileByPath(
     baseId: string,
     path: string,
-    input: KnowledgeWriteFileInput = {}
+    input: KnowledgeWriteFileInput = {},
+    expectedVersion?: string | null
   ): Promise<KnowledgeEntry> {
-    return kb.writeKbFileByPath(this.transport, baseId, path, input);
+    return kb.writeKbFileByPath(
+      this.transport,
+      baseId,
+      path,
+      input,
+      expectedVersion
+    );
   }
 
   listKbDirByPath(
@@ -629,9 +636,16 @@ export class DoplClient {
   writeSkillFile(
     slug: string,
     fileName: string,
-    body: string
+    body: string,
+    expectedVersion?: string | null
   ): Promise<SkillFile> {
-    return skills.writeSkillFile(this.transport, slug, fileName, body);
+    return skills.writeSkillFile(
+      this.transport,
+      slug,
+      fileName,
+      body,
+      expectedVersion
+    );
   }
 
   renameSkillFile(

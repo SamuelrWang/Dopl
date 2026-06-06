@@ -170,7 +170,17 @@ export interface UpdateBasePatch {
 export async function updateBaseRow(
   id: string,
   patch: UpdateBasePatch
-): Promise<KnowledgeBase> {
+): Promise<KnowledgeBase>;
+export async function updateBaseRow(
+  id: string,
+  patch: UpdateBasePatch,
+  expectedUpdatedAt: string | undefined
+): Promise<KnowledgeBase | null>;
+export async function updateBaseRow(
+  id: string,
+  patch: UpdateBasePatch,
+  expectedUpdatedAt?: string
+): Promise<KnowledgeBase | null> {
   const db = supabaseAdmin();
   const update: Record<string, unknown> = {};
   if (patch.name !== undefined) update.name = patch.name;
@@ -179,13 +189,19 @@ export async function updateBaseRow(
   if (patch.agentWriteEnabled !== undefined)
     update.agent_write_enabled = patch.agentWriteEnabled;
   if (patch.visibility !== undefined) update.visibility = patch.visibility;
-  const { data, error } = await db
-    .from("knowledge_bases")
-    .update(update)
-    .eq("id", id)
-    .select(KNOWLEDGE_BASE_COLS)
-    .single();
-  if (error || !data) throw error || new Error("Failed to update knowledge base");
+  // Optimistic concurrency: when expectedUpdatedAt is supplied, the
+  // `updated_at` filter makes this an atomic compare-and-swap. 0 rows →
+  // the row changed since the caller read it → return null (stale).
+  let query = db.from("knowledge_bases").update(update).eq("id", id);
+  if (expectedUpdatedAt !== undefined) {
+    query = query.eq("updated_at", expectedUpdatedAt);
+  }
+  const { data, error } = await query.select(KNOWLEDGE_BASE_COLS).maybeSingle();
+  if (error) throw error;
+  if (!data) {
+    if (expectedUpdatedAt !== undefined) return null;
+    throw new Error("Failed to update knowledge base");
+  }
   return mapBaseRow(data as KnowledgeBaseRow);
 }
 
@@ -346,19 +362,33 @@ export interface UpdateFolderPatch {
 export async function updateFolderRow(
   id: string,
   patch: UpdateFolderPatch
-): Promise<KnowledgeFolder> {
+): Promise<KnowledgeFolder>;
+export async function updateFolderRow(
+  id: string,
+  patch: UpdateFolderPatch,
+  expectedUpdatedAt: string | undefined
+): Promise<KnowledgeFolder | null>;
+export async function updateFolderRow(
+  id: string,
+  patch: UpdateFolderPatch,
+  expectedUpdatedAt?: string
+): Promise<KnowledgeFolder | null> {
   const db = supabaseAdmin();
   const update: Record<string, unknown> = {};
   if (patch.name !== undefined) update.name = patch.name;
   if (patch.parentId !== undefined) update.parent_id = patch.parentId;
   if (patch.position !== undefined) update.position = patch.position;
-  const { data, error } = await db
-    .from("knowledge_folders")
-    .update(update)
-    .eq("id", id)
-    .select(KNOWLEDGE_FOLDER_COLS)
-    .single();
-  if (error || !data) throw error || new Error("Failed to update knowledge folder");
+  // Optimistic concurrency CAS (see updateBaseRow).
+  let query = db.from("knowledge_folders").update(update).eq("id", id);
+  if (expectedUpdatedAt !== undefined) {
+    query = query.eq("updated_at", expectedUpdatedAt);
+  }
+  const { data, error } = await query.select(KNOWLEDGE_FOLDER_COLS).maybeSingle();
+  if (error) throw error;
+  if (!data) {
+    if (expectedUpdatedAt !== undefined) return null;
+    throw new Error("Failed to update knowledge folder");
+  }
   return mapFolderRow(data as KnowledgeFolderRow);
 }
 
@@ -572,7 +602,17 @@ export interface UpdateEntryPatch {
 export async function updateEntryRow(
   id: string,
   patch: UpdateEntryPatch
-): Promise<KnowledgeEntry> {
+): Promise<KnowledgeEntry>;
+export async function updateEntryRow(
+  id: string,
+  patch: UpdateEntryPatch,
+  expectedUpdatedAt: string | undefined
+): Promise<KnowledgeEntry | null>;
+export async function updateEntryRow(
+  id: string,
+  patch: UpdateEntryPatch,
+  expectedUpdatedAt?: string
+): Promise<KnowledgeEntry | null> {
   const db = supabaseAdmin();
   const update: Record<string, unknown> = {};
   if (patch.title !== undefined) update.title = patch.title;
@@ -584,13 +624,17 @@ export async function updateEntryRow(
   if (patch.lastEditedBy !== undefined) update.last_edited_by = patch.lastEditedBy;
   if (patch.lastEditedSource !== undefined)
     update.last_edited_source = patch.lastEditedSource;
-  const { data, error } = await db
-    .from("knowledge_entries")
-    .update(update)
-    .eq("id", id)
-    .select(KNOWLEDGE_ENTRY_COLS)
-    .single();
-  if (error || !data) throw error || new Error("Failed to update knowledge entry");
+  // Optimistic concurrency CAS (see updateBaseRow).
+  let query = db.from("knowledge_entries").update(update).eq("id", id);
+  if (expectedUpdatedAt !== undefined) {
+    query = query.eq("updated_at", expectedUpdatedAt);
+  }
+  const { data, error } = await query.select(KNOWLEDGE_ENTRY_COLS).maybeSingle();
+  if (error) throw error;
+  if (!data) {
+    if (expectedUpdatedAt !== undefined) return null;
+    throw new Error("Failed to update knowledge entry");
+  }
   return mapEntryRow(data as KnowledgeEntryRow);
 }
 

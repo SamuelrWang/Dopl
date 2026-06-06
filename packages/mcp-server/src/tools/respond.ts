@@ -28,6 +28,19 @@ export function err(message: string): ToolResponse {
 }
 
 /**
+ * True when a thrown error is an optimistic-concurrency conflict (HTTP
+ * 412) from the Dopl API. Duck-typed on `.status` so it works across the
+ * @dopl/client module boundary without importing the error class.
+ */
+export function isConflict(e: unknown): boolean {
+  return (
+    typeof e === "object" &&
+    e !== null &&
+    (e as { status?: number }).status === 412
+  );
+}
+
+/**
  * Returns an error response when any of `required` params is absent for the
  * given op, or null when they're all present. Treats undefined / null /
  * empty-string as absent — the same "no value" semantics the old per-tool

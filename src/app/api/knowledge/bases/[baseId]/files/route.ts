@@ -61,9 +61,14 @@ async function handlePut(request: NextRequest, auth: WorkspaceAuthContext) {
     const baseId = requireBaseId(auth);
     const input = await parseJson(request, WriteFileSchema);
     const ctx = buildKnowledgeContext(auth);
+    // Optimistic-concurrency precondition on the resolved entry's
+    // updated_at (mirrors the skills file route + ID-based entry route).
+    // Mismatch → 412 KNOWLEDGE_STALE_VERSION.
+    const expectedUpdatedAt = request.headers.get("x-updated-at") ?? undefined;
     const entry = await writeFileByPath(ctx, baseId, input.path, {
       body: input.body,
       title: input.title,
+      expectedUpdatedAt,
     });
     return NextResponse.json({ entry });
   } catch (err) {

@@ -16,6 +16,12 @@ export type RegisterTool = <S extends ZodRawShape>(name: string, description: st
 export declare function ok(text: string): ToolResponse;
 export declare function err(message: string): ToolResponse;
 /**
+ * True when a thrown error is an optimistic-concurrency conflict (HTTP
+ * 412) from the Dopl API. Duck-typed on `.status` so it works across the
+ * @dopl/client module boundary without importing the error class.
+ */
+export declare function isConflict(e: unknown): boolean;
+/**
  * Returns an error response when any of `required` params is absent for the
  * given op, or null when they're all present. Treats undefined / null /
  * empty-string as absent — the same "no value" semantics the old per-tool

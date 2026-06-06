@@ -31,7 +31,7 @@ const SKILL_DESCRIPTION = `Read and author the user's skills. Each skill is a fo
 - "list_files" — list the files inside a skill (name + position + length each). Use op="read_file" for a specific body. Requires: slug.
 - "read_file" — read one file from a skill. SKILL.md is the canonical procedure entry point; supplementary files (e.g. \`examples.md\`, \`references/*.md\`) are referenced from SKILL.md and loaded on demand. Requires: slug, file_name.
 - "create_file" — create a new supplementary file SKILL.md links to (\`examples.md\`, \`references/<topic>.md\`, \`templates/<name>.md\`). Cannot recreate SKILL.md (created by op="create"). Names must match \`[A-Za-z0-9._-]+\\.md\` (no slashes — flat namespace). Requires: slug, file_name.
-- "write_file" — overwrite a skill file's body (PUT semantics). The whole body is replaced — read it first with op="read_file" for a partial edit. Requires: slug, file_name, body.
+- "write_file" — overwrite a skill file's body (PUT semantics). The whole body is replaced — read it first with op="read_file" for a partial edit AND to get the Version token; pass that as \`expected_version\` so a concurrent edit can't be silently overwritten (you'll get a 412 to reconcile instead). Requires: slug, file_name, body.
 - "rename_file" — rename a file inside a skill. Cannot rename SKILL.md. Requires: slug, file_name, new_name.
 - "authoring_guide" — fetch the canonical skill-authoring framework: what makes a high-quality skill, how to write description + when_to_use, the canonical body section order, anti-patterns, and a quality checklist. Call before authoring any new skill (every op="create"). The framework is also loaded into the system prompt at session start; this op is the explicit affordance to re-read it deliberately when you're about to write.
 
@@ -69,6 +69,8 @@ function registerSkillTools(register, client) {
         file_name: zod_1.z.string().optional().describe("File name, e.g. SKILL.md or examples.md. Required for read_file, create_file, write_file, rename_file."),
         new_name: zod_1.z.string().optional().describe("op=rename_file (required): the file's new name."),
         body: zod_1.z.string().max(1_048_576).optional().describe("op=create: initial SKILL.md content. op=create_file: optional initial body. op=write_file (required): the new full body."),
+        expected_version: zod_1.z.string().optional().describe("op=write_file: the file's version from a prior read_file, to avoid overwriting a concurrent edit (412 on mismatch). Omit to auto-guard against the current version."),
+        force: zod_1.z.boolean().optional().describe("op=write_file: overwrite even if the file changed since you read it. Discards the other edit — use only when intentional."),
     }, async (args) => {
         switch (args.op) {
             case "list":
@@ -113,7 +115,7 @@ function registerSkillTools(register, client) {
                 const miss = (0, respond_1.missingParams)("write_file", args, ["slug", "file_name", "body"]);
                 if (miss)
                     return miss;
-                return opWriteFile(client, args.slug, args.file_name, args.body);
+                return opWriteFile(client, args.slug, args.file_name, args.body, args.expected_version, args.force);
             }
             case "rename_file": {
                 const miss = (0, respond_1.missingParams)("rename_file", args, ["slug", "file_name", "new_name"]);
@@ -278,7 +280,7 @@ async function opListFiles(client, slug) {
 async function opReadFile(client, slug, file_name) {
     try {
         const file = await client.readSkillFile(slug, file_name);
-        return (0, respond_1.ok)(`# \`${slug}\` / \`${file.name}\`\n\n${file.body}`);
+        return (0, respond_1.ok)(`# \`${slug}\` / \`${file.name}\`\nVersion: \`${file.updatedAt}\` (pass as expected_version to write_file)\n\n${file.body}`);
     }
     catch (e) {
         return (0, respond_1.err)(`Couldn't read \`${file_name}\` from \`${slug}\`: ${errorMessage(e)}`);
@@ -296,12 +298,15 @@ async function opCreateFile(client, slug, file_name, body) {
         return (0, respond_1.err)(`Couldn't create \`${file_name}\` in \`${slug}\`: ${errorMessage(e)}`);
     }
 }
-async function opWriteFile(client, slug, file_name, body) {
+async function opWriteFile(client, slug, file_name, body, expected_version, force) {
     try {
-        const file = await client.writeSkillFile(slug, file_name, body);
-        return (0, respond_1.ok)(`Wrote \`${file.name}\` in \`${slug}\` (${file.body.length} chars).`);
+        const file = await client.writeSkillFile(slug, file_name, body, force ? null : expected_version);
+        return (0, respond_1.ok)(`Wrote \`${file.name}\` in \`${slug}\` (${file.body.length} chars). New version: \`${file.updatedAt}\`.`);
     }
     catch (e) {
+        if ((0, respond_1.isConflict)(e)) {
+            return (0, respond_1.err)(`\`${file_name}\` in \`${slug}\` changed since you last read it. Call dopl_skill(op="read_file", slug, file_name) to get the current content + version, reconcile your changes, then retry write_file with that expected_version (or pass force=true to overwrite).`);
+        }
         return (0, respond_1.err)(`Couldn't write \`${file_name}\` in \`${slug}\`: ${errorMessage(e)}`);
     }
 }

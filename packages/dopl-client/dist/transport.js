@@ -55,14 +55,14 @@ class DoplTransport {
         return this.baseUrl;
     }
     async request(path, options = {}) {
-        const { method = "GET", body, timeoutMs = DEFAULT_TIMEOUT_MS, toolName, retries, workspaceIdOverride, } = options;
+        const { method = "GET", body, timeoutMs = DEFAULT_TIMEOUT_MS, toolName, retries, workspaceIdOverride, customHeaders, } = options;
         const maxAttempts = 1 +
             (retries ?? (retry_js_1.IDEMPOTENT_METHODS.has(method) ? retry_js_1.DEFAULT_GET_RETRIES : 0));
         let lastError = null;
         for (let attempt = 0; attempt < maxAttempts; attempt++) {
             const started = Date.now();
             try {
-                const res = await this.doFetch(path, method, body, timeoutMs, toolName, workspaceIdOverride);
+                const res = await this.doFetch(path, method, body, timeoutMs, toolName, workspaceIdOverride, customHeaders);
                 const duration = Date.now() - started;
                 if (res.ok) {
                     log("%s %s → %d in %dms", method, path, res.status, duration);
@@ -150,7 +150,7 @@ class DoplTransport {
         }
         throw lastError ?? new errors_js_1.DoplNetworkError(`Exhausted retries: ${method} ${path}`);
     }
-    buildHeaders(toolName, withJsonBody = true, workspaceIdOverride) {
+    buildHeaders(toolName, withJsonBody = true, workspaceIdOverride, customHeaders) {
         const headers = {
             Authorization: `Bearer ${this.apiKey}`,
         };
@@ -167,15 +167,29 @@ class DoplTransport {
         const effectiveWorkspaceId = workspaceIdOverride ?? exports.workspaceContext.getStore() ?? this.workspaceId;
         if (effectiveWorkspaceId)
             headers["X-Workspace-Id"] = effectiveWorkspaceId;
+        // Custom headers last, but never allowed to clobber a reserved key.
+        if (customHeaders) {
+            const reserved = new Set([
+                "authorization",
+                "content-type",
+                this.toolHeaderName.toLowerCase(),
+                "x-dopl-client",
+                "x-workspace-id",
+            ]);
+            for (const [key, value] of Object.entries(customHeaders)) {
+                if (!reserved.has(key.toLowerCase()))
+                    headers[key] = value;
+            }
+        }
         return headers;
     }
-    async doFetch(path, method, body, timeoutMs, toolName, workspaceIdOverride) {
+    async doFetch(path, method, body, timeoutMs, toolName, workspaceIdOverride, customHeaders) {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), timeoutMs);
         try {
             return await fetch(`${this.baseUrl}${path}`, {
                 method,
-                headers: this.buildHeaders(toolName, true, workspaceIdOverride),
+                headers: this.buildHeaders(toolName, true, workspaceIdOverride, customHeaders),
                 body: body ? JSON.stringify(body) : undefined,
                 signal: controller.signal,
             });

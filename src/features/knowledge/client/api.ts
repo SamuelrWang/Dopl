@@ -145,11 +145,12 @@ export async function createBase(
 export async function updateBase(
   baseId: string,
   patch: KnowledgeBaseUpdateInput,
-  workspaceId?: string
+  workspaceId?: string,
+  expectedUpdatedAt?: string
 ): Promise<KnowledgeBase> {
   const data = await request<{ base: KnowledgeBase }>(
     `/api/knowledge/bases/${baseId}`,
-    { method: "PATCH", body: patch, workspaceId }
+    { method: "PATCH", body: patch, workspaceId, expectedUpdatedAt }
   );
   return data.base;
 }

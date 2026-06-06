@@ -42,6 +42,12 @@ export interface RequestOptions {
      * happens at the MCP layer before this point.
      */
     workspaceIdOverride?: string;
+    /**
+     * Extra per-call request headers (e.g. `X-Updated-At` for optimistic
+     * concurrency). Reserved headers (Authorization, Content-Type, the
+     * tool header, X-Dopl-Client, X-Workspace-Id) cannot be overridden.
+     */
+    customHeaders?: Record<string, string>;
 }
 export declare class DoplTransport {
     private readonly baseUrl;
@@ -67,6 +73,6 @@ export declare class DoplTransport {
      * a successful response (`res.ok || 204`) returns void.
      */
     requestNoContent(path: string, method: string, toolName: string, body?: unknown, workspaceIdOverride?: string): Promise<void>;
-    buildHeaders(toolName?: string, withJsonBody?: boolean, workspaceIdOverride?: string): Record<string, string>;
+    buildHeaders(toolName?: string, withJsonBody?: boolean, workspaceIdOverride?: string, customHeaders?: Record<string, string>): Record<string, string>;
     private doFetch;
 }

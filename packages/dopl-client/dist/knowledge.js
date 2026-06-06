@@ -27,6 +27,7 @@ exports.listKbTrash = listKbTrash;
 exports.restoreKbFolder = restoreKbFolder;
 exports.restoreKbEntry = restoreKbEntry;
 exports.searchKb = searchKb;
+const errors_js_1 = require("./errors.js");
 const enc = encodeURIComponent;
 // ─── Bases ──────────────────────────────────────────────────────────
 async function listKbBases(t) {
@@ -60,11 +61,34 @@ async function readKbFileByPath(t, baseId, path) {
     const data = await t.request(`/api/knowledge/bases/${enc(baseId)}/files?path=${enc(path)}`, { toolName: "kb_read_file" });
     return data.entry;
 }
-async function writeKbFileByPath(t, baseId, path, input = {}) {
+async function writeKbFileByPath(t, baseId, path, input = {}, expectedVersion) {
+    // Optimistic concurrency, tri-state on `expectedVersion`:
+    //   - string    → atomic compare-and-swap against it (412 on mismatch).
+    //   - undefined  → safe default: read the current version first so the
+    //                  write is STILL a CAS; a concurrent edit can't be
+    //                  silently lost. A missing entry (404) means create.
+    //   - null       → force: blind overwrite, no precondition.
+    let version;
+    if (expectedVersion === null) {
+        version = undefined;
+    }
+    else if (expectedVersion === undefined) {
+        try {
+            version = (await readKbFileByPath(t, baseId, path)).updatedAt;
+        }
+        catch (e) {
+            if (!(e instanceof errors_js_1.DoplApiError) || e.status !== 404)
+                throw e;
+        }
+    }
+    else {
+        version = expectedVersion;
+    }
     const data = await t.request(`/api/knowledge/bases/${enc(baseId)}/files`, {
         method: "PUT",
         body: { path, ...input },
         toolName: "kb_write_file",
+        customHeaders: version ? { "X-Updated-At": version } : undefined,
     });
     return data.entry;
 }

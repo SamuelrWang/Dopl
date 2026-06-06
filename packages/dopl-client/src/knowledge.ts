@@ -10,6 +10,7 @@
  */
 
 import type { DoplTransport } from "./transport.js";
+import { DoplApiError } from "./errors.js";
 import type {
   KnowledgeBase,
   KnowledgeBaseCreateInput,
@@ -119,14 +120,34 @@ export async function writeKbFileByPath(
   t: DoplTransport,
   baseId: string,
   path: string,
-  input: KnowledgeWriteFileInput = {}
+  input: KnowledgeWriteFileInput = {},
+  expectedVersion?: string | null
 ): Promise<KnowledgeEntry> {
+  // Optimistic concurrency, tri-state on `expectedVersion`:
+  //   - string    → atomic compare-and-swap against it (412 on mismatch).
+  //   - undefined  → safe default: read the current version first so the
+  //                  write is STILL a CAS; a concurrent edit can't be
+  //                  silently lost. A missing entry (404) means create.
+  //   - null       → force: blind overwrite, no precondition.
+  let version: string | undefined;
+  if (expectedVersion === null) {
+    version = undefined;
+  } else if (expectedVersion === undefined) {
+    try {
+      version = (await readKbFileByPath(t, baseId, path)).updatedAt;
+    } catch (e) {
+      if (!(e instanceof DoplApiError) || e.status !== 404) throw e;
+    }
+  } else {
+    version = expectedVersion;
+  }
   const data = await t.request<{ entry: KnowledgeEntry }>(
     `/api/knowledge/bases/${enc(baseId)}/files`,
     {
       method: "PUT",
       body: { path, ...input },
       toolName: "kb_write_file",
+      customHeaders: version ? { "X-Updated-At": version } : undefined,
     }
   );
   return data.entry;

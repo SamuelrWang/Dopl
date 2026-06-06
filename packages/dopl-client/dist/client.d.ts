@@ -143,7 +143,7 @@ export declare class DoplClient {
     deleteKbBase(baseId: string): Promise<void>;
     restoreKbBase(baseId: string): Promise<KnowledgeBase>;
     readKbFileByPath(baseId: string, path: string): Promise<KnowledgeEntry>;
-    writeKbFileByPath(baseId: string, path: string, input?: KnowledgeWriteFileInput): Promise<KnowledgeEntry>;
+    writeKbFileByPath(baseId: string, path: string, input?: KnowledgeWriteFileInput, expectedVersion?: string | null): Promise<KnowledgeEntry>;
     listKbDirByPath(baseId: string, path?: string): Promise<KnowledgeDirListing>;
     createKbFolderByPath(baseId: string, path: string): Promise<KnowledgeFolder>;
     deleteKbByPath(baseId: string, path: string): Promise<KnowledgePathOpResult>;
@@ -169,7 +169,7 @@ export declare class DoplClient {
         name: string;
         body?: string;
     }): Promise<SkillFile>;
-    writeSkillFile(slug: string, fileName: string, body: string): Promise<SkillFile>;
+    writeSkillFile(slug: string, fileName: string, body: string, expectedVersion?: string | null): Promise<SkillFile>;
     renameSkillFile(slug: string, currentName: string, newName: string): Promise<SkillFile>;
     deleteSkillFile(slug: string, fileName: string): Promise<void>;
     connectIntegration: (p: IntegrationProvider) => Promise<ConnectResponse>;

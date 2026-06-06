@@ -19,6 +19,7 @@ exports.createSkillFile = createSkillFile;
 exports.writeSkillFile = writeSkillFile;
 exports.renameSkillFile = renameSkillFile;
 exports.deleteSkillFile = deleteSkillFile;
+const errors_js_1 = require("./errors.js");
 const enc = encodeURIComponent;
 // ─── Read ───────────────────────────────────────────────────────────
 async function listSkills(t) {
@@ -63,8 +64,35 @@ async function createSkillFile(t, slug, input) {
     const data = await t.request(`/api/skills/${enc(slug)}/files`, { method: "POST", body: input, toolName: "skill_create_file" });
     return data.file;
 }
-async function writeSkillFile(t, slug, fileName, body) {
-    const data = await t.request(`/api/skills/${enc(slug)}/files/${enc(fileName)}`, { method: "PUT", body: { body }, toolName: "skill_write_file" });
+async function writeSkillFile(t, slug, fileName, body, expectedVersion) {
+    // Optimistic concurrency, tri-state on `expectedVersion`:
+    //   - string    → atomic CAS against it (412 on mismatch).
+    //   - undefined  → safe default: read the current version first so the
+    //                  write is STILL a CAS; a concurrent edit can't be
+    //                  silently lost. 404 falls through (write surfaces it).
+    //   - null       → force: blind overwrite, no precondition.
+    let version;
+    if (expectedVersion === null) {
+        version = undefined;
+    }
+    else if (expectedVersion === undefined) {
+        try {
+            version = (await readSkillFile(t, slug, fileName)).updatedAt;
+        }
+        catch (e) {
+            if (!(e instanceof errors_js_1.DoplApiError) || e.status !== 404)
+                throw e;
+        }
+    }
+    else {
+        version = expectedVersion;
+    }
+    const data = await t.request(`/api/skills/${enc(slug)}/files/${enc(fileName)}`, {
+        method: "PUT",
+        body: { body },
+        toolName: "skill_write_file",
+        customHeaders: version ? { "X-Updated-At": version } : undefined,
+    });
     return data.file;
 }
 async function renameSkillFile(t, slug, currentName, newName) {

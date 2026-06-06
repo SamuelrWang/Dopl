@@ -382,16 +382,6 @@ export function reducer(state: CanvasState, action: CanvasAction): CanvasState {
         }),
       };
 
-    case "SET_CONNECTION_API_KEY":
-      return {
-        ...state,
-        panels: state.panels.map((p) =>
-          p.id === action.panelId && p.type === "connection"
-            ? { ...p, apiKey: action.apiKey }
-            : p
-        ),
-      };
-
     case "SPAWN_ENTRY_PANEL": {
       // Idempotency: skip if an entry panel with this entryId already exists
       if (state.panels.some((p) => p.type === "entry" && p.entryId === action.entryId)) {

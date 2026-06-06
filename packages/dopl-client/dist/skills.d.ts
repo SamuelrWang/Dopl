@@ -41,6 +41,6 @@ export declare function createSkillFile(t: DoplTransport, slug: string, input: {
     name: string;
     body?: string;
 }): Promise<SkillFile>;
-export declare function writeSkillFile(t: DoplTransport, slug: string, fileName: string, body: string): Promise<SkillFile>;
+export declare function writeSkillFile(t: DoplTransport, slug: string, fileName: string, body: string, expectedVersion?: string | null): Promise<SkillFile>;
 export declare function renameSkillFile(t: DoplTransport, slug: string, currentName: string, newName: string): Promise<SkillFile>;
 export declare function deleteSkillFile(t: DoplTransport, slug: string, fileName: string): Promise<void>;

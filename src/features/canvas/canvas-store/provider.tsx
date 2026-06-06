@@ -65,6 +65,7 @@ interface CanvasProviderProps {
    * realtime subscription filters. Omit for shared / read-only views.
    */
   workspaceId?: string;
+  workspaceSlug?: string;
   canvasSlug?: string;
   /**
    * Server-rendered canvas state. Fetched by the `/canvas` server
@@ -98,6 +99,7 @@ export function CanvasProvider({
   children,
   userId,
   workspaceId,
+  workspaceSlug,
   canvasSlug,
   initialState,
   initialConversations,
@@ -106,8 +108,11 @@ export function CanvasProvider({
   onPanelsMove,
 }: CanvasProviderProps) {
   const scope = useMemo(
-    () => (workspaceId && canvasSlug ? { workspaceId, canvasSlug } : null),
-    [workspaceId, canvasSlug]
+    () =>
+      workspaceId && canvasSlug
+        ? { workspaceId, workspaceSlug, canvasSlug }
+        : null,
+    [workspaceId, workspaceSlug, canvasSlug]
   );
   const [state, dispatch] = useReducer(
     reducer,

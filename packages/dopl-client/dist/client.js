@@ -311,8 +311,8 @@ class DoplClient {
     readKbFileByPath(baseId, path) {
         return kb.readKbFileByPath(this.transport, baseId, path);
     }
-    writeKbFileByPath(baseId, path, input = {}) {
-        return kb.writeKbFileByPath(this.transport, baseId, path, input);
+    writeKbFileByPath(baseId, path, input = {}, expectedVersion) {
+        return kb.writeKbFileByPath(this.transport, baseId, path, input, expectedVersion);
     }
     listKbDirByPath(baseId, path = "") {
         return kb.listKbDirByPath(this.transport, baseId, path);
@@ -367,8 +367,8 @@ class DoplClient {
     createSkillFile(slug, input) {
         return skills.createSkillFile(this.transport, slug, input);
     }
-    writeSkillFile(slug, fileName, body) {
-        return skills.writeSkillFile(this.transport, slug, fileName, body);
+    writeSkillFile(slug, fileName, body, expectedVersion) {
+        return skills.writeSkillFile(this.transport, slug, fileName, body, expectedVersion);
     }
     renameSkillFile(slug, currentName, newName) {
         return skills.renameSkillFile(this.transport, slug, currentName, newName);

@@ -49,8 +49,6 @@ export interface ChatPanelData extends BasePanelData {
  */
 export interface ConnectionPanelData extends BasePanelData {
   type: "connection";
-  /** User's Dopl API key (sk-dopl-...) — null until they paste one */
-  apiKey: string | null;
 }
 
 /**
@@ -512,11 +510,6 @@ export type CanvasAction =
       readme: string;
       agentsMd: string;
       manifest: Record<string, unknown>;
-    }
-  | {
-      type: "SET_CONNECTION_API_KEY";
-      panelId: string;
-      apiKey: string | null;
     }
   | {
       /**

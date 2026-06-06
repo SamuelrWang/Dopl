@@ -119,9 +119,16 @@ export function KnowledgeBaseView({
   }, [base.id, workspaceId]);
 
   // Live updates from MCP/CLI agents and other tabs (Item 5.E). Any
-  // INSERT/UPDATE/DELETE on this workspace's folders or entries
-  // triggers a tree refetch. Cheap — refetch is one HTTP round-trip.
-  useKnowledgeRealtime(workspaceId, refresh);
+  // INSERT/UPDATE/DELETE on this workspace's folders or entries refetches
+  // the tree AND the open entry, so another user's saved edit appears
+  // without waiting for a tab refocus. DocPane's re-seed effect applies
+  // the fresh entry body ONLY when the editor is clean (not dirty/saving/
+  // conflict), so this never clobbers an active typer.
+  const onRealtimeChange = useCallback(() => {
+    void refresh();
+    void refetchEntry();
+  }, [refresh, refetchEntry]);
+  useKnowledgeRealtime(workspaceId, onRealtimeChange);
 
   const handleCreateFolder = useCallback(
     async (parentId: string | null, name: string): Promise<string> => {

@@ -167,7 +167,17 @@ export interface UpdateSkillPatch {
 export async function updateSkillRow(
   id: string,
   patch: UpdateSkillPatch
-): Promise<Skill> {
+): Promise<Skill>;
+export async function updateSkillRow(
+  id: string,
+  patch: UpdateSkillPatch,
+  expectedUpdatedAt: string | undefined
+): Promise<Skill | null>;
+export async function updateSkillRow(
+  id: string,
+  patch: UpdateSkillPatch,
+  expectedUpdatedAt?: string
+): Promise<Skill | null> {
   const db = supabaseAdmin();
   const update: Record<string, unknown> = {};
   if (patch.name !== undefined) update.name = patch.name;
@@ -182,13 +192,19 @@ export async function updateSkillRow(
   if (patch.lastEditedBy !== undefined) update.last_edited_by = patch.lastEditedBy;
   if (patch.lastEditedSource !== undefined)
     update.last_edited_source = patch.lastEditedSource;
-  const { data, error } = await db
-    .from("skills")
-    .update(update)
-    .eq("id", id)
-    .select(SKILL_COLS)
-    .single();
-  if (error || !data) throw error || new Error("Failed to update skill");
+  // Optimistic concurrency: when expectedUpdatedAt is supplied, the
+  // `updated_at` filter makes this an atomic compare-and-swap. 0 rows →
+  // the row changed since the caller read it → return null (stale).
+  let query = db.from("skills").update(update).eq("id", id);
+  if (expectedUpdatedAt !== undefined) {
+    query = query.eq("updated_at", expectedUpdatedAt);
+  }
+  const { data, error } = await query.select(SKILL_COLS).maybeSingle();
+  if (error) throw error;
+  if (!data) {
+    if (expectedUpdatedAt !== undefined) return null;
+    throw new Error("Failed to update skill");
+  }
   return mapSkillRow(data as SkillRow);
 }
 
@@ -297,7 +313,17 @@ export interface UpdateFilePatch {
 export async function updateFileRow(
   id: string,
   patch: UpdateFilePatch
-): Promise<SkillFile> {
+): Promise<SkillFile>;
+export async function updateFileRow(
+  id: string,
+  patch: UpdateFilePatch,
+  expectedUpdatedAt: string | undefined
+): Promise<SkillFile | null>;
+export async function updateFileRow(
+  id: string,
+  patch: UpdateFilePatch,
+  expectedUpdatedAt?: string
+): Promise<SkillFile | null> {
   const db = supabaseAdmin();
   const update: Record<string, unknown> = {};
   if (patch.name !== undefined) update.name = patch.name;
@@ -306,13 +332,17 @@ export async function updateFileRow(
   if (patch.lastEditedBy !== undefined) update.last_edited_by = patch.lastEditedBy;
   if (patch.lastEditedSource !== undefined)
     update.last_edited_source = patch.lastEditedSource;
-  const { data, error } = await db
-    .from("skill_files")
-    .update(update)
-    .eq("id", id)
-    .select(SKILL_FILE_COLS)
-    .single();
-  if (error || !data) throw error || new Error("Failed to update skill file");
+  // Optimistic concurrency CAS (see updateSkillRow).
+  let query = db.from("skill_files").update(update).eq("id", id);
+  if (expectedUpdatedAt !== undefined) {
+    query = query.eq("updated_at", expectedUpdatedAt);
+  }
+  const { data, error } = await query.select(SKILL_FILE_COLS).maybeSingle();
+  if (error) throw error;
+  if (!data) {
+    if (expectedUpdatedAt !== undefined) return null;
+    throw new Error("Failed to update skill file");
+  }
   return mapSkillFileRow(data as SkillFileRow);
 }
 

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import type { Role, Workspace } from "@/features/workspaces/types";
 import { WorkspaceSettingsForm } from "@/features/workspaces/components/workspace-settings-form";
-import { WorkspaceKeysSection } from "@/features/api-keys/components/workspace-keys-section";
+import { ConnectionSetup } from "@/features/api-keys/components/connection-setup";
 import { WorkspaceIconUploader } from "../workspace-icon-uploader";
 import { SectionShell } from "./section-shell";
 
@@ -71,7 +71,7 @@ export function WorkspaceSection({ workspaceSegment, onWorkspaceChanged }: Props
         </div>
       )}
       <WorkspaceSettingsForm workspace={workspace} role={role} />
-      <WorkspaceKeysSection workspaceSlug={workspaceSegment} />
+      <ConnectionSetup workspaceSlug={workspaceSegment} />
     </SectionShell>
   );
 }

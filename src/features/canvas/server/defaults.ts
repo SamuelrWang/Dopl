@@ -92,7 +92,6 @@ export function ensureDefaultPanels(state: CanvasState): CanvasState {
           y: 40,
           width: CONNECTION_PANEL_SIZE.width,
           height: CONNECTION_PANEL_SIZE.height,
-          apiKey: null,
         },
       ],
       nextPanelId: s.nextPanelId + 1,

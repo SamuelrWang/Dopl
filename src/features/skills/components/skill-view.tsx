@@ -14,6 +14,9 @@ import { VisibilityPill, MakePublicAction } from "@/shared/ui/visibility-pill";
 import { useMyAccessContext } from "@/features/members/hooks/use-my-access";
 import { meetsLevel } from "@/features/members/access-defaults";
 import { useRefetchOnFocus } from "@/shared/hooks/use-refetch-on-focus";
+import { useCurrentProfile } from "@/shared/auth/use-current-profile";
+import { usePresence } from "@/shared/realtime/use-presence";
+import { AvatarStack } from "@/shared/ui/avatar-stack";
 import { toast } from "@/shared/ui/toast";
 import { AlertTriangle } from "lucide-react";
 // Cross-feature imports: DocEditor + SourceIcon live in features/knowledge
@@ -45,6 +48,7 @@ import {
   updateSkill,
   writeSkillFile,
 } from "@/features/skills/client/api";
+import { useSkillsRealtime } from "../client/realtime";
 import { FileTabs } from "./skill-file-tabs";
 import {
   errMessage,
@@ -161,6 +165,20 @@ export function SkillView({
   }, [skill.slug]);
   const conflictRef = useRef<typeof conflict>(null);
   conflictRef.current = conflict;
+  // Mirror save status so the realtime gate can read it synchronously.
+  const saveStatusRef = useRef<SaveStatus>(saveStatus);
+  saveStatusRef.current = saveStatus;
+
+  // Presence: who else has this skill open, and whether they're editing.
+  const selfProfile = useCurrentProfile();
+  const presencePeers = usePresence(
+    `presence:skill:${skill.id}`,
+    selfProfile,
+    saveStatus === "dirty" || saveStatus === "saving"
+  );
+  const otherEditors = presencePeers.filter(
+    (p) => p.userId !== selfProfile?.userId
+  );
 
   const flushSave = useCallback(
     async (fileId: string, fileName: string, body: string) => {
@@ -362,27 +380,50 @@ export function SkillView({
     setSaveStatus("idle");
   }, []);
 
+  // Pull the freshest skill + files from the server and replace local
+  // state. Callers MUST ensure the editor is at rest first (see the
+  // guards below) — a replace bumps the active file's `updatedAt`, which
+  // is part of the editor's resetKey, so calling this mid-edit would
+  // remount the editor under the user.
+  const pullFreshSkill = useCallback(async () => {
+    const fresh = await fetchSkill(slugRef.current).catch(() => null);
+    if (!fresh) return;
+    setFiles(sortFiles(fresh.files));
+    // If the active tab still exists in the new payload, keep it;
+    // otherwise fall back to SKILL.md (or the first file).
+    setActiveFileId((prev) => {
+      if (fresh.files.some((f) => f.id === prev)) return prev;
+      return primaryFileId(fresh.files) ?? fresh.files[0]?.id ?? prev;
+    });
+  }, []);
+
+  const isEditorAtRest = useCallback(
+    () =>
+      timersRef.current.size === 0 &&
+      pendingBodiesRef.current.size === 0 &&
+      saveStatusRef.current !== "saving" &&
+      conflictRef.current === null,
+    []
+  );
+
   // When the user switches back to this tab AND nothing is mid-save,
   // pull the freshest version of the skill so changes another tab or
-  // an MCP agent saved while away show up automatically. The skip
-  // check stops us from clobbering keystrokes the user has buffered.
-  useRefetchOnFocus(
-    async () => {
-      const fresh = await fetchSkill(slugRef.current).catch(() => null);
-      if (!fresh) return;
-      setFiles(sortFiles(fresh.files));
-      // If the active tab still exists in the new payload, keep it;
-      // otherwise fall back to SKILL.md (or the first file).
-      setActiveFileId((prev) => {
-        if (fresh.files.some((f) => f.id === prev)) return prev;
-        return primaryFileId(fresh.files) ?? fresh.files[0]?.id ?? prev;
-      });
-    },
-    {
-      skip: () =>
-        timersRef.current.size > 0 || pendingBodiesRef.current.size > 0,
-    }
-  );
+  // an MCP agent saved while away show up automatically.
+  useRefetchOnFocus(pullFreshSkill, {
+    skip: () =>
+      timersRef.current.size > 0 || pendingBodiesRef.current.size > 0,
+  });
+
+  // Live updates (Tier 2): another user / MCP agent saving a file or skill
+  // metadata pushes here. Only pull when the editor is fully at rest so a
+  // remote change to ANY file never remounts the active editor under the
+  // user. While they're editing, the refetch is skipped and self-heals on
+  // the next event once they pause (their own save echoes a realtime event).
+  const onRealtimeChange = useCallback(() => {
+    if (!isEditorAtRest()) return;
+    void pullFreshSkill();
+  }, [isEditorAtRest, pullFreshSkill]);
+  useSkillsRealtime(skill.workspaceId, onRealtimeChange);
 
   const updateActiveBody = useCallback(
     (body: string) => {
@@ -537,6 +578,7 @@ export function SkillView({
         }
         trailing={
           <>
+            <AvatarStack users={otherEditors} />
             <SaveStatusIndicator state={saveStatus} />
             <button
               type="button"

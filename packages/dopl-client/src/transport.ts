@@ -65,6 +65,12 @@ export interface RequestOptions {
    * happens at the MCP layer before this point.
    */
   workspaceIdOverride?: string;
+  /**
+   * Extra per-call request headers (e.g. `X-Updated-At` for optimistic
+   * concurrency). Reserved headers (Authorization, Content-Type, the
+   * tool header, X-Dopl-Client, X-Workspace-Id) cannot be overridden.
+   */
+  customHeaders?: Record<string, string>;
 }
 
 export class DoplTransport {
@@ -106,6 +112,7 @@ export class DoplTransport {
       toolName,
       retries,
       workspaceIdOverride,
+      customHeaders,
     } = options;
 
     const maxAttempts =
@@ -122,7 +129,8 @@ export class DoplTransport {
           body,
           timeoutMs,
           toolName,
-          workspaceIdOverride
+          workspaceIdOverride,
+          customHeaders
         );
         const duration = Date.now() - started;
 
@@ -270,7 +278,8 @@ export class DoplTransport {
   buildHeaders(
     toolName?: string,
     withJsonBody = true,
-    workspaceIdOverride?: string
+    workspaceIdOverride?: string,
+    customHeaders?: Record<string, string>
   ): Record<string, string> {
     const headers: Record<string, string> = {
       Authorization: `Bearer ${this.apiKey}`,
@@ -285,6 +294,19 @@ export class DoplTransport {
     const effectiveWorkspaceId =
       workspaceIdOverride ?? workspaceContext.getStore() ?? this.workspaceId;
     if (effectiveWorkspaceId) headers["X-Workspace-Id"] = effectiveWorkspaceId;
+    // Custom headers last, but never allowed to clobber a reserved key.
+    if (customHeaders) {
+      const reserved = new Set([
+        "authorization",
+        "content-type",
+        this.toolHeaderName.toLowerCase(),
+        "x-dopl-client",
+        "x-workspace-id",
+      ]);
+      for (const [key, value] of Object.entries(customHeaders)) {
+        if (!reserved.has(key.toLowerCase())) headers[key] = value;
+      }
+    }
     return headers;
   }
 
@@ -294,14 +316,20 @@ export class DoplTransport {
     body: unknown,
     timeoutMs: number,
     toolName?: string,
-    workspaceIdOverride?: string
+    workspaceIdOverride?: string,
+    customHeaders?: Record<string, string>
   ): Promise<Response> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
       return await fetch(`${this.baseUrl}${path}`, {
         method,
-        headers: this.buildHeaders(toolName, true, workspaceIdOverride),
+        headers: this.buildHeaders(
+          toolName,
+          true,
+          workspaceIdOverride,
+          customHeaders
+        ),
         body: body ? JSON.stringify(body) : undefined,
         signal: controller.signal,
       });

@@ -48,8 +48,8 @@ const KB_DESCRIPTION = `Manage the caller's own editable knowledge bases — the
 - "restore_base" — restore a soft-deleted base (recovery, not deletion). Use after op=list_trash. Accepts the trashed base's slug or a UUID.
 - "create_folder" — create a folder at a path. mkdir -p semantics; idempotent on existing folders.
 - "move_folder" — move + rename a folder; leaf becomes the new name, missing parents created, cycles rejected.
-- "read_file" — read an entry's full markdown body by path (must resolve to an entry, not a folder).
-- "write_file" — upsert an entry. \`path\` resolves an existing entry; for new entries the title becomes the addressable path (pass \`title\` for a clean one). Parents mkdir-p'd.
+- "read_file" — read an entry's full markdown body by path (must resolve to an entry, not a folder). Returns a Version token — pass it to write_file as \`expected_version\`.
+- "write_file" — upsert an entry. \`path\` resolves an existing entry; for new entries the title becomes the addressable path (pass \`title\` for a clean one). Parents mkdir-p'd. To edit an existing entry safely, read_file first and pass its Version as \`expected_version\` so a concurrent edit can't be silently overwritten (you'll get a 412 to reconcile instead).
 - "move_file" — move + rename an entry; parents mkdir-p'd, leaf becomes the new title.
 - "list_trash" — list soft-deleted bases/folders/entries. Optional \`base\` scopes to one base; omit for workspace-wide.
 - "restore_file" — restore a soft-deleted entry by id (from op=list_trash).
@@ -80,6 +80,8 @@ function registerKnowledgeTools(register, client) {
         slug: zod_1.z.string().optional().describe("update_base: optional new slug (1-80 chars)."),
         body: zod_1.z.string().optional().describe("write_file: required markdown body."),
         title: zod_1.z.string().optional().describe("write_file: optional title override (defaults to the leaf path segment)."),
+        expected_version: zod_1.z.string().optional().describe("write_file: the entry's version from a prior read_file, to avoid overwriting a concurrent edit (412 on mismatch). Omit to auto-guard against the current version."),
+        force: zod_1.z.boolean().optional().describe("write_file: overwrite even if the entry changed since you read it. Discards the other edit — use only when intentional."),
         folder_id: zod_1.z.string().optional().describe("restore_folder: required folder UUID (from list_trash)."),
         entry_id: zod_1.z.string().optional().describe("restore_file: required entry UUID (from list_trash)."),
         query: zod_1.z.string().optional().describe("search: required free-text query."),
@@ -140,7 +142,7 @@ function registerKnowledgeTools(register, client) {
                 const miss = (0, respond_1.missingParams)("write_file", args, ["base", "path", "body"]);
                 if (miss)
                     return miss;
-                return opWriteFile(client, args.base, args.path, args.body, args.title);
+                return opWriteFile(client, args.base, args.path, args.body, args.title, args.expected_version, args.force);
             }
             case "move_file": {
                 const miss = (0, respond_1.missingParams)("move_file", args, ["base", "from_path", "to_path"]);
@@ -336,7 +338,7 @@ async function opReadFile(client, ref, path) {
     const entry = await client.readKbFileByPath(base.id, path);
     const lines = [
         `# ${entry.title}`,
-        `Path: \`${path}\` · Last edited: ${entry.lastEditedSource} on ${entry.updatedAt}`,
+        `Path: \`${path}\` · Version: \`${entry.updatedAt}\` (pass as expected_version to write_file) · last edited by ${entry.lastEditedSource}`,
         "",
         "---",
         "",
@@ -344,14 +346,20 @@ async function opReadFile(client, ref, path) {
     ];
     return (0, respond_1.ok)(lines.join("\n"));
 }
-async function opWriteFile(client, ref, path, body, title) {
+async function opWriteFile(client, ref, path, body, title, expected_version, force) {
     const base = await resolveBaseOr(client, ref);
     if (isErr(base))
         return base;
-    const entry = await client.writeKbFileByPath(base.id, path, {
-        body,
-        title,
-    });
+    let entry;
+    try {
+        entry = await client.writeKbFileByPath(base.id, path, { body, title }, force ? null : expected_version);
+    }
+    catch (e) {
+        if ((0, respond_1.isConflict)(e)) {
+            return (0, respond_1.err)(`\`${path}\` changed since you last read it. Call dopl_kb(op="read_file", base, path) to get the current content + version, reconcile your changes, then retry write_file with that expected_version (or pass force=true to overwrite).`);
+        }
+        throw e;
+    }
     // The addressable path's leaf is the entry's title (not the input
     // path's leaf segment). Print it so callers can read the entry
     // back without guessing. When `title` was passed and the slug-of-
@@ -362,7 +370,7 @@ async function opWriteFile(client, ref, path, body, title) {
     const note = canonicalPath !== path
         ? ` Address future reads/moves with path \`${canonicalPath}\`.`
         : "";
-    return (0, respond_1.ok)(`Wrote \`${canonicalPath}\` (entry id: \`${entry.id}\`, ${entry.body.length} chars).${note}`);
+    return (0, respond_1.ok)(`Wrote \`${canonicalPath}\` (entry id: \`${entry.id}\`, ${entry.body.length} chars). New version: \`${entry.updatedAt}\`.${note}`);
 }
 async function opMoveFile(client, ref, from_path, to_path) {
     const base = await resolveBaseOr(client, ref);
