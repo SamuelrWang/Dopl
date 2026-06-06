@@ -20,6 +20,8 @@ export interface WorkspaceKeyState {
   generate: () => Promise<void>;
   /** Revoke the active key. */
   revoke: () => Promise<void>;
+  /** Revoke the current key (if any) and mint a fresh one in one action. */
+  rotate: () => Promise<void>;
   /** Non-fatal error message (e.g. "revoke the existing key first"). */
   error: string | null;
   clearError: () => void;
@@ -123,7 +125,34 @@ export function useWorkspaceKey(workspaceSlug: string): WorkspaceKeyState {
     setPlaintext(null);
   }, [active, base]);
 
+  // One-click rotate: revoke the current key (server-side first, so the
+  // create passes the one-active-key rule) then mint a fresh one.
+  const rotate = useCallback(async () => {
+    setError(null);
+    if (active) {
+      const del = await fetch(`${base}/${active.id}`, { method: "DELETE" });
+      if (!del.ok) {
+        setError("Couldn't rotate the key. Try again.");
+        return;
+      }
+    }
+    const res = await fetch(base, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    if (!res.ok) {
+      setActive(null);
+      setPlaintext(null);
+      setError("Couldn't generate a key. Try again.");
+      return;
+    }
+    const data = (await res.json()) as { key: string; id: string; prefix: string };
+    setActive({ id: data.id, prefix: data.prefix });
+    setPlaintext(data.key);
+  }, [active, base]);
+
   const clearError = useCallback(() => setError(null), []);
 
-  return { active, plaintext, isLoading, generate, revoke, error, clearError };
+  return { active, plaintext, isLoading, generate, revoke, rotate, error, clearError };
 }

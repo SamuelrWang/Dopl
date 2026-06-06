@@ -10,7 +10,7 @@ import { getUser } from "@/shared/supabase/server";
 import { resolvePageWorkspace } from "@/features/workspaces/server/segment";
 import { workspaceSegment } from "@/features/workspaces/url";
 import { PageTopBar } from "@/shared/layout/page-top-bar";
-import { ConnectionSetup } from "@/features/api-keys/components/connection-setup";
+import { ConnectAppSection } from "@/features/api-keys/components/connect-app-section";
 import { MembersWidget } from "@/features/members/components/members-widget";
 
 export const dynamic = "force-dynamic";
@@ -45,12 +45,7 @@ export default async function OverviewPage({ params }: PageProps) {
 
           <MembersWidget workspaceSlug={segment} />
 
-          <section className="rounded-2xl border border-white/[0.1] bg-[var(--panel-surface)] p-5">
-            <p className="text-[10px] uppercase tracking-wider text-text-secondary/60 mb-3">
-              Connect your app
-            </p>
-            <ConnectionSetup workspaceSlug={segment} />
-          </section>
+          <ConnectAppSection workspaceSlug={segment} />
         </div>
       </div>
     </>
