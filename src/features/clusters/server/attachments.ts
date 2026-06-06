@@ -604,7 +604,6 @@ export async function listAttachedSkillsById(
     description: string;
     status: "active" | "draft";
     when_to_use: string;
-    body: string;
     deleted_at: string | null;
   };
 
@@ -625,7 +624,7 @@ export async function listAttachedSkillsById(
     // listAttachedKnowledgeBasesById for the rationale.
     const { data: skillRows, error: skillErr } = await db
       .from("skills")
-      .select("id, slug, name, description, status, when_to_use, body, deleted_at")
+      .select("id, slug, name, description, status, when_to_use, deleted_at")
       .in("id", skillIdList)
       .eq("workspace_id", scope.workspaceId);
     if (skillErr) throw skillErr;
@@ -634,25 +633,49 @@ export async function listAttachedSkillsById(
     }
   }
 
-  const rows = (linkRows ?? []).map((r) => ({
-    added_at: r.added_at,
-    skill_id: r.skill_id,
-    skill: skillsById.get(r.skill_id) ?? null,
-  }));
+  const liveRows = (linkRows ?? [])
+    .map((r) => ({
+      added_at: r.added_at,
+      skill_id: r.skill_id,
+      skill: skillsById.get(r.skill_id) ?? null,
+    }))
+    .filter(
+      (r): r is { added_at: string; skill_id: string; skill: SkillRel } =>
+        r.skill !== null && r.skill.deleted_at === null
+    );
 
-  return rows
-    .filter((r) => r.skill && r.skill.deleted_at === null)
-    .map((r) => {
-      const s = r.skill!;
-      return {
-        skill_id: r.skill_id,
-        slug: s.slug,
-        name: s.name,
-        description: s.description,
-        status: s.status,
-        when_to_use: s.when_to_use,
-        body: s.body.slice(0, CONTEXT_CHAR_BUDGET_PER_FIELD),
-        added_at: r.added_at,
-      };
-    });
+  if (liveRows.length === 0) return [];
+
+  // Skill body lives in skill_files as the canonical `SKILL.md` row —
+  // `skills.body` was dropped in migration 20260501100000_skill_files.
+  // Batch-fetch the SKILL.md body for every attached skill.
+  const liveSkillIds = liveRows.map((r) => r.skill_id);
+  const bodyBySkillId = new Map<string, string>();
+  const { data: fileRows, error: fileErr } = await db
+    .from("skill_files")
+    .select("skill_id, body")
+    .in("skill_id", liveSkillIds)
+    .eq("name", "SKILL.md")
+    .is("deleted_at", null);
+  if (fileErr) throw fileErr;
+  for (const f of fileRows ?? []) {
+    bodyBySkillId.set(f.skill_id, f.body ?? "");
+  }
+
+  return liveRows.map((r) => {
+    const s = r.skill;
+    return {
+      skill_id: r.skill_id,
+      slug: s.slug,
+      name: s.name,
+      description: s.description,
+      status: s.status,
+      when_to_use: s.when_to_use,
+      body: (bodyBySkillId.get(r.skill_id) ?? "").slice(
+        0,
+        CONTEXT_CHAR_BUDGET_PER_FIELD
+      ),
+      added_at: r.added_at,
+    };
+  });
 }
