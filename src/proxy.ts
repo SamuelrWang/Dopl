@@ -17,6 +17,18 @@ const PUBLIC_ROUTES = [
   // still bounce to /login at the click.
   "/invite/",
   "/api/workspaces/invitations/",
+  // Remote MCP + OAuth surface. These self-authenticate: the /api/mcp handler
+  // returns its own MCP-spec 401 + WWW-Authenticate (so clients can discover
+  // the OAuth server and start the login dance); the OAuth endpoints are
+  // public per spec or do their own session/PKCE checks; the /oauth/authorize
+  // consent page runs its own getUser + login bounce (preserving the OAuth
+  // query). They MUST bypass the middleware session gate or the dance never
+  // starts. "/api/oauth" covers /api/oauth/* plus the /api/oauth-*-server
+  // metadata routes.
+  "/.well-known/oauth-",
+  "/oauth/authorize",
+  "/api/oauth",
+  "/api/mcp",
 ];
 
 export async function proxy(request: NextRequest) {
@@ -103,9 +115,15 @@ export async function proxy(request: NextRequest) {
     return supabaseResponse;
   }
 
-  // Allow API routes with API key auth (external/MCP access)
+  // Allow API routes carrying an MCP credential — an sk-dopl- API key OR a
+  // remote-MCP OAuth access token (dopl_at_). The route's own auth wrapper
+  // validates it; the middleware just must not block the loopback /api/*
+  // calls the hosted MCP server makes on the caller's behalf.
   const authHeader = request.headers.get("authorization");
-  if (pathname.startsWith("/api/") && authHeader?.includes("sk-dopl-")) {
+  if (
+    pathname.startsWith("/api/") &&
+    (authHeader?.includes("sk-dopl-") || authHeader?.includes("dopl_at_"))
+  ) {
     return supabaseResponse;
   }
 
