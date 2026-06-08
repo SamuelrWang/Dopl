@@ -45,7 +45,7 @@ async function handlePatch(request: NextRequest, ctx: Ctx) {
     const body = await request.json();
     const cluster = await updateCluster(
       slug,
-      { name: body.name, entry_ids: body.entry_ids },
+      { name: body.name },
       scopeOf(ctx)
     );
     return NextResponse.json(cluster);

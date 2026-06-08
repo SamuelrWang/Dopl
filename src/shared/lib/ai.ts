@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { config } from "dotenv";
 import { resolve } from "path";
-import { retryWithBackoff } from "@/features/ingestion/server/utils";
+import { retryWithBackoff } from "@/shared/lib/retry";
 import { callExternal } from "@/features/analytics/server/call-external";
 import { logSystemEvent } from "@/features/analytics/server/system-events";
 
@@ -60,7 +60,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
     );
     void logSystemEvent({
       severity: "warn",
-      category: "ingestion",
+      category: "external_api",
       source: "ai.generateEmbedding",
       message: `Embedding input truncated (${original} → ${MAX_EMBEDDING_INPUT_CHARS} chars)`,
       fingerprintKeys: ["embedding", "truncated"],

@@ -5,15 +5,6 @@ import "server-only";
  * from cluster-context.ts on the client side. Defined here independently
  * to keep the API route free of client-component imports.
  */
-export interface CanvasContextEntry {
-  kind: "entry";
-  entryId: string;
-  title?: string;
-  summary?: string | null;
-  readme?: string;
-  agentsMd?: string;
-}
-
 export interface CanvasContextChat {
   kind: "chat";
   panelId: string;
@@ -21,7 +12,7 @@ export interface CanvasContextChat {
   messages: Array<{ role: string; content: string }>;
 }
 
-export type ContextPanelDTO = CanvasContextEntry | CanvasContextChat;
+export type ContextPanelDTO = CanvasContextChat;
 
 export interface AttachedKnowledgeBaseDTO {
   knowledgeBaseId: string;
@@ -65,9 +56,8 @@ export interface CanvasContextPayload {
 
 /**
  * Build a system-prompt prefix that primes Claude with the panels
- * loaded in the user's cluster/canvas. Handles entry and chat panel
- * types. Runs BEFORE the tool-based flow so the model has cluster
- * context inline.
+ * loaded in the user's cluster/canvas. Runs BEFORE the tool-based flow
+ * so the model has cluster context inline.
  */
 export function buildCanvasContextPrefix(ctx: CanvasContextPayload): string {
   const hasPanels = !!ctx.panels && ctx.panels.length > 0;
@@ -81,7 +71,7 @@ export function buildCanvasContextPrefix(ctx: CanvasContextPayload): string {
 
   let header: string;
   if (ctx.scope === "canvas") {
-    header = `The user's canvas currently contains the following panels. You can see everything on their canvas — use this context to answer questions about what they're looking at, reference specific entries, and help them build on what they have:\n`;
+    header = `The user's canvas currently contains the following panels. You can see everything on their canvas — use this context to answer questions about what they're looking at and help them build on what they have:\n`;
   } else if (ctx.clusterName) {
     header = `You are currently chatting inside a cluster named "${ctx.clusterName}". Treat the loaded panels and attached resources below as context the user has already pulled into this conversation:\n`;
   } else {
@@ -92,24 +82,14 @@ export function buildCanvasContextPrefix(ctx: CanvasContextPayload): string {
 
   for (const p of ctx.panels ?? []) {
     const parts: string[] = [];
-    switch (p.kind) {
-      case "entry":
-        parts.push(`── Entry: ${p.title || "Untitled"} (entry_id: ${p.entryId})`);
-        if (p.summary) parts.push(`Summary: ${p.summary}`);
-        if (p.readme) parts.push(`README:\n<USER_CONTENT>\n${p.readme}\n</USER_CONTENT>`);
-        if (p.agentsMd) parts.push(`agents.md:\n<USER_CONTENT>\n${p.agentsMd}\n</USER_CONTENT>`);
-        break;
-      case "chat":
-        parts.push(`── Chat: ${p.title || "Untitled Chat"}`);
-        if (p.messages.length > 0) {
-          parts.push("Recent messages:");
-          for (const m of p.messages) {
-            parts.push(`  ${m.role}: ${m.content}`);
-          }
-        } else {
-          parts.push("(no messages yet)");
-        }
-        break;
+    parts.push(`── Chat: ${p.title || "Untitled Chat"}`);
+    if (p.messages.length > 0) {
+      parts.push("Recent messages:");
+      for (const m of p.messages) {
+        parts.push(`  ${m.role}: ${m.content}`);
+      }
+    } else {
+      parts.push("(no messages yet)");
     }
     blocks.push(parts.join("\n"));
   }
@@ -158,8 +138,8 @@ export function buildCanvasContextPrefix(ctx: CanvasContextPayload): string {
   );
   blocks.push(
     ctx.scope === "canvas"
-      ? "When the user asks about what's on their canvas or references panels they can see, answer from the context above. You can still call search_knowledge_base and get_entry_details for entries NOT on the canvas when relevant."
-      : "When the user asks about things in the cluster, prefer answering from the context above. You can still call search_knowledge_base and get_entry_details for entries OUTSIDE the cluster when relevant."
+      ? "When the user asks about what's on their canvas or references panels they can see, answer from the context above."
+      : "When the user asks about things in the cluster, prefer answering from the context above."
   );
 
   return blocks.join("\n\n") + "\n\n";

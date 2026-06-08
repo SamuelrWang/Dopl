@@ -1,24 +1,14 @@
-import type { PendingStatus } from "./types.js";
 import type {
-  BuildResult,
   CanvasPanel,
-  WorkspaceSummary,
   WorkspaceListItem,
   ClusterDetail,
   ClusterKnowledgeEntry,
   ClusterSkillFull,
-  ClusterQueryResult,
   ClusterRow,
-  DoplEntry,
-  ListResult,
   Pack,
   PackFile,
   PackFileMeta,
-  PrepareIngestResult,
   ResolvedWorkspace,
-  SearchResult,
-  SubmitIngestedEntryInput,
-  SubmitIngestedEntryResult,
 } from "./types.js";
 import { DoplTransport } from "./transport.js";
 import * as kb from "./knowledge.js";
@@ -41,27 +31,12 @@ import type {
   UpdateSkillPatch as SkillUpdatePatch,
 } from "./skills.js";
 import type { ResolvedSkill, Skill, SkillFile } from "./skill-types.js";
-import * as integrations from "./integrations.js";
-import type {
-  ConnectResponse,
-  IntegrationActionResultResponse,
-  IntegrationActionsResponse,
-  IntegrationConnectionsResponse,
-  IntegrationListResponse,
-  IntegrationProvider,
-  IntegrationStatusResponse,
-  PrepareFromIntegrationResponse,
-  ReadIntegrationObjectResponse,
-} from "./integration-types.js";
 
 export type { DoplTransportOptions as DoplClientOptions } from "./transport.js";
 export { parseRetryAfter } from "./retry.js";
 
-const PENDING_CACHE_TTL_MS = 5_000;
-
 export class DoplClient {
   private transport: DoplTransport;
-  private pendingCache: { ts: number; data: PendingStatus } | null = null;
 
   constructor(
     baseUrl: string,
@@ -88,105 +63,6 @@ export class DoplClient {
     return this.transport.getWorkspaceId();
   }
 
-  entryUrl(slug: string | null | undefined): string | null {
-    if (!slug) return null;
-    return `${this.getBaseUrl()}/e/${encodeURIComponent(slug)}`;
-  }
-
-  async searchSetups(params: {
-    query: string;
-    tags?: string[];
-    use_case?: string;
-    max_results?: number;
-  }): Promise<SearchResult> {
-    return this.transport.request<SearchResult>("/api/query", {
-      method: "POST",
-      toolName: "search_setups",
-      body: {
-        query: params.query,
-        filters: { tags: params.tags, use_case: params.use_case },
-        max_results: params.max_results ?? 5,
-      },
-    });
-  }
-
-  async getSetup(id: string): Promise<DoplEntry> {
-    return this.transport.request<DoplEntry>(`/api/entries/${id}`, {
-      toolName: "get_setup",
-    });
-  }
-
-  async describeLink(url: string): Promise<{
-    url: string;
-    type: string;
-    title: string | null;
-    description: string | null;
-    metadata: Record<string, unknown>;
-    error?: string;
-  }> {
-    return this.transport.request("/api/links/describe", {
-      method: "POST",
-      body: { url },
-      toolName: "describe_link",
-    });
-  }
-
-  async getIngestContent(
-    entryId: string,
-    sourceUrl?: string
-  ): Promise<{
-    entry_id: string;
-    source_url: string | null;
-    content: string;
-    chars: number;
-    truncated: boolean;
-  }> {
-    const qs = sourceUrl ? `?source_url=${encodeURIComponent(sourceUrl)}` : "";
-    return this.transport.request(
-      `/api/ingest/content/${encodeURIComponent(entryId)}${qs}`,
-      { toolName: "get_ingest_content" }
-    );
-  }
-
-  async buildSolution(params: {
-    brief: string;
-    preferred_tools?: string[];
-    excluded_tools?: string[];
-    max_complexity?: string;
-  }): Promise<BuildResult> {
-    return this.transport.request<BuildResult>("/api/build", {
-      method: "POST",
-      toolName: "build_solution",
-      body: {
-        brief: params.brief,
-        constraints: {
-          preferred_tools: params.preferred_tools,
-          excluded_tools: params.excluded_tools,
-          max_complexity: params.max_complexity,
-        },
-      },
-    });
-  }
-
-  async listSetups(params?: {
-    use_case?: string;
-    complexity?: string;
-    limit?: number;
-    offset?: number;
-  }): Promise<ListResult> {
-    const query = new URLSearchParams();
-    query.set("status", "complete");
-    if (params?.use_case) query.set("use_case", params.use_case);
-    if (params?.complexity) query.set("complexity", params.complexity);
-    if (params?.limit) query.set("limit", String(params.limit));
-    if (params?.offset) query.set("offset", String(params.offset));
-
-    return this.transport.request<ListResult>(
-      `/api/entries?${query.toString()}`,
-      { toolName: "list_setups" }
-    );
-  }
-
   async listCanvasPanels(): Promise<CanvasPanel[]> {
     const res = await this.transport.request<{ panels: CanvasPanel[] }>(
       "/api/canvas/panels",
@@ -195,32 +71,11 @@ export class DoplClient {
     return res.panels;
   }
 
-  async addCanvasPanel(
-    entryId: string
-  ): Promise<{ panel: CanvasPanel; created: boolean }> {
-    return this.transport.request<{ panel: CanvasPanel; created: boolean }>(
-      "/api/canvas/panels",
-      {
-        method: "POST",
-        toolName: "canvas_add_entry",
-        body: { entry_id: entryId },
-      }
-    );
-  }
-
-  async removeCanvasPanel(entryId: string): Promise<void> {
-    await this.transport.requestNoContent(
-      `/api/canvas/panels/${encodeURIComponent(entryId)}`,
-      "DELETE",
-      "canvas_remove_entry"
-    );
-  }
-
-  async createCluster(name: string, entryIds: string[]): Promise<ClusterRow> {
+  async createCluster(name: string): Promise<ClusterRow> {
     return this.transport.request<ClusterRow>("/api/clusters", {
       method: "POST",
       toolName: "canvas_create_cluster",
-      body: { name, entry_ids: entryIds },
+      body: { name },
     });
   }
 
@@ -234,21 +89,6 @@ export class DoplClient {
     return this.transport.request<ClusterDetail>(
       `/api/clusters/${encodeURIComponent(slug)}`,
       { toolName: "get_cluster" }
-    );
-  }
-
-  async queryCluster(
-    slug: string,
-    query: string,
-    maxResults?: number
-  ): Promise<ClusterQueryResult> {
-    return this.transport.request<ClusterQueryResult>(
-      `/api/clusters/${encodeURIComponent(slug)}/query`,
-      {
-        method: "POST",
-        toolName: "query_cluster",
-        body: { query, max_results: maxResults ?? 5 },
-      }
     );
   }
 
@@ -317,78 +157,9 @@ export class DoplClient {
     };
   }
 
-  async prepareIngest(
-    url: string,
-    content?: { text?: string; images?: string[]; links?: string[] }
-  ): Promise<PrepareIngestResult> {
-    const result = await this.transport.request<PrepareIngestResult>(
-      "/api/ingest/prepare",
-      {
-        method: "POST",
-        toolName: "ingest_url",
-        body: { url, content: content || {} },
-        timeoutMs: 120_000,
-      }
-    );
-    this.invalidatePendingCache();
-    return result;
-  }
-
-  async getPendingStatus(): Promise<PendingStatus> {
-    const now = Date.now();
-    if (this.pendingCache && now - this.pendingCache.ts < PENDING_CACHE_TTL_MS) {
-      return this.pendingCache.data;
-    }
-    try {
-      const data = await this.transport.request<PendingStatus>(
-        "/api/ingest/pending",
-        { toolName: "_pending_status" }
-      );
-      this.pendingCache = { ts: now, data };
-      return data;
-    } catch {
-      const empty: PendingStatus = { pending_ingestions: 0, recent: [] };
-      this.pendingCache = { ts: now, data: empty };
-      return empty;
-    }
-  }
-
-  invalidatePendingCache(): void {
-    this.pendingCache = null;
-  }
-
-  async submitIngestedEntry(
-    input: SubmitIngestedEntryInput
-  ): Promise<SubmitIngestedEntryResult> {
-    return this.transport.request<SubmitIngestedEntryResult>(
-      "/api/ingest/submit",
-      {
-        method: "POST",
-        toolName: "submit_ingested_entry",
-        body: input,
-        timeoutMs: 120_000,
-      }
-    );
-  }
-
-  async skeletonIngest(url: string): Promise<{
-    entry_id: string;
-    slug: string | null;
-    status: string;
-    tier?: string;
-    title?: string | null;
-  }> {
-    return this.transport.request("/api/admin/skeleton-ingest", {
-      method: "POST",
-      toolName: "skeleton_ingest",
-      body: { url },
-      timeoutMs: 60_000,
-    });
-  }
-
   async updateCluster(
     slug: string,
-    updates: { name?: string; entry_ids?: string[] }
+    updates: { name?: string }
   ): Promise<ClusterRow> {
     return this.transport.request<ClusterRow>(
       `/api/clusters/${encodeURIComponent(slug)}`,
@@ -416,50 +187,6 @@ export class DoplClient {
       `/api/clusters/${encodeURIComponent(slug)}`,
       "DELETE",
       "delete_cluster"
-    );
-  }
-
-  async updateEntry(
-    id: string,
-    updates: {
-      title?: string;
-      summary?: string;
-      use_case?: string;
-      complexity?: string;
-    }
-  ): Promise<DoplEntry> {
-    return this.transport.request<DoplEntry>(
-      `/api/entries/${encodeURIComponent(id)}`,
-      {
-        method: "PATCH",
-        toolName: "update_entry",
-        body: updates,
-      }
-    );
-  }
-
-  async checkEntryUpdates(id: string): Promise<{
-    entry_id: string;
-    title: string | null;
-    has_updates: boolean | null;
-    reason?: string;
-    ingested_at?: string;
-    last_pushed_at?: string;
-    days_since_ingestion?: number;
-    days_since_push?: number;
-    repo?: string;
-  }> {
-    return this.transport.request(
-      `/api/entries/${encodeURIComponent(id)}/check-updates`,
-      { toolName: "check_entry_updates" }
-    );
-  }
-
-  async deleteEntry(id: string): Promise<void> {
-    await this.transport.requestNoContent(
-      `/api/entries/${encodeURIComponent(id)}`,
-      "DELETE",
-      "delete_entry"
     );
   }
 
@@ -659,22 +386,4 @@ export class DoplClient {
   deleteSkillFile(slug: string, fileName: string): Promise<void> {
     return skills.deleteSkillFile(this.transport, slug, fileName);
   }
-
-  // ── Integrations (Notion / Gmail / Drive / …) ────────────────────
-  connectIntegration = (p: IntegrationProvider): Promise<ConnectResponse> =>
-    integrations.connectIntegration(this.transport, p);
-  getIntegrationStatus = (p: IntegrationProvider): Promise<IntegrationStatusResponse> =>
-    integrations.getIntegrationStatus(this.transport, p);
-  listIntegrationObjects = (p: IntegrationProvider, input: { query?: string; cursor?: string; limit?: number } = {}): Promise<IntegrationListResponse> =>
-    integrations.listIntegrationObjects(this.transport, p, input);
-  readIntegrationObject = (p: IntegrationProvider, input: { object_id: string }): Promise<ReadIntegrationObjectResponse> =>
-    integrations.readIntegrationObject(this.transport, p, input);
-  prepareFromIntegration = (input: { provider: IntegrationProvider; object_id: string; kb_id?: string; cluster_id?: string }): Promise<PrepareFromIntegrationResponse> =>
-    integrations.prepareFromIntegration(this.transport, input);
-  listIntegrationActions = (p: IntegrationProvider, options: { query?: string } = {}): Promise<IntegrationActionsResponse> =>
-    integrations.listIntegrationActions(this.transport, p, options);
-  executeIntegrationAction = (p: IntegrationProvider, input: { action: string; params: Record<string, unknown> }): Promise<IntegrationActionResultResponse> =>
-    integrations.executeIntegrationAction(this.transport, p, input);
-  listMyIntegrations = (): Promise<IntegrationConnectionsResponse> =>
-    integrations.listMyIntegrations(this.transport);
 }

@@ -9,12 +9,9 @@
  *
  *   - `stripFromClusters`: remove panel ids from every cluster, auto-
  *     dissolve clusters that fall below MIN_CLUSTER_SIZE.
- *   - `dedupSingletonPanels`: collapse multiple connection/browse panels
- *     to one each (historical bug self-heal).
+ *   - `dedupSingletonPanels`: collapse multiple connection panels to one
+ *     (historical bug self-heal).
  *   - `ensureDefaultPanels`: inject the connection default if missing.
- *     Also strips a legacy "ingestion" panel type. The browse panel is
- *     NOT auto-injected — it opens only when the user clicks the Browse
- *     pill (see fixed-input-bar `handleSpawnBrowse`).
  */
 
 import type { CanvasState, Cluster, Panel } from "@/features/canvas/types";
@@ -41,7 +38,7 @@ export function stripFromClusters(
 }
 
 export function dedupSingletonPanels(state: CanvasState): CanvasState {
-  const SINGLETON_TYPES = new Set(["connection", "browse"]);
+  const SINGLETON_TYPES = new Set(["connection"]);
   const seen = new Set<string>();
   const dropped = new Set<string>();
   const kept: Panel[] = [];

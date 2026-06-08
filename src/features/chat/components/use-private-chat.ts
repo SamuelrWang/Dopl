@@ -21,10 +21,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type {
-  ChatAttachment,
-  ChatMessage,
-} from "@/features/ingestion/components/chat-message";
+import type { ChatAttachment, ChatMessage } from "@/shared/types/chat";
 import { messagesToApiHistory } from "./chat-message-types";
 import type { ScopeFilters } from "./cluster-scope-picker";
 import { attachPanelToCluster } from "./attach-panel-to-cluster";
@@ -292,17 +289,6 @@ export function usePrivateChat({
                     type: "tool_activity",
                     toolName: event.name || "tool",
                     status: "calling",
-                  },
-                ]);
-                break;
-              case "entry_reference":
-                if (!event.entry) break;
-                setMessages((prev) => [
-                  ...prev,
-                  {
-                    role: "ai",
-                    type: "entry_cards",
-                    entries: [event.entry!],
                   },
                 ]);
                 break;

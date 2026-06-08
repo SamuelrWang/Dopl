@@ -2,35 +2,23 @@
  * `dopl_cluster` + `dopl_cluster_admin` — cluster read/non-destructive writes
  * and the separately permission-gated destructive cluster operations.
  *
- * Follows the canonical consolidation pattern (see `setups.ts`): a single
- * `register(...)` per tool with an `op` enum + a flat schema of all per-op
- * params (optional at the schema level), a handler that switches on `op`,
- * validates required params for the chosen op via `missingParams`, then calls
- * a lifted op-function. Op bodies are lifted verbatim from the old per-tool
- * handlers in `server.ts` — only restructured into functions, logic and output
- * text unchanged.
+ * Clusters are containers for attached knowledge bases + skills.
  */
 
 import { z } from "zod";
 import type { DoplClient } from "@dopl/client";
 import { ok, missingParams, type RegisterTool, type ToolResponse } from "./respond";
 
-// Local copy of the server-side constant used inside get_cluster's body.
-const CONTEXT_CHAR_BUDGET = 2000;
-
-const CLUSTER_DESCRIPTION = `Read and non-destructively modify Dopl clusters (curated groupings of setups). Set \`op\` to one of:
-- "list" — discover all clusters in the knowledge base. Cheap metadata call; run it proactively to show the user their workspace or to resolve a slug another op needs, rather than asking for a slug.
-- "get" — retrieve a cluster's metadata plus member entries, attached knowledge bases, and attached skills. Use before answering what's in a cluster or what KBs/skills it can access. KB attachments include an entries_index (read a body via op="read_knowledge_entry"); skill bodies are truncated (full procedure via op="read_skill"). For searching inside a cluster, use op="query".
-- "query" — semantic search scoped to the entries inside ONE cluster. Use when a cluster is already the focus and the user wants to find something within it — NOT for broad discovery (use the \`search_setups\` tool for cross-KB search). If you lack a slug, run op="list" first.
-- "create" — create a new cluster from entries already on the user's canvas. Use on "group these into a cluster", "make a cluster for X", or when canvas panels have grown enough that clustering helps. For adding one entry to an existing cluster, use op="add_entry".
-- "update" — rename a cluster or REPLACE its entry membership with a new set of entry IDs. Covers both structural edits and plain renames (pass just \`name\`). For adding a single entry without replacing the whole set, use op="add_entry" (less destructive).
-- "add_entry" — add a single entry to an existing cluster to expand its membership. To create a brand-new cluster, use op="create".
+const CLUSTER_DESCRIPTION = `Read and non-destructively modify Dopl clusters (curated groupings of knowledge bases + skills). Set \`op\` to one of:
+- "list" — discover all clusters. Cheap metadata call; run it proactively to show the user their workspace or to resolve a slug another op needs, rather than asking for a slug.
+- "get" — retrieve a cluster's metadata plus attached knowledge bases and skills. Use before answering what's in a cluster or what KBs/skills it can access. KB attachments include an entries_index (read a body via op="read_knowledge_entry"); skill bodies are truncated (full procedure via op="read_skill").
+- "create" — create a new, empty cluster by name. Use on "make a cluster for X". Attach knowledge bases / skills to it as a separate step.
+- "update" — rename a cluster (pass \`name\`).
 - "read_knowledge_entry" — read the full body of one entry inside a knowledge base attached to the cluster. Find the (kb id, entry id) pair via op="get" first. 404s if the KB isn't attached or the entry doesn't exist.
 - "read_skill" — read the full body of every file (SKILL.md + supplementary) for a skill attached to the cluster. Find the skill_id via op="get" first. Use when the truncated body from op="get" isn't enough. 404s if the skill isn't attached.`;
 
-const CLUSTER_ADMIN_DESCRIPTION = `DESTRUCTIVE cluster operations — permanent and irreversible. Each op deletes data; confirm intent if the user's phrasing is at all ambiguous. Set \`op\` to one of:
-- "delete_cluster" — permanently delete a cluster grouping. Individual entries REMAIN in the KB and on the user's canvas; only the cluster is removed. Use when the user explicitly asks to drop a cluster.
-- "delete_entry" — PERMANENTLY remove an entry from the knowledge base. Use only when the user explicitly asks. Irreversible — chunks, tags, sources, and the entry row are all dropped. Canvas panels owned by other users that reference it become missing-entry placeholders. Ask for confirmation before calling if intent is ambiguous.`;
+const CLUSTER_ADMIN_DESCRIPTION = `DESTRUCTIVE cluster operations — permanent and irreversible. Confirm intent if the user's phrasing is at all ambiguous. Set \`op\` to one of:
+- "delete_cluster" — permanently delete a cluster grouping. Attached knowledge bases + skills REMAIN; only the cluster grouping is removed.`;
 
 export function registerClusterTools(
   register: RegisterTool,
@@ -44,10 +32,8 @@ export function registerClusterTools(
         .enum([
           "list",
           "get",
-          "query",
           "create",
           "update",
-          "add_entry",
           "read_knowledge_entry",
           "read_skill",
         ])
@@ -55,35 +41,15 @@ export function registerClusterTools(
       slug: z
         .string()
         .optional()
-        .describe("op=get/update/add_entry: cluster slug from op=list."),
+        .describe("op=get/update: cluster slug from op=list."),
       cluster_slug: z
         .string()
         .optional()
-        .describe("op=query/read_knowledge_entry/read_skill: cluster slug."),
-      query: z
-        .string()
-        .optional()
-        .describe("op=query: natural language search query."),
-      max_results: z
-        .number()
-        .optional()
-        .describe("op=query: max results (default 5)."),
+        .describe("op=read_knowledge_entry/read_skill: cluster slug."),
       name: z
         .string()
         .optional()
         .describe("op=create: cluster name, e.g. 'AI Agent Stack'. op=update: new cluster name."),
-      entries: z
-        .array(z.string())
-        .optional()
-        .describe("op=create: entry slugs or UUIDs to include (must be on your canvas)."),
-      entry_ids: z
-        .array(z.string())
-        .optional()
-        .describe("op=update: new set of entry IDs (replaces existing membership)."),
-      entry: z
-        .string()
-        .optional()
-        .describe("op=add_entry: entry slug or UUID to add to the cluster."),
       knowledge_base_id: z
         .string()
         .optional()
@@ -106,30 +72,15 @@ export function registerClusterTools(
           if (miss) return miss;
           return opGet(client, args.slug as string);
         }
-        case "query": {
-          const miss = missingParams("query", args, ["cluster_slug", "query"]);
-          if (miss) return miss;
-          return opQuery(
-            client,
-            args.cluster_slug as string,
-            args.query as string,
-            args.max_results,
-          );
-        }
         case "create": {
-          const miss = missingParams("create", args, ["name", "entries"]);
+          const miss = missingParams("create", args, ["name"]);
           if (miss) return miss;
-          return opCreate(client, args.name as string, args.entries as string[]);
+          return opCreate(client, args.name as string);
         }
         case "update": {
-          const miss = missingParams("update", args, ["slug"]);
+          const miss = missingParams("update", args, ["slug", "name"]);
           if (miss) return miss;
-          return opUpdate(client, args.slug as string, args.name, args.entry_ids);
-        }
-        case "add_entry": {
-          const miss = missingParams("add_entry", args, ["slug", "entry"]);
-          if (miss) return miss;
-          return opAddEntry(client, args.slug as string, args.entry as string);
+          return opUpdate(client, args.slug as string, args.name as string);
         }
         case "read_knowledge_entry": {
           const miss = missingParams("read_knowledge_entry", args, [
@@ -166,16 +117,12 @@ export function registerClusterTools(
     CLUSTER_ADMIN_DESCRIPTION,
     {
       op: z
-        .enum(["delete_cluster", "delete_entry"])
+        .enum(["delete_cluster"])
         .describe("Destructive operation to perform."),
       slug: z
         .string()
         .optional()
         .describe("op=delete_cluster: cluster slug."),
-      entry: z
-        .string()
-        .optional()
-        .describe("op=delete_entry: entry slug or UUID to delete."),
     },
     async (args): Promise<ToolResponse> => {
       switch (args.op) {
@@ -183,11 +130,6 @@ export function registerClusterTools(
           const miss = missingParams("delete_cluster", args, ["slug"]);
           if (miss) return miss;
           return opDeleteCluster(client, args.slug as string);
-        }
-        case "delete_entry": {
-          const miss = missingParams("delete_entry", args, ["entry"]);
-          if (miss) return miss;
-          return opDeleteEntry(client, args.entry as string);
         }
       }
     },
@@ -202,24 +144,20 @@ function plural(n: number, noun: string): string {
 }
 
 /**
- * Compose a one-line summary of what a cluster actually contains —
- * entries/setups AND attached knowledge bases AND skills — so "what's in
- * this cluster?" is answered accurately even when it holds no entry panels.
+ * Compose a one-line summary of what a cluster contains — attached
+ * knowledge bases AND skills.
  */
 function clusterContentSummary(c: {
-  panel_count?: number;
   knowledge_base_count?: number;
   skill_count?: number;
   knowledge_base_names?: string[];
   skill_names?: string[];
 }): string {
-  const entries = c.panel_count ?? 0;
   const kbs = c.knowledge_base_count ?? 0;
   const skills = c.skill_count ?? 0;
-  if (entries === 0 && kbs === 0 && skills === 0) return "empty";
+  if (kbs === 0 && skills === 0) return "empty";
 
   const parts: string[] = [];
-  if (entries > 0) parts.push(plural(entries, "setup"));
   if (kbs > 0) {
     const names = c.knowledge_base_names?.length
       ? ` (${c.knowledge_base_names.join(", ")})`
@@ -251,13 +189,8 @@ async function opGet(client: DoplClient, slug: string): Promise<ToolResponse> {
   const lines: string[] = [];
   lines.push(`# Cluster: ${cluster.name}`);
   lines.push(`Slug: \`${cluster.slug}\``);
-
-  // Lead with a composed summary of what the cluster actually contains so
-  // the answer to "what's in this cluster?" is accurate even when it holds
-  // no entry panels (e.g. a cluster that's all knowledge bases + skills).
   lines.push(
     `**Contains:** ${clusterContentSummary({
-      panel_count: cluster.entries.length,
       knowledge_base_count: cluster.knowledge_bases.length,
       skill_count: cluster.skills.length,
       knowledge_base_names: cluster.knowledge_bases.map((kb) => kb.name),
@@ -265,26 +198,6 @@ async function opGet(client: DoplClient, slug: string): Promise<ToolResponse> {
     })}`
   );
   lines.push("");
-
-  if (cluster.entries.length > 0) {
-    lines.push(`## Entries\n`);
-    for (const e of cluster.entries) {
-      const title = e.title || "Untitled";
-      const url = client.entryUrl(e.slug);
-      const heading = url ? `[${title}](${url})` : title;
-      lines.push(`### ${heading}`);
-      if (e.summary) lines.push(e.summary);
-      if (e.readme) {
-        lines.push(`\nREADME:\n${e.readme.slice(0, CONTEXT_CHAR_BUDGET)}`);
-      }
-      if (e.agents_md) {
-        lines.push(
-          `\nagents.md:\n${e.agents_md.slice(0, CONTEXT_CHAR_BUDGET)}`
-        );
-      }
-      lines.push("");
-    }
-  }
 
   if (cluster.knowledge_bases.length > 0) {
     lines.push(`## Attached Knowledge Bases\n`);
@@ -335,110 +248,24 @@ async function opGet(client: DoplClient, slug: string): Promise<ToolResponse> {
   return ok(lines.join("\n"));
 }
 
-async function opQuery(
-  client: DoplClient,
-  cluster_slug: string,
-  query: string,
-  max_results: number | undefined,
-): Promise<ToolResponse> {
-  const result = await client.queryCluster(
-    cluster_slug,
-    query,
-    max_results
-  );
-
-  const lines: string[] = [];
-  lines.push(
-    `## Cluster Search: "${query}" in ${result.cluster_slug} (${result.results.length} results)\n`
-  );
-
-  for (const r of result.results) {
-    const title = r.title || "Untitled";
-    const url = client.entryUrl(r.slug);
-    const heading = url ? `[${title}](${url})` : title;
-    lines.push(
-      `### ${heading} (${Math.round(r.similarity * 100)}% match)`
-    );
-    if (r.summary) lines.push(r.summary);
-    lines.push("");
-  }
-
-  return ok(lines.join("\n"));
-}
-
 async function opCreate(
   client: DoplClient,
   name: string,
-  entries: string[],
 ): Promise<ToolResponse> {
-  // Validate entries exist (and resolve slug → UUID where needed) before creating cluster.
-  const validationErrors: string[] = [];
-  const resolvedIds: string[] = [];
-  for (const ref of entries) {
-    try {
-      const entry = await client.getSetup(ref);
-      resolvedIds.push(entry.id);
-    } catch {
-      validationErrors.push(ref);
-    }
-  }
-  if (validationErrors.length > 0) {
-    return ok(
-      `Entries not found: ${validationErrors.join(", ")}. Use \`search_setups\` to find valid entries.`
-    );
-  }
-
-  const result = await client.createCluster(name, resolvedIds);
-  const slug = result.slug;
-
+  const result = await client.createCluster(name);
   return ok(
-    `Created cluster **${result.name}** (slug: \`${slug}\`) with ${result.panel_count ?? resolvedIds.length} entries.`
+    `Created cluster **${result.name}** (slug: \`${result.slug}\`). Attach knowledge bases or skills to populate it.`
   );
 }
 
 async function opUpdate(
   client: DoplClient,
   slug: string,
-  name: string | undefined,
-  entry_ids: string[] | undefined,
+  name: string,
 ): Promise<ToolResponse> {
-  const updates: { name?: string; entry_ids?: string[] } = {};
-  if (name) updates.name = name;
-  if (entry_ids) updates.entry_ids = entry_ids;
-
-  const result = await client.updateCluster(slug, updates);
-
+  const result = await client.updateCluster(slug, { name });
   return ok(
-    `Updated cluster **${result.name}** (slug: \`${result.slug}\`) — ${result.panel_count ?? 0} entries.`
-  );
-}
-
-async function opAddEntry(
-  client: DoplClient,
-  slug: string,
-  entryRef: string,
-): Promise<ToolResponse> {
-  // Get current cluster to build updated entry list
-  const detail = await client.getCluster(slug);
-  const existingIds = detail.entries.map((e) => e.entry_id);
-
-  // Validate entry exists and resolve slug → UUID for cluster membership.
-  const newEntry = await client.getSetup(entryRef);
-  const newEntryId = newEntry.id;
-  const title = newEntry.title || "Untitled";
-  const url = client.entryUrl(newEntry.slug);
-  const label = url ? `[${title}](${url})` : title;
-
-  if (existingIds.includes(newEntryId)) {
-    return ok(`**${label}** is already in cluster "${slug}".`);
-  }
-
-  // Add entry to cluster membership.
-  const updatedIds = [...existingIds, newEntryId];
-  await client.updateCluster(slug, { entry_ids: updatedIds });
-
-  return ok(
-    `Added **${label}** to cluster "${slug}" (now ${updatedIds.length} entries).`
+    `Renamed cluster to **${result.name}** (slug: \`${result.slug}\`).`
   );
 }
 
@@ -490,13 +317,5 @@ async function opDeleteCluster(
   slug: string,
 ): Promise<ToolResponse> {
   await client.deleteCluster(slug);
-  return ok(`Deleted cluster \`${slug}\`. Entries remain in the knowledge base.`);
-}
-
-async function opDeleteEntry(
-  client: DoplClient,
-  entry: string,
-): Promise<ToolResponse> {
-  await client.deleteEntry(entry);
-  return ok(`Deleted entry from the knowledge base.`);
+  return ok(`Deleted cluster \`${slug}\`. Attached knowledge bases + skills remain.`);
 }

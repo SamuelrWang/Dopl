@@ -67,8 +67,7 @@ interface Options {
  *
  * If a future product decision requires gating user-data MCP calls,
  * compose `withMcpAccess` inside the handler signature instead of
- * altering this default — see `app/api/query/route.ts` for the
- * gated-MCP pattern on read-only KB tools.
+ * altering this default.
  */
 export function withWorkspaceAuth(
   handler: (

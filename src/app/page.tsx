@@ -148,12 +148,6 @@ export default function Home() {
                 Docs
               </Link>
               <Link
-                href="/community"
-                className="text-white/60 text-[13px] hover:text-white transition-colors"
-              >
-                Community
-              </Link>
-              <Link
                 href="/pricing"
                 className="text-white/60 text-[13px] hover:text-white transition-colors"
               >

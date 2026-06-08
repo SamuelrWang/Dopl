@@ -18,7 +18,6 @@ import {
   useCanvas,
 } from "./canvas-store";
 import {
-  BROWSE_PANEL_SIZE,
   DEFAULT_PANEL_SIZE,
   KNOWLEDGE_PANEL_SIZE,
   MAX_ZOOM,
@@ -120,11 +119,8 @@ export function FixedInputBar() {
   }
 
   /**
-   * Route the user's typed input:
-   *   - Bare URL (nothing else)   → spawn chat + kick off ingestion inline
-   *     (preserves the "paste a link to ingest" shortcut)
-   *   - Anything else             → spawn chat + hand it the message as
-   *     `pendingInput`; the new chat panel fires /api/chat on mount
+   * Spawn a chat panel and hand it the typed message as `pendingInput`;
+   * the new chat panel fires /api/chat on mount.
    */
   function handleSend() {
     const text = input.trim();
@@ -144,50 +140,7 @@ export function FixedInputBar() {
   }
 
   /**
-   * Spawn a new browse panel at the camera viewport center — OR, if one
-   * already exists, frame the camera on the existing panel so it fills
-   * the viewport. Only one browse panel is allowed at a time.
-   */
-  function handleSpawnBrowse() {
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-
-    const existing = state.panels.find((p) => p.type === "browse");
-    if (existing) {
-      // Fit-to-viewport zoom with 10% margin, clamped to canvas limits.
-      const fitZoom = Math.max(
-        MIN_ZOOM,
-        Math.min(
-          MAX_ZOOM,
-          Math.min(vw / existing.width, vh / existing.height) * 0.9
-        )
-      );
-      dispatch({
-        type: "SET_CAMERA",
-        camera: {
-          x: -(existing.x + existing.width / 2) * fitZoom + vw / 2,
-          y: -(existing.y + existing.height / 2) * fitZoom + vh / 2,
-          zoom: fitZoom,
-        },
-      });
-      dispatch({ type: "SET_SELECTION", panelIds: [existing.id] });
-      return;
-    }
-
-    const { x, y } = computeNewPanelPosition(
-      state,
-      vw,
-      vh,
-      BROWSE_PANEL_SIZE.width,
-      BROWSE_PANEL_SIZE.height
-    );
-    const id = `browse-${state.nextPanelId}`;
-    dispatch({ type: "CREATE_BROWSE_PANEL", id, x, y });
-  }
-
-  /**
-   * Spawn a knowledge panel — singleton, frame-existing-or-spawn pattern
-   * (mirrors handleSpawnBrowse).
+   * Spawn a knowledge panel — singleton, frame-existing-or-spawn pattern.
    */
   function handleSpawnKnowledge() {
     const vw = window.innerWidth;
@@ -299,12 +252,12 @@ export function FixedInputBar() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask anything or paste a URL..."
+            placeholder="Ask anything..."
             rows={1}
             className="w-full bg-transparent px-4 pt-4 pb-2 text-base leading-[24px] text-white/90 outline-none resize-none placeholder:text-white/30 disabled:opacity-50 min-h-[48px] max-h-[200px]"
           />
           <div className="flex items-center justify-between px-3 pb-3">
-            {/* Left pill group — Chat + Browse */}
+            {/* Left pill group — Chat + Knowledge + Skills */}
             <div className="inline-flex items-center gap-2">
               {/* CHAT pill — opens the fixed chat drawer */}
               <button
@@ -317,14 +270,6 @@ export function FixedInputBar() {
                 }`}
               >
                 Chat
-              </button>
-              {/* BROWSE pill — spawns a browse/search panel */}
-              <button
-                onClick={handleSpawnBrowse}
-                aria-label="Spawn browse panel"
-                className="inline-flex items-center h-7 px-3 font-mono text-[10px] uppercase tracking-wider text-white/60 hover:text-white/95 bg-white/[0.04] hover:bg-white/[0.09] border border-white/[0.12] hover:border-white/[0.22] rounded-full transition-colors"
-              >
-                Browse
               </button>
               {/* KNOWLEDGE pill — spawns a knowledge panel */}
               <button

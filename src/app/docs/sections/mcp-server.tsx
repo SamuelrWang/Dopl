@@ -85,22 +85,21 @@ args = ["@dopl/mcp-server", "--api-key", "YOUR_API_KEY"]`}</CodeBlock>
 
       <H2 id="mcp-tools">Available tools</H2>
       <P>
-        The MCP server exposes 24 tools. Here are the most commonly used:
+        The MCP server exposes tools across knowledge bases, skills, clusters,
+        and the canvas. Here are the most commonly used:
       </P>
       <Table
         headers={["Tool", "Description"]}
         rows={[
-          ["search_setups", "Search the knowledge base with natural language. Returns ranked results with optional AI synthesis."],
-          ["dopl_setups(op=get)", "Get full details for an entry: README, agents.md, manifest."],
-          ["build_solution", "Compose a multi-source solution from a brief description of what you want to build."],
-          ["dopl_ingest(op=url)", "Ingest a URL into the knowledge base. Processes in the background (30 to 120 seconds)."],
           ["dopl_cluster(op=list)", "List all your clusters."],
-          ["dopl_cluster(op=get)", "Get cluster details with member entries and READMEs."],
-          ["dopl_cluster(op=query)", "Semantic search scoped to a single cluster."],
-          ["dopl_canvas(op=add_entry)", "Add a knowledge base entry to your canvas."],
-          ["dopl_canvas(op=search_and_add)", "Search and add top results to your canvas in one step."],
-          ["dopl_cluster(op=create)", "Group canvas entries into a named cluster."],
-          ["dopl_entry(op=check_updates)", "Check if a GitHub-sourced entry has upstream changes since ingestion."],
+          ["dopl_cluster(op=get)", "Get cluster details with attached knowledge bases and skills."],
+          ["dopl_cluster(op=read_knowledge_entry)", "Read a knowledge-base entry inside a cluster."],
+          ["dopl_cluster(op=read_skill)", "Read the full body of a skill attached to a cluster."],
+          ["dopl_cluster(op=create)", "Create a new cluster by name."],
+          ["dopl_kb", "Browse, read, and write your workspace knowledge bases."],
+          ["dopl_skill", "List, read, and author your workspace skills."],
+          ["dopl_packs", "Browse curated, version-pinned knowledge packs."],
+          ["dopl_canvas(op=list)", "List the panels on your canvas."],
         ]}
       />
 

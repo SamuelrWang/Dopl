@@ -38,12 +38,6 @@ export default async function AdminAnalyticsPage() {
           >
             Health
           </Link>
-          <Link
-            href="/admin/review"
-            className="rounded border border-white/[0.08] px-3 py-1.5 text-text-secondary hover:bg-white/[0.04]"
-          >
-            Review queue
-          </Link>
         </nav>
       </header>
 

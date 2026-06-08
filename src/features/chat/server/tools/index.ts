@@ -2,7 +2,6 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import type { CanvasContextPayload } from "../canvas-context";
 import type { ToolHandler, ToolResult } from "./types";
-import { executeSearchKnowledgeBase, executeGetEntryDetails } from "./search";
 import { executeListWorkspaceClusters } from "./clusters";
 import {
   executeListWorkspaceKnowledgeBases,
@@ -19,15 +18,6 @@ import {
   executeEmitAgentPrompt,
   executeEmitContextFile,
 } from "./artifacts";
-import {
-  INTEGRATION_TOOLS,
-  executeExecuteIntegrationActionTool,
-  executeIntegrationStatus,
-  executeListIntegrationActionsTool,
-  executeListIntegrationObjects,
-  executeListMyIntegrationsTool,
-  executeReadIntegrationObject,
-} from "./integrations";
 
 /**
  * Per-chat scope filters the user picks via the ClusterScopePicker. The
@@ -46,34 +36,6 @@ export type ChatMode = "workspace" | "private";
 
 // ── Tool catalogue ─────────────────────────────────────────────────
 
-const SEARCH_TOOLS: Anthropic.Tool[] = [
-  {
-    name: "search_knowledge_base",
-    description:
-      "Search the public Dopl catalog for AI/automation setups matching a query. Use this for ideas, patterns, and reference implementations from the wider community — NOT for the user's own workspace data. Returns ranked results with titles and summaries.",
-    input_schema: {
-      type: "object" as const,
-      properties: {
-        query: { type: "string", description: "Natural language search query" },
-        max_results: { type: "number", description: "Number of results (default 5)" },
-      },
-      required: ["query"],
-    },
-  },
-  {
-    name: "get_entry_details",
-    description:
-      "Get full details (README, agents.md, manifest, tags) of one Dopl catalog entry. Use after search_knowledge_base when you need implementation specifics from a result.",
-    input_schema: {
-      type: "object" as const,
-      properties: {
-        entry_id: { type: "string", description: "Entry UUID from search results" },
-      },
-      required: ["entry_id"],
-    },
-  },
-];
-
 const CLUSTER_READ_TOOLS: Anthropic.Tool[] = [
   {
     name: "list_workspace_clusters",
@@ -91,7 +53,7 @@ const WORKSPACE_KB_TOOLS: Anthropic.Tool[] = [
   {
     name: "list_workspace_knowledge_bases",
     description:
-      "List the workspace's knowledge bases with their slugs, names, and descriptions. The user's own knowledge bases — different from the public Dopl catalog covered by search_knowledge_base.",
+      "List the workspace's knowledge bases with their slugs, names, and descriptions.",
     input_schema: {
       type: "object" as const,
       properties: {},
@@ -204,33 +166,20 @@ const ARTIFACT_TOOLS: Anthropic.Tool[] = [
 ];
 
 /**
- * Workspace-mode tool set — preserves the canvas chat surface (search +
- * cluster reads) and adds the integration action surface so the agent
- * can run write actions on connected providers (e.g. send a Gmail, post
- * a Slack message, create a Calendar event) without leaving the canvas
- * chat.
+ * Workspace-mode tool set — the canvas chat surface (cluster reads).
  */
 export const WORKSPACE_TOOLS: Anthropic.Tool[] = [
-  ...SEARCH_TOOLS,
   ...CLUSTER_READ_TOOLS,
-  ...INTEGRATION_TOOLS,
 ];
 
 /**
  * Private-mode tool set — read-only across every workspace data family
- * + the artifact-emit tools, PLUS the integration action surface so
- * the agent can pull from any connected provider (Calendar events,
- * Sheets rows, Slack history, GitHub issues) without us having to
- * hand-wrap a read path per provider. Write actions are reachable
- * here too — the system prompt nudges the agent to confirm
- * destructive operations with the user before running them.
+ * (clusters, knowledge bases, skills) + the artifact-emit tools.
  */
 export const PRIVATE_TOOLS: Anthropic.Tool[] = [
-  ...SEARCH_TOOLS,
   ...CLUSTER_READ_TOOLS,
   ...WORKSPACE_KB_TOOLS,
   ...WORKSPACE_SKILLS_TOOLS,
-  ...INTEGRATION_TOOLS,
   ...ARTIFACT_TOOLS,
 ];
 
@@ -244,8 +193,6 @@ export const TOOLS = WORKSPACE_TOOLS;
 // ── Dispatch ───────────────────────────────────────────────────────
 
 const HANDLERS: Record<string, ToolHandler> = {
-  search_knowledge_base: executeSearchKnowledgeBase,
-  get_entry_details: executeGetEntryDetails,
   list_workspace_clusters: executeListWorkspaceClusters,
 };
 
@@ -270,18 +217,6 @@ const SCOPED_HANDLERS: Record<string, ScopedToolHandler> = {
   read_skill_file: executeReadSkillFile,
   emit_agent_prompt: (input) => executeEmitAgentPrompt(input),
   emit_context_file: (input) => executeEmitContextFile(input),
-  integration_status: (input, userId, canvasContext, workspaceId) =>
-    executeIntegrationStatus(input, userId, canvasContext, workspaceId),
-  list_integration_objects: (input, userId, canvasContext, workspaceId) =>
-    executeListIntegrationObjects(input, userId, canvasContext, workspaceId),
-  read_integration_object: (input, userId, canvasContext, workspaceId) =>
-    executeReadIntegrationObject(input, userId, canvasContext, workspaceId),
-  list_integration_actions: (input, userId, canvasContext, workspaceId) =>
-    executeListIntegrationActionsTool(input, userId, canvasContext, workspaceId),
-  execute_integration_action: (input, userId, canvasContext, workspaceId) =>
-    executeExecuteIntegrationActionTool(input, userId, canvasContext, workspaceId),
-  list_my_integrations: (input, userId, canvasContext, workspaceId) =>
-    executeListMyIntegrationsTool(input, userId, canvasContext, workspaceId),
 };
 
 /**

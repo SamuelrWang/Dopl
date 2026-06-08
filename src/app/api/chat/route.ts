@@ -38,23 +38,6 @@ function toolSummary(
   name: string,
   toolOutput: { result: string; entries?: unknown[] }
 ): string {
-  if (name === "search_knowledge_base") {
-    return `Found ${(toolOutput.entries || []).length} relevant source(s)`;
-  }
-  if (name === "ingest_url") {
-    // Branch on actual tool result status so the badge doesn't lie
-    // ("Done" used to render even when the tool refused).
-    try {
-      const parsed = JSON.parse(toolOutput.result);
-      if (parsed.status === "queued") return "Queued for ingestion";
-      if (parsed.status === "already_exists") return "Already ingested";
-      if (parsed.status === "processing") return "Started ingestion";
-      if (parsed.status === "error") return "Ingestion error";
-    } catch {
-      // fall through
-    }
-    return "Queued for ingestion";
-  }
   if (name === "search_workspace_knowledge") {
     try {
       const parsed = JSON.parse(toolOutput.result);
@@ -241,7 +224,6 @@ async function handlePost(
           let currentMessages = [...messages];
           let iterations = 0;
           const MAX_ITERATIONS = 5;
-          const ingestedUrls = new Set<string>();
           let hadToolCalls = false;
 
           while (iterations < MAX_ITERATIONS) {
@@ -301,30 +283,6 @@ async function handlePost(
                 { mode, scopeFilters }
               );
 
-              // Emit ingest_started for ingest_url tool so the frontend
-              // can spawn an entry panel and connect to the progress stream.
-              // Skip if we already ingested this URL in this session (dedup).
-              if (block.name === "ingest_url") {
-                const urlArg = (block.input as Record<string, unknown>).url as string;
-                try {
-                  const parsed = JSON.parse(toolOutput.result);
-                  if (urlArg && ingestedUrls.has(urlArg)) {
-                    // Already ingested this URL in this chat turn — skip
-                  } else {
-                    if (urlArg) ingestedUrls.add(urlArg);
-                    send({
-                      type: "ingest_started",
-                      entry_id: parsed.entry_id,
-                      stream_url: parsed.stream_url,
-                      status: parsed.status,
-                      title: parsed.title,
-                    });
-                  }
-                } catch {
-                  // Failed to parse — skip the event
-                }
-              }
-
               // Artifact emission — private mode only. The tool itself
               // returned a no-op "rendered" payload to Claude; the
               // browser-facing artifact event carries the actual
@@ -342,12 +300,6 @@ async function handlePost(
                 );
                 if (artifact) {
                   send({ type: "artifact", artifact });
-                }
-              }
-
-              if (toolOutput.entries) {
-                for (const entry of toolOutput.entries) {
-                  send({ type: "entry_reference", entry });
                 }
               }
 

@@ -2,11 +2,7 @@ import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { slugifyClusterName } from "../slug";
 import { normalizeClusterName } from "@/shared/lib/cluster-name";
-import { CONTEXT_CHAR_BUDGET_PER_FIELD } from "@/config";
-import {
-  hydrateClusterGrouping,
-  tearDownClusterCanvasArtifacts,
-} from "./canvas-side-effects";
+import { tearDownClusterCanvasArtifacts } from "./canvas-side-effects";
 import {
   listAttachedKnowledgeBasesById,
   listAttachedSkillsById,
@@ -22,7 +18,7 @@ export interface ClusterRow {
   name: string;
   created_at: string;
   updated_at: string;
-  /** Count of entry/setup panels grouped in the cluster. */
+  /** Deprecated — clusters no longer hold entry/setup panels. Always 0. */
   panel_count: number;
   /** Count of attached (non-deleted) knowledge bases. */
   knowledge_base_count: number;
@@ -34,39 +30,24 @@ export interface ClusterRow {
   skill_names: string[];
 }
 
-export interface ClusterDetailEntry {
-  entry_id: string;
-  slug: string | null;
-  title: string | null;
-  summary: string | null;
-  readme: string | null;
-  agents_md: string | null;
-}
-
 export interface ClusterDetail extends ClusterRow {
-  entries: ClusterDetailEntry[];
   knowledge_bases: ClusterAttachedKnowledgeBase[];
   skills: ClusterAttachedSkill[];
 }
 
 export interface ClusterCreateRequest {
   name: string;
-  entry_ids: string[];
 }
 
 export interface ClusterUpdateRequest {
   name?: string;
-  entry_ids?: string[];
 }
 
 /**
  * Scope identifying the active workspace + the calling user. `workspaceId`
- * is the new scope key; `userId` is retained for entry-access checks
- * (which are user-level) and for the legacy `user_id` column on cluster
+ * is the scope key; `userId` is retained for the `user_id` column on cluster
  * rows used for attribution and analytics. `source` distinguishes
- * agent-origin (API key auth) from user-origin (session auth) calls,
- * mirroring `KnowledgeContext.source`. Agent-origin attach/detach is
- * gated by the per-KB / per-skill `agent_write_enabled` toggle.
+ * agent-origin (API key auth) from user-origin (session auth) calls.
  */
 export interface ClusterScope {
   workspaceId: string;
@@ -76,35 +57,8 @@ export interface ClusterScope {
 
 // ── CRUD ─────────────────────────────────────────────────────────────
 //
-// All cluster CRUD scopes by `workspaceId`. Members of the canvas can read
-// and (subject to role checks at the route layer) write. `userId` is
-// passed through for entry-access filtering — entry visibility is a
-// user-level concern, not a workspace one.
-
-/**
- * Filter a list of entry IDs down to those the given user is allowed to
- * place in a cluster — either entries they ingested themselves, or
- * approved (public-visible) entries. Prevents an IDOR where someone
- * adds a stranger's pending/denied entry to their cluster.
- */
-async function filterEntryIdsAccessible(
-  entryIds: string[],
-  userId: string
-): Promise<string[]> {
-  if (entryIds.length === 0) return [];
-  const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("entries")
-    .select("id, ingested_by, moderation_status")
-    .in("id", entryIds);
-  if (error) throw error;
-  const allowed = new Set<string>();
-  for (const row of data || []) {
-    if (row.moderation_status === "approved") allowed.add(row.id);
-    else if (row.ingested_by === userId) allowed.add(row.id);
-  }
-  return entryIds.filter((id) => allowed.has(id));
-}
+// All cluster CRUD scopes by `workspaceId`. Clusters are containers for
+// attached knowledge bases + skills.
 
 export async function listClusters(scope: ClusterScope): Promise<ClusterRow[]> {
   const db = supabaseAdmin();
@@ -119,18 +73,6 @@ export async function listClusters(scope: ClusterScope): Promise<ClusterRow[]> {
   const rows = data || [];
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.id);
-
-  // Entry-panel counts.
-  const { data: counts, error: countError } = await db
-    .from("cluster_panels")
-    .select("cluster_id")
-    .in("cluster_id", ids);
-  if (countError) throw countError;
-
-  const countMap = new Map<string, number>();
-  for (const row of counts || []) {
-    countMap.set(row.cluster_id, (countMap.get(row.cluster_id) || 0) + 1);
-  }
 
   // Attached KB + skill names, batched across all clusters so the list
   // stays a cheap metadata call. Manual two-step joins (not PostgREST
@@ -208,7 +150,7 @@ export async function listClusters(scope: ClusterScope): Promise<ClusterRow[]> {
     const skill_names = skillNamesByCluster.get(r.id) || [];
     return {
       ...r,
-      panel_count: countMap.get(r.id) || 0,
+      panel_count: 0,
       knowledge_base_count: knowledge_base_names.length,
       skill_count: skill_names.length,
       knowledge_base_names,
@@ -233,38 +175,6 @@ export async function getCluster(
     throw new Error(`Cluster not found: ${slug}`);
   }
 
-  const { data: panels, error: panelError } = await db
-    .from("cluster_panels")
-    .select("entry_id")
-    .eq("cluster_id", cluster.id);
-
-  if (panelError) throw panelError;
-
-  const entryIds = (panels || []).map((p) => p.entry_id);
-  let entries: ClusterDetailEntry[] = [];
-
-  if (entryIds.length > 0) {
-    const { data: entryRows, error: entryError } = await db
-      .from("entries")
-      .select("id, slug, title, summary, readme, agents_md")
-      .in("id", entryIds);
-
-    if (entryError) throw entryError;
-
-    entries = (entryRows || []).map((e) => ({
-      entry_id: e.id,
-      slug: e.slug ?? null,
-      title: e.title,
-      summary: e.summary,
-      readme: e.readme
-        ? e.readme.slice(0, CONTEXT_CHAR_BUDGET_PER_FIELD)
-        : null,
-      agents_md: e.agents_md
-        ? e.agents_md.slice(0, CONTEXT_CHAR_BUDGET_PER_FIELD)
-        : null,
-    }));
-  }
-
   const [knowledge_bases, skills] = await Promise.all([
     listAttachedKnowledgeBasesById(cluster.id, scope),
     listAttachedSkillsById(cluster.id, scope),
@@ -272,12 +182,11 @@ export async function getCluster(
 
   return {
     ...cluster,
-    panel_count: entryIds.length,
+    panel_count: 0,
     knowledge_base_count: knowledge_bases.length,
     skill_count: skills.length,
     knowledge_base_names: knowledge_bases.map((k) => k.name),
     skill_names: skills.map((s) => s.name),
-    entries,
     knowledge_bases,
     skills,
   };
@@ -302,7 +211,7 @@ export async function createCluster(
   // canvas display and the agent's listing. The slug stays lowercase-hyphen.
   const name = normalizeClusterName(req.name);
 
-  // Generate unique slug scoped to this canvas's existing clusters.
+  // Generate unique slug scoped to this workspace's existing clusters.
   const { data: existing } = await db
     .from("clusters")
     .select("slug")
@@ -310,34 +219,18 @@ export async function createCluster(
   const existingSlugs = (existing || []).map((r) => r.slug);
   const slug = slugifyClusterName(name, existingSlugs);
 
-  // Strip out any entry_ids the user doesn't have access to (someone
-  // else's pending/denied entry, etc). Silent filter — don't reveal
-  // which ids were rejected.
-  const safeEntryIds = await filterEntryIdsAccessible(
-    req.entry_ids,
-    scope.userId
-  );
-
-  // Atomic cluster + cluster_panels insert via RPC. Either both rows
-  // land or neither does — no more orphan cluster rows on partial
-  // failure. The canvas_state grouping hydration that follows stays in
-  // TS because it's already non-fatal (failure logs but doesn't reject
-  // the user's request) and tolerates partial success.
-  const { data: rpcRows, error: rpcError } = await db.rpc(
-    "create_cluster_with_entries",
-    {
-      p_workspace_id: scope.workspaceId,
-      p_user_id: scope.userId,
-      p_name: name,
-      p_slug: slug,
-      p_entry_ids: safeEntryIds,
-    }
-  );
-  if (rpcError) throw rpcError;
-  const cluster = Array.isArray(rpcRows) ? rpcRows[0] : rpcRows;
+  const { data: cluster, error: insError } = await db
+    .from("clusters")
+    .insert({
+      workspace_id: scope.workspaceId,
+      user_id: scope.userId,
+      name,
+      slug,
+    })
+    .select("id, slug, name, created_at, updated_at")
+    .single();
+  if (insError) throw insError;
   if (!cluster) throw new Error("Failed to create cluster");
-
-  await hydrateClusterGrouping(scope, cluster, safeEntryIds);
 
   // Fire first_cluster_built event (analytics). Fire-and-forget; dynamic
   // import so this module stays import-free of the analytics tree in
@@ -354,12 +247,9 @@ export async function createCluster(
       .catch(() => {});
   }
 
-  // A new cluster has no attached KBs/skills yet (attachment is a separate
-  // action), so the summary fields are empty here. Call getCluster for the
-  // full picture.
   return {
     ...cluster,
-    panel_count: safeEntryIds.length,
+    panel_count: 0,
     knowledge_base_count: 0,
     skill_count: 0,
     knowledge_base_names: [],
@@ -410,28 +300,6 @@ export async function updateCluster(
     if (updateError) throw updateError;
   }
 
-  let safeEntryIds: string[] | undefined;
-  if (req.entry_ids) {
-    safeEntryIds = await filterEntryIdsAccessible(req.entry_ids, scope.userId);
-
-    const { error: delError } = await db
-      .from("cluster_panels")
-      .delete()
-      .eq("cluster_id", cluster.id);
-    if (delError) throw delError;
-
-    if (safeEntryIds.length > 0) {
-      const rows = safeEntryIds.map((eid) => ({
-        cluster_id: cluster.id,
-        entry_id: eid,
-      }));
-      const { error: insError } = await db
-        .from("cluster_panels")
-        .insert(rows);
-      if (insError) throw insError;
-    }
-  }
-
   const { data: updated, error: refetchError } = await db
     .from("clusters")
     .select("id, slug, name, created_at, updated_at")
@@ -440,12 +308,9 @@ export async function updateCluster(
 
   if (refetchError || !updated) throw refetchError || new Error("Refetch failed");
 
-  const panelCount = safeEntryIds?.length ?? 0;
-  // This return reflects entry membership only; KB/skill attachments are
-  // unchanged by an update and not surfaced here. Call getCluster for them.
   return {
     ...updated,
-    panel_count: panelCount,
+    panel_count: 0,
     knowledge_base_count: 0,
     skill_count: 0,
     knowledge_base_names: [],

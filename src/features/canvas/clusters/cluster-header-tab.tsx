@@ -21,9 +21,7 @@ import { useEffect, useRef, useState } from "react";
 import { useCapabilities, usePanelsContext } from "../canvas-store";
 import type { Cluster } from "../types";
 import { isPanelDeletable } from "../types";
-import { PublishDialog } from "@/features/community/components/publish-dialog";
 import { normalizeClusterName } from "@/shared/lib/cluster-name";
-import { toast } from "@/shared/ui/toast";
 
 interface ClusterHeaderTabProps {
   cluster: Cluster;
@@ -47,7 +45,6 @@ export function ClusterHeaderTab({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(cluster.name);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [publishOpen, setPublishOpen] = useState(false);
   const tabRef = useRef<HTMLDivElement>(null);
 
   // Reset draft when the authoritative name changes (e.g. AI name arrived).
@@ -127,38 +124,6 @@ export function ClusterHeaderTab({
     for (const p of deletable) {
       dispatch({ type: "CLOSE_PANEL", id: p.id });
     }
-  }
-
-  function handlePublishClick() {
-    setMenuOpen(false);
-    setPublishOpen(true);
-  }
-
-  /**
-   * Grab the already-published URL for this cluster and drop it on the
-   * clipboard. Visible only when `cluster.publishedSlug` is set — i.e.
-   * the cluster already has a live community page. Used for the
-   * X-comment workflow where the user wants to re-paste the link days
-   * or weeks after the initial publish.
-   */
-  async function handleCopyShareLink() {
-    setMenuOpen(false);
-    if (!cluster.publishedSlug) return;
-    const shareUrl = `${window.location.origin}/community/${cluster.publishedSlug}`;
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-    } catch {
-      // Clipboard API unavailable — toast's "Open" action still gets
-      // the user to the page.
-    }
-    toast({
-      title: "Share link copied",
-      description: shareUrl,
-      action: {
-        label: "Open",
-        onClick: () => window.open(shareUrl, "_blank"),
-      },
-    });
   }
 
   return (
@@ -244,26 +209,6 @@ export function ClusterHeaderTab({
           className="absolute left-1/2 -translate-x-1/2 mt-1 min-w-[120px] bg-[var(--cluster-menu-surface)] border border-white/[0.12] rounded-[4px] shadow-[0_4px_16px_rgba(0,0,0,0.4)] overflow-hidden"
           role="menu"
         >
-          {capabilities.canAdd && cluster.dbId && !cluster.publishedSlug && (
-            <button
-              type="button"
-              onClick={handlePublishClick}
-              role="menuitem"
-              className="w-full text-left px-3 h-8 font-mono text-[10px] uppercase tracking-wider text-white/80 hover:text-white hover:bg-white/[0.06] transition-colors"
-            >
-              Publish
-            </button>
-          )}
-          {cluster.publishedSlug && (
-            <button
-              type="button"
-              onClick={handleCopyShareLink}
-              role="menuitem"
-              className="w-full text-left px-3 h-8 font-mono text-[10px] uppercase tracking-wider text-white/80 hover:text-white hover:bg-white/[0.06] transition-colors"
-            >
-              Copy share link
-            </button>
-          )}
           {capabilities.canDelete && (
             <button
               type="button"
@@ -285,35 +230,6 @@ export function ClusterHeaderTab({
             </button>
           )}
         </div>
-      )}
-
-      {cluster.dbId && (
-        <PublishDialog
-          open={publishOpen}
-          onOpenChange={setPublishOpen}
-          clusterName={cluster.name}
-          clusterDbId={cluster.dbId}
-          onPublished={(slug) => {
-            // Stamp the slug locally so the "Copy share link" menu
-            // item appears immediately without waiting for a reload.
-            dispatch({
-              type: "UPDATE_CLUSTER_PUBLISHED_SLUG",
-              clusterId: cluster.id,
-              publishedSlug: slug,
-            });
-            // PublishDialog already wrote the URL to the clipboard;
-            // surface that to the user + offer one-click to view.
-            const shareUrl = `${window.location.origin}/community/${slug}`;
-            toast({
-              title: "Share link copied",
-              description: shareUrl,
-              action: {
-                label: "Open",
-                onClick: () => window.open(shareUrl, "_blank"),
-              },
-            });
-          }}
-        />
       )}
     </div>
   );

@@ -48,12 +48,8 @@ export {
 export type {
   Panel,
   ChatPanelData,
-  EntryPanelData,
   CanvasState,
   CanvasAction,
 } from "./types";
 
-export type {
-  ChatMessage,
-  ProgressEvent,
-} from "@/features/ingestion/components/chat-message";
+export type { ChatMessage } from "@/shared/types/chat";

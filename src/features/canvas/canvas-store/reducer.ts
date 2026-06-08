@@ -1,33 +1,23 @@
 import type {
   ArtifactPanelData,
-  BrowsePanelData,
   CanvasAction,
   CanvasState,
   ChatPanelData,
-  Cluster,
-  ConnectionPanelData,
-  EntryPanelData,
   KnowledgeBasePanelData,
   KnowledgePanelData,
-  Panel,
   SkillPanelData,
   SkillsPanelData,
 } from "../types";
 import {
   ARTIFACT_PANEL_SIZE,
-  BROWSE_PANEL_SIZE,
-  CONNECTION_PANEL_SIZE,
-  ENTRY_PANEL_SIZE,
   KNOWLEDGE_BASE_PANEL_SIZE,
   KNOWLEDGE_PANEL_SIZE,
-  MIN_CLUSTER_SIZE,
   SKILL_PANEL_SIZE,
   SKILLS_PANEL_SIZE,
   isPanelDeletable,
 } from "../types";
 import { stripFromClusters } from "@/features/canvas/server/defaults";
-import type { ChatMessage } from "@/features/ingestion/components/chat-message";
-import { findNonOverlappingPosition, computeNewPanelPosition } from "./layout";
+import { findNonOverlappingPosition } from "./layout";
 
 // ── Reducer ────────────────────────────────────────────────────────
 
@@ -115,7 +105,6 @@ export function reducer(state: CanvasState, action: CanvasAction): CanvasState {
         title: action.title,
         messages: [],
         isProcessing: false,
-        activeEntryId: null,
         pendingInput: action.pendingInput,
       };
       return {
@@ -146,19 +135,6 @@ export function reducer(state: CanvasState, action: CanvasAction): CanvasState {
           (id) => id !== action.id
         ),
         clusters: stripFromClusters(state.clusters, new Set([action.id])),
-      };
-    }
-
-    case "CLOSE_ENTRY_BY_ENTRY_ID": {
-      const target = state.panels.find(
-        (p) => p.type === "entry" && (p as EntryPanelData).entryId === action.entryId
-      );
-      if (!target) return state;
-      return {
-        ...state,
-        panels: state.panels.filter((p) => p.id !== target.id),
-        selectedPanelIds: state.selectedPanelIds.filter((id) => id !== target.id),
-        clusters: stripFromClusters(state.clusters, new Set([target.id])),
       };
     }
 
@@ -319,258 +295,6 @@ export function reducer(state: CanvasState, action: CanvasAction): CanvasState {
         }),
       };
 
-    case "UPDATE_PROGRESS":
-      return {
-        ...state,
-        panels: state.panels.map((p) => {
-          if (p.id !== action.panelId || p.type !== "chat") return p;
-          // Find the most recent progress message for this entryId and append
-          const idx = findLastIndex(
-            p.messages,
-            (m) =>
-              m.role === "ai" &&
-              m.type === "progress" &&
-              m.entryId === action.entryId
-          );
-          if (idx === -1) return p;
-          const msg = p.messages[idx];
-          if (msg.type !== "progress") return p;
-          const updatedMessages = [...p.messages];
-          updatedMessages[idx] = {
-            ...msg,
-            events: [...msg.events, action.event],
-            status:
-              action.event.type === "complete"
-                ? "complete"
-                : action.event.type === "error"
-                  ? "error"
-                  : "streaming",
-          };
-          return { ...p, messages: updatedMessages };
-        }),
-      };
-
-    case "SET_PROCESSING":
-      return {
-        ...state,
-        panels: state.panels.map((p) =>
-          p.id === action.panelId && p.type === "chat"
-            ? {
-                ...p,
-                isProcessing: action.isProcessing,
-                activeEntryId: action.activeEntryId,
-              }
-            : p
-        ),
-      };
-
-    case "ADD_ARTIFACTS":
-      return {
-        ...state,
-        panels: state.panels.map((p) => {
-          if (p.id !== action.panelId || p.type !== "chat") return p;
-          const artifactsMessage: ChatMessage = {
-            role: "ai",
-            type: "artifacts",
-            entryId: action.entryId,
-            title: action.title,
-            readme: action.readme,
-            agentsMd: action.agentsMd,
-            manifest: action.manifest,
-          };
-          return { ...p, messages: [...p.messages, artifactsMessage] };
-        }),
-      };
-
-    case "SPAWN_ENTRY_PANEL": {
-      // Idempotency: skip if an entry panel with this entryId already exists
-      if (state.panels.some((p) => p.type === "entry" && p.entryId === action.entryId)) {
-        return state;
-      }
-      // Position: caller override → right-of-source → camera center.
-      const source = state.panels.find((p) => p.id === action.sourcePanelId);
-
-      let x: number;
-      let y: number;
-      if (action.position) {
-        // Ingestion panel replacement — take over the exact slot.
-        // Skip overlap-avoidance: the panel being replaced still lives in
-        // state at this point and would otherwise nudge the new one away
-        // from its intended slot.
-        x = action.position.x;
-        y = action.position.y;
-      } else if (source) {
-        const preferred = findNonOverlappingPosition(
-          source.x + source.width + 32,
-          source.y,
-          ENTRY_PANEL_SIZE.width,
-          ENTRY_PANEL_SIZE.height,
-          state.panels
-        );
-        x = preferred.x;
-        y = preferred.y;
-      } else {
-        // Fallback — camera center. `window` may be undefined during SSR,
-        // but the reducer only runs after hydration, so it's safe to read.
-        const vw = typeof window !== "undefined" ? window.innerWidth : 1440;
-        const vh = typeof window !== "undefined" ? window.innerHeight : 900;
-        const pos = computeNewPanelPosition(
-          state,
-          vw,
-          vh,
-          ENTRY_PANEL_SIZE.width,
-          ENTRY_PANEL_SIZE.height
-        );
-        const adjusted = findNonOverlappingPosition(
-          pos.x,
-          pos.y,
-          ENTRY_PANEL_SIZE.width,
-          ENTRY_PANEL_SIZE.height,
-          state.panels
-        );
-        x = adjusted.x;
-        y = adjusted.y;
-      }
-
-      const newPanelId = `entry-${state.nextPanelId}`;
-      const newPanel: EntryPanelData = {
-        id: newPanelId,
-        type: "entry",
-        x,
-        y,
-        width: ENTRY_PANEL_SIZE.width,
-        height: ENTRY_PANEL_SIZE.height,
-        entryId: action.entryId,
-        title: action.title,
-        summary: action.summary,
-        sourceUrl: action.sourceUrl,
-        sourcePlatform: action.sourcePlatform,
-        sourceAuthor: action.sourceAuthor,
-        thumbnailUrl: action.thumbnailUrl,
-        useCase: action.useCase,
-        complexity: action.complexity,
-        contentType: action.contentType || null,
-        tags: action.tags,
-        readme: action.readme,
-        agentsMd: action.agentsMd,
-        manifest: action.manifest,
-        sourceChatPanelId: action.sourcePanelId,
-        createdAt: new Date().toISOString(),
-        readmeLoading: action.readmeLoading,
-        agentsMdLoading: action.agentsMdLoading,
-        tagsLoading: action.tagsLoading,
-        isIngesting: action.isIngesting,
-        isPendingIngestion: action.isPendingIngestion,
-      };
-
-      // Cluster auto-join: if the source panel was in a cluster, the new
-      // entry joins the same cluster so ingestion output stays grouped
-      // with the thread of work that produced it.
-      const sourceCluster = state.clusters.find((c) =>
-        c.panelIds.includes(action.sourcePanelId)
-      );
-      const nextClusters = sourceCluster
-        ? state.clusters.map((c) =>
-            c.id === sourceCluster.id
-              ? { ...c, panelIds: [...c.panelIds, newPanelId] }
-              : c
-          )
-        : state.clusters;
-
-      return {
-        ...state,
-        panels: [...state.panels, newPanel],
-        clusters: nextClusters,
-        nextPanelId: state.nextPanelId + 1,
-      };
-    }
-
-    case "UPDATE_ENTRY_ARTIFACT": {
-      return {
-        ...state,
-        panels: state.panels.map((p) => {
-          if (p.type !== "entry" || p.entryId !== action.entryId) return p;
-          return {
-            ...p,
-            ...(action.readme !== undefined && { readme: action.readme, readmeLoading: false }),
-            ...(action.agentsMd !== undefined && { agentsMd: action.agentsMd, agentsMdLoading: false }),
-            ...(action.tags !== undefined && { tags: action.tags, tagsLoading: false }),
-          };
-        }),
-      };
-    }
-
-    case "UPDATE_ENTRY_METADATA": {
-      return {
-        ...state,
-        panels: state.panels.map((p) => {
-          if (p.type !== "entry" || p.entryId !== action.entryId) return p;
-          return {
-            ...p,
-            ...(action.title !== undefined && { title: action.title }),
-            ...(action.summary !== undefined && { summary: action.summary }),
-            ...(action.sourceUrl !== undefined && { sourceUrl: action.sourceUrl }),
-            ...(action.sourcePlatform !== undefined && { sourcePlatform: action.sourcePlatform }),
-            ...(action.sourceAuthor !== undefined && { sourceAuthor: action.sourceAuthor }),
-            ...(action.thumbnailUrl !== undefined && { thumbnailUrl: action.thumbnailUrl }),
-            ...(action.useCase !== undefined && { useCase: action.useCase }),
-            ...(action.complexity !== undefined && { complexity: action.complexity }),
-          };
-        }),
-      };
-    }
-
-    case "APPEND_INGESTION_LOG": {
-      return {
-        ...state,
-        panels: state.panels.map((p) => {
-          if (p.type !== "entry" || p.entryId !== action.entryId) return p;
-          return {
-            ...p,
-            ingestionLogs: [...(p.ingestionLogs || []), action.event],
-          };
-        }),
-      };
-    }
-
-    case "SET_ENTRY_INGESTING": {
-      return {
-        ...state,
-        panels: state.panels.map((p) => {
-          if (p.type !== "entry" || p.entryId !== action.entryId) return p;
-          return {
-            ...p,
-            isIngesting: action.isIngesting,
-            // Clear logs when ingestion ends
-            ...(!action.isIngesting && { ingestionLogs: [] }),
-          };
-        }),
-      };
-    }
-
-    case "SET_ENTRY_STATUS_FROM_REALTIME": {
-      // Driven by the entries realtime subscription. Only touches the
-      // two visual flags; leaves artifacts/metadata alone so an
-      // in-flight ingestion render isn't clobbered. When the agent
-      // finishes a ingest_url → submit flow, the resulting
-      // complete-entry payload arrives via the existing SSE pipeline
-      // (or a separate fetch on panel open), not this action.
-      return {
-        ...state,
-        panels: state.panels.map((p) => {
-          if (p.type !== "entry" || p.entryId !== action.entryId) return p;
-          const next: typeof p = { ...p };
-          if (action.isPendingIngestion !== undefined) {
-            next.isPendingIngestion = action.isPendingIngestion;
-          }
-          if (action.isIngesting !== undefined) {
-            next.isIngesting = action.isIngesting;
-          }
-          return next;
-        }),
-      };
-    }
-
     case "CREATE_CLUSTER": {
       // Apply the moves atomically with the cluster creation so the outline
       // never flashes in the pre-layout positions.
@@ -617,15 +341,6 @@ export function reducer(state: CanvasState, action: CanvasAction): CanvasState {
         ),
       };
 
-    case "UPDATE_CLUSTER_PUBLISHED_SLUG":
-      return {
-        ...state,
-        clusters: state.clusters.map((c) =>
-          c.id === action.clusterId
-            ? { ...c, publishedSlug: action.publishedSlug }
-            : c
-        ),
-      };
 
     case "ADD_PANEL_TO_CLUSTER": {
       // Enforce one-cluster-per-panel. Strip from any other cluster
@@ -663,29 +378,6 @@ export function reducer(state: CanvasState, action: CanvasAction): CanvasState {
           new Set([action.panelId])
         ),
       };
-
-    case "CREATE_BROWSE_PANEL": {
-      const { x, y } = findNonOverlappingPosition(
-        action.x,
-        action.y,
-        BROWSE_PANEL_SIZE.width,
-        BROWSE_PANEL_SIZE.height,
-        state.panels
-      );
-      const newPanel: BrowsePanelData = {
-        id: action.id,
-        type: "browse",
-        x,
-        y,
-        width: BROWSE_PANEL_SIZE.width,
-        height: BROWSE_PANEL_SIZE.height,
-      };
-      return {
-        ...state,
-        panels: [...state.panels, newPanel],
-        nextPanelId: state.nextPanelId + 1,
-      };
-    }
 
     case "CREATE_KNOWLEDGE_PANEL": {
       const { x, y } = findNonOverlappingPosition(
@@ -839,12 +531,4 @@ export function reducer(state: CanvasState, action: CanvasAction): CanvasState {
     default:
       return state;
   }
-}
-
-// Polyfill for Array.findLastIndex (Node 18 / older browsers may not support)
-function findLastIndex<T>(arr: T[], pred: (item: T) => boolean): number {
-  for (let i = arr.length - 1; i >= 0; i--) {
-    if (pred(arr[i])) return i;
-  }
-  return -1;
 }

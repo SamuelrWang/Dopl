@@ -91,7 +91,7 @@ const BASE = "https://api.example.test";
     (0, vitest_1.it)("does NOT retry on POST (non-idempotent)", async () => {
         mock = installFetchMock([() => textResponse(503, "")]);
         const client = new client_js_1.DoplClient(BASE, "k");
-        await (0, vitest_1.expect)(client.searchSetups({ query: "x" })).rejects.toBeInstanceOf(errors_js_1.DoplApiError);
+        await (0, vitest_1.expect)(client.createCluster("x")).rejects.toBeInstanceOf(errors_js_1.DoplApiError);
         (0, vitest_1.expect)(mock.calls).toHaveLength(1);
     });
     (0, vitest_1.it)("honors Retry-After seconds on 429", async () => {
@@ -140,7 +140,7 @@ const BASE = "https://api.example.test";
         ]);
         const client = new client_js_1.DoplClient(BASE, "k");
         const err = await client
-            .searchSetups({ query: "x" })
+            .createCluster("x")
             .catch((e) => e);
         (0, vitest_1.expect)(err).toBeInstanceOf(errors_js_1.DoplTimeoutError);
     });

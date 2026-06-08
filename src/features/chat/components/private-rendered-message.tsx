@@ -1,7 +1,7 @@
 "use client";
 
 import { MarkdownMessage } from "@/shared/design";
-import type { ChatMessage } from "@/features/ingestion/components/chat-message";
+import type { ChatMessage } from "@/shared/types/chat";
 import { SentAttachmentPreview } from "./chat-attachments";
 import { DoplAgentGroup } from "./dopl-agent-group";
 import { DoplAgentHeader } from "./dopl-agent-header";
@@ -90,20 +90,6 @@ function blockify(messages: ChatMessage[]): Block[] {
       continue;
     }
 
-    if (m.role === "ai" && m.type === "entry_cards") {
-      if (!openSteps || openSteps.length === 0) {
-        // Defensive: entry_cards arrived without an open tool — treat
-        // as its own group with a virtual "found" row.
-        openSteps = [
-          { toolName: "search", status: "done", entries: m.entries },
-        ];
-      } else {
-        const last = openSteps[openSteps.length - 1];
-        last.entries = [...last.entries, ...m.entries];
-      }
-      continue;
-    }
-
     closeGroup();
 
     if (m.role === "user" && m.type === "text") {
@@ -119,8 +105,6 @@ function blockify(messages: ChatMessage[]): Block[] {
     } else if (m.role === "ai" && m.type === "trial_expired") {
       blocks.push({ kind: "trial-expired", text: m.message });
     }
-    // Other variants (progress, artifacts) are canvas-chat specific
-    // and shouldn't appear here. Silently skip.
   }
 
   closeGroup();
@@ -154,8 +138,6 @@ function toTurns(blocks: Block[]): Turn[] {
 }
 
 const TOOL_KIND_LABEL: Record<string, string> = {
-  search_knowledge_base: "Searched Dopl catalog",
-  get_entry_details: "Read catalog entry",
   list_workspace_clusters: "Listed clusters",
   list_workspace_knowledge_bases: "Listed knowledge bases",
   search_workspace_knowledge: "Searched workspace knowledge",

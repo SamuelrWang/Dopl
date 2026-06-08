@@ -157,8 +157,8 @@ export default function DesignSystemPage() {
           >
             <GlassNavLink href="/design">Design</GlassNavLink>
             <GlassNavLink href="/canvas">Canvas</GlassNavLink>
-            <GlassNavLink href="/browse">Browse</GlassNavLink>
-            <GlassNavLink href="/build">Builder</GlassNavLink>
+            <GlassNavLink href="/docs">Docs</GlassNavLink>
+            <GlassNavLink href="/pricing">Pricing</GlassNavLink>
           </GlassNavbar>
           <p className="text-[10px] text-white/40 font-mono uppercase tracking-wide mt-3">
             Navbar corners: rounded-[3px] · Hairline border: white/10

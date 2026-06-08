@@ -18,8 +18,6 @@ import React, { useCallback, useState, type Dispatch } from "react";
 import { useCapabilities } from "./canvas-store";
 import { ChatPanelBody } from "@/features/chat/components/chat-panel";
 import { ConnectionPanelBody } from "./panels/connection-panel";
-import { EntryPanelBody } from "./panels/entry-panel";
-import { BrowsePanelBody } from "./panels/browse/browse-panel";
 import { KnowledgePanelBody } from "./panels/knowledge/knowledge-panel";
 import { SkillsPanelBody } from "./panels/skills/skills-panel";
 import { KnowledgeBasePanelBody } from "./panels/knowledge-base/knowledge-base-panel";
@@ -91,11 +89,7 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
       ? panel.title
       : panel.type === "connection"
         ? "API & MCP Connection"
-        : panel.type === "entry"
-          ? `Entry · ${panel.title}`
-          : panel.type === "browse"
-            ? "Shared Clusters"
-            : panel.type === "knowledge"
+        : panel.type === "knowledge"
                 ? "Knowledge Bases"
                 : panel.type === "skills"
                   ? "Skills"
@@ -261,8 +255,6 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
       <div className="flex-1 min-h-0 flex flex-col">
         {panel.type === "chat" && <ChatPanelBody panel={panel} />}
         {panel.type === "connection" && <ConnectionPanelBody />}
-        {panel.type === "entry" && <EntryPanelBody panel={panel} />}
-        {panel.type === "browse" && <BrowsePanelBody />}
         {panel.type === "knowledge" && <KnowledgePanelBody panel={panel} />}
         {panel.type === "skills" && <SkillsPanelBody panel={panel} />}
         {panel.type === "knowledge-base" && <KnowledgeBasePanelBody panel={panel} />}

@@ -10,20 +10,17 @@
  *                 UPDATE_STREAMING_MESSAGE (in-place edit, no bloat)
  *   - tool_call: finalise any open streaming bubble, then append a
  *                tool_activity message
- *   - entry_reference: append an entry_cards message for inline render
  *   - tool_result: append a "done" tool_activity summary
  *   - done: finalise the trailing streaming bubble
  *   - error: append a plain-text error bubble
  */
 
 import { useCallback, useRef, useState } from "react";
-import { useCanvas, useCanvasScope, computeNewPanelPosition } from "@/features/canvas/canvas-store";
-import type { ChatMessage, ChatAttachment } from "@/features/ingestion/components/chat-message";
+import { useCanvas, useCanvasScope } from "@/features/canvas/canvas-store";
+import type { ChatMessage, ChatAttachment } from "@/shared/types/chat";
 import type { ChatPanelData } from "@/features/canvas/types";
-import { ENTRY_PANEL_SIZE } from "@/features/canvas/types";
 import { buildCanvasContext } from "./cluster-context";
 import { messagesToApiHistory } from "./chat-message-types";
-import { connectToIngestionStream } from "@/features/canvas/use-panel-ingestion";
 
 interface UseChatOptions {
   panel: ChatPanelData;
@@ -159,19 +156,7 @@ export function useChat({ panel }: UseChatOptions) {
               content?: string;
               name?: string;
               summary?: string;
-              entry?: {
-                entry_id: string;
-                title?: string;
-                summary?: string;
-                source_url?: string;
-                complexity?: string;
-              };
               message?: string;
-              // ingest_started fields
-              entry_id?: string;
-              stream_url?: string;
-              status?: string;
-              title?: string;
             };
             try {
               event = JSON.parse(jsonStr);
@@ -199,19 +184,6 @@ export function useChat({ panel }: UseChatOptions) {
                 });
                 break;
               }
-              case "entry_reference": {
-                if (!event.entry) break;
-                dispatch({
-                  type: "APPEND_MESSAGE",
-                  panelId: panel.id,
-                  message: {
-                    role: "ai",
-                    type: "entry_cards",
-                    entries: [event.entry],
-                  },
-                });
-                break;
-              }
               case "tool_result": {
                 dispatch({
                   type: "APPEND_MESSAGE",
@@ -226,144 +198,6 @@ export function useChat({ panel }: UseChatOptions) {
                 });
                 // A fresh streaming bubble will be created lazily on the
                 // next text_delta — no need to prep it empty.
-                break;
-              }
-              case "ingest_started": {
-                const entryId = event.entry_id;
-                const streamUrl = event.stream_url;
-                const ingestStatus = event.status;
-                const ingestTitle = event.title;
-
-                if (!entryId) break;
-
-                if (ingestStatus === "queued") {
-                  // Site chat created a skeleton entry with status
-                  // 'pending_ingestion'. The user's connected MCP agent
-                  // will pick it up on its next tool call via the
-                  // _dopl_status footer. Spawn an amber placeholder
-                  // panel; it auto-transitions to the ingesting state
-                  // when the entries realtime subscription observes
-                  // the DB row flip to 'processing'.
-                  dispatch({
-                    type: "SPAWN_ENTRY_PANEL",
-                    sourcePanelId: panel.id,
-                    entryId,
-                    title: ingestTitle || "Queued — waiting for agent",
-                    summary: null,
-                    sourceUrl: "",
-                    sourcePlatform: null,
-                    sourceAuthor: null,
-                    thumbnailUrl: null,
-                    useCase: null,
-                    complexity: null,
-                    tags: [],
-                    readme: "",
-                    agentsMd: "",
-                    manifest: {},
-                    isPendingIngestion: true,
-                  });
-                } else if (ingestStatus === "already_exists") {
-                  // Fetch full entry and spawn a completed panel. If the
-                  // fetch fails the user sees chat success but no panel —
-                  // surface that so they can retry / realize something's
-                  // wrong.
-                  fetch(`/api/entries/${entryId}`)
-                    .then(async (r) => {
-                      if (!r.ok) {
-                        throw new Error(
-                          `Couldn't load existing entry (HTTP ${r.status})`
-                        );
-                      }
-                      return r.json();
-                    })
-                    .then((entry) => {
-                      if (!entry) return;
-                      const tags = (entry.tags ?? []).map((t: { tag_type: string; tag_value: string }) => ({
-                        type: t.tag_type,
-                        value: t.tag_value,
-                      }));
-                      dispatch({
-                        type: "SPAWN_ENTRY_PANEL",
-                        sourcePanelId: panel.id,
-                        entryId,
-                        title: entry.title || "Untitled Setup",
-                        summary: entry.summary ?? null,
-                        sourceUrl: entry.source_url ?? "",
-                        sourcePlatform: entry.source_platform ?? null,
-                        sourceAuthor: entry.source_author ?? null,
-                        thumbnailUrl: entry.thumbnail_url ?? null,
-                        useCase: entry.use_case ?? null,
-                        complexity: entry.complexity ?? null,
-                        contentType: entry.content_type ?? null,
-                        tags,
-                        readme: entry.readme || "",
-                        agentsMd: entry.agents_md || "",
-                        manifest: entry.manifest || {},
-                      });
-                    })
-                    .catch((err) => {
-                      console.error("[useChat] already_exists fetch failed:", err);
-                      dispatch({
-                        type: "APPEND_MESSAGE",
-                        panelId: panel.id,
-                        message: {
-                          role: "ai",
-                          type: "text",
-                          content:
-                            "I found an existing entry for that URL but couldn't load it. You can try searching for it directly or refreshing.",
-                        },
-                      });
-                    });
-                } else if (streamUrl) {
-                  // Spawn a skeleton entry panel and connect to stream
-                  dispatch({
-                    type: "SPAWN_ENTRY_PANEL",
-                    sourcePanelId: panel.id,
-                    entryId,
-                    title: ingestTitle || "Ingesting...",
-                    summary: null,
-                    sourceUrl: "",
-                    sourcePlatform: null,
-                    sourceAuthor: null,
-                    thumbnailUrl: null,
-                    useCase: null,
-                    complexity: null,
-                    tags: [],
-                    readme: "",
-                    agentsMd: "",
-                    manifest: {},
-                    readmeLoading: true,
-                    agentsMdLoading: true,
-                    tagsLoading: true,
-                    isIngesting: true,
-                  });
-
-                  connectToIngestionStream(
-                    entryId,
-                    streamUrl,
-                    panel.id,
-                    dispatch,
-                    (reason) => {
-                      // Ingestion failed — add a message to the chat explaining why.
-                      // If the reason names a DB constraint (code=... / constraint=...),
-                      // it's not a paywall — surface the specific error and skip the
-                      // Chrome-extension boilerplate so the underlying bug stays visible.
-                      const isDbError = /code=|constraint/i.test(reason);
-                      const content = isDbError
-                        ? `Ingestion failed with a database error: ${reason}`
-                        : `Ingestion failed: ${reason}\n\nThis usually happens with paywalled sites, bot-protected pages, or content that requires login. You can try using the Dopl Chrome Extension to ingest the page directly from your browser, which bypasses these restrictions since it reads the page as you see it.`;
-                      dispatch({
-                        type: "APPEND_MESSAGE",
-                        panelId: panel.id,
-                        message: {
-                          role: "ai",
-                          type: "text",
-                          content,
-                        },
-                      });
-                    }
-                  );
-                }
                 break;
               }
               case "done": {

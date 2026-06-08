@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { denyIfNoCanvasWrite } from "@/features/members/server/access";
@@ -8,7 +8,6 @@ const supabase = supabaseAdmin();
 interface MigratePanel {
   panel_id: string;
   panel_type: string;
-  entry_id?: string | null;
   x: number;
   y: number;
   width: number;
@@ -18,6 +17,16 @@ interface MigratePanel {
   source_url?: string;
   panel_data?: Record<string, unknown>;
 }
+
+const VALID_PANEL_TYPES = new Set([
+  "chat",
+  "connection",
+  "knowledge",
+  "skills",
+  "knowledge-base",
+  "skill",
+  "artifact",
+]);
 
 /**
  * POST /api/canvas/state/migrate — bulk import from localStorage into
@@ -51,14 +60,16 @@ export const POST = withWorkspaceAuth(
         return NextResponse.json({ error: stateError.message }, { status: 500 });
       }
 
-      const panels: MigratePanel[] = Array.isArray(body.panels) ? body.panels : [];
+      const allPanels: MigratePanel[] = Array.isArray(body.panels) ? body.panels : [];
+      // Drop any legacy panel types that no longer exist (e.g. 'entry',
+      // 'browse') — they'd violate the canvas_panels panel_type CHECK.
+      const panels = allPanels.filter((p) => VALID_PANEL_TYPES.has(p.panel_type));
       if (panels.length > 0) {
         const rows = panels.map((p) => ({
           user_id: userId,
           workspace_id: workspaceId,
           panel_id: p.panel_id,
-          panel_type: p.panel_type || "entry",
-          entry_id: p.entry_id || null,
+          panel_type: p.panel_type,
           x: p.x ?? 0,
           y: p.y ?? 0,
           width: p.width ?? null,

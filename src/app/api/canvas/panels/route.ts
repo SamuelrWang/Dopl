@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { denyIfNoCanvasWrite } from "@/features/members/server/access";
@@ -19,44 +19,16 @@ export const GET = withWorkspaceAuth(async (_request, { workspaceId }) => {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const panels = data || [];
+  const panels = (data || []).map((p) => ({ ...p, slug: null as string | null }));
 
-  // Hydrate entry slugs for entry-typed panels so MCP consumers can hyperlink
-  // without ever learning the internal UUID.
-  const entryIds = panels
-    .map((p) => (p as { entry_id: string | null }).entry_id)
-    .filter((id): id is string => typeof id === "string" && id.length > 0);
-
-  const slugByEntryId = new Map<string, string | null>();
-  if (entryIds.length > 0) {
-    const { data: entries } = await supabase
-      .from("entries")
-      .select("id, slug")
-      .in("id", entryIds);
-    for (const e of entries || []) {
-      slugByEntryId.set(
-        (e as { id: string }).id,
-        (e as { slug: string | null }).slug ?? null
-      );
-    }
-  }
-
-  const hydrated = panels.map((p) => {
-    const entryId = (p as { entry_id: string | null }).entry_id;
-    return {
-      ...p,
-      slug: entryId ? slugByEntryId.get(entryId) ?? null : null,
-    };
-  });
-
-  return NextResponse.json({ panels: hydrated });
+  return NextResponse.json({ panels });
 });
 
 /**
  * POST /api/canvas/panels — add a panel to the active canvas.
- * Supported panel types: entry, chat, connection, browse,
- * knowledge, skills, knowledge-base, skill, artifact.
- * Body: { panel_id, panel_type, entry_id?, x, y, width?, height?, title?, summary?, source_url?, panel_data? }
+ * Supported panel types: chat, connection, knowledge, skills,
+ * knowledge-base, skill, artifact.
+ * Body: { panel_id, panel_type, x, y, width?, height?, title?, summary?, source_url?, panel_data? }
  */
 export const POST = withWorkspaceAuth(
   async (request, { userId, workspaceId, apiKeyId }) => {
@@ -64,50 +36,30 @@ export const POST = withWorkspaceAuth(
     if (denied) return denied;
 
     const body = await request.json();
-    const { panel_type, entry_id, x, y, width, height, title, summary, source_url, panel_data } = body;
-    let { panel_id } = body;
-
-    // MCP's canvas_add_entry posts { entry_id } only — no panel_id. The UI
-    // posts both. Synthesize a stable panel_id from entry_id when missing.
-    if ((!panel_id || typeof panel_id !== "string") && typeof entry_id === "string" && entry_id.length > 0) {
-      panel_id = `entry-${entry_id}`;
-    }
+    const { panel_type, x, y, width, height, title, summary, source_url, panel_data } = body;
+    const { panel_id } = body;
 
     if (!panel_id || typeof panel_id !== "string") {
-      return NextResponse.json({ error: "panel_id or entry_id is required" }, { status: 400 });
+      return NextResponse.json({ error: "panel_id is required" }, { status: 400 });
     }
 
     // Allow-list MUST mirror the discriminated union in
     // src/features/canvas/types.ts and the cases in panel-dto.ts.
     // When adding a new panel type, update all three sites.
     const VALID_PANEL_TYPES = [
-      "entry",
       "chat",
       "connection",
-      "browse",
       "knowledge",
       "skills",
       "knowledge-base",
       "skill",
       "artifact",
     ];
-    if (panel_type && !VALID_PANEL_TYPES.includes(panel_type)) {
+    if (!panel_type || !VALID_PANEL_TYPES.includes(panel_type)) {
       return NextResponse.json(
         { error: `Invalid panel_type. Must be one of: ${VALID_PANEL_TYPES.join(", ")}` },
         { status: 400 }
       );
-    }
-
-    if (panel_type === "entry" && entry_id) {
-      const { data: entry, error: entryError } = await supabase
-        .from("entries")
-        .select("id, status")
-        .eq("id", entry_id)
-        .single();
-
-      if (entryError || !entry) {
-        return NextResponse.json({ error: "Entry not found" }, { status: 404 });
-      }
     }
 
     const { data: panel, error: insertError } = await supabase
@@ -117,8 +69,7 @@ export const POST = withWorkspaceAuth(
           user_id: userId,
           workspace_id: workspaceId,
           panel_id,
-          panel_type: panel_type || "entry",
-          entry_id: entry_id || null,
+          panel_type,
           x: x ?? 0,
           y: y ?? 0,
           width: width ?? null,

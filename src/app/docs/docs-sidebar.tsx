@@ -27,28 +27,11 @@ export const DOC_SECTIONS: DocSection[] = [
     ],
   },
   {
-    id: "ingestion",
-    title: "Ingestion",
-    items: [
-      { id: "supported-sources", title: "Supported sources" },
-      { id: "how-ingestion-works", title: "How ingestion works" },
-      { id: "generated-artifacts", title: "Generated artifacts" },
-    ],
-  },
-  {
     id: "clusters",
     title: "Clusters",
     items: [
       { id: "creating-clusters", title: "Creating clusters" },
       { id: "skill-files", title: "Skill files" },
-    ],
-  },
-  {
-    id: "search-and-build",
-    title: "Search & Build",
-    items: [
-      { id: "semantic-search", title: "Semantic search" },
-      { id: "solution-builder", title: "Solution builder" },
     ],
   },
   {
@@ -58,14 +41,6 @@ export const DOC_SECTIONS: DocSection[] = [
       { id: "mcp-setup", title: "Setup" },
       { id: "mcp-tools", title: "Available tools" },
       { id: "api-keys", title: "API keys" },
-    ],
-  },
-  {
-    id: "community",
-    title: "Community",
-    items: [
-      { id: "publishing", title: "Publishing clusters" },
-      { id: "browsing-community", title: "Browsing shared setups" },
     ],
   },
 ];

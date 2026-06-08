@@ -4,15 +4,12 @@ import { createServerClient } from "@supabase/ssr";
 const PUBLIC_ROUTES = [
   "/login",
   "/auth/callback",
-  "/api/og/tweet",
-  "/api/og/github",
   "/api/billing/webhook",
   // Cron + scheduled jobs are machine-to-machine: invoked by Vercel Cron with
   // a Bearer CRON_SECRET that the routes verify themselves. They must bypass
   // the session gate (same rationale as the billing webhook above) or the
   // middleware 401s them before their own auth runs — so the jobs never fire.
   "/api/cron/",
-  "/api/ingest/cleanup-pending",
   "/terms",
   "/privacy",
   "/pricing",

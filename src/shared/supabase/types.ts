@@ -96,7 +96,6 @@ export type Database = {
       canvas_panels: {
         Row: {
           added_at: string | null
-          entry_id: string | null
           height: number | null
           id: string
           panel_data: Json
@@ -113,7 +112,6 @@ export type Database = {
         }
         Insert: {
           added_at?: string | null
-          entry_id?: string | null
           height?: number | null
           id?: string
           panel_data?: Json
@@ -130,7 +128,6 @@ export type Database = {
         }
         Update: {
           added_at?: string | null
-          entry_id?: string | null
           height?: number | null
           id?: string
           panel_data?: Json
@@ -146,13 +143,6 @@ export type Database = {
           y?: number | null
         }
         Relationships: [
-          {
-            foreignKeyName: "canvas_panels_entry_id_fkey"
-            columns: ["entry_id"]
-            isOneToOne: false
-            referencedRelation: "entries"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "canvas_panels_workspace_id_fkey"
             columns: ["workspace_id"]
@@ -297,83 +287,6 @@ export type Database = {
           },
         ]
       }
-      chunks: {
-        Row: {
-          chunk_index: number | null
-          chunk_type: string | null
-          content: string
-          created_at: string | null
-          embedding: string | null
-          entry_id: string | null
-          id: string
-        }
-        Insert: {
-          chunk_index?: number | null
-          chunk_type?: string | null
-          content: string
-          created_at?: string | null
-          embedding?: string | null
-          entry_id?: string | null
-          id?: string
-        }
-        Update: {
-          chunk_index?: number | null
-          chunk_type?: string | null
-          content?: string
-          created_at?: string | null
-          embedding?: string | null
-          entry_id?: string | null
-          id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "chunks_entry_id_fkey"
-            columns: ["entry_id"]
-            isOneToOne: false
-            referencedRelation: "entries"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      cluster_forks: {
-        Row: {
-          created_at: string | null
-          created_cluster_id: string | null
-          forked_by_user_id: string
-          id: string
-          source_published_cluster_id: string
-        }
-        Insert: {
-          created_at?: string | null
-          created_cluster_id?: string | null
-          forked_by_user_id: string
-          id?: string
-          source_published_cluster_id: string
-        }
-        Update: {
-          created_at?: string | null
-          created_cluster_id?: string | null
-          forked_by_user_id?: string
-          id?: string
-          source_published_cluster_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "cluster_forks_created_cluster_id_fkey"
-            columns: ["created_cluster_id"]
-            isOneToOne: false
-            referencedRelation: "clusters"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cluster_forks_source_published_cluster_id_fkey"
-            columns: ["source_published_cluster_id"]
-            isOneToOne: false
-            referencedRelation: "published_clusters"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       cluster_knowledge_bases: {
         Row: {
           added_at: string
@@ -416,39 +329,6 @@ export type Database = {
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      cluster_panels: {
-        Row: {
-          added_at: string | null
-          cluster_id: string
-          entry_id: string
-        }
-        Insert: {
-          added_at?: string | null
-          cluster_id: string
-          entry_id: string
-        }
-        Update: {
-          added_at?: string | null
-          cluster_id?: string
-          entry_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "cluster_panels_cluster_id_fkey"
-            columns: ["cluster_id"]
-            isOneToOne: false
-            referencedRelation: "clusters"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cluster_panels_entry_id_fkey"
-            columns: ["entry_id"]
-            isOneToOne: false
-            referencedRelation: "entries"
             referencedColumns: ["id"]
           },
         ]
@@ -619,152 +499,6 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
-      }
-      entries: {
-        Row: {
-          agents_md: string | null
-          canonical_score: number | null
-          chunks_attempted: number | null
-          chunks_embedded: number | null
-          complexity: string | null
-          content_type: string | null
-          created_at: string | null
-          descriptor: string | null
-          descriptor_prompt_version: string | null
-          github_sha: string | null
-          id: string
-          ingested_at: string | null
-          ingested_by: string | null
-          ingestion_tier: Database["public"]["Enums"]["ingestion_tier"]
-          manifest: Json | null
-          moderated_at: string | null
-          moderated_by: string | null
-          moderation_status: string
-          raw_content: Json | null
-          readme: string | null
-          slug: string
-          source_author: string | null
-          source_date: string | null
-          source_platform: string | null
-          source_url: string
-          status: string | null
-          summary: string | null
-          thumbnail_url: string | null
-          title: string | null
-          updated_at: string | null
-          use_case: string | null
-          writeback_at: string | null
-          writeback_by: string | null
-        }
-        Insert: {
-          agents_md?: string | null
-          canonical_score?: number | null
-          chunks_attempted?: number | null
-          chunks_embedded?: number | null
-          complexity?: string | null
-          content_type?: string | null
-          created_at?: string | null
-          descriptor?: string | null
-          descriptor_prompt_version?: string | null
-          github_sha?: string | null
-          id?: string
-          ingested_at?: string | null
-          ingested_by?: string | null
-          ingestion_tier?: Database["public"]["Enums"]["ingestion_tier"]
-          manifest?: Json | null
-          moderated_at?: string | null
-          moderated_by?: string | null
-          moderation_status?: string
-          raw_content?: Json | null
-          readme?: string | null
-          slug: string
-          source_author?: string | null
-          source_date?: string | null
-          source_platform?: string | null
-          source_url: string
-          status?: string | null
-          summary?: string | null
-          thumbnail_url?: string | null
-          title?: string | null
-          updated_at?: string | null
-          use_case?: string | null
-          writeback_at?: string | null
-          writeback_by?: string | null
-        }
-        Update: {
-          agents_md?: string | null
-          canonical_score?: number | null
-          chunks_attempted?: number | null
-          chunks_embedded?: number | null
-          complexity?: string | null
-          content_type?: string | null
-          created_at?: string | null
-          descriptor?: string | null
-          descriptor_prompt_version?: string | null
-          github_sha?: string | null
-          id?: string
-          ingested_at?: string | null
-          ingested_by?: string | null
-          ingestion_tier?: Database["public"]["Enums"]["ingestion_tier"]
-          manifest?: Json | null
-          moderated_at?: string | null
-          moderated_by?: string | null
-          moderation_status?: string
-          raw_content?: Json | null
-          readme?: string | null
-          slug?: string
-          source_author?: string | null
-          source_date?: string | null
-          source_platform?: string | null
-          source_url?: string
-          status?: string | null
-          summary?: string | null
-          thumbnail_url?: string | null
-          title?: string | null
-          updated_at?: string | null
-          use_case?: string | null
-          writeback_at?: string | null
-          writeback_by?: string | null
-        }
-        Relationships: []
-      }
-      ingestion_logs: {
-        Row: {
-          created_at: string | null
-          details: Json | null
-          duration_ms: number | null
-          entry_id: string | null
-          id: string
-          status: string | null
-          step: string
-        }
-        Insert: {
-          created_at?: string | null
-          details?: Json | null
-          duration_ms?: number | null
-          entry_id?: string | null
-          id?: string
-          status?: string | null
-          step: string
-        }
-        Update: {
-          created_at?: string | null
-          details?: Json | null
-          duration_ms?: number | null
-          entry_id?: string | null
-          id?: string
-          status?: string | null
-          step?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "ingestion_logs_entry_id_fkey"
-            columns: ["entry_id"]
-            isOneToOne: false
-            referencedRelation: "entries"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       knowledge_bases: {
         Row: {
@@ -1107,84 +841,133 @@ export type Database = {
           },
         ]
       }
-      oauth_connection_grants: {
+      mcp_tokens: {
         Row: {
-          connection_id: string
-          granted_at: string
-          workspace_id: string
+          access_expires_at: string
+          access_token_hash: string
+          client_id: string
+          client_name: string | null
+          created_at: string
+          family_id: string
+          id: string
+          last_used_at: string | null
+          refresh_expires_at: string | null
+          refresh_token_hash: string | null
+          revoked_at: string | null
+          scopes: string[]
+          user_id: string
         }
         Insert: {
-          connection_id: string
-          granted_at?: string
-          workspace_id: string
+          access_expires_at: string
+          access_token_hash: string
+          client_id: string
+          client_name?: string | null
+          created_at?: string
+          family_id?: string
+          id?: string
+          last_used_at?: string | null
+          refresh_expires_at?: string | null
+          refresh_token_hash?: string | null
+          revoked_at?: string | null
+          scopes?: string[]
+          user_id: string
         }
         Update: {
-          connection_id?: string
-          granted_at?: string
-          workspace_id?: string
+          access_expires_at?: string
+          access_token_hash?: string
+          client_id?: string
+          client_name?: string | null
+          created_at?: string
+          family_id?: string
+          id?: string
+          last_used_at?: string | null
+          refresh_expires_at?: string | null
+          refresh_token_hash?: string | null
+          revoked_at?: string | null
+          scopes?: string[]
+          user_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "oauth_connection_grants_connection_id_fkey"
-            columns: ["connection_id"]
+            foreignKeyName: "mcp_tokens_client_id_fkey"
+            columns: ["client_id"]
             isOneToOne: false
-            referencedRelation: "oauth_connections"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "oauth_connection_grants_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
+            referencedRelation: "oauth_clients"
+            referencedColumns: ["client_id"]
           },
         ]
       }
-      oauth_connections: {
+      oauth_authorization_codes: {
         Row: {
-          account_avatar_url: string | null
-          account_email: string | null
-          account_label: string | null
-          alias: string
-          composio_connection_id: string
+          client_id: string
+          code_challenge: string
+          code_challenge_method: string
+          code_hash: string
+          consumed_at: string | null
           created_at: string
-          id: string
-          last_used_at: string | null
-          provider: string
+          expires_at: string
+          redirect_uri: string
           scopes: string[]
-          status: string
-          updated_at: string
           user_id: string
         }
         Insert: {
-          account_avatar_url?: string | null
-          account_email?: string | null
-          account_label?: string | null
-          alias: string
-          composio_connection_id: string
+          client_id: string
+          code_challenge: string
+          code_challenge_method?: string
+          code_hash: string
+          consumed_at?: string | null
           created_at?: string
-          id?: string
-          last_used_at?: string | null
-          provider: string
+          expires_at: string
+          redirect_uri: string
           scopes?: string[]
-          status?: string
-          updated_at?: string
           user_id: string
         }
         Update: {
-          account_avatar_url?: string | null
-          account_email?: string | null
-          account_label?: string | null
-          alias?: string
-          composio_connection_id?: string
+          client_id?: string
+          code_challenge?: string
+          code_challenge_method?: string
+          code_hash?: string
+          consumed_at?: string | null
           created_at?: string
-          id?: string
-          last_used_at?: string | null
-          provider?: string
+          expires_at?: string
+          redirect_uri?: string
           scopes?: string[]
-          status?: string
-          updated_at?: string
           user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "oauth_authorization_codes_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "oauth_clients"
+            referencedColumns: ["client_id"]
+          },
+        ]
+      }
+      oauth_clients: {
+        Row: {
+          client_id: string
+          client_name: string | null
+          created_at: string
+          grant_types: string[]
+          redirect_uris: string[]
+          token_endpoint_auth_method: string
+        }
+        Insert: {
+          client_id: string
+          client_name?: string | null
+          created_at?: string
+          grant_types?: string[]
+          redirect_uris: string[]
+          token_endpoint_auth_method?: string
+        }
+        Update: {
+          client_id?: string
+          client_name?: string | null
+          created_at?: string
+          grant_types?: string[]
+          redirect_uris?: string[]
+          token_endpoint_auth_method?: string
         }
         Relationships: []
       }
@@ -1260,115 +1043,26 @@ export type Database = {
         }
         Relationships: []
       }
-      published_cluster_panels: {
+      rate_limit_events: {
         Row: {
-          entry_id: string
-          height: number | null
+          endpoint: string | null
           id: string
-          published_cluster_id: string
-          source_url: string | null
-          summary: string | null
-          title: string | null
-          width: number | null
-          x: number | null
-          y: number | null
+          requested_at: string
+          subject: string
         }
         Insert: {
-          entry_id: string
-          height?: number | null
+          endpoint?: string | null
           id?: string
-          published_cluster_id: string
-          source_url?: string | null
-          summary?: string | null
-          title?: string | null
-          width?: number | null
-          x?: number | null
-          y?: number | null
+          requested_at?: string
+          subject: string
         }
         Update: {
-          entry_id?: string
-          height?: number | null
+          endpoint?: string | null
           id?: string
-          published_cluster_id?: string
-          source_url?: string | null
-          summary?: string | null
-          title?: string | null
-          width?: number | null
-          x?: number | null
-          y?: number | null
+          requested_at?: string
+          subject?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "published_cluster_panels_entry_id_fkey"
-            columns: ["entry_id"]
-            isOneToOne: false
-            referencedRelation: "entries"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "published_cluster_panels_published_cluster_id_fkey"
-            columns: ["published_cluster_id"]
-            isOneToOne: false
-            referencedRelation: "published_clusters"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      published_clusters: {
-        Row: {
-          category: string | null
-          cluster_id: string
-          created_at: string | null
-          description: string | null
-          embedding: string | null
-          fork_count: number
-          id: string
-          slug: string
-          status: string
-          thumbnail_url: string | null
-          title: string
-          updated_at: string | null
-          user_id: string
-        }
-        Insert: {
-          category?: string | null
-          cluster_id: string
-          created_at?: string | null
-          description?: string | null
-          embedding?: string | null
-          fork_count?: number
-          id?: string
-          slug: string
-          status?: string
-          thumbnail_url?: string | null
-          title: string
-          updated_at?: string | null
-          user_id: string
-        }
-        Update: {
-          category?: string | null
-          cluster_id?: string
-          created_at?: string | null
-          description?: string | null
-          embedding?: string | null
-          fork_count?: number
-          id?: string
-          slug?: string
-          status?: string
-          thumbnail_url?: string | null
-          title?: string
-          updated_at?: string | null
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "published_clusters_cluster_id_fkey"
-            columns: ["cluster_id"]
-            isOneToOne: false
-            referencedRelation: "clusters"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       skill_files: {
         Row: {
@@ -1510,78 +1204,6 @@ export type Database = {
           },
         ]
       }
-      sources: {
-        Row: {
-          content_metadata: Json | null
-          created_at: string | null
-          depth: number | null
-          entry_id: string | null
-          extracted_content: string | null
-          fetch_status_code: number | null
-          id: string
-          mime_type: string | null
-          normalized_url: string | null
-          parent_source_id: string | null
-          raw_content: string | null
-          source_type: string
-          status: string
-          status_reason: string | null
-          storage_path: string | null
-          url: string | null
-        }
-        Insert: {
-          content_metadata?: Json | null
-          created_at?: string | null
-          depth?: number | null
-          entry_id?: string | null
-          extracted_content?: string | null
-          fetch_status_code?: number | null
-          id?: string
-          mime_type?: string | null
-          normalized_url?: string | null
-          parent_source_id?: string | null
-          raw_content?: string | null
-          source_type: string
-          status?: string
-          status_reason?: string | null
-          storage_path?: string | null
-          url?: string | null
-        }
-        Update: {
-          content_metadata?: Json | null
-          created_at?: string | null
-          depth?: number | null
-          entry_id?: string | null
-          extracted_content?: string | null
-          fetch_status_code?: number | null
-          id?: string
-          mime_type?: string | null
-          normalized_url?: string | null
-          parent_source_id?: string | null
-          raw_content?: string | null
-          source_type?: string
-          status?: string
-          status_reason?: string | null
-          storage_path?: string | null
-          url?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "sources_entry_id_fkey"
-            columns: ["entry_id"]
-            isOneToOne: false
-            referencedRelation: "entries"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "sources_parent_source_id_fkey"
-            columns: ["parent_source_id"]
-            isOneToOne: false
-            referencedRelation: "sources"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       system_events: {
         Row: {
           category: string
@@ -1617,38 +1239,6 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: []
-      }
-      tags: {
-        Row: {
-          created_at: string | null
-          entry_id: string | null
-          id: string
-          tag_type: string
-          tag_value: string
-        }
-        Insert: {
-          created_at?: string | null
-          entry_id?: string | null
-          id?: string
-          tag_type: string
-          tag_value: string
-        }
-        Update: {
-          created_at?: string | null
-          entry_id?: string | null
-          id?: string
-          tag_type?: string
-          tag_value?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "tags_entry_id_fkey"
-            columns: ["entry_id"]
-            isOneToOne: false
-            referencedRelation: "entries"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       user_preferences: {
         Row: {
@@ -1863,56 +1453,6 @@ export type Database = {
         }
         Relationships: []
       }
-      writeback_audits: {
-        Row: {
-          accepted: boolean
-          audit_passed: boolean
-          audit_reasons: Json | null
-          audit_score: number
-          created_at: string
-          entry_id: string
-          id: string
-          incoming_byte_len: number | null
-          prompt_version: string | null
-          rejection_reason: string | null
-          submitted_by: string | null
-        }
-        Insert: {
-          accepted: boolean
-          audit_passed: boolean
-          audit_reasons?: Json | null
-          audit_score: number
-          created_at?: string
-          entry_id: string
-          id?: string
-          incoming_byte_len?: number | null
-          prompt_version?: string | null
-          rejection_reason?: string | null
-          submitted_by?: string | null
-        }
-        Update: {
-          accepted?: boolean
-          audit_passed?: boolean
-          audit_reasons?: Json | null
-          audit_score?: number
-          created_at?: string
-          entry_id?: string
-          id?: string
-          incoming_byte_len?: number | null
-          prompt_version?: string | null
-          rejection_reason?: string | null
-          submitted_by?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "writeback_audits_entry_id_fkey"
-            columns: ["entry_id"]
-            isOneToOne: false
-            referencedRelation: "entries"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
     }
     Views: {
       [_ in never]: never
@@ -1935,23 +1475,11 @@ export type Database = {
         Args: { p_api_key_id: string; p_endpoint: string; p_rpm: number }
         Returns: boolean
       }
-      cleanup_system_events: { Args: never; Returns: number }
-      create_cluster_with_entries: {
-        Args: {
-          p_entry_ids: string[]
-          p_name: string
-          p_slug: string
-          p_user_id: string
-          p_workspace_id: string
-        }
-        Returns: {
-          created_at: string
-          id: string
-          name: string
-          slug: string
-          updated_at: string
-        }[]
+      check_and_record_rate_limit_subject: {
+        Args: { p_endpoint: string; p_rpm: number; p_subject: string }
+        Returns: boolean
       }
+      cleanup_system_events: { Args: never; Returns: number }
       increment_fork_count: { Args: { pc_id: string }; Returns: undefined }
       increment_ingestion_count: {
         Args: { user_id_input: string }
@@ -1960,29 +1488,6 @@ export type Database = {
       is_workspace_member: {
         Args: { p_min_role?: string; p_user_id: string; p_workspace_id: string }
         Returns: boolean
-      }
-      search_entries: {
-        Args: {
-          caller_user_id?: string
-          filter_complexity?: string
-          filter_entry_ids?: string[]
-          filter_tags?: string[]
-          filter_use_case?: string
-          match_count?: number
-          match_threshold?: number
-          query_embedding: string
-        }
-        Returns: {
-          agents_md: string
-          complexity: string
-          entry_id: string
-          manifest: Json
-          readme: string
-          similarity: number
-          summary: string
-          title: string
-          use_case: string
-        }[]
       }
       search_knowledge_entries: {
         Args: {
@@ -2002,30 +1507,9 @@ export type Database = {
           updated_at: string
         }[]
       }
-      search_published_clusters: {
-        Args: {
-          filter_category?: string
-          match_count?: number
-          match_threshold?: number
-          query_embedding: string
-        }
-        Returns: {
-          category: string
-          created_at: string
-          description: string
-          fork_count: number
-          id: string
-          similarity: number
-          slug: string
-          thumbnail_url: string
-          title: string
-          updated_at: string
-          user_id: string
-        }[]
-      }
     }
     Enums: {
-      ingestion_tier: "skeleton" | "full"
+      [_ in never]: never
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2152,8 +1636,6 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {
-      ingestion_tier: ["skeleton", "full"],
-    },
+    Enums: {},
   },
 } as const

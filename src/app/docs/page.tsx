@@ -76,12 +76,6 @@ export default function DocsPage() {
 
         <div className="ml-auto flex items-center gap-4">
           <Link
-            href="/community"
-            className="text-white/45 text-[13px] hover:text-white/70 transition-colors"
-          >
-            Community
-          </Link>
-          <Link
             href="/pricing"
             className="text-white/45 text-[13px] hover:text-white/70 transition-colors"
           >

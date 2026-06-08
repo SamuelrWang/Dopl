@@ -37,13 +37,10 @@ exports.DoplClient = exports.parseRetryAfter = void 0;
 const transport_js_1 = require("./transport.js");
 const kb = __importStar(require("./knowledge.js"));
 const skills = __importStar(require("./skills.js"));
-const integrations = __importStar(require("./integrations.js"));
 var retry_js_1 = require("./retry.js");
 Object.defineProperty(exports, "parseRetryAfter", { enumerable: true, get: function () { return retry_js_1.parseRetryAfter; } });
-const PENDING_CACHE_TTL_MS = 5_000;
 class DoplClient {
     transport;
-    pendingCache = null;
     constructor(baseUrl, apiKey, opts = {}) {
         this.transport = new transport_js_1.DoplTransport(baseUrl, apiKey, opts);
     }
@@ -61,84 +58,15 @@ class DoplClient {
     getWorkspaceId() {
         return this.transport.getWorkspaceId();
     }
-    entryUrl(slug) {
-        if (!slug)
-            return null;
-        return `${this.getBaseUrl()}/e/${encodeURIComponent(slug)}`;
-    }
-    async searchSetups(params) {
-        return this.transport.request("/api/query", {
-            method: "POST",
-            toolName: "search_setups",
-            body: {
-                query: params.query,
-                filters: { tags: params.tags, use_case: params.use_case },
-                max_results: params.max_results ?? 5,
-            },
-        });
-    }
-    async getSetup(id) {
-        return this.transport.request(`/api/entries/${id}`, {
-            toolName: "get_setup",
-        });
-    }
-    async describeLink(url) {
-        return this.transport.request("/api/links/describe", {
-            method: "POST",
-            body: { url },
-            toolName: "describe_link",
-        });
-    }
-    async getIngestContent(entryId, sourceUrl) {
-        const qs = sourceUrl ? `?source_url=${encodeURIComponent(sourceUrl)}` : "";
-        return this.transport.request(`/api/ingest/content/${encodeURIComponent(entryId)}${qs}`, { toolName: "get_ingest_content" });
-    }
-    async buildSolution(params) {
-        return this.transport.request("/api/build", {
-            method: "POST",
-            toolName: "build_solution",
-            body: {
-                brief: params.brief,
-                constraints: {
-                    preferred_tools: params.preferred_tools,
-                    excluded_tools: params.excluded_tools,
-                    max_complexity: params.max_complexity,
-                },
-            },
-        });
-    }
-    async listSetups(params) {
-        const query = new URLSearchParams();
-        query.set("status", "complete");
-        if (params?.use_case)
-            query.set("use_case", params.use_case);
-        if (params?.complexity)
-            query.set("complexity", params.complexity);
-        if (params?.limit)
-            query.set("limit", String(params.limit));
-        if (params?.offset)
-            query.set("offset", String(params.offset));
-        return this.transport.request(`/api/entries?${query.toString()}`, { toolName: "list_setups" });
-    }
     async listCanvasPanels() {
         const res = await this.transport.request("/api/canvas/panels", { toolName: "canvas_list_panels" });
         return res.panels;
     }
-    async addCanvasPanel(entryId) {
-        return this.transport.request("/api/canvas/panels", {
-            method: "POST",
-            toolName: "canvas_add_entry",
-            body: { entry_id: entryId },
-        });
-    }
-    async removeCanvasPanel(entryId) {
-        await this.transport.requestNoContent(`/api/canvas/panels/${encodeURIComponent(entryId)}`, "DELETE", "canvas_remove_entry");
-    }
-    async createCluster(name, entryIds) {
+    async createCluster(name) {
         return this.transport.request("/api/clusters", {
             method: "POST",
             toolName: "canvas_create_cluster",
-            body: { name, entry_ids: entryIds },
+            body: { name },
         });
     }
     async listClusters() {
@@ -148,13 +76,6 @@ class DoplClient {
     }
     async getCluster(slug) {
         return this.transport.request(`/api/clusters/${encodeURIComponent(slug)}`, { toolName: "get_cluster" });
-    }
-    async queryCluster(slug, query, maxResults) {
-        return this.transport.request(`/api/clusters/${encodeURIComponent(slug)}/query`, {
-            method: "POST",
-            toolName: "query_cluster",
-            body: { query, max_results: maxResults ?? 5 },
-        });
     }
     async getClusterKnowledgeEntry(clusterSlug, kbId, entryId) {
         return this.transport.request(`/api/clusters/${encodeURIComponent(clusterSlug)}/knowledge-bases/${encodeURIComponent(kbId)}/entries/${encodeURIComponent(entryId)}`, { toolName: "read_cluster_knowledge_entry" });
@@ -191,51 +112,6 @@ class DoplClient {
             user_id: typeof res.user_id === "string" ? res.user_id : null,
         };
     }
-    async prepareIngest(url, content) {
-        const result = await this.transport.request("/api/ingest/prepare", {
-            method: "POST",
-            toolName: "ingest_url",
-            body: { url, content: content || {} },
-            timeoutMs: 120_000,
-        });
-        this.invalidatePendingCache();
-        return result;
-    }
-    async getPendingStatus() {
-        const now = Date.now();
-        if (this.pendingCache && now - this.pendingCache.ts < PENDING_CACHE_TTL_MS) {
-            return this.pendingCache.data;
-        }
-        try {
-            const data = await this.transport.request("/api/ingest/pending", { toolName: "_pending_status" });
-            this.pendingCache = { ts: now, data };
-            return data;
-        }
-        catch {
-            const empty = { pending_ingestions: 0, recent: [] };
-            this.pendingCache = { ts: now, data: empty };
-            return empty;
-        }
-    }
-    invalidatePendingCache() {
-        this.pendingCache = null;
-    }
-    async submitIngestedEntry(input) {
-        return this.transport.request("/api/ingest/submit", {
-            method: "POST",
-            toolName: "submit_ingested_entry",
-            body: input,
-            timeoutMs: 120_000,
-        });
-    }
-    async skeletonIngest(url) {
-        return this.transport.request("/api/admin/skeleton-ingest", {
-            method: "POST",
-            toolName: "skeleton_ingest",
-            body: { url },
-            timeoutMs: 60_000,
-        });
-    }
     async updateCluster(slug, updates) {
         return this.transport.request(`/api/clusters/${encodeURIComponent(slug)}`, {
             method: "PATCH",
@@ -252,19 +128,6 @@ class DoplClient {
     }
     async deleteCluster(slug) {
         await this.transport.requestNoContent(`/api/clusters/${encodeURIComponent(slug)}`, "DELETE", "delete_cluster");
-    }
-    async updateEntry(id, updates) {
-        return this.transport.request(`/api/entries/${encodeURIComponent(id)}`, {
-            method: "PATCH",
-            toolName: "update_entry",
-            body: updates,
-        });
-    }
-    async checkEntryUpdates(id) {
-        return this.transport.request(`/api/entries/${encodeURIComponent(id)}/check-updates`, { toolName: "check_entry_updates" });
-    }
-    async deleteEntry(id) {
-        await this.transport.requestNoContent(`/api/entries/${encodeURIComponent(id)}`, "DELETE", "delete_entry");
     }
     async listPacks() {
         return this.transport.request("/api/knowledge/packs", {
@@ -376,14 +239,5 @@ class DoplClient {
     deleteSkillFile(slug, fileName) {
         return skills.deleteSkillFile(this.transport, slug, fileName);
     }
-    // ── Integrations (Notion / Gmail / Drive / …) ────────────────────
-    connectIntegration = (p) => integrations.connectIntegration(this.transport, p);
-    getIntegrationStatus = (p) => integrations.getIntegrationStatus(this.transport, p);
-    listIntegrationObjects = (p, input = {}) => integrations.listIntegrationObjects(this.transport, p, input);
-    readIntegrationObject = (p, input) => integrations.readIntegrationObject(this.transport, p, input);
-    prepareFromIntegration = (input) => integrations.prepareFromIntegration(this.transport, input);
-    listIntegrationActions = (p, options = {}) => integrations.listIntegrationActions(this.transport, p, options);
-    executeIntegrationAction = (p, input) => integrations.executeIntegrationAction(this.transport, p, input);
-    listMyIntegrations = () => integrations.listMyIntegrations(this.transport);
 }
 exports.DoplClient = DoplClient;

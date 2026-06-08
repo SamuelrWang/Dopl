@@ -29,8 +29,8 @@ function errText(err) {
  */
 async function bootServer(client, opts = {}) {
     const diag = opts.onDiag ?? (() => { });
-    // Status ping → admin flag + user id. Safe default on failure: non-admin
-    // (admin loses skeleton_ingest until next boot; non-admins unaffected).
+    // Status ping → admin flag + user id. Safe default on failure: non-admin.
+    // (No tools are admin-gated currently; the flag is retained for future use.)
     let isAdmin = false;
     let userId = null;
     try {

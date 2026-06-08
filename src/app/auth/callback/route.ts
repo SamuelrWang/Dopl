@@ -3,7 +3,6 @@ import { createServerSupabaseClient } from "@/shared/supabase/admin";
 import { cookies } from "next/headers";
 import { startTrialIfNew } from "@/features/billing/server/subscriptions";
 import { logConversionEvent, hasFiredEvent } from "@/features/analytics/server/conversion-events";
-import { forkPublishedCluster } from "@/features/community/server/service";
 import { ensureDefaultWorkspace } from "@/features/workspaces/server/service";
 import { ensureDefaultCanvas } from "@/features/workspaces/server/canvases";
 import { safeRedirect } from "@/shared/lib/url/safe-redirect";
@@ -16,10 +15,6 @@ export async function GET(request: NextRequest) {
   // override via ?redirectTo= but only if same-origin path (open
   // redirect guard — see safeRedirect doc).
   const redirectTo = safeRedirect(searchParams.get("redirectTo"));
-  // Optional "install this cluster on landing" intent. Set by the
-  // shared-cluster page's "Log in to install" CTA so the visitor lands
-  // on /canvas with the cluster already imported, no extra click.
-  const installCluster = searchParams.get("installCluster");
 
   if (code) {
     const cookieStore = await cookies();
@@ -57,26 +52,6 @@ export async function GET(request: NextRequest) {
           // hit /canvas.
           const workspace = await ensureDefaultWorkspace(user.id);
           await ensureDefaultCanvas(workspace.id);
-
-          // Fulfil install intent. Self-fork and "already imported"
-          // failures are silent successes from the visitor's POV — they
-          // still land on /canvas and the cluster is there.
-          if (installCluster) {
-            try {
-              await forkPublishedCluster(installCluster, user.id, workspace.id);
-            } catch (err) {
-              const msg = err instanceof Error ? err.message : String(err);
-              if (
-                !msg.includes("already imported") &&
-                !msg.includes("Cannot import your own cluster")
-              ) {
-                console.error(
-                  `[auth.callback] auto-install failed for ${installCluster}:`,
-                  msg
-                );
-              }
-            }
-          }
         }
       } catch (err) {
         // Swallow — trial/event/install failures must not break sign-in.

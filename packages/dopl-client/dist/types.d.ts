@@ -154,10 +154,9 @@ export interface ClusterSkillFull {
         body: string;
     }>;
 }
-export type CanvasPanelType = "entry" | "chat" | "connection" | "browse";
+export type CanvasPanelType = "chat" | "connection" | "knowledge" | "skills" | "knowledge-base" | "skill" | "artifact";
 export interface CanvasPanel {
     id: string;
-    entry_id: string | null;
     panel_type: CanvasPanelType;
     slug: string | null;
     title: string | null;

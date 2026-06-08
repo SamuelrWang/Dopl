@@ -152,13 +152,11 @@ export async function DELETE() {
     // Best-effort — we proceed with the delete either way.
     await Promise.all([
       admin.from("conversations").delete().eq("user_id", user.id),
-      admin.from("published_clusters").delete().eq("user_id", user.id),
     ]).catch(() => {});
 
     // Delete the auth user — all per-user data cascades automatically:
     // profiles, api_keys, canvas_panels, user-scoped clusters, chat_attachments,
     // user_preferences
-    // entries.ingested_by is SET NULL (preserves global entries)
     // mcp_events.user_id / system_events.user_id are SET NULL (analytics retained)
     const { error } = await admin.auth.admin.deleteUser(user.id);
 

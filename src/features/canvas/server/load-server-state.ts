@@ -26,7 +26,7 @@ import type {
   Panel,
 } from "@/features/canvas/types";
 import { INITIAL_CANVAS_STATE } from "@/features/canvas/types";
-import type { ChatMessage, ChatAttachment } from "@/features/ingestion/components/chat-message";
+import type { ChatMessage, ChatAttachment } from "@/shared/types/chat";
 
 // ── Shared types mirrored from the client-side conversation sync ─────
 
@@ -84,22 +84,13 @@ export async function loadCanvasInitialState(
   try {
     const supabase = supabaseAdmin();
 
-    const [stateRes, panelsRes, publishedRes] = await Promise.all([
+    const [stateRes, panelsRes] = await Promise.all([
       supabase
         .from("canvas_state")
         .select("*")
         .eq("workspace_id", scope.workspaceId)
         .maybeSingle(),
       supabase.from("canvas_panels").select("*").eq("workspace_id", scope.workspaceId),
-      // Published clusters stay user-scoped — publishing is a user-level
-      // action and the gallery is global. We still filter by user so the
-      // local cluster's `publishedSlug` resolves to *this* user's
-      // published copy. Indexed lookup, ≪50 rows per user typically.
-      supabase
-        .from("published_clusters")
-        .select("cluster_id, slug")
-        .eq("user_id", scope.userId)
-        .eq("status", "published"),
     ]);
 
     // 404 / first-time user → return empty state with defaults injected.
@@ -176,23 +167,7 @@ export async function loadCanvasInitialState(
       }
     }
 
-    const rawClusters: Cluster[] = Array.isArray(cs.clusters) ? cs.clusters : [];
-
-    // Build a map of cluster_id → published slug so we can stitch it
-    // onto each Cluster in one pass. Clusters without a published row
-    // get publishedSlug=null (the "not published" signal).
-    const publishedSlugByClusterDbId = new Map<string, string>();
-    for (const row of publishedRes.data || []) {
-      if (row.cluster_id && row.slug) {
-        publishedSlugByClusterDbId.set(row.cluster_id, row.slug);
-      }
-    }
-    const clusters: Cluster[] = rawClusters.map((c) => ({
-      ...c,
-      publishedSlug: c.dbId
-        ? publishedSlugByClusterDbId.get(c.dbId) ?? null
-        : null,
-    }));
+    const clusters: Cluster[] = Array.isArray(cs.clusters) ? cs.clusters : [];
 
     const state: CanvasState = {
       ...empty,

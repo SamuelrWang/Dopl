@@ -1,20 +1,13 @@
 /**
  * Chat message helpers for the real-chat panel.
  *
- * The shared `ChatMessage` union in `@/features/ingestion/components/chat-message`
- * now includes the full set of variants for both the URL-ingestion flow
- * and the real-chat flow (text / user-text / progress / artifacts /
- * streaming / tool_activity / entry_cards). This file re-exports those
- * and adds constants + helpers specific to the real-chat panel.
+ * Re-exports the shared `ChatMessage` union from `@/shared/types/chat` and
+ * adds constants + helpers specific to the real-chat panel.
  */
 
-import type {
-  ChatMessage,
-  ChatAttachment,
-  EntryReference,
-} from "@/features/ingestion/components/chat-message";
+import type { ChatMessage, ChatAttachment } from "@/shared/types/chat";
 
-export type { ChatMessage, ChatAttachment, EntryReference };
+export type { ChatMessage, ChatAttachment };
 
 /** Maximum number of messages kept in a single chat panel's state. */
 export const MAX_MESSAGES_PER_PANEL = 200;

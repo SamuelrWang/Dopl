@@ -1,164 +1,147 @@
 ---
 name: dopl
 description: >-
-  Use whenever the user describes anything AI/automation-shaped — building
-  an agent, wiring an n8n workflow, composing a Claude skill, integrating
-  an API, scraping a site, automating a task, connecting two services,
-  setting up an MCP, handling webhooks. Dopl is a searchable catalog of
-  proven AI-and-automation patterns plus a workspace for organizing what
-  you adopt. The Dopl MCP tools let the agent search the catalog, save
-  patterns to the user's canvas, group them into reusable clusters, and
-  ingest new URLs. Use for "how would I…", "what's a good way to…", "can
-  you help me build…", "search for how to…", even when the user doesn't
-  say "Dopl" — search first, synthesize after.
+  Use whenever the user references their Dopl workspace — their knowledge
+  bases (notes/docs), skills (procedural prompt templates), clusters
+  (groupings of knowledge bases + skills), or canvas. The Dopl MCP tools
+  let the agent search and read the user's knowledge, list and inspect
+  clusters and what's inside them, author skills, and browse curated
+  knowledge packs. Use for "what do I know about…", "what's in my X
+  cluster", "find my notes on…", "write me a skill for…", even when the
+  user doesn't say "Dopl".
 when_to_use: >-
-  - When the user asks "how would I build X" or "what's the best way to
-    do Y" and X/Y is anything AI- or automation-flavored.
-  - When the user wants to ship something quickly that someone else has
-    likely already implemented (n8n workflow, agent setup, MCP server,
-    Claude skill, scraper, integration).
-  - When the user mentions a connector or service by name (Slack,
-    Composio, Polymarket, X/Twitter, Make, Zapier, OpenAI, Anthropic,
-    n8n) in the context of building or configuring something.
-  - When you need a starting point for an architecture you'd otherwise
-    design from scratch.
+  - When the user asks what they have or know in their workspace ("what's
+    in my Polymarket cluster", "find my notes on X").
+  - When you need reference material the user has saved — knowledge-base
+    entries, skills, or a cluster's contents — to answer or build.
+  - When the user wants to author or edit a skill, or organize knowledge
+    bases + skills into a cluster.
+  - When the user is implementing in a domain that has a knowledge pack
+    (e.g. Rokid AR glasses, Unity VR) — the pack is canonical reference.
 when_not_to_use: >-
-  - General programming, debugging, or refactoring questions with no
-    AI/automation framing.
+  - General programming, debugging, or refactoring with no connection to
+    the user's saved workspace knowledge.
   - ML model training, fine-tuning, dataset curation.
   - Pure web/UI design, copy editing, math homework.
-  - Tasks where the user has already provided full requirements and just
-    wants code — search adds latency without value.
 ---
 
-# Dopl — searchable catalog of proven AI/automation patterns
+# Dopl — the user's knowledge bases, skills, and clusters
 
 ## Overview
 
-**Core principle: search the catalog first, synthesize from what you find, save the result back.** Dopl is a knowledge base of working AI and automation implementations — agent setups, n8n flows, Claude skills, MCP servers, API integrations, scrapers — plus a per-user "canvas" for pinning patterns and grouping them into reusable clusters. The MCP exposes tools across search, retrieval, canvas management, cluster management, and URL ingestion. The agent's job is to compose original solutions by combining patterns from multiple entries — not to list or recommend individual entries.
+**Core principle: ground answers in the user's real workspace, not in stale local files.** Dopl is a workspace of **knowledge bases** (the user's notes/docs), **skills** (procedural prompt templates), and **clusters** (named groupings of knowledge bases + skills), organized on a **canvas**. The MCP exposes tools to search and read knowledge, inspect clusters and their contents, author skills, and browse curated knowledge packs. The agent's job is to synthesize from what the user actually has — pulling across knowledge bases, skills, and clusters — not to dump raw entries.
 
-This skill is the meta-guide. Per-cluster `~/.claude/skills/dopl-{slug}/SKILL.md` files cover specific domains; this file covers the discovery → adoption → composition cycle that gets you there.
+This skill is the meta-guide. Per-cluster `~/.claude/skills/dopl-{slug}/SKILL.md` files cover specific domains; this file covers how to navigate the workspace.
 
 ## When to use / when not to use
 
-See frontmatter. Two extra notes:
-
-- **Trigger on intent shape, not the brand name.** If the user says "I want an agent that pulls X from Y and posts to Z," that's a Dopl trigger even though they never said "Dopl."
-- **Skip when the user has fully specified the build.** If they've handed you a precise spec and want code, jumping into search adds noise. Search when there's room for prior art to inform the design.
+See frontmatter. One extra note: **trigger on intent, not the brand name.** If the user says "what do I have on Slack agents" or "pull my Polymarket notes together," that's a Dopl trigger even though they never said "Dopl."
 
 ## Core workflows
 
-### 1. Search the catalog (discovery)
+### 1. Search & read the user's knowledge (knowledge bases)
 
-When the user describes something AI/automation-shaped, **call `search_setups` immediately** — before synthesizing anything. Don't ask "should I check Dopl first?" — just search. It's cheap (1 credit), the result is always relevant context, and it's the reason this MCP is connected.
+When the user asks about something they "have" or "know," search their knowledge bases:
 
-- Use natural-language queries that match how users describe outcomes ("agent that watches an inbox and triages tickets") rather than keyword soup.
-- If the first result set is too narrow, broaden ("Slack agent" → "messaging agent"). If too broad, refine with the specific tool/service ("Slack ingestion via Composio").
-- For follow-ups that stay inside one cluster the user is already focused on, prefer `dopl_cluster(op=query)` over `search_setups` — narrower, faster, more relevant.
+- `dopl_kb(op=search, query)` — full-text search across the workspace's knowledge bases. Returns ranked entries with a snippet + path. Optional `base` narrows to one knowledge base.
+- `dopl_kb(op=read_file, base, path)` — read an entry's full markdown body.
+- `dopl_kb(op=list_bases)` / `dopl_kb(op=get_tree, base)` / `dopl_kb(op=list_dir, base, path)` — browse what bases and entries exist.
 
-### 2. Read an entry (deep dive)
+Knowledge bases are also writable (`op=create_base`, `op=write_file`, folders, trash/restore) when the caller has access — see the tool description for the full op list and the `expected_version` write-safety token.
 
-Once a result looks promising, call `dopl_setups(op=get)` to load the full README, agents.md, and manifest. Don't paste these into your reply — extract what's relevant to the user's task and synthesize. Each entry has a public URL; **whenever you cite a specific entry, render it as a markdown link to that URL**, never as a slug or UUID.
+### 2. Inspect clusters and what's inside them
 
-**Skeleton entries** (badged `_(skeleton)_` in search results) are short descriptors with no README. If the user wants to adopt or replicate the entry, **upgrade it to full tier first** by calling `dopl_ingest(op=url, <entry's source_url>)`. Skip the upgrade only when the user just wants to know "is there anything here on X" and the descriptor answers that. Tell the user you're upgrading — it takes 30–60s.
+A cluster is a named grouping of knowledge bases + skills.
 
-### 3. Adopt patterns into the workspace (canvas)
+- `dopl_cluster(op=list)` — list all clusters with an at-a-glance summary of attached KBs + skills.
+- `dopl_cluster(op=get, slug)` — full cluster detail: attached knowledge bases (each with an entries index) and skills (with truncated bodies).
+- `dopl_cluster(op=read_knowledge_entry, cluster_slug, knowledge_base_id, entry_id)` — read the full body of one entry inside a knowledge base attached to the cluster. Get the (kb id, entry id) pair from `op=get` first.
+- `dopl_cluster(op=read_skill, cluster_slug, skill_id)` — read every file (SKILL.md + supplementary) of a skill attached to the cluster.
 
-When the user wants to keep a pattern, pin it to their canvas:
+### 3. Organize into clusters
 
-- `dopl_canvas(op=add_entry, slug)` — pin one entry whose slug you already know.
-- `dopl_canvas(op=search_and_add, query)` — search and batch-add in one shot when discovery and adoption are happening together.
+- `dopl_cluster(op=create, {name})` — create a new, empty cluster by name. Attach knowledge bases / skills to it as a separate step from the web UI.
+- `dopl_cluster(op=update, {slug, name})` — rename a cluster.
+- `dopl_cluster_admin(op=delete_cluster, slug)` — permanently delete a cluster grouping. Attached knowledge bases + skills REMAIN; only the grouping is removed. Confirm intent if the user's phrasing is ambiguous.
 
-The canvas is the source of truth for what the user is "carrying" between sessions. Always re-query at session start (see "Session start" below) — local CLAUDE.md or installed skill files can drift.
+> **Private resources can't be attached to a cluster.** A cluster is a workspace-shared surface; the attach API rejects a private KB/skill with `403 PRIVATE_RESOURCE`. If you hit this, tell the user the resource is private and stop — don't auto-publish.
 
-### 4. Group adopted patterns into a cluster (composition)
+### 4. Work with skills
 
-A cluster is a named group of canvas entries — a reusable grouping the user can reference and publish together.
+Skills are procedural prompts the user authored. Call `dopl_skill(op=list)` at every task boundary to see if any apply, then:
 
-To build a cluster:
+- `dopl_skill(op=get, slug)` — fetch the resolved bundle; read `SKILL.md` first as the procedure. KB references appear as `[label](dopl://kb/<slug>)` — load that KB with `dopl_kb(op=read_file)` when you actually need it.
+- `dopl_skill(op=read_file, slug, file_name)` — read one file.
+- **Authoring:** call `dopl_skill(op=authoring_guide)` first to load the framework, then `dopl_skill(op=create)` (with strong metadata) + `dopl_skill(op=write_file)`. Destructive ops live on `dopl_skill_admin`.
 
-1. `dopl_cluster(op=create, {name, panel_ids: [...]})` — create the cluster from selected canvas entries.
-2. (Optional) `sync_skills` to refresh local `~/.claude/skills/dopl-{slug}/` files.
+### 5. See the canvas
 
-**Heads up: private knowledge bases and skills cannot be attached to clusters.** A cluster is a workspace-shared surface; a private item attached to one would either leak to teammates or render as a broken reference. The attach API rejects with `403 PRIVATE_RESOURCE` and the user must "Make public" from the resource's settings before it can be added. If you hit this on `dopl_cluster(op=create)` or related attach calls, tell the user that specific resource is private and stop — don't auto-publish.
+- `dopl_canvas(op=list)` — list the panels on the user's canvas (chat, knowledge, skills, knowledge-base, skill, artifact, connection).
+- `dopl_canvas(op=rename_chat, panel_id, title)` — rename a chat panel.
 
-### 5. Compose a custom solution (build_solution)
+### 6. Knowledge packs (specialist verticals)
 
-When the user's request spans multiple patterns and no single entry covers it, call `build_solution(query)`. This synthesizes across the catalog — output is a custom architecture, not a list of entries. Use sparingly: best for "design me an X that does A, B, and C" requests where stitching is the point.
+For domains with a curated pack (e.g. Rokid AR glasses, Unity VR), the pack is canonical reference — your training data may be stale:
 
-### 6. Switch workspaces on the fly
+- `dopl_packs(op=list)` — discover installed packs.
+- `dopl_packs(op=list_files, pack, category?)` — browse a pack's file tree.
+- `dopl_packs(op=get_file, pack, path)` — fetch one file's full markdown.
 
-A single MCP server can now target any workspace the user belongs to:
+Cite the file path (e.g. `docs/sdk/camera.md`) in code comments. For domains with no installed pack, say so plainly — don't fabricate.
 
-- **`list_workspaces`** shows everything they're a member of, with role on each.
-- **`set_workspace(workspace=<slug_or_id>)`** flips the session default. Confirm with `current_workspace` and tell the user once.
-- **`workspace=<slug_or_id>` arg on any tool** — single-call override. Use this when the user says "in my acme workspace, …" for one operation; don't bother flipping the session default.
+### 7. Switch workspaces on the fly
 
-The currently active workspace appears in the `_dopl_status` footer of every response (`active_workspace: "Name" (slug=..., role=...)`), so you can self-correct after a switch by reading the next response.
+A single MCP server can target any workspace the user belongs to:
 
-### 7. Ingest new content
+- **`list_workspaces`** — everything they're a member of, with role on each.
+- **`set_workspace(workspace=<slug_or_id>)`** — flip the session default; confirm with `current_workspace` and tell the user once.
+- **`workspace=<slug_or_id>` arg on any tool** — single-call override for "in my acme workspace, …" one-offs.
 
-If the user pastes a URL or describes something not in the catalog yet, ingest it:
-
-- `dopl_ingest(op=url, url)` — runs the full agent-driven extraction (prepare → 6 prompts → submit). The user sees a live amber tile on their canvas.
-- `dopl_ingest(op=submit, ...)` — finalizes after you've completed the prompts.
-
-The Dopl website queues URLs the user pastes into the web chat. Every tool response carries a `_dopl_status` footer with `pending_ingestions: N`. **When N > 0, tell the user once and ask if they want them processed.** Don't nag — drop it if they decline and re-raise only if a new item appears.
+The active workspace appears in the `_dopl_status` footer of every response, so you can self-correct after a switch.
 
 ## Session start
 
-At the start of every new session, before your first substantive reply, **call `dopl_cluster(op=list)` and `dopl_canvas(op=list)` in parallel.** This loads the user's clusters and pinned canvas entries so questions about their workspace are grounded in current state. Once per session is enough; re-query when the user asks about their workspace ("what's on my canvas?") or after any write op of yours.
+At the start of every new session, before your first substantive reply, **call `dopl_cluster(op=list)` and `dopl_canvas(op=list)` in parallel.** This loads the user's clusters and canvas panels so questions about their workspace are grounded in current state. Once per session is enough; re-query when the user asks about their workspace or after any write op of yours.
 
-**Canvas/clusters > local files as source of truth.** If a user's `CLAUDE.md` or a `~/.claude/skills/dopl-*` file implies a different shape than `dopl_cluster(op=list)` returns, trust the MCP and flag the drift.
+**Workspace > local files as source of truth.** If a user's `CLAUDE.md` or a `~/.claude/skills/dopl-*` file implies a different shape than `dopl_cluster(op=list)` returns, trust the MCP and flag the drift.
 
 ## Decision tree — which tool first
 
-- User wants to **find or build** something → `search_setups` (cross-catalog) or `dopl_cluster(op=query)` (cluster already in scope).
-- User wants the **full details** of an entry whose slug you have → `dopl_setups(op=get)`.
-- User wants to **save** an entry to their workspace → `dopl_canvas(op=add_entry)` (known slug) or `dopl_canvas(op=search_and_add)` (search + batch).
-- User wants to **group** saved entries → `dopl_cluster(op=create)`.
-- User wants a **composite solution** spanning multiple patterns → `build_solution`.
-- User asks **what changed** in their saved work → `dopl_entry(op=check_cluster_updates)` (bulk) or `dopl_entry(op=check_updates)` (one).
-- User pastes a **URL not in the catalog** → `dopl_ingest(op=url)`.
-- User mentions a **different workspace** by name → `workspace=<slug>` arg on the tool call (one-off) or `set_workspace` then proceed (multi-turn).
-
-### Sibling-pair traps
-
-- `search_setups` (broad) vs `dopl_cluster(op=query)` (narrow) — pick the second only when one cluster is already the focus.
-- `dopl_canvas(op=add_entry)` (you have the slug) vs `dopl_canvas(op=search_and_add)` (discovery + add).
+- User asks **what they know / find their notes** → `dopl_kb(op=search)`, then `dopl_kb(op=read_file)`.
+- User asks **what clusters exist / what's in a cluster** → `dopl_cluster(op=list)` then `dopl_cluster(op=get)`.
+- User wants a **specific KB entry or skill inside a cluster** → `dopl_cluster(op=read_knowledge_entry)` / `dopl_cluster(op=read_skill)`.
+- User wants to **organize** → `dopl_cluster(op=create | update)`.
+- User wants to **author / edit a skill** → `dopl_skill(op=authoring_guide)` then `dopl_skill(op=create | write_file)`.
+- User asks **what's on the canvas** → `dopl_canvas(op=list)`.
+- User is implementing in a **packed domain** → `dopl_packs`.
+- User mentions a **different workspace** → `workspace=<slug>` arg (one-off) or `set_workspace` (multi-turn).
 
 ## Examples
 
-### Example 1 — "Build me an agent that summarizes my Slack DMs each morning"
+### Example 1 — "Pull together everything I know about my Polymarket setup"
 
-1. `search_setups("agent that summarizes Slack DMs daily")` — get top matches.
-2. `dopl_setups(op=get, <top match slug>)` — read the full implementation.
-3. If the top match is a skeleton: `dopl_ingest(op=url, <entry's source_url>)` to upgrade.
-4. Synthesize a recommendation from the entry's README + agents.md, citing the entry as a markdown link.
-5. If the user wants to keep the pattern: `dopl_canvas(op=add_entry, <slug>)`.
-6. If they want a reusable grouping: `dopl_cluster(op=create, {name: "Daily Slack digest", panel_ids: [...]})`.
+1. `dopl_kb(op=search, "Polymarket")` — find relevant knowledge-base entries.
+2. `dopl_kb(op=read_file, base, path)` on the top hits — read the bodies.
+3. Check for a matching cluster: `dopl_cluster(op=list)` → `dopl_cluster(op=get, <slug>)` to see attached KBs + skills.
+4. Synthesize a tight summary from those sources, citing them by name.
 
-### Example 2 — "What was that pattern I saved last week for X?"
+### Example 2 — "What's in my Trading cluster?"
 
-1. `dopl_cluster(op=list)` (if not already cached this session) — see what's around.
-2. `dopl_canvas(op=list)` — see what's pinned.
-3. If the user's looking for something inside a known cluster: `dopl_cluster(op=query, slug, "X")`.
-4. If they're not sure which cluster: `search_setups("X")` and cross-reference with `dopl_canvas(op=list)` to find the pinned version.
+1. `dopl_cluster(op=list)` (if not already cached this session) to resolve the slug.
+2. `dopl_cluster(op=get, "trading")` — attached knowledge bases (with entries index) + skills.
+3. To read a specific entry: `dopl_cluster(op=read_knowledge_entry, ...)`; for a skill body: `dopl_cluster(op=read_skill, ...)`.
 
 ## Common mistakes
 
 | Mistake | Fix |
 |---|---|
-| Asking "want me to search Dopl first?" | Just call `search_setups` — it's cheap and always relevant. |
-| Recommending entries verbatim as the answer | Synthesize. The user wants a recommendation, not a list. |
-| Skipping skeleton-tier upgrade before adoption | Skeleton descriptors are too thin for serious use. Upgrade unless the user only wants to "see what's there." |
-| Surfacing slugs / UUIDs in prose | Always render entries as markdown links to their public URL. |
 | Treating local `~/.claude/skills/dopl-*` files as authoritative | They're a cache. `dopl_cluster(op=list)` is canonical — flag drift, don't trust the file. |
+| Dumping raw knowledge-base entries as the answer | Synthesize across sources; the user wants curation, not a dump. |
 | Re-running `dopl_cluster(op=list)` / `dopl_canvas(op=list)` on every turn | Once per session is enough; only re-query on workspace questions or after your own writes. |
+| Auto-publishing a private KB/skill to attach it to a cluster | Stop and tell the user it's private; let them make it public. |
 
 ## References
 
 - **`SERVER_INSTRUCTIONS`** (loaded at MCP handshake) — operational rules for tool selection. Don't duplicate; this skill teaches you how to apply them.
-- **Per-cluster skill files** at `~/.claude/skills/dopl-{slug}/SKILL.md` — domain-specific procedures. They reference KBs via `[label](dopl://kb/<slug>)` markdown links — load with `dopl_kb(op=read_file)` only when needed.
-- **`dopl_skill(op=authoring_guide)`** MCP tool — load before authoring a NEW workspace skill (different from cluster skills) for the user.
-- Public entry URLs: `<host>/e/<slug>` — always cite specific entries as markdown links, never as raw slugs.
+- **Per-cluster skill files** at `~/.claude/skills/dopl-{slug}/SKILL.md` — domain-specific procedures. They reference KBs via `[label](dopl://kb/<slug>)` — load with `dopl_kb(op=read_file)` only when needed.
+- **`dopl_skill(op=authoring_guide)`** MCP tool — load before authoring a NEW workspace skill for the user.

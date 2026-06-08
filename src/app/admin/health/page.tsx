@@ -1,11 +1,9 @@
 import { notFound } from "next/navigation";
-import Link from "next/link";
 import { getUser } from "@/shared/supabase/server";
 import { isAdmin } from "@/shared/auth/with-auth";
 import {
   getRecentAlerts,
   getExternalApiHealth,
-  getIngestionHealth,
   getMcpHealth,
   computeOverallStatus,
 } from "@/features/analytics/server/health";
@@ -41,14 +39,13 @@ export default async function AdminHealthPage() {
   const user = await getUser();
   if (!isAdmin(user?.id)) notFound();
 
-  const [alerts, external, ingestion, mcp] = await Promise.all([
+  const [alerts, external, mcp] = await Promise.all([
     getRecentAlerts({ sinceMs: 24 * 60 * 60 * 1000, limit: 50 }),
     getExternalApiHealth(),
-    getIngestionHealth(),
     getMcpHealth(),
   ]);
 
-  const status = computeOverallStatus({ alerts, ingestion, mcp, external });
+  const status = computeOverallStatus({ alerts, mcp, external });
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-5xl">
@@ -56,15 +53,9 @@ export default async function AdminHealthPage() {
         <div>
           <h1 className="text-2xl font-medium text-text-primary">System Health</h1>
           <p className="text-sm text-text-secondary mt-1">
-            Rolling 24h view of anomalies, external API failures, and ingestion success rate.
+            Rolling 24h view of anomalies, external API failures, and MCP health.
           </p>
         </div>
-        <Link
-          href="/admin/review"
-          className="text-sm text-text-secondary hover:text-text-primary underline underline-offset-2"
-        >
-          Moderation queue →
-        </Link>
       </header>
 
       {/* Status banner */}
@@ -84,19 +75,7 @@ export default async function AdminHealthPage() {
       </div>
 
       {/* Metric tiles */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-        <div className="rounded-xl bg-white/[0.03] border border-white/[0.08] p-4">
-          <div className="text-xs uppercase tracking-wide text-text-tertiary mb-1">Ingestion (24h)</div>
-          <div className="text-2xl font-medium text-text-primary">
-            {(ingestion.success_rate * 100).toFixed(0)}%
-          </div>
-          <div className="text-xs text-text-secondary mt-2 space-y-0.5">
-            <div>{ingestion.completed_24h} completed</div>
-            <div className="text-red-300">{ingestion.failed_24h} failed{ingestion.timeouts_24h > 0 && ` (${ingestion.timeouts_24h} timeouts)`}</div>
-            <div className="text-amber-300">{ingestion.empty_content_24h} empty/blocked</div>
-          </div>
-        </div>
-
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
         <div className="rounded-xl bg-white/[0.03] border border-white/[0.08] p-4">
           <div className="text-xs uppercase tracking-wide text-text-tertiary mb-1">MCP (24h)</div>
           <div className="text-2xl font-medium text-text-primary">

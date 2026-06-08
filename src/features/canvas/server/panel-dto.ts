@@ -13,7 +13,6 @@ import type {
   Panel,
   ArtifactPanelData,
   ChatPanelData,
-  EntryPanelData,
   ConnectionPanelData,
   KnowledgeBasePanelData,
   KnowledgePanelData,
@@ -30,7 +29,6 @@ export function panelToDbRow(panel: Panel) {
     y: panel.y,
     width: panel.width,
     height: panel.height,
-    entry_id: null as string | null,
     title: null as string | null,
     summary: null as string | null,
     source_url: null as string | null,
@@ -38,25 +36,6 @@ export function panelToDbRow(panel: Panel) {
   };
 
   switch (panel.type) {
-    case "entry":
-      base.entry_id = panel.entryId;
-      base.title = panel.title;
-      base.summary = panel.summary;
-      base.source_url = panel.sourceUrl;
-      base.panel_data = {
-        sourcePlatform: panel.sourcePlatform,
-        sourceAuthor: panel.sourceAuthor,
-        thumbnailUrl: panel.thumbnailUrl,
-        useCase: panel.useCase,
-        complexity: panel.complexity,
-        contentType: panel.contentType,
-        tags: panel.tags,
-        readme: panel.readme,
-        agentsMd: panel.agentsMd,
-        manifest: panel.manifest,
-        createdAt: panel.createdAt,
-      };
-      break;
     case "chat":
       base.title = panel.title;
       base.panel_data = {
@@ -66,8 +45,6 @@ export function panelToDbRow(panel: Panel) {
       };
       break;
     case "connection":
-      break;
-    case "browse":
       break;
     case "knowledge":
       break;
@@ -117,26 +94,6 @@ export function dbRowToPanel(row: Record<string, unknown>): Panel | null {
   const type = row.panel_type as string;
 
   switch (type) {
-    case "entry":
-      return {
-        ...base,
-        type: "entry",
-        entryId: (row.entry_id as string) || "",
-        title: (row.title as string) || "Untitled",
-        summary: (row.summary as string) || null,
-        sourceUrl: (row.source_url as string) || "",
-        sourcePlatform: (data.sourcePlatform as string) || null,
-        sourceAuthor: (data.sourceAuthor as string) || null,
-        thumbnailUrl: (data.thumbnailUrl as string) || null,
-        useCase: (data.useCase as string) || null,
-        complexity: (data.complexity as string) || null,
-        contentType: (data.contentType as string) || null,
-        tags: (data.tags as Array<{ type: string; value: string }>) || [],
-        readme: (data.readme as string) || "",
-        agentsMd: (data.agentsMd as string) || "",
-        manifest: (data.manifest as Record<string, unknown>) || {},
-        createdAt: (data.createdAt as string) || new Date().toISOString(),
-      } as EntryPanelData;
     case "chat":
       return {
         ...base,
@@ -144,15 +101,12 @@ export function dbRowToPanel(row: Record<string, unknown>): Panel | null {
         title: (row.title as string) || "New Chat",
         messages: [],
         isProcessing: false,
-        activeEntryId: null,
         conversationId: (data.conversationId as string) || undefined,
         pinned: (data.pinned as boolean) || false,
         expiresAt: (data.expiresAt as string) || undefined,
       } as ChatPanelData;
     case "connection":
       return { ...base, type: "connection" } as ConnectionPanelData;
-    case "browse":
-      return { ...base, type: "browse" };
     case "knowledge":
       return { ...base, type: "knowledge" } as KnowledgePanelData;
     case "skills":

@@ -4,27 +4,23 @@
  * ChatPanelBody — real conversational chat inside a canvas chat panel.
  *
  * Behaviour:
- *   - Normal typed messages flow through /api/chat via `useChat`.
- *     Responses stream in token by token using the UPDATE_STREAMING_MESSAGE
+ *   - Typed messages flow through /api/chat via `useChat`. Responses
+ *     stream in token by token using the UPDATE_STREAMING_MESSAGE
  *     reducer action so only one streaming bubble is ever in flight.
- *   - If the user types a bare URL (and nothing else), we shortcut to
- *     the existing ingestion flow via `usePanelIngestion`. This keeps the
- *     "paste a link to ingest" UX the user asked to preserve.
  *   - When the panel lives inside a cluster, `useChat` automatically
- *     gathers sibling EntryPanels and includes them as `clusterContext`
+ *     gathers sibling panels and includes them as `clusterContext`
  *     in every API call — see `cluster-context.ts`.
  *   - Users can attach files and images via the paperclip button, drag
  *     & drop, or paste from clipboard. Attachments are uploaded to
  *     Supabase Storage on send and included as multimodal content blocks
  *     for Anthropic vision/document support.
  *
- * Rendering is done by a local `<RenderedMessage>` that handles the
- * full shared `ChatMessage` union: text, user-text, streaming, progress,
- * artifacts, tool_activity, and entry_cards.
+ * Rendering is done by `<RenderedMessage>` that handles the shared
+ * `ChatMessage` union: text, user-text, streaming, tool_activity.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ChatAttachment } from "@/features/ingestion/components/chat-message";
+import type { ChatAttachment } from "@/shared/types/chat";
 import type { ChatPanelData } from "@/features/canvas/types";
 import { usePanelsContext } from "@/features/canvas/canvas-store";
 import { useChat } from "./use-chat";
@@ -45,7 +41,7 @@ interface ChatPanelBodyProps {
 }
 
 export function ChatPanelBody({ panel }: ChatPanelBodyProps) {
-  const { panels, clusters, dispatch } = usePanelsContext();
+  const { clusters, dispatch } = usePanelsContext();
   const [input, setInput] = useState("");
   const [pendingAttachments, setPendingAttachments] = useState<
     PendingAttachment[]
@@ -101,16 +97,7 @@ export function ChatPanelBody({ panel }: ChatPanelBodyProps) {
 
   const isProcessing = chatStreaming || panel.isProcessing || isUploading;
 
-  // Build entry name lookup for citation pills
-  const entryNames = useMemo(() => {
-    const map: Record<string, string> = {};
-    for (const p of panels) {
-      if (p.type === "entry") {
-        map[p.entryId] = p.title;
-      }
-    }
-    return map;
-  }, [panels]);
+  const entryNames = useMemo<Record<string, string>>(() => ({}), []);
 
   // Auto-scroll to bottom on new messages / streaming updates.
   useEffect(() => {
@@ -346,8 +333,8 @@ export function ChatPanelBody({ panel }: ChatPanelBodyProps) {
         {!hasMessages && !isDragOver && (
           <p className="text-xs text-white/30 italic font-mono uppercase tracking-wide">
             {clusterName
-              ? "Ask a question about this cluster. You can also paste a URL to ingest."
-              : "Start a conversation. You can also paste a URL or drop files."}
+              ? "Ask a question about this cluster."
+              : "Start a conversation. You can drop files."}
           </p>
         )}
         {panel.messages.map((msg, i) => (
@@ -396,7 +383,7 @@ export function ChatPanelBody({ panel }: ChatPanelBodyProps) {
                   ? "Thinking..."
                   : clusterName
                     ? `Message in ${clusterName}...`
-                    : "Send a message, paste a URL, or drop files..."
+                    : "Send a message or drop files..."
             }
             disabled={isProcessing}
             rows={1}

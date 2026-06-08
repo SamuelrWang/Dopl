@@ -23,7 +23,7 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useCanvas, useCanvasScope } from "./canvas-store";
 import type { ChatPanelData } from "./types";
-import type { ChatMessage, ChatAttachment } from "@/features/ingestion/components/chat-message";
+import type { ChatMessage, ChatAttachment } from "@/shared/types/chat";
 
 /** Attachment metadata stored in persisted conversation JSONB (no base64). */
 interface PersistedAttachment {

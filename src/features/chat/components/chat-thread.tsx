@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { Mic, Paperclip } from "lucide-react";
-import type { ChatMessage } from "@/features/ingestion/components/chat-message";
+import type { ChatMessage } from "@/shared/types/chat";
 import { getSupabaseBrowser } from "@/shared/supabase/browser";
 import { usePrivateChat } from "./use-private-chat";
 import { PrivateMessageList } from "./private-rendered-message";

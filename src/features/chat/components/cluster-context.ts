@@ -20,7 +20,6 @@ import type { CanvasState, Panel } from "@/features/canvas/types";
 
 // ── Constants ────────────────────────────────────────────────────────
 
-import { CONTEXT_CHAR_BUDGET_PER_FIELD } from "@/config";
 
 /** Max total chars across all serialized panels in one context payload. */
 const TOTAL_CONTEXT_CHAR_BUDGET = 30_000;
@@ -33,22 +32,12 @@ const CHAT_TRANSCRIPT_CHAR_BUDGET = 2000;
 
 // ── Types (shared with the API route via the wire format) ────────────
 
-export type ContextPanelDTO =
-  | {
-      kind: "entry";
-      entryId: string;
-      title: string;
-      summary: string | null;
-      readme: string;
-      agentsMd: string;
-    }
-  | {
-      kind: "chat";
-      panelId: string;
-      title: string;
-      messages: Array<{ role: string; content: string }>;
-    }
-;
+export type ContextPanelDTO = {
+  kind: "chat";
+  panelId: string;
+  title: string;
+  messages: Array<{ role: string; content: string }>;
+};
 
 export interface CanvasContextPayload {
   scope: "cluster" | "canvas";
@@ -69,16 +58,6 @@ function serializePanel(
   if (panel.id === selfId) return null;
 
   switch (panel.type) {
-    case "entry":
-      return {
-        kind: "entry",
-        entryId: panel.entryId,
-        title: panel.title,
-        summary: panel.summary,
-        readme: (panel.readme || "").slice(0, CONTEXT_CHAR_BUDGET_PER_FIELD),
-        agentsMd: (panel.agentsMd || "").slice(0, CONTEXT_CHAR_BUDGET_PER_FIELD),
-      };
-
     case "chat": {
       // Isolation rule: standalone (canvas-scope) chats don't see each
       // other's messages — each is its own session. Cluster-scope chats
@@ -122,9 +101,8 @@ function serializePanel(
       };
     }
 
-    // Connection, browse panels are not knowledge content.
+    // Connection panels are not knowledge content.
     case "connection":
-    case "browse":
       return null;
 
     default:
@@ -133,22 +111,11 @@ function serializePanel(
 }
 
 function estimateDTOChars(dto: ContextPanelDTO): number {
-  switch (dto.kind) {
-    case "entry":
-      return (
-        (dto.title?.length || 0) +
-        (dto.summary?.length || 0) +
-        dto.readme.length +
-        dto.agentsMd.length +
-        50 // overhead for labels
-      );
-    case "chat":
-      return (
-        (dto.title?.length || 0) +
-        dto.messages.reduce((n, m) => n + m.content.length + 15, 0) +
-        30
-      );
-  }
+  return (
+    (dto.title?.length || 0) +
+    dto.messages.reduce((n, m) => n + m.content.length + 15, 0) +
+    30
+  );
 }
 
 // ── Public API ───────────────────────────────────────────────────────

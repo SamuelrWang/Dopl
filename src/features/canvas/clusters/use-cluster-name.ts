@@ -38,7 +38,6 @@ const MAX_NAME_CHARS = 40;
  */
 function panelLabel(p: Panel): string | null {
   switch (p.type) {
-    case "entry":
     case "artifact":
       return p.title && p.title.trim().length > 0 ? p.title.trim() : null;
     case "knowledge-base":

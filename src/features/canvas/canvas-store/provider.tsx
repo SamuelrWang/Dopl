@@ -20,7 +20,6 @@ import {
 import { reducer } from "./reducer";
 import { useCanvasDbSync } from "../use-canvas-db-sync";
 import { useClusterAttachmentSync } from "../use-cluster-attachment-sync";
-import { useEntriesRealtime } from "../use-entries-realtime";
 import { useClustersRealtime } from "../use-clusters-realtime";
 import {
   useConversationSync,
@@ -174,7 +173,6 @@ export function CanvasProvider({
               <ChatConversationsProvider initialConversations={initialConversations}>
                 {syncStrategy === "user" && <CanvasDbSyncBridge />}
                 {syncStrategy === "user" && <ConversationSyncBridge />}
-                {syncStrategy === "user" && <EntriesRealtimeBridge />}
                 {syncStrategy === "user" && <ClustersRealtimeBridge />}
                 {syncStrategy === "user" && <ClusterAttachmentSyncBridge />}
                 {syncStrategy === "user" && <AutoFocusNewPanelBridge />}
@@ -259,16 +257,6 @@ function CanvasDbSyncBridge() {
 /** Bridge for conversation persistence — saves chat messages to Supabase. */
 function ConversationSyncBridge() {
   useConversationSync();
-  return null;
-}
-
-/**
- * Bridge for realtime updates to `entries` rows the user owns. Flips
- * amber pending tiles to the ingesting state (and on to complete) live
- * when the user's MCP agent claims and finishes them.
- */
-function EntriesRealtimeBridge() {
-  useEntriesRealtime();
   return null;
 }
 

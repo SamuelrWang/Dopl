@@ -123,7 +123,7 @@ describe("DoplClient retries", () => {
   it("does NOT retry on POST (non-idempotent)", async () => {
     mock = installFetchMock([() => textResponse(503, "")]);
     const client = new DoplClient(BASE, "k");
-    await expect(client.searchSetups({ query: "x" })).rejects.toBeInstanceOf(DoplApiError);
+    await expect(client.createCluster("x")).rejects.toBeInstanceOf(DoplApiError);
     expect(mock.calls).toHaveLength(1);
   });
 
@@ -176,7 +176,7 @@ describe("DoplClient retries", () => {
     ]);
     const client = new DoplClient(BASE, "k");
     const err = await client
-      .searchSetups({ query: "x" })
+      .createCluster("x")
       .catch((e: unknown) => e);
     expect(err).toBeInstanceOf(DoplTimeoutError);
   });

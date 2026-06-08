@@ -87,16 +87,13 @@ export function SelectionMenu({ cursorPos }: SelectionMenuProps) {
       });
     }
 
-    // Sync to DB (fire-and-forget). Only entry panel IDs map to DB entries.
-    const entryIds = clusterCandidates
-      .filter((p) => p.type === "entry")
-      .map((p) => (p as { entryId: string }).entryId);
+    // Sync to DB (fire-and-forget).
     const headers: Record<string, string> = { "content-type": "application/json" };
     if (workspaceId) headers["X-Workspace-Id"] = workspaceId;
     fetch("/api/clusters", {
       method: "POST",
       headers,
-      body: JSON.stringify({ name: cluster.name, entry_ids: entryIds }),
+      body: JSON.stringify({ name: cluster.name }),
     })
       .then((res) => res.json())
       .then((data) => {

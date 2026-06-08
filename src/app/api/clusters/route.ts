@@ -7,7 +7,6 @@ import { createCluster, listClusters } from "@/features/clusters/server/service"
 
 const ClusterCreateSchema = z.object({
   name: z.string().min(1, "Name is required").max(120),
-  entry_ids: z.array(z.string().uuid()).optional().default([]),
 });
 
 function toErrorResponse(err: unknown): NextResponse {
@@ -44,7 +43,7 @@ async function handlePost(
   try {
     const input = await parseJson(request, ClusterCreateSchema);
     const cluster = await createCluster(
-      { name: input.name, entry_ids: input.entry_ids },
+      { name: input.name },
       { userId, workspaceId, source: apiKeyId ? "agent" : "user" }
     );
     return NextResponse.json(cluster, { status: 201 });

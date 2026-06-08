@@ -20,7 +20,7 @@ import type {
   ScopeFilters,
   ScopeOption,
 } from "./cluster-scope-picker";
-import type { ChatMessage } from "@/features/ingestion/components/chat-message";
+import type { ChatMessage } from "@/shared/types/chat";
 
 interface ChatShellProps {
   workspaceId: string;

@@ -13,22 +13,14 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isLanding = pathname === "/";
   const isDocs = pathname.startsWith("/docs");
-  // Community detail pages use their own full-screen layout
-  const isCommunityDetail = pathname.startsWith("/community/") && !pathname.endsWith("/posts");
-  // /browse needs more horizontal room + breathing space below the
-  // fixed top nav so the smart-chat rail + grid don't run up against
-  // the bars. Wider max-width than the default `container` class.
-  // Matches /browse, /browse/entries, /browse/clusters.
-  const isBrowse = pathname === "/browse" || pathname.startsWith("/browse/");
   // Full-bleed routes opt out of the centered container so panels can
   // sit flush against the workspace sidebar + page top bar (no padding
   // gap that lets the mosaic grid bleed through).
   const isFullBleed =
     /^\/[^/]+\/knowledge\/[^/]+\/?$/.test(pathname) ||
     /^\/[^/]+\/chat\/?$/.test(pathname) ||
-    /^\/[^/]+\/overview\/?$/.test(pathname) ||
-    /^\/settings\/integrations\/?$/.test(pathname);
-  const isNoChrome = isLanding || isCommunityDetail || isDocs;
+    /^\/[^/]+\/overview\/?$/.test(pathname);
+  const isNoChrome = isLanding || isDocs;
   const isNoSidebar = NO_SIDEBAR_PATHS.has(pathname);
 
   // Toggle mosaic-bg on body: remove for landing, ensure present elsewhere
@@ -88,14 +80,9 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
       <div className="relative z-[2] pointer-events-none md:pl-64">
         <main
           className={
-            // /browse goes full-viewport-width: chat rail flushes to
-            // the left edge, grid fills the rest. No mx-auto + no
-            // max-width so wide monitors don't get empty side gutters.
-            isBrowse
-              ? "w-full pl-3 pr-3 pt-3 pb-3 pointer-events-auto"
-              : isFullBleed
-                ? "pointer-events-auto"
-                : "container mx-auto px-4 py-8 pointer-events-auto"
+            isFullBleed
+              ? "pointer-events-auto"
+              : "container mx-auto px-4 py-8 pointer-events-auto"
           }
         >
           {children}
