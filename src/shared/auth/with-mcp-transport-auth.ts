@@ -2,7 +2,7 @@ import "server-only";
 import {
   validateApiKey,
   touchMcpStatus,
-  checkAndRecordRateLimit,
+  checkAndRecordRateLimitSubject,
 } from "./api-keys";
 import { isOAuthAccessToken, validateAccessToken } from "./mcp-oauth";
 
@@ -61,8 +61,8 @@ export async function authenticateMcpRequest(
     if (isOAuthAccessToken(key)) {
       const tok = await validateAccessToken(key);
       if (tok) {
-        const within = await checkAndRecordRateLimit(
-          tok.tokenId,
+        const within = await checkAndRecordRateLimitSubject(
+          `mcp:${tok.tokenId}`,
           OAUTH_RPM,
           "POST /api/mcp",
         );

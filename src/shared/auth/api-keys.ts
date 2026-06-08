@@ -93,6 +93,33 @@ export async function checkAndRecordRateLimit(
 }
 
 /**
+ * Atomic rate-limit check + record keyed by an arbitrary text subject, backed
+ * by `check_and_record_rate_limit_subject` + the FK-free `rate_limit_events`
+ * table. Use this for callers that aren't api_keys rows — e.g. OAuth access
+ * tokens ("mcp:<token_id>") — since the api_key_usage table FKs to api_keys.
+ *
+ * Fails closed, like checkAndRecordRateLimit.
+ */
+export async function checkAndRecordRateLimitSubject(
+  subject: string,
+  rpm: number,
+  endpoint: string
+): Promise<boolean> {
+  const supabase = supabaseAdmin();
+  const { data, error } = await supabase.rpc(
+    "check_and_record_rate_limit_subject",
+    { p_subject: subject, p_rpm: rpm, p_endpoint: endpoint }
+  );
+
+  if (error) {
+    console.error("[auth] Subject rate limit RPC failed:", error);
+    return false; // Fail closed
+  }
+
+  return data === true;
+}
+
+/**
  * Refresh last_used_at on the api_keys row and opportunistically prune
  * old usage records. Fire-and-forget — never blocks the caller.
  */

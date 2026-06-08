@@ -42,7 +42,12 @@ export async function GET(request: NextRequest) {
   ).toISOString();
   const nowIso = new Date(now).toISOString();
 
-  const counts = { codes: 0, expired_tokens: 0, revoked_tokens: 0 };
+  const counts = {
+    codes: 0,
+    expired_tokens: 0,
+    revoked_tokens: 0,
+    rate_limit_events: 0,
+  };
   try {
     const codes = await supabase
       .from("oauth_authorization_codes")
@@ -64,6 +69,14 @@ export async function GET(request: NextRequest) {
       .lt("revoked_at", revokedCutoff)
       .select("id");
     counts.revoked_tokens = revoked.data?.length ?? 0;
+
+    // Rate-limit events only matter for a 60s window — purge anything older.
+    const rl = await supabase
+      .from("rate_limit_events")
+      .delete()
+      .lt("requested_at", new Date(now - 3600_000).toISOString())
+      .select("id");
+    counts.rate_limit_events = rl.data?.length ?? 0;
   } catch (err) {
     void logSystemEvent({
       severity: "error",
