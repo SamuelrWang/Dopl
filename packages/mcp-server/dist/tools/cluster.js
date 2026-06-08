@@ -172,19 +172,61 @@ function registerClusterTools(register, client) {
     });
 }
 // ── dopl_cluster ops ─────────────────────────────────────────────────
+/** Pluralize a count, e.g. plural(2, "skill") → "2 skills". */
+function plural(n, noun) {
+    return `${n} ${noun}${n === 1 ? "" : "s"}`;
+}
+/**
+ * Compose a one-line summary of what a cluster actually contains —
+ * entries/setups AND attached knowledge bases AND skills — so "what's in
+ * this cluster?" is answered accurately even when it holds no entry panels.
+ */
+function clusterContentSummary(c) {
+    const entries = c.panel_count ?? 0;
+    const kbs = c.knowledge_base_count ?? 0;
+    const skills = c.skill_count ?? 0;
+    if (entries === 0 && kbs === 0 && skills === 0)
+        return "empty";
+    const parts = [];
+    if (entries > 0)
+        parts.push(plural(entries, "setup"));
+    if (kbs > 0) {
+        const names = c.knowledge_base_names?.length
+            ? ` (${c.knowledge_base_names.join(", ")})`
+            : "";
+        parts.push(`${plural(kbs, "knowledge base")}${names}`);
+    }
+    if (skills > 0) {
+        const names = c.skill_names?.length
+            ? ` (${c.skill_names.join(", ")})`
+            : "";
+        parts.push(`${plural(skills, "skill")}${names}`);
+    }
+    return parts.join(" · ");
+}
 async function opList(client) {
     const { clusters } = await client.listClusters();
-    const lines = clusters.map((c) => `- **${c.name}** (slug: \`${c.slug}\`) — ${c.panel_count ?? 0} entries`);
-    return (0, respond_1.ok)(lines.join("\n") || "No clusters found.");
+    if (clusters.length === 0)
+        return (0, respond_1.ok)("No clusters found.");
+    const lines = clusters.map((c) => `- **${c.name}** (slug: \`${c.slug}\`) — ${clusterContentSummary(c)}`);
+    return (0, respond_1.ok)(lines.join("\n"));
 }
 async function opGet(client, slug) {
     const cluster = await client.getCluster(slug);
     const lines = [];
     lines.push(`# Cluster: ${cluster.name}`);
     lines.push(`Slug: \`${cluster.slug}\``);
-    lines.push(`Entries: ${cluster.entries.length}`);
-    lines.push(`Knowledge bases: ${cluster.knowledge_bases.length}`);
-    lines.push(`Skills: ${cluster.skills.length}\n`);
+    // Lead with a composed summary of what the cluster actually contains so
+    // the answer to "what's in this cluster?" is accurate even when it holds
+    // no entry panels (e.g. a cluster that's all knowledge bases + skills).
+    lines.push(`**Contains:** ${clusterContentSummary({
+        panel_count: cluster.entries.length,
+        knowledge_base_count: cluster.knowledge_bases.length,
+        skill_count: cluster.skills.length,
+        knowledge_base_names: cluster.knowledge_bases.map((kb) => kb.name),
+        skill_names: cluster.skills.map((sk) => sk.name),
+    })}`);
+    lines.push("");
     if (cluster.entries.length > 0) {
         lines.push(`## Entries\n`);
         for (const e of cluster.entries) {

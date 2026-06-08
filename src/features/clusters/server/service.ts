@@ -1,6 +1,7 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { slugifyClusterName } from "../slug";
+import { normalizeClusterName } from "@/shared/lib/cluster-name";
 import { CONTEXT_CHAR_BUDGET_PER_FIELD } from "@/config";
 import {
   hydrateClusterGrouping,
@@ -21,7 +22,16 @@ export interface ClusterRow {
   name: string;
   created_at: string;
   updated_at: string;
+  /** Count of entry/setup panels grouped in the cluster. */
   panel_count: number;
+  /** Count of attached (non-deleted) knowledge bases. */
+  knowledge_base_count: number;
+  /** Count of attached (non-deleted) skills. */
+  skill_count: number;
+  /** Names of attached knowledge bases, for at-a-glance summaries. */
+  knowledge_base_names: string[];
+  /** Names of attached skills, for at-a-glance summaries. */
+  skill_names: string[];
 }
 
 export interface ClusterDetailEntry {
@@ -108,15 +118,13 @@ export async function listClusters(scope: ClusterScope): Promise<ClusterRow[]> {
 
   const rows = data || [];
   if (rows.length === 0) return [];
+  const ids = rows.map((r) => r.id);
 
+  // Entry-panel counts.
   const { data: counts, error: countError } = await db
     .from("cluster_panels")
     .select("cluster_id")
-    .in(
-      "cluster_id",
-      rows.map((r) => r.id)
-    );
-
+    .in("cluster_id", ids);
   if (countError) throw countError;
 
   const countMap = new Map<string, number>();
@@ -124,10 +132,89 @@ export async function listClusters(scope: ClusterScope): Promise<ClusterRow[]> {
     countMap.set(row.cluster_id, (countMap.get(row.cluster_id) || 0) + 1);
   }
 
-  return rows.map((r) => ({
-    ...r,
-    panel_count: countMap.get(r.id) || 0,
-  }));
+  // Attached KB + skill names, batched across all clusters so the list
+  // stays a cheap metadata call. Manual two-step joins (not PostgREST
+  // embedded resources) — see attachments.ts for why embedded joins are
+  // avoided after the workspace_id denormalization.
+  const [kbLinkRes, skillLinkRes] = await Promise.all([
+    db
+      .from("cluster_knowledge_bases")
+      .select("cluster_id, knowledge_base_id")
+      .in("cluster_id", ids)
+      .eq("workspace_id", scope.workspaceId),
+    db
+      .from("cluster_skills")
+      .select("cluster_id, skill_id")
+      .in("cluster_id", ids)
+      .eq("workspace_id", scope.workspaceId),
+  ]);
+  if (kbLinkRes.error) throw kbLinkRes.error;
+  if (skillLinkRes.error) throw skillLinkRes.error;
+
+  const kbIds = [
+    ...new Set((kbLinkRes.data || []).map((r) => r.knowledge_base_id)),
+  ];
+  const skillIds = [
+    ...new Set((skillLinkRes.data || []).map((r) => r.skill_id)),
+  ];
+
+  // Resolve names, dropping soft-deleted resources.
+  const kbNameById = new Map<string, string>();
+  if (kbIds.length > 0) {
+    const { data: kbRows, error: kbErr } = await db
+      .from("knowledge_bases")
+      .select("id, name, deleted_at")
+      .in("id", kbIds)
+      .eq("workspace_id", scope.workspaceId);
+    if (kbErr) throw kbErr;
+    for (const k of kbRows || []) {
+      if (k.deleted_at === null) kbNameById.set(k.id, k.name);
+    }
+  }
+  const skillNameById = new Map<string, string>();
+  if (skillIds.length > 0) {
+    const { data: skillRows, error: skillErr } = await db
+      .from("skills")
+      .select("id, name, deleted_at")
+      .in("id", skillIds)
+      .eq("workspace_id", scope.workspaceId);
+    if (skillErr) throw skillErr;
+    for (const s of skillRows || []) {
+      if (s.deleted_at === null) skillNameById.set(s.id, s.name);
+    }
+  }
+
+  // Group resolved names per cluster (skipping deleted resources absent
+  // from the name maps).
+  const kbNamesByCluster = new Map<string, string[]>();
+  for (const link of kbLinkRes.data || []) {
+    const name = kbNameById.get(link.knowledge_base_id);
+    if (!name) continue;
+    const arr = kbNamesByCluster.get(link.cluster_id) || [];
+    arr.push(name);
+    kbNamesByCluster.set(link.cluster_id, arr);
+  }
+  const skillNamesByCluster = new Map<string, string[]>();
+  for (const link of skillLinkRes.data || []) {
+    const name = skillNameById.get(link.skill_id);
+    if (!name) continue;
+    const arr = skillNamesByCluster.get(link.cluster_id) || [];
+    arr.push(name);
+    skillNamesByCluster.set(link.cluster_id, arr);
+  }
+
+  return rows.map((r) => {
+    const knowledge_base_names = kbNamesByCluster.get(r.id) || [];
+    const skill_names = skillNamesByCluster.get(r.id) || [];
+    return {
+      ...r,
+      panel_count: countMap.get(r.id) || 0,
+      knowledge_base_count: knowledge_base_names.length,
+      skill_count: skill_names.length,
+      knowledge_base_names,
+      skill_names,
+    };
+  });
 }
 
 export async function getCluster(
@@ -186,6 +273,10 @@ export async function getCluster(
   return {
     ...cluster,
     panel_count: entryIds.length,
+    knowledge_base_count: knowledge_bases.length,
+    skill_count: skills.length,
+    knowledge_base_names: knowledge_bases.map((k) => k.name),
+    skill_names: skills.map((s) => s.name),
     entries,
     knowledge_bases,
     skills,
@@ -207,13 +298,17 @@ export async function createCluster(
     .eq("user_id", scope.userId);
   const isFirstCluster = (priorCount ?? 0) === 0;
 
+  // Canonicalize the name to UPPER_SNAKE so the stored name matches the
+  // canvas display and the agent's listing. The slug stays lowercase-hyphen.
+  const name = normalizeClusterName(req.name);
+
   // Generate unique slug scoped to this canvas's existing clusters.
   const { data: existing } = await db
     .from("clusters")
     .select("slug")
     .eq("workspace_id", scope.workspaceId);
   const existingSlugs = (existing || []).map((r) => r.slug);
-  const slug = slugifyClusterName(req.name, existingSlugs);
+  const slug = slugifyClusterName(name, existingSlugs);
 
   // Strip out any entry_ids the user doesn't have access to (someone
   // else's pending/denied entry, etc). Silent filter — don't reveal
@@ -233,7 +328,7 @@ export async function createCluster(
     {
       p_workspace_id: scope.workspaceId,
       p_user_id: scope.userId,
-      p_name: req.name,
+      p_name: name,
       p_slug: slug,
       p_entry_ids: safeEntryIds,
     }
@@ -259,7 +354,17 @@ export async function createCluster(
       .catch(() => {});
   }
 
-  return { ...cluster, panel_count: safeEntryIds.length };
+  // A new cluster has no attached KBs/skills yet (attachment is a separate
+  // action), so the summary fields are empty here. Call getCluster for the
+  // full picture.
+  return {
+    ...cluster,
+    panel_count: safeEntryIds.length,
+    knowledge_base_count: 0,
+    skill_count: 0,
+    knowledge_base_names: [],
+    skill_names: [],
+  };
 }
 
 export async function updateCluster(
@@ -282,7 +387,8 @@ export async function updateCluster(
 
   let newSlug = cluster.slug;
 
-  if (req.name && req.name !== cluster.name) {
+  const nextName = req.name ? normalizeClusterName(req.name) : undefined;
+  if (nextName && nextName !== cluster.name) {
     const { data: existing } = await db
       .from("clusters")
       .select("slug")
@@ -290,12 +396,12 @@ export async function updateCluster(
     const existingSlugs = (existing || [])
       .map((r) => r.slug)
       .filter((s) => s !== cluster.slug);
-    newSlug = slugifyClusterName(req.name, existingSlugs);
+    newSlug = slugifyClusterName(nextName, existingSlugs);
 
     const { error: updateError } = await db
       .from("clusters")
       .update({
-        name: req.name,
+        name: nextName,
         slug: newSlug,
         updated_at: new Date().toISOString(),
       })
@@ -335,7 +441,16 @@ export async function updateCluster(
   if (refetchError || !updated) throw refetchError || new Error("Refetch failed");
 
   const panelCount = safeEntryIds?.length ?? 0;
-  return { ...updated, panel_count: panelCount };
+  // This return reflects entry membership only; KB/skill attachments are
+  // unchanged by an update and not surfaced here. Call getCluster for them.
+  return {
+    ...updated,
+    panel_count: panelCount,
+    knowledge_base_count: 0,
+    skill_count: 0,
+    knowledge_base_names: [],
+    skill_names: [],
+  };
 }
 
 export async function deleteCluster(

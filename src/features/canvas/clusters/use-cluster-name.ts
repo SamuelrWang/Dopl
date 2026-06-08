@@ -12,10 +12,11 @@
  * agent rename it via the `rename_cluster` MCP tool.
  *
  * Name-derivation heuristics, in order:
- *   1. If there's one entry panel: use its title (truncated).
- *   2. If there are 2+ entry panels: use the first entry's title +
- *      "and N more".
- *   3. Fallback: "Cluster of N items" — guaranteed non-empty.
+ *   1. Collect a label from each content panel — entry/artifact titles and
+ *      knowledge-base/skill names (chat, browse, connection, and the
+ *      singleton browsers contribute none).
+ *   2. One label: use it (truncated). 2+ labels: first label + "+N".
+ *   3. Fallback: "Cluster of N items" — only when no panel has a label.
  *
  * The user keeps the placeholder "Cluster N" format locked until this
  * hook runs once; after that, the returned name is editable and no
@@ -24,30 +25,47 @@
 
 import { useEffect, useRef } from "react";
 import { useCanvas } from "../canvas-store";
+import { normalizeClusterName } from "@/shared/lib/cluster-name";
 import type { Cluster, Panel } from "../types";
 
 const PLACEHOLDER_PATTERN = /^Cluster[_\s]+\d+$/i;
 const MAX_NAME_CHARS = 40;
 
-function deriveClusterName(panels: Panel[]): string {
-  const entryTitles = panels
-    .filter((p) => p.type === "entry")
-    .map((p) => (p as Extract<Panel, { type: "entry" }>).title)
-    .filter((t): t is string => typeof t === "string" && t.length > 0);
+/**
+ * Extract a human label from a content panel: entry/artifact titles and
+ * knowledge-base/skill names. Returns null for panels with no meaningful
+ * label (chat, browse, connection, and the singleton KB/skill browsers).
+ */
+function panelLabel(p: Panel): string | null {
+  switch (p.type) {
+    case "entry":
+    case "artifact":
+      return p.title && p.title.trim().length > 0 ? p.title.trim() : null;
+    case "knowledge-base":
+    case "skill":
+      return p.name && p.name.trim().length > 0 ? p.name.trim() : null;
+    default:
+      return null;
+  }
+}
 
-  if (entryTitles.length === 0) {
+function deriveClusterName(panels: Panel[]): string {
+  const labels = panels
+    .map(panelLabel)
+    .filter((t): t is string => t !== null);
+
+  if (labels.length === 0) {
     return `Cluster of ${panels.length} items`;
   }
 
-  const primary = entryTitles[0];
+  const primary = labels[0];
   const truncated =
     primary.length > MAX_NAME_CHARS
       ? primary.slice(0, MAX_NAME_CHARS - 1).trimEnd() + "…"
       : primary;
 
-  if (entryTitles.length === 1) return truncated;
-  const extra = entryTitles.length - 1;
-  return `${truncated} +${extra}`;
+  if (labels.length === 1) return truncated;
+  return `${truncated} +${labels.length - 1}`;
 }
 
 export function useClusterName(cluster: Cluster): void {
@@ -67,7 +85,7 @@ export function useClusterName(cluster: Cluster): void {
     if (memberPanels.length === 0) return;
 
     namedRef.current = true;
-    const derived = deriveClusterName(memberPanels);
+    const derived = normalizeClusterName(deriveClusterName(memberPanels));
     dispatch({
       type: "UPDATE_CLUSTER_NAME",
       clusterId: cluster.id,

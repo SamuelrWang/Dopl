@@ -65,7 +65,8 @@ export interface ServerConversation {
  * Guarantees:
  *   - Always returns a valid CanvasState (empty + defaults on any error).
  *   - Runs `dedupSingletonPanels` + `ensureDefaultPanels` before return
- *     so connection + browse panels are always present (single instance).
+ *     so the connection panel is always present (single instance). The
+ *     browse panel is no longer auto-injected — it opens on demand.
  *   - Chat panel `messages` arrays are populated from the conversations
  *     table so the reducer doesn't need a separate HYDRATE_CHAT_MESSAGES
  *     dispatch on mount.

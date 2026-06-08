@@ -13,6 +13,8 @@ import { resolvePageWorkspace } from "@/features/workspaces/server/segment";
 import { workspaceSegment } from "@/features/workspaces/url";
 import { WorkspaceSettingsForm } from "@/features/workspaces/components/workspace-settings-form";
 import { ConnectionSetup } from "@/features/api-keys/components/connection-setup";
+import { RemoteConnect } from "@/features/api-keys/components/remote-connect";
+import { ConnectedAppsSection } from "@/features/api-keys/components/connected-apps-section";
 
 export const dynamic = "force-dynamic";
 
@@ -46,7 +48,19 @@ export default async function WorkspaceSettingsPage({ params }: PageProps) {
       <div className="space-y-8">
         <WorkspaceSettingsForm workspace={workspace} role={membership.role} />
         <section>
+          <h2 className="text-sm font-semibold text-white mb-3">Connect an MCP client</h2>
+          <RemoteConnect />
+        </section>
+        <section>
+          <h2 className="text-sm font-semibold text-white mb-3">Connected apps</h2>
+          <ConnectedAppsSection />
+        </section>
+        <section>
           <h2 className="text-sm font-semibold text-white mb-3">API key &amp; setup</h2>
+          <p className="text-xs text-white/40 mb-3">
+            For offline, CI, or headless use. The remote connection above is
+            recommended for everyone else.
+          </p>
           <ConnectionSetup workspaceSlug={workspaceSegment(workspace)} />
         </section>
       </div>

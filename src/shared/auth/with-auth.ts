@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { API_KEY_PREFIX } from "@/config";
 import { createServerClient } from "@supabase/ssr";
 import { validateApiKey, checkAndRecordRateLimit, touchApiKey, touchMcpStatus } from "./api-keys";
+import { validateAccessToken } from "./mcp-oauth";
 import { getUserSubscription, type SubscriptionTier } from "@/features/billing/server/subscriptions";
 import { hasActiveAccess, accessDeniedBody } from "@/features/billing/server/access";
 import { logMcpEvent } from "@/features/analytics/server/mcp-events";
@@ -53,8 +54,8 @@ async function runAndLog5xx(
  * - If no header → check Supabase session cookies → allow if authenticated
  * - Otherwise → 401
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function withExternalAuth(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   handler: (request: NextRequest, context?: any) => Promise<Response | NextResponse>
 ) {
   return async (
@@ -68,6 +69,14 @@ export function withExternalAuth(
       const key = authHeader.replace(/^Bearer\s+/i, "").trim();
 
       if (!key.startsWith(API_KEY_PREFIX)) {
+        // Remote-MCP OAuth access token? Accept it here too so OAuth callers'
+        // loopback /api/* requests (and bootServer's status ping, which uses
+        // this wrapper) work the same as sk-dopl- keys.
+        const tok = await validateAccessToken(key);
+        if (tok) {
+          touchMcpStatus(tok.userId);
+          return handler(request, context);
+        }
         return NextResponse.json(
           { error: "Invalid API key format" },
           { status: 401 }
@@ -154,6 +163,20 @@ export function withUserAuth(
       const key = authHeader.replace(/^Bearer\s+/i, "").trim();
 
       if (!key.startsWith(API_KEY_PREFIX)) {
+        // Remote-MCP OAuth access token? The /api/mcp route forwards the
+        // caller's OAuth token to these /api/* endpoints over loopback, so a
+        // token is a first-class credential here alongside sk-dopl- keys.
+        const tok = await validateAccessToken(key);
+        if (tok) {
+          touchMcpStatus(tok.userId);
+          return runAndLog5xx(
+            () => handler(request, { userId: tok.userId, params: resolvedParams }),
+            {
+              endpoint: `${request.method} ${request.nextUrl.pathname}`,
+              userId: tok.userId,
+            }
+          );
+        }
         return NextResponse.json(
           { error: "Invalid API key format" },
           { status: 401 }

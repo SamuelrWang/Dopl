@@ -2,111 +2,117 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-export interface BrowseEntry {
+/**
+ * use-browse-state — data layer for the Browse panel.
+ *
+ * The panel browses **shared clusters** (the public community gallery) via
+ * `GET /api/community`:
+ *   - listing mode  → `?sort=newest|popular&limit&page` → { items, total }
+ *   - search mode   → `?q=<query>`                       → { items, total }
+ *
+ * It used to browse individual KB entries (GitHub repos / X posts) via
+ * `/api/entries` + `/api/query`; that surface was retired when ingestion of
+ * arbitrary links was dropped, so the panel now surfaces shareable clusters
+ * the user can import onto their canvas.
+ */
+export interface BrowseCluster {
   id: string;
-  title: string | null;
-  summary: string | null;
-  source_platform: string | null;
+  slug: string;
+  title: string;
+  description: string;
+  category: string | null;
   thumbnail_url: string | null;
-  created_at: string | null;
-  similarity?: number;
-  // `relevance_explanation` was populated by server-side synthesis, which
-  // has been retired in favour of client-only synthesis. Kept as optional
-  // for type-compat with older response payloads still in flight; the
-  // field will always be undefined from /api/query going forward.
-}
-
-// The Synthesis block used to carry a server-side-generated
-// recommendation + composite_approach. Retired — callers should compose
-// recommendations in their own model context. Fields stay optional so
-// existing render conditionals (`synthesis && synthesis.recommendation`)
-// still type-check; `synthesis` is always null at runtime now, so those
-// branches never render.
-export interface Synthesis {
-  recommendation?: string;
-  composite_approach?: string;
+  fork_count: number;
+  panel_count: number;
+  author_name: string | null;
+  author_avatar: string | null;
+  created_at: string;
 }
 
 export interface BrowseState {
   mode: "browse" | "search";
   query: string;
   setQuery: (q: string) => void;
-  sort: "newest" | "oldest" | "alpha";
-  setSort: (s: "newest" | "oldest" | "alpha") => void;
-  entries: BrowseEntry[];
+  sort: "newest" | "popular";
+  setSort: (s: "newest" | "popular") => void;
+  clusters: BrowseCluster[];
   totalCount: number;
   loading: boolean;
   loadingMore: boolean;
   hasMore: boolean;
   loadMore: () => void;
   error: string | null;
-  /** Always null post-pivot; kept for backward compat with existing consumers. */
-  synthesis: Synthesis | null;
   handleSearch: () => void;
   clearSearch: () => void;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapBrowseEntries(raw: any[]): BrowseEntry[] {
-  return raw.map((e) => ({
-    id: (e.entry_id as string) || (e.id as string),
-    title: (e.title as string) ?? null,
-    summary: (e.summary as string) ?? null,
-    source_platform: (e.source_platform as string) ?? null,
-    thumbnail_url: (e.thumbnail_url as string) ?? null,
-    created_at: (e.created_at as string) ?? null,
-    similarity: e.similarity as number | undefined,
-    // relevance_explanation intentionally dropped — see BrowseEntry comment.
+function mapClusters(raw: any[]): BrowseCluster[] {
+  return raw.map((c) => ({
+    id: c.id as string,
+    slug: c.slug as string,
+    title: (c.title as string) ?? "Untitled cluster",
+    description: (c.description as string) ?? "",
+    category: (c.category as string) ?? null,
+    thumbnail_url: (c.thumbnail_url as string) ?? null,
+    fork_count: (c.fork_count as number) ?? 0,
+    panel_count: (c.panel_count as number) ?? 0,
+    author_name: c.author?.display_name ?? null,
+    author_avatar: c.author?.avatar_url ?? null,
+    created_at: (c.created_at as string) ?? "",
   }));
 }
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 30;
 
 export function useBrowseState(): BrowseState {
   const [mode, setMode] = useState<"browse" | "search">("browse");
   const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<"newest" | "oldest" | "alpha">("newest");
-  const [entries, setEntries] = useState<BrowseEntry[]>([]);
+  const [sort, setSort] = useState<"newest" | "popular">("newest");
+  const [clusters, setClusters] = useState<BrowseCluster[]>([]);
   const [totalCount, setTotalCount] = useState(0);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [synthesis, setSynthesis] = useState<Synthesis | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
 
   // Browse mode: fetch first page on mount and when sort changes.
-  // The setState calls inside the .then callbacks are fine — they run
-  // asynchronously (not synchronously in the effect body).
+  // State updates live inside the async IIFE (not the effect body) so they
+  // don't trigger the cascading-render lint and run only as fetch resolves.
   useEffect(() => {
     if (mode !== "browse") return;
 
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
-
     let cancelled = false;
-    setLoading(true);
 
-    fetch(`/api/entries?status=complete&sort=${sort}&limit=${PAGE_SIZE}&offset=0`, {
-      signal: controller.signal,
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error(`Failed to fetch entries (${res.status})`);
-        return res.json();
-      })
-      .then((data) => {
+    void (async () => {
+      setLoading(true);
+      setPage(1);
+      try {
+        const res = await fetch(
+          `/api/community?sort=${sort}&limit=${PAGE_SIZE}&page=1`,
+          { signal: controller.signal },
+        );
+        if (!res.ok) {
+          throw new Error(`Failed to fetch clusters (${res.status})`);
+        }
+        const data = await res.json();
         if (cancelled) return;
-        setEntries(mapBrowseEntries(data.entries || []));
+        setClusters(mapClusters(data.items || []));
         setTotalCount(data.total || 0);
-        setLoading(false);
         setError(null);
-      })
-      .catch((err) => {
-        if (cancelled || err.name === "AbortError") return;
-        setError(err.message || "Failed to load entries");
-        setLoading(false);
-      });
+      } catch (err) {
+        const e = err as Error;
+        if (cancelled || e.name === "AbortError") return;
+        setError(e.message || "Failed to load shared clusters");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
 
     return () => {
       cancelled = true;
@@ -117,35 +123,36 @@ export function useBrowseState(): BrowseState {
   const loadMore = useCallback(() => {
     if (mode !== "browse") return;
     if (loading || loadingMore) return;
-    if (entries.length >= totalCount) return;
+    if (clusters.length >= totalCount) return;
 
-    const offset = entries.length;
+    const nextPage = page + 1;
     setLoadingMore(true);
 
-    fetch(`/api/entries?status=complete&sort=${sort}&limit=${PAGE_SIZE}&offset=${offset}`)
+    fetch(`/api/community?sort=${sort}&limit=${PAGE_SIZE}&page=${nextPage}`)
       .then((res) => {
         if (!res.ok) throw new Error(`Failed to load more (${res.status})`);
         return res.json();
       })
       .then((data) => {
-        const incoming = mapBrowseEntries(data.entries || []);
+        const incoming = mapClusters(data.items || []);
         // Dedup by id in case a row shifted pages between fetches.
-        setEntries((prev) => {
-          const seen = new Set(prev.map((e) => e.id));
+        setClusters((prev) => {
+          const seen = new Set(prev.map((c) => c.id));
           const merged = [...prev];
-          for (const e of incoming) {
-            if (!seen.has(e.id)) merged.push(e);
+          for (const c of incoming) {
+            if (!seen.has(c.id)) merged.push(c);
           }
           return merged;
         });
         setTotalCount(data.total || 0);
+        setPage(nextPage);
         setLoadingMore(false);
       })
       .catch((err) => {
-        setError(err.message || "Failed to load more entries");
+        setError(err.message || "Failed to load more clusters");
         setLoadingMore(false);
       });
-  }, [mode, sort, entries.length, totalCount, loading, loadingMore]);
+  }, [mode, sort, page, clusters.length, totalCount, loading, loadingMore]);
 
   const handleSearch = useCallback(() => {
     const q = query.trim();
@@ -158,15 +165,8 @@ export function useBrowseState(): BrowseState {
     setMode("search");
     setLoading(true);
     setError(null);
-    setSynthesis(null);
 
-    fetch("/api/query", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        query: q,
-        max_results: 20,
-      }),
+    fetch(`/api/community?q=${encodeURIComponent(q)}&limit=20`, {
       signal: controller.signal,
     })
       .then((res) => {
@@ -174,11 +174,8 @@ export function useBrowseState(): BrowseState {
         return res.json();
       })
       .then((data) => {
-        setEntries(mapBrowseEntries(data.entries || []));
-        setTotalCount(data.entries?.length || 0);
-        // Synthesis was removed server-side — leave `synthesis` null.
-        // Any consumer UI block guarded by `synthesis && …` will cleanly
-        // not render.
+        setClusters(mapClusters(data.items || []));
+        setTotalCount(data.total ?? data.items?.length ?? 0);
         setLoading(false);
       })
       .catch((err) => {
@@ -193,7 +190,6 @@ export function useBrowseState(): BrowseState {
     setMode("browse");
     setLoading(true);
     setQuery("");
-    setSynthesis(null);
   }, []);
 
   // Cleanup on unmount
@@ -207,14 +203,13 @@ export function useBrowseState(): BrowseState {
     setQuery,
     sort,
     setSort,
-    entries,
+    clusters,
     totalCount,
     loading,
     loadingMore,
-    hasMore: mode === "browse" && entries.length < totalCount,
+    hasMore: mode === "browse" && clusters.length < totalCount,
     loadMore,
     error,
-    synthesis,
     handleSearch,
     clearSearch,
   };

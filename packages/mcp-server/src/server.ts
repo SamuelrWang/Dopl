@@ -18,7 +18,7 @@ import { registerPacksTools } from "./tools/packs.js";
 import { SKILL_AUTHORING_GUIDE } from "./prompts/skill-authoring-guide.js";
 import { packageVersion } from "./version.js";
 
-const SERVER_INSTRUCTIONS = `You are connected to **Dopl** — a knowledge base of proven AI and automation implementations including agent workflows, n8n automations, Claude skills, API integrations, and more.
+export const SERVER_INSTRUCTIONS = `You are connected to **Dopl** — a knowledge base of proven AI and automation implementations including agent workflows, n8n automations, Claude skills, API integrations, and more.
 
 ## How to use this
 
@@ -295,9 +295,29 @@ export function createServer(
     isAdmin?: boolean;
     workspace?: WorkspaceSummary | null;
     role?: WorkspaceRole | null;
+    /**
+     * OAuth scopes granted for this session. Reserved for Stage 3 (OAuth):
+     * when present and lacking `dopl.write`, write/admin tool ops are gated.
+     * Absent ⇒ full access (stdio + bearer-key callers), so no behavior
+     * change today.
+     */
+    scopes?: string[];
   } = {},
 ): McpServer {
   const isAdmin = options.isAdmin === true;
+
+  // OAuth scope gating: a read-only session (a token carrying `dopl.read`
+  // but not `dopl.write`) doesn't get the purely write/destructive tools
+  // registered at all. Absent scopes ⇒ full access (stdio + API-key callers),
+  // so behavior is unchanged for them. Mixed read+write tools stay registered;
+  // per-op write enforcement is a documented follow-up.
+  const canWrite = !options.scopes || options.scopes.includes("dopl.write");
+  const READ_ONLY_BLOCKED_TOOLS = new Set([
+    "dopl_cluster_admin",
+    "dopl_kb_admin",
+    "dopl_skill_admin",
+    "dopl_ingest",
+  ]);
   // Active workspace for this MCP session — seeded from the startup
   // handshake (index.ts) and mutated by `set_workspace` mid-session.
   // The slug threads into skill-writer calls so on-disk SKILL.md paths
@@ -386,6 +406,8 @@ export function createServer(
     schema: S,
     handler: (args: z.infer<z.ZodObject<S>>) => Promise<ToolResponse>,
   ): void {
+    // Read-only OAuth sessions skip write/destructive tools entirely.
+    if (!canWrite && READ_ONLY_BLOCKED_TOOLS.has(name)) return;
     // Spread the workspace arg into the published schema so the agent
     // sees it on every tool's introspection without having to author
     // it per-tool. Strip it out before calling the original handler so

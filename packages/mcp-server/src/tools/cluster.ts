@@ -196,13 +196,53 @@ export function registerClusterTools(
 
 // ── dopl_cluster ops ─────────────────────────────────────────────────
 
+/** Pluralize a count, e.g. plural(2, "skill") → "2 skills". */
+function plural(n: number, noun: string): string {
+  return `${n} ${noun}${n === 1 ? "" : "s"}`;
+}
+
+/**
+ * Compose a one-line summary of what a cluster actually contains —
+ * entries/setups AND attached knowledge bases AND skills — so "what's in
+ * this cluster?" is answered accurately even when it holds no entry panels.
+ */
+function clusterContentSummary(c: {
+  panel_count?: number;
+  knowledge_base_count?: number;
+  skill_count?: number;
+  knowledge_base_names?: string[];
+  skill_names?: string[];
+}): string {
+  const entries = c.panel_count ?? 0;
+  const kbs = c.knowledge_base_count ?? 0;
+  const skills = c.skill_count ?? 0;
+  if (entries === 0 && kbs === 0 && skills === 0) return "empty";
+
+  const parts: string[] = [];
+  if (entries > 0) parts.push(plural(entries, "setup"));
+  if (kbs > 0) {
+    const names = c.knowledge_base_names?.length
+      ? ` (${c.knowledge_base_names.join(", ")})`
+      : "";
+    parts.push(`${plural(kbs, "knowledge base")}${names}`);
+  }
+  if (skills > 0) {
+    const names = c.skill_names?.length
+      ? ` (${c.skill_names.join(", ")})`
+      : "";
+    parts.push(`${plural(skills, "skill")}${names}`);
+  }
+  return parts.join(" · ");
+}
+
 async function opList(client: DoplClient): Promise<ToolResponse> {
   const { clusters } = await client.listClusters();
+  if (clusters.length === 0) return ok("No clusters found.");
   const lines = clusters.map(
     (c) =>
-      `- **${c.name}** (slug: \`${c.slug}\`) — ${c.panel_count ?? 0} entries`
+      `- **${c.name}** (slug: \`${c.slug}\`) — ${clusterContentSummary(c)}`
   );
-  return ok(lines.join("\n") || "No clusters found.");
+  return ok(lines.join("\n"));
 }
 
 async function opGet(client: DoplClient, slug: string): Promise<ToolResponse> {
@@ -211,9 +251,20 @@ async function opGet(client: DoplClient, slug: string): Promise<ToolResponse> {
   const lines: string[] = [];
   lines.push(`# Cluster: ${cluster.name}`);
   lines.push(`Slug: \`${cluster.slug}\``);
-  lines.push(`Entries: ${cluster.entries.length}`);
-  lines.push(`Knowledge bases: ${cluster.knowledge_bases.length}`);
-  lines.push(`Skills: ${cluster.skills.length}\n`);
+
+  // Lead with a composed summary of what the cluster actually contains so
+  // the answer to "what's in this cluster?" is accurate even when it holds
+  // no entry panels (e.g. a cluster that's all knowledge bases + skills).
+  lines.push(
+    `**Contains:** ${clusterContentSummary({
+      panel_count: cluster.entries.length,
+      knowledge_base_count: cluster.knowledge_bases.length,
+      skill_count: cluster.skills.length,
+      knowledge_base_names: cluster.knowledge_bases.map((kb) => kb.name),
+      skill_names: cluster.skills.map((sk) => sk.name),
+    })}`
+  );
+  lines.push("");
 
   if (cluster.entries.length > 0) {
     lines.push(`## Entries\n`);

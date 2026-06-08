@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.SERVER_INSTRUCTIONS = void 0;
 exports.createServer = createServer;
 const mcp_js_1 = require("@modelcontextprotocol/sdk/server/mcp.js");
 const zod_1 = require("zod");
@@ -15,7 +16,7 @@ const ingest_js_1 = require("./tools/ingest.js");
 const packs_js_1 = require("./tools/packs.js");
 const skill_authoring_guide_js_1 = require("./prompts/skill-authoring-guide.js");
 const version_js_1 = require("./version.js");
-const SERVER_INSTRUCTIONS = `You are connected to **Dopl** — a knowledge base of proven AI and automation implementations including agent workflows, n8n automations, Claude skills, API integrations, and more.
+exports.SERVER_INSTRUCTIONS = `You are connected to **Dopl** — a knowledge base of proven AI and automation implementations including agent workflows, n8n automations, Claude skills, API integrations, and more.
 
 ## How to use this
 
@@ -248,6 +249,18 @@ const WORKSPACE_ARG_SHAPE = {
 };
 function createServer(client, options = {}) {
     const isAdmin = options.isAdmin === true;
+    // OAuth scope gating: a read-only session (a token carrying `dopl.read`
+    // but not `dopl.write`) doesn't get the purely write/destructive tools
+    // registered at all. Absent scopes ⇒ full access (stdio + API-key callers),
+    // so behavior is unchanged for them. Mixed read+write tools stay registered;
+    // per-op write enforcement is a documented follow-up.
+    const canWrite = !options.scopes || options.scopes.includes("dopl.write");
+    const READ_ONLY_BLOCKED_TOOLS = new Set([
+        "dopl_cluster_admin",
+        "dopl_kb_admin",
+        "dopl_skill_admin",
+        "dopl_ingest",
+    ]);
     // Active workspace for this MCP session — seeded from the startup
     // handshake (index.ts) and mutated by `set_workspace` mid-session.
     // The slug threads into skill-writer calls so on-disk SKILL.md paths
@@ -306,7 +319,7 @@ function createServer(client, options = {}) {
         // accurate across publishes (audit fix #24).
         version: version_js_1.packageVersion,
     }, {
-        instructions: SERVER_INSTRUCTIONS,
+        instructions: exports.SERVER_INSTRUCTIONS,
     });
     // ── Tool registration helper ─────────────────────────────────────
     // Every call funnels through here so:
@@ -320,6 +333,9 @@ function createServer(client, options = {}) {
     // Matches the MCP SDK's own zod-inference signature so handler arg
     // types come through correctly.
     function registerTool(name, description, schema, handler) {
+        // Read-only OAuth sessions skip write/destructive tools entirely.
+        if (!canWrite && READ_ONLY_BLOCKED_TOOLS.has(name))
+            return;
         // Spread the workspace arg into the published schema so the agent
         // sees it on every tool's introspection without having to author
         // it per-tool. Strip it out before calling the original handler so

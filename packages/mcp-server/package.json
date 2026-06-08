@@ -3,6 +3,17 @@
   "version": "1.1.0",
   "description": "MCP server for Dopl — search and build from a knowledge base of AI/automation setups",
   "main": "dist/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./factory": {
+      "types": "./dist/factory.d.ts",
+      "default": "./dist/factory.js"
+    },
+    "./package.json": "./package.json"
+  },
   "bin": {
     "dopl-mcp": "dist/bin/dopl-mcp.js"
   },

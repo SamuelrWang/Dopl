@@ -94,7 +94,7 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
         : panel.type === "entry"
           ? `Entry · ${panel.title}`
           : panel.type === "browse"
-            ? "Browse Entries"
+            ? "Shared Clusters"
             : panel.type === "knowledge"
                 ? "Knowledge Bases"
                 : panel.type === "skills"
@@ -262,7 +262,7 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
         {panel.type === "chat" && <ChatPanelBody panel={panel} />}
         {panel.type === "connection" && <ConnectionPanelBody />}
         {panel.type === "entry" && <EntryPanelBody panel={panel} />}
-        {panel.type === "browse" && <BrowsePanelBody panel={panel} />}
+        {panel.type === "browse" && <BrowsePanelBody />}
         {panel.type === "knowledge" && <KnowledgePanelBody panel={panel} />}
         {panel.type === "skills" && <SkillsPanelBody panel={panel} />}
         {panel.type === "knowledge-base" && <KnowledgeBasePanelBody panel={panel} />}

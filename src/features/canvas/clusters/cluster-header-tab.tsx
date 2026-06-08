@@ -22,6 +22,7 @@ import { useCapabilities, usePanelsContext } from "../canvas-store";
 import type { Cluster } from "../types";
 import { isPanelDeletable } from "../types";
 import { PublishDialog } from "@/features/community/components/publish-dialog";
+import { normalizeClusterName } from "@/shared/lib/cluster-name";
 import { toast } from "@/shared/ui/toast";
 
 interface ClusterHeaderTabProps {
@@ -68,7 +69,10 @@ export function ClusterHeaderTab({
   }, [menuOpen]);
 
   function commitName() {
-    const next = draft.trim();
+    // Canonicalize to UPPER_SNAKE so the stored name matches the canvas
+    // display (CSS-uppercased) and the agent's listing. Server normalizes
+    // too; doing it here keeps the optimistic store value consistent.
+    const next = normalizeClusterName(draft);
     if (next && next !== cluster.name) {
       dispatch({
         type: "UPDATE_CLUSTER_NAME",

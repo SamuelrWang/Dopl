@@ -4,8 +4,8 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { homedir } from "os";
 import { join } from "path";
 import { readFile } from "fs/promises";
-import { DoplClient, DoplApiError } from "@dopl/client";
-import { createServer } from "./server.js";
+import { DoplClient } from "@dopl/client";
+import { bootServer } from "./factory.js";
 import { clientIdentifier } from "./version.js";
 import { cleanupOrphanSkills } from "./orphan-skill-cleanup.js";
 
@@ -118,11 +118,9 @@ async function main() {
   // Resolve workspaceId: explicit arg/env > config file > nothing (server
   // falls back to default canvas).
   let workspaceId = argWorkspaceId;
-  let workspaceSlug: string | undefined;
   if (!workspaceId) {
     const fromConfig = await readConfigWorkspace();
     workspaceId = fromConfig.workspaceId;
-    workspaceSlug = fromConfig.workspaceSlug;
   }
 
   const client = new DoplClient(baseUrl, apiKey, {
@@ -130,34 +128,24 @@ async function main() {
     workspaceId,
   });
 
-  // Block on the first status ping so we know whether this caller is the
-  // admin before we register tools. The ping doubles as the initial
-  // liveness signal to the web app, so we can drop the prior background
-  // retry. If the backend is unreachable, we default to non-admin —
-  // safe-default: admin loses skeleton_ingest until restart, non-admins
-  // are unaffected.
-  const { is_admin, user_id } = await pingWithRetry(client);
+  // Status ping (admin flag + liveness) + canvas handshake + tool
+  // registration — all shared with the remote HTTP route via factory.ts.
+  // A few ping retries here because the stdio server boots once and should
+  // tolerate a cold backend; the HTTP route uses 0 (per-request, cached).
+  const { server, userId, activeWorkspace } = await bootServer(client, {
+    pingRetries: 3,
+    onDiag: (message) => console.error(message),
+  });
 
-  // Canvas handshake — confirm the requested canvas exists and the
-  // caller is an active member. Failure is fatal: we'd rather refuse to
-  // start than write skill files into the wrong workspace.
-  const handshake = await resolveWorkspace(client, workspaceId, workspaceSlug);
-  if (handshake) {
-    client.setWorkspaceId(handshake.workspace.id);
+  if (activeWorkspace) {
     console.error(
-      `[dopl-mcp] Active canvas: ${handshake.workspace.name} (${handshake.workspace.slug}, role=${handshake.role})`
+      `[dopl-mcp] Active canvas: ${activeWorkspace.name} (${activeWorkspace.slug}, role=${activeWorkspace.role})`,
     );
   } else {
     console.error(
-      "[dopl-mcp] Could not resolve active canvas — tools that target a canvas will return errors. Run `dopl canvas use <slug>` to select one."
+      "[dopl-mcp] Could not resolve active canvas — tools that target a canvas will return errors. Run `dopl canvas use <slug>` to select one.",
     );
   }
-
-  const server = createServer(client, {
-    isAdmin: is_admin,
-    workspace: handshake?.workspace ?? null,
-    role: handshake?.role ?? null,
-  });
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
@@ -167,61 +155,13 @@ async function main() {
   // Must NOT block boot or serve — failures log and move on. Pass
   // user_id from the ping so the cleanup can scope deletions to dirs
   // it owns (Audit B7 — multi-user OS account safety).
-  void cleanupOrphanSkills(client, { userId: user_id }).catch((err) => {
+  void cleanupOrphanSkills(client, { userId }).catch((err) => {
     console.error(
       `[dopl-mcp] Orphan skill cleanup failed: ${
         err instanceof Error ? err.message : String(err)
       }`,
     );
   });
-}
-
-async function pingWithRetry(
-  client: DoplClient,
-): Promise<{ is_admin: boolean; user_id: string | null }> {
-  const delays = [1000, 2000, 4000];
-  for (let attempt = 0; attempt <= delays.length; attempt++) {
-    try {
-      return await client.pingMcpStatus();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (attempt === delays.length) {
-        console.error(
-          `[dopl-mcp] Initial status ping failed after ${delays.length + 1} attempts: ${msg}`
-        );
-        return { is_admin: false, user_id: null };
-      }
-      await new Promise((resolve) => setTimeout(resolve, delays[attempt]));
-    }
-  }
-  return { is_admin: false, user_id: null };
-}
-
-async function resolveWorkspace(
-  client: DoplClient,
-  workspaceId: string | undefined,
-  workspaceSlug: string | undefined
-) {
-  try {
-    const res = await client.getActiveWorkspace();
-    return res;
-  } catch (err) {
-    const detail =
-      err instanceof DoplApiError
-        ? `${err.status}: ${err.message}`
-        : err instanceof Error
-          ? err.message
-          : String(err);
-    const target = workspaceId
-      ? `workspaceId=${workspaceId}`
-      : workspaceSlug
-        ? `workspaceSlug=${workspaceSlug}`
-        : "default canvas";
-    console.error(
-      `[dopl-mcp] Canvas handshake failed (${target}): ${detail}`
-    );
-    return null;
-  }
 }
 
 main().catch((error) => {

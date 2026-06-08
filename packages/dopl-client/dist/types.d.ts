@@ -67,6 +67,14 @@ export interface ClusterRow {
     created_at: string;
     updated_at: string;
     panel_count: number;
+    /**
+     * Attachment summary. Optional for back-compat with older API responses
+     * that predate the counts; consumers should treat absent as 0 / empty.
+     */
+    knowledge_base_count?: number;
+    skill_count?: number;
+    knowledge_base_names?: string[];
+    skill_names?: string[];
 }
 export interface WorkspaceSummary {
     id: string;

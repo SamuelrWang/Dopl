@@ -11,13 +11,14 @@
  *     dissolve clusters that fall below MIN_CLUSTER_SIZE.
  *   - `dedupSingletonPanels`: collapse multiple connection/browse panels
  *     to one each (historical bug self-heal).
- *   - `ensureDefaultPanels`: inject connection + browse defaults if
- *     missing. Also strips a legacy "ingestion" panel type.
+ *   - `ensureDefaultPanels`: inject the connection default if missing.
+ *     Also strips a legacy "ingestion" panel type. The browse panel is
+ *     NOT auto-injected — it opens only when the user clicks the Browse
+ *     pill (see fixed-input-bar `handleSpawnBrowse`).
  */
 
 import type { CanvasState, Cluster, Panel } from "@/features/canvas/types";
 import {
-  BROWSE_PANEL_SIZE,
   CONNECTION_PANEL_SIZE,
   MIN_CLUSTER_SIZE,
 } from "@/features/canvas/types";
@@ -98,25 +99,9 @@ export function ensureDefaultPanels(state: CanvasState): CanvasState {
     };
   }
 
-  // Browse panel
-  if (!s.panels.some((p) => p.type === "browse")) {
-    const id = `browse-${s.nextPanelId}`;
-    s = {
-      ...s,
-      panels: [
-        ...s.panels,
-        {
-          id,
-          type: "browse" as const,
-          x: 40 + CONNECTION_PANEL_SIZE.width + 32,
-          y: 40,
-          width: BROWSE_PANEL_SIZE.width,
-          height: BROWSE_PANEL_SIZE.height,
-        },
-      ],
-      nextPanelId: s.nextPanelId + 1,
-    };
-  }
+  // Browse panel is intentionally NOT auto-injected — it stays closed
+  // until the user opens it via the Browse pill. (Still a singleton: see
+  // dedupSingletonPanels, so only one can exist once opened.)
 
   return s;
 }

@@ -114,9 +114,10 @@ export function CanvasSection() {
 
       <H3 id="panel-browse">Browse panel</H3>
       <P>
-        A resizable knowledge base browser. Search, filter, and add entries to your canvas
-        from here. You can resize it by dragging any edge or corner. Minimum size is 700 by
-        400 pixels.
+        A resizable browser for shared clusters. Search the community gallery and import any
+        shared cluster onto your canvas with one click. It stays closed until you open it from
+        the Browse pill. You can resize it by dragging any edge or corner. Minimum size is 700
+        by 400 pixels.
       </P>
 
       <H3 id="panel-connection">Connection panel</H3>

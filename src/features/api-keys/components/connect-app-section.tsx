@@ -13,6 +13,7 @@ import { useEffect, useState } from "react";
 import { Copy, Key as KeyIcon, Eye, EyeOff } from "lucide-react";
 import { toast } from "@/shared/ui/toast";
 import { useWorkspaceKey } from "../hooks/use-workspace-key";
+import { RemoteConnect } from "./remote-connect";
 
 interface Props {
   workspaceSlug: string;
@@ -39,7 +40,7 @@ export function ConnectAppSection({ workspaceSlug }: Props) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setOrigin(window.location.origin);
   }, []);
-  const mcpServerUrl = `${origin || "https://www.usedopl.com"}/mcp/${workspaceSlug}`;
+  const mcpServerUrl = `${origin || "https://www.usedopl.com"}/api/mcp`;
   const skillsCmd = `npx dopl skill install <name>`;
 
   const prompt = [
@@ -58,10 +59,17 @@ export function ConnectAppSection({ workspaceSlug }: Props) {
         Connect your app
       </p>
       <p className="text-xs text-text-secondary mb-4">
-        First-time MCP setup. Your workspace API key is below — paste the
-        command into Claude Code, or hand the prompt to your agent and let it
-        set itself up.
+        Connect any MCP client to this workspace. The recommended way needs no
+        API key — you log in once and updates roll out automatically.
       </p>
+
+      <RemoteConnect />
+
+      <details className="mt-4">
+        <summary className="cursor-pointer text-[11px] text-text-secondary hover:text-text-primary transition-colors">
+          Or use an API key instead (offline / CI / legacy)
+        </summary>
+        <div className="mt-4">
 
       <PromptBanner prompt={prompt} />
 
@@ -172,6 +180,8 @@ export function ConnectAppSection({ workspaceSlug }: Props) {
           <CodeRow code={skillsCmd} />
         </Step>
       </div>
+        </div>
+      </details>
     </section>
   );
 }

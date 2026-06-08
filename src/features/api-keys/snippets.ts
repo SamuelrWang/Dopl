@@ -7,6 +7,22 @@
 
 export const KEY_PLACEHOLDER = "<YOUR_API_KEY>";
 
+// ── Remote (recommended): hosted HTTP MCP + OAuth, no API key ─────────
+
+/** Claude Code one-liner for the remote HTTP server (OAuth handles auth). */
+export function buildClaudeCliHttp(url: string): string {
+  return `claude mcp add --transport http dopl ${url}`;
+}
+
+/** Claude Desktop / Cursor mcpServers JSON for the remote HTTP server. */
+export function buildClaudeConfigHttp(url: string): string {
+  return JSON.stringify(
+    { mcpServers: { dopl: { type: "http", url } } },
+    null,
+    2,
+  );
+}
+
 /** Claude Code CLI one-liner. */
 export function buildClaudeCli(key: string): string {
   return `claude mcp add dopl --scope user --transport stdio -- npx @dopl/mcp-server --api-key ${key}`;
