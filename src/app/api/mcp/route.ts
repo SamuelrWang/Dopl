@@ -11,14 +11,26 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
 /**
- * Base URL the in-app MCP server calls for its `/api/*` tool requests. We
- * hit our OWN origin over loopback so every tool call reuses the existing
- * `withMcpAccess` + `withWorkspaceAuth` gating verbatim (see the design note
- * in the plan). Prefer the configured public URL; fall back to the request
- * origin so dev / preview deployments work without extra config.
+ * Base URL the in-app MCP server calls for its `/api/*` tool requests (loopback,
+ * carrying the caller's credential, to reuse withMcpAccess/withWorkspaceAuth).
+ *
+ * Use the EXACT host the request arrived on — NOT NEXT_PUBLIC_APP_URL — because
+ * that env points at the apex (usedopl.com) which 307-redirects to www, and
+ * `fetch` DROPS the Authorization header across that host change, 401-ing every
+ * loopback call. The Host + X-Forwarded-Proto headers give the real public host
+ * on Vercel (www.usedopl.com), so the loopback never redirects.
  */
 function appBaseUrl(request: Request): string {
-  return process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin;
+  const host = request.headers.get("host");
+  if (host) {
+    const proto = request.headers.get("x-forwarded-proto") ?? "https";
+    return `${proto}://${host}`;
+  }
+  try {
+    return new URL(request.url).origin;
+  } catch {
+    return process.env.NEXT_PUBLIC_APP_URL || "https://www.usedopl.com";
+  }
 }
 
 async function handle(request: Request): Promise<Response> {
