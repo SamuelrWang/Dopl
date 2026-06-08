@@ -50,6 +50,25 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
+  // Size caps — registration is open (public clients), so bound the inputs.
+  if (redirectUris.length > 20) {
+    return NextResponse.json(
+      {
+        error: "invalid_redirect_uri",
+        error_description: "Too many redirect_uris (max 20).",
+      },
+      { status: 400 },
+    );
+  }
+  if (redirectUris.some((u) => u.length > 2048)) {
+    return NextResponse.json(
+      {
+        error: "invalid_redirect_uri",
+        error_description: "A redirect_uri exceeds the 2048-char limit.",
+      },
+      { status: 400 },
+    );
+  }
   for (const uri of redirectUris) {
     if (!isAllowedRedirect(uri)) {
       return NextResponse.json(
@@ -64,7 +83,9 @@ export async function POST(request: NextRequest) {
 
   const client = await registerClient({
     client_name:
-      typeof body.client_name === "string" ? body.client_name : null,
+      typeof body.client_name === "string"
+        ? body.client_name.slice(0, 255)
+        : null,
     redirect_uris: redirectUris,
   });
 

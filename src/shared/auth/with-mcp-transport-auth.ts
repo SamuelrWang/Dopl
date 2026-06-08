@@ -1,6 +1,17 @@
 import "server-only";
-import { validateApiKey, touchMcpStatus } from "./api-keys";
+import {
+  validateApiKey,
+  touchMcpStatus,
+  checkAndRecordRateLimit,
+} from "./api-keys";
 import { isOAuthAccessToken, validateAccessToken } from "./mcp-oauth";
+
+// Per-token request ceiling for OAuth callers at the /api/mcp boundary. API
+// keys are rate-limited at the loopback /api/* layer (by key id); OAuth tokens
+// aren't (their loopback calls skip it to avoid double-counting), so they're
+// limited here instead. Generous by default — agents are bursty — but caps
+// runaway abuse. Override via env.
+const OAUTH_RPM = Number(process.env.MCP_OAUTH_RATE_LIMIT_RPM) || 600;
 
 /**
  * Authentication for the remote MCP transport boundary (`/api/mcp`).
@@ -50,6 +61,12 @@ export async function authenticateMcpRequest(
     if (isOAuthAccessToken(key)) {
       const tok = await validateAccessToken(key);
       if (tok) {
+        const within = await checkAndRecordRateLimit(
+          tok.tokenId,
+          OAUTH_RPM,
+          "POST /api/mcp",
+        );
+        if (!within) return { ok: false, response: rateLimited() };
         touchMcpStatus(tok.userId);
         return {
           ok: true,
@@ -90,6 +107,20 @@ export async function authenticateMcpRequest(
  * authenticate (Stage 3 fills the metadata with the OAuth authorization
  * server; in Stage 2 it advertises bearer).
  */
+function rateLimited(): Response {
+  return new Response(
+    JSON.stringify({
+      jsonrpc: "2.0",
+      id: null,
+      error: { code: -32000, message: "Rate limit exceeded. Try again shortly." },
+    }),
+    {
+      status: 429,
+      headers: { "Content-Type": "application/json", "Retry-After": "60" },
+    },
+  );
+}
+
 function unauthorized(request: Request): Response {
   const origin = new URL(request.url).origin;
   const metadataUrl = `${origin}/.well-known/oauth-protected-resource`;

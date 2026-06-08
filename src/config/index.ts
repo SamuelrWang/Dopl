@@ -71,6 +71,8 @@ export const RESERVED_WORKSPACE_SLUGS: ReadonlySet<string> = new Set([
   "entries",
   "invite",
   "login",
+  "mcp",
+  "oauth",
   "pricing",
   "privacy",
   "settings",

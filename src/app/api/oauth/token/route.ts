@@ -18,8 +18,33 @@ export const dynamic = "force-dynamic";
  * the client_id + redirect_uri + PKCE challenge at issuance and re-checked
  * here. Form-encoded per the OAuth spec.
  */
-function str(v: FormDataEntryValue | null): string {
-  return typeof v === "string" ? v.trim() : "";
+async function readParams(
+  request: NextRequest,
+): Promise<Record<string, string>> {
+  const ct = request.headers.get("content-type") || "";
+  // OAuth mandates form-encoding, but some MCP clients send JSON — accept both.
+  if (ct.includes("application/json")) {
+    try {
+      const j = (await request.json()) as Record<string, unknown>;
+      const o: Record<string, string> = {};
+      for (const [k, v] of Object.entries(j)) {
+        if (typeof v === "string") o[k] = v.trim();
+      }
+      return o;
+    } catch {
+      return {};
+    }
+  }
+  try {
+    const f = await request.formData();
+    const o: Record<string, string> = {};
+    for (const [k, v] of f.entries()) {
+      if (typeof v === "string") o[k] = v.trim();
+    }
+    return o;
+  } catch {
+    return {};
+  }
 }
 
 function tokenError(error: string, description: string, status: number) {
@@ -43,20 +68,14 @@ function tokenResponse(tokens: IssuedTokens) {
 }
 
 export async function POST(request: NextRequest) {
-  let form: FormData;
-  try {
-    form = await request.formData();
-  } catch {
-    return tokenError("invalid_request", "Expected form-encoded body.", 400);
-  }
-
-  const grantType = str(form.get("grant_type"));
+  const params = await readParams(request);
+  const grantType = params.grant_type ?? "";
 
   if (grantType === "authorization_code") {
-    const code = str(form.get("code"));
-    const clientId = str(form.get("client_id"));
-    const redirectUri = str(form.get("redirect_uri"));
-    const codeVerifier = str(form.get("code_verifier"));
+    const code = params.code ?? "";
+    const clientId = params.client_id ?? "";
+    const redirectUri = params.redirect_uri ?? "";
+    const codeVerifier = params.code_verifier ?? "";
     if (!code || !clientId || !redirectUri || !codeVerifier) {
       return tokenError(
         "invalid_request",
@@ -91,8 +110,8 @@ export async function POST(request: NextRequest) {
   }
 
   if (grantType === "refresh_token") {
-    const refreshToken = str(form.get("refresh_token"));
-    const clientId = str(form.get("client_id"));
+    const refreshToken = params.refresh_token ?? "";
+    const clientId = params.client_id ?? "";
     if (!refreshToken || !clientId) {
       return tokenError(
         "invalid_request",

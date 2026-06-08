@@ -1,5 +1,5 @@
 import "server-only";
-import { createHash, randomBytes } from "crypto";
+import { createHash, randomBytes, randomUUID } from "crypto";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 
 /**
@@ -29,6 +29,12 @@ const CLIENT_PREFIX = "dopl_client_";
 export const ACCESS_TTL_S = 60 * 60; // 1 hour
 const REFRESH_TTL_S = 60 * 60 * 24 * 30; // 30 days
 const CODE_TTL_S = 5 * 60; // 5 minutes
+
+// Per-instance debounce so a hot token doesn't write last_used_at on every
+// request (mirrors touchMcpStatus). Serverless instances each keep their own
+// map — fine: at most one write/min/token/instance.
+const lastUsedTouched = new Map<string, number>();
+const LAST_USED_TOUCH_MS = 60_000;
 
 function sha256(input: string): string {
   return createHash("sha256").update(input).digest("hex");
@@ -173,6 +179,9 @@ export async function issueTokens(input: {
   clientId: string;
   scopes: string[];
   clientName?: string | null;
+  /** Rotation family — omitted on the auth-code grant (new family), carried
+   *  forward by rotateRefreshToken so reuse detection can revoke the chain. */
+  familyId?: string;
 }): Promise<IssuedTokens> {
   const db = supabaseAdmin();
   const accessToken = randToken(ACCESS_PREFIX);
@@ -187,6 +196,7 @@ export async function issueTokens(input: {
     access_expires_at: new Date(now + ACCESS_TTL_S * 1000).toISOString(),
     refresh_expires_at: new Date(now + REFRESH_TTL_S * 1000).toISOString(),
     client_name: input.clientName ?? null,
+    family_id: input.familyId ?? randomUUID(),
   });
   if (error) throw error;
   return {
@@ -217,14 +227,19 @@ export async function validateAccessToken(
   if (data.revoked_at) return null;
   if (new Date(data.access_expires_at).getTime() < Date.now()) return null;
 
-  void db
-    .from("mcp_tokens")
-    .update({ last_used_at: new Date().toISOString() })
-    .eq("id", data.id)
-    .then(
-      () => {},
-      () => {},
-    );
+  // Debounced last_used_at write (per instance).
+  const now = Date.now();
+  if (now - (lastUsedTouched.get(data.id) ?? 0) > LAST_USED_TOUCH_MS) {
+    lastUsedTouched.set(data.id, now);
+    void db
+      .from("mcp_tokens")
+      .update({ last_used_at: new Date(now).toISOString() })
+      .eq("id", data.id)
+      .then(
+        () => {},
+        () => {},
+      );
+  }
 
   return { userId: data.user_id, scopes: data.scopes, tokenId: data.id };
 }
@@ -243,13 +258,21 @@ export async function rotateRefreshToken(input: {
   const { data, error } = await db
     .from("mcp_tokens")
     .select(
-      "id, user_id, client_id, scopes, refresh_expires_at, revoked_at, client_name",
+      "id, user_id, client_id, scopes, refresh_expires_at, revoked_at, client_name, family_id",
     )
     .eq("refresh_token_hash", sha256(input.refreshToken))
     .maybeSingle();
   if (error || !data) return null;
-  if (data.revoked_at) return null;
   if (data.client_id !== input.clientId) return null;
+
+  // Reuse detection (OAuth 2.1 BCP §4.13.2): an already-revoked refresh token
+  // presented again means it was rotated already — the classic stolen-token
+  // signal. Revoke the whole family and refuse.
+  if (data.revoked_at) {
+    await revokeFamily(data.family_id);
+    return null;
+  }
+
   if (
     data.refresh_expires_at &&
     new Date(data.refresh_expires_at).getTime() < Date.now()
@@ -257,6 +280,7 @@ export async function rotateRefreshToken(input: {
     return null;
   }
 
+  // Atomically revoke this token (rotation); losing the race ⇒ null.
   const { data: revoked } = await db
     .from("mcp_tokens")
     .update({ revoked_at: new Date().toISOString() })
@@ -265,12 +289,24 @@ export async function rotateRefreshToken(input: {
     .select("id");
   if (!revoked || revoked.length === 0) return null;
 
+  // New tokens stay in the same family so a future reuse revokes the chain.
   return issueTokens({
     userId: data.user_id,
     clientId: data.client_id,
     scopes: data.scopes,
     clientName: data.client_name,
+    familyId: data.family_id,
   });
+}
+
+/** Revoke every active token in a rotation family (reuse-detected theft). */
+async function revokeFamily(familyId: string): Promise<void> {
+  const db = supabaseAdmin();
+  await db
+    .from("mcp_tokens")
+    .update({ revoked_at: new Date().toISOString() })
+    .eq("family_id", familyId)
+    .is("revoked_at", null);
 }
 
 /** RFC 7009 revocation — accepts either an access or refresh token. */
