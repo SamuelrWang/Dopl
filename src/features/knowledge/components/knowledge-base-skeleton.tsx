@@ -12,7 +12,7 @@ export function KnowledgeBaseSkeleton() {
   return (
     <div
       className="pt-[52px] pointer-events-auto"
-      style={{ backgroundColor: "oklch(0.13 0 0)" }}
+      style={{ backgroundColor: "var(--panel-surface)" }}
       aria-busy="true"
       aria-live="polite"
     >
@@ -20,10 +20,10 @@ export function KnowledgeBaseSkeleton() {
       <div className="flex h-[calc(100vh-52px)]">
         {/* Tree column */}
         <aside
-          className="hidden md:flex w-72 shrink-0 flex-col border-r border-white/[0.06]"
-          style={{ backgroundColor: "oklch(0.135 0 0)" }}
+          className="hidden md:flex w-72 shrink-0 flex-col border-r border-border-subtle"
+          style={{ backgroundColor: "var(--tabs-surface)" }}
         >
-          <div className="px-3 py-3 border-b border-white/[0.06] space-y-2">
+          <div className="px-3 py-3 border-b border-border-subtle space-y-2">
             <Bar className="h-3 w-24" />
             <Bar className="h-7 w-full rounded-md" />
           </div>
@@ -40,7 +40,7 @@ export function KnowledgeBaseSkeleton() {
         {/* Doc column */}
         <div
           className="flex-1 min-w-0 overflow-hidden"
-          style={{ backgroundColor: "oklch(0.11 0 0)" }}
+          style={{ backgroundColor: "var(--input-surface)" }}
         >
           <div className="max-w-3xl mx-auto px-8 py-10 space-y-5">
             <Bar className="h-6 w-2/3" />
@@ -79,7 +79,7 @@ function Bar({ className }: { className?: string }) {
   return (
     <div
       aria-hidden
-      className={cn("animate-pulse rounded bg-white/[0.05]", className)}
+      className={cn("animate-pulse rounded bg-surface-raised-2", className)}
     />
   );
 }

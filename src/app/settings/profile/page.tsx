@@ -69,8 +69,8 @@ export default function ProfileSettingsPage() {
     return (
       <div className="container mx-auto px-4 py-8 max-w-lg">
         <div className="animate-pulse space-y-4">
-          <div className="h-6 w-32 bg-white/[0.06] rounded" />
-          <div className="h-40 bg-white/[0.06] rounded-xl" />
+          <div className="h-6 w-32 bg-surface-raised-3 rounded" />
+          <div className="h-40 bg-surface-raised-3 rounded-xl" />
         </div>
       </div>
     );
@@ -80,14 +80,14 @@ export default function ProfileSettingsPage() {
     <div className="container mx-auto px-4 py-8 max-w-lg">
       <Link
         href="/settings"
-        className="inline-flex items-center gap-1.5 text-xs text-white/30 hover:text-white/60 transition-colors mb-4"
+        className="inline-flex items-center gap-1.5 text-xs text-text-muted hover:text-text-tertiary transition-colors mb-4"
       >
         <ArrowLeft size={12} /> Settings
       </Link>
 
-      <h1 className="text-xl font-medium text-white mb-6">Profile</h1>
+      <h1 className="text-xl font-medium text-text-primary mb-6">Profile</h1>
 
-      <div className="rounded-xl bg-white/[0.03] border border-white/[0.08] p-5 space-y-5">
+      <div className="rounded-xl bg-surface-raised-1 border border-border-default p-5 space-y-5">
         {/* Display Name */}
         <Field
           label="Display Name"
@@ -98,7 +98,7 @@ export default function ProfileSettingsPage() {
 
         {/* Bio */}
         <div>
-          <label className="block text-xs font-medium text-white/50 uppercase tracking-wider mb-1.5">
+          <label className="block text-xs font-medium text-text-tertiary uppercase tracking-wider mb-1.5">
             Bio
           </label>
           <textarea
@@ -106,7 +106,7 @@ export default function ProfileSettingsPage() {
             onChange={(e) => setProfile((p) => ({ ...p, bio: e.target.value }))}
             placeholder="Tell people about yourself..."
             rows={3}
-            className="w-full px-3 py-2 rounded-md bg-white/[0.04] border border-white/[0.08] text-sm text-white placeholder:text-white/20 outline-none focus:border-white/[0.15] transition-colors resize-none"
+            className="w-full px-3 py-2 rounded-md bg-surface-raised-2 border border-border-default text-sm text-text-primary placeholder:text-text-disabled outline-none focus:border-border-strong transition-colors resize-none"
           />
         </div>
 
@@ -136,11 +136,11 @@ export default function ProfileSettingsPage() {
 
         {error && <p className="text-xs text-red-400">{error}</p>}
 
-        <div className="flex items-center gap-3 pt-2 border-t border-white/[0.06]">
+        <div className="flex items-center gap-3 pt-2 border-t border-border-subtle">
           <button
             onClick={handleSave}
             disabled={saving}
-            className="h-9 px-5 rounded-md bg-white text-black text-sm font-medium hover:bg-white/90 disabled:opacity-50 transition-colors"
+            className="h-9 px-5 rounded-md bg-surface-cta text-text-on-cta text-sm font-medium hover:bg-surface-cta/90 disabled:opacity-50 transition-colors"
           >
             {saving ? "Saving..." : saved ? "Saved!" : "Save Changes"}
           </button>
@@ -163,7 +163,7 @@ function Field({
 }) {
   return (
     <div>
-      <label className="block text-xs font-medium text-white/50 uppercase tracking-wider mb-1.5">
+      <label className="block text-xs font-medium text-text-tertiary uppercase tracking-wider mb-1.5">
         {label}
       </label>
       <input
@@ -171,7 +171,7 @@ function Field({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full h-9 px-3 rounded-md bg-white/[0.04] border border-white/[0.08] text-sm text-white placeholder:text-white/20 outline-none focus:border-white/[0.15] transition-colors"
+        className="w-full h-9 px-3 rounded-md bg-surface-raised-2 border border-border-default text-sm text-text-primary placeholder:text-text-disabled outline-none focus:border-border-strong transition-colors"
       />
     </div>
   );

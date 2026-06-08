@@ -69,14 +69,14 @@ export function SkillsPanelBody({ panel }: { panel: SkillsPanelData }) {
 
   return (
     <div className="flex h-full w-full flex-col">
-      <header className="flex items-center justify-between border-b border-white/[0.06] px-5 py-4">
+      <header className="flex items-center justify-between border-b border-border-subtle px-5 py-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-md border border-white/[0.08] bg-white/[0.04]">
-            <Sparkles size={14} className="text-white/70" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-md border border-border-default bg-surface-raised-2">
+            <Sparkles size={14} className="text-text-secondary" />
           </div>
           <div>
-            <h2 className="text-sm font-semibold text-white/90">Skills</h2>
-            <p className="text-[11px] text-white/50">
+            <h2 className="text-sm font-semibold text-text-primary">Skills</h2>
+            <p className="text-[11px] text-text-tertiary">
               Click a skill to open it in a panel
             </p>
           </div>
@@ -84,7 +84,7 @@ export function SkillsPanelBody({ panel }: { panel: SkillsPanelData }) {
         <button
           type="button"
           onClick={() => setCreating((c) => !c)}
-          className="inline-flex items-center gap-1.5 rounded-md border border-white/[0.12] bg-white/[0.04] px-3 py-1.5 text-xs text-white/80 transition-colors hover:border-white/[0.22] hover:bg-white/[0.08]"
+          className="inline-flex items-center gap-1.5 rounded-md border border-border-strong bg-surface-raised-2 px-3 py-1.5 text-xs text-text-secondary transition-colors hover:border-border-highlight hover:bg-surface-raised-4"
         >
           <Plus size={12} />
           New skill
@@ -94,7 +94,7 @@ export function SkillsPanelBody({ panel }: { panel: SkillsPanelData }) {
       {creating && (
         <form
           onSubmit={handleCreate}
-          className="flex items-center gap-2 border-b border-white/[0.06] bg-white/[0.02] px-5 py-3"
+          className="flex items-center gap-2 border-b border-border-subtle bg-surface-raised-1 px-5 py-3"
         >
           <input
             autoFocus
@@ -102,12 +102,12 @@ export function SkillsPanelBody({ panel }: { panel: SkillsPanelData }) {
             value={createName}
             onChange={(e) => setCreateName(e.target.value)}
             placeholder="Skill name"
-            className="flex-1 rounded-md border border-white/[0.1] bg-transparent px-3 py-1.5 text-xs text-white/90 placeholder:text-white/30 focus:border-white/[0.25] focus:outline-none"
+            className="flex-1 rounded-md border border-border-default bg-transparent px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-border-highlight focus:outline-none"
           />
           <button
             type="submit"
             disabled={!createName.trim()}
-            className="rounded-md border border-white/[0.18] bg-white/[0.08] px-3 py-1.5 text-xs text-white/90 transition-colors hover:bg-white/[0.12] disabled:opacity-40"
+            className="rounded-md border border-border-strong bg-surface-raised-4 px-3 py-1.5 text-xs text-text-primary transition-colors hover:bg-surface-raised-4 disabled:opacity-40"
           >
             Create
           </button>
@@ -118,7 +118,7 @@ export function SkillsPanelBody({ panel }: { panel: SkillsPanelData }) {
               setCreateName("");
               setCreateError(null);
             }}
-            className="rounded-md px-2 py-1.5 text-xs text-white/50 hover:text-white/85"
+            className="rounded-md px-2 py-1.5 text-xs text-text-tertiary hover:text-text-secondary"
           >
             Cancel
           </button>
@@ -136,19 +136,19 @@ export function SkillsPanelBody({ panel }: { panel: SkillsPanelData }) {
           </div>
         )}
         {skills && skills.length === 0 && (
-          <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-white/[0.12] px-6 py-12 text-center">
-            <Sparkles size={20} className="text-white/30" />
+          <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border-strong px-6 py-12 text-center">
+            <Sparkles size={20} className="text-text-muted" />
             <div>
-              <div className="text-xs text-white/60">No skills yet</div>
-              <div className="mt-1 text-[11px] text-white/40">
-                Click <strong className="text-white/60">+ New skill</strong> to
+              <div className="text-xs text-text-tertiary">No skills yet</div>
+              <div className="mt-1 text-[11px] text-text-muted">
+                Click <strong className="text-text-tertiary">+ New skill</strong> to
                 add one.
               </div>
             </div>
           </div>
         )}
         {skills && skills.length > 0 && (
-          <ul className="divide-y divide-white/[0.04]">
+          <ul className="divide-y divide-border-subtle">
             {skills.map((skill) => (
               <SkillRow
                 key={skill.id}
@@ -166,7 +166,7 @@ export function SkillsPanelBody({ panel }: { panel: SkillsPanelData }) {
 function SkillRowSkeletonList() {
   return (
     <ul
-      className="divide-y divide-white/[0.04]"
+      className="divide-y divide-border-subtle"
       aria-label="Loading skills"
     >
       {[0, 1, 2].map((i) => (
@@ -174,13 +174,13 @@ function SkillRowSkeletonList() {
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0 flex-1 space-y-2">
               <div className="flex items-center gap-2">
-                <Skeleton className="h-3.5 w-32 bg-white/[0.06]" />
-                <Skeleton className="h-3.5 w-12 rounded-full bg-white/[0.06]" />
+                <Skeleton className="h-3.5 w-32 bg-surface-raised-3" />
+                <Skeleton className="h-3.5 w-12 rounded-full bg-surface-raised-3" />
               </div>
-              <Skeleton className="h-3 w-full bg-white/[0.04]" />
-              <Skeleton className="h-3 w-3/4 bg-white/[0.04]" />
+              <Skeleton className="h-3 w-full bg-surface-raised-2" />
+              <Skeleton className="h-3 w-3/4 bg-surface-raised-2" />
             </div>
-            <Skeleton className="h-3 w-16 bg-white/[0.04]" />
+            <Skeleton className="h-3 w-16 bg-surface-raised-2" />
           </div>
         </li>
       ))}
@@ -194,24 +194,24 @@ function SkillRow({ skill, onClick }: { skill: Skill; onClick: () => void }) {
       <button
         type="button"
         onClick={onClick}
-        className="group w-full cursor-pointer py-3 text-left transition-colors hover:bg-white/[0.02]"
+        className="group w-full cursor-pointer py-3 text-left transition-colors hover:bg-surface-raised-1"
       >
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
             <div className="mb-1 flex items-center gap-2">
-              <span className="font-mono text-[12.5px] text-white/90">
+              <span className="font-mono text-[12.5px] text-text-primary">
                 {skill.name}
               </span>
               <StatusPill status={skill.status} />
             </div>
             {skill.description && (
-              <p className="mb-2 text-xs leading-relaxed text-white/65">
+              <p className="mb-2 text-xs leading-relaxed text-text-tertiary">
                 {skill.description}
               </p>
             )}
             {skill.whenToUse && (
-              <div className="mb-2 text-[11px] leading-relaxed text-white/45">
-                <span className="mr-1.5 font-mono uppercase tracking-wider text-white/35">
+              <div className="mb-2 text-[11px] leading-relaxed text-text-muted">
+                <span className="mr-1.5 font-mono uppercase tracking-wider text-text-muted">
                   When to use:
                 </span>
                 <span className="line-clamp-2">{skill.whenToUse}</span>
@@ -226,7 +226,7 @@ function SkillRow({ skill, onClick }: { skill: Skill; onClick: () => void }) {
             )}
           </div>
           <div className="flex shrink-0 flex-col items-end gap-2">
-            <div className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-white/40">
+            <div className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-text-muted">
               <Play size={9} />
               {skill.totalInvocations.toLocaleString()} runs
             </div>
@@ -247,8 +247,8 @@ function StatusPill({ status }: { status: "active" | "draft" }) {
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-white/[0.08] bg-white/[0.02] px-1.5 py-0.5 text-[10px] text-white/40">
-      <span className="h-1 w-1 rounded-full bg-white/40" />
+    <span className="inline-flex items-center gap-1 rounded-full border border-border-default bg-surface-raised-1 px-1.5 py-0.5 text-[10px] text-text-muted">
+      <span className="h-1 w-1 rounded-full bg-text-text-muted" />
       draft
     </span>
   );
@@ -256,7 +256,7 @@ function StatusPill({ status }: { status: "active" | "draft" }) {
 
 function ConnectorChip({ name }: { name: string }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded-md border border-white/[0.08] bg-white/[0.02] px-1.5 py-0.5 text-[10px] text-white/55">
+    <span className="inline-flex items-center gap-1 rounded-md border border-border-default bg-surface-raised-1 px-1.5 py-0.5 text-[10px] text-text-tertiary">
       <Plug size={9} />
       {name}
     </span>

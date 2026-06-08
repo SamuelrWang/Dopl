@@ -152,18 +152,17 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
       // is a shadow, it doesn't affect layout and follows the panel's
       // rounded corners automatically.
       className={
-        "relative rounded-2xl overflow-hidden bg-[var(--panel-surface)] border border-white/[0.1] flex flex-col select-text transition-[box-shadow] duration-150 " +
+        "relative rounded-2xl overflow-hidden bg-[var(--panel-surface)] border border-border-default flex flex-col select-text transition-[box-shadow] duration-150 " +
         (isSelected
-          ? "shadow-[0_0_0_2px_rgba(255,255,255,0.5),0_4px_16px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.08)] !border-white/30"
-          : "shadow-[0_4px_16px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.08)]")
+          ? "shadow-[var(--ring-selected),var(--shadow-panel)] !border-border-highlight"
+          : "shadow-[var(--shadow-panel)]")
       }
     >
       {/* Top specular highlight */}
       <div
         className="pointer-events-none absolute inset-x-0 top-0 h-px"
         style={{
-          background:
-            "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.3) 30%, rgba(255,255,255,0.4) 50%, rgba(255,255,255,0.3) 70%, transparent 100%)",
+          background: "var(--shine-top-gradient)",
         }}
       />
 
@@ -176,7 +175,7 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
       <div
         data-drag-handle
         style={{ cursor: isDragging ? "grabbing" : "grab" }}
-        className="shrink-0 flex items-center gap-2 px-4 h-10 border-b border-white/[0.06] select-none"
+        className="shrink-0 flex items-center gap-2 px-4 h-10 border-b border-border-subtle select-none"
       >
         {/* Drag indicator dots */}
         <div
@@ -184,22 +183,22 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
           aria-hidden
         >
           <div className="flex gap-[2px]">
-            <span className="w-[3px] h-[3px] rounded-none bg-white/30" />
-            <span className="w-[3px] h-[3px] rounded-none bg-white/30" />
+            <span className="w-[3px] h-[3px] rounded-none bg-text-text-muted" />
+            <span className="w-[3px] h-[3px] rounded-none bg-text-text-muted" />
           </div>
           <div className="flex gap-[2px]">
-            <span className="w-[3px] h-[3px] rounded-none bg-white/30" />
-            <span className="w-[3px] h-[3px] rounded-none bg-white/30" />
+            <span className="w-[3px] h-[3px] rounded-none bg-text-text-muted" />
+            <span className="w-[3px] h-[3px] rounded-none bg-text-text-muted" />
           </div>
           <div className="flex gap-[2px]">
-            <span className="w-[3px] h-[3px] rounded-none bg-white/30" />
-            <span className="w-[3px] h-[3px] rounded-none bg-white/30" />
+            <span className="w-[3px] h-[3px] rounded-none bg-text-text-muted" />
+            <span className="w-[3px] h-[3px] rounded-none bg-text-text-muted" />
           </div>
         </div>
 
         <span
           style={{ cursor: isDragging ? "grabbing" : "grab" }}
-          className="font-mono text-[10px] uppercase tracking-wide text-white/70 truncate flex-1"
+          className="font-mono text-[10px] uppercase tracking-wide text-text-secondary truncate flex-1"
         >
           {headerTitle}
         </span>
@@ -208,7 +207,7 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
           <button
             onClick={handleClose}
             aria-label="Close panel"
-            className="w-6 h-6 flex items-center justify-center rounded-[3px] text-white/40 hover:text-white/90 hover:bg-white/[0.06] border border-transparent hover:border-white/[0.1] transition-colors"
+            className="w-6 h-6 flex items-center justify-center rounded-[3px] text-text-muted hover:text-text-primary hover:bg-surface-raised-3 border border-transparent hover:border-border-default transition-colors"
           >
             <svg
               width="12"
@@ -228,7 +227,7 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
           <span
             aria-label="Pinned panel"
             title="Pinned — cannot be closed"
-            className="w-6 h-6 flex items-center justify-center text-white/30"
+            className="w-6 h-6 flex items-center justify-center text-text-muted"
           >
             <svg
               width="12"

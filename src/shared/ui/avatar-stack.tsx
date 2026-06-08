@@ -25,7 +25,7 @@ function Avatar({ user }: { user: AvatarStackUser }) {
       <div
         className={cn(
           "flex h-6 w-6 items-center justify-center rounded-full ring-2 ring-[var(--background,#0a0a0a)] overflow-hidden",
-          "bg-white/[0.08] text-[9px] font-semibold uppercase tracking-wide text-white/70"
+          "bg-surface-raised-4 text-[9px] font-semibold uppercase tracking-wide text-text-secondary"
         )}
       >
         {user.avatarUrl ? (
@@ -69,7 +69,7 @@ export function AvatarStack({
         <Avatar key={u.userId} user={u} />
       ))}
       {overflow > 0 && (
-        <div className="flex h-6 w-6 items-center justify-center rounded-full ring-2 ring-[var(--background,#0a0a0a)] bg-white/[0.06] text-[9px] font-semibold text-white/50">
+        <div className="flex h-6 w-6 items-center justify-center rounded-full ring-2 ring-[var(--background,#0a0a0a)] bg-surface-raised-3 text-[9px] font-semibold text-text-tertiary">
           +{overflow}
         </div>
       )}

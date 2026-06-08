@@ -27,10 +27,10 @@ export function BaseSettingsModal({
 }: Props) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl bg-[#0a0a0a] border-white/[0.12] text-white max-h-[85vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-2xl bg-modal-surface border-border-strong text-text-primary max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-white">{base.name} settings</DialogTitle>
-          <DialogDescription className="text-white/40 font-mono text-[11px]">
+          <DialogTitle className="text-text-primary">{base.name} settings</DialogTitle>
+          <DialogDescription className="text-text-muted font-mono text-[11px]">
             /{workspaceSlug}/knowledge/{base.slug}
           </DialogDescription>
         </DialogHeader>

@@ -44,12 +44,12 @@ export function PendingInvitations({ workspaceSlug, invitations, onRevoked }: Pr
   if (invitations.length === 0) return null;
 
   return (
-    <section className="px-4 py-4 border-t border-white/[0.06]">
+    <section className="px-4 py-4 border-t border-border-subtle">
       <h3 className="text-[10px] font-mono uppercase tracking-wider text-text-secondary/60 mb-3">
         Pending invitations · {invitations.length}
       </h3>
       {error && <p className="text-xs text-red-400 mb-2">{error}</p>}
-      <ul className="divide-y divide-white/[0.04]">
+      <ul className="divide-y divide-border-subtle">
         {invitations.map((inv) => (
           <li
             key={inv.id}

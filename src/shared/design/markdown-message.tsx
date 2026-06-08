@@ -85,11 +85,11 @@ export function MarkdownMessage({ content, className, entryNames }: MarkdownMess
     <div
       className={cn(
         // Base prose scaffolding + base text color
-        "prose prose-sm max-w-none text-white/[0.88]",
+        "prose prose-sm max-w-none text-text-primary",
         // Paragraphs: no top margin, tight bottom margin
         "prose-p:my-0 prose-p:mb-2 prose-p:leading-[20px] prose-p:text-xs",
         // Headings: unified style, small, semibold/bold, tight top margins
-        "prose-headings:font-semibold prose-headings:text-white/90",
+        "prose-headings:font-semibold prose-headings:text-text-primary",
         "prose-h1:text-xs prose-h2:text-xs prose-h3:text-xs",
         "prose-h4:text-xs prose-h5:text-xs prose-h6:text-xs",
         "prose-h1:font-bold prose-h2:font-bold",
@@ -97,30 +97,30 @@ export function MarkdownMessage({ content, className, entryNames }: MarkdownMess
         "prose-h5:font-semibold prose-h6:font-semibold",
         "prose-h1:mt-3 prose-h2:mt-3 prose-h3:mt-2",
         // Bold text
-        "prose-strong:text-white/90 prose-strong:font-semibold",
+        "prose-strong:text-text-primary prose-strong:font-semibold",
         // Italic / emphasis — Tailwind Typography's default is
         // text-gray-500 which is unreadable on our dark surface.
-        "prose-em:text-white/80 prose-em:italic",
+        "prose-em:text-text-secondary prose-em:italic",
         // Blockquotes — same readability issue. Keep the italic quote
         // feel but lift the text color, soften the left border to match
         // the rest of the dark chrome.
-        "prose-blockquote:text-white/75 prose-blockquote:italic",
-        "prose-blockquote:border-l-2 prose-blockquote:border-l-white/20",
+        "prose-blockquote:text-text-secondary prose-blockquote:italic",
+        "prose-blockquote:border-l-2 prose-blockquote:border-l-border-highlight",
         "prose-blockquote:pl-3 prose-blockquote:my-2",
         "prose-blockquote:font-normal",
         // Links — make them visible on the dark surface without
         // over-saturating. Default prose link color is too muted.
-        "prose-a:text-sky-300/90 prose-a:underline prose-a:decoration-sky-300/30",
+        "prose-a:text-link prose-a:underline prose-a:decoration-sky-300/30",
         "hover:prose-a:decoration-sky-300/80",
         // Inline code — explicit text color (default prose-code is near-black,
         // unreadable on our dark surface). `before:`/`after:content-none`
         // strips Tailwind Typography's default backtick pseudo-elements.
-        "prose-code:text-xs prose-code:font-mono prose-code:text-white/90",
-        "prose-code:bg-white/[0.08] prose-code:border prose-code:border-white/[0.08]",
+        "prose-code:text-xs prose-code:font-mono prose-code:text-text-primary",
+        "prose-code:bg-surface-raised-4 prose-code:border prose-code:border-border-default",
         "prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded",
         "prose-code:before:content-none prose-code:after:content-none",
         // Code blocks
-        "prose-pre:bg-white/[0.06] prose-pre:rounded-lg",
+        "prose-pre:bg-surface-raised-3 prose-pre:rounded-lg",
         // Lists
         "prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0 prose-li:text-xs prose-li:leading-[20px]",
         className

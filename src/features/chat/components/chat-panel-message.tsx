@@ -21,7 +21,7 @@ export function RenderedMessage({
   if (message.role === "user" && message.type === "text") {
     return (
       <div className="max-w-[90%] md:max-w-[80%] ml-auto">
-        <div className="text-xs leading-[20px] text-white/90 bg-white/[0.08] border border-white/[0.1] rounded py-2 px-3">
+        <div className="text-xs leading-[20px] text-text-primary bg-surface-raised-4 border border-border-default rounded py-2 px-3">
           <p className="whitespace-pre-wrap break-words">{message.content}</p>
           {message.attachments && message.attachments.length > 0 && (
             <SentAttachmentPreview attachments={message.attachments} />
@@ -47,7 +47,7 @@ export function RenderedMessage({
         {message.content.length > 0 ? (
           <MarkdownMessage content={message.content + " ▍"} entryNames={entryNames} />
         ) : (
-          <p className="text-xs text-white/40 italic font-mono uppercase tracking-wide animate-pulse">
+          <p className="text-xs text-text-muted italic font-mono uppercase tracking-wide animate-pulse">
             Thinking...
           </p>
         )}
@@ -59,7 +59,7 @@ export function RenderedMessage({
   if (message.role === "ai" && message.type === "tool_activity") {
     return (
       <div className="max-w-[90%] md:max-w-[80%] mr-auto">
-        <div className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-white/50 bg-white/[0.04] border border-white/[0.08] rounded-[3px] px-2 h-6">
+        <div className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-text-tertiary bg-surface-raised-2 border border-border-default rounded-[3px] px-2 h-6">
           <span
             className={
               message.status === "done"
@@ -71,7 +71,7 @@ export function RenderedMessage({
           </span>
           <span>{message.toolName}</span>
           {message.summary && (
-            <span className="text-white/30">— {message.summary}</span>
+            <span className="text-text-muted">— {message.summary}</span>
           )}
         </div>
       </div>

@@ -15,12 +15,12 @@ export function SkillViewSkeleton() {
     >
       <span className="sr-only">Loading skill</span>
       <div
-        className="h-full rounded-2xl border border-white/[0.1] bg-[var(--panel-surface)] overflow-hidden flex"
-        style={{ backgroundColor: "oklch(0.13 0 0)" }}
+        className="h-full rounded-2xl border border-border-default bg-[var(--panel-surface)] overflow-hidden flex"
+        style={{ backgroundColor: "var(--panel-surface)" }}
       >
         {/* Main column — file tabs + editor */}
         <div className="flex-1 min-w-0 flex flex-col">
-          <div className="shrink-0 flex items-center gap-2 border-b border-white/[0.06] px-3 py-2">
+          <div className="shrink-0 flex items-center gap-2 border-b border-border-subtle px-3 py-2">
             <Bar className="h-6 w-28 rounded-md" />
             <Bar className="h-6 w-24 rounded-md" />
             <Bar className="h-6 w-20 rounded-md" />
@@ -45,7 +45,7 @@ export function SkillViewSkeleton() {
         </div>
 
         {/* Right rail — KB picker placeholder */}
-        <aside className="hidden lg:flex w-72 shrink-0 flex-col border-l border-white/[0.06] p-3 gap-3">
+        <aside className="hidden lg:flex w-72 shrink-0 flex-col border-l border-border-subtle p-3 gap-3">
           <Bar className="h-3 w-24" />
           <div className="space-y-2">
             {[0, 1, 2, 3].map((i) => (
@@ -62,7 +62,7 @@ function Bar({ className }: { className?: string }) {
   return (
     <div
       aria-hidden
-      className={cn("animate-pulse rounded bg-white/[0.05]", className)}
+      className={cn("animate-pulse rounded bg-surface-raised-2", className)}
     />
   );
 }

@@ -6,11 +6,15 @@ import { Sidebar } from "./sidebar";
 import { FlushGrid } from "@/shared/design";
 import { MyAccessProvider } from "@/features/members/hooks/use-my-access";
 import { workspaceSegmentFromPath } from "@/shared/lib/url/workspace-segment";
+import { useTheme } from "@/shared/hooks/use-theme";
 
 const NO_SIDEBAR_PATHS = new Set(["/login", "/terms", "/privacy"]);
 
 export function LayoutShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  // Owns the <html> theme class: applies the saved preference on app routes
+  // and forces dark on marketing/auth/docs routes, re-running on navigation.
+  useTheme();
   const isLanding = pathname === "/";
   const isDocs = pathname.startsWith("/docs");
   // Full-bleed routes opt out of the centered container so panels can

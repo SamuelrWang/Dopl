@@ -15,11 +15,11 @@ const pillVariants = cva(
     variants: {
       variant: {
         default:
-          "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-inset-hover)]",
+          "text-[var(--text-text-secondary)] hover:text-[var(--text-text-primary)] hover:bg-[var(--bg-inset-hover)]",
         inset:
-          "bg-[var(--bg-inset)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:bg-[var(--bg-inset-hover)] hover:text-[var(--text-primary)] hover:border-[var(--border-default)]",
+          "bg-[var(--bg-inset)] border border-[var(--border-subtle)] text-[var(--text-text-secondary)] hover:bg-[var(--bg-inset-hover)] hover:text-[var(--text-text-primary)] hover:border-[var(--border-default)]",
         active:
-          "bg-[var(--bg-inset)] border border-[var(--border-highlight)] text-[var(--text-primary)] shadow-[var(--inset-highlight)]",
+          "bg-[var(--bg-inset)] border border-[var(--border-highlight)] text-[var(--text-text-primary)] shadow-[var(--inset-highlight)]",
       },
       size: {
         sm: "h-8 px-3 text-xs gap-1.5",
@@ -63,7 +63,7 @@ export function Pill({
   const content = (
     <>
       {icon && (
-        <span className="shrink-0 [&_svg]:size-4 text-[var(--text-muted)]">
+        <span className="shrink-0 [&_svg]:size-4 text-[var(--text-text-muted)]">
           {icon}
         </span>
       )}

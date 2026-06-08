@@ -44,7 +44,7 @@ export function KbResults({
       {items.map((it, i) => {
         const inner = (
           <>
-            <span className="mt-1.5 w-1 h-1 rounded-full bg-text-secondary/40 shrink-0" />
+            <span className="mt-1.5 w-1 h-1 rounded-full bg-text-text-secondary/40 shrink-0" />
             <div className="min-w-0 flex-1">
               <p className="text-[12.5px] text-text-primary truncate">
                 {it.title}
@@ -66,7 +66,7 @@ export function KbResults({
             href={it.href}
             target="_blank"
             rel="noreferrer"
-            className="flex items-start gap-3 hover:bg-white/[0.03] rounded-md px-1 -mx-1 transition-colors"
+            className="flex items-start gap-3 hover:bg-surface-raised-1 rounded-md px-1 -mx-1 transition-colors"
           >
             {inner}
           </a>

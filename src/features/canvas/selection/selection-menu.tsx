@@ -131,9 +131,9 @@ export function SelectionMenu({ cursorPos }: SelectionMenuProps) {
       }}
       className="z-30"
     >
-      <div className="inline-flex items-center gap-1 px-1 h-8 rounded-[4px] bg-[oklch(0.07_0_0)] border border-white/[0.12] shadow-[0_4px_16px_rgba(0,0,0,0.4)]">
+      <div className="inline-flex items-center gap-1 px-1 h-8 rounded-[4px] bg-[var(--cluster-tab-surface)] border border-border-strong shadow-[0_4px_16px_rgba(0,0,0,0.4)]">
         <MenuButton label="Cluster" onClick={handleCluster} />
-        <div className="w-px h-4 bg-white/[0.12]" aria-hidden />
+        <div className="w-px h-4 bg-border-strong" aria-hidden />
         <MenuButton label="Delete" tone="danger" onClick={handleDelete} />
       </div>
     </div>
@@ -151,13 +151,13 @@ function MenuButton({
 }) {
   const colour =
     tone === "danger"
-      ? "text-white/70 hover:text-[color:var(--coral)]"
-      : "text-white/70 hover:text-white";
+      ? "text-text-secondary hover:text-[color:var(--coral)]"
+      : "text-text-secondary hover:text-text-primary";
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex items-center h-6 px-3 font-mono text-[10px] uppercase tracking-wider rounded-[3px] hover:bg-white/[0.06] transition-colors ${colour}`}
+      className={`inline-flex items-center h-6 px-3 font-mono text-[10px] uppercase tracking-wider rounded-[3px] hover:bg-surface-raised-3 transition-colors ${colour}`}
     >
       {label}
     </button>

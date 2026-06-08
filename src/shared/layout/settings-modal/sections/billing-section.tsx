@@ -37,7 +37,7 @@ export function BillingSection() {
   if (sub.loading) {
     return (
       <SectionShell title="Billing">
-        <div className="h-24 rounded-lg bg-white/[0.03] animate-pulse" />
+        <div className="h-24 rounded-lg bg-surface-raised-1 animate-pulse" />
       </SectionShell>
     );
   }
@@ -48,7 +48,7 @@ export function BillingSection() {
         <button
           type="button"
           onClick={() => setShowCheckout(false)}
-          className="self-start text-sm text-white/50 hover:text-white/80 transition-colors cursor-pointer"
+          className="self-start text-sm text-text-tertiary hover:text-text-secondary transition-colors cursor-pointer"
         >
           ← Back to billing
         </button>
@@ -61,11 +61,11 @@ export function BillingSection() {
 
   return (
     <SectionShell title="Billing" subtitle="Manage your plan and payment">
-      <div className="rounded-xl bg-white/[0.03] border border-white/[0.08] p-5 space-y-5">
+      <div className="rounded-xl bg-surface-raised-1 border border-border-default p-5 space-y-5">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm text-white/60">Current plan</p>
-            <p className="text-lg font-medium text-white">
+            <p className="text-sm text-text-tertiary">Current plan</p>
+            <p className="text-lg font-medium text-text-primary">
               {planLabel}
               {sub.isPaid && (
                 <span className="ml-2 text-xs px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-normal">
@@ -80,18 +80,18 @@ export function BillingSection() {
             </p>
           </div>
           {sub.isPaid && sub.subscription_period_end && (
-            <p className="text-xs text-white/40">
+            <p className="text-xs text-text-muted">
               Renews {new Date(sub.subscription_period_end).toLocaleDateString()}
             </p>
           )}
           {sub.isTrialing && sub.access.trial_expires_at && (
-            <p className="text-xs text-white/40">
+            <p className="text-xs text-text-muted">
               Ends {new Date(sub.access.trial_expires_at).toLocaleDateString()}
             </p>
           )}
         </div>
 
-        <div className="border-t border-white/[0.06] pt-4">
+        <div className="border-t border-border-subtle pt-4">
           {portalError && (
             <div className="mb-3 rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2 text-xs text-red-400">
               {portalError}

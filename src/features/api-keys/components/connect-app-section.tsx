@@ -54,7 +54,7 @@ export function ConnectAppSection({ workspaceSlug }: Props) {
   ].join("\n");
 
   return (
-    <section className="rounded-2xl border border-white/[0.1] bg-[var(--panel-surface)] p-5">
+    <section className="rounded-2xl border border-border-default bg-[var(--panel-surface)] p-5">
       <p className="text-sm font-medium text-text-primary mb-1">
         Connect your app
       </p>
@@ -113,7 +113,7 @@ export function ConnectAppSection({ workspaceSlug }: Props) {
             </div>
           ) : active ? (
             <div className="space-y-2">
-              <div className="rounded-md border border-white/[0.1] bg-white/[0.02] p-3 flex items-center gap-2">
+              <div className="rounded-md border border-border-default bg-surface-raised-1 p-3 flex items-center gap-2">
                 <KeyIcon size={12} className="text-text-secondary shrink-0" />
                 <code className="flex-1 truncate font-mono text-[12px] text-text-secondary">
                   {active.prefix}…
@@ -136,7 +136,7 @@ export function ConnectAppSection({ workspaceSlug }: Props) {
               <button
                 type="button"
                 onClick={() => void generate()}
-                className="h-8 px-3 rounded-md bg-white text-black text-xs font-medium hover:bg-white/90 transition-colors flex items-center gap-1.5 cursor-pointer"
+                className="h-8 px-3 rounded-md bg-surface-cta text-text-on-cta text-xs font-medium hover:bg-surface-cta/90 transition-colors flex items-center gap-1.5 cursor-pointer"
               >
                 <KeyIcon size={11} />
                 Generate API key
@@ -188,7 +188,7 @@ export function ConnectAppSection({ workspaceSlug }: Props) {
 
 function PromptBanner({ prompt }: { prompt: string }) {
   return (
-    <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-4 flex items-center justify-between gap-3">
+    <div className="rounded-lg border border-border-default bg-surface-raised-1 p-4 flex items-center justify-between gap-3">
       <div className="min-w-0">
         <p className="text-sm font-medium text-text-primary">
           Give your agent everything it needs
@@ -214,9 +214,9 @@ function Step({ n, title, description, last, children }: StepProps) {
   return (
     <div className="relative flex gap-4 pb-6 last:pb-0">
       {!last && (
-        <span className="absolute left-3 top-7 bottom-0 w-px bg-white/[0.08]" />
+        <span className="absolute left-3 top-7 bottom-0 w-px bg-surface-raised-3" />
       )}
-      <div className="shrink-0 w-6 h-6 rounded-md border border-white/[0.1] bg-white/[0.04] flex items-center justify-center text-[11px] text-text-secondary font-mono z-10">
+      <div className="shrink-0 w-6 h-6 rounded-md border border-border-default bg-surface-raised-2 flex items-center justify-center text-[11px] text-text-secondary font-mono z-10">
         {n}
       </div>
       <div className="flex-1 min-w-0">
@@ -232,7 +232,7 @@ function Step({ n, title, description, last, children }: StepProps) {
 
 function CodeRow({ code }: { code: string }) {
   return (
-    <div className="flex items-center gap-2 rounded-md border border-white/[0.08] bg-black/30 px-3 py-2">
+    <div className="flex items-center gap-2 rounded-md border border-border-default bg-bg-inset px-3 py-2">
       <code className="flex-1 truncate font-mono text-[12px] text-text-primary">
         {code}
       </code>
@@ -269,7 +269,7 @@ function CopyButton({
       type="button"
       onClick={handleCopy}
       className={
-        "shrink-0 flex items-center gap-1.5 rounded-md border border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.08] hover:text-text-primary transition-colors cursor-pointer " +
+        "shrink-0 flex items-center gap-1.5 rounded-md border border-border-default bg-surface-raised-2 hover:bg-surface-raised-4 hover:text-text-primary transition-colors cursor-pointer " +
         (compact
           ? "px-1.5 py-1 text-[10px] text-text-secondary"
           : "px-2.5 py-1.5 text-[11px] text-text-secondary")

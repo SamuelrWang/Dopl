@@ -79,10 +79,10 @@ export function CreateBaseDialog({
         if (!next) reset();
       }}
     >
-      <DialogContent className="sm:max-w-md bg-[#0a0a0a] border-white/[0.12] text-white">
+      <DialogContent className="sm:max-w-md bg-modal-surface border-border-strong text-text-primary">
         <DialogHeader>
-          <DialogTitle className="text-white">New knowledge base</DialogTitle>
-          <DialogDescription className="text-white/50">
+          <DialogTitle className="text-text-primary">New knowledge base</DialogTitle>
+          <DialogDescription className="text-text-tertiary">
             A knowledge base holds folders + files. Editable in the
             browser, also accessible to your agent over MCP once you
             flip the agent-write toggle in settings.
@@ -91,7 +91,7 @@ export function CreateBaseDialog({
 
         <div className="flex flex-col gap-4 py-2">
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-white/60 uppercase tracking-wider">
+            <label className="text-xs font-medium text-text-tertiary uppercase tracking-wider">
               Name
             </label>
             <input
@@ -100,13 +100,13 @@ export function CreateBaseDialog({
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Product specs"
               autoFocus
-              className="h-9 px-3 rounded-md bg-white/[0.06] border border-white/[0.12] text-sm text-white placeholder:text-white/30 outline-none focus:border-white/[0.25] transition-colors"
+              className="h-9 px-3 rounded-md bg-surface-raised-3 border border-border-strong text-sm text-text-primary placeholder:text-text-muted outline-none focus:border-border-highlight transition-colors"
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-white/60 uppercase tracking-wider">
+            <label className="text-xs font-medium text-text-tertiary uppercase tracking-wider">
               Description{" "}
-              <span className="text-white/30 normal-case tracking-normal">
+              <span className="text-text-muted normal-case tracking-normal">
                 (optional)
               </span>
             </label>
@@ -115,17 +115,17 @@ export function CreateBaseDialog({
               onChange={(e) => setDescription(e.target.value)}
               placeholder="What lives in this knowledge base?"
               rows={3}
-              className="px-3 py-2 rounded-md bg-white/[0.06] border border-white/[0.12] text-sm text-white placeholder:text-white/30 outline-none focus:border-white/[0.25] transition-colors resize-none"
+              className="px-3 py-2 rounded-md bg-surface-raised-3 border border-border-strong text-sm text-text-primary placeholder:text-text-muted outline-none focus:border-border-highlight transition-colors resize-none"
             />
           </div>
           {error && <p className="text-xs text-red-400">{error}</p>}
         </div>
 
-        <DialogFooter className="bg-transparent border-white/[0.08]">
+        <DialogFooter className="bg-transparent border-border-default">
           <button
             type="button"
             onClick={() => onOpenChange(false)}
-            className="h-8 px-4 rounded-md text-xs font-medium text-white/60 hover:text-white/80 transition-colors"
+            className="h-8 px-4 rounded-md text-xs font-medium text-text-tertiary hover:text-text-secondary transition-colors"
           >
             Cancel
           </button>
@@ -133,7 +133,7 @@ export function CreateBaseDialog({
             type="button"
             onClick={handleCreate}
             disabled={submitting || !name.trim()}
-            className="h-8 px-4 rounded-md bg-white text-black text-xs font-medium hover:bg-white/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="h-8 px-4 rounded-md bg-surface-cta text-text-on-cta text-xs font-medium hover:bg-surface-cta/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             {submitting ? "Creating..." : "Create"}
           </button>

@@ -70,19 +70,19 @@ export function AcceptInviteCard({ status, token, needsAuth }: Props) {
   }
 
   return (
-    <div className="rounded-xl bg-white/[0.04] border border-white/[0.1] p-7 max-w-md w-full">
-      <p className="text-[10px] uppercase tracking-wider text-white/40 font-mono">
+    <div className="rounded-xl bg-surface-raised-2 border border-border-default p-7 max-w-md w-full">
+      <p className="text-[10px] uppercase tracking-wider text-text-muted font-mono">
         Workspace invitation
       </p>
-      <h1 className="mt-2 text-xl font-semibold text-white">
+      <h1 className="mt-2 text-xl font-semibold text-text-primary">
         {status.workspace.name}
       </h1>
-      <p className="mt-2 text-sm text-white/60">
+      <p className="mt-2 text-sm text-text-tertiary">
         {status.inviter.email ? (
           <>
-            <span className="text-white">{status.inviter.email}</span> invited
+            <span className="text-text-primary">{status.inviter.email}</span> invited
             you as{" "}
-            <span className="text-white">
+            <span className="text-text-primary">
               {ROLE_LABELS[status.invitation.invitedRole] ??
                 status.invitation.invitedRole}
             </span>
@@ -91,7 +91,7 @@ export function AcceptInviteCard({ status, token, needsAuth }: Props) {
         ) : (
           <>
             You've been invited as{" "}
-            <span className="text-white">
+            <span className="text-text-primary">
               {ROLE_LABELS[status.invitation.invitedRole] ??
                 status.invitation.invitedRole}
             </span>
@@ -103,18 +103,18 @@ export function AcceptInviteCard({ status, token, needsAuth }: Props) {
       {dead ? (
         <div className="mt-6 rounded-md bg-red-500/10 border border-red-500/20 p-3">
           <p className="text-xs text-red-200">{reason}</p>
-          <p className="text-[11px] text-white/40 mt-1.5">
+          <p className="text-[11px] text-text-muted mt-1.5">
             Ask the workspace admin to send a fresh invitation.
           </p>
         </div>
       ) : needsAuth ? (
         <div className="mt-6 flex flex-col gap-3">
-          <p className="text-xs text-white/50">
+          <p className="text-xs text-text-tertiary">
             Sign in to accept. We'll bring you back here.
           </p>
           <a
             href={`/login?redirectTo=${encodeURIComponent(`/invite/${token}`)}`}
-            className="h-9 px-4 rounded-md bg-white text-black text-xs font-medium hover:bg-white/90 transition-colors inline-flex items-center justify-center"
+            className="h-9 px-4 rounded-md bg-surface-cta text-text-on-cta text-xs font-medium hover:bg-surface-cta/90 transition-colors inline-flex items-center justify-center"
           >
             Sign in to accept
           </a>
@@ -126,14 +126,14 @@ export function AcceptInviteCard({ status, token, needsAuth }: Props) {
             type="button"
             onClick={accept}
             disabled={accepting}
-            className="h-9 px-4 rounded-md bg-white text-black text-xs font-medium hover:bg-white/90 disabled:opacity-40 transition-colors"
+            className="h-9 px-4 rounded-md bg-surface-cta text-text-on-cta text-xs font-medium hover:bg-surface-cta/90 disabled:opacity-40 transition-colors"
           >
             {accepting ? "Joining..." : `Join ${status.workspace.name}`}
           </button>
         </div>
       )}
 
-      <p className="mt-6 text-[10px] uppercase tracking-wider text-white/30 font-mono">
+      <p className="mt-6 text-[10px] uppercase tracking-wider text-text-muted font-mono">
         Expires {new Date(status.invitation.expiresAt).toLocaleString()}
       </p>
     </div>

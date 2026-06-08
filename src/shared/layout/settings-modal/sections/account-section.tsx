@@ -70,30 +70,30 @@ export function AccountSection() {
           <img
             src={profile.avatar_url}
             alt=""
-            className="w-14 h-14 rounded-full border border-white/[0.1] object-cover"
+            className="w-14 h-14 rounded-full border border-border-default object-cover"
           />
         ) : (
-          <div className="w-14 h-14 rounded-full bg-white/[0.06] border border-white/[0.1] flex items-center justify-center text-lg text-white/70">
+          <div className="w-14 h-14 rounded-full bg-surface-raised-3 border border-border-default flex items-center justify-center text-lg text-text-secondary">
             {(displayName[0] || profile?.email?.[0] || "?").toUpperCase()}
           </div>
         )}
         <div className="min-w-0">
-          <p className="text-sm font-medium text-white truncate">
+          <p className="text-sm font-medium text-text-primary truncate">
             {profile?.display_name || "User"}
           </p>
-          <p className="text-xs text-white/40 truncate">{profile?.email}</p>
+          <p className="text-xs text-text-muted truncate">{profile?.email}</p>
         </div>
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-white/60 uppercase tracking-wider">
+        <label className="text-xs font-medium text-text-tertiary uppercase tracking-wider">
           Display name
         </label>
         <input
           type="text"
           value={displayName}
           onChange={(e) => setDisplayName(e.target.value)}
-          className="h-9 px-3 rounded-md bg-white/[0.06] border border-white/[0.12] text-sm text-white placeholder:text-white/30 outline-none focus:border-white/[0.25] transition-colors"
+          className="h-9 px-3 rounded-md bg-surface-raised-3 border border-border-strong text-sm text-text-primary placeholder:text-text-muted outline-none focus:border-border-highlight transition-colors"
         />
       </div>
 
@@ -105,7 +105,7 @@ export function AccountSection() {
           type="button"
           disabled={!dirty || saving}
           onClick={handleSave}
-          className="h-8 px-4 rounded-md bg-white text-black text-xs font-medium hover:bg-white/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+          className="h-8 px-4 rounded-md bg-surface-cta text-text-on-cta text-xs font-medium hover:bg-surface-cta/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
         >
           {saving ? "Saving…" : "Save changes"}
         </button>

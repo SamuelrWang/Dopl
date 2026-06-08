@@ -103,12 +103,12 @@ export function WorkspaceSwitcher({
   return (
     <div
       ref={ref}
-      className="relative flex items-center gap-2 px-3 py-3 border-b border-white/[0.06]"
+      className="relative flex items-center gap-2 px-3 py-3 border-b border-border-subtle"
     >
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex-1 flex items-center gap-2 px-1 py-1 rounded-md hover:bg-white/[0.04] transition-colors text-left cursor-pointer"
+        className="flex-1 flex items-center gap-2 px-1 py-1 rounded-md hover:bg-surface-raised-2 transition-colors text-left cursor-pointer"
       >
         <WorkspaceAvatar name={currentName} iconUrl={current?.iconUrl} size="md" />
         <span className="flex-1 min-w-0 text-sm font-medium text-text-primary truncate">

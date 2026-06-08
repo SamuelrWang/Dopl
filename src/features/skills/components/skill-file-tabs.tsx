@@ -57,7 +57,7 @@ export function FileTabs({
   onRename,
 }: FileTabsProps) {
   return (
-    <div className="flex items-stretch border-b border-white/[0.06] px-2 overflow-x-auto">
+    <div className="flex items-stretch border-b border-border-subtle px-2 overflow-x-auto">
       {files.map((file) => (
         <FileTab
           key={file.id}
@@ -73,7 +73,7 @@ export function FileTabs({
         <button
           type="button"
           onClick={onAdd}
-          className="ml-1 my-1.5 flex items-center gap-1 px-2 py-1 rounded-md text-[11px] text-text-secondary/70 hover:bg-white/[0.04] hover:text-text-primary transition-colors cursor-pointer"
+          className="ml-1 my-1.5 flex items-center gap-1 px-2 py-1 rounded-md text-[11px] text-text-secondary/70 hover:bg-surface-raised-2 hover:text-text-primary transition-colors cursor-pointer"
         >
           <Plus size={11} />
           Add file
@@ -172,7 +172,7 @@ function FileTab({
               "bg-transparent border rounded px-1 py-0.5 text-[12px] font-mono w-32 outline-none",
               error
                 ? "border-red-500/50 focus:border-red-500/70"
-                : "border-white/[0.1] focus:border-white/[0.2]"
+                : "border-border-default focus:border-border-highlight"
             )}
           />
           {error && (
@@ -205,13 +205,13 @@ function FileTab({
             onRemove();
           }}
           aria-label={`Remove ${file.name}`}
-          className="opacity-0 group-hover:opacity-100 w-4 h-4 rounded flex items-center justify-center hover:bg-white/[0.06] transition-opacity"
+          className="opacity-0 group-hover:opacity-100 w-4 h-4 rounded flex items-center justify-center hover:bg-surface-raised-3 transition-opacity"
         >
           <X size={10} className="text-text-secondary/70" />
         </button>
       )}
       {active && (
-        <span className="absolute left-2 right-2 -bottom-px h-px bg-text-primary" />
+        <span className="absolute left-2 right-2 -bottom-px h-px bg-text-text-primary" />
       )}
     </div>
   );

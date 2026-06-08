@@ -92,15 +92,15 @@ export default async function AuthorizePage({
           <input type="hidden" name="scope" value={scope} />
           <input type="hidden" name="state" value={state} />
 
-          <p className="text-[13px] leading-relaxed text-white/70">
-            <span className="text-white/90 font-medium">{clientLabel}</span> wants
+          <p className="text-[13px] leading-relaxed text-text-secondary">
+            <span className="text-text-primary font-medium">{clientLabel}</span> wants
             to access your Dopl workspaces as{" "}
-            <span className="text-white/90">{user.email}</span>.
+            <span className="text-text-primary">{user.email}</span>.
           </p>
 
-          <div className="space-y-2 text-[12px] text-white/60">
+          <div className="space-y-2 text-[12px] text-text-tertiary">
             <div className="flex items-start gap-2">
-              <span className="text-white/40 font-mono">read</span>
+              <span className="text-text-muted font-mono">read</span>
               <span>Search and read your setups, clusters, knowledge bases, and skills.</span>
             </div>
             <label className="flex items-start gap-2 cursor-pointer">
@@ -111,7 +111,7 @@ export default async function AuthorizePage({
                 className="mt-0.5"
               />
               <span>
-                <span className="text-white/40 font-mono">write</span>{" "}
+                <span className="text-text-muted font-mono">write</span>{" "}
                 Create, update, and delete your content (canvas, clusters,
                 knowledge bases, skills, ingestion).
               </span>
@@ -123,7 +123,7 @@ export default async function AuthorizePage({
               type="submit"
               name="decision"
               value="approve"
-              className="flex-1 h-9 rounded-[4px] bg-white/[0.12] border border-white/[0.2] text-white text-[12px] font-mono uppercase tracking-wider hover:bg-white/[0.18] transition-colors"
+              className="flex-1 h-9 rounded-[4px] bg-surface-raised-4 border border-border-highlight text-text-primary text-[12px] font-mono uppercase tracking-wider hover:bg-surface-selected transition-colors"
             >
               Approve
             </button>
@@ -131,7 +131,7 @@ export default async function AuthorizePage({
               type="submit"
               name="decision"
               value="deny"
-              className="h-9 px-4 rounded-[4px] border border-white/[0.12] text-white/60 text-[12px] font-mono uppercase tracking-wider hover:text-white/90 hover:border-white/[0.22] transition-colors"
+              className="h-9 px-4 rounded-[4px] border border-border-strong text-text-tertiary text-[12px] font-mono uppercase tracking-wider hover:text-text-primary hover:border-border-highlight transition-colors"
             >
               Deny
             </button>
@@ -145,7 +145,7 @@ export default async function AuthorizePage({
 function Screen({ title, body }: { title: string; body: React.ReactNode }) {
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black px-6">
-      <div className="w-full max-w-sm rounded-[8px] border border-white/[0.1] bg-[var(--card-surface-elevated)] p-6">
+      <div className="w-full max-w-sm rounded-[8px] border border-border-default bg-[var(--card-surface-elevated)] p-6">
         <h1
           className="text-2xl font-bold mb-5"
           style={{
@@ -156,7 +156,7 @@ function Screen({ title, body }: { title: string; body: React.ReactNode }) {
         >
           Dopl
         </h1>
-        <h2 className="text-[13px] font-mono uppercase tracking-wider text-white/80 mb-4">
+        <h2 className="text-[13px] font-mono uppercase tracking-wider text-text-secondary mb-4">
           {title}
         </h2>
         {body}

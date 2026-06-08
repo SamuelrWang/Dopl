@@ -18,9 +18,9 @@ interface MonoLabelProps extends React.HTMLAttributes<HTMLSpanElement> {
 }
 
 const toneStyles: Record<NonNullable<MonoLabelProps["tone"]>, string> = {
-  default: "text-white/70",
-  strong: "text-white/90",
-  muted: "text-white/50",
+  default: "text-text-secondary",
+  strong: "text-text-primary",
+  muted: "text-text-tertiary",
 };
 
 export function MonoLabel({

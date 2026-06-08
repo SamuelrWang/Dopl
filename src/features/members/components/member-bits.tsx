@@ -86,7 +86,7 @@ export function Avatar({
   return (
     <span
       className={cn(
-        "shrink-0 rounded-full flex items-center justify-center font-semibold text-white bg-gradient-to-br",
+        "shrink-0 rounded-full flex items-center justify-center font-semibold text-text-primary bg-gradient-to-br",
         gradientFor(person.userId),
         dim,
         className
@@ -100,8 +100,8 @@ export function Avatar({
 const ROLE_STYLE: Record<MemberRole, string> = {
   owner: "bg-violet-500/15 border-violet-500/25 text-violet-200",
   admin: "bg-emerald-500/10 border-emerald-500/20 text-emerald-200",
-  member: "bg-white/[0.04] border-white/[0.08] text-text-secondary",
-  viewer: "bg-white/[0.03] border-white/[0.06] text-text-secondary/70",
+  member: "bg-surface-raised-2 border-border-default text-text-secondary",
+  viewer: "bg-surface-raised-1 border-border-subtle text-text-secondary/70",
 };
 
 export function RolePill({ role }: { role: MemberRole }) {
@@ -163,7 +163,7 @@ export function RoleSelect({
           />
           <div
             role="listbox"
-            className="absolute left-0 top-full mt-1 w-56 rounded-md border border-white/[0.1] bg-[oklch(0.16_0_0)] shadow-2xl shadow-black/60 py-1 z-20"
+            className="absolute left-0 top-full mt-1 w-56 rounded-md border border-border-default bg-[var(--bg-inset-hover)] shadow-[var(--shadow-elevated)] py-1 z-20"
           >
             {ROLE_OPTIONS.map((opt) => {
               const active = opt.value === value;
@@ -179,7 +179,7 @@ export function RoleSelect({
                   }}
                   className={cn(
                     "w-full text-left px-3 py-2 cursor-pointer transition-colors flex items-start gap-2",
-                    active ? "bg-white/[0.04]" : "hover:bg-white/[0.04]"
+                    active ? "bg-surface-selected" : "hover:bg-surface-raised-2"
                   )}
                 >
                   <Check
@@ -230,7 +230,7 @@ export function TabButton({
     >
       {children}
       {active && (
-        <span className="absolute left-2 right-2 -bottom-px h-px bg-text-primary" />
+        <span className="absolute left-2 right-2 -bottom-px h-px bg-text-text-primary" />
       )}
     </button>
   );
@@ -253,7 +253,7 @@ export function SelectFilter({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-white/[0.03] border border-white/[0.06] text-xs text-text-primary hover:border-white/[0.12] transition-colors cursor-pointer"
+        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-surface-raised-1 border border-border-subtle text-xs text-text-primary hover:border-border-strong transition-colors cursor-pointer"
       >
         <span>{current.label}</span>
         <ChevronDown size={11} className="text-text-secondary/60" />
@@ -265,7 +265,7 @@ export function SelectFilter({
             onClick={() => setOpen(false)}
             aria-hidden
           />
-          <div className="absolute right-0 top-full mt-1 min-w-[160px] rounded-md border border-white/[0.1] bg-[oklch(0.16_0_0)] shadow-2xl shadow-black/60 py-1 z-20">
+          <div className="absolute right-0 top-full mt-1 min-w-[160px] rounded-md border border-border-default bg-[var(--bg-inset-hover)] shadow-[var(--shadow-elevated)] py-1 z-20">
             {options.map((o) => (
               <button
                 key={o.value}
@@ -277,8 +277,8 @@ export function SelectFilter({
                 className={cn(
                   "w-full text-left px-3 py-1.5 text-xs cursor-pointer transition-colors",
                   o.value === value
-                    ? "text-text-primary bg-white/[0.04]"
-                    : "text-text-secondary hover:bg-white/[0.04] hover:text-text-primary"
+                    ? "text-text-primary bg-surface-selected"
+                    : "text-text-secondary hover:bg-surface-raised-2 hover:text-text-primary"
                 )}
               >
                 {o.label}

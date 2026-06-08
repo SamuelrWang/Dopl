@@ -17,7 +17,7 @@ const STATUS_STYLES: Record<string, string> = {
 };
 
 const SEVERITY_STYLES: Record<string, string> = {
-  info: "bg-white/5 text-text-tertiary",
+  info: "bg-surface-raised-2 text-text-tertiary",
   warn: "bg-amber-500/10 text-amber-300",
   error: "bg-red-500/10 text-red-300",
   critical: "bg-red-500/25 text-red-200 ring-1 ring-red-400/40",
@@ -76,7 +76,7 @@ export default async function AdminHealthPage() {
 
       {/* Metric tiles */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-        <div className="rounded-xl bg-white/[0.03] border border-white/[0.08] p-4">
+        <div className="rounded-xl bg-surface-raised-1 border border-border-default p-4">
           <div className="text-xs uppercase tracking-wide text-text-tertiary mb-1">MCP (24h)</div>
           <div className="text-2xl font-medium text-text-primary">
             {mcp.calls_24h === 0 ? "—" : `${((1 - mcp.error_rate) * 100).toFixed(0)}%`}
@@ -88,7 +88,7 @@ export default async function AdminHealthPage() {
           </div>
         </div>
 
-        <div className="rounded-xl bg-white/[0.03] border border-white/[0.08] p-4">
+        <div className="rounded-xl bg-surface-raised-1 border border-border-default p-4">
           <div className="text-xs uppercase tracking-wide text-text-tertiary mb-1">Unacked alerts</div>
           <div className="text-2xl font-medium text-text-primary">{alerts.length}</div>
           <div className="text-xs text-text-secondary mt-2">
@@ -103,14 +103,14 @@ export default async function AdminHealthPage() {
       <section className="mb-8">
         <h2 className="text-lg font-medium text-text-primary mb-3">External APIs (24h)</h2>
         {external.length === 0 ? (
-          <div className="rounded-xl bg-white/[0.02] border border-white/[0.06] p-4 text-sm text-text-tertiary">
+          <div className="rounded-xl bg-surface-raised-1 border border-border-subtle p-4 text-sm text-text-tertiary">
             No external API events logged in the last 24h. (Either nothing ran, or everything ran clean.)
           </div>
         ) : (
-          <div className="rounded-xl bg-white/[0.03] border border-white/[0.08] overflow-hidden">
+          <div className="rounded-xl bg-surface-raised-1 border border-border-default overflow-hidden">
             <table className="w-full text-sm">
               <thead className="text-xs uppercase tracking-wide text-text-tertiary">
-                <tr className="border-b border-white/[0.06]">
+                <tr className="border-b border-border-subtle">
                   <th className="text-left px-4 py-2">Provider</th>
                   <th className="text-right px-4 py-2">Events</th>
                   <th className="text-right px-4 py-2">Errors</th>
@@ -120,7 +120,7 @@ export default async function AdminHealthPage() {
               </thead>
               <tbody>
                 {external.map((p) => (
-                  <tr key={p.name} className="border-t border-white/[0.04]">
+                  <tr key={p.name} className="border-t border-border-subtle">
                     <td className="px-4 py-2 font-mono text-text-primary">{p.name}</td>
                     <td className="px-4 py-2 text-right text-text-secondary">{p.events_24h}</td>
                     <td className={`px-4 py-2 text-right ${p.errors_24h > 0 ? "text-red-300" : "text-text-tertiary"}`}>
@@ -150,7 +150,7 @@ export default async function AdminHealthPage() {
       <section>
         <h2 className="text-lg font-medium text-text-primary mb-3">Recent alerts</h2>
         {alerts.length === 0 ? (
-          <div className="rounded-xl bg-white/[0.02] border border-white/[0.06] p-4 text-sm text-text-tertiary">
+          <div className="rounded-xl bg-surface-raised-1 border border-border-subtle p-4 text-sm text-text-tertiary">
             No alerts in the last 24h.
           </div>
         ) : (
@@ -158,7 +158,7 @@ export default async function AdminHealthPage() {
             {alerts.map((a) => (
               <div
                 key={a.fingerprint}
-                className="rounded-xl bg-white/[0.03] border border-white/[0.08] p-4 space-y-1.5"
+                className="rounded-xl bg-surface-raised-1 border border-border-default p-4 space-y-1.5"
               >
                 <div className="flex items-center gap-2 flex-wrap">
                   <span

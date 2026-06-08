@@ -165,8 +165,8 @@ export function Sidebar() {
 
   return (
     <aside
-      className="hidden md:flex fixed inset-y-0 left-0 w-64 z-10 flex-col overflow-hidden border-r border-white/[0.06] pointer-events-auto"
-      style={{ backgroundColor: "oklch(0.13 0 0)" }}
+      className="hidden md:flex fixed inset-y-0 left-0 w-64 z-10 flex-col overflow-hidden border-r border-border-subtle pointer-events-auto"
+      style={{ backgroundColor: "var(--panel-surface)" }}
     >
       <WorkspaceSwitcher
         current={currentWorkspace}
@@ -250,13 +250,13 @@ function usePendingInvitations() {
 
 function SidebarSearchRow() {
   return (
-    <div className="flex items-center gap-2 px-3 py-3 border-b border-white/[0.06]">
+    <div className="flex items-center gap-2 px-3 py-3 border-b border-border-subtle">
       <button
         type="button"
-        className="flex-1 flex items-center justify-between gap-2 px-2 py-1.5 rounded-md border border-white/[0.06] hover:bg-white/[0.04] transition-colors cursor-pointer"
+        className="flex-1 flex items-center justify-between gap-2 px-2 py-1.5 rounded-md border border-border-subtle hover:bg-surface-raised-2 transition-colors cursor-pointer"
       >
         <span className="flex items-center gap-1.5 text-xs text-text-secondary">
-          <kbd className="font-mono px-1 py-0.5 rounded bg-white/[0.06] border border-white/[0.1] text-[10px] text-text-secondary/70">
+          <kbd className="font-mono px-1 py-0.5 rounded bg-surface-raised-3 border border-border-default text-[10px] text-text-secondary/70">
             K
           </kbd>
           Quick Actions
@@ -266,7 +266,7 @@ function SidebarSearchRow() {
       <button
         type="button"
         aria-label="Search"
-        className="flex items-center gap-1.5 px-2 py-1.5 rounded-md border border-white/[0.06] hover:bg-white/[0.04] transition-colors cursor-pointer"
+        className="flex items-center gap-1.5 px-2 py-1.5 rounded-md border border-border-subtle hover:bg-surface-raised-2 transition-colors cursor-pointer"
       >
         <Search size={13} className="text-text-secondary/60" />
         <kbd className="font-mono text-[10px] text-text-secondary/40">/</kbd>
@@ -320,8 +320,8 @@ function SidebarNav({ pathname, workspaceSegment, workspaceId }: NavProps) {
         const className = cn(
           "flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-sm transition-colors cursor-pointer",
           active
-            ? "bg-white/[0.06] text-text-primary"
-            : "text-text-secondary hover:bg-white/[0.04] hover:text-text-primary",
+            ? "bg-surface-selected text-text-primary"
+            : "text-text-secondary hover:bg-surface-raised-2 hover:text-text-primary",
         );
         const inner = (
           <>
@@ -452,8 +452,8 @@ function KnowledgeNavSection({ pathname, workspaceSegment, workspaceId }: NavPro
   const rowClassName = cn(
     "w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-sm transition-colors cursor-pointer text-left",
     isOnKnowledge
-      ? "bg-white/[0.06] text-text-primary"
-      : "text-text-secondary hover:bg-white/[0.04] hover:text-text-primary",
+      ? "bg-surface-selected text-text-primary"
+      : "text-text-secondary hover:bg-surface-raised-2 hover:text-text-primary",
   );
 
   return (
@@ -474,7 +474,7 @@ function KnowledgeNavSection({ pathname, workspaceSegment, workspaceId }: NavPro
       </button>
 
       {expanded && (
-        <div className="ml-4 mt-0.5 mb-1 flex flex-col gap-0.5 border-l border-white/[0.06] pl-2">
+        <div className="ml-4 mt-0.5 mb-1 flex flex-col gap-0.5 border-l border-border-subtle pl-2">
           {status === "loading" && kbsForRender.length === 0 ? (
             <div className="px-2 py-1 text-xs text-text-secondary/60">
               Loading…
@@ -487,8 +487,8 @@ function KnowledgeNavSection({ pathname, workspaceSegment, workspaceId }: NavPro
             const itemClass = cn(
               "flex items-center gap-1.5 px-2 py-1 rounded-md text-xs transition-colors cursor-pointer",
               itemActive
-                ? "bg-white/[0.06] text-text-primary"
-                : "text-text-secondary hover:bg-white/[0.04] hover:text-text-primary",
+                ? "bg-surface-selected text-text-primary"
+                : "text-text-secondary hover:bg-surface-raised-2 hover:text-text-primary",
             );
             const level = resolveAccess("knowledge_base", kb.id);
             const itemInner = (
@@ -526,7 +526,7 @@ function KnowledgeNavSection({ pathname, workspaceSegment, workspaceId }: NavPro
               disabled={creating || !workspaceId}
               className={cn(
                 "flex items-center gap-1.5 px-2 py-1 rounded-md text-xs transition-colors cursor-pointer text-left",
-                "text-text-secondary/70 hover:bg-white/[0.04] hover:text-text-primary",
+                "text-text-secondary/70 hover:bg-surface-raised-2 hover:text-text-primary",
                 "disabled:opacity-50 disabled:cursor-default disabled:hover:bg-transparent",
               )}
             >
@@ -618,8 +618,8 @@ function SkillsNavSection({ pathname, workspaceSegment, workspaceId }: NavProps)
   const rowClassName = cn(
     "w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-sm transition-colors cursor-pointer text-left",
     isOnSkills
-      ? "bg-white/[0.06] text-text-primary"
-      : "text-text-secondary hover:bg-white/[0.04] hover:text-text-primary",
+      ? "bg-surface-selected text-text-primary"
+      : "text-text-secondary hover:bg-surface-raised-2 hover:text-text-primary",
   );
 
   return (
@@ -640,7 +640,7 @@ function SkillsNavSection({ pathname, workspaceSegment, workspaceId }: NavProps)
       </button>
 
       {expanded && (
-        <div className="ml-4 mt-0.5 mb-1 flex flex-col gap-0.5 border-l border-white/[0.06] pl-2">
+        <div className="ml-4 mt-0.5 mb-1 flex flex-col gap-0.5 border-l border-border-subtle pl-2">
           {status === "loading" && skillsForRender.length === 0 ? (
             <div className="px-2 py-1 text-xs text-text-secondary/60">
               Loading…
@@ -653,8 +653,8 @@ function SkillsNavSection({ pathname, workspaceSegment, workspaceId }: NavProps)
             const itemClass = cn(
               "flex items-center gap-1.5 px-2 py-1 rounded-md text-xs transition-colors cursor-pointer",
               itemActive
-                ? "bg-white/[0.06] text-text-primary"
-                : "text-text-secondary hover:bg-white/[0.04] hover:text-text-primary",
+                ? "bg-surface-selected text-text-primary"
+                : "text-text-secondary hover:bg-surface-raised-2 hover:text-text-primary",
             );
             const level = resolveAccess("skill", skill.id);
             const itemInner = (
@@ -690,7 +690,7 @@ function SkillsNavSection({ pathname, workspaceSegment, workspaceId }: NavProps)
               disabled={creating || !workspaceId}
               className={cn(
                 "flex items-center gap-1.5 px-2 py-1 rounded-md text-xs transition-colors cursor-pointer text-left",
-                "text-text-secondary/70 hover:bg-white/[0.04] hover:text-text-primary",
+                "text-text-secondary/70 hover:bg-surface-raised-2 hover:text-text-primary",
                 "disabled:opacity-50 disabled:cursor-default disabled:hover:bg-transparent",
               )}
             >

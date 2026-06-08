@@ -389,7 +389,7 @@ function ConflictBanner({
           type="button"
           onClick={onDiscardMine}
           disabled={resolving}
-          className="rounded-md border border-white/[0.1] bg-white/[0.02] px-2.5 py-1 text-[11px] text-white/70 transition-colors hover:bg-white/[0.06] hover:text-white/95 disabled:opacity-40"
+          className="rounded-md border border-border-default bg-surface-raised-1 px-2.5 py-1 text-[11px] text-text-secondary transition-colors hover:bg-surface-raised-3 hover:text-text-primary disabled:opacity-40"
         >
           Discard mine, reload
         </button>

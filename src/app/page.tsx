@@ -240,7 +240,7 @@ export default function Home() {
                   // joins the panel below — like a tab stuck onto the card.
                   style={{
                     backgroundColor: active
-                      ? "oklch(0.11 0 0)"
+                      ? "var(--input-surface)"
                       : "transparent",
                     transition:
                       "background-color 220ms ease-out, color 180ms ease-out",
@@ -280,7 +280,7 @@ export default function Home() {
         <div className="relative max-w-[1280px] mx-auto">
           <div
             className="rounded-xl border border-white/[0.08] overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.35),0_32px_80px_rgba(0,0,0,0.55)] text-left"
-            style={{ height: 680, backgroundColor: "oklch(0.11 0 0)" }}
+            style={{ height: 680, backgroundColor: "var(--input-surface)" }}
           >
             <div className="flex h-full">
               <SidebarMock active={tab} kbTick={kbTick} />

@@ -34,8 +34,8 @@ export function WorkspacesList({ initial }: { initial: Workspace[] }) {
     <>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-semibold text-white">Workspaces</h1>
-          <p className="text-sm text-white/50 mt-1">
+          <h1 className="text-2xl font-semibold text-text-primary">Workspaces</h1>
+          <p className="text-sm text-text-tertiary mt-1">
             Each workspace is a separate workspace — its own clusters and
             chat history.
           </p>
@@ -43,7 +43,7 @@ export function WorkspacesList({ initial }: { initial: Workspace[] }) {
         <button
           type="button"
           onClick={() => setCreateOpen(true)}
-          className="h-9 px-4 rounded-md bg-white text-black text-xs font-medium hover:bg-white/90 transition-colors"
+          className="h-9 px-4 rounded-md bg-surface-cta text-text-on-cta text-xs font-medium hover:bg-surface-cta/90 transition-colors"
         >
           New workspace
         </button>
@@ -74,34 +74,34 @@ export function WorkspacesList({ initial }: { initial: Workspace[] }) {
 function WorkspaceCard({ workspace }: { workspace: Workspace }) {
   const segment = workspaceSegment(workspace);
   return (
-    <div className="rounded-lg bg-white/[0.03] border border-white/[0.08] p-4 hover:bg-white/[0.05] hover:border-white/[0.15] transition-colors">
+    <div className="rounded-lg bg-surface-raised-1 border border-border-default p-4 hover:bg-surface-raised-2 hover:border-border-strong transition-colors">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <Link
             href={`/${segment}`}
-            className="block text-sm font-medium text-white truncate hover:underline"
+            className="block text-sm font-medium text-text-primary truncate hover:underline"
           >
             {workspace.name}
           </Link>
           {workspace.description && (
-            <p className="text-xs text-white/50 mt-1 line-clamp-2">
+            <p className="text-xs text-text-tertiary mt-1 line-clamp-2">
               {workspace.description}
             </p>
           )}
-          <p className="text-[10px] uppercase tracking-wider text-white/30 mt-2 font-mono">
+          <p className="text-[10px] uppercase tracking-wider text-text-muted mt-2 font-mono">
             Updated {formatRelative(workspace.updatedAt)}
           </p>
         </div>
         <div className="flex flex-col items-end gap-1 shrink-0">
           <Link
             href={`/${segment}`}
-            className="h-7 px-3 rounded-md text-[10px] uppercase tracking-wider font-medium text-white/70 bg-white/[0.06] border border-white/[0.12] hover:bg-white/[0.1] hover:text-white transition-colors"
+            className="h-7 px-3 rounded-md text-[10px] uppercase tracking-wider font-medium text-text-secondary bg-surface-raised-3 border border-border-strong hover:bg-surface-raised-4 hover:text-text-primary transition-colors"
           >
             Open
           </Link>
           <Link
             href={`/${segment}/settings`}
-            className="text-[10px] uppercase tracking-wider text-white/40 hover:text-white/70 transition-colors"
+            className="text-[10px] uppercase tracking-wider text-text-muted hover:text-text-secondary transition-colors"
           >
             Settings
           </Link>
@@ -113,16 +113,16 @@ function WorkspaceCard({ workspace }: { workspace: Workspace }) {
 
 function EmptyState({ onCreate }: { onCreate: () => void }) {
   return (
-    <div className="rounded-lg bg-white/[0.02] border border-dashed border-white/[0.12] p-10 flex flex-col items-center text-center">
-      <h2 className="text-base font-medium text-white">No workspaces yet</h2>
-      <p className="text-sm text-white/50 mt-1 max-w-sm">
+    <div className="rounded-lg bg-surface-raised-1 border border-dashed border-border-strong p-10 flex flex-col items-center text-center">
+      <h2 className="text-base font-medium text-text-primary">No workspaces yet</h2>
+      <p className="text-sm text-text-tertiary mt-1 max-w-sm">
         Create your first workspace to start gathering setups and building
         clusters.
       </p>
       <button
         type="button"
         onClick={onCreate}
-        className="mt-4 h-9 px-4 rounded-md bg-white text-black text-xs font-medium hover:bg-white/90 transition-colors"
+        className="mt-4 h-9 px-4 rounded-md bg-surface-cta text-text-on-cta text-xs font-medium hover:bg-surface-cta/90 transition-colors"
       >
         Create workspace
       </button>

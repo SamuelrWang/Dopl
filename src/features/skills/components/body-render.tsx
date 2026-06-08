@@ -129,7 +129,7 @@ export function ConnectorChip({ provider, field, label }: ConnectorChipProps) {
     <span
       className={cn(
         "inline-flex items-baseline gap-1 align-baseline px-1.5 py-px rounded",
-        "bg-white/[0.04] border border-white/[0.08] text-text-primary",
+        "bg-surface-raised-2 border border-border-default text-text-primary",
         "text-[12.5px] font-medium"
       )}
     >

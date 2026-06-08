@@ -21,11 +21,11 @@ export default async function AdminAnalyticsPage() {
           </h1>
           <p className="text-sm text-text-secondary mt-1">
             Funnel metrics for the $7.99/mo launch. Pulls from
-            <code className="mx-1 rounded bg-white/[0.06] px-1 py-0.5 text-xs">
+            <code className="mx-1 rounded bg-surface-raised-3 px-1 py-0.5 text-xs">
               conversion_events
             </code>
             and
-            <code className="mx-1 rounded bg-white/[0.06] px-1 py-0.5 text-xs">
+            <code className="mx-1 rounded bg-surface-raised-3 px-1 py-0.5 text-xs">
               profiles
             </code>
             .
@@ -34,7 +34,7 @@ export default async function AdminAnalyticsPage() {
         <nav className="flex gap-2 text-sm">
           <Link
             href="/admin/health"
-            className="rounded border border-white/[0.08] px-3 py-1.5 text-text-secondary hover:bg-white/[0.04]"
+            className="rounded border border-border-default px-3 py-1.5 text-text-secondary hover:bg-surface-raised-2"
           >
             Health
           </Link>
@@ -88,9 +88,9 @@ export default async function AdminAnalyticsPage() {
         <h2 className="text-sm font-medium text-text-primary mb-3">
           Last 30 days
         </h2>
-        <div className="rounded-lg border border-white/[0.08] overflow-hidden">
+        <div className="rounded-lg border border-border-default overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-white/[0.02] text-xs uppercase tracking-wide text-text-tertiary">
+            <thead className="bg-surface-raised-1 text-xs uppercase tracking-wide text-text-tertiary">
               <tr>
                 <th className="text-left px-3 py-2 font-medium">Day</th>
                 <th className="text-right px-3 py-2 font-medium">Signups</th>
@@ -101,7 +101,7 @@ export default async function AdminAnalyticsPage() {
               {m.daily.map((row) => (
                 <tr
                   key={row.day}
-                  className="border-t border-white/[0.04] text-text-secondary"
+                  className="border-t border-border-subtle text-text-secondary"
                 >
                   <td className="px-3 py-1.5 font-mono text-xs">{row.day}</td>
                   <td className="px-3 py-1.5 text-right">{row.signups}</td>
@@ -134,7 +134,7 @@ function Kpi({
       ? "text-emerald-300"
       : "text-text-primary";
   return (
-    <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-3">
+    <div className="rounded-lg border border-border-default bg-surface-raised-1 px-3 py-3">
       <div className="text-xs text-text-tertiary uppercase tracking-wide">
         {label}
       </div>
@@ -155,7 +155,7 @@ function Funnel({
   pct: number | null;
 }) {
   return (
-    <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-4 py-3">
+    <div className="rounded-lg border border-border-default bg-surface-raised-1 px-4 py-3">
       <div className="flex items-baseline justify-between gap-2">
         <div className="text-sm text-text-primary">{label}</div>
         <div className="text-lg font-semibold text-text-primary">

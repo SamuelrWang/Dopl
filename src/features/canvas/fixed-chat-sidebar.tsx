@@ -162,7 +162,7 @@ export function FixedChatSidebar() {
           onClick={handleToggle}
           aria-label="Toggle chat sidebar"
           style={{ pointerEvents: "auto" }}
-          className="self-center shrink-0 w-6 h-16 flex items-center justify-center rounded-l-lg bg-[#1c1c1f] border border-r-0 border-white/10 text-white/40 hover:text-white/80 hover:bg-[#252528]"
+          className="self-center shrink-0 w-6 h-16 flex items-center justify-center rounded-l-lg bg-bg-elevated border border-r-0 border-border-default text-text-muted hover:text-text-secondary hover:bg-bg-elevated-hover"
         >
           <svg
             width="10"
@@ -180,29 +180,29 @@ export function FixedChatSidebar() {
 
         {/* Inner panel — rounded corners here (not on the transforming element) */}
         <div
-          className="flex-1 flex flex-col rounded-l-2xl overflow-hidden bg-[#1c1c1f]"
+          className="flex-1 flex flex-col rounded-l-2xl overflow-hidden bg-bg-elevated"
           style={{
             pointerEvents: "auto",
-            boxShadow: "inset 1px 0 0 rgba(255,255,255,0.08)",
+            boxShadow: "inset 1px 0 0 var(--hairline-shine)",
           }}
         >
           <div className="flex w-full h-full">
             {/* Conversation list */}
             <div
               className="w-[180px] shrink-0 flex flex-col overflow-hidden"
-              style={{ boxShadow: "inset -1px 0 0 rgba(255,255,255,0.06)" }}
+              style={{ boxShadow: "inset -1px 0 0 var(--hairline-shine)" }}
             >
               <div
                 className="shrink-0 px-3 h-10 flex items-center"
-                style={{ boxShadow: "inset 0 -1px 0 rgba(255,255,255,0.06)" }}
+                style={{ boxShadow: "inset 0 -1px 0 var(--hairline-shine)" }}
               >
-                <span className="font-mono text-[10px] uppercase tracking-wider text-white/50">
+                <span className="font-mono text-[10px] uppercase tracking-wider text-text-tertiary">
                   Conversations
                 </span>
               </div>
               <div className="flex-1 overflow-y-auto">
                 {chatPanels.length === 0 ? (
-                  <div className="px-3 py-4 text-[11px] text-white/25 font-mono">
+                  <div className="px-3 py-4 text-[11px] text-text-disabled font-mono">
                     No chats yet
                   </div>
                 ) : (
@@ -212,24 +212,24 @@ export function FixedChatSidebar() {
                       onClick={() => setSelectedPanelId(panel.id)}
                       className={`w-full text-left px-3 py-2.5 ${
                         effectivePanel?.id === panel.id
-                          ? "bg-white/[0.08]"
-                          : "hover:bg-white/[0.04]"
+                          ? "bg-surface-selected"
+                          : "hover:bg-surface-raised-2"
                       }`}
-                      style={{ boxShadow: "inset 0 -1px 0 rgba(255,255,255,0.04)" }}
+                      style={{ boxShadow: "inset 0 -1px 0 var(--hairline-shine)" }}
                     >
-                      <div className="font-mono text-[11px] text-white/70 truncate leading-tight">
+                      <div className="font-mono text-[11px] text-text-secondary truncate leading-tight">
                         {panel.title}
                       </div>
                       <div className="flex items-center gap-2 mt-1">
-                        <span className="font-mono text-[9px] text-white/25">
+                        <span className="font-mono text-[9px] text-text-disabled">
                           {panel.messages.filter((m) => m.type === "text").length} msgs
                         </span>
                         {panel.pinned ? (
-                          <span className="font-mono text-[9px] text-white/30">
+                          <span className="font-mono text-[9px] text-text-muted">
                             Pinned
                           </span>
                         ) : panel.expiresAt ? (
-                          <span className="font-mono text-[9px] text-white/20">
+                          <span className="font-mono text-[9px] text-text-disabled">
                             {formatTimeShort(panel.expiresAt)}
                           </span>
                         ) : null}
@@ -246,16 +246,16 @@ export function FixedChatSidebar() {
                 <>
                   <div
                     className="shrink-0 px-4 h-10 flex items-center justify-between"
-                    style={{ boxShadow: "inset 0 -1px 0 rgba(255,255,255,0.06)" }}
+                    style={{ boxShadow: "inset 0 -1px 0 var(--hairline-shine)" }}
                   >
-                    <span className="font-mono text-[11px] text-white/60 truncate">
+                    <span className="font-mono text-[11px] text-text-tertiary truncate">
                       {effectivePanel.title}
                     </span>
                     <button
                       onClick={handleLocate}
                       aria-label="Locate on canvas"
                       title="Pan canvas to this chat"
-                      className="w-6 h-6 flex items-center justify-center rounded-[3px] text-white/30 hover:text-white/70 hover:bg-white/[0.06]"
+                      className="w-6 h-6 flex items-center justify-center rounded-[3px] text-text-muted hover:text-text-secondary hover:bg-surface-raised-3"
                     >
                       <svg
                         width="12"
@@ -275,27 +275,27 @@ export function FixedChatSidebar() {
 
                   <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
                     {textMessages.length === 0 ? (
-                      <div className="text-[11px] text-white/20 font-mono py-4">
+                      <div className="text-[11px] text-text-disabled font-mono py-4">
                         No messages yet
                       </div>
                     ) : (
                       textMessages.map((msg, i) => (
                         <div key={i} className="flex flex-col gap-1">
-                          <span className="font-mono text-[9px] uppercase tracking-wider text-white/25">
+                          <span className="font-mono text-[9px] uppercase tracking-wider text-text-disabled">
                             {msg.role === "user" ? "You" : "AI"}
                           </span>
                           {msg.role === "ai" && msg.type === "text" ? (
-                            <div className="text-[12px] text-white/70 leading-relaxed">
+                            <div className="text-[12px] text-text-secondary leading-relaxed">
                               <MarkdownMessage content={msg.content} />
                             </div>
                           ) : (
-                            <div className="text-[12px] text-white/70 leading-relaxed whitespace-pre-wrap">
+                            <div className="text-[12px] text-text-secondary leading-relaxed whitespace-pre-wrap">
                               {msg.type === "text" ? msg.content : ""}
                               {msg.role === "user" &&
                                 msg.type === "text" &&
                                 msg.attachments &&
                                 msg.attachments.length > 0 && (
-                                  <span className="block mt-1 font-mono text-[9px] text-white/30 uppercase">
+                                  <span className="block mt-1 font-mono text-[9px] text-text-muted uppercase">
                                     [{msg.attachments.length} attachment
                                     {msg.attachments.length > 1 ? "s" : ""}]
                                   </span>
@@ -309,7 +309,7 @@ export function FixedChatSidebar() {
                 </>
               ) : (
                 <div className="flex-1 flex items-center justify-center">
-                  <span className="font-mono text-[11px] text-white/20">
+                  <span className="font-mono text-[11px] text-text-disabled">
                     No conversation selected
                   </span>
                 </div>

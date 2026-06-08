@@ -96,6 +96,16 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} ${playfairDisplay.variable} ${inter.variable} antialiased mosaic-bg min-h-screen`}
       >
+        {/* Pre-hydration: apply the saved theme before first paint so light
+            mode never flashes dark on reload. Forced-dark routes (marketing,
+            auth, legal, docs, design demo) ignore the preference and stay
+            dark. Keep this route list in sync with isForcedDarkPath() in
+            src/shared/hooks/use-theme.ts. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var p=location.pathname;var f=p==='/'||p.indexOf('/docs')===0||p.indexOf('/login')===0||p.indexOf('/pricing')===0||p.indexOf('/privacy')===0||p.indexOf('/terms')===0||p.indexOf('/design')===0;var t=localStorage.getItem('dopl-theme');var e=document.documentElement;if(!f&&t==='light'){e.classList.add('light');e.classList.remove('dark');}else{e.classList.add('dark');e.classList.remove('light');}}catch(e){}})();`,
+          }}
+        />
         {/* Pre-hydration: strip mosaic-bg before first paint on no-chrome
             routes so the grid pattern never flashes. Inline scripts in
             <body> are render-blocking, so this runs before the browser

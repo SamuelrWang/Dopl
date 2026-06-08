@@ -84,7 +84,7 @@ export function ContextFileCard({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-white/[0.03] transition-colors"
+        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-surface-raised-1 transition-colors"
       >
         <FileText size={12} className="text-cyan-300/80 shrink-0" />
         <span className="text-[10px] font-mono uppercase tracking-wider text-cyan-300/80 shrink-0">
@@ -104,14 +104,14 @@ export function ContextFileCard({
         aria-hidden={!open}
       >
         <div className="overflow-hidden min-h-0">
-          <div className="px-3 py-3 max-h-[360px] overflow-y-auto border-t border-white/[0.06] text-[12.5px]">
+          <div className="px-3 py-3 max-h-[360px] overflow-y-auto border-t border-border-subtle text-[12.5px]">
             <MarkdownMessage content={markdown} />
           </div>
-          <div className="flex items-center gap-2 px-2 py-2 border-t border-white/[0.06] bg-white/[0.02]">
+          <div className="flex items-center gap-2 px-2 py-2 border-t border-border-subtle bg-surface-raised-1">
             <button
               type="button"
               onClick={handleCopy}
-              className="flex items-center gap-1.5 px-2 py-1 rounded text-[11.5px] text-text-secondary hover:bg-white/[0.06] hover:text-text-primary transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 px-2 py-1 rounded text-[11.5px] text-text-secondary hover:bg-surface-raised-3 hover:text-text-primary transition-colors cursor-pointer"
             >
               {copied ? <Check size={12} /> : <Copy size={12} />}
               {copied ? "Copied" : "Copy"}
@@ -119,7 +119,7 @@ export function ContextFileCard({
             <button
               type="button"
               onClick={handleDownload}
-              className="flex items-center gap-1.5 px-2 py-1 rounded text-[11.5px] text-text-secondary hover:bg-white/[0.06] hover:text-text-primary transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 px-2 py-1 rounded text-[11.5px] text-text-secondary hover:bg-surface-raised-3 hover:text-text-primary transition-colors cursor-pointer"
             >
               <Download size={12} /> Download .md
             </button>
@@ -130,7 +130,7 @@ export function ContextFileCard({
                   if (!promoting && !promoted) setConfirmOpen(true);
                 }}
                 disabled={promoting || Boolean(promoted)}
-                className="ml-auto flex items-center gap-1.5 px-2 py-1 rounded text-[11.5px] text-text-secondary hover:bg-white/[0.06] hover:text-text-primary transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                className="ml-auto flex items-center gap-1.5 px-2 py-1 rounded text-[11.5px] text-text-secondary hover:bg-surface-raised-3 hover:text-text-primary transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {promoted ? (
                   <>

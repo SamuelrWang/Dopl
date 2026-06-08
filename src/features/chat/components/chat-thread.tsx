@@ -162,7 +162,7 @@ export function ChatThread({
   return (
     <div className="flex flex-col h-full min-h-0">
       {/* Header */}
-      <div className="shrink-0 flex items-center gap-2 px-4 py-2.5 border-b border-white/[0.06]">
+      <div className="shrink-0 flex items-center gap-2 px-4 py-2.5 border-b border-border-subtle">
         {titleEditing ? (
           <input
             type="text"
@@ -182,7 +182,7 @@ export function ChatThread({
               }
             }}
             autoFocus
-            className="flex-1 bg-transparent outline-none text-[13px] font-medium text-text-primary border-b border-white/[0.15]"
+            className="flex-1 bg-transparent outline-none text-[13px] font-medium text-text-primary border-b border-border-strong"
           />
         ) : (
           <button
@@ -229,7 +229,7 @@ export function ChatThread({
       {/* Composer — same centered column as messages. */}
       <div className="shrink-0 px-6 pb-4 pt-2">
         <div className="max-w-3xl mx-auto">
-          <div className="flex items-end gap-2 rounded-xl border border-white/[0.1] bg-white/[0.04] px-3 py-2">
+          <div className="flex items-end gap-2 rounded-xl border border-border-default bg-surface-raised-2 px-3 py-2">
             <button
               type="button"
               disabled
@@ -267,7 +267,7 @@ export function ChatThread({
               onClick={handleSend}
               disabled={!canSend}
               aria-label={isStreaming ? "Processing" : "Send"}
-              className="shrink-0 w-7 h-7 flex items-center justify-center text-white/50 hover:text-white/90 border border-white/[0.12] hover:border-white/[0.22] rounded-full transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-white/[0.04] hover:bg-white/[0.08] cursor-pointer"
+              className="shrink-0 w-7 h-7 flex items-center justify-center text-text-tertiary hover:text-text-primary border border-border-strong hover:border-border-highlight rounded-full transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-surface-raised-2 hover:bg-surface-raised-4 cursor-pointer"
             >
               <svg
                 width="14"

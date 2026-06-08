@@ -237,14 +237,13 @@ export function FixedInputBar() {
     >
       <div className="w-[95%] md:w-3/4 max-w-3xl pointer-events-auto">
         <div
-          className="relative rounded-2xl overflow-hidden backdrop-blur-xl border border-white/[0.1] shadow-[0_4px_16px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.08)] transition-colors duration-200 focus-within:border-white/[0.18]"
-          style={{ backgroundColor: "oklch(0.13 0 0 / 0.5)" }}
+          className="relative rounded-2xl overflow-hidden backdrop-blur-xl border border-border-default shadow-[var(--shadow-panel)] transition-colors duration-200 focus-within:border-border-strong"
+          style={{ backgroundColor: "var(--input-surface)" }}
         >
           <div
             className="pointer-events-none absolute inset-x-0 top-0 h-px"
             style={{
-              background:
-                "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.3) 30%, rgba(255,255,255,0.4) 50%, rgba(255,255,255,0.3) 70%, transparent 100%)",
+              background: "var(--shine-top-gradient)",
             }}
           />
           <textarea
@@ -254,7 +253,7 @@ export function FixedInputBar() {
             onKeyDown={handleKeyDown}
             placeholder="Ask anything..."
             rows={1}
-            className="w-full bg-transparent px-4 pt-4 pb-2 text-base leading-[24px] text-white/90 outline-none resize-none placeholder:text-white/30 disabled:opacity-50 min-h-[48px] max-h-[200px]"
+            className="w-full bg-transparent px-4 pt-4 pb-2 text-base leading-[24px] text-text-primary outline-none resize-none placeholder:text-text-muted disabled:opacity-50 min-h-[48px] max-h-[200px]"
           />
           <div className="flex items-center justify-between px-3 pb-3">
             {/* Left pill group — Chat + Knowledge + Skills */}
@@ -265,8 +264,8 @@ export function FixedInputBar() {
                 aria-label="Toggle chat panel"
                 className={`inline-flex items-center h-7 px-3 font-mono text-[10px] uppercase tracking-wider rounded-full transition-colors border ${
                   chatOpen
-                    ? "text-white/90 bg-white/[0.12] border-white/[0.25]"
-                    : "text-white/60 hover:text-white/95 bg-white/[0.04] hover:bg-white/[0.09] border-white/[0.12] hover:border-white/[0.22]"
+                    ? "text-text-primary bg-surface-selected border-border-highlight"
+                    : "text-text-tertiary hover:text-text-primary bg-surface-raised-2 hover:bg-surface-raised-4 border-border-default hover:border-border-highlight"
                 }`}
               >
                 Chat
@@ -275,7 +274,7 @@ export function FixedInputBar() {
               <button
                 onClick={handleSpawnKnowledge}
                 aria-label="Spawn knowledge panel"
-                className="inline-flex items-center h-7 px-3 font-mono text-[10px] uppercase tracking-wider text-white/60 hover:text-white/95 bg-white/[0.04] hover:bg-white/[0.09] border border-white/[0.12] hover:border-white/[0.22] rounded-full transition-colors"
+                className="inline-flex items-center h-7 px-3 font-mono text-[10px] uppercase tracking-wider text-text-tertiary hover:text-text-primary bg-surface-raised-2 hover:bg-surface-raised-4 border border-border-default hover:border-border-highlight rounded-full transition-colors"
               >
                 Knowledge
               </button>
@@ -283,7 +282,7 @@ export function FixedInputBar() {
               <button
                 onClick={handleSpawnSkills}
                 aria-label="Spawn skills panel"
-                className="inline-flex items-center h-7 px-3 font-mono text-[10px] uppercase tracking-wider text-white/60 hover:text-white/95 bg-white/[0.04] hover:bg-white/[0.09] border border-white/[0.12] hover:border-white/[0.22] rounded-full transition-colors"
+                className="inline-flex items-center h-7 px-3 font-mono text-[10px] uppercase tracking-wider text-text-tertiary hover:text-text-primary bg-surface-raised-2 hover:bg-surface-raised-4 border border-border-default hover:border-border-highlight rounded-full transition-colors"
               >
                 Skills
               </button>
@@ -326,7 +325,7 @@ export function FixedInputBar() {
                       strokeWidth={1.8}
                       strokeLinecap="round"
                       strokeLinejoin="round"
-                      className="w-4 h-4 text-white/40 hover:text-white/70 transition-colors"
+                      className="w-4 h-4 text-text-muted hover:text-text-secondary transition-colors"
                     >
                       <rect x="9" y="2" width="6" height="12" rx="3" />
                       <path d="M5 10a7 7 0 0 0 14 0" />
@@ -341,7 +340,7 @@ export function FixedInputBar() {
                 onClick={handleSend}
                 disabled={!canSend}
                 aria-label="Send"
-                className="w-7 h-7 flex items-center justify-center text-white/50 hover:text-white/90 border border-white/[0.12] hover:border-white/[0.22] rounded-full transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-white/[0.04] hover:bg-white/[0.08]"
+                className="w-7 h-7 flex items-center justify-center text-text-tertiary hover:text-text-primary border border-border-default hover:border-border-highlight rounded-full transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-surface-raised-2 hover:bg-surface-raised-4"
               >
                 <svg
                   width="14"

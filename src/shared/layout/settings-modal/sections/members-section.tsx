@@ -45,7 +45,7 @@ export function MembersSection({
           <button
             type="button"
             onClick={() => setInviteOpen(true)}
-            className="flex items-center gap-1.5 px-3 h-8 rounded-md border border-white/[0.12] bg-white/[0.06] hover:bg-white/[0.1] transition-colors text-xs text-white cursor-pointer"
+            className="flex items-center gap-1.5 px-3 h-8 rounded-md border border-border-strong bg-surface-raised-3 hover:bg-surface-raised-4 transition-colors text-xs text-text-primary cursor-pointer"
           >
             <Plus size={13} />
             Add members

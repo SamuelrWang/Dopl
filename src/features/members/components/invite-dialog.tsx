@@ -110,31 +110,31 @@ export function InviteDialog({ workspaceSlug, open, onOpenChange, onInvited }: P
     >
       <DialogContent
         showCloseButton={false}
-        className="sm:max-w-md bg-[#0a0a0a] border-white/[0.12] text-white"
+        className="sm:max-w-md bg-modal-surface border-border-strong text-text-primary"
       >
         <div className="flex flex-col items-center text-center gap-1.5 pt-2">
-          <div className="w-10 h-10 rounded-full flex items-center justify-center bg-white/[0.06] border border-white/[0.1] text-white/80">
+          <div className="w-10 h-10 rounded-full flex items-center justify-center bg-surface-raised-3 border border-border-default text-text-secondary">
             <UserPlus size={18} />
           </div>
-          <DialogTitle className="text-white text-lg">Add members</DialogTitle>
-          <p className="text-sm text-white/50">
+          <DialogTitle className="text-text-primary text-lg">Add members</DialogTitle>
+          <p className="text-sm text-text-tertiary">
             Type or paste in emails below, separated by commas
           </p>
         </div>
 
         {sentCount != null ? (
           <div className="flex flex-col gap-2 py-4 text-center">
-            <p className="text-sm text-white">
+            <p className="text-sm text-text-primary">
               {sentCount === 1 ? "Invitation sent." : `${sentCount} invitations sent.`}
             </p>
-            <p className="text-xs text-white/50">
+            <p className="text-xs text-text-tertiary">
               They&apos;ll see it in their sidebar the next time they log in and
               can accept from there. Invites expire in 7 days.
             </p>
             <button
               type="button"
               onClick={() => onOpenChange(false)}
-              className="mt-2 h-9 rounded-md bg-[#2f6fed] text-white text-sm font-medium hover:bg-[#2b66d9] transition-colors cursor-pointer"
+              className="mt-2 h-9 rounded-md bg-accent-primary text-accent-on text-sm font-medium hover:bg-accent-primary/90 transition-colors cursor-pointer"
             >
               Done
             </button>
@@ -147,26 +147,26 @@ export function InviteDialog({ workspaceSlug, open, onOpenChange, onInvited }: P
               onChange={(e) => setEmailsInput(e.target.value)}
               placeholder="Search names or emails"
               autoFocus
-              className="h-10 px-3 rounded-md bg-white/[0.04] border border-white/[0.12] text-sm text-white placeholder:text-white/30 outline-none focus:border-white/[0.25] transition-colors"
+              className="h-10 px-3 rounded-md bg-surface-raised-2 border border-border-strong text-sm text-text-primary placeholder:text-text-muted outline-none focus:border-border-highlight transition-colors"
             />
 
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-white/60">Select role</label>
+              <label className="text-xs font-medium text-text-tertiary">Select role</label>
               <div className="relative">
                 <button
                   type="button"
                   onClick={() => setRoleOpen((o) => !o)}
-                  className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-md bg-white/[0.04] border border-white/[0.12] text-left hover:bg-white/[0.06] transition-colors cursor-pointer"
+                  className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-md bg-surface-raised-2 border border-border-strong text-left hover:bg-surface-raised-3 transition-colors cursor-pointer"
                 >
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-white">{selectedRole.label}</p>
-                    <p className="text-xs text-white/40">{selectedRole.hint}</p>
+                    <p className="text-sm font-medium text-text-primary">{selectedRole.label}</p>
+                    <p className="text-xs text-text-muted">{selectedRole.hint}</p>
                   </div>
-                  <ChevronDown size={16} className="shrink-0 text-white/40" />
+                  <ChevronDown size={16} className="shrink-0 text-text-muted" />
                 </button>
 
                 {roleOpen && (
-                  <div className="absolute left-0 right-0 top-full z-10 mt-1 rounded-md overflow-hidden bg-[#141414] border border-white/[0.12] shadow-[0_8px_32px_rgba(0,0,0,0.5)] py-1">
+                  <div className="absolute left-0 right-0 top-full z-10 mt-1 rounded-md overflow-hidden bg-bg-inset border border-border-strong shadow-[0_8px_32px_rgba(0,0,0,0.5)] py-1">
                     {ROLES.map((r) => (
                       <button
                         key={r.value}
@@ -177,11 +177,11 @@ export function InviteDialog({ workspaceSlug, open, onOpenChange, onInvited }: P
                         }}
                         className={cn(
                           "w-full text-left px-3 py-2 transition-colors cursor-pointer",
-                          r.value === role ? "bg-white/[0.06]" : "hover:bg-white/[0.04]",
+                          r.value === role ? "bg-surface-selected" : "hover:bg-surface-raised-2",
                         )}
                       >
-                        <p className="text-sm font-medium text-white">{r.label}</p>
-                        <p className="text-xs text-white/40">{r.hint}</p>
+                        <p className="text-sm font-medium text-text-primary">{r.label}</p>
+                        <p className="text-xs text-text-muted">{r.hint}</p>
                       </button>
                     ))}
                   </div>
@@ -196,14 +196,14 @@ export function InviteDialog({ workspaceSlug, open, onOpenChange, onInvited }: P
                 type="button"
                 onClick={handleInvite}
                 disabled={submitting || emailsInput.trim() === ""}
-                className="h-10 rounded-md bg-[#2f6fed] text-white text-sm font-medium hover:bg-[#2b66d9] disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                className="h-10 rounded-md bg-accent-primary text-accent-on text-sm font-medium hover:bg-accent-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
               >
                 {submitting ? "Sending…" : "Send invite"}
               </button>
               <button
                 type="button"
                 onClick={() => onOpenChange(false)}
-                className="h-10 rounded-md text-sm font-medium text-white/70 hover:text-white hover:bg-white/[0.04] transition-colors cursor-pointer"
+                className="h-10 rounded-md text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-raised-2 transition-colors cursor-pointer"
               >
                 Cancel
               </button>

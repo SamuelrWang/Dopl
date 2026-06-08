@@ -79,7 +79,7 @@ export function AgentPromptCard({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-white/[0.03] transition-colors"
+        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-surface-raised-1 transition-colors"
       >
         <Send size={12} className="text-violet-300/80 shrink-0" />
         <span className="text-[10px] font-mono uppercase tracking-wider text-violet-300/80 shrink-0">
@@ -99,14 +99,14 @@ export function AgentPromptCard({
         aria-hidden={!open}
       >
         <div className="overflow-hidden min-h-0">
-          <pre className="px-3 py-3 max-h-[280px] overflow-y-auto text-[12px] leading-relaxed text-text-primary/90 whitespace-pre-wrap font-mono border-t border-white/[0.06]">
+          <pre className="px-3 py-3 max-h-[280px] overflow-y-auto text-[12px] leading-relaxed text-text-primary/90 whitespace-pre-wrap font-mono border-t border-border-subtle">
             {prompt}
           </pre>
-          <div className="flex items-center gap-2 px-2 py-2 border-t border-white/[0.06] bg-white/[0.02]">
+          <div className="flex items-center gap-2 px-2 py-2 border-t border-border-subtle bg-surface-raised-1">
             <button
               type="button"
               onClick={handleCopy}
-              className="flex items-center gap-1.5 px-2 py-1 rounded text-[11.5px] text-text-secondary hover:bg-white/[0.06] hover:text-text-primary transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 px-2 py-1 rounded text-[11.5px] text-text-secondary hover:bg-surface-raised-3 hover:text-text-primary transition-colors cursor-pointer"
             >
               {copied ? <Check size={12} /> : <Copy size={12} />}
               {copied ? "Copied" : "Copy prompt"}
@@ -118,7 +118,7 @@ export function AgentPromptCard({
                   if (!promoting && !promoted) setConfirmOpen(true);
                 }}
                 disabled={promoting || Boolean(promoted)}
-                className="ml-auto flex items-center gap-1.5 px-2 py-1 rounded text-[11.5px] text-text-secondary hover:bg-white/[0.06] hover:text-text-primary transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                className="ml-auto flex items-center gap-1.5 px-2 py-1 rounded text-[11.5px] text-text-secondary hover:bg-surface-raised-3 hover:text-text-primary transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {promoted ? (
                   <>

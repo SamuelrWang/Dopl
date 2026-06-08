@@ -77,7 +77,7 @@ export function ArtifactPanelBody({ panel, dispatch }: ArtifactPanelBodyProps) {
       {/* Header — title (editable) + view toggle */}
       <div
         data-no-drag
-        className="shrink-0 flex items-center gap-2 px-4 py-2 border-b border-white/[0.06]"
+        className="shrink-0 flex items-center gap-2 px-4 py-2 border-b border-border-subtle"
       >
         {titleEditing ? (
           <input
@@ -94,7 +94,7 @@ export function ArtifactPanelBody({ panel, dispatch }: ArtifactPanelBodyProps) {
               }
             }}
             autoFocus
-            className="flex-1 bg-transparent outline-none text-[13px] font-medium text-text-primary border-b border-white/[0.15]"
+            className="flex-1 bg-transparent outline-none text-[13px] font-medium text-text-primary border-b border-border-strong"
           />
         ) : (
           <button
@@ -109,7 +109,7 @@ export function ArtifactPanelBody({ panel, dispatch }: ArtifactPanelBodyProps) {
           type="button"
           onClick={editing ? commitMarkdown : startEditingMarkdown}
           aria-label={editing ? "View" : "Edit"}
-          className="shrink-0 w-7 h-7 rounded-md flex items-center justify-center text-text-secondary/70 hover:bg-white/[0.06] hover:text-text-primary transition-colors cursor-pointer"
+          className="shrink-0 w-7 h-7 rounded-md flex items-center justify-center text-text-secondary/70 hover:bg-surface-raised-3 hover:text-text-primary transition-colors cursor-pointer"
         >
           {editing ? <Eye size={13} /> : <Pencil size={13} />}
         </button>

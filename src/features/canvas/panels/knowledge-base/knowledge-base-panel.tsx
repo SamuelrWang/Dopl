@@ -226,19 +226,19 @@ export function KnowledgeBasePanelBody({ panel }: Props) {
     <div className="flex h-full w-full flex-col">
       <ClusterAttachmentBanner panelId={panel.id} />
       {/* Sub-header: KB metadata */}
-      <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-3">
+      <div className="flex items-center justify-between border-b border-border-subtle px-4 py-3">
         <button
           type="button"
           onClick={() => setTreeOpen((v) => !v)}
           aria-label={treeOpen ? "Collapse file tree" : "Expand file tree"}
           title={treeOpen ? "Collapse file tree" : "Expand file tree"}
-          className="mr-2 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-white/55 transition-colors hover:bg-white/[0.04] hover:text-white/85"
+          className="mr-2 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-text-tertiary transition-colors hover:bg-surface-raised-2 hover:text-text-secondary"
         >
           {treeOpen ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
         </button>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <h2 className="truncate text-sm font-semibold text-white/90">
+            <h2 className="truncate text-sm font-semibold text-text-primary">
               {data?.base.name ?? panel.name}
             </h2>
             {/* Audit B10: visibility pill on the canvas KB panel
@@ -255,7 +255,7 @@ export function KnowledgeBasePanelBody({ panel }: Props) {
               className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] transition-colors ${
                 agentEnabled
                   ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-300/90 hover:bg-emerald-400/15"
-                  : "border-white/[0.08] bg-white/[0.02] text-white/40 hover:text-white/65"
+                  : "border-border-default bg-surface-raised-1 text-text-muted hover:text-text-tertiary"
               }`}
             >
               <Bot size={9} />
@@ -263,7 +263,7 @@ export function KnowledgeBasePanelBody({ panel }: Props) {
             </button>
           </div>
           {(data?.base.description ?? panel.description) && (
-            <p className="mt-0.5 truncate text-[11px] text-white/45">
+            <p className="mt-0.5 truncate text-[11px] text-text-muted">
               {data?.base.description ?? panel.description}
             </p>
           )}
@@ -271,7 +271,7 @@ export function KnowledgeBasePanelBody({ panel }: Props) {
       </div>
 
       {status === "error" && (
-        <div className="border-b border-white/[0.06] bg-red-500/5 px-4 py-2 text-[11px] text-red-400">
+        <div className="border-b border-border-subtle bg-red-500/5 px-4 py-2 text-[11px] text-red-400">
           {error?.message || "Failed to load this knowledge base"}
         </div>
       )}
@@ -280,7 +280,7 @@ export function KnowledgeBasePanelBody({ panel }: Props) {
       <div className="flex flex-1 min-h-0">
         {/* Tree */}
         <div
-          className={`shrink-0 overflow-y-auto border-r border-white/[0.06] py-2 transition-[width] duration-150 ${
+          className={`shrink-0 overflow-y-auto border-r border-border-subtle py-2 transition-[width] duration-150 ${
             treeOpen ? "w-[210px]" : "w-0 border-r-0 overflow-hidden"
           }`}
           aria-hidden={!treeOpen}
@@ -305,11 +305,11 @@ export function KnowledgeBasePanelBody({ panel }: Props) {
             />
           )}
           {canEdit && (
-            <div className="mt-2 flex flex-col gap-1 border-t border-white/[0.04] px-2 pt-2">
+            <div className="mt-2 flex flex-col gap-1 border-t border-border-subtle px-2 pt-2">
               <button
                 type="button"
                 onClick={() => handleAddEntry(null)}
-                className="flex w-full items-center gap-1.5 rounded px-2 py-1 text-[11px] text-white/50 transition-colors hover:bg-white/[0.03] hover:text-white/85"
+                className="flex w-full items-center gap-1.5 rounded px-2 py-1 text-[11px] text-text-tertiary transition-colors hover:bg-surface-raised-1 hover:text-text-secondary"
               >
                 <Plus size={10} />
                 Add entry
@@ -317,7 +317,7 @@ export function KnowledgeBasePanelBody({ panel }: Props) {
               <button
                 type="button"
                 onClick={() => handleAddFolder(null)}
-                className="flex w-full items-center gap-1.5 rounded px-2 py-1 text-[11px] text-white/50 transition-colors hover:bg-white/[0.03] hover:text-white/85"
+                className="flex w-full items-center gap-1.5 rounded px-2 py-1 text-[11px] text-text-tertiary transition-colors hover:bg-surface-raised-1 hover:text-text-secondary"
               >
                 <Plus size={10} />
                 Add folder
@@ -337,7 +337,7 @@ export function KnowledgeBasePanelBody({ panel }: Props) {
               canEdit={canEdit}
             />
           ) : (
-            <div className="flex h-full items-center justify-center text-xs text-white/40">
+            <div className="flex h-full items-center justify-center text-xs text-text-muted">
               {data && data.entries.length === 0
                 ? "No entries yet — add one"
                 : "Select an entry"}
@@ -360,7 +360,7 @@ function TreePaneSkeleton() {
         "w-36 ml-3",
         "w-24",
       ].map((w, i) => (
-        <Skeleton key={i} className={`h-3 ${w} bg-white/[0.05]`} />
+        <Skeleton key={i} className={`h-3 ${w} bg-surface-raised-2`} />
       ))}
     </div>
   );
@@ -476,13 +476,13 @@ function FolderRow({ node, ...props }: { node: TreeNode } & TreeNodesProps) {
   return (
     <div className="px-1">
       <div
-        className="group flex items-center gap-1 rounded text-[12px] text-white/80 transition-colors hover:bg-white/[0.04]"
+        className="group flex items-center gap-1 rounded text-[12px] text-text-secondary transition-colors hover:bg-surface-raised-2"
         style={{ paddingLeft: padding }}
       >
         {isEditing ? (
           <div className="flex flex-1 items-center gap-1 py-1">
-            <ChevronRight size={11} className="shrink-0 text-white/45" />
-            <Folder size={12} className="shrink-0 text-white/55" />
+            <ChevronRight size={11} className="shrink-0 text-text-muted" />
+            <Folder size={12} className="shrink-0 text-text-tertiary" />
             <InlineEditableRow
               value={node.name}
               selectAllOnMount
@@ -502,14 +502,14 @@ function FolderRow({ node, ...props }: { node: TreeNode } & TreeNodesProps) {
             className="flex flex-1 items-center gap-1 py-1 text-left"
           >
             {isOpen ? (
-              <ChevronDown size={11} className="shrink-0 text-white/45" />
+              <ChevronDown size={11} className="shrink-0 text-text-muted" />
             ) : (
-              <ChevronRight size={11} className="shrink-0 text-white/45" />
+              <ChevronRight size={11} className="shrink-0 text-text-muted" />
             )}
             {isOpen ? (
-              <FolderOpen size={12} className="shrink-0 text-white/55" />
+              <FolderOpen size={12} className="shrink-0 text-text-tertiary" />
             ) : (
-              <Folder size={12} className="shrink-0 text-white/55" />
+              <Folder size={12} className="shrink-0 text-text-tertiary" />
             )}
             <span className="truncate">{node.name}</span>
           </button>
@@ -554,14 +554,14 @@ function EntryRow({ node, ...props }: { node: TreeNode } & TreeNodesProps) {
       <div
         className={`group flex items-center gap-1 rounded text-[11.5px] transition-colors ${
           active
-            ? "bg-white/[0.06] text-white/95"
-            : "text-white/60 hover:bg-white/[0.03] hover:text-white/85"
+            ? "bg-surface-selected text-text-primary"
+            : "text-text-tertiary hover:bg-surface-raised-1 hover:text-text-secondary"
         }`}
         style={{ paddingLeft: padding }}
       >
         {isEditing ? (
           <div className="flex flex-1 items-center gap-1.5 py-1">
-            <FileText size={10} className="shrink-0 text-white/40" />
+            <FileText size={10} className="shrink-0 text-text-muted" />
             <InlineEditableRow
               value={node.name}
               selectAllOnMount
@@ -580,7 +580,7 @@ function EntryRow({ node, ...props }: { node: TreeNode } & TreeNodesProps) {
             onClick={() => props.onSelectEntry(node.id)}
             className="flex flex-1 items-center gap-1.5 py-1 text-left"
           >
-            <FileText size={10} className="shrink-0 text-white/40" />
+            <FileText size={10} className="shrink-0 text-text-muted" />
             <span className="truncate">{node.name}</span>
           </button>
         )}
@@ -617,7 +617,7 @@ function IconButton({
       aria-label={label}
       title={label}
       onClick={onClick}
-      className="flex h-5 w-5 items-center justify-center rounded text-white/45 hover:bg-white/[0.06] hover:text-white/85"
+      className="flex h-5 w-5 items-center justify-center rounded text-text-muted hover:bg-surface-raised-3 hover:text-text-secondary"
     >
       {children}
     </button>
@@ -828,7 +828,7 @@ function EntryEditor({
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center text-xs text-white/40">
+      <div className="flex h-full items-center justify-center text-xs text-text-muted">
         Loading…
       </div>
     );
@@ -857,7 +857,7 @@ function EntryEditor({
             type="button"
             onClick={handleDiscardMine}
             disabled={saving}
-            className="rounded border border-white/[0.1] bg-white/[0.02] px-2 py-0.5 text-[10px] text-white/70 transition-colors hover:bg-white/[0.06] hover:text-white/95 disabled:opacity-40"
+            className="rounded border border-border-default bg-surface-raised-1 px-2 py-0.5 text-[10px] text-text-secondary transition-colors hover:bg-surface-raised-3 hover:text-text-primary disabled:opacity-40"
           >
             Discard mine
           </button>
@@ -871,7 +871,7 @@ function EntryEditor({
           </button>
         </div>
       )}
-      <div className="flex items-center gap-2 border-b border-white/[0.06] px-4 py-2">
+      <div className="flex items-center gap-2 border-b border-border-subtle px-4 py-2">
         <input
           type="text"
           value={title}
@@ -879,21 +879,21 @@ function EntryEditor({
             setTitle(e.target.value);
             setDirty(true);
           }}
-          className="flex-1 bg-transparent text-sm font-semibold text-white/95 placeholder:text-white/30 focus:outline-none"
+          className="flex-1 bg-transparent text-sm font-semibold text-text-primary placeholder:text-text-muted focus:outline-none"
           placeholder="Untitled"
         />
         <button
           type="button"
           onClick={handleSave}
           disabled={!dirty || saving || conflict !== null}
-          className="inline-flex items-center gap-1 rounded-md border border-white/[0.18] bg-white/[0.06] px-2 py-1 text-[11px] text-white/85 transition-colors hover:bg-white/[0.1] disabled:opacity-40"
+          className="inline-flex items-center gap-1 rounded-md border border-border-strong bg-surface-raised-3 px-2 py-1 text-[11px] text-text-secondary transition-colors hover:bg-surface-raised-4 disabled:opacity-40"
         >
           <Save size={10} />
           {saving ? "Saving…" : dirty ? "Save" : "Saved"}
         </button>
       </div>
       {errorText && (
-        <div className="border-b border-white/[0.06] bg-red-500/5 px-4 py-1 text-[10px] text-red-400">
+        <div className="border-b border-border-subtle bg-red-500/5 px-4 py-1 text-[10px] text-red-400">
           {errorText}
         </div>
       )}

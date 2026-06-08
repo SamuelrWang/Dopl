@@ -18,7 +18,7 @@ export function ConnectionPanelBody() {
       {scope?.workspaceSlug ? (
         <ConnectionSetup workspaceSlug={scope.workspaceSlug} />
       ) : (
-        <p className="py-8 text-center text-xs text-white/40">
+        <p className="py-8 text-center text-xs text-text-muted">
           Open this from a workspace canvas to manage its API key.
         </p>
       )}

@@ -53,7 +53,7 @@ export function WorkspaceSection({ workspaceSegment, onWorkspaceChanged }: Props
   if (!workspace || !role) {
     return (
       <SectionShell title="General">
-        <div className="h-24 rounded-lg bg-white/[0.03] animate-pulse" />
+        <div className="h-24 rounded-lg bg-surface-raised-1 animate-pulse" />
       </SectionShell>
     );
   }
@@ -64,7 +64,7 @@ export function WorkspaceSection({ workspaceSegment, onWorkspaceChanged }: Props
     <SectionShell title="General" subtitle="Manage this workspace">
       {canEdit && (
         <div className="flex flex-col gap-2">
-          <label className="text-xs font-medium text-white/60 uppercase tracking-wider">
+          <label className="text-xs font-medium text-text-tertiary uppercase tracking-wider">
             Workspace image
           </label>
           <WorkspaceIconUploader workspace={workspace} onChanged={onWorkspaceChanged} />

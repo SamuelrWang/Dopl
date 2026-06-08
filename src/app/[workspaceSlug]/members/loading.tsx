@@ -13,8 +13,8 @@ export default function Loading() {
       <PageTopBar title="Members" />
       <div className="fixed top-[52px] right-0 bottom-0 left-0 md:left-64 z-[3] p-3 pointer-events-auto">
         <div
-          className="h-full rounded-2xl border border-white/[0.1] overflow-hidden flex flex-col"
-          style={{ backgroundColor: "oklch(0.13 0 0)" }}
+          className="h-full rounded-2xl border border-border-default overflow-hidden flex flex-col"
+          style={{ backgroundColor: "var(--panel-surface)" }}
         >
           <MembersTableSkeleton withToolbar />
         </div>

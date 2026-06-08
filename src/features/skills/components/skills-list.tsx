@@ -51,7 +51,7 @@ export function SkillsList({ workspaceSlug, workspaceId, skills }: Props) {
               type="button"
               onClick={() => setTrashOpen(true)}
               title="View recently deleted skills"
-              className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-text-secondary hover:text-text-primary hover:bg-white/[0.04] cursor-pointer"
+              className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-text-secondary hover:text-text-primary hover:bg-surface-raised-2 cursor-pointer"
             >
               <Trash2 size={12} />
               Trash
@@ -72,7 +72,7 @@ export function SkillsList({ workspaceSlug, workspaceId, skills }: Props) {
         {skills.length === 0 ? (
           <EmptyState />
         ) : (
-          <div className="rounded-xl border border-white/[0.06] divide-y divide-white/[0.04] overflow-hidden">
+          <div className="rounded-xl border border-border-subtle divide-y divide-border-subtle overflow-hidden">
             {skills.map((skill) => (
               <SkillRow
                 key={skill.slug}
@@ -106,8 +106,8 @@ function SkillRow({
 
   return (
     <div
-      className="bg-transparent hover:bg-white/[0.015] transition-colors"
-      style={!expanded ? { backgroundColor: "transparent" } : { backgroundColor: "oklch(0.13 0 0)" }}
+      className="bg-transparent hover:bg-surface-raised-1 transition-colors"
+      style={!expanded ? { backgroundColor: "transparent" } : { backgroundColor: "var(--panel-surface)" }}
     >
       <button
         type="button"
@@ -186,7 +186,7 @@ function ExpandedDetail({
                   "inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-[11px]",
                   c.status === "connected"
                     ? "border-emerald-500/20 bg-emerald-500/5 text-text-primary"
-                    : "border-white/[0.06] bg-white/[0.02] text-text-secondary"
+                    : "border-border-subtle bg-surface-raised-1 text-text-secondary"
                 )}
               >
                 {KNOWN_PROVIDERS.has(c.provider) && (
@@ -209,7 +209,7 @@ function ExpandedDetail({
       <div className="lg:col-span-2 flex justify-end">
         <Link
           href={`/${workspaceSlug}/skills/${skillSegment(skill)}`}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white text-black text-xs font-medium hover:bg-white/90 transition-colors cursor-pointer"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-surface-cta text-text-on-cta text-xs font-medium hover:bg-surface-cta/90 transition-colors cursor-pointer"
         >
           Open
           <ArrowRight size={12} />
@@ -237,13 +237,13 @@ function StatusPill({ status }: { status: SkillStatus }) {
         "shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider",
         status === "active"
           ? "bg-emerald-500/10 text-emerald-300 border border-emerald-500/20"
-          : "bg-white/[0.04] text-text-secondary border border-white/[0.08]"
+          : "bg-surface-raised-2 text-text-secondary border border-border-default"
       )}
     >
       <span
         className={cn(
           "w-1 h-1 rounded-full",
-          status === "active" ? "bg-emerald-400" : "bg-text-secondary/60"
+          status === "active" ? "bg-emerald-400" : "bg-text-text-secondary/60"
         )}
       />
       {status}
@@ -253,7 +253,7 @@ function StatusPill({ status }: { status: SkillStatus }) {
 
 function EmptyState() {
   return (
-    <div className="rounded-xl border border-white/[0.06] p-10 text-center">
+    <div className="rounded-xl border border-border-subtle p-10 text-center">
       <p className="text-sm text-text-primary mb-1">No skills yet</p>
       <p className="text-xs text-text-secondary leading-relaxed max-w-md mx-auto">
         Skills are workspace-scoped procedural prompts your connected agent can

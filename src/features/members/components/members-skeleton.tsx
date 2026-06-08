@@ -32,14 +32,14 @@ export function MembersTableSkeleton({ withToolbar = false, className }: Props) 
       <span className="sr-only">Loading members</span>
 
       {withToolbar && (
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-white/[0.06]">
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-border-subtle">
           <Bar className="h-7 w-full max-w-sm flex-1" />
           <Bar className="h-7 w-28" />
           <Bar className="ml-auto h-3 w-20" />
         </div>
       )}
 
-      <ul className="flex-1 min-h-0 divide-y divide-white/[0.04]">
+      <ul className="flex-1 min-h-0 divide-y divide-border-subtle">
         {Array.from({ length: ROWS }).map((_, i) => (
           <li key={i} className={ROW_GRID}>
             {/* chevron column kept empty for alignment */}
@@ -65,7 +65,7 @@ function Bar({ className }: { className?: string }) {
   return (
     <div
       aria-hidden="true"
-      className={cn("animate-pulse rounded bg-white/[0.05]", className)}
+      className={cn("animate-pulse rounded bg-surface-raised-2", className)}
     />
   );
 }
@@ -98,16 +98,16 @@ export function AccessMatrixSkeleton() {
             <Icon size={11} />
             {label}
           </h4>
-          <ul className="rounded-lg border border-white/[0.06] divide-y divide-white/[0.04] overflow-hidden">
+          <ul className="rounded-lg border border-border-subtle divide-y divide-border-subtle overflow-hidden">
             {Array.from({ length: ACCESS_ROWS_PER_SECTION }).map((_, i) => (
               <li
                 key={i}
                 className="flex items-center justify-between gap-3 px-3 py-2"
               >
                 <Bar className="h-3 w-40" />
-                <div className="inline-flex items-center rounded-md border border-white/[0.08] overflow-hidden h-6">
-                  <Bar className="h-full w-11 rounded-none bg-white/[0.04]" />
-                  <Bar className="h-full w-11 rounded-none bg-white/[0.04]" />
+                <div className="inline-flex items-center rounded-md border border-border-default overflow-hidden h-6">
+                  <Bar className="h-full w-11 rounded-none bg-surface-raised-2" />
+                  <Bar className="h-full w-11 rounded-none bg-surface-raised-2" />
                 </div>
               </li>
             ))}

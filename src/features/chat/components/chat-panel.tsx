@@ -301,10 +301,10 @@ export function ChatPanelBody({ panel }: ChatPanelBodyProps) {
           data-no-drag
           className="shrink-0 px-4 pt-3 pb-0 flex items-center gap-1.5"
         >
-          <span className="font-mono text-[9px] uppercase tracking-wider text-white/40">
+          <span className="font-mono text-[9px] uppercase tracking-wider text-text-muted">
             In cluster:
           </span>
-          <span className="font-mono text-[9px] uppercase tracking-wider text-white/70">
+          <span className="font-mono text-[9px] uppercase tracking-wider text-text-secondary">
             {clusterName}
           </span>
         </div>
@@ -315,7 +315,7 @@ export function ChatPanelBody({ panel }: ChatPanelBodyProps) {
         ref={scrollRef}
         className={`flex-1 overflow-y-auto p-4 space-y-3 min-h-0 transition-colors duration-150 ${
           isDragOver
-            ? "bg-white/[0.04] ring-1 ring-inset ring-white/[0.15] rounded-lg"
+            ? "bg-surface-raised-2 ring-1 ring-inset ring-border-strong rounded-lg"
             : ""
         }`}
         onDragEnter={handleDragEnter}
@@ -325,13 +325,13 @@ export function ChatPanelBody({ panel }: ChatPanelBodyProps) {
       >
         {isDragOver && (
           <div className="flex items-center justify-center py-6">
-            <span className="font-mono text-xs uppercase tracking-wider text-white/40">
+            <span className="font-mono text-xs uppercase tracking-wider text-text-muted">
               Drop files to attach
             </span>
           </div>
         )}
         {!hasMessages && !isDragOver && (
-          <p className="text-xs text-white/30 italic font-mono uppercase tracking-wide">
+          <p className="text-xs text-text-muted italic font-mono uppercase tracking-wide">
             {clusterName
               ? "Ask a question about this cluster."
               : "Start a conversation. You can drop files."}
@@ -354,12 +354,11 @@ export function ChatPanelBody({ panel }: ChatPanelBodyProps) {
 
       {/* Input bar */}
       <div data-no-drag className="shrink-0 p-3">
-        <div className="relative rounded-xl overflow-hidden bg-[var(--input-surface)] border border-white/[0.1] shadow-[0_2px_8px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.06)] transition-colors duration-200 focus-within:bg-[var(--input-surface-focus)] focus-within:border-white/[0.18]">
+        <div className="relative rounded-xl overflow-hidden bg-[var(--input-surface)] border border-border-default shadow-[0_2px_8px_rgba(0,0,0,0.3),inset_0_1px_0_var(--hairline-shine)] transition-colors duration-200 focus-within:bg-[var(--input-surface-focus)] focus-within:border-border-strong">
           <div
             className="pointer-events-none absolute inset-x-0 top-0 h-px"
             style={{
-              background:
-                "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.25) 30%, rgba(255,255,255,0.35) 50%, rgba(255,255,255,0.25) 70%, transparent 100%)",
+              background: "var(--shine-top-gradient)",
             }}
           />
           {/* Pending attachment previews */}
@@ -387,7 +386,7 @@ export function ChatPanelBody({ panel }: ChatPanelBodyProps) {
             }
             disabled={isProcessing}
             rows={1}
-            className="w-full bg-transparent px-3 pt-3 pb-1.5 text-xs leading-[18px] text-white/90 outline-none resize-none placeholder:text-white/30 disabled:opacity-50 min-h-[36px] max-h-[120px]"
+            className="w-full bg-transparent px-3 pt-3 pb-1.5 text-xs leading-[18px] text-text-primary outline-none resize-none placeholder:text-text-muted disabled:opacity-50 min-h-[36px] max-h-[120px]"
           />
           <div className="flex items-center justify-between px-2 pb-2">
             <AttachButton onFiles={addFiles} disabled={isProcessing} />
@@ -429,7 +428,7 @@ export function ChatPanelBody({ panel }: ChatPanelBodyProps) {
                       strokeWidth={1.8}
                       strokeLinecap="round"
                       strokeLinejoin="round"
-                      className="w-4 h-4 text-white/40 hover:text-white/70 transition-colors"
+                      className="w-4 h-4 text-text-muted hover:text-text-secondary transition-colors"
                     >
                       <rect x="9" y="2" width="6" height="12" rx="3" />
                       <path d="M5 10a7 7 0 0 0 14 0" />
@@ -444,7 +443,7 @@ export function ChatPanelBody({ panel }: ChatPanelBodyProps) {
                 onClick={handleSend}
                 disabled={!canSend}
                 aria-label={isProcessing ? "Processing" : "Send"}
-                className="w-7 h-7 flex items-center justify-center text-white/50 hover:text-white/90 border border-white/[0.12] hover:border-white/[0.22] rounded-full transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-white/[0.04] hover:bg-white/[0.08]"
+                className="w-7 h-7 flex items-center justify-center text-text-tertiary hover:text-text-primary border border-border-strong hover:border-border-highlight rounded-full transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-surface-raised-2 hover:bg-surface-raised-4"
               >
                 <svg
                   width="14"

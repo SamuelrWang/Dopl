@@ -93,7 +93,7 @@ export function AccessMatrix({
               <Icon size={11} />
               {SECTION_LABELS[type]} · {items.length}
             </h4>
-            <ul className="rounded-lg border border-white/[0.06] divide-y divide-white/[0.04] overflow-hidden">
+            <ul className="rounded-lg border border-border-subtle divide-y divide-border-subtle overflow-hidden">
               {items.map((r) => {
                 const key = `${r.type}:${r.id}`;
                 const current = overrides.get(key) ?? defaultLevel;
@@ -135,7 +135,7 @@ function LevelToggle({
   return (
     <div
       role="radiogroup"
-      className="inline-flex items-center rounded-md border border-white/[0.08] overflow-hidden"
+      className="inline-flex items-center rounded-md border border-border-default overflow-hidden"
     >
       {(["read", "edit"] as AccessLevel[]).map((level) => {
         const active = value === level;
@@ -149,8 +149,8 @@ function LevelToggle({
             className={cn(
               "px-2.5 py-1 text-[10px] font-mono uppercase tracking-wider transition-colors cursor-pointer",
               active
-                ? "bg-white/[0.08] text-text-primary"
-                : "text-text-secondary/60 hover:text-text-primary hover:bg-white/[0.04]"
+                ? "bg-surface-selected text-text-primary"
+                : "text-text-secondary/60 hover:text-text-primary hover:bg-surface-raised-2"
             )}
           >
             {level}

@@ -90,12 +90,12 @@ export function ToastHost() {
     <div
       role="status"
       aria-live="polite"
-      className="fixed bottom-4 right-4 z-[9999] max-w-sm rounded-lg border border-white/[0.12] bg-[#0a0a0a] shadow-2xl shadow-black/60 px-4 py-3 flex items-start gap-3 text-white animate-in fade-in slide-in-from-bottom-2 duration-200"
+      className="fixed bottom-4 right-4 z-[9999] max-w-sm rounded-lg border border-border-strong bg-modal-surface shadow-[var(--shadow-elevated)] px-4 py-3 flex items-start gap-3 text-text-primary animate-in fade-in slide-in-from-bottom-2 duration-200"
     >
       <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium text-white">{active.title}</div>
+        <div className="text-sm font-medium text-text-primary">{active.title}</div>
         {active.description && (
-          <div className="mt-0.5 text-xs text-white/50 truncate" title={active.description}>
+          <div className="mt-0.5 text-xs text-text-tertiary truncate" title={active.description}>
             {active.description}
           </div>
         )}
@@ -107,7 +107,7 @@ export function ToastHost() {
             active.action?.onClick();
             setCurrent(null);
           }}
-          className="shrink-0 h-7 px-2.5 rounded-md bg-white text-black text-xs font-medium hover:bg-white/90 transition-colors"
+          className="shrink-0 h-7 px-2.5 rounded-md bg-surface-invert text-text-on-invert text-xs font-medium hover:bg-surface-invert transition-colors"
         >
           {active.action.label}
         </button>
@@ -115,7 +115,7 @@ export function ToastHost() {
       <button
         type="button"
         onClick={() => setCurrent(null)}
-        className="shrink-0 text-white/40 hover:text-white/80 transition-colors"
+        className="shrink-0 text-text-muted hover:text-text-secondary transition-colors"
         aria-label="Dismiss"
       >
         <X size={14} />

@@ -13,7 +13,7 @@ export function DoplAgentHeader({ streaming = false }: { streaming?: boolean }) 
     <div className="flex items-center gap-2">
       <span
         className={
-          "shrink-0 flex items-center justify-center w-6 h-6 rounded-md overflow-hidden bg-white/[0.06] border border-white/[0.08] " +
+          "shrink-0 flex items-center justify-center w-6 h-6 rounded-md overflow-hidden bg-surface-raised-3 border border-border-default " +
           (streaming ? "animate-pulse" : "")
         }
         aria-hidden

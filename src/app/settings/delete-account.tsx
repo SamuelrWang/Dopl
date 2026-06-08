@@ -84,8 +84,8 @@ export function DeleteAccount() {
             <button
               onClick={() => setShowConfirm(false)}
               disabled={deleting}
-              className="px-4 py-2 text-sm rounded-lg border border-white/[0.1] text-text-secondary
-                hover:bg-white/[0.06] transition-colors cursor-pointer disabled:opacity-50"
+              className="px-4 py-2 text-sm rounded-lg border border-border-default text-text-secondary
+                hover:bg-surface-raised-3 transition-colors cursor-pointer disabled:opacity-50"
             >
               Cancel
             </button>

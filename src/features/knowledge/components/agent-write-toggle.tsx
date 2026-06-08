@@ -59,7 +59,7 @@ export function AgentWriteToggle({
   }
 
   return (
-    <div className="rounded-lg border border-white/[0.08] p-4 bg-white/[0.02]">
+    <div className="rounded-lg border border-border-default p-4 bg-surface-raised-1">
       <div className="flex items-start gap-4">
         <div className="flex-1">
           <p className="text-sm font-medium text-text-primary">
@@ -88,7 +88,7 @@ export function AgentWriteToggle({
           onClick={() => handleToggle(!enabled)}
           className={cn(
             "shrink-0 inline-flex h-6 w-11 items-center rounded-full transition-colors",
-            enabled ? "bg-violet-500" : "bg-white/[0.12]",
+            enabled ? "bg-violet-500" : "bg-surface-raised-4",
             submitting && "opacity-50 cursor-not-allowed"
           )}
         >

@@ -136,7 +136,7 @@ export function MembersTable({
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-white/[0.06]">
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-border-subtle">
         <div className="relative flex-1 max-w-sm">
           <Search
             size={12}
@@ -147,7 +147,7 @@ export function MembersTable({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search members"
-            className="w-full pl-7 pr-3 py-1.5 rounded-md bg-white/[0.03] border border-white/[0.06] text-xs placeholder:text-text-secondary/40 outline-none focus:border-white/[0.15] transition-colors"
+            className="w-full pl-7 pr-3 py-1.5 rounded-md bg-surface-raised-1 border border-border-subtle text-xs placeholder:text-text-secondary/40 outline-none focus:border-border-strong transition-colors"
           />
         </div>
         <SelectFilter
@@ -167,7 +167,7 @@ export function MembersTable({
       </div>
 
       {error && (
-        <p className="px-4 py-2 text-xs text-red-400 border-b border-white/[0.06]">
+        <p className="px-4 py-2 text-xs text-red-400 border-b border-border-subtle">
           {error}
         </p>
       )}
@@ -182,7 +182,7 @@ export function MembersTable({
           </div>
         )}
         {visibleMembers.length > 0 && (
-          <ul className="divide-y divide-white/[0.04]">
+          <ul className="divide-y divide-border-subtle">
             {visibleMembers.map((m) => {
               const isSelf = m.userId === currentUserId;
               const canEditTarget =
@@ -212,8 +212,8 @@ export function MembersTable({
                     }}
                     className={cn(
                       "grid grid-cols-[16px_1fr_140px_140px_60px] items-center gap-3 px-4 py-3 transition-colors",
-                      expandable && "cursor-pointer hover:bg-white/[0.015]",
-                      expanded && "bg-white/[0.02]"
+                      expandable && "cursor-pointer hover:bg-surface-raised-1",
+                      expanded && "bg-surface-selected"
                     )}
                   >
                     <ChevronRight

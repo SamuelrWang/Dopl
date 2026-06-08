@@ -109,7 +109,7 @@ export function KnowledgeSearch({
           }}
           onFocus={() => setOpen(true)}
           placeholder="Search content"
-          className="w-full pl-7 pr-7 py-1 text-xs bg-white/[0.03] border border-white/[0.06] rounded-md text-text-primary placeholder:text-text-secondary/50 focus:outline-none focus:border-white/[0.15]"
+          className="w-full pl-7 pr-7 py-1 text-xs bg-surface-raised-1 border border-border-subtle rounded-md text-text-primary placeholder:text-text-secondary/50 focus:outline-none focus:border-border-strong"
         />
         {query ? (
           <button
@@ -120,7 +120,7 @@ export function KnowledgeSearch({
               setHits(null);
               setOpen(false);
             }}
-            className="absolute right-1.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded flex items-center justify-center hover:bg-white/[0.06]"
+            className="absolute right-1.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded flex items-center justify-center hover:bg-surface-raised-3"
           >
             <X size={10} className="text-text-secondary/70" />
           </button>
@@ -129,7 +129,7 @@ export function KnowledgeSearch({
 
       {open && query.trim().length > 0 ? (
         <div
-          className="absolute z-30 left-0 right-0 mt-1 rounded-md border border-white/[0.1] bg-[oklch(0.16_0_0)] shadow-2xl shadow-black/60 max-h-80 overflow-y-auto"
+          className="absolute z-30 left-0 right-0 mt-1 rounded-md border border-border-default bg-[var(--bg-inset-hover)] shadow-2xl shadow-black/60 max-h-80 overflow-y-auto"
         >
           {loading && hits === null ? (
             <p className="px-3 py-2 text-xs text-text-secondary">
@@ -153,7 +153,7 @@ export function KnowledgeSearch({
                 setOpen(false);
               }}
               className={cn(
-                "w-full text-left px-3 py-2 hover:bg-white/[0.04] cursor-pointer border-b border-white/[0.04] last:border-b-0"
+                "w-full text-left px-3 py-2 hover:bg-surface-raised-2 cursor-pointer border-b border-border-subtle last:border-b-0"
               )}
             >
               <p className="text-xs font-medium text-text-primary truncate">

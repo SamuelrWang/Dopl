@@ -43,19 +43,19 @@ export function PaywallModal({ open, onClose }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-scrim p-4">
       <div
-        className="w-full max-w-md rounded-2xl bg-[var(--panel-surface,#0a0a0a)] border border-white/[0.08] p-6"
+        className="w-full max-w-md rounded-2xl bg-[var(--panel-surface,#0a0a0a)] border border-border-default p-6"
         style={{
           boxShadow:
-            "0 12px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06)",
+            "0 12px 40px rgba(0,0,0,0.5), inset 0 1px 0 var(--hairline-shine)",
         }}
       >
-        <h2 className="text-xl font-semibold text-white/95">
+        <h2 className="text-xl font-semibold text-text-primary">
           Your free trial has ended
         </h2>
-        <p className="mt-2 text-sm text-white/60 leading-relaxed">
-          Subscribe for <strong className="text-white/85">$7.99/mo</strong> to
+        <p className="mt-2 text-sm text-text-tertiary leading-relaxed">
+          Subscribe for <strong className="text-text-secondary">$7.99/mo</strong> to
           keep using Dopl — unlimited ingestion, MCP access, canvas, and
           cluster sync.
         </p>

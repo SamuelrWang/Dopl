@@ -116,7 +116,7 @@ export function BaseSettingsForm({ workspaceId, workspaceSlug, base }: Props) {
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="h-9 px-3 rounded-md bg-white/[0.06] border border-white/[0.12] text-sm text-white placeholder:text-white/30 outline-none focus:border-white/[0.25] transition-colors"
+            className="h-9 px-3 rounded-md bg-surface-raised-3 border border-border-strong text-sm text-text-primary placeholder:text-text-muted outline-none focus:border-border-highlight transition-colors"
           />
         </Field>
         <Field label="Description">
@@ -124,7 +124,7 @@ export function BaseSettingsForm({ workspaceId, workspaceSlug, base }: Props) {
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={3}
-            className="px-3 py-2 rounded-md bg-white/[0.06] border border-white/[0.12] text-sm text-white placeholder:text-white/30 outline-none focus:border-white/[0.25] transition-colors resize-none"
+            className="px-3 py-2 rounded-md bg-surface-raised-3 border border-border-strong text-sm text-text-primary placeholder:text-text-muted outline-none focus:border-border-highlight transition-colors resize-none"
           />
         </Field>
         <div className="flex justify-end">
@@ -132,7 +132,7 @@ export function BaseSettingsForm({ workspaceId, workspaceSlug, base }: Props) {
             type="button"
             onClick={handleSave}
             disabled={!dirty || saving}
-            className="h-8 px-4 rounded-md bg-white text-black text-xs font-medium hover:bg-white/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="h-8 px-4 rounded-md bg-surface-cta text-text-on-cta text-xs font-medium hover:bg-surface-cta/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             {saving ? "Saving…" : "Save changes"}
           </button>
@@ -163,7 +163,7 @@ export function BaseSettingsForm({ workspaceId, workspaceSlug, base }: Props) {
               type="text"
               value={slug}
               onChange={(e) => setSlug(e.target.value)}
-              className="h-9 px-3 rounded-md bg-white/[0.06] border border-white/[0.12] text-sm font-mono text-white outline-none focus:border-white/[0.25] transition-colors"
+              className="h-9 px-3 rounded-md bg-surface-raised-3 border border-border-strong text-sm font-mono text-text-primary outline-none focus:border-border-highlight transition-colors"
             />
             <p className="mt-1 text-[11px] text-text-secondary/60">
               Lowercase letters, numbers, and hyphens. Changing it
@@ -187,7 +187,7 @@ export function BaseSettingsForm({ workspaceId, workspaceSlug, base }: Props) {
             type="button"
             onClick={handleDelete}
             disabled={deleting}
-            className="mt-3 h-8 px-4 rounded-md bg-red-500 text-white text-xs font-medium hover:bg-red-500/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="mt-3 h-8 px-4 rounded-md bg-red-500 text-text-primary text-xs font-medium hover:bg-red-500/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             {deleting ? "Deleting…" : "Delete knowledge base"}
           </button>
@@ -206,7 +206,7 @@ function Section({
 }) {
   return (
     <section>
-      <h2 className="text-[10px] font-medium text-white/40 uppercase tracking-wider mb-3">
+      <h2 className="text-[10px] font-medium text-text-muted uppercase tracking-wider mb-3">
         {title}
       </h2>
       <div className="flex flex-col gap-4">{children}</div>
@@ -223,7 +223,7 @@ function Field({
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label className="text-xs font-medium text-white/60 uppercase tracking-wider">
+      <label className="text-xs font-medium text-text-tertiary uppercase tracking-wider">
         {label}
       </label>
       {children}

@@ -34,8 +34,8 @@ export function ChatExpiryBar({
   );
 
   return (
-    <div className="shrink-0 flex items-center justify-between px-4 h-6 border-b border-white/[0.04] bg-white/[0.02]">
-      <span className="font-mono text-[9px] uppercase tracking-wider text-white/30">
+    <div className="shrink-0 flex items-center justify-between px-4 h-6 border-b border-border-subtle bg-surface-raised-1">
+      <span className="font-mono text-[9px] uppercase tracking-wider text-text-muted">
         {isPinned
           ? "Pinned"
           : panel.expiresAt
@@ -46,7 +46,7 @@ export function ChatExpiryBar({
         onClick={handleTogglePin}
         aria-label={isPinned ? "Unpin chat" : "Pin chat"}
         title={isPinned ? "Unpin — will auto-delete after 7 days" : "Pin — keep forever"}
-        className="w-5 h-5 flex items-center justify-center rounded-[2px] text-white/30 hover:text-white/70 transition-colors"
+        className="w-5 h-5 flex items-center justify-center rounded-[2px] text-text-muted hover:text-text-secondary transition-colors"
       >
         <svg
           width="10"

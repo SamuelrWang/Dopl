@@ -35,10 +35,10 @@ export function RemoteConnect() {
   return (
     <div className="rounded-[4px] border border-violet-400/30 bg-violet-500/[0.05] p-4 space-y-3">
       <div>
-        <p className="text-sm font-medium text-white/90">
+        <p className="text-sm font-medium text-text-primary">
           Recommended — connect &amp; log in
         </p>
-        <p className="text-[11px] text-white/50 leading-snug mt-0.5">
+        <p className="text-[11px] text-text-tertiary leading-snug mt-0.5">
           Add this URL in your MCP client (Claude Code/Desktop, Cursor, or
           Claude.ai&rsquo;s &ldquo;Add custom connector&rdquo;). A browser opens
           once to sign in to Dopl — no API key to copy, and server updates roll
@@ -78,17 +78,17 @@ function Row({
 }) {
   return (
     <div className="space-y-1">
-      <p className="text-[10px] font-mono uppercase tracking-wider text-white/40">
+      <p className="text-[10px] font-mono uppercase tracking-wider text-text-muted">
         {label}
       </p>
-      <div className="flex items-center gap-2 rounded-[3px] border border-white/[0.08] bg-black/30 px-3 py-2">
-        <code className="flex-1 truncate font-mono text-[12px] text-white/85">
+      <div className="flex items-center gap-2 rounded-[3px] border border-border-default bg-bg-inset px-3 py-2">
+        <code className="flex-1 truncate font-mono text-[12px] text-text-secondary">
           {text}
         </code>
         <button
           type="button"
           onClick={() => onCopy(text, id)}
-          className="shrink-0 text-white/30 hover:text-white/70 transition-colors"
+          className="shrink-0 text-text-muted hover:text-text-secondary transition-colors"
           title="Copy"
         >
           {copied === id ? (

@@ -242,27 +242,27 @@ const PROSE_CLASSES = [
   // prose-p's my-3. Strip those vertical margins so list items are tight.
   "[&_li>p]:my-0 [&_li>p]:leading-[1.65]",
   // Inline code
-  "prose-code:text-[12.5px] prose-code:text-text-primary prose-code:bg-white/[0.06] prose-code:border prose-code:border-white/[0.06]",
+  "prose-code:text-[12.5px] prose-code:text-text-primary prose-code:bg-surface-raised-3 prose-code:border prose-code:border-border-subtle",
   "prose-code:px-1 prose-code:py-px prose-code:rounded prose-code:font-mono",
   "prose-code:before:content-none prose-code:after:content-none",
   // Code blocks
-  "prose-pre:bg-white/[0.04] prose-pre:border prose-pre:border-white/[0.06]",
+  "prose-pre:bg-surface-raised-2 prose-pre:border prose-pre:border-border-subtle",
   "prose-pre:rounded-lg prose-pre:my-3 prose-pre:text-[12.5px]",
   // Links
   "prose-a:text-violet-300 prose-a:no-underline hover:prose-a:underline",
   // HR
-  "prose-hr:border-white/[0.08] prose-hr:my-6",
+  "prose-hr:border-border-default prose-hr:my-6",
   // Tables — clean docs look
   "[&_table]:my-3 [&_table]:border-collapse [&_table]:w-full [&_table]:text-[13px]",
-  "[&_thead]:bg-white/[0.03]",
+  "[&_thead]:bg-surface-raised-1",
   "[&_th]:text-left [&_th]:font-semibold [&_th]:text-text-primary [&_th]:px-3 [&_th]:py-1.5",
-  "[&_th]:border [&_th]:border-white/[0.08]",
-  "[&_td]:px-3 [&_td]:py-1.5 [&_td]:border [&_td]:border-white/[0.06] [&_td]:text-text-primary/90",
-  "[&_tbody_tr:hover]:bg-white/[0.02]",
+  "[&_th]:border [&_th]:border-border-default",
+  "[&_td]:px-3 [&_td]:py-1.5 [&_td]:border [&_td]:border-border-subtle [&_td]:text-text-primary/90",
+  "[&_tbody_tr:hover]:bg-surface-raised-1",
   // Selected node ring (subtle)
   "[&_.ProseMirror-selectednode]:outline [&_.ProseMirror-selectednode]:outline-2 [&_.ProseMirror-selectednode]:outline-violet-400/30",
   // Editing affordance: faint cursor color
-  "[&_.ProseMirror]:caret-text-primary",
+  "[&_.ProseMirror]:caret-text-text-primary",
   // Tiptap wraps content in a `.ProseMirror` div, which means the
   // prose `:first-child` selector targets the wrapper, not the actual
   // first paragraph/heading. Manually strip the top margin so the

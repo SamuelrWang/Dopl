@@ -582,7 +582,7 @@ export function SkillView({
             <SaveStatusIndicator state={saveStatus} />
             <button
               type="button"
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-white/[0.08] hover:bg-white/[0.04] transition-colors text-xs text-text-primary cursor-pointer"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-border-default hover:bg-surface-raised-2 transition-colors text-xs text-text-primary cursor-pointer"
             >
               <Play size={12} />
               Test in Claude Code
@@ -590,7 +590,7 @@ export function SkillView({
             <button
               type="button"
               aria-label="More"
-              className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-white/[0.04] transition-colors cursor-pointer"
+              className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-surface-raised-2 transition-colors cursor-pointer"
             >
               <MoreHorizontal size={13} className="text-text-secondary" />
             </button>
@@ -600,8 +600,8 @@ export function SkillView({
 
       <div className="fixed top-[52px] right-0 bottom-0 left-0 md:left-64 z-[3] p-3 pointer-events-auto">
         <div
-          className="h-full rounded-2xl border border-white/[0.1] bg-[var(--panel-surface)] overflow-hidden flex"
-          style={{ backgroundColor: "oklch(0.13 0 0)" }}
+          className="h-full rounded-2xl border border-border-default bg-[var(--panel-surface)] overflow-hidden flex"
+          style={{ backgroundColor: "var(--panel-surface)" }}
         >
           {/* Main column */}
           <div className="flex-1 min-w-0 flex flex-col">
@@ -635,7 +635,7 @@ export function SkillView({
                     type="button"
                     onClick={handleDiscardMine}
                     disabled={saveStatus === "saving"}
-                    className="rounded-md border border-white/[0.1] bg-white/[0.02] px-2.5 py-1 text-[11px] text-white/70 transition-colors hover:bg-white/[0.06] hover:text-white/95 disabled:opacity-40"
+                    className="rounded-md border border-border-default bg-surface-raised-1 px-2.5 py-1 text-[11px] text-text-secondary transition-colors hover:bg-surface-raised-3 hover:text-text-primary disabled:opacity-40"
                   >
                     Discard mine, reload
                   </button>
@@ -669,7 +669,7 @@ export function SkillView({
           </div>
 
           {/* Right rail */}
-          <aside className="w-72 shrink-0 flex flex-col border-l border-white/[0.08] overflow-hidden">
+          <aside className="w-72 shrink-0 flex flex-col border-l border-border-default overflow-hidden">
             <KbPicker
               kbs={workspaceKbs}
               referenced={referencedKbSlugs}
@@ -721,7 +721,7 @@ function KbPicker({ kbs, referenced, onToggle }: KbPickerProps) {
                   "w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md text-left transition-colors cursor-pointer",
                   linked
                     ? "bg-violet-500/10 hover:bg-violet-500/15"
-                    : "hover:bg-white/[0.04]"
+                    : "hover:bg-surface-raised-2"
                 )}
               >
                 <span
@@ -729,7 +729,7 @@ function KbPicker({ kbs, referenced, onToggle }: KbPickerProps) {
                     "shrink-0 w-4 h-4 rounded border flex items-center justify-center transition-colors",
                     linked
                       ? "border-violet-400/60 bg-violet-500/20"
-                      : "border-white/[0.15]"
+                      : "border-border-strong"
                   )}
                 >
                   {linked && <Check size={10} className="text-violet-200" />}
@@ -765,7 +765,7 @@ function ConnectorsStrip({
 }) {
   if (connectors.length === 0) return null;
   return (
-    <div className="border-t border-white/[0.06] px-4 py-3">
+    <div className="border-t border-border-subtle px-4 py-3">
       <div className="flex items-center justify-between mb-2">
         <span className="text-[10px] font-mono uppercase tracking-wider text-text-secondary/70">
           Connectors
@@ -781,7 +781,7 @@ function ConnectorsStrip({
                 "inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded text-[11px]",
                 c.status === "connected"
                   ? "bg-emerald-500/10 text-text-primary border border-emerald-500/20"
-                  : "bg-white/[0.03] text-text-secondary border border-white/[0.06]"
+                  : "bg-surface-raised-1 text-text-secondary border border-border-subtle"
               )}
               title={c.usedFor}
             >

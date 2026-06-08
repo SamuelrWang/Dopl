@@ -208,13 +208,13 @@ export function Toolbar({ editor }: ToolbarProps) {
 
   return (
     <div
-      className="sticky top-0 z-[3] flex items-center gap-1 px-6 py-1.5 border-b border-white/[0.06] mb-3"
-      style={{ backgroundColor: "oklch(0.11 0 0)" }}
+      className="sticky top-0 z-[3] flex items-center gap-1 px-6 py-1.5 border-b border-border-subtle mb-3"
+      style={{ backgroundColor: "var(--input-surface)" }}
     >
       {groups.map((group, gi) => (
         <div key={gi} className="flex items-center gap-0.5">
           {gi > 0 && (
-            <span className="mx-1 h-4 w-px bg-white/[0.08]" aria-hidden />
+            <span className="mx-1 h-4 w-px bg-surface-raised-4" aria-hidden />
           )}
           {group.map((item) => (
             <ToolbarButton key={item.label} {...item} />
@@ -242,8 +242,8 @@ function ToolbarButton({ icon: Icon, label, active, disabled, run }: ToolbarItem
         disabled
           ? "text-text-secondary/30 cursor-not-allowed"
           : active
-            ? "bg-white/[0.08] text-text-primary cursor-pointer"
-            : "text-text-secondary hover:bg-white/[0.04] hover:text-text-primary cursor-pointer",
+            ? "bg-surface-selected text-text-primary cursor-pointer"
+            : "text-text-secondary hover:bg-surface-raised-2 hover:text-text-primary cursor-pointer",
       )}
     >
       <Icon size={13} />

@@ -273,7 +273,7 @@ export function KnowledgeTree({
 
       <DragOverlay>
         {active ? (
-          <div className="flex items-center gap-2 rounded-md bg-[oklch(0.16_0_0)] border border-white/[0.15] px-2 py-1 text-xs text-text-primary shadow-2xl">
+          <div className="flex items-center gap-2 rounded-md bg-[var(--bg-inset-hover)] border border-border-strong px-2 py-1 text-xs text-text-primary shadow-2xl">
             {active.type === "folder" ? (
               <Folder size={12} className="text-text-secondary/70" />
             ) : (
@@ -459,7 +459,7 @@ function FolderRow({
           "group flex items-center gap-1.5 pr-2 py-1 text-xs transition-colors cursor-pointer",
           drop.isOver
             ? "bg-violet-500/[0.08] text-text-primary"
-            : "text-text-secondary hover:bg-white/[0.04] hover:text-text-primary"
+            : "text-text-secondary hover:bg-surface-raised-2 hover:text-text-primary"
         )}
         onContextMenu={(e) => openMenu(e, ctxItem)}
         {...(isEditing ? {} : drag.listeners)}
@@ -473,7 +473,7 @@ function FolderRow({
             e.stopPropagation();
             onToggle();
           }}
-          className="shrink-0 w-4 h-4 rounded flex items-center justify-center hover:bg-white/[0.06]"
+          className="shrink-0 w-4 h-4 rounded flex items-center justify-center hover:bg-surface-raised-3"
         >
           {isOpen ? (
             <ChevronDown size={11} className="text-text-secondary/70" />
@@ -563,7 +563,7 @@ function FolderRowActions({
                 setBusy(false);
               }
             }}
-            className="w-5 h-5 rounded flex items-center justify-center hover:bg-white/[0.06] disabled:opacity-50 disabled:cursor-default"
+            className="w-5 h-5 rounded flex items-center justify-center hover:bg-surface-raised-3 disabled:opacity-50 disabled:cursor-default"
           >
             <Plus size={10} className="text-text-secondary/70" />
           </button>
@@ -585,7 +585,7 @@ function FolderRowActions({
                 setBusy(false);
               }
             }}
-            className="w-5 h-5 rounded flex items-center justify-center hover:bg-white/[0.06] disabled:opacity-50 disabled:cursor-default"
+            className="w-5 h-5 rounded flex items-center justify-center hover:bg-surface-raised-3 disabled:opacity-50 disabled:cursor-default"
           >
             <Folder size={10} className="text-text-secondary/70" />
           </button>
@@ -599,7 +599,7 @@ function FolderRowActions({
           e.stopPropagation();
           onMore(e);
         }}
-        className="w-5 h-5 rounded flex items-center justify-center hover:bg-white/[0.06]"
+        className="w-5 h-5 rounded flex items-center justify-center hover:bg-surface-raised-3"
       >
         <MoreHorizontal size={10} className="text-text-secondary/70" />
       </button>
@@ -642,8 +642,8 @@ function EntryRow({ entry, depth, isSelected, onSelect, openMenu }: EntryRowProp
       className={cn(
         "group flex items-center gap-2 pr-2 py-1 text-xs transition-colors cursor-pointer",
         isSelected
-          ? "bg-white/[0.06] text-text-primary"
-          : "text-text-secondary hover:bg-white/[0.04] hover:text-text-primary"
+          ? "bg-surface-selected text-text-primary"
+          : "text-text-secondary hover:bg-surface-raised-2 hover:text-text-primary"
       )}
       onClick={isEditing ? undefined : onSelect}
       onContextMenu={(e) => openMenu(e, ctxItem)}
@@ -689,7 +689,7 @@ function EntryRow({ entry, depth, isSelected, onSelect, openMenu }: EntryRowProp
             e.stopPropagation();
             openMenu(e, ctxItem);
           }}
-          className="shrink-0 w-5 h-5 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-white/[0.06] transition-opacity cursor-pointer"
+          className="shrink-0 w-5 h-5 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-surface-raised-3 transition-opacity cursor-pointer"
         >
           <MoreHorizontal size={10} className="text-text-secondary/70" />
         </button>
@@ -738,7 +738,7 @@ function AddRowAffordance({
             setBusy(false);
           }
         }}
-        className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-text-secondary/70 hover:text-text-primary hover:bg-white/[0.04] cursor-pointer disabled:opacity-50 disabled:cursor-default"
+        className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-text-secondary/70 hover:text-text-primary hover:bg-surface-raised-2 cursor-pointer disabled:opacity-50 disabled:cursor-default"
       >
         <Plus size={10} />
         New entry
@@ -758,7 +758,7 @@ function AddRowAffordance({
             setBusy(false);
           }
         }}
-        className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-text-secondary/70 hover:text-text-primary hover:bg-white/[0.04] cursor-pointer disabled:opacity-50 disabled:cursor-default"
+        className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-text-secondary/70 hover:text-text-primary hover:bg-surface-raised-2 cursor-pointer disabled:opacity-50 disabled:cursor-default"
       >
         <Folder size={10} />
         New folder

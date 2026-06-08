@@ -45,7 +45,7 @@ export function MembersView({ workspaceSlug, workspaceId, currentUserId, myRole 
             <button
               type="button"
               onClick={() => setInviteOpen(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-white/[0.08] hover:bg-white/[0.04] transition-colors text-xs text-text-primary cursor-pointer"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-border-default hover:bg-surface-raised-2 transition-colors text-xs text-text-primary cursor-pointer"
             >
               <Plus size={12} />
               Add member
@@ -56,8 +56,8 @@ export function MembersView({ workspaceSlug, workspaceId, currentUserId, myRole 
 
       <div className="fixed top-[52px] right-0 bottom-0 left-0 md:left-64 z-[3] p-3 pointer-events-auto">
         <div
-          className="h-full rounded-2xl border border-white/[0.1] overflow-hidden flex flex-col"
-          style={{ backgroundColor: "oklch(0.13 0 0)" }}
+          className="h-full rounded-2xl border border-border-default overflow-hidden flex flex-col"
+          style={{ backgroundColor: "var(--panel-surface)" }}
         >
           <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
             <div className="flex-1 min-h-0">

@@ -98,15 +98,15 @@ export function WorkspaceSettingsForm({ workspace, role }: Props) {
 
   return (
     <div className="space-y-8">
-      <section className="rounded-lg bg-white/[0.03] border border-white/[0.08] p-5">
-        <h2 className="text-sm font-medium text-white">General</h2>
-        <p className="text-xs text-white/50 mt-1 mb-5">
+      <section className="rounded-lg bg-surface-raised-1 border border-border-default p-5">
+        <h2 className="text-sm font-medium text-text-primary">General</h2>
+        <p className="text-xs text-text-tertiary mt-1 mb-5">
           Renaming a workspace regenerates its slug, so the URL changes.
         </p>
 
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-white/60 uppercase tracking-wider">
+            <label className="text-xs font-medium text-text-tertiary uppercase tracking-wider">
               Name
             </label>
             <input
@@ -114,12 +114,12 @@ export function WorkspaceSettingsForm({ workspace, role }: Props) {
               value={name}
               onChange={(e) => setName(e.target.value)}
               disabled={!canEdit}
-              className="h-9 px-3 rounded-md bg-white/[0.06] border border-white/[0.12] text-sm text-white placeholder:text-white/30 outline-none focus:border-white/[0.25] transition-colors disabled:opacity-50"
+              className="h-9 px-3 rounded-md bg-surface-raised-3 border border-border-strong text-sm text-text-primary placeholder:text-text-muted outline-none focus:border-border-highlight transition-colors disabled:opacity-50"
             />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-white/60 uppercase tracking-wider">
+            <label className="text-xs font-medium text-text-tertiary uppercase tracking-wider">
               Description
             </label>
             <textarea
@@ -127,7 +127,7 @@ export function WorkspaceSettingsForm({ workspace, role }: Props) {
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
               disabled={!canEdit}
-              className="px-3 py-2 rounded-md bg-white/[0.06] border border-white/[0.12] text-sm text-white placeholder:text-white/30 outline-none focus:border-white/[0.25] transition-colors resize-none disabled:opacity-50"
+              className="px-3 py-2 rounded-md bg-surface-raised-3 border border-border-strong text-sm text-text-primary placeholder:text-text-muted outline-none focus:border-border-highlight transition-colors resize-none disabled:opacity-50"
             />
           </div>
 
@@ -139,7 +139,7 @@ export function WorkspaceSettingsForm({ workspace, role }: Props) {
               type="button"
               disabled={!canEdit || !dirty || saving}
               onClick={handleSave}
-              className="h-8 px-4 rounded-md bg-white text-black text-xs font-medium hover:bg-white/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="h-8 px-4 rounded-md bg-surface-cta text-text-on-cta text-xs font-medium hover:bg-surface-cta/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               {saving ? "Saving..." : "Save changes"}
             </button>
@@ -148,9 +148,9 @@ export function WorkspaceSettingsForm({ workspace, role }: Props) {
       </section>
 
       {canDelete && (
-        <section className="rounded-lg bg-white/[0.02] border border-red-500/20 p-5">
+        <section className="rounded-lg bg-surface-raised-1 border border-red-500/20 p-5">
           <h2 className="text-sm font-medium text-red-200">Danger zone</h2>
-          <p className="text-xs text-white/50 mt-1 mb-4">
+          <p className="text-xs text-text-tertiary mt-1 mb-4">
             Deletes this workspace, every cluster inside it, all panels, and
             all chat history. This cannot be undone.
           </p>
@@ -167,11 +167,11 @@ export function WorkspaceSettingsForm({ workspace, role }: Props) {
       <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <DialogContent
           showCloseButton={false}
-          className="bg-[#0a0a0a] border-white/[0.12]"
+          className="bg-modal-surface border-border-strong"
         >
           <DialogHeader>
-            <DialogTitle className="text-white">Delete this workspace?</DialogTitle>
-            <DialogDescription className="text-white/60">
+            <DialogTitle className="text-text-primary">Delete this workspace?</DialogTitle>
+            <DialogDescription className="text-text-tertiary">
               You're about to permanently delete <strong>{workspace.name}</strong>.
               Every cluster, panel, and chat inside it will be
               removed. This action cannot be undone.
@@ -181,7 +181,7 @@ export function WorkspaceSettingsForm({ workspace, role }: Props) {
             <button
               type="button"
               onClick={() => setConfirmDelete(false)}
-              className="h-8 px-4 rounded-md text-xs font-medium text-white/60 hover:text-white/80 transition-colors"
+              className="h-8 px-4 rounded-md text-xs font-medium text-text-tertiary hover:text-text-secondary transition-colors"
             >
               Cancel
             </button>

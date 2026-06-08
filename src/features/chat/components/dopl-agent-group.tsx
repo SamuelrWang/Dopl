@@ -8,7 +8,7 @@
  */
 export function DoplAgentGroup({ children }: { children: React.ReactNode }) {
   return (
-    <div className="border-l border-white/[0.08] pl-3 ml-[11px] flex flex-col">
+    <div className="border-l border-border-default pl-3 ml-[11px] flex flex-col">
       {children}
     </div>
   );

@@ -239,9 +239,9 @@ export function InlineEditableRow({
           void commit();
         }}
         className={cn(
-          "min-w-0 flex-1 rounded border border-white/[0.18] bg-white/[0.04]",
-          "px-1.5 py-0.5 text-[12px] text-white/95 placeholder:text-white/30",
-          "focus:border-white/[0.3] focus:bg-white/[0.06] focus:outline-none",
+          "min-w-0 flex-1 rounded border border-border-strong bg-surface-raised-2",
+          "px-1.5 py-0.5 text-[12px] text-text-primary placeholder:text-text-muted",
+          "focus:border-border-highlight focus:bg-surface-raised-3 focus:outline-none",
           "disabled:opacity-60",
           inputClassName,
         )}

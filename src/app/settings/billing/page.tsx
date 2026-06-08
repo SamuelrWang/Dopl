@@ -81,9 +81,9 @@ function BillingPageInner() {
   if (sub.loading) {
     return (
       <div className="container mx-auto px-4 py-8 max-w-lg">
-        <h1 className="text-xl font-medium text-white mb-6">Billing</h1>
-        <div className="rounded-xl bg-white/[0.03] border border-white/[0.08] p-5">
-          <div className="h-20 animate-pulse bg-white/[0.04] rounded-lg" />
+        <h1 className="text-xl font-medium text-text-primary mb-6">Billing</h1>
+        <div className="rounded-xl bg-surface-raised-1 border border-border-default p-5">
+          <div className="h-20 animate-pulse bg-surface-raised-2 rounded-lg" />
         </div>
       </div>
     );
@@ -94,11 +94,11 @@ function BillingPageInner() {
       <div className="container mx-auto px-4 py-8 max-w-lg">
         <button
           onClick={() => setShowCheckout(false)}
-          className="text-sm text-white/50 hover:text-white/80 transition-colors mb-4"
+          className="text-sm text-text-tertiary hover:text-text-secondary transition-colors mb-4"
         >
           &larr; Back to billing
         </button>
-        <h1 className="text-xl font-medium text-white mb-6">Subscribe</h1>
+        <h1 className="text-xl font-medium text-text-primary mb-6">Subscribe</h1>
         <EmbeddedCheckoutForm />
       </div>
     );
@@ -113,10 +113,10 @@ function BillingPageInner() {
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-lg">
-      <h1 className="text-xl font-medium text-white mb-6">Billing</h1>
+      <h1 className="text-xl font-medium text-text-primary mb-6">Billing</h1>
 
       {paymentStatus === "complete" && !sub.isPaid && (
-        <div className="mb-4 rounded-lg bg-white/[0.04] border border-white/[0.08] px-4 py-3 text-sm text-white/70">
+        <div className="mb-4 rounded-lg bg-surface-raised-2 border border-border-default px-4 py-3 text-sm text-text-secondary">
           Finalizing your subscription… this usually takes a few seconds.
         </div>
       )}
@@ -133,12 +133,12 @@ function BillingPageInner() {
         </div>
       )}
 
-      <div className="rounded-xl bg-white/[0.03] border border-white/[0.08] p-5 space-y-5">
+      <div className="rounded-xl bg-surface-raised-1 border border-border-default p-5 space-y-5">
         {/* Plan row */}
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm text-white/60">Current plan</p>
-            <p className="text-lg font-medium text-white">
+            <p className="text-sm text-text-tertiary">Current plan</p>
+            <p className="text-lg font-medium text-text-primary">
               {planLabel}
               {sub.isPaid && (
                 <span className="ml-2 text-xs px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-normal">
@@ -153,19 +153,19 @@ function BillingPageInner() {
             </p>
           </div>
           {sub.isPaid && sub.subscription_period_end && (
-            <p className="text-xs text-white/40">
+            <p className="text-xs text-text-muted">
               Renews {new Date(sub.subscription_period_end).toLocaleDateString()}
             </p>
           )}
           {sub.isTrialing && sub.access.trial_expires_at && (
-            <p className="text-xs text-white/40">
+            <p className="text-xs text-text-muted">
               Ends {new Date(sub.access.trial_expires_at).toLocaleString()}
             </p>
           )}
         </div>
 
         {/* Actions */}
-        <div className="border-t border-white/[0.06] pt-4">
+        <div className="border-t border-border-subtle pt-4">
           {portalError && (
             <div className="mb-3 rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2 text-xs text-red-400">
               {portalError}

@@ -44,7 +44,7 @@ export function VisibilityPill({ visibility, className }: Props) {
     <span
       className={cn(
         "inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[10px] font-medium",
-        "border-white/[0.1] bg-white/[0.04] text-white/55",
+        "border-border-default bg-surface-raised-2 text-text-tertiary",
         className,
       )}
       title="Public — every member of this workspace can see this."
@@ -101,7 +101,7 @@ export function MakePublicAction({
       title={`Make this ${resourceType} visible to every workspace member. Cannot be undone.`}
       className={cn(
         "inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors",
-        "border-white/[0.18] bg-white/[0.04] text-white/75 hover:bg-white/[0.08] hover:text-white/95",
+        "border-border-strong bg-surface-raised-2 text-text-secondary hover:bg-surface-raised-4 hover:text-text-primary",
         "disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer",
         className,
       )}

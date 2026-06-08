@@ -36,7 +36,7 @@ function CopyBtn({
     <button
       type="button"
       onClick={() => onCopy(text, id)}
-      className="absolute top-2 right-2 z-10 text-white/30 hover:text-white/70 transition-colors"
+      className="absolute top-2 right-2 z-10 text-text-muted hover:text-text-secondary transition-colors"
       title="Copy"
     >
       {copiedId === id ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
@@ -58,7 +58,7 @@ function CodeBlock({
   return (
     <div className="relative">
       <CopyBtn text={text} id={id} copiedId={copiedId} onCopy={onCopy} />
-      <pre className="text-[10px] font-mono bg-black/[0.3] border border-white/[0.08] rounded-[3px] p-3 pr-8 overflow-auto text-white/80 leading-relaxed whitespace-pre-wrap break-all">
+      <pre className="text-[10px] font-mono bg-bg-inset border border-border-default rounded-[3px] p-3 pr-8 overflow-auto text-text-secondary leading-relaxed whitespace-pre-wrap break-all">
         {text}
       </pre>
     </div>
@@ -90,7 +90,7 @@ export function ConnectionSetup({ workspaceSlug }: { workspaceSlug: string }) {
     return (
       <div className="flex items-center gap-2 py-8 justify-center">
         <div className="w-3 h-3 rounded-full bg-accent-primary/40 animate-pulse" />
-        <p className="text-xs text-white/40 font-mono">Loading your API key…</p>
+        <p className="text-xs text-text-muted font-mono">Loading your API key…</p>
       </div>
     );
   }
@@ -98,7 +98,7 @@ export function ConnectionSetup({ workspaceSlug }: { workspaceSlug: string }) {
   if (!active) {
     return (
       <div className="py-6 space-y-3 text-center">
-        <p className="text-xs text-white/50 leading-relaxed">
+        <p className="text-xs text-text-tertiary leading-relaxed">
           No API key for this workspace yet. Generate one to connect Claude Code,
           Codex, or any MCP tool.
         </p>
@@ -119,7 +119,7 @@ export function ConnectionSetup({ workspaceSlug }: { workspaceSlug: string }) {
   return (
     <div className="space-y-4">
       {/* Platform tabs */}
-      <div className="flex gap-1 p-0.5 rounded-[4px] bg-white/[0.04]">
+      <div className="flex gap-1 p-0.5 rounded-[4px] bg-surface-raised-2">
         {(
           [
             { id: "claude" as Platform, label: "Claude Code" },
@@ -133,8 +133,8 @@ export function ConnectionSetup({ workspaceSlug }: { workspaceSlug: string }) {
             onClick={() => setPlatform(tab.id)}
             className={`flex-1 px-2 py-1.5 font-mono text-[10px] uppercase tracking-wider rounded-[3px] transition-colors ${
               platform === tab.id
-                ? "bg-white/[0.1] text-white/90"
-                : "text-white/40 hover:text-white/60"
+                ? "bg-surface-selected text-text-primary"
+                : "text-text-muted hover:text-text-tertiary"
             }`}
           >
             {tab.label}
@@ -149,14 +149,14 @@ export function ConnectionSetup({ workspaceSlug }: { workspaceSlug: string }) {
             <CodeBlock text={buildClaudeCli(snippetKey)} id="cli" copiedId={copiedId} onCopy={copy} />
           </section>
           <div className="flex items-center gap-2">
-            <div className="flex-1 h-px bg-white/[0.06]" />
-            <span className="text-[9px] font-mono text-white/25 uppercase tracking-widest">or add to config</span>
-            <div className="flex-1 h-px bg-white/[0.06]" />
+            <div className="flex-1 h-px bg-surface-raised-3" />
+            <span className="text-[9px] font-mono text-text-disabled uppercase tracking-widest">or add to config</span>
+            <div className="flex-1 h-px bg-surface-raised-3" />
           </div>
           <section className="space-y-1.5">
             <MonoLabel tone="muted">Claude Desktop / VS Code config</MonoLabel>
             <CodeBlock text={buildClaudeConfig(snippetKey)} id="claude-config" copiedId={copiedId} onCopy={copy} />
-            <p className="text-[10px] text-white/30 leading-relaxed">
+            <p className="text-[10px] text-text-muted leading-relaxed">
               macOS: ~/Library/Application Support/Claude/claude_desktop_config.json
               <br />
               Windows: %APPDATA%\Claude\claude_desktop_config.json
@@ -176,7 +176,7 @@ export function ConnectionSetup({ workspaceSlug }: { workspaceSlug: string }) {
 
       {platform === "other" && (
         <div className="space-y-3">
-          <p className="text-xs text-white/70 leading-relaxed">
+          <p className="text-xs text-text-secondary leading-relaxed">
             Copy this and give it to any MCP-compatible AI tool. It will set up the connection.
           </p>
           <section className="space-y-1.5">
@@ -191,10 +191,10 @@ export function ConnectionSetup({ workspaceSlug }: { workspaceSlug: string }) {
       )}
 
       {/* Key chip + manage */}
-      <div className="pt-1 border-t border-white/[0.06] space-y-3">
+      <div className="pt-1 border-t border-border-subtle space-y-3">
         <section className="space-y-1.5">
           <MonoLabel tone="muted">API Key</MonoLabel>
-          <div className="relative flex items-center gap-2 px-3 py-2 rounded-[3px] bg-black/[0.3] border border-white/[0.08] text-xs font-mono text-white/90 break-all">
+          <div className="relative flex items-center gap-2 px-3 py-2 rounded-[3px] bg-bg-inset border border-border-default text-xs font-mono text-text-primary break-all">
             <span className="flex-1">
               {plaintext ? (revealed ? plaintext : maskKey(plaintext)) : `${active.prefix}…`}
             </span>
@@ -202,7 +202,7 @@ export function ConnectionSetup({ workspaceSlug }: { workspaceSlug: string }) {
               <button
                 type="button"
                 onClick={() => setRevealed((r) => !r)}
-                className="shrink-0 text-white/30 hover:text-white/70 transition-colors"
+                className="shrink-0 text-text-muted hover:text-text-secondary transition-colors"
                 title={revealed ? "Hide" : "Reveal"}
               >
                 {revealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
@@ -212,7 +212,7 @@ export function ConnectionSetup({ workspaceSlug }: { workspaceSlug: string }) {
               <button
                 type="button"
                 onClick={() => copy(plaintext, "key")}
-                className="shrink-0 text-white/30 hover:text-white/70 transition-colors"
+                className="shrink-0 text-text-muted hover:text-text-secondary transition-colors"
                 title="Copy"
               >
                 {copiedId === "key" ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
@@ -220,7 +220,7 @@ export function ConnectionSetup({ workspaceSlug }: { workspaceSlug: string }) {
             )}
           </div>
           {!plaintext && (
-            <p className="text-[10px] text-white/30 leading-relaxed">
+            <p className="text-[10px] text-text-muted leading-relaxed">
               This key predates encrypted storage and can&apos;t be revealed. Revoke
               and generate a new one to autofill the snippets.
             </p>
@@ -236,14 +236,14 @@ export function ConnectionSetup({ workspaceSlug }: { workspaceSlug: string }) {
           <button
             type="button"
             onClick={() => void revoke()}
-            className="px-2.5 py-1 rounded-[3px] font-mono text-[10px] uppercase tracking-wide border border-white/[0.12] text-white/60 hover:bg-white/[0.06] hover:text-white/90 transition-colors"
+            className="px-2.5 py-1 rounded-[3px] font-mono text-[10px] uppercase tracking-wide border border-border-strong text-text-tertiary hover:bg-surface-raised-3 hover:text-text-primary transition-colors"
           >
             Revoke
           </button>
           <button
             type="button"
             onClick={() => void generate()}
-            className="px-2.5 py-1 rounded-[3px] font-mono text-[10px] uppercase tracking-wide border border-white/[0.12] text-white/40 hover:bg-white/[0.04] transition-colors"
+            className="px-2.5 py-1 rounded-[3px] font-mono text-[10px] uppercase tracking-wide border border-border-strong text-text-muted hover:bg-surface-raised-2 transition-colors"
           >
             Generate new
           </button>

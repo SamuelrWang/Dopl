@@ -64,7 +64,7 @@ export function SwitcherPanel({
       : `${memberCount} member${memberCount === 1 ? "" : "s"}`;
 
   return (
-    <div className="absolute left-3 right-3 top-full mt-1 rounded-md overflow-hidden bg-[oklch(0.16_0_0)] border border-white/[0.1] shadow-[0_8px_32px_rgba(0,0,0,0.5)] z-10">
+    <div className="absolute left-3 right-3 top-full mt-1 rounded-md overflow-hidden bg-[var(--bg-inset-hover)] border border-border-default shadow-[0_8px_32px_rgba(0,0,0,0.5)] z-10">
       {/* Current-workspace header */}
       <div className="px-3 pt-3 pb-2">
         <div className="flex items-center gap-2.5">
@@ -101,14 +101,14 @@ export function SwitcherPanel({
               type="button"
               aria-label="Account options"
               onClick={() => setAccountMenuOpen((o) => !o)}
-              className="shrink-0 p-1 rounded-md text-text-secondary/60 hover:bg-white/[0.06] hover:text-text-primary transition-colors cursor-pointer"
+              className="shrink-0 p-1 rounded-md text-text-secondary/60 hover:bg-surface-raised-3 hover:text-text-primary transition-colors cursor-pointer"
             >
               <MoreHorizontal size={16} />
             </button>
           </div>
 
           {accountMenuOpen && (
-            <div className="absolute right-3 top-full z-10 mt-1 w-40 rounded-md overflow-hidden bg-[oklch(0.18_0_0)] border border-white/[0.1] shadow-[0_8px_32px_rgba(0,0,0,0.5)] py-1">
+            <div className="absolute right-3 top-full z-10 mt-1 w-40 rounded-md overflow-hidden bg-[var(--bg-elevated)] border border-border-default shadow-[0_8px_32px_rgba(0,0,0,0.5)] py-1">
               <MenuRow
                 label="Settings"
                 onClick={() => {
@@ -138,7 +138,7 @@ export function SwitcherPanel({
               key={w.id}
               href={`/${segment}`}
               onClick={onNavigate}
-              className="flex items-center gap-2.5 px-3 py-1.5 text-sm text-text-secondary hover:bg-white/[0.04] hover:text-text-primary transition-colors cursor-pointer"
+              className="flex items-center gap-2.5 px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-raised-2 hover:text-text-primary transition-colors cursor-pointer"
             >
               <WorkspaceAvatar name={w.name} iconUrl={w.iconUrl} size="sm" />
               <span className="flex-1 min-w-0 truncate">{w.name}</span>
@@ -151,7 +151,7 @@ export function SwitcherPanel({
         <button
           type="button"
           onClick={onOpenCreate}
-          className="w-full flex items-center gap-2.5 px-3 py-1.5 text-sm text-[#4a9eff] hover:bg-white/[0.04] transition-colors cursor-pointer"
+          className="w-full flex items-center gap-2.5 px-3 py-1.5 text-sm text-link hover:bg-surface-raised-2 transition-colors cursor-pointer"
         >
           <Plus size={15} className="shrink-0" />
           <span>New workspace</span>
@@ -182,7 +182,7 @@ export function SwitcherPanel({
                     type="button"
                     onClick={() => onAccept(inv)}
                     disabled={accepting}
-                    className="shrink-0 h-6 px-2 rounded-md bg-white text-black text-[11px] font-medium hover:bg-white/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                    className="shrink-0 h-6 px-2 rounded-md bg-surface-cta text-text-on-cta text-[11px] font-medium hover:bg-surface-cta/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
                   >
                     {accepting ? "…" : "Accept"}
                   </button>
@@ -200,7 +200,7 @@ export function SwitcherPanel({
         <button
           type="button"
           onClick={onSignOut}
-          className="w-full flex items-center gap-2.5 px-3 py-1.5 text-sm text-text-secondary hover:bg-white/[0.04] hover:text-text-primary transition-colors cursor-pointer"
+          className="w-full flex items-center gap-2.5 px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-raised-2 hover:text-text-primary transition-colors cursor-pointer"
         >
           <LogOut size={15} className="shrink-0" />
           <span>Log out</span>
@@ -223,7 +223,7 @@ function PanelButton({
     <button
       type="button"
       onClick={onClick}
-      className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md border border-white/[0.1] text-xs text-text-secondary hover:bg-white/[0.04] hover:text-text-primary transition-colors cursor-pointer"
+      className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md border border-border-default text-xs text-text-secondary hover:bg-surface-raised-2 hover:text-text-primary transition-colors cursor-pointer"
     >
       <Icon size={13} className="shrink-0" />
       <span className="truncate">{label}</span>
@@ -236,7 +236,7 @@ function MenuRow({ label, onClick }: { label: string; onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="w-full text-left px-3 py-1.5 text-sm text-text-secondary hover:bg-white/[0.06] hover:text-text-primary transition-colors cursor-pointer"
+      className="w-full text-left px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-raised-3 hover:text-text-primary transition-colors cursor-pointer"
     >
       {label}
     </button>
@@ -246,7 +246,7 @@ function MenuRow({ label, onClick }: { label: string; onClick: () => void }) {
 function AccountAvatar({ user }: { user: User }) {
   const avatarUrl = user.user_metadata?.avatar_url as string | undefined;
   return (
-    <span className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center overflow-hidden border border-white/[0.1] bg-white/[0.06] text-xs text-text-secondary">
+    <span className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center overflow-hidden border border-border-default bg-surface-raised-3 text-xs text-text-secondary">
       {avatarUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
@@ -258,5 +258,5 @@ function AccountAvatar({ user }: { user: User }) {
 }
 
 function Divider() {
-  return <div className="border-t border-white/[0.06]" />;
+  return <div className="border-t border-border-subtle" />;
 }

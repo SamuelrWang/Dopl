@@ -94,10 +94,10 @@ export function SkillsTrashModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl bg-[#0a0a0a] border-white/[0.12] text-white">
+      <DialogContent className="sm:max-w-2xl bg-modal-surface border-border-strong text-text-primary">
         <DialogHeader>
-          <DialogTitle className="text-white">Trash</DialogTitle>
-          <DialogDescription className="text-white/50">
+          <DialogTitle className="text-text-primary">Trash</DialogTitle>
+          <DialogDescription className="text-text-tertiary">
             Soft-deleted skills and skill files from this workspace.
           </DialogDescription>
         </DialogHeader>
@@ -154,10 +154,10 @@ function Section({
 }) {
   return (
     <div className="mt-3 first:mt-0">
-      <p className="text-[10px] font-medium text-white/40 uppercase tracking-wider mb-1.5">
+      <p className="text-[10px] font-medium text-text-muted uppercase tracking-wider mb-1.5">
         {title}
       </p>
-      <div className="rounded-md border border-white/[0.06] divide-y divide-white/[0.04]">
+      <div className="rounded-md border border-border-subtle divide-y divide-border-subtle">
         {children}
       </div>
     </div>
@@ -185,7 +185,7 @@ function TrashRow({
       <button
         type="button"
         onClick={onRestore}
-        className="flex items-center gap-1 px-2 py-1 rounded-md text-xs text-text-secondary hover:text-text-primary hover:bg-white/[0.04] cursor-pointer"
+        className="flex items-center gap-1 px-2 py-1 rounded-md text-xs text-text-secondary hover:text-text-primary hover:bg-surface-raised-2 cursor-pointer"
       >
         <RotateCcw size={11} />
         Restore

@@ -93,7 +93,7 @@ export function UpgradeModal({ open, onOpenChange, reason = "generic" }: Upgrade
               </ul>
             </div>
 
-            <div className="flex items-center justify-between pt-2 border-t border-white/[0.06]">
+            <div className="flex items-center justify-between pt-2 border-t border-border-subtle">
               <div>
                 <span className="text-lg font-semibold text-text-primary">$20</span>
                 <span className="text-sm text-text-tertiary">/month</span>

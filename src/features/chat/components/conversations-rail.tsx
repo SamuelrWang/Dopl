@@ -35,12 +35,12 @@ export function ConversationsRail({
 }: ConversationsRailProps) {
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between px-3 py-2.5 border-b border-white/[0.06]">
+      <div className="flex items-center justify-between px-3 py-2.5 border-b border-border-subtle">
         <p className="text-xs font-medium text-text-primary">Conversations</p>
         <button
           type="button"
           onClick={onNew}
-          className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-md text-[11px] text-text-secondary hover:bg-white/[0.04] hover:text-text-primary transition-colors cursor-pointer"
+          className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-md text-[11px] text-text-secondary hover:bg-surface-raised-2 hover:text-text-primary transition-colors cursor-pointer"
         >
           <Plus size={11} />
           New
@@ -52,8 +52,8 @@ export function ConversationsRail({
           <div className="px-3 py-2 space-y-2">
             {[0, 1, 2].map((i) => (
               <div key={i} className="space-y-1">
-                <div className="h-3 rounded bg-white/[0.04] w-3/4" />
-                <div className="h-3 rounded bg-white/[0.03] w-2/3" />
+                <div className="h-3 rounded bg-surface-raised-2 w-3/4" />
+                <div className="h-3 rounded bg-surface-raised-1 w-2/3" />
               </div>
             ))}
           </div>
@@ -71,7 +71,7 @@ export function ConversationsRail({
                 onClick={() => onSelect(c.panelId)}
                 className={cn(
                   "w-full text-left px-3 py-2 transition-colors cursor-pointer block",
-                  active ? "bg-white/[0.06]" : "hover:bg-white/[0.04]"
+                  active ? "bg-surface-selected" : "hover:bg-surface-raised-2"
                 )}
               >
                 <div className="flex items-center justify-between gap-2 mb-0.5">

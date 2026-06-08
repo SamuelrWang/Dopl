@@ -384,7 +384,7 @@ export function KnowledgeBaseView({
             <button
               type="button"
               onClick={() => setSettingsOpen(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white text-black text-xs font-medium hover:bg-white/90 transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-surface-cta text-text-on-cta text-xs font-medium hover:bg-surface-cta/90 transition-colors cursor-pointer"
             >
               <Settings size={12} />
               Settings
@@ -394,12 +394,12 @@ export function KnowledgeBaseView({
       />
       <div
         className="pt-[52px] pointer-events-auto"
-        style={{ backgroundColor: "oklch(0.13 0 0)" }}
+        style={{ backgroundColor: "var(--panel-surface)" }}
       >
         <div className="flex h-[calc(100vh-52px)]">
           <aside
-            className="hidden md:flex w-72 shrink-0 flex-col border-r border-white/[0.06]"
-            style={{ backgroundColor: "oklch(0.135 0 0)" }}
+            className="hidden md:flex w-72 shrink-0 flex-col border-r border-border-subtle"
+            style={{ backgroundColor: "var(--tabs-surface)" }}
           >
             <KnowledgeTree
               baseId={base.id}
@@ -423,7 +423,7 @@ export function KnowledgeBaseView({
           </aside>
           <div
             className="flex-1 min-w-0 overflow-y-auto"
-            style={{ backgroundColor: "oklch(0.11 0 0)" }}
+            style={{ backgroundColor: "var(--input-surface)" }}
           >
             {displayEntry ? (
               <DocPane

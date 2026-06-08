@@ -143,7 +143,7 @@ export function ClusterHeaderTab({
       }}
       className="z-20"
     >
-      <div className="inline-flex items-center h-6 px-2 gap-1.5 rounded-[4px] bg-[var(--cluster-tab-surface)] border border-white/[0.12] shadow-[0_2px_8px_rgba(0,0,0,0.35)] whitespace-nowrap">
+      <div className="inline-flex items-center h-6 px-2 gap-1.5 rounded-[4px] bg-[var(--cluster-tab-surface)] border border-border-strong shadow-[0_2px_8px_rgba(0,0,0,0.35)] whitespace-nowrap">
         {editing ? (
           <input
             ref={(el) => el?.focus({ preventScroll: true })}
@@ -164,31 +164,31 @@ export function ClusterHeaderTab({
             // or force wrap. Clamp at a reasonable min so an empty input
             // still has a click target.
             size={Math.max(draft.length, 10)}
-            className="bg-transparent outline-none font-mono text-[10px] uppercase tracking-wider text-white/90"
+            className="bg-transparent outline-none font-mono text-[10px] uppercase tracking-wider text-text-primary"
           />
         ) : capabilities.canAdd ? (
           <button
             type="button"
             onClick={() => setEditing(true)}
-            className="font-mono text-[10px] uppercase tracking-wider text-white/80 hover:text-white transition-colors whitespace-nowrap"
+            className="font-mono text-[10px] uppercase tracking-wider text-text-secondary hover:text-text-primary transition-colors whitespace-nowrap"
             title="Click to rename"
           >
             {cluster.name}
           </button>
         ) : (
           // Read-only viewer — name is plain text, not an edit target.
-          <span className="font-mono text-[10px] uppercase tracking-wider text-white/80 whitespace-nowrap">
+          <span className="font-mono text-[10px] uppercase tracking-wider text-text-secondary whitespace-nowrap">
             {cluster.name}
           </span>
         )}
 
-        <span className="w-px h-3 bg-white/[0.12]" aria-hidden />
+        <span className="w-px h-3 bg-border-strong" aria-hidden />
 
         <button
           type="button"
           onClick={() => setMenuOpen((v) => !v)}
           aria-label="Cluster menu"
-          className="w-5 h-5 flex items-center justify-center text-white/50 hover:text-white/90 transition-colors"
+          className="w-5 h-5 flex items-center justify-center text-text-tertiary hover:text-text-primary transition-colors"
         >
           <svg
             width="12"
@@ -206,7 +206,7 @@ export function ClusterHeaderTab({
 
       {menuOpen && (
         <div
-          className="absolute left-1/2 -translate-x-1/2 mt-1 min-w-[120px] bg-[var(--cluster-menu-surface)] border border-white/[0.12] rounded-[4px] shadow-[0_4px_16px_rgba(0,0,0,0.4)] overflow-hidden"
+          className="absolute left-1/2 -translate-x-1/2 mt-1 min-w-[120px] bg-[var(--cluster-menu-surface)] border border-border-strong rounded-[4px] shadow-[0_4px_16px_rgba(0,0,0,0.4)] overflow-hidden"
           role="menu"
         >
           {capabilities.canDelete && (
@@ -214,7 +214,7 @@ export function ClusterHeaderTab({
               type="button"
               onClick={handleUncluster}
               role="menuitem"
-              className="w-full text-left px-3 h-8 font-mono text-[10px] uppercase tracking-wider text-white/80 hover:text-white hover:bg-white/[0.06] transition-colors"
+              className="w-full text-left px-3 h-8 font-mono text-[10px] uppercase tracking-wider text-text-secondary hover:text-text-primary hover:bg-surface-raised-3 transition-colors"
             >
               Uncluster
             </button>
@@ -224,7 +224,7 @@ export function ClusterHeaderTab({
               type="button"
               onClick={handleDeleteMembers}
               role="menuitem"
-              className="w-full text-left px-3 h-8 font-mono text-[10px] uppercase tracking-wider text-red-400/80 hover:text-red-400 hover:bg-white/[0.06] transition-colors"
+              className="w-full text-left px-3 h-8 font-mono text-[10px] uppercase tracking-wider text-red-400/80 hover:text-red-400 hover:bg-surface-raised-3 transition-colors"
             >
               Delete All
             </button>

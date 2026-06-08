@@ -69,7 +69,7 @@ export function Tooltip({
           role="tooltip"
           id={id}
           className={cn(
-            "pointer-events-none absolute z-50 whitespace-nowrap rounded-md border border-white/[0.12] bg-[#0a0a0a] px-2 py-1 text-[10px] text-white/95 shadow-2xl shadow-black/60",
+            "pointer-events-none absolute z-50 whitespace-nowrap rounded-md border border-border-strong bg-modal-surface px-2 py-1 text-[10px] text-text-primary shadow-[var(--shadow-elevated)]",
             side === "bottom" && "left-0 top-full mt-1",
             side === "top" && "left-0 bottom-full mb-1",
             side === "right" && "left-full top-0 ml-1",

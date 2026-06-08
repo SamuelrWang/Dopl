@@ -66,7 +66,7 @@ export function TreeContextMenu({
       ref={ref}
       role="menu"
       style={{ left: x, top: y }}
-      className="fixed z-[1000] min-w-[160px] rounded-md border border-white/[0.1] bg-[oklch(0.16_0_0)] shadow-2xl shadow-black/60 py-1"
+      className="fixed z-[1000] min-w-[160px] rounded-md border border-border-default bg-[var(--bg-inset-hover)] shadow-2xl shadow-black/60 py-1"
     >
       {canEdit ? (
         <>
@@ -86,7 +86,7 @@ export function TreeContextMenu({
               onMove(item);
             }}
           />
-          <div className="my-1 mx-1 h-px bg-white/[0.06]" />
+          <div className="my-1 mx-1 h-px bg-surface-raised-3" />
           <MenuItem
             icon={<Trash2 size={12} />}
             label="Delete"
@@ -125,7 +125,7 @@ function MenuItem({
       className={
         destructive
           ? "w-full flex items-center gap-2 px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/[0.08] cursor-pointer"
-          : "w-full flex items-center gap-2 px-3 py-1.5 text-xs text-text-secondary hover:bg-white/[0.04] hover:text-text-primary cursor-pointer"
+          : "w-full flex items-center gap-2 px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-raised-2 hover:text-text-primary cursor-pointer"
       }
     >
       {icon}

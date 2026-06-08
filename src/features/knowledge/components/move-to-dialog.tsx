@@ -113,7 +113,7 @@ export function MoveToDialog({
             Pick the folder to move this {itemType} into.
           </DialogDescription>
         </DialogHeader>
-        <div className="max-h-72 overflow-y-auto rounded-md border border-white/[0.06] bg-white/[0.02]">
+        <div className="max-h-72 overflow-y-auto rounded-md border border-border-subtle bg-surface-raised-1">
           <button
             type="button"
             onClick={() => setSelected(null)}
@@ -121,7 +121,7 @@ export function MoveToDialog({
               "w-full flex items-center gap-2 px-3 py-1.5 text-xs cursor-pointer",
               selected === null
                 ? "bg-violet-500/[0.12] text-text-primary"
-                : "text-text-secondary hover:bg-white/[0.04]"
+                : "text-text-secondary hover:bg-surface-raised-2"
             )}
           >
             <Folder size={12} className="text-text-secondary/70" />
@@ -190,7 +190,7 @@ function FolderList({
                   ? "text-text-secondary/30 cursor-not-allowed"
                   : selected === folder.id
                     ? "bg-violet-500/[0.12] text-text-primary cursor-pointer"
-                    : "text-text-secondary hover:bg-white/[0.04] cursor-pointer"
+                    : "text-text-secondary hover:bg-surface-raised-2 cursor-pointer"
               )}
             >
               <span
@@ -201,7 +201,7 @@ function FolderList({
                   e.stopPropagation();
                   toggle(folder.id);
                 }}
-                className="shrink-0 w-4 h-4 rounded flex items-center justify-center hover:bg-white/[0.06]"
+                className="shrink-0 w-4 h-4 rounded flex items-center justify-center hover:bg-surface-raised-3"
               >
                 {hasChildren ? (
                   isOpen ? (

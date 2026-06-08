@@ -37,10 +37,10 @@ const borderSwatches = [
 ];
 
 const textSwatches = [
-  { name: "text-primary", value: "var(--text-primary)" },
-  { name: "text-secondary", value: "var(--text-secondary)" },
-  { name: "text-muted", value: "var(--text-muted)" },
-  { name: "text-disabled", value: "var(--text-disabled)" },
+  { name: "text-text-primary", value: "var(--text-text-primary)" },
+  { name: "text-text-secondary", value: "var(--text-text-secondary)" },
+  { name: "text-text-muted", value: "var(--text-text-muted)" },
+  { name: "text-text-disabled", value: "var(--text-text-disabled)" },
 ];
 
 const accentSwatches = [
@@ -100,13 +100,13 @@ export default function DesignSystemPage() {
       {/* Hero — reproduction of the screenshot aesthetic */}
       <section className="min-h-[60vh] flex flex-col items-center justify-center px-8 py-24 relative">
         <div className="text-center mb-12 space-y-3">
-          <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">
+          <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-text-muted)]">
             Dopl
           </p>
-          <h1 className="text-5xl font-bold text-[var(--text-primary)]">
+          <h1 className="text-5xl font-bold text-[var(--text-text-primary)]">
             <GlowText>Design System</GlowText>
           </h1>
-          <p className="text-[var(--text-secondary)] max-w-md mx-auto text-sm">
+          <p className="text-[var(--text-text-secondary)] max-w-md mx-auto text-sm">
             Foundation for the dark, glowing aesthetic. Reference these primitives when building new pages.
           </p>
         </div>
@@ -121,7 +121,7 @@ export default function DesignSystemPage() {
           <Pill icon={<BuilderIcon />}>Builder</Pill>
         </PillBar>
 
-        <p className="mt-8 text-xs text-[var(--text-muted)]">
+        <p className="mt-8 text-xs text-[var(--text-text-muted)]">
           ↑ Reproduction of the reference screenshot using new primitives
         </p>
       </section>
@@ -378,7 +378,7 @@ export default function DesignSystemPage() {
                 key={s.name}
                 className="flex items-center gap-4 text-sm py-2 border-b border-[var(--border-subtle)]"
               >
-                <code className="text-[var(--text-muted)] text-xs w-40 shrink-0">
+                <code className="text-[var(--text-text-muted)] text-xs w-40 shrink-0">
                   {s.name}
                 </code>
                 <span style={{ color: s.value }} className="text-base">
@@ -407,7 +407,7 @@ export default function DesignSystemPage() {
                   className="w-16 h-16 bg-[var(--bg-elevated)] border border-[var(--border-default)]"
                   style={{ borderRadius: r.value }}
                 />
-                <code className="text-[10px] text-[var(--text-muted)]">{r.name}</code>
+                <code className="text-[10px] text-[var(--text-text-muted)]">{r.name}</code>
               </div>
             ))}
           </div>
@@ -417,21 +417,21 @@ export default function DesignSystemPage() {
         <TokenSection title="Surface Variants" subtitle="The container primitive in all variants and shapes">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
-              <code className="text-xs text-[var(--text-muted)]">elevated / card</code>
+              <code className="text-xs text-[var(--text-text-muted)]">elevated / card</code>
               <Surface variant="elevated" shape="card" className="p-6 h-32 flex items-center justify-center">
-                <span className="text-[var(--text-secondary)] text-sm">Elevated Card</span>
+                <span className="text-[var(--text-text-secondary)] text-sm">Elevated Card</span>
               </Surface>
             </div>
             <div className="space-y-2">
-              <code className="text-xs text-[var(--text-muted)]">inset / panel</code>
+              <code className="text-xs text-[var(--text-text-muted)]">inset / panel</code>
               <Surface variant="inset" shape="panel" className="p-6 h-32 flex items-center justify-center">
-                <span className="text-[var(--text-secondary)] text-sm">Inset Panel</span>
+                <span className="text-[var(--text-text-secondary)] text-sm">Inset Panel</span>
               </Surface>
             </div>
             <div className="space-y-2">
-              <code className="text-xs text-[var(--text-muted)]">flat / tile</code>
+              <code className="text-xs text-[var(--text-text-muted)]">flat / tile</code>
               <Surface variant="flat" shape="tile" className="p-6 h-32 flex items-center justify-center">
-                <span className="text-[var(--text-secondary)] text-sm">Flat Tile</span>
+                <span className="text-[var(--text-text-secondary)] text-sm">Flat Tile</span>
               </Surface>
             </div>
           </div>
@@ -442,19 +442,19 @@ export default function DesignSystemPage() {
           <div className="flex items-center gap-12 flex-wrap">
             <div className="flex flex-col items-center gap-3">
               <Image src="/favicons/favicon-32x32.png" alt="Logo" width={24} height={24} className="rounded-md" />
-              <code className="text-[10px] text-[var(--text-muted)]">24px</code>
+              <code className="text-[10px] text-[var(--text-text-muted)]">24px</code>
             </div>
             <div className="flex flex-col items-center gap-3">
               <Image src="/favicons/favicon-32x32.png" alt="Logo" width={32} height={32} className="rounded-lg" />
-              <code className="text-[10px] text-[var(--text-muted)]">32px</code>
+              <code className="text-[10px] text-[var(--text-text-muted)]">32px</code>
             </div>
             <div className="flex flex-col items-center gap-3">
               <Image src="/favicons/android-chrome-192x192.png" alt="Logo" width={56} height={56} className="rounded-xl" />
-              <code className="text-[10px] text-[var(--text-muted)]">56px</code>
+              <code className="text-[10px] text-[var(--text-text-muted)]">56px</code>
             </div>
             <div className="flex flex-col items-center gap-3">
               <Image src="/favicons/android-chrome-192x192.png" alt="Logo" width={80} height={80} className="rounded-2xl" />
-              <code className="text-[10px] text-[var(--text-muted)]">80px</code>
+              <code className="text-[10px] text-[var(--text-text-muted)]">80px</code>
             </div>
           </div>
         </TokenSection>
@@ -521,8 +521,8 @@ function TokenSection({
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-lg font-semibold text-[var(--text-primary)]">{title}</h2>
-        <p className="text-xs text-[var(--text-muted)] mt-0.5">{subtitle}</p>
+        <h2 className="text-lg font-semibold text-[var(--text-text-primary)]">{title}</h2>
+        <p className="text-xs text-[var(--text-text-muted)] mt-0.5">{subtitle}</p>
       </div>
       {children}
     </div>
@@ -545,9 +545,9 @@ function Swatch({
         style={{ backgroundColor: value }}
       />
       <div className="space-y-0.5">
-        <code className="block text-[10px] text-[var(--text-secondary)]">{name}</code>
+        <code className="block text-[10px] text-[var(--text-text-secondary)]">{name}</code>
         {oklch && (
-          <code className="block text-[10px] text-[var(--text-muted)]">{oklch}</code>
+          <code className="block text-[10px] text-[var(--text-text-muted)]">{oklch}</code>
         )}
       </div>
     </div>
@@ -561,7 +561,7 @@ function BorderSwatch({ name, value }: { name: string; value: string }) {
         className="h-16 rounded-lg bg-[var(--bg-elevated)]"
         style={{ border: `1px solid ${value}` }}
       />
-      <code className="block text-[10px] text-[var(--text-secondary)]">{name}</code>
+      <code className="block text-[10px] text-[var(--text-text-secondary)]">{name}</code>
     </div>
   );
 }

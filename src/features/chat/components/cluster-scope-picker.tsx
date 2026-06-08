@@ -106,14 +106,14 @@ export function ClusterScopePicker({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] text-text-secondary hover:bg-white/[0.04] hover:text-text-primary transition-colors cursor-pointer border border-white/[0.06]"
+        className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] text-text-secondary hover:bg-surface-raised-2 hover:text-text-primary transition-colors cursor-pointer border border-border-subtle"
       >
         <Filter size={11} />
         <span className="truncate max-w-[160px]">Scope: {summary}</span>
       </button>
       {open && (
-        <div className="absolute right-0 top-full mt-1 w-[280px] rounded-lg border border-white/[0.1] bg-[var(--panel-surface,_#181818)] shadow-lg z-50 overflow-hidden">
-          <div className="flex items-center gap-2 px-3 py-2 border-b border-white/[0.06]">
+        <div className="absolute right-0 top-full mt-1 w-[280px] rounded-lg border border-border-default bg-[var(--panel-surface,_#181818)] shadow-lg z-50 overflow-hidden">
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-border-subtle">
             <button
               type="button"
               onClick={selectAll}
@@ -182,7 +182,7 @@ function PickerSection({
     );
   }
   return (
-    <div className="px-1 py-2 border-b border-white/[0.04] last:border-b-0">
+    <div className="px-1 py-2 border-b border-border-subtle last:border-b-0">
       <p className="px-2 text-[10px] font-mono uppercase tracking-wider text-text-secondary/50 mb-1">
         {label}
       </p>
@@ -193,14 +193,14 @@ function PickerSection({
             key={o.id}
             type="button"
             onClick={() => onToggle(o.id)}
-            className="w-full flex items-center gap-2 px-2 py-1 rounded-md text-left text-[12px] text-text-primary hover:bg-white/[0.04] transition-colors cursor-pointer"
+            className="w-full flex items-center gap-2 px-2 py-1 rounded-md text-left text-[12px] text-text-primary hover:bg-surface-raised-2 transition-colors cursor-pointer"
           >
             <span
               className={
                 "shrink-0 w-3.5 h-3.5 rounded-sm border flex items-center justify-center " +
                 (checked
                   ? "bg-violet-300/30 border-violet-300/60"
-                  : "border-white/[0.15]")
+                  : "border-border-strong")
               }
             >
               {checked && <Check size={10} className="text-text-primary" />}

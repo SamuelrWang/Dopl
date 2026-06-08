@@ -194,3 +194,12 @@ See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture and [plan 
 - Description: The new ENGINEERING.md §2 rule is **500 lines hard cap, no edit may add lines to a file already over 500**. P2 relocations added 1–3 lines to `skeleton.ts` and `clusters/service.ts` via `import "server-only"` + a boundary-note comment, technically violating the new rule. `page.tsx` dropped from 1114 → 823 in P2.5 but is still over. `pipeline.ts` is untouched and will be split in P3a.
 - Proposed resolution: defer — these files are already in the refactor queue for their respective phases (skeleton.ts → P3a, clusters/service.ts → P6 cleanup, pipeline.ts → P3a, page.tsx → P6). Grandfathered with explicit deadlines in ENGINEERING.md §2. Any *further* edits to these files that don't shrink them below 500 must include a split in the same PR.
 - Status: open (tracked)
+
+### F-019: Canvas-native drawing primitives don't theme (light mode)
+- Location: `src/features/canvas/canvas-minimap.tsx`, `src/features/canvas/canvas.tsx` (marquee overlay ~L728), `src/features/canvas/clusters/cluster-outline.tsx` (SVG stroke/fill)
+- Found during: Light-mode tokenize sweep (Phase A)
+- Severity: smell
+- Description: These draw with hardcoded `rgba(255,255,255,…)` in JS-computed inline styles / SVG attributes (minimap panel dots + viewport rect, marquee selection box, dashed cluster outline). They aren't CSS-class utilities, so the token sweep left them. In dark mode they're correct (unchanged); in `html.light` they render white-on-light → faint/invisible. The canvas's own grid in `canvas-parts/index.tsx` uses `rgba(0,0,0,…)` (black-on-light = visible, acceptable).
+- Evidence: `grep -rn "rgba(255" src/features/canvas` → minimap, canvas marquee, cluster-outline.
+- Proposed resolution: defer — a dedicated canvas-chrome pass. Either read these colors from CSS vars via `getComputedStyle`/a theme-aware constant, or branch on the active theme. Low risk (canvas chrome only), localized.
+- Status: deferred

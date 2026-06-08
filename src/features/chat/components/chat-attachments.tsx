@@ -119,7 +119,7 @@ export function AttachButton({ onFiles, disabled }: AttachButtonProps) {
         onClick={() => inputRef.current?.click()}
         disabled={disabled}
         aria-label="Attach files"
-        className="w-6 h-6 flex items-center justify-center text-white/40 hover:text-white/70 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        className="w-6 h-6 flex items-center justify-center text-text-muted hover:text-text-secondary transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
       >
         <svg
           width="12"
@@ -159,7 +159,7 @@ export function AttachmentPreviewStrip({
           className="relative shrink-0 group"
         >
           {a.file.type.startsWith("image/") ? (
-            <div className="w-16 h-16 rounded-[4px] overflow-hidden bg-white/[0.06] border border-white/[0.1]">
+            <div className="w-16 h-16 rounded-[4px] overflow-hidden bg-surface-raised-3 border border-border-default">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={a.previewUrl}
@@ -168,14 +168,14 @@ export function AttachmentPreviewStrip({
               />
             </div>
           ) : (
-            <div className="h-16 min-w-[80px] max-w-[120px] rounded-[4px] bg-white/[0.06] border border-white/[0.1] flex flex-col items-center justify-center gap-0.5 px-2">
-              <span className="font-mono text-[9px] font-bold text-white/50 uppercase">
+            <div className="h-16 min-w-[80px] max-w-[120px] rounded-[4px] bg-surface-raised-3 border border-border-default flex flex-col items-center justify-center gap-0.5 px-2">
+              <span className="font-mono text-[9px] font-bold text-text-tertiary uppercase">
                 {fileTypeIcon(a.file.type)}
               </span>
-              <span className="text-[9px] text-white/40 truncate max-w-full">
+              <span className="text-[9px] text-text-muted truncate max-w-full">
                 {a.file.name}
               </span>
-              <span className="text-[8px] text-white/30">
+              <span className="text-[8px] text-text-muted">
                 {formatFileSize(a.file.size)}
               </span>
             </div>
@@ -184,7 +184,7 @@ export function AttachmentPreviewStrip({
           <button
             type="button"
             onClick={() => onRemove(a.id)}
-            className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-black/70 border border-white/20 text-white/70 hover:text-white flex items-center justify-center text-[10px] leading-none opacity-0 group-hover:opacity-100 transition-opacity"
+            className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-black/70 border border-border-highlight text-text-secondary hover:text-text-primary flex items-center justify-center text-[10px] leading-none opacity-0 group-hover:opacity-100 transition-opacity"
             aria-label={`Remove ${a.file.name}`}
           >
             x
@@ -220,7 +220,7 @@ export function SentAttachmentPreview({
             href={a.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="block w-[120px] rounded-[4px] overflow-hidden bg-white/[0.06] border border-white/[0.1] hover:border-white/[0.25] transition-colors"
+            className="block w-[120px] rounded-[4px] overflow-hidden bg-surface-raised-3 border border-border-default hover:border-border-highlight transition-colors"
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
@@ -236,7 +236,7 @@ export function SentAttachmentPreview({
             href={a.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 h-6 px-2 rounded-[3px] bg-white/[0.06] border border-white/[0.1] hover:border-white/[0.25] transition-colors text-white/60 hover:text-white/80"
+            className="inline-flex items-center gap-1.5 h-6 px-2 rounded-[3px] bg-surface-raised-3 border border-border-default hover:border-border-highlight transition-colors text-text-tertiary hover:text-text-secondary"
           >
             <span className="font-mono text-[9px] font-bold uppercase">
               {fileTypeIcon(a.mimeType)}
@@ -244,7 +244,7 @@ export function SentAttachmentPreview({
             <span className="text-[10px] truncate max-w-[100px]">
               {a.fileName}
             </span>
-            <span className="text-[8px] text-white/30">
+            <span className="text-[8px] text-text-muted">
               {formatFileSize(a.fileSize)}
             </span>
           </a>

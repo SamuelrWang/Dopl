@@ -353,7 +353,7 @@ export function PrivateMessageList({
 function UserBubble({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex justify-end">
-      <div className="max-w-[78%] rounded-2xl px-4 py-2.5 bg-white/[0.06] border border-white/[0.08] text-[13.5px] leading-relaxed text-text-primary">
+      <div className="max-w-[78%] rounded-2xl px-4 py-2.5 bg-surface-raised-3 border border-border-default text-[13.5px] leading-relaxed text-text-primary">
         {children}
       </div>
     </div>

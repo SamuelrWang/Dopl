@@ -33,7 +33,7 @@ export function KnowledgeBasesList({
           <button
             type="button"
             onClick={() => setCreateOpen(true)}
-            className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white text-black text-xs font-medium hover:bg-white/90 transition-colors cursor-pointer"
+            className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-surface-cta text-text-on-cta text-xs font-medium hover:bg-surface-cta/90 transition-colors cursor-pointer"
           >
             <Plus size={12} />
             New knowledge base
@@ -46,8 +46,8 @@ export function KnowledgeBasesList({
             <Link
               key={kb.id}
               href={`/${workspaceSlug}/knowledge/${knowledgeBaseSegment(kb)}`}
-              className="group block rounded-xl border border-white/[0.06] p-5 hover:border-white/[0.15] hover:bg-white/[0.02] transition-colors cursor-pointer"
-              style={{ backgroundColor: "oklch(0.13 0 0)" }}
+              className="group block rounded-xl border border-border-subtle p-5 hover:border-border-strong hover:bg-surface-raised-1 transition-colors cursor-pointer"
+              style={{ backgroundColor: "var(--panel-surface)" }}
             >
               <p className="text-sm font-semibold text-text-primary truncate">
                 {kb.name}
@@ -67,9 +67,9 @@ export function KnowledgeBasesList({
           <button
             type="button"
             onClick={() => setCreateOpen(true)}
-            className="group flex flex-col items-center justify-center rounded-xl border border-dashed border-white/[0.08] p-5 hover:border-white/[0.2] hover:bg-white/[0.02] transition-colors cursor-pointer min-h-[148px]"
+            className="group flex flex-col items-center justify-center rounded-xl border border-dashed border-border-default p-5 hover:border-border-highlight hover:bg-surface-raised-1 transition-colors cursor-pointer min-h-[148px]"
           >
-            <div className="w-10 h-10 rounded-lg flex items-center justify-center border border-white/[0.06] mb-2 group-hover:border-white/[0.15] transition-colors">
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center border border-border-subtle mb-2 group-hover:border-border-strong transition-colors">
               <Plus size={16} className="text-text-secondary" />
             </div>
             <p className="text-sm font-medium text-text-secondary">

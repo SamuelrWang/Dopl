@@ -168,7 +168,7 @@ export function FixedChatPanel() {
 
   return (
     <div
-      className="fixed flex flex-col overflow-hidden rounded-2xl bg-[var(--panel-surface)] border border-white/[0.08]"
+      className="fixed flex flex-col overflow-hidden rounded-2xl bg-[var(--panel-surface)] border border-border-default"
       style={{
         top: EDGE_GAP,
         right: EDGE_GAP,
@@ -176,21 +176,21 @@ export function FixedChatPanel() {
         width: PANEL_WIDTH,
         zIndex: 40,
         boxShadow:
-          "0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06)",
+          "0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 var(--hairline-shine)",
       }}
     >
       {/* ── Top bar ──────────────────────────────────────────────── */}
       <div
         className="shrink-0 h-10 flex items-center justify-between px-4 gap-2"
-        style={{ boxShadow: "inset 0 -1px 0 rgba(255,255,255,0.06)" }}
+        style={{ boxShadow: "inset 0 -1px 0 var(--hairline-shine)" }}
       >
-        <span className="font-mono text-[10px] uppercase tracking-wider text-white/50 truncate min-w-0">
+        <span className="font-mono text-[10px] uppercase tracking-wider text-text-tertiary truncate min-w-0">
           {effectivePanel?.title || "Chat"}
         </span>
         <button
           onClick={close}
           aria-label="Close chat panel"
-          className="w-6 h-6 shrink-0 flex items-center justify-center rounded-[3px] text-white/40 hover:text-white/80 hover:bg-white/[0.08] transition-colors"
+          className="w-6 h-6 shrink-0 flex items-center justify-center rounded-[3px] text-text-muted hover:text-text-secondary hover:bg-surface-raised-4 transition-colors"
         >
           <svg
             width="12"
@@ -219,7 +219,7 @@ export function FixedChatPanel() {
           >
             <div className="flex-1 overflow-y-auto">
               {!hasAnyChats ? (
-                <div className="px-3 py-4 text-[11px] text-white/25 font-mono">
+                <div className="px-3 py-4 text-[11px] text-text-disabled font-mono">
                   No chats yet
                 </div>
               ) : (
@@ -231,27 +231,27 @@ export function FixedChatPanel() {
                       onClick={() => setSelectedPanelId(panel.id)}
                       className={`w-full text-left px-3 py-2.5 transition-colors ${
                         effectivePanel?.id === panel.id
-                          ? "bg-white/[0.08]"
-                          : "hover:bg-white/[0.04]"
+                          ? "bg-surface-selected"
+                          : "hover:bg-surface-raised-2"
                       }`}
                       style={{
-                        boxShadow: "inset 0 -1px 0 rgba(255,255,255,0.04)",
+                        boxShadow: "inset 0 -1px 0 var(--hairline-shine)",
                       }}
                     >
-                      <div className="font-mono text-[11px] text-white/70 truncate leading-tight">
+                      <div className="font-mono text-[11px] text-text-secondary truncate leading-tight">
                         {panel.title}
                       </div>
                       <div className="flex items-center gap-2 mt-1">
-                        <span className="font-mono text-[9px] text-white/25">
+                        <span className="font-mono text-[9px] text-text-disabled">
                           {panel.messages.filter((m) => m.type === "text").length}{" "}
                           msgs
                         </span>
                         {panel.pinned ? (
-                          <span className="font-mono text-[9px] text-white/30">
+                          <span className="font-mono text-[9px] text-text-muted">
                             Pinned
                           </span>
                         ) : panel.expiresAt ? (
-                          <span className="font-mono text-[9px] text-white/20">
+                          <span className="font-mono text-[9px] text-text-disabled">
                             {formatTimeShort(panel.expiresAt)}
                           </span>
                         ) : null}
@@ -262,9 +262,9 @@ export function FixedChatPanel() {
                   {/* Closed chats — click to reopen on canvas */}
                   {closedConversations.length > 0 && (
                     <div
-                      className="px-3 py-2 mt-1 text-[9px] uppercase tracking-wider text-white/25 font-mono"
+                      className="px-3 py-2 mt-1 text-[9px] uppercase tracking-wider text-text-disabled font-mono"
                       style={{
-                        boxShadow: "inset 0 -1px 0 rgba(255,255,255,0.04)",
+                        boxShadow: "inset 0 -1px 0 var(--hairline-shine)",
                       }}
                     >
                       Closed
@@ -275,24 +275,24 @@ export function FixedChatPanel() {
                       key={conv.panel_id}
                       onClick={() => reopenConversation(conv)}
                       title="Click to reopen on canvas"
-                      className="w-full text-left px-3 py-2.5 transition-colors opacity-55 hover:opacity-100 hover:bg-white/[0.04]"
+                      className="w-full text-left px-3 py-2.5 transition-colors opacity-55 hover:opacity-100 hover:bg-surface-raised-2"
                       style={{
-                        boxShadow: "inset 0 -1px 0 rgba(255,255,255,0.04)",
+                        boxShadow: "inset 0 -1px 0 var(--hairline-shine)",
                       }}
                     >
-                      <div className="font-mono text-[11px] text-white/60 truncate leading-tight">
+                      <div className="font-mono text-[11px] text-text-tertiary truncate leading-tight">
                         {conv.title || "Untitled chat"}
                       </div>
                       <div className="flex items-center gap-2 mt-1">
-                        <span className="font-mono text-[9px] text-white/25">
+                        <span className="font-mono text-[9px] text-text-disabled">
                           {conv.messages.length} msgs
                         </span>
                         {conv.pinned ? (
-                          <span className="font-mono text-[9px] text-white/30">
+                          <span className="font-mono text-[9px] text-text-muted">
                             Pinned
                           </span>
                         ) : conv.expires_at ? (
-                          <span className="font-mono text-[9px] text-white/20">
+                          <span className="font-mono text-[9px] text-text-disabled">
                             {formatTimeShort(conv.expires_at)}
                           </span>
                         ) : null}
@@ -306,11 +306,11 @@ export function FixedChatPanel() {
         )}
 
         {/* Divider with centered toggle arrow */}
-        <div className="relative shrink-0 w-px bg-white/[0.06]">
+        <div className="relative shrink-0 w-px bg-surface-raised-3">
           <button
             onClick={() => setListOpen((v) => !v)}
             aria-label={listOpen ? "Hide conversations" : "Show conversations"}
-            className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 left-0 z-10 w-4 h-8 flex items-center justify-center rounded-full bg-[var(--panel-surface)] border border-white/[0.1] text-white/30 hover:text-white/70 hover:bg-white/[0.06] transition-colors"
+            className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 left-0 z-10 w-4 h-8 flex items-center justify-center rounded-full bg-[var(--panel-surface)] border border-border-default text-text-muted hover:text-text-secondary hover:bg-surface-raised-3 transition-colors"
           >
             <svg
               width="6"
@@ -338,7 +338,7 @@ export function FixedChatPanel() {
             <ChatPanelBody panel={effectivePanel} />
           ) : (
             <div className="flex-1 flex items-center justify-center">
-              <span className="font-mono text-[11px] text-white/20">
+              <span className="font-mono text-[11px] text-text-disabled">
                 No conversation selected
               </span>
             </div>

@@ -53,11 +53,11 @@ export function ConnectedAppsSection() {
   }
 
   if (grants === null) {
-    return <p className="text-[11px] text-white/40 font-mono">Loading…</p>;
+    return <p className="text-[11px] text-text-muted font-mono">Loading…</p>;
   }
   if (grants.length === 0) {
     return (
-      <p className="text-[11px] text-white/40 leading-relaxed">
+      <p className="text-[11px] text-text-muted leading-relaxed">
         No connected apps yet. When you connect an MCP client via
         &ldquo;Connect &amp; log in,&rdquo; it appears here and you can revoke it
         anytime.
@@ -70,13 +70,13 @@ export function ConnectedAppsSection() {
       {grants.map((g) => (
         <li
           key={g.id}
-          className="flex items-center gap-3 rounded-[3px] border border-white/[0.08] bg-white/[0.02] px-3 py-2"
+          className="flex items-center gap-3 rounded-[3px] border border-border-default bg-surface-raised-1 px-3 py-2"
         >
           <div className="min-w-0 flex-1">
-            <p className="text-[12px] text-white/90 truncate">
+            <p className="text-[12px] text-text-primary truncate">
               {g.client_name || "MCP client"}
             </p>
-            <p className="text-[10px] text-white/40 font-mono truncate">
+            <p className="text-[10px] text-text-muted font-mono truncate">
               {g.scopes.join(" ") || "dopl.read"}
               {g.last_used_at
                 ? ` · last used ${new Date(g.last_used_at).toLocaleDateString()}`
@@ -87,7 +87,7 @@ export function ConnectedAppsSection() {
             type="button"
             onClick={() => void revoke(g.id)}
             disabled={revoking === g.id}
-            className="shrink-0 text-[11px] text-white/50 hover:text-red-400/90 transition-colors disabled:opacity-50"
+            className="shrink-0 text-[11px] text-text-tertiary hover:text-red-400/90 transition-colors disabled:opacity-50"
           >
             {revoking === g.id ? "…" : "Disconnect"}
           </button>

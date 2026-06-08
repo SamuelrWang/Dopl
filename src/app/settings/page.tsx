@@ -19,17 +19,17 @@ export default async function SettingsPage() {
     <div className="container mx-auto px-4 py-8 max-w-lg">
       <h1 className="text-xl font-medium text-text-primary mb-6">Settings</h1>
 
-      <div className="rounded-xl bg-white/[0.03] border border-white/[0.08] p-5 space-y-4">
+      <div className="rounded-xl bg-surface-raised-1 border border-border-default p-5 space-y-4">
         <div className="flex items-center gap-4">
           {profile?.avatar_url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={profile.avatar_url}
               alt=""
-              className="w-12 h-12 rounded-full border border-white/[0.1]"
+              className="w-12 h-12 rounded-full border border-border-default"
             />
           ) : (
-            <div className="w-12 h-12 rounded-full bg-white/[0.06] border border-white/[0.1] flex items-center justify-center text-text-secondary font-medium">
+            <div className="w-12 h-12 rounded-full bg-surface-raised-3 border border-border-default flex items-center justify-center text-text-secondary font-medium">
               {(profile?.display_name?.[0] || user.email?.[0] || "?").toUpperCase()}
             </div>
           )}
@@ -41,7 +41,7 @@ export default async function SettingsPage() {
           </div>
         </div>
 
-        <div className="border-t border-white/[0.06] pt-4 space-y-3">
+        <div className="border-t border-border-subtle pt-4 space-y-3">
           <Link
             href="/settings/profile"
             className="flex items-center justify-between text-sm text-text-secondary hover:text-text-primary transition-colors"

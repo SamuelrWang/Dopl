@@ -109,8 +109,8 @@ export function EditableTitle({
       className={cn(
         "min-w-0 truncate bg-transparent px-1 -mx-1 rounded",
         "text-sm font-medium text-text-primary placeholder:text-text-secondary/40",
-        "transition-colors hover:bg-white/[0.03] focus:bg-white/[0.04]",
-        "focus:outline-none focus:ring-1 focus:ring-white/20",
+        "transition-colors hover:bg-surface-raised-1 focus:bg-surface-raised-2",
+        "focus:outline-none focus:ring-1 focus:ring-border-highlight",
         "disabled:opacity-60",
         className,
       )}

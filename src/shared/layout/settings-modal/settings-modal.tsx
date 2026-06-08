@@ -1,16 +1,22 @@
 "use client";
 
-import { CreditCard, Settings as SettingsIcon, User, Users } from "lucide-react";
+import { CreditCard, Palette, Settings as SettingsIcon, User, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/shared/ui/dialog";
 import { cn } from "@/shared/lib/utils";
 import type { Role } from "@/features/workspaces/types";
 import { AccountSection } from "./sections/account-section";
+import { AppearanceSection } from "./sections/appearance-section";
 import { WorkspaceSection } from "./sections/workspace-section";
 import { MembersSection } from "./sections/members-section";
 import { BillingSection } from "./sections/billing-section";
 
-export type SettingsSection = "account" | "workspace" | "members" | "billing";
+export type SettingsSection =
+  | "account"
+  | "appearance"
+  | "workspace"
+  | "members"
+  | "billing";
 
 interface NavItem {
   id: SettingsSection;
@@ -24,7 +30,13 @@ interface NavGroup {
 }
 
 const NAV: ReadonlyArray<NavGroup> = [
-  { label: "Account", items: [{ id: "account", label: "Account", icon: User }] },
+  {
+    label: "Account",
+    items: [
+      { id: "account", label: "Account", icon: User },
+      { id: "appearance", label: "Appearance", icon: Palette },
+    ],
+  },
   {
     label: "Workspace",
     items: [
@@ -68,13 +80,13 @@ export function SettingsModal({
 }: Props) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex sm:max-w-3xl h-[80vh] p-0 gap-0 bg-[#0a0a0a] border-white/[0.12] overflow-hidden">
+      <DialogContent className="flex sm:max-w-3xl h-[80vh] p-0 gap-0 bg-modal-surface border-border-strong overflow-hidden">
         <DialogTitle className="sr-only">Settings</DialogTitle>
         <div className="flex h-full w-full">
-          <nav className="w-52 shrink-0 border-r border-white/[0.08] bg-white/[0.02] p-3 overflow-y-auto">
+          <nav className="w-52 shrink-0 border-r border-border-default bg-surface-raised-1 p-3 overflow-y-auto">
             {NAV.map((group) => (
               <div key={group.label} className="mb-4">
-                <p className="px-2 mb-1 text-[10px] uppercase tracking-wider text-white/40">
+                <p className="px-2 mb-1 text-[10px] uppercase tracking-wider text-text-muted">
                   {group.label}
                 </p>
                 {group.items.map((item) => {
@@ -87,8 +99,8 @@ export function SettingsModal({
                       className={cn(
                         "w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md text-sm transition-colors cursor-pointer",
                         section === item.id
-                          ? "bg-white/[0.08] text-white"
-                          : "text-white/60 hover:bg-white/[0.04] hover:text-white",
+                          ? "bg-surface-selected text-text-primary"
+                          : "text-text-tertiary hover:bg-surface-raised-2 hover:text-text-primary",
                       )}
                     >
                       <Icon size={15} className="shrink-0" />
@@ -102,6 +114,7 @@ export function SettingsModal({
 
           <div className="flex-1 min-w-0 overflow-y-auto p-6">
             {section === "account" && <AccountSection />}
+            {section === "appearance" && <AppearanceSection />}
             {section === "workspace" && (
               <WorkspaceSection
                 workspaceSegment={workspaceSegment}

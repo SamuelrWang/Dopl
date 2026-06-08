@@ -68,14 +68,14 @@ export function KnowledgePanelBody({ panel }: { panel: KnowledgePanelData }) {
 
   return (
     <div className="flex h-full w-full flex-col">
-      <header className="flex items-center justify-between border-b border-white/[0.06] px-5 py-4">
+      <header className="flex items-center justify-between border-b border-border-subtle px-5 py-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-md border border-white/[0.08] bg-white/[0.04]">
-            <BookOpen size={14} className="text-white/70" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-md border border-border-default bg-surface-raised-2">
+            <BookOpen size={14} className="text-text-secondary" />
           </div>
           <div>
-            <h2 className="text-sm font-semibold text-white/90">Knowledge</h2>
-            <p className="text-[11px] text-white/50">
+            <h2 className="text-sm font-semibold text-text-primary">Knowledge</h2>
+            <p className="text-[11px] text-text-tertiary">
               Click a base to open it in a panel
             </p>
           </div>
@@ -83,7 +83,7 @@ export function KnowledgePanelBody({ panel }: { panel: KnowledgePanelData }) {
         <button
           type="button"
           onClick={() => setCreating((c) => !c)}
-          className="inline-flex items-center gap-1.5 rounded-md border border-white/[0.12] bg-white/[0.04] px-3 py-1.5 text-xs text-white/80 transition-colors hover:border-white/[0.22] hover:bg-white/[0.08]"
+          className="inline-flex items-center gap-1.5 rounded-md border border-border-strong bg-surface-raised-2 px-3 py-1.5 text-xs text-text-secondary transition-colors hover:border-border-highlight hover:bg-surface-raised-4"
         >
           <Plus size={12} />
           New base
@@ -93,7 +93,7 @@ export function KnowledgePanelBody({ panel }: { panel: KnowledgePanelData }) {
       {creating && (
         <form
           onSubmit={handleCreate}
-          className="flex items-center gap-2 border-b border-white/[0.06] bg-white/[0.02] px-5 py-3"
+          className="flex items-center gap-2 border-b border-border-subtle bg-surface-raised-1 px-5 py-3"
         >
           <input
             autoFocus
@@ -101,12 +101,12 @@ export function KnowledgePanelBody({ panel }: { panel: KnowledgePanelData }) {
             value={createName}
             onChange={(e) => setCreateName(e.target.value)}
             placeholder="Knowledge base name"
-            className="flex-1 rounded-md border border-white/[0.1] bg-transparent px-3 py-1.5 text-xs text-white/90 placeholder:text-white/30 focus:border-white/[0.25] focus:outline-none"
+            className="flex-1 rounded-md border border-border-default bg-transparent px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-border-highlight focus:outline-none"
           />
           <button
             type="submit"
             disabled={!createName.trim()}
-            className="rounded-md border border-white/[0.18] bg-white/[0.08] px-3 py-1.5 text-xs text-white/90 transition-colors hover:bg-white/[0.12] disabled:opacity-40"
+            className="rounded-md border border-border-strong bg-surface-raised-4 px-3 py-1.5 text-xs text-text-primary transition-colors hover:bg-surface-raised-4 disabled:opacity-40"
           >
             Create
           </button>
@@ -117,7 +117,7 @@ export function KnowledgePanelBody({ panel }: { panel: KnowledgePanelData }) {
               setCreateName("");
               setCreateError(null);
             }}
-            className="rounded-md px-2 py-1.5 text-xs text-white/50 hover:text-white/85"
+            className="rounded-md px-2 py-1.5 text-xs text-text-tertiary hover:text-text-secondary"
           >
             Cancel
           </button>
@@ -135,12 +135,12 @@ export function KnowledgePanelBody({ panel }: { panel: KnowledgePanelData }) {
           </div>
         )}
         {bases && bases.length === 0 && (
-          <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-white/[0.12] px-6 py-12 text-center">
-            <BookOpen size={20} className="text-white/30" />
+          <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border-strong px-6 py-12 text-center">
+            <BookOpen size={20} className="text-text-muted" />
             <div>
-              <div className="text-xs text-white/60">No knowledge bases yet</div>
-              <div className="mt-1 text-[11px] text-white/40">
-                Click <strong className="text-white/60">+ New base</strong> to
+              <div className="text-xs text-text-tertiary">No knowledge bases yet</div>
+              <div className="mt-1 text-[11px] text-text-muted">
+                Click <strong className="text-text-tertiary">+ New base</strong> to
                 create one.
               </div>
             </div>
@@ -171,15 +171,15 @@ function KnowledgeCardSkeletonGrid() {
       {[0, 1, 2].map((i) => (
         <div
           key={i}
-          className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-4"
+          className="rounded-lg border border-border-subtle bg-surface-raised-1 p-4"
         >
           <div className="mb-2 flex items-start justify-between gap-2">
-            <Skeleton className="h-4 w-24 bg-white/[0.06]" />
-            <Skeleton className="h-4 w-14 rounded-full bg-white/[0.06]" />
+            <Skeleton className="h-4 w-24 bg-surface-raised-3" />
+            <Skeleton className="h-4 w-14 rounded-full bg-surface-raised-3" />
           </div>
-          <Skeleton className="mb-1.5 h-3 w-full bg-white/[0.04]" />
-          <Skeleton className="mb-3 h-3 w-2/3 bg-white/[0.04]" />
-          <Skeleton className="h-2.5 w-16 bg-white/[0.04]" />
+          <Skeleton className="mb-1.5 h-3 w-full bg-surface-raised-2" />
+          <Skeleton className="mb-3 h-3 w-2/3 bg-surface-raised-2" />
+          <Skeleton className="h-2.5 w-16 bg-surface-raised-2" />
         </div>
       ))}
     </div>
@@ -198,18 +198,18 @@ function KnowledgeCard({
     <button
       type="button"
       onClick={onClick}
-      className="group rounded-lg border border-white/[0.06] bg-white/[0.02] p-4 text-left transition-colors hover:border-white/[0.18] hover:bg-white/[0.05]"
+      className="group rounded-lg border border-border-subtle bg-surface-raised-1 p-4 text-left transition-colors hover:border-border-strong hover:bg-surface-raised-2"
     >
       <div className="mb-2 flex items-start justify-between gap-2">
-        <h3 className="truncate text-sm font-medium text-white/90 group-hover:text-white/95">
+        <h3 className="truncate text-sm font-medium text-text-primary group-hover:text-text-primary">
           {base.name}
         </h3>
         <AgentBadge enabled={base.agentWriteEnabled} />
       </div>
-      <p className="mb-3 line-clamp-2 text-xs leading-relaxed text-white/55">
+      <p className="mb-3 line-clamp-2 text-xs leading-relaxed text-text-tertiary">
         {base.description || "No description"}
       </p>
-      <div className="text-[10px] uppercase tracking-wider text-white/35">
+      <div className="text-[10px] uppercase tracking-wider text-text-muted">
         Updated {updatedAt}
       </div>
     </button>
@@ -222,7 +222,7 @@ function AgentBadge({ enabled }: { enabled: boolean }) {
       className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] ${
         enabled
           ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-300/90"
-          : "border-white/[0.08] bg-white/[0.02] text-white/40"
+          : "border-border-default bg-surface-raised-1 text-text-muted"
       }`}
     >
       <Bot size={9} />

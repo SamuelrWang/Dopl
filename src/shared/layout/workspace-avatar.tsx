@@ -26,7 +26,7 @@ export function WorkspaceAvatar({ name, iconUrl, size = "md", className }: Props
   return (
     <span
       className={cn(
-        "shrink-0 inline-flex items-center justify-center overflow-hidden border border-white/[0.1] bg-white/[0.06] text-text-secondary font-medium",
+        "shrink-0 inline-flex items-center justify-center overflow-hidden border border-border-default bg-surface-raised-3 text-text-secondary font-medium",
         SIZE_CLASSES[size],
         className,
       )}

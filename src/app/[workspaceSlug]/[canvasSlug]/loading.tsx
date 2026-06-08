@@ -98,7 +98,7 @@ export default function CanvasLoading() {
         {panels.map((p) => (
           <div
             key={p.id}
-            className="absolute animate-pulse rounded-lg border border-white/[0.08] bg-white/[0.04]"
+            className="absolute animate-pulse rounded-lg border border-border-default bg-surface-raised-2"
             style={{
               left: p.x,
               top: p.y,

@@ -108,7 +108,7 @@ export function SkillPanelBody({ panel }: Props) {
       />
 
       {errorText && (
-        <div className="border-b border-white/[0.06] bg-red-500/5 px-4 py-1 text-[10px] text-red-400">
+        <div className="border-b border-border-subtle bg-red-500/5 px-4 py-1 text-[10px] text-red-400">
           {errorText}
         </div>
       )}
@@ -414,7 +414,7 @@ function SkillHeader({
   }
 
   return (
-    <div className="border-b border-white/[0.06]">
+    <div className="border-b border-border-subtle">
       {conflict && (
         <div
           role="alert"
@@ -429,7 +429,7 @@ function SkillHeader({
             type="button"
             onClick={handleDiscardMine}
             disabled={saving}
-            className="rounded border border-white/[0.1] bg-white/[0.02] px-2 py-0.5 text-[10px] text-white/70 transition-colors hover:bg-white/[0.06] hover:text-white/95 disabled:opacity-40"
+            className="rounded border border-border-default bg-surface-raised-1 px-2 py-0.5 text-[10px] text-text-secondary transition-colors hover:bg-surface-raised-3 hover:text-text-primary disabled:opacity-40"
           >
             Discard mine
           </button>
@@ -444,7 +444,7 @@ function SkillHeader({
         </div>
       )}
       {errorText && (
-        <div className="border-b border-white/[0.06] bg-red-500/5 px-4 py-1 text-[10px] text-red-400">
+        <div className="border-b border-border-subtle bg-red-500/5 px-4 py-1 text-[10px] text-red-400">
           {errorText}
         </div>
       )}
@@ -458,7 +458,7 @@ function SkillHeader({
                 setName(e.target.value);
                 setDirty(true);
               }}
-              className="min-w-0 flex-1 truncate bg-transparent font-mono text-[13px] text-white/95 placeholder:text-white/25 focus:outline-none"
+              className="min-w-0 flex-1 truncate bg-transparent font-mono text-[13px] text-text-primary placeholder:text-text-disabled focus:outline-none"
               placeholder="skill-slug"
             />
             {/* Audit B10: visibility pill on the canvas skill panel
@@ -473,12 +473,12 @@ function SkillHeader({
               className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] transition-colors ${
                 status === "active"
                   ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-300/90"
-                  : "border-white/[0.08] bg-white/[0.02] text-white/40 hover:text-white/65"
+                  : "border-border-default bg-surface-raised-1 text-text-muted hover:text-text-tertiary"
               }`}
             >
               <span
                 className={`h-1 w-1 rounded-full ${
-                  status === "active" ? "bg-emerald-400" : "bg-white/40"
+                  status === "active" ? "bg-emerald-400" : "bg-text-text-muted"
                 }`}
               />
               {status}
@@ -487,7 +487,7 @@ function SkillHeader({
               type="button"
               onClick={handleSave}
               disabled={!dirty || saving || conflict !== null}
-              className="inline-flex items-center gap-1 rounded-md border border-white/[0.18] bg-white/[0.06] px-2 py-1 text-[10px] text-white/85 transition-colors hover:bg-white/[0.1] disabled:opacity-40"
+              className="inline-flex items-center gap-1 rounded-md border border-border-strong bg-surface-raised-3 px-2 py-1 text-[10px] text-text-secondary transition-colors hover:bg-surface-raised-4 disabled:opacity-40"
             >
               <Save size={9} />
               {saving ? "Saving…" : dirty ? "Save" : "Saved"}
@@ -500,11 +500,11 @@ function SkillHeader({
               setDescription(e.target.value);
               setDirty(true);
             }}
-            className="mt-1.5 w-full bg-transparent text-[11.5px] leading-relaxed text-white/65 placeholder:text-white/25 focus:outline-none"
+            className="mt-1.5 w-full bg-transparent text-[11.5px] leading-relaxed text-text-tertiary placeholder:text-text-disabled focus:outline-none"
             placeholder="Short description"
           />
           <div className="mt-2">
-            <div className="mb-0.5 font-mono text-[10px] uppercase tracking-wider text-white/40">
+            <div className="mb-0.5 font-mono text-[10px] uppercase tracking-wider text-text-muted">
               When to use
             </div>
             <textarea
@@ -514,7 +514,7 @@ function SkillHeader({
                 setDirty(true);
               }}
               rows={2}
-              className="w-full resize-none bg-transparent text-[11.5px] leading-relaxed text-white/70 placeholder:text-white/25 focus:outline-none"
+              className="w-full resize-none bg-transparent text-[11.5px] leading-relaxed text-text-secondary placeholder:text-text-disabled focus:outline-none"
               placeholder="When the agent should reach for this skill…"
             />
           </div>
@@ -555,7 +555,7 @@ function FileTabs({
   onDelete: (file: SkillFile) => void;
 }) {
   return (
-    <div className="flex shrink-0 items-center gap-1 overflow-x-auto border-b border-white/[0.06] px-3 pt-2">
+    <div className="flex shrink-0 items-center gap-1 overflow-x-auto border-b border-border-subtle px-3 pt-2">
       {files.map((f) => {
         const isActive = f.name === active;
         const pinned = f.name === PRIMARY_SKILL_FILE_NAME;
@@ -565,8 +565,8 @@ function FileTabs({
             key={f.id}
             className={`group inline-flex shrink-0 items-center gap-1 rounded-t-md border-b-2 px-2 py-1.5 font-mono text-[11px] transition-colors ${
               isActive
-                ? "border-white/60 bg-white/[0.04] text-white/95"
-                : "border-transparent text-white/45 hover:text-white/75"
+                ? "border-border-active bg-surface-selected text-text-primary"
+                : "border-transparent text-text-muted hover:text-text-secondary"
             }`}
           >
             {isEditing ? (
@@ -597,13 +597,13 @@ function FileTabs({
                 type="button"
                 aria-label={`Delete ${f.name}`}
                 onClick={() => onDelete(f)}
-                className="ml-0.5 flex h-4 w-4 items-center justify-center rounded text-white/35 hover:text-white/85"
+                className="ml-0.5 flex h-4 w-4 items-center justify-center rounded text-text-muted hover:text-text-secondary"
               >
                 <X size={9} />
               </button>
             )}
             {!isEditing && pinned && (
-              <span className="text-[9px] text-white/35">·pinned</span>
+              <span className="text-[9px] text-text-muted">·pinned</span>
             )}
           </div>
         );
@@ -612,7 +612,7 @@ function FileTabs({
         <button
           type="button"
           onClick={onAdd}
-          className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[10px] text-white/40 transition-colors hover:text-white/70"
+          className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[10px] text-text-muted transition-colors hover:text-text-secondary"
         >
           <Plus size={9} />
           Add file
@@ -819,7 +819,7 @@ function FileEditor({
             type="button"
             onClick={handleDiscardMine}
             disabled={saving}
-            className="rounded border border-white/[0.1] bg-white/[0.02] px-2 py-0.5 text-[10px] text-white/70 transition-colors hover:bg-white/[0.06] hover:text-white/95 disabled:opacity-40"
+            className="rounded border border-border-default bg-surface-raised-1 px-2 py-0.5 text-[10px] text-text-secondary transition-colors hover:bg-surface-raised-3 hover:text-text-primary disabled:opacity-40"
           >
             Discard mine
           </button>
@@ -834,21 +834,21 @@ function FileEditor({
         </div>
       )}
       <div className="flex items-center justify-between px-4 py-1.5">
-        <span className="font-mono text-[10px] uppercase tracking-wider text-white/35">
+        <span className="font-mono text-[10px] uppercase tracking-wider text-text-muted">
           {file.name}
         </span>
         <button
           type="button"
           onClick={handleSave}
           disabled={!dirty || saving || conflict !== null}
-          className="inline-flex items-center gap-1 rounded-md border border-white/[0.18] bg-white/[0.06] px-2 py-1 text-[10px] text-white/85 transition-colors hover:bg-white/[0.1] disabled:opacity-40"
+          className="inline-flex items-center gap-1 rounded-md border border-border-strong bg-surface-raised-3 px-2 py-1 text-[10px] text-text-secondary transition-colors hover:bg-surface-raised-4 disabled:opacity-40"
         >
           <Save size={9} />
           {saving ? "Saving…" : dirty ? "Save" : "Saved"}
         </button>
       </div>
       {errorText && (
-        <div className="border-y border-white/[0.06] bg-red-500/5 px-4 py-1 text-[10px] text-red-400">
+        <div className="border-y border-border-subtle bg-red-500/5 px-4 py-1 text-[10px] text-red-400">
           {errorText}
         </div>
       )}
@@ -858,7 +858,7 @@ function FileEditor({
           setBody(e.target.value);
           setDirty(true);
         }}
-        className="flex-1 min-h-0 resize-none bg-transparent px-4 py-3 font-mono text-[12px] leading-relaxed text-white/85 placeholder:text-white/25 focus:outline-none"
+        className="flex-1 min-h-0 resize-none bg-transparent px-4 py-3 font-mono text-[12px] leading-relaxed text-text-secondary placeholder:text-text-disabled focus:outline-none"
         placeholder="Write markdown here…"
       />
     </div>
@@ -872,25 +872,25 @@ function SkillPanelSkeleton() {
       aria-label="Loading skill"
     >
       {/* Header */}
-      <div className="border-b border-white/[0.06] px-4 py-3">
+      <div className="border-b border-border-subtle px-4 py-3">
         <div className="flex items-center gap-2">
-          <Skeleton className="h-4 w-4 rounded bg-white/[0.06]" />
-          <Skeleton className="h-4 w-40 bg-white/[0.06]" />
-          <Skeleton className="ml-auto h-4 w-16 rounded-full bg-white/[0.06]" />
+          <Skeleton className="h-4 w-4 rounded bg-surface-raised-3" />
+          <Skeleton className="h-4 w-40 bg-surface-raised-3" />
+          <Skeleton className="ml-auto h-4 w-16 rounded-full bg-surface-raised-3" />
         </div>
-        <Skeleton className="mt-2 h-3 w-3/4 bg-white/[0.04]" />
+        <Skeleton className="mt-2 h-3 w-3/4 bg-surface-raised-2" />
       </div>
       {/* File tabs */}
-      <div className="flex gap-1 border-b border-white/[0.06] px-2 py-1.5">
-        <Skeleton className="h-5 w-24 rounded bg-white/[0.05]" />
-        <Skeleton className="h-5 w-20 rounded bg-white/[0.04]" />
+      <div className="flex gap-1 border-b border-border-subtle px-2 py-1.5">
+        <Skeleton className="h-5 w-24 rounded bg-surface-raised-2" />
+        <Skeleton className="h-5 w-20 rounded bg-surface-raised-2" />
       </div>
       {/* Body */}
       <div className="flex-1 space-y-2 px-4 py-3">
-        <Skeleton className="h-3 w-full bg-white/[0.04]" />
-        <Skeleton className="h-3 w-11/12 bg-white/[0.04]" />
-        <Skeleton className="h-3 w-4/5 bg-white/[0.04]" />
-        <Skeleton className="h-3 w-2/3 bg-white/[0.04]" />
+        <Skeleton className="h-3 w-full bg-surface-raised-2" />
+        <Skeleton className="h-3 w-11/12 bg-surface-raised-2" />
+        <Skeleton className="h-3 w-4/5 bg-surface-raised-2" />
+        <Skeleton className="h-3 w-2/3 bg-surface-raised-2" />
       </div>
     </div>
   );
