@@ -404,7 +404,9 @@ html {
   body {
     background-color: var(--body-bg);
     color: var(--forest);
-    font-family: var(--font-sans);
+    /* Use the real next/font variable (set on <body>), with a system-sans
+       fallback so it can never drop to the browser's serif default. */
+    font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
   }
 
   html {
