@@ -29,8 +29,8 @@ export default async function OverviewPage({ params }: PageProps) {
   return (
     <>
       <PageTopBar title="Overview" />
-      <div className="fixed top-[52px] right-0 bottom-0 left-0 md:left-64 z-[3] pointer-events-auto overflow-y-auto">
-        <div className="p-3 max-w-4xl mx-auto space-y-3">
+      <div className="h-full overflow-y-auto">
+        <div className="p-6 max-w-4xl mx-auto space-y-3">
           <section className="rounded-2xl border border-border-default bg-[var(--panel-surface)] p-5">
             <p className="text-[10px] uppercase tracking-wider text-text-secondary/60 mb-1">
               Workspace

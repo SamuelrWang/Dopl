@@ -16,7 +16,7 @@ export function ClusterAttachmentBanner({ panelId }: { panelId: string }) {
   if (!cluster) return null;
 
   return (
-    <div className="flex items-center justify-between gap-2 border-b border-emerald-400/15 bg-emerald-400/[0.04] px-4 py-1.5 text-[11px] text-emerald-200/85">
+    <div className="flex items-center justify-between gap-2 border-b border-agent-on/15 bg-agent-on/[0.04] px-4 py-1.5 text-[11px] text-agent-on/85">
       <div className="flex items-center gap-1.5 truncate">
         <Link2 size={11} className="shrink-0" />
         <span className="truncate">
@@ -28,7 +28,7 @@ export function ClusterAttachmentBanner({ panelId }: { panelId: string }) {
         onClick={() =>
           dispatch({ type: "REMOVE_PANEL_FROM_CLUSTER", panelId })
         }
-        className="inline-flex shrink-0 items-center gap-1 rounded border border-emerald-400/20 px-1.5 py-0.5 text-[10px] text-emerald-200/85 transition-colors hover:bg-emerald-400/10 hover:text-emerald-100"
+        className="inline-flex shrink-0 items-center gap-1 rounded border border-agent-on/20 px-1.5 py-0.5 text-[10px] text-agent-on/85 transition-colors hover:bg-agent-on/10 hover:text-agent-on"
         title="Detach from cluster"
       >
         <Unlink size={9} />

@@ -11,18 +11,14 @@ import { cn } from "@/shared/lib/utils";
 export function KnowledgeBaseSkeleton() {
   return (
     <div
-      className="pt-[52px] pointer-events-auto"
-      style={{ backgroundColor: "var(--panel-surface)" }}
+      className="pointer-events-auto h-full"
       aria-busy="true"
       aria-live="polite"
     >
       <span className="sr-only">Loading knowledge base</span>
-      <div className="flex h-[calc(100vh-52px)]">
+      <div className="flex h-full">
         {/* Tree column */}
-        <aside
-          className="hidden md:flex w-72 shrink-0 flex-col border-r border-border-subtle"
-          style={{ backgroundColor: "var(--tabs-surface)" }}
-        >
+        <aside className="hidden md:flex w-72 shrink-0 flex-col border-r border-border-subtle">
           <div className="px-3 py-3 border-b border-border-subtle space-y-2">
             <Bar className="h-3 w-24" />
             <Bar className="h-7 w-full rounded-md" />
@@ -38,10 +34,7 @@ export function KnowledgeBaseSkeleton() {
         </aside>
 
         {/* Doc column */}
-        <div
-          className="flex-1 min-w-0 overflow-hidden"
-          style={{ backgroundColor: "var(--input-surface)" }}
-        >
+        <div className="flex-1 min-w-0 overflow-hidden">
           <div className="max-w-3xl mx-auto px-8 py-10 space-y-5">
             <Bar className="h-6 w-2/3" />
             <div className="space-y-2.5">

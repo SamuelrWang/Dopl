@@ -221,7 +221,7 @@ function AgentBadge({ enabled }: { enabled: boolean }) {
     <span
       className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] ${
         enabled
-          ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-300/90"
+          ? "border-agent-on/20 bg-agent-on/10 text-agent-on/90"
           : "border-border-default bg-surface-raised-1 text-text-muted"
       }`}
     >

@@ -158,14 +158,6 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
           : "shadow-[var(--shadow-panel)]")
       }
     >
-      {/* Top specular highlight */}
-      <div
-        className="pointer-events-none absolute inset-x-0 top-0 h-px"
-        style={{
-          background: "var(--shine-top-gradient)",
-        }}
-      />
-
       {/* Header — dedicated drag handle. Marked with `data-drag-handle` so
           the root pointer-down handler always treats this region as a drag
           zone, even over the title text. Inline `cursor: grab` overrides

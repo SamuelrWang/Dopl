@@ -41,8 +41,14 @@ function CanvasPortal() {
 
   if (!mounted) return null;
 
+  // Inset to match the shell's content-panel geometry (sidebar width + gap on
+  // the left, top-bar height + gap on top, small gap on the right/bottom) and
+  // clip to the rounded panel. The Canvas resizes to this box automatically via
+  // its ResizeObserver, and pointer math uses getBoundingClientRect so the
+  // offset is handled. Still portaled to <body> so it escapes the z-[2] chrome
+  // layer and receives marquee/drag events.
   return createPortal(
-    <div className="fixed inset-0 z-[1]">
+    <div className="fixed top-[60px] right-2 bottom-2 left-2 md:left-[264px] z-[1] overflow-hidden rounded-2xl border border-border-subtle bg-[var(--bg-elevated)] shadow-[var(--shadow-panel)]">
       <Canvas />
     </div>,
     document.body

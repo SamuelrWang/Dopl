@@ -54,11 +54,8 @@ export function MembersView({ workspaceSlug, workspaceId, currentUserId, myRole 
         }
       />
 
-      <div className="fixed top-[52px] right-0 bottom-0 left-0 md:left-64 z-[3] p-3 pointer-events-auto">
-        <div
-          className="h-full rounded-2xl border border-border-default overflow-hidden flex flex-col"
-          style={{ backgroundColor: "var(--panel-surface)" }}
-        >
+      <div className="h-full">
+        <div className="h-full overflow-hidden flex flex-col">
           <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
             <div className="flex-1 min-h-0">
               <MembersTable

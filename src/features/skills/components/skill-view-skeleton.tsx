@@ -9,15 +9,12 @@ import { cn } from "@/shared/lib/utils";
 export function SkillViewSkeleton() {
   return (
     <div
-      className="fixed top-[52px] right-0 bottom-0 left-0 md:left-64 z-[3] p-3 pointer-events-auto"
+      className="h-full"
       aria-busy="true"
       aria-live="polite"
     >
       <span className="sr-only">Loading skill</span>
-      <div
-        className="h-full rounded-2xl border border-border-default bg-[var(--panel-surface)] overflow-hidden flex"
-        style={{ backgroundColor: "var(--panel-surface)" }}
-      >
+      <div className="h-full overflow-hidden flex">
         {/* Main column — file tabs + editor */}
         <div className="flex-1 min-w-0 flex flex-col">
           <div className="shrink-0 flex items-center gap-2 border-b border-border-subtle px-3 py-2">

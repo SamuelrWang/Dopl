@@ -52,11 +52,11 @@ export const ClusterOutline = React.memo(function ClusterOutline({ panels, empha
   const vbH = bounds.height + strokeInset * 2;
 
   const strokeColor = emphasised
-    ? "rgba(255,255,255,0.5)"
-    : "rgba(255,255,255,0.35)";
+    ? "var(--cluster-outline-stroke-strong)"
+    : "var(--cluster-outline-stroke)";
   const fillColor = emphasised
-    ? "rgba(255,255,255,0.05)"
-    : "rgba(255,255,255,0.03)";
+    ? "var(--cluster-outline-fill-strong)"
+    : "var(--cluster-outline-fill)";
 
   return (
     <svg
@@ -85,16 +85,15 @@ export const ClusterOutline = React.memo(function ClusterOutline({ panels, empha
         strokeWidth={CLUSTER_PADDING}
         style={{ pointerEvents: "fill", cursor: "grab" }}
       />
-      {/* Visual outline */}
+      {/* Visual outline. stroke/fill set via style (not SVG attributes) so
+          the CSS var() resolves and themes with light/dark. */}
       <path
         d={path}
-        fill={fillColor}
-        stroke={strokeColor}
         strokeWidth={1.5}
         strokeDasharray="8 6"
         strokeLinejoin="round"
         strokeLinecap="round"
-        style={{ pointerEvents: "none" }}
+        style={{ pointerEvents: "none", stroke: strokeColor, fill: fillColor }}
       />
     </svg>
   );

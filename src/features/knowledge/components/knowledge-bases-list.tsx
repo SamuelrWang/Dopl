@@ -40,7 +40,7 @@ export function KnowledgeBasesList({
           </button>
         }
       />
-      <div className="container mx-auto max-w-6xl px-6 pt-[68px] pb-8 pointer-events-auto">
+      <div className="container mx-auto max-w-6xl px-6 pt-2 pb-8 pointer-events-auto">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {bases.map((kb) => (
             <Link

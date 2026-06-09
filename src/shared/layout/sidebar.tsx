@@ -12,7 +12,6 @@ import {
   Home,
   LayoutGrid,
   MessageSquare,
-  Plug,
   Plus,
   Search,
   Sparkles,
@@ -82,7 +81,6 @@ type NavSection =
   | "chat"
   | "knowledge"
   | "skills"
-  | "integrations"
   | "members";
 
 interface NavItem {
@@ -97,7 +95,6 @@ const navItems: ReadonlyArray<NavItem> = [
   { label: "Chat", icon: MessageSquare, section: "chat" },
   { label: "Knowledge", icon: BookOpen, section: "knowledge" },
   { label: "Skills", icon: Sparkles, section: "skills" },
-  { label: "Integrations", icon: Plug, section: "integrations" },
   { label: "Members", icon: Users, section: "members" },
 ];
 
@@ -109,7 +106,6 @@ const NAMED_WORKSPACE_SUBROUTES: ReadonlyArray<string> = [
   "chat",
   "knowledge",
   "skills",
-  "integrations",
   "settings",
 ];
 
@@ -165,8 +161,7 @@ export function Sidebar() {
 
   return (
     <aside
-      className="hidden md:flex fixed inset-y-0 left-0 w-64 z-10 flex-col overflow-hidden border-r border-border-subtle pointer-events-auto"
-      style={{ backgroundColor: "var(--panel-surface)" }}
+      className="hidden md:flex fixed inset-y-0 left-0 w-64 z-10 flex-col overflow-hidden pointer-events-auto"
     >
       <WorkspaceSwitcher
         current={currentWorkspace}

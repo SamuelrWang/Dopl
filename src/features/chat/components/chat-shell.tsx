@@ -134,32 +134,30 @@ export function ChatShell({ workspaceId }: ChatShellProps) {
   );
 
   return (
-    <div className="fixed top-[52px] right-0 bottom-0 left-0 md:left-64 z-[3] p-3 pointer-events-auto">
-      <div className="h-full rounded-2xl border border-border-default bg-[var(--panel-surface)] overflow-hidden flex">
-        <aside className="w-56 shrink-0 flex flex-col border-r border-border-default">
-          <ConversationsRail
-            conversations={railConversations}
-            activePanelId={selectedPanelId}
-            isLoading={isLoading}
-            onSelect={setSelectedPanelId}
-            onNew={handleNew}
-          />
-        </aside>
+    <div className="h-full flex">
+      <aside className="w-56 shrink-0 flex flex-col border-r border-border-subtle">
+        <ConversationsRail
+          conversations={railConversations}
+          activePanelId={selectedPanelId}
+          isLoading={isLoading}
+          onSelect={setSelectedPanelId}
+          onNew={handleNew}
+        />
+      </aside>
 
-        <div className="flex-1 min-w-0 flex flex-col">
-          <ChatThread
-            key={selectedPanelId}
-            workspaceId={workspaceId}
-            panelId={selectedPanelId}
-            initialMessages={selectedConversation?.messages || []}
-            initialTitle={selectedConversation?.title || "New chat"}
-            initialScopeFilters={selectedConversation?.scope_filters ?? null}
-            clusters={clusters}
-            knowledgeBases={knowledgeBases}
-            skills={skills}
-            onFirstResponseSaved={handleFirstResponseSaved}
-          />
-        </div>
+      <div className="flex-1 min-w-0 flex flex-col">
+        <ChatThread
+          key={selectedPanelId}
+          workspaceId={workspaceId}
+          panelId={selectedPanelId}
+          initialMessages={selectedConversation?.messages || []}
+          initialTitle={selectedConversation?.title || "New chat"}
+          initialScopeFilters={selectedConversation?.scope_filters ?? null}
+          clusters={clusters}
+          knowledgeBases={knowledgeBases}
+          skills={skills}
+          onFirstResponseSaved={handleFirstResponseSaved}
+        />
       </div>
     </div>
   );

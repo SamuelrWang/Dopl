@@ -68,7 +68,7 @@ export function SkillsList({ workspaceSlug, workspaceId, skills }: Props) {
           </div>
         }
       />
-      <div className="container mx-auto max-w-5xl px-6 pt-[68px] pb-8 pointer-events-auto">
+      <div className="container mx-auto max-w-5xl px-6 pt-2 pb-8 pointer-events-auto">
         {skills.length === 0 ? (
           <EmptyState />
         ) : (

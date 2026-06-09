@@ -32,10 +32,9 @@ export function PageTopBar({ title, leading, trailing, className }: Props) {
     <div
       className={cn(
         "fixed top-0 right-0 left-0 md:left-64 h-[52px] z-[5]",
-        "border-b border-border-subtle flex items-center px-6 gap-2 pointer-events-auto",
+        "flex items-center px-6 gap-2 pointer-events-none [&_*]:pointer-events-auto",
         className,
       )}
-      style={{ backgroundColor: "var(--panel-surface)" }}
     >
       {leading}
       {typeof title === "string" ? (

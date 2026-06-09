@@ -68,6 +68,10 @@
   --color-link: var(--link);
   --color-accent-on: var(--accent-on);
 
+  /* Cluster/agent "active" green (Agent: on pills, attachment banner) —
+     bright on dark, darker emerald on light so it stays legible. */
+  --color-agent-on: var(--agent-on);
+
   /* Inverted affordance (menu rows that flip to solid on hover/active) +
      active-state indicator border. In light these become the neutral
      #7C7372 chip with light text, matching the reference selected item. */
@@ -143,7 +147,7 @@
 :root {
   /* Surfaces — pure neutral charcoal (no hue) */
   --bg-base: oklch(0.15 0 0);
-  --bg-elevated: oklch(0.18 0 0);
+  --bg-elevated: oklch(0.205 0 0);
   --bg-elevated-hover: oklch(0.21 0 0);
   --bg-inset: oklch(0.13 0 0);
   --bg-inset-hover: oklch(0.16 0 0);
@@ -214,6 +218,16 @@
   --border-active: oklch(1 0 0 / 60%);
   --hairline-shine: rgba(255, 255, 255, 0.06);
 
+  /* Cluster/agent active green */
+  --agent-on: oklch(0.84 0.15 162);
+
+  /* Cluster outline (dashed region behind grouped panels) — drawn in SVG.
+     White-alpha on dark; black-alpha on light so the region is visible. */
+  --cluster-outline-stroke: rgba(255, 255, 255, 0.35);
+  --cluster-outline-stroke-strong: rgba(255, 255, 255, 0.5);
+  --cluster-outline-fill: rgba(255, 255, 255, 0.03);
+  --cluster-outline-fill-strong: rgba(255, 255, 255, 0.05);
+
   /* Panel shine + selection — used by canvas-panel inline styles.
      Dark keeps the white shine; light inverts to a soft neutral shadow. */
   --shine-top-gradient: linear-gradient(
@@ -225,8 +239,9 @@
     transparent 100%
   );
   --ring-selected: 0 0 0 2px rgba(255, 255, 255, 0.5);
-  --shadow-panel: 0 4px 16px rgba(0, 0, 0, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  /* Plain drop shadow — no inset top-edge highlight (that read as a second,
+     inner border on the panels). One clean border per panel. */
+  --shadow-panel: 0 4px 16px rgba(0, 0, 0, 0.3);
 
   /* Radius base */
   --radius: 0.625rem;
@@ -239,8 +254,9 @@
   --mint: #9EFFBF;        /* success */
   --gold: #F4D35E;        /* warnings */
 
-  /* Body background — true charcoal (no hue) */
-  --body-bg: #141414;
+  /* App-frame background — near-black. Darker than the panel surface so the
+     content panel reads as an elevated gray card floating on the frame. */
+  --body-bg: #0a0a0a;
 
   /* Gradients — neutral charcoal */
   --gradient-elevated: linear-gradient(
@@ -343,6 +359,15 @@ html.light {
   --border-active: #3e3a3b;
   --hairline-shine: oklch(0 0 0 / 5%);
 
+  /* Cluster/agent green — darker emerald so it reads on white */
+  --agent-on: oklch(0.52 0.14 162);
+
+  /* Cluster outline — black-alpha so the dashed region is visible on light */
+  --cluster-outline-stroke: rgba(0, 0, 0, 0.3);
+  --cluster-outline-stroke-strong: rgba(0, 0, 0, 0.45);
+  --cluster-outline-fill: rgba(0, 0, 0, 0.035);
+  --cluster-outline-fill-strong: rgba(0, 0, 0, 0.06);
+
   /* Panel shine inverts to a soft neutral shadow + faint inset */
   --shine-top-gradient: transparent;
   --ring-selected: 0 0 0 2px oklch(0 0 0 / 12%);
@@ -420,101 +445,14 @@ html {
 }
 
 /* ─────────────────────────────────────────────────────────────────────
-   Mosaic background pattern (openclaw-cloud)
-   Subtle blueprint grid using inline SVG data URL.
-   Apply via class .mosaic-bg on body or a wrapper.
+   App-frame background (.mosaic-bg) — flat, no grid or texture.
    ───────────────────────────────────────────────────────────────────── */
 
+/* Flat app-frame background, themed via --body-bg. There is intentionally
+   NO frame grid or texture — the grid lives only on the canvas, which paints
+   its own (panning with the camera) inside its panel. */
 .mosaic-bg {
-  /* Base: deep charcoal (darker than before) */
-  background-color: #0b0b0b;
-  /* Organic gradient: more radial "blobs" at odd positions — mix of
-     lighter pools and darker shadow spots layered unpredictably for a
-     lava-lamp / organic feel. All hues are neutral gray. */
-  background-image:
-    /* lighter pools (darker than before) */
-    radial-gradient(ellipse 50% 38% at 18% 22%, #101010 0%, transparent 55%),
-    radial-gradient(ellipse 42% 55% at 82% 35%, #0c0c0c 0%, transparent 60%),
-    radial-gradient(ellipse 60% 34% at 50% 88%, #0e0e0e 0%, transparent 55%),
-    radial-gradient(ellipse 30% 48% at 12% 75%, #0b0b0b 0%, transparent 60%),
-    radial-gradient(ellipse 38% 30% at 72% 70%, #0d0d0d 0%, transparent 65%),
-    radial-gradient(ellipse 26% 34% at 40% 15%, #0a0a0a 0%, transparent 70%),
-    radial-gradient(ellipse 32% 28% at 90% 82%, #0c0c0c 0%, transparent 60%),
-    radial-gradient(ellipse 28% 40% at 5% 48%, #0b0b0b 0%, transparent 65%),
-    radial-gradient(ellipse 34% 26% at 58% 52%, #0f0f0f 0%, transparent 70%),
-    /* darker shadow spots (more of them) */
-    radial-gradient(ellipse 36% 30% at 28% 55%, #030303 0%, transparent 60%),
-    radial-gradient(ellipse 30% 42% at 65% 18%, #050505 0%, transparent 65%),
-    radial-gradient(ellipse 42% 28% at 92% 55%, #040404 0%, transparent 60%),
-    radial-gradient(ellipse 28% 38% at 22% 92%, #060606 0%, transparent 65%),
-    radial-gradient(ellipse 34% 26% at 48% 40%, #040404 0%, transparent 62%),
-    radial-gradient(ellipse 28% 34% at 8% 10%, #050505 0%, transparent 65%),
-    radial-gradient(ellipse 32% 26% at 78% 92%, #030303 0%, transparent 60%),
-    radial-gradient(ellipse 26% 38% at 95% 20%, #050505 0%, transparent 65%),
-    radial-gradient(ellipse 30% 28% at 38% 78%, #040404 0%, transparent 68%),
-    /* base diagonal */
-    linear-gradient(135deg, #070707 0%, #0c0c0c 50%, #080808 100%);
-  /* Use transform hack instead of background-attachment: fixed.
-     background-attachment: fixed forces a full repaint of all 20+ gradient
-     layers on every scroll/zoom frame. Promoting the element to its own
-     compositing layer via will-change + translateZ(0) lets the GPU cache
-     the rasterised result and composite it cheaply. */
-  will-change: transform;
-  transform: translateZ(0);
-}
-
-/* Subtle noise overlay to break up banding in the gradients */
-.mosaic-bg::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: -1;
-  opacity: 0.4;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 120 120' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='2.4' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.08 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  background-size: 120px 120px;
-  will-change: transform;
-  transform: translateZ(0);
-}
-
-/* Grid overlay — evenly spaced lines that sit flush at every edge.
-   Cell size is a CSS variable set at runtime by <FlushGrid /> so the
-   viewport is divided into an exact integer number of cells in each
-   dimension. Anchored at 0 0 so there is always a line at the left
-   and top edges; because the size divides evenly there is also a line
-   at the right and bottom edges. */
-.mosaic-bg::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 1;
-  background-image:
-    linear-gradient(to right, rgba(0, 0, 0, 0.7) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(0, 0, 0, 0.7) 1px, transparent 1px);
-  background-size: var(--grid-cell-x, 160px) var(--grid-cell-y, 160px);
-  background-position: 0 0;
-  will-change: transform;
-  transform: translateZ(0);
-}
-
-/* When the canvas page is active, hide the body grid — the Canvas
-   component paints its own grid that pans with the camera. Without this
-   suppression, two grids would render on top of each other (one static
-   from the body, one moving from the canvas). */
-.canvas-active.mosaic-bg::after {
-  display: none;
-}
-
-/* Light theme: flatten the textured mosaic to the flat canvas color and
-   drop the noise + dark grid overlays. */
-html.light .mosaic-bg {
-  background-color: #e1e2e6;
-  background-image: none;
-}
-html.light .mosaic-bg::before,
-html.light .mosaic-bg::after {
-  display: none;
+  background-color: var(--body-bg);
 }
 
 

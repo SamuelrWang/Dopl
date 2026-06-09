@@ -392,15 +392,9 @@ export function KnowledgeBaseView({
           </>
         }
       />
-      <div
-        className="pt-[52px] pointer-events-auto"
-        style={{ backgroundColor: "var(--panel-surface)" }}
-      >
-        <div className="flex h-[calc(100vh-52px)]">
-          <aside
-            className="hidden md:flex w-72 shrink-0 flex-col border-r border-border-subtle"
-            style={{ backgroundColor: "var(--tabs-surface)" }}
-          >
+      <div className="pointer-events-auto h-full">
+        <div className="flex h-full">
+          <aside className="hidden md:flex w-72 shrink-0 flex-col border-r border-border-subtle">
             <KnowledgeTree
               baseId={base.id}
               folders={folders}
@@ -421,10 +415,7 @@ export function KnowledgeBaseView({
               onClearEditing={handleClearEditing}
             />
           </aside>
-          <div
-            className="flex-1 min-w-0 overflow-y-auto"
-            style={{ backgroundColor: "var(--input-surface)" }}
-          >
+          <div className="flex-1 min-w-0 overflow-y-auto">
             {displayEntry ? (
               <DocPane
                 key={displayEntry.id}
