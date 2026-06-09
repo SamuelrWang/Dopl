@@ -13,7 +13,6 @@ import {
   LayoutGrid,
   MessageSquare,
   Plus,
-  Search,
   Sparkles,
   Users,
 } from "lucide-react";
@@ -28,11 +27,6 @@ import {
 } from "@/features/skills/client/api";
 import { useSkillsRealtime } from "@/features/skills/client/realtime";
 import { useKnowledgeBases } from "@/features/knowledge/client/hooks";
-import {
-  createBase as apiCreateBase,
-  createEntry as apiCreateEntry,
-} from "@/features/knowledge/client/api";
-import { useKnowledgeRealtime } from "@/features/knowledge/client/realtime";
 import { useMyAccessContext } from "@/features/members/hooks/use-my-access";
 import type { AccessLevel } from "@/features/members/access-defaults";
 import { meetsLevel } from "@/features/members/access-defaults";
@@ -43,19 +37,6 @@ import type {
   PendingInvitation,
   WorkspaceLike,
 } from "./workspace-switcher";
-
-/**
- * Default body seeded into the first entry of every KB created from
- * the sidebar "+ New knowledge base" affordance. Nudges the user
- * toward connecting an agent and tells them where to find the
- * agent-write toggle.
- */
-const DEFAULT_KB_README_BODY = `# Welcome to your knowledge base
-
-This is your first entry. You can edit it directly here, or connect your agent to read, edit, and create entries automatically.
-
-To enable agent edits, open this knowledge base's settings and turn on **Agent: write** for the base.
-`;
 
 /**
  * Default body for the SKILL.md of every skill created from the
@@ -175,7 +156,6 @@ export function Sidebar() {
         }}
         onWorkspacesChanged={refreshWorkspaces}
       />
-      <SidebarSearchRow />
       {/* Nav region claims the remaining height and scrolls internally
           when the list of expanded KBs / skills overflows. min-h-0 is
           required for overflow-y to work inside a flex column. */}
@@ -243,33 +223,6 @@ function usePendingInvitations() {
   return { invitations, refresh };
 }
 
-function SidebarSearchRow() {
-  return (
-    <div className="flex items-center gap-2 px-3 py-3 border-b border-border-subtle">
-      <button
-        type="button"
-        className="flex-1 flex items-center justify-between gap-2 px-2 py-1.5 rounded-md border border-border-subtle hover:bg-surface-raised-2 transition-colors cursor-pointer"
-      >
-        <span className="flex items-center gap-1.5 text-xs text-text-secondary">
-          <kbd className="font-mono px-1 py-0.5 rounded bg-surface-raised-3 border border-border-default text-[10px] text-text-secondary/70">
-            K
-          </kbd>
-          Quick Actions
-        </span>
-        <kbd className="font-mono text-[10px] text-text-secondary/40">⌘K</kbd>
-      </button>
-      <button
-        type="button"
-        aria-label="Search"
-        className="flex items-center gap-1.5 px-2 py-1.5 rounded-md border border-border-subtle hover:bg-surface-raised-2 transition-colors cursor-pointer"
-      >
-        <Search size={13} className="text-text-secondary/60" />
-        <kbd className="font-mono text-[10px] text-text-secondary/40">/</kbd>
-      </button>
-    </div>
-  );
-}
-
 interface NavProps {
   pathname: string;
   workspaceSegment: string | null;
@@ -313,7 +266,7 @@ function SidebarNav({ pathname, workspaceSegment, workspaceId }: NavProps) {
             ? isCanvasPath(pathname)
             : lastSegment === item.section;
         const className = cn(
-          "flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-sm transition-colors cursor-pointer",
+          "flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-[15px] transition-colors cursor-pointer",
           active
             ? "bg-surface-selected text-text-primary"
             : "text-text-secondary hover:bg-surface-raised-2 hover:text-text-primary",
@@ -360,181 +313,41 @@ function SidebarNav({ pathname, workspaceSegment, workspaceId }: NavProps) {
  * its detail page.
  */
 function KnowledgeNavSection({ pathname, workspaceSegment, workspaceId }: NavProps) {
-  const router = useRouter();
   const segments = pathname.split("/").filter(Boolean);
   const isOnKnowledge =
     segments.length >= 2 &&
     !RESERVED_WORKSPACE_SLUGS.has(segments[0]) &&
     segments[1] === "knowledge";
-  const currentKbSegment = isOnKnowledge ? segments[2] ?? null : null;
-  const currentKbPublicId = currentKbSegment
-    ? parseSegment(currentKbSegment)?.publicId ?? null
-    : null;
 
-  const [expanded, setExpanded] = useState(isOnKnowledge);
-  const [creating, setCreating] = useState(false);
-  const { data: bases, status, refetch } = useKnowledgeBases(
-    workspaceId ?? undefined
-  );
-  // Live-update on KB renames / creates / deletes anywhere in the
-  // workspace (e.g. inline rename on the detail page) so the
-  // sidebar reflects the change without a page reload.
-  useKnowledgeRealtime(workspaceId ?? undefined, refetch);
-  // Access info for read/edit badges. The provider lives in the
-  // layout shell so the request is shared across both nav sections,
-  // the canvas panels, and the detail pages — single round trip per
-  // workspace load. (Audit A-008.)
-  const access = useMyAccessContext();
-  const resolveAccess = access.resolve;
-  // Read-only members shouldn't see the "Add new knowledge base"
-  // affordance — clicking it would just hit a 403. defaultLevel is
-  // null until the access fetch resolves; treat as "edit" then so
-  // the button isn't briefly hidden then re-shown for owners/admins.
-  const canCreate =
-    access.data == null ? true : meetsLevel(access.data.defaultLevel, "edit");
-  const kbsForRender = bases ?? [];
+  // The KB list now lives in the knowledge tree pane (KnowledgeBaseSwitcher).
+  // This sidebar row is a plain link into the knowledge area (first KB).
+  const { data: bases } = useKnowledgeBases(workspaceId ?? undefined);
+  const firstKb = (bases ?? [])[0];
 
-  /**
-   * Instant-create a base named "Untitled", seed a README so the tree
-   * isn't empty, and route the user to the new KB's detail page where
-   * they can rename inline. Failure of the README seed is non-fatal —
-   * the base still exists and is renamable.
-   */
-  async function handleAddNew() {
-    if (!workspaceSegment || !workspaceId || creating) return;
-    setCreating(true);
-    try {
-      const base = await apiCreateBase(
-        { name: "Untitled", description: null, agentWriteEnabled: false },
-        workspaceId
-      );
-      try {
-        await apiCreateEntry(
-          base.id,
-          {
-            folderId: null,
-            title: "README",
-            excerpt: null,
-            body: DEFAULT_KB_README_BODY,
-            entryType: "note",
-            position: 0,
-          },
-          workspaceId
-        );
-      } catch {
-        // Non-fatal — base creation succeeded, user can add entries
-        // manually from the detail page.
-      }
-      refetch();
-      // Audit A-009: kick the access cache so the new KB's badge
-      // reflects the resolved level rather than flashing the cached
-      // default until the next workspace nav.
-      access.refetch();
-      setExpanded(true);
-      router.push(
-        `/${workspaceSegment}/knowledge/${base.slug}-${base.publicId}`
-      );
-    } catch (err) {
-      toast({
-        title: "Couldn't create knowledge base",
-        description: err instanceof Error ? err.message : "Unknown error",
-      });
-    } finally {
-      setCreating(false);
-    }
-  }
-
-  const rowClassName = cn(
-    "w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-sm transition-colors cursor-pointer text-left",
+  const className = cn(
+    "w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-[15px] transition-colors cursor-pointer text-left",
     isOnKnowledge
       ? "bg-surface-selected text-text-primary"
       : "text-text-secondary hover:bg-surface-raised-2 hover:text-text-primary",
   );
-
-  return (
+  const inner = (
     <>
-      <button
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-        aria-expanded={expanded}
-        className={rowClassName}
-      >
-        <BookOpen size={15} className="shrink-0" />
-        <span className="flex-1 text-left">Knowledge</span>
-        {expanded ? (
-          <ChevronDown size={13} className="text-text-secondary/60 shrink-0" />
-        ) : (
-          <ChevronRight size={13} className="text-text-secondary/60 shrink-0" />
-        )}
-      </button>
-
-      {expanded && (
-        <div className="ml-4 mt-0.5 mb-1 flex flex-col gap-0.5 border-l border-border-subtle pl-2">
-          {status === "loading" && kbsForRender.length === 0 ? (
-            <div className="px-2 py-1 text-xs text-text-secondary/60">
-              Loading…
-            </div>
-          ) : null}
-          {kbsForRender.map((kb) => {
-            const itemActive = currentKbPublicId
-              ? kb.publicId === currentKbPublicId
-              : kb.slug === currentKbSegment;
-            const itemClass = cn(
-              "flex items-center gap-1.5 px-2 py-1 rounded-md text-xs transition-colors cursor-pointer",
-              itemActive
-                ? "bg-surface-selected text-text-primary"
-                : "text-text-secondary hover:bg-surface-raised-2 hover:text-text-primary",
-            );
-            const level = resolveAccess("knowledge_base", kb.id);
-            const itemInner = (
-              <>
-                <span className="truncate flex-1">{kb.name}</span>
-                <AccessIcon level={level} />
-              </>
-            );
-            if (workspaceSegment) {
-              return (
-                <Link
-                  key={kb.id}
-                  href={`/${workspaceSegment}/knowledge/${kb.slug}-${kb.publicId}`}
-                  className={itemClass}
-                >
-                  {itemInner}
-                </Link>
-              );
-            }
-            return (
-              <span key={kb.id} className={cn(itemClass, "opacity-60")}>
-                {itemInner}
-              </span>
-            );
-          })}
-          {/* Audit A-005: hide the create affordance from read-only
-           * members. Server enforces (creates 403), but a button that
-           * always 403s is bad UX. canCreate falls open to true while
-           * access is still loading so admins/owners don't see a flash
-           * of the button missing. */}
-          {workspaceSegment && canCreate && (
-            <button
-              type="button"
-              onClick={handleAddNew}
-              disabled={creating || !workspaceId}
-              className={cn(
-                "flex items-center gap-1.5 px-2 py-1 rounded-md text-xs transition-colors cursor-pointer text-left",
-                "text-text-secondary/70 hover:bg-surface-raised-2 hover:text-text-primary",
-                "disabled:opacity-50 disabled:cursor-default disabled:hover:bg-transparent",
-              )}
-            >
-              <Plus size={11} className="shrink-0" />
-              <span className="truncate">
-                {creating ? "Creating…" : "Add new knowledge base"}
-              </span>
-            </button>
-          )}
-        </div>
-      )}
+      <BookOpen size={15} className="shrink-0" />
+      <span className="flex-1 text-left">Knowledge</span>
     </>
   );
+
+  if (workspaceSegment && firstKb) {
+    return (
+      <Link
+        href={`/${workspaceSegment}/knowledge/${firstKb.slug}-${firstKb.publicId}`}
+        className={className}
+      >
+        {inner}
+      </Link>
+    );
+  }
+  return <span className={cn(className, "opacity-60")}>{inner}</span>;
 }
 
 /**
@@ -611,7 +424,7 @@ function SkillsNavSection({ pathname, workspaceSegment, workspaceId }: NavProps)
   }
 
   const rowClassName = cn(
-    "w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-sm transition-colors cursor-pointer text-left",
+    "w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-[15px] transition-colors cursor-pointer text-left",
     isOnSkills
       ? "bg-surface-selected text-text-primary"
       : "text-text-secondary hover:bg-surface-raised-2 hover:text-text-primary",
@@ -646,7 +459,7 @@ function SkillsNavSection({ pathname, workspaceSegment, workspaceId }: NavProps)
               ? skill.publicId === currentSkillPublicId
               : skill.slug === currentSkillSegment;
             const itemClass = cn(
-              "flex items-center gap-1.5 px-2 py-1 rounded-md text-xs transition-colors cursor-pointer",
+              "flex items-center gap-1.5 px-2 py-1 rounded-md text-[13px] transition-colors cursor-pointer",
               itemActive
                 ? "bg-surface-selected text-text-primary"
                 : "text-text-secondary hover:bg-surface-raised-2 hover:text-text-primary",
@@ -684,7 +497,7 @@ function SkillsNavSection({ pathname, workspaceSegment, workspaceId }: NavProps)
               onClick={handleAddNew}
               disabled={creating || !workspaceId}
               className={cn(
-                "flex items-center gap-1.5 px-2 py-1 rounded-md text-xs transition-colors cursor-pointer text-left",
+                "flex items-center gap-1.5 px-2 py-1 rounded-md text-[13px] transition-colors cursor-pointer text-left",
                 "text-text-secondary/70 hover:bg-surface-raised-2 hover:text-text-primary",
                 "disabled:opacity-50 disabled:cursor-default disabled:hover:bg-transparent",
               )}

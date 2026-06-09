@@ -337,7 +337,7 @@ export function DocPane({
           onDiscardMine={handleDiscardMine}
         />
       )}
-      <div className="max-w-3xl px-6 pt-7 pb-3 flex items-center gap-3">
+      <div className="max-w-3xl px-6 pt-3 pb-3 flex items-center gap-3">
         <input
           type="text"
           value={title}
@@ -347,7 +347,7 @@ export function DocPane({
             scheduleSave(next, body);
           }}
           placeholder="Untitled"
-          className="flex-1 bg-transparent text-[20px] font-semibold text-text-primary tracking-tight focus:outline-none placeholder:text-text-secondary/40"
+          className="flex-1 bg-transparent text-[26px] font-semibold text-text-primary tracking-tight focus:outline-none placeholder:text-text-secondary/40"
         />
         <AvatarStack users={otherEditors} />
         <SaveStatusIndicator state={status} />

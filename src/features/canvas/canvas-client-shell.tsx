@@ -48,7 +48,7 @@ function CanvasPortal() {
   // offset is handled. Still portaled to <body> so it escapes the z-[2] chrome
   // layer and receives marquee/drag events.
   return createPortal(
-    <div className="fixed top-[60px] right-2 bottom-2 left-2 md:left-[264px] z-[1] overflow-hidden rounded-2xl border border-border-subtle bg-[var(--bg-elevated)] shadow-[var(--shadow-panel)]">
+    <div className="canvas-surface fixed top-[60px] right-2 bottom-2 left-2 md:left-[264px] z-[1] overflow-hidden rounded-2xl border border-border-subtle shadow-[var(--shadow-panel)]">
       <Canvas />
     </div>,
     document.body

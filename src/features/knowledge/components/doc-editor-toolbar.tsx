@@ -207,20 +207,19 @@ export function Toolbar({ editor }: ToolbarProps) {
   const groups = inTable ? [...baseGroups, tableGroup] : baseGroups;
 
   return (
-    <div
-      className="sticky top-0 z-[3] flex items-center gap-1 px-6 py-1.5 border-b border-border-subtle mb-3"
-      style={{ backgroundColor: "var(--input-surface)" }}
-    >
-      {groups.map((group, gi) => (
-        <div key={gi} className="flex items-center gap-0.5">
-          {gi > 0 && (
-            <span className="mx-1 h-4 w-px bg-surface-raised-4" aria-hidden />
-          )}
-          {group.map((item) => (
-            <ToolbarButton key={item.label} {...item} />
-          ))}
-        </div>
-      ))}
+    <div className="pointer-events-none fixed bottom-4 left-0 right-0 z-[5] flex justify-center px-4 md:pl-64">
+      <div className="pointer-events-auto flex items-center gap-1 rounded-full border border-border-default bg-[var(--panel-surface)] px-2 py-1 shadow-[var(--shadow-panel)] backdrop-blur-xl">
+        {groups.map((group, gi) => (
+          <div key={gi} className="flex items-center gap-0.5">
+            {gi > 0 && (
+              <span className="mx-1 h-4 w-px bg-surface-raised-4" aria-hidden />
+            )}
+            {group.map((item) => (
+              <ToolbarButton key={item.label} {...item} />
+            ))}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

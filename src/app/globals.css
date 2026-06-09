@@ -124,10 +124,12 @@
   --color-chart-4: var(--success);
   --color-chart-5: var(--warning);
 
-  /* Fonts */
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-geist-sans);
+  /* Fonts — always fall back to a system sans (never the browser's
+     serif default) if the loaded font variable is missing. */
+  --font-sans: var(--font-geist-sans), system-ui, -apple-system, "Segoe UI",
+    sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-heading: var(--font-geist-sans), system-ui, sans-serif;
 
   /* Radius scale */
   --radius-sm: calc(var(--radius) * 0.6);
@@ -402,7 +404,7 @@ html {
   body {
     background-color: var(--body-bg);
     color: var(--forest);
-    font-family: var(--font-geist-sans);
+    font-family: var(--font-sans);
   }
 
   html {
@@ -453,6 +455,36 @@ html {
    its own (panning with the camera) inside its panel. */
 .mosaic-bg {
   background-color: var(--body-bg);
+}
+
+/* Canvas surface — the organic "lava-lamp" mosaic gradient, scoped to the
+   canvas panel ONLY (the rest of the app frame stays flat). */
+.canvas-surface {
+  background-color: #0b0b0b;
+  background-image:
+    radial-gradient(ellipse 50% 38% at 18% 22%, #101010 0%, transparent 55%),
+    radial-gradient(ellipse 42% 55% at 82% 35%, #0c0c0c 0%, transparent 60%),
+    radial-gradient(ellipse 60% 34% at 50% 88%, #0e0e0e 0%, transparent 55%),
+    radial-gradient(ellipse 30% 48% at 12% 75%, #0b0b0b 0%, transparent 60%),
+    radial-gradient(ellipse 38% 30% at 72% 70%, #0d0d0d 0%, transparent 65%),
+    radial-gradient(ellipse 26% 34% at 40% 15%, #0a0a0a 0%, transparent 70%),
+    radial-gradient(ellipse 32% 28% at 90% 82%, #0c0c0c 0%, transparent 60%),
+    radial-gradient(ellipse 28% 40% at 5% 48%, #0b0b0b 0%, transparent 65%),
+    radial-gradient(ellipse 34% 26% at 58% 52%, #0f0f0f 0%, transparent 70%),
+    radial-gradient(ellipse 36% 30% at 28% 55%, #030303 0%, transparent 60%),
+    radial-gradient(ellipse 30% 42% at 65% 18%, #050505 0%, transparent 65%),
+    radial-gradient(ellipse 42% 28% at 92% 55%, #040404 0%, transparent 60%),
+    radial-gradient(ellipse 28% 38% at 22% 92%, #060606 0%, transparent 65%),
+    radial-gradient(ellipse 34% 26% at 48% 40%, #040404 0%, transparent 62%),
+    radial-gradient(ellipse 28% 34% at 8% 10%, #050505 0%, transparent 65%),
+    radial-gradient(ellipse 32% 26% at 78% 92%, #030303 0%, transparent 60%),
+    radial-gradient(ellipse 26% 38% at 95% 20%, #050505 0%, transparent 65%),
+    radial-gradient(ellipse 30% 28% at 38% 78%, #040404 0%, transparent 68%),
+    linear-gradient(135deg, #070707 0%, #0c0c0c 50%, #080808 100%);
+}
+html.light .canvas-surface {
+  background-color: #e8e9ec;
+  background-image: none;
 }
 
 

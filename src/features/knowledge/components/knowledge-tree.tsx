@@ -456,7 +456,7 @@ function FolderRow({
         }}
         style={{ ...dragStyle, paddingLeft: `${8 + depth * 16}px` }}
         className={cn(
-          "group flex items-center gap-1.5 pr-2 py-1 text-xs transition-colors cursor-pointer",
+          "group flex items-center gap-1.5 pr-2 py-1 text-sm transition-colors cursor-pointer",
           drop.isOver
             ? "bg-violet-500/[0.08] text-text-primary"
             : "text-text-secondary hover:bg-surface-raised-2 hover:text-text-primary"
@@ -640,7 +640,7 @@ function EntryRow({ entry, depth, isSelected, onSelect, openMenu }: EntryRowProp
       ref={setNodeRef}
       style={{ ...dragStyle, paddingLeft: `${8 + depth * 16 + 16}px` }}
       className={cn(
-        "group flex items-center gap-2 pr-2 py-1 text-xs transition-colors cursor-pointer",
+        "group flex items-center gap-2 pr-2 py-1 text-sm transition-colors cursor-pointer",
         isSelected
           ? "bg-surface-selected text-text-primary"
           : "text-text-secondary hover:bg-surface-raised-2 hover:text-text-primary"
@@ -738,7 +738,7 @@ function AddRowAffordance({
             setBusy(false);
           }
         }}
-        className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-text-secondary/70 hover:text-text-primary hover:bg-surface-raised-2 cursor-pointer disabled:opacity-50 disabled:cursor-default"
+        className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[13px] text-text-secondary/70 hover:text-text-primary hover:bg-surface-raised-2 cursor-pointer disabled:opacity-50 disabled:cursor-default"
       >
         <Plus size={10} />
         New entry
@@ -758,7 +758,7 @@ function AddRowAffordance({
             setBusy(false);
           }
         }}
-        className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-text-secondary/70 hover:text-text-primary hover:bg-surface-raised-2 cursor-pointer disabled:opacity-50 disabled:cursor-default"
+        className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[13px] text-text-secondary/70 hover:text-text-primary hover:bg-surface-raised-2 cursor-pointer disabled:opacity-50 disabled:cursor-default"
       >
         <Folder size={10} />
         New folder

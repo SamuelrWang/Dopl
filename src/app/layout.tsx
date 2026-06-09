@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Space_Grotesk, JetBrains_Mono, Playfair_Display, Inter } from "next/font/google";
+import { Hanken_Grotesk, Geist_Mono, Space_Grotesk, JetBrains_Mono, Newsreader, Inter } from "next/font/google";
 import "./globals.css";
 import { LayoutShell } from "@/shared/layout/layout-shell";
 import { ToastHost } from "@/shared/ui/toast";
 
-const geistSans = Geist({
+const geistSans = Hanken_Grotesk({
   variable: "--font-geist-sans",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
 });
 
 const geistMono = Geist_Mono({
@@ -28,10 +29,11 @@ const jetbrainsMono = JetBrains_Mono({
   weight: ["400", "500"],
 });
 
-// Serif font — used for branding (Dopl logo)
-const playfairDisplay = Playfair_Display({
+// Serif font (Newsreader) — used for branding / serif accents.
+const playfairDisplay = Newsreader({
   variable: "--font-playfair",
   subsets: ["latin"],
+  weight: ["400", "500", "600"],
   style: ["normal", "italic"],
 });
 

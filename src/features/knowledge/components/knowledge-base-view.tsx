@@ -32,6 +32,7 @@ import { useKnowledgeEntry } from "../client/hooks";
 import { useKnowledgeRealtime } from "../client/realtime";
 import { BaseSettingsModal } from "./base-settings-modal";
 import { DocPane } from "./doc-pane";
+import { KnowledgeBaseSwitcher } from "./knowledge-base-switcher";
 import { KnowledgeSearch } from "./knowledge-search";
 import { KnowledgeTree } from "./knowledge-tree";
 import { MoveToDialog } from "./move-to-dialog";
@@ -395,25 +396,32 @@ export function KnowledgeBaseView({
       <div className="pointer-events-auto h-full">
         <div className="flex h-full">
           <aside className="hidden md:flex w-72 shrink-0 flex-col border-r border-border-subtle">
-            <KnowledgeTree
-              baseId={base.id}
-              folders={folders}
-              entries={entries}
-              selectedEntryId={displayEntry?.id ?? null}
-              canEdit={canEdit}
-              onSelect={(id) => setSelectedId(id)}
-              onCreateFolder={handleCreateFolder}
-              onCreateEntry={handleCreateEntry}
-              onMoveFolder={handleMoveFolder}
-              onMoveEntry={handleMoveEntry}
-              onRename={handleRename}
-              onRequestMove={handleRequestMove}
-              onDelete={handleDelete}
-              editingNodeId={editingNodeId}
-              onCommitRename={handleCommitRename}
-              onCancelStub={handleCancelStub}
-              onClearEditing={handleClearEditing}
+            <KnowledgeBaseSwitcher
+              workspaceId={workspaceId}
+              workspaceSegment={workspaceSlug}
+              currentBaseId={base.id}
             />
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              <KnowledgeTree
+                baseId={base.id}
+                folders={folders}
+                entries={entries}
+                selectedEntryId={displayEntry?.id ?? null}
+                canEdit={canEdit}
+                onSelect={(id) => setSelectedId(id)}
+                onCreateFolder={handleCreateFolder}
+                onCreateEntry={handleCreateEntry}
+                onMoveFolder={handleMoveFolder}
+                onMoveEntry={handleMoveEntry}
+                onRename={handleRename}
+                onRequestMove={handleRequestMove}
+                onDelete={handleDelete}
+                editingNodeId={editingNodeId}
+                onCommitRename={handleCommitRename}
+                onCancelStub={handleCancelStub}
+                onClearEditing={handleClearEditing}
+              />
+            </div>
           </aside>
           <div className="flex-1 min-w-0 overflow-y-auto">
             {displayEntry ? (

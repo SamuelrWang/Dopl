@@ -166,7 +166,7 @@ export function DocEditor({ initialMarkdown, resetKey, onChange, readOnly }: Pro
     >
       <Toolbar editor={editor} />
       <div
-        className="max-w-3xl px-6 pb-10 min-h-[60vh] cursor-text"
+        className="max-w-3xl px-6 pb-28 min-h-[60vh] cursor-text"
         onClick={(e) => {
           if (readOnly) return;
           // Only fire when the click landed on this wrapper (not on
@@ -219,13 +219,13 @@ const PROSE_CLASSES = [
   // Outer container
   "prose max-w-none text-text-primary/90 focus:outline-none",
   // Paragraphs
-  "prose-p:my-3 prose-p:leading-[1.65] prose-p:text-[14px]",
+  "prose-p:my-3 prose-p:leading-[1.7] prose-p:text-[16px]",
   // Headings
   "prose-headings:text-text-primary prose-headings:font-semibold prose-headings:tracking-tight",
-  "prose-h1:text-[18px] prose-h1:mt-7 prose-h1:mb-2",
-  "prose-h2:text-[15px] prose-h2:mt-6 prose-h2:mb-1.5",
-  "prose-h3:text-[14px] prose-h3:mt-5 prose-h3:mb-1",
-  "prose-h4:text-[13px] prose-h4:mt-4 prose-h4:mb-1",
+  "prose-h1:text-[24px] prose-h1:mt-7 prose-h1:mb-2",
+  "prose-h2:text-[19px] prose-h2:mt-6 prose-h2:mb-1.5",
+  "prose-h3:text-[16px] prose-h3:mt-5 prose-h3:mb-1",
+  "prose-h4:text-[15px] prose-h4:mt-4 prose-h4:mb-1",
   // Bold + italic
   "prose-strong:text-text-primary prose-strong:font-semibold",
   "prose-em:text-text-primary/85 prose-em:italic",
@@ -233,9 +233,9 @@ const PROSE_CLASSES = [
   "prose-blockquote:not-italic prose-blockquote:font-normal",
   "prose-blockquote:text-text-primary/85 prose-blockquote:border-l-2 prose-blockquote:border-l-violet-400/40",
   "prose-blockquote:pl-3.5 prose-blockquote:my-3 prose-blockquote:py-0.5",
-  "[&_blockquote_p]:my-1 [&_blockquote_p]:text-[14px] [&_blockquote_p:before]:hidden [&_blockquote_p:after]:hidden",
+  "[&_blockquote_p]:my-1 [&_blockquote_p]:text-[16px] [&_blockquote_p:before]:hidden [&_blockquote_p:after]:hidden",
   // Lists
-  "prose-ul:my-2.5 prose-ol:my-2.5 prose-li:my-0.5 prose-li:text-[14px] prose-li:leading-[1.65]",
+  "prose-ul:my-2.5 prose-ol:my-2.5 prose-li:my-0.5 prose-li:text-[16px] prose-li:leading-[1.7]",
   "prose-ul:pl-5 prose-ol:pl-5",
   "[&_li::marker]:text-text-secondary/50",
   // Tiptap wraps each list-item's content in a <p>, which then inherits
