@@ -26,7 +26,6 @@ import {
   createSkill as apiCreateSkill,
 } from "@/features/skills/client/api";
 import { useSkillsRealtime } from "@/features/skills/client/realtime";
-import { useKnowledgeBases } from "@/features/knowledge/client/hooks";
 import { useMyAccessContext } from "@/features/members/hooks/use-my-access";
 import type { AccessLevel } from "@/features/members/access-defaults";
 import { meetsLevel } from "@/features/members/access-defaults";
@@ -238,18 +237,10 @@ function SidebarNav({ pathname, workspaceSegment, workspaceId }: NavProps) {
       {navItems.map((item) => {
         const Icon = item.icon;
 
-        // Knowledge + Skills get their own collapsible sub-lists. The
-        // other sections render as plain links / disabled buttons.
-        if (item.section === "knowledge") {
-          return (
-            <KnowledgeNavSection
-              key={item.section}
-              pathname={pathname}
-              workspaceSegment={workspaceSegment}
-              workspaceId={workspaceId}
-            />
-          );
-        }
+        // Skills keeps its collapsible sub-list. Knowledge is now a plain
+        // link into /{ws}/knowledge (the KB list lives in the knowledge
+        // tree pane); the index route redirects to the first KB or shows
+        // the create state — so the link is always navigable.
         if (item.section === "skills") {
           return (
             <SkillsNavSection
@@ -264,7 +255,9 @@ function SidebarNav({ pathname, workspaceSegment, workspaceId }: NavProps) {
         const active =
           item.section === "canvas"
             ? isCanvasPath(pathname)
-            : lastSegment === item.section;
+            : item.section === "knowledge"
+              ? segments[1] === "knowledge"
+              : lastSegment === item.section;
         const className = cn(
           "flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-[15px] transition-colors cursor-pointer",
           active
@@ -304,50 +297,6 @@ function SidebarNav({ pathname, workspaceSegment, workspaceId }: NavProps) {
       })}
     </nav>
   );
-}
-
-/**
- * Knowledge nav row + collapsible KB list. The whole row toggles the
- * dropdown; there's no longer a root `/knowledge` index page to
- * navigate to. The user picks a specific KB from the dropdown to enter
- * its detail page.
- */
-function KnowledgeNavSection({ pathname, workspaceSegment, workspaceId }: NavProps) {
-  const segments = pathname.split("/").filter(Boolean);
-  const isOnKnowledge =
-    segments.length >= 2 &&
-    !RESERVED_WORKSPACE_SLUGS.has(segments[0]) &&
-    segments[1] === "knowledge";
-
-  // The KB list now lives in the knowledge tree pane (KnowledgeBaseSwitcher).
-  // This sidebar row is a plain link into the knowledge area (first KB).
-  const { data: bases } = useKnowledgeBases(workspaceId ?? undefined);
-  const firstKb = (bases ?? [])[0];
-
-  const className = cn(
-    "w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-[15px] transition-colors cursor-pointer text-left",
-    isOnKnowledge
-      ? "bg-surface-selected text-text-primary"
-      : "text-text-secondary hover:bg-surface-raised-2 hover:text-text-primary",
-  );
-  const inner = (
-    <>
-      <BookOpen size={15} className="shrink-0" />
-      <span className="flex-1 text-left">Knowledge</span>
-    </>
-  );
-
-  if (workspaceSegment && firstKb) {
-    return (
-      <Link
-        href={`/${workspaceSegment}/knowledge/${firstKb.slug}-${firstKb.publicId}`}
-        className={className}
-      >
-        {inner}
-      </Link>
-    );
-  }
-  return <span className={cn(className, "opacity-60")}>{inner}</span>;
 }
 
 /**
