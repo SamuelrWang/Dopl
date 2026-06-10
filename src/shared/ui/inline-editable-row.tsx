@@ -48,6 +48,14 @@ interface Props {
    */
   onCancel?: () => Promise<void> | void;
   /**
+   * Called when editing settles with nothing to commit — blur (click
+   * outside) or Enter with unchanged/empty text. The parent should
+   * clear its `editing` state so the row leaves edit mode; the row
+   * keeps its current name. Without this, an unchanged blur left the
+   * input stuck in editing with no way out.
+   */
+  onExit?: () => void;
+  /**
    * Surface a friendly error to the user. Fires when `onCommit` throws
    * (so the parent can toast) and when `onCancel` throws (so a stub
    * delete that fails doesn't silently leave an "Untitled" row stuck).
@@ -81,6 +89,7 @@ export function InlineEditableRow({
   value,
   onCommit,
   onCancel,
+  onExit,
   onError,
   selectAllOnMount = false,
   placeholder,
@@ -147,9 +156,11 @@ export function InlineEditableRow({
     }
     const next = draft.trim();
     if (!next || next === value.trim()) {
-      // Nothing meaningful changed — treat as a no-op cancel. We do
-      // NOT call onCancel here; that's reserved for explicit Escape.
+      // Nothing meaningful changed — settle and tell the parent to
+      // exit edit mode (the row keeps its current name). We do NOT
+      // call onCancel here; that's reserved for explicit Escape.
       settledRef.current = true;
+      onExit?.();
       return;
     }
     committingRef.current = true;

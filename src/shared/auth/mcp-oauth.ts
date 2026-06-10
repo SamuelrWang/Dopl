@@ -44,7 +44,7 @@ function randToken(prefix: string): string {
   return prefix + randomBytes(32).toString("hex");
 }
 
-/** Is this string an OAuth access token (vs an sk-dopl- API key)? */
+/** Is this string a Dopl OAuth access token (the `dopl_at_` prefix)? */
 export function isOAuthAccessToken(token: string): boolean {
   return token.startsWith(ACCESS_PREFIX);
 }

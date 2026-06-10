@@ -32,26 +32,26 @@ export const MCP_CLIENT_CYCLES = [
   {
     name: "Claude Code",
     badge: "CC",
-    cmd: "claude mcp add dopl https://mcp.dopl.ai/u/sam-wang",
-    response: "✓ Connected. 12 tools registered.",
-  },
-  {
-    name: "Codex CLI",
-    badge: "CX",
-    cmd: "codex mcp register dopl https://mcp.dopl.ai/u/sam-wang",
-    response: "✓ Registered. Run codex login dopl to authenticate.",
+    cmd: "claude mcp add --transport http dopl https://usedopl.com/api/mcp",
+    response: "→ Opening browser to sign in… ✓ Connected. 12 tools registered.",
   },
   {
     name: "Claude Desktop",
     badge: "CD",
-    cmd: "claude_desktop add dopl https://mcp.dopl.ai/u/sam-wang",
-    response: "✓ Server added. Restart Claude Desktop to use.",
+    cmd: "Add custom connector → https://usedopl.com/api/mcp",
+    response: "→ Sign in to Dopl… ✓ Connected. Restart to use.",
   },
   {
     name: "Cursor",
     badge: "CR",
-    cmd: "cursor mcp connect dopl https://mcp.dopl.ai/u/sam-wang",
-    response: "✓ Connected. Reload Cursor to refresh tools.",
+    cmd: "Add MCP server (HTTP) → https://usedopl.com/api/mcp",
+    response: "→ Sign in to Dopl… ✓ Connected. Tools refreshed.",
+  },
+  {
+    name: "Claude.ai",
+    badge: "AI",
+    cmd: "Add custom connector → https://usedopl.com/api/mcp",
+    response: "→ Sign in to Dopl… ✓ Connected. 12 tools available.",
   },
 ] as const;
 

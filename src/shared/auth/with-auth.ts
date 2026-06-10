@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { API_KEY_PREFIX } from "@/config";
 import { createServerClient } from "@supabase/ssr";
-import { validateApiKey, checkAndRecordRateLimit, touchApiKey, touchMcpStatus } from "./api-keys";
+import { touchMcpStatus } from "./mcp-session";
 import { validateAccessToken } from "./mcp-oauth";
 import { getUserSubscription, type SubscriptionTier } from "@/features/billing/server/subscriptions";
 import { hasActiveAccess, accessDeniedBody } from "@/features/billing/server/access";
@@ -50,7 +49,8 @@ async function runAndLog5xx(
 /**
  * Wraps an API route handler with authentication.
  *
- * - If Authorization header with `sk-dopl-` key is present → validate, rate limit, proceed
+ * - If an Authorization header is present → validate it as a remote-MCP OAuth
+ *   access token, proceed if valid
  * - If no header → check Supabase session cookies → allow if authenticated
  * - Otherwise → 401
  */
@@ -65,53 +65,19 @@ export function withExternalAuth(
     const authHeader = request.headers.get("authorization");
 
     if (authHeader) {
-      // External API call with key
-      const key = authHeader.replace(/^Bearer\s+/i, "").trim();
-
-      if (!key.startsWith(API_KEY_PREFIX)) {
-        // Remote-MCP OAuth access token? Accept it here too so OAuth callers'
-        // loopback /api/* requests (and bootServer's status ping, which uses
-        // this wrapper) work the same as sk-dopl- keys.
-        const tok = await validateAccessToken(key);
-        if (tok) {
-          touchMcpStatus(tok.userId);
-          return handler(request, context);
-        }
-        return NextResponse.json(
-          { error: "Invalid API key format" },
-          { status: 401 }
-        );
+      // Remote-MCP OAuth access token — the in-app MCP server forwards the
+      // caller's token to these /api/* endpoints over loopback (and
+      // bootServer's status ping uses this wrapper).
+      const token = authHeader.replace(/^Bearer\s+/i, "").trim();
+      const tok = await validateAccessToken(token);
+      if (tok) {
+        touchMcpStatus(tok.userId);
+        return handler(request, context);
       }
-
-      const keyRecord = await validateApiKey(key);
-      if (!keyRecord) {
-        return NextResponse.json(
-          { error: "Invalid or revoked API key" },
-          { status: 401 }
-        );
-      }
-
-      // Atomic rate limit + usage record (single RPC, no race).
-      const endpoint = `${request.method} ${request.nextUrl.pathname}`;
-      const withinLimit = await checkAndRecordRateLimit(
-        keyRecord.id,
-        keyRecord.rate_limit_rpm,
-        endpoint
+      return NextResponse.json(
+        { error: "Invalid or expired credentials" },
+        { status: 401 }
       );
-      if (!withinLimit) {
-        return NextResponse.json(
-          {
-            error: "Rate limit exceeded",
-            limit: keyRecord.rate_limit_rpm,
-            window: "60 seconds",
-          },
-          { status: 429 }
-        );
-      }
-
-      touchApiKey(keyRecord.id);
-
-      return handler(request, context);
     }
 
     // No auth header — check Supabase session
@@ -122,11 +88,7 @@ export function withExternalAuth(
 
     // No valid auth
     return NextResponse.json(
-      {
-        error: "Authentication required",
-        message:
-          "Sign in or provide an API key via Authorization: Bearer sk-dopl-... header",
-      },
+      { error: "Authentication required", message: "Sign in to continue." },
       { status: 401 }
     );
   };
@@ -136,17 +98,22 @@ export function withExternalAuth(
  * Like withExternalAuth, but injects the authenticated user's ID into the handler.
  * Required for per-user resources (canvas panels, user-scoped clusters).
  *
- * - API key auth: uses user_id from the api_keys table. Returns 403 if key has no user_id.
- *   When the API key carries a `workspace_id` (Item 4 — workspace-scoped keys),
- *   it's surfaced via `apiKeyWorkspaceId` for `withWorkspaceAuth` to enforce.
- * - Session auth: uses user.id from Supabase session. `apiKeyWorkspaceId` is undefined.
+ * - OAuth-token auth (remote MCP): uses the token's user_id. `apiKeyWorkspaceId`
+ *   is always undefined — OAuth callers target any workspace via the
+ *   `x-workspace-id` header / `set_workspace`.
+ * - Session auth: uses user.id from the Supabase session.
  */
 export function withUserAuth(
   handler: (
     request: NextRequest,
     context: {
       userId: string;
-      apiKeyId?: string;
+      // MCP-agent session marker: the OAuth access-token id for remote-MCP
+      // (agent) calls, undefined for session (UI) calls. Downstream handlers use
+      // it to tag writeback `source` and to enforce per-resource agent gates
+      // (`agent_write_enabled`, canvas-edit access). The "is this an agent?"
+      // signal — its truthiness, not the specific id, is what the gates read.
+      agentTokenId?: string;
       apiKeyWorkspaceId?: string | null;
       params?: Record<string, string>;
     }
@@ -160,77 +127,33 @@ export function withUserAuth(
     const authHeader = request.headers.get("authorization");
 
     if (authHeader) {
-      const key = authHeader.replace(/^Bearer\s+/i, "").trim();
-
-      if (!key.startsWith(API_KEY_PREFIX)) {
-        // Remote-MCP OAuth access token? The /api/mcp route forwards the
-        // caller's OAuth token to these /api/* endpoints over loopback, so a
-        // token is a first-class credential here alongside sk-dopl- keys.
-        const tok = await validateAccessToken(key);
-        if (tok) {
-          touchMcpStatus(tok.userId);
-          return runAndLog5xx(
-            () => handler(request, { userId: tok.userId, params: resolvedParams }),
-            {
-              endpoint: `${request.method} ${request.nextUrl.pathname}`,
+      // Remote-MCP OAuth access token. The /api/mcp route forwards the caller's
+      // token to these /api/* endpoints over loopback.
+      const token = authHeader.replace(/^Bearer\s+/i, "").trim();
+      const tok = await validateAccessToken(token);
+      if (tok) {
+        // Every authenticated MCP call acts as a heartbeat for the settings
+        // MCP-connection detector (polls /api/user/mcp-status). Debounced ~30s.
+        touchMcpStatus(tok.userId);
+        return runAndLog5xx(
+          () =>
+            handler(request, {
               userId: tok.userId,
-            }
-          );
-        }
-        return NextResponse.json(
-          { error: "Invalid API key format" },
-          { status: 401 }
-        );
-      }
-
-      const keyRecord = await validateApiKey(key);
-      if (!keyRecord) {
-        return NextResponse.json(
-          { error: "Invalid or revoked API key" },
-          { status: 401 }
-        );
-      }
-
-      if (!keyRecord.user_id) {
-        return NextResponse.json(
+              // Marks this as an agent (MCP) call so per-resource agent gates
+              // (agent_write_enabled, canvas-edit) and writeback `source`
+              // tagging engage — session (UI) calls leave this undefined.
+              agentTokenId: tok.tokenId,
+              params: resolvedParams,
+            }),
           {
-            error: "This API key is not linked to a user account",
-            message: "Canvas operations require a user-scoped API key. Generate one from Settings.",
-          },
-          { status: 403 }
+            endpoint: `${request.method} ${request.nextUrl.pathname}`,
+            userId: tok.userId,
+          }
         );
       }
-
-      const endpoint = `${request.method} ${request.nextUrl.pathname}`;
-      const withinLimit = await checkAndRecordRateLimit(
-        keyRecord.id,
-        keyRecord.rate_limit_rpm,
-        endpoint
-      );
-      if (!withinLimit) {
-        return NextResponse.json(
-          { error: "Rate limit exceeded", limit: keyRecord.rate_limit_rpm, window: "60 seconds" },
-          { status: 429 }
-        );
-      }
-
-      touchApiKey(keyRecord.id);
-
-      // Locally bind narrowed userId so the closure sees a non-null value.
-      const userId = keyRecord.user_id;
-      // Every authenticated MCP call acts as a heartbeat for the
-      // settings/keys MCP-connection detector (use-mcp-connection-status
-      // polls /api/user/mcp-status). Debounced to ~30s.
-      touchMcpStatus(userId);
-      return runAndLog5xx(
-        () =>
-          handler(request, {
-            userId,
-            apiKeyId: keyRecord.id,
-            apiKeyWorkspaceId: keyRecord.workspace_id,
-            params: resolvedParams,
-          }),
-        { endpoint, userId }
+      return NextResponse.json(
+        { error: "Invalid or expired credentials" },
+        { status: 401 }
       );
     }
 
@@ -247,10 +170,7 @@ export function withUserAuth(
     }
 
     return NextResponse.json(
-      {
-        error: "Authentication required",
-        message: "Sign in or provide an API key via Authorization: Bearer sk-dopl-... header",
-      },
+      { error: "Authentication required", message: "Sign in to continue." },
       { status: 401 }
     );
   };
@@ -263,7 +183,7 @@ export function withUserAuth(
 export function withSubscriptionAuth(
   handler: (
     request: NextRequest,
-    context: { userId: string; apiKeyId?: string; tier: SubscriptionTier; params?: Record<string, string> }
+    context: { userId: string; agentTokenId?: string; tier: SubscriptionTier; params?: Record<string, string> }
   ) => Promise<Response | NextResponse>
 ) {
   return withUserAuth(async (request, ctx) => {
@@ -272,7 +192,7 @@ export function withSubscriptionAuth(
       (sub.tier === "pro" || sub.tier === "power") && sub.status === "active"
         ? sub.tier
         : "free";
-    return handler(request, { userId: ctx.userId, apiKeyId: ctx.apiKeyId, tier, params: ctx.params });
+    return handler(request, { userId: ctx.userId, agentTokenId: ctx.agentTokenId, tier, params: ctx.params });
   });
 }
 
@@ -281,7 +201,7 @@ export function withSubscriptionAuth(
  * endpoint by the single hasActiveAccess() check:
  *
  *   1. Auth + rate limit (via withUserAuth).
- *   2. API-key requests only: check trial-active-or-paid. Session (UI) calls bypass.
+ *   2. MCP (OAuth-token) requests only: check trial-active-or-paid. Session (UI) calls bypass.
  *   3. If denied, return 402 with a clean trial_expired body and log the event.
  *   4. Run the handler. Log the MCP event for analytics. No credit math.
  *
@@ -295,14 +215,16 @@ export function withMcpAccess(
     request: NextRequest,
     context: {
       userId: string;
-      apiKeyId?: string;
+      agentTokenId?: string;
       tier: SubscriptionTier;
       params?: Record<string, string>;
     }
   ) => Promise<Response | NextResponse>
 ) {
   return withUserAuth(async (request, ctx) => {
-    const isApiKey = !!request.headers.get("authorization");
+    // An Authorization header means a remote-MCP (OAuth-token) caller, whose
+    // loopback /api/* requests all carry the bearer. Session (UI) calls have none.
+    const isMcpCaller = !!request.headers.get("authorization");
 
     // Resolve tier for downstream content-depth logic (still used for
     // free vs paid content gating inside some handlers). "free" here
@@ -315,7 +237,7 @@ export function withMcpAccess(
 
     // UI (session) calls are unmetered and unlogged — in-app usage is
     // tracked via the conversations table. MCP calls get gated + logged.
-    if (!isApiKey) {
+    if (!isMcpCaller) {
       return handler(request, { ...ctx, tier: resolvedTier });
     }
 
@@ -340,7 +262,7 @@ export function withMcpAccess(
       const response = NextResponse.json(body, { status: 402 });
       logMcpEvent({
         userId: ctx.userId,
-        apiKeyId: ctx.apiKeyId ?? null,
+        agentTokenId: ctx.agentTokenId ?? null,
         toolName,
         endpoint,
         arguments: argsPayload,
@@ -361,7 +283,7 @@ export function withMcpAccess(
       const message = err instanceof Error ? err.message : String(err);
       logMcpEvent({
         userId: ctx.userId,
-        apiKeyId: ctx.apiKeyId ?? null,
+        agentTokenId: ctx.agentTokenId ?? null,
         toolName,
         endpoint,
         arguments: argsPayload,
@@ -400,7 +322,7 @@ export function withMcpAccess(
 
     logMcpEvent({
       userId: ctx.userId,
-      apiKeyId: ctx.apiKeyId ?? null,
+      agentTokenId: ctx.agentTokenId ?? null,
       toolName,
       endpoint,
       arguments: argsPayload,
@@ -434,11 +356,6 @@ if (typeof process !== "undefined" && !process.env.ADMIN_USER_ID) {
   console.warn(
     "[auth] ADMIN_USER_ID is not set. /admin/* routes will reject all callers as 404. " +
       "Set ADMIN_USER_ID to your Supabase auth UUID to enable moderation."
-  );
-}
-if (typeof process !== "undefined" && !process.env.ADMIN_SECRET) {
-  console.warn(
-    "[auth] ADMIN_SECRET is not set. /api/admin/keys will reject all callers as 401."
   );
 }
 

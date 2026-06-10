@@ -85,7 +85,7 @@ function toolSummary(
 
 async function handlePost(
   request: NextRequest,
-  { userId, apiKeyId }: { userId: string; apiKeyId?: string }
+  { userId, agentTokenId }: { userId: string; agentTokenId?: string }
 ) {
   try {
     const body = await request.json();
@@ -159,7 +159,7 @@ async function handlePost(
         const detail = await getCluster(canvasContext.clusterSlug, {
           userId,
           workspaceId,
-          source: apiKeyId ? "agent" : "user",
+          source: agentTokenId ? "agent" : "user",
         });
         enriched = {
           ...canvasContext,

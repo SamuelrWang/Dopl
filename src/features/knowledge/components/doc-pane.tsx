@@ -12,6 +12,7 @@ import {
   fetchEntry as apiFetchEntry,
   updateEntry as apiUpdateEntry,
 } from "../client/api";
+import { DESCRIPTION_MAX } from "../schema";
 import type { KnowledgeEntry } from "../types";
 import { DocEditor, SaveStatusIndicator, type SaveStatus } from "./doc-editor";
 
@@ -86,6 +87,12 @@ export function DocPane({
   const [status, setStatus] = useState<SaveStatus>("idle");
   const [conflict, setConflict] = useState<ConflictState | null>(null);
   const [resolving, setResolving] = useState(false);
+  // Agent-facing description (the entry's `excerpt` column). Saved on
+  // blur — independently of the title/body autosave, but through the
+  // same updated_at precondition so a description save can't make the
+  // next body autosave 412.
+  const [description, setDescription] = useState(entry.excerpt ?? "");
+  const lastSavedDescription = useRef(entry.excerpt ?? "");
 
   // Authoritative markdown handed to DocEditor. Bumping `editorReloadKey`
   // forces DocEditor to re-seed its Tiptap state with `editorMd` —
@@ -141,9 +148,11 @@ export function DocPane({
     setBody(entry.body);
     setEditorMd(entry.body);
     setEditorReloadKey((k) => k + 1);
+    setDescription(entry.excerpt ?? "");
     lastSaved.current = { title: entry.title, body: entry.body };
+    lastSavedDescription.current = entry.excerpt ?? "";
     expectedUpdatedAtRef.current = entry.updatedAt;
-  }, [entry.id, entry.title, entry.body, entry.updatedAt, status, conflict]);
+  }, [entry.id, entry.title, entry.body, entry.excerpt, entry.updatedAt, status, conflict]);
 
   // Tab regained focus AND the editor isn't dirty AND not resolving a
   // conflict — pull the latest.
@@ -265,6 +274,29 @@ export function DocPane({
     [entry.id, workspaceId, onSaved, enterConflict]
   );
 
+  /** Save the agent-facing description on blur (no-op when unchanged). */
+  const handleDescriptionBlur = useCallback(async () => {
+    const next = description.trim();
+    if (next === lastSavedDescription.current.trim()) return;
+    try {
+      const saved = await apiUpdateEntry(
+        entry.id,
+        { excerpt: next === "" ? null : next },
+        workspaceId,
+        expectedUpdatedAtRef.current
+      );
+      lastSavedDescription.current = next;
+      expectedUpdatedAtRef.current = saved.updatedAt;
+      onSaved();
+    } catch (err) {
+      if (err instanceof KnowledgeApiError && err.status === 412) {
+        await enterConflict();
+        return;
+      }
+      reportError(err, "Couldn't save description");
+    }
+  }, [description, entry.id, workspaceId, onSaved, enterConflict]);
+
   /**
    * Conflict resolution: keep the user's local edits, overwrite the
    * server's version. Uses the conflict's serverUpdatedAt as the
@@ -337,20 +369,42 @@ export function DocPane({
           onDiscardMine={handleDiscardMine}
         />
       )}
-      <div className="max-w-3xl px-6 pt-3 pb-3 flex items-center gap-3">
-        <input
-          type="text"
-          value={title}
-          onChange={(e) => {
-            const next = e.target.value;
-            setTitle(next);
-            scheduleSave(next, body);
-          }}
-          placeholder="Untitled"
-          className="flex-1 bg-transparent text-[26px] font-semibold text-text-primary tracking-tight focus:outline-none placeholder:text-text-secondary/40"
-        />
-        <AvatarStack users={otherEditors} />
-        <SaveStatusIndicator state={status} />
+      {/* Floating header panel — the single place the file's name shows,
+          plus the agent-facing description (entry `excerpt`) that streams
+          to MCP clients in tree / directory listings. */}
+      <div className="mx-auto mt-4 mb-1 w-[calc(100%-3rem)] max-w-3xl rounded-xl border border-border-default bg-surface-raised-1 px-5 pt-3.5 pb-2.5">
+        <div className="flex items-center gap-3">
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => {
+              const next = e.target.value;
+              setTitle(next);
+              scheduleSave(next, body);
+            }}
+            placeholder="Untitled"
+            className="flex-1 min-w-0 bg-transparent text-[24px] font-semibold text-text-primary tracking-tight focus:outline-none placeholder:text-text-secondary/40"
+          />
+          <AvatarStack users={otherEditors} />
+          <SaveStatusIndicator state={status} />
+        </div>
+        <div className="mt-1 flex items-end gap-2">
+          <textarea
+            value={description}
+            onChange={(e) =>
+              setDescription(e.target.value.slice(0, DESCRIPTION_MAX))
+            }
+            onBlur={handleDescriptionBlur}
+            rows={2}
+            maxLength={DESCRIPTION_MAX}
+            aria-label="Description for agents"
+            placeholder="Add a short description — agents see this when browsing the tree, before opening the file…"
+            className="flex-1 min-w-0 resize-none bg-transparent text-[13px] leading-relaxed text-text-secondary placeholder:text-text-muted focus:outline-none"
+          />
+          <span className="shrink-0 pb-0.5 font-mono text-[10px] text-text-muted">
+            {description.length}/{DESCRIPTION_MAX}
+          </span>
+        </div>
       </div>
       <DocEditor
         initialMarkdown={editorMd}

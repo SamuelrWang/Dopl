@@ -31,8 +31,8 @@ export const GET = withWorkspaceAuth(async (_request, { workspaceId }) => {
  * Body: { panel_id, panel_type, x, y, width?, height?, title?, summary?, source_url?, panel_data? }
  */
 export const POST = withWorkspaceAuth(
-  async (request, { userId, workspaceId, apiKeyId }) => {
-    const denied = await denyIfNoCanvasWrite({ apiKeyId, userId, workspaceId });
+  async (request, { userId, workspaceId, agentTokenId }) => {
+    const denied = await denyIfNoCanvasWrite({ agentTokenId, userId, workspaceId });
     if (denied) return denied;
 
     const body = await request.json();

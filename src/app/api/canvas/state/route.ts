@@ -49,8 +49,8 @@ export const GET = withWorkspaceAuth(async (_request, { workspaceId }) => {
  * 409 and the latest snapshot so the client can refetch + retry.
  */
 export const PATCH = withWorkspaceAuth(
-  async (request, { userId, workspaceId, apiKeyId }) => {
-    const denied = await denyIfNoCanvasWrite({ apiKeyId, userId, workspaceId });
+  async (request, { userId, workspaceId, agentTokenId }) => {
+    const denied = await denyIfNoCanvasWrite({ agentTokenId, userId, workspaceId });
     if (denied) return denied;
 
     const body = await request.json();

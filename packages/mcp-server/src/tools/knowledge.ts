@@ -229,6 +229,7 @@ async function opGetTree(client: DoplClient, ref: string): Promise<ToolResponse>
   const tree = await client.getKbTree(base.id);
   const lines = [
     `## ${tree.base.name} \`${tree.base.slug}\``,
+    ...(tree.base.description ? [tree.base.description] : []),
     `Folders: ${tree.folders.length} · Entries: ${tree.entries.length}`,
     "",
   ];
@@ -251,15 +252,27 @@ async function opGetTree(client: DoplClient, ref: string): Promise<ToolResponse>
     arr.sort((a, b) => a.position - b.position || a.title.localeCompare(b.title));
   function dump(parentId: string | null, prefix: string): void {
     for (const f of childFolders.get(parentId) ?? []) {
-      lines.push(`${prefix}📁 ${f.name}/`);
+      lines.push(`${prefix}📁 ${f.name}/${descSuffix(f.description)}`);
       dump(f.id, prefix + "  ");
     }
     for (const e of childEntries.get(parentId) ?? []) {
-      lines.push(`${prefix}📄 ${e.title}`);
+      lines.push(`${prefix}📄 ${e.title}${descSuffix(e.excerpt)}`);
     }
   }
   dump(null, "");
   return ok(lines.join("\n"));
+}
+
+/**
+ * ` — description` suffix for tree / directory rows. Folder
+ * `description` and entry `excerpt` are the user-curated, agent-facing
+ * summaries (≤300 chars) — surfacing them here lets agents pick the
+ * right file from a listing instead of read_file-ing everything.
+ * Newlines are flattened so one row stays one line.
+ */
+function descSuffix(text: string | null | undefined): string {
+  if (!text) return "";
+  return ` — ${text.replace(/\s*\n+\s*/g, " ")}`;
 }
 
 async function opListDir(client: DoplClient, ref: string, path?: string): Promise<ToolResponse> {
@@ -269,11 +282,14 @@ async function opListDir(client: DoplClient, ref: string, path?: string): Promis
   const lines: string[] = [];
   const where = listing.folder ? listing.folder.name : "(root)";
   lines.push(`## ${base.name} → ${where}`);
+  if (listing.folder?.description) lines.push(listing.folder.description);
   if (listing.folders.length === 0 && listing.entries.length === 0) {
     lines.push("Empty.");
   } else {
-    for (const f of listing.folders) lines.push(`📁 ${f.name}/`);
-    for (const e of listing.entries) lines.push(`📄 ${e.title}`);
+    for (const f of listing.folders)
+      lines.push(`📁 ${f.name}/${descSuffix(f.description)}`);
+    for (const e of listing.entries)
+      lines.push(`📄 ${e.title}${descSuffix(e.excerpt)}`);
   }
   return ok(lines.join("\n"));
 }

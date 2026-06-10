@@ -3,10 +3,10 @@ import { H2, H3, P, Table, CodeBlock, SectionHero, type TocEntry } from "../docs
 export const TOC: TocEntry[] = [
   { id: "mcp-setup", title: "Setup", level: 2 },
   { id: "mcp-claude-code", title: "Claude Code", level: 3 },
-  { id: "mcp-claude-desktop", title: "Claude Desktop", level: 3 },
-  { id: "mcp-codex", title: "Codex", level: 3 },
+  { id: "mcp-claude-desktop", title: "Claude Desktop & Claude.ai", level: 3 },
+  { id: "mcp-other", title: "Cursor & other clients", level: 3 },
   { id: "mcp-tools", title: "Available tools", level: 2 },
-  { id: "api-keys", title: "API keys", level: 2 },
+  { id: "mcp-access", title: "Managing access", level: 2 },
 ];
 
 function ConnectionIllustration() {
@@ -42,45 +42,44 @@ export function McpServerSection() {
 
       <H2 id="mcp-setup">Setup</H2>
       <P>
-        The Dopl MCP server connects your knowledge base to Claude Code, Claude Desktop,
-        or any MCP-compatible AI tool.
+        Dopl is a hosted, remote MCP server. You connect by pointing your MCP
+        client at one URL — there is nothing to install. The first time you
+        connect, a browser window opens so you can sign in to Dopl; after that
+        your client stays authorized and server updates roll out automatically.
       </P>
+      <CodeBlock title="MCP server URL">{`https://www.usedopl.com/api/mcp`}</CodeBlock>
 
       <H3 id="mcp-claude-code">Claude Code</H3>
       <P>
-        Run this command in your terminal:
+        Run this command in your terminal, then follow the browser sign-in:
       </P>
-      <CodeBlock title="Terminal">{`claude mcp add dopl --scope user --transport stdio -- \\
-  npx @dopl/mcp-server --api-key YOUR_API_KEY`}</CodeBlock>
+      <CodeBlock title="Terminal">{`claude mcp add --transport http dopl https://www.usedopl.com/api/mcp`}</CodeBlock>
       <P>
-        Restart Claude Code afterwards. Dopl tools will appear in your tool list.
+        Dopl tools appear in your tool list once you&rsquo;ve signed in.
       </P>
 
-      <H3 id="mcp-claude-desktop">Claude Desktop</H3>
+      <H3 id="mcp-claude-desktop">Claude Desktop & Claude.ai</H3>
       <P>
-        Add this to your Claude Desktop config file:
+        In Claude.ai, use &ldquo;Add custom connector&rdquo; and paste the URL.
+        For Claude Desktop, add this to your config file:
       </P>
       <CodeBlock title="claude_desktop_config.json">{`{
   "mcpServers": {
     "dopl": {
-      "command": "npx",
-      "args": ["@dopl/mcp-server", "--api-key", "YOUR_API_KEY"]
+      "type": "http",
+      "url": "https://www.usedopl.com/api/mcp"
     }
   }
 }`}</CodeBlock>
       <P>
-        Restart Claude Desktop to pick up the changes.
+        Restart Claude Desktop, then sign in when prompted.
       </P>
 
-      <H3 id="mcp-codex">Codex</H3>
+      <H3 id="mcp-other">Cursor & other clients</H3>
       <P>
-        Add the Dopl server to your Codex MCP config:
-      </P>
-      <CodeBlock title="~/.codex/config.toml">{`[mcp_servers.dopl]
-command = "npx"
-args = ["@dopl/mcp-server", "--api-key", "YOUR_API_KEY"]`}</CodeBlock>
-      <P>
-        The same tools and capabilities are available regardless of which platform you connect from.
+        Any MCP-compatible client that supports remote (HTTP / streamable) servers
+        works: add Dopl as an HTTP server pointed at the URL above. The same tools
+        and capabilities are available regardless of which client you connect from.
       </P>
 
       <H2 id="mcp-tools">Available tools</H2>
@@ -103,14 +102,15 @@ args = ["@dopl/mcp-server", "--api-key", "YOUR_API_KEY"]`}</CodeBlock>
         ]}
       />
 
-      <H2 id="api-keys">API keys</H2>
+      <H2 id="mcp-access">Managing access</H2>
       <P>
-        Generate API keys in Settings. Each key gets a name (for your reference) and is
-        displayed once at creation. Save it somewhere safe.
+        Connecting authorizes your MCP client through Dopl&rsquo;s sign-in — there
+        are no API keys to copy or rotate. Each connected client shows up under
+        &ldquo;Connected apps&rdquo; in your workspace settings.
       </P>
       <P>
-        You can create multiple keys (one per device or workspace) and revoke any key at
-        any time. Keys are rate-limited per minute based on your plan.
+        Revoke a client there at any time to immediately cut off its access.
+        Requests are rate-limited per minute based on your plan.
       </P>
     </div>
   );

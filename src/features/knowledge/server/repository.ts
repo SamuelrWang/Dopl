@@ -329,6 +329,7 @@ export interface InsertFolderArgs {
   knowledgeBaseId: string;
   parentId?: string | null;
   name: string;
+  description?: string | null;
   position?: number;
   createdBy: string | null;
 }
@@ -344,6 +345,7 @@ export async function insertFolder(
       knowledge_base_id: args.knowledgeBaseId,
       parent_id: args.parentId ?? null,
       name: args.name,
+      description: args.description ?? null,
       position: args.position ?? 0,
       created_by: args.createdBy,
     })
@@ -355,6 +357,7 @@ export async function insertFolder(
 
 export interface UpdateFolderPatch {
   name?: string;
+  description?: string | null;
   parentId?: string | null;
   position?: number;
 }
@@ -376,6 +379,7 @@ export async function updateFolderRow(
   const db = supabaseAdmin();
   const update: Record<string, unknown> = {};
   if (patch.name !== undefined) update.name = patch.name;
+  if (patch.description !== undefined) update.description = patch.description;
   if (patch.parentId !== undefined) update.parent_id = patch.parentId;
   if (patch.position !== undefined) update.position = patch.position;
   // Optimistic concurrency CAS (see updateBaseRow).

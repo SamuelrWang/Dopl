@@ -17,7 +17,7 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
 
 export interface McpEventInput {
   userId: string | null;
-  apiKeyId: string | null;
+  agentTokenId: string | null;
   toolName: string;
   endpoint: string;
   arguments: unknown;
@@ -48,18 +48,18 @@ function truncate(value: unknown): unknown {
 }
 
 /**
- * Derive a best-effort session_id from api_key_id + a 1-hour time bucket.
- * Groups tool calls made from the same key within a sliding hour window so
- * an admin UI can stitch them back into a pseudo-transcript. Not perfect
- * (calls spanning an hour boundary get split), but avoids protocol-level
- * session tracking which stdio MCP doesn't meaningfully expose.
+ * Derive a best-effort session_id from the agent (OAuth) token id + a 1-hour
+ * time bucket. Groups tool calls made from the same token within a sliding hour
+ * window so an admin UI can stitch them back into a pseudo-transcript. Not
+ * perfect (calls spanning an hour boundary get split), but avoids
+ * protocol-level session tracking the MCP transport doesn't expose.
  */
-function deriveSessionId(apiKeyId: string | null): string | null {
-  if (!apiKeyId) return null;
+function deriveSessionId(agentTokenId: string | null): string | null {
+  if (!agentTokenId) return null;
   const bucket = Math.floor(Date.now() / (60 * 60 * 1000));
   return crypto
     .createHash("sha256")
-    .update(`${apiKeyId}:${bucket}`)
+    .update(`${agentTokenId}:${bucket}`)
     .digest("hex")
     .slice(0, 32);
 }
@@ -72,8 +72,11 @@ export async function logMcpEvent(event: McpEventInput): Promise<void> {
   try {
     const supabase = supabaseAdmin();
     await supabase.from("mcp_events").insert({
+      // Legacy column that FK'd to the removed api_keys table. Agent identity
+      // now lives in session_id (derived from the OAuth token id). Kept null so
+      // the insert is valid both before and after the api_keys drop migration.
+      api_key_id: null,
       user_id: event.userId,
-      api_key_id: event.apiKeyId,
       tool_name: event.toolName,
       endpoint: event.endpoint,
       arguments: truncate(event.arguments) ?? null,
@@ -82,7 +85,7 @@ export async function logMcpEvent(event: McpEventInput): Promise<void> {
         ? truncate(event.responseSummary)
         : null,
       latency_ms: event.latencyMs,
-      session_id: deriveSessionId(event.apiKeyId),
+      session_id: deriveSessionId(event.agentTokenId),
       source: event.source,
       error: event.error ?? null,
     });

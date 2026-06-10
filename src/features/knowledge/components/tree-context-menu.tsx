@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { Edit2, FolderInput, Trash2 } from "lucide-react";
+import { useClampedFixedPosition } from "@/shared/hooks/use-clamped-fixed-position";
 
 export interface ContextMenuItem {
   type: "folder" | "entry";
@@ -27,7 +28,8 @@ interface Props {
 }
 
 /**
- * Inline absolute-positioned context menu for tree rows. Closes on
+ * Cursor-anchored context menu for tree rows, clamped to the viewport
+ * via useClampedFixedPosition so it never opens off-screen. Closes on
  * click-outside, Escape, or a menu-item click.
  *
  * Kept dead simple — no Popover / portal — to match the existing
@@ -44,7 +46,7 @@ export function TreeContextMenu({
   onClose,
   canEdit = true,
 }: Props) {
-  const ref = useRef<HTMLDivElement>(null);
+  const { ref, style } = useClampedFixedPosition<HTMLDivElement>(x, y);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -59,14 +61,14 @@ export function TreeContextMenu({
       document.removeEventListener("mousedown", handleClick);
       document.removeEventListener("keydown", handleKey);
     };
-  }, [onClose]);
+  }, [onClose, ref]);
 
   return (
     <div
       ref={ref}
       role="menu"
-      style={{ left: x, top: y }}
-      className="fixed z-[1000] min-w-[160px] rounded-md border border-border-default bg-[var(--bg-inset-hover)] shadow-2xl shadow-black/60 py-1"
+      style={style}
+      className="z-[1000] min-w-[160px] rounded-md border border-border-default bg-[var(--bg-inset-hover)] shadow-2xl shadow-black/60 py-1"
     >
       {canEdit ? (
         <>

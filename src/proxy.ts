@@ -118,20 +118,11 @@ export async function proxy(request: NextRequest) {
     return supabaseResponse;
   }
 
-  // Allow API routes carrying an MCP credential — an sk-dopl- API key OR a
-  // remote-MCP OAuth access token (dopl_at_). The route's own auth wrapper
-  // validates it; the middleware just must not block the loopback /api/*
-  // calls the hosted MCP server makes on the caller's behalf.
+  // Allow API routes carrying a remote-MCP OAuth access token (dopl_at_). The
+  // route's own auth wrapper validates it; the middleware just must not block
+  // the loopback /api/* calls the hosted MCP server makes on the caller's behalf.
   const authHeader = request.headers.get("authorization");
-  if (
-    pathname.startsWith("/api/") &&
-    (authHeader?.includes("sk-dopl-") || authHeader?.includes("dopl_at_"))
-  ) {
-    return supabaseResponse;
-  }
-
-  // Allow admin API routes (they have their own ADMIN_SECRET check)
-  if (pathname.startsWith("/api/admin/")) {
+  if (pathname.startsWith("/api/") && authHeader?.includes("dopl_at_")) {
     return supabaseResponse;
   }
 

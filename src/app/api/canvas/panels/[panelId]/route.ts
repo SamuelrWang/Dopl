@@ -9,8 +9,8 @@ const supabase = supabaseAdmin();
  * PATCH /api/canvas/panels/[panelId] — update a panel's position, size, or data.
  */
 export const PATCH = withWorkspaceAuth(
-  async (request, { userId, workspaceId, apiKeyId, params }) => {
-    const denied = await denyIfNoCanvasWrite({ apiKeyId, userId, workspaceId });
+  async (request, { userId, workspaceId, agentTokenId, params }) => {
+    const denied = await denyIfNoCanvasWrite({ agentTokenId, userId, workspaceId });
     if (denied) return denied;
 
     const panelId = params?.panelId;
@@ -52,8 +52,8 @@ export const PATCH = withWorkspaceAuth(
  * by its panel_id.
  */
 export const DELETE = withWorkspaceAuth(
-  async (_request, { userId, workspaceId, apiKeyId, params }) => {
-    const denied = await denyIfNoCanvasWrite({ apiKeyId, userId, workspaceId });
+  async (_request, { userId, workspaceId, agentTokenId, params }) => {
+    const denied = await denyIfNoCanvasWrite({ agentTokenId, userId, workspaceId });
     if (denied) return denied;
 
     const panelId = params?.panelId;

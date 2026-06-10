@@ -1,5 +1,7 @@
 # M-5 / M-6 / M-10 audit findings
 
+> **MOOT as of 2026-06-09** for the npx/stdio + API-key findings (A-025, A-030, A-031, A-036 and any other `dopl mcp config` / `--api-key` / stdio finding): that entire install path was removed in favor of the remote OAuth MCP server (`/api/mcp`). These findings no longer apply — there is no CLI, no stdio binary, and no API key. Archived code: `~/Desktop/dopl-artifacts/mcp-npx-apikey-install/`.
+
 Captured 2026-05-04 after a deep audit of the next three shipped items from `MCP-MULTI-WORKSPACE.md`. Continues the `A-NNN` numbering from `M7-M11-AUDIT-FINDINGS.md`. Severity reflects practical exploitability or user impact, not the audit-agent's initial label — several agent-flagged "criticals" didn't survive direct verification and have been downgraded with rationale.
 
 ## Status legend

@@ -206,8 +206,13 @@ export function Toolbar({ editor }: ToolbarProps) {
 
   const groups = inTable ? [...baseGroups, tableGroup] : baseGroups;
 
+  // Viewport-fixed so it stays pinned while the file panel scrolls. The
+  // panel sits right of the app rail (74px) + surface margin (4px) + app
+  // sidebar (204px) + KB tree (288px) = 570px, with the surface's 6px
+  // right margin — so offset left/right to center over the panel (not the
+  // viewport) at md+. Below md the tree/sidebars collapse.
   return (
-    <div className="pointer-events-none fixed bottom-4 left-0 right-0 z-[5] flex justify-center px-4 md:pl-64">
+    <div className="pointer-events-none fixed bottom-4 left-0 right-0 z-[5] flex justify-center px-4 md:left-[570px] md:right-[6px]">
       <div className="pointer-events-auto flex items-center gap-1 rounded-full border border-border-default bg-[var(--panel-surface)] px-2 py-1 shadow-[var(--shadow-panel)] backdrop-blur-xl">
         {groups.map((group, gi) => (
           <div key={gi} className="flex items-center gap-0.5">

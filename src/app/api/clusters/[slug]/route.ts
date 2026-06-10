@@ -9,7 +9,7 @@ import {
 interface Ctx {
   userId: string;
   workspaceId: string;
-  apiKeyId?: string;
+  agentTokenId?: string;
   params?: Record<string, string>;
 }
 
@@ -17,7 +17,7 @@ function scopeOf(ctx: Ctx) {
   return {
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
-    source: ctx.apiKeyId ? ("agent" as const) : ("user" as const),
+    source: ctx.agentTokenId ? ("agent" as const) : ("user" as const),
   };
 }
 

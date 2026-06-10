@@ -7,7 +7,7 @@ import { withUserAuth } from "./with-auth";
 
 export interface WorkspaceAuthContext {
   userId: string;
-  apiKeyId?: string;
+  agentTokenId?: string;
   /**
    * If the request is authenticated via a workspace-scoped API key
    * (`api_keys.workspace_id IS NOT NULL`), this is the workspace it's
@@ -37,7 +37,7 @@ interface Options {
 /**
  * Composes `withUserAuth` to additionally resolve the active workspace
  * and verify the caller's membership + role. Injects `{ workspaceId,
- * workspaceSlug, role }` alongside the standard `{ userId, apiKeyId }`.
+ * workspaceSlug, role }` alongside the standard `{ userId, agentTokenId }`.
  *
  * Workspace resolution priority (Item 4 update):
  *   1. If the API key has a `workspace_id` (workspace-scoped key), use it.
@@ -115,7 +115,7 @@ export function withWorkspaceAuth(
       }
       return handler(request, {
         userId: ctx.userId,
-        apiKeyId: ctx.apiKeyId,
+        agentTokenId: ctx.agentTokenId,
         apiKeyWorkspaceId: ctx.apiKeyWorkspaceId ?? null,
         workspaceId: workspace.id,
         workspaceSlug: workspace.slug,

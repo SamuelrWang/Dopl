@@ -59,7 +59,7 @@ async function main() {
   const ctx = buildKnowledgeContext({
     userId: USER_ID,
     workspaceId: WORKSPACE_ID,
-    apiKeyId: null,
+    agentTokenId: null,
   });
 
   // ── 1. getBaseTree on a seeded base ───────────────────────────────

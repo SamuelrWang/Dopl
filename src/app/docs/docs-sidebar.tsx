@@ -40,7 +40,7 @@ export const DOC_SECTIONS: DocSection[] = [
     items: [
       { id: "mcp-setup", title: "Setup" },
       { id: "mcp-tools", title: "Available tools" },
-      { id: "api-keys", title: "API keys" },
+      { id: "mcp-access", title: "Managing access" },
     ],
   },
 ];

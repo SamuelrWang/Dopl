@@ -11,8 +11,9 @@
  * outside, Escape, or selecting any leaf action.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronRight, ArrowUp } from "lucide-react";
+import { useClampedFixedPosition } from "@/shared/hooks/use-clamped-fixed-position";
 import { MENU_SECTIONS, type MenuItem, type Submenu } from "./menu-data";
 
 const MENU_WIDTH = 200;
@@ -24,7 +25,8 @@ interface Props {
 }
 
 export function CanvasContextMenu({ x, y, onClose }: Props) {
-  const rootRef = useRef<HTMLDivElement>(null);
+  const { ref: rootRef, style: clampStyle } =
+    useClampedFixedPosition<HTMLDivElement>(x, y, 12);
   const [openSubmenu, setOpenSubmenu] = useState<MenuItem | null>(null);
 
   useEffect(() => {
@@ -40,17 +42,13 @@ export function CanvasContextMenu({ x, y, onClose }: Props) {
       document.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [onClose]);
-
-  // Keep the menu inside the viewport — flip horizontally / clamp vertically.
-  const left = Math.min(x, window.innerWidth - MENU_WIDTH - 12);
-  const top = Math.min(y, window.innerHeight - 320);
+  }, [onClose, rootRef]);
 
   return (
     <div
       ref={rootRef}
       onContextMenu={(e) => e.preventDefault()}
-      style={{ position: "fixed", left, top, width: MENU_WIDTH, zIndex: 99999 }}
+      style={{ ...clampStyle, width: MENU_WIDTH, zIndex: 99999 }}
       className="flex flex-col gap-1.5 select-none"
     >
       {/* Start typing pill */}

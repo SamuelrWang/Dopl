@@ -15,7 +15,7 @@ const AttachSchema = z.object({
 interface Ctx {
   userId: string;
   workspaceId: string;
-  apiKeyId?: string;
+  agentTokenId?: string;
   params?: Record<string, string>;
 }
 
@@ -39,7 +39,7 @@ async function handleGet(_request: NextRequest, ctx: Ctx) {
     const items = await listAttachedSkills(slug, {
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
-      source: ctx.apiKeyId ? "agent" : "user",
+      source: ctx.agentTokenId ? "agent" : "user",
     });
     return NextResponse.json({ skills: items });
   } catch (err) {
@@ -57,7 +57,7 @@ async function handlePost(request: NextRequest, ctx: Ctx) {
     const item = await attachSkill(slug, input.skill_id, {
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
-      source: ctx.apiKeyId ? "agent" : "user",
+      source: ctx.agentTokenId ? "agent" : "user",
     });
     return NextResponse.json(item, { status: 201 });
   } catch (err) {

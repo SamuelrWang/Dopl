@@ -91,12 +91,12 @@ async function main() {
   const userCtx = buildKnowledgeContext({
     userId: USER_ID,
     workspaceId: WORKSPACE_ID,
-    apiKeyId: null,
+    agentTokenId: null,
   });
   const agentCtx = buildKnowledgeContext({
     userId: USER_ID,
     workspaceId: WORKSPACE_ID,
-    apiKeyId: "fake-api-key-for-agent-source",
+    agentTokenId: "fake-api-key-for-agent-source",
   });
 
   const base = await createBase(userCtx, {

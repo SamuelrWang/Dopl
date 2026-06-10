@@ -104,6 +104,11 @@ export type AgentWriteToggleInput = z.infer<typeof AgentWriteToggleSchema>;
 
 // ─── knowledge_folders ──────────────────────────────────────────────
 
+// Agent-facing descriptions (folder `description`, entry `excerpt`) are
+// capped at 300 chars: long enough for a useful preview, short enough
+// that the MCP get_tree / list_dir listings they stream into stay lean.
+export const DESCRIPTION_MAX = 300;
+
 export const KnowledgeFolderCreateSchema = z.object({
   knowledgeBaseId: z.string().uuid(),
   parentId: z.string().uuid().nullable().optional(),
@@ -112,6 +117,7 @@ export const KnowledgeFolderCreateSchema = z.object({
     .min(1, "Name is required")
     .max(200)
     .regex(noSlashRegex, noSlashMessage),
+  description: z.string().max(DESCRIPTION_MAX).nullable().optional(),
   position: z.number().int().min(0).optional(),
 });
 export type KnowledgeFolderCreateInput = z.infer<
@@ -120,6 +126,7 @@ export type KnowledgeFolderCreateInput = z.infer<
 
 export const KnowledgeFolderUpdateSchema = z.object({
   name: z.string().min(1).max(200).regex(noSlashRegex, noSlashMessage).optional(),
+  description: z.string().max(DESCRIPTION_MAX).nullable().optional(),
   position: z.number().int().min(0).optional(),
 });
 export type KnowledgeFolderUpdateInput = z.infer<
@@ -144,7 +151,7 @@ export const KnowledgeEntryCreateSchema = z.object({
     .min(1, "Title is required")
     .max(300)
     .regex(noSlashRegex, noSlashMessage),
-  excerpt: z.string().max(1000).nullable().optional(),
+  excerpt: z.string().max(DESCRIPTION_MAX).nullable().optional(),
   body: z.string().max(MAX_BODY_BYTES, bodyMaxMessage).optional(),
   entryType: KnowledgeEntryTypeSchema.optional(),
   position: z.number().int().min(0).optional(),
@@ -155,7 +162,7 @@ export type KnowledgeEntryCreateInput = z.infer<
 
 export const KnowledgeEntryUpdateSchema = z.object({
   title: z.string().min(1).max(300).regex(noSlashRegex, noSlashMessage).optional(),
-  excerpt: z.string().max(1000).nullable().optional(),
+  excerpt: z.string().max(DESCRIPTION_MAX).nullable().optional(),
   body: z.string().max(MAX_BODY_BYTES, bodyMaxMessage).optional(),
   entryType: KnowledgeEntryTypeSchema.optional(),
   position: z.number().int().min(0).optional(),

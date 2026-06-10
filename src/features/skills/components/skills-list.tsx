@@ -60,7 +60,7 @@ export function SkillsList({ workspaceSlug, workspaceId, skills }: Props) {
               type="button"
               disabled
               title="Skill authoring lands in the next milestone"
-              className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white/40 text-black/60 text-xs font-medium cursor-not-allowed"
+              className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-surface-raised-3 text-text-muted text-xs font-medium cursor-not-allowed"
             >
               <Plus size={12} />
               New skill
@@ -68,7 +68,7 @@ export function SkillsList({ workspaceSlug, workspaceId, skills }: Props) {
           </div>
         }
       />
-      <div className="container mx-auto max-w-5xl px-6 pt-2 pb-8 pointer-events-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto container mx-auto max-w-5xl px-6 pt-4 pb-8">
         {skills.length === 0 ? (
           <EmptyState />
         ) : (

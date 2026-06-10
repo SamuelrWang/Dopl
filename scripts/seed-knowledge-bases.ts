@@ -118,7 +118,7 @@ async function main() {
     const ctx = buildKnowledgeContext({
       workspaceId: workspace.id as string,
       userId: (workspace.owner_id as string) ?? null,
-      apiKeyId: null,
+      agentTokenId: null,
     });
 
     try {

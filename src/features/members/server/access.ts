@@ -228,14 +228,14 @@ export async function requireWorkspaceCanvasAccess(
 /**
  * Convenience wrapper for canvas write routes. Returns a NextResponse
  * to short-circuit the handler on denial, or null on success. Skips the
- * check entirely for session-cookie callers (no apiKeyId).
+ * check entirely for session-cookie callers (no agentTokenId).
  */
 export async function denyIfNoCanvasWrite(ctx: {
-  apiKeyId?: string;
+  agentTokenId?: string;
   userId: string;
   workspaceId: string;
 }): Promise<NextResponse | null> {
-  if (!ctx.apiKeyId) return null;
+  if (!ctx.agentTokenId) return null;
   try {
     await requireWorkspaceCanvasAccess(ctx.userId, ctx.workspaceId, "edit");
     return null;

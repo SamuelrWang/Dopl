@@ -15,22 +15,6 @@ import {
 } from "./dto";
 import { findWorkspaceById, findMembership } from "./repository";
 import { resolveMembershipOrThrow } from "./service";
-import { ensureWorkspaceKey } from "@/shared/auth/api-keys";
-
-/**
- * Best-effort pre-generation of the member's workspace API key on join.
- * Idempotent + never throws — a failed key-gen must not block the join.
- */
-async function autoGenWorkspaceKey(
-  userId: string,
-  workspaceId: string
-): Promise<void> {
-  try {
-    await ensureWorkspaceKey(userId, workspaceId);
-  } catch (e) {
-    console.error("[invitations] auto-generate API key failed:", e);
-  }
-}
 
 const INVITATION_COLS =
   "id, workspace_id, email, invited_role, invited_by, token, expires_at, accepted_at, accepted_by, revoked_at, created_at";
@@ -283,7 +267,6 @@ export async function acceptInvitationByToken(
         accepted_by: userId,
       })
       .eq("id", status.invitation.id);
-    await autoGenWorkspaceKey(userId, status.invitation.workspaceId);
     return {
       workspaceSlug: status.workspace.slug,
       workspacePublicId: status.workspace.publicId,
@@ -306,8 +289,6 @@ export async function acceptInvitationByToken(
     { onConflict: "workspace_id,user_id" }
   );
   if (memberError) throw memberError;
-
-  await autoGenWorkspaceKey(userId, status.invitation.workspaceId);
 
   const { error: invError } = await db
     .from("workspace_invitations")

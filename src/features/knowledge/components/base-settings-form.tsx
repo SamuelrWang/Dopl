@@ -3,12 +3,15 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "@/shared/ui/toast";
+import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import {
   KnowledgeApiError,
   deleteBase,
   updateBase,
+  updateFolder,
 } from "../client/api";
-import type { KnowledgeBase } from "../types";
+import { DESCRIPTION_MAX } from "../schema";
+import type { KnowledgeBase, KnowledgeFolder } from "../types";
 import { knowledgeBaseSegment } from "../url";
 import { AgentWriteToggle } from "./agent-write-toggle";
 
@@ -16,6 +19,8 @@ interface Props {
   workspaceId: string;
   workspaceSlug: string;
   base: KnowledgeBase;
+  folders: KnowledgeFolder[];
+  onFoldersChanged?: () => void;
 }
 
 /**
@@ -25,7 +30,13 @@ interface Props {
  *   3. Advanced — slug edit (folded behind a disclosure).
  *   4. Danger zone — soft-delete the KB.
  */
-export function BaseSettingsForm({ workspaceId, workspaceSlug, base }: Props) {
+export function BaseSettingsForm({
+  workspaceId,
+  workspaceSlug,
+  base,
+  folders,
+  onFoldersChanged,
+}: Props) {
   const router = useRouter();
   const [name, setName] = useState(base.name);
   const [description, setDescription] = useState(base.description ?? "");
@@ -33,6 +44,7 @@ export function BaseSettingsForm({ workspaceId, workspaceSlug, base }: Props) {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
   const dirty =
     name.trim() !== base.name ||
@@ -82,10 +94,6 @@ export function BaseSettingsForm({ workspaceId, workspaceSlug, base }: Props) {
   }
 
   async function handleDelete() {
-    const ok = window.confirm(
-      `Move "${base.name}" to trash? You can restore it from the trash modal.`
-    );
-    if (!ok) return;
     setDeleting(true);
     try {
       await deleteBase(base.id, workspaceId);
@@ -122,10 +130,17 @@ export function BaseSettingsForm({ workspaceId, workspaceSlug, base }: Props) {
         <Field label="Description">
           <textarea
             value={description}
-            onChange={(e) => setDescription(e.target.value)}
+            onChange={(e) =>
+              setDescription(e.target.value.slice(0, DESCRIPTION_MAX))
+            }
             rows={3}
+            maxLength={DESCRIPTION_MAX}
+            placeholder="What's in this knowledge base? Agents see this when listing bases."
             className="px-3 py-2 rounded-md bg-surface-raised-3 border border-border-strong text-sm text-text-primary placeholder:text-text-muted outline-none focus:border-border-highlight transition-colors resize-none"
           />
+          <p className="text-right font-mono text-[10px] text-text-muted">
+            {description.length}/{DESCRIPTION_MAX}
+          </p>
         </Field>
         <div className="flex justify-end">
           <button
@@ -138,6 +153,29 @@ export function BaseSettingsForm({ workspaceId, workspaceSlug, base }: Props) {
           </button>
         </div>
       </Section>
+
+      {/* Folder descriptions — agent-facing summaries streamed into MCP
+          tree / directory listings alongside the folder names. */}
+      {folders.length > 0 ? (
+        <Section title="Folder descriptions">
+          <p className="text-xs text-text-secondary leading-relaxed -mt-1">
+            Short summaries of what each folder holds. Agents see these when
+            browsing the tree, so they can navigate without opening every
+            file.
+          </p>
+          <div className="flex flex-col gap-3">
+            {sortFoldersByPath(folders).map(({ folder, pathLabel }) => (
+              <FolderDescriptionRow
+                key={folder.id}
+                folder={folder}
+                pathLabel={pathLabel}
+                workspaceId={workspaceId}
+                onSaved={onFoldersChanged}
+              />
+            ))}
+          </div>
+        </Section>
+      ) : null}
 
       {/* Agent access */}
       <Section title="Agent access">
@@ -185,14 +223,24 @@ export function BaseSettingsForm({ workspaceId, workspaceSlug, base }: Props) {
           </p>
           <button
             type="button"
-            onClick={handleDelete}
+            onClick={() => setConfirmDeleteOpen(true)}
             disabled={deleting}
-            className="mt-3 h-8 px-4 rounded-md bg-red-500 text-text-primary text-xs font-medium hover:bg-red-500/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="mt-3 h-8 px-4 rounded-md bg-red-500 text-white text-xs font-medium hover:bg-red-500/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             {deleting ? "Deleting…" : "Delete knowledge base"}
           </button>
         </div>
       </Section>
+
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        onOpenChange={setConfirmDeleteOpen}
+        title="Delete knowledge base?"
+        description={`“${base.name}” and all its folders + entries will move to trash. You can restore it from the trash modal until it's purged.`}
+        confirmLabel="Delete"
+        destructive
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }
@@ -227,6 +275,87 @@ function Field({
         {label}
       </label>
       {children}
+    </div>
+  );
+}
+
+/** Full path label per folder ("parent / child"), sorted so nested
+ *  folders list under their ancestors. Cycle-guarded. */
+function sortFoldersByPath(
+  folders: KnowledgeFolder[]
+): Array<{ folder: KnowledgeFolder; pathLabel: string }> {
+  const byId = new Map(folders.map((f) => [f.id, f]));
+  return folders
+    .map((folder) => {
+      const parts: string[] = [];
+      const visited = new Set<string>();
+      let current: KnowledgeFolder | undefined = folder;
+      while (current && !visited.has(current.id)) {
+        visited.add(current.id);
+        parts.unshift(current.name);
+        current = current.parentId ? byId.get(current.parentId) : undefined;
+      }
+      return { folder, pathLabel: parts.join(" / ") };
+    })
+    .sort((a, b) => a.pathLabel.localeCompare(b.pathLabel));
+}
+
+/** One folder's description editor — saves on blur when changed. */
+function FolderDescriptionRow({
+  folder,
+  pathLabel,
+  workspaceId,
+  onSaved,
+}: {
+  folder: KnowledgeFolder;
+  pathLabel: string;
+  workspaceId: string;
+  onSaved?: () => void;
+}) {
+  const [value, setValue] = useState(folder.description ?? "");
+  const [savedValue, setSavedValue] = useState(folder.description ?? "");
+
+  async function handleBlur() {
+    const next = value.trim();
+    if (next === savedValue.trim()) return;
+    try {
+      await updateFolder(
+        folder.id,
+        { description: next === "" ? null : next },
+        workspaceId
+      );
+      setSavedValue(next);
+      onSaved?.();
+    } catch (err) {
+      const msg =
+        err instanceof KnowledgeApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Save failed";
+      toast({ title: "Couldn't save folder description", description: msg });
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-xs font-medium text-text-primary truncate">
+          {pathLabel}
+        </span>
+        <span className="shrink-0 font-mono text-[10px] text-text-muted">
+          {value.length}/{DESCRIPTION_MAX}
+        </span>
+      </div>
+      <textarea
+        value={value}
+        onChange={(e) => setValue(e.target.value.slice(0, DESCRIPTION_MAX))}
+        onBlur={handleBlur}
+        rows={2}
+        maxLength={DESCRIPTION_MAX}
+        placeholder="What's in this folder?"
+        className="px-3 py-2 rounded-md bg-surface-raised-3 border border-border-strong text-sm text-text-primary placeholder:text-text-muted outline-none focus:border-border-highlight transition-colors resize-none"
+      />
     </div>
   );
 }

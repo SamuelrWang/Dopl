@@ -105,40 +105,8 @@ async function main() {
     if (!updateOther || updateOther.length === 0) ok("User 1 cannot update User 2's profile");
     else fail("User 1 cannot update User 2's profile", `updated ${updateOther.length} rows`);
 
-    // ── Test 2: API Keys RLS ──
-    console.log("\n── Test 2: API Keys RLS ──");
-
-    // Create an API key for user 1 via admin (simulating app behavior)
-    const keyHash1 = `test-hash-${Date.now()}-1`;
-    const { error: keyErr1 } = await admin.from("api_keys").insert({
-      key_hash: keyHash1,
-      key_prefix: "sk-dopl-test1",
-      name: "Test Key 1",
-      user_id: user1Id,
-    });
-    if (keyErr1) fail("Admin create key for user 1", keyErr1.message);
-
-    const keyHash2 = `test-hash-${Date.now()}-2`;
-    await admin.from("api_keys").insert({
-      key_hash: keyHash2,
-      key_prefix: "sk-dopl-test2",
-      name: "Test Key 2",
-      user_id: user2Id,
-    });
-
-    // User 1 can see own keys
-    const { data: ownKeys } = await s1.client.from("api_keys").select("*");
-    if (ownKeys && ownKeys.length >= 1 && ownKeys.every((k) => k.user_id === user1Id))
-      ok("User 1 can only see own API keys");
-    else fail("User 1 can only see own API keys", `got ${ownKeys?.length} keys`);
-
-    // User 1 cannot see user 2's keys
-    const { data: otherKeys } = await s1.client.from("api_keys").select("*").eq("user_id", user2Id);
-    if (!otherKeys || otherKeys.length === 0) ok("User 1 cannot see User 2's API keys");
-    else fail("User 1 cannot see User 2's API keys", `got ${otherKeys?.length} keys`);
-
-    // ── Test 3: Canvas Panels RLS ──
-    console.log("\n── Test 3: Canvas Panels RLS ──");
+    // ── Test 2: Canvas Panels RLS ──
+    console.log("\n── Test 2: Canvas Panels RLS ──");
 
     // Create a test entry via admin
     const { data: testEntry } = await admin
@@ -182,8 +150,8 @@ async function main() {
       else fail("User 2 can only see own canvas panels", `got ${u2Panels?.length} panels`);
     }
 
-    // ── Test 4: Clusters RLS ──
-    console.log("\n── Test 4: Clusters RLS ──");
+    // ── Test 3: Clusters RLS ──
+    console.log("\n── Test 3: Clusters RLS ──");
 
     // Create a global cluster (user_id = NULL)
     const { data: globalCluster } = await admin
@@ -264,11 +232,10 @@ async function main() {
 
     // Check user 1's data exists before deletion
     const { data: preProfile } = await admin.from("profiles").select("id").eq("id", user1Id);
-    const { data: preKeys } = await admin.from("api_keys").select("id").eq("user_id", user1Id);
     const { data: prePanels } = await admin.from("canvas_panels").select("id").eq("user_id", user1Id);
     const { data: preClusters } = await admin.from("clusters").select("id").eq("user_id", user1Id);
 
-    console.log(`  Pre-delete: ${preProfile?.length} profiles, ${preKeys?.length} keys, ${prePanels?.length} panels, ${preClusters?.length} clusters`);
+    console.log(`  Pre-delete: ${preProfile?.length} profiles, ${prePanels?.length} panels, ${preClusters?.length} clusters`);
 
     // Set ingested_by on test entry to user 1
     if (testEntry) {
@@ -283,11 +250,6 @@ async function main() {
     const { data: postProfile } = await admin.from("profiles").select("id").eq("id", user1Id);
     if (!postProfile || postProfile.length === 0) ok("Profile deleted on user deletion");
     else fail("Profile deleted on user deletion", `${postProfile.length} rows remain`);
-
-    // Verify cascade: API keys deleted
-    const { data: postKeys } = await admin.from("api_keys").select("id").eq("user_id", user1Id);
-    if (!postKeys || postKeys.length === 0) ok("API keys deleted on user deletion");
-    else fail("API keys deleted on user deletion", `${postKeys.length} rows remain`);
 
     // Verify cascade: canvas panels deleted
     const { data: postPanels } = await admin.from("canvas_panels").select("id").eq("user_id", user1Id);

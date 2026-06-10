@@ -59,6 +59,11 @@ export interface KnowledgeFolder {
   knowledgeBaseId: string;
   parentId: string | null;
   name: string;
+  /** Agent-facing summary of the folder's contents (≤300 chars).
+   *  Surfaced in MCP get_tree / list_dir so agents can navigate
+   *  without opening every file. Entries use `excerpt` for the same
+   *  purpose; bases use `description`. */
+  description: string | null;
   position: number;
   createdBy: string | null;
   createdAt: string;

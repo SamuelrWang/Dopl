@@ -136,10 +136,10 @@ async function main() {
     }
   }
 
-  console.log("\nDone. Smoke test:");
-  console.log("  curl -H 'Authorization: Bearer sk-dopl-…' http://localhost:3000/api/knowledge/packs");
-  console.log("  curl -H 'Authorization: Bearer sk-dopl-…' http://localhost:3000/api/knowledge/packs/rokid/files");
-  console.log("  curl -H 'Authorization: Bearer sk-dopl-…' 'http://localhost:3000/api/knowledge/packs/rokid/file?path=docs/sdk/camera.md'");
+  console.log("\nDone. Smoke test (use a remote-MCP OAuth token, Bearer dopl_at_…):");
+  console.log("  curl -H 'Authorization: Bearer dopl_at_…' http://localhost:3000/api/knowledge/packs");
+  console.log("  curl -H 'Authorization: Bearer dopl_at_…' http://localhost:3000/api/knowledge/packs/rokid/files");
+  console.log("  curl -H 'Authorization: Bearer dopl_at_…' 'http://localhost:3000/api/knowledge/packs/rokid/file?path=docs/sdk/camera.md'");
 }
 
 main().catch((err) => {

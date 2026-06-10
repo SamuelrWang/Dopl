@@ -10,8 +10,8 @@ const supabase = supabaseAdmin();
  * Body: { updates: [{ panel_id, x?, y?, title?, panel_data? }] }
  */
 export const PATCH = withWorkspaceAuth(
-  async (request, { userId, workspaceId, apiKeyId }) => {
-    const denied = await denyIfNoCanvasWrite({ apiKeyId, userId, workspaceId });
+  async (request, { userId, workspaceId, agentTokenId }) => {
+    const denied = await denyIfNoCanvasWrite({ agentTokenId, userId, workspaceId });
     if (denied) return denied;
 
     const body = await request.json();

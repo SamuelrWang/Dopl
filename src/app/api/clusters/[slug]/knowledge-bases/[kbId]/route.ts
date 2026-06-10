@@ -6,7 +6,7 @@ import { detachKnowledgeBase } from "@/features/clusters/server/attachments";
 interface Ctx {
   userId: string;
   workspaceId: string;
-  apiKeyId?: string;
+  agentTokenId?: string;
   params?: Record<string, string>;
 }
 
@@ -31,7 +31,7 @@ async function handleDelete(_request: NextRequest, ctx: Ctx) {
     await detachKnowledgeBase(slug, kbId, {
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
-      source: ctx.apiKeyId ? "agent" : "user",
+      source: ctx.agentTokenId ? "agent" : "user",
     });
     return new NextResponse(null, { status: 204 });
   } catch (err) {

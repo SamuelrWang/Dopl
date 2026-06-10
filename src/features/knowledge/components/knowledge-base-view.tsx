@@ -1,10 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Settings } from "lucide-react";
-import { PageTopBar } from "@/shared/layout/page-top-bar";
-import { EditableTitle } from "@/shared/layout/editable-title";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { ChevronRight, Settings } from "lucide-react";
 import { toast } from "@/shared/ui/toast";
+import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { VisibilityPill, MakePublicAction } from "@/shared/ui/visibility-pill";
 import { useMyAccessContext } from "@/features/members/hooks/use-my-access";
 import { meetsLevel } from "@/features/members/access-defaults";
@@ -108,6 +107,36 @@ export function KnowledgeBaseView({
       : undefined
   );
   const displayEntry = fullEntry ?? selectedMeta;
+
+  // Folder chain (root → leaf) for the opened entry, for the header
+  // breadcrumb. Visited-set guard in case a stale tree snapshot ever
+  // carries a parent cycle.
+  const folderChain = useMemo(() => {
+    const chain: KnowledgeFolder[] = [];
+    const visited = new Set<string>();
+    let folderId = selectedMeta?.folderId ?? null;
+    while (folderId && !visited.has(folderId)) {
+      visited.add(folderId);
+      const folder = folders.find((f) => f.id === folderId);
+      if (!folder) break;
+      chain.unshift(folder);
+      folderId = folder.parentId;
+    }
+    return chain;
+  }, [folders, selectedMeta?.folderId]);
+
+  /** Breadcrumb navigation: jump to the first entry directly inside a
+   *  folder (`null` = the KB root crumb → first entry in the base). */
+  const handleCrumbSelect = useCallback(
+    (folderId: string | null) => {
+      const target =
+        folderId === null
+          ? entries[0]
+          : entries.find((e) => e.folderId === folderId);
+      if (target) setSelectedId(target.id);
+    },
+    [entries]
+  );
 
   const refresh = useCallback(async () => {
     try {
@@ -271,12 +300,18 @@ export function KnowledgeBaseView({
     setEditingNodeId(null);
   }, []);
 
-  const handleDelete = useCallback(
+  // In-app delete confirmation (replaces window.confirm). The context
+  // menu sets the target; the ConfirmDialog below runs performDelete.
+  const [deleteTarget, setDeleteTarget] = useState<ContextMenuItem | null>(
+    null
+  );
+
+  const handleDelete = useCallback((item: ContextMenuItem) => {
+    setDeleteTarget(item);
+  }, []);
+
+  const performDelete = useCallback(
     async (item: ContextMenuItem) => {
-      const ok = window.confirm(
-        `Delete ${item.type} “${item.label}”? You can restore it from Trash.`
-      );
-      if (!ok) return;
       try {
         if (item.type === "folder") {
           await apiDeleteFolder(item.id, workspaceId);
@@ -335,65 +370,87 @@ export function KnowledgeBaseView({
   );
 
   return (
-    <>
-      <PageTopBar
-        title={
-          <div className="flex items-center gap-2 min-w-0">
-            <EditableTitle
-              value={displayedName}
-              onSave={async (next) => {
-                const updated = await apiUpdateBase(
-                  base.id,
-                  { name: next },
-                  workspaceId
-                );
-                setDisplayedName(updated.name);
-              }}
-              onError={(err) => reportError(err, "Couldn't rename")}
-              placeholder="Untitled knowledge base"
-            />
-            <VisibilityPill visibility={displayedVisibility} />
-            {displayedVisibility === "private" && isOwner ? (
-              <MakePublicAction
-                resourceType="knowledge base"
-                onConfirm={async () => {
-                  try {
-                    await apiUpdateBase(
-                      base.id,
-                      { visibility: "public" },
-                      workspaceId,
-                    );
-                    setDisplayedVisibility("public");
-                    toast({ title: "Knowledge base is now public" });
-                  } catch (err) {
-                    reportError(err, "Couldn't publish");
-                  }
-                }}
-              />
-            ) : null}
-          </div>
-        }
-        trailing={
-          <>
-            <div className="w-56 hidden md:block">
-              <KnowledgeSearch
-                workspaceId={workspaceId}
-                baseSlug={base.slug}
-                onSelectEntry={(entryId) => setSelectedId(entryId)}
-              />
-            </div>
+    <div className="flex h-full min-h-0 flex-1 flex-col">
+      {/* In-panel header — replaces the viewport-fixed PageTopBar so the
+          view can live inside the new-design rounded panel, which draws
+          its own chrome around this component. */}
+      <div className="flex h-[52px] shrink-0 items-center gap-2 border-b border-border-subtle px-5">
+        <div className="flex items-center gap-2 min-w-0">
+          {/* Breadcrumb path to the opened file: KB › folder › … › entry.
+              Ancestor crumbs jump to the first entry inside that level;
+              the tail is the open entry itself. KB renames live in the
+              base settings modal. */}
+          <nav
+            aria-label="Path to the open entry"
+            className="flex items-center gap-1 min-w-0 text-sm"
+          >
             <button
               type="button"
-              onClick={() => setSettingsOpen(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-surface-cta text-text-on-cta text-xs font-medium hover:bg-surface-cta/90 transition-colors cursor-pointer"
+              onClick={() => handleCrumbSelect(null)}
+              className="max-w-[180px] truncate text-text-secondary hover:text-text-primary transition-colors cursor-pointer"
             >
-              <Settings size={12} />
-              Settings
+              {displayedName || "Untitled knowledge base"}
             </button>
-          </>
-        }
-      />
-      <div className="pointer-events-auto h-full">
+            {folderChain.map((folder) => (
+              <Fragment key={folder.id}>
+                <ChevronRight size={13} className="shrink-0 text-text-muted" />
+                <button
+                  type="button"
+                  onClick={() => handleCrumbSelect(folder.id)}
+                  className="max-w-[160px] truncate text-text-secondary hover:text-text-primary transition-colors cursor-pointer"
+                >
+                  {folder.name}
+                </button>
+              </Fragment>
+            ))}
+            {displayEntry ? (
+              <>
+                <ChevronRight size={13} className="shrink-0 text-text-muted" />
+                <span className="max-w-[220px] truncate font-medium text-text-primary">
+                  {displayEntry.title}
+                </span>
+              </>
+            ) : null}
+          </nav>
+          <VisibilityPill visibility={displayedVisibility} />
+          {displayedVisibility === "private" && isOwner ? (
+            <MakePublicAction
+              resourceType="knowledge base"
+              onConfirm={async () => {
+                try {
+                  await apiUpdateBase(
+                    base.id,
+                    { visibility: "public" },
+                    workspaceId,
+                  );
+                  setDisplayedVisibility("public");
+                  toast({ title: "Knowledge base is now public" });
+                } catch (err) {
+                  reportError(err, "Couldn't publish");
+                }
+              }}
+            />
+          ) : null}
+        </div>
+        <div className="ml-auto flex items-center gap-2">
+          <div className="w-56 hidden md:block">
+            <KnowledgeSearch
+              workspaceId={workspaceId}
+              baseSlug={base.slug}
+              onSelectEntry={(entryId) => setSelectedId(entryId)}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => setSettingsOpen(true)}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-surface-cta text-text-on-cta text-xs font-medium hover:bg-surface-cta/90 transition-colors cursor-pointer"
+          >
+            <Settings size={12} />
+            Settings
+          </button>
+        </div>
+      </div>
+      <div className="pointer-events-auto flex-1 min-h-0">
         <div className="flex h-full">
           <aside className="hidden md:flex w-72 shrink-0 flex-col border-r border-border-subtle">
             <KnowledgeBaseSwitcher
@@ -454,6 +511,24 @@ export function KnowledgeBaseView({
         </div>
       </div>
 
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+        title={`Delete ${deleteTarget?.type === "folder" ? "folder" : "entry"}?`}
+        description={
+          deleteTarget
+            ? `“${deleteTarget.label}” will move to Trash. You can restore it until the trash is purged.`
+            : undefined
+        }
+        confirmLabel="Delete"
+        destructive
+        onConfirm={async () => {
+          if (deleteTarget) await performDelete(deleteTarget);
+        }}
+      />
+
       {moveTarget ? (
         <MoveToDialog
           open={moveTarget !== null}
@@ -474,8 +549,10 @@ export function KnowledgeBaseView({
         workspaceId={workspaceId}
         workspaceSlug={workspaceSlug}
         base={base}
+        folders={folders}
+        onFoldersChanged={refresh}
       />
-    </>
+    </div>
   );
 }
 

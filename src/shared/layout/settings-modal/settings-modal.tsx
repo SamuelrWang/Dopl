@@ -1,19 +1,24 @@
 "use client";
 
-import { CreditCard, Palette, Settings as SettingsIcon, User, Users } from "lucide-react";
+import {
+  CreditCard,
+  Settings as SettingsIcon,
+  User,
+  Users,
+  X,
+} from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { Dialog, DialogContent, DialogTitle } from "@/shared/ui/dialog";
 import { cn } from "@/shared/lib/utils";
 import type { Role } from "@/features/workspaces/types";
 import { AccountSection } from "./sections/account-section";
-import { AppearanceSection } from "./sections/appearance-section";
 import { WorkspaceSection } from "./sections/workspace-section";
 import { MembersSection } from "./sections/members-section";
-import { BillingSection } from "./sections/billing-section";
+import { PlansBilling } from "./sections/plans-billing";
+import { ModalShell } from "./modal-shell";
+import styles from "./settings-modal.module.css";
 
 export type SettingsSection =
   | "account"
-  | "appearance"
   | "workspace"
   | "members"
   | "billing";
@@ -24,19 +29,7 @@ interface NavItem {
   icon: LucideIcon;
 }
 
-interface NavGroup {
-  label: string;
-  items: NavItem[];
-}
-
-const NAV: ReadonlyArray<NavGroup> = [
-  {
-    label: "Account",
-    items: [
-      { id: "account", label: "Account", icon: User },
-      { id: "appearance", label: "Appearance", icon: Palette },
-    ],
-  },
+const NAV: ReadonlyArray<{ label: string; items: NavItem[] }> = [
   {
     label: "Workspace",
     items: [
@@ -45,8 +38,11 @@ const NAV: ReadonlyArray<NavGroup> = [
     ],
   },
   {
-    label: "Access & billing",
-    items: [{ id: "billing", label: "Billing", icon: CreditCard }],
+    label: "Account",
+    items: [
+      { id: "account", label: "Account", icon: User },
+      { id: "billing", label: "Plans & Billing", icon: CreditCard },
+    ],
   },
 ];
 
@@ -63,9 +59,11 @@ interface Props {
 }
 
 /**
- * Notion-style settings modal: grouped left nav + scrolling right pane.
- * Only surfaces sections that have real backing — Account, Workspace
- * (General + image + keys), Members, and Billing.
+ * Settings modal in the new design language: a darkened scrim with a
+ * scaled-down "page" card that fades / pops in. Grouped left nav +
+ * scrolling right pane. The Account / Appearance / General / Members
+ * sections are reused as-is (rendered light via the module's token scope);
+ * Plans & Billing is the new cloned billing layout.
  */
 export function SettingsModal({
   open,
@@ -79,60 +77,58 @@ export function SettingsModal({
   onWorkspaceChanged,
 }: Props) {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex sm:max-w-3xl h-[80vh] p-0 gap-0 bg-modal-surface border-border-strong overflow-hidden">
-        <DialogTitle className="sr-only">Settings</DialogTitle>
-        <div className="flex h-full w-full">
-          <nav className="w-52 shrink-0 border-r border-border-default bg-surface-raised-1 p-3 overflow-y-auto">
-            {NAV.map((group) => (
-              <div key={group.label} className="mb-4">
-                <p className="px-2 mb-1 text-[10px] uppercase tracking-wider text-text-muted">
-                  {group.label}
-                </p>
-                {group.items.map((item) => {
-                  const Icon = item.icon;
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => onSectionChange(item.id)}
-                      className={cn(
-                        "w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md text-sm transition-colors cursor-pointer",
-                        section === item.id
-                          ? "bg-surface-selected text-text-primary"
-                          : "text-text-tertiary hover:bg-surface-raised-2 hover:text-text-primary",
-                      )}
-                    >
-                      <Icon size={15} className="shrink-0" />
-                      <span>{item.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            ))}
-          </nav>
+    <ModalShell open={open} onClose={() => onOpenChange(false)} label="Settings">
+      <button
+        type="button"
+        className={styles.close}
+        onClick={() => onOpenChange(false)}
+        aria-label="Close settings"
+      >
+        <X size={18} />
+      </button>
 
-          <div className="flex-1 min-w-0 overflow-y-auto p-6">
-            {section === "account" && <AccountSection />}
-            {section === "appearance" && <AppearanceSection />}
-            {section === "workspace" && (
-              <WorkspaceSection
-                workspaceSegment={workspaceSegment}
-                onWorkspaceChanged={onWorkspaceChanged}
-              />
-            )}
-            {section === "members" && (
-              <MembersSection
-                workspaceSegment={workspaceSegment}
-                workspaceId={workspaceId}
-                currentUserId={currentUserId}
-                role={role}
-              />
-            )}
-            {section === "billing" && <BillingSection />}
+      <nav className={styles.nav}>
+        {NAV.map((group) => (
+          <div key={group.label} className={styles.navGroup}>
+            <p className={styles.navGroupLabel}>{group.label}</p>
+            {group.items.map((item) => {
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => onSectionChange(item.id)}
+                  className={cn(styles.navItem, section === item.id && styles.navActive)}
+                >
+                  <Icon size={18} strokeWidth={1.8} />
+                  {item.label}
+                </button>
+              );
+            })}
           </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+        ))}
+        <div className={styles.navFoot}>Dopl</div>
+      </nav>
+
+      <div className={styles.pane}>
+        {section === "account" && <AccountSection />}
+        {section === "workspace" && (
+          <WorkspaceSection
+            workspaceSegment={workspaceSegment}
+            onWorkspaceChanged={onWorkspaceChanged}
+          />
+        )}
+        {section === "members" && (
+          <MembersSection
+            workspaceSegment={workspaceSegment}
+            workspaceId={workspaceId}
+            currentUserId={currentUserId}
+            role={role}
+          />
+        )}
+        {section === "billing" && <PlansBilling />}
+      </div>
+    </ModalShell>
   );
 }
+

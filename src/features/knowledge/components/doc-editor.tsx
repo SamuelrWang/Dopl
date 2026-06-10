@@ -166,7 +166,7 @@ export function DocEditor({ initialMarkdown, resetKey, onChange, readOnly }: Pro
     >
       <Toolbar editor={editor} />
       <div
-        className="max-w-3xl px-6 pb-28 min-h-[60vh] cursor-text"
+        className="mx-auto w-full max-w-3xl px-6 pb-28 min-h-[60vh] cursor-text"
         onClick={(e) => {
           if (readOnly) return;
           // Only fire when the click landed on this wrapper (not on

@@ -598,7 +598,7 @@ export function SkillView({
         }
       />
 
-      <div className="h-full">
+      <div className="flex-1 min-h-0">
         <div className="h-full overflow-hidden flex">
           {/* Main column */}
           <div className="flex-1 min-w-0 flex flex-col">

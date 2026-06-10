@@ -59,6 +59,15 @@ function toApiError(err: unknown): KnowledgeApiError {
 }
 
 /**
+ * Last successful result per cache key. Survives unmount/remount so
+ * route navigations within the knowledge area re-render instantly with
+ * the previous data while a background refetch revalidates
+ * (stale-while-revalidate). Keys already namespace by workspace/base,
+ * so nothing leaks across contexts.
+ */
+const memoryCache = new Map<string, unknown>();
+
+/**
  * Generic loader hook. Reuses the cancellation + state pattern across
  * every hook below.
  *
@@ -89,11 +98,18 @@ function useFetch<T>(
   const initialKeyRef = useRef(options?.initialKey);
   const seedConsumedRef = useRef(false);
 
-  const [data, setData] = useState<T | null>(
-    initialDataRef.current !== undefined && initialKeyRef.current === key
-      ? initialDataRef.current
-      : null
-  );
+  const [data, setData] = useState<T | null>(() => {
+    if (
+      initialDataRef.current !== undefined &&
+      initialKeyRef.current === key
+    ) {
+      return initialDataRef.current;
+    }
+    // Warm-start from the last successful fetch for this key (route
+    // remounts) — the effect below still revalidates in the background.
+    if (key && memoryCache.has(key)) return memoryCache.get(key) as T;
+    return null;
+  });
   const [error, setError] = useState<KnowledgeApiError | null>(null);
   // Bump to force a refetch.
   const [tick, setTick] = useState(0);
@@ -109,7 +125,7 @@ function useFetch<T>(
   const lastKeyRef = useRef(key);
   if (lastKeyRef.current !== key) {
     lastKeyRef.current = key;
-    setData(null);
+    setData(key && memoryCache.has(key) ? (memoryCache.get(key) as T) : null);
     setError(null);
   }
   // Hold the latest loader in a ref so the in-flight effect always
@@ -130,6 +146,7 @@ function useFetch<T>(
       initialKeyRef.current === key
     ) {
       seedConsumedRef.current = true;
+      memoryCache.set(key, initialDataRef.current);
       return;
     }
     let cancelled = false;
@@ -137,6 +154,7 @@ function useFetch<T>(
       .current()
       .then((next) => {
         if (cancelled) return;
+        memoryCache.set(key, next);
         setError(null);
         setData(next);
       })

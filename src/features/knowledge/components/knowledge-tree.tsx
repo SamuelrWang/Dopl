@@ -95,6 +95,10 @@ interface InlineEditCtxValue {
   commitRename: (item: ContextMenuItem, name: string) => Promise<void>;
   cancelStub: (item: ContextMenuItem) => Promise<void>;
   clearEditing: () => void;
+  /** Exit edit mode without committing (blur with unchanged text). Keeps
+   *  the row's current name and drops any stub mark so a later rename's
+   *  Escape can't delete a row the user decided to keep. */
+  exitEdit: (id: string) => void;
   /** Read from the access provider — gates write affordances inside
    *  the tree (FolderRowActions create buttons, AddRowAffordance). */
   canEdit: boolean;
@@ -178,6 +182,15 @@ export function KnowledgeTree({
         });
       },
       clearEditing: () => {
+        onClearEditing();
+      },
+      exitEdit: (id: string) => {
+        setStubIds((prev) => {
+          if (!prev.has(id)) return prev;
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
         onClearEditing();
       },
       canEdit,
@@ -461,6 +474,7 @@ function FolderRow({
             ? "bg-violet-500/[0.08] text-text-primary"
             : "text-text-secondary hover:bg-surface-raised-2 hover:text-text-primary"
         )}
+        onClick={isEditing ? undefined : onToggle}
         onContextMenu={(e) => openMenu(e, ctxItem)}
         {...(isEditing ? {} : drag.listeners)}
         {...(isEditing ? {} : drag.attributes)}
@@ -473,7 +487,7 @@ function FolderRow({
             e.stopPropagation();
             onToggle();
           }}
-          className="shrink-0 w-4 h-4 rounded flex items-center justify-center hover:bg-surface-raised-3"
+          className="shrink-0 w-4 h-4 rounded flex items-center justify-center hover:bg-surface-raised-3 cursor-pointer"
         >
           {isOpen ? (
             <ChevronDown size={11} className="text-text-secondary/70" />
@@ -504,6 +518,7 @@ function FolderRow({
                   }
                 : () => inline.clearEditing()
             }
+            onExit={() => inline.exitEdit(folder.id)}
             className="flex-1"
           />
         ) : (
@@ -563,7 +578,7 @@ function FolderRowActions({
                 setBusy(false);
               }
             }}
-            className="w-5 h-5 rounded flex items-center justify-center hover:bg-surface-raised-3 disabled:opacity-50 disabled:cursor-default"
+            className="w-5 h-5 rounded flex items-center justify-center hover:bg-surface-raised-3 cursor-pointer disabled:opacity-50 disabled:cursor-default"
           >
             <Plus size={10} className="text-text-secondary/70" />
           </button>
@@ -585,7 +600,7 @@ function FolderRowActions({
                 setBusy(false);
               }
             }}
-            className="w-5 h-5 rounded flex items-center justify-center hover:bg-surface-raised-3 disabled:opacity-50 disabled:cursor-default"
+            className="w-5 h-5 rounded flex items-center justify-center hover:bg-surface-raised-3 cursor-pointer disabled:opacity-50 disabled:cursor-default"
           >
             <Folder size={10} className="text-text-secondary/70" />
           </button>
@@ -599,7 +614,7 @@ function FolderRowActions({
           e.stopPropagation();
           onMore(e);
         }}
-        className="w-5 h-5 rounded flex items-center justify-center hover:bg-surface-raised-3"
+        className="w-5 h-5 rounded flex items-center justify-center hover:bg-surface-raised-3 cursor-pointer"
       >
         <MoreHorizontal size={10} className="text-text-secondary/70" />
       </button>
@@ -675,6 +690,7 @@ function EntryRow({ entry, depth, isSelected, onSelect, openMenu }: EntryRowProp
                 }
               : () => inline.clearEditing()
           }
+          onExit={() => inline.exitEdit(entry.id)}
           className="flex-1"
         />
       ) : (

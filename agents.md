@@ -150,40 +150,21 @@ Progress is streamed live to the frontend via SSE at `/api/ingest/{id}/stream`.
 
 ## API Authentication
 
-External API consumers (MCP clients, third-party apps) authenticate with API keys:
-- Keys are prefixed with `sk-dopl-` and stored as SHA-256 hashes in the `api_keys` table
-- Pass via `Authorization: Bearer sk-dopl-...` header
-- Rate limited per key (default 60 req/min)
-- The web frontend's own requests (same-origin) pass through without auth
-
-**Admin key management** (requires `ADMIN_SECRET` env var):
-- `POST /api/admin/keys` — create key (returns plaintext once)
-- `GET /api/admin/keys` — list keys (prefix/name/dates only)
-- `DELETE /api/admin/keys/{id}` — revoke key
-
-**Protected routes** (require API key for external access):
-- `POST /api/query`, `POST /api/build`, `POST /api/ingest`, `GET /api/entries/{id}/download`
-
-**Public routes** (no auth needed):
-- `GET /api/entries`, `GET /api/entries/{id}`, `GET /api/tags`, `GET /api/github/contents`
+External API consumers (MCP clients) authenticate via OAuth, not API keys:
+- The remote MCP endpoint (`/api/mcp`) issues a `WWW-Authenticate` challenge; clients discover the OAuth server (`/api/oauth/**` + `.well-known` metadata) and run a browser sign-in (PKCE), receiving a `dopl_at_` access token.
+- The token is passed via `Authorization: Bearer dopl_at_...`. The in-app MCP server forwards it to loopback `/api/*` calls.
+- The web frontend's own requests (same-origin session cookies) pass through without a bearer.
+- There are no `sk-dopl-` API keys.
 
 ## MCP Server
 
-The `packages/mcp-server/` directory contains an MCP server that wraps the Dopl API. Install it in Claude Code:
+The `packages/mcp-server/` package is the in-process MCP engine, booted by the app's `/api/mcp` route via `@dopl/mcp-server/factory`. Users connect to it as a remote, OAuth-authenticated HTTP server — nothing is installed locally:
 
-```json
-{
-  "mcpServers": {
-    "dopl": {
-      "command": "npx",
-      "args": ["@dopl/mcp-server", "--api-key", "sk-dopl-xxxxx"],
-      "env": { "DOPL_BASE_URL": "https://your-site.vercel.app" }
-    }
-  }
-}
+```sh
+claude mcp add --transport http dopl https://www.usedopl.com/api/mcp
 ```
 
-Tools: `search_setups`, `get_setup`, `build_solution`, `list_setups`.
+Or add the URL `https://www.usedopl.com/api/mcp` as an HTTP MCP server in Claude Desktop, Claude.ai ("Add custom connector"), or Cursor. A browser opens once to sign in.
 
 ## Design System
 

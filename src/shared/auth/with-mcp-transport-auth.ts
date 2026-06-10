@@ -1,24 +1,18 @@
 import "server-only";
-import {
-  validateApiKey,
-  touchMcpStatus,
-  checkAndRecordRateLimitSubject,
-} from "./api-keys";
+import { touchMcpStatus, checkAndRecordRateLimitSubject } from "./mcp-session";
 import { isOAuthAccessToken, validateAccessToken } from "./mcp-oauth";
 
-// Per-token request ceiling for OAuth callers at the /api/mcp boundary. API
-// keys are rate-limited at the loopback /api/* layer (by key id); OAuth tokens
-// aren't (their loopback calls skip it to avoid double-counting), so they're
-// limited here instead. Generous by default — agents are bursty — but caps
-// runaway abuse. Override via env.
+// Per-token request ceiling for OAuth callers at the /api/mcp boundary.
+// Generous by default — agents are bursty — but caps runaway abuse. The
+// loopback /api/* calls skip rate limiting to avoid double-counting, so the
+// ceiling is enforced here. Override via env.
 const OAUTH_RPM = Number(process.env.MCP_OAUTH_RATE_LIMIT_RPM) || 600;
 
 /**
  * Authentication for the remote MCP transport boundary (`/api/mcp`).
  *
- * Stage 2: bearer API key (`sk-dopl-...`). Stage 3 (OAuth) extends
- * `authenticateMcpRequest` to ALSO accept OAuth access tokens (via
- * `mcp-oauth.ts`) without changing the route.
+ * Accepts an OAuth access token (the "Connect → log in" flow) via
+ * `mcp-oauth.ts`. This is the only credential — there is no API-key path.
  *
  * This is intentionally distinct from `withMcpAccess` / `withWorkspaceAuth`:
  * those run the heavy gating (paywall, rate limit, per-resource
@@ -34,14 +28,14 @@ export interface McpAuthContext {
   /** Raw credential to forward to the loopback DoplClient (Authorization: Bearer). */
   credential: string;
   userId: string;
-  /** Present for API-key callers; absent for OAuth-token callers. */
-  apiKeyId?: string;
-  /** Workspace the key is locked to (workspace-scoped key), else null. */
+  /**
+   * Workspace this session is locked to, else null. Always null for OAuth
+   * callers (they target any workspace via `x-workspace-id` / `set_workspace`).
+   */
   apiKeyWorkspaceId: string | null;
   /**
-   * OAuth scopes for this session (e.g. ["dopl.read","dopl.write"]). Undefined
-   * for API-key callers ⇒ full access. Passed into bootServer to gate
-   * write/admin tool registration.
+   * OAuth scopes for this session (e.g. ["dopl.read","dopl.write"]). Passed
+   * into bootServer to gate write/admin tool registration.
    */
   scopes?: string[];
 }
@@ -56,45 +50,27 @@ export async function authenticateMcpRequest(
   const header = request.headers.get("authorization");
   const key = header?.replace(/^Bearer\s+/i, "").trim();
 
-  if (key) {
-    // OAuth access token (remote "Connect → log in" flow).
-    if (isOAuthAccessToken(key)) {
-      const tok = await validateAccessToken(key);
-      if (tok) {
-        const within = await checkAndRecordRateLimitSubject(
-          `mcp:${tok.tokenId}`,
-          OAUTH_RPM,
-          "POST /api/mcp",
-        );
-        if (!within) return { ok: false, response: rateLimited() };
-        touchMcpStatus(tok.userId);
-        return {
-          ok: true,
-          auth: {
-            credential: key,
-            userId: tok.userId,
-            apiKeyWorkspaceId: null,
-            scopes: tok.scopes,
-          },
-        };
-      }
-    } else {
-      // Bearer API key (`sk-dopl-...`). Service keys (user_id null) can't map
-      // to an MCP user session.
-      const record = await validateApiKey(key);
-      if (record?.user_id) {
-        // Debounced internally — flips the settings "MCP connected" card.
-        touchMcpStatus(record.user_id);
-        return {
-          ok: true,
-          auth: {
-            credential: key,
-            userId: record.user_id,
-            apiKeyId: record.id,
-            apiKeyWorkspaceId: record.workspace_id,
-          },
-        };
-      }
+  // OAuth access token (remote "Connect → log in" flow) — the only credential.
+  if (key && isOAuthAccessToken(key)) {
+    const tok = await validateAccessToken(key);
+    if (tok) {
+      const within = await checkAndRecordRateLimitSubject(
+        `mcp:${tok.tokenId}`,
+        OAUTH_RPM,
+        "POST /api/mcp",
+      );
+      if (!within) return { ok: false, response: rateLimited() };
+      // Debounced internally — flips the settings "MCP connected" card.
+      touchMcpStatus(tok.userId);
+      return {
+        ok: true,
+        auth: {
+          credential: key,
+          userId: tok.userId,
+          apiKeyWorkspaceId: null,
+          scopes: tok.scopes,
+        },
+      };
     }
   }
 

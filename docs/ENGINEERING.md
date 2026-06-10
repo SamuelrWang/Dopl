@@ -27,11 +27,10 @@ Client-side data fetching uses `useEffect + fetch + useState` (e.g. `useWorkspac
 ```
 setup-intelligence-engine/
 ├── docs/                          # This file, ADRs, runbooks
-├── packages/
+├── packages/                      # Internal workspace libs (not published to npm)
 │   ├── chrome-extension/          # Browser extension (webpack build)
-│   ├── cli/                       # `dopl` CLI (shell companion; consumes @dopl/client)
 │   ├── dopl-client/               # @dopl/client — shared HTTP client + types
-│   └── mcp-server/                # MCP server (consumes @dopl/client)
+│   └── mcp-server/                # In-process MCP engine; booted by /api/mcp via @dopl/mcp-server/factory
 ├── public/                        # Static assets
 ├── scripts/                       # One-off ops scripts (tsx-run)
 ├── supabase/
@@ -57,6 +56,7 @@ setup-intelligence-engine/
 │   │   ├── ui/                    # shadcn primitives (Button, Dialog, etc.)
 │   │   ├── design/                # Higher-level design components (MarkdownMessage, Orb, ...)
 │   │   ├── layout/                # Shells + headers + sidebars
+│   │   │   └── app-shell/         # NEW-DESIGN chrome: AppShell (workspace rail + sidebar + titlebar) + AppPanel (white panel with the light token scope). Mounted once by src/app/[workspaceSlug]/(app)/layout.tsx; every named workspace sub-page (overview/chat/knowledge/skills/members/settings) renders inside an AppPanel. Canvas + non-workspace routes keep the legacy layout-shell chrome until converted. Dark/light toggle removed — use-theme is a fixed-dark shim.
 │   │   ├── lib/                   # Pure utilities (ai, github, slug, utils, http-error)
 │   │   ├── prompts/               # Claude prompt templates
 │   │   ├── hooks/                 # Generic hooks
@@ -326,7 +326,7 @@ export const POST = withUserAuth(async (req, { userId }) => {
 });
 ```
 
-The route handler is **thin**. All logic is in `service.ts`. `withUserAuth` injects `userId`, handles both session-cookie and `sk-dopl-*` API-key paths, rate-limits API keys, and logs 5xx responses to the system-events telemetry table.
+The route handler is **thin**. All logic is in `service.ts`. `withUserAuth` injects `userId`, handles both the session-cookie path and the remote-MCP OAuth-token path (`dopl_at_`), and logs 5xx responses to the system-events telemetry table.
 
 ### DTO mapping
 
@@ -388,13 +388,13 @@ export const POST = withUserAuth(async (req, { userId }) => {
 
 All auth wrappers live in `src/shared/auth/with-auth.ts`:
 
-- `withExternalAuth(handler)` — API-key OR session; 401 if neither.
+- `withExternalAuth(handler)` — remote-MCP OAuth token OR session; 401 if neither.
 - `withUserAuth(handler)` — same, plus injects `userId` into the handler context.
 - `withSubscriptionAuth(handler)` — also resolves the user's subscription tier.
 - `withMcpAccess(action, handler)` — gates MCP calls by trial/paid status, logs analytics. Alias `withMcpCredits` exists pending cleanup.
 - `withAdminAuth(handler)` — requires `ADMIN_USER_ID` env var match.
 
-They handle: Bearer `sk-dopl-*` API-key validation, Supabase session cookies, rate limiting, and automatic 5xx system-event logging.
+They handle: Bearer OAuth access tokens (`dopl_at_`, validated via `mcp-oauth.ts`), Supabase session cookies, OAuth-subject rate limiting, and automatic 5xx system-event logging.
 
 ### Shared API helpers
 

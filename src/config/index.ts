@@ -32,9 +32,6 @@ export const ALLOWED_CHAT_ATTACHMENT_TYPES = [
   "application/json",
 ] as const;
 
-// ── Auth ────────────────────────────────────────────────────────────
-export const API_KEY_PREFIX = "sk-dopl-";
-
 // ── Context budgets ─────────────────────────────────────────────────
 export const CONTEXT_CHAR_BUDGET_PER_FIELD = 2000;
 

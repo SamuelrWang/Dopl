@@ -47,14 +47,8 @@ jobs:
       - name: Build @dopl/mcp-server
         run: npm run build -w @dopl/mcp-server
 
-      - name: Build @dopl/cli
-        run: npm run build -w @dopl/cli
-
       - name: Test @dopl/client
         run: npm test -w @dopl/client
-
-      - name: Test @dopl/cli
-        run: npm test -w @dopl/cli
 
   size-check:
     name: file size cap (500 lines)

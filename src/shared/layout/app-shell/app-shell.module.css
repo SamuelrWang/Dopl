@@ -1,0 +1,435 @@
+/*
+ * Scoped, fixed-colorway preview for the Knowledge landing page.
+ * Ported from the "Transforms" mockup. Deliberately self-contained and
+ * isolated from the global dark/light token system so it can be previewed
+ * without touching the canvas colorway or the rest of the app. When this
+ * design language is rolled out site-wide, promote these into the global
+ * tokens. Fonts reference the already-loaded globals:
+ *   --font-geist-sans  = Hanken Grotesk
+ *   --font-playfair    = Newsreader
+ */
+
+.root {
+  --bg: #d6dee7;
+  --panel: #f5f7fa;
+  --sidebar: #d6dee7;
+  --ink: #232a31;
+  --ink-soft: #646d78;
+  --ink-faint: #98a2ad;
+  --line: #d6dde5;
+  --line-soft: #dce3ea;
+  --active: #d9e1e9;
+  --purple: #6f93bf;
+  --lavender: #e3eaf2;
+  --orange: #d8bca6;
+  --black: #1c2127;
+  --rail: #2c3640;
+  --rail-tile: #3a4651;
+  --rail-tile-hi: #46535f;
+
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: var(--rail);
+  color: var(--ink);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.root *, .root *::before, .root *::after { box-sizing: border-box; }
+
+.serif { font-family: var(--font-playfair), Georgia, serif; }
+
+/* ---------- Titlebar ---------- */
+.titlebar {
+  height: 40px;
+  flex: 0 0 40px;
+  display: flex;
+  align-items: center;
+  padding: 0 22px 0 18px;
+}
+.titlebar .spacer { flex: 1; }
+.topIcons { display: flex; align-items: center; gap: 22px; color: #aab6c2; }
+.topIcons button { background: none; border: none; color: inherit; cursor: pointer; display: flex; padding: 0; }
+
+/* ---------- Body layout ---------- */
+.body { flex: 1; display: flex; min-height: 0; }
+
+/* ---------- Workspace rail (far left) ---------- */
+.rail {
+  width: 74px;
+  flex: 0 0 74px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 13px;
+  padding: 6px 0 16px;
+}
+.wsTile {
+  position: relative;
+  width: 46px;
+  height: 46px;
+  border-radius: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  background: var(--rail-tile);
+  color: #cdd6df;
+  overflow: hidden;
+  text-decoration: none;
+  transition: border-radius 0.16s ease, background 0.16s ease;
+}
+.wsTile:not(.wsActive):hover { border-radius: 13px; background: var(--rail-tile-hi); }
+/* Selected workspace: a detached border ring (gap rendered in the rail
+   color, then a light hairline) instead of a solid fill — matches the
+   reference rail's outlined-tile treatment. */
+.wsActive {
+  box-shadow: 0 0 0 2px var(--rail), 0 0 0 4px rgba(233, 238, 243, 0.7);
+}
+.wsTile img { width: 100%; height: 100%; object-fit: cover; }
+.wsLetter { font-family: var(--font-playfair), serif; font-size: 21px; font-weight: 500; }
+.wsAdd {
+  width: 46px;
+  height: 46px;
+  border-radius: 15px;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  background: var(--rail-tile);
+  color: #9fb0bd;
+  text-decoration: none;
+  transition: border-radius 0.16s ease, background 0.16s ease, color 0.16s ease;
+}
+.wsAdd:hover { border-radius: 13px; background: var(--rail-tile-hi); color: #dce4eb; }
+.railSpacer { flex: 1; }
+.wsMe {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  background: var(--black);
+  color: #e9eef3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-playfair), serif;
+  font-size: 18px;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+/* ---------- Surface (rounded panel group) ---------- */
+.surface {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  border-radius: 18px;
+  overflow: hidden;
+  margin: 5px 6px 6px 4px;
+  background: var(--sidebar);
+}
+
+/* ---------- Sidebar ---------- */
+.sidebar {
+  width: 204px;
+  flex: 0 0 204px;
+  background: var(--sidebar);
+  padding: 8px 12px 20px 12px;
+  display: flex;
+  flex-direction: column;
+}
+.brand { display: flex; align-items: center; padding: 6px 4px 0; margin-bottom: 28px; }
+.brandName {
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nav { display: flex; flex-direction: column; gap: 3px; }
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 9px 10px;
+  border-radius: 11px;
+  color: #3a414a;
+  font-size: 16px;
+  font-weight: 500;
+  text-decoration: none;
+}
+.navItem svg { flex: 0 0 auto; color: #474f59; }
+.navItem.navActive { background: var(--black); color: #fff; }
+.navItem.navActive svg { color: #fff; }
+.navItem:not(.navActive):hover { background: #dce3ea; }
+
+.wordsCard {
+  margin-top: auto;
+  background: var(--lavender);
+  border-radius: 16px;
+  padding: 18px;
+}
+.wcTitle { font-size: 16px; font-weight: 600; margin-bottom: 9px; letter-spacing: -0.01em; }
+.wcTitle b { color: var(--purple); font-weight: 700; }
+.wcDesc { font-size: 13.5px; color: var(--ink-soft); line-height: 1.45; margin-bottom: 16px; }
+.upgradeBtn {
+  display: block;
+  width: 100%;
+  text-align: center;
+  background: var(--black);
+  color: #fff;
+  border: none;
+  border-radius: 11px;
+  padding: 11px 0;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.foot { margin-top: 18px; display: flex; flex-direction: column; gap: 4px; }
+.footItem {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 9px 10px;
+  color: #474f59;
+  font-size: 15.5px;
+  font-weight: 500;
+  text-decoration: none;
+  border-radius: 11px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+}
+.footItem:hover { background: #dce3ea; }
+.footItem svg { color: #474f59; }
+
+/* ---------- Main panel ---------- */
+.main {
+  flex: 1;
+  min-width: 0;
+  background: var(--panel);
+  border-top-left-radius: 22px;
+  padding: 34px 0 0 38px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.scroll { flex: 1; overflow-y: auto; padding-right: 38px; padding-bottom: 40px; }
+.scroll::-webkit-scrollbar { width: 0; }
+
+.head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; gap: 20px; }
+.title { display: flex; align-items: center; gap: 14px; }
+.title h1 { font-size: 30px; font-weight: 600; letter-spacing: -0.02em; }
+.tag {
+  background: var(--black);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 9px;
+  letter-spacing: -0.01em;
+}
+
+/* hero */
+.hero {
+  position: relative;
+  border-radius: 20px;
+  overflow: hidden;
+  color: #fff;
+  min-height: 320px;
+  margin-bottom: 42px;
+  background: linear-gradient(118deg, #3b4f5e 0%, #414c52 30%, #4a4138 62%, #251d15 100%);
+  display: flex;
+}
+.heroBlobs { position: absolute; inset: 0; z-index: 1; filter: blur(2px); }
+.heroBlobs span {
+  position: absolute;
+  border-radius: 24%;
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 6px 30px rgba(0, 0, 0, 0.25);
+}
+.heroInner { position: relative; z-index: 2; padding: 48px 50px; max-width: 62%; }
+.hero h2 {
+  font-family: var(--font-playfair), serif;
+  font-weight: 400;
+  font-size: 38px;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  margin-bottom: 16px;
+}
+.hero p { font-size: 18px; line-height: 1.45; color: #e2e8ed; margin-bottom: 28px; max-width: 440px; }
+.heroActions { display: flex; align-items: center; gap: 28px; }
+.tryit {
+  background: #e5d6ce;
+  color: #232a31;
+  border: none;
+  border-radius: 12px;
+  padding: 13px 28px;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.howit { color: #fff; font-size: 16px; font-weight: 600; text-decoration: none; cursor: pointer; }
+
+/* section head */
+.sectionHead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 26px; gap: 20px; }
+.sectionTitle {
+  font-family: var(--font-playfair), serif;
+  font-size: 32px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: #1e242b;
+}
+.createNew {
+  background: var(--black);
+  color: #fff;
+  border: none;
+  border-radius: 11px;
+  padding: 12px 24px;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* cards */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 26px;
+  max-width: 1160px;
+}
+@media (max-width: 1100px) { .cards { grid-template-columns: repeat(2, 1fr); } }
+.card {
+  border: 1.5px solid var(--line);
+  border-radius: 18px;
+  background: #f6f8fb;
+  padding: 24px 26px;
+  min-height: 250px;
+  display: flex;
+  flex-direction: column;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.14s ease, background 0.14s ease, transform 0.14s ease;
+}
+.card:hover { border-color: #b9c6d3; background: #fdfefe; transform: translateY(-2px); }
+.card h3 { font-size: 21px; font-weight: 700; letter-spacing: -0.01em; color: #1e242b; margin: 0 0 10px; }
+.cardDesc { font-size: 16px; line-height: 1.4; color: var(--ink-soft); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.cardMeta {
+  margin-top: auto;
+  padding-top: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-faint);
+}
+
+.cardNew {
+  border-style: dashed;
+  border-color: #c4cfda;
+  background: #f2f5f9;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.cardNew:hover { background: #eef2f7; transform: none; }
+.plus {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #dce3ea;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #646d78;
+  margin-bottom: 16px;
+}
+
+.empty { font-size: 16px; color: var(--ink-soft); padding: 8px 0 30px; }
+
+/* ---------- KB detail panel ----------
+   White main panel hosting the existing KnowledgeBaseView (tree + doc
+   pane). No padding — the view fills the panel edge-to-edge and draws
+   its own in-panel header. */
+.mainDetail {
+  flex: 1;
+  min-width: 0;
+  background: #fbfcfd;
+  border-top-left-radius: 22px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: var(--text-primary);
+}
+
+/* Light semantic-token scope for embedded token-based components
+   (the KB tree, doc pane, editor, search). Mirrors the `html.light`
+   block in globals.css so the existing dark-first components render
+   light inside the new shell while the app html stays `.dark`.
+   Duplicated in settings-modal.module.css — promote to a shared layer
+   when the design language rolls out site-wide. */
+.lightScope {
+  color-scheme: light;
+  --bg-base: #f5f7fa;
+  --bg-elevated: #fbfcfd;
+  --bg-elevated-hover: #f1f4f7;
+  --bg-inset: #eef1f5;
+  --bg-inset-hover: #e6ebf0;
+  --bg-overlay: #fefefe;
+  --panel-surface: #fbfcfd;
+  --panel-surface-focus: #ffffff;
+  --input-surface: #f1f4f7;
+  --input-surface-focus: #ffffff;
+  --card-surface: #fefefe;
+  --card-surface-elevated: #ffffff;
+  --card-surface-subtle: #f4f6f9;
+  --modal-surface: #fefefe;
+  --border-subtle: oklch(0 0 0 / 6%);
+  --border-default: oklch(0 0 0 / 8%);
+  --border-strong: oklch(0 0 0 / 12%);
+  --border-highlight: oklch(0 0 0 / 16%);
+  --text-primary: #232a31;
+  --text-secondary: #646d78;
+  --text-tertiary: #7c858f;
+  --text-muted: #98a2ad;
+  --text-disabled: #c4cad1;
+  --accent-primary: #3e3a3b;
+  --accent-on: #fefefe;
+  --link: #2f6fed;
+  --success: oklch(0.55 0.15 155);
+  --warning: oklch(0.62 0.13 75);
+  --danger: oklch(0.55 0.22 25);
+  --surface-raised-1: oklch(0 0 0 / 2%);
+  --surface-raised-2: oklch(0 0 0 / 3.5%);
+  --surface-raised-3: oklch(0 0 0 / 5%);
+  --surface-raised-4: oklch(0 0 0 / 7%);
+  --surface-selected: oklch(0 0 0 / 8%);
+  --surface-invert: #1c2127;
+  --text-on-invert: #ffffff;
+  --surface-cta: #1c2127;
+  --text-on-cta: #ffffff;
+  --border-active: #3e3a3b;
+  --agent-on: oklch(0.52 0.14 162);
+  --scrim: oklch(0 0 0 / 40%);
+}

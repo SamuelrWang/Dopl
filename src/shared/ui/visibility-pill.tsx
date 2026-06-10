@@ -15,6 +15,7 @@
 import { useState } from "react";
 import { Lock, Globe } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
+import { ConfirmDialog } from "./confirm-dialog";
 
 export type Visibility = "public" | "private";
 
@@ -71,43 +72,42 @@ interface MakePublicProps {
  *
  * Once-public-stays-public is the M-10 product rule: there is no
  * server path to flip back, so the confirmation copy is explicit
- * about that. Native `confirm()` keeps the dependency surface zero;
- * we can swap for a styled modal once one exists in shared/ui.
+ * about that. Confirmation runs through the shared in-app
+ * ConfirmDialog (new design language), not window.confirm.
  */
 export function MakePublicAction({
   resourceType,
   onConfirm,
   className,
 }: MakePublicProps) {
-  const [busy, setBusy] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   return (
-    <button
-      type="button"
-      disabled={busy}
-      onClick={async () => {
-        const ok = window.confirm(
-          `Make this ${resourceType} public?\n\n` +
-            `Every member of this workspace will be able to see it. ` +
-            `This is irreversible — once public, ${resourceType}s cannot be made private again.`,
-        );
-        if (!ok) return;
-        setBusy(true);
-        try {
-          await onConfirm();
-        } finally {
-          setBusy(false);
+    <>
+      <button
+        type="button"
+        onClick={() => setConfirmOpen(true)}
+        title={`Make this ${resourceType} visible to every workspace member. Cannot be undone.`}
+        className={cn(
+          "inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors",
+          "border-border-strong bg-surface-raised-2 text-text-secondary hover:bg-surface-raised-4 hover:text-text-primary",
+          "cursor-pointer",
+          className,
+        )}
+      >
+        <Globe size={9} />
+        Make public
+      </button>
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title={`Make this ${resourceType} public?`}
+        description={
+          `Every member of this workspace will be able to see it. ` +
+          `This is irreversible — once public, ${resourceType}s cannot be made private again.`
         }
-      }}
-      title={`Make this ${resourceType} visible to every workspace member. Cannot be undone.`}
-      className={cn(
-        "inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors",
-        "border-border-strong bg-surface-raised-2 text-text-secondary hover:bg-surface-raised-4 hover:text-text-primary",
-        "disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer",
-        className,
-      )}
-    >
-      <Globe size={9} />
-      {busy ? "Publishing…" : "Make public"}
-    </button>
+        confirmLabel="Make public"
+        onConfirm={onConfirm}
+      />
+    </>
   );
 }

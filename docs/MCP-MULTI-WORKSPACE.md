@@ -79,6 +79,12 @@ Goal: one MCP server instance can serve all workspaces the user has access to, w
 
 ## M-6 — `dopl mcp config` CLI subcommand
 
+> **REMOVED 2026-06-09.** The npx/stdio + API-key install path (the `@dopl/cli`
+> package, the stdio `@dopl/mcp-server` binary, and `sk-dopl-` keys) was fully
+> removed in favor of the remote, OAuth-authenticated MCP server at `/api/mcp`.
+> There is no longer a `dopl mcp config` command. This section is retained for
+> historical context only. Archived code: `~/Desktop/dopl-artifacts/mcp-npx-apikey-install/`.
+
 **Why:** Even after the single-instance refactor, users still need a one-line copy-paste to set up their `mcp.json`. Today the only example is in `--help` output ([packages/mcp-server/src/index.ts:45-57](packages/mcp-server/src/index.ts)).
 
 **Shape:**

@@ -20,7 +20,7 @@ export const KNOWLEDGE_BASE_COLS =
   "id, workspace_id, name, slug, public_id, description, agent_write_enabled, visibility, created_by, created_at, updated_at, deleted_at";
 
 export const KNOWLEDGE_FOLDER_COLS =
-  "id, workspace_id, knowledge_base_id, parent_id, name, position, created_by, created_at, updated_at, deleted_at";
+  "id, workspace_id, knowledge_base_id, parent_id, name, description, position, created_by, created_at, updated_at, deleted_at";
 
 export const KNOWLEDGE_ENTRY_COLS =
   "id, workspace_id, knowledge_base_id, folder_id, title, excerpt, body, entry_type, position, created_by, last_edited_by, last_edited_source, created_at, updated_at, deleted_at";
@@ -55,6 +55,7 @@ export interface KnowledgeFolderRow {
   knowledge_base_id: string;
   parent_id: string | null;
   name: string;
+  description: string | null;
   position: number;
   created_by: string | null;
   created_at: string;
@@ -110,6 +111,7 @@ export function mapFolderRow(row: KnowledgeFolderRow): KnowledgeFolder {
     knowledgeBaseId: row.knowledge_base_id,
     parentId: row.parent_id,
     name: row.name,
+    description: row.description,
     position: row.position,
     createdBy: row.created_by,
     createdAt: row.created_at,

@@ -98,14 +98,13 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} ${playfairDisplay.variable} ${inter.variable} antialiased mosaic-bg min-h-screen`}
       >
-        {/* Pre-hydration: apply the saved theme before first paint so light
-            mode never flashes dark on reload. Forced-dark routes (marketing,
-            auth, legal, docs, design demo) ignore the preference and stay
-            dark. Keep this route list in sync with isForcedDarkPath() in
-            src/shared/hooks/use-theme.ts. */}
+        {/* Pre-hydration: the light-mode toggle was removed with the
+            new-design rollout — legacy surfaces are always dark (the new
+            (app) pages carry their own fixed palette). Pin the class so a
+            stale saved "light" preference can never flash. */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var p=location.pathname;var f=p==='/'||p.indexOf('/docs')===0||p.indexOf('/login')===0||p.indexOf('/pricing')===0||p.indexOf('/privacy')===0||p.indexOf('/terms')===0||p.indexOf('/design')===0;var t=localStorage.getItem('dopl-theme');var e=document.documentElement;if(!f&&t==='light'){e.classList.add('light');e.classList.remove('dark');}else{e.classList.add('dark');e.classList.remove('light');}}catch(e){}})();`,
+            __html: `(function(){try{var e=document.documentElement;e.classList.add('dark');e.classList.remove('light');}catch(e){}})();`,
           }}
         />
         {/* Pre-hydration: strip mosaic-bg before first paint on no-chrome

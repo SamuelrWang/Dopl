@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import type { Role, Workspace } from "@/features/workspaces/types";
 import { WorkspaceSettingsForm } from "@/features/workspaces/components/workspace-settings-form";
-import { ConnectionSetup } from "@/features/api-keys/components/connection-setup";
+import { RemoteConnect } from "@/features/mcp-connect";
 import { WorkspaceIconUploader } from "../workspace-icon-uploader";
 import { SectionShell } from "./section-shell";
 
@@ -15,7 +15,7 @@ interface Props {
 /**
  * Workspace > General. Fetches the full workspace (the switcher only
  * carries a slim slice) and composes the icon uploader, the existing
- * rename/description/delete form, and workspace API keys.
+ * rename/description/delete form, and the MCP connection block.
  */
 export function WorkspaceSection({ workspaceSegment, onWorkspaceChanged }: Props) {
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
@@ -71,7 +71,7 @@ export function WorkspaceSection({ workspaceSegment, onWorkspaceChanged }: Props
         </div>
       )}
       <WorkspaceSettingsForm workspace={workspace} role={role} />
-      <ConnectionSetup workspaceSlug={workspaceSegment} />
+      <RemoteConnect />
     </SectionShell>
   );
 }

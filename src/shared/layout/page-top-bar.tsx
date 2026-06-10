@@ -18,21 +18,17 @@ interface Props {
 }
 
 /**
- * Slim 52px chrome bar pinned to the top of the main content area
- * (right of the sidebar). Its bottom border aligns with the sidebar
- * header's bottom border to form one continuous horizontal line across
- * the viewport — same shape as Attio / Linear / Basepoint.
- *
- * Pages that render this should add `pt-[68px]` (52px bar + ~16px
- * breathing room) to their content wrapper so it isn't hidden behind
- * the bar. The bar is `fixed`, so it sits above scrolling content.
+ * Slim 52px header bar at the top of a page's content panel. In-flow
+ * (NOT fixed): every page now renders inside the AppShell's white
+ * panel, so the bar sits at the top of the panel and scrolling content
+ * passes beneath its border.
  */
 export function PageTopBar({ title, leading, trailing, className }: Props) {
   return (
     <div
       className={cn(
-        "fixed top-0 right-0 left-0 md:left-64 h-[52px] z-[5]",
-        "flex items-center px-6 gap-2 pointer-events-none [&_*]:pointer-events-auto",
+        "h-[52px] shrink-0 border-b border-border-subtle",
+        "flex items-center px-6 gap-2",
         className,
       )}
     >

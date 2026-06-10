@@ -64,7 +64,7 @@ async function main() {
   const ctx = buildKnowledgeContext({
     userId: USER_ID,
     workspaceId: WORKSPACE_ID,
-    apiKeyId: null,
+    agentTokenId: null,
   });
   const base = await createBase(ctx, {
     name: `smoke paths ${new Date().toISOString()}`,

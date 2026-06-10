@@ -37,6 +37,8 @@ export interface KnowledgeFolder {
     knowledgeBaseId: string;
     parentId: string | null;
     name: string;
+    /** Agent-facing summary of the folder's contents (≤300 chars). */
+    description: string | null;
     position: number;
     createdBy: string | null;
     createdAt: string;

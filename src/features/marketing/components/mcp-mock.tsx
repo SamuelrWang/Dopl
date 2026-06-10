@@ -58,7 +58,7 @@ export function McpMock({ mcpTick }: { mcpTick: number }) {
               </div>
               <div className="flex items-center gap-2">
                 <div className="flex-1 font-mono text-[13px] text-white/90 px-3 py-2 rounded-md bg-black/40 border border-white/[0.06] truncate">
-                  mcp.dopl.ai/u/sam-wang
+                  usedopl.com/api/mcp
                 </div>
                 <button
                   type="button"

@@ -51,7 +51,7 @@ const SLUG_RETRY_MAX = 3;
 export interface AuthLike {
   userId: string;
   workspaceId: string;
-  apiKeyId?: string | null;
+  agentTokenId?: string | null;
   apiKeyWorkspaceId?: string | null;
 }
 
@@ -59,7 +59,7 @@ export function buildSkillContext(auth: AuthLike): SkillContext {
   return {
     workspaceId: auth.workspaceId,
     userId: auth.userId,
-    source: auth.apiKeyId ? "agent" : "user",
+    source: auth.agentTokenId ? "agent" : "user",
     apiKeyWorkspaceId: auth.apiKeyWorkspaceId ?? null,
   };
 }

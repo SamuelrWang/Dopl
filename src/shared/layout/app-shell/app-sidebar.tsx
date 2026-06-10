@@ -1,0 +1,135 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import {
+  BookOpen,
+  Gift,
+  HelpCircle,
+  Home,
+  LayoutGrid,
+  MessageSquare,
+  Settings,
+  Sparkles,
+  UserPlus,
+  Users,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { cn } from "@/shared/lib/utils";
+import type { SettingsSection } from "@/shared/layout/settings-modal";
+import styles from "./app-shell.module.css";
+
+type NavSection =
+  | "overview"
+  | "canvas"
+  | "chat"
+  | "knowledge"
+  | "skills"
+  | "members";
+
+const NAV: ReadonlyArray<{ label: string; icon: LucideIcon; section: NavSection }> = [
+  { label: "Overview", icon: Home, section: "overview" },
+  { label: "Canvas", icon: LayoutGrid, section: "canvas" },
+  { label: "Chat", icon: MessageSquare, section: "chat" },
+  { label: "Knowledge", icon: BookOpen, section: "knowledge" },
+  { label: "Skills", icon: Sparkles, section: "skills" },
+  { label: "Members", icon: Users, section: "members" },
+];
+
+interface Props {
+  workspaceSegment: string;
+  workspaceName: string;
+  onOpenSettings: (section: SettingsSection) => void;
+}
+
+function sectionPath(segment: string, section: NavSection): string {
+  return section === "canvas" ? `/${segment}` : `/${segment}/${section}`;
+}
+
+/**
+ * App sidebar in the new design language. Brand slot shows the open
+ * workspace's name; nav highlights the section the current path is in;
+ * footer carries Invite / Free month / Settings / Help, wired to the
+ * settings modal.
+ */
+export function AppSidebar({
+  workspaceSegment,
+  workspaceName,
+  onOpenSettings,
+}: Props) {
+  const pathname = usePathname();
+  // Path shape: /{wsSegment}/{section}/... — anything else (including
+  // /{wsSegment}/{canvasSlug}) highlights Canvas.
+  const segments = pathname.split("/").filter(Boolean);
+  const activeSection: NavSection = (
+    NAV.some((n) => n.section === segments[1]) ? segments[1] : "canvas"
+  ) as NavSection;
+
+  return (
+    <aside className={styles.sidebar}>
+      <div className={styles.brand}>
+        <span className={styles.brandName}>{workspaceName}</span>
+      </div>
+
+      <nav className={styles.nav}>
+        {NAV.map(({ label, icon: Icon, section }) => (
+          <Link
+            key={section}
+            href={sectionPath(workspaceSegment, section)}
+            className={cn(styles.navItem, section === activeSection && styles.navActive)}
+          >
+            <Icon size={20} strokeWidth={1.8} />
+            {label}
+          </Link>
+        ))}
+      </nav>
+
+      <div className={styles.wordsCard}>
+        <div className={styles.wcTitle}>
+          <b>Pro</b> unlocks more
+        </div>
+        <div className={styles.wcDesc}>
+          Unlimited knowledge bases, skills, and agent access across your team.
+        </div>
+        <button
+          type="button"
+          className={styles.upgradeBtn}
+          onClick={() => onOpenSettings("billing")}
+        >
+          Upgrade to Pro
+        </button>
+      </div>
+
+      <div className={styles.foot}>
+        <button
+          type="button"
+          className={styles.footItem}
+          onClick={() => onOpenSettings("members")}
+        >
+          <UserPlus size={20} strokeWidth={1.8} />
+          Invite your team
+        </button>
+        <button
+          type="button"
+          className={styles.footItem}
+          onClick={() => onOpenSettings("billing")}
+        >
+          <Gift size={20} strokeWidth={1.8} />
+          Get a free month
+        </button>
+        <button
+          type="button"
+          className={styles.footItem}
+          onClick={() => onOpenSettings("account")}
+        >
+          <Settings size={20} strokeWidth={1.8} />
+          Settings
+        </button>
+        <Link href="/docs" className={styles.footItem}>
+          <HelpCircle size={20} strokeWidth={1.8} />
+          Help
+        </Link>
+      </div>
+    </aside>
+  );
+}

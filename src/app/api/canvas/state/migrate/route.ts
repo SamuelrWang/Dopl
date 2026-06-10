@@ -33,9 +33,9 @@ const VALID_PANEL_TYPES = new Set([
  * the active canvas. Idempotent (upserts).
  */
 export const POST = withWorkspaceAuth(
-  async (request, { userId, workspaceId, apiKeyId }) => {
+  async (request, { userId, workspaceId, agentTokenId }) => {
     try {
-      const denied = await denyIfNoCanvasWrite({ apiKeyId, userId, workspaceId });
+      const denied = await denyIfNoCanvasWrite({ agentTokenId, userId, workspaceId });
       if (denied) return denied;
 
       const body = await request.json();
