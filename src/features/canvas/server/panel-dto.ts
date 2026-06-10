@@ -13,6 +13,9 @@ import type {
   Panel,
   ArtifactPanelData,
   ChatPanelData,
+  ClusterInfoPanelData,
+  NodePanelData,
+  NodeRef,
   ConnectionPanelData,
   KnowledgeBasePanelData,
   KnowledgePanelData,
@@ -74,6 +77,22 @@ export function panelToDbRow(panel: Panel) {
         markdown: panel.markdown,
         sourceConversationId: panel.sourceConversationId,
         sourceMessageId: panel.sourceMessageId,
+      };
+      break;
+    case "cluster-info":
+      base.panel_data = {
+        clusterId: panel.clusterId,
+      };
+      break;
+    case "node":
+      base.title = panel.title;
+      base.panel_data = {
+        description: panel.description,
+        reads: panel.reads,
+        actions: panel.actions,
+        userInput: panel.userInput,
+        agentOutput: panel.agentOutput,
+        nextInstructions: panel.nextInstructions,
       };
       break;
   }
@@ -141,6 +160,26 @@ export function dbRowToPanel(row: Record<string, unknown>): Panel | null {
           (data.sourceConversationId as string) || undefined,
         sourceMessageId: (data.sourceMessageId as string) || undefined,
       } as ArtifactPanelData;
+    case "cluster-info":
+      return {
+        ...base,
+        type: "cluster-info",
+        clusterId: (data.clusterId as string) || "",
+      } as ClusterInfoPanelData;
+    case "node":
+      return {
+        ...base,
+        type: "node",
+        title: (row.title as string) || "",
+        description: (data.description as string) || "",
+        reads: Array.isArray(data.reads) ? (data.reads as NodeRef[]) : [],
+        actions: Array.isArray(data.actions)
+          ? (data.actions as NodeRef[])
+          : [],
+        userInput: (data.userInput as string) || "",
+        agentOutput: (data.agentOutput as string) || "",
+        nextInstructions: (data.nextInstructions as string) || "",
+      } as NodePanelData;
     default:
       return null;
   }

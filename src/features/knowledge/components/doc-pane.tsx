@@ -12,7 +12,7 @@ import {
   fetchEntry as apiFetchEntry,
   updateEntry as apiUpdateEntry,
 } from "../client/api";
-import { DESCRIPTION_MAX } from "../schema";
+import { DESCRIPTION_MAX } from "@/config";
 import type { KnowledgeEntry } from "../types";
 import { DocEditor, SaveStatusIndicator, type SaveStatus } from "./doc-editor";
 
@@ -21,6 +21,11 @@ const AUTOSAVE_DELAY_MS = 1500;
 export interface DocPaneProps {
   entry: KnowledgeEntry;
   workspaceId: string;
+  /** True while the per-entry body fetch is in flight (the tree only
+   *  carries metadata, so the title shows immediately but the body
+   *  arrives a beat later). When set, the editor area renders a skeleton
+   *  instead of a blank document. */
+  bodyLoading?: boolean;
   /** Called after a successful save — the parent refetches the tree
    *  to pick up updated metadata (title, updated_at). */
   onSaved: () => void;
@@ -78,6 +83,7 @@ interface ConflictState {
 export function DocPane({
   entry,
   workspaceId,
+  bodyLoading = false,
   onSaved,
   onStaleVersion,
   onFocusRefetch,
@@ -406,17 +412,49 @@ export function DocPane({
           </span>
         </div>
       </div>
-      <DocEditor
-        initialMarkdown={editorMd}
-        resetKey={`${entry.id}:${editorReloadKey}`}
-        onChange={(md) => {
-          setBody(md);
-          scheduleSave(title, md);
-        }}
-      />
+      {bodyLoading ? (
+        <DocBodySkeleton />
+      ) : (
+        <DocEditor
+          initialMarkdown={editorMd}
+          resetKey={`${entry.id}:${editorReloadKey}`}
+          onChange={(md) => {
+            setBody(md);
+            scheduleSave(title, md);
+          }}
+        />
+      )}
     </article>
   );
 }
+
+/**
+ * Placeholder shown in the editor column while the per-entry body fetch
+ * is in flight. Mirrors the editor's geometry (`mx-auto … max-w-3xl
+ * px-6`) and the route loader's paragraph-bar treatment so the swap to
+ * real content is seamless. A 0%-width entry renders as a paragraph gap.
+ */
+function DocBodySkeleton() {
+  return (
+    <div
+      className="mx-auto w-full max-w-3xl px-6 pt-5 flex flex-col gap-2.5"
+      aria-hidden
+    >
+      {DOC_SKELETON_LINE_WIDTHS.map((w, i) => (
+        <div
+          key={i}
+          className="h-3.5 rounded bg-surface-raised-3 animate-pulse"
+          style={{ width: w }}
+        />
+      ))}
+    </div>
+  );
+}
+
+const DOC_SKELETON_LINE_WIDTHS = [
+  "42%", "96%", "88%", "92%", "60%", "0%", "78%", "94%", "85%", "70%", "0%",
+  "64%", "90%", "52%",
+];
 
 function ConflictBanner({
   resolving,

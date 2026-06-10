@@ -7,7 +7,7 @@
 
 import { z } from "zod";
 import type { DoplClient } from "@dopl/client";
-import { ok, missingParams, type RegisterTool, type ToolResponse } from "./respond";
+import { err, ok, missingParams, type RegisterTool, type ToolResponse } from "./respond";
 
 const CLUSTER_DESCRIPTION = `Read and non-destructively modify Dopl clusters (curated groupings of knowledge bases + skills). Set \`op\` to one of:
 - "list" — discover all clusters. Cheap metadata call; run it proactively to show the user their workspace or to resolve a slug another op needs, rather than asking for a slug.
@@ -50,6 +50,10 @@ export function registerClusterTools(
         .string()
         .optional()
         .describe("op=create: cluster name, e.g. 'AI Agent Stack'. op=update: new cluster name."),
+      description: z
+        .string()
+        .optional()
+        .describe("op=update: workflow description (max 300 chars) shown on the cluster's canvas card and in op=get."),
       knowledge_base_id: z
         .string()
         .optional()
@@ -78,9 +82,17 @@ export function registerClusterTools(
           return opCreate(client, args.name as string);
         }
         case "update": {
-          const miss = missingParams("update", args, ["slug", "name"]);
+          const miss = missingParams("update", args, ["slug"]);
           if (miss) return miss;
-          return opUpdate(client, args.slug as string, args.name as string);
+          if (args.name === undefined && args.description === undefined) {
+            return err("update needs `name` and/or `description`.");
+          }
+          return opUpdate(
+            client,
+            args.slug as string,
+            args.name as string | undefined,
+            args.description as string | undefined
+          );
         }
         case "read_knowledge_entry": {
           const miss = missingParams("read_knowledge_entry", args, [
@@ -189,6 +201,7 @@ async function opGet(client: DoplClient, slug: string): Promise<ToolResponse> {
   const lines: string[] = [];
   lines.push(`# Cluster: ${cluster.name}`);
   lines.push(`Slug: \`${cluster.slug}\``);
+  if (cluster.description) lines.push(cluster.description);
   lines.push(
     `**Contains:** ${clusterContentSummary({
       knowledge_base_count: cluster.knowledge_bases.length,
@@ -198,6 +211,49 @@ async function opGet(client: DoplClient, slug: string): Promise<ToolResponse> {
     })}`
   );
   lines.push("");
+
+  // ── Workflow (node blocks + connectors composed from the canvas) ──
+  if (cluster.workflow && cluster.workflow.nodes.length > 0) {
+    const wf = cluster.workflow;
+    lines.push(`## Workflow (${wf.nodes.length} step${wf.nodes.length === 1 ? "" : "s"})`);
+    lines.push(
+      `Steps are topologically ordered. Follow them in order; each step lists what to READ (knowledge), which ACTIONS (skills) to apply, what input to expect from the user, what output to produce, and when to move on.`
+    );
+    lines.push("");
+    for (let i = 0; i < wf.nodes.length; i++) {
+      const n = wf.nodes[i];
+      lines.push(`### Step ${i + 1}: ${n.title || "(untitled)"} \`${n.id}\``);
+      if (n.description) lines.push(n.description);
+      if (n.reads.length > 0) {
+        lines.push(
+          `- Read: ${n.reads
+            .map((r) =>
+              r.kind === "file"
+                ? `${r.name} (file, kb_id: ${r.kbId}, entry_id: ${r.entryId})`
+                : `${r.name} (knowledge base, kb_id: ${r.kbId})`
+            )
+            .join("; ")}`
+        );
+      }
+      if (n.actions.length > 0) {
+        lines.push(
+          `- Action: ${n.actions
+            .map((a) => `${a.name} (skill, skill_id: ${a.skillId})`)
+            .join("; ")}`
+        );
+      }
+      if (n.userInput) lines.push(`- User input: ${n.userInput}`);
+      if (n.agentOutput) lines.push(`- Agent output: ${n.agentOutput}`);
+      if (n.nextInstructions) lines.push(`- Next: ${n.nextInstructions}`);
+      lines.push("");
+    }
+    if (wf.edges.length > 0) {
+      lines.push(
+        `Connections: ${wf.edges.map((e) => `\`${e.from}\` → \`${e.to}\``).join(", ")}`
+      );
+      lines.push("");
+    }
+  }
 
   if (cluster.knowledge_bases.length > 0) {
     lines.push(`## Attached Knowledge Bases\n`);
@@ -261,11 +317,12 @@ async function opCreate(
 async function opUpdate(
   client: DoplClient,
   slug: string,
-  name: string,
+  name: string | undefined,
+  description: string | undefined,
 ): Promise<ToolResponse> {
-  const result = await client.updateCluster(slug, { name });
+  const result = await client.updateCluster(slug, { name, description });
   return ok(
-    `Renamed cluster to **${result.name}** (slug: \`${result.slug}\`).`
+    `Updated cluster **${result.name}** (slug: \`${result.slug}\`).`
   );
 }
 

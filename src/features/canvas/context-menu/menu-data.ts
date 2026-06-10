@@ -1,87 +1,62 @@
 import {
-  Image,
-  PlaySquare,
-  AudioLines,
-  Scan,
-  CirclePlus,
-  Clipboard,
+  BookOpen,
   MessageSquare,
-  Flag,
+  Sparkles,
+  SquarePlus,
+  Workflow,
   type LucideIcon,
 } from "lucide-react";
 
 export type MenuItemId =
-  | "create-image"
-  | "create-video"
-  | "create-audio"
-  | "new-frame"
-  | "upload-media"
-  | "paste"
-  | "cursor-chat"
-  | "report";
+  | "new-cluster"
+  | "new-node"
+  | "new-chat"
+  | "open-knowledge"
+  | "open-skills";
 
 export interface MenuItem {
   id: MenuItemId;
   label: string;
   icon: LucideIcon;
   shortcut?: string;
-  submenu?: Submenu;
 }
 
-export interface Submenu {
-  title: string;
-  groups: string[][];
-}
-
+/**
+ * Canvas context-menu items (right-click / double-click on empty canvas).
+ * Every item dispatches a real store action via the onAction callback in
+ * CanvasContextMenu — no decorative entries. The node-block item joins
+ * this list with the node panel type (workflow builder phase 2).
+ */
 export const MENU_SECTIONS: MenuItem[][] = [
   [
     {
-      id: "create-image",
-      label: "Create Image",
-      icon: Image,
-      submenu: {
-        title: "Create Image",
-        groups: [
-          ["Flux 1.1", "Flux Kontext"],
-          ["Imagen 4", "Imagen 4 Ultra"],
-          ["Ideogram 3.0", "Recraft V3"],
-          ["Nano Banana"],
-        ],
-      },
+      id: "new-cluster",
+      label: "New cluster",
+      icon: Workflow,
     },
     {
-      id: "create-video",
-      label: "Create Video",
-      icon: PlaySquare,
-      submenu: {
-        title: "Create Video",
-        groups: [
-          ["Ray3.14", "Ray3.14 HDR"],
-          ["Veo 3", "Veo 3.1"],
-          ["Kling 2.6", "Kling 3.0", "Kling Omni"],
-          ["Seedance 2.0"],
-        ],
-      },
-    },
-    {
-      id: "create-audio",
-      label: "Create Audio",
-      icon: AudioLines,
-      submenu: {
-        title: "Create Audio",
-        groups: [
-          ["ElevenLabs v3"],
-          ["Suno 4.5", "Udio 1.5"],
-          ["MMAudio"],
-        ],
-      },
+      id: "new-node",
+      label: "New node",
+      icon: SquarePlus,
     },
   ],
   [
-    { id: "new-frame", label: "New Frame", icon: Scan, shortcut: "F" },
-    { id: "upload-media", label: "Upload Media", icon: CirclePlus, shortcut: "⌘U" },
-    { id: "paste", label: "Paste", icon: Clipboard, shortcut: "⌘V" },
+    {
+      id: "new-chat",
+      label: "New chat",
+      icon: MessageSquare,
+    },
   ],
-  [{ id: "cursor-chat", label: "Cursor Chat", icon: MessageSquare, shortcut: "/" }],
-  [{ id: "report", label: "Report", icon: Flag }],
+  [
+    {
+      id: "open-knowledge",
+      label: "Knowledge bases",
+      icon: BookOpen,
+    },
+    {
+      id: "open-skills",
+      label: "Skills",
+      icon: Sparkles,
+    },
+  ],
 ];

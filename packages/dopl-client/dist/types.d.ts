@@ -64,6 +64,8 @@ export interface ClusterRow {
     id: string;
     slug: string;
     name: string;
+    /** Workflow description (≤300 chars). Optional for back-compat. */
+    description?: string | null;
     created_at: string;
     updated_at: string;
     panel_count: number;
@@ -130,10 +132,41 @@ export interface ClusterAttachedSkill {
     body: string;
     added_at: string;
 }
+export interface ClusterWorkflowNode {
+    /** Canvas panel id — referenced by workflow edges. */
+    id: string;
+    title: string;
+    description: string;
+    reads: Array<{
+        kind: "kb" | "file";
+        kbId: string;
+        entryId?: string;
+        name: string;
+    }>;
+    actions: Array<{
+        kind: "skill";
+        skillId: string;
+        name: string;
+    }>;
+    userInput: string;
+    agentOutput: string;
+    nextInstructions: string;
+}
+export interface ClusterWorkflow {
+    /** Topologically ordered when the edge graph is acyclic. */
+    nodes: ClusterWorkflowNode[];
+    edges: Array<{
+        from: string;
+        to: string;
+    }>;
+}
 export interface ClusterDetail extends ClusterRow {
     entries: ClusterDetailEntry[];
     knowledge_bases: ClusterAttachedKnowledgeBase[];
     skills: ClusterAttachedSkill[];
+    /** Workflow composed from the canvas (node blocks + connectors).
+     *  Null/absent when the cluster has no node blocks. */
+    workflow?: ClusterWorkflow | null;
 }
 export interface ClusterKnowledgeEntry {
     entry_id: string;

@@ -106,6 +106,59 @@ export interface ArtifactPanelData extends BasePanelData {
   sourceMessageId?: string;
 }
 
+/**
+ * Cluster-info panel — the workflow header card that fronts a cluster.
+ * Lives INSIDE its cluster's outline; shows the cluster's editable name +
+ * description (read live from `state.clusters`, so panel_data only needs
+ * the linkage). Created atomically with the cluster (CREATE_CLUSTER_WORKFLOW)
+ * or synthesized for pre-workflow clusters (CLUSTER_ATTACH_INFO_PANEL).
+ */
+export interface ClusterInfoPanelData extends BasePanelData {
+  type: "cluster-info";
+  /** Store-local id of the cluster this panel fronts. */
+  clusterId: string;
+}
+
+/**
+ * A docked reference inside a node block's Read or Action field.
+ * Created by dragging a KB/skill panel (or a file out of a KB panel's
+ * tree) into the zone. File refs attach their parent KB to the cluster.
+ */
+export type NodeRef =
+  | { kind: "kb"; kbId: string; name: string }
+  | { kind: "file"; kbId: string; entryId: string; name: string }
+  | { kind: "skill"; skillId: string; name: string };
+
+/** Stable identity key for dedupe when docking. */
+export function nodeRefKey(ref: NodeRef): string {
+  switch (ref.kind) {
+    case "kb":
+      return `kb:${ref.kbId}`;
+    case "file":
+      return `file:${ref.kbId}:${ref.entryId}`;
+    case "skill":
+      return `skill:${ref.skillId}`;
+  }
+}
+
+/**
+ * NodePanelData — a workflow step. Fields are all optional-by-emptiness:
+ *   - reads:   knowledge the agent should READ at this step
+ *   - actions: skills the agent should APPLY at this step
+ *   - userInput / agentOutput / nextInstructions: free text
+ * Connector edges between nodes live in CanvasState.edges (phase 3).
+ */
+export interface NodePanelData extends BasePanelData {
+  type: "node";
+  title: string;
+  description: string;
+  reads: NodeRef[];
+  actions: NodeRef[];
+  userInput: string;
+  agentOutput: string;
+  nextInstructions: string;
+}
+
 /** Discriminated union — add more panel types here later */
 export type Panel =
   | ChatPanelData
@@ -114,11 +167,15 @@ export type Panel =
   | SkillsPanelData
   | KnowledgeBasePanelData
   | SkillPanelData
-  | ArtifactPanelData;
+  | ArtifactPanelData
+  | ClusterInfoPanelData
+  | NodePanelData;
 
 /** Returns true if the user is allowed to close this panel. */
 export function isPanelDeletable(panel: Panel): boolean {
-  return panel.type !== "connection";
+  // cluster-info panels have no ✕ — their lifecycle is the cluster's
+  // (deleted together via DELETE_CLUSTER).
+  return panel.type !== "connection" && panel.type !== "cluster-info";
 }
 
 /** Returns true if this panel type can participate in clusters. */
@@ -136,7 +193,11 @@ export function isPanelClusterable(panel: Panel): boolean {
  * "knowledge" / "skills" library panels).
  */
 export function isPanelResizable(panel: Panel): boolean {
-  return panel.type === "knowledge-base" || panel.type === "skill";
+  return (
+    panel.type === "knowledge-base" ||
+    panel.type === "skill" ||
+    panel.type === "node"
+  );
 }
 
 /** Smallest size a resizable panel can be dragged down to, by type. */
@@ -167,11 +228,28 @@ export interface Cluster {
   dbId?: string;
   /** URL-safe slug — populated after syncing to /api/clusters. */
   slug?: string;
+  /** Workflow description shown on the cluster-info panel and streamed
+   *  to agents via dopl_cluster. Synced to clusters.description. */
+  description?: string | null;
+  /** Panel id of this cluster's cluster-info panel. A cluster with an
+   *  info panel survives with a single member (the panel itself);
+   *  clusters without one keep the legacy ≥2-members rule. */
+  infoPanelId?: string;
 }
 
 export const CONNECTION_PANEL_SIZE = {
   width: 440,
   height: 560,
+} as const;
+
+export const CLUSTER_INFO_PANEL_SIZE = {
+  width: 420,
+  height: 176,
+} as const;
+
+export const NODE_PANEL_SIZE = {
+  width: 460,
+  height: 640,
 } as const;
 
 export const KNOWLEDGE_PANEL_SIZE = {
@@ -209,7 +287,9 @@ export const DEFAULT_PANEL_MIN_SIZE = {
 export const MIN_CLUSTER_SIZE = 2;
 
 /** World-space padding between cluster members and the outline. */
-export const CLUSTER_PADDING = 24;
+/** Workflow outlines breathe — generous space between panel edges and
+ * the dashed cluster boundary (was 24 in the blob era). */
+export const CLUSTER_PADDING = 96;
 
 /** Corner radius (world-space px) for the rounded rectilinear outline. */
 export const CLUSTER_CORNER_RADIUS = 12;
@@ -225,6 +305,18 @@ export const CLUSTER_CORNER_RADIUS = 12;
  * drags within this threshold of a cluster, it auto-joins.
  */
 export const CLUSTER_MEMBERSHIP_DISTANCE = 140;
+
+/**
+ * Edge — a workflow connector between two panels (node blocks). Drawn
+ * from the source's right port to the target's left port. Persisted in
+ * the canvas_edges table (workspace-shared).
+ */
+export interface Edge {
+  /** DB uuid (client-generated; mirrors the canvas_edges row). */
+  id: string;
+  fromPanelId: string;
+  toPanelId: string;
+}
 
 export interface CanvasState {
   /**
@@ -243,6 +335,8 @@ export interface CanvasState {
   panels: Panel[];
   /** Persistent panel groupings; see Cluster interface for invariants. */
   clusters: Cluster[];
+  /** Workflow connector edges between node panels. */
+  edges: Edge[];
   /** Monotonic counter so each new panel gets a unique id without collisions */
   nextPanelId: number;
   /** Monotonic counter for cluster ids (separate namespace from panels). */
@@ -261,7 +355,14 @@ export interface CanvasState {
    * clusters that dissolved as a result. Session-only — NOT persisted to
    * localStorage or DB.
    */
-  deletedPanelsStack: Array<{ panels: Panel[]; clusters: Cluster[] }>;
+  deletedPanelsStack: Array<{
+    panels: Panel[];
+    /** Snapshot of every cluster the deletion touched (dissolved OR
+     *  shrunk) so undo can restore membership, not just existence. */
+    clusters: Cluster[];
+    /** Edges removed by the deletion (endpoints in the deleted set). */
+    edges: Edge[];
+  }>;
 }
 
 /** Zoom bounds. Going below 0.5 or above 4 gets confusing / unreadable. */
@@ -273,6 +374,7 @@ export const INITIAL_CANVAS_STATE: CanvasState = {
   camera: { x: 0, y: 0, zoom: 1 },
   panels: [],
   clusters: [],
+  edges: [],
   nextPanelId: 1,
   nextClusterId: 1,
   selectedPanelIds: [],
@@ -429,6 +531,83 @@ export type CanvasAction =
     }
   | { type: "DELETE_CLUSTER"; clusterId: string }
   | { type: "UPDATE_CLUSTER_NAME"; clusterId: string; name: string }
+  | {
+      /**
+       * Create a workflow cluster: the cluster AND its cluster-info panel
+       * in one reducer step. `cluster.panelIds` must include
+       * `infoPanel.id` and `cluster.infoPanelId` must equal it. Bumps
+       * nextClusterId + nextPanelId.
+       */
+      type: "CREATE_CLUSTER_WORKFLOW";
+      cluster: Cluster;
+      infoPanel: ClusterInfoPanelData;
+      /** Optional atomic panel moves (selection-menu auto-layout). */
+      moves?: Array<{ id: string; x: number; y: number }>;
+    }
+  | {
+      /**
+       * Synthesize a cluster-info panel for a pre-workflow cluster
+       * (upgrade in place). Adds the panel, appends it to the cluster's
+       * panelIds, sets infoPanelId, bumps nextPanelId.
+       */
+      type: "CLUSTER_ATTACH_INFO_PANEL";
+      clusterId: string;
+      panel: ClusterInfoPanelData;
+    }
+  | {
+      /** Update workflow metadata (name and/or description). */
+      type: "UPDATE_CLUSTER_INFO";
+      clusterId: string;
+      name?: string;
+      description?: string | null;
+    }
+  | {
+      /** Spawn an empty node block at (x, y). */
+      type: "CREATE_NODE_PANEL";
+      id: string;
+      x: number;
+      y: number;
+    }
+  | {
+      /** Patch a node's free-text fields. */
+      type: "UPDATE_NODE_FIELDS";
+      panelId: string;
+      patch: Partial<
+        Pick<
+          NodePanelData,
+          | "title"
+          | "description"
+          | "userInput"
+          | "agentOutput"
+          | "nextInstructions"
+        >
+      >;
+    }
+  | {
+      /** Dock a KB/file/skill reference into a node's Read or Action
+       *  field (dedupes by nodeRefKey). */
+      type: "NODE_DOCK_REF";
+      panelId: string;
+      zone: "read" | "action";
+      ref: NodeRef;
+    }
+  | {
+      /** Remove a docked reference from a node field. */
+      type: "NODE_UNDOCK_REF";
+      panelId: string;
+      zone: "read" | "action";
+      refKey: string;
+    }
+  | {
+      /** Add a connector edge (dedupes on from→to pair). */
+      type: "EDGE_ADD";
+      edge: Edge;
+    }
+  | {
+      /** Remove a connector edge by id. */
+      type: "EDGE_REMOVE";
+      edgeId: string;
+    }
   | {
       /**
        * Append a panel to an existing cluster. Preserves the cluster's

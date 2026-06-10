@@ -25,6 +25,7 @@ type ClustersRow = {
   workspace_id: string;
   name: string;
   slug: string;
+  description?: string | null;
 };
 
 const RECONNECT_DELAYS_MS = [500, 1000, 2000, 4000, 8000, 15000];
@@ -107,11 +108,27 @@ export function useClustersRealtime() {
             if (payload.eventType === "UPDATE" && payload.new) {
               const cluster = findClusterByDbId(payload.new.id);
               if (!cluster) return;
-              if (cluster.name !== payload.new.name) {
+              if (
+                cluster.name !== payload.new.name ||
+                (cluster.description ?? null) !==
+                  (payload.new.description ?? null)
+              ) {
                 dispatch({
-                  type: "UPDATE_CLUSTER_NAME",
+                  type: "UPDATE_CLUSTER_INFO",
                   clusterId: cluster.id,
                   name: payload.new.name,
+                  description: payload.new.description ?? null,
+                });
+              }
+              // Renames regenerate the slug server-side. Without syncing
+              // it, every slug-keyed call (info-panel PATCH, attachment
+              // ops) 404s until reload.
+              if (cluster.slug !== payload.new.slug) {
+                dispatch({
+                  type: "UPDATE_CLUSTER_DB_INFO",
+                  clusterId: cluster.id,
+                  dbId: payload.new.id,
+                  slug: payload.new.slug,
                 });
               }
               return;

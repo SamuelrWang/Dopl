@@ -42,6 +42,10 @@ function registerClusterTools(register, client) {
             .string()
             .optional()
             .describe("op=create: cluster name, e.g. 'AI Agent Stack'. op=update: new cluster name."),
+        description: zod_1.z
+            .string()
+            .optional()
+            .describe("op=update: workflow description (max 300 chars) shown on the cluster's canvas card and in op=get."),
         knowledge_base_id: zod_1.z
             .string()
             .optional()
@@ -71,10 +75,13 @@ function registerClusterTools(register, client) {
                 return opCreate(client, args.name);
             }
             case "update": {
-                const miss = (0, respond_1.missingParams)("update", args, ["slug", "name"]);
+                const miss = (0, respond_1.missingParams)("update", args, ["slug"]);
                 if (miss)
                     return miss;
-                return opUpdate(client, args.slug, args.name);
+                if (args.name === undefined && args.description === undefined) {
+                    return (0, respond_1.err)("update needs `name` and/or `description`.");
+                }
+                return opUpdate(client, args.slug, args.name, args.description);
             }
             case "read_knowledge_entry": {
                 const miss = (0, respond_1.missingParams)("read_knowledge_entry", args, [
@@ -157,6 +164,8 @@ async function opGet(client, slug) {
     const lines = [];
     lines.push(`# Cluster: ${cluster.name}`);
     lines.push(`Slug: \`${cluster.slug}\``);
+    if (cluster.description)
+        lines.push(cluster.description);
     lines.push(`**Contains:** ${clusterContentSummary({
         knowledge_base_count: cluster.knowledge_bases.length,
         skill_count: cluster.skills.length,
@@ -164,6 +173,42 @@ async function opGet(client, slug) {
         skill_names: cluster.skills.map((sk) => sk.name),
     })}`);
     lines.push("");
+    // ── Workflow (node blocks + connectors composed from the canvas) ──
+    if (cluster.workflow && cluster.workflow.nodes.length > 0) {
+        const wf = cluster.workflow;
+        lines.push(`## Workflow (${wf.nodes.length} step${wf.nodes.length === 1 ? "" : "s"})`);
+        lines.push(`Steps are topologically ordered. Follow them in order; each step lists what to READ (knowledge), which ACTIONS (skills) to apply, what input to expect from the user, what output to produce, and when to move on.`);
+        lines.push("");
+        for (let i = 0; i < wf.nodes.length; i++) {
+            const n = wf.nodes[i];
+            lines.push(`### Step ${i + 1}: ${n.title || "(untitled)"} \`${n.id}\``);
+            if (n.description)
+                lines.push(n.description);
+            if (n.reads.length > 0) {
+                lines.push(`- Read: ${n.reads
+                    .map((r) => r.kind === "file"
+                    ? `${r.name} (file, kb_id: ${r.kbId}, entry_id: ${r.entryId})`
+                    : `${r.name} (knowledge base, kb_id: ${r.kbId})`)
+                    .join("; ")}`);
+            }
+            if (n.actions.length > 0) {
+                lines.push(`- Action: ${n.actions
+                    .map((a) => `${a.name} (skill, skill_id: ${a.skillId})`)
+                    .join("; ")}`);
+            }
+            if (n.userInput)
+                lines.push(`- User input: ${n.userInput}`);
+            if (n.agentOutput)
+                lines.push(`- Agent output: ${n.agentOutput}`);
+            if (n.nextInstructions)
+                lines.push(`- Next: ${n.nextInstructions}`);
+            lines.push("");
+        }
+        if (wf.edges.length > 0) {
+            lines.push(`Connections: ${wf.edges.map((e) => `\`${e.from}\` → \`${e.to}\``).join(", ")}`);
+            lines.push("");
+        }
+    }
     if (cluster.knowledge_bases.length > 0) {
         lines.push(`## Attached Knowledge Bases\n`);
         for (const kb of cluster.knowledge_bases) {
@@ -208,9 +253,9 @@ async function opCreate(client, name) {
     const result = await client.createCluster(name);
     return (0, respond_1.ok)(`Created cluster **${result.name}** (slug: \`${result.slug}\`). Attach knowledge bases or skills to populate it.`);
 }
-async function opUpdate(client, slug, name) {
-    const result = await client.updateCluster(slug, { name });
-    return (0, respond_1.ok)(`Renamed cluster to **${result.name}** (slug: \`${result.slug}\`).`);
+async function opUpdate(client, slug, name, description) {
+    const result = await client.updateCluster(slug, { name, description });
+    return (0, respond_1.ok)(`Updated cluster **${result.name}** (slug: \`${result.slug}\`).`);
 }
 async function opReadKnowledgeEntry(client, cluster_slug, knowledge_base_id, entry_id) {
     const e = await client.getClusterKnowledgeEntry(cluster_slug, knowledge_base_id, entry_id);

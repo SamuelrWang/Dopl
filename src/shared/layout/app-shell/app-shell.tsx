@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Bell, UserRound } from "lucide-react";
 import { useAuthUser, userInitials } from "@/shared/auth/use-auth-user";
-import type { WorkspaceLike } from "@/shared/layout/workspace-switcher";
+import type { WorkspaceLike } from "./workspace-types";
 import { SettingsModal, type SettingsSection } from "@/shared/layout/settings-modal";
 import { AppRail } from "./app-rail";
 import { AppSidebar } from "./app-sidebar";

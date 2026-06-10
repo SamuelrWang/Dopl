@@ -41,6 +41,7 @@ export declare class DoplClient {
     }>;
     updateCluster(slug: string, updates: {
         name?: string;
+        description?: string | null;
     }): Promise<ClusterRow>;
     renameChat(panelId: string, title: string): Promise<void>;
     deleteCluster(slug: string): Promise<void>;

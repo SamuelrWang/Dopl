@@ -153,6 +153,7 @@ export function CanvasMinimap({
 
   return (
     <div
+      data-canvas-minimap
       style={{
         position: "absolute",
         right: 16,

@@ -2,8 +2,10 @@
 
 import React from "react";
 import { CanvasPanel } from "../canvas-panel";
-import type { Cluster, Panel, CanvasAction } from "../types";
+import type { Cluster, Edge, Panel, CanvasAction } from "../types";
 import { ClusterWorldLayer } from "../clusters/cluster-layer";
+import { EdgeLayer } from "../edges/edge-layer";
+import { NodePortsLayer } from "../edges/node-ports-layer";
 import { isPointInClusterShape } from "../clusters/cluster-geometry";
 
 /**
@@ -54,8 +56,8 @@ function CanvasGrid({ zoom }: { zoom: number }) {
         width: GRID_HALF * 2,
         height: GRID_HALF * 2,
         backgroundImage: `
-          linear-gradient(to right, rgba(0, 0, 0, ${(0.7 * opacity).toFixed(2)}) 1px, transparent 1px),
-          linear-gradient(to bottom, rgba(0, 0, 0, ${(0.7 * opacity).toFixed(2)}) 1px, transparent 1px)
+          linear-gradient(to right, rgba(28, 33, 39, ${(0.07 * opacity).toFixed(3)}) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(28, 33, 39, ${(0.07 * opacity).toFixed(3)}) 1px, transparent 1px)
         `,
         backgroundSize: `${cell}px ${cell}px`,
         backgroundPosition: "0 0",
@@ -71,11 +73,13 @@ function CanvasGrid({ zoom }: { zoom: number }) {
 export const WorldContents = React.memo(function WorldContents({
   zoom,
   panels,
+  edges,
   selectedPanelIds,
   dispatch,
 }: {
   zoom: number;
   panels: Panel[];
+  edges: Edge[];
   selectedPanelIds: string[];
   dispatch: React.Dispatch<CanvasAction>;
 }) {
@@ -83,6 +87,7 @@ export const WorldContents = React.memo(function WorldContents({
     <>
       <CanvasGrid zoom={zoom} />
       <ClusterWorldLayer />
+      <EdgeLayer panels={panels} edges={edges} />
       {panels.map((panel) => (
         <CanvasPanel
           key={panel.id}
@@ -91,6 +96,7 @@ export const WorldContents = React.memo(function WorldContents({
           dispatch={dispatch}
         />
       ))}
+      <NodePortsLayer panels={panels} />
     </>
   );
 });

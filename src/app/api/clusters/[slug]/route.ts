@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { DESCRIPTION_MAX } from "@/config";
 import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
 import {
   deleteCluster,
@@ -45,7 +46,15 @@ async function handlePatch(request: NextRequest, ctx: Ctx) {
     const body = await request.json();
     const cluster = await updateCluster(
       slug,
-      { name: body.name },
+      {
+        name: typeof body.name === "string" ? body.name : undefined,
+        description:
+          typeof body.description === "string"
+            ? body.description.slice(0, DESCRIPTION_MAX)
+            : body.description === null
+              ? null
+              : undefined,
+      },
       scopeOf(ctx)
     );
     return NextResponse.json(cluster);

@@ -11,8 +11,8 @@
  * Actions:
  *   - Cluster → filters out non-clusterable panels (connection), runs
  *     the auto-layout, dispatches CREATE_CLUSTER with a placeholder name,
- *     and clears the selection. The useClusterName hook mounted by
- *     ClusterLayer will asynchronously fetch the AI-generated name.
+ *     and clears the selection. Every cluster is a workflow — it gets
+ *     a cluster-info panel as its header (createWorkflowCluster).
  *   - Delete → closes every deletable selected panel (connection panel
  *     is pinned and skipped).
  *
@@ -21,9 +21,12 @@
  */
 
 import { useCanvas, useCanvasScope } from "../canvas-store";
-import type { Cluster } from "../types";
-import { isPanelClusterable, isPanelDeletable } from "../types";
+import {
+  CLUSTER_INFO_PANEL_SIZE,
+  isPanelClusterable,
+} from "../types";
 import { computeClusterLayout } from "../clusters/cluster-layout";
+import { createWorkflowCluster } from "../clusters/create-cluster";
 
 interface SelectionMenuProps {
   cursorPos: { x: number; y: number };
@@ -38,10 +41,14 @@ export function SelectionMenu({ cursorPos }: SelectionMenuProps) {
     // Freeze the current selection ids so later dispatches can see it.
     const selectedIds = state.selectedPanelIds;
 
-    // Connection panels can't be clustered — they're pinned singletons
-    // that should stay out of multi-panel groupings.
+    // Connection panels can't be clustered, and cluster-info panels are
+    // pinned to their OWN cluster — including one here would dissolve
+    // its workflow and strand the card pointing at a deleted cluster.
     const clusterCandidates = state.panels.filter(
-      (p) => selectedIds.includes(p.id) && isPanelClusterable(p)
+      (p) =>
+        selectedIds.includes(p.id) &&
+        isPanelClusterable(p) &&
+        p.type !== "cluster-info"
     );
     if (clusterCandidates.length < 2) {
       // Nothing to cluster once we strip the non-clusterables.
@@ -49,18 +56,8 @@ export function SelectionMenu({ cursorPos }: SelectionMenuProps) {
       return;
     }
 
+    // Compute laid-out positions once (info-panel anchor + chat spawning).
     const moves = computeClusterLayout(clusterCandidates);
-    const cluster: Cluster = {
-      id: `cluster-${state.nextClusterId}`,
-      name: `Cluster_${state.nextClusterId}`,
-      panelIds: clusterCandidates.map((p) => p.id),
-      createdAt: new Date().toISOString(),
-    };
-    dispatch({ type: "CREATE_CLUSTER", cluster, moves });
-    // Clear the selection so the outline is the only visible affordance.
-    dispatch({ type: "SET_SELECTION", panelIds: [] });
-
-    // Compute laid-out positions once (used for chat spawning).
     const laidOutPanels = clusterCandidates.map((p) => {
       const move = moves.find((m) => m.id === p.id);
       return move ? { ...p, x: move.x, y: move.y } : p;
@@ -68,10 +65,28 @@ export function SelectionMenu({ cursorPos }: SelectionMenuProps) {
     const leftmostX = Math.min(...laidOutPanels.map((p) => p.x));
     const topY = Math.min(...laidOutPanels.map((p) => p.y));
 
+    // Creates the cluster + its info panel atomically, applies the moves,
+    // and fire-and-forgets the /api/clusters sync.
+    const cluster = createWorkflowCluster({
+      state,
+      dispatch,
+      workspaceId,
+      at: {
+        x: leftmostX,
+        y: topY - CLUSTER_INFO_PANEL_SIZE.height - 48,
+      },
+      memberPanelIds: clusterCandidates.map((p) => p.id),
+      moves,
+    });
+    // Clear the selection so the outline is the only visible affordance.
+    dispatch({ type: "SET_SELECTION", panelIds: [] });
+
     // ── Auto-spawn a chat panel if the cluster has none ──
     const hasChat = clusterCandidates.some((p) => p.type === "chat");
     if (!hasChat) {
-      const chatPanelId = `panel-${state.nextPanelId}`;
+      // +1: the workflow creation consumed state.nextPanelId for the
+      // info panel in the same tick.
+      const chatPanelId = `panel-${state.nextPanelId + 1}`;
 
       dispatch({
         type: "CREATE_CHAT_PANEL",
@@ -86,38 +101,12 @@ export function SelectionMenu({ cursorPos }: SelectionMenuProps) {
         clusterId: cluster.id,
       });
     }
-
-    // Sync to DB (fire-and-forget).
-    const headers: Record<string, string> = { "content-type": "application/json" };
-    if (workspaceId) headers["X-Workspace-Id"] = workspaceId;
-    fetch("/api/clusters", {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ name: cluster.name }),
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.id && data.slug) {
-          dispatch({
-            type: "UPDATE_CLUSTER_DB_INFO",
-            clusterId: cluster.id,
-            dbId: data.id,
-            slug: data.slug,
-          });
-        }
-      })
-      .catch((err) => console.error("[selection-menu] cluster creation failed:", err));
   }
 
   function handleDelete() {
-    const selectedIds = state.selectedPanelIds;
-    const deletable = state.panels.filter(
-      (p) => selectedIds.includes(p.id) && isPanelDeletable(p)
-    );
-    for (const p of deletable) {
-      dispatch({ type: "CLOSE_PANEL", id: p.id });
-    }
-    dispatch({ type: "SET_SELECTION", panelIds: [] });
+    // DELETE_SELECTED_PANELS (not a CLOSE_PANEL loop) so the deletion
+    // lands on the undo stack — identical to the keyboard Delete path.
+    dispatch({ type: "DELETE_SELECTED_PANELS" });
   }
 
   return (
@@ -131,7 +120,7 @@ export function SelectionMenu({ cursorPos }: SelectionMenuProps) {
       }}
       className="z-30"
     >
-      <div className="inline-flex items-center gap-1 px-1 h-8 rounded-[4px] bg-[var(--cluster-tab-surface)] border border-border-strong shadow-[0_4px_16px_rgba(0,0,0,0.4)]">
+      <div className="inline-flex items-center gap-1 px-1 h-8 rounded-[4px] bg-[var(--cluster-tab-surface)] border border-border-strong shadow-[0_4px_16px_rgba(0,0,0,0.18)]">
         <MenuButton label="Cluster" onClick={handleCluster} />
         <div className="w-px h-4 bg-border-strong" aria-hidden />
         <MenuButton label="Delete" tone="danger" onClick={handleDelete} />

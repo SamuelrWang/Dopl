@@ -89,17 +89,30 @@ export function useClusterAttachmentSync(): void {
     const currentKb = computeContributors(state.clusters, state.panels, "knowledge-base");
     const currentSkill = computeContributors(state.clusters, state.panels, "skill");
 
-    // First effect run for a given workspace: seed baseline silently.
-    if (initializedForWorkspaceRef.current !== scope.workspaceId) {
-      lastKbRef.current = currentKb;
-      lastSkillRef.current = currentSkill;
-      initializedForWorkspaceRef.current = scope.workspaceId;
-      return;
-    }
-
     const slugByClusterId = new Map<string, string>();
     for (const c of state.clusters) {
       if (c.slug) slugByClusterId.set(c.id, c.slug);
+    }
+
+    // Slug-less clusters (just created, /api/clusters POST in flight)
+    // must NOT enter the baseline: their pairs can't produce ops yet
+    // (diffSide skips them), and committing them would make the diff
+    // see "no change" once the slug arrives — the attach would never
+    // fire. Excluding them re-diffs the pairs on slug arrival.
+    const committable = (m: ContributorMap): ContributorMap => {
+      const next: ContributorMap = new Map();
+      for (const [clusterId, refs] of m) {
+        if (slugByClusterId.has(clusterId)) next.set(clusterId, refs);
+      }
+      return next;
+    };
+
+    // First effect run for a given workspace: seed baseline silently.
+    if (initializedForWorkspaceRef.current !== scope.workspaceId) {
+      lastKbRef.current = committable(currentKb);
+      lastSkillRef.current = committable(currentSkill);
+      initializedForWorkspaceRef.current = scope.workspaceId;
+      return;
     }
 
     const ops: PendingOp[] = [];
@@ -128,8 +141,8 @@ export function useClusterAttachmentSync(): void {
     // committed.
     const previousKb = lastKbRef.current;
     const previousSkill = lastSkillRef.current;
-    lastKbRef.current = currentKb;
-    lastSkillRef.current = currentSkill;
+    lastKbRef.current = committable(currentKb);
+    lastSkillRef.current = committable(currentSkill);
 
     void runOps(ops, scope.workspaceId).then((failed) => {
       if (failed.length === 0) return;
@@ -244,16 +257,33 @@ function computeContributors(
     for (const pid of c.panelIds) {
       const p = byId.get(pid);
       if (!p) continue;
-      let refId: string | null = null;
-      if (panelType === "knowledge-base" && p.type === "knowledge-base") {
-        refId = p.knowledgeBaseId;
-      } else if (panelType === "skill" && p.type === "skill") {
-        refId = p.skillId;
+      // A panel can contribute multiple refs: KB/skill panels contribute
+      // themselves; NODE panels contribute every docked reference in
+      // their Read (KBs — file refs attach their parent KB) or Action
+      // (skills) fields. Dock = attach; undock = the pair vanishes while
+      // the node lives on → detach. Same close-preserves semantics as
+      // panel closes.
+      const refIds: string[] = [];
+      if (panelType === "knowledge-base") {
+        if (p.type === "knowledge-base") refIds.push(p.knowledgeBaseId);
+        else if (p.type === "node") {
+          for (const r of p.reads) {
+            if (r.kind === "kb" || r.kind === "file") refIds.push(r.kbId);
+          }
+        }
+      } else {
+        if (p.type === "skill") refIds.push(p.skillId);
+        else if (p.type === "node") {
+          for (const r of p.actions) {
+            if (r.kind === "skill") refIds.push(r.skillId);
+          }
+        }
       }
-      if (!refId) continue;
-      const set = refMap.get(refId) ?? new Set<string>();
-      set.add(pid);
-      refMap.set(refId, set);
+      for (const refId of refIds) {
+        const set = refMap.get(refId) ?? new Set<string>();
+        set.add(pid);
+        refMap.set(refId, set);
+      }
     }
     out.set(c.id, refMap);
   }

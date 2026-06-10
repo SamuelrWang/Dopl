@@ -84,13 +84,19 @@ export async function loadCanvasInitialState(
   try {
     const supabase = supabaseAdmin();
 
-    const [stateRes, panelsRes] = await Promise.all([
+    const [stateRes, panelsRes, edgesRes] = await Promise.all([
       supabase
         .from("canvas_state")
         .select("*")
         .eq("workspace_id", scope.workspaceId)
         .maybeSingle(),
       supabase.from("canvas_panels").select("*").eq("workspace_id", scope.workspaceId),
+      // Edge load failure (e.g. migration not applied yet) degrades to
+      // an empty edge list rather than nuking the whole canvas state.
+      supabase
+        .from("canvas_edges")
+        .select("id, from_panel_id, to_panel_id")
+        .eq("workspace_id", scope.workspaceId),
     ]);
 
     // 404 / first-time user → return empty state with defaults injected.
@@ -169,6 +175,17 @@ export async function loadCanvasInitialState(
 
     const clusters: Cluster[] = Array.isArray(cs.clusters) ? cs.clusters : [];
 
+    const panelIds = new Set(panels.map((p) => p.id));
+    const edges = (edgesRes.error ? [] : edgesRes.data ?? [])
+      .map((row) => ({
+        id: row.id as string,
+        fromPanelId: row.from_panel_id as string,
+        toPanelId: row.to_panel_id as string,
+      }))
+      // Drop edges whose endpoint panels are gone (deleted in another
+      // session before the DB cascade caught up).
+      .filter((ed) => panelIds.has(ed.fromPanelId) && panelIds.has(ed.toPanelId));
+
     const state: CanvasState = {
       ...empty,
       camera: {
@@ -178,8 +195,21 @@ export async function loadCanvasInitialState(
       },
       panels,
       clusters,
-      nextPanelId: cs.next_panel_id ?? 1,
-      nextClusterId: cs.next_cluster_id ?? 1,
+      edges,
+      // Clamp the counters against what's actually loaded: the panel
+      // POSTs are immediate but the counter only persists via a
+      // debounced PATCH that can be lost (409 / tab close). A stale
+      // counter would mint duplicate `panel-N` ids — colliding React
+      // keys, silently-ignored POSTs, and panel_data writes landing in
+      // the wrong row.
+      nextPanelId: Math.max(
+        cs.next_panel_id ?? 1,
+        maxNumericSuffix(panels.map((p) => p.id), "panel-") + 1
+      ),
+      nextClusterId: Math.max(
+        cs.next_cluster_id ?? 1,
+        maxNumericSuffix(clusters.map((c) => c.id), "cluster-") + 1
+      ),
     };
 
     return dedupSingletonPanels(ensureDefaultPanels(state));
@@ -319,4 +349,15 @@ async function resolveAttachmentUrls(
   } catch {
     // Silent failure — client will show placeholders for attachments.
   }
+}
+
+/** Largest numeric suffix among ids shaped `${prefix}${n}`; 0 if none. */
+function maxNumericSuffix(ids: string[], prefix: string): number {
+  let max = 0;
+  for (const id of ids) {
+    if (!id.startsWith(prefix)) continue;
+    const n = Number(id.slice(prefix.length));
+    if (Number.isInteger(n) && n > max) max = n;
+  }
+  return max;
 }

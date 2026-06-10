@@ -159,7 +159,7 @@ export class DoplClient {
 
   async updateCluster(
     slug: string,
-    updates: { name?: string }
+    updates: { name?: string; description?: string | null }
   ): Promise<ClusterRow> {
     return this.transport.request<ClusterRow>(
       `/api/clusters/${encodeURIComponent(slug)}`,

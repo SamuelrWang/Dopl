@@ -1,5 +1,9 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
+import {
+  composeClusterWorkflow,
+  type ClusterWorkflow,
+} from "./workflow";
 import { slugifyClusterName } from "../slug";
 import { normalizeClusterName } from "@/shared/lib/cluster-name";
 import { tearDownClusterCanvasArtifacts } from "./canvas-side-effects";
@@ -17,6 +21,9 @@ export interface ClusterRow {
   slug: string;
   name: string;
   created_at: string;
+  /** Workflow description (≤300 chars) — shown on the cluster-info panel
+   *  and streamed to agents via dopl_cluster. */
+  description: string | null;
   updated_at: string;
   /** Deprecated — clusters no longer hold entry/setup panels. Always 0. */
   panel_count: number;
@@ -33,14 +40,19 @@ export interface ClusterRow {
 export interface ClusterDetail extends ClusterRow {
   knowledge_bases: ClusterAttachedKnowledgeBase[];
   skills: ClusterAttachedSkill[];
+  /** Workflow definition composed from the canvas (node panels + edges).
+   *  Null when the cluster has no node blocks. */
+  workflow: ClusterWorkflow | null;
 }
 
 export interface ClusterCreateRequest {
   name: string;
+  description?: string | null;
 }
 
 export interface ClusterUpdateRequest {
   name?: string;
+  description?: string | null;
 }
 
 /**
@@ -64,7 +76,7 @@ export async function listClusters(scope: ClusterScope): Promise<ClusterRow[]> {
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("clusters")
-    .select("id, slug, name, created_at, updated_at")
+    .select("id, slug, name, description, created_at, updated_at")
     .eq("workspace_id", scope.workspaceId)
     .order("created_at", { ascending: false });
 
@@ -166,7 +178,7 @@ export async function getCluster(
   const db = supabaseAdmin();
   const { data: cluster, error } = await db
     .from("clusters")
-    .select("id, slug, name, created_at, updated_at")
+    .select("id, slug, name, description, created_at, updated_at")
     .eq("slug", slug)
     .eq("workspace_id", scope.workspaceId)
     .single();
@@ -175,9 +187,10 @@ export async function getCluster(
     throw new Error(`Cluster not found: ${slug}`);
   }
 
-  const [knowledge_bases, skills] = await Promise.all([
+  const [knowledge_bases, skills, workflow] = await Promise.all([
     listAttachedKnowledgeBasesById(cluster.id, scope),
     listAttachedSkillsById(cluster.id, scope),
+    composeClusterWorkflow(scope.workspaceId, cluster.id),
   ]);
 
   return {
@@ -189,6 +202,7 @@ export async function getCluster(
     skill_names: skills.map((s) => s.name),
     knowledge_bases,
     skills,
+    workflow,
   };
 }
 
@@ -226,8 +240,9 @@ export async function createCluster(
       user_id: scope.userId,
       name,
       slug,
+      description: req.description ?? null,
     })
-    .select("id, slug, name, created_at, updated_at")
+    .select("id, slug, name, description, created_at, updated_at")
     .single();
   if (insError) throw insError;
   if (!cluster) throw new Error("Failed to create cluster");
@@ -266,7 +281,7 @@ export async function updateCluster(
 
   const { data: cluster, error: lookupError } = await db
     .from("clusters")
-    .select("id, slug, name, created_at, updated_at")
+    .select("id, slug, name, description, created_at, updated_at")
     .eq("slug", slug)
     .eq("workspace_id", scope.workspaceId)
     .single();
@@ -275,7 +290,7 @@ export async function updateCluster(
     throw new Error(`Cluster not found: ${slug}`);
   }
 
-  let newSlug = cluster.slug;
+  const update: Record<string, unknown> = {};
 
   const nextName = req.name ? normalizeClusterName(req.name) : undefined;
   if (nextName && nextName !== cluster.name) {
@@ -286,15 +301,16 @@ export async function updateCluster(
     const existingSlugs = (existing || [])
       .map((r) => r.slug)
       .filter((s) => s !== cluster.slug);
-    newSlug = slugifyClusterName(nextName, existingSlugs);
+    update.name = nextName;
+    update.slug = slugifyClusterName(nextName, existingSlugs);
+  }
+  if (req.description !== undefined) update.description = req.description;
 
+  if (Object.keys(update).length > 0) {
+    update.updated_at = new Date().toISOString();
     const { error: updateError } = await db
       .from("clusters")
-      .update({
-        name: nextName,
-        slug: newSlug,
-        updated_at: new Date().toISOString(),
-      })
+      .update(update)
       .eq("id", cluster.id)
       .eq("workspace_id", scope.workspaceId);
     if (updateError) throw updateError;
@@ -302,7 +318,7 @@ export async function updateCluster(
 
   const { data: updated, error: refetchError } = await db
     .from("clusters")
-    .select("id, slug, name, created_at, updated_at")
+    .select("id, slug, name, description, created_at, updated_at")
     .eq("id", cluster.id)
     .single();
 

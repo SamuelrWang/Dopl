@@ -23,6 +23,8 @@ import { SkillsPanelBody } from "./panels/skills/skills-panel";
 import { KnowledgeBasePanelBody } from "./panels/knowledge-base/knowledge-base-panel";
 import { SkillPanelBody } from "./panels/skill/skill-panel";
 import { ArtifactPanelBody } from "./panels/artifact/artifact-panel";
+import { ClusterInfoPanelBody } from "./panels/cluster-info/cluster-info-panel";
+import { NodePanelBody } from "./panels/node/node-panel";
 import { ChatExpiryBar } from "./canvas-panel-expiry";
 import { useCanvasPanelDrag } from "./use-canvas-panel-drag";
 import { useCanvasPanelResize } from "./use-canvas-panel-resize";
@@ -99,7 +101,11 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
                       ? `Skill · ${panel.name}`
                       : panel.type === "artifact"
                         ? `Artifact · ${panel.title}`
-                        : "Panel";
+                        : panel.type === "cluster-info"
+                          ? "Workflow"
+                          : panel.type === "node"
+                            ? `Node${panel.title ? ` · ${panel.title}` : ""}`
+                            : "Panel";
 
   return (
     <div
@@ -172,8 +178,12 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
           from being selectable — the header is for dragging, not reading. */}
       <div
         data-drag-handle
-        style={{ cursor: isDragging ? "grabbing" : "grab" }}
-        className="shrink-0 flex items-center gap-2 px-4 h-10 border-b border-border-subtle select-none"
+        style={{
+          cursor: isDragging ? "grabbing" : "grab",
+          background: "var(--panel-header-surface)",
+          borderColor: "var(--panel-header-border)",
+        }}
+        className="shrink-0 flex items-center gap-2 px-4 h-10 border-b select-none"
       >
         {/* Drag indicator dots */}
         <div
@@ -196,7 +206,7 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
 
         <span
           style={{ cursor: isDragging ? "grabbing" : "grab" }}
-          className="font-mono text-[10px] uppercase tracking-wide text-text-secondary truncate flex-1"
+          className="font-mono text-[10px] uppercase tracking-wide text-[var(--panel-header-text)] truncate flex-1"
         >
           {headerTitle}
         </span>
@@ -257,6 +267,8 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
         {panel.type === "knowledge-base" && <KnowledgeBasePanelBody panel={panel} />}
         {panel.type === "skill" && <SkillPanelBody panel={panel} />}
         {panel.type === "artifact" && <ArtifactPanelBody panel={panel} dispatch={dispatch} />}
+        {panel.type === "cluster-info" && <ClusterInfoPanelBody panel={panel} />}
+        {panel.type === "node" && <NodePanelBody panel={panel} />}
       </div>
 
       {/* Confirmation dialog for closing chat panels with messages */}

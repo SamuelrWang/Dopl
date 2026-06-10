@@ -5,7 +5,7 @@
  *
  * Pattern: `useEffect` → `fetch` → `useState` with a `cancelled` flag —
  * matches the existing `useWorkspaces` convention in
- * [sidebar.tsx](src/shared/layout/sidebar.tsx). Each hook returns a
+ * the app-shell rail. Each hook returns a
  * `refetch()` callback so callers can revalidate after mutations.
  *
  * Status enum: `idle | loading | success | error`. Components check

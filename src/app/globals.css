@@ -223,12 +223,18 @@
   /* Cluster/agent active green */
   --agent-on: oklch(0.84 0.15 162);
 
+  /* Panel header — alpha tints of --accent-primary (the existing
+     cyan/blue accent) so panels aren't fully monochrome */
+  --panel-header-surface: oklch(0.78 0.16 240 / 10%);
+  --panel-header-border: oklch(0.78 0.16 240 / 30%);
+  --panel-header-text: var(--accent-primary);
+
   /* Cluster outline (dashed region behind grouped panels) — drawn in SVG.
-     White-alpha on dark; black-alpha on light so the region is visible. */
-  --cluster-outline-stroke: rgba(255, 255, 255, 0.35);
-  --cluster-outline-stroke-strong: rgba(255, 255, 255, 0.5);
-  --cluster-outline-fill: rgba(255, 255, 255, 0.03);
-  --cluster-outline-fill-strong: rgba(255, 255, 255, 0.05);
+     Alpha variants of --accent-primary so the region reads clearly. */
+  --cluster-outline-stroke: oklch(0.78 0.16 240 / 60%);
+  --cluster-outline-stroke-strong: oklch(0.78 0.16 240 / 80%);
+  --cluster-outline-fill: oklch(0.78 0.16 240 / 5%);
+  --cluster-outline-fill-strong: oklch(0.78 0.16 240 / 8%);
 
   /* Panel shine + selection — used by canvas-panel inline styles.
      Dark keeps the white shine; light inverts to a soft neutral shadow. */
@@ -364,11 +370,18 @@ html.light {
   /* Cluster/agent green — darker emerald so it reads on white */
   --agent-on: oklch(0.52 0.14 162);
 
-  /* Cluster outline — black-alpha so the dashed region is visible on light */
-  --cluster-outline-stroke: rgba(0, 0, 0, 0.3);
-  --cluster-outline-stroke-strong: rgba(0, 0, 0, 0.45);
-  --cluster-outline-fill: rgba(0, 0, 0, 0.035);
-  --cluster-outline-fill-strong: rgba(0, 0, 0, 0.06);
+  /* Panel header — alpha tints of --link (#2f6fed), the only blue in
+     the light palette, so panels aren't fully monochrome */
+  --panel-header-surface: rgba(47, 111, 237, 0.07);
+  --panel-header-border: rgba(47, 111, 237, 0.25);
+  --panel-header-text: var(--link);
+
+  /* Cluster outline — alpha variants of --link (#2f6fed) so the dashed
+     region is clearly visible on light */
+  --cluster-outline-stroke: rgba(47, 111, 237, 0.55);
+  --cluster-outline-stroke-strong: rgba(47, 111, 237, 0.8);
+  --cluster-outline-fill: rgba(47, 111, 237, 0.04);
+  --cluster-outline-fill-strong: rgba(47, 111, 237, 0.07);
 
   /* Panel shine inverts to a soft neutral shadow + faint inset */
   --shine-top-gradient: transparent;
@@ -459,6 +472,31 @@ html {
   background-color: var(--body-bg);
 }
 
+/* ─────────────────────────────────────────────────────────────────────
+   AppShell geometry — single source of truth for the new-design chrome.
+   Consumed by shared/layout/app-shell/app-shell.module.css (titlebar,
+   rail, sidebar, surface margins, panel radius) AND by the canvas portal
+   (canvas-client-shell.tsx), whose fixed container must align exactly
+   with the shell's white panel area. Change values here only.
+   ───────────────────────────────────────────────────────────────────── */
+:root {
+  --shell-titlebar-h: 40px;
+  --shell-rail-w: 74px;
+  --shell-sidebar-w: 204px;
+  --shell-gap-top: 5px;
+  --shell-gap-right: 6px;
+  --shell-gap-bottom: 6px;
+  --shell-gap-left: 4px;
+  --shell-panel-radius: 22px;
+  /* Derived: viewport insets of the white main panel. */
+  --app-panel-top: calc(var(--shell-titlebar-h) + var(--shell-gap-top));
+  --app-panel-left: calc(
+    var(--shell-rail-w) + var(--shell-gap-left) + var(--shell-sidebar-w)
+  );
+  --app-panel-right: var(--shell-gap-right);
+  --app-panel-bottom: var(--shell-gap-bottom);
+}
+
 /* Canvas surface — the organic "lava-lamp" mosaic gradient, scoped to the
    canvas panel ONLY (the rest of the app frame stays flat). */
 .canvas-surface {
@@ -486,6 +524,14 @@ html {
 }
 html.light .canvas-surface {
   background-color: #e8e9ec;
+  background-image: none;
+}
+/* New-design canvas: flat light surface inside the AppShell panel area.
+   Applied alongside the lightScope token class on the canvas portal
+   container (html stays .dark, so this can't ride html.light). Slightly
+   gray so the white floating panels read against it. */
+.canvas-surface.canvas-surface-light {
+  background-color: #eef1f5;
   background-image: none;
 }
 

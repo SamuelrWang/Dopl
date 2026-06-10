@@ -3,7 +3,12 @@
 import React, { useCallback, useEffect, useRef, useState, type Dispatch } from "react";
 import { useCanvasStateRef, useCapabilities } from "./canvas-store";
 import { computeIdealClusterMembership } from "./clusters/cluster-geometry";
-import { isPanelClusterable, type CanvasAction, type Panel } from "./types";
+import {
+  isPanelClusterable,
+  type CanvasAction,
+  type NodeRef,
+  type Panel,
+} from "./types";
 
 /**
  * Does this element have a non-whitespace DIRECT text child? Used to block
@@ -79,6 +84,23 @@ export function useCanvasPanelDrag(
   // can distinguish "click on a multi-selected panel" (collapse selection)
   // from "drag a multi-selected group" (keep selection).
   const didDragRef = useRef(false);
+
+  // Node-dock target under the cursor during a solo KB/skill panel drag.
+  // The zone element is highlighted imperatively via [data-dock-active]
+  // (no React state — this runs every pointermove frame).
+  const dockTargetRef = useRef<{
+    el: HTMLElement;
+    nodePanelId: string;
+    zone: "read" | "action";
+  } | null>(null);
+
+  const clearDockTarget = useCallback(() => {
+    const current = dockTargetRef.current;
+    if (current) {
+      delete current.el.dataset.dockActive;
+      dockTargetRef.current = null;
+    }
+  }, []);
 
   const handleRootPointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
@@ -218,6 +240,40 @@ export function useCanvasPanelDrag(
         })),
       });
 
+      // ── Node dock-zone hit-test ────────────────────────────────────
+      // Solo drags of a KB / skill panel can dock into a node block's
+      // Read / Action zone. elementsFromPoint returns the full stack,
+      // so the dragged panel's own elements (under the cursor) are
+      // skipped by requiring a zone that belongs to a DIFFERENT panel.
+      if (
+        origin.panels.length === 1 &&
+        (panel.type === "knowledge-base" || panel.type === "skill")
+      ) {
+        const wantZone = panel.type === "knowledge-base" ? "read" : "action";
+        let found: HTMLElement | null = null;
+        for (const el of document.elementsFromPoint(e.clientX, e.clientY)) {
+          const zoneEl = (el as HTMLElement).closest?.(
+            `[data-dock-zone="${wantZone}"]`
+          ) as HTMLElement | null;
+          if (zoneEl && zoneEl.dataset.dockPanelId !== panel.id) {
+            found = zoneEl;
+            break;
+          }
+        }
+        const current = dockTargetRef.current;
+        if (found !== (current?.el ?? null)) {
+          clearDockTarget();
+          if (found && found.dataset.dockPanelId) {
+            found.dataset.dockActive = "true";
+            dockTargetRef.current = {
+              el: found,
+              nodePanelId: found.dataset.dockPanelId,
+              zone: wantZone,
+            };
+          }
+        }
+      }
+
       // ── Cluster membership re-computation ─────────────────────────
       // After updating positions, decide whether each moved panel
       // should enter / leave / stay in its current cluster based on
@@ -261,6 +317,10 @@ export function useCanvasPanelDrag(
         // Non-clusterable panels (connection, browse) skip membership checks.
         const movedPanel = latestState.panels.find((p) => p.id === moved.id);
         if (movedPanel && !isPanelClusterable(movedPanel)) continue;
+        // Cluster-info panels are pinned to their own cluster — dragging
+        // one repositions it (the outline follows) but never re-homes it
+        // into a spatially-nearer cluster.
+        if (movedPanel?.type === "cluster-info") continue;
 
         const currentCluster = latestState.clusters.find((c) =>
           c.panelIds.includes(moved.id)
@@ -283,7 +343,7 @@ export function useCanvasPanelDrag(
         }
       }
     },
-    [dispatch, canvasStateRef]
+    [dispatch, canvasStateRef, panel.type, panel.id, clearDockTarget]
   );
 
   const handleRootPointerUp = useCallback(
@@ -292,9 +352,41 @@ export function useCanvasPanelDrag(
       if (target.hasPointerCapture(e.pointerId)) {
         target.releasePointerCapture(e.pointerId);
       }
+
+      // ── Dock on drop ──────────────────────────────────────────────
+      // Dropping a KB / skill panel onto a node zone converts the panel
+      // into a docked reference: the ref lands in the node's field and
+      // the dragged panel leaves the canvas. pointercancel (the platform
+      // ABORTED the gesture) must never commit a dock — that would
+      // delete the dragged panel on an unintentional gesture.
+      const wasCanceled = e.type === "pointercancel";
+      const dock = dockTargetRef.current;
+      if (dock && didDragRef.current && !wasCanceled) {
+        let ref: NodeRef | null = null;
+        if (panel.type === "knowledge-base") {
+          ref = {
+            kind: "kb",
+            kbId: panel.knowledgeBaseId,
+            name: panel.name,
+          };
+        } else if (panel.type === "skill") {
+          ref = { kind: "skill", skillId: panel.skillId, name: panel.name };
+        }
+        if (ref) {
+          dispatch({
+            type: "NODE_DOCK_REF",
+            panelId: dock.nodePanelId,
+            zone: dock.zone,
+            ref,
+          });
+          dispatch({ type: "CLOSE_PANEL", id: panel.id });
+        }
+      }
+      clearDockTarget();
       // If the user clicked (not dragged) a panel that was part of a
       // multi-selection, collapse the selection down to just this panel.
-      if (!didDragRef.current) {
+      // (Skipped for canceled gestures — a cancel is not a click.)
+      if (!didDragRef.current && !wasCanceled) {
         const sel = canvasStateRef.current.selectedPanelIds;
         if (sel.length > 1 && sel.includes(panel.id)) {
           dispatch({ type: "SET_SELECTION", panelIds: [panel.id] });
@@ -307,18 +399,20 @@ export function useCanvasPanelDrag(
         document.body.classList.remove("panel-dragging");
       }
     },
-    [dispatch, panel.id, canvasStateRef]
+    [dispatch, panel, canvasStateRef, clearDockTarget]
   );
 
-  // Safety net: if this panel unmounts mid-drag (e.g. user clicks Close),
-  // make sure we don't leave the body stuck in `panel-dragging`.
+  // Safety net: if this panel unmounts mid-drag (e.g. user clicks Close,
+  // keyboard delete, realtime removal), make sure we don't leave the
+  // body stuck in `panel-dragging` or a node zone stuck highlighted.
   useEffect(() => {
     return () => {
       if (typeof document !== "undefined") {
         document.body.classList.remove("panel-dragging");
       }
+      clearDockTarget();
     };
-  }, []);
+  }, [clearDockTarget]);
 
   return {
     isDragging,

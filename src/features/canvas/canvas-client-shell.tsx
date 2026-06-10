@@ -12,6 +12,7 @@
 
 import { createPortal } from "react-dom";
 import { useSyncExternalStore } from "react";
+import shellStyles from "@/shared/layout/app-shell/app-shell.module.css";
 import { CanvasProvider } from "@/features/canvas/canvas-store";
 import { CanvasGridSync } from "@/features/canvas/canvas-grid-sync";
 import { useLayoutSnapshot } from "@/features/canvas/use-layout-snapshot";
@@ -41,14 +42,25 @@ function CanvasPortal() {
 
   if (!mounted) return null;
 
-  // Inset to match the shell's content-panel geometry (sidebar width + gap on
-  // the left, top-bar height + gap on top, small gap on the right/bottom) and
-  // clip to the rounded panel. The Canvas resizes to this box automatically via
-  // its ResizeObserver, and pointer math uses getBoundingClientRect so the
-  // offset is handled. Still portaled to <body> so it escapes the z-[2] chrome
-  // layer and receives marquee/drag events.
+  // Inset to the AppShell's white-panel rect (single-sourced via the
+  // --app-panel-* vars in globals.css) so the canvas sits exactly where the
+  // shell's main panel would be. z-[31] floats above the AppShell root
+  // (z-30) but below modals (z-40). The lightScope class re-themes every
+  // token-based panel/overlay inside to the new light palette. The Canvas
+  // resizes to this box automatically via its ResizeObserver, and pointer
+  // math uses getBoundingClientRect so the offset is handled. Still portaled
+  // to <body> so the shell chrome can never intercept marquee/drag events.
   return createPortal(
-    <div className="canvas-surface fixed top-[60px] right-2 bottom-2 left-2 md:left-[264px] z-[1] overflow-hidden rounded-2xl border border-border-subtle shadow-[var(--shadow-panel)]">
+    <div
+      className={`${shellStyles.lightScope} canvas-surface canvas-surface-light fixed z-[31] overflow-hidden border border-border-subtle shadow-[var(--shadow-panel)]`}
+      style={{
+        top: "var(--app-panel-top)",
+        left: "var(--app-panel-left)",
+        right: "var(--app-panel-right)",
+        bottom: "var(--app-panel-bottom)",
+        borderRadius: "var(--shell-panel-radius) 18px 18px 18px",
+      }}
+    >
       <Canvas />
     </div>,
     document.body
@@ -88,8 +100,13 @@ export default function CanvasClientShell({
           canvasSlug={canvasSlug}
         />
         <CanvasPortal />
-        <FixedInputBar />
-        <FixedChatPanel />
+        {/* Fixed overlays render outside the portal; the wrapper div has no
+            layout but carries the light token scope so they match the new
+            canvas palette. */}
+        <div className={shellStyles.lightScope}>
+          <FixedInputBar />
+          <FixedChatPanel />
+        </div>
         <PaywallGate />
       </DrawerProvider>
     </CanvasProvider>

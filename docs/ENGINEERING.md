@@ -56,7 +56,7 @@ setup-intelligence-engine/
 │   │   ├── ui/                    # shadcn primitives (Button, Dialog, etc.)
 │   │   ├── design/                # Higher-level design components (MarkdownMessage, Orb, ...)
 │   │   ├── layout/                # Shells + headers + sidebars
-│   │   │   └── app-shell/         # NEW-DESIGN chrome: AppShell (workspace rail + sidebar + titlebar) + AppPanel (white panel with the light token scope). Mounted once by src/app/[workspaceSlug]/(app)/layout.tsx; every named workspace sub-page (overview/chat/knowledge/skills/members/settings) renders inside an AppPanel. Canvas + non-workspace routes keep the legacy layout-shell chrome until converted. Dark/light toggle removed — use-theme is a fixed-dark shim.
+│   │   │   └── app-shell/         # NEW-DESIGN chrome: AppShell (workspace rail + sidebar + titlebar) + AppPanel (white panel with the light token scope). Mounted once by src/app/[workspaceSlug]/(app)/layout.tsx AND by [canvasSlug]/layout.tsx; every workspace page renders inside it. The canvas portals to <body> at z-[31], inset to the shell's white-panel rect via the --app-panel-* vars in globals.css (single-source geometry). Only non-workspace routes keep the legacy layout-shell chrome. Dark/light toggle removed — use-theme is a fixed-dark shim. Clusters are workflows: cluster-info + node panel types, canvas_edges connectors, dock=attach sync, dopl_cluster exposes the workflow graph (see docs/WORKFLOW-BUILDER-PLAN.md).
 │   │   ├── lib/                   # Pure utilities (ai, github, slug, utils, http-error)
 │   │   ├── prompts/               # Claude prompt templates
 │   │   ├── hooks/                 # Generic hooks

@@ -45,8 +45,8 @@
 
 /* ---------- Titlebar ---------- */
 .titlebar {
-  height: 40px;
-  flex: 0 0 40px;
+  height: var(--shell-titlebar-h);
+  flex: 0 0 var(--shell-titlebar-h);
   display: flex;
   align-items: center;
   padding: 0 22px 0 18px;
@@ -60,8 +60,8 @@
 
 /* ---------- Workspace rail (far left) ---------- */
 .rail {
-  width: 74px;
-  flex: 0 0 74px;
+  width: var(--shell-rail-w);
+  flex: 0 0 var(--shell-rail-w);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -132,14 +132,14 @@
   display: flex;
   border-radius: 18px;
   overflow: hidden;
-  margin: 5px 6px 6px 4px;
+  margin: var(--shell-gap-top) var(--shell-gap-right) var(--shell-gap-bottom) var(--shell-gap-left);
   background: var(--sidebar);
 }
 
 /* ---------- Sidebar ---------- */
 .sidebar {
-  width: 204px;
-  flex: 0 0 204px;
+  width: var(--shell-sidebar-w);
+  flex: 0 0 var(--shell-sidebar-w);
   background: var(--sidebar);
   padding: 8px 12px 20px 12px;
   display: flex;
@@ -223,7 +223,7 @@
   flex: 1;
   min-width: 0;
   background: var(--panel);
-  border-top-left-radius: 22px;
+  border-top-left-radius: var(--shell-panel-radius);
   padding: 34px 0 0 38px;
   display: flex;
   flex-direction: column;
@@ -376,7 +376,7 @@
   flex: 1;
   min-width: 0;
   background: #fbfcfd;
-  border-top-left-radius: 22px;
+  border-top-left-radius: var(--shell-panel-radius);
   display: flex;
   flex-direction: column;
   overflow: hidden;

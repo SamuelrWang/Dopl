@@ -12,6 +12,7 @@
  */
 
 import { useEffect, useRef, useState, useCallback } from "react";
+import { getCanvasViewportSize } from "./viewport-size";
 import {
   computeNewPanelPosition,
   nextPanelIdString,
@@ -96,8 +97,7 @@ export function FixedInputBar() {
    * panel itself.
    */
   function spawnChatPanel(pendingInput?: string): string {
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
+    const { vw, vh } = getCanvasViewportSize();
     const { x, y } = computeNewPanelPosition(
       state,
       vw,
@@ -143,8 +143,7 @@ export function FixedInputBar() {
    * Spawn a knowledge panel — singleton, frame-existing-or-spawn pattern.
    */
   function handleSpawnKnowledge() {
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
+    const { vw, vh } = getCanvasViewportSize();
 
     const existing = state.panels.find((p) => p.type === "knowledge");
     if (existing) {
@@ -182,8 +181,7 @@ export function FixedInputBar() {
    * Spawn a skills panel — singleton, frame-existing-or-spawn pattern.
    */
   function handleSpawnSkills() {
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
+    const { vw, vh } = getCanvasViewportSize();
 
     const existing = state.panels.find((p) => p.type === "skills");
     if (existing) {
@@ -228,8 +226,11 @@ export function FixedInputBar() {
 
   return (
     <div
-      className="fixed bottom-4 left-0 right-0 z-30 flex justify-center px-4 pointer-events-none"
+      className="fixed z-[32] flex justify-center px-4 pointer-events-none"
       style={{
+        bottom: "calc(var(--app-panel-bottom) + 10px)",
+        left: "var(--app-panel-left)",
+        right: "var(--app-panel-right)",
         transform: "translateX(calc(var(--chat-drawer-inset, 0px) / -2))",
         transition: "transform 250ms cubic-bezier(0.16, 1, 0.3, 1)",
         willChange: "transform",

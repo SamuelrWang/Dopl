@@ -89,7 +89,7 @@ export const ClusterOutline = React.memo(function ClusterOutline({ panels, empha
           the CSS var() resolves and themes with light/dark. */}
       <path
         d={path}
-        strokeWidth={1.5}
+        strokeWidth={2}
         strokeDasharray="8 6"
         strokeLinejoin="round"
         strokeLinecap="round"

@@ -99,7 +99,11 @@ export function KnowledgeBaseView({
   // `initialEntry` is the server-fetched body for the first-selected
   // entry; the hook seeds from it and skips the initial fetch so the
   // page paints with content on reload (no client-side waterfall).
-  const { data: fullEntry, refetch: refetchEntry } = useKnowledgeEntry(
+  const {
+    data: fullEntry,
+    status: entryStatus,
+    refetch: refetchEntry,
+  } = useKnowledgeEntry(
     selectedMeta?.id,
     workspaceId,
     initialEntry
@@ -107,6 +111,16 @@ export function KnowledgeBaseView({
       : undefined
   );
   const displayEntry = fullEntry ?? selectedMeta;
+  // The tree omits bodies, so on entry switch `displayEntry` is the
+  // metadata-only `selectedMeta` (title yes, body empty) until the
+  // per-entry fetch lands. Flag that window so DocPane can show a body
+  // skeleton instead of a blank editor. False on error (don't hang the
+  // skeleton) and when the full body for THIS entry is already in hand
+  // (matched id — covers the warm-cache no-flicker path).
+  const bodyLoading =
+    !!selectedMeta &&
+    fullEntry?.id !== selectedMeta.id &&
+    entryStatus !== "error";
 
   // Folder chain (root → leaf) for the opened entry, for the header
   // breadcrumb. Visited-set guard in case a stale tree snapshot ever
@@ -486,6 +500,7 @@ export function KnowledgeBaseView({
                 key={displayEntry.id}
                 entry={displayEntry}
                 workspaceId={workspaceId}
+                bodyLoading={bodyLoading}
                 onSaved={refresh}
                 onStaleVersion={() => {
                   // DocPane now owns 412 recovery — it fetches the

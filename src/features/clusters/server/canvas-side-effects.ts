@@ -44,14 +44,37 @@ export async function tearDownClusterCanvasArtifacts(
   }
 
   const existing = (stateRow as { clusters: Record<string, unknown>[] }).clusters;
+  const removedEntries: Record<string, unknown>[] = [];
   const pruned = existing.filter((c) => {
     const entrySlug = typeof c.slug === "string" ? c.slug : null;
     const entryDbId = typeof c.dbId === "string" ? c.dbId : null;
-    if (entrySlug === slug) return false;
-    if (cluster && entryDbId === cluster.id) return false;
-    return true;
+    const matches =
+      entrySlug === slug || (cluster != null && entryDbId === cluster.id);
+    if (matches) removedEntries.push(c);
+    return !matches;
   });
   if (pruned.length === existing.length) return;
+
+  // Also remove the cluster's cluster-info panel row: without this, a
+  // server-side delete (clusters page, MCP dopl_cluster_admin) leaves an
+  // orphaned header card on the canvas pointing at a deleted cluster —
+  // it renders "Cluster removed." with no close affordance (its
+  // lifecycle is the cluster's, which no longer exists).
+  const infoPanelIds = removedEntries
+    .map((c) => (typeof c.infoPanelId === "string" ? c.infoPanelId : null))
+    .filter((id): id is string => id !== null);
+  if (infoPanelIds.length > 0) {
+    const { error: panelError } = await db
+      .from("canvas_panels")
+      .delete()
+      .eq("workspace_id", scope.workspaceId)
+      .in("panel_id", infoPanelIds);
+    if (panelError) {
+      throw new Error(
+        `Failed to remove cluster-info panel(s) for cluster ${slug}: ${panelError.message}`
+      );
+    }
+  }
 
   const { error: stateError } = await db
     .from("canvas_state")

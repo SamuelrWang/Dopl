@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DESCRIPTION_MAX } from "@/config";
 
 /**
  * Zod input schemas for the knowledge feature. Used by REST handlers
@@ -103,11 +104,6 @@ export const AgentWriteToggleSchema = z.object({
 export type AgentWriteToggleInput = z.infer<typeof AgentWriteToggleSchema>;
 
 // ─── knowledge_folders ──────────────────────────────────────────────
-
-// Agent-facing descriptions (folder `description`, entry `excerpt`) are
-// capped at 300 chars: long enough for a useful preview, short enough
-// that the MCP get_tree / list_dir listings they stream into stay lean.
-export const DESCRIPTION_MAX = 300;
 
 export const KnowledgeFolderCreateSchema = z.object({
   knowledgeBaseId: z.string().uuid(),

@@ -4,9 +4,11 @@ import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
 import { parseJson } from "@/shared/api/parse-json";
 import { HttpError } from "@/shared/lib/http-error";
 import { createCluster, listClusters } from "@/features/clusters/server/service";
+import { DESCRIPTION_MAX } from "@/config";
 
 const ClusterCreateSchema = z.object({
   name: z.string().min(1, "Name is required").max(120),
+  description: z.string().max(DESCRIPTION_MAX).nullable().optional(),
 });
 
 function toErrorResponse(err: unknown): NextResponse {
@@ -43,7 +45,7 @@ async function handlePost(
   try {
     const input = await parseJson(request, ClusterCreateSchema);
     const cluster = await createCluster(
-      { name: input.name },
+      { name: input.name, description: input.description },
       { userId, workspaceId, source: agentTokenId ? "agent" : "user" }
     );
     return NextResponse.json(cluster, { status: 201 });

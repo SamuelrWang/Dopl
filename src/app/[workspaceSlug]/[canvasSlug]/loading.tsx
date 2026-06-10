@@ -13,6 +13,7 @@
 
 import { useRef, useSyncExternalStore } from "react";
 import { useParams } from "next/navigation";
+import shellStyles from "@/shared/layout/app-shell/app-shell.module.css";
 import {
   layoutSnapshotKey,
   type LayoutSnapshot,
@@ -71,10 +72,23 @@ export default function CanvasLoading() {
     () => null
   );
 
+  // Both branches paint the AppShell panel rect (the canvas portal's
+  // exact box) in the light surface so the swap to the live canvas
+  // doesn't flash.
+  const panelRectStyle: React.CSSProperties = {
+    top: "var(--app-panel-top)",
+    left: "var(--app-panel-left)",
+    right: "var(--app-panel-right)",
+    bottom: "var(--app-panel-bottom)",
+    borderRadius: "var(--shell-panel-radius) 18px 18px 18px",
+    backgroundColor: "#eef1f5",
+  };
+
   if (!snapshot) {
     return (
       <div
-        className="fixed inset-0 z-[1] pointer-events-none"
+        className={`${shellStyles.lightScope} fixed z-[31] pointer-events-none`}
+        style={panelRectStyle}
         aria-busy="true"
         aria-live="polite"
       />
@@ -84,7 +98,8 @@ export default function CanvasLoading() {
   const { camera, panels } = snapshot;
   return (
     <div
-      className="fixed inset-0 z-[1] overflow-hidden pointer-events-none"
+      className={`${shellStyles.lightScope} fixed z-[31] overflow-hidden pointer-events-none`}
+      style={panelRectStyle}
       aria-busy="true"
       aria-live="polite"
     >

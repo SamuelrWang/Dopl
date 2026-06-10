@@ -14,6 +14,7 @@ import {
   Trash2,
 } from "lucide-react";
 import type { KnowledgeBasePanelData } from "../../types";
+import { useRefChipDrag } from "../../use-ref-chip-drag";
 import { useCanvasScope } from "../../canvas-store";
 import { ClusterAttachmentBanner } from "../cluster-attachment-banner";
 import { useKnowledgeTree } from "@/features/knowledge/client/hooks";
@@ -46,6 +47,7 @@ interface Props {
 }
 
 export function KnowledgeBasePanelBody({ panel }: Props) {
+  const beginRefDrag = useRefChipDrag();
   const scope = useCanvasScope();
   const { data, status, error, refetch } = useKnowledgeTree(
     panel.knowledgeBaseId,
@@ -59,7 +61,11 @@ export function KnowledgeBasePanelBody({ panel }: Props) {
   const canEdit = accessLevel == null ? true : meetsLevel(accessLevel, "edit");
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set(["__root__"]));
-  const [treeOpen, setTreeOpen] = useState(true);
+  // On the canvas the tree is an on-demand drawer: closed by default,
+  // opened via the header chevron, and auto-collapsed when the user
+  // clicks off the panel (see the pointerdown effect below).
+  const [treeOpen, setTreeOpen] = useState(false);
+  const panelRootRef = useRef<HTMLDivElement>(null);
   const [agentToggling, setAgentToggling] = useState(false);
   const [agentEnabled, setAgentEnabled] = useState(panel.agentWriteEnabled);
   /**
@@ -86,6 +92,24 @@ export function KnowledgeBasePanelBody({ panel }: Props) {
       setSelectedEntryId(data.entries[0].id);
     }
   }, [data, selectedEntryId]);
+
+  // Auto-collapse the tree when the user clicks anywhere outside this
+  // panel (off onto the canvas or another panel) so panels stay compact.
+  // Capture phase so the canvas's own pointer handlers — which
+  // stopPropagation while panning/dragging — can't swallow the outside
+  // click before we see it. Only listens while the tree is open.
+  useEffect(() => {
+    if (!treeOpen) return;
+    function handlePointerDown(e: PointerEvent) {
+      const root = panelRootRef.current;
+      if (root && !root.contains(e.target as Node)) {
+        setTreeOpen(false);
+      }
+    }
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    return () =>
+      document.removeEventListener("pointerdown", handlePointerDown, true);
+  }, [treeOpen]);
 
   const tree = useMemo(() => buildTree(data?.folders ?? [], data?.entries ?? []), [data]);
 
@@ -223,7 +247,7 @@ export function KnowledgeBasePanelBody({ panel }: Props) {
   }
 
   return (
-    <div className="flex h-full w-full flex-col">
+    <div ref={panelRootRef} className="flex h-full w-full flex-col">
       <ClusterAttachmentBanner panelId={panel.id} />
       {/* Sub-header: KB metadata */}
       <div className="flex items-center justify-between border-b border-border-subtle px-4 py-3">
@@ -301,6 +325,14 @@ export function KnowledgeBasePanelBody({ panel }: Props) {
               onCommitRename={handleCommitRename}
               onCancelStub={handleCancelStub}
               canEdit={canEdit}
+              onFileDragStart={(e, node) =>
+                beginRefDrag(e, {
+                  kind: "file",
+                  kbId: panel.knowledgeBaseId,
+                  entryId: node.id,
+                  name: node.name,
+                })
+              }
               depth={0}
             />
           )}
@@ -451,6 +483,9 @@ interface TreeNodesProps {
   /** Audit A-005 — gates the in-row "+ entry" / "delete" affordances.
    *  Read-only members render labels only. */
   canEdit: boolean;
+  /** Pointer-down hook for dragging an entry row out of the tree into a
+   *  node block's Read zone (file chip). */
+  onFileDragStart: (e: React.PointerEvent, node: TreeNode) => void;
   depth: number;
 }
 
@@ -578,6 +613,7 @@ function EntryRow({ node, ...props }: { node: TreeNode } & TreeNodesProps) {
           <button
             type="button"
             onClick={() => props.onSelectEntry(node.id)}
+            onPointerDown={(e) => props.onFileDragStart(e, node)}
             className="flex flex-1 items-center gap-1.5 py-1 text-left"
           >
             <FileText size={10} className="shrink-0 text-text-muted" />

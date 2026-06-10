@@ -29,12 +29,14 @@
  */
 
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useCanvas } from "./canvas-store";
+import { useCanvas, useCanvasScope } from "./canvas-store";
 import { MAX_ZOOM, MIN_ZOOM, computePanelsBounds, type Cluster, type Panel } from "./types";
 import { CanvasMinimap } from "./canvas-minimap";
 import { clusterBounds } from "./clusters/cluster-geometry";
+import { createWorkflowCluster } from "./clusters/create-cluster";
 import { SelectionMenu } from "./selection/selection-menu";
 import { CanvasContextMenu } from "./context-menu/canvas-context-menu";
+import type { MenuItemId } from "./context-menu/menu-data";
 import { useEdgeScroll } from "./use-edge-scroll";
 import {
   applyCameraDirect,
@@ -381,6 +383,85 @@ export function Canvas({ showMinimap = true }: CanvasProps = {}) {
     []
   );
 
+  // ── Context-menu actions ──────────────────────────────────────────
+  // Convert the menu's screen position to world coords and dispatch the
+  // chosen creation. Reads state.camera directly — the menu can only be
+  // open outside gestures, where it's authoritative.
+  const scope = useCanvasScope();
+  const handleMenuAction = useCallback(
+    (id: MenuItemId) => {
+      const menuPos = contextMenu;
+      const viewport = viewportRef.current;
+      if (!menuPos || !viewport) return;
+      const rect = viewport.getBoundingClientRect();
+      const cam = state.camera;
+      const worldX = (menuPos.x - rect.left - cam.x) / cam.zoom;
+      const worldY = (menuPos.y - rect.top - cam.y) / cam.zoom;
+
+      switch (id) {
+        case "new-cluster":
+          createWorkflowCluster({
+            state,
+            dispatch,
+            workspaceId: scope?.workspaceId ?? null,
+            at: { x: worldX, y: worldY },
+          });
+          break;
+        case "new-node":
+          dispatch({
+            type: "CREATE_NODE_PANEL",
+            id: `panel-${state.nextPanelId}`,
+            x: worldX,
+            y: worldY,
+          });
+          break;
+        case "new-chat":
+          dispatch({
+            type: "CREATE_CHAT_PANEL",
+            id: `panel-${state.nextPanelId}`,
+            x: worldX,
+            y: worldY,
+            title: "New Chat",
+          });
+          break;
+        case "open-knowledge":
+          dispatch({
+            type: "CREATE_KNOWLEDGE_PANEL",
+            id: `panel-${state.nextPanelId}`,
+            x: worldX,
+            y: worldY,
+          });
+          break;
+        case "open-skills":
+          dispatch({
+            type: "CREATE_SKILLS_PANEL",
+            id: `panel-${state.nextPanelId}`,
+            x: worldX,
+            y: worldY,
+          });
+          break;
+      }
+    },
+    [contextMenu, state, dispatch, scope]
+  );
+
+  // Double-click on empty canvas opens the same creation menu.
+  const handleDoubleClick = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      const target = e.target as HTMLElement;
+      if (
+        target.closest(
+          "[data-panel-id], [data-canvas-minimap], [data-edge-port]"
+        )
+      ) {
+        return;
+      }
+      setMarquee(null);
+      setContextMenu({ x: e.clientX, y: e.clientY });
+    },
+    []
+  );
+
   // ── Zoom (trackpad pinch) ─────────────────────────────────────────
   // Attached once via native addEventListener so we can preventDefault.
   // Reads the latest camera from cameraRef so this effect doesn't need to
@@ -653,6 +734,7 @@ export function Canvas({ showMinimap = true }: CanvasProps = {}) {
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
       onContextMenu={handleContextMenu}
+      onDoubleClick={handleDoubleClick}
       className="relative w-full h-full overflow-clip touch-none select-none"
       style={{ cursor: "default" }}
     >
@@ -689,6 +771,7 @@ export function Canvas({ showMinimap = true }: CanvasProps = {}) {
         <WorldContents
           zoom={zoom}
           panels={state.panels}
+          edges={state.edges}
           selectedPanelIds={state.selectedPanelIds}
           dispatch={dispatch}
         />
@@ -707,6 +790,7 @@ export function Canvas({ showMinimap = true }: CanvasProps = {}) {
         <CanvasContextMenu
           x={contextMenu.x}
           y={contextMenu.y}
+          onAction={handleMenuAction}
           onClose={() => setContextMenu(null)}
         />
       )}
@@ -719,7 +803,10 @@ export function Canvas({ showMinimap = true }: CanvasProps = {}) {
         <div
           className="pointer-events-none rounded-[2px]"
           style={{
-            position: "fixed",
+            // Viewport-relative coords → absolute within the relative
+            // viewport div. `fixed` would resolve against the WINDOW and
+            // draw the box offset by the AppShell panel insets.
+            position: "absolute",
             left: marqueeRect.left,
             top: marqueeRect.top,
             width: marqueeRect.width,

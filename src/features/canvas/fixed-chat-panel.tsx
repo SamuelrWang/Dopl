@@ -8,6 +8,7 @@
  */
 
 import { useMemo, useState, useCallback } from "react";
+import { getCanvasViewportSize } from "./viewport-size";
 import {
   usePanelsContext,
   useCanvas,
@@ -123,8 +124,7 @@ export function FixedChatPanel() {
    */
   const reopenConversation = useCallback(
     (conv: ServerConversation) => {
-      const vw = typeof window !== "undefined" ? window.innerWidth : 1200;
-      const vh = typeof window !== "undefined" ? window.innerHeight : 800;
+      const { vw, vh } = getCanvasViewportSize();
       const { x, y } = computeNewPanelPosition(state, vw, vh, 480, 600);
 
       dispatch({
@@ -170,11 +170,11 @@ export function FixedChatPanel() {
     <div
       className="fixed flex flex-col overflow-hidden rounded-2xl bg-[var(--panel-surface)] border border-border-default"
       style={{
-        top: EDGE_GAP,
-        right: EDGE_GAP,
-        bottom: EDGE_GAP,
+        top: `calc(var(--app-panel-top) + ${EDGE_GAP}px)`,
+        right: `calc(var(--app-panel-right) + ${EDGE_GAP}px)`,
+        bottom: `calc(var(--app-panel-bottom) + ${EDGE_GAP}px)`,
         width: PANEL_WIDTH,
-        zIndex: 40,
+        zIndex: 39,
         boxShadow:
           "0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 var(--hairline-shine)",
       }}
@@ -182,9 +182,12 @@ export function FixedChatPanel() {
       {/* ── Top bar ──────────────────────────────────────────────── */}
       <div
         className="shrink-0 h-10 flex items-center justify-between px-4 gap-2"
-        style={{ boxShadow: "inset 0 -1px 0 var(--hairline-shine)" }}
+        style={{
+          background: "var(--panel-header-surface)",
+          boxShadow: "inset 0 -1px 0 var(--panel-header-border)",
+        }}
       >
-        <span className="font-mono text-[10px] uppercase tracking-wider text-text-tertiary truncate min-w-0">
+        <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--panel-header-text)] truncate min-w-0">
           {effectivePanel?.title || "Chat"}
         </span>
         <button

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
-import type { WorkspaceLike } from "@/shared/layout/workspace-switcher";
+import type { WorkspaceLike } from "./workspace-types";
 import { workspaceSegment } from "@/features/workspaces/url";
 import styles from "./app-shell.module.css";
 

@@ -17,7 +17,7 @@
 import { useEffect, useRef } from "react";
 import { CANVAS_STORAGE_KEY_PREFIX, CANVAS_ACTIVE_USER_KEY } from "@/config";
 import { useCanvas, useCanvasScope } from "./canvas-store";
-import type { Panel } from "./types";
+import type { Edge, Panel } from "./types";
 import { panelToDbRow } from "@/features/canvas/server/panel-dto";
 import {
   fetchCurrentVersion,
@@ -81,6 +81,15 @@ export function useCanvasDbSync() {
   const syncedRef = useRef(false);
   const prevCameraRef = useRef("");
   const prevPanelIdsRef = useRef<Set<string>>(new Set());
+  const prevEdgesRef = useRef<Map<string, Edge>>(new Map());
+  // Pending debounced updates accumulate across effect runs — a second
+  // change inside the debounce window must MERGE with (not replace) the
+  // first, or the earlier panel's update is silently dropped when the
+  // timer is rescheduled.
+  const pendingTitleUpdatesRef = useRef<Map<string, string>>(new Map());
+  const pendingPanelDataRef = useRef<
+    Map<string, Record<string, unknown>>
+  >(new Map());
   const prevPositionsRef = useRef("");
   const prevCountersRef = useRef("");
   const prevTitlesRef = useRef<Map<string, string>>(new Map());
@@ -133,6 +142,7 @@ export function useCanvasDbSync() {
     }
     prevTitlesRef.current = titles;
     prevClustersRef.current = JSON.stringify(state.clusters);
+    prevEdgesRef.current = new Map(state.edges.map((e) => [e.id, e]));
     const dataMap = new Map<string, string>();
     for (const p of state.panels) {
       const row = panelToDbRow(p);
@@ -196,6 +206,41 @@ export function useCanvasDbSync() {
     prevPanelIdsRef.current = currentPanelIds;
   }, [state.panels]);
 
+  // Edge add/remove → immediate POST/DELETE (same shape as panels; the
+  // edge id is a client-generated uuid so no response round-trip needed)
+  useEffect(() => {
+    if (!syncedRef.current) return;
+    const current = new Map(state.edges.map((e) => [e.id, e]));
+    const prev = prevEdgesRef.current;
+
+    for (const [id, edge] of current) {
+      if (!prev.has(id)) {
+        fetch("/api/canvas/edges", {
+          method: "POST",
+          headers: syncHeaders(workspaceId),
+          body: JSON.stringify(edge),
+        })
+          .then(() => setLocalSaveTimestamp())
+          .catch((err) =>
+            console.error("[canvas-sync] edge create failed:", err)
+          );
+      }
+    }
+
+    for (const id of prev.keys()) {
+      if (!current.has(id)) {
+        fetch(`/api/canvas/edges/${encodeURIComponent(id)}`, {
+          method: "DELETE",
+          headers: workspaceId ? { "X-Workspace-Id": workspaceId } : undefined,
+        }).catch((err) =>
+          console.error("[canvas-sync] edge delete failed:", err)
+        );
+      }
+    }
+
+    prevEdgesRef.current = current;
+  }, [state.edges]);
+
   // Panel positions → debounced batch update (500ms)
   useEffect(() => {
     if (!syncedRef.current) return;
@@ -234,12 +279,19 @@ export function useCanvasDbSync() {
       }
     }
     if (changedTitles.length > 0) {
+      for (const u of changedTitles) {
+        pendingTitleUpdatesRef.current.set(u.panel_id, u.title);
+      }
       if (titleTimerRef.current) clearTimeout(titleTimerRef.current);
       titleTimerRef.current = setTimeout(() => {
+        const updates = [...pendingTitleUpdatesRef.current].map(
+          ([panel_id, title]) => ({ panel_id, title })
+        );
+        pendingTitleUpdatesRef.current = new Map();
         fetch("/api/canvas/panels/batch", {
           method: "PATCH",
           headers: syncHeaders(workspaceId),
-          body: JSON.stringify({ updates: changedTitles }),
+          body: JSON.stringify({ updates }),
         }).catch((err) => console.error("[canvas-sync] title batch update failed:", err));
         titleTimerRef.current = null;
       }, 1000);
@@ -278,12 +330,19 @@ export function useCanvasDbSync() {
       }
     }
     if (panelDataUpdates.length > 0) {
+      for (const u of panelDataUpdates) {
+        pendingPanelDataRef.current.set(u.panel_id, u.panel_data);
+      }
       if (panelDataTimerRef.current) clearTimeout(panelDataTimerRef.current);
       panelDataTimerRef.current = setTimeout(() => {
+        const updates = [...pendingPanelDataRef.current].map(
+          ([panel_id, panel_data]) => ({ panel_id, panel_data })
+        );
+        pendingPanelDataRef.current = new Map();
         fetch("/api/canvas/panels/batch", {
           method: "PATCH",
           headers: syncHeaders(workspaceId),
-          body: JSON.stringify({ updates: panelDataUpdates }),
+          body: JSON.stringify({ updates }),
         }).then(() => setLocalSaveTimestamp())
           .catch((err) => console.error("[canvas-sync] panel_data batch update failed:", err));
         panelDataTimerRef.current = null;

@@ -10,7 +10,7 @@ import {
   updateBase,
   updateFolder,
 } from "../client/api";
-import { DESCRIPTION_MAX } from "../schema";
+import { DESCRIPTION_MAX } from "@/config";
 import type { KnowledgeBase, KnowledgeFolder } from "../types";
 import { knowledgeBaseSegment } from "../url";
 import { AgentWriteToggle } from "./agent-write-toggle";
