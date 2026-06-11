@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
-import { meetsMinRole } from "@/features/workspaces/types";
+import { ROLE_RANK, meetsMinRole } from "@/features/workspaces/types";
 import type { TeamView } from "@/features/teams/types";
 import type {
   AssignableRole,
@@ -14,16 +14,10 @@ import type {
 import { SelectFilter } from "./member-bits";
 import { MEMBER_ROW_GRID, MemberRow } from "./member-row";
 import { PendingInvitations } from "./pending-invitations";
+import { JoinRequestsBanner } from "./join-requests-banner";
 import { MembersTableSkeleton } from "./members-skeleton";
 
 type RoleFilter = MemberRole | "all";
-
-const ROLE_RANK: Record<MemberRole, number> = {
-  owner: 0,
-  admin: 1,
-  member: 2,
-  viewer: 3,
-};
 
 interface Props {
   workspaceSlug: string;
@@ -81,7 +75,7 @@ export function MembersTab({
     return filtered
       .map((m, idx) => ({ m, idx }))
       .sort((a, b) => {
-        const r = ROLE_RANK[a.m.role] - ROLE_RANK[b.m.role];
+        const r = ROLE_RANK[b.m.role] - ROLE_RANK[a.m.role];
         if (r !== 0) return r;
         const an = (a.m.displayName ?? a.m.email ?? "").toLowerCase();
         const bn = (b.m.displayName ?? b.m.email ?? "").toLowerCase();
@@ -171,6 +165,12 @@ export function MembersTab({
 
       {error && <p className="text-xs text-red-400">{error}</p>}
 
+      <JoinRequestsBanner
+        workspaceSlug={workspaceSlug}
+        enabled={canManage}
+        onResolved={onChanged}
+      />
+
       {canManage && invitations.length > 0 && (
         <PendingInvitations
           workspaceSlug={workspaceSlug}
@@ -250,7 +250,15 @@ export function MembersTab({
         confirmLabel="Remove"
         destructive
         onConfirm={async () => {
-          if (removeTarget) await remove(removeTarget);
+          if (!removeTarget) return;
+          try {
+            await remove(removeTarget);
+          } catch (err) {
+            // Surface the server's reason ("Admins cannot remove owners or
+            // admins", last-owner protection, …) — ConfirmDialog swallows
+            // the throw and only keeps itself open.
+            setError(err instanceof Error ? err.message : "Failed to remove");
+          }
         }}
       />
     </div>

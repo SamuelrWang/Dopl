@@ -291,15 +291,23 @@ export interface CanvasState {
    */
   selectedPanelIds: string[];
   /**
-   * Undo stack for deleted panels. Each entry is a batch of panels + any
-   * clusters that dissolved as a result. Session-only — NOT persisted to
-   * localStorage or DB.
+   * Undo/redo history over the STRUCTURAL canvas state (panels + edges —
+   * camera and selection are deliberately not history-worthy). Snapshots
+   * are structurally shared with live state so the memory cost is one
+   * array of references per entry. Session-only — NOT persisted to
+   * localStorage or DB; db-sync's diff effects translate an undo/redo
+   * into the matching POST/PATCH/DELETE calls automatically.
    */
-  deletedPanelsStack: Array<{
-    panels: Panel[];
-    /** Edges removed by the deletion (endpoints in the deleted set). */
-    edges: Edge[];
-  }>;
+  history: {
+    past: CanvasSnapshot[];
+    future: CanvasSnapshot[];
+  };
+}
+
+/** One undo/redo history entry — the undoable subset of CanvasState. */
+export interface CanvasSnapshot {
+  panels: Panel[];
+  edges: Edge[];
 }
 
 /** Zoom bounds. Going below 0.5 or above 4 gets confusing / unreadable. */
@@ -313,7 +321,7 @@ export const INITIAL_CANVAS_STATE: CanvasState = {
   edges: [],
   nextPanelId: 1,
   selectedPanelIds: [],
-  deletedPanelsStack: [],
+  history: { past: [], future: [] },
 };
 
 export const DEFAULT_PANEL_SIZE = {
@@ -588,17 +596,23 @@ export type CanvasAction =
   | { type: "APPLY_REMOTE_EDGE_REMOVE"; edgeId: string }
   | { type: "HYDRATE"; state: CanvasState }
   | {
-      /**
-       * Delete all selected panels (that are deletable). Snapshots the
-       * removed panels + dissolved clusters onto the undo stack.
-       */
+      /** Delete all selected panels (that are deletable). */
       type: "DELETE_SELECTED_PANELS";
     }
   | {
       /**
-       * Restore the most recently deleted batch from the undo stack.
-       * Re-adds panels and restores cluster memberships. Sets selection
-       * to the restored panel ids.
+       * Push a history entry for the CURRENT state. Dispatched at the
+       * start of coalesced gestures (panel drag / resize) so the whole
+       * gesture undoes as one step — discrete actions push their own
+       * entries via the reducer's history wrapper.
        */
-      type: "UNDO_DELETE";
+      type: "HISTORY_CHECKPOINT";
+    }
+  | {
+      /** Step back one history entry (panels + edges). */
+      type: "UNDO";
+    }
+  | {
+      /** Step forward one history entry (panels + edges). */
+      type: "REDO";
     };

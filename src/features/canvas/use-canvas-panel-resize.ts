@@ -28,6 +28,8 @@ export function useCanvasPanelResize(
     width: number;
     height: number;
     edge: ResizeEdge;
+    /** First-move flag: the gesture checkpoints history exactly once. */
+    checkpointed: boolean;
   } | null>(null);
 
   const [isResizing, setIsResizing] = useState(false);
@@ -45,6 +47,7 @@ export function useCanvasPanelResize(
         width: panel.width,
         height: panel.height,
         edge,
+        checkpointed: false,
       };
       setIsResizing(true);
     },
@@ -55,6 +58,11 @@ export function useCanvasPanelResize(
     (e: React.PointerEvent<HTMLDivElement>) => {
       const origin = resizeOriginRef.current;
       if (!origin) return;
+      if (!origin.checkpointed) {
+        // One history entry per resize gesture (see drag hook).
+        dispatch({ type: "HISTORY_CHECKPOINT" });
+        origin.checkpointed = true;
+      }
       const zoom = canvasStateRef.current.camera.zoom;
       const dx = (e.clientX - origin.mouseX) / zoom;
       const dy = (e.clientY - origin.mouseY) / zoom;

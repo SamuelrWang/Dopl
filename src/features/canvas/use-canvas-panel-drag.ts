@@ -194,6 +194,13 @@ export function useCanvasPanelDrag(
     (e: React.PointerEvent<HTMLDivElement>) => {
       const origin = dragOriginRef.current;
       if (!origin) return;
+      if (!didDragRef.current) {
+        // First real movement of this gesture — checkpoint the pre-drag
+        // layout so the whole drag undoes as ONE history step (the
+        // per-frame MOVE_PANELS dispatches are deliberately not
+        // history-pushing).
+        dispatch({ type: "HISTORY_CHECKPOINT" });
+      }
       didDragRef.current = true;
       // Cursor deltas are in screen pixels; panel positions are in world
       // coords. Divide by zoom so panels track the cursor 1:1 visually

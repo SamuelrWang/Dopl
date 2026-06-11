@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { Check, ChevronDown, UserPlus } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Check, ChevronDown, Link2, RotateCcw } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/shared/ui/dialog";
 import { cn } from "@/shared/lib/utils";
+import appShell from "@/shared/layout/app-shell/app-shell.module.css";
 import type { TeamView } from "@/features/teams/types";
 import type { AssignableRole } from "../types";
 
@@ -26,6 +27,118 @@ const ROLES: Array<{ value: AssignableRole; label: string; hint: string }> = [
   { value: "member", label: "Member", hint: "Can use everything: KBs, skills, and canvas" },
   { value: "viewer", label: "Viewer", hint: "Read-only access to the workspace" },
 ];
+
+/**
+ * Shareable invite link: anyone with the link can request to join; an
+ * admin approves from the members page. The link is permanent until
+ * reset (resetting invalidates previously shared copies).
+ */
+function ShareLinkSection({
+  workspaceSlug,
+  open,
+}: {
+  workspaceSlug: string;
+  open: boolean;
+}) {
+  const [token, setToken] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    fetch(`/api/workspaces/${encodeURIComponent(workspaceSlug)}/join-link`, {
+      credentials: "same-origin",
+    })
+      .then(async (res) => {
+        if (cancelled || !res.ok) return;
+        const body = (await res.json()) as { token: string };
+        if (!cancelled) setToken(body.token);
+      })
+      .catch(() => {
+        /* section just stays in its loading state */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceSlug, open]);
+
+  const url =
+    token && typeof window !== "undefined"
+      ? `${window.location.origin}/join/${token}`
+      : null;
+
+  async function copy() {
+    if (!url) return;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* clipboard can be blocked — the input below stays selectable */
+    }
+  }
+
+  async function reset() {
+    setBusy(true);
+    try {
+      const res = await fetch(
+        `/api/workspaces/${encodeURIComponent(workspaceSlug)}/join-link`,
+        { method: "POST" }
+      );
+      if (res.ok) {
+        const body = (await res.json()) as { token: string };
+        setToken(body.token);
+        setCopied(false);
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5 border-t border-border-subtle pt-3">
+      <div className="flex items-center justify-between">
+        <label className="text-xs font-medium text-text-tertiary">
+          Or share an invite link
+        </label>
+        <button
+          type="button"
+          onClick={() => void reset()}
+          disabled={busy || !token}
+          title="Reset link — previously shared copies stop working"
+          className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-text-secondary/50 hover:text-text-primary transition-colors disabled:opacity-40 cursor-pointer"
+        >
+          <RotateCcw size={10} />
+          Reset
+        </button>
+      </div>
+      <div className="flex items-center gap-2">
+        <div className="flex-1 flex items-center gap-2 px-3 h-9 rounded-md bg-surface-raised-2 border border-border-strong min-w-0">
+          <Link2 size={13} className="shrink-0 text-text-muted" />
+          <input
+            readOnly
+            value={url ?? "Generating link…"}
+            onFocus={(e) => e.target.select()}
+            className="flex-1 min-w-0 bg-transparent text-xs text-text-secondary outline-none truncate"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={() => void copy()}
+          disabled={!url}
+          className="shrink-0 h-9 px-3 rounded-md border border-border-strong bg-surface-raised-2 hover:bg-surface-raised-3 text-xs font-medium text-text-primary transition-colors disabled:opacity-40 cursor-pointer"
+        >
+          {copied ? "Copied!" : "Copy link"}
+        </button>
+      </div>
+      <p className="text-[11px] text-text-muted">
+        Anyone with the link can request to join — you approve them from the
+        members page.
+      </p>
+    </div>
+  );
+}
 
 /** Split a comma/whitespace-separated string into unique trimmed emails. */
 function parseEmails(raw: string): string[] {
@@ -132,14 +245,16 @@ export function InviteDialog({
         if (!next) reset();
       }}
     >
+      {/* lightScope: dialog portals to <body>, escaping the page's light
+          token scope — re-apply it so the popup matches the page. */}
       <DialogContent
         showCloseButton={false}
-        className="sm:max-w-md bg-modal-surface border-border-strong text-text-primary"
+        className={cn(
+          appShell.lightScope,
+          "sm:max-w-md bg-modal-surface border-border-strong text-text-primary"
+        )}
       >
         <div className="flex flex-col items-center text-center gap-1.5 pt-2">
-          <div className="w-10 h-10 rounded-full flex items-center justify-center bg-surface-raised-3 border border-border-default text-text-secondary">
-            <UserPlus size={18} />
-          </div>
           <DialogTitle className="text-text-primary text-lg">Add members</DialogTitle>
           <p className="text-sm text-text-tertiary">
             Type or paste in emails below, separated by commas
@@ -212,6 +327,8 @@ export function InviteDialog({
                 )}
               </div>
             </div>
+
+            <ShareLinkSection workspaceSlug={workspaceSlug} open={open} />
 
             {teams.length > 0 && (
               <div className="flex flex-col gap-1.5">

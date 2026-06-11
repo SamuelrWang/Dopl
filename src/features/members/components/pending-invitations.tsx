@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Mail } from "lucide-react";
 import type { TeamView } from "@/features/teams/types";
 import type { WorkspaceInvitationView } from "../types";
+import { formatRelativeTime } from "../format-last-active";
 import { TeamChip } from "./team-bits";
 
 interface Props {
@@ -65,7 +66,7 @@ export function PendingInvitations({
             <div className="min-w-0 flex items-center gap-2 flex-wrap">
               <p className="text-sm text-text-primary truncate">{inv.email}</p>
               <p className="text-[10px] font-mono uppercase tracking-wider text-text-secondary/50">
-                {inv.invitedRole} · sent {formatRelative(inv.createdAt)}
+                {inv.invitedRole} · sent {formatRelativeTime(inv.createdAt)}
               </p>
               {(inv.teamIds ?? []).map((teamId) => {
                 const team = teamById.get(teamId);
@@ -89,16 +90,3 @@ export function PendingInvitations({
   );
 }
 
-function formatRelative(iso: string): string {
-  const ts = new Date(iso).getTime();
-  if (Number.isNaN(ts)) return "—";
-  const diffMs = Date.now() - ts;
-  const minutes = Math.floor(diffMs / 60_000);
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d ago`;
-  return new Date(iso).toLocaleDateString();
-}

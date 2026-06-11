@@ -396,7 +396,12 @@ export interface ResourceAccessMeta {
   createdBy: string | null;
 }
 
-/** access_mode + creator + name for one resource; null if missing/deleted. */
+/**
+ * access_mode + creator + name for one resource; null if missing.
+ * Soft-deleted KBs are INCLUDED on purpose: access checks must still
+ * resolve for trash restore (existence gating for reads happens in the
+ * knowledge service's own lookups, which already exclude deleted rows).
+ */
 export async function getResourceAccessMeta(
   workspaceId: string,
   resourceType: TeamResourceType,
@@ -409,7 +414,6 @@ export async function getResourceAccessMeta(
       .select("name, access_mode, created_by")
       .eq("workspace_id", workspaceId)
       .eq("id", resourceId)
-      .is("deleted_at", null)
       .maybeSingle();
     if (error) throw error;
     if (!data) return null;

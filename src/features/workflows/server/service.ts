@@ -436,40 +436,43 @@ export async function deleteWorkflow(
   // this an MCP delete leaves an orphan workflow card on the canvas pointing
   // at a deleted row (the canvas trash button removes the header too; nodes
   // stay on the canvas in both paths).
-  const { data: wf } = await db
+  const { data: wf, error: lookupError } = await db
     .from("workflows")
     .select("id")
     .eq(isUuid ? "id" : "slug", idOrSlug)
     .eq("workspace_id", scope.workspaceId)
     .maybeSingle();
+  if (lookupError) throw lookupError;
+  // No row -> nothing to delete (idempotent), and crucially we never run
+  // the DELETE below without the access gate having seen the row first.
+  if (!wf?.id) return;
 
-  if (wf?.id) {
-    await requireEffectiveAccess(
-      scope.userId,
-      scope.workspaceId,
-      "workflow",
-      wf.id,
-      "edit",
-      { role: scope.role }
-    );
-    const { data: headers } = await db
+  await requireEffectiveAccess(
+    scope.userId,
+    scope.workspaceId,
+    "workflow",
+    wf.id,
+    "edit",
+    { role: scope.role }
+  );
+
+  const { data: headers } = await db
+    .from("canvas_panels")
+    .select("panel_id, panel_data")
+    .eq("workspace_id", scope.workspaceId)
+    .eq("panel_type", "workflow");
+  const headerIds = (headers ?? [])
+    .filter(
+      (p) =>
+        (p.panel_data as { workflowId?: string } | null)?.workflowId === wf.id
+    )
+    .map((p) => p.panel_id);
+  if (headerIds.length > 0) {
+    await db
       .from("canvas_panels")
-      .select("panel_id, panel_data")
+      .delete()
       .eq("workspace_id", scope.workspaceId)
-      .eq("panel_type", "workflow");
-    const headerIds = (headers ?? [])
-      .filter(
-        (p) =>
-          (p.panel_data as { workflowId?: string } | null)?.workflowId === wf.id
-      )
-      .map((p) => p.panel_id);
-    if (headerIds.length > 0) {
-      await db
-        .from("canvas_panels")
-        .delete()
-        .eq("workspace_id", scope.workspaceId)
-        .in("panel_id", headerIds);
-    }
+      .in("panel_id", headerIds);
   }
 
   // Idempotent: junction rows + (if any) the row vanish via FK cascade.

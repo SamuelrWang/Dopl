@@ -32,6 +32,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from
 import { useCanvas, useCanvasScope, nextPanelIdString } from "./canvas-store";
 import { MAX_ZOOM, MIN_ZOOM, computePanelsBounds } from "./types";
 import { CanvasMinimap } from "./canvas-minimap";
+import { CanvasHistoryBar } from "./canvas-history-bar";
 import { createWorkflow } from "./create-workflow";
 import { CanvasContextMenu } from "./context-menu/canvas-context-menu";
 import type { MenuItemId } from "./context-menu/menu-data";
@@ -582,10 +583,10 @@ export function Canvas({ showMinimap = true }: CanvasProps = {}) {
         return;
       }
 
-      // Cmd+Z (Mac) / Ctrl+Z (Win) → undo delete
-      if (e.key === "z" && (e.metaKey || e.ctrlKey) && !e.shiftKey) {
+      // Cmd+Z / Ctrl+Z → undo · Cmd+Shift+Z / Ctrl+Shift+Z → redo
+      if ((e.key === "z" || e.key === "Z") && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
-        dispatch({ type: "UNDO_DELETE" });
+        dispatch({ type: e.shiftKey ? "REDO" : "UNDO" });
         return;
       }
 
@@ -719,6 +720,9 @@ export function Canvas({ showMinimap = true }: CanvasProps = {}) {
           viewportHeight={vpSize.h}
         />
       )}
+
+      {/* Bottom control bar — back/forward over the structural history. */}
+      <CanvasHistoryBar />
     </div>
   );
 }

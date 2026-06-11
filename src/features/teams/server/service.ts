@@ -11,6 +11,7 @@ import type {
 } from "../types";
 import type { TeamCreateInput, TeamUpdateInput } from "../schema";
 import { TeamNotFoundError } from "./errors";
+import { listEffectiveAccess, resolveLevel } from "./access";
 import {
   computeWorkflowAudience,
   validateKbNarrowing,
@@ -79,9 +80,10 @@ export async function createTeam(
 
     // KB grants first so a same-payload workflow grant sees them when the
     // invariant computes the new team's readable KBs.
-    const grants = [...(input.grants ?? [])].sort((a) =>
-      a.resourceType === "knowledge_base" ? -1 : 1
-    );
+    const grants = [...(input.grants ?? [])].sort((a, b) => {
+      if (a.resourceType === b.resourceType) return 0;
+      return a.resourceType === "knowledge_base" ? -1 : 1;
+    });
     for (const grant of grants) {
       await setTeamGrant(
         workspaceId,
@@ -317,7 +319,7 @@ export async function getAccessMatrix(
   workspaceId: string,
   callerId: string
 ): Promise<AccessMatrix> {
-  await requireMember(workspaceId, callerId);
+  const callerRole = await requireMember(workspaceId, callerId);
   const db = supabaseAdmin();
   const [teams, kbs, wfs] = await Promise.all([
     listTeams(workspaceId, callerId),
@@ -362,6 +364,25 @@ export async function getAccessMatrix(
       createdBy: r.user_id,
     })),
   ];
+
+  // Non-admins must not learn the names of teams-mode resources they have
+  // no grant on — the per-resource gates 404 those on purpose, so the
+  // matrix payload can't be the side channel that leaks them.
+  if (!meetsMinRole(callerRole, "admin")) {
+    const access = await listEffectiveAccess(workspaceId, callerId, {
+      role: callerRole,
+    });
+    const visible =
+      access === null
+        ? []
+        : resources.filter(
+            (r) =>
+              r.createdBy === callerId ||
+              resolveLevel(access, r.resourceType, r.resourceId, r.accessMode) !==
+                null
+          );
+    return { teams, resources: visible };
+  }
 
   return { teams, resources };
 }

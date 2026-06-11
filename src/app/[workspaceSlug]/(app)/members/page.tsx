@@ -23,7 +23,6 @@ export default async function MembersPage({ params }: PageProps) {
     <AppPanel>
       <MembersView
         workspaceSlug={workspaceSegment(workspace)}
-        workspaceId={workspace.id}
         currentUserId={user.id}
         myRole={membership.role}
       />

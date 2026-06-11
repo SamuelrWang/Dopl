@@ -77,7 +77,7 @@ export async function loadCanvasInitialState(
   const empty: CanvasState = {
     ...INITIAL_CANVAS_STATE,
     selectedPanelIds: [],
-    deletedPanelsStack: [],
+    history: { past: [], future: [] },
   };
 
   try {
@@ -202,7 +202,35 @@ export async function loadCanvasInitialState(
       ),
     };
 
-    return dedupSingletonPanels(ensureDefaultPanels(state));
+    const finalState = dedupSingletonPanels(ensureDefaultPanels(state));
+
+    // ── Reconciliation: the DB must mirror the canvas the user sees ──
+    // Rows that didn't make it into the composed state (failed historical
+    // deletes, legacy/unknown panel types dropped by dbRowToPanel,
+    // singleton duplicates) would otherwise live forever — invisible on
+    // the canvas but still listed to agents via dopl_canvas/the API.
+    // Deleting them here makes every canvas load self-healing.
+    const keepIds = new Set(finalState.panels.map((p) => p.id));
+    const strayIds = dbPanels
+      .map((r) => (r as { panel_id: string }).panel_id)
+      .filter((id) => !keepIds.has(id));
+    if (strayIds.length > 0) {
+      const { error: strayErr } = await supabase
+        .from("canvas_panels")
+        .delete()
+        .eq("workspace_id", scope.workspaceId)
+        .in("panel_id", strayIds);
+      if (strayErr) {
+        console.error("[canvas-load] stray panel cleanup failed:", strayErr);
+      } else {
+        console.warn(
+          `[canvas-load] reconciled ${strayIds.length} stray canvas_panels row(s):`,
+          strayIds
+        );
+      }
+    }
+
+    return finalState;
   } catch {
     return dedupSingletonPanels(ensureDefaultPanels(empty));
   }

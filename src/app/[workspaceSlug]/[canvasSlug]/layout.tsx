@@ -13,6 +13,7 @@ import { getUser } from "@/shared/supabase/server";
 import { resolveWorkspaceSegmentForUser } from "@/features/workspaces/server/segment";
 import { workspaceSegment } from "@/features/workspaces/url";
 import { MyAccessProvider } from "@/features/members/hooks/use-my-access";
+import { JoinRequestNotices } from "@/features/workspaces/components/join-request-notices";
 import { AppShell } from "@/shared/layout/app-shell";
 
 export const dynamic = "force-dynamic";
@@ -39,7 +40,10 @@ export default async function CanvasLayout({ children, params }: LayoutProps) {
       workspacePublicId={ws.publicId}
       workspaceName={ws.name}
     >
-      <MyAccessProvider workspaceSegment={segment}>{children}</MyAccessProvider>
+      <MyAccessProvider workspaceSegment={segment}>
+        {children}
+        <JoinRequestNotices />
+      </MyAccessProvider>
     </AppShell>
   );
 }

@@ -146,7 +146,7 @@ export function CanvasProvider({
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
       try {
-        const { deletedPanelsStack: _, ...persistable } = state;
+        const { history: _, ...persistable } = state;
         localStorage.setItem(storageKey, JSON.stringify(persistable));
       } catch {
         // localStorage may be full or unavailable; ignore

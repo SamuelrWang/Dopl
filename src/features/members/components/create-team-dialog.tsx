@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Users } from "lucide-react";
+import { Check } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/shared/ui/dialog";
 import { cn } from "@/shared/lib/utils";
+import appShell from "@/shared/layout/app-shell/app-shell.module.css";
 import type { AccessMatrixResource } from "@/features/teams/types";
 import type { AccessLevel } from "@/features/teams/access-levels";
 import type { WorkspaceMemberView } from "../types";
@@ -125,14 +126,16 @@ export function CreateTeamDialog({
         if (!next) reset();
       }}
     >
+      {/* lightScope: dialog portals to <body>, escaping the page's light
+          token scope — re-apply it so the popup matches the page. */}
       <DialogContent
         showCloseButton={false}
-        className="sm:max-w-lg bg-modal-surface border-border-strong text-text-primary"
+        className={cn(
+          appShell.lightScope,
+          "sm:max-w-lg bg-modal-surface border-border-strong text-text-primary"
+        )}
       >
         <div className="flex flex-col items-center text-center gap-1.5 pt-2">
-          <div className="w-10 h-10 rounded-full flex items-center justify-center bg-surface-raised-3 border border-border-default text-text-secondary">
-            <Users size={18} />
-          </div>
           <DialogTitle className="text-text-primary text-lg">Create team</DialogTitle>
           <p className="text-sm text-text-tertiary">
             Group members and control which resources they can reach

@@ -393,6 +393,16 @@ export async function reconcileAttachments(
   const kbDeletes = [...haveKb].filter((id) => !wantKb.has(id));
   const skillDeletes = [...haveSkill].filter((id) => !wantSkill.has(id));
 
+  // Backstop for paths that don't pre-validate (connect/disconnect wiring
+  // an existing node in, removeNode): newly attached KBs must be readable
+  // by this workflow's whole audience — same 409 as the explicit attach.
+  if (kbInserts.length) {
+    await validateKbsForWorkflow(
+      workflowId,
+      kbInserts.map((i) => i.knowledge_base_id),
+      scope
+    );
+  }
   if (kbInserts.length) await db.from("workflow_knowledge_bases").upsert(kbInserts, { onConflict: "workflow_id,knowledge_base_id" });
   if (skillInserts.length) await db.from("workflow_skills").upsert(skillInserts, { onConflict: "workflow_id,skill_id" });
   if (kbDeletes.length) await db.from("workflow_knowledge_bases").delete().eq("workflow_id", workflowId).in("knowledge_base_id", kbDeletes);

@@ -52,7 +52,108 @@ function counterAfterMint(state: CanvasState, id: string): number {
     : state.nextPanelId + 1;
 }
 
+// ── History wrapper ─────────────────────────────────────────────────
+
+/** Discrete actions that each push one undo entry. Gesture-shaped
+ *  changes (drag / resize) are coalesced instead: the gesture's start
+ *  dispatches HISTORY_CHECKPOINT once and the per-frame MOVE/RESIZE
+ *  actions stay out of this set. Camera + selection are never
+ *  history-worthy. */
+const UNDOABLE_ACTIONS = new Set<CanvasAction["type"]>([
+  "CREATE_CHAT_PANEL",
+  "CREATE_KNOWLEDGE_PANEL",
+  "CREATE_SKILLS_PANEL",
+  "CREATE_KNOWLEDGE_BASE_PANEL",
+  "CREATE_SKILL_PANEL",
+  "CREATE_ARTIFACT_PANEL",
+  "CREATE_NODE_PANEL",
+  "CREATE_WORKFLOW",
+  "CLOSE_PANEL",
+  "DELETE_SELECTED_PANELS",
+  "EDGE_ADD",
+  "EDGE_REMOVE",
+  "NODE_DOCK_REF",
+  "NODE_UNDOCK_REF",
+  "UPDATE_NODE_FIELDS",
+  "UPDATE_WORKFLOW_INFO",
+  "UPDATE_CHAT_TITLE",
+  "UPDATE_ARTIFACT_MARKDOWN",
+  "UPDATE_ARTIFACT_TITLE",
+]);
+
+const HISTORY_CAP = 50;
+
+function pushHistory(state: CanvasState): CanvasState["history"] {
+  return {
+    past: [
+      ...state.history.past.slice(-(HISTORY_CAP - 1)),
+      { panels: state.panels, edges: state.edges },
+    ],
+    future: [],
+  };
+}
+
+/** Apply a snapshot's panels+edges; selection is pruned to survivors. */
+function applySnapshot(
+  state: CanvasState,
+  snap: { panels: CanvasState["panels"]; edges: CanvasState["edges"] },
+  history: CanvasState["history"]
+): CanvasState {
+  const ids = new Set(snap.panels.map((p) => p.id));
+  return {
+    ...state,
+    panels: snap.panels,
+    edges: snap.edges,
+    selectedPanelIds: state.selectedPanelIds.filter((id) => ids.has(id)),
+    history,
+  };
+}
+
 export function reducer(state: CanvasState, action: CanvasAction): CanvasState {
+  switch (action.type) {
+    case "UNDO": {
+      const { past, future } = state.history;
+      if (past.length === 0) return state;
+      const snap = past[past.length - 1];
+      return applySnapshot(state, snap, {
+        past: past.slice(0, -1),
+        future: [
+          ...future,
+          { panels: state.panels, edges: state.edges },
+        ].slice(-HISTORY_CAP),
+      });
+    }
+    case "REDO": {
+      const { past, future } = state.history;
+      if (future.length === 0) return state;
+      const snap = future[future.length - 1];
+      return applySnapshot(state, snap, {
+        past: [
+          ...past,
+          { panels: state.panels, edges: state.edges },
+        ].slice(-HISTORY_CAP),
+        future: future.slice(0, -1),
+      });
+    }
+    case "HISTORY_CHECKPOINT":
+      return { ...state, history: pushHistory(state) };
+    default: {
+      const next = baseReducer(state, action);
+      // Only push when the action actually changed something — refused
+      // creations / no-op closes shouldn't burn an undo step.
+      if (
+        next !== state &&
+        UNDOABLE_ACTIONS.has(action.type) &&
+        (next.panels !== state.panels || next.edges !== state.edges)
+      ) {
+        return { ...next, history: pushHistory(state) };
+      }
+      return next;
+    }
+  }
+}
+
+function baseReducer(state: CanvasState, action: CanvasAction): CanvasState {
   switch (action.type) {
     case "HYDRATE":
       return action.state;
@@ -183,10 +284,6 @@ export function reducer(state: CanvasState, action: CanvasAction): CanvasState {
 
       const deleteIds = new Set(toDelete.map((p) => p.id));
 
-      const removedEdges = state.edges.filter(
-        (ed) => deleteIds.has(ed.fromPanelId) || deleteIds.has(ed.toPanelId)
-      );
-
       return {
         ...state,
         panels: state.panels.filter((p) => !deleteIds.has(p.id)),
@@ -194,42 +291,6 @@ export function reducer(state: CanvasState, action: CanvasAction): CanvasState {
         edges: state.edges.filter(
           (ed) => !deleteIds.has(ed.fromPanelId) && !deleteIds.has(ed.toPanelId)
         ),
-        deletedPanelsStack: [
-          ...state.deletedPanelsStack.slice(-19), // cap at 20
-          { panels: toDelete, edges: removedEdges },
-        ],
-      };
-    }
-
-    case "UNDO_DELETE": {
-      const stack = state.deletedPanelsStack;
-      if (stack.length === 0) return state;
-
-      const last = stack[stack.length - 1];
-      const restoredIds = last.panels.map((p) => p.id);
-
-      // Panels that will exist after the restore.
-      const postPanelIds = new Set([
-        ...state.panels.map((p) => p.id),
-        ...restoredIds,
-      ]);
-
-      // Restore edges whose endpoints both exist post-restore (db-sync
-      // re-POSTs them; ids are stable uuids).
-      const existingEdgeIds = new Set(state.edges.map((e) => e.id));
-      const restoredEdges = (last.edges ?? []).filter(
-        (e) =>
-          !existingEdgeIds.has(e.id) &&
-          postPanelIds.has(e.fromPanelId) &&
-          postPanelIds.has(e.toPanelId)
-      );
-
-      return {
-        ...state,
-        panels: [...state.panels, ...last.panels],
-        selectedPanelIds: restoredIds,
-        edges: [...state.edges, ...restoredEdges],
-        deletedPanelsStack: stack.slice(0, -1),
       };
     }
 

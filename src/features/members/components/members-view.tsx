@@ -22,7 +22,6 @@ type Tab = "members" | "teams" | "access";
 
 interface Props {
   workspaceSlug: string;
-  workspaceId: string;
   currentUserId: string;
   myRole: MemberRole;
 }

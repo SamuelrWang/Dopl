@@ -63,15 +63,16 @@ export const GET = withUserAuth(
       }
       const payload = {
         defaultLevel: result.defaultLevel,
-        overrides: result.teamsModeResources
-          .filter(
-            (r): r is typeof r & { level: "read" | "edit" } => r.level !== null
-          )
-          .map((r) => ({
-            resourceType: r.resourceType,
-            resourceId: r.resourceId,
-            level: r.level,
-          })),
+        // level null (teams-mode resource with no grant) maps to "read",
+        // NOT omission: the client treats a missing entry as the role
+        // default ("edit" for members), which would flip a just-revoked
+        // KB panel to editable. "read" keeps affordances locked until the
+        // lists refetch and drop the resource entirely.
+        overrides: result.teamsModeResources.map((r) => ({
+          resourceType: r.resourceType,
+          resourceId: r.resourceId,
+          level: r.level ?? ("read" as const),
+        })),
       };
       // Audit A-010: this is per-user data; never let a CDN cache it
       // by URL alone. Vercel's authenticated-route default is usually

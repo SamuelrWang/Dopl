@@ -92,7 +92,7 @@ export function useCanvasDbSync() {
   const prevPanelIdsRef = useRef<Set<string>>(new Set());
   const prevEdgesRef = useRef<Map<string, Edge>>(new Map());
   // In-flight panel creates, keyed by panel id. Edge creates await their
-  // endpoints' entries here: an UNDO_DELETE restores panels + edges in
+  // endpoints' entries here: an UNDO restores panels + edges in
   // one commit, and an edge POST that races ahead of its panel POST
   // violates the canvas_edges → canvas_panels FK and is lost for good.
   const pendingPanelCreatesRef = useRef<Map<string, Promise<unknown>>>(
@@ -212,23 +212,44 @@ export function useCanvasDbSync() {
             pendingPanelCreatesRef.current.delete(panel.id);
           }
         });
+        // A restored workflow header (undo of a close) needs its backing
+        // `workflows` row back too — the close deleted it. POST with the
+        // panel's own workflowId; if the row still exists the create
+        // fails on the duplicate id and that's fine.
+        if (panel.type === "workflow") {
+          fetch("/api/workflows", {
+            method: "POST",
+            headers: syncHeaders(workspaceId),
+            body: JSON.stringify({
+              id: panel.workflowId,
+              name: panel.name,
+              description: panel.description,
+            }),
+          }).catch((err) =>
+            console.error("[canvas-sync] workflow row restore failed:", err)
+          );
+        }
       }
     }
 
     // Panel removed → DELETE from DB (immediate). A removed workflow header
     // panel also deletes its backing workflows row (detaches its KBs/skills;
-    // panels stay).
+    // panels stay). `keepalive` so a close immediately followed by tab
+    // close / navigation still lands — a killed DELETE leaves an orphan
+    // row that agents keep "seeing" on the canvas forever.
     for (const prevId of prevIds) {
       if (!currentPanelIds.has(prevId)) {
         fetch(`/api/canvas/panels/${encodeURIComponent(prevId)}`, {
           method: "DELETE",
           headers: workspaceId ? { "X-Workspace-Id": workspaceId } : undefined,
+          keepalive: true,
         }).catch((err) => console.error("[canvas-sync] panel delete failed:", err));
         const workflowId = prevWorkflowsRef.current.get(prevId);
         if (workflowId) {
           fetch(`/api/workflows/${encodeURIComponent(workflowId)}`, {
             method: "DELETE",
             headers: workspaceId ? { "X-Workspace-Id": workspaceId } : undefined,
+            keepalive: true,
           }).catch((err) =>
             console.error("[canvas-sync] workflow delete failed:", err)
           );
@@ -250,7 +271,7 @@ export function useCanvasDbSync() {
     for (const [id, edge] of current) {
       if (!prev.has(id)) {
         // Wait for any in-flight creates of the endpoint panels first
-        // (UNDO_DELETE restores panel + edge in one commit) — the edge
+        // (UNDO restores panel + edge in one commit) — the edge
         // row's FK requires both panel rows to exist.
         const deps = [
           pendingPanelCreatesRef.current.get(edge.fromPanelId),
@@ -284,6 +305,7 @@ export function useCanvasDbSync() {
         fetch(`/api/canvas/edges/${encodeURIComponent(id)}`, {
           method: "DELETE",
           headers: workspaceId ? { "X-Workspace-Id": workspaceId } : undefined,
+          keepalive: true,
         }).catch((err) =>
           console.error("[canvas-sync] edge delete failed:", err)
         );

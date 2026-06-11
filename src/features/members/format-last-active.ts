@@ -26,6 +26,11 @@ export function formatLastActive(
   return { label: relative(lastSeenAt), dot: "idle" };
 }
 
+/** "just now" / "5m ago" / "3h ago" / "2d ago" / locale date. */
+export function formatRelativeTime(iso: string | null | undefined): string {
+  return relative(iso);
+}
+
 function relative(iso: string | null | undefined): string {
   if (!iso) return "—";
   const ts = new Date(iso).getTime();
