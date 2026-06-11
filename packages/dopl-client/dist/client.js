@@ -77,11 +77,44 @@ class DoplClient {
     async getCluster(slug) {
         return this.transport.request(`/api/clusters/${encodeURIComponent(slug)}`, { toolName: "get_cluster" });
     }
-    async getClusterKnowledgeEntry(clusterSlug, kbId, entryId) {
-        return this.transport.request(`/api/clusters/${encodeURIComponent(clusterSlug)}/knowledge-bases/${encodeURIComponent(kbId)}/entries/${encodeURIComponent(entryId)}`, { toolName: "read_cluster_knowledge_entry" });
+    // ── Workflows ────────────────────────────────────────────────────
+    async listWorkflows() {
+        return this.transport.request("/api/workflows", { toolName: "list_workflows" });
     }
-    async getClusterSkill(clusterSlug, skillId) {
-        return this.transport.request(`/api/clusters/${encodeURIComponent(clusterSlug)}/skills/${encodeURIComponent(skillId)}/full`, { toolName: "read_cluster_skill" });
+    async getWorkflow(idOrSlug) {
+        return this.transport.request(`/api/workflows/${encodeURIComponent(idOrSlug)}`, { toolName: "get_workflow" });
+    }
+    async createWorkflow(name) {
+        return this.transport.request("/api/workflows", {
+            method: "POST",
+            toolName: "create_workflow",
+            body: { name },
+        });
+    }
+    async updateWorkflow(idOrSlug, updates) {
+        return this.transport.request(`/api/workflows/${encodeURIComponent(idOrSlug)}`, { method: "PATCH", toolName: "update_workflow", body: updates });
+    }
+    async deleteWorkflow(idOrSlug) {
+        await this.transport.requestNoContent(`/api/workflows/${encodeURIComponent(idOrSlug)}`, "DELETE", "delete_workflow");
+    }
+    // ── Workflow graph authoring ──────────────────────────────────────
+    async setWorkflowGraph(idOrSlug, spec) {
+        await this.transport.requestNoContent(`/api/workflows/${encodeURIComponent(idOrSlug)}/graph`, "POST", "set_workflow_graph", spec);
+    }
+    async addWorkflowNode(idOrSlug, node) {
+        return this.transport.request(`/api/workflows/${encodeURIComponent(idOrSlug)}/nodes`, { method: "POST", toolName: "add_workflow_node", body: node });
+    }
+    async updateWorkflowNode(idOrSlug, nodeId, patch) {
+        await this.transport.requestNoContent(`/api/workflows/${encodeURIComponent(idOrSlug)}/nodes/${encodeURIComponent(nodeId)}`, "PATCH", "update_workflow_node", patch);
+    }
+    async removeWorkflowNode(idOrSlug, nodeId) {
+        await this.transport.requestNoContent(`/api/workflows/${encodeURIComponent(idOrSlug)}/nodes/${encodeURIComponent(nodeId)}`, "DELETE", "remove_workflow_node");
+    }
+    async connectWorkflow(idOrSlug, from, to) {
+        await this.transport.requestNoContent(`/api/workflows/${encodeURIComponent(idOrSlug)}/edges`, "POST", "connect_workflow", { from, to });
+    }
+    async disconnectWorkflow(idOrSlug, from, to) {
+        await this.transport.requestNoContent(`/api/workflows/${encodeURIComponent(idOrSlug)}/edges`, "DELETE", "disconnect_workflow", { from, to });
     }
     // ── Workspaces ────────────────────────────────────────────────────
     async listWorkspaces() {

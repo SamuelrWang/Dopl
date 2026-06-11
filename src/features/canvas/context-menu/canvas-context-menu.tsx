@@ -46,7 +46,7 @@ export function CanvasContextMenu({ x, y, onAction, onClose }: Props) {
       // Stop pointer events from reaching the canvas viewport: without
       // this, pressing a menu item starts a marquee / cluster drag and
       // the viewport's pointer capture retargets the click away from
-      // the button (same guard as SelectionMenu).
+      // the button.
       onPointerDown={(e) => e.stopPropagation()}
       onPointerUp={(e) => e.stopPropagation()}
       style={{ ...clampStyle, width: MENU_WIDTH, zIndex: 99999 }}

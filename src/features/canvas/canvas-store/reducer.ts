@@ -18,7 +18,6 @@ import {
   isPanelDeletable,
   nodeRefKey,
 } from "../types";
-import { stripFromClusters } from "@/features/canvas/server/defaults";
 import { findNonOverlappingPosition } from "./layout";
 
 // ── Reducer ────────────────────────────────────────────────────────
@@ -36,6 +35,21 @@ function panelIdTaken(state: CanvasState, id: string): boolean {
     console.warn(`[canvas] refused duplicate panel id ${id}`);
   }
   return taken;
+}
+
+/**
+ * Counter value after creating a panel with `id`. For `panel-N` ids the
+ * counter jumps past N — call sites mint FREE ids that can sit ahead of
+ * a lagging counter (see nextPanelIdString), and a plain `+ 1` would
+ * leave the counter pointing at a taken suffix, turning every later
+ * create into a panelIdTaken no-op. Non-`panel-N` ids (e.g.
+ * `artifact-<uuid>`) keep the legacy `+ 1`.
+ */
+function counterAfterMint(state: CanvasState, id: string): number {
+  const m = /^panel-(\d+)$/.exec(id);
+  return m
+    ? Math.max(state.nextPanelId, Number(m[1])) + 1
+    : state.nextPanelId + 1;
 }
 
 export function reducer(state: CanvasState, action: CanvasAction): CanvasState {
@@ -128,7 +142,7 @@ export function reducer(state: CanvasState, action: CanvasAction): CanvasState {
       return {
         ...state,
         panels: [...state.panels, newPanel],
-        nextPanelId: state.nextPanelId + 1,
+        nextPanelId: counterAfterMint(state, action.id),
       };
     }
 
@@ -152,7 +166,6 @@ export function reducer(state: CanvasState, action: CanvasAction): CanvasState {
         selectedPanelIds: state.selectedPanelIds.filter(
           (id) => id !== action.id
         ),
-        clusters: stripFromClusters(state.clusters, new Set([action.id])),
         edges: state.edges.filter(
           (ed) => ed.fromPanelId !== action.id && ed.toPanelId !== action.id
         ),
@@ -170,14 +183,6 @@ export function reducer(state: CanvasState, action: CanvasAction): CanvasState {
 
       const deleteIds = new Set(toDelete.map((p) => p.id));
 
-      // Snapshot EVERY cluster the deletion touches (dissolved or merely
-      // shrunk) so undo can restore membership — with the info-panel
-      // survival rule, workflow clusters usually shrink instead of
-      // dissolving, and a dissolve-only snapshot would lose membership.
-      const newClusters = stripFromClusters(state.clusters, deleteIds);
-      const touchedClusters = state.clusters.filter((c) =>
-        c.panelIds.some((id) => deleteIds.has(id))
-      );
       const removedEdges = state.edges.filter(
         (ed) => deleteIds.has(ed.fromPanelId) || deleteIds.has(ed.toPanelId)
       );
@@ -186,13 +191,12 @@ export function reducer(state: CanvasState, action: CanvasAction): CanvasState {
         ...state,
         panels: state.panels.filter((p) => !deleteIds.has(p.id)),
         selectedPanelIds: [],
-        clusters: newClusters,
         edges: state.edges.filter(
           (ed) => !deleteIds.has(ed.fromPanelId) && !deleteIds.has(ed.toPanelId)
         ),
         deletedPanelsStack: [
           ...state.deletedPanelsStack.slice(-19), // cap at 20
-          { panels: toDelete, clusters: touchedClusters, edges: removedEdges },
+          { panels: toDelete, edges: removedEdges },
         ],
       };
     }
@@ -203,34 +207,12 @@ export function reducer(state: CanvasState, action: CanvasAction): CanvasState {
 
       const last = stack[stack.length - 1];
       const restoredIds = last.panels.map((p) => p.id);
-      const restoredIdSet = new Set(restoredIds);
 
-      // Panels that will exist after the restore — snapshot panelIds may
-      // reference panels deleted in LATER operations; filter those out.
+      // Panels that will exist after the restore.
       const postPanelIds = new Set([
         ...state.panels.map((p) => p.id),
         ...restoredIds,
       ]);
-
-      // Restore touched clusters: re-add restored members to shrunk
-      // clusters (immutably — the old in-place mutation corrupted prior
-      // state snapshots) and resurrect fully-dissolved ones.
-      const mergedClusters = state.clusters.map((mc) => {
-        const snapshot = last.clusters.find((c) => c.id === mc.id);
-        if (!snapshot) return mc;
-        const restoredMembers = snapshot.panelIds.filter(
-          (id) => restoredIdSet.has(id) && !mc.panelIds.includes(id)
-        );
-        if (restoredMembers.length === 0) return mc;
-        return { ...mc, panelIds: [...mc.panelIds, ...restoredMembers] };
-      });
-      for (const c of last.clusters) {
-        if (mergedClusters.some((mc) => mc.id === c.id)) continue;
-        mergedClusters.push({
-          ...c,
-          panelIds: c.panelIds.filter((id) => postPanelIds.has(id)),
-        });
-      }
 
       // Restore edges whose endpoints both exist post-restore (db-sync
       // re-POSTs them; ids are stable uuids).
@@ -246,7 +228,6 @@ export function reducer(state: CanvasState, action: CanvasAction): CanvasState {
         ...state,
         panels: [...state.panels, ...last.panels],
         selectedPanelIds: restoredIds,
-        clusters: mergedClusters,
         edges: [...state.edges, ...restoredEdges],
         deletedPanelsStack: stack.slice(0, -1),
       };
@@ -352,114 +333,28 @@ export function reducer(state: CanvasState, action: CanvasAction): CanvasState {
         }),
       };
 
-    case "CREATE_CLUSTER": {
-      // Apply the moves atomically with the cluster creation so the outline
-      // never flashes in the pre-layout positions.
-      const moveMap = new Map(action.moves.map((m) => [m.id, m]));
-      const movedPanels = state.panels.map((p) => {
-        const move = moveMap.get(p.id);
-        return move ? { ...p, x: move.x, y: move.y } : p;
-      });
-
-      // Enforce one-cluster-per-panel: strip the new members from any
-      // pre-existing clusters before appending the new one.
-      const newMemberSet = new Set(action.cluster.panelIds);
-      const withoutDuplicates = stripFromClusters(state.clusters, newMemberSet);
-
-      return {
-        ...state,
-        panels: movedPanels,
-        clusters: [...withoutDuplicates, action.cluster],
-        nextClusterId: state.nextClusterId + 1,
-      };
-    }
-
-    case "DELETE_CLUSTER": {
-      // The cluster-info panel's lifecycle is the cluster's — remove it
-      // together so no orphaned header card floats on the canvas.
-      const cluster = state.clusters.find((c) => c.id === action.clusterId);
-      const infoId = cluster?.infoPanelId;
-      return {
-        ...state,
-        panels: infoId
-          ? state.panels.filter((p) => p.id !== infoId)
-          : state.panels,
-        selectedPanelIds: infoId
-          ? state.selectedPanelIds.filter((id) => id !== infoId)
-          : state.selectedPanelIds,
-        clusters: state.clusters.filter((c) => c.id !== action.clusterId),
-        edges: infoId
-          ? state.edges.filter(
-              (ed) => ed.fromPanelId !== infoId && ed.toPanelId !== infoId
-            )
-          : state.edges,
-      };
-    }
-
-    case "CREATE_CLUSTER_WORKFLOW": {
-      if (panelIdTaken(state, action.infoPanel.id)) return state;
-      // Workflow creation: the cluster, its info panel, and any layout
-      // moves land in one reducer step so the outline + header card
-      // appear together (never a flash of the pre-layout positions).
-      const moveMap = new Map((action.moves ?? []).map((m) => [m.id, m]));
-      const movedPanels = state.panels.map((p) => {
-        const move = moveMap.get(p.id);
-        return move ? { ...p, x: move.x, y: move.y } : p;
-      });
-      const newMemberSet = new Set(action.cluster.panelIds);
-      const withoutDuplicates = stripFromClusters(state.clusters, newMemberSet);
-      return {
-        ...state,
-        panels: [...movedPanels, action.infoPanel],
-        clusters: [...withoutDuplicates, action.cluster],
-        nextClusterId: state.nextClusterId + 1,
-        nextPanelId: state.nextPanelId + 1,
-      };
-    }
-
-    case "CLUSTER_ATTACH_INFO_PANEL": {
-      // Upgrade-in-place: synthesize the info panel for a pre-workflow
-      // cluster. No-ops if the cluster already has one (or is gone).
-      const cluster = state.clusters.find((c) => c.id === action.clusterId);
-      if (!cluster) return state;
-      // No-op only when the recorded info panel actually EXISTS — a
-      // stale infoPanelId (panel row lost) must not block re-synthesis,
-      // or the cluster becomes permanently headerless (unrenamable,
-      // undeletable from the canvas).
-      const infoPanelAlive =
-        cluster.infoPanelId != null &&
-        state.panels.some((p) => p.id === cluster.infoPanelId);
-      if (infoPanelAlive) return state;
-      if (state.panels.some((p) => p.id === action.panel.id)) return state;
+    case "CREATE_WORKFLOW": {
+      if (panelIdTaken(state, action.panel.id)) return state;
       return {
         ...state,
         panels: [...state.panels, action.panel],
-        clusters: state.clusters.map((c) =>
-          c.id === action.clusterId
-            ? {
-                ...c,
-                infoPanelId: action.panel.id,
-                panelIds: [...c.panelIds, action.panel.id],
-              }
-            : c
-        ),
-        nextPanelId: state.nextPanelId + 1,
+        nextPanelId: counterAfterMint(state, action.panel.id),
       };
     }
 
-    case "UPDATE_CLUSTER_INFO":
+    case "UPDATE_WORKFLOW_INFO":
       return {
         ...state,
-        clusters: state.clusters.map((c) =>
-          c.id === action.clusterId
+        panels: state.panels.map((p) =>
+          p.id === action.panelId && p.type === "workflow"
             ? {
-                ...c,
+                ...p,
                 ...(action.name !== undefined ? { name: action.name } : null),
                 ...(action.description !== undefined
                   ? { description: action.description }
                   : null),
               }
-            : c
+            : p
         ),
       };
 
@@ -492,7 +387,7 @@ export function reducer(state: CanvasState, action: CanvasAction): CanvasState {
             nextInstructions: "",
           },
         ],
-        nextPanelId: state.nextPanelId + 1,
+        nextPanelId: counterAfterMint(state, action.id),
       };
     }
 
@@ -534,10 +429,16 @@ export function reducer(state: CanvasState, action: CanvasAction): CanvasState {
       };
 
     case "EDGE_ADD": {
+      // Reject the exact pair AND the reverse pair: A→B and B→A render
+      // as pixel-identical overlapping curves (facing-anchor geometry is
+      // symmetric), so the "second" edge just makes deletion look broken
+      // — and membership reachability is undirected anyway.
       const exists = state.edges.some(
         (ed) =>
-          ed.fromPanelId === action.edge.fromPanelId &&
-          ed.toPanelId === action.edge.toPanelId
+          (ed.fromPanelId === action.edge.fromPanelId &&
+            ed.toPanelId === action.edge.toPanelId) ||
+          (ed.fromPanelId === action.edge.toPanelId &&
+            ed.toPanelId === action.edge.fromPanelId)
       );
       if (exists || action.edge.fromPanelId === action.edge.toPanelId) {
         return state;
@@ -549,62 +450,6 @@ export function reducer(state: CanvasState, action: CanvasAction): CanvasState {
       return {
         ...state,
         edges: state.edges.filter((ed) => ed.id !== action.edgeId),
-      };
-
-    case "UPDATE_CLUSTER_NAME":
-      return {
-        ...state,
-        clusters: state.clusters.map((c) =>
-          c.id === action.clusterId ? { ...c, name: action.name } : c
-        ),
-      };
-
-    case "UPDATE_CLUSTER_DB_INFO":
-      return {
-        ...state,
-        clusters: state.clusters.map((c) =>
-          c.id === action.clusterId
-            ? { ...c, dbId: action.dbId, slug: action.slug }
-            : c
-        ),
-      };
-
-
-    case "ADD_PANEL_TO_CLUSTER": {
-      // Enforce one-cluster-per-panel. Strip from any other cluster
-      // (auto-dissolving anything that falls below MIN_CLUSTER_SIZE)
-      // and append to the target. Preserve the target cluster's name
-      // and createdAt — joining is a membership bump, not a re-cluster.
-      const strippedClusters = stripFromClusters(
-        state.clusters,
-        new Set([action.panelId])
-      );
-      const target = strippedClusters.find((c) => c.id === action.clusterId);
-      if (!target) {
-        // Target cluster no longer exists (was auto-dissolved during
-        // strip, e.g. the panel was its second-to-last member). No-op.
-        return { ...state, clusters: strippedClusters };
-      }
-      if (target.panelIds.includes(action.panelId)) {
-        return { ...state, clusters: strippedClusters };
-      }
-      return {
-        ...state,
-        clusters: strippedClusters.map((c) =>
-          c.id === action.clusterId
-            ? { ...c, panelIds: [...c.panelIds, action.panelId] }
-            : c
-        ),
-      };
-    }
-
-    case "REMOVE_PANEL_FROM_CLUSTER":
-      return {
-        ...state,
-        clusters: stripFromClusters(
-          state.clusters,
-          new Set([action.panelId])
-        ),
       };
 
     case "CREATE_KNOWLEDGE_PANEL": {
@@ -627,7 +472,7 @@ export function reducer(state: CanvasState, action: CanvasAction): CanvasState {
       return {
         ...state,
         panels: [...state.panels, newPanel],
-        nextPanelId: state.nextPanelId + 1,
+        nextPanelId: counterAfterMint(state, action.id),
       };
     }
 
@@ -651,7 +496,7 @@ export function reducer(state: CanvasState, action: CanvasAction): CanvasState {
       return {
         ...state,
         panels: [...state.panels, newPanel],
-        nextPanelId: state.nextPanelId + 1,
+        nextPanelId: counterAfterMint(state, action.id),
       };
     }
 
@@ -680,7 +525,7 @@ export function reducer(state: CanvasState, action: CanvasAction): CanvasState {
       return {
         ...state,
         panels: [...state.panels, newPanel],
-        nextPanelId: state.nextPanelId + 1,
+        nextPanelId: counterAfterMint(state, action.id),
       };
     }
 
@@ -709,7 +554,7 @@ export function reducer(state: CanvasState, action: CanvasAction): CanvasState {
       return {
         ...state,
         panels: [...state.panels, newPanel],
-        nextPanelId: state.nextPanelId + 1,
+        nextPanelId: counterAfterMint(state, action.id),
       };
     }
 
@@ -737,7 +582,7 @@ export function reducer(state: CanvasState, action: CanvasAction): CanvasState {
       return {
         ...state,
         panels: [...state.panels, newPanel],
-        nextPanelId: state.nextPanelId + 1,
+        nextPanelId: counterAfterMint(state, action.id),
       };
     }
 
@@ -760,6 +605,56 @@ export function reducer(state: CanvasState, action: CanvasAction): CanvasState {
             : p
         ),
       };
+
+    case "APPLY_REMOTE_PANEL_UPSERT": {
+      const incoming = action.panel;
+      const exists = state.panels.some((p) => p.id === incoming.id);
+      if (!exists) {
+        return { ...state, panels: [...state.panels, incoming] };
+      }
+      // Don't clobber a panel the user has selected (likely dragging or
+      // editing its text) — a debounced echo of an older value would snap
+      // it back.
+      if (state.selectedPanelIds.includes(incoming.id)) return state;
+      return {
+        ...state,
+        panels: state.panels.map((p) => (p.id === incoming.id ? incoming : p)),
+      };
+    }
+
+    case "APPLY_REMOTE_PANEL_REMOVE": {
+      if (!state.panels.some((p) => p.id === action.panelId)) return state;
+      return {
+        ...state,
+        panels: state.panels.filter((p) => p.id !== action.panelId),
+        selectedPanelIds: state.selectedPanelIds.filter(
+          (id) => id !== action.panelId
+        ),
+        edges: state.edges.filter(
+          (e) =>
+            e.fromPanelId !== action.panelId && e.toPanelId !== action.panelId
+        ),
+      };
+    }
+
+    case "APPLY_REMOTE_EDGE_UPSERT": {
+      const dup = state.edges.some(
+        (e) =>
+          e.id === action.edge.id ||
+          (e.fromPanelId === action.edge.fromPanelId &&
+            e.toPanelId === action.edge.toPanelId)
+      );
+      if (dup) return state;
+      return { ...state, edges: [...state.edges, action.edge] };
+    }
+
+    case "APPLY_REMOTE_EDGE_REMOVE": {
+      if (!state.edges.some((e) => e.id === action.edgeId)) return state;
+      return {
+        ...state,
+        edges: state.edges.filter((e) => e.id !== action.edgeId),
+      };
+    }
 
     default:
       return state;

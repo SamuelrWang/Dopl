@@ -18,7 +18,6 @@ import {
   type ChatScopeFilters,
 } from "@/features/chat/server/tools";
 import { buildArtifactFromToolCall } from "@/features/chat/server/tools/artifacts";
-import { getCluster } from "@/features/clusters/server/service";
 import { resolveActiveWorkspace } from "@/features/workspaces/server/service";
 import { HttpError } from "@/shared/lib/http-error";
 import { config } from "dotenv";
@@ -143,53 +142,9 @@ async function handlePost(
     const client = new Anthropic({ apiKey: key });
     const encoder = new TextEncoder();
 
-    // Server-side enrichment: when the chat is inside a synced cluster,
-    // attach the cluster's KBs + skills so the system prompt has real
-    // context. Failures are non-fatal — chat still works without the
-    // enrichment. Skipped in private mode since the private chat doesn't
-    // run inside a cluster.
-    let enriched: CanvasContextPayload | undefined = canvasContext;
-    if (
-      mode === "workspace" &&
-      canvasContext &&
-      canvasContext.scope === "cluster" &&
-      canvasContext.clusterSlug
-    ) {
-      try {
-        const detail = await getCluster(canvasContext.clusterSlug, {
-          userId,
-          workspaceId,
-          source: agentTokenId ? "agent" : "user",
-        });
-        enriched = {
-          ...canvasContext,
-          knowledgeBases: detail.knowledge_bases.map((kb) => ({
-            knowledgeBaseId: kb.knowledge_base_id,
-            slug: kb.slug,
-            name: kb.name,
-            description: kb.description,
-            agentWriteEnabled: kb.agent_write_enabled,
-            entriesIndex: kb.entries_index.map((e) => ({
-              entryId: e.entry_id,
-              title: e.title,
-              folderPath: e.folder_path,
-            })),
-          })),
-          skills: detail.skills.map((sk) => ({
-            skillId: sk.skill_id,
-            slug: sk.slug,
-            name: sk.name,
-            description: sk.description,
-            whenToUse: sk.when_to_use,
-            status: sk.status,
-            body: sk.body,
-          })),
-        };
-      } catch (err) {
-        // Non-fatal: skip enrichment but keep the original payload.
-        console.warn("chat: cluster enrichment failed", err);
-      }
-    }
+    // Chats are canvas-scoped (the spatial cluster grouping was removed);
+    // the canvas context already carries the panels the agent can see.
+    const enriched: CanvasContextPayload | undefined = canvasContext;
 
     // Compose system prompt + tool set per mode.
     const baseSystemPrompt =

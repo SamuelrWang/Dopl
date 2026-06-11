@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 
 export type MenuItemId =
-  | "new-cluster"
+  | "new-workflow"
   | "new-node"
   | "new-chat"
   | "open-knowledge"
@@ -30,8 +30,8 @@ export interface MenuItem {
 export const MENU_SECTIONS: MenuItem[][] = [
   [
     {
-      id: "new-cluster",
-      label: "New cluster",
+      id: "new-workflow",
+      label: "New workflow",
       icon: Workflow,
     },
     {

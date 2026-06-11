@@ -2,11 +2,9 @@
 
 import React from "react";
 import { CanvasPanel } from "../canvas-panel";
-import type { Cluster, Edge, Panel, CanvasAction } from "../types";
-import { ClusterWorldLayer } from "../clusters/cluster-layer";
+import type { Edge, Panel, CanvasAction } from "../types";
 import { EdgeLayer } from "../edges/edge-layer";
 import { NodePortsLayer } from "../edges/node-ports-layer";
-import { isPointInClusterShape } from "../clusters/cluster-geometry";
 
 /**
  * Apply camera transform directly to the world DOM element, bypassing React.
@@ -86,8 +84,12 @@ export const WorldContents = React.memo(function WorldContents({
   return (
     <>
       <CanvasGrid zoom={zoom} />
-      <ClusterWorldLayer />
       <EdgeLayer panels={panels} edges={edges} />
+      {/* Ports BELOW the panels: each panel's 22px hover bands sit just
+          outside its edges and would otherwise eat clicks on any neighbor
+          panel inside that strip. Edge-drag drop targeting is unaffected —
+          it hit-tests with elementsFromPoint (scans the full stack). */}
+      <NodePortsLayer panels={panels} />
       {panels.map((panel) => (
         <CanvasPanel
           key={panel.id}
@@ -96,34 +98,9 @@ export const WorldContents = React.memo(function WorldContents({
           dispatch={dispatch}
         />
       ))}
-      <NodePortsLayer panels={panels} />
     </>
   );
 });
-
-/** Find the topmost cluster whose world-space bounds contain the given point. */
-export function findClusterAtPoint(
-  clusters: Cluster[],
-  panels: Panel[],
-  worldPoint: { x: number; y: number }
-): Cluster | null {
-  for (let i = clusters.length - 1; i >= 0; i--) {
-    const c = clusters[i];
-    const members = panels.filter((p) => c.panelIds.includes(p.id));
-    if (members.length === 0) continue;
-    // Use the actual padded-per-panel shape, not the full bounding box.
-    // This avoids triggering drags from empty corners of the AABB.
-    if (isPointInClusterShape(members, worldPoint)) return c;
-  }
-  return null;
-}
-
-export interface ClusterDragState {
-  clusterId: string;
-  mouseX: number;
-  mouseY: number;
-  panels: Array<{ id: string; x: number; y: number }>;
-}
 
 export interface MarqueeState {
   /** Viewport-relative start point (pixels). */

@@ -23,7 +23,7 @@ import { SkillsPanelBody } from "./panels/skills/skills-panel";
 import { KnowledgeBasePanelBody } from "./panels/knowledge-base/knowledge-base-panel";
 import { SkillPanelBody } from "./panels/skill/skill-panel";
 import { ArtifactPanelBody } from "./panels/artifact/artifact-panel";
-import { ClusterInfoPanelBody } from "./panels/cluster-info/cluster-info-panel";
+import { WorkflowPanelBody } from "./panels/workflow/workflow-panel";
 import { NodePanelBody } from "./panels/node/node-panel";
 import { ChatExpiryBar } from "./canvas-panel-expiry";
 import { useCanvasPanelDrag } from "./use-canvas-panel-drag";
@@ -101,7 +101,7 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
                       ? `Skill · ${panel.name}`
                       : panel.type === "artifact"
                         ? `Artifact · ${panel.title}`
-                        : panel.type === "cluster-info"
+                        : panel.type === "workflow"
                           ? "Workflow"
                           : panel.type === "node"
                             ? `Node${panel.title ? ` · ${panel.title}` : ""}`
@@ -160,7 +160,7 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
       className={
         "relative rounded-2xl overflow-hidden bg-[var(--panel-surface)] border border-border-default flex flex-col select-text transition-[box-shadow] duration-150 " +
         (isSelected
-          ? "shadow-[var(--ring-selected),var(--shadow-panel)] !border-border-highlight"
+          ? "shadow-[0_0_0_2px_var(--surface-cta),var(--shadow-panel)] !border-[var(--surface-cta)]"
           : "shadow-[var(--shadow-panel)]")
       }
     >
@@ -191,16 +191,16 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
           aria-hidden
         >
           <div className="flex gap-[2px]">
-            <span className="w-[3px] h-[3px] rounded-none bg-text-text-muted" />
-            <span className="w-[3px] h-[3px] rounded-none bg-text-text-muted" />
+            <span className="w-[3px] h-[3px] rounded-none bg-white/50" />
+            <span className="w-[3px] h-[3px] rounded-none bg-white/50" />
           </div>
           <div className="flex gap-[2px]">
-            <span className="w-[3px] h-[3px] rounded-none bg-text-text-muted" />
-            <span className="w-[3px] h-[3px] rounded-none bg-text-text-muted" />
+            <span className="w-[3px] h-[3px] rounded-none bg-white/50" />
+            <span className="w-[3px] h-[3px] rounded-none bg-white/50" />
           </div>
           <div className="flex gap-[2px]">
-            <span className="w-[3px] h-[3px] rounded-none bg-text-text-muted" />
-            <span className="w-[3px] h-[3px] rounded-none bg-text-text-muted" />
+            <span className="w-[3px] h-[3px] rounded-none bg-white/50" />
+            <span className="w-[3px] h-[3px] rounded-none bg-white/50" />
           </div>
         </div>
 
@@ -215,7 +215,7 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
           <button
             onClick={handleClose}
             aria-label="Close panel"
-            className="w-6 h-6 flex items-center justify-center rounded-[3px] text-text-muted hover:text-text-primary hover:bg-surface-raised-3 border border-transparent hover:border-border-default transition-colors"
+            className="w-6 h-6 flex items-center justify-center rounded-[3px] text-white/70 hover:text-white hover:bg-white/15 border border-transparent hover:border-white/25 transition-colors"
           >
             <svg
               width="12"
@@ -235,7 +235,7 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
           <span
             aria-label="Pinned panel"
             title="Pinned — cannot be closed"
-            className="w-6 h-6 flex items-center justify-center text-text-muted"
+            className="w-6 h-6 flex items-center justify-center text-white/70"
           >
             <svg
               width="12"
@@ -267,7 +267,7 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
         {panel.type === "knowledge-base" && <KnowledgeBasePanelBody panel={panel} />}
         {panel.type === "skill" && <SkillPanelBody panel={panel} />}
         {panel.type === "artifact" && <ArtifactPanelBody panel={panel} dispatch={dispatch} />}
-        {panel.type === "cluster-info" && <ClusterInfoPanelBody panel={panel} />}
+        {panel.type === "workflow" && <WorkflowPanelBody panel={panel} />}
         {panel.type === "node" && <NodePanelBody panel={panel} />}
       </div>
 

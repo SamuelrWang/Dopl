@@ -72,6 +72,15 @@ function panelIdSet(panels: Panel[]): Set<string> {
   return new Set(panels.map((p) => p.id));
 }
 
+/** panelId → workflowId for every workflow header panel. */
+function workflowIdMap(panels: Panel[]): Map<string, string> {
+  const m = new Map<string, string>();
+  for (const p of panels) {
+    if (p.type === "workflow") m.set(p.id, p.workflowId);
+  }
+  return m;
+}
+
 // ── The hook ──────────────────────────────────────────────────────────
 
 export function useCanvasDbSync() {
@@ -82,6 +91,13 @@ export function useCanvasDbSync() {
   const prevCameraRef = useRef("");
   const prevPanelIdsRef = useRef<Set<string>>(new Set());
   const prevEdgesRef = useRef<Map<string, Edge>>(new Map());
+  // In-flight panel creates, keyed by panel id. Edge creates await their
+  // endpoints' entries here: an UNDO_DELETE restores panels + edges in
+  // one commit, and an edge POST that races ahead of its panel POST
+  // violates the canvas_edges → canvas_panels FK and is lost for good.
+  const pendingPanelCreatesRef = useRef<Map<string, Promise<unknown>>>(
+    new Map()
+  );
   // Pending debounced updates accumulate across effect runs — a second
   // change inside the debounce window must MERGE with (not replace) the
   // first, or the earlier panel's update is silently dropped when the
@@ -93,12 +109,13 @@ export function useCanvasDbSync() {
   const prevPositionsRef = useRef("");
   const prevCountersRef = useRef("");
   const prevTitlesRef = useRef<Map<string, string>>(new Map());
-  const prevClustersRef = useRef("");
+  // panelId → workflowId for workflow header panels, so removing a header
+  // panel can also delete its backing workflows row.
+  const prevWorkflowsRef = useRef<Map<string, string>>(new Map());
   const prevPanelDataRef = useRef<Map<string, string>>(new Map());
   const cameraTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const positionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const titleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const clusterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const panelDataTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Optimistic-lock version for canvas_state. Hydrated on mount via a
   // GET, then bumped in lock-step with every successful PATCH so cross-
@@ -133,7 +150,7 @@ export function useCanvasDbSync() {
     prevCameraRef.current = cameraKey(state.camera);
     prevPanelIdsRef.current = panelIdSet(state.panels);
     prevPositionsRef.current = panelPositionKey(state.panels);
-    prevCountersRef.current = `${state.nextPanelId}|${state.nextClusterId}`;
+    prevCountersRef.current = `${state.nextPanelId}`;
     const titles = new Map<string, string>();
     for (const p of state.panels) {
       if ("title" in p && typeof p.title === "string") {
@@ -141,7 +158,7 @@ export function useCanvasDbSync() {
       }
     }
     prevTitlesRef.current = titles;
-    prevClustersRef.current = JSON.stringify(state.clusters);
+    prevWorkflowsRef.current = workflowIdMap(state.panels);
     prevEdgesRef.current = new Map(state.edges.map((e) => [e.id, e]));
     const dataMap = new Map<string, string>();
     for (const p of state.panels) {
@@ -157,7 +174,7 @@ export function useCanvasDbSync() {
   useEffect(() => {
     if (!syncedRef.current) return;
     const currentCamera = cameraKey(state.camera);
-    const currentCounters = `${state.nextPanelId}|${state.nextClusterId}`;
+    const currentCounters = `${state.nextPanelId}`;
     if (currentCamera !== prevCameraRef.current || currentCounters !== prevCountersRef.current) {
       if (cameraTimerRef.current) clearTimeout(cameraTimerRef.current);
       cameraTimerRef.current = setTimeout(() => {
@@ -166,14 +183,13 @@ export function useCanvasDbSync() {
           camera_y: state.camera.y,
           camera_zoom: state.camera.zoom,
           next_panel_id: state.nextPanelId,
-          next_cluster_id: state.nextClusterId,
         }).then(() => setLocalSaveTimestamp());
         cameraTimerRef.current = null;
       }, 1000);
       prevCameraRef.current = currentCamera;
       prevCountersRef.current = currentCounters;
     }
-  }, [state.camera, state.nextPanelId, state.nextClusterId]);
+  }, [state.camera, state.nextPanelId]);
 
   // Panel add/remove → immediate POST/DELETE
   useEffect(() => {
@@ -185,25 +201,43 @@ export function useCanvasDbSync() {
     for (const panel of state.panels) {
       if (!prevIds.has(panel.id)) {
         const row = panelToDbRow(panel);
-        fetch("/api/canvas/panels", {
+        const create = fetch("/api/canvas/panels", {
           method: "POST",
           headers: syncHeaders(workspaceId),
           body: JSON.stringify(row),
         }).then(() => setLocalSaveTimestamp()).catch((err) => console.error("[canvas-sync] panel create failed:", err));
+        pendingPanelCreatesRef.current.set(panel.id, create);
+        void create.finally(() => {
+          if (pendingPanelCreatesRef.current.get(panel.id) === create) {
+            pendingPanelCreatesRef.current.delete(panel.id);
+          }
+        });
       }
     }
 
-    // Panel removed → DELETE from DB (immediate)
+    // Panel removed → DELETE from DB (immediate). A removed workflow header
+    // panel also deletes its backing workflows row (detaches its KBs/skills;
+    // panels stay).
     for (const prevId of prevIds) {
       if (!currentPanelIds.has(prevId)) {
         fetch(`/api/canvas/panels/${encodeURIComponent(prevId)}`, {
           method: "DELETE",
           headers: workspaceId ? { "X-Workspace-Id": workspaceId } : undefined,
         }).catch((err) => console.error("[canvas-sync] panel delete failed:", err));
+        const workflowId = prevWorkflowsRef.current.get(prevId);
+        if (workflowId) {
+          fetch(`/api/workflows/${encodeURIComponent(workflowId)}`, {
+            method: "DELETE",
+            headers: workspaceId ? { "X-Workspace-Id": workspaceId } : undefined,
+          }).catch((err) =>
+            console.error("[canvas-sync] workflow delete failed:", err)
+          );
+        }
       }
     }
 
     prevPanelIdsRef.current = currentPanelIds;
+    prevWorkflowsRef.current = workflowIdMap(state.panels);
   }, [state.panels]);
 
   // Edge add/remove → immediate POST/DELETE (same shape as panels; the
@@ -215,12 +249,30 @@ export function useCanvasDbSync() {
 
     for (const [id, edge] of current) {
       if (!prev.has(id)) {
-        fetch("/api/canvas/edges", {
-          method: "POST",
-          headers: syncHeaders(workspaceId),
-          body: JSON.stringify(edge),
-        })
-          .then(() => setLocalSaveTimestamp())
+        // Wait for any in-flight creates of the endpoint panels first
+        // (UNDO_DELETE restores panel + edge in one commit) — the edge
+        // row's FK requires both panel rows to exist.
+        const deps = [
+          pendingPanelCreatesRef.current.get(edge.fromPanelId),
+          pendingPanelCreatesRef.current.get(edge.toPanelId),
+        ].filter(Boolean);
+        void Promise.allSettled(deps)
+          .then(() =>
+            fetch("/api/canvas/edges", {
+              method: "POST",
+              headers: syncHeaders(workspaceId),
+              body: JSON.stringify(edge),
+            })
+          )
+          .then((res) => {
+            if (!res.ok) {
+              console.error(
+                `[canvas-sync] edge create failed: HTTP ${res.status}`,
+                edge
+              );
+            }
+            setLocalSaveTimestamp();
+          })
           .catch((err) =>
             console.error("[canvas-sync] edge create failed:", err)
           );
@@ -299,22 +351,6 @@ export function useCanvasDbSync() {
     prevTitlesRef.current = currentTitles;
   }, [state.panels]);
 
-  // Clusters → debounced save (1000ms)
-  useEffect(() => {
-    if (!syncedRef.current) return;
-    const currentClustersKey = JSON.stringify(state.clusters);
-    if (currentClustersKey !== prevClustersRef.current) {
-      if (clusterTimerRef.current) clearTimeout(clusterTimerRef.current);
-      clusterTimerRef.current = setTimeout(() => {
-        void patchCanvasState(workspaceId, stateVersionRef, {
-          clusters: state.clusters,
-        }).then(() => setLocalSaveTimestamp());
-        clusterTimerRef.current = null;
-      }, 1000);
-      prevClustersRef.current = currentClustersKey;
-    }
-  }, [state.clusters]);
-
   // Panel data → debounced batch update (2000ms)
   useEffect(() => {
     if (!syncedRef.current) return;
@@ -357,7 +393,6 @@ export function useCanvasDbSync() {
       if (cameraTimerRef.current) clearTimeout(cameraTimerRef.current);
       if (positionTimerRef.current) clearTimeout(positionTimerRef.current);
       if (titleTimerRef.current) clearTimeout(titleTimerRef.current);
-      if (clusterTimerRef.current) clearTimeout(clusterTimerRef.current);
       if (panelDataTimerRef.current) clearTimeout(panelDataTimerRef.current);
     };
   }, []);
@@ -384,7 +419,6 @@ export function useCanvasDbSync() {
         cameraTimerRef.current !== null ||
         positionTimerRef.current !== null ||
         titleTimerRef.current !== null ||
-        clusterTimerRef.current !== null ||
         panelDataTimerRef.current !== null;
       if (!anyPending) return;
 
@@ -400,7 +434,6 @@ export function useCanvasDbSync() {
             camera_y: s.camera.y,
             camera_zoom: s.camera.zoom,
             next_panel_id: s.nextPanelId,
-            next_cluster_id: s.nextClusterId,
           },
           { keepalive: true },
         );
@@ -450,18 +483,6 @@ export function useCanvasDbSync() {
             body: JSON.stringify({ updates: titleUpdates }),
           }).catch(() => {});
         }
-      }
-
-      // Clusters
-      if (clusterTimerRef.current) {
-        clearTimeout(clusterTimerRef.current);
-        clusterTimerRef.current = null;
-        void patchCanvasState(
-          workspaceId,
-          stateVersionRef,
-          { clusters: s.clusters },
-          { keepalive: true },
-        );
       }
     }
 

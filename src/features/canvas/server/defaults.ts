@@ -7,41 +7,13 @@
  * server-side initial-state loader enforce the same rules. Pure
  * functions, no React, no DB.
  *
- *   - `stripFromClusters`: remove panel ids from every cluster, auto-
- *     dissolve clusters that fall below MIN_CLUSTER_SIZE.
  *   - `dedupSingletonPanels`: collapse multiple connection panels to one
  *     (historical bug self-heal).
  *   - `ensureDefaultPanels`: inject the connection default if missing.
  */
 
-import type { CanvasState, Cluster, Panel } from "@/features/canvas/types";
-import {
-  CONNECTION_PANEL_SIZE,
-  MIN_CLUSTER_SIZE,
-} from "@/features/canvas/types";
-
-export function stripFromClusters(
-  clusters: Cluster[],
-  panelIds: ReadonlySet<string>
-): Cluster[] {
-  const next: Cluster[] = [];
-  for (const c of clusters) {
-    const remaining = c.panelIds.filter((id) => !panelIds.has(id));
-    if (remaining.length === c.panelIds.length) {
-      next.push(c);
-      continue;
-    }
-    // Workflow survival rule: a cluster that still contains its
-    // cluster-info panel is valid at ANY size (the info panel alone is a
-    // legitimate empty workflow). Clusters without an info panel keep
-    // the legacy ≥ MIN_CLUSTER_SIZE auto-dissolve.
-    const keepsInfoPanel =
-      c.infoPanelId != null && remaining.includes(c.infoPanelId);
-    if (!keepsInfoPanel && remaining.length < MIN_CLUSTER_SIZE) continue;
-    next.push({ ...c, panelIds: remaining });
-  }
-  return next;
-}
+import type { CanvasState, Panel } from "@/features/canvas/types";
+import { CONNECTION_PANEL_SIZE } from "@/features/canvas/types";
 
 export function dedupSingletonPanels(state: CanvasState): CanvasState {
   const SINGLETON_TYPES = new Set(["connection"]);
@@ -58,7 +30,7 @@ export function dedupSingletonPanels(state: CanvasState): CanvasState {
     // localStorage / in-memory state; the DB's unique constraint can't
     // hold one, so the first is always the row that actually exists.
     // NOT added to `dropped`: the surviving copy shares the id and must
-    // keep its cluster membership + selection.
+    // keep its selection.
     if (seenIds.has(p.id)) {
       removedDuplicateIds = true;
       continue;
@@ -79,7 +51,9 @@ export function dedupSingletonPanels(state: CanvasState): CanvasState {
   return {
     ...state,
     panels: kept,
-    clusters: stripFromClusters(state.clusters, dropped),
+    edges: state.edges.filter(
+      (e) => !dropped.has(e.fromPanelId) && !dropped.has(e.toPanelId)
+    ),
     selectedPanelIds: state.selectedPanelIds.filter((id) => !dropped.has(id)),
   };
 }

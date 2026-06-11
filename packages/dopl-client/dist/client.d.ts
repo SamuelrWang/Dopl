@@ -1,4 +1,4 @@
-import type { CanvasPanel, WorkspaceListItem, ClusterDetail, ClusterKnowledgeEntry, ClusterSkillFull, ClusterRow, Pack, PackFile, PackFileMeta, ResolvedWorkspace } from "./types.js";
+import type { CanvasPanel, WorkspaceListItem, ClusterDetail, ClusterRow, WorkflowRow, WorkflowDetail, WorkflowGraphSpec, WorkflowNodeInput, Pack, PackFile, PackFileMeta, ResolvedWorkspace } from "./types.js";
 import { DoplTransport } from "./transport.js";
 import type { KnowledgeBase, KnowledgeBaseCreateInput, KnowledgeBaseUpdateInput, KnowledgeDirListing, KnowledgeEntry, KnowledgeFolder, KnowledgePathOpResult, KnowledgeSearchHit, KnowledgeTrashSnapshot, KnowledgeTreeSnapshot, KnowledgeWriteFileInput } from "./knowledge-types.js";
 import type { CreateSkillInput, UpdateSkillPatch as SkillUpdatePatch } from "./skills.js";
@@ -22,8 +22,26 @@ export declare class DoplClient {
         clusters: ClusterRow[];
     }>;
     getCluster(slug: string): Promise<ClusterDetail>;
-    getClusterKnowledgeEntry(clusterSlug: string, kbId: string, entryId: string): Promise<ClusterKnowledgeEntry>;
-    getClusterSkill(clusterSlug: string, skillId: string): Promise<ClusterSkillFull>;
+    listWorkflows(): Promise<{
+        workflows: WorkflowRow[];
+    }>;
+    getWorkflow(idOrSlug: string): Promise<WorkflowDetail>;
+    createWorkflow(name: string): Promise<WorkflowRow>;
+    updateWorkflow(idOrSlug: string, updates: {
+        name?: string;
+        description?: string | null;
+    }): Promise<WorkflowRow>;
+    deleteWorkflow(idOrSlug: string): Promise<void>;
+    setWorkflowGraph(idOrSlug: string, spec: WorkflowGraphSpec): Promise<void>;
+    addWorkflowNode(idOrSlug: string, node: WorkflowNodeInput & {
+        connect_from?: string;
+    }): Promise<{
+        node_id: string;
+    }>;
+    updateWorkflowNode(idOrSlug: string, nodeId: string, patch: Partial<WorkflowNodeInput>): Promise<void>;
+    removeWorkflowNode(idOrSlug: string, nodeId: string): Promise<void>;
+    connectWorkflow(idOrSlug: string, from: string, to: string): Promise<void>;
+    disconnectWorkflow(idOrSlug: string, from: string, to: string): Promise<void>;
     listWorkspaces(): Promise<{
         workspaces: WorkspaceListItem[];
     }>;

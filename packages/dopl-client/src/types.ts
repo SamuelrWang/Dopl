@@ -64,19 +64,16 @@ export interface ClusterRow {
   id: string;
   slug: string;
   name: string;
-  /** Workflow description (≤300 chars). Optional for back-compat. */
+  /** Cluster description (≤300 chars). Optional for back-compat. */
   description?: string | null;
   created_at: string;
   updated_at: string;
-  panel_count: number;
   /**
-   * Attachment summary. Optional for back-compat with older API responses
-   * that predate the counts; consumers should treat absent as 0 / empty.
+   * Workflow grouping summary (clusters contain workflows). Optional for
+   * back-compat; consumers should treat absent as 0 / empty.
    */
-  knowledge_base_count?: number;
-  skill_count?: number;
-  knowledge_base_names?: string[];
-  skill_names?: string[];
+  workflow_count?: number;
+  workflow_names?: string[];
 }
 
 export interface WorkspaceSummary {
@@ -167,13 +164,73 @@ export interface ClusterWorkflow {
   edges: Array<{ from: string; to: string }>;
 }
 
+/** Summary of a workflow assigned to a cluster (drill in via dopl_workflow). */
+export interface ClusterWorkflowSummary {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+}
+
 export interface ClusterDetail extends ClusterRow {
-  entries: ClusterDetailEntry[];
+  /** Workflows grouped under this cluster. */
+  workflows: ClusterWorkflowSummary[];
+}
+
+// ── Workflows ────────────────────────────────────────────────────────
+// A workflow is a header panel + its edge-connected node graph. Clusters
+// are non-spatial containers that group workflows; KB/skill attachments
+// + the node graph live at the workflow level.
+
+export interface WorkflowRow {
+  id: string;
+  slug: string;
+  name: string;
+  description?: string | null;
+  /** Cluster this workflow belongs to, if any. */
+  cluster_id?: string | null;
+  created_at: string;
+  updated_at: string;
+  knowledge_base_count?: number;
+  skill_count?: number;
+  knowledge_base_names?: string[];
+  skill_names?: string[];
+  /** Set on agent-path create: the canvas header panel id (use as "header"
+   *  endpoint when connecting nodes). */
+  header_panel_id?: string;
+}
+
+// ── Workflow graph authoring (MCP) ───────────────────────────────────
+export interface WorkflowReadRef {
+  kbId: string;
+  /** Present → a file (entry) ref; absent → a whole-KB ref. */
+  entryId?: string;
+}
+export interface WorkflowActionRef {
+  skillId: string;
+}
+export interface WorkflowNodeInput {
+  /** Stable agent-chosen handle (lets a later set_graph match this node). */
+  ref: string;
+  title?: string;
+  description?: string;
+  reads?: WorkflowReadRef[];
+  actions?: WorkflowActionRef[];
+  userInput?: string;
+  agentOutput?: string;
+  nextInstructions?: string;
+}
+export interface WorkflowGraphSpec {
+  nodes: WorkflowNodeInput[];
+  /** Each endpoint is a node `ref` or the literal "header". */
+  edges: Array<{ from: string; to: string }>;
+}
+
+export interface WorkflowDetail extends WorkflowRow {
   knowledge_bases: ClusterAttachedKnowledgeBase[];
   skills: ClusterAttachedSkill[];
-  /** Workflow composed from the canvas (node blocks + connectors).
-   *  Null/absent when the cluster has no node blocks. */
-  workflow?: ClusterWorkflow | null;
+  /** Node graph composed from the canvas. Null when no nodes are wired. */
+  graph?: ClusterWorkflow | null;
 }
 
 export interface ClusterKnowledgeEntry {

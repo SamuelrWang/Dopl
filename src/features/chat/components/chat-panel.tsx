@@ -41,7 +41,7 @@ interface ChatPanelBodyProps {
 }
 
 export function ChatPanelBody({ panel }: ChatPanelBodyProps) {
-  const { clusters, dispatch } = usePanelsContext();
+  const { dispatch } = usePanelsContext();
   const [input, setInput] = useState("");
   const [pendingAttachments, setPendingAttachments] = useState<
     PendingAttachment[]
@@ -88,12 +88,6 @@ export function ChatPanelBody({ panel }: ChatPanelBodyProps) {
 
   // Auto-generate a topic name for the chat after the first AI response.
   useChatName(panel);
-
-  // Current cluster name (for the "in cluster: X" badge at the top).
-  const clusterName = useMemo(() => {
-    const cluster = clusters.find((c) => c.panelIds.includes(panel.id));
-    return cluster?.name ?? null;
-  }, [clusters, panel.id]);
 
   const isProcessing = chatStreaming || panel.isProcessing || isUploading;
 
@@ -294,22 +288,6 @@ export function ChatPanelBody({ panel }: ChatPanelBodyProps) {
 
   return (
     <>
-      {/* Cluster badge — small indicator at the top of the message area
-          showing which cluster this chat is loaded into, if any. */}
-      {clusterName && (
-        <div
-          data-no-drag
-          className="shrink-0 px-4 pt-3 pb-0 flex items-center gap-1.5"
-        >
-          <span className="font-mono text-[9px] uppercase tracking-wider text-text-muted">
-            In cluster:
-          </span>
-          <span className="font-mono text-[9px] uppercase tracking-wider text-text-secondary">
-            {clusterName}
-          </span>
-        </div>
-      )}
-
       {/* Messages — scrollable region with drag & drop support */}
       <div
         ref={scrollRef}
@@ -332,9 +310,7 @@ export function ChatPanelBody({ panel }: ChatPanelBodyProps) {
         )}
         {!hasMessages && !isDragOver && (
           <p className="text-xs text-text-muted italic font-mono uppercase tracking-wide">
-            {clusterName
-              ? "Ask a question about this cluster."
-              : "Start a conversation. You can drop files."}
+            Start a conversation. You can drop files.
           </p>
         )}
         {panel.messages.map((msg, i) => (
@@ -380,9 +356,7 @@ export function ChatPanelBody({ panel }: ChatPanelBodyProps) {
                 ? "Uploading..."
                 : isProcessing
                   ? "Thinking..."
-                  : clusterName
-                    ? `Message in ${clusterName}...`
-                    : "Send a message or drop files..."
+                  : "Send a message or drop files..."
             }
             disabled={isProcessing}
             rows={1}

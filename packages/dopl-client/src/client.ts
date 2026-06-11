@@ -2,9 +2,11 @@ import type {
   CanvasPanel,
   WorkspaceListItem,
   ClusterDetail,
-  ClusterKnowledgeEntry,
-  ClusterSkillFull,
   ClusterRow,
+  WorkflowRow,
+  WorkflowDetail,
+  WorkflowGraphSpec,
+  WorkflowNodeInput,
   Pack,
   PackFile,
   PackFileMeta,
@@ -92,24 +94,114 @@ export class DoplClient {
     );
   }
 
-  async getClusterKnowledgeEntry(
-    clusterSlug: string,
-    kbId: string,
-    entryId: string
-  ): Promise<ClusterKnowledgeEntry> {
-    return this.transport.request<ClusterKnowledgeEntry>(
-      `/api/clusters/${encodeURIComponent(clusterSlug)}/knowledge-bases/${encodeURIComponent(kbId)}/entries/${encodeURIComponent(entryId)}`,
-      { toolName: "read_cluster_knowledge_entry" }
+  // ── Workflows ────────────────────────────────────────────────────
+  async listWorkflows(): Promise<{ workflows: WorkflowRow[] }> {
+    return this.transport.request<{ workflows: WorkflowRow[] }>(
+      "/api/workflows",
+      { toolName: "list_workflows" }
     );
   }
 
-  async getClusterSkill(
-    clusterSlug: string,
-    skillId: string
-  ): Promise<ClusterSkillFull> {
-    return this.transport.request<ClusterSkillFull>(
-      `/api/clusters/${encodeURIComponent(clusterSlug)}/skills/${encodeURIComponent(skillId)}/full`,
-      { toolName: "read_cluster_skill" }
+  async getWorkflow(idOrSlug: string): Promise<WorkflowDetail> {
+    return this.transport.request<WorkflowDetail>(
+      `/api/workflows/${encodeURIComponent(idOrSlug)}`,
+      { toolName: "get_workflow" }
+    );
+  }
+
+  async createWorkflow(name: string): Promise<WorkflowRow> {
+    return this.transport.request<WorkflowRow>("/api/workflows", {
+      method: "POST",
+      toolName: "create_workflow",
+      body: { name },
+    });
+  }
+
+  async updateWorkflow(
+    idOrSlug: string,
+    updates: { name?: string; description?: string | null }
+  ): Promise<WorkflowRow> {
+    return this.transport.request<WorkflowRow>(
+      `/api/workflows/${encodeURIComponent(idOrSlug)}`,
+      { method: "PATCH", toolName: "update_workflow", body: updates }
+    );
+  }
+
+  async deleteWorkflow(idOrSlug: string): Promise<void> {
+    await this.transport.requestNoContent(
+      `/api/workflows/${encodeURIComponent(idOrSlug)}`,
+      "DELETE",
+      "delete_workflow"
+    );
+  }
+
+  // ── Workflow graph authoring ──────────────────────────────────────
+  async setWorkflowGraph(
+    idOrSlug: string,
+    spec: WorkflowGraphSpec
+  ): Promise<void> {
+    await this.transport.requestNoContent(
+      `/api/workflows/${encodeURIComponent(idOrSlug)}/graph`,
+      "POST",
+      "set_workflow_graph",
+      spec
+    );
+  }
+
+  async addWorkflowNode(
+    idOrSlug: string,
+    node: WorkflowNodeInput & { connect_from?: string }
+  ): Promise<{ node_id: string }> {
+    return this.transport.request<{ node_id: string }>(
+      `/api/workflows/${encodeURIComponent(idOrSlug)}/nodes`,
+      { method: "POST", toolName: "add_workflow_node", body: node }
+    );
+  }
+
+  async updateWorkflowNode(
+    idOrSlug: string,
+    nodeId: string,
+    patch: Partial<WorkflowNodeInput>
+  ): Promise<void> {
+    await this.transport.requestNoContent(
+      `/api/workflows/${encodeURIComponent(idOrSlug)}/nodes/${encodeURIComponent(nodeId)}`,
+      "PATCH",
+      "update_workflow_node",
+      patch
+    );
+  }
+
+  async removeWorkflowNode(idOrSlug: string, nodeId: string): Promise<void> {
+    await this.transport.requestNoContent(
+      `/api/workflows/${encodeURIComponent(idOrSlug)}/nodes/${encodeURIComponent(nodeId)}`,
+      "DELETE",
+      "remove_workflow_node"
+    );
+  }
+
+  async connectWorkflow(
+    idOrSlug: string,
+    from: string,
+    to: string
+  ): Promise<void> {
+    await this.transport.requestNoContent(
+      `/api/workflows/${encodeURIComponent(idOrSlug)}/edges`,
+      "POST",
+      "connect_workflow",
+      { from, to }
+    );
+  }
+
+  async disconnectWorkflow(
+    idOrSlug: string,
+    from: string,
+    to: string
+  ): Promise<void> {
+    await this.transport.requestNoContent(
+      `/api/workflows/${encodeURIComponent(idOrSlug)}/edges`,
+      "DELETE",
+      "disconnect_workflow",
+      { from, to }
     );
   }
 

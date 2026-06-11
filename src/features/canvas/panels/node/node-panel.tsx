@@ -21,8 +21,13 @@
 import { useState } from "react";
 import { BookOpen, FileText, Sparkles, X } from "lucide-react";
 import { useCanvas } from "../../canvas-store";
-import type { NodePanelData, NodeRef } from "../../types";
+import type {
+  KnowledgeBasePanelData,
+  NodePanelData,
+  NodeRef,
+} from "../../types";
 import { nodeRefKey } from "../../types";
+import { KnowledgeBasePanelBody } from "../knowledge-base/knowledge-base-panel";
 
 export function NodePanelBody({ panel }: { panel: NodePanelData }) {
   const { dispatch } = useCanvas();
@@ -132,11 +137,69 @@ function DockZone({
             {hint}
           </span>
         ) : (
-          refs.map((ref) => (
-            <RefChip key={nodeRefKey(ref)} nodeRef={ref} onUndock={onUndock} />
-          ))
+          refs.map((ref) =>
+            // Docked knowledge bases render their full panel body inline
+            // (browse + read entries in place); files and skills stay
+            // compact chips.
+            ref.kind === "kb" ? (
+              <EmbeddedKbRef
+                key={nodeRefKey(ref)}
+                nodeRef={ref}
+                onUndock={onUndock}
+              />
+            ) : (
+              <RefChip key={nodeRefKey(ref)} nodeRef={ref} onUndock={onUndock} />
+            )
+          )
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * A docked knowledge-base ref shown as the full KB panel body (embedded
+ * mode: no attachment banner, no tree-expand button, no agent toggle) so
+ * the node block displays the knowledge contents in place. The synthetic
+ * panel object carries only what the body actually reads — the live
+ * name/description/visibility come from its own useKnowledgeTree fetch.
+ */
+function EmbeddedKbRef({
+  nodeRef,
+  onUndock,
+}: {
+  nodeRef: Extract<NodeRef, { kind: "kb" }>;
+  onUndock: (ref: NodeRef) => void;
+}) {
+  const embeddedPanel: KnowledgeBasePanelData = {
+    id: `node-embed-${nodeRef.kbId}`,
+    type: "knowledge-base",
+    knowledgeBaseId: nodeRef.kbId,
+    slug: "",
+    name: nodeRef.name,
+    description: null,
+    agentWriteEnabled: false,
+    x: 0,
+    y: 0,
+    width: 0,
+    height: 0,
+  };
+  return (
+    <div
+      data-no-drag
+      className="relative h-[420px] overflow-hidden rounded-md border border-border-default bg-[var(--panel-surface)]"
+    >
+      <KnowledgeBasePanelBody panel={embeddedPanel} embedded />
+      <button
+        type="button"
+        aria-label={`Remove ${nodeRef.name}`}
+        title={`Remove ${nodeRef.name}`}
+        onClick={() => onUndock(nodeRef)}
+        onPointerDown={(e) => e.stopPropagation()}
+        className="absolute right-2 top-2.5 z-10 flex h-5 w-5 items-center justify-center rounded text-text-muted transition-colors hover:bg-surface-raised-3 hover:text-text-primary cursor-pointer"
+      >
+        <X size={11} />
+      </button>
     </div>
   );
 }

@@ -1,0 +1,91 @@
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
+import { HttpError } from "@/shared/lib/http-error";
+import { denyIfNoCanvasWrite } from "@/features/members/server/access";
+import { DESCRIPTION_MAX } from "@/config";
+import { resolveWorkflowId } from "@/features/workflows/server/attachments";
+import { removeNode, updateNode } from "@/features/workflows/server/authoring";
+
+interface Ctx {
+  userId: string;
+  workspaceId: string;
+  agentTokenId?: string;
+  params?: Record<string, string>;
+}
+
+const PatchBody = z.object({
+  title: z.string().max(200).optional(),
+  description: z.string().max(2000).optional(),
+  reads: z.array(z.object({ kbId: z.string().uuid(), entryId: z.string().uuid().optional() })).max(50).optional(),
+  actions: z.array(z.object({ skillId: z.string().uuid() })).max(50).optional(),
+  userInput: z.string().max(DESCRIPTION_MAX * 8).optional(),
+  agentOutput: z.string().max(DESCRIPTION_MAX * 8).optional(),
+  nextInstructions: z.string().max(DESCRIPTION_MAX * 8).optional(),
+});
+
+function scopeOf(ctx: Ctx) {
+  return {
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+    source: ctx.agentTokenId ? ("agent" as const) : ("user" as const),
+  };
+}
+
+function toError(err: unknown): NextResponse {
+  if (err instanceof HttpError)
+    return NextResponse.json(err.toResponseBody(), { status: err.status });
+  console.error("[api/workflows/nodes/:nodeId]", err);
+  return NextResponse.json(
+    { error: { code: "INTERNAL_ERROR", message: "Internal error" } },
+    { status: 500 }
+  );
+}
+
+async function gate(ctx: Ctx): Promise<NextResponse | null> {
+  return denyIfNoCanvasWrite({
+    agentTokenId: ctx.agentTokenId,
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+  });
+}
+
+async function handlePatch(request: NextRequest, ctx: Ctx) {
+  try {
+    const denied = await gate(ctx);
+    if (denied) return denied;
+    const { id, nodeId } = ctx.params ?? {};
+    if (!id || !nodeId) return NextResponse.json({ error: "id + nodeId required" }, { status: 400 });
+    const parsed = PatchBody.safeParse(await request.json());
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: { code: "VALIDATION_FAILED", issues: parsed.error.issues } },
+        { status: 400 }
+      );
+    }
+    const scope = scopeOf(ctx);
+    const workflowId = await resolveWorkflowId(id, scope);
+    await updateNode(workflowId, nodeId, parsed.data, scope);
+    return new NextResponse(null, { status: 204 });
+  } catch (err) {
+    return toError(err);
+  }
+}
+
+async function handleDelete(_request: NextRequest, ctx: Ctx) {
+  try {
+    const denied = await gate(ctx);
+    if (denied) return denied;
+    const { id, nodeId } = ctx.params ?? {};
+    if (!id || !nodeId) return NextResponse.json({ error: "id + nodeId required" }, { status: 400 });
+    const scope = scopeOf(ctx);
+    const workflowId = await resolveWorkflowId(id, scope);
+    await removeNode(workflowId, nodeId, scope);
+    return new NextResponse(null, { status: 204 });
+  } catch (err) {
+    return toError(err);
+  }
+}
+
+export const PATCH = withWorkspaceAuth(handlePatch, { minRole: "member" });
+export const DELETE = withWorkspaceAuth(handleDelete, { minRole: "member" });

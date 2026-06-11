@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import { FileText, Plus, Save, Trash2, X } from "lucide-react";
 import type { SkillPanelData } from "../../types";
 import { useCanvasScope } from "../../canvas-store";
-import { ClusterAttachmentBanner } from "../cluster-attachment-banner";
 import { useSkillsRealtime } from "@/features/skills/client/realtime";
 import {
   SkillApiError,
@@ -100,7 +99,6 @@ export function SkillPanelBody({ panel }: Props) {
 
   return (
     <div className="flex h-full w-full flex-col">
-      <ClusterAttachmentBanner panelId={panel.id} />
       <SkillHeader
         skill={skill}
         workspaceId={scope?.workspaceId}

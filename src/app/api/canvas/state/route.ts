@@ -60,9 +60,7 @@ export const PATCH = withWorkspaceAuth(
     if (body.camera_y !== undefined) update.camera_y = body.camera_y;
     if (body.camera_zoom !== undefined) update.camera_zoom = body.camera_zoom;
     if (body.next_panel_id !== undefined) update.next_panel_id = body.next_panel_id;
-    if (body.next_cluster_id !== undefined) update.next_cluster_id = body.next_cluster_id;
     if (body.sidebar_open !== undefined) update.sidebar_open = body.sidebar_open;
-    if (body.clusters !== undefined) update.clusters = body.clusters;
 
     const expectedVersion: number | null =
       typeof body.if_version === "number" ? body.if_version : null;

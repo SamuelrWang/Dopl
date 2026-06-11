@@ -9,6 +9,7 @@ import type {
 import { registerKnowledgeTools } from "./tools/knowledge.js";
 import { registerSkillTools } from "./tools/skills.js";
 import { registerClusterTools } from "./tools/cluster.js";
+import { registerWorkflowTools } from "./tools/workflow.js";
 import { registerCanvasTools } from "./tools/canvas.js";
 import { registerPacksTools } from "./tools/packs.js";
 import { SKILL_AUTHORING_GUIDE } from "./prompts/skill-authoring-guide.js";
@@ -18,7 +19,7 @@ export const SERVER_INSTRUCTIONS = `You are connected to **Dopl** — the user's
 
 ## How to use this
 
-Use the Dopl tools to read and organize the user's workspace: their knowledge bases (notes/docs), skills (procedural prompt templates), and clusters (groupings of knowledge bases + skills). Ground your answers in the user's real workspace state, not in stale local files.
+Use the Dopl tools to read and organize the user's workspace: their knowledge bases (notes/docs), skills (procedural prompt templates), and workflows (agent-followable node graphs, grouped into clusters). Ground your answers in the user's real workspace state, not in stale local files.
 
 ## Session start — preload the user's workspace
 
@@ -43,8 +44,11 @@ After set_workspace, call current_workspace once to confirm and tell the user.
 
 ## Decision tree — which tool
 
-- See what clusters exist -> dopl_cluster(op='list'); inspect one -> dopl_cluster(op='get') (lists attached knowledge bases + skills).
-- Read a knowledge-base entry inside a cluster -> dopl_cluster(op='read_knowledge_entry'); read a skill's full body -> dopl_cluster(op='read_skill').
+- See what workflows exist -> dopl_workflow(op='list'); inspect one (ordered steps + node ids + the knowledge bases / skills it references) -> dopl_workflow(op='get'). A workflow is a header + its connected node graph — the agent-followable unit.
+- AUTHOR a workflow end-to-end over MCP (appears live on an open canvas): dopl_workflow(op='create') then op='set_graph' (declarative: send the whole {nodes, edges} and it's made to match) — or build incrementally with op='add_node'/'connect'/'update_node'/'remove_node'/'disconnect'. Node reads/actions reference dopl_kb / dopl_skill ids and auto-attach. Finish with op='get' to verify.
+- Rename / describe a workflow -> dopl_workflow(op='update'); delete one -> dopl_workflow_admin(op='delete_workflow').
+- Clusters are non-spatial CONTAINERS that group workflows. See what clusters exist -> dopl_cluster(op='list'); inspect one (its workflows) -> dopl_cluster(op='get').
+- Read a knowledge-base entry -> dopl_kb(op='read_file'); read a skill's full body -> dopl_skill(op='get'). A workflow's attached KBs/skills are listed by dopl_workflow(op='get').
 - Create / rename a cluster -> dopl_cluster(op='create' | 'update'); delete one -> dopl_cluster_admin(op='delete_cluster').
 - Browse / read / write the user's knowledge bases -> dopl_kb (+ dopl_kb_admin for destructive ops).
 - List / read / author the user's skills -> dopl_skill (+ dopl_skill_admin).
@@ -191,6 +195,7 @@ export function createServer(
     "dopl_cluster_admin",
     "dopl_kb_admin",
     "dopl_skill_admin",
+    "dopl_workflow_admin",
   ]);
   // Active workspace for this MCP session — seeded from the startup
   // handshake (index.ts) and mutated by `set_workspace` mid-session.
@@ -490,6 +495,7 @@ export function createServer(
   // `dopl_<domain>_admin` companion where the domain has destructive ops)
   // that dispatches on an `op` arg.
   registerClusterTools(registerTool, client); // dopl_cluster + dopl_cluster_admin
+  registerWorkflowTools(registerTool, client); // dopl_workflow + dopl_workflow_admin
   registerCanvasTools(registerTool, client);
   registerPacksTools(registerTool, client); // curated read-only knowledge packs
   registerKnowledgeTools(registerTool, client); // dopl_kb + dopl_kb_admin (user bases)

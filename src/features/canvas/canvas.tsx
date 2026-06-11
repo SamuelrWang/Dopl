@@ -28,13 +28,11 @@
  *     { passive: false }.
  */
 
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useCanvas, useCanvasScope } from "./canvas-store";
-import { MAX_ZOOM, MIN_ZOOM, computePanelsBounds, type Cluster, type Panel } from "./types";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCanvas, useCanvasScope, nextPanelIdString } from "./canvas-store";
+import { MAX_ZOOM, MIN_ZOOM, computePanelsBounds } from "./types";
 import { CanvasMinimap } from "./canvas-minimap";
-import { clusterBounds } from "./clusters/cluster-geometry";
-import { createWorkflowCluster } from "./clusters/create-cluster";
-import { SelectionMenu } from "./selection/selection-menu";
+import { createWorkflow } from "./create-workflow";
 import { CanvasContextMenu } from "./context-menu/canvas-context-menu";
 import type { MenuItemId } from "./context-menu/menu-data";
 import { useEdgeScroll } from "./use-edge-scroll";
@@ -42,10 +40,7 @@ import {
   applyCameraDirect,
   MARQUEE_CLICK_THRESHOLD_PX,
   WorldContents,
-  findClusterAtPoint,
-  boxIntersectsPanel,
   getGridCellSize,
-  type ClusterDragState,
   type MarqueeState,
 } from "./canvas-parts";
 
@@ -66,7 +61,6 @@ export function Canvas({ showMinimap = true }: CanvasProps = {}) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const worldRef = useRef<HTMLDivElement>(null);
   const [marquee, setMarquee] = useState<MarqueeState | null>(null);
-  const [cursorPos, setCursorPos] = useState<{ x: number; y: number } | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const marqueeRef = useRef<MarqueeState | null>(null);
   // Keep ref in sync with state so handlers always see latest value.
@@ -124,11 +118,6 @@ export function Canvas({ showMinimap = true }: CanvasProps = {}) {
   const gestureFlushRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingCameraRef = useRef<{ x: number; y: number; zoom: number } | null>(null);
 
-  // Cluster drag lives in a ref because we don't need to re-render on
-  // every pointermove (the MOVE_PANELS dispatch does that work). Set
-  // when pointerdown hits empty cluster space, cleared on pointerup.
-  const clusterDragRef = useRef<ClusterDragState | null>(null);
-
   // Mirror the latest camera into a ref so the native wheel listener (below)
   // can read it without re-attaching on every camera change.
   // IMPORTANT: skip the sync while a gesture is in progress — the refs are
@@ -168,18 +157,6 @@ export function Canvas({ showMinimap = true }: CanvasProps = {}) {
     panelsRef.current = state.panels;
   }, [state.panels]);
 
-  // Cluster list ref — used by the pointerdown hit-test without
-  // re-creating the callback on every cluster change.
-  const clustersRef = useRef(state.clusters);
-  useEffect(() => {
-    clustersRef.current = state.clusters;
-  }, [state.clusters]);
-
-  // Clear the selection menu when selection drops below 2 panels.
-  useEffect(() => {
-    if (state.selectedPanelIds.length < 2) setCursorPos(null);
-  }, [state.selectedPanelIds]);
-
   // ── Edge-scroll: auto-pan when cursor hits window edge ────────────
   useEdgeScroll({
     viewportRef,
@@ -191,7 +168,7 @@ export function Canvas({ showMinimap = true }: CanvasProps = {}) {
     dispatch,
   });
 
-  // ── Background pointerdown (cluster drag OR marquee) ──────────────
+  // ── Background pointerdown (marquee selection) ────────────────────
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
@@ -204,54 +181,7 @@ export function Canvas({ showMinimap = true }: CanvasProps = {}) {
       const vx = e.clientX - rect.left;
       const vy = e.clientY - rect.top;
 
-      // Convert to world coords for cluster hit testing.
-      const camera = cameraRef.current;
-      const worldX = (vx - camera.x) / camera.zoom;
-      const worldY = (vy - camera.y) / camera.zoom;
-
-      // 1. Cluster hit test — if the pointer is inside a cluster's empty
-      //    area, start a cluster drag that moves every member together.
-      //    Shift+click on an empty cluster area additively selects the
-      //    members WITHOUT starting a drag (so the user can combine
-      //    clusters into a single selection).
-      const hitCluster = findClusterAtPoint(
-        clustersRef.current,
-        panelsRef.current,
-        { x: worldX, y: worldY }
-      );
-      if (hitCluster) {
-        if (e.shiftKey) {
-          // Additive: union the cluster members into the existing selection
-          // and bail — no drag.
-          const merged = Array.from(
-            new Set([...state.selectedPanelIds, ...hitCluster.panelIds])
-          );
-          dispatch({ type: "SET_SELECTION", panelIds: merged });
-          return;
-        }
-
-        viewport.setPointerCapture(e.pointerId);
-
-        // Capture starting positions for every cluster member so the
-        // move handler can apply a rigid delta.
-        const memberPositions = panelsRef.current
-          .filter((p) => hitCluster.panelIds.includes(p.id))
-          .map((p) => ({ id: p.id, x: p.x, y: p.y }));
-
-        clusterDragRef.current = {
-          clusterId: hitCluster.id,
-          mouseX: e.clientX,
-          mouseY: e.clientY,
-          panels: memberPositions,
-        };
-
-        // Select the cluster members while dragging so the UI shows
-        // consistent "what you're moving".
-        dispatch({ type: "SET_SELECTION", panelIds: hitCluster.panelIds });
-        return;
-      }
-
-      // 2. No cluster hit — fall through to marquee selection.
+      // Background press → marquee selection.
       viewport.setPointerCapture(e.pointerId);
       setMarquee({
         startX: vx,
@@ -267,24 +197,6 @@ export function Canvas({ showMinimap = true }: CanvasProps = {}) {
 
   const handlePointerMove = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
-      // Cluster drag takes precedence — if one is active we route all
-      // movement there and skip marquee logic entirely.
-      const clusterDrag = clusterDragRef.current;
-      if (clusterDrag) {
-        const zoom = cameraRef.current.zoom;
-        const dx = (e.clientX - clusterDrag.mouseX) / zoom;
-        const dy = (e.clientY - clusterDrag.mouseY) / zoom;
-        dispatch({
-          type: "MOVE_PANELS",
-          moves: clusterDrag.panels.map((p) => ({
-            id: p.id,
-            x: p.x + dx,
-            y: p.y + dy,
-          })),
-        });
-        return;
-      }
-
       // Read marquee from ref to avoid stale closure — the useCallback
       // deps intentionally exclude marquee state for performance, so the
       // ref is the only reliable source during a drag gesture.
@@ -338,13 +250,6 @@ export function Canvas({ showMinimap = true }: CanvasProps = {}) {
         viewport.releasePointerCapture(e.pointerId);
       }
 
-      // Cluster drag release — clear the drag ref, keep the selection
-      // (which already reflects the cluster's members).
-      if (clusterDragRef.current) {
-        clusterDragRef.current = null;
-        return;
-      }
-
       const currentMarquee = marqueeRef.current;
       if (!currentMarquee) return;
 
@@ -359,10 +264,6 @@ export function Canvas({ showMinimap = true }: CanvasProps = {}) {
         !currentMarquee.additive
       ) {
         dispatch({ type: "SET_SELECTION", panelIds: [] });
-        setCursorPos(null);
-      } else {
-        // Marquee ended — show selection menu at cursor if 2+ panels selected.
-        setCursorPos({ x: e.clientX, y: e.clientY });
       }
       setMarquee(null);
     },
@@ -399,8 +300,8 @@ export function Canvas({ showMinimap = true }: CanvasProps = {}) {
       const worldY = (menuPos.y - rect.top - cam.y) / cam.zoom;
 
       switch (id) {
-        case "new-cluster":
-          createWorkflowCluster({
+        case "new-workflow":
+          createWorkflow({
             state,
             dispatch,
             workspaceId: scope?.workspaceId ?? null,
@@ -410,7 +311,7 @@ export function Canvas({ showMinimap = true }: CanvasProps = {}) {
         case "new-node":
           dispatch({
             type: "CREATE_NODE_PANEL",
-            id: `panel-${state.nextPanelId}`,
+            id: nextPanelIdString(state),
             x: worldX,
             y: worldY,
           });
@@ -418,7 +319,7 @@ export function Canvas({ showMinimap = true }: CanvasProps = {}) {
         case "new-chat":
           dispatch({
             type: "CREATE_CHAT_PANEL",
-            id: `panel-${state.nextPanelId}`,
+            id: nextPanelIdString(state),
             x: worldX,
             y: worldY,
             title: "New Chat",
@@ -427,7 +328,7 @@ export function Canvas({ showMinimap = true }: CanvasProps = {}) {
         case "open-knowledge":
           dispatch({
             type: "CREATE_KNOWLEDGE_PANEL",
-            id: `panel-${state.nextPanelId}`,
+            id: nextPanelIdString(state),
             x: worldX,
             y: worldY,
           });
@@ -435,7 +336,7 @@ export function Canvas({ showMinimap = true }: CanvasProps = {}) {
         case "open-skills":
           dispatch({
             type: "CREATE_SKILLS_PANEL",
-            id: `panel-${state.nextPanelId}`,
+            id: nextPanelIdString(state),
             x: worldX,
             y: worldY,
           });
@@ -451,7 +352,7 @@ export function Canvas({ showMinimap = true }: CanvasProps = {}) {
       const target = e.target as HTMLElement;
       if (
         target.closest(
-          "[data-panel-id], [data-canvas-minimap], [data-edge-port]"
+          "[data-panel-id], [data-canvas-minimap], [data-edge-site]"
         )
       ) {
         return;
@@ -712,7 +613,7 @@ export function Canvas({ showMinimap = true }: CanvasProps = {}) {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [dispatch, state.selectedPanelIds]);
 
-  const { x: camX, y: camY, zoom } = state.camera;
+  const { zoom } = state.camera;
 
   // Geometry for the marquee overlay — normalised so the div always has a
   // positive size regardless of drag direction.
@@ -738,9 +639,8 @@ export function Canvas({ showMinimap = true }: CanvasProps = {}) {
       className="relative w-full h-full overflow-clip touch-none select-none"
       style={{ cursor: "default" }}
     >
-      {/* World layer — scaled then translated by camera. Cluster outlines
-          render BEHIND the panels so panels always appear "on top of"
-          their cluster backdrop.
+      {/* World layer — scaled then translated by camera. Edges render
+          behind the panels; connector sites + panels on top.
           transform-origin MUST be 0 0 — the browser default of 50% 50% would
           silently break the anchored-zoom math.
 
@@ -776,13 +676,6 @@ export function Canvas({ showMinimap = true }: CanvasProps = {}) {
           dispatch={dispatch}
         />
       </div>
-
-      {/* Cluster header tabs now rendered inside ClusterWorldLayer. */}
-
-      {/* Floating selection menu — follows cursor when 2+ panels selected */}
-      {cursorPos && state.selectedPanelIds.length >= 2 && (
-        <SelectionMenu cursorPos={cursorPos} />
-      )}
 
       {/* Custom right-click menu — replaces the native browser menu on
           empty canvas space. */}

@@ -14,78 +14,48 @@ export type Database = {
   }
   public: {
     Tables: {
-      api_key_usage: {
+      canvas_edges: {
         Row: {
-          api_key_id: string | null
-          endpoint: string
+          created_at: string
+          created_by: string | null
+          from_panel_id: string
           id: string
-          requested_at: string | null
+          to_panel_id: string
+          workspace_id: string
         }
         Insert: {
-          api_key_id?: string | null
-          endpoint: string
+          created_at?: string
+          created_by?: string | null
+          from_panel_id: string
           id?: string
-          requested_at?: string | null
+          to_panel_id: string
+          workspace_id: string
         }
         Update: {
-          api_key_id?: string | null
-          endpoint?: string
+          created_at?: string
+          created_by?: string | null
+          from_panel_id?: string
           id?: string
-          requested_at?: string | null
+          to_panel_id?: string
+          workspace_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "api_key_usage_api_key_id_fkey"
-            columns: ["api_key_id"]
+            foreignKeyName: "canvas_edges_from_panel_fkey"
+            columns: ["workspace_id", "from_panel_id"]
             isOneToOne: false
-            referencedRelation: "api_keys"
-            referencedColumns: ["id"]
+            referencedRelation: "canvas_panels"
+            referencedColumns: ["workspace_id", "panel_id"]
           },
-        ]
-      }
-      api_keys: {
-        Row: {
-          created_at: string | null
-          encrypted_key: string | null
-          id: string
-          key_hash: string
-          key_prefix: string
-          last_used_at: string | null
-          name: string
-          rate_limit_rpm: number | null
-          revoked_at: string | null
-          user_id: string | null
-          workspace_id: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          encrypted_key?: string | null
-          id?: string
-          key_hash: string
-          key_prefix: string
-          last_used_at?: string | null
-          name: string
-          rate_limit_rpm?: number | null
-          revoked_at?: string | null
-          user_id?: string | null
-          workspace_id?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          encrypted_key?: string | null
-          id?: string
-          key_hash?: string
-          key_prefix?: string
-          last_used_at?: string | null
-          name?: string
-          rate_limit_rpm?: number | null
-          revoked_at?: string | null
-          user_id?: string | null
-          workspace_id?: string | null
-        }
-        Relationships: [
           {
-            foreignKeyName: "api_keys_workspace_id_fkey"
+            foreignKeyName: "canvas_edges_to_panel_fkey"
+            columns: ["workspace_id", "to_panel_id"]
+            isOneToOne: false
+            referencedRelation: "canvas_panels"
+            referencedColumns: ["workspace_id", "panel_id"]
+          },
+          {
+            foreignKeyName: "canvas_edges_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -157,9 +127,7 @@ export type Database = {
           camera_x: number
           camera_y: number
           camera_zoom: number
-          clusters: Json
           id: string
-          next_cluster_id: number
           next_panel_id: number
           sidebar_open: boolean
           updated_at: string | null
@@ -171,9 +139,7 @@ export type Database = {
           camera_x?: number
           camera_y?: number
           camera_zoom?: number
-          clusters?: Json
           id?: string
-          next_cluster_id?: number
           next_panel_id?: number
           sidebar_open?: boolean
           updated_at?: string | null
@@ -185,9 +151,7 @@ export type Database = {
           camera_x?: number
           camera_y?: number
           camera_zoom?: number
-          clusters?: Json
           id?: string
-          next_cluster_id?: number
           next_panel_id?: number
           sidebar_open?: boolean
           updated_at?: string | null
@@ -287,101 +251,10 @@ export type Database = {
           },
         ]
       }
-      cluster_knowledge_bases: {
-        Row: {
-          added_at: string
-          added_by_user_id: string | null
-          cluster_id: string
-          knowledge_base_id: string
-          workspace_id: string
-        }
-        Insert: {
-          added_at?: string
-          added_by_user_id?: string | null
-          cluster_id: string
-          knowledge_base_id: string
-          workspace_id: string
-        }
-        Update: {
-          added_at?: string
-          added_by_user_id?: string | null
-          cluster_id?: string
-          knowledge_base_id?: string
-          workspace_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "cluster_knowledge_bases_cluster_id_fkey"
-            columns: ["cluster_id"]
-            isOneToOne: false
-            referencedRelation: "clusters"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cluster_knowledge_bases_knowledge_base_id_fkey"
-            columns: ["knowledge_base_id"]
-            isOneToOne: false
-            referencedRelation: "knowledge_bases"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cluster_knowledge_bases_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      cluster_skills: {
-        Row: {
-          added_at: string
-          added_by_user_id: string | null
-          cluster_id: string
-          skill_id: string
-          workspace_id: string
-        }
-        Insert: {
-          added_at?: string
-          added_by_user_id?: string | null
-          cluster_id: string
-          skill_id: string
-          workspace_id: string
-        }
-        Update: {
-          added_at?: string
-          added_by_user_id?: string | null
-          cluster_id?: string
-          skill_id?: string
-          workspace_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "cluster_skills_cluster_id_fkey"
-            columns: ["cluster_id"]
-            isOneToOne: false
-            referencedRelation: "clusters"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cluster_skills_skill_id_fkey"
-            columns: ["skill_id"]
-            isOneToOne: false
-            referencedRelation: "skills"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cluster_skills_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       clusters: {
         Row: {
           created_at: string | null
+          description: string | null
           forked_from_slug: string | null
           forked_from_title: string | null
           id: string
@@ -393,6 +266,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          description?: string | null
           forked_from_slug?: string | null
           forked_from_title?: string | null
           id?: string
@@ -404,6 +278,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          description?: string | null
           forked_from_slug?: string | null
           forked_from_title?: string | null
           id?: string
@@ -637,6 +512,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           deleted_at: string | null
+          description: string | null
           id: string
           knowledge_base_id: string
           name: string
@@ -649,6 +525,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
+          description?: string | null
           id?: string
           knowledge_base_id: string
           name: string
@@ -661,6 +538,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
+          description?: string | null
           id?: string
           knowledge_base_id?: string
           name?: string
@@ -831,15 +709,7 @@ export type Database = {
           tool_name?: string
           user_id?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "mcp_events_api_key_id_fkey"
-            columns: ["api_key_id"]
-            isOneToOne: false
-            referencedRelation: "api_keys"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       mcp_tokens: {
         Row: {
@@ -1291,6 +1161,149 @@ export type Database = {
         }
         Relationships: []
       }
+      workflow_knowledge_bases: {
+        Row: {
+          added_at: string
+          added_by_user_id: string | null
+          knowledge_base_id: string
+          workflow_id: string
+          workspace_id: string
+        }
+        Insert: {
+          added_at?: string
+          added_by_user_id?: string | null
+          knowledge_base_id: string
+          workflow_id: string
+          workspace_id: string
+        }
+        Update: {
+          added_at?: string
+          added_by_user_id?: string | null
+          knowledge_base_id?: string
+          workflow_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workflow_knowledge_bases_knowledge_base_id_fkey"
+            columns: ["knowledge_base_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_bases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workflow_knowledge_bases_workflow_id_fkey"
+            columns: ["workflow_id"]
+            isOneToOne: false
+            referencedRelation: "workflows"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workflow_knowledge_bases_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workflow_skills: {
+        Row: {
+          added_at: string
+          added_by_user_id: string | null
+          skill_id: string
+          workflow_id: string
+          workspace_id: string
+        }
+        Insert: {
+          added_at?: string
+          added_by_user_id?: string | null
+          skill_id: string
+          workflow_id: string
+          workspace_id: string
+        }
+        Update: {
+          added_at?: string
+          added_by_user_id?: string | null
+          skill_id?: string
+          workflow_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workflow_skills_skill_id_fkey"
+            columns: ["skill_id"]
+            isOneToOne: false
+            referencedRelation: "skills"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workflow_skills_workflow_id_fkey"
+            columns: ["workflow_id"]
+            isOneToOne: false
+            referencedRelation: "workflows"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workflow_skills_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workflows: {
+        Row: {
+          cluster_id: string | null
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          slug: string
+          updated_at: string
+          user_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          cluster_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          slug: string
+          updated_at?: string
+          user_id?: string | null
+          workspace_id: string
+        }
+        Update: {
+          cluster_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          slug?: string
+          updated_at?: string
+          user_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workflows_cluster_id_fkey"
+            columns: ["cluster_id"]
+            isOneToOne: false
+            referencedRelation: "clusters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workflows_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workspace_invitations: {
         Row: {
           accepted_at: string | null
@@ -1470,10 +1483,6 @@ export type Database = {
       cascade_soft_delete_folder: {
         Args: { p_deleted_at: string; p_folder_id: string }
         Returns: undefined
-      }
-      check_and_record_rate_limit: {
-        Args: { p_api_key_id: string; p_endpoint: string; p_rpm: number }
-        Returns: boolean
       }
       check_and_record_rate_limit_subject: {
         Args: { p_endpoint: string; p_rpm: number; p_subject: string }

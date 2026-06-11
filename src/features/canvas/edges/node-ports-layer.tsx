@@ -1,68 +1,82 @@
 "use client";
 
 /**
- * NodePortsLayer — connector ports for node panels, rendered in WORLD
- * space as siblings of the panels (panels clip their children via
- * overflow-hidden, so ports can't live inside them).
+ * NodePortsLayer — connector dots for node + workflow-header panels,
+ * rendered in WORLD space as siblings of the panels (panels clip their
+ * children via overflow-hidden, so the dots can't live inside them).
  *
- * Each node gets an IN port on its left edge (drop target) and an OUT
- * port on its right edge (drag source — see useEdgeDrag). Ports
- * inverse-scale slightly is unnecessary: at world scale they zoom with
- * the panels, which reads naturally.
+ * One dot per side, centered ON the panel edge (the edge runs through
+ * the middle of the dot), always visible, and stacked ABOVE the panels
+ * (z-index) so a dot is never hidden under its own or a neighbouring
+ * panel. Nodes expose all four sides; the workflow header exposes a
+ * single bottom dot. Drag out of any dot to start a connection; drop
+ * anywhere on another node/workflow panel to finish it — direction (the
+ * arrow) follows drag order.
+ *
+ * Scale-on-hover is composed INTO the same transform as the centering
+ * translate (arbitrary-value Tailwind classes): a bare `scale-*` utility
+ * would REPLACE the translate and visually fling the dot toward the
+ * panel's top-left corner.
  */
 
 import { useCapabilities } from "../canvas-store";
 import { useEdgeDrag } from "./use-edge-drag";
+import { SIDES, SITE_FRACTIONS, sitePoint, type Side } from "./anchors";
 import type { Panel } from "../types";
 
-const PORT_SIZE = 14;
+const SITE_SIZE = 14;
 
 export function NodePortsLayer({ panels }: { panels: Panel[] }) {
-  const beginEdgeDrag = useEdgeDrag();
-  // Read-only canvases (shared cluster viewer) render no ports — edge
-  // authoring is an editor affordance.
   const { canMove } = useCapabilities();
-  const nodes = panels.filter((p) => p.type === "node");
-  if (!canMove || nodes.length === 0) return null;
+
+  const connectable = panels.filter(
+    (p) => p.type === "node" || p.type === "workflow"
+  );
+  const connectableIds = new Set(connectable.map((p) => p.id));
+  const beginDrag = useEdgeDrag({
+    // State-derived membership beats sniffing data-* attributes off the
+    // DOM — the drop test can't silently break if panel markup changes.
+    isConnectable: (id) => connectableIds.has(id),
+  });
+
+  // Read-only canvases (shared viewer) render no dots — edge authoring
+  // is an editor affordance.
+  if (!canMove || connectable.length === 0) return null;
 
   return (
     <>
-      {nodes.map((p) => {
-        const midY = p.y + p.height / 2 - PORT_SIZE / 2;
-        return (
-          <div key={`ports-${p.id}`}>
-            {/* IN port — drop target (left edge) */}
-            <div
-              data-edge-port="in"
-              data-port-panel-id={p.id}
-              title="Connect from another node"
-              // Don't let a press on the port fall through to the
-              // viewport — it would start a marquee (or drag the whole
-              // cluster, since the port straddles the panel edge).
-              onPointerDown={(e) => e.stopPropagation()}
-              className="absolute rounded-full border-2 border-[#5b82b0] bg-[var(--panel-surface)] transition-transform data-[port-active=true]:scale-150 data-[port-active=true]:bg-[#5b82b0]"
-              style={{
-                left: p.x - PORT_SIZE / 2,
-                top: midY,
-                width: PORT_SIZE,
-                height: PORT_SIZE,
-              }}
-            />
-            {/* OUT port — drag source (right edge) */}
-            <div
-              data-edge-port="out"
-              data-port-panel-id={p.id}
-              title="Drag to connect to another node"
-              onPointerDown={(e) => beginEdgeDrag(e, p.id)}
-              className="absolute rounded-full border-2 border-[#5b82b0] bg-[#5b82b0] cursor-crosshair hover:scale-125 transition-transform"
-              style={{
-                left: p.x + p.width - PORT_SIZE / 2,
-                top: midY,
-                width: PORT_SIZE,
-                height: PORT_SIZE,
-              }}
-            />
-          </div>
+      {connectable.map((panel) => {
+        const sides: Side[] = panel.type === "workflow" ? ["bottom"] : SIDES;
+        return sides.map((side) =>
+          SITE_FRACTIONS.map((frac) => {
+            const pt = sitePoint(panel, side, frac);
+            return (
+              <div
+                key={`${panel.id}-${side}-${frac}`}
+                data-edge-site="true"
+                data-port-panel-id={panel.id}
+                data-site-side={side}
+                data-site-frac={frac}
+                title="Drag to connect"
+                onPointerDown={(e) => beginDrag(e, panel.id, side, frac)}
+                className="absolute rounded-full bg-[var(--panel-header-text)] border-2 border-[#5b82b0] transition-transform duration-150 [transform:translate(-50%,-50%)] hover:[transform:translate(-50%,-50%)_scale(1.3)] data-[port-active=true]:[transform:translate(-50%,-50%)_scale(1.45)]"
+                style={{
+                  left: pt.x,
+                  top: pt.y,
+                  width: SITE_SIZE,
+                  height: SITE_SIZE,
+                  cursor: "crosshair",
+                  // Above the panels (selected panels sit at z 10) so the
+                  // dot is never buried under its own or a neighbour's box.
+                  zIndex: 11,
+                  // Without this, touch/pen gestures get claimed for
+                  // scrolling and fire pointercancel — edge drawing would
+                  // silently never work on touch devices.
+                  touchAction: "none",
+                }}
+              />
+            );
+          })
         );
       })}
     </>

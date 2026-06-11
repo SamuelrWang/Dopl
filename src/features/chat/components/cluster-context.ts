@@ -132,18 +132,13 @@ export function buildCanvasContext(
   panelId: string,
   state: CanvasState
 ): CanvasContextPayload {
-  const cluster = state.clusters.find((c) => c.panelIds.includes(panelId));
-  const scope: "cluster" | "canvas" = cluster ? "cluster" : "canvas";
-
-  const candidatePanels = cluster
-    ? state.panels.filter((p) => new Set(cluster.panelIds).has(p.id))
-    : state.panels;
-
+  // Every chat is canvas-scoped now (spatial clusters are gone) — each
+  // standalone chat is its own session; sibling chats are excluded.
   const panels: ContextPanelDTO[] = [];
   let totalChars = 0;
 
-  for (const p of candidatePanels) {
-    const dto = serializePanel(p, panelId, scope);
+  for (const p of state.panels) {
+    const dto = serializePanel(p, panelId, "canvas");
     if (!dto) continue;
 
     const chars = estimateDTOChars(dto);
@@ -153,26 +148,8 @@ export function buildCanvasContext(
     totalChars += chars;
   }
 
-  if (cluster) {
-    return {
-      scope: "cluster",
-      clusterName: cluster.name,
-      clusterSlug: cluster.slug,
-      panels,
-    };
-  }
-
   return {
     scope: "canvas",
     panels,
   };
-}
-
-/** Used by the chat panel header to display a small "in cluster: X" badge. */
-export function findEnclosingClusterName(
-  panelId: string,
-  state: CanvasState
-): string | null {
-  const cluster = state.clusters.find((c) => c.panelIds.includes(panelId));
-  return cluster?.name ?? null;
 }

@@ -16,7 +16,6 @@ import {
 import type { KnowledgeBasePanelData } from "../../types";
 import { useRefChipDrag } from "../../use-ref-chip-drag";
 import { useCanvasScope } from "../../canvas-store";
-import { ClusterAttachmentBanner } from "../cluster-attachment-banner";
 import { useKnowledgeTree } from "@/features/knowledge/client/hooks";
 import { useKnowledgeRealtime } from "@/features/knowledge/client/realtime";
 import {
@@ -44,9 +43,15 @@ import { DocEditor } from "@/features/knowledge/components/doc-editor";
 
 interface Props {
   panel: KnowledgeBasePanelData;
+  /** Rendered inline inside a node block's Read zone (docked KB ref)
+   *  rather than as a free canvas panel. Hides canvas-panel chrome that
+   *  makes no sense there: the cluster-attachment banner, the file-tree
+   *  expand button, and the agent toggle (the synthetic panel object a
+   *  dock ref builds carries no trustworthy agentWriteEnabled). */
+  embedded?: boolean;
 }
 
-export function KnowledgeBasePanelBody({ panel }: Props) {
+export function KnowledgeBasePanelBody({ panel, embedded = false }: Props) {
   const beginRefDrag = useRefChipDrag();
   const scope = useCanvasScope();
   const { data, status, error, refetch } = useKnowledgeTree(
@@ -99,7 +104,7 @@ export function KnowledgeBasePanelBody({ panel }: Props) {
   // stopPropagation while panning/dragging — can't swallow the outside
   // click before we see it. Only listens while the tree is open.
   useEffect(() => {
-    if (!treeOpen) return;
+    if (!treeOpen || embedded) return;
     function handlePointerDown(e: PointerEvent) {
       const root = panelRootRef.current;
       if (root && !root.contains(e.target as Node)) {
@@ -109,7 +114,7 @@ export function KnowledgeBasePanelBody({ panel }: Props) {
     document.addEventListener("pointerdown", handlePointerDown, true);
     return () =>
       document.removeEventListener("pointerdown", handlePointerDown, true);
-  }, [treeOpen]);
+  }, [treeOpen, embedded]);
 
   const tree = useMemo(() => buildTree(data?.folders ?? [], data?.entries ?? []), [data]);
 
@@ -248,18 +253,19 @@ export function KnowledgeBasePanelBody({ panel }: Props) {
 
   return (
     <div ref={panelRootRef} className="flex h-full w-full flex-col">
-      <ClusterAttachmentBanner panelId={panel.id} />
       {/* Sub-header: KB metadata */}
       <div className="flex items-center justify-between border-b border-border-subtle px-4 py-3">
-        <button
-          type="button"
-          onClick={() => setTreeOpen((v) => !v)}
-          aria-label={treeOpen ? "Collapse file tree" : "Expand file tree"}
-          title={treeOpen ? "Collapse file tree" : "Expand file tree"}
-          className="mr-2 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-text-tertiary transition-colors hover:bg-surface-raised-2 hover:text-text-secondary"
-        >
-          {treeOpen ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
-        </button>
+        {!embedded && (
+          <button
+            type="button"
+            onClick={() => setTreeOpen((v) => !v)}
+            aria-label={treeOpen ? "Collapse file tree" : "Expand file tree"}
+            title={treeOpen ? "Collapse file tree" : "Expand file tree"}
+            className="mr-2 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-text-tertiary transition-colors hover:bg-surface-raised-2 hover:text-text-secondary"
+          >
+            {treeOpen ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
+          </button>
+        )}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h2 className="truncate text-sm font-semibold text-text-primary">
@@ -272,19 +278,21 @@ export function KnowledgeBasePanelBody({ panel }: Props) {
             {data?.base.visibility && (
               <VisibilityPill visibility={data.base.visibility} />
             )}
-            <button
-              type="button"
-              onClick={handleAgentToggle}
-              disabled={agentToggling}
-              className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] transition-colors ${
-                agentEnabled
-                  ? "border-agent-on/20 bg-agent-on/10 text-agent-on/90 hover:bg-agent-on/15"
-                  : "border-border-default bg-surface-raised-1 text-text-muted hover:text-text-tertiary"
-              }`}
-            >
-              <Bot size={9} />
-              {agentEnabled ? "Agent: on" : "Agent: off"}
-            </button>
+            {!embedded && (
+              <button
+                type="button"
+                onClick={handleAgentToggle}
+                disabled={agentToggling}
+                className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] transition-colors ${
+                  agentEnabled
+                    ? "border-agent-on/20 bg-agent-on/10 text-agent-on/90 hover:bg-agent-on/15"
+                    : "border-border-default bg-surface-raised-1 text-text-muted hover:text-text-tertiary"
+                }`}
+              >
+                <Bot size={9} />
+                {agentEnabled ? "Agent: on" : "Agent: off"}
+              </button>
+            )}
           </div>
           {(data?.base.description ?? panel.description) && (
             <p className="mt-0.5 truncate text-[11px] text-text-muted">

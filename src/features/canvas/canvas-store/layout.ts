@@ -92,7 +92,23 @@ export function findNonOverlappingPosition(
   return { x: Math.round(preferredX), y: Math.round(preferredY) };
 }
 
-/** Build the next panel ID as a string */
-export function nextPanelIdString(state: CanvasState): string {
-  return `panel-${state.nextPanelId}`;
+/**
+ * Mint the next free `panel-N` id.
+ *
+ * Skips suffixes already on the canvas: the persisted counter can lag
+ * the real panels (debounced counter PATCH lost to a 409 / tab close),
+ * and the reducer REFUSES creation on an id collision — so minting
+ * blindly from the counter would make every create a silent no-op.
+ *
+ * `offset` requests the (offset+1)-th free suffix, for call sites that
+ * mint several ids from one state snapshot before any dispatch lands
+ * (e.g. workflow-create consumes the first, its auto chat panel the
+ * second).
+ */
+export function nextPanelIdString(state: CanvasState, offset = 0): string {
+  const taken = new Set(state.panels.map((p) => p.id));
+  let n = state.nextPanelId;
+  let remaining = offset;
+  while (taken.has(`panel-${n}`) || remaining-- > 0) n++;
+  return `panel-${n}`;
 }

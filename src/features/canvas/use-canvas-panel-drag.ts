@@ -2,9 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState, type Dispatch } from "react";
 import { useCanvasStateRef, useCapabilities } from "./canvas-store";
-import { computeIdealClusterMembership } from "./clusters/cluster-geometry";
 import {
-  isPanelClusterable,
   type CanvasAction,
   type NodeRef,
   type Panel,
@@ -35,10 +33,9 @@ function hasDirectTextContent(el: Element): boolean {
  * applies the cursor delta to every panel captured at drag start, and
  * pointer-up releases capture + resets state.
  *
- * Also runs the cluster membership re-computation on every move so
- * panels auto-enter/leave clusters based on spatial proximity. The
- * moving-panels-are-all-one-cluster short-circuit avoids surprise
- * re-clustering when the user deliberately drags a whole cluster.
+ * A solo drag of a knowledge-base / skill panel also hit-tests node
+ * dock zones so the panel can be docked into a node's Read / Action
+ * field on drop.
  *
  * The click-vs-drag decision (used to collapse multi-selection on a
  * plain click while preserving it on a group drag) is handled inside
@@ -56,22 +53,14 @@ export function useCanvasPanelDrag(
   const canvasStateRef = useCanvasStateRef();
   const capabilities = useCapabilities();
 
-  // Drag origin captures the STARTING positions (and sizes) of every
-  // panel that will move together (solo = just this panel; group = all
-  // selected panels when the user drags a member of a multi-selection).
-  // pointermove applies the cursor delta to each panel's starting
-  // position, and uses the sizes to re-compute cluster membership based
-  // on the panels' new bounding boxes.
+  // Drag origin captures the STARTING positions of every panel that will
+  // move together (solo = just this panel; group = all selected panels
+  // when the user drags a member of a multi-selection). pointermove
+  // applies the cursor delta to each panel's starting position.
   const dragOriginRef = useRef<{
     mouseX: number;
     mouseY: number;
-    panels: Array<{
-      id: string;
-      x: number;
-      y: number;
-      width: number;
-      height: number;
-    }>;
+    panels: Array<{ id: string; x: number; y: number }>;
   } | null>(null);
 
   // Drives the cursor swap from `grab` to `grabbing` while the user is
@@ -179,22 +168,8 @@ export function useCanvasPanelDrag(
         const panelsToCapture = isPartOfMultiSelect
           ? canvasStateRef.current.panels
               .filter((p) => sel.includes(p.id))
-              .map((p) => ({
-                id: p.id,
-                x: p.x,
-                y: p.y,
-                width: p.width,
-                height: p.height,
-              }))
-          : [
-              {
-                id: panel.id,
-                x: panel.x,
-                y: panel.y,
-                width: panel.width,
-                height: panel.height,
-              },
-            ];
+              .map((p) => ({ id: p.id, x: p.x, y: p.y }))
+          : [{ id: panel.id, x: panel.x, y: panel.y }];
 
         dragOriginRef.current = {
           mouseX: evt.clientX,
@@ -271,75 +246,6 @@ export function useCanvasPanelDrag(
               zone: wantZone,
             };
           }
-        }
-      }
-
-      // ── Cluster membership re-computation ─────────────────────────
-      // After updating positions, decide whether each moved panel
-      // should enter / leave / stay in its current cluster based on
-      // distance to other members. Membership checks are cheap (small
-      // N) so running them every frame is fine. Both dispatches are
-      // batched into the same React render by v18 auto-batching.
-      const latestState = canvasStateRef.current;
-      const movingIds = new Set(origin.panels.map((p) => p.id));
-
-      // Build a "virtual" panels array with moved panels' NEW positions
-      // applied so the membership checker sees the post-move layout.
-      const virtualPanels = latestState.panels.map((p) => {
-        const moved = origin.panels.find((m) => m.id === p.id);
-        if (!moved) return p;
-        return { ...p, x: moved.x + dx, y: moved.y + dy };
-      });
-
-      // If this drag is a cluster drag (every member of a cluster is
-      // in the moving set), skip the membership checks — rigid group
-      // moves can't change distances between members. This also avoids
-      // surprising reclusters when the user intentionally moves a
-      // whole cluster as one.
-      const allMovingBelongToOneCluster = (() => {
-        const firstCluster = latestState.clusters.find((c) =>
-          c.panelIds.some((id) => movingIds.has(id))
-        );
-        if (!firstCluster) return false;
-        // Every moving panel must be in the same cluster AND every
-        // member of that cluster must be moving.
-        if (!firstCluster.panelIds.every((id) => movingIds.has(id))) {
-          return false;
-        }
-        return origin.panels.every((p) =>
-          firstCluster.panelIds.includes(p.id)
-        );
-      })();
-
-      if (allMovingBelongToOneCluster) return;
-
-      for (const moved of origin.panels) {
-        // Non-clusterable panels (connection, browse) skip membership checks.
-        const movedPanel = latestState.panels.find((p) => p.id === moved.id);
-        if (movedPanel && !isPanelClusterable(movedPanel)) continue;
-        // Cluster-info panels are pinned to their own cluster — dragging
-        // one repositions it (the outline follows) but never re-homes it
-        // into a spatially-nearer cluster.
-        if (movedPanel?.type === "cluster-info") continue;
-
-        const currentCluster = latestState.clusters.find((c) =>
-          c.panelIds.includes(moved.id)
-        );
-        const currentId = currentCluster?.id ?? null;
-        const idealId = computeIdealClusterMembership(
-          moved.id,
-          virtualPanels,
-          latestState.clusters
-        );
-        if (idealId === currentId) continue;
-        if (idealId === null) {
-          dispatch({ type: "REMOVE_PANEL_FROM_CLUSTER", panelId: moved.id });
-        } else {
-          dispatch({
-            type: "ADD_PANEL_TO_CLUSTER",
-            panelId: moved.id,
-            clusterId: idealId,
-          });
         }
       }
     },

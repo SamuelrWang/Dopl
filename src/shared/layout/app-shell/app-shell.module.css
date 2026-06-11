@@ -409,6 +409,12 @@
   --border-default: oklch(0 0 0 / 8%);
   --border-strong: oklch(0 0 0 / 12%);
   --border-highlight: oklch(0 0 0 / 16%);
+  /* Panel header — the app's dark frame/ink color (var(--surface-cta) =
+     #1c2127, same dark surface as the shell background) with white text,
+     instead of the faint cyan tint inherited from the dark :root. */
+  --panel-header-surface: var(--surface-cta);
+  --panel-header-border: rgba(255, 255, 255, 0.12);
+  --panel-header-text: #ffffff;
   --text-primary: #232a31;
   --text-secondary: #646d78;
   --text-tertiary: #7c858f;

@@ -48,9 +48,7 @@ export const POST = withWorkspaceAuth(
           camera_y: body.camera_y ?? 0,
           camera_zoom: body.camera_zoom ?? 1,
           next_panel_id: body.next_panel_id ?? 1,
-          next_cluster_id: body.next_cluster_id ?? 1,
           sidebar_open: body.sidebar_open ?? false,
-          clusters: body.clusters ?? [],
           updated_at: new Date().toISOString(),
         },
         { onConflict: "workspace_id" }

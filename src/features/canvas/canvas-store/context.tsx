@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, type Dispatch, type MutableRefObject } from "react";
-import type { CanvasState, CanvasAction, Panel, Cluster } from "../types";
+import type { CanvasState, CanvasAction, Panel } from "../types";
 
 // ── Context value types ───────────────────────────────────────────
 
@@ -13,13 +13,12 @@ interface CanvasContextValue {
 export const CanvasContext = createContext<CanvasContextValue | null>(null);
 
 /**
- * Separate context carrying only panels + clusters + dispatch.
- * Components that don't need camera can subscribe to this instead of
- * CanvasContext, avoiding re-renders on camera/zoom changes.
+ * Separate context carrying only panels + dispatch. Components that don't
+ * need camera can subscribe to this instead of CanvasContext, avoiding
+ * re-renders on camera/zoom changes.
  */
 interface PanelsContextValue {
   panels: Panel[];
-  clusters: Cluster[];
   dispatch: Dispatch<CanvasAction>;
 }
 export const PanelsContext = createContext<PanelsContextValue | null>(null);

@@ -107,16 +107,18 @@ export interface ArtifactPanelData extends BasePanelData {
 }
 
 /**
- * Cluster-info panel — the workflow header card that fronts a cluster.
- * Lives INSIDE its cluster's outline; shows the cluster's editable name +
- * description (read live from `state.clusters`, so panel_data only needs
- * the linkage). Created atomically with the cluster (CREATE_CLUSTER_WORKFLOW)
- * or synthesized for pre-workflow clusters (CLUSTER_ATTACH_INFO_PANEL).
+ * Workflow header panel — the editable card that fronts a workflow. Carries
+ * its own name + description (self-contained in panel_data; synced to the
+ * `workflows` table via /api/workflows). The workflow it anchors is the
+ * header panel plus every `node` panel reachable from it through edges; a
+ * single connector site sits at its bottom.
  */
-export interface ClusterInfoPanelData extends BasePanelData {
-  type: "cluster-info";
-  /** Store-local id of the cluster this panel fronts. */
-  clusterId: string;
+export interface WorkflowPanelData extends BasePanelData {
+  type: "workflow";
+  /** DB id of the workflows row this panel fronts. */
+  workflowId: string;
+  name: string;
+  description: string | null;
 }
 
 /**
@@ -157,6 +159,10 @@ export interface NodePanelData extends BasePanelData {
   userInput: string;
   agentOutput: string;
   nextInstructions: string;
+  /** Agent authoring handle (set when a node is created/edited over MCP via
+   *  set_graph). Round-tripped through panel_data so a later set_graph can
+   *  match it; absent on canvas-created nodes. */
+  ref?: string;
 }
 
 /** Discriminated union — add more panel types here later */
@@ -168,23 +174,12 @@ export type Panel =
   | KnowledgeBasePanelData
   | SkillPanelData
   | ArtifactPanelData
-  | ClusterInfoPanelData
+  | WorkflowPanelData
   | NodePanelData;
 
 /** Returns true if the user is allowed to close this panel. */
 export function isPanelDeletable(panel: Panel): boolean {
-  // cluster-info panels have no ✕ — their lifecycle is the cluster's
-  // (deleted together via DELETE_CLUSTER).
-  return panel.type !== "connection" && panel.type !== "cluster-info";
-}
-
-/** Returns true if this panel type can participate in clusters. */
-export function isPanelClusterable(panel: Panel): boolean {
-  return (
-    panel.type !== "connection" &&
-    panel.type !== "knowledge" &&
-    panel.type !== "skills"
-  );
+  return panel.type !== "connection";
 }
 
 /**
@@ -206,50 +201,21 @@ export function panelMinSize(panel: Panel): { width: number; height: number } {
   return DEFAULT_PANEL_MIN_SIZE;
 }
 
-/**
- * Cluster — a persistent grouping of panels with a visible outline and
- * header tab. Creating a cluster auto-reorganizes the selected panels into
- * a tight grid and draws a rectilinear union outline around them.
- *
- * Invariants:
- *  - `panelIds.length >= 2` — single-panel clusters are auto-dissolved.
- *  - Each panel id appears in AT MOST one cluster. Creating a cluster that
- *    includes an already-clustered panel will remove it from its old
- *    cluster first.
- *  - Panel ids in `panelIds` must refer to real panels in `state.panels`.
- *    Closing a panel (CLOSE_PANEL) strips it from every cluster.
- */
-export interface Cluster {
-  id: string;
-  name: string;
-  panelIds: string[];
-  createdAt: string;
-  /** DB row id — populated after syncing to /api/clusters. */
-  dbId?: string;
-  /** URL-safe slug — populated after syncing to /api/clusters. */
-  slug?: string;
-  /** Workflow description shown on the cluster-info panel and streamed
-   *  to agents via dopl_cluster. Synced to clusters.description. */
-  description?: string | null;
-  /** Panel id of this cluster's cluster-info panel. A cluster with an
-   *  info panel survives with a single member (the panel itself);
-   *  clusters without one keep the legacy ≥2-members rule. */
-  infoPanelId?: string;
-}
-
 export const CONNECTION_PANEL_SIZE = {
   width: 440,
   height: 560,
 } as const;
 
-export const CLUSTER_INFO_PANEL_SIZE = {
+export const WORKFLOW_PANEL_SIZE = {
   width: 420,
   height: 176,
 } as const;
 
 export const NODE_PANEL_SIZE = {
-  width: 460,
-  height: 640,
+  // Wide + tall enough to host embedded knowledge-base views in the
+  // Read zone (docked KB refs render the full KB panel body inline).
+  width: 720,
+  height: 960,
 } as const;
 
 export const KNOWLEDGE_PANEL_SIZE = {
@@ -283,29 +249,6 @@ export const DEFAULT_PANEL_MIN_SIZE = {
   height: 320,
 } as const;
 
-/** Minimum members a cluster must have to exist. Below this → auto-dissolve. */
-export const MIN_CLUSTER_SIZE = 2;
-
-/** World-space padding between cluster members and the outline. */
-/** Workflow outlines breathe — generous space between panel edges and
- * the dashed cluster boundary (was 24 in the blob era). */
-export const CLUSTER_PADDING = 96;
-
-/** Corner radius (world-space px) for the rounded rectilinear outline. */
-export const CLUSTER_CORNER_RADIUS = 12;
-
-/**
- * Grace distance (world-space px) used to re-compute cluster membership
- * while a panel is being dragged. A panel belongs to a cluster iff its
- * bounding box is within this distance of at least one other member.
- *
- * Bigger = more room to jiggle a member around without accidentally
- * declustering. When a panel drags past this threshold away from every
- * other cluster member, it auto-leaves. When a non-clustered panel
- * drags within this threshold of a cluster, it auto-joins.
- */
-export const CLUSTER_MEMBERSHIP_DISTANCE = 140;
-
 /**
  * Edge — a workflow connector between two panels (node blocks). Drawn
  * from the source's right port to the target's left port. Persisted in
@@ -322,7 +265,8 @@ export interface CanvasState {
   /**
    * Schema version for persistence migration.
    *  - v1: original schema (panels + camera + nextPanelId)
-   *  - v2: adds `clusters: Cluster[]`
+   *  - v2: adds `edges` (workflows are the header panel + edge-connected
+   *    nodes; the old spatial `clusters` array is gone)
    */
   version: 2;
   /**
@@ -333,14 +277,10 @@ export interface CanvasState {
    */
   camera: { x: number; y: number; zoom: number };
   panels: Panel[];
-  /** Persistent panel groupings; see Cluster interface for invariants. */
-  clusters: Cluster[];
-  /** Workflow connector edges between node panels. */
+  /** Workflow connector edges between node / workflow-header panels. */
   edges: Edge[];
   /** Monotonic counter so each new panel gets a unique id without collisions */
   nextPanelId: number;
-  /** Monotonic counter for cluster ids (separate namespace from panels). */
-  nextClusterId: number;
   /**
    * The currently-selected panel ids. Multi-select is supported via:
    *   - Shift-click on a panel (toggle membership)
@@ -357,9 +297,6 @@ export interface CanvasState {
    */
   deletedPanelsStack: Array<{
     panels: Panel[];
-    /** Snapshot of every cluster the deletion touched (dissolved OR
-     *  shrunk) so undo can restore membership, not just existence. */
-    clusters: Cluster[];
     /** Edges removed by the deletion (endpoints in the deleted set). */
     edges: Edge[];
   }>;
@@ -373,10 +310,8 @@ export const INITIAL_CANVAS_STATE: CanvasState = {
   version: 2,
   camera: { x: 0, y: 0, zoom: 1 },
   panels: [],
-  clusters: [],
   edges: [],
   nextPanelId: 1,
-  nextClusterId: 1,
   selectedPanelIds: [],
   deletedPanelsStack: [],
 };
@@ -515,49 +450,15 @@ export type CanvasAction =
       panelIds: string[];
     }
   | {
-      /**
-       * Create a new cluster and atomically apply a set of panel moves.
-       * The two happen in one reducer step so the outline never flashes in
-       * the "before" layout.
-       *
-       * The reducer also:
-       *  - Strips the clustered panel ids from any other clusters (one-per-panel)
-       *  - Drops any cluster that falls below MIN_CLUSTER_SIZE as a result
-       *  - Bumps nextClusterId
-       */
-      type: "CREATE_CLUSTER";
-      cluster: Cluster;
-      moves: Array<{ id: string; x: number; y: number }>;
-    }
-  | { type: "DELETE_CLUSTER"; clusterId: string }
-  | { type: "UPDATE_CLUSTER_NAME"; clusterId: string; name: string }
-  | {
-      /**
-       * Create a workflow cluster: the cluster AND its cluster-info panel
-       * in one reducer step. `cluster.panelIds` must include
-       * `infoPanel.id` and `cluster.infoPanelId` must equal it. Bumps
-       * nextClusterId + nextPanelId.
-       */
-      type: "CREATE_CLUSTER_WORKFLOW";
-      cluster: Cluster;
-      infoPanel: ClusterInfoPanelData;
-      /** Optional atomic panel moves (selection-menu auto-layout). */
-      moves?: Array<{ id: string; x: number; y: number }>;
+      /** Spawn a workflow header panel (already carries its DB workflowId
+       *  + name/description; the create-workflow helper POSTs the row). */
+      type: "CREATE_WORKFLOW";
+      panel: WorkflowPanelData;
     }
   | {
-      /**
-       * Synthesize a cluster-info panel for a pre-workflow cluster
-       * (upgrade in place). Adds the panel, appends it to the cluster's
-       * panelIds, sets infoPanelId, bumps nextPanelId.
-       */
-      type: "CLUSTER_ATTACH_INFO_PANEL";
-      clusterId: string;
-      panel: ClusterInfoPanelData;
-    }
-  | {
-      /** Update workflow metadata (name and/or description). */
-      type: "UPDATE_CLUSTER_INFO";
-      clusterId: string;
+      /** Patch a workflow header's name and/or description in place. */
+      type: "UPDATE_WORKFLOW_INFO";
+      panelId: string;
       name?: string;
       description?: string | null;
     }
@@ -607,26 +508,6 @@ export type CanvasAction =
       /** Remove a connector edge by id. */
       type: "EDGE_REMOVE";
       edgeId: string;
-    }
-  | {
-      /**
-       * Append a panel to an existing cluster. Preserves the cluster's
-       * name/createdAt — this is a membership update, NOT a re-cluster.
-       * Strips the panel from any other cluster first to enforce the
-       * one-cluster-per-panel invariant.
-       */
-      type: "ADD_PANEL_TO_CLUSTER";
-      panelId: string;
-      clusterId: string;
-    }
-  | {
-      /**
-       * Remove a panel from whatever cluster it currently belongs to.
-       * If that drops the cluster below MIN_CLUSTER_SIZE it's
-       * auto-dissolved.
-       */
-      type: "REMOVE_PANEL_FROM_CLUSTER";
-      panelId: string;
     }
   | {
       /** Spawn a knowledge panel at (x, y). */
@@ -695,12 +576,16 @@ export type CanvasAction =
       title: string;
     }
   | {
-      /** Attach DB-generated id and slug to a cluster after API sync. */
-      type: "UPDATE_CLUSTER_DB_INFO";
-      clusterId: string;
-      dbId: string;
-      slug: string;
+      /** Apply a panel row received over realtime (another writer — e.g. an
+       *  MCP agent). Adds if new; for an existing panel patches position /
+       *  size / panel_data, but NOT one the user has selected (likely mid-
+       *  drag) so a debounced echo can't snap it back. */
+      type: "APPLY_REMOTE_PANEL_UPSERT";
+      panel: Panel;
     }
+  | { type: "APPLY_REMOTE_PANEL_REMOVE"; panelId: string }
+  | { type: "APPLY_REMOTE_EDGE_UPSERT"; edge: Edge }
+  | { type: "APPLY_REMOTE_EDGE_REMOVE"; edgeId: string }
   | { type: "HYDRATE"; state: CanvasState }
   | {
       /**

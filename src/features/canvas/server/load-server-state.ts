@@ -21,7 +21,6 @@ import {
 } from "./defaults";
 import type {
   CanvasState,
-  Cluster,
   ChatPanelData,
   Panel,
 } from "@/features/canvas/types";
@@ -109,8 +108,6 @@ export async function loadCanvasInitialState(
       camera_y: number;
       camera_zoom: number;
       next_panel_id: number;
-      next_cluster_id: number;
-      clusters: Cluster[] | null;
     };
     const dbPanels = panelsRes.data || [];
 
@@ -173,8 +170,6 @@ export async function loadCanvasInitialState(
       }
     }
 
-    const clusters: Cluster[] = Array.isArray(cs.clusters) ? cs.clusters : [];
-
     const panelIds = new Set(panels.map((p) => p.id));
     const edges = (edgesRes.error ? [] : edgesRes.data ?? [])
       .map((row) => ({
@@ -194,9 +189,8 @@ export async function loadCanvasInitialState(
         zoom: cs.camera_zoom ?? 1,
       },
       panels,
-      clusters,
       edges,
-      // Clamp the counters against what's actually loaded: the panel
+      // Clamp the counter against what's actually loaded: the panel
       // POSTs are immediate but the counter only persists via a
       // debounced PATCH that can be lost (409 / tab close). A stale
       // counter would mint duplicate `panel-N` ids — colliding React
@@ -205,10 +199,6 @@ export async function loadCanvasInitialState(
       nextPanelId: Math.max(
         cs.next_panel_id ?? 1,
         maxNumericSuffix(panels.map((p) => p.id), "panel-") + 1
-      ),
-      nextClusterId: Math.max(
-        cs.next_cluster_id ?? 1,
-        maxNumericSuffix(clusters.map((c) => c.id), "cluster-") + 1
       ),
     };
 

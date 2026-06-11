@@ -19,8 +19,8 @@ import {
 } from "./context";
 import { reducer } from "./reducer";
 import { useCanvasDbSync } from "../use-canvas-db-sync";
-import { useClusterAttachmentSync } from "../use-cluster-attachment-sync";
-import { useClustersRealtime } from "../use-clusters-realtime";
+import { useWorkflowAttachmentSync } from "../use-workflow-attachment-sync";
+import { useCanvasRealtime } from "../use-canvas-realtime";
 import {
   useConversationSync,
   ChatConversationsProvider,
@@ -158,8 +158,8 @@ export function CanvasProvider({
   }, [state, storageKey, syncStrategy]);
 
   const panelsCtx = useMemo(
-    () => ({ panels: state.panels, clusters: state.clusters, dispatch }),
-    [state.panels, state.clusters, dispatch]
+    () => ({ panels: state.panels, dispatch }),
+    [state.panels, dispatch]
   );
 
   const effectiveCapabilities = capabilities ?? DEFAULT_CAPABILITIES;
@@ -173,8 +173,8 @@ export function CanvasProvider({
               <ChatConversationsProvider initialConversations={initialConversations}>
                 {syncStrategy === "user" && <CanvasDbSyncBridge />}
                 {syncStrategy === "user" && <ConversationSyncBridge />}
-                {syncStrategy === "user" && <ClustersRealtimeBridge />}
-                {syncStrategy === "user" && <ClusterAttachmentSyncBridge />}
+                {syncStrategy === "user" && <WorkflowAttachmentSyncBridge />}
+                {syncStrategy === "user" && <CanvasRealtimeBridge />}
                 {syncStrategy === "user" && <AutoFocusNewPanelBridge />}
                 {syncStrategy === "shared" && (
                   <SharedPanelMoveBridge onPanelsMove={onPanelsMove} />
@@ -261,21 +261,20 @@ function ConversationSyncBridge() {
 }
 
 /**
- * Bridge for realtime updates to clusters. Reflects MCP-agent edits
- * (rename / delete) on the canvas without a page reload.
+ * Bridge keeping each workflow's KB/skill attachments in sync with the
+ * refs docked into its connected nodes (dock = attach).
  */
-function ClustersRealtimeBridge() {
-  useClustersRealtime();
+function WorkflowAttachmentSyncBridge() {
+  useWorkflowAttachmentSync();
   return null;
 }
 
 /**
- * Bridge for keeping the cluster_knowledge_bases / cluster_skills
- * junction tables in sync with the canvas's KB/Skill panel cluster
- * membership.
+ * Bridge applying realtime canvas_panels / canvas_edges changes from other
+ * writers (e.g. an MCP agent) into the reducer live.
  */
-function ClusterAttachmentSyncBridge() {
-  useClusterAttachmentSync();
+function CanvasRealtimeBridge() {
+  useCanvasRealtime();
   return null;
 }
 

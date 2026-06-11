@@ -13,7 +13,7 @@ import type {
   Panel,
   ArtifactPanelData,
   ChatPanelData,
-  ClusterInfoPanelData,
+  WorkflowPanelData,
   NodePanelData,
   NodeRef,
   ConnectionPanelData,
@@ -79,9 +79,11 @@ export function panelToDbRow(panel: Panel) {
         sourceMessageId: panel.sourceMessageId,
       };
       break;
-    case "cluster-info":
+    case "workflow":
       base.panel_data = {
-        clusterId: panel.clusterId,
+        workflowId: panel.workflowId,
+        name: panel.name,
+        description: panel.description ?? "",
       };
       break;
     case "node":
@@ -93,6 +95,9 @@ export function panelToDbRow(panel: Panel) {
         userInput: panel.userInput,
         agentOutput: panel.agentOutput,
         nextInstructions: panel.nextInstructions,
+        // Preserve the agent authoring handle so the client's write-through
+        // doesn't wipe it (set_graph matches nodes by ref).
+        ...(panel.ref ? { ref: panel.ref } : null),
       };
       break;
   }
@@ -160,12 +165,14 @@ export function dbRowToPanel(row: Record<string, unknown>): Panel | null {
           (data.sourceConversationId as string) || undefined,
         sourceMessageId: (data.sourceMessageId as string) || undefined,
       } as ArtifactPanelData;
-    case "cluster-info":
+    case "workflow":
       return {
         ...base,
-        type: "cluster-info",
-        clusterId: (data.clusterId as string) || "",
-      } as ClusterInfoPanelData;
+        type: "workflow",
+        workflowId: (data.workflowId as string) || "",
+        name: (data.name as string) || "",
+        description: (data.description as string) || null,
+      } as WorkflowPanelData;
     case "node":
       return {
         ...base,
@@ -179,6 +186,7 @@ export function dbRowToPanel(row: Record<string, unknown>): Panel | null {
         userInput: (data.userInput as string) || "",
         agentOutput: (data.agentOutput as string) || "",
         nextInstructions: (data.nextInstructions as string) || "",
+        ...(typeof data.ref === "string" ? { ref: data.ref } : null),
       } as NodePanelData;
     default:
       return null;
