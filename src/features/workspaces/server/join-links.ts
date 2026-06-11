@@ -31,8 +31,18 @@ export interface JoinRequestNotice {
 const REQUEST_COLS =
   "id, workspace_id, user_id, status, requested_at, resolved_at, pending_acknowledged_at, resolved_acknowledged_at";
 
+/**
+ * Lowercase hex, NOT base64url: join links get retyped and pasted through
+ * messaging apps that case-fold URLs, and a case-sensitive token then 404s
+ * (seen in the wild on day one). 32 bytes = 64 hex chars, ample entropy.
+ * Lookups normalize to lowercase for the same reason.
+ */
 function generateToken(): string {
-  return randomBytes(32).toString("base64url");
+  return randomBytes(32).toString("hex");
+}
+
+function normalizeToken(token: string): string {
+  return token.trim().toLowerCase();
 }
 
 async function requireAdmin(workspaceId: string, callerId: string): Promise<Role> {
@@ -117,7 +127,7 @@ export async function getJoinLinkInfo(token: string): Promise<JoinLinkInfo | nul
   const { data, error } = await db
     .from("workspace_join_links")
     .select("workspace_id, created_by")
-    .eq("token", token)
+    .eq("token", normalizeToken(token))
     .maybeSingle();
   if (error) throw error;
   if (!data) return null;
