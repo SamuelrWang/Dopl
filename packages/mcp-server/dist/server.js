@@ -42,8 +42,9 @@ After set_workspace, call current_workspace once to confirm and tell the user.
 
 ## Decision tree — which tool
 
-- See what workflows exist -> dopl_workflow(op='list'); inspect one (ordered steps + the knowledge bases / skills it references) -> dopl_workflow(op='get'). A workflow is a header + its connected node graph — the agent-followable unit.
-- Create / rename a workflow -> dopl_workflow(op='create' | 'update'); delete one -> dopl_workflow_admin(op='delete_workflow').
+- See what workflows exist -> dopl_workflow(op='list'); inspect one (ordered steps + node ids + the knowledge bases / skills it references) -> dopl_workflow(op='get'). A workflow is a header + its connected node graph — the agent-followable unit.
+- AUTHOR a workflow end-to-end over MCP (appears live on an open canvas): dopl_workflow(op='create') then op='set_graph' (declarative: send the whole {nodes, edges} and it's made to match) — or build incrementally with op='add_node'/'connect'/'update_node'/'remove_node'/'disconnect'. Node reads/actions reference dopl_kb / dopl_skill ids and auto-attach. Finish with op='get' to verify.
+- Rename / describe a workflow -> dopl_workflow(op='update'); delete one -> dopl_workflow_admin(op='delete_workflow').
 - Clusters are non-spatial CONTAINERS that group workflows. See what clusters exist -> dopl_cluster(op='list'); inspect one (its workflows) -> dopl_cluster(op='get').
 - Read a knowledge-base entry -> dopl_kb(op='read_file'); read a skill's full body -> dopl_skill(op='get'). A workflow's attached KBs/skills are listed by dopl_workflow(op='get').
 - Create / rename a cluster -> dopl_cluster(op='create' | 'update'); delete one -> dopl_cluster_admin(op='delete_cluster').

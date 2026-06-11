@@ -14,7 +14,9 @@ export type ConversionEventType =
   | "subscribed"
   | "reactivation_email_sent"
   | "reactivated"
-  | "churned";
+  | "churned"
+  | "onboarding_survey_submitted"
+  | "onboarding_completed";
 
 export async function logConversionEvent(params: {
   userId: string;

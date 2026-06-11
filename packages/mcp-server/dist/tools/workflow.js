@@ -11,22 +11,60 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerWorkflowTools = registerWorkflowTools;
 const zod_1 = require("zod");
 const respond_1 = require("./respond");
-const WORKFLOW_DESCRIPTION = `Read and non-destructively modify Dopl workflows (a header + its connected node graph; the agent-followable unit). Set \`op\` to one of:
-- "list" — discover all workflows. Cheap metadata call; run it proactively to show the user their workspace or to resolve a slug another op needs.
-- "get" — retrieve a workflow's metadata, its topologically-ordered steps (each with what to READ, which ACTIONS to apply, user input, agent output, and when to advance), and the knowledge bases + skills it references. Use before answering what a workflow does or executing it.
-- "create" — create a new, empty workflow by name. Use on "make a workflow for X". Nodes + connectors are authored on the canvas.
-- "update" — rename a workflow (\`name\`) and/or set its \`description\`.`;
+const WORKFLOW_DESCRIPTION = `Read and AUTHOR Dopl workflows (a header + its connected node graph; the agent-followable unit). Changes appear live on an open canvas. Set \`op\` to one of:
+- "list" — discover all workflows. Cheap metadata call; run it proactively to resolve a slug another op needs.
+- "get" — retrieve a workflow's metadata, its topologically-ordered steps (each node's id, READ knowledge, ACTION skills, user input, agent output, next), and attached knowledge bases + skills. Node ids returned here are what update_node/remove_node/connect take.
+- "create" — create a new workflow by name; spawns its header panel on the canvas and returns header_panel_id.
+- "update" — rename (\`name\`) and/or set \`description\`.
+- "set_graph" — DECLARATIVE authoring (preferred): pass \`graph\` = { nodes, edges } and the server makes the workflow match exactly (create/update/delete to fit). Each node has a stable \`ref\`; edges connect node \`ref\`s (or the literal "header"). Re-send to edit. Knowledge/skill ids in reads/actions auto-attach.
+- "add_node" — add one node (\`node\`, incl. \`ref\`); \`connect_from\` ("header" or a node id, default "header") wires it in. Returns the new node id.
+- "update_node" — patch a node's fields (\`node_id\` + \`node\`).
+- "remove_node" — delete a node (\`node_id\`); its edges go with it.
+- "connect" / "disconnect" — add/remove an edge (\`from\`,\`to\` = node id or "header").
+
+Typical authoring flow: create → set_graph (or add_node + connect) → get to verify. Node reads = [{kbId} | {kbId,entryId}]; actions = [{skillId}] (ids from dopl_kb / dopl_skill). KBs/skills must be public.`;
 const WORKFLOW_ADMIN_DESCRIPTION = `DESTRUCTIVE workflow operations — permanent and irreversible. Confirm intent if the user's phrasing is at all ambiguous. Set \`op\` to one of:
 - "delete_workflow" — permanently delete a workflow. Its nodes stay on the canvas; attached knowledge bases + skills are detached (not deleted).`;
+const zNode = zod_1.z.object({
+    ref: zod_1.z.string().optional().describe("stable handle for this node (required for set_graph + add_node)"),
+    title: zod_1.z.string().optional(),
+    description: zod_1.z.string().optional(),
+    reads: zod_1.z
+        .array(zod_1.z.object({ kbId: zod_1.z.string(), entryId: zod_1.z.string().optional() }))
+        .optional()
+        .describe("knowledge to READ: [{kbId} | {kbId, entryId}]"),
+    actions: zod_1.z
+        .array(zod_1.z.object({ skillId: zod_1.z.string() }))
+        .optional()
+        .describe("skills to APPLY: [{skillId}]"),
+    userInput: zod_1.z.string().optional(),
+    agentOutput: zod_1.z.string().optional(),
+    nextInstructions: zod_1.z.string().optional(),
+});
+const zGraph = zod_1.z.object({
+    nodes: zod_1.z.array(zNode),
+    edges: zod_1.z.array(zod_1.z.object({ from: zod_1.z.string(), to: zod_1.z.string() })),
+});
 function registerWorkflowTools(register, client) {
     register("dopl_workflow", WORKFLOW_DESCRIPTION, {
         op: zod_1.z
-            .enum(["list", "get", "create", "update"])
+            .enum([
+            "list",
+            "get",
+            "create",
+            "update",
+            "set_graph",
+            "add_node",
+            "update_node",
+            "remove_node",
+            "connect",
+            "disconnect",
+        ])
             .describe("Operation to perform."),
         slug: zod_1.z
             .string()
             .optional()
-            .describe("op=get/update: workflow slug from op=list."),
+            .describe("Workflow slug (from op=list) — required for every op except list/create."),
         name: zod_1.z
             .string()
             .optional()
@@ -35,7 +73,16 @@ function registerWorkflowTools(register, client) {
             .string()
             .max(300, "description is capped at 300 chars")
             .optional()
-            .describe("op=update: workflow description (max 300 chars), shown to agents in op=get."),
+            .describe("op=update: workflow description (max 300 chars)."),
+        graph: zGraph.optional().describe("op=set_graph: the full { nodes, edges } the workflow should match."),
+        node: zNode.optional().describe("op=add_node/update_node: the node's fields."),
+        connect_from: zod_1.z
+            .string()
+            .optional()
+            .describe("op=add_node: 'header' or a node id to connect the new node from (default 'header')."),
+        node_id: zod_1.z.string().optional().describe("op=update_node/remove_node: target node id (from op=get)."),
+        from: zod_1.z.string().optional().describe("op=connect/disconnect: source node id or 'header'."),
+        to: zod_1.z.string().optional().describe("op=connect/disconnect: target node id or 'header'."),
     }, async (args) => {
         switch (args.op) {
             case "list":
@@ -60,6 +107,45 @@ function registerWorkflowTools(register, client) {
                     return (0, respond_1.err)("update needs `name` and/or `description`.");
                 }
                 return opUpdate(client, args.slug, args.name, args.description);
+            }
+            case "set_graph": {
+                const miss = (0, respond_1.missingParams)("set_graph", args, ["slug", "graph"]);
+                if (miss)
+                    return miss;
+                return opSetGraph(client, args.slug, args.graph);
+            }
+            case "add_node": {
+                const miss = (0, respond_1.missingParams)("add_node", args, ["slug", "node"]);
+                if (miss)
+                    return miss;
+                const node = args.node;
+                if (!node.ref)
+                    return (0, respond_1.err)("add_node needs `node.ref` (a stable handle).");
+                return opAddNode(client, args.slug, node, args.connect_from);
+            }
+            case "update_node": {
+                const miss = (0, respond_1.missingParams)("update_node", args, ["slug", "node_id", "node"]);
+                if (miss)
+                    return miss;
+                return opUpdateNode(client, args.slug, args.node_id, args.node);
+            }
+            case "remove_node": {
+                const miss = (0, respond_1.missingParams)("remove_node", args, ["slug", "node_id"]);
+                if (miss)
+                    return miss;
+                return opRemoveNode(client, args.slug, args.node_id);
+            }
+            case "connect": {
+                const miss = (0, respond_1.missingParams)("connect", args, ["slug", "from", "to"]);
+                if (miss)
+                    return miss;
+                return opConnect(client, args.slug, args.from, args.to);
+            }
+            case "disconnect": {
+                const miss = (0, respond_1.missingParams)("disconnect", args, ["slug", "from", "to"]);
+                if (miss)
+                    return miss;
+                return opDisconnect(client, args.slug, args.from, args.to);
             }
         }
     });
@@ -111,14 +197,41 @@ async function opGet(client, slug) {
     lines.push("");
     const steps = wf.graph?.nodes ?? [];
     if (steps.length > 0) {
-        lines.push(`## Steps (${steps.length})`);
-        lines.push(`Topologically ordered. Follow them in order; each step lists what to READ (knowledge), which ACTIONS (skills) to apply, expected user input, the output to produce, and when to advance.`);
+        const graphEdges = wf.graph?.edges ?? [];
+        // ── Hierarchy: stages + per-step dependencies ────────────────────
+        // Stage = longest-path depth from the entry steps (nodes arrive
+        // topologically sorted, so one forward relaxation pass suffices;
+        // a cycle degrades gracefully to flat stages). Steps sharing a
+        // stage have no dependency between them → parallel branches.
+        const stage = new Map(steps.map((n) => [n.id, 0]));
+        for (const n of steps) {
+            for (const e of graphEdges) {
+                if (e.from !== n.id)
+                    continue;
+                stage.set(e.to, Math.max(stage.get(e.to) ?? 0, (stage.get(n.id) ?? 0) + 1));
+            }
+        }
+        const stepNo = new Map(steps.map((n, i) => [n.id, i + 1]));
+        const label = (id) => `Step ${stepNo.get(id)} (\`${id}\`)`;
+        const prevOf = (id) => graphEdges.filter((e) => e.to === id).map((e) => e.from);
+        const nextOf = (id) => graphEdges.filter((e) => e.from === id).map((e) => e.to);
+        const stageCount = Math.max(...[...stage.values()]) + 1;
+        lines.push(`## Steps (${steps.length}) — execution order`);
+        lines.push(`Topologically ordered into ${plural(stageCount, "stage")}. Stages run IN SEQUENCE; steps in the SAME stage have no dependency between them and are parallel branches — do them in any order (or concurrently) before moving to the next stage. Each step's "Depends on" / "Leads to" lines give the exact edges. Per step: READ (knowledge), ACTIONS (skills), expected user input, the output to produce, and when to advance.`);
         lines.push("");
         for (let i = 0; i < steps.length; i++) {
             const n = steps[i];
-            lines.push(`### Step ${i + 1}: ${n.title || "(untitled)"} \`${n.id}\``);
+            lines.push(`### Step ${i + 1}: ${n.title || "(untitled)"} \`${n.id}\` — stage ${(stage.get(n.id) ?? 0) + 1} of ${stageCount}`);
             if (n.description)
                 lines.push(n.description);
+            const prev = prevOf(n.id);
+            const next = nextOf(n.id);
+            lines.push(prev.length === 0
+                ? `- Depends on: nothing — entry step`
+                : `- Depends on: ${prev.map(label).join(", ")}${prev.length > 1 ? " (all must be done first)" : ""}`);
+            lines.push(next.length === 0
+                ? `- Leads to: nothing — terminal step`
+                : `- Leads to: ${next.map(label).join(", ")}${next.length > 1 ? " (fans out into parallel branches)" : ""}`);
             if (n.reads.length > 0) {
                 lines.push(`- Read: ${n.reads
                     .map((r) => r.kind === "file"
@@ -184,9 +297,39 @@ async function opGet(client, slug) {
 }
 async function opCreate(client, name) {
     const wf = await client.createWorkflow(name);
-    return (0, respond_1.ok)(`Created workflow **${wf.name}** (slug: \`${wf.slug}\`). Author its nodes + connectors on the canvas.`);
+    return (0, respond_1.ok)(`Created workflow **${wf.name}** (slug: \`${wf.slug}\`)${wf.header_panel_id ? `, header panel \`${wf.header_panel_id}\`` : ""}. Now author its graph with op="set_graph" (or add_node + connect), then op="get" to verify.`);
 }
 async function opUpdate(client, slug, name, description) {
     const wf = await client.updateWorkflow(slug, { name, description });
     return (0, respond_1.ok)(`Updated workflow **${wf.name}** (slug: \`${wf.slug}\`).`);
+}
+async function opSetGraph(client, slug, graph) {
+    // ref is required for every node in set_graph.
+    for (const n of graph.nodes) {
+        if (!n.ref)
+            return (0, respond_1.err)("Every node in `graph.nodes` needs a `ref`.");
+    }
+    await client.setWorkflowGraph(slug, graph);
+    return (0, respond_1.ok)(`Set workflow \`${slug}\` graph: ${graph.nodes.length} node(s), ${graph.edges.length} edge(s). Run op="get" to see the ordered steps.`);
+}
+async function opAddNode(client, slug, node, connectFrom) {
+    const payload = { ...node, connect_from: connectFrom };
+    const { node_id } = await client.addWorkflowNode(slug, payload);
+    return (0, respond_1.ok)(`Added node \`${node_id}\` to workflow \`${slug}\` (connected from ${connectFrom ?? "header"}).`);
+}
+async function opUpdateNode(client, slug, nodeId, node) {
+    await client.updateWorkflowNode(slug, nodeId, node);
+    return (0, respond_1.ok)(`Updated node \`${nodeId}\` in workflow \`${slug}\`.`);
+}
+async function opRemoveNode(client, slug, nodeId) {
+    await client.removeWorkflowNode(slug, nodeId);
+    return (0, respond_1.ok)(`Removed node \`${nodeId}\` from workflow \`${slug}\`.`);
+}
+async function opConnect(client, slug, from, to) {
+    await client.connectWorkflow(slug, from, to);
+    return (0, respond_1.ok)(`Connected \`${from}\` → \`${to}\` in workflow \`${slug}\`.`);
+}
+async function opDisconnect(client, slug, from, to) {
+    await client.disconnectWorkflow(slug, from, to);
+    return (0, respond_1.ok)(`Disconnected \`${from}\` → \`${to}\` in workflow \`${slug}\`.`);
 }

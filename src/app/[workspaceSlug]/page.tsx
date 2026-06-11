@@ -11,6 +11,7 @@ import { getUser } from "@/shared/supabase/server";
 import { resolvePageWorkspace } from "@/features/workspaces/server/segment";
 import { workspaceSegment } from "@/features/workspaces/url";
 import { ensureDefaultCanvas } from "@/features/workspaces/server/canvases";
+import { isOnboarded } from "@/features/onboarding/server/service";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,9 @@ export default async function WorkspaceRootPage({ params }: PageProps) {
 
   const user = await getUser();
   if (!user) redirect("/login");
+
+  // First-run users finish onboarding before entering a workspace.
+  if (!(await isOnboarded(user.id))) redirect("/onboarding");
 
   const workspace = await resolvePageWorkspace(workspaceSlug, user.id);
   const canvas = await ensureDefaultCanvas(workspace.id);

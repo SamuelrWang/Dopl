@@ -5,6 +5,7 @@ import { startTrialIfNew } from "@/features/billing/server/subscriptions";
 import { logConversionEvent, hasFiredEvent } from "@/features/analytics/server/conversion-events";
 import { ensureDefaultWorkspace } from "@/features/workspaces/server/service";
 import { ensureDefaultCanvas } from "@/features/workspaces/server/canvases";
+import { isOnboarded } from "@/features/onboarding/server/service";
 import { safeRedirect } from "@/shared/lib/url/safe-redirect";
 
 export async function GET(request: NextRequest) {
@@ -22,6 +23,9 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error) {
+      // Onboarding detour for new users; set inside the try below so a
+      // failed status read falls back to redirectTo and never blocks sign-in.
+      let destination = redirectTo;
       // Stamp a 24-hour trial on first sign-in. Idempotent — only runs
       // if trial_started_at is null. Wrapped in try/catch so a trial
       // failure can never block the redirect.
@@ -52,6 +56,15 @@ export async function GET(request: NextRequest) {
           // hit /canvas.
           const workspace = await ensureDefaultWorkspace(user.id);
           await ensureDefaultCanvas(workspace.id);
+
+          // First-run users detour to /onboarding (survey + MCP connect).
+          // Only an EXPLICIT deep link is threaded — the /canvas default
+          // isn't, since onboarding computes the workspace landing itself.
+          if (!(await isOnboarded(user.id))) {
+            destination = searchParams.get("redirectTo")
+              ? `/onboarding?${new URLSearchParams({ redirectTo })}`
+              : "/onboarding";
+          }
         }
       } catch (err) {
         // Swallow — trial/event/install failures must not break sign-in.
@@ -60,7 +73,7 @@ export async function GET(request: NextRequest) {
           err instanceof Error ? err.message : String(err)
         );
       }
-      return NextResponse.redirect(new URL(redirectTo, request.url));
+      return NextResponse.redirect(new URL(destination, request.url));
     }
   }
 

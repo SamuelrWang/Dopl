@@ -130,6 +130,26 @@ function isUniqueViolation(err: unknown): boolean {
   return typeof message === "string" && message.includes("23505");
 }
 
+/**
+ * Onboarding helper: give the user's default workspace its real name
+ * ("{FirstName}'s Workspace") once we know who they are. Only fires
+ * while the workspace still carries the provisioning placeholder name
+ * ("Untitled") — if the user already renamed it (settings, MCP), their
+ * name wins and this is a no-op. Idempotent, so onboarding completion
+ * can safely retry.
+ */
+export async function renameDefaultWorkspaceIfUntitled(
+  userId: string,
+  name: string
+): Promise<Workspace> {
+  const workspace = await ensureDefaultWorkspace(userId);
+  if (workspace.name !== "Untitled") return workspace;
+  return updateWorkspace(workspace.id, {
+    name,
+    slug: slugifyWorkspaceName(name),
+  });
+}
+
 export async function listMyWorkspaces(userId: string): Promise<Workspace[]> {
   return listWorkspacesForUser(userId);
 }

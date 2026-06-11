@@ -215,15 +215,53 @@ async function opGet(client: DoplClient, slug: string): Promise<ToolResponse> {
 
   const steps = wf.graph?.nodes ?? [];
   if (steps.length > 0) {
-    lines.push(`## Steps (${steps.length})`);
+    const graphEdges = wf.graph?.edges ?? [];
+    // ── Hierarchy: stages + per-step dependencies ────────────────────
+    // Stage = longest-path depth from the entry steps (nodes arrive
+    // topologically sorted, so one forward relaxation pass suffices;
+    // a cycle degrades gracefully to flat stages). Steps sharing a
+    // stage have no dependency between them → parallel branches.
+    const stage = new Map<string, number>(steps.map((n) => [n.id, 0]));
+    for (const n of steps) {
+      for (const e of graphEdges) {
+        if (e.from !== n.id) continue;
+        stage.set(
+          e.to,
+          Math.max(stage.get(e.to) ?? 0, (stage.get(n.id) ?? 0) + 1)
+        );
+      }
+    }
+    const stepNo = new Map(steps.map((n, i) => [n.id, i + 1]));
+    const label = (id: string) => `Step ${stepNo.get(id)} (\`${id}\`)`;
+    const prevOf = (id: string) =>
+      graphEdges.filter((e) => e.to === id).map((e) => e.from);
+    const nextOf = (id: string) =>
+      graphEdges.filter((e) => e.from === id).map((e) => e.to);
+    const stageCount = Math.max(...[...stage.values()]) + 1;
+
+    lines.push(`## Steps (${steps.length}) — execution order`);
     lines.push(
-      `Topologically ordered. Follow them in order; each step lists what to READ (knowledge), which ACTIONS (skills) to apply, expected user input, the output to produce, and when to advance.`
+      `Topologically ordered into ${plural(stageCount, "stage")}. Stages run IN SEQUENCE; steps in the SAME stage have no dependency between them and are parallel branches — do them in any order (or concurrently) before moving to the next stage. Each step's "Depends on" / "Leads to" lines give the exact edges. Per step: READ (knowledge), ACTIONS (skills), expected user input, the output to produce, and when to advance.`
     );
     lines.push("");
     for (let i = 0; i < steps.length; i++) {
       const n = steps[i];
-      lines.push(`### Step ${i + 1}: ${n.title || "(untitled)"} \`${n.id}\``);
+      lines.push(
+        `### Step ${i + 1}: ${n.title || "(untitled)"} \`${n.id}\` — stage ${(stage.get(n.id) ?? 0) + 1} of ${stageCount}`
+      );
       if (n.description) lines.push(n.description);
+      const prev = prevOf(n.id);
+      const next = nextOf(n.id);
+      lines.push(
+        prev.length === 0
+          ? `- Depends on: nothing — entry step`
+          : `- Depends on: ${prev.map(label).join(", ")}${prev.length > 1 ? " (all must be done first)" : ""}`
+      );
+      lines.push(
+        next.length === 0
+          ? `- Leads to: nothing — terminal step`
+          : `- Leads to: ${next.map(label).join(", ")}${next.length > 1 ? " (fans out into parallel branches)" : ""}`
+      );
       if (n.reads.length > 0) {
         lines.push(
           `- Read: ${n.reads

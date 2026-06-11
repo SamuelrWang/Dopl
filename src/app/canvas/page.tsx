@@ -14,12 +14,17 @@ import { getUser } from "@/shared/supabase/server";
 import { ensureDefaultWorkspace } from "@/features/workspaces/server/service";
 import { workspaceSegment } from "@/features/workspaces/url";
 import { ensureDefaultCanvas } from "@/features/workspaces/server/canvases";
+import { isOnboarded } from "@/features/onboarding/server/service";
 
 export const dynamic = "force-dynamic";
 
 export default async function CanvasLegacyRedirectPage() {
   const user = await getUser();
   if (!user) redirect("/login");
+
+  // First-run users finish onboarding before landing on a canvas —
+  // covers tabs that bypass the auth-callback gate (closed mid-flow).
+  if (!(await isOnboarded(user.id))) redirect("/onboarding");
 
   const workspace = await ensureDefaultWorkspace(user.id);
   const canvas = await ensureDefaultCanvas(workspace.id);
