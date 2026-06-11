@@ -1,21 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
+import type { Role } from "@/features/workspaces/types";
 import { HttpError } from "@/shared/lib/http-error";
-import { denyIfNoCanvasWrite } from "@/features/members/server/access";
+import { denyIfNoCanvasWrite } from "@/features/canvas/server/access";
 import { DESCRIPTION_MAX } from "@/config";
-import { resolveWorkflowId } from "@/features/workflows/server/attachments";
+import {
+  requireWorkflowEdit,
+  resolveWorkflowId,
+} from "@/features/workflows/server/attachments";
 import { setGraph } from "@/features/workflows/server/authoring";
 
 interface Ctx {
   userId: string;
   workspaceId: string;
+  role: Role;
   agentTokenId?: string;
   params?: Record<string, string>;
 }
 
-const ReadRef = z.object({ kbId: z.string().uuid(), entryId: z.string().uuid().optional() });
-const ActionRef = z.object({ skillId: z.string().uuid() });
+const ReadRef = z.object({ kbId: z.string().min(1), entryId: z.string().uuid().optional() });
+const ActionRef = z.object({ skillId: z.string().min(1) });
 const NodeSpec = z.object({
   ref: z.string().min(1).max(120),
   title: z.string().max(200).optional(),
@@ -62,9 +67,11 @@ async function handlePost(request: NextRequest, ctx: Ctx) {
     const scope = {
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
+      role: ctx.role,
       source: ctx.agentTokenId ? ("agent" as const) : ("user" as const),
     };
     const workflowId = await resolveWorkflowId(id, scope);
+    await requireWorkflowEdit(workflowId, scope);
     await setGraph(workflowId, parsed.data, scope);
     return new NextResponse(null, { status: 204 });
   } catch (err) {

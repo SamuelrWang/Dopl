@@ -1,7 +1,9 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { slugify } from "@/shared/lib/slug/slugify";
-import { requireResourceAccess } from "@/features/members/server/access";
+import { HttpError } from "@/shared/lib/http-error";
+import { meetsMinRole } from "@/features/workspaces/types";
+import { findMembership } from "@/features/workspaces/server/repository";
 import { PRIMARY_SKILL_FILE_NAME } from "../types";
 import type {
   ResolvedSkill,
@@ -549,11 +551,10 @@ async function resolveReference(
 // ─── Agent-write enforcement ────────────────────────────────────────
 
 /**
- * Gate for agent-origin skill writes. The per-(member, skill) access
- * matrix is now the single source of truth — owner/admin always pass,
- * member/viewer pass when their matrix entry is `edit`. The legacy
- * skill-level `agent_write_enabled` toggle is no longer consulted:
- * admins manage agent access centrally from the members page.
+ * Gate for agent-origin skill writes. The per-(member, skill) override
+ * matrix is gone (teams scope knowledge bases and workflows, not
+ * skills), so the rule collapses to the role default: member+ can
+ * write, viewer cannot.
  *
  * `SkillAgentWriteDisabledError` is still thrown when an agent tries
  * to flip `agentWriteEnabled` itself in updateSkill — that path
@@ -561,16 +562,20 @@ async function resolveReference(
  */
 export async function assertAgentWriteAllowed(
   ctx: SkillContext,
-  skill: Skill
+  _skill: Skill
 ): Promise<void> {
   if (ctx.source !== "agent") return;
-  await requireResourceAccess(
-    ctx.userId,
-    ctx.workspaceId,
-    "skill",
-    skill.id,
-    "edit"
-  );
+  const membership = await findMembership(ctx.workspaceId, ctx.userId);
+  if (!membership || membership.status !== "active") {
+    throw new HttpError(404, "WORKSPACE_NOT_FOUND", "Workspace not found");
+  }
+  if (!meetsMinRole(membership.role, "member")) {
+    throw new HttpError(
+      403,
+      "RESOURCE_ACCESS_DENIED",
+      "Your access on this skill is read-only"
+    );
+  }
 }
 
 // ─── Seeding ────────────────────────────────────────────────────────

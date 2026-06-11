@@ -15,6 +15,8 @@
  * Soft-delete: every type carries `deletedAt`. `null` = active.
  */
 
+import type { Role } from "@/features/workspaces/types";
+
 export type KnowledgeEntryType = "note" | "doc" | "transcript" | "imported";
 
 /**
@@ -47,6 +49,8 @@ export interface KnowledgeBase {
   description: string | null;
   agentWriteEnabled: boolean;
   visibility: Visibility;
+  /** 'workspace' = every member (role default level); 'teams' = granted teams only. */
+  accessMode: "workspace" | "teams";
   createdBy: string | null;
   createdAt: string;
   updatedAt: string;
@@ -97,6 +101,8 @@ export interface KnowledgeContext {
   workspaceId: string;
   userId: string;
   source: WriteSource;
+  /** Caller's workspace role — used for team-access resolution without refetching membership. */
+  role: Role;
   /**
    * If the request is authenticated via a workspace-scoped API key,
    * this is the workspace it's locked to. `null` for session callers

@@ -8,6 +8,7 @@
  */
 
 import type { Role, InvitedRole, MembershipStatus } from "@/features/workspaces/types";
+import type { MemberTeamRef } from "@/features/teams/types";
 
 export type MemberRole = Role;
 export type AssignableRole = InvitedRole;
@@ -21,10 +22,14 @@ export interface WorkspaceMemberView {
   joinedAt: string;
   invitedBy: string | null;
   invitedAt: string | null;
+  /** Throttled activity timestamp (bumped at most every ~5 min). */
+  lastSeenAt: string | null;
   /** Hydrated from auth.users — null if lookup fails. */
   email: string | null;
   displayName: string | null;
   avatarUrl: string | null;
+  /** Teams the member belongs to (chips on the members table). */
+  teams: MemberTeamRef[];
 }
 
 export interface WorkspaceInvitationView {
@@ -38,4 +43,6 @@ export interface WorkspaceInvitationView {
   acceptedAt: string | null;
   revokedAt: string | null;
   createdAt: string;
+  /** Teams the invitee auto-joins on accept. */
+  teamIds?: string[];
 }

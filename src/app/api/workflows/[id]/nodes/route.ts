@@ -1,15 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
+import type { Role } from "@/features/workspaces/types";
 import { HttpError } from "@/shared/lib/http-error";
-import { denyIfNoCanvasWrite } from "@/features/members/server/access";
+import { denyIfNoCanvasWrite } from "@/features/canvas/server/access";
 import { DESCRIPTION_MAX } from "@/config";
-import { resolveWorkflowId } from "@/features/workflows/server/attachments";
+import {
+  requireWorkflowEdit,
+  resolveWorkflowId,
+} from "@/features/workflows/server/attachments";
 import { addNode } from "@/features/workflows/server/authoring";
 
 interface Ctx {
   userId: string;
   workspaceId: string;
+  role: Role;
   agentTokenId?: string;
   params?: Record<string, string>;
 }
@@ -18,8 +23,8 @@ const NodeBody = z.object({
   ref: z.string().min(1).max(120),
   title: z.string().max(200).optional(),
   description: z.string().max(2000).optional(),
-  reads: z.array(z.object({ kbId: z.string().uuid(), entryId: z.string().uuid().optional() })).max(50).optional(),
-  actions: z.array(z.object({ skillId: z.string().uuid() })).max(50).optional(),
+  reads: z.array(z.object({ kbId: z.string().min(1), entryId: z.string().uuid().optional() })).max(50).optional(),
+  actions: z.array(z.object({ skillId: z.string().min(1) })).max(50).optional(),
   userInput: z.string().max(DESCRIPTION_MAX * 8).optional(),
   agentOutput: z.string().max(DESCRIPTION_MAX * 8).optional(),
   nextInstructions: z.string().max(DESCRIPTION_MAX * 8).optional(),
@@ -57,9 +62,11 @@ async function handlePost(request: NextRequest, ctx: Ctx) {
     const scope = {
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
+      role: ctx.role,
       source: ctx.agentTokenId ? ("agent" as const) : ("user" as const),
     };
     const workflowId = await resolveWorkflowId(id, scope);
+    await requireWorkflowEdit(workflowId, scope);
     const { connect_from, ...node } = parsed.data;
     const nodeId = await addNode(workflowId, node, connect_from, scope);
     return NextResponse.json({ node_id: nodeId }, { status: 201 });

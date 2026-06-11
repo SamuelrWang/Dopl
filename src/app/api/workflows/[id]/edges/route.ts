@@ -1,14 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
+import type { Role } from "@/features/workspaces/types";
 import { HttpError } from "@/shared/lib/http-error";
-import { denyIfNoCanvasWrite } from "@/features/members/server/access";
-import { resolveWorkflowId } from "@/features/workflows/server/attachments";
+import { denyIfNoCanvasWrite } from "@/features/canvas/server/access";
+import {
+  requireWorkflowEdit,
+  resolveWorkflowId,
+} from "@/features/workflows/server/attachments";
 import { connect, disconnect } from "@/features/workflows/server/authoring";
 
 interface Ctx {
   userId: string;
   workspaceId: string;
+  role: Role;
   agentTokenId?: string;
   params?: Record<string, string>;
 }
@@ -19,6 +24,7 @@ function scopeOf(ctx: Ctx) {
   return {
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
+    role: ctx.role,
     source: ctx.agentTokenId ? ("agent" as const) : ("user" as const),
   };
 }
@@ -60,6 +66,7 @@ async function run(
     }
     const scope = scopeOf(ctx);
     const workflowId = await resolveWorkflowId(id, scope);
+    await requireWorkflowEdit(workflowId, scope);
     const fn = op === "connect" ? connect : disconnect;
     await fn(workflowId, parsed.data.from, parsed.data.to, scope);
     return new NextResponse(null, { status: 204 });

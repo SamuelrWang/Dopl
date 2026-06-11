@@ -1,15 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
+import type { Role } from "@/features/workspaces/types";
 import { HttpError } from "@/shared/lib/http-error";
-import { denyIfNoCanvasWrite } from "@/features/members/server/access";
+import { denyIfNoCanvasWrite } from "@/features/canvas/server/access";
 import { DESCRIPTION_MAX } from "@/config";
-import { resolveWorkflowId } from "@/features/workflows/server/attachments";
+import {
+  requireWorkflowEdit,
+  resolveWorkflowId,
+} from "@/features/workflows/server/attachments";
 import { removeNode, updateNode } from "@/features/workflows/server/authoring";
 
 interface Ctx {
   userId: string;
   workspaceId: string;
+  role: Role;
   agentTokenId?: string;
   params?: Record<string, string>;
 }
@@ -17,8 +22,8 @@ interface Ctx {
 const PatchBody = z.object({
   title: z.string().max(200).optional(),
   description: z.string().max(2000).optional(),
-  reads: z.array(z.object({ kbId: z.string().uuid(), entryId: z.string().uuid().optional() })).max(50).optional(),
-  actions: z.array(z.object({ skillId: z.string().uuid() })).max(50).optional(),
+  reads: z.array(z.object({ kbId: z.string().min(1), entryId: z.string().uuid().optional() })).max(50).optional(),
+  actions: z.array(z.object({ skillId: z.string().min(1) })).max(50).optional(),
   userInput: z.string().max(DESCRIPTION_MAX * 8).optional(),
   agentOutput: z.string().max(DESCRIPTION_MAX * 8).optional(),
   nextInstructions: z.string().max(DESCRIPTION_MAX * 8).optional(),
@@ -28,6 +33,7 @@ function scopeOf(ctx: Ctx) {
   return {
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
+    role: ctx.role,
     source: ctx.agentTokenId ? ("agent" as const) : ("user" as const),
   };
 }
@@ -65,6 +71,7 @@ async function handlePatch(request: NextRequest, ctx: Ctx) {
     }
     const scope = scopeOf(ctx);
     const workflowId = await resolveWorkflowId(id, scope);
+    await requireWorkflowEdit(workflowId, scope);
     await updateNode(workflowId, nodeId, parsed.data, scope);
     return new NextResponse(null, { status: 204 });
   } catch (err) {
@@ -80,6 +87,7 @@ async function handleDelete(_request: NextRequest, ctx: Ctx) {
     if (!id || !nodeId) return NextResponse.json({ error: "id + nodeId required" }, { status: 400 });
     const scope = scopeOf(ctx);
     const workflowId = await resolveWorkflowId(id, scope);
+    await requireWorkflowEdit(workflowId, scope);
     await removeNode(workflowId, nodeId, scope);
     return new NextResponse(null, { status: 204 });
   } catch (err) {

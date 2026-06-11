@@ -59,6 +59,7 @@ async function main() {
   const ctx = buildKnowledgeContext({
     userId: USER_ID,
     workspaceId: WORKSPACE_ID,
+    role: "owner",
     agentTokenId: null,
   });
 

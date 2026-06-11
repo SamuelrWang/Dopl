@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
 import type { KnowledgeContext } from "../types";
 import { KnowledgeBaseNotFoundError } from "./errors";
 import * as repo from "./repository";
+import { listBases } from "./service";
 
 /**
  * Full-text search across the workspace's knowledge entries (Item 5.D).
@@ -63,10 +64,19 @@ export async function searchKnowledgeEntries(
   const trimmed = query.trim();
   if (trimmed.length === 0) return [];
 
+  // Visibility + team-scope gate: only search bases the caller can read.
+  // Also closes the historical gap where private bases' entries leaked
+  // into search results (the RPC itself applies no visibility filter).
+  const readable = await listBases(ctx);
+  const readableIds = new Set(readable.map((b) => b.id));
+  if (readableIds.size === 0) return [];
+
   let baseId: string | null = null;
   if (opts.baseSlug) {
     const base = await repo.findBaseBySlug(ctx.workspaceId, opts.baseSlug, false);
-    if (!base) throw new KnowledgeBaseNotFoundError(opts.baseSlug);
+    if (!base || !readableIds.has(base.id)) {
+      throw new KnowledgeBaseNotFoundError(opts.baseSlug);
+    }
     baseId = base.id;
   }
 
@@ -83,7 +93,9 @@ export async function searchKnowledgeEntries(
   });
   if (error) throw error;
 
-  return ((data ?? []) as RpcRow[]).map((row) => ({
+  return ((data ?? []) as RpcRow[])
+    .filter((row) => readableIds.has(row.knowledge_base_id))
+    .map((row) => ({
     entryId: row.entry_id,
     knowledgeBaseId: row.knowledge_base_id,
     folderId: row.folder_id,

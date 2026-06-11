@@ -29,6 +29,7 @@ export interface WorkspaceMemberRow {
   joined_at: string;
   invited_by: string | null;
   invited_at: string | null;
+  last_seen_at: string | null;
 }
 
 export function mapWorkspaceRow(row: WorkspaceRow): Workspace {
@@ -54,6 +55,7 @@ export function mapMemberRow(row: WorkspaceMemberRow): WorkspaceMembership {
     joinedAt: row.joined_at,
     invitedBy: row.invited_by,
     invitedAt: row.invited_at,
+    lastSeenAt: row.last_seen_at,
   };
 }
 

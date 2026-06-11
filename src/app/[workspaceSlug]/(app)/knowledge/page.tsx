@@ -12,6 +12,7 @@
 import { redirect } from "next/navigation";
 import { getUser } from "@/shared/supabase/server";
 import { resolvePageWorkspace } from "@/features/workspaces/server/segment";
+import { resolveMembershipOrThrow } from "@/features/workspaces/server/service";
 import { workspaceSegment } from "@/features/workspaces/url";
 import {
   buildKnowledgeContext,
@@ -35,9 +36,11 @@ export default async function KnowledgeIndexPage({ params }: PageProps) {
     user.id,
     "knowledge"
   );
+  const { membership } = await resolveMembershipOrThrow(workspace.id, user.id);
   const ctx = buildKnowledgeContext({
     userId: user.id,
     workspaceId: workspace.id,
+    role: membership.role,
     agentTokenId: null,
   });
   const bases = await listBases(ctx);

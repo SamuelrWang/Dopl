@@ -1,15 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, UserPlus } from "lucide-react";
+import { Check, ChevronDown, UserPlus } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/shared/ui/dialog";
 import { cn } from "@/shared/lib/utils";
+import type { TeamView } from "@/features/teams/types";
 import type { AssignableRole } from "../types";
 
 interface Props {
   workspaceSlug: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Teams the inviter can pre-assign — invitees auto-join on accept. */
+  teams?: TeamView[];
   /** Called after a successful invite so the parent can refresh lists. */
   onInvited?: (email: string) => void;
 }
@@ -42,10 +45,17 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  * invitation the invitee picks up from their sidebar on next login —
  * no email is sent. Matches the Notion "Add members" layout.
  */
-export function InviteDialog({ workspaceSlug, open, onOpenChange, onInvited }: Props) {
+export function InviteDialog({
+  workspaceSlug,
+  open,
+  onOpenChange,
+  teams = [],
+  onInvited,
+}: Props) {
   const [emailsInput, setEmailsInput] = useState("");
   const [role, setRole] = useState<AssignableRole>("admin");
   const [roleOpen, setRoleOpen] = useState(false);
+  const [teamIds, setTeamIds] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sentCount, setSentCount] = useState<number | null>(null);
@@ -56,9 +66,19 @@ export function InviteDialog({ workspaceSlug, open, onOpenChange, onInvited }: P
     setEmailsInput("");
     setRole("admin");
     setRoleOpen(false);
+    setTeamIds(new Set());
     setError(null);
     setSentCount(null);
     setSubmitting(false);
+  }
+
+  function toggleTeam(id: string) {
+    setTeamIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }
 
   async function handleInvite() {
@@ -80,7 +100,11 @@ export function InviteDialog({ workspaceSlug, open, onOpenChange, onInvited }: P
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ email, role }),
+              body: JSON.stringify({
+                email,
+                role,
+                ...(teamIds.size > 0 ? { teamIds: [...teamIds] } : {}),
+              }),
             },
           );
           return { email, ok: res.ok };
@@ -188,6 +212,46 @@ export function InviteDialog({ workspaceSlug, open, onOpenChange, onInvited }: P
                 )}
               </div>
             </div>
+
+            {teams.length > 0 && (
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-text-tertiary">
+                  Add to teams (optional)
+                </label>
+                <ul className="rounded-md border border-border-strong divide-y divide-border-subtle overflow-hidden max-h-36 overflow-y-auto bg-surface-raised-1">
+                  {teams.map((t) => {
+                    const on = teamIds.has(t.id);
+                    return (
+                      <li key={t.id}>
+                        <button
+                          type="button"
+                          onClick={() => toggleTeam(t.id)}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-surface-raised-2 transition-colors cursor-pointer"
+                        >
+                          <span
+                            className="h-1.5 w-1.5 rounded-full shrink-0"
+                            style={{ backgroundColor: t.color ?? "#8b5cf6" }}
+                          />
+                          <span className="flex-1 text-xs text-text-primary truncate">
+                            {t.name}
+                          </span>
+                          <span
+                            className={cn(
+                              "flex h-4 w-4 items-center justify-center rounded border transition-colors",
+                              on
+                                ? "bg-accent-primary border-accent-primary text-accent-on"
+                                : "border-border-strong text-transparent"
+                            )}
+                          >
+                            <Check size={10} strokeWidth={3} />
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
 
             {error && <p className="text-xs text-red-400">{error}</p>}
 

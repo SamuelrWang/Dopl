@@ -17,7 +17,7 @@ import {
 const WORKSPACE_COLS =
   "id, owner_id, name, slug, public_id, description, icon_url, created_at, updated_at";
 const MEMBER_COLS =
-  "workspace_id, user_id, role, status, joined_at, invited_by, invited_at";
+  "workspace_id, user_id, role, status, joined_at, invited_by, invited_at, last_seen_at";
 
 export async function findWorkspaceById(workspaceId: string): Promise<Workspace | null> {
   const db = supabaseAdmin();

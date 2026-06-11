@@ -3,6 +3,7 @@ import { z } from "zod";
 import { DESCRIPTION_MAX } from "@/config";
 import { HttpError } from "@/shared/lib/http-error";
 import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
+import type { Role } from "@/features/workspaces/types";
 import {
   deleteWorkflow,
   getWorkflow,
@@ -12,6 +13,7 @@ import {
 interface Ctx {
   userId: string;
   workspaceId: string;
+  role: Role;
   agentTokenId?: string;
   params?: Record<string, string>;
 }
@@ -20,6 +22,7 @@ function scopeOf(ctx: Ctx) {
   return {
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
+    role: ctx.role,
     source: ctx.agentTokenId ? ("agent" as const) : ("user" as const),
   };
 }

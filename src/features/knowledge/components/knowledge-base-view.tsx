@@ -6,7 +6,7 @@ import { toast } from "@/shared/ui/toast";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { VisibilityPill, MakePublicAction } from "@/shared/ui/visibility-pill";
 import { useMyAccessContext } from "@/features/members/hooks/use-my-access";
-import { meetsLevel } from "@/features/members/access-defaults";
+import { meetsLevel } from "@/features/teams/access-levels";
 import type {
   KnowledgeBase,
   KnowledgeEntry,

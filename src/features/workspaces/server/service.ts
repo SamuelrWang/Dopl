@@ -9,6 +9,7 @@ import type {
 } from "../types";
 import { meetsMinRole } from "../types";
 import { slugifyWorkspaceName } from "../slug";
+import { touchLastSeen } from "./last-seen";
 import { RESERVED_WORKSPACE_SLUGS } from "@/config";
 import {
   deleteWorkspace,
@@ -46,6 +47,7 @@ export async function resolveMembershipOrThrow(
   if (!membership || membership.status !== "active") {
     throw new HttpError(404, "WORKSPACE_NOT_FOUND", "Workspace not found");
   }
+  touchLastSeen(workspaceId, userId, membership.lastSeenAt);
   return { workspace, membership };
 }
 

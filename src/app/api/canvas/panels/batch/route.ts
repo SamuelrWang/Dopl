@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
 import { supabaseAdmin } from "@/shared/supabase/admin";
-import { denyIfNoCanvasWrite } from "@/features/members/server/access";
+import { denyIfNoCanvasWrite } from "@/features/canvas/server/access";
 
 const supabase = supabaseAdmin();
 

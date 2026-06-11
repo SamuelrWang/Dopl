@@ -20,7 +20,7 @@ export default async function MembersPage({ params }: PageProps) {
   const { membership } = await resolveMembershipOrThrow(workspace.id, user.id);
 
   return (
-    <AppPanel scroll={false}>
+    <AppPanel>
       <MembersView
         workspaceSlug={workspaceSegment(workspace)}
         workspaceId={workspace.id}

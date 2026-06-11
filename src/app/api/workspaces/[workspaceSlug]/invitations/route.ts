@@ -64,6 +64,7 @@ export const POST = withUserAuth(
         invitedBy: userId,
         email: input.email,
         role: input.role,
+        teamIds: input.teamIds,
       });
       return NextResponse.json({ invitation }, { status: 201 });
     } catch (err) {

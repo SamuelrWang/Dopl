@@ -15,6 +15,12 @@ import {
 } from "./dto";
 import { findWorkspaceById, findMembership } from "./repository";
 import { resolveMembershipOrThrow } from "./service";
+import {
+  insertTeamMembers,
+  listInvitationTeamIds,
+  listTeamsForWorkspace,
+  replaceInvitationTeams,
+} from "@/features/teams/server/repository";
 
 const INVITATION_COLS =
   "id, workspace_id, email, invited_role, invited_by, token, expires_at, accepted_at, accepted_by, revoked_at, created_at";
@@ -59,6 +65,8 @@ export interface CreateInvitationInput {
   invitedBy: string;
   email: string;
   role: InvitedRole;
+  /** Teams the invitee auto-joins on accept. Must belong to the workspace. */
+  teamIds?: string[];
   ttlDays?: number;
 }
 
@@ -93,7 +101,17 @@ export async function createInvitation(
     .gt("expires_at", new Date().toISOString())
     .maybeSingle();
 
-  if (existing) return mapInvitationRow(existing as InvitationRow);
+  const teamIds = await validateInvitationTeams(input.workspaceId, input.teamIds);
+
+  if (existing) {
+    // Reusing a live invitation: refresh its team pre-assignment when the
+    // caller specified one (an omitted teamIds leaves the prior set alone).
+    const inv = mapInvitationRow(existing as InvitationRow);
+    if (input.teamIds !== undefined) {
+      await replaceInvitationTeams(inv.id, teamIds);
+    }
+    return { ...inv, teamIds: await listInvitationTeamIds(inv.id) };
+  }
 
   const token = generateToken();
   const { data, error } = await db
@@ -111,7 +129,29 @@ export async function createInvitation(
   if (error || !data) {
     throw error || new Error("Failed to create invitation");
   }
-  return mapInvitationRow(data as InvitationRow);
+  const invitation = mapInvitationRow(data as InvitationRow);
+  if (teamIds.length > 0) {
+    await replaceInvitationTeams(invitation.id, teamIds);
+  }
+  return { ...invitation, teamIds };
+}
+
+/** Validate the invite's teams belong to this workspace; returns the deduped set. */
+async function validateInvitationTeams(
+  workspaceId: string,
+  teamIds: string[] | undefined
+): Promise<string[]> {
+  const ids = [...new Set(teamIds ?? [])];
+  if (ids.length === 0) return [];
+  const teams = await listTeamsForWorkspace(workspaceId);
+  const known = new Set(teams.map((t) => t.id));
+  const unknown = ids.filter((id) => !known.has(id));
+  if (unknown.length > 0) {
+    throw new HttpError(400, "TEAM_NOT_FOUND", "Some teams do not exist in this workspace", {
+      teamIds: unknown,
+    });
+  }
+  return ids;
 }
 
 export async function listWorkspaceInvitations(
@@ -126,7 +166,22 @@ export async function listWorkspaceInvitations(
     .eq("workspace_id", workspaceId)
     .order("created_at", { ascending: false });
   if (error) throw error;
-  return ((data ?? []) as InvitationRow[]).map(mapInvitationRow);
+  const invitations = ((data ?? []) as InvitationRow[]).map(mapInvitationRow);
+  if (invitations.length === 0) return invitations;
+
+  // Hydrate pre-assigned teams in one query for the pending-invites UI.
+  const { data: teamRows, error: teamError } = await db
+    .from("workspace_invitation_teams")
+    .select("invitation_id, team_id")
+    .in("invitation_id", invitations.map((i) => i.id));
+  if (teamError) throw teamError;
+  const teamsByInvitation = new Map<string, string[]>();
+  for (const row of (teamRows ?? []) as Array<{ invitation_id: string; team_id: string }>) {
+    const list = teamsByInvitation.get(row.invitation_id) ?? [];
+    list.push(row.team_id);
+    teamsByInvitation.set(row.invitation_id, list);
+  }
+  return invitations.map((i) => ({ ...i, teamIds: teamsByInvitation.get(i.id) ?? [] }));
 }
 
 export async function revokeInvitation(
@@ -267,6 +322,7 @@ export async function acceptInvitationByToken(
         accepted_by: userId,
       })
       .eq("id", status.invitation.id);
+    await joinInvitationTeams(status.invitation.id, status.invitation.workspaceId, userId);
     return {
       workspaceSlug: status.workspace.slug,
       workspacePublicId: status.workspace.publicId,
@@ -299,10 +355,36 @@ export async function acceptInvitationByToken(
     .eq("id", status.invitation.id);
   if (invError) throw invError;
 
+  // Membership is active now, so the team_members trigger accepts the rows.
+  await joinInvitationTeams(status.invitation.id, status.invitation.workspaceId, userId);
+
   return {
     workspaceSlug: status.workspace.slug,
     workspacePublicId: status.workspace.publicId,
   };
+}
+
+/**
+ * Best-effort: add the accepting user to the invite's pre-assigned teams.
+ * Teams deleted since the invite cascade off the junction automatically;
+ * a residual failure logs and never blocks the accept.
+ */
+async function joinInvitationTeams(
+  invitationId: string,
+  workspaceId: string,
+  userId: string
+): Promise<void> {
+  try {
+    const teamIds = await listInvitationTeamIds(invitationId);
+    for (const teamId of teamIds) {
+      await insertTeamMembers(teamId, workspaceId, [userId], null);
+    }
+  } catch (err) {
+    console.error(
+      `[invitations] Failed to join pre-assigned teams for invitation ${invitationId}:`,
+      err instanceof Error ? err.message : err
+    );
+  }
 }
 
 export interface PendingInvitationForUser {
@@ -472,27 +554,9 @@ export async function removeMember(
 
   const db = supabaseAdmin();
 
-  // Clear the member's per-resource access overrides for this workspace
-  // FIRST. There's no FK from workspace_resource_access to
-  // workspace_members (only to workspaces and auth.users), so the row-
-  // delete below doesn't cascade these. Without this, re-inviting the
-  // same user later silently restores their old per-KB / per-skill /
-  // per-canvas grants. Deleting before the membership keeps the
-  // table consistent if the member-delete fails. Best-effort: log and
-  // continue if it errors — the membership delete is the load-bearing
-  // change.
-  const { error: accessError } = await db
-    .from("workspace_resource_access")
-    .delete()
-    .eq("workspace_id", workspaceId)
-    .eq("user_id", targetUserId);
-  if (accessError) {
-    console.error(
-      `[members] Failed to clear access overrides for ${targetUserId} in workspace ${workspaceId}:`,
-      accessError.message
-    );
-  }
-
+  // Team memberships are cleaned up by the member_removed_team_cleanup
+  // DB trigger on workspace_members delete — no manual sweep needed
+  // (the legacy workspace_resource_access table is no longer consulted).
   const { error } = await db
     .from("workspace_members")
     .delete()

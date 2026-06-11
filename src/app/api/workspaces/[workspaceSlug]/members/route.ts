@@ -3,6 +3,7 @@ import { withUserAuth } from "@/shared/auth/with-auth";
 import { HttpError } from "@/shared/lib/http-error";
 import { listWorkspaceMembers } from "@/features/workspaces/server/service";
 import { resolveApiWorkspace } from "@/features/workspaces/server/segment";
+import { listTeamRefsByUser } from "@/features/teams/server/repository";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 
 interface Ctx {
@@ -30,7 +31,10 @@ export const GET = withUserAuth(
         );
       }
 
-      const members = await listWorkspaceMembers(workspace.id, userId);
+      const [members, teamsByUser] = await Promise.all([
+        listWorkspaceMembers(workspace.id, userId),
+        listTeamRefsByUser(workspace.id),
+      ]);
 
       // Hydrate email + display name + avatar from auth.users so the UI
       // can render real names and profile pics. auth.admin.getUserById
@@ -68,6 +72,7 @@ export const GET = withUserAuth(
         email: emails.get(m.userId) ?? null,
         displayName: displayNames.get(m.userId) ?? null,
         avatarUrl: avatarUrls.get(m.userId) ?? null,
+        teams: teamsByUser.get(m.userId) ?? [],
       }));
 
       return NextResponse.json({ members: hydrated });

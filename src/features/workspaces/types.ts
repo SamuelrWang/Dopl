@@ -16,6 +16,8 @@ export interface Invitation {
   acceptedBy: string | null;
   revokedAt: string | null;
   createdAt: string;
+  /** Teams the invitee auto-joins on accept (hydrated where the UI needs it). */
+  teamIds?: string[];
 }
 
 export interface InvitationStatus {
@@ -80,6 +82,8 @@ export interface WorkspaceMembership {
   joinedAt: string;
   invitedBy: string | null;
   invitedAt: string | null;
+  /** Throttled activity timestamp (bumped at most every ~5 min). */
+  lastSeenAt: string | null;
 }
 
 /**

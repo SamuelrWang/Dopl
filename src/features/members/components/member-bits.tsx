@@ -98,8 +98,8 @@ export function Avatar({
 }
 
 const ROLE_STYLE: Record<MemberRole, string> = {
-  owner: "bg-violet-500/15 border-violet-500/25 text-violet-200",
-  admin: "bg-emerald-500/10 border-emerald-500/20 text-emerald-200",
+  owner: "bg-violet-500/10 border-violet-600/30 text-violet-700",
+  admin: "bg-emerald-500/10 border-emerald-600/30 text-emerald-700",
   member: "bg-surface-raised-2 border-border-default text-text-secondary",
   viewer: "bg-surface-raised-1 border-border-subtle text-text-secondary/70",
 };
@@ -230,7 +230,7 @@ export function TabButton({
     >
       {children}
       {active && (
-        <span className="absolute left-2 right-2 -bottom-px h-px bg-text-text-primary" />
+        <span className="absolute left-2 right-2 -bottom-px h-[2px] bg-[var(--text-primary)]" />
       )}
     </button>
   );

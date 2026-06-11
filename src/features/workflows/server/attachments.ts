@@ -3,6 +3,16 @@ import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { CONTEXT_CHAR_BUDGET_PER_FIELD } from "@/config";
 import { HttpError } from "@/shared/lib/http-error";
+import {
+  listEffectiveAccess,
+  requireEffectiveAccess,
+  resolveLevel,
+} from "@/features/teams/server/access";
+import {
+  computeWorkflowAudience,
+  validateWorkflowKbInvariant,
+} from "@/features/teams/server/invariant";
+import { getResourceAccessMeta } from "@/features/teams/server/repository";
 import type { WorkflowScope } from "./service";
 
 // Workflow-level KB/skill attachments. Mirrors the cluster attachment
@@ -65,6 +75,52 @@ export async function resolveWorkflowId(
 // can't be attached (it would leak to every member) — same guard as the
 // cluster attachments had.
 
+/** Team-scope write gate shared by every attach/detach op. */
+export async function requireWorkflowEdit(
+  workflowId: string,
+  scope: WorkflowScope
+): Promise<void> {
+  await requireEffectiveAccess(
+    scope.userId,
+    scope.workspaceId,
+    "workflow",
+    workflowId,
+    "edit",
+    { role: scope.role }
+  );
+}
+
+/**
+ * Workflow↔KB invariant gate: every team (or everyone, for a
+ * workspace-mode workflow) that can read this workflow must be able to
+ * read each KB about to be attached/referenced. Throws 409 with the
+ * conflict payload otherwise; admins may retry with autoGrant.
+ */
+export async function validateKbsForWorkflow(
+  workflowId: string,
+  kbIds: string[],
+  scope: WorkflowScope,
+  opts?: { autoGrant?: boolean }
+): Promise<void> {
+  if (kbIds.length === 0) return;
+  const wfMeta = await getResourceAccessMeta(
+    scope.workspaceId,
+    "workflow",
+    workflowId
+  );
+  if (!wfMeta) return;
+  await validateWorkflowKbInvariant({
+    workspaceId: scope.workspaceId,
+    workflowId,
+    workflowName: wfMeta.name,
+    kbIds,
+    audience: await computeWorkflowAudience(scope.workspaceId, workflowId),
+    autoGrant: opts?.autoGrant
+      ? { callerId: scope.userId, role: scope.role }
+      : undefined,
+  });
+}
+
 async function assertKbAttachable(
   knowledgeBaseId: string,
   scope: WorkflowScope
@@ -110,9 +166,12 @@ async function assertSkillAttachable(
 export async function attachKnowledgeBase(
   workflowId: string,
   knowledgeBaseId: string,
-  scope: WorkflowScope
+  scope: WorkflowScope,
+  opts?: { autoGrant?: boolean }
 ): Promise<void> {
+  await requireWorkflowEdit(workflowId, scope);
   await assertKbAttachable(knowledgeBaseId, scope);
+  await validateKbsForWorkflow(workflowId, [knowledgeBaseId], scope, opts);
   const db = supabaseAdmin();
   const { error } = await db.from("workflow_knowledge_bases").upsert(
     {
@@ -131,6 +190,7 @@ export async function detachKnowledgeBase(
   knowledgeBaseId: string,
   scope: WorkflowScope
 ): Promise<void> {
+  await requireWorkflowEdit(workflowId, scope);
   const db = supabaseAdmin();
   const { error } = await db
     .from("workflow_knowledge_bases")
@@ -146,6 +206,7 @@ export async function attachSkill(
   skillId: string,
   scope: WorkflowScope
 ): Promise<void> {
+  await requireWorkflowEdit(workflowId, scope);
   await assertSkillAttachable(skillId, scope);
   const db = supabaseAdmin();
   const { error } = await db.from("workflow_skills").upsert(
@@ -165,6 +226,7 @@ export async function detachSkill(
   skillId: string,
   scope: WorkflowScope
 ): Promise<void> {
+  await requireWorkflowEdit(workflowId, scope);
   const db = supabaseAdmin();
   const { error } = await db
     .from("workflow_skills")
@@ -187,6 +249,8 @@ export async function listAttachedKnowledgeBasesById(
     name: string;
     description: string | null;
     agent_write_enabled: boolean;
+    access_mode: "workspace" | "teams";
+    created_by: string | null;
     deleted_at: string | null;
   };
 
@@ -202,12 +266,33 @@ export async function listAttachedKnowledgeBasesById(
   if (kbIdList.length > 0) {
     const { data: kbRows, error: kbErr } = await db
       .from("knowledge_bases")
-      .select("id, slug, name, description, agent_write_enabled, deleted_at")
+      .select(
+        "id, slug, name, description, agent_write_enabled, access_mode, created_by, deleted_at"
+      )
       .in("id", kbIdList)
       .eq("workspace_id", scope.workspaceId);
     if (kbErr) throw kbErr;
     for (const kb of kbRows ?? []) kbsById.set(kb.id, kb as KbRel);
   }
+
+  // Team scoping: hide attached teams-mode KBs the caller can't read.
+  // The attach-time invariant keeps these rare, but admin autoGrant
+  // asymmetries can still produce them — filter defensively.
+  const hasScopedKb = [...kbsById.values()].some(
+    (kb) => kb.access_mode === "teams" && kb.created_by !== scope.userId
+  );
+  const access = hasScopedKb
+    ? await listEffectiveAccess(scope.workspaceId, scope.userId, {
+        role: scope.role,
+      })
+    : null;
+  const kbReadable = (kb: KbRel): boolean => {
+    if (kb.access_mode !== "teams" || kb.created_by === scope.userId) return true;
+    return (
+      access !== null &&
+      resolveLevel(access, "knowledge_base", kb.id, kb.access_mode) !== null
+    );
+  };
 
   const liveRows = (linkRows ?? [])
     .map((r) => ({
@@ -217,7 +302,7 @@ export async function listAttachedKnowledgeBasesById(
     }))
     .filter(
       (r): r is { added_at: string; knowledge_base_id: string; kb: KbRel } =>
-        r.kb !== null && r.kb.deleted_at === null
+        r.kb !== null && r.kb.deleted_at === null && kbReadable(r.kb)
     );
   if (liveRows.length === 0) return [];
 

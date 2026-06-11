@@ -3,6 +3,12 @@ import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { normalizeClusterName } from "@/shared/lib/cluster-name";
 import { HttpError } from "@/shared/lib/http-error";
+import type { Role } from "@/features/workspaces/types";
+import {
+  listEffectiveAccess,
+  requireEffectiveAccess,
+  resolveLevel,
+} from "@/features/teams/server/access";
 import { slugifyWorkflowName } from "../slug";
 import { spawnHeaderPanel } from "./authoring";
 import { composeWorkflow, type WorkflowGraph } from "./graph";
@@ -22,6 +28,10 @@ export interface WorkflowRow {
   name: string;
   description: string | null;
   cluster_id: string | null;
+  /** 'workspace' = every member; 'teams' = granted teams only. */
+  access_mode: "workspace" | "teams";
+  /** Creator (retains edit on teams-mode workflows). */
+  user_id: string | null;
   created_at: string;
   updated_at: string;
   knowledge_base_count: number;
@@ -56,11 +66,13 @@ export interface WorkflowUpdateRequest {
 export interface WorkflowScope {
   workspaceId: string;
   userId: string;
+  /** Caller's workspace role — used for team-access resolution without refetching membership. */
+  role: Role;
   source: "user" | "agent";
 }
 
 const SELECT_COLS =
-  "id, slug, name, description, cluster_id, created_at, updated_at";
+  "id, slug, name, description, cluster_id, access_mode, user_id, created_at, updated_at";
 
 /**
  * `cluster_id` is caller-supplied; the FK alone only proves the cluster
@@ -122,7 +134,31 @@ export async function listWorkflows(
     .order("created_at", { ascending: false });
   if (error) throw error;
 
-  const rows = data || [];
+  // Team scoping: drop teams-mode workflows the caller can't read, and
+  // remember which KBs they can read so hidden KB names don't leak into
+  // knowledge_base_names. One batch query covers both resource types.
+  const allRows = (data || []) as Array<
+    Omit<
+      WorkflowRow,
+      | "knowledge_base_count"
+      | "skill_count"
+      | "knowledge_base_names"
+      | "skill_names"
+      | "header_panel_id"
+    >
+  >;
+  if (allRows.length === 0) return [];
+  const access = await listEffectiveAccess(scope.workspaceId, scope.userId, {
+    role: scope.role,
+  });
+  const rows =
+    access === null
+      ? allRows.filter((r) => r.access_mode !== "teams")
+      : allRows.filter(
+          (r) =>
+            r.user_id === scope.userId ||
+            resolveLevel(access, "workflow", r.id, r.access_mode) !== null
+        );
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.id);
 
@@ -150,12 +186,24 @@ export async function listWorkflows(
   if (kbIds.length > 0) {
     const { data: kbRows, error: kbErr } = await db
       .from("knowledge_bases")
-      .select("id, name, deleted_at")
+      .select("id, name, deleted_at, access_mode, created_by")
       .in("id", kbIds)
       .eq("workspace_id", scope.workspaceId);
     if (kbErr) throw kbErr;
-    for (const k of kbRows || [])
-      if (k.deleted_at === null) kbNameById.set(k.id, k.name);
+    for (const k of kbRows || []) {
+      if (k.deleted_at !== null) continue;
+      // Don't leak names of teams-mode KBs the caller can't read.
+      const kbReadable =
+        k.created_by === scope.userId ||
+        (access !== null &&
+          resolveLevel(
+            access,
+            "knowledge_base",
+            k.id,
+            k.access_mode as "workspace" | "teams"
+          ) !== null);
+      if (kbReadable) kbNameById.set(k.id, k.name);
+    }
   }
   const skillNameById = new Map<string, string>();
   if (skillIds.length > 0) {
@@ -212,6 +260,17 @@ export async function getWorkflow(
     .eq("workspace_id", scope.workspaceId)
     .single();
   if (error || !wf) throw new HttpError(404, "WORKFLOW_NOT_FOUND", `Workflow not found: ${idOrSlug}`);
+
+  // Team scoping: 404 teams-mode workflows for members outside every
+  // granted team (admins and the creator pass).
+  await requireEffectiveAccess(
+    scope.userId,
+    scope.workspaceId,
+    "workflow",
+    wf.id,
+    "read",
+    { role: scope.role }
+  );
 
   const [knowledge_bases, skills, graph] = await Promise.all([
     listAttachedKnowledgeBasesById(wf.id, scope),
@@ -311,6 +370,15 @@ export async function updateWorkflow(
     .single();
   if (lookupError || !wf) throw new HttpError(404, "WORKFLOW_NOT_FOUND", `Workflow not found: ${idOrSlug}`);
 
+  await requireEffectiveAccess(
+    scope.userId,
+    scope.workspaceId,
+    "workflow",
+    wf.id,
+    "edit",
+    { role: scope.role }
+  );
+
   const update: Record<string, unknown> = {};
   const nextName = req.name ? normalizeClusterName(req.name) : undefined;
   if (nextName && nextName !== wf.name) {
@@ -363,6 +431,47 @@ export async function deleteWorkflow(
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
       idOrSlug
     );
+
+  // Resolve the row first so we can also remove its header panel — without
+  // this an MCP delete leaves an orphan workflow card on the canvas pointing
+  // at a deleted row (the canvas trash button removes the header too; nodes
+  // stay on the canvas in both paths).
+  const { data: wf } = await db
+    .from("workflows")
+    .select("id")
+    .eq(isUuid ? "id" : "slug", idOrSlug)
+    .eq("workspace_id", scope.workspaceId)
+    .maybeSingle();
+
+  if (wf?.id) {
+    await requireEffectiveAccess(
+      scope.userId,
+      scope.workspaceId,
+      "workflow",
+      wf.id,
+      "edit",
+      { role: scope.role }
+    );
+    const { data: headers } = await db
+      .from("canvas_panels")
+      .select("panel_id, panel_data")
+      .eq("workspace_id", scope.workspaceId)
+      .eq("panel_type", "workflow");
+    const headerIds = (headers ?? [])
+      .filter(
+        (p) =>
+          (p.panel_data as { workflowId?: string } | null)?.workflowId === wf.id
+      )
+      .map((p) => p.panel_id);
+    if (headerIds.length > 0) {
+      await db
+        .from("canvas_panels")
+        .delete()
+        .eq("workspace_id", scope.workspaceId)
+        .in("panel_id", headerIds);
+    }
+  }
+
   // Idempotent: junction rows + (if any) the row vanish via FK cascade.
   const { error } = await db
     .from("workflows")

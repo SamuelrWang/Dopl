@@ -12,7 +12,7 @@ import { PageTopBar } from "@/shared/layout/page-top-bar";
 import { EditableTitle } from "@/shared/layout/editable-title";
 import { VisibilityPill, MakePublicAction } from "@/shared/ui/visibility-pill";
 import { useMyAccessContext } from "@/features/members/hooks/use-my-access";
-import { meetsLevel } from "@/features/members/access-defaults";
+import { meetsLevel } from "@/features/teams/access-levels";
 import { useRefetchOnFocus } from "@/shared/hooks/use-refetch-on-focus";
 import { useCurrentProfile } from "@/shared/auth/use-current-profile";
 import { usePresence } from "@/shared/realtime/use-presence";

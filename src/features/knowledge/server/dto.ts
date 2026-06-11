@@ -17,7 +17,7 @@ import type {
  */
 
 export const KNOWLEDGE_BASE_COLS =
-  "id, workspace_id, name, slug, public_id, description, agent_write_enabled, visibility, created_by, created_at, updated_at, deleted_at";
+  "id, workspace_id, name, slug, public_id, description, agent_write_enabled, visibility, access_mode, created_by, created_at, updated_at, deleted_at";
 
 export const KNOWLEDGE_FOLDER_COLS =
   "id, workspace_id, knowledge_base_id, parent_id, name, description, position, created_by, created_at, updated_at, deleted_at";
@@ -43,6 +43,7 @@ export interface KnowledgeBaseRow {
   description: string | null;
   agent_write_enabled: boolean;
   visibility: "public" | "private";
+  access_mode: "workspace" | "teams";
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -97,6 +98,7 @@ export function mapBaseRow(row: KnowledgeBaseRow): KnowledgeBase {
     description: row.description,
     agentWriteEnabled: row.agent_write_enabled,
     visibility: row.visibility,
+    accessMode: row.access_mode,
     createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

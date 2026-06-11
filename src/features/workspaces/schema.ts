@@ -24,6 +24,7 @@ export type WorkspaceUpdateInput = z.infer<typeof WorkspaceUpdateSchema>;
 export const InvitationCreateSchema = z.object({
   email: z.string().email(),
   role: z.enum(["admin", "member", "viewer"]),
+  teamIds: z.array(z.string().uuid()).max(20).optional(),
 });
 export type InvitationCreateInput = z.infer<typeof InvitationCreateSchema>;
 

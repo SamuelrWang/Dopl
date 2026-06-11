@@ -91,11 +91,13 @@ async function main() {
   const userCtx = buildKnowledgeContext({
     userId: USER_ID,
     workspaceId: WORKSPACE_ID,
+    role: "owner",
     agentTokenId: null,
   });
   const agentCtx = buildKnowledgeContext({
     userId: USER_ID,
     workspaceId: WORKSPACE_ID,
+    role: "owner",
     agentTokenId: "fake-api-key-for-agent-source",
   });
 

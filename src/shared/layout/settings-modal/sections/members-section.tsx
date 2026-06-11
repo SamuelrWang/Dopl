@@ -6,8 +6,10 @@ import { meetsMinRole } from "@/features/workspaces/types";
 import type { MemberRole } from "@/features/members/types";
 import { useMembers } from "@/features/members/hooks/use-members";
 import { useInvitations } from "@/features/members/hooks/use-invitations";
-import { MembersTable } from "@/features/members/components/members-table";
-import { PendingInvitations } from "@/features/members/components/pending-invitations";
+import { useTeams } from "@/features/members/hooks/use-teams";
+import { useWorkspaceResources } from "@/features/members/hooks/use-workspace-resources";
+import { MembersTab } from "@/features/members/components/members-tab";
+import { MemberDrawer } from "@/features/members/components/member-drawer";
 import { InviteDialog } from "@/features/members/components/invite-dialog";
 import { SectionShell } from "./section-shell";
 
@@ -19,24 +21,31 @@ interface Props {
 }
 
 /**
- * Members section — flat members table (admins can re-role/remove),
- * an invite button, and the pending-invitations list for managers.
- * Composes the low-level members pieces directly (not the full-page
- * MembersView, which assumes a fixed page layout).
+ * Members section — member list (admins can re-role/remove), invite
+ * button, pending invitations, and the member detail drawer. Team
+ * management lives on the full Members page; this section reuses its
+ * pieces in the settings modal frame.
  */
 export function MembersSection({
   workspaceSegment,
-  workspaceId,
   currentUserId,
   role,
 }: Props) {
   const canManage = meetsMinRole(role, "admin");
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const { members, loading, refresh: refreshMembers } = useMembers(workspaceSegment);
   const { invitations, refresh: refreshInvitations } = useInvitations(
     workspaceSegment,
     canManage,
   );
+  const { teams, refresh: refreshTeams } = useTeams(workspaceSegment);
+  const { resources } = useWorkspaceResources(workspaceSegment);
+
+  const memberList = members ?? [];
+  const teamList = teams ?? [];
+  const selectedMember =
+    memberList.find((m) => m.userId === selectedMemberId) ?? null;
 
   return (
     <SectionShell title="Members" subtitle="Manage who can access this workspace">
@@ -53,28 +62,37 @@ export function MembersSection({
         </div>
       )}
 
-      <MembersTable
+      <MembersTab
         workspaceSlug={workspaceSegment}
-        workspaceId={workspaceId}
         currentUserId={currentUserId}
         myRole={role}
-        members={members ?? []}
+        members={memberList}
+        invitations={invitations ?? []}
+        teams={teamList}
         loading={loading}
         onChanged={refreshMembers}
+        onInvitationsChanged={refreshInvitations}
+        onSelectMember={setSelectedMemberId}
       />
 
-      {canManage && invitations && invitations.length > 0 && (
-        <PendingInvitations
-          workspaceSlug={workspaceSegment}
-          invitations={invitations}
-          onRevoked={refreshInvitations}
-        />
-      )}
+      <MemberDrawer
+        workspaceSlug={workspaceSegment}
+        member={selectedMember}
+        teams={teamList}
+        resources={resources ?? []}
+        myRole={role}
+        onClose={() => setSelectedMemberId(null)}
+        onTeamsChanged={() => {
+          refreshTeams();
+          refreshMembers();
+        }}
+      />
 
       <InviteDialog
         workspaceSlug={workspaceSegment}
         open={inviteOpen}
         onOpenChange={setInviteOpen}
+        teams={teamList}
         onInvited={() => refreshInvitations()}
       />
     </SectionShell>

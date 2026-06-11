@@ -1,7 +1,13 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { slugify } from "@/shared/lib/slug/slugify";
-import { requireResourceAccess } from "@/features/members/server/access";
+import type { Role } from "@/features/workspaces/types";
+import {
+  effectiveResourceAccess,
+  listEffectiveAccess,
+  requireEffectiveAccess,
+  resolveLevel,
+} from "@/features/teams/server/access";
 import type {
   KnowledgeBase,
   KnowledgeFolder,
@@ -68,6 +74,7 @@ const SLUG_RETRY_MAX = 3;
 export interface AuthLike {
   userId: string;
   workspaceId: string;
+  role: Role;
   agentTokenId?: string | null;
   apiKeyWorkspaceId?: string | null;
 }
@@ -83,6 +90,7 @@ export function buildKnowledgeContext(auth: AuthLike): KnowledgeContext {
   return {
     workspaceId: auth.workspaceId,
     userId: auth.userId,
+    role: auth.role,
     source: auth.agentTokenId ? "agent" : "user",
     apiKeyWorkspaceId: auth.apiKeyWorkspaceId ?? null,
   };
@@ -105,6 +113,27 @@ function canSeeBase(ctx: KnowledgeContext, base: KnowledgeBase): boolean {
   return base.createdBy === ctx.userId;
 }
 
+/**
+ * Full visibility gate for single-base reads: M-10 visibility rules plus
+ * team scoping — a teams-mode base is 404 for members outside every
+ * granted team (admins and the creator always pass).
+ */
+async function assertBaseVisible(
+  ctx: KnowledgeContext,
+  base: KnowledgeBase
+): Promise<void> {
+  if (!canSeeBase(ctx, base)) throw new KnowledgeBaseNotFoundError(base.id);
+  if (base.accessMode !== "teams") return;
+  const level = await effectiveResourceAccess(
+    ctx.userId,
+    ctx.workspaceId,
+    "knowledge_base",
+    base.id,
+    { role: ctx.role }
+  );
+  if (level === null) throw new KnowledgeBaseNotFoundError(base.id);
+}
+
 // ─── Base reads ─────────────────────────────────────────────────────
 
 /**
@@ -118,7 +147,10 @@ export async function listBases(
   ctx: KnowledgeContext
 ): Promise<KnowledgeBase[]> {
   const all = await repo.listBasesForWorkspace(ctx.workspaceId, false);
-  const visible = all.filter((b) => canSeeBase(ctx, b));
+  const visible = await filterTeamVisibleBases(
+    ctx,
+    all.filter((b) => canSeeBase(ctx, b))
+  );
   if (visible.length > 0) return visible;
   // CRITICAL: seed only when the workspace has NO bases at all, not
   // when the *caller* sees zero — otherwise a member who joins a
@@ -142,9 +174,28 @@ export async function listBases(
   ) {
     await seedWorkspace(ctx);
     const seeded = await repo.listBasesForWorkspace(ctx.workspaceId, false);
-    return seeded.filter((b) => canSeeBase(ctx, b));
+    return filterTeamVisibleBases(ctx, seeded.filter((b) => canSeeBase(ctx, b)));
   }
   return visible;
+}
+
+/**
+ * Team-scope list filter: drops teams-mode bases the caller can't read.
+ * One batch query regardless of base count; workspace-mode bases pass
+ * through untouched.
+ */
+async function filterTeamVisibleBases(
+  ctx: KnowledgeContext,
+  bases: KnowledgeBase[]
+): Promise<KnowledgeBase[]> {
+  if (!bases.some((b) => b.accessMode === "teams")) return bases;
+  const acc = await listEffectiveAccess(ctx.workspaceId, ctx.userId, {
+    role: ctx.role,
+  });
+  if (!acc) return [];
+  return bases.filter(
+    (b) => resolveLevel(acc, "knowledge_base", b.id, b.accessMode) !== null
+  );
 }
 
 export async function getBaseById(
@@ -154,9 +205,10 @@ export async function getBaseById(
   const base = await repo.findBaseById(id, false);
   if (!base) throw new KnowledgeBaseNotFoundError(id);
   assertSameWorkspace(base.workspaceId, ctx.workspaceId, `knowledge base ${id}`);
-  // Hide private items from non-owners and workspace-scoped keys —
-  // 404 is the right shape so visibility itself isn't an oracle.
-  if (!canSeeBase(ctx, base)) throw new KnowledgeBaseNotFoundError(id);
+  // Hide private items from non-owners and workspace-scoped keys, and
+  // teams-mode bases from non-granted members — 404 is the right shape
+  // so visibility itself isn't an oracle.
+  await assertBaseVisible(ctx, base);
   return base;
 }
 
@@ -166,7 +218,7 @@ export async function getBaseBySlug(
 ): Promise<KnowledgeBase> {
   const base = await repo.findBaseBySlug(ctx.workspaceId, slug, false);
   if (!base) throw new KnowledgeBaseNotFoundError(slug);
-  if (!canSeeBase(ctx, base)) throw new KnowledgeBaseNotFoundError(slug);
+  await assertBaseVisible(ctx, base);
   return base;
 }
 
@@ -176,7 +228,7 @@ export async function getBaseByPublicId(
 ): Promise<KnowledgeBase> {
   const base = await repo.findBaseByPublicId(ctx.workspaceId, publicId, false);
   if (!base) throw new KnowledgeBaseNotFoundError(publicId);
-  if (!canSeeBase(ctx, base)) throw new KnowledgeBaseNotFoundError(publicId);
+  await assertBaseVisible(ctx, base);
   return base;
 }
 
@@ -226,7 +278,7 @@ export async function createBase(
         // Default true: a brand-new base belongs to its creator (visibility
         // defaults to private above), and the creator's agent should be
         // able to write to it without an extra opt-in step. Actual write
-        // enforcement is the access-matrix in `requireResourceAccess`,
+        // enforcement is the team grant check in `requireEffectiveAccess`,
         // not this column — keeping the column TRUE here just stops the
         // UI/MCP messaging from misrepresenting the access state.
         agentWriteEnabled: input.agentWriteEnabled ?? true,
@@ -280,7 +332,7 @@ export async function updateBase(
       patch = { ...patch, visibility: undefined };
     }
   }
-  await assertAgentWriteAllowed(ctx, base);
+  await assertBaseWritable(ctx, base);
   if (expectedUpdatedAt && base.updatedAt !== expectedUpdatedAt) {
     throw new KnowledgeStaleVersionError(expectedUpdatedAt, base.updatedAt);
   }
@@ -320,7 +372,7 @@ export async function softDeleteBase(
   id: string
 ): Promise<void> {
   const base = await getBaseById(ctx, id);
-  await assertAgentWriteAllowed(ctx, base);
+  await assertBaseWritable(ctx, base);
   await repo.markBaseDeleted(id);
 }
 
@@ -331,7 +383,7 @@ export async function restoreBase(
   const base = await repo.findBaseById(id, true);
   if (!base) throw new KnowledgeBaseNotFoundError(id);
   assertSameWorkspace(base.workspaceId, ctx.workspaceId, `knowledge base ${id}`);
-  await assertAgentWriteAllowed(ctx, base);
+  await assertBaseWritable(ctx, base);
   return repo.restoreBaseRow(id);
 }
 
@@ -374,7 +426,7 @@ export async function createFolder(
   input: KnowledgeFolderCreateInput
 ): Promise<KnowledgeFolder> {
   const base = await getBaseById(ctx, input.knowledgeBaseId);
-  await assertAgentWriteAllowed(ctx, base);
+  await assertBaseWritable(ctx, base);
   if (input.parentId) {
     const parent = await repo.findFolderById(input.parentId, false);
     if (!parent) throw new FolderNotFoundError(input.parentId);
@@ -405,7 +457,7 @@ export async function updateFolder(
   const folder = await getFolderInternal(ctx, id, false);
   const base = await repo.findBaseById(folder.knowledgeBaseId, true);
   if (!base) throw new KnowledgeBaseNotFoundError(folder.knowledgeBaseId);
-  await assertAgentWriteAllowed(ctx, base);
+  await assertBaseWritable(ctx, base);
   if (expectedUpdatedAt && folder.updatedAt !== expectedUpdatedAt) {
     throw new KnowledgeStaleVersionError(expectedUpdatedAt, folder.updatedAt);
   }
@@ -428,7 +480,7 @@ export async function moveFolder(
   const folder = await getFolderInternal(ctx, id, false);
   const base = await repo.findBaseById(folder.knowledgeBaseId, true);
   if (!base) throw new KnowledgeBaseNotFoundError(folder.knowledgeBaseId);
-  await assertAgentWriteAllowed(ctx, base);
+  await assertBaseWritable(ctx, base);
 
   if (input.parentId !== null) {
     const newParent = await repo.findFolderById(input.parentId, false);
@@ -461,7 +513,7 @@ export async function softDeleteFolder(
   const folder = await getFolderInternal(ctx, id, false);
   const base = await repo.findBaseById(folder.knowledgeBaseId, true);
   if (!base) throw new KnowledgeBaseNotFoundError(folder.knowledgeBaseId);
-  await assertAgentWriteAllowed(ctx, base);
+  await assertBaseWritable(ctx, base);
   await repo.markFolderDeleted(id);
 }
 
@@ -472,7 +524,7 @@ export async function restoreFolder(
   const folder = await getFolderInternal(ctx, id, true);
   const base = await repo.findBaseById(folder.knowledgeBaseId, true);
   if (!base) throw new KnowledgeBaseNotFoundError(folder.knowledgeBaseId);
-  await assertAgentWriteAllowed(ctx, base);
+  await assertBaseWritable(ctx, base);
   return repo.restoreFolderRow(id);
 }
 
@@ -513,7 +565,7 @@ export async function createEntry(
   input: KnowledgeEntryCreateInput
 ): Promise<KnowledgeEntry> {
   const base = await getBaseById(ctx, input.knowledgeBaseId);
-  await assertAgentWriteAllowed(ctx, base);
+  await assertBaseWritable(ctx, base);
   if (input.folderId) {
     const folder = await repo.findFolderById(input.folderId, false);
     if (!folder) throw new FolderNotFoundError(input.folderId);
@@ -547,7 +599,7 @@ export async function updateEntry(
   const entry = await getEntry(ctx, id);
   const base = await repo.findBaseById(entry.knowledgeBaseId, true);
   if (!base) throw new KnowledgeBaseNotFoundError(entry.knowledgeBaseId);
-  await assertAgentWriteAllowed(ctx, base);
+  await assertBaseWritable(ctx, base);
   if (expectedUpdatedAt && entry.updatedAt !== expectedUpdatedAt) {
     throw new KnowledgeStaleVersionError(expectedUpdatedAt, entry.updatedAt);
   }
@@ -582,7 +634,7 @@ export async function moveEntry(
   const entry = await getEntry(ctx, id);
   const base = await repo.findBaseById(entry.knowledgeBaseId, true);
   if (!base) throw new KnowledgeBaseNotFoundError(entry.knowledgeBaseId);
-  await assertAgentWriteAllowed(ctx, base);
+  await assertBaseWritable(ctx, base);
 
   if (input.folderId !== null) {
     const folder = await repo.findFolderById(input.folderId, false);
@@ -610,7 +662,7 @@ export async function softDeleteEntry(
   const entry = await getEntry(ctx, id);
   const base = await repo.findBaseById(entry.knowledgeBaseId, true);
   if (!base) throw new KnowledgeBaseNotFoundError(entry.knowledgeBaseId);
-  await assertAgentWriteAllowed(ctx, base);
+  await assertBaseWritable(ctx, base);
   await repo.markEntryDeleted(id);
 }
 
@@ -623,7 +675,7 @@ export async function restoreEntry(
   assertSameWorkspace(entry.workspaceId, ctx.workspaceId, `entry ${id}`);
   const base = await repo.findBaseById(entry.knowledgeBaseId, true);
   if (!base) throw new KnowledgeBaseNotFoundError(entry.knowledgeBaseId);
-  await assertAgentWriteAllowed(ctx, base);
+  await assertBaseWritable(ctx, base);
   return repo.restoreEntryRow(id);
 }
 
@@ -711,7 +763,7 @@ export async function writeFileByPath(
   input: WriteFileByPathInput = {}
 ): Promise<KnowledgeEntry> {
   const base = await getBaseById(ctx, baseId);
-  await assertAgentWriteAllowed(ctx, base);
+  await assertBaseWritable(ctx, base);
 
   const segments = parsePath(path);
   if (segments.length === 0) {
@@ -790,7 +842,7 @@ export async function createFolderByPath(
   path: string
 ): Promise<KnowledgeFolder> {
   const base = await getBaseById(ctx, baseId);
-  await assertAgentWriteAllowed(ctx, base);
+  await assertBaseWritable(ctx, base);
 
   const segments = parsePath(path);
   if (segments.length === 0) {
@@ -818,7 +870,7 @@ export async function deleteByPath(
   path: string
 ): Promise<{ kind: "folder" | "entry"; id: string }> {
   const base = await getBaseById(ctx, baseId);
-  await assertAgentWriteAllowed(ctx, base);
+  await assertBaseWritable(ctx, base);
   const resolved = await resolvePath(ctx, base.id, path);
   if (resolved.kind === "root") {
     throw new KnowledgePathConflictError("Cannot delete the base root.");
@@ -851,7 +903,7 @@ export async function moveByPath(
   toPath: string
 ): Promise<{ kind: "folder" | "entry"; id: string }> {
   const base = await getBaseById(ctx, baseId);
-  await assertAgentWriteAllowed(ctx, base);
+  await assertBaseWritable(ctx, base);
 
   const fromResolved = await resolvePath(ctx, base.id, fromPath);
   if (fromResolved.kind === "root") {
@@ -987,30 +1039,30 @@ export async function purgeTrashOlderThan(
   return repo.hardDeleteOlderThan(ctx.workspaceId, beforeIso);
 }
 
-// ─── Agent-write enforcement ────────────────────────────────────────
+// ─── Write enforcement ──────────────────────────────────────────────
 
 /**
- * Gate for agent-origin KB writes. The per-(member, KB) access matrix
- * is now the single source of truth — owner/admin members always pass,
- * member/viewer pass when their matrix entry is `edit`. The legacy
- * KB-level `agent_write_enabled` toggle is no longer consulted here:
- * admins manage agent access centrally from the members page.
+ * Gate for KB writes from EVERY source (web sessions included). Team
+ * grants are the source of truth: owner/admin and the creator always
+ * pass; on a teams-mode base other members need an `edit` grant via one
+ * of their teams; on a workspace-mode base the role default applies
+ * (member → edit, viewer → read-only).
  *
  * `AgentWriteDisabledError` is still thrown when an agent tries to flip
  * `agentWriteEnabled` itself in updateBase — that path doesn't call
  * here.
  */
-export async function assertAgentWriteAllowed(
+export async function assertBaseWritable(
   ctx: KnowledgeContext,
   base: KnowledgeBase
 ): Promise<void> {
-  if (ctx.source !== "agent") return;
-  await requireResourceAccess(
+  await requireEffectiveAccess(
     ctx.userId,
     ctx.workspaceId,
     "knowledge_base",
     base.id,
-    "edit"
+    "edit",
+    { role: ctx.role }
   );
 }
 

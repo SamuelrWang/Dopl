@@ -5,6 +5,7 @@ import { HttpError } from "@/shared/lib/http-error";
 import { NODE_PANEL_SIZE, WORKFLOW_PANEL_SIZE } from "@/features/canvas/types";
 import { insertEdge } from "@/features/canvas/server/edges";
 import { composeWorkflow } from "./graph";
+import { validateKbsForWorkflow } from "./attachments";
 import type { WorkflowScope } from "./service";
 
 /**
@@ -112,103 +113,222 @@ export async function spawnHeaderPanel(
   return panelId;
 }
 
-/** The header panel id for a workflow (throws if it has none). */
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The header panel id for a workflow. Legacy workflows migrated from
+ * pre-pivot clusters may have no header panel — rather than 409, spawn one
+ * on first authoring op so those workflows become authorable + visible.
+ */
 async function resolveHeaderPanelId(
   workflowId: string,
-  workspaceId: string
+  scope: WorkflowScope
 ): Promise<string> {
   const db = supabaseAdmin();
   const { data } = await db
     .from("canvas_panels")
     .select("panel_id, panel_data")
-    .eq("workspace_id", workspaceId)
+    .eq("workspace_id", scope.workspaceId)
     .eq("panel_type", "workflow");
   const header = (data ?? []).find(
     (r) => (r.panel_data as { workflowId?: string } | null)?.workflowId === workflowId
   );
-  if (!header) {
-    throw new HttpError(
-      409,
-      "WORKFLOW_HAS_NO_HEADER",
-      "Workflow has no header panel on the canvas; recreate it via dopl_workflow create."
-    );
+  if (header) return header.panel_id as string;
+
+  const { data: wf } = await db
+    .from("workflows")
+    .select("name, description")
+    .eq("id", workflowId)
+    .eq("workspace_id", scope.workspaceId)
+    .maybeSingle();
+  if (!wf) throw new HttpError(404, "WORKFLOW_NOT_FOUND", `Workflow not found: ${workflowId}`);
+  return spawnHeaderPanel(workflowId, wf.name, wf.description ?? null, scope);
+}
+
+/**
+ * Map every node panel_id → the set of workflow ids whose header reaches it
+ * (undirected, stopping at other headers — mirrors graph.ts). Used to keep
+ * authoring ops from touching a node that belongs to a DIFFERENT workflow.
+ */
+async function nodeOwnership(
+  scope: WorkflowScope
+): Promise<Map<string, Set<string>>> {
+  const db = supabaseAdmin();
+  const [{ data: panels }, { data: edges }] = await Promise.all([
+    db
+      .from("canvas_panels")
+      .select("panel_id, panel_type, panel_data")
+      .eq("workspace_id", scope.workspaceId)
+      .in("panel_type", ["workflow", "node"]),
+    db
+      .from("canvas_edges")
+      .select("from_panel_id, to_panel_id")
+      .eq("workspace_id", scope.workspaceId),
+  ]);
+
+  const adj = new Map<string, string[]>();
+  for (const e of edges ?? []) {
+    adj.set(e.from_panel_id, [...(adj.get(e.from_panel_id) ?? []), e.to_panel_id]);
+    adj.set(e.to_panel_id, [...(adj.get(e.to_panel_id) ?? []), e.from_panel_id]);
   }
-  return header.panel_id as string;
+  const headers = (panels ?? []).filter((p) => p.panel_type === "workflow");
+  const headerIds = new Set(headers.map((h) => h.panel_id));
+  const nodeIds = new Set(
+    (panels ?? []).filter((p) => p.panel_type === "node").map((p) => p.panel_id)
+  );
+
+  const out = new Map<string, Set<string>>();
+  for (const h of headers) {
+    const wfId = (h.panel_data as { workflowId?: string } | null)?.workflowId;
+    if (!wfId) continue;
+    const visited = new Set<string>([h.panel_id]);
+    const queue = [h.panel_id];
+    while (queue.length) {
+      const cur = queue.shift()!;
+      for (const nb of adj.get(cur) ?? []) {
+        if (visited.has(nb)) continue;
+        visited.add(nb);
+        if (headerIds.has(nb) && nb !== h.panel_id) continue;
+        queue.push(nb);
+      }
+    }
+    for (const id of visited) {
+      if (!nodeIds.has(id)) continue;
+      const set = out.get(id) ?? new Set<string>();
+      set.add(wfId);
+      out.set(id, set);
+    }
+  }
+  return out;
+}
+
+/** Guard: the node must be edge-reachable from THIS workflow's header. */
+async function assertNodeInWorkflow(
+  workflowId: string,
+  nodeId: string,
+  scope: WorkflowScope
+): Promise<void> {
+  const own = await nodeOwnership(scope);
+  if (!own.get(nodeId)?.has(workflowId)) {
+    throw new HttpError(404, "NODE_NOT_IN_WORKFLOW", `Node ${nodeId} is not part of this workflow.`);
+  }
 }
 
 // ── Ref resolution + validation ──────────────────────────────────────
 
-/** Resolve read/action ids → named NodeRefs, validating each belongs to the
- *  workspace, is live, and is public (the canvas is workspace-shared). */
+interface ResourceRow {
+  id: string;
+  slug: string;
+  name: string;
+  visibility: string | null;
+  deleted_at: string | null;
+}
+
+/**
+ * Resolve a set of kb/skill TOKENS (each a slug OR a uuid) → token → canonical
+ * {id, name}, validating each belongs to the workspace, is live, and is public
+ * (the canvas is workspace-shared). Agents get slugs from dopl_kb / dopl_skill,
+ * so accepting either removes the "where do I find the uuid" dead-end.
+ */
+async function resolveResources(
+  table: "knowledge_bases" | "skills",
+  tokens: string[],
+  label: "Knowledge base" | "Skill",
+  errCode: "KNOWLEDGE_BASE_NOT_FOUND" | "SKILL_NOT_FOUND",
+  scope: WorkflowScope
+): Promise<Map<string, { id: string; name: string }>> {
+  const out = new Map<string, { id: string; name: string }>();
+  const uniq = [...new Set(tokens)];
+  if (uniq.length === 0) return out;
+
+  const db = supabaseAdmin();
+  const uuids = uniq.filter((t) => UUID_RE.test(t));
+  const slugs = uniq.filter((t) => !UUID_RE.test(t));
+  const rows: ResourceRow[] = [];
+  if (uuids.length) {
+    const { data } = await db
+      .from(table)
+      .select("id, slug, name, visibility, deleted_at")
+      .in("id", uuids)
+      .eq("workspace_id", scope.workspaceId);
+    rows.push(...((data ?? []) as ResourceRow[]));
+  }
+  if (slugs.length) {
+    const { data } = await db
+      .from(table)
+      .select("id, slug, name, visibility, deleted_at")
+      .in("slug", slugs)
+      .eq("workspace_id", scope.workspaceId);
+    rows.push(...((data ?? []) as ResourceRow[]));
+  }
+
+  const byId = new Map<string, ResourceRow>();
+  const bySlug = new Map<string, ResourceRow>();
+  for (const r of rows) {
+    if (r.deleted_at) continue;
+    if (r.visibility === "private")
+      throw new HttpError(403, "PRIVATE_RESOURCE", `${label} \`${r.slug}\` is private; make it public to use it in a workflow.`);
+    byId.set(r.id, r);
+    bySlug.set(r.slug, r);
+  }
+  for (const t of uniq) {
+    const row = UUID_RE.test(t) ? byId.get(t) : bySlug.get(t);
+    if (!row) throw new HttpError(404, errCode, `${label} not found: ${t}`);
+    out.set(t, { id: row.id, name: row.name });
+  }
+  return out;
+}
+
+/** Resolve read/action refs → named NodeRefs (kb/skill ids accept slug OR
+ *  uuid; entryId is a uuid). Stored NodeRefs always carry canonical uuids. */
 async function resolveRefs(
   reads: ReadRefInput[],
   actions: ActionRefInput[],
   scope: WorkflowScope
 ): Promise<{ reads: NodeRef[]; actions: NodeRef[] }> {
   const db = supabaseAdmin();
-  const kbIds = [...new Set(reads.map((r) => r.kbId))];
+  const kbCanon = await resolveResources(
+    "knowledge_bases",
+    reads.map((r) => r.kbId),
+    "Knowledge base",
+    "KNOWLEDGE_BASE_NOT_FOUND",
+    scope
+  );
+  const skillCanon = await resolveResources(
+    "skills",
+    actions.map((a) => a.skillId),
+    "Skill",
+    "SKILL_NOT_FOUND",
+    scope
+  );
+
   const entryIds = [...new Set(reads.filter((r) => r.entryId).map((r) => r.entryId!))];
-  const skillIds = [...new Set(actions.map((a) => a.skillId))];
-
-  const kbById = new Map<string, string>();
-  if (kbIds.length) {
-    const { data } = await db
-      .from("knowledge_bases")
-      .select("id, name, visibility, deleted_at")
-      .in("id", kbIds)
-      .eq("workspace_id", scope.workspaceId);
-    for (const k of data ?? []) {
-      if (k.deleted_at) continue;
-      if (k.visibility === "private")
-        throw new HttpError(403, "PRIVATE_RESOURCE", `Knowledge base ${k.id} is private; make it public to use it in a workflow.`);
-      kbById.set(k.id, k.name);
-    }
-    for (const id of kbIds)
-      if (!kbById.has(id)) throw new HttpError(404, "KNOWLEDGE_BASE_NOT_FOUND", `Knowledge base not found: ${id}`);
-  }
-
-  const entryById = new Map<string, { title: string; kbId: string }>();
+  const entryById = new Map<string, { title: string }>();
   if (entryIds.length) {
     const { data } = await db
       .from("knowledge_entries")
-      .select("id, title, knowledge_base_id, deleted_at")
+      .select("id, title, deleted_at")
       .in("id", entryIds)
       .eq("workspace_id", scope.workspaceId);
     for (const e of data ?? []) {
       if (e.deleted_at) continue;
-      entryById.set(e.id, { title: e.title, kbId: e.knowledge_base_id });
+      entryById.set(e.id, { title: e.title });
     }
     for (const id of entryIds)
       if (!entryById.has(id)) throw new HttpError(404, "ENTRY_NOT_FOUND", `Entry not found: ${id}`);
   }
 
-  const skillById = new Map<string, string>();
-  if (skillIds.length) {
-    const { data } = await db
-      .from("skills")
-      .select("id, name, visibility, deleted_at")
-      .in("id", skillIds)
-      .eq("workspace_id", scope.workspaceId);
-    for (const s of data ?? []) {
-      if (s.deleted_at) continue;
-      if (s.visibility === "private")
-        throw new HttpError(403, "PRIVATE_RESOURCE", `Skill ${s.id} is private; make it public to use it in a workflow.`);
-      skillById.set(s.id, s.name);
-    }
-    for (const id of skillIds)
-      if (!skillById.has(id)) throw new HttpError(404, "SKILL_NOT_FOUND", `Skill not found: ${id}`);
-  }
-
-  const resolvedReads: NodeRef[] = reads.map((r) =>
-    r.entryId
-      ? { kind: "file", kbId: r.kbId, entryId: r.entryId, name: entryById.get(r.entryId)!.title }
-      : { kind: "kb", kbId: r.kbId, name: kbById.get(r.kbId)! }
-  );
-  const resolvedActions: NodeRef[] = actions.map((a) => ({
-    kind: "skill",
-    skillId: a.skillId,
-    name: skillById.get(a.skillId)!,
-  }));
+  const resolvedReads: NodeRef[] = reads.map((r) => {
+    const kb = kbCanon.get(r.kbId)!;
+    return r.entryId
+      ? { kind: "file", kbId: kb.id, entryId: r.entryId, name: entryById.get(r.entryId)!.title }
+      : { kind: "kb", kbId: kb.id, name: kb.name };
+  });
+  const resolvedActions: NodeRef[] = actions.map((a) => {
+    const sk = skillCanon.get(a.skillId)!;
+    return { kind: "skill", skillId: sk.id, name: sk.name };
+  });
   return { reads: resolvedReads, actions: resolvedActions };
 }
 
@@ -229,6 +349,15 @@ async function nodeDataFrom(
       ref: input.ref,
     },
   };
+}
+
+/** Distinct KB ids referenced by resolved node data (kb + file reads). */
+function kbIdsOf(datas: ResolvedNodeData[]): string[] {
+  const ids = new Set<string>();
+  for (const d of datas)
+    for (const r of d.reads)
+      if (r.kind === "kb" || r.kind === "file") ids.add(r.kbId);
+  return [...ids];
 }
 
 // ── Attachment reconciliation ────────────────────────────────────────
@@ -276,7 +405,7 @@ const NODE_GAP = 80;
 
 async function memberNodePanels(workflowId: string, scope: WorkflowScope) {
   const db = supabaseAdmin();
-  const headerId = await resolveHeaderPanelId(workflowId, scope.workspaceId);
+  const headerId = await resolveHeaderPanelId(workflowId, scope);
   const graph = await composeWorkflow(scope.workspaceId, workflowId);
   const ids = (graph?.nodes ?? []).map((n) => n.id);
   const { data } = await db
@@ -328,11 +457,25 @@ export async function setGraph(
   scope: WorkflowScope
 ): Promise<void> {
   const db = supabaseAdmin();
-  const headerId = await resolveHeaderPanelId(workflowId, scope.workspaceId);
+  const headerId = await resolveHeaderPanelId(workflowId, scope);
+
+  // Refs are the reconciliation key + edge endpoints — duplicates would
+  // strand an unconnected orphan node (the second wins the ref→id map).
+  const seenRefs = new Set<string>();
+  for (const n of spec.nodes) {
+    if (seenRefs.has(n.ref)) {
+      throw new HttpError(400, "DUPLICATE_REF", `Duplicate node ref "${n.ref}" — each node needs a unique ref.`);
+    }
+    seenRefs.add(n.ref);
+  }
 
   // Resolve + validate every node's refs UPFRONT so an invalid ref aborts
   // before any write (no partial graph).
   const resolved = await Promise.all(spec.nodes.map((n) => nodeDataFrom(n, scope)));
+
+  // Team invariant: the workflow's audience must be able to read every
+  // referenced KB — abort before any panel write.
+  await validateKbsForWorkflow(workflowId, kbIdsOf(resolved.map((r) => r.data)), scope);
 
   // Map existing member nodes by their stored ref.
   const { panels: existing } = await memberNodePanels(workflowId, scope);
@@ -401,8 +544,9 @@ export async function addNode(
   connectFrom: string | undefined,
   scope: WorkflowScope
 ): Promise<string> {
-  const headerId = await resolveHeaderPanelId(workflowId, scope.workspaceId);
+  const headerId = await resolveHeaderPanelId(workflowId, scope);
   const { title, data } = await nodeDataFrom(input, scope);
+  await validateKbsForWorkflow(workflowId, kbIdsOf([data]), scope);
   const { panels } = await memberNodePanels(workflowId, scope);
 
   // Place to the right of the rightmost current member.
@@ -435,6 +579,7 @@ export async function updateNode(
     .from("canvas_panels").select("panel_id, title, panel_data, x, y")
     .eq("workspace_id", scope.workspaceId).eq("panel_id", nodeId).eq("panel_type", "node").maybeSingle();
   if (!row) throw new HttpError(404, "NODE_NOT_FOUND", `Node not found: ${nodeId}`);
+  await assertNodeInWorkflow(workflowId, nodeId, scope);
 
   const cur = (row.panel_data ?? {}) as Record<string, unknown>;
   const merged: NodeInput = {
@@ -471,6 +616,7 @@ export async function updateNode(
     title = built.title;
     data = built.data;
   }
+  await validateKbsForWorkflow(workflowId, kbIdsOf([data]), scope);
   await writeNodePanel(nodeId, title, data, (row.x as number) ?? 0, (row.y as number) ?? 0, scope);
   await reconcileAttachments(workflowId, scope);
 }
@@ -480,6 +626,7 @@ export async function removeNode(
   nodeId: string,
   scope: WorkflowScope
 ): Promise<void> {
+  await assertNodeInWorkflow(workflowId, nodeId, scope);
   const db = supabaseAdmin();
   await db.from("canvas_panels").delete()
     .eq("workspace_id", scope.workspaceId).eq("panel_id", nodeId).eq("panel_type", "node");
@@ -493,10 +640,23 @@ export async function connect(
   to: string,
   scope: WorkflowScope
 ): Promise<void> {
-  const headerId = await resolveHeaderPanelId(workflowId, scope.workspaceId);
+  const headerId = await resolveHeaderPanelId(workflowId, scope);
   const fromId = from === "header" ? headerId : from;
   const toId = to === "header" ? headerId : to;
   if (fromId === toId) throw new HttpError(400, "SELF_EDGE", "Cannot connect a panel to itself.");
+
+  // Don't let an agent wire in a node that already belongs to a DIFFERENT
+  // workflow (it would become dual-homed). Isolated nodes + this workflow's
+  // own nodes are fine.
+  const own = await nodeOwnership(scope);
+  for (const endpoint of [fromId, toId]) {
+    if (endpoint === headerId) continue;
+    const owners = own.get(endpoint);
+    if (owners && [...owners].some((w) => w !== workflowId)) {
+      throw new HttpError(400, "NODE_IN_OTHER_WORKFLOW", `Panel ${endpoint} belongs to a different workflow; connect within one workflow.`);
+    }
+  }
+
   await insertEdge(scope.workspaceId, scope.userId, { id: crypto.randomUUID(), fromPanelId: fromId, toPanelId: toId });
   await reconcileAttachments(workflowId, scope);
 }
@@ -507,7 +667,7 @@ export async function disconnect(
   to: string,
   scope: WorkflowScope
 ): Promise<void> {
-  const headerId = await resolveHeaderPanelId(workflowId, scope.workspaceId);
+  const headerId = await resolveHeaderPanelId(workflowId, scope);
   const fromId = from === "header" ? headerId : from;
   const toId = to === "header" ? headerId : to;
   await deleteEdgeByPair(scope.workspaceId, fromId, toId);

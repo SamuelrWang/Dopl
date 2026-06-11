@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
+import type { Role } from "@/features/workspaces/types";
 import { parseJson } from "@/shared/api/parse-json";
 import { HttpError } from "@/shared/lib/http-error";
 import {
@@ -29,12 +30,13 @@ function toErrorResponse(err: unknown): NextResponse {
 
 async function handleGet(
   _request: NextRequest,
-  { userId, workspaceId, agentTokenId }: { userId: string; workspaceId: string; agentTokenId?: string }
+  { userId, workspaceId, role, agentTokenId }: { userId: string; workspaceId: string; role: Role; agentTokenId?: string }
 ) {
   try {
     const workflows = await listWorkflows({
       userId,
       workspaceId,
+      role,
       source: agentTokenId ? "agent" : "user",
     });
     return NextResponse.json({ workflows });
@@ -45,13 +47,14 @@ async function handleGet(
 
 async function handlePost(
   request: NextRequest,
-  { userId, workspaceId, agentTokenId }: { userId: string; workspaceId: string; agentTokenId?: string }
+  { userId, workspaceId, role, agentTokenId }: { userId: string; workspaceId: string; role: Role; agentTokenId?: string }
 ) {
   try {
     const input = await parseJson(request, WorkflowCreateSchema);
     const workflow = await createWorkflow(input, {
       userId,
       workspaceId,
+      role,
       source: agentTokenId ? "agent" : "user",
     });
     return NextResponse.json(workflow, { status: 201 });

@@ -6,6 +6,11 @@ import {
   listEntriesForBase,
   findEntryById,
 } from "@/features/knowledge/server/repository";
+import {
+  effectiveResourceAccess,
+  listEffectiveAccess,
+  resolveLevel,
+} from "@/features/teams/server/access";
 import type { ToolResult } from "./types";
 
 const supabase = supabaseAdmin();
@@ -40,6 +45,26 @@ function visibleBaseFilter<
   });
 }
 
+/**
+ * Visibility + team-scope resolution in one place: applies the private-
+ * ownership filter, then drops teams-mode bases the caller has no grant
+ * on (one batch query; workspace-mode bases pass through).
+ */
+async function listVisibleBases(
+  workspaceId: string,
+  userId: string,
+  kbIds?: string[]
+) {
+  const all = await listBasesForWorkspace(workspaceId);
+  const pre = visibleBaseFilter(all, userId, kbIds);
+  if (!pre.some((b) => b.accessMode === "teams")) return pre;
+  const acc = await listEffectiveAccess(workspaceId, userId);
+  if (!acc) return [];
+  return pre.filter(
+    (b) => resolveLevel(acc, "knowledge_base", b.id, b.accessMode) !== null
+  );
+}
+
 /** Tool: list_workspace_knowledge_bases. */
 export async function executeListWorkspaceKnowledgeBases(
   _input: Record<string, unknown>,
@@ -51,8 +76,7 @@ export async function executeListWorkspaceKnowledgeBases(
   if (!userId || !workspaceId) {
     return { result: JSON.stringify({ error: "Not authenticated." }) };
   }
-  const all = await listBasesForWorkspace(workspaceId);
-  const visible = visibleBaseFilter(all, userId, scopeFilters?.kbIds);
+  const visible = await listVisibleBases(workspaceId, userId, scopeFilters?.kbIds);
   return {
     result: JSON.stringify({
       knowledge_bases: visible.map((b) => ({
@@ -92,8 +116,7 @@ export async function executeSearchWorkspaceKnowledge(
   }
 
   // Resolve visible bases, then constrain entry search to those.
-  const all = await listBasesForWorkspace(workspaceId);
-  const visible = visibleBaseFilter(all, userId, scopeFilters?.kbIds);
+  const visible = await listVisibleBases(workspaceId, userId, scopeFilters?.kbIds);
   if (visible.length === 0) {
     return { result: JSON.stringify({ matches: [] }) };
   }
@@ -167,8 +190,7 @@ export async function executeReadKnowledgeEntry(
     if (!entry || entry.workspaceId !== workspaceId) {
       return { result: JSON.stringify({ error: "Entry not found." }) };
     }
-    const all = await listBasesForWorkspace(workspaceId);
-    const visible = visibleBaseFilter(all, userId, scopeFilters?.kbIds);
+    const visible = await listVisibleBases(workspaceId, userId, scopeFilters?.kbIds);
     const base = visible.find((b) => b.id === entry.knowledgeBaseId);
     if (!base) {
       return { result: JSON.stringify({ error: "Entry not visible." }) };
@@ -202,6 +224,17 @@ export async function executeReadKnowledgeEntry(
   }
   if (base.visibility === "private" && base.createdBy !== userId) {
     return { result: JSON.stringify({ error: "Knowledge base not visible." }) };
+  }
+  if (base.accessMode === "teams") {
+    const level = await effectiveResourceAccess(
+      userId,
+      workspaceId,
+      "knowledge_base",
+      base.id
+    );
+    if (level === null) {
+      return { result: JSON.stringify({ error: "Knowledge base not visible." }) };
+    }
   }
   const entries = await listEntriesForBase(base.id);
   const match = entries.find(

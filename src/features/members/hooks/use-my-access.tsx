@@ -29,10 +29,12 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type {
-  AccessLevel,
-  ResourceType,
-} from "@/features/members/access-defaults";
+import type { AccessLevel } from "@/features/teams/access-levels";
+
+/** Resource kinds the badge UI may ask about. Teams-mode resolution only
+ *  produces knowledge_base/workflow entries; skill/canvas fall through to
+ *  the role default. */
+type ResourceType = "knowledge_base" | "skill" | "canvas" | "workflow";
 
 interface MyAccessPayload {
   defaultLevel: AccessLevel;

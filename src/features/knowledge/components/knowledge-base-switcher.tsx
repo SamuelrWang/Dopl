@@ -7,7 +7,7 @@ import { Lock, Plus, Users } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { toast } from "@/shared/ui/toast";
 import { useMyAccessContext } from "@/features/members/hooks/use-my-access";
-import { meetsLevel } from "@/features/members/access-defaults";
+import { meetsLevel } from "@/features/teams/access-levels";
 import { useKnowledgeBases } from "../client/hooks";
 import { useKnowledgeRealtime } from "../client/realtime";
 import {

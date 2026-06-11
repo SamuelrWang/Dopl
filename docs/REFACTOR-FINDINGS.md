@@ -203,3 +203,19 @@ See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture and [plan 
 - Evidence: `grep -rn "rgba(255" src/features/canvas` → minimap, canvas marquee, cluster-outline.
 - Proposed resolution: defer — a dedicated canvas-chrome pass. Either read these colors from CSS vars via `getComputedStyle`/a theme-aware constant, or branch on the active theme. Low risk (canvas chrome only), localized.
 - Status: deferred
+
+### F-020: Legacy `workspace_resource_access` table is inert — drop pending
+- Location: `supabase/migrations/20260503060326_member_resource_access.sql` (table), no remaining code consumers
+- Found during: Teams feature build (2026-06-11)
+- Severity: smell
+- Description: Per-member resource overrides were replaced wholesale by team-based grants (`teams` / `team_members` / `team_resource_access` + `access_mode` columns). All code paths that read or wrote `workspace_resource_access` were removed (`members/server/access.ts`, the member access route, the access matrix UI, `removeMember`'s manual cleanup). The table and its triggers (`cleanup_resource_access_on_*`) remain in the DB but nothing consults them. One pre-existing override row existed at cutover and silently reverted to the role default.
+- Proposed resolution: defer — once the teams model is stable in prod, ship a `DROP TABLE workspace_resource_access` migration (and its orphaned `cleanup_resource_access_on_*` trigger functions, which also trip the SECURITY DEFINER advisor).
+- Status: open
+
+### F-021: Canvas panels don't team-filter workflow headers/nodes
+- Location: `src/features/canvas/server/load-server-state.ts` (panel load), canvas realtime
+- Found during: Teams feature build (2026-06-11)
+- Severity: smell
+- Description: Teams-mode workflows are enforced at every workflow API read/write (list, get, graph/node/edge/attachment ops) and in KB reads, but the shared canvas still renders the workflow header/node panels themselves to all members — canvas_panels load is workspace-scoped, not team-scoped. A non-granted member sees the panel shell but every interaction (open, edit, node ops) 404s/403s.
+- Proposed resolution: defer — decide whether teams-mode workflows should disappear from the canvas for non-granted members (needs per-user canvas state filtering + realtime predicate) or render a locked placeholder.
+- Status: open

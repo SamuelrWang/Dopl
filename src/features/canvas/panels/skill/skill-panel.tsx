@@ -21,7 +21,7 @@ import { Skeleton } from "@/shared/ui/skeleton";
 import { InlineEditableRow } from "@/shared/ui/inline-editable-row";
 import { toast } from "@/shared/ui/toast";
 import { useMyAccessContext } from "@/features/members/hooks/use-my-access";
-import { meetsLevel } from "@/features/members/access-defaults";
+import { meetsLevel } from "@/features/teams/access-levels";
 import { VisibilityPill } from "@/shared/ui/visibility-pill";
 
 interface Props {

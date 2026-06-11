@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
+import type { Role } from "@/features/workspaces/types";
 import { HttpError } from "@/shared/lib/http-error";
 import {
   attachKnowledgeBase,
@@ -10,6 +11,7 @@ import {
 interface Ctx {
   userId: string;
   workspaceId: string;
+  role: Role;
   agentTokenId?: string;
   params?: Record<string, string>;
 }
@@ -18,6 +20,7 @@ function scopeOf(ctx: Ctx) {
   return {
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
+    role: ctx.role,
     source: ctx.agentTokenId ? ("agent" as const) : ("user" as const),
   };
 }
@@ -42,7 +45,9 @@ async function handlePost(request: NextRequest, ctx: Ctx) {
       return NextResponse.json({ error: "knowledge_base_id required" }, { status: 400 });
     const scope = scopeOf(ctx);
     const workflowId = await resolveWorkflowId(id, scope);
-    await attachKnowledgeBase(workflowId, kbId, scope);
+    await attachKnowledgeBase(workflowId, kbId, scope, {
+      autoGrant: body?.autoGrant === true || body?.auto_grant === true,
+    });
     return new NextResponse(null, { status: 204 });
   } catch (err) {
     return toError(err);

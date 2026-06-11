@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
+import type { Role } from "@/features/workspaces/types";
 import { HttpError } from "@/shared/lib/http-error";
 import {
   attachSkill,
@@ -10,6 +11,7 @@ import {
 interface Ctx {
   userId: string;
   workspaceId: string;
+  role: Role;
   agentTokenId?: string;
   params?: Record<string, string>;
 }
@@ -18,6 +20,7 @@ function scopeOf(ctx: Ctx) {
   return {
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
+    role: ctx.role,
     source: ctx.agentTokenId ? ("agent" as const) : ("user" as const),
   };
 }
