@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { Check, Copy } from "lucide-react";
-import { StatusDot } from "@/shared/design";
 import {
   buildAgentConnectPrompt,
   DEFAULT_MCP_URL,
@@ -42,11 +41,14 @@ export function McpConnectStep({
   return (
     <div className="space-y-7">
       <div>
-        <h1 className="text-2xl font-semibold text-[var(--text-primary)]">
+        <h1
+          className="text-[28px] font-medium leading-tight text-[#1e242b]"
+          style={{ fontFamily: "var(--font-playfair), Georgia, serif" }}
+        >
           Connect your AI agent
         </h1>
-        <p className="mt-1.5 text-sm text-[var(--text-muted)] leading-relaxed">
-          Dopl speaks <span className="text-[var(--text-secondary)]">MCP</span> —
+        <p className="mt-2 text-[15px] text-[#646d78] leading-relaxed">
+          Dopl speaks <span className="font-semibold text-[#232a31]">MCP</span> —
           an open protocol that lets any AI agent read and write your
           workspace: knowledge bases, skills, and canvases. Add the server
           below in your agent&rsquo;s MCP settings, or paste the prompt and let
@@ -82,17 +84,27 @@ export function McpConnectStep({
 
       <div className="flex items-center justify-between pt-1">
         {connected ? (
-          <StatusDot state="online" label="Connected" />
+          <span className="flex items-center gap-2">
+            <span className="w-2 h-2 bg-emerald-600" />
+            <span className="font-mono text-[10px] uppercase tracking-wide text-emerald-700">
+              Connected
+            </span>
+          </span>
         ) : (
-          <StatusDot state="connecting" label="Waiting for your agent…" />
+          <span className="flex items-center gap-2">
+            <span className="w-2 h-2 animate-pulse bg-[#6f93bf]" />
+            <span className="font-mono text-[10px] uppercase tracking-wide text-[#646d78]">
+              Waiting for your agent…
+            </span>
+          </span>
         )}
         {!connected && (
           <button
             type="button"
             onClick={onSkip}
             disabled={finishing}
-            className="font-mono text-[10px] uppercase tracking-wider text-[var(--text-muted)]
-              hover:text-[var(--text-secondary)] transition-colors cursor-pointer underline underline-offset-4
+            className="text-[14px] font-semibold text-[#646d78]
+              hover:text-[#232a31] transition-colors cursor-pointer underline underline-offset-4
               disabled:opacity-50"
           >
             Skip for now
@@ -120,12 +132,12 @@ function CopyRow({
 }) {
   return (
     <div className="space-y-1.5">
-      <p className="font-mono text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
+      <p className="font-mono text-[10px] uppercase tracking-[0.06em] text-[#98a2ad]">
         {label}
       </p>
-      <div className="flex items-start gap-2 rounded-lg border border-[var(--border-default)] bg-[var(--bg-inset)] px-3 py-2.5">
+      <div className="flex items-start gap-2 rounded-[11px] border-[1.5px] border-[#d6dde5] bg-[#eef1f5] px-3.5 py-2.5">
         <code
-          className={`flex-1 font-mono text-[12px] text-[var(--text-secondary)] leading-relaxed ${
+          className={`flex-1 font-mono text-[12px] text-[#3a414a] leading-relaxed ${
             multiline ? "whitespace-pre-wrap break-words" : "truncate"
           }`}
         >
@@ -134,7 +146,7 @@ function CopyRow({
         <button
           type="button"
           onClick={() => onCopy(text, id)}
-          className="shrink-0 mt-0.5 text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors cursor-pointer"
+          className="shrink-0 mt-0.5 text-[#98a2ad] hover:text-[#232a31] transition-colors cursor-pointer"
           title="Copy"
         >
           {copied === id ? (

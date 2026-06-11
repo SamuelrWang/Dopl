@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { MonoLabel } from "@/shared/design";
 import { useMcpConnectionPoll } from "../hooks/use-mcp-connection-poll";
 import type { OnboardingStep, SurveySubmission } from "../types";
 import { McpConnectStep } from "./mcp-connect-step";
@@ -17,7 +16,8 @@ interface OnboardingFlowProps {
 /**
  * Client stepper for /onboarding: survey → MCP connect → (transition)
  * workspace. The workspace step is invisible — completion renames the
- * auto-provisioned workspace and routes straight into it.
+ * auto-provisioned workspace and routes straight into it. Styling
+ * follows the knowledge-landing colorway (app-shell.module.css).
  */
 export function OnboardingFlow({ initialStep, redirectTo }: OnboardingFlowProps) {
   const router = useRouter();
@@ -81,30 +81,30 @@ export function OnboardingFlow({ initialStep, redirectTo }: OnboardingFlowProps)
       className="w-full max-w-xl"
       style={{ animation: "loginFadeIn 0.6s ease-out both" }}
     >
-      <div className="mb-8 flex items-center justify-between">
+      <div className="mb-7 flex items-center justify-between">
         <h2
-          className="text-xl font-bold text-[var(--text-primary)]"
+          className="text-2xl font-medium text-[#232a31]"
           style={{
-            fontFamily: "var(--font-playfair), 'Playfair Display', serif",
+            fontFamily: "var(--font-playfair), Georgia, serif",
             fontStyle: "italic",
           }}
         >
           Dopl
         </h2>
-        <MonoLabel tone="muted">
+        <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-[#98a2ad]">
           {step === "survey" ? "01 / 02" : "02 / 02"}
-        </MonoLabel>
+        </span>
       </div>
 
-      <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)] p-8 shadow-2xl">
+      <div className="rounded-[20px] border-[1.5px] border-[#d6dde5] bg-[#fbfcfd] p-8 shadow-[0_6px_30px_rgba(28,33,39,0.08)]">
         {error && (
-          <div className="mb-5 p-3 rounded-lg border border-red-400/20 bg-red-400/[0.06]">
-            <p className="font-mono text-[10px] text-red-300">{error}</p>
+          <div className="mb-5 p-3 rounded-[11px] border-[1.5px] border-red-200 bg-red-50">
+            <p className="text-[13px] text-red-600">{error}</p>
             {finishRef.current === false && step === "connect" && (
               <button
                 type="button"
                 onClick={() => void finish(connected)}
-                className="mt-1.5 font-mono text-[10px] uppercase tracking-wider text-red-300 underline underline-offset-2 cursor-pointer"
+                className="mt-1.5 text-[13px] font-semibold text-red-600 underline underline-offset-2 cursor-pointer"
               >
                 Retry
               </button>
@@ -114,8 +114,8 @@ export function OnboardingFlow({ initialStep, redirectTo }: OnboardingFlowProps)
 
         {finishing ? (
           <div className="py-16 flex flex-col items-center gap-4">
-            <div className="w-8 h-8 rounded-full border-2 border-[var(--accent-primary)]/30 border-t-[var(--accent-primary)] animate-spin" />
-            <p className="text-sm text-[var(--text-muted)]">
+            <div className="w-8 h-8 rounded-full border-2 border-[#6f93bf]/30 border-t-[#6f93bf] animate-spin" />
+            <p className="text-[15px] text-[#646d78]">
               Setting up your workspace…
             </p>
           </div>

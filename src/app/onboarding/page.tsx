@@ -29,14 +29,13 @@ export default async function OnboardingPage({ searchParams }: PageProps) {
     ? safeRedirect(params.redirectTo)
     : undefined;
 
+  // Colorway mirrors the knowledge-landing shell (app-shell.module.css).
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-[var(--bg-base)] px-6 py-12">
-      <div className="absolute inset-0 overflow-hidden" aria-hidden>
-        <div className="login-orb login-orb-1" />
-        <div className="login-orb login-orb-2" />
-        <div className="login-orb login-orb-3" />
-      </div>
-      <div className="relative z-10 flex w-full justify-center">
+    <div
+      className="fixed inset-0 z-50 overflow-y-auto bg-[#d6dee7] text-[#232a31]"
+      style={{ fontFamily: "var(--font-geist-sans), system-ui, sans-serif" }}
+    >
+      <div className="min-h-full flex items-center justify-center px-6 py-12">
         <OnboardingFlow
           initialStep={status.surveyCompleted ? "connect" : "survey"}
           redirectTo={redirectTo}

@@ -1,6 +1,5 @@
 "use client";
 
-import { Input } from "@/shared/ui/input";
 import { OTHER_OPTION_VALUE, type SurveyOption } from "../constants";
 
 interface ChipSelectProps {
@@ -16,9 +15,10 @@ interface ChipSelectProps {
 }
 
 /**
- * Chip-style selector for the onboarding survey. Single mode behaves
- * like a radio group; multi mode toggles. The "Other" chip is a normal
- * selection whose free text rides alongside in `otherText`.
+ * Chip-style selector for the onboarding survey, in the knowledge-landing
+ * colorway: light card chips, lavender + blue when selected. Single mode
+ * behaves like a radio group; multi mode toggles. The "Other" chip is a
+ * normal selection whose free text rides alongside in `otherText`.
  */
 export function ChipSelect({
   options,
@@ -58,10 +58,10 @@ export function ChipSelect({
               type="button"
               aria-pressed={selected}
               onClick={() => toggle(option.value)}
-              className={`px-3.5 py-2 rounded-lg border text-[13px] transition-colors cursor-pointer ${
+              className={`px-3.5 py-2 rounded-[11px] border-[1.5px] text-[14px] font-medium transition-colors cursor-pointer ${
                 selected
-                  ? "border-[var(--accent-primary)] bg-[var(--accent-primary)]/10 text-[var(--text-primary)] shadow-[0_0_12px_-4px_var(--accent-primary)]"
-                  : "border-[var(--border-default)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"
+                  ? "border-[#6f93bf] bg-[#e3eaf2] text-[#232a31]"
+                  : "border-[#d6dde5] bg-[#f6f8fb] text-[#3a414a] hover:border-[#b9c6d3] hover:bg-[#fdfefe]"
               }`}
             >
               {option.label}
@@ -70,12 +70,16 @@ export function ChipSelect({
         })}
       </div>
       {otherSelected && (
-        <Input
+        <input
           autoFocus
+          type="text"
           value={otherText}
           maxLength={200}
           placeholder="Tell us more…"
           onChange={(e) => onOtherTextChange?.(e.target.value)}
+          className="w-full rounded-[11px] border-[1.5px] border-[#d6dde5] bg-white px-3.5 py-2.5
+            text-[14px] text-[#232a31] placeholder:text-[#98a2ad]
+            focus:outline-none focus:border-[#6f93bf] transition-colors"
         />
       )}
     </div>

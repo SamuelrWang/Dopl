@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { MonoLabel } from "@/shared/design";
 import {
   OTHER_OPTION_VALUE,
   REFERRAL_OPTIONS,
@@ -54,10 +53,13 @@ export function SurveyStep({ submitting, onSubmit }: SurveyStepProps) {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-semibold text-[var(--text-primary)]">
+        <h1
+          className="text-[28px] font-medium leading-tight text-[#1e242b]"
+          style={{ fontFamily: "var(--font-playfair), Georgia, serif" }}
+        >
           Tell us about yourself
         </h1>
-        <p className="mt-1.5 text-sm text-[var(--text-muted)]">
+        <p className="mt-2 text-[15px] text-[#646d78]">
           A few quick questions to tune Dopl to how you work.
         </p>
       </div>
@@ -111,10 +113,9 @@ export function SurveyStep({ submitting, onSubmit }: SurveyStepProps) {
         type="button"
         disabled={incomplete || submitting}
         onClick={handleSubmit}
-        className="w-full px-4 py-2.5 rounded-lg font-mono text-[11px] uppercase tracking-wider
-          bg-[var(--accent-primary)]/15 hover:bg-[var(--accent-primary)]/25
-          border border-[var(--accent-primary)]/40 hover:border-[var(--accent-primary)]/70
-          text-[var(--text-primary)] transition-colors cursor-pointer
+        className="w-full px-4 py-3 rounded-[11px] text-[15px] font-semibold
+          bg-[#1c2127] text-white hover:bg-[#2c3640]
+          transition-colors cursor-pointer
           disabled:opacity-40 disabled:cursor-not-allowed"
       >
         {submitting ? "Saving…" : "Continue"}
@@ -137,11 +138,11 @@ function Question({
   return (
     <div className="space-y-3">
       <div className="flex items-baseline gap-2.5">
-        <MonoLabel tone="muted">{index}</MonoLabel>
-        <p className="text-sm font-medium text-[var(--text-primary)]">{label}</p>
-        {hint && (
-          <span className="text-[11px] text-[var(--text-muted)]">{hint}</span>
-        )}
+        <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-[#98a2ad]">
+          {index}
+        </span>
+        <p className="text-[15px] font-semibold text-[#232a31]">{label}</p>
+        {hint && <span className="text-[12px] text-[#98a2ad]">{hint}</span>}
       </div>
       {children}
     </div>

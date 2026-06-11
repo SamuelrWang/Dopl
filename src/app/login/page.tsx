@@ -73,42 +73,40 @@ function LoginForm() {
     }
   }
 
+  // Colorway mirrors the knowledge-landing shell (app-shell.module.css):
+  // slate-blue page, near-white card, ink text, dark CTA, Newsreader serif.
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--bg-base)] px-6">
-      {/* Ambient orbs behind the card */}
-      <div className="absolute inset-0 overflow-hidden" aria-hidden>
-        <div className="login-orb login-orb-1" />
-        <div className="login-orb login-orb-2" />
-        <div className="login-orb login-orb-3" />
-      </div>
-
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[#d6dee7] px-6 text-[#232a31]"
+      style={{ fontFamily: "var(--font-geist-sans), system-ui, sans-serif" }}
+    >
       <div
-        className="relative z-10 w-full max-w-sm"
+        className="relative w-full max-w-sm"
         style={{ animation: "loginFadeIn 0.6s ease-out both" }}
       >
         {/* Logo + tagline */}
         <div className="mb-8 text-center">
           <h1
-            className="text-4xl font-bold text-[var(--text-primary)]"
+            className="text-4xl font-medium"
             style={{
-              fontFamily: "var(--font-playfair), 'Playfair Display', serif",
+              fontFamily: "var(--font-playfair), Georgia, serif",
               fontStyle: "italic",
             }}
           >
             Dopl
           </h1>
-          <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--text-muted)]">
-            Your AI workspace
+          <p className="mt-3 text-[15px] text-[#646d78]">
+            Everything your agents know, in one place.
           </p>
         </div>
 
-        <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-elevated)] p-8 shadow-2xl">
+        <div className="rounded-[20px] border-[1.5px] border-[#d6dde5] bg-[#fbfcfd] p-8 shadow-[0_6px_30px_rgba(28,33,39,0.08)]">
           {/* Continue with Google */}
           <button
             type="button"
             onClick={handleGoogleLogin}
-            className="w-full flex items-center justify-center gap-3 px-4 py-2.5 mb-3 rounded-lg
-              border border-[var(--border-strong)] bg-[var(--bg-inset)] hover:bg-[var(--bg-inset-hover)]
+            className="w-full flex items-center justify-center gap-3 px-4 py-3 mb-3 rounded-[11px]
+              border-[1.5px] border-[#d6dde5] bg-white hover:border-[#b9c6d3] hover:bg-[#fdfefe]
               transition-colors cursor-pointer disabled:opacity-50"
           >
             <svg className="w-[17px] h-[17px]" viewBox="0 0 18 18" fill="none">
@@ -117,28 +115,26 @@ function LoginForm() {
               <path d="M3.964 10.71c-.18-.54-.2822-1.1168-.2822-1.71s.1022-1.17.2822-1.71V4.9582H.9573A8.9961 8.9961 0 0 0 0 9c0 1.4523.3477 2.8268.9573 4.0418L3.964 10.71z" fill="#FBBC05" />
               <path d="M9 3.5795c1.3214 0 2.5077.4541 3.4405 1.346l2.5813-2.5813C13.4632.8918 11.4259 0 9 0 5.4818 0 2.4382 2.0168.9573 4.9582L3.964 7.29C4.6718 5.1627 6.6559 3.5795 9 3.5795z" fill="#EA4335" />
             </svg>
-            <span className="font-mono text-[11px] text-[var(--text-primary)]">
-              Continue with Google
-            </span>
+            <span className="text-[15px] font-semibold">Continue with Google</span>
           </button>
 
           {/* Divider */}
-          <div className="flex items-center gap-3 my-4">
-            <div className="flex-1 h-px bg-[var(--border-default)]" />
-            <span className="font-mono text-[10px] text-[var(--text-muted)] uppercase tracking-wide">
+          <div className="flex items-center gap-3 my-5">
+            <div className="flex-1 h-px bg-[#d6dde5]" />
+            <span className="font-mono text-[10px] text-[#98a2ad] uppercase tracking-wide">
               or
             </span>
-            <div className="flex-1 h-px bg-[var(--border-default)]" />
+            <div className="flex-1 h-px bg-[#d6dde5]" />
           </div>
 
           {error && (
-            <div className="mb-3 p-3 rounded-lg border border-red-400/20 bg-red-400/[0.06]">
-              <p className="font-mono text-[10px] text-red-300">{error}</p>
+            <div className="mb-3 p-3 rounded-[11px] border-[1.5px] border-red-200 bg-red-50">
+              <p className="text-[13px] text-red-600">{error}</p>
             </div>
           )}
           {message && (
-            <div className="mb-3 p-3 rounded-lg border border-accent-primary/20 bg-accent-primary/[0.06]">
-              <p className="font-mono text-[10px] text-accent-primary">{message}</p>
+            <div className="mb-3 p-3 rounded-[11px] border-[1.5px] border-[#6f93bf]/40 bg-[#e3eaf2]">
+              <p className="text-[13px] text-[#232a31]">{message}</p>
             </div>
           )}
 
@@ -152,19 +148,19 @@ function LoginForm() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 placeholder=" "
-                className="peer w-full bg-transparent border-0 border-b border-[var(--border-strong)]
-                  px-0 py-3 text-sm text-[var(--text-primary)]
+                className="peer w-full bg-transparent border-0 border-b-[1.5px] border-[#c4cfda]
+                  px-0 py-3 text-[15px] text-[#232a31]
                   placeholder:text-transparent
-                  focus:outline-none focus:border-[var(--border-highlight)] focus:ring-0
+                  focus:outline-none focus:border-[#6f93bf] focus:ring-0
                   transition-colors"
               />
               <label
                 htmlFor="login-email"
                 className={`pointer-events-none absolute left-0 font-mono uppercase tracking-[0.1em] transition-all duration-300 ${
                   email.length > 0
-                    ? "-top-[10px] text-[9px] text-[var(--text-secondary)]"
-                    : "top-[12px] text-[11px] text-[var(--text-muted)]"
-                } peer-focus:-top-[10px] peer-focus:text-[9px] peer-focus:text-accent-primary`}
+                    ? "-top-[10px] text-[9px] text-[#646d78]"
+                    : "top-[12px] text-[11px] text-[#98a2ad]"
+                } peer-focus:-top-[10px] peer-focus:text-[9px] peer-focus:text-[#6f93bf]`}
               >
                 Email
               </label>
@@ -173,10 +169,8 @@ function LoginForm() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full mt-5 px-4 py-2.5 rounded-lg font-mono text-[11px] uppercase tracking-wider
-                bg-[var(--bg-inset)] hover:bg-[var(--bg-inset-hover)]
-                border border-[var(--border-default)] hover:border-[var(--border-strong)]
-                text-[var(--text-secondary)] hover:text-[var(--text-primary)]
+              className="w-full mt-6 px-4 py-3 rounded-[11px] text-[15px] font-semibold
+                bg-[#1c2127] text-white hover:bg-[#2c3640]
                 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
               {loading ? "Sending link..." : "Continue with Email"}
@@ -185,11 +179,11 @@ function LoginForm() {
         </div>
 
         {/* Footer */}
-        <p className="font-mono text-[9px] text-[var(--text-muted)] mt-6 text-center uppercase tracking-wide leading-relaxed">
+        <p className="text-[12px] text-[#98a2ad] mt-6 text-center leading-relaxed">
           By continuing, you agree to our{" "}
-          <Link href="/terms" className="underline hover:text-[var(--text-secondary)] transition-colors">Terms of Service</Link>
+          <Link href="/terms" className="underline hover:text-[#646d78] transition-colors">Terms of Service</Link>
           {" "}and{" "}
-          <Link href="/privacy" className="underline hover:text-[var(--text-secondary)] transition-colors">Privacy Policy</Link>.
+          <Link href="/privacy" className="underline hover:text-[#646d78] transition-colors">Privacy Policy</Link>.
         </p>
       </div>
     </div>
