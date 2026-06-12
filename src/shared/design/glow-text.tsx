@@ -44,4 +44,3 @@ export function GlowText({
   );
 }
 
-export { glowTextVariants };

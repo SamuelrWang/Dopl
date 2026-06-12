@@ -24,7 +24,6 @@ import {
   KnowledgeApiError,
   fetchBases,
   fetchEntry,
-  fetchTrash,
   fetchTree,
 } from "./api";
 
@@ -218,16 +217,4 @@ export function useKnowledgeEntry(
     () => fetchEntry(entryId as string, workspaceId),
     { initialData: options?.initialData, initialKey }
   );
-}
-
-export function useKnowledgeTrash(
-  baseId?: string,
-  workspaceId?: string
-): Result<{
-  bases: KnowledgeBase[];
-  folders: KnowledgeFolder[];
-  entries: KnowledgeEntry[];
-}> {
-  const key = `${workspaceId ?? "default"}:${baseId ?? "all"}`;
-  return useFetch(key, () => fetchTrash(baseId, workspaceId));
 }

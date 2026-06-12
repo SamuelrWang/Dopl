@@ -25,6 +25,9 @@ node_modules/
 .DS_Store
 *.pem
 
+# claude worktrees
+.claude/worktrees/
+
 # debug
 npm-debug.log*
 yarn-debug.log*

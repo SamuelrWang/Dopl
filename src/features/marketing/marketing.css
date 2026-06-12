@@ -1,0 +1,103 @@
+/* Landing-page-only animations. Imported by src/app/page.tsx. */
+
+/* Scroll reveal — toggled by the <Reveal> IntersectionObserver wrapper. */
+.mk-reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition:
+    opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  transition-delay: var(--mk-delay, 0ms);
+}
+
+.mk-reveal-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Horizontal marquee — content is duplicated once, so -50% loops seamlessly. */
+@keyframes mk-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.mk-marquee {
+  display: flex;
+  width: max-content;
+  animation: mk-marquee var(--mk-marquee-duration, 30s) linear infinite;
+}
+
+.mk-marquee-reverse {
+  animation-direction: reverse;
+}
+
+/* Cascading pills — staggered slide-in, driven per-pill via --mk-delay. */
+@keyframes mk-pill-in {
+  from {
+    opacity: 0;
+    transform: translateX(var(--mk-pill-from, 40px));
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.mk-pill {
+  opacity: 0;
+  animation: mk-pill-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation-delay: var(--mk-delay, 0ms);
+}
+
+/* Workflow mock — edges draw themselves in. */
+@keyframes mk-dash {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.mk-edge {
+  stroke-dasharray: 120;
+  stroke-dashoffset: 120;
+  animation: mk-dash 1.2s ease-out forwards;
+  animation-delay: var(--mk-delay, 0ms);
+}
+
+/* Soft pulsing glow behind the hero pill / CTA section. */
+@keyframes mk-glow {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.08);
+  }
+}
+
+.mk-glow {
+  animation: mk-glow 4.5s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mk-reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .mk-marquee,
+  .mk-pill,
+  .mk-edge,
+  .mk-glow {
+    animation: none;
+    opacity: 1;
+  }
+  .mk-edge {
+    stroke-dashoffset: 0;
+  }
+}

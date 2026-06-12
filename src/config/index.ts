@@ -5,17 +5,6 @@
  * Single-use constants stay co-located with their consumers.
  */
 
-// ── Ingestion limits ────────────────────────────────────────────────
-export const MAX_LINK_DEPTH = parseInt(process.env.MAX_LINK_DEPTH || "3", 10);
-export const MAX_CONTENT_FOR_CLAUDE = 100_000;
-// Ceiling on the `gathered_content` string returned by /api/ingest/prepare.
-// Depth-0 sources (primary README / extracted text) are always kept; higher-
-// depth followed-link sources are dropped from the tail once the budget is hit.
-// 300K keeps a 200K-context agent comfortable with room for prompts + system.
-export const GATHERED_CONTENT_MAX = 300_000;
-export const MAX_IMAGES_PER_ENTRY = 20;
-export const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
-
 // ── Chat attachment limits ──────────────────────────────────────────
 export const MAX_CHAT_ATTACHMENT_SIZE = 10 * 1024 * 1024; // 10MB per file
 export const MAX_CHAT_ATTACHMENTS_PER_MESSAGE = 5;
@@ -34,10 +23,6 @@ export const ALLOWED_CHAT_ATTACHMENT_TYPES = [
 
 // ── Context budgets ─────────────────────────────────────────────────
 export const CONTEXT_CHAR_BUDGET_PER_FIELD = 2000;
-
-// ── Subscription / billing ──────────────────────────────────────────
-export const FREE_INGESTION_LIMIT = 5;
-export const CONTENT_PREVIEW_LENGTH = 500;
 
 // ── Canvas storage keys ─────────────────────────────────────────────
 export const CANVAS_STORAGE_KEY_PREFIX = "dopl:canvas:state";
@@ -60,12 +45,10 @@ export const RESERVED_WORKSPACE_SLUGS: ReadonlySet<string> = new Set([
   "browse",
   "build",
   "canvas",
-  "community",
   "connect",
   "design",
   "docs",
   "e",
-  "entries",
   "invite",
   "login",
   "mcp",

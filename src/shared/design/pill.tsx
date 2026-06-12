@@ -94,4 +94,3 @@ export function Pill({
   );
 }
 
-export { pillVariants };

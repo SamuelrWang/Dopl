@@ -1,148 +1,159 @@
-export const TABS = [
-  { id: "mcp", label: "MCP" },
-  { id: "knowledge", label: "Knowledge Base" },
-  { id: "skills", label: "Skills" },
-  { id: "teams", label: "Teams" },
+/**
+ * Landing page design tokens + section data.
+ *
+ * Palette translates the app's dark/cyan-blue identity (see globals.css
+ * --accent-* tokens) into an alternating light/dark marketing rhythm.
+ */
+
+export const MARKETING = {
+  /** Light "ice" sections — cool white. */
+  ice: "#f2f5fa",
+  /** Dark "ink" sections. */
+  ink: "#0b0e14",
+  /** Slightly lifted card surface on ink. */
+  inkCard: "#12161f",
+  /** Deep blue full-bleed band. */
+  deep: "#0e2240",
+  /** Soft blue band (light accent strip). */
+  soft: "#dce7f8",
+  /** Primary accent — matches app --accent-primary family. */
+  accent: "#4a9eff",
+  /** Stronger glow accent — matches app --accent-glow family. */
+  glow: "#3d7bff",
+  /** Link blue — matches app --link (light theme). */
+  link: "#2f6fed",
+  /** Text on light surfaces. */
+  inkText: "#10131a",
+  /** Muted text on light surfaces. */
+  mutedText: "#5b6573",
+} as const;
+
+/** Agent tools shown in the marquee ribbon. Monogram chips until real logos land. */
+export const AGENT_TOOLS = [
+  { name: "Claude Code", mark: "C" },
+  { name: "Codex", mark: "X" },
+  { name: "Cursor", mark: "Cu" },
+  { name: "Gemini CLI", mark: "G" },
+  { name: "Copilot", mark: "Co" },
+  { name: "Windsurf", mark: "W" },
+  { name: "Goose", mark: "Go" },
+  { name: "claude.ai", mark: "ai" },
 ] as const;
 
-export type TabId = (typeof TABS)[number]["id"];
-
-/** Page bg — charcoal. Clearly lighter than the panel (0.11) so the
- *  panel reads as a darker, framed surface elevated against the page. */
-export const PAGE_BG = "oklch(0.16 0 0)";
-
-/** Per-tab dwell time. The progress bar fills over this duration; when
- *  it reaches 100% the tab auto-advances to the next one. */
-export const TAB_DURATION_MS = 8000;
-
-/** Knowledge anim — total ~7.8s at 120ms × 65. */
-export const KB_TICK_MS = 120;
-export const KB_TICK_TOTAL = 65;
-
-/** MCP anim — total ~7.7s at 120ms × 64. The terminal window flies in
- *  at tick 4, cycles begin at tick 8, four cycles of 14 ticks each. */
-export const MCP_TICK_MS = 120;
-export const MCP_TICK_TOTAL = 64;
-export const MCP_FLY_IN_TICK = 4;
-export const MCP_CYCLE_START_TICK = 8;
-export const MCP_CYCLE_LENGTH = 14;
-export const MCP_TYPE_CHARS_PER_TICK = 6;
-
-export const MCP_CLIENT_CYCLES = [
-  {
-    name: "Claude Code",
-    badge: "CC",
-    cmd: "claude mcp add --transport http dopl https://usedopl.com/api/mcp",
-    response: "→ Opening browser to sign in… ✓ Connected. 12 tools registered.",
-  },
-  {
-    name: "Claude Desktop",
-    badge: "CD",
-    cmd: "Add custom connector → https://usedopl.com/api/mcp",
-    response: "→ Sign in to Dopl… ✓ Connected. Restart to use.",
-  },
-  {
-    name: "Cursor",
-    badge: "CR",
-    cmd: "Add MCP server (HTTP) → https://usedopl.com/api/mcp",
-    response: "→ Sign in to Dopl… ✓ Connected. Tools refreshed.",
-  },
-  {
-    name: "Claude.ai",
-    badge: "AI",
-    cmd: "Add custom connector → https://usedopl.com/api/mcp",
-    response: "→ Sign in to Dopl… ✓ Connected. 12 tools available.",
-  },
-] as const;
-
-export const KB_ENTRIES: { title: string; active?: boolean }[] = [
-  { title: "Mistakes Samuel pushes back on" },
-  { title: "Personal context — building blocks", active: true },
-  { title: "Playbook — Catch-up with existing contact" },
-  { title: "Playbook — Cold or warm intro" },
-  { title: "Playbook — Listing to contract conversion" },
-  { title: "Playbook — Reply to delayed sender" },
-  { title: "README — How to use this KB" },
-  { title: "Subject lines" },
-  { title: "Voice and style rules" },
-  { title: "Workflow when drafting an email" },
+/** Messy "scattered context" phrases — hero ribbon input side. */
+export const RIBBON_IN = [
+  "how do we deploy again?",
+  "ask Sarah about the API",
+  "what's our brand voice?",
+  "where's the onboarding doc?",
+  "paste the style guide… again",
 ];
 
-/** Tick gates for the Knowledge animation. Edit these numbers to retime. */
-export const KB_GATE = {
-  entriesStart: 13,
-  entrySelected: 24,
-  title: 26,
-  toolbar: 28,
-  h2: 30,
-  intro: 32,
-  h3Position: 44,
-  positionBullet1: 45,
-  positionBullet2: 46,
-  positionBullet3: 47,
-  positionBullet4: 48,
-  h3Tooling: 50,
-  toolingBullet: 51,
-  quote: 53,
-  h3Recent: 55,
-  recentBullet1: 56,
-  recentBullet2: 57,
-  recentBullet3: 58,
-  h3Tracked: 60,
-  trackedIntro: 61,
-  table: 63,
-};
+/** Completed agent actions — hero ribbon output side. */
+export const RIBBON_OUT = [
+  "✓ PR opened",
+  "✓ report drafted",
+  "✓ campaign shipped",
+  "✓ docs updated",
+  "✓ leads enriched",
+];
 
-export interface SkillEntry {
-  name: string;
-  desc: string;
-  invocations: number;
-  connectors: string[];
-  expanded?: boolean;
-  whenUse?: string;
-  whenNot?: string;
-  connectorBadges?: { name: string; connected: boolean }[];
+export interface TeamPreview {
+  id: string;
+  label: string;
+  skills: string[];
+  knowledge: string[];
 }
 
-export const SKILLS: SkillEntry[] = [
+/** Teams selector — chips + the resources each team's agents receive. */
+export const TEAMS: TeamPreview[] = [
   {
-    name: "Cold outreach email writer",
-    desc: "Composes personalized outbound emails from a target&apos;s LinkedIn + company signals. Writes in the user&apos;s voice.",
-    invocations: 1342,
-    connectors: ["linkedin", "gmail"],
-    expanded: true,
-    whenUse:
-      "When you need a first-touch sales email tailored to a specific prospect, with research baked in.",
-    whenNot:
-      "When the recipient has already replied — switch to the reply-handler skill instead.",
-    connectorBadges: [
-      { name: "LinkedIn", connected: true },
-      { name: "Gmail", connected: true },
-      { name: "Slack", connected: false },
-    ],
+    id: "engineering",
+    label: "Engineering",
+    skills: ["Code review", "Release notes", "Incident triage"],
+    knowledge: ["Architecture docs", "API reference", "Runbooks"],
   },
   {
-    name: "Polymarket trading bot",
-    desc: "Auto-buys 'No' on standalone yes/no markets with positive expected value, holds to resolution.",
-    invocations: 87,
-    connectors: ["polymarket"],
+    id: "marketing",
+    label: "Marketing",
+    skills: ["Campaign brief", "SEO audit", "Social calendar"],
+    knowledge: ["Brand voice", "Personas", "Past campaigns"],
   },
   {
-    name: "Code review assistant",
-    desc: "Reviews diffs for security, type safety, and adherence to repo conventions. Posts inline comments.",
-    invocations: 524,
-    connectors: ["github"],
+    id: "sales",
+    label: "Sales",
+    skills: ["Lead enrichment", "Outreach draft", "Call summary"],
+    knowledge: ["ICP definition", "Pricing sheet", "Battle cards"],
   },
   {
-    name: "GitHub repo analyzer",
-    desc: "Crawls a repo, extracts setup instructions, and surfaces hidden configuration knobs.",
-    invocations: 211,
-    connectors: ["github"],
+    id: "ops",
+    label: "Ops",
+    skills: ["Weekly report", "Vendor compare", "SOP writer"],
+    knowledge: ["Process docs", "Tool inventory", "Policies"],
   },
   {
-    name: "Linear ticket triager",
-    desc: "Reads new Linear tickets, assigns severity + owner based on past triage decisions.",
-    invocations: 96,
-    connectors: ["linear"],
+    id: "support",
+    label: "Support",
+    skills: ["Ticket triage", "Macro drafts", "Escalation memo"],
+    knowledge: ["Product FAQ", "Known issues", "Tone guide"],
   },
+];
+
+export interface FeatureBlock {
+  id: string;
+  eyebrow: string;
+  title: string;
+  body: string;
+  mock: "skills" | "knowledge" | "workflows" | "admin";
+}
+
+export const FEATURE_BLOCKS: FeatureBlock[] = [
+  {
+    id: "skills",
+    eyebrow: "Skills library",
+    title: "Skills your whole team shares",
+    body: "Package the prompts and procedures that work into named skills. Every agent on the team gets the same playbook, instantly.",
+    mock: "skills",
+  },
+  {
+    id: "knowledge",
+    eyebrow: "Knowledge bases",
+    title: "Everything your agents should know",
+    body: "Docs, decisions, and tribal knowledge live in one place — loaded into every session so nobody re-explains the basics.",
+    mock: "knowledge",
+  },
+  {
+    id: "workflows",
+    eyebrow: "Workflows",
+    title: "Multi-step work, mapped out",
+    body: "Chain skills and knowledge into workflows agents can follow end to end — not just answers, finished work.",
+    mock: "workflows",
+  },
+  {
+    id: "admin",
+    eyebrow: "Central management",
+    title: "One place to run it all",
+    body: "Distribute resources by team, manage access, and update a skill once to update it everywhere.",
+    mock: "admin",
+  },
+];
+
+export const SKILL_PILLS = [
+  "Cold outreach writer",
+  "Code review assistant",
+  "Ticket triager",
+  "Weekly report",
+  "SEO audit",
+  "Release notes",
+  "Call summary",
+];
+
+export const KNOWLEDGE_PILLS = [
+  "Brand voice",
+  "API reference",
+  "Onboarding guide",
+  "Pricing sheet",
+  "Architecture docs",
+  "Process SOPs",
+  "Known issues",
 ];

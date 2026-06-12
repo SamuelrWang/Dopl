@@ -24,13 +24,13 @@
 // pure-Node. Removing the directive matches ENGINEERING.md §10:
 // "Shared code (types, pure utilities) has no directive."
 
-export type LegacyKnowledgeEntryType =
+type LegacyKnowledgeEntryType =
   | "note"
   | "doc"
   | "transcript"
   | "imported";
 
-export interface LegacyKnowledgeEntry {
+interface LegacyKnowledgeEntry {
   id: string;
   title: string;
   excerpt: string;

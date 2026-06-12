@@ -177,26 +177,6 @@ export function withUserAuth(
 }
 
 /**
- * Like withUserAuth, but also resolves the user's subscription tier.
- * Use for routes that need tier-based gating (ingestion, entry details, build).
- */
-export function withSubscriptionAuth(
-  handler: (
-    request: NextRequest,
-    context: { userId: string; agentTokenId?: string; tier: SubscriptionTier; params?: Record<string, string> }
-  ) => Promise<Response | NextResponse>
-) {
-  return withUserAuth(async (request, ctx) => {
-    const sub = await getUserSubscription(ctx.userId);
-    const tier: SubscriptionTier =
-      (sub.tier === "pro" || sub.tier === "power") && sub.status === "active"
-        ? sub.tier
-        : "free";
-    return handler(request, { userId: ctx.userId, agentTokenId: ctx.agentTokenId, tier, params: ctx.params });
-  });
-}
-
-/**
  * Replaces the old credit-based withMcpCredits. Gates every MCP-reachable
  * endpoint by the single hasActiveAccess() check:
  *
@@ -357,29 +337,6 @@ if (typeof process !== "undefined" && !process.env.ADMIN_USER_ID) {
     "[auth] ADMIN_USER_ID is not set. /admin/* routes will reject all callers as 404. " +
       "Set ADMIN_USER_ID to your Supabase auth UUID to enable moderation."
   );
-}
-
-/**
- * Like withUserAuth, but also requires the caller to be the designated admin
- * (as set via the ADMIN_USER_ID env var). Returns 403 otherwise.
- *
- * Use for routes that manage the global entry moderation queue.
- */
-export function withAdminAuth(
-  handler: (
-    request: NextRequest,
-    context: { userId: string; params?: Record<string, string> }
-  ) => Promise<Response | NextResponse>
-) {
-  return withUserAuth(async (request, ctx) => {
-    if (!isAdmin(ctx.userId)) {
-      // Return 404 rather than 403 so admin routes are indistinguishable
-      // from nonexistent ones. Non-admins (and MCP clients) must never
-      // learn that an admin surface exists at this path.
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
-    return handler(request, ctx);
-  });
 }
 
 /**

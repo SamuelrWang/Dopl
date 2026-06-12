@@ -112,17 +112,6 @@ export async function fetchBases(workspaceId?: string): Promise<KnowledgeBase[]>
   return data.bases;
 }
 
-export async function fetchBase(
-  baseId: string,
-  workspaceId?: string
-): Promise<KnowledgeBase> {
-  const data = await request<{ base: KnowledgeBase }>(
-    `/api/knowledge/bases/${baseId}`,
-    { workspaceId }
-  );
-  return data.base;
-}
-
 export async function fetchTree(
   baseId: string,
   workspaceId?: string
@@ -165,29 +154,7 @@ export async function deleteBase(
   });
 }
 
-export async function restoreBase(
-  baseId: string,
-  workspaceId?: string
-): Promise<KnowledgeBase> {
-  const data = await request<{ base: KnowledgeBase }>(
-    `/api/knowledge/bases/${baseId}/restore`,
-    { method: "POST", workspaceId }
-  );
-  return data.base;
-}
-
 // ─── Folders ────────────────────────────────────────────────────────
-
-export async function fetchFolders(
-  baseId: string,
-  workspaceId?: string
-): Promise<KnowledgeFolder[]> {
-  const data = await request<{ folders: KnowledgeFolder[] }>(
-    `/api/knowledge/bases/${baseId}/folders`,
-    { workspaceId }
-  );
-  return data.folders;
-}
 
 export type FolderCreateBody = Omit<KnowledgeFolderCreateInput, "knowledgeBaseId">;
 
@@ -250,28 +217,6 @@ export async function restoreFolder(
 }
 
 // ─── Entries ────────────────────────────────────────────────────────
-
-export interface FetchEntriesOpts {
-  folderId?: string | null;
-  includeBody?: boolean;
-}
-
-export async function fetchEntries(
-  baseId: string,
-  opts: FetchEntriesOpts = {},
-  workspaceId?: string
-): Promise<KnowledgeEntry[]> {
-  const query: Record<string, string | undefined> = {};
-  if (opts.folderId !== undefined) {
-    query.folderId = opts.folderId === null ? "null" : opts.folderId;
-  }
-  if (opts.includeBody === false) query.includeBody = "false";
-  const data = await request<{ entries: KnowledgeEntry[] }>(
-    `/api/knowledge/bases/${baseId}/entries`,
-    { workspaceId, query }
-  );
-  return data.entries;
-}
 
 export async function fetchEntry(
   entryId: string,
@@ -342,29 +287,6 @@ export async function restoreEntry(
     { method: "POST", workspaceId }
   );
   return data.entry;
-}
-
-// ─── Trash ──────────────────────────────────────────────────────────
-
-export async function fetchTrash(
-  baseId?: string,
-  workspaceId?: string
-): Promise<{ bases: KnowledgeBase[]; folders: KnowledgeFolder[]; entries: KnowledgeEntry[] }> {
-  return request("/api/knowledge/trash", {
-    workspaceId,
-    query: { baseId },
-  });
-}
-
-export async function purgeTrash(
-  beforeIso: string,
-  workspaceId?: string
-): Promise<{ deleted: number }> {
-  return request("/api/knowledge/trash/purge", {
-    method: "POST",
-    body: { beforeIso },
-    workspaceId,
-  });
 }
 
 // ─── Search (Item 5.D) ──────────────────────────────────────────────
