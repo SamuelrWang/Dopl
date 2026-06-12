@@ -36,9 +36,14 @@ export function ConflictDialog({
     ),
   ];
 
+  const audienceIsAllMembers = details.conflicts.some(
+    (c) => c.audienceIsAllMembers
+  );
   const description = resolvable
     ? `${teamNames.join(", ")} ${teamNames.length === 1 ? "has" : "have"} access to “${details.workflowName}” but can't read ${kbNames}. Grant read access so this change can apply?`
-    : `“${details.workflowName}” is available to the whole workspace, but ${kbNames} is restricted to specific teams. Widen the knowledge base's access (or scope the workflow to teams) first.`;
+    : audienceIsAllMembers
+      ? `“${details.workflowName}” is available to the whole workspace, but this change would restrict ${kbNames}. Scope the workflow to teams first, or keep the knowledge base shared.`
+      : `${teamNames.join(", ")} can read “${details.workflowName}”, which depends on ${kbNames}. Remove ${teamNames.length === 1 ? "that team" : "those teams"} from the workflow first, or keep their access to the knowledge base.`;
 
   return (
     <ConfirmDialog

@@ -2,13 +2,26 @@
 
 import Link from "next/link";
 import { Plus } from "lucide-react";
+import { TeamChip } from "@/features/members/components/team-bits";
+import { kbScope, KB_SCOPE_LABEL } from "../../scope";
 import type { KnowledgeBase } from "../../types";
 import { knowledgeBaseSegment } from "../../url";
 import styles from "@/shared/layout/app-shell/app-shell.module.css";
 
+/** Minimal team ref for the admin card pills. */
+export interface KbTeamRef {
+  teamId: string;
+  name: string;
+  color: string | null;
+}
+
+const MAX_TEAM_PILLS = 3;
+
 interface Props {
   workspaceSegment: string;
   bases: KnowledgeBase[];
+  /** Present only for admins: kbId → teams granted on that KB. */
+  kbTeams?: Record<string, KbTeamRef[]>;
   onCreate: () => void;
 }
 
@@ -18,7 +31,12 @@ interface Props {
  * tree view) plus a dashed "create" tile. The dark top titlebar lives one
  * level up in the preview shell, spanning the full dark area.
  */
-export function LandingContent({ workspaceSegment, bases, onCreate }: Props) {
+export function LandingContent({
+  workspaceSegment,
+  bases,
+  kbTeams,
+  onCreate,
+}: Props) {
   return (
     <main className={styles.main}>
         <div className={styles.scroll}>
@@ -55,8 +73,9 @@ export function LandingContent({ workspaceSegment, bases, onCreate }: Props) {
             </div>
           </section>
 
-          <div className={styles.sectionHead}>
-            <h2 className={styles.sectionTitle}>Knowledge Bases</h2>
+          {/* Section heading removed — the hero already titles the page;
+              keep the Create New shortcut right-aligned above the grid. */}
+          <div className={styles.sectionHead} style={{ justifyContent: "flex-end" }}>
             <button type="button" className={styles.createNew} onClick={onCreate}>
               Create New
             </button>
@@ -69,22 +88,43 @@ export function LandingContent({ workspaceSegment, bases, onCreate }: Props) {
           ) : null}
 
           <div className={styles.cards}>
-            {bases.map((kb) => (
-              <Link
-                key={kb.id}
-                href={`/${workspaceSegment}/knowledge/${knowledgeBaseSegment(kb)}`}
-                className={styles.card}
-              >
-                <h3>{kb.name}</h3>
-                {kb.description ? (
-                  <p className={styles.cardDesc}>{kb.description}</p>
-                ) : null}
-                <div className={styles.cardMeta}>
-                  <span>{kb.visibility === "private" ? "Private" : "Shared"}</span>
-                  <span>Updated {formatRelative(kb.updatedAt)}</span>
-                </div>
-              </Link>
-            ))}
+            {bases.map((kb) => {
+              const scope = kbScope(kb);
+              // Pills are an admin-only affordance: members just get the
+              // scope label (kbTeams is undefined for them).
+              const teams =
+                scope === "team" ? (kbTeams?.[kb.id] ?? null) : null;
+              return (
+                <Link
+                  key={kb.id}
+                  href={`/${workspaceSegment}/knowledge/${knowledgeBaseSegment(kb)}`}
+                  className={styles.card}
+                >
+                  <h3>{kb.name}</h3>
+                  {kb.description ? (
+                    <p className={styles.cardDesc}>{kb.description}</p>
+                  ) : null}
+                  {teams && teams.length > 0 ? (
+                    <div
+                      className={`${styles.lightScope} flex flex-wrap items-center gap-1.5 pt-3`}
+                    >
+                      {teams.slice(0, MAX_TEAM_PILLS).map((t) => (
+                        <TeamChip key={t.teamId} name={t.name} color={t.color} />
+                      ))}
+                      {teams.length > MAX_TEAM_PILLS ? (
+                        <span className="text-[11px] text-text-secondary">
+                          +{teams.length - MAX_TEAM_PILLS}
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  <div className={styles.cardMeta}>
+                    <span>{KB_SCOPE_LABEL[scope]}</span>
+                    <span>Updated {formatRelative(kb.updatedAt)}</span>
+                  </div>
+                </Link>
+              );
+            })}
 
             <button type="button" className={`${styles.card} ${styles.cardNew}`} onClick={onCreate}>
               <span className={styles.plus}>

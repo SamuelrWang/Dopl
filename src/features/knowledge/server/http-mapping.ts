@@ -11,6 +11,8 @@ import {
   KnowledgePathConflictError,
   KnowledgeStaleVersionError,
   PathTraversalError,
+  ScopeChangeForbiddenError,
+  TeamScopeForbiddenError,
   WorkspaceKeyPrivateVisibilityError,
 } from "./errors";
 
@@ -55,6 +57,12 @@ export function mapKnowledgeError(err: unknown): HttpError | null {
   }
   if (err instanceof WorkspaceKeyPrivateVisibilityError) {
     return new HttpError(403, "WORKSPACE_KEY_PRIVATE_VISIBILITY", err.message);
+  }
+  if (err instanceof TeamScopeForbiddenError) {
+    return new HttpError(403, "TEAM_SCOPE_FORBIDDEN", err.message);
+  }
+  if (err instanceof ScopeChangeForbiddenError) {
+    return new HttpError(403, "SCOPE_CHANGE_FORBIDDEN", err.message);
   }
   return null;
 }

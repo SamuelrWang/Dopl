@@ -133,6 +133,8 @@ export interface InsertBaseArgs {
    *  App code passes `'private'` for new items so they start as drafts;
    *  see `createBase` in service.ts. */
   visibility?: "public" | "private";
+  /** `'workspace'` if omitted (matches DB column default). */
+  accessMode?: "workspace" | "teams";
   createdBy: string | null;
 }
 
@@ -148,6 +150,7 @@ export async function insertBase(args: InsertBaseArgs): Promise<KnowledgeBase> {
       description: args.description ?? null,
       agent_write_enabled: args.agentWriteEnabled ?? false,
       visibility: args.visibility ?? "public",
+      access_mode: args.accessMode ?? "workspace",
       created_by: args.createdBy,
     })
     .select(KNOWLEDGE_BASE_COLS)
@@ -161,10 +164,11 @@ export interface UpdateBasePatch {
   slug?: string;
   description?: string | null;
   agentWriteEnabled?: boolean;
-  /** Visibility is one-way private → public. The service layer rejects
-   *  any patch that tries to flip back to private; this repo function
-   *  takes whatever it's given and trusts the caller. */
+  /** Two-way — the service layer gates who may change scope and runs
+   *  the workflow↔KB narrowing invariant; this repo function takes
+   *  whatever it's given and trusts the caller. */
   visibility?: "public" | "private";
+  accessMode?: "workspace" | "teams";
 }
 
 export async function updateBaseRow(
@@ -189,6 +193,7 @@ export async function updateBaseRow(
   if (patch.agentWriteEnabled !== undefined)
     update.agent_write_enabled = patch.agentWriteEnabled;
   if (patch.visibility !== undefined) update.visibility = patch.visibility;
+  if (patch.accessMode !== undefined) update.access_mode = patch.accessMode;
   // Optimistic concurrency: when expectedUpdatedAt is supplied, the
   // `updated_at` filter makes this an atomic compare-and-swap. 0 rows →
   // the row changed since the caller read it → return null (stale).

@@ -11,6 +11,7 @@ import type {
   WorkspaceInvitationView,
   WorkspaceMemberView,
 } from "../types";
+import { removeMember, updateMemberRole } from "../members-client";
 import { SelectFilter } from "./member-bits";
 import { MEMBER_ROW_GRID, MemberRow } from "./member-row";
 import { PendingInvitations } from "./pending-invitations";
@@ -91,18 +92,7 @@ export function MembersTab({
     setBusyId(target.userId);
     setError(null);
     try {
-      const res = await fetch(
-        `/api/workspaces/${encodeURIComponent(workspaceSlug)}/members/${encodeURIComponent(target.userId)}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ role }),
-        }
-      );
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body?.error?.message || body?.error || "Failed to update role");
-      }
+      await updateMemberRole(workspaceSlug, target.userId, role);
       onChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
@@ -112,14 +102,7 @@ export function MembersTab({
   }
 
   async function remove(target: WorkspaceMemberView) {
-    const res = await fetch(
-      `/api/workspaces/${encodeURIComponent(workspaceSlug)}/members/${encodeURIComponent(target.userId)}`,
-      { method: "DELETE" }
-    );
-    if (!res.ok && res.status !== 204) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(body?.error?.message || body?.error || "Failed to remove");
-    }
+    await removeMember(workspaceSlug, target.userId);
     onChanged();
   }
 
@@ -217,6 +200,8 @@ export function MembersTab({
                 !isSelf &&
                 m.role !== "owner" &&
                 (myRole === "owner" || m.role !== "admin");
+              // Regular members only open their own detail drawer.
+              const clickable = canManage || isSelf;
               return (
                 <li key={m.userId}>
                   <MemberRow
@@ -224,8 +209,9 @@ export function MembersTab({
                     isSelf={isSelf}
                     canManage={canManage}
                     canEditTarget={canEditTarget}
+                    clickable={clickable}
                     busy={busyId === m.userId}
-                    onOpen={() => onSelectMember(m.userId)}
+                    onOpen={() => clickable && onSelectMember(m.userId)}
                     onChangeRole={(role) => void changeRole(m, role)}
                     onRemove={() => setRemoveTarget(m)}
                   />

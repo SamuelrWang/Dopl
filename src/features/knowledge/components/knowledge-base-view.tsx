@@ -4,9 +4,11 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronRight, Settings } from "lucide-react";
 import { toast } from "@/shared/ui/toast";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
-import { VisibilityPill, MakePublicAction } from "@/shared/ui/visibility-pill";
+import { KbScopeBadge } from "@/shared/ui/visibility-pill";
 import { useMyAccessContext } from "@/features/members/hooks/use-my-access";
 import { meetsLevel } from "@/features/teams/access-levels";
+import type { Role } from "@/features/workspaces/types";
+import { kbScope } from "../scope";
 import type {
   KnowledgeBase,
   KnowledgeEntry,
@@ -23,7 +25,6 @@ import {
   moveFolder as apiMoveFolder,
   restoreEntry as apiRestoreEntry,
   restoreFolder as apiRestoreFolder,
-  updateBase as apiUpdateBase,
   updateEntry as apiUpdateEntry,
   updateFolder as apiUpdateFolder,
 } from "../client/api";
@@ -46,9 +47,9 @@ interface Props {
   /** SSR-fetched body for the initially-selected entry. When provided,
    *  the entry hook seeds from this and skips the first network fetch. */
   initialEntry: KnowledgeEntry | null;
-  /** True if the current user is the KB's owner — gates the inline
-   *  "Make public" button next to the visibility pill. */
-  isOwner: boolean;
+  /** Gate the Sharing section in settings (owner-or-admin rule). */
+  currentUserId: string;
+  role: Role;
 }
 
 export function KnowledgeBaseView({
@@ -58,7 +59,8 @@ export function KnowledgeBaseView({
   folders: initialFolders,
   entries: initialEntries,
   initialEntry,
-  isOwner,
+  currentUserId,
+  role,
 }: Props) {
   const [folders, setFolders] = useState(initialFolders);
   const [entries, setEntries] = useState(initialEntries);
@@ -79,15 +81,8 @@ export function KnowledgeBaseView({
   useEffect(() => {
     setDisplayedName(base.name);
   }, [base.name]);
-  // Local mirror of base.visibility so the inline "Make public"
-  // affordance updates the pill immediately without waiting for the
-  // next page render. Stays in sync if the prop changes externally.
-  const [displayedVisibility, setDisplayedVisibility] = useState(
-    base.visibility,
-  );
-  useEffect(() => {
-    setDisplayedVisibility(base.visibility);
-  }, [base.visibility]);
+  // Scope changes live in Settings → Sharing, which router.refresh()es
+  // on save — the badge reads straight from the prop.
 
   const selectedMeta = useMemo(
     () => entries.find((e) => e.id === selectedId) ?? entries[0] ?? null,
@@ -426,25 +421,7 @@ export function KnowledgeBaseView({
               </>
             ) : null}
           </nav>
-          <VisibilityPill visibility={displayedVisibility} />
-          {displayedVisibility === "private" && isOwner ? (
-            <MakePublicAction
-              resourceType="knowledge base"
-              onConfirm={async () => {
-                try {
-                  await apiUpdateBase(
-                    base.id,
-                    { visibility: "public" },
-                    workspaceId,
-                  );
-                  setDisplayedVisibility("public");
-                  toast({ title: "Knowledge base is now public" });
-                } catch (err) {
-                  reportError(err, "Couldn't publish");
-                }
-              }}
-            />
-          ) : null}
+          <KbScopeBadge scope={kbScope(base)} />
         </div>
         <div className="ml-auto flex items-center gap-2">
           <div className="w-56 hidden md:block">
@@ -564,6 +541,8 @@ export function KnowledgeBaseView({
         workspaceId={workspaceId}
         workspaceSlug={workspaceSlug}
         base={base}
+        currentUserId={currentUserId}
+        role={role}
         folders={folders}
         onFoldersChanged={refresh}
       />

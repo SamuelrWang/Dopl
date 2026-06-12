@@ -33,8 +33,10 @@ export type WriteSource = "user" | "agent";
  * rows are owner-only — invisible in lists, search, and the canvas
  * for non-owners (RLS enforces, service layer is belt-and-suspenders).
  *
- * Once-public-stays-public: there's no path from `'public'` to
- * `'private'` in the API. New items default to `'private'` from the
+ * For knowledge bases visibility is two-way: the owner or a workspace
+ * admin can flip scope via the Sharing settings (narrowing transitions
+ * are workflow-invariant-checked). Skills keep the original one-way
+ * private → public rule. New items default to `'private'` from the
  * app code (DB column default is `'public'` so existing rows stay
  * visible, but `createBase` / `createSkill` override).
  */

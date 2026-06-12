@@ -21,6 +21,9 @@ interface Props {
   isSelf: boolean;
   canManage: boolean;
   canEditTarget: boolean;
+  /** Whether clicking the row opens the detail drawer (admins see
+   *  everyone; regular members only themselves). */
+  clickable: boolean;
   busy: boolean;
   onOpen: () => void;
   onChangeRole: (role: AssignableRole) => void;
@@ -29,13 +32,14 @@ interface Props {
 
 /**
  * One members-table row: avatar · role · team chips · last active ·
- * kebab. Clicking the row opens the member detail drawer.
+ * kebab. Clicking the row opens the member detail drawer (when allowed).
  */
 export function MemberRow({
   member: m,
   isSelf,
   canManage,
   canEditTarget,
+  clickable,
   busy,
   onOpen,
   onChangeRole,
@@ -44,21 +48,37 @@ export function MemberRow({
   const activity = formatLastActive(m.lastSeenAt, m.status, m.invitedAt);
   const chips = m.teams.slice(0, 2);
   const extraChips = m.teams.length - chips.length;
+  const kebabItems = [
+    ...(clickable ? [{ label: "View details", onSelect: onOpen }] : []),
+    ...(canManage && !isSelf && m.role !== "owner"
+      ? [
+          {
+            label: "Remove from workspace",
+            onSelect: onRemove,
+            destructive: true,
+          },
+        ]
+      : []),
+  ];
 
   return (
     <div
-      onClick={onOpen}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onOpen();
-        }
-      }}
+      {...(clickable
+        ? {
+            onClick: onOpen,
+            role: "button" as const,
+            tabIndex: 0,
+            onKeyDown: (e: React.KeyboardEvent) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onOpen();
+              }
+            },
+          }
+        : {})}
       className={cn(
         MEMBER_ROW_GRID,
-        "cursor-pointer hover:bg-surface-raised-1 transition-colors"
+        clickable && "cursor-pointer hover:bg-surface-raised-1 transition-colors"
       )}
     >
       <div className="flex items-center gap-3 min-w-0">
@@ -114,21 +134,12 @@ export function MemberRow({
       </div>
 
       <div className="flex justify-end">
-        <KebabMenu
-          ariaLabel={`Actions for ${m.displayName || m.email || "member"}`}
-          items={[
-            { label: "View details", onSelect: onOpen },
-            ...(canManage && !isSelf && m.role !== "owner"
-              ? [
-                  {
-                    label: "Remove from workspace",
-                    onSelect: onRemove,
-                    destructive: true,
-                  },
-                ]
-              : []),
-          ]}
-        />
+        {kebabItems.length > 0 && (
+          <KebabMenu
+            ariaLabel={`Actions for ${m.displayName || m.email || "member"}`}
+            items={kebabItems}
+          />
+        )}
       </div>
     </div>
   );

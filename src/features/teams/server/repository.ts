@@ -310,6 +310,22 @@ export async function listGrantsForResources(
   return ((data ?? []) as TeamGrantDbRow[]).map(mapTeamGrantRow);
 }
 
+/** Drop every team grant on one resource (KB going private). */
+export async function deleteGrantsForResource(
+  workspaceId: string,
+  resourceType: TeamResourceType,
+  resourceId: string
+): Promise<void> {
+  const db = supabaseAdmin();
+  const { error } = await db
+    .from("team_resource_access")
+    .delete()
+    .eq("workspace_id", workspaceId)
+    .eq("resource_type", resourceType)
+    .eq("resource_id", resourceId);
+  if (error) throw error;
+}
+
 export async function deleteGrantRow(
   teamId: string,
   resourceType: TeamResourceType,

@@ -3,6 +3,7 @@
 import { X } from "lucide-react";
 import { ModalShell } from "@/shared/layout/settings-modal";
 import modalStyles from "@/shared/layout/settings-modal/settings-modal.module.css";
+import type { Role } from "@/features/workspaces/types";
 import type { KnowledgeBase, KnowledgeFolder } from "../types";
 import { BaseSettingsForm } from "./base-settings-form";
 
@@ -12,6 +13,8 @@ interface Props {
   workspaceId: string;
   workspaceSlug: string;
   base: KnowledgeBase;
+  currentUserId: string;
+  role: Role;
   /** Active folders in the base — each gets an agent-facing description
    *  editor in the Descriptions section. */
   folders: KnowledgeFolder[];
@@ -31,6 +34,8 @@ export function BaseSettingsModal({
   workspaceId,
   workspaceSlug,
   base,
+  currentUserId,
+  role,
   folders,
   onFoldersChanged,
 }: Props) {
@@ -59,6 +64,8 @@ export function BaseSettingsModal({
           workspaceSlug={workspaceSlug}
           base={base}
           folders={folders}
+          currentUserId={currentUserId}
+          role={role}
           onFoldersChanged={onFoldersChanged}
         />
       </div>

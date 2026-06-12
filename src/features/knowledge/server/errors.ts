@@ -41,12 +41,28 @@ export class EntryNotFoundError extends Error {
  */
 export class AgentWriteDisabledError extends Error {
   readonly code = "AGENT_WRITE_DISABLED";
-  constructor(baseId: string) {
+  constructor(baseId: string, message?: string) {
     super(
-      `Agent writes are disabled for knowledge base ${baseId}. ` +
-        `Toggle the agent-write setting in the knowledge base settings to enable.`
+      message ??
+        `Agent writes are disabled for knowledge base ${baseId}. ` +
+          `Toggle the agent-write setting in the knowledge base settings to enable.`
     );
     this.name = "AgentWriteDisabledError";
+  }
+}
+
+/**
+ * Thrown when a caller who is neither the KB owner nor a workspace
+ * admin tries to change sharing scope (visibility / access mode /
+ * team grants). Maps to 403.
+ */
+export class ScopeChangeForbiddenError extends Error {
+  readonly code = "SCOPE_CHANGE_FORBIDDEN";
+  constructor() {
+    super(
+      "Only the knowledge base owner or a workspace admin can change sharing settings."
+    );
+    this.name = "ScopeChangeForbiddenError";
   }
 }
 
@@ -66,6 +82,18 @@ export class WorkspaceKeyPrivateVisibilityError extends Error {
         "Use a personal API key (from Account Settings → Keys) for private items."
     );
     this.name = "WorkspaceKeyPrivateVisibilityError";
+  }
+}
+
+/**
+ * Thrown when a non-admin tries to grant a team they don't belong to
+ * (KB create or sharing update). Maps to 403.
+ */
+export class TeamScopeForbiddenError extends Error {
+  readonly code = "TEAM_SCOPE_FORBIDDEN";
+  constructor() {
+    super("You can only share with teams you belong to.");
+    this.name = "TeamScopeForbiddenError";
   }
 }
 

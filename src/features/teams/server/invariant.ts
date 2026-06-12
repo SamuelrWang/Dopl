@@ -204,6 +204,31 @@ export async function validateKbNarrowing(args: {
   }
 }
 
+/**
+ * A KB is going private: everyone except the owner/admins loses read.
+ * Covers both audience shapes with the existing narrowing check — first
+ * the ungranted side (all-members / non-granted teams), then the
+ * currently granted teams (their grants get deleted on the flip).
+ */
+export async function validateKbGoingPrivate(args: {
+  workspaceId: string;
+  knowledgeBaseId: string;
+  knowledgeBaseName: string;
+}): Promise<void> {
+  await validateKbNarrowing({ ...args, losingTeamIds: "allUngranted" });
+  const granted = await listGrantsForResource(
+    args.workspaceId,
+    "knowledge_base",
+    args.knowledgeBaseId
+  );
+  if (granted.length > 0) {
+    await validateKbNarrowing({
+      ...args,
+      losingTeamIds: granted.map((g) => g.teamId),
+    });
+  }
+}
+
 async function listWorkflowsAttachedToKb(
   workspaceId: string,
   knowledgeBaseId: string

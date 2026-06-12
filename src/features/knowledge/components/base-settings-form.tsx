@@ -11,30 +11,37 @@ import {
   updateFolder,
 } from "../client/api";
 import { DESCRIPTION_MAX } from "@/config";
+import type { Role } from "@/features/workspaces/types";
 import type { KnowledgeBase, KnowledgeFolder } from "../types";
 import { knowledgeBaseSegment } from "../url";
 import { AgentWriteToggle } from "./agent-write-toggle";
+import { KbSharingSection } from "./kb-sharing-section";
 
 interface Props {
   workspaceId: string;
   workspaceSlug: string;
   base: KnowledgeBase;
   folders: KnowledgeFolder[];
+  currentUserId: string;
+  role: Role;
   onFoldersChanged?: () => void;
 }
 
 /**
  * Settings form for a single knowledge base. Sections:
  *   1. General — name, description.
- *   2. Agent access — the agent-write toggle.
- *   3. Advanced — slug edit (folded behind a disclosure).
- *   4. Danger zone — soft-delete the KB.
+ *   2. Sharing — private / teams / workspace scope + team grants.
+ *   3. Agent access — the agent-write toggle.
+ *   4. Advanced — slug edit (folded behind a disclosure).
+ *   5. Danger zone — soft-delete the KB.
  */
 export function BaseSettingsForm({
   workspaceId,
   workspaceSlug,
   base,
   folders,
+  currentUserId,
+  role,
   onFoldersChanged,
 }: Props) {
   const router = useRouter();
@@ -152,6 +159,17 @@ export function BaseSettingsForm({
             {saving ? "Saving…" : "Save changes"}
           </button>
         </div>
+      </Section>
+
+      {/* Sharing — three-way scope + team grants. */}
+      <Section title="Sharing">
+        <KbSharingSection
+          workspaceId={workspaceId}
+          workspaceSlug={workspaceSlug}
+          base={base}
+          currentUserId={currentUserId}
+          role={role}
+        />
       </Section>
 
       {/* Folder descriptions — agent-facing summaries streamed into MCP

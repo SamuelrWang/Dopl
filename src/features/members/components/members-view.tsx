@@ -59,6 +59,16 @@ export function MembersView({ workspaceSlug, currentUserId, myRole }: Props) {
     refreshResources();
   }, [refreshTeams, refreshMembers, refreshResources]);
 
+  // Regular members only get a detail drawer for themselves; admins+
+  // can inspect anyone. Backstop for the row-level gating in MembersTab.
+  const selectMember = useCallback(
+    (userId: string) => {
+      if (!canManage && userId !== currentUserId) return;
+      setSelectedMemberId(userId);
+    },
+    [canManage, currentUserId]
+  );
+
   const selectedMember =
     memberList.find((m) => m.userId === selectedMemberId) ?? null;
   const pendingCount = inviteList.length;
@@ -164,7 +174,7 @@ export function MembersView({ workspaceSlug, currentUserId, myRole }: Props) {
             loading={loading}
             onChanged={refreshMembers}
             onInvitationsChanged={refreshInvitations}
-            onSelectMember={setSelectedMemberId}
+            onSelectMember={selectMember}
           />
         )}
         {tab === "teams" && (
@@ -198,8 +208,10 @@ export function MembersView({ workspaceSlug, currentUserId, myRole }: Props) {
         teams={teamList}
         resources={resourceList}
         myRole={myRole}
+        currentUserId={currentUserId}
         onClose={() => setSelectedMemberId(null)}
         onTeamsChanged={onTeamsChanged}
+        onMemberChanged={refreshMembers}
       />
 
       <CreateTeamDialog

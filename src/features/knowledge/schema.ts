@@ -61,41 +61,101 @@ export const KnowledgeEntryTypeSchema = z.enum([
 
 // ─── knowledge_bases ────────────────────────────────────────────────
 
-export const KnowledgeBaseCreateSchema = z.object({
-  name: z.string().min(1, "Name is required").max(120),
-  // `nullable().optional()` for parity with KnowledgeBaseUpdateSchema —
-  // both `undefined` (omit) and `null` (explicit clear) are valid.
-  description: z.string().max(2000).nullable().optional(),
-  slug: z
-    .string()
-    .min(1)
-    .max(80)
-    .regex(slugRegex, "Slug must be kebab-case")
-    .optional(),
-  agentWriteEnabled: z.boolean().optional(),
-  /**
-   * Optional visibility at creation. Service-level `createBase`
-   * defaults to `'private'` when omitted (start drafty, opt to
-   * publish later). The full enum is accepted here so a future "+ New
-   * public KB" affordance can plumb `'public'` without schema churn.
-   */
-  visibility: z.enum(["public", "private"]).optional(),
+/** One team's grant on a KB — used by create + update sharing payloads. */
+export const KbTeamGrantSchema = z.object({
+  teamId: z.string().uuid(),
+  level: z.enum(["read", "edit"]),
 });
+export type KbTeamGrantInput = z.infer<typeof KbTeamGrantSchema>;
+
+/**
+ * Shared refinement: teams mode can't be private, and grants only make
+ * sense in teams mode. `requireGrants` (create) additionally demands at
+ * least one grant — updates may send an empty set (deliberate "owner +
+ * admins only" state; the UI warns before allowing it).
+ */
+function refineScope(requireGrants: boolean) {
+  return (
+    data: {
+      visibility?: "public" | "private";
+      accessMode?: "workspace" | "teams";
+      teamGrants?: KbTeamGrantInput[];
+    },
+    ctx: z.RefinementCtx
+  ) => {
+    if (data.accessMode === "teams") {
+      if (data.visibility === "private") {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "A private knowledge base cannot be teams-scoped",
+          path: ["accessMode"],
+        });
+      }
+      if (requireGrants && (!data.teamGrants || data.teamGrants.length === 0)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Teams-scoped knowledge bases need at least one team grant",
+          path: ["teamGrants"],
+        });
+      }
+    }
+    if (data.teamGrants?.length && data.accessMode !== "teams") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "teamGrants requires accessMode 'teams'",
+        path: ["teamGrants"],
+      });
+    }
+  };
+}
+
+export const KnowledgeBaseCreateSchema = z
+  .object({
+    name: z.string().min(1, "Name is required").max(120),
+    // `nullable().optional()` for parity with KnowledgeBaseUpdateSchema —
+    // both `undefined` (omit) and `null` (explicit clear) are valid.
+    description: z.string().max(2000).nullable().optional(),
+    slug: z
+      .string()
+      .min(1)
+      .max(80)
+      .regex(slugRegex, "Slug must be kebab-case")
+      .optional(),
+    agentWriteEnabled: z.boolean().optional(),
+    /**
+     * Optional visibility at creation. Service-level `createBase`
+     * defaults to `'private'` when omitted (start drafty, share later).
+     */
+    visibility: z.enum(["public", "private"]).optional(),
+    /** `'teams'` scopes the base to the granted teams below. */
+    accessMode: z.enum(["workspace", "teams"]).optional(),
+    /** Initial team grants — only valid with `accessMode: 'teams'`. */
+    teamGrants: z.array(KbTeamGrantSchema).max(50).optional(),
+  })
+  .superRefine(refineScope(true));
 export type KnowledgeBaseCreateInput = z.infer<typeof KnowledgeBaseCreateSchema>;
 
-export const KnowledgeBaseUpdateSchema = z.object({
-  name: z.string().min(1).max(120).optional(),
-  description: z.string().max(2000).nullable().optional(),
-  slug: z.string().min(1).max(80).regex(slugRegex).optional(),
-  agentWriteEnabled: z.boolean().optional(),
-  /**
-   * Visibility update is one-way: only `'public'` is accepted here, so
-   * a private item can be promoted to public but never the reverse.
-   * The service layer additionally checks the prior state — once
-   * public, always public. (M-10 product decision.)
-   */
-  visibility: z.literal("public").optional(),
-});
+export const KnowledgeBaseUpdateSchema = z
+  .object({
+    name: z.string().min(1).max(120).optional(),
+    description: z.string().max(2000).nullable().optional(),
+    slug: z.string().min(1).max(80).regex(slugRegex).optional(),
+    agentWriteEnabled: z.boolean().optional(),
+    /**
+     * Two-way visibility: scope is fully changeable by the owner or a
+     * workspace admin. Narrowing transitions (→ private, grant removal)
+     * are invariant-checked against attached workflows in the service.
+     */
+    visibility: z.enum(["public", "private"]).optional(),
+    accessMode: z.enum(["workspace", "teams"]).optional(),
+    /**
+     * Declarative FULL set of team grants when `accessMode: 'teams'` —
+     * the service diffs against current rows (upserts added/changed,
+     * removes missing).
+     */
+    teamGrants: z.array(KbTeamGrantSchema).max(50).optional(),
+  })
+  .superRefine(refineScope(false));
 export type KnowledgeBaseUpdateInput = z.infer<typeof KnowledgeBaseUpdateSchema>;
 
 export const AgentWriteToggleSchema = z.object({

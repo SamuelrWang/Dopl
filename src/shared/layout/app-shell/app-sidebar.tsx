@@ -4,14 +4,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   BookOpen,
-  Gift,
   HelpCircle,
   Home,
   LayoutGrid,
   MessageSquare,
   Settings,
   Sparkles,
-  UserPlus,
   Users,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -49,8 +47,7 @@ function sectionPath(segment: string, section: NavSection): string {
 /**
  * App sidebar in the new design language. Brand slot shows the open
  * workspace's name; nav highlights the section the current path is in;
- * footer carries Invite / Free month / Settings / Help, wired to the
- * settings modal.
+ * footer carries Settings / Help, wired to the settings modal.
  */
 export function AppSidebar({
   workspaceSegment,
@@ -101,22 +98,6 @@ export function AppSidebar({
       </div>
 
       <div className={styles.foot}>
-        <button
-          type="button"
-          className={styles.footItem}
-          onClick={() => onOpenSettings("members")}
-        >
-          <UserPlus size={20} strokeWidth={1.8} />
-          Invite your team
-        </button>
-        <button
-          type="button"
-          className={styles.footItem}
-          onClick={() => onOpenSettings("billing")}
-        >
-          <Gift size={20} strokeWidth={1.8} />
-          Get a free month
-        </button>
         <button
           type="button"
           className={styles.footItem}

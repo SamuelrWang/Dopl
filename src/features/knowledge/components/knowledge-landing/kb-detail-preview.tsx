@@ -1,4 +1,5 @@
 import { AppPanel } from "@/shared/layout/app-shell";
+import type { Role } from "@/features/workspaces/types";
 import type {
   KnowledgeBase,
   KnowledgeEntry,
@@ -13,7 +14,8 @@ interface Props {
   folders: KnowledgeFolder[];
   entries: KnowledgeEntry[];
   initialEntry: KnowledgeEntry | null;
-  isOwner: boolean;
+  currentUserId: string;
+  role: Role;
 }
 
 /**
@@ -29,7 +31,8 @@ export function KbDetailPreview({
   folders,
   entries,
   initialEntry,
-  isOwner,
+  currentUserId,
+  role,
 }: Props) {
   return (
     <AppPanel scroll={false}>
@@ -40,7 +43,8 @@ export function KbDetailPreview({
         folders={folders}
         entries={entries}
         initialEntry={initialEntry}
-        isOwner={isOwner}
+        currentUserId={currentUserId}
+        role={role}
       />
     </AppPanel>
   );

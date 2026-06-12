@@ -1,23 +1,27 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { BookOpen, Plus, Workflow } from "lucide-react";
+import { X } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import appShell from "@/shared/layout/app-shell/app-shell.module.css";
+import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import {
   Drawer,
   DrawerBody,
+  DrawerClose,
   DrawerContent,
   DrawerHeader,
   DrawerTitle,
 } from "@/shared/ui/drawer";
 import { meetsMinRole } from "@/features/workspaces/types";
 import type { AccessMatrixResource, TeamView } from "@/features/teams/types";
-import type { MemberRole, WorkspaceMemberView } from "../types";
+import type { AssignableRole, MemberRole, WorkspaceMemberView } from "../types";
 import { addTeamMembers, removeTeamMember } from "../teams-client";
+import { removeMember, updateMemberRole } from "../members-client";
 import { computeEffectiveAccess } from "../effective-access";
-import { Avatar, RolePill } from "./member-bits";
-import { ScopePill, TeamChip } from "./team-bits";
+import { Avatar, RolePill, RoleSelect } from "./member-bits";
+import { ScopePill } from "./team-bits";
+import { MemberDrawerTeams } from "./member-drawer-teams";
 
 interface Props {
   workspaceSlug: string;
@@ -25,14 +29,16 @@ interface Props {
   teams: TeamView[];
   resources: AccessMatrixResource[];
   myRole: MemberRole;
+  currentUserId: string;
   onClose: () => void;
   onTeamsChanged: () => void;
+  onMemberChanged: () => void;
 }
 
 /**
- * Member detail drawer: profile, role, team chips with add/remove, and
- * the computed effective-access list (KBs + workflows, with the team
- * supplying each level attributed).
+ * Member detail drawer: inverted (dark-ink) header, role (editable for
+ * admins), expandable team rows with per-team scoping, the computed
+ * effective-access list, and an admin-only remove-from-workspace action.
  */
 export function MemberDrawer({
   workspaceSlug,
@@ -40,13 +46,25 @@ export function MemberDrawer({
   teams,
   resources,
   myRole,
+  currentUserId,
   onClose,
   onTeamsChanged,
+  onMemberChanged,
 }: Props) {
   const canManage = meetsMinRole(myRole, "admin");
-  const [pickerOpen, setPickerOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmRemove, setConfirmRemove] = useState(false);
+
+  const isSelf = member?.userId === currentUserId;
+  // Admins manage members/viewers; only owners manage admins. Nobody
+  // edits the owner or themselves here (mirrors the members-table rule).
+  const canEditTarget =
+    canManage &&
+    member !== null &&
+    !isSelf &&
+    member.role !== "owner" &&
+    (myRole === "owner" || member.role !== "admin");
 
   const memberTeams = useMemo(
     () => (member ? teams.filter((t) => t.memberIds.includes(member.userId)) : []),
@@ -72,12 +90,12 @@ export function MemberDrawer({
   const kbRows = access.filter((r) => r.resourceType === "knowledge_base");
   const wfRows = access.filter((r) => r.resourceType === "workflow");
 
-  async function mutateTeams(fn: () => Promise<void>) {
+  async function mutate(fn: () => Promise<void>, onDone?: () => void) {
     setBusy(true);
     setError(null);
     try {
       await fn();
-      onTeamsChanged();
+      (onDone ?? onTeamsChanged)();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -85,105 +103,88 @@ export function MemberDrawer({
     }
   }
 
+  function changeRole(role: AssignableRole) {
+    if (!member || !canEditTarget) return;
+    void mutate(
+      () => updateMemberRole(workspaceSlug, member.userId, role),
+      onMemberChanged
+    );
+  }
+
+  async function handleRemove() {
+    if (!member) return;
+    await removeMember(workspaceSlug, member.userId);
+    onClose();
+    onMemberChanged();
+    onTeamsChanged();
+  }
+
   return (
     <Drawer open={member !== null} onOpenChange={(open) => !open && onClose()}>
       {/* Drawer portals to <body>, escaping AppPanel's light token scope —
           re-apply it here so the panel matches the page, not the dark root. */}
-      <DrawerContent className={appShell.lightScope}>
+      <DrawerContent className={appShell.lightScope} showCloseButton={false}>
         {member && (
           <>
-            <DrawerHeader>
-              <div className="flex items-center gap-3 min-w-0">
+            {/* Inverted header — the app's dark ink frame color. */}
+            <DrawerHeader className="bg-[var(--surface-cta)] border-transparent">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
                 <Avatar person={member} size="md" />
                 <div className="min-w-0">
-                  <DrawerTitle className="truncate">
+                  <DrawerTitle className="truncate text-[var(--text-on-cta)]">
                     {member.displayName || member.email || member.userId}
                   </DrawerTitle>
                   {member.email && (
-                    <p className="mt-1 text-[11px] text-text-secondary/60 truncate">
+                    <p className="mt-1 text-[11px] text-white/60 truncate">
                       {member.email}
                     </p>
                   )}
                 </div>
               </div>
+              <DrawerClose
+                render={
+                  <button
+                    type="button"
+                    aria-label="Close"
+                    className="shrink-0 flex h-7 w-7 items-center justify-center rounded-md text-white/70 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                  />
+                }
+              >
+                <X size={14} />
+              </DrawerClose>
             </DrawerHeader>
             <DrawerBody className="space-y-6">
               <section>
                 <SectionLabel>Role</SectionLabel>
-                <RolePill role={member.role} />
+                {canEditTarget ? (
+                  <RoleSelect
+                    value={member.role as AssignableRole}
+                    disabled={busy}
+                    onChange={changeRole}
+                  />
+                ) : (
+                  <RolePill role={member.role} />
+                )}
               </section>
 
-              <section>
-                <div className="flex items-center justify-between mb-2">
-                  <SectionLabel className="mb-0">Teams</SectionLabel>
-                  {canManage && availableTeams.length > 0 && (
-                    <div className="relative">
-                      <button
-                        type="button"
-                        onClick={() => setPickerOpen((v) => !v)}
-                        className="flex items-center gap-1 text-[11px] text-text-secondary hover:text-text-primary transition-colors cursor-pointer"
-                      >
-                        <Plus size={11} />
-                        Add to team
-                      </button>
-                      {pickerOpen && (
-                        <>
-                          <div
-                            className="fixed inset-0 z-10"
-                            onClick={() => setPickerOpen(false)}
-                            aria-hidden
-                          />
-                          <div className="absolute right-0 top-full mt-1 min-w-[170px] rounded-md border border-border-default bg-[var(--bg-inset-hover)] shadow-[var(--shadow-elevated)] py-1 z-20">
-                            {availableTeams.map((t) => (
-                              <button
-                                key={t.id}
-                                type="button"
-                                disabled={busy}
-                                onClick={() => {
-                                  setPickerOpen(false);
-                                  void mutateTeams(() =>
-                                    addTeamMembers(workspaceSlug, t.id, [member.userId])
-                                  );
-                                }}
-                                className="w-full flex items-center gap-2 text-left px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-raised-2 hover:text-text-primary transition-colors cursor-pointer"
-                              >
-                                <span
-                                  className="h-1.5 w-1.5 rounded-full shrink-0"
-                                  style={{ backgroundColor: t.color ?? "#8b5cf6" }}
-                                />
-                                {t.name}
-                              </button>
-                            ))}
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {memberTeams.length === 0 && (
-                    <span className="text-[11px] text-text-secondary/50">
-                      Not in any team
-                    </span>
-                  )}
-                  {memberTeams.map((t) => (
-                    <TeamChip
-                      key={t.id}
-                      name={t.name}
-                      color={t.color}
-                      onRemove={
-                        canManage
-                          ? () =>
-                              void mutateTeams(() =>
-                                removeTeamMember(workspaceSlug, t.id, member.userId)
-                              )
-                          : undefined
-                      }
-                    />
-                  ))}
-                </div>
-                {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
-              </section>
+              <MemberDrawerTeams
+                memberTeams={memberTeams}
+                availableTeams={availableTeams}
+                resources={resources}
+                canManage={canManage}
+                busy={busy}
+                onAddToTeam={(teamId) =>
+                  void mutate(() =>
+                    addTeamMembers(workspaceSlug, teamId, [member.userId])
+                  )
+                }
+                onRemoveFromTeam={(teamId) =>
+                  void mutate(() =>
+                    removeTeamMember(workspaceSlug, teamId, member.userId)
+                  )
+                }
+              />
+              {error && <p className="text-xs text-red-400">{error}</p>}
 
               <section>
                 <SectionLabel>Effective access</SectionLabel>
@@ -192,10 +193,42 @@ export function MemberDrawer({
                   {(member.role === "owner" || member.role === "admin") &&
                     " Owners and admins always have full access."}
                 </p>
-                <AccessSection icon={<BookOpen size={11} />} label="Knowledge bases" rows={kbRows} />
-                <AccessSection icon={<Workflow size={11} />} label="Workflows" rows={wfRows} />
+                <AccessSection label="Knowledge bases" rows={kbRows} />
+                <AccessSection label="Workflows" rows={wfRows} />
               </section>
+
+              {canEditTarget && (
+                <section className="border-t border-border-subtle pt-4">
+                  <SectionLabel>Danger zone</SectionLabel>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => setConfirmRemove(true)}
+                    className="px-3 py-1.5 rounded-md border border-red-500/30 text-xs text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer disabled:opacity-60"
+                  >
+                    Remove from workspace
+                  </button>
+                </section>
+              )}
             </DrawerBody>
+
+            <ConfirmDialog
+              open={confirmRemove}
+              onOpenChange={setConfirmRemove}
+              title="Remove member?"
+              description={`${member.displayName || member.email || "This member"} will lose access to the workspace and be removed from all teams.`}
+              confirmLabel="Remove"
+              destructive
+              onConfirm={async () => {
+                try {
+                  await handleRemove();
+                } catch (err) {
+                  setError(
+                    err instanceof Error ? err.message : "Failed to remove"
+                  );
+                }
+              }}
+            />
           </>
         )}
       </DrawerContent>
@@ -223,19 +256,16 @@ function SectionLabel({
 }
 
 function AccessSection({
-  icon,
   label,
   rows,
 }: {
-  icon: React.ReactNode;
   label: string;
   rows: ReturnType<typeof computeEffectiveAccess>;
 }) {
   if (rows.length === 0) return null;
   return (
     <div className="mb-4 last:mb-0">
-      <h5 className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-text-secondary/50 mb-1.5">
-        {icon}
+      <h5 className="text-[10px] font-mono uppercase tracking-wider text-text-secondary/50 mb-1.5">
         {label}
       </h5>
       <ul className="rounded-lg border border-border-subtle divide-y divide-border-subtle overflow-hidden">

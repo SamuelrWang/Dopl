@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { BookOpen, Plus, Workflow } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import appShell from "@/shared/layout/app-shell/app-shell.module.css";
 import {
   Drawer,
   DrawerBody,
+  DrawerClose,
   DrawerContent,
   DrawerFooter,
   DrawerHeader,
@@ -124,13 +125,14 @@ export function TeamDrawer({
   return (
     <Drawer open={team !== null} onOpenChange={(open) => !open && onClose()}>
       {/* Light token scope — the portal escapes AppPanel's lightScope. */}
-      <DrawerContent className={appShell.lightScope}>
+      <DrawerContent className={appShell.lightScope} showCloseButton={false}>
         {team && (
           <>
-            <DrawerHeader>
+            {/* Inverted header — the app's dark ink frame color. */}
+            <DrawerHeader className="bg-[var(--surface-cta)] border-transparent">
               <div className="flex items-center gap-3 min-w-0 flex-1">
                 <TeamColorTile color={team.color} />
-                <div className="min-w-0 flex-1 pr-8">
+                <div className="min-w-0 flex-1">
                   {canManage ? (
                     <input
                       value={name}
@@ -140,18 +142,31 @@ export function TeamDrawer({
                         if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                       }}
                       aria-label="Team name"
-                      className="w-full bg-transparent text-base font-medium text-text-primary outline-none border-b border-transparent focus:border-border-strong transition-colors"
+                      className="w-full bg-transparent text-base font-medium text-[var(--text-on-cta)] outline-none border-b border-transparent focus:border-white/30 transition-colors"
                     />
                   ) : (
-                    <DrawerTitle className="truncate">{team.name}</DrawerTitle>
+                    <DrawerTitle className="truncate text-[var(--text-on-cta)]">
+                      {team.name}
+                    </DrawerTitle>
                   )}
                   {team.description && (
-                    <p className="mt-1 text-[11px] text-text-secondary/60 truncate">
+                    <p className="mt-1 text-[11px] text-white/60 truncate">
                       {team.description}
                     </p>
                   )}
                 </div>
               </div>
+              <DrawerClose
+                render={
+                  <button
+                    type="button"
+                    aria-label="Close"
+                    className="shrink-0 flex h-7 w-7 items-center justify-center rounded-md text-white/70 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                  />
+                }
+              >
+                <X size={14} />
+              </DrawerClose>
             </DrawerHeader>
 
             <DrawerBody className="space-y-6">
@@ -235,7 +250,6 @@ export function TeamDrawer({
               </section>
 
               <GrantSection
-                icon={<BookOpen size={11} />}
                 label="Knowledge base access"
                 resources={kbResources}
                 grantFor={grantFor}
@@ -244,7 +258,6 @@ export function TeamDrawer({
                 onChange={changeGrant}
               />
               <GrantSection
-                icon={<Workflow size={11} />}
                 label="Workflow access"
                 resources={wfResources}
                 grantFor={grantFor}
@@ -280,7 +293,6 @@ export function TeamDrawer({
 }
 
 function GrantSection({
-  icon,
   label,
   resources,
   grantFor,
@@ -288,7 +300,6 @@ function GrantSection({
   busy,
   onChange,
 }: {
-  icon: React.ReactNode;
   label: string;
   resources: AccessMatrixResource[];
   grantFor: (type: TeamResourceType, id: string) => AccessLevel | null;
@@ -299,8 +310,7 @@ function GrantSection({
   if (resources.length === 0) return null;
   return (
     <section>
-      <h4 className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-text-secondary/60 mb-2">
-        {icon}
+      <h4 className="text-[10px] font-mono uppercase tracking-wider text-text-secondary/60 mb-2">
         {label}
       </h4>
       <ul className="rounded-lg border border-border-subtle divide-y divide-border-subtle overflow-hidden">

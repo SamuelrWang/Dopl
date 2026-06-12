@@ -1,14 +1,19 @@
 "use client";
 
 import { useState } from "react";
+import type { Role } from "@/features/workspaces/types";
 import type { KnowledgeBase } from "../../types";
 import { CreateBaseDialog } from "../create-base-dialog";
-import { LandingContent } from "./landing-content";
+import { LandingContent, type KbTeamRef } from "./landing-content";
 
 interface Props {
   workspaceSegment: string;
   workspaceId: string;
   bases: KnowledgeBase[];
+  currentUserId: string;
+  role: Role;
+  /** Admin-only: kbId → teams with a grant, for the card pills. */
+  kbTeams?: Record<string, KbTeamRef[]>;
 }
 
 /**
@@ -21,6 +26,9 @@ export function KnowledgeLandingPreview({
   workspaceSegment,
   workspaceId,
   bases,
+  currentUserId,
+  role,
+  kbTeams,
 }: Props) {
   const [createOpen, setCreateOpen] = useState(false);
 
@@ -29,6 +37,7 @@ export function KnowledgeLandingPreview({
       <LandingContent
         workspaceSegment={workspaceSegment}
         bases={bases}
+        kbTeams={kbTeams}
         onCreate={() => setCreateOpen(true)}
       />
 
@@ -37,6 +46,8 @@ export function KnowledgeLandingPreview({
         onOpenChange={setCreateOpen}
         workspaceId={workspaceId}
         workspaceSlug={workspaceSegment}
+        currentUserId={currentUserId}
+        role={role}
       />
     </>
   );

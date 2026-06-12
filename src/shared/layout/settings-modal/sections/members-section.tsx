@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Plus } from "lucide-react";
 import { meetsMinRole } from "@/features/workspaces/types";
 import type { MemberRole } from "@/features/members/types";
@@ -44,6 +44,14 @@ export function MembersSection({
 
   const memberList = members ?? [];
   const teamList = teams ?? [];
+  // Regular members only get a detail drawer for themselves.
+  const selectMember = useCallback(
+    (userId: string) => {
+      if (!canManage && userId !== currentUserId) return;
+      setSelectedMemberId(userId);
+    },
+    [canManage, currentUserId]
+  );
   const selectedMember =
     memberList.find((m) => m.userId === selectedMemberId) ?? null;
 
@@ -72,7 +80,7 @@ export function MembersSection({
         loading={loading}
         onChanged={refreshMembers}
         onInvitationsChanged={refreshInvitations}
-        onSelectMember={setSelectedMemberId}
+        onSelectMember={selectMember}
       />
 
       <MemberDrawer
@@ -81,11 +89,13 @@ export function MembersSection({
         teams={teamList}
         resources={resources ?? []}
         myRole={role}
+        currentUserId={currentUserId}
         onClose={() => setSelectedMemberId(null)}
         onTeamsChanged={() => {
           refreshTeams();
           refreshMembers();
         }}
+        onMemberChanged={refreshMembers}
       />
 
       <InviteDialog
