@@ -1,16 +1,15 @@
 /**
- * Persistent shell for every named workspace sub-page (overview, chat,
- * knowledge, skills, members, settings) — the (app) route group.
+ * Persistent shell for every workspace sub-page — the (app) route group:
+ * the named sections (overview, chat, knowledge, skills, members,
+ * settings) plus the canvas editor ([canvasSlug]; static segments win
+ * over the dynamic match).
  *
  * Mounting the AppShell here — instead of per-page — means the rail,
  * sidebar, titlebar, workspaces fetch, and settings-modal state all
- * survive navigation between these pages. Only the white content panel
- * re-renders, covered by each route's loading skeleton. MyAccessProvider
- * lives here too so the access fetch is shared instead of re-firing per
- * navigation.
- *
- * The canvas route ([canvasSlug]) deliberately sits OUTSIDE this group:
- * it keeps the legacy chrome + colorway until its own conversion pass.
+ * survive navigation between every page, canvas included. Only the white
+ * content panel re-renders, covered by each route's loading skeleton.
+ * MyAccessProvider lives here too so the access fetch is shared instead
+ * of re-firing per navigation.
  *
  * Canonical-slug redirects stay in the pages (they know their full
  * sub-path); the layout just resolves and renders, and 404s when the
