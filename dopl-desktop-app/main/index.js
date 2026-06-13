@@ -6,10 +6,15 @@ const Store = require('electron-store');
 const APP_URL = process.env.DOPL_APP_URL || 'https://www.usedopl.com/';
 const APP_ORIGIN = new URL(APP_URL).origin;
 
-// Hosts we allow to open as in-app popup windows (OAuth / sign-in flows).
-// Everything else that tries to open a new window is sent to the system browser.
+// Hosts that are part of a sign-in flow and must stay INSIDE the app window so
+// the session lands in the app's web origin (not the system browser). Includes
+// the Supabase auth domain, which is the first redirect hop of Supabase OAuth —
+// missing it sent the whole Google flow to the external browser and the app
+// never received the session. Matches the host or any subdomain.
 const AUTH_HOSTS = [
+  'supabase.co',          // <ref>.supabase.co — Supabase auth authorize/callback
   'accounts.google.com',
+  'oauth2.googleapis.com',
   'appleid.apple.com',
   'github.com',
   'login.microsoftonline.com',
@@ -219,6 +224,14 @@ if (!gotLock) {
   });
 
   app.whenReady().then(() => {
+    // Strip the "Electron/x" and app-name tokens from the User-Agent so Google
+    // OAuth doesn't reject the in-window flow as a "disallowed_useragent".
+    try {
+      app.userAgentFallback = app.userAgentFallback
+        .replace(/ Electron\/[^\s]+/i, '')
+        .replace(new RegExp(' ' + app.getName() + '\\/[^\\s]+', 'i'), '');
+    } catch (_) {}
+
     buildMenu();
     createMainWindow();
 
