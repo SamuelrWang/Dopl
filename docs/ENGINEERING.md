@@ -554,6 +554,67 @@ When doing a large restructure (feature relocation, service split, directory reo
 
 ---
 
+## 18. Desktop app — build, signing & notarization
+
+The macOS desktop app lives in `dopl-desktop-app/`. It's a thin Electron wrapper
+around the production web app (`https://www.usedopl.com/`) — single `BrowserWindow`,
+external links open in the system browser, OAuth popups allowed, offline fallback,
+standard macOS menu. It is **inert for the Vercel/Next build** (`node_modules/` and
+`dist/` are gitignored; nothing imports it).
+
+### Layout
+- `main/index.js` — app entry (window, menu, navigation/link handling).
+- `renderer/preload.js` — minimal context-isolated bridge (`window.dopl`).
+- `renderer/offline.html` — shown on `did-fail-load`.
+- `build/icon.icns` — app icon (keep; don't regenerate casually).
+- `entitlements.mac.plist` — hardened-runtime entitlements (JIT, etc.).
+- `scripts/notarize.js` — electron-builder `afterSign` hook (notarizes during build).
+- `scripts/finish-notarize.sh` — standalone notarize+staple of an existing DMG.
+
+### Commands
+```bash
+cd dopl-desktop-app
+npm install              # first time / after clone (node_modules not committed)
+npm run start            # run from source (dev)
+npm run smoke            # headless load check against www.usedopl.com
+npm run build            # signed DMG -> dist/Dopl-<ver>-arm64.dmg
+npm run notarize         # notarize + staple the built DMG (no rebuild)
+```
+
+### Signing identity (set up; not secret)
+- Developer ID: `Developer ID Application: Samuel Wang (7352NBAF44)` (in Keychain).
+- Team ID: `7352NBAF44` · Apple ID: `samuelnywang717@gmail.com` · appId: `com.dopl.connect`.
+- `electron-builder` auto-signs with the keychain cert during `npm run build`.
+
+### Credentials (NOT stored in this repo)
+The Apple **app-specific password** is a live secret and must never be committed.
+`scripts/finish-notarize.sh` loads creds at runtime in this priority:
+1. env vars `APPLE_ID` + `APPLE_APP_SPECIFIC_PASSWORD`, else
+2. a local creds file (default `~/Desktop/openclaw/workspace/memory/apple-signing-checklist.md`,
+   override with `DOPL_SIGNING_CREDS_FILE`).
+
+Provide creds via env when building elsewhere:
+```bash
+export APPLE_ID="samuelnywang717@gmail.com"
+export APPLE_APP_SPECIFIC_PASSWORD="xxxx-xxxx-xxxx-xxxx"   # appleid.apple.com → App-Specific Passwords
+npm run notarize
+```
+
+### Notarization notes
+- Notarization is **path-independent** (Apple checks the bundle, not its location).
+- Every build must be re-notarized (the afterSign hook does it when creds are present).
+- `SKIP_NOTARIZE=true npm run build` for fast unsigned-ish dev builds.
+- **403 "A required agreement is missing or has expired"** is an *account* error, not
+  a code error: accept the pending Developer Program License Agreement at
+  developer.apple.com → App Store Connect → Agreements, Tax, and Banking, wait a few
+  minutes to propagate, then re-run `npm run notarize`.
+- Verify a build: `xcrun stapler validate <dmg>` and, on the `.app` inside the mounted
+  DMG, `spctl -a -vvv <app>` → expect `accepted / source=Notarized Developer ID`.
+  (`spctl` on the `.dmg` itself reports "no usable signature" — that's expected; the
+  DMG carries a stapled ticket, not a code signature.)
+
+---
+
 ## Appendix A — ESLint rules to add
 
 - `import/order` with groups: builtin, external, internal (`@/` alias), parent, sibling, index.
