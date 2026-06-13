@@ -1,0 +1,54 @@
+{
+  "name": "dopl-desktop",
+  "version": "1.0.0",
+  "description": "Dopl — desktop app",
+  "main": "main/index.js",
+  "scripts": {
+    "start": "electron .",
+    "smoke": "electron scripts/smoke-test.js",
+    "build": "electron-builder --mac",
+    "notarize": "bash scripts/finish-notarize.sh"
+  },
+  "dependencies": {
+    "electron-store": "^8.1.0"
+  },
+  "devDependencies": {
+    "electron": "^32.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.dopl.connect",
+    "productName": "Dopl",
+    "mac": {
+      "icon": "build/icon.icns",
+      "target": "dmg",
+      "category": "public.app-category.productivity",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "entitlements.mac.plist",
+      "entitlementsInherit": "entitlements.mac.plist",
+      "notarize": false,
+      "extendInfo": {}
+    },
+    "afterSign": "./scripts/notarize.js",
+    "dmg": {
+      "title": "Dopl",
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    },
+    "files": [
+      "main/**/*",
+      "renderer/**/*"
+    ]
+  }
+}
