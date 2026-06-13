@@ -16,6 +16,11 @@ export async function GET(request: NextRequest) {
   // override via ?redirectTo= but only if same-origin path (open
   // redirect guard — see safeRedirect doc).
   const redirectTo = safeRedirect(searchParams.get("redirectTo"));
+  // Desktop app flow: this callback runs in the user's system browser. After
+  // the exchange we hand the session back to the app via /auth/desktop-handoff
+  // (which redirects to a dopl:// deep link). Skip the onboarding detour — the
+  // user finishes onboarding inside the app once the session lands there.
+  const isDesktop = searchParams.get("desktop") === "1";
 
   if (code) {
     const cookieStore = await cookies();
@@ -25,7 +30,7 @@ export async function GET(request: NextRequest) {
     if (!error) {
       // Onboarding detour for new users; set inside the try below so a
       // failed status read falls back to redirectTo and never blocks sign-in.
-      let destination = redirectTo;
+      let destination = isDesktop ? "/auth/desktop-handoff" : redirectTo;
       // Stamp a 24-hour trial on first sign-in. Idempotent — only runs
       // if trial_started_at is null. Wrapped in try/catch so a trial
       // failure can never block the redirect.
@@ -60,7 +65,7 @@ export async function GET(request: NextRequest) {
           // First-run users detour to /onboarding (survey + MCP connect).
           // Only an EXPLICIT deep link is threaded — the /canvas default
           // isn't, since onboarding computes the workspace landing itself.
-          if (!(await isOnboarded(user.id))) {
+          if (!isDesktop && !(await isOnboarded(user.id))) {
             destination = searchParams.get("redirectTo")
               ? `/onboarding?${new URLSearchParams({ redirectTo })}`
               : "/onboarding";

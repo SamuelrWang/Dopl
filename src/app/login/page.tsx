@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { getSupabaseBrowser } from "@/shared/supabase/browser";
 import { safeRedirect } from "@/shared/lib/url/safe-redirect";
+import { isDesktopApp } from "@/shared/lib/desktop";
 
 export default function LoginPage() {
   return (
@@ -64,6 +65,20 @@ function LoginForm() {
 
   async function handleGoogleLogin() {
     setError(null);
+
+    // Desktop app: OAuth can't run in the wrapper window (Supabase PKCE needs
+    // the code-verifier to live in the same context that exchanges the code).
+    // Open the system browser to run the flow there; it hands the finished
+    // session back to the app via a dopl:// deep link. window.open is routed
+    // to the system browser by the desktop shell's window-open handler.
+    if (isDesktopApp()) {
+      window.open(`${window.location.origin}/auth/desktop-start`, "_blank");
+      setMessage(
+        "Continue signing in with Google in your browser. You'll be returned to the Dopl app automatically.",
+      );
+      return;
+    }
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo: buildCallbackUrl() },

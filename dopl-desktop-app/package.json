@@ -28,7 +28,14 @@
       "entitlements": "entitlements.mac.plist",
       "entitlementsInherit": "entitlements.mac.plist",
       "notarize": false,
-      "extendInfo": {}
+      "extendInfo": {
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLName": "com.dopl.connect",
+            "CFBundleURLSchemes": ["dopl"]
+          }
+        ]
+      }
     },
     "afterSign": "./scripts/notarize.js",
     "dmg": {

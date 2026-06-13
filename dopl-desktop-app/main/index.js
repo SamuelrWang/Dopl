@@ -6,35 +6,24 @@ const Store = require('electron-store');
 const APP_URL = process.env.DOPL_APP_URL || 'https://www.usedopl.com/';
 const APP_ORIGIN = new URL(APP_URL).origin;
 
-// Hosts that are part of a sign-in flow and must stay INSIDE the app window so
-// the session lands in the app's web origin (not the system browser). Includes
-// the Supabase auth domain, which is the first redirect hop of Supabase OAuth —
-// missing it sent the whole Google flow to the external browser and the app
-// never received the session. Matches the host or any subdomain.
-const AUTH_HOSTS = [
-  'supabase.co',          // <ref>.supabase.co — Supabase auth authorize/callback
-  'accounts.google.com',
-  'oauth2.googleapis.com',
-  'appleid.apple.com',
-  'github.com',
-  'login.microsoftonline.com',
-];
+// Custom URL scheme used to hand the OAuth session back from the system browser
+// into this app (dopl://auth#access_token=…&refresh_token=…). Registered with
+// macOS via setAsDefaultProtocolClient + CFBundleURLTypes in package.json.
+const PROTOCOL = 'dopl';
 
 const store = new Store();
 let mainWindow = null;
+let pendingDeepLink = null; // deep link received before the window is ready
 
-function isAuthHost(host) {
-  return AUTH_HOSTS.some((h) => host === h || host.endsWith('.' + h));
-}
-
-// Internal = the app itself or an auth provider mid-flow → navigate in-window.
-function isInternalUrl(urlStr) {
+// In-app navigation is limited to the app's own web origin. Sign-in runs in the
+// SYSTEM BROWSER (Supabase PKCE requires it), so OAuth provider hosts are NOT
+// kept in-window — they're opened externally and hand the session back via the
+// dopl:// deep link.
+function isAppUrl(urlStr) {
   try {
     const u = new URL(urlStr);
     if (u.origin === APP_ORIGIN) return true;
-    // Also treat the bare/apex usedopl.com (and any subdomain) as internal.
     if (u.hostname === 'usedopl.com' || u.hostname.endsWith('.usedopl.com')) return true;
-    if (isAuthHost(u.hostname)) return true;
     return false;
   } catch (_) {
     return false;
@@ -99,29 +88,18 @@ function showOffline() {
 
 // ── Navigation / link handling ─────────────────────────────────────────────────
 function wireNavigation(contents) {
-  // window.open / target=_blank
+  // window.open / target=_blank → always open in the system browser. This is how
+  // sign-in leaves the app: the login page calls window.open('/auth/desktop-start')
+  // and OAuth runs in the real browser, then returns via the dopl:// deep link.
   contents.setWindowOpenHandler(({ url }) => {
-    if (isInternalUrl(url)) {
-      // Allow auth/same-origin popups to open as a real child window so OAuth
-      // popup flows complete, then return to the app.
-      return {
-        action: 'allow',
-        overrideBrowserWindowOptions: {
-          width: 520,
-          height: 720,
-          autoHideMenuBar: true,
-          webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
-        },
-      };
-    }
-    shell.openExternal(url);
+    if (/^https?:/i.test(url)) shell.openExternal(url);
     return { action: 'deny' };
   });
 
-  // In-window navigation: keep app + auth hosts in-window, push the rest to the
+  // In-window navigation stays on the app's own origin; anything else goes to the
   // system browser so the wrapper never becomes a general-purpose browser.
   contents.on('will-navigate', (event, url) => {
-    if (!isInternalUrl(url)) {
+    if (!isAppUrl(url)) {
       event.preventDefault();
       shell.openExternal(url);
     }
@@ -210,12 +188,63 @@ function buildMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
+// ── Deep link (dopl://) ─────────────────────────────────────────────────────────
+// The system browser finishes OAuth and redirects to dopl://auth#<tokens>. macOS
+// routes that to this app; we load the in-app completion page with the same
+// fragment so the app's window adopts the session.
+function openDeepLink(url) {
+  let fragment = '';
+  try {
+    const u = new URL(url);
+    fragment = u.hash ? u.hash.slice(1) : u.search.slice(1);
+  } catch (_) {
+    const i = url.indexOf('#');
+    if (i >= 0) fragment = url.slice(i + 1);
+  }
+  const target = `${APP_ORIGIN}/auth/desktop-complete#${fragment}`;
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.loadURL(target).catch((err) => console.error('[deeplink] load failed:', err && err.message));
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  }
+}
+
+function handleDeepLink(url) {
+  if (!url || !url.startsWith(PROTOCOL + '://')) return;
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    openDeepLink(url);
+  } else {
+    pendingDeepLink = url; // arrived before the window existed — flush on ready
+  }
+}
+
+function flushPendingDeepLink() {
+  if (pendingDeepLink) {
+    const url = pendingDeepLink;
+    pendingDeepLink = null;
+    openDeepLink(url);
+  }
+}
+
+// Register as the handler for dopl:// (also declared in Info.plist via build config).
+app.setAsDefaultProtocolClient(PROTOCOL);
+
+// macOS delivers deep links via 'open-url' (can fire before the app is ready).
+app.on('open-url', (event, url) => {
+  event.preventDefault();
+  handleDeepLink(url);
+});
+
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
 } else {
-  app.on('second-instance', () => {
+  app.on('second-instance', (_event, argv) => {
+    // Windows/Linux deliver deep links as a launch arg; macOS uses 'open-url'.
+    const link = argv.find((a) => a.startsWith(PROTOCOL + '://'));
+    if (link) handleDeepLink(link);
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.show();
@@ -224,8 +253,8 @@ if (!gotLock) {
   });
 
   app.whenReady().then(() => {
-    // Strip the "Electron/x" and app-name tokens from the User-Agent so Google
-    // OAuth doesn't reject the in-window flow as a "disallowed_useragent".
+    // Present a clean Chrome User-Agent (no "Electron/x" or app-name token) so
+    // the web app and any third-party widgets don't treat us as an odd client.
     try {
       app.userAgentFallback = app.userAgentFallback
         .replace(/ Electron\/[^\s]+/i, '')
@@ -234,6 +263,7 @@ if (!gotLock) {
 
     buildMenu();
     createMainWindow();
+    flushPendingDeepLink();
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {
