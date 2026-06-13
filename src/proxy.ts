@@ -4,6 +4,12 @@ import { createServerClient } from "@supabase/ssr";
 const PUBLIC_ROUTES = [
   "/login",
   "/auth/callback",
+  // Desktop app sign-in bridge: /auth/desktop-start (pre-auth, kicks off OAuth
+  // in the system browser), /auth/desktop-handoff (hands the session to the
+  // dopl:// deep link), /auth/desktop-complete (loaded in the app window to
+  // adopt the session). All must bypass the session gate — the user isn't
+  // signed in within the app window until desktop-complete runs.
+  "/auth/desktop",
   "/api/billing/webhook",
   // Cron + scheduled jobs are machine-to-machine: invoked by Vercel Cron with
   // a Bearer CRON_SECRET that the routes verify themselves. They must bypass
