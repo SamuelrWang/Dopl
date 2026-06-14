@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Bell, UserRound } from "lucide-react";
-import { useAuthUser, userInitials } from "@/shared/auth/use-auth-user";
+import { useAuthUser } from "@/shared/auth/use-auth-user";
 import type { WorkspaceLike } from "./workspace-types";
 import { SettingsModal, type SettingsSection } from "@/shared/layout/settings-modal";
+import { CreateWorkspaceDialog } from "@/features/workspaces/components/create-workspace-dialog";
 import { AppRail } from "./app-rail";
 import { AppSidebar } from "./app-sidebar";
 import styles from "./app-shell.module.css";
@@ -33,11 +34,11 @@ export function AppShell({
   children,
 }: Props) {
   const { user } = useAuthUser();
-  const workspaces = useRailWorkspaces();
+  const { workspaces, refresh: refreshWorkspaces } = useRailWorkspaces();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("billing");
+  const [createWsOpen, setCreateWsOpen] = useState(false);
 
-  const userInitial = user ? userInitials(user)[0] : "?";
   const activeRole =
     workspaces.find((w) => w.publicId === workspacePublicId)?.role ?? "viewer";
 
@@ -69,7 +70,7 @@ export function AppShell({
         <AppRail
           workspaces={workspaces}
           activePublicId={workspacePublicId}
-          userInitial={userInitial}
+          onAddWorkspace={() => setCreateWsOpen(true)}
         />
         <div className={styles.surface}>
           <AppSidebar
@@ -80,6 +81,12 @@ export function AppShell({
           {children}
         </div>
       </div>
+
+      <CreateWorkspaceDialog
+        open={createWsOpen}
+        onOpenChange={setCreateWsOpen}
+        onCreated={refreshWorkspaces}
+      />
 
       <SettingsModal
         open={settingsOpen}
@@ -96,9 +103,14 @@ export function AppShell({
   );
 }
 
-/** Loads the user's workspaces for the rail. Empty until the fetch resolves. */
-function useRailWorkspaces(): WorkspaceLike[] {
+/** Loads the user's workspaces for the rail. Empty until the fetch
+ *  resolves; `refresh` refetches (e.g. after creating a workspace). */
+function useRailWorkspaces(): {
+  workspaces: WorkspaceLike[];
+  refresh: () => void;
+} {
   const [workspaces, setWorkspaces] = useState<WorkspaceLike[]>([]);
+  const [tick, setTick] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -113,7 +125,8 @@ function useRailWorkspaces(): WorkspaceLike[] {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [tick]);
 
-  return workspaces;
+  const refresh = useCallback(() => setTick((t) => t + 1), []);
+  return { workspaces, refresh };
 }

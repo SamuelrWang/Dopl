@@ -10,15 +10,20 @@ import styles from "./app-shell.module.css";
 interface Props {
   workspaces: WorkspaceLike[];
   activePublicId: string;
-  userInitial: string;
+  onAddWorkspace: () => void;
 }
 
 /**
  * Far-left vertical rail of workspace tiles (new design language). Lists
  * the user's real workspaces — the active one is highlighted with the
- * light tile + edge bar — plus an add affordance and the account avatar.
+ * light tile + edge bar — plus an add affordance (opens the create-
+ * workspace dialog in place). Account/profile lives in the top-right.
  */
-export function AppRail({ workspaces, activePublicId, userInitial }: Props) {
+export function AppRail({
+  workspaces,
+  activePublicId,
+  onAddWorkspace,
+}: Props) {
   return (
     <nav className={styles.rail}>
       {workspaces.map((ws) => {
@@ -41,15 +46,15 @@ export function AppRail({ workspaces, activePublicId, userInitial }: Props) {
         );
       })}
 
-      <Link href="/workspaces" title="Add workspace" className={styles.wsAdd}>
+      <button
+        type="button"
+        title="New workspace"
+        aria-label="New workspace"
+        onClick={onAddWorkspace}
+        className={styles.wsAdd}
+      >
         <Plus size={22} strokeWidth={2} />
-      </Link>
-
-      <div className={styles.railSpacer} />
-
-      <Link href="/settings" title="You" className={styles.wsMe}>
-        {userInitial}
-      </Link>
+      </button>
     </nav>
   );
 }
