@@ -12,6 +12,7 @@ import { Lead } from "./lead";
 import { StreamingIndicator } from "./streaming-indicator";
 import { AgentPromptCard } from "./agent-prompt-card";
 import { ContextFileCard } from "./context-file-card";
+import { KbDocumentCard } from "./kb-document-card";
 
 type EntryRef = {
   entry_id: string;
@@ -35,6 +36,7 @@ type Block =
   | { kind: "agent-group"; steps: AgentStep[] }
   | { kind: "agent-prompt"; message: Extract<ChatMessage, { type: "agent_prompt_artifact" }> }
   | { kind: "context-file"; message: Extract<ChatMessage, { type: "context_file_artifact" }> }
+  | { kind: "kb-card"; message: Extract<ChatMessage, { type: "kb_card_artifact" }> }
   | { kind: "trial-expired"; text: string };
 
 type AiBlock = Exclude<Block, { kind: "user-text" }>;
@@ -102,6 +104,8 @@ function blockify(messages: ChatMessage[]): Block[] {
       blocks.push({ kind: "agent-prompt", message: m });
     } else if (m.role === "ai" && m.type === "context_file_artifact") {
       blocks.push({ kind: "context-file", message: m });
+    } else if (m.role === "ai" && m.type === "kb_card_artifact") {
+      blocks.push({ kind: "kb-card", message: m });
     } else if (m.role === "ai" && m.type === "trial_expired") {
       blocks.push({ kind: "trial-expired", text: m.message });
     }
@@ -144,6 +148,7 @@ const TOOL_KIND_LABEL: Record<string, string> = {
   read_knowledge_entry: "Read knowledge entry",
   list_workspace_skills: "Listed skills",
   read_skill_file: "Read skill file",
+  render_knowledge_entry: "Rendered knowledge entry",
   emit_agent_prompt: "Drafted agent prompt",
   emit_context_file: "Synthesized context file",
 };
@@ -319,6 +324,18 @@ export function PrivateMessageList({
                                 })
                             : undefined
                         }
+                      />
+                    );
+                  case "kb-card":
+                    return (
+                      <KbDocumentCard
+                        key={bi}
+                        title={block.message.title}
+                        knowledgeBase={block.message.knowledgeBase}
+                        knowledgeBaseSlug={block.message.knowledgeBaseSlug}
+                        body={block.message.body}
+                        entryId={block.message.entryId}
+                        updatedAt={block.message.updatedAt}
                       />
                     );
                   case "trial-expired":

@@ -71,6 +71,8 @@ function toolSummary(
       return "Listed clusters";
     case "read_knowledge_entry":
       return "Read knowledge entry";
+    case "render_knowledge_entry":
+      return "Rendered knowledge entry";
     case "read_skill_file":
       return "Read skill file";
     case "emit_agent_prompt":
@@ -256,6 +258,13 @@ async function handlePost(
                 if (artifact) {
                   send({ type: "artifact", artifact });
                 }
+              }
+
+              // Server-sourced artifacts ride back on the tool result
+              // (e.g. render_knowledge_entry's kb_card, whose body is
+              // fetched server-side rather than supplied by the model).
+              if (toolOutput.artifact) {
+                send({ type: "artifact", artifact: toolOutput.artifact });
               }
 
               send({

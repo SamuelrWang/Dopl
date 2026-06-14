@@ -28,7 +28,31 @@ export interface ContextFileArtifact {
   markdown: string;
 }
 
-export type ArtifactPayload = AgentPromptArtifact | ContextFileArtifact;
+/**
+ * A faithful inline render of one knowledge-base entry. Content is
+ * SERVER-fetched (see `executeRenderKnowledgeEntry`) under the caller's
+ * access, so `body` is the true entry body, never model-reproduced.
+ */
+export interface KbCardArtifact {
+  kind: "kb_card";
+  id: string;
+  /** Entry title — shown as the card heading. */
+  title: string;
+  /** Owning knowledge base's display name + slug (for the deep link). */
+  knowledgeBase: string;
+  knowledgeBaseSlug: string;
+  /** True entry markdown body. */
+  body: string;
+  /** Entry UUID — lets the card deep-link into the Knowledge section. */
+  entryId: string;
+  /** ISO timestamp of the entry's last edit (shown as a freshness hint). */
+  updatedAt: string | null;
+}
+
+export type ArtifactPayload =
+  | AgentPromptArtifact
+  | ContextFileArtifact
+  | KbCardArtifact;
 
 export async function executeEmitAgentPrompt(
   input: Record<string, unknown>

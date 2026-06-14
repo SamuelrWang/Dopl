@@ -66,4 +66,23 @@ export type ChatMessage =
       title: string;
       markdown: string;
       promotedPanelId?: string;
+    }
+  | {
+      /**
+       * Private-chat artifact: a faithful inline render of one knowledge-
+       * base entry (the `render_knowledge_entry` tool). Body is fetched
+       * server-side under the caller's access, so it always reflects the
+       * true entry. Rendered as a `<KbDocumentCard>` — a read view with
+       * copy + open-in-Knowledge, no promote (the entry already lives in
+       * the workspace).
+       */
+      role: "ai";
+      type: "kb_card_artifact";
+      artifactId: string;
+      title: string;
+      knowledgeBase: string;
+      knowledgeBaseSlug: string;
+      body: string;
+      entryId: string;
+      updatedAt: string | null;
     };

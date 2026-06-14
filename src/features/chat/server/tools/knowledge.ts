@@ -1,4 +1,5 @@
 import "server-only";
+import { randomUUID } from "crypto";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import {
   listBasesForWorkspace,
@@ -164,6 +165,98 @@ export async function executeSearchWorkspaceKnowledge(
   return { result: JSON.stringify({ matches }) };
 }
 
+/** Minimal shapes the resolver returns; both read + render tools use them. */
+type ResolvedEntry = {
+  id: string;
+  title: string;
+  excerpt: string | null;
+  body: string;
+  updatedAt: string | null;
+};
+type ResolvedBase = { id: string; slug: string; name: string };
+
+/**
+ * Resolve one visible KB entry from a tool input — by `entry_id`
+ * (preferred) or `knowledge_base_slug` + `title`. Centralises the
+ * access checks (private ownership + teams-mode grant) so the read and
+ * render tools enforce the exact same visibility rules. Returns the
+ * entry + its owning base, or a user-facing `error` string.
+ */
+async function resolveVisibleEntry(
+  input: Record<string, unknown>,
+  userId: string,
+  workspaceId: string,
+  scopeFilters?: KnowledgeScopeFilters
+): Promise<{ entry: ResolvedEntry; base: ResolvedBase } | { error: string }> {
+  const entryId = input.entry_id as string | undefined;
+  const slugInput = input.knowledge_base_slug as string | undefined;
+  if (!entryId && !slugInput) {
+    return { error: "Provide entry_id, or knowledge_base_slug + title." };
+  }
+
+  if (entryId) {
+    const entry = await findEntryById(entryId);
+    if (!entry || entry.workspaceId !== workspaceId) {
+      return { error: "Entry not found." };
+    }
+    const visible = await listVisibleBases(workspaceId, userId, scopeFilters?.kbIds);
+    const base = visible.find((b) => b.id === entry.knowledgeBaseId);
+    if (!base) return { error: "Entry not visible." };
+    return {
+      entry: {
+        id: entry.id,
+        title: entry.title,
+        excerpt: entry.excerpt,
+        body: entry.body,
+        updatedAt: entry.updatedAt,
+      },
+      base: { id: base.id, slug: base.slug, name: base.name },
+    };
+  }
+
+  // slug + title fallback (let the model address by name).
+  const titleInput = input.title as string | undefined;
+  if (!slugInput || !titleInput) {
+    return {
+      error:
+        "knowledge_base_slug AND title are required when entry_id is omitted.",
+    };
+  }
+  const base = await findBaseBySlug(workspaceId, slugInput);
+  if (!base) return { error: "Knowledge base not found." };
+  if (base.visibility === "private" && base.createdBy !== userId) {
+    return { error: "Knowledge base not visible." };
+  }
+  // Respect the per-chat scope picker when it's narrowing to a subset.
+  if (scopeFilters?.kbIds && !scopeFilters.kbIds.includes(base.id)) {
+    return { error: "Knowledge base not in scope." };
+  }
+  if (base.accessMode === "teams") {
+    const level = await effectiveResourceAccess(
+      userId,
+      workspaceId,
+      "knowledge_base",
+      base.id
+    );
+    if (level === null) return { error: "Knowledge base not visible." };
+  }
+  const entries = await listEntriesForBase(base.id);
+  const match = entries.find(
+    (e) => e.title.toLowerCase() === titleInput.toLowerCase()
+  );
+  if (!match) return { error: "Entry not found by title." };
+  return {
+    entry: {
+      id: match.id,
+      title: match.title,
+      excerpt: match.excerpt,
+      body: match.body,
+      updatedAt: match.updatedAt,
+    },
+    base: { id: base.id, slug: base.slug, name: base.name },
+  };
+}
+
 /** Tool: read_knowledge_entry — return full body of one workspace KB entry. */
 export async function executeReadKnowledgeEntry(
   input: Record<string, unknown>,
@@ -175,84 +268,77 @@ export async function executeReadKnowledgeEntry(
   if (!userId || !workspaceId) {
     return { result: JSON.stringify({ error: "Not authenticated." }) };
   }
-  const entryId = input.entry_id as string;
-  const slugInput = input.knowledge_base_slug as string | undefined;
-  if (!entryId && !slugInput) {
-    return {
-      result: JSON.stringify({
-        error: "Provide entry_id, or knowledge_base_slug + title.",
-      }),
-    };
-  }
-
-  if (entryId) {
-    const entry = await findEntryById(entryId);
-    if (!entry || entry.workspaceId !== workspaceId) {
-      return { result: JSON.stringify({ error: "Entry not found." }) };
-    }
-    const visible = await listVisibleBases(workspaceId, userId, scopeFilters?.kbIds);
-    const base = visible.find((b) => b.id === entry.knowledgeBaseId);
-    if (!base) {
-      return { result: JSON.stringify({ error: "Entry not visible." }) };
-    }
-    return {
-      result: JSON.stringify({
-        entry: {
-          id: entry.id,
-          knowledge_base: base.name,
-          title: entry.title,
-          excerpt: entry.excerpt,
-          body: entry.body,
-          updated_at: entry.updatedAt,
-        },
-      }),
-    };
-  }
-
-  // slug + title fallback (let the model address by name).
-  const titleInput = input.title as string | undefined;
-  if (!slugInput || !titleInput) {
-    return {
-      result: JSON.stringify({
-        error: "knowledge_base_slug AND title are required when entry_id is omitted.",
-      }),
-    };
-  }
-  const base = await findBaseBySlug(workspaceId, slugInput);
-  if (!base) {
-    return { result: JSON.stringify({ error: "Knowledge base not found." }) };
-  }
-  if (base.visibility === "private" && base.createdBy !== userId) {
-    return { result: JSON.stringify({ error: "Knowledge base not visible." }) };
-  }
-  if (base.accessMode === "teams") {
-    const level = await effectiveResourceAccess(
-      userId,
-      workspaceId,
-      "knowledge_base",
-      base.id
-    );
-    if (level === null) {
-      return { result: JSON.stringify({ error: "Knowledge base not visible." }) };
-    }
-  }
-  const entries = await listEntriesForBase(base.id);
-  const match = entries.find(
-    (e) => e.title.toLowerCase() === titleInput.toLowerCase()
+  const resolved = await resolveVisibleEntry(
+    input,
+    userId,
+    workspaceId,
+    scopeFilters
   );
-  if (!match) {
-    return { result: JSON.stringify({ error: "Entry not found by title." }) };
+  if ("error" in resolved) {
+    return { result: JSON.stringify({ error: resolved.error }) };
   }
+  const { entry, base } = resolved;
   return {
     result: JSON.stringify({
       entry: {
-        id: match.id,
+        id: entry.id,
         knowledge_base: base.name,
-        title: match.title,
-        excerpt: match.excerpt,
-        body: match.body,
-        updated_at: match.updatedAt,
+        title: entry.title,
+        excerpt: entry.excerpt,
+        body: entry.body,
+        updated_at: entry.updatedAt,
       },
     }),
+  };
+}
+
+/**
+ * Tool: render_knowledge_entry — surface one entry as a faithful inline
+ * document card in the chat.
+ *
+ * Fetches the REAL entry under the caller's access (same resolver as the
+ * read tool) and returns a `kb_card` artifact carrying the true body, so
+ * the rendered card can never be a model hallucination. The model-facing
+ * `result` is intentionally small (title + KB only, NOT the body): the
+ * card shows the content, so re-dumping the body into the conversation
+ * would just burn tokens.
+ */
+export async function executeRenderKnowledgeEntry(
+  input: Record<string, unknown>,
+  userId?: string,
+  _canvasContext?: unknown,
+  workspaceId?: string,
+  scopeFilters?: KnowledgeScopeFilters
+): Promise<ToolResult> {
+  if (!userId || !workspaceId) {
+    return { result: JSON.stringify({ error: "Not authenticated." }) };
+  }
+  const resolved = await resolveVisibleEntry(
+    input,
+    userId,
+    workspaceId,
+    scopeFilters
+  );
+  if ("error" in resolved) {
+    return { result: JSON.stringify({ error: resolved.error }) };
+  }
+  const { entry, base } = resolved;
+  return {
+    result: JSON.stringify({
+      status: "rendered",
+      kind: "kb_card",
+      title: entry.title,
+      knowledge_base: base.name,
+    }),
+    artifact: {
+      kind: "kb_card",
+      id: randomUUID(),
+      title: entry.title,
+      knowledgeBase: base.name,
+      knowledgeBaseSlug: base.slug,
+      body: entry.body,
+      entryId: entry.id,
+      updatedAt: entry.updatedAt,
+    },
   };
 }

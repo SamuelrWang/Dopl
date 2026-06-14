@@ -7,6 +7,7 @@ import {
   executeListWorkspaceKnowledgeBases,
   executeSearchWorkspaceKnowledge,
   executeReadKnowledgeEntry,
+  executeRenderKnowledgeEntry,
   type KnowledgeScopeFilters,
 } from "./knowledge";
 import {
@@ -76,7 +77,27 @@ const WORKSPACE_KB_TOOLS: Anthropic.Tool[] = [
   {
     name: "read_knowledge_entry",
     description:
-      "Read the full body of a workspace knowledge-base entry. Address by entry_id (preferred — get this from search_workspace_knowledge), OR by knowledge_base_slug + title for direct lookups.",
+      "Read the full body of a workspace knowledge-base entry INTO YOUR OWN context so you can reason over or synthesize from it. Address by entry_id (preferred — get this from search_workspace_knowledge), OR by knowledge_base_slug + title for direct lookups. Use this when you need the content to answer; use render_knowledge_entry instead when the user wants to SEE the entry itself.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        entry_id: { type: "string", description: "Entry UUID (preferred)." },
+        knowledge_base_slug: {
+          type: "string",
+          description: "KB slug, used with `title` when entry_id isn't known.",
+        },
+        title: {
+          type: "string",
+          description: "Entry title, used with `knowledge_base_slug`.",
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "render_knowledge_entry",
+    description:
+      "Display one knowledge-base entry as a faithful, formatted document card inline in the chat — the user sees the real entry, rendered. Use this (instead of pasting or paraphrasing the whole body) when the user wants to SEE, READ, OPEN, PULL UP, or SHOW a specific entry, or when your answer essentially IS one entry. The card fetches the true content server-side, so you do NOT need to read the entry first or reproduce its text — just call this with the reference and add a one-line lead-in. For a CURATED bundle drawn from multiple sources, use emit_context_file instead. Address by entry_id (preferred — from search_workspace_knowledge) OR knowledge_base_slug + title.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -213,6 +234,7 @@ const SCOPED_HANDLERS: Record<string, ScopedToolHandler> = {
   list_workspace_knowledge_bases: executeListWorkspaceKnowledgeBases,
   search_workspace_knowledge: executeSearchWorkspaceKnowledge,
   read_knowledge_entry: executeReadKnowledgeEntry,
+  render_knowledge_entry: executeRenderKnowledgeEntry,
   list_workspace_skills: executeListWorkspaceSkills,
   read_skill_file: executeReadSkillFile,
   emit_agent_prompt: (input) => executeEmitAgentPrompt(input),

@@ -260,11 +260,16 @@ export function usePrivateChat({
                 complexity?: string;
               };
               artifact?: {
-                kind: "agent_prompt" | "context_file";
+                kind: "agent_prompt" | "context_file" | "kb_card";
                 id: string;
                 title: string;
                 prompt?: string;
                 markdown?: string;
+                knowledgeBase?: string;
+                knowledgeBaseSlug?: string;
+                body?: string;
+                entryId?: string;
+                updatedAt?: string | null;
               };
               message?: string;
             };
@@ -325,6 +330,21 @@ export function usePrivateChat({
                       artifactId: event.artifact!.id,
                       title: event.artifact!.title,
                       markdown: event.artifact!.markdown || "",
+                    },
+                  ]);
+                } else if (event.artifact.kind === "kb_card") {
+                  setMessages((prev) => [
+                    ...prev,
+                    {
+                      role: "ai",
+                      type: "kb_card_artifact",
+                      artifactId: event.artifact!.id,
+                      title: event.artifact!.title,
+                      knowledgeBase: event.artifact!.knowledgeBase || "",
+                      knowledgeBaseSlug: event.artifact!.knowledgeBaseSlug || "",
+                      body: event.artifact!.body || "",
+                      entryId: event.artifact!.entryId || "",
+                      updatedAt: event.artifact!.updatedAt ?? null,
                     },
                   ]);
                 }
