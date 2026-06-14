@@ -1,6 +1,10 @@
 /**
  * /[workspaceSlug] — workspace root, redirects to the default canvas.
  *
+ * Lives inside the (app) group so the AppShell stays mounted while the
+ * redirect resolves — hopping sidebar → Canvas never tears down the
+ * shell (that teardown was a full-screen background flash).
+ *
  * For now every workspace has exactly one canvas (slug='main'), so this
  * just redirects there. Later phases may pick the user's last-active
  * canvas or render a workspace-level overview.

@@ -1,19 +1,26 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import type { KnowledgeContext } from "../types";
+import { embedQuery } from "./embeddings";
 import { KnowledgeBaseNotFoundError } from "./errors";
 import * as repo from "./repository";
 import { listBases } from "./service";
 
 /**
- * Full-text search across the workspace's knowledge entries (Item 5.D).
- * Backed by the `search_knowledge_entries` Postgres RPC + a tsvector
- * GIN index from migration 20260501020000_knowledge_fulltext.
+ * Search across the workspace's knowledge entries.
+ *
+ * Hybrid by default: the query is embedded (OpenAI) and the
+ * `search_knowledge_hybrid` RPC fuses vector similarity over
+ * `knowledge_entry_chunks` with the tsvector keyword rank (RRF).
+ * When embeddings are unavailable (no key, API failure), falls back
+ * to the original pure full-text `search_knowledge_entries` RPC —
+ * search never breaks, it just gets less semantic.
  *
  * Path: client → REST `/api/knowledge/search` → service → RPC → results.
  *
- * Snippets returned by the RPC use HTML `<b>` tags around matched
- * terms — strip or render at the UI layer.
+ * Keyword-hit snippets use HTML `<b>` tags around matched terms
+ * (vector-only hits return plain chunk text) — strip or render at the
+ * UI layer.
  */
 
 export interface SearchHit {
@@ -82,15 +89,34 @@ export async function searchKnowledgeEntries(
 
   const db = supabaseAdmin();
   // SECURITY: `p_workspace_id` MUST come from the auth context
-  // (`ctx.workspaceId`), never from client-controllable input. The RPC is
-  // SECURITY INVOKER but the admin client bypasses RLS, so the function
-  // trusts whatever workspace_id we pass. Audit fix #11.
-  const { data, error } = await db.rpc("search_knowledge_entries", {
+  // (`ctx.workspaceId`), never from client-controllable input. The RPCs
+  // are SECURITY INVOKER but the admin client bypasses RLS, so the
+  // functions trust whatever workspace_id we pass. Audit fix #11.
+  const ftsArgs = {
     p_workspace_id: ctx.workspaceId,
     p_query: trimmed,
     p_base_id: baseId,
     p_limit: opts.limit ?? 20,
-  });
+  };
+  let result: { data: unknown; error: { message?: string } | null } | null = null;
+  const queryEmbedding = await embedQuery(trimmed);
+  if (queryEmbedding) {
+    result = await db.rpc("search_knowledge_hybrid", {
+      ...ftsArgs,
+      p_embedding: queryEmbedding,
+    });
+    if (result.error) {
+      // Hybrid RPC missing/unhealthy (e.g. migration not applied yet) —
+      // degrade to pure full-text rather than breaking search.
+      console.error(
+        "[knowledge-search] hybrid RPC failed, falling back to FTS:",
+        result.error.message
+      );
+      result = null;
+    }
+  }
+  if (!result) result = await db.rpc("search_knowledge_entries", ftsArgs);
+  const { data, error } = result;
   if (error) throw error;
 
   return ((data ?? []) as RpcRow[])

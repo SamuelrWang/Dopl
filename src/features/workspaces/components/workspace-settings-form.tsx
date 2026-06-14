@@ -87,7 +87,15 @@ export function WorkspaceSettingsForm({ workspace, role }: Props) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body?.error?.message || body?.error || "Failed to delete");
       }
-      router.push("/workspaces");
+      // Workspace is gone — land on the first remaining one (the root
+      // page redirects on through onboarding if none are left).
+      const next = await fetch("/api/workspaces")
+        .then((r) => (r.ok ? r.json() : { workspaces: [] }))
+        .then(
+          (body: { workspaces?: Workspace[] }) => body.workspaces?.[0] ?? null
+        )
+        .catch(() => null);
+      router.push(next ? `/${workspaceSegment(next)}` : "/onboarding");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");

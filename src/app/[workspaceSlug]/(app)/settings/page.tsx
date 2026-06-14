@@ -6,7 +6,6 @@
  */
 
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { getUser } from "@/shared/supabase/server";
 import { resolveMembershipOrThrow } from "@/features/workspaces/server/service";
 import { resolvePageWorkspace } from "@/features/workspaces/server/segment";
@@ -32,12 +31,6 @@ export default async function WorkspaceSettingsPage({ params }: PageProps) {
   return (
     <AppPanel>
     <div className="container mx-auto px-4 pt-10 pb-16 max-w-2xl">
-      <Link
-        href="/workspaces"
-        className="text-[10px] uppercase tracking-wider text-text-muted hover:text-text-secondary transition-colors"
-      >
-        ← All workspaces
-      </Link>
       <div className="mt-3 mb-6">
         <h1 className="text-2xl font-semibold text-text-primary">{workspace.name}</h1>
         <p className="text-xs text-text-muted mt-1 font-mono">

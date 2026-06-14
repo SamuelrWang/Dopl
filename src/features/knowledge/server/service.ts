@@ -57,6 +57,7 @@ import {
   type ResolvedPath,
 } from "./path";
 import * as repo from "./repository";
+import { scheduleEntryEmbedding } from "./embeddings";
 import { buildSeedKnowledgeBases } from "./seed";
 
 /**
@@ -747,7 +748,7 @@ export async function createEntry(
       );
     }
   }
-  return repo.insertEntry({
+  const created = await repo.insertEntry({
     workspaceId: ctx.workspaceId,
     knowledgeBaseId: base.id,
     folderId: input.folderId ?? null,
@@ -759,6 +760,8 @@ export async function createEntry(
     createdBy: ctx.userId,
     source: ctx.source,
   });
+  scheduleEntryEmbedding(created);
+  return created;
 }
 
 export async function updateEntry(
@@ -793,6 +796,12 @@ export async function updateEntry(
   if (saved === null) {
     const fresh = await getEntry(ctx, id);
     throw new KnowledgeStaleVersionError(expectedUpdatedAt!, fresh.updatedAt);
+  }
+  // Content changed → refresh chunk embeddings in the background.
+  // (Position/folder-only patches skip; the hash check inside would
+  // no-op anyway, but don't even schedule.)
+  if (patch.title !== undefined || patch.body !== undefined) {
+    scheduleEntryEmbedding(saved);
   }
   return saved;
 }
@@ -979,6 +988,9 @@ export async function writeFileByPath(
         fresh?.updatedAt ?? "concurrent"
       );
     }
+    if (input.title !== undefined || input.body !== undefined) {
+      scheduleEntryEmbedding(saved);
+    }
     return saved;
   }
 
@@ -991,7 +1003,7 @@ export async function writeFileByPath(
 
   // mkdir -p parents, then create.
   const parentFolder = await ensureFolderPath(ctx, base.id, parentSegments);
-  return repo.insertEntry({
+  const created = await repo.insertEntry({
     workspaceId: ctx.workspaceId,
     knowledgeBaseId: base.id,
     folderId: parentFolder?.id ?? null,
@@ -1000,6 +1012,8 @@ export async function writeFileByPath(
     createdBy: ctx.userId,
     source: ctx.source,
   });
+  scheduleEntryEmbedding(created);
+  return created;
 }
 
 /**
