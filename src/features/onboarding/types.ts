@@ -12,4 +12,4 @@ export interface OnboardingStatus {
   surveyCompleted: boolean;
 }
 
-export type OnboardingStep = "survey" | "connect";
+export type OnboardingStep = "survey" | "connect" | "seed";

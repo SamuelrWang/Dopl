@@ -38,6 +38,14 @@ export const DOPL_CARD_TEMPLATE = `<div style="font-family:system-ui,-apple-syst
 </div>`;
 
 /**
+ * Concise connect prompt (onboarding step 2). Just gets the agent talking
+ * to the MCP server; the richer seeding prompt comes on the next step.
+ */
+export function buildConnectPrompt(url: string): string {
+  return `Connect to my Dopl MCP server. Server name: ${MCP_SERVER_NAME}. Transport: HTTP (streamable). URL: ${url}. It uses OAuth — a browser window will open for me to sign in; no API key. Once connected, list the available tools.`;
+}
+
+/**
  * The bootstrap prompt. Drives an agent-led interview that fills the
  * user's workspace with genuinely useful, durable knowledge — and shows
  * each write as a rendered card. The agent supplies all content and does

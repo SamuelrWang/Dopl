@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Check, Copy } from "lucide-react";
 import { DEFAULT_MCP_URL, MCP_SERVER_NAME } from "../constants";
-import { buildBootstrapPrompt } from "../bootstrap-prompt";
+import { buildConnectPrompt } from "../bootstrap-prompt";
 
 interface McpConnectStepProps {
   connected: boolean;
@@ -37,20 +37,14 @@ export function McpConnectStep({
 
   return (
     <div className="space-y-7">
-      <div>
-        <h1
-          className="text-[28px] font-medium leading-tight text-[#1e242b]"
-          style={{ fontFamily: "var(--font-playfair), Georgia, serif" }}
-        >
+      <div className="text-center">
+        <h1 className="text-[28px] font-semibold leading-tight text-[#1e242b]">
           Connect your AI agent
         </h1>
         <p className="mt-2 text-[15px] text-[#646d78] leading-relaxed">
-          Dopl speaks <span className="font-semibold text-[#232a31]">MCP</span> —
-          an open protocol that lets any AI agent read and write your
-          workspace: knowledge bases, skills, and canvases. Add the server
-          below in your agent&rsquo;s MCP settings, or paste the prompt and let
-          it connect itself. A browser window opens once to sign in — no API
-          key.
+          Add the <span className="font-semibold text-[#232a31]">MCP</span>{" "}
+          server below to your agent, or paste the prompt to let it connect.
+          One browser sign-in — no API key.
         </p>
       </div>
 
@@ -70,8 +64,8 @@ export function McpConnectStep({
           onCopy={copy}
         />
         <CopyRow
-          label="Or paste this prompt to set up your workspace"
-          text={buildBootstrapPrompt(url)}
+          label="Or paste this prompt to connect"
+          text={buildConnectPrompt(url)}
           id="prompt"
           copied={copied}
           onCopy={copy}

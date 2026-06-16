@@ -15,8 +15,6 @@ export interface SurveyOption {
 export const ROLE_OPTIONS: SurveyOption[] = [
   { value: "engineer", label: "Engineer" },
   { value: "founder", label: "Founder" },
-  { value: "product", label: "Product" },
-  { value: "designer", label: "Designer" },
   { value: "operations", label: "Operations" },
   { value: "student", label: "Student" },
 ];
@@ -26,7 +24,6 @@ export const USE_CASE_OPTIONS: SurveyOption[] = [
   { value: "build_agent_workflows", label: "Build agent workflows" },
   { value: "team_knowledge_sharing", label: "Team knowledge sharing" },
   { value: "connect_agents_mcp", label: "Connect agents via MCP" },
-  { value: "research", label: "Research" },
 ];
 
 export const TEAM_OPTIONS: SurveyOption[] = [

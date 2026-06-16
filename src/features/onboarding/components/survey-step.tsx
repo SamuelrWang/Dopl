@@ -52,11 +52,8 @@ export function SurveyStep({ submitting, onSubmit }: SurveyStepProps) {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1
-          className="text-[28px] font-medium leading-tight text-[#1e242b]"
-          style={{ fontFamily: "var(--font-playfair), Georgia, serif" }}
-        >
+      <div className="text-center">
+        <h1 className="text-[28px] font-semibold leading-tight text-[#1e242b]">
           Tell us about yourself
         </h1>
         <p className="mt-2 text-[15px] text-[#646d78]">
