@@ -380,14 +380,14 @@ async function opWriteFile(
   force?: boolean,
 ): Promise<ToolResponse> {
   try {
-    const file = await client.writeSkillFile(
+    const { file, webUrl } = await client.writeSkillFile(
       slug,
       file_name,
       body,
       force ? null : expected_version
     );
     return ok(
-      `Wrote \`${file.name}\` in \`${slug}\` (${file.body.length} chars). New version: \`${file.updatedAt}\`.`
+      `Wrote \`${file.name}\` in \`${slug}\` (${file.body.length} chars). New version: \`${file.updatedAt}\`.\nView in Dopl: ${webUrl}`
     );
   } catch (e) {
     if (isConflict(e)) {

@@ -22,6 +22,7 @@ import type {
   KnowledgeTrashSnapshot,
   KnowledgeTreeSnapshot,
   KnowledgeWriteFileInput,
+  KnowledgeWriteFileResult,
 } from "./knowledge-types.js";
 
 const enc = encodeURIComponent;
@@ -122,7 +123,7 @@ export async function writeKbFileByPath(
   path: string,
   input: KnowledgeWriteFileInput = {},
   expectedVersion?: string | null
-): Promise<KnowledgeEntry> {
+): Promise<KnowledgeWriteFileResult> {
   // Optimistic concurrency, tri-state on `expectedVersion`:
   //   - string    → atomic compare-and-swap against it (412 on mismatch).
   //   - undefined  → safe default: read the current version first so the
@@ -141,7 +142,7 @@ export async function writeKbFileByPath(
   } else {
     version = expectedVersion;
   }
-  const data = await t.request<{ entry: KnowledgeEntry }>(
+  const data = await t.request<KnowledgeWriteFileResult>(
     `/api/knowledge/bases/${enc(baseId)}/files`,
     {
       method: "PUT",
@@ -150,7 +151,7 @@ export async function writeKbFileByPath(
       customHeaders: version ? { "X-Updated-At": version } : undefined,
     }
   );
-  return data.entry;
+  return data;
 }
 
 export async function listKbDirByPath(

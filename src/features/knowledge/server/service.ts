@@ -941,7 +941,7 @@ export async function writeFileByPath(
   baseId: string,
   path: string,
   input: WriteFileByPathInput = {}
-): Promise<KnowledgeEntry> {
+): Promise<{ entry: KnowledgeEntry; base: KnowledgeBase }> {
   const base = await getBaseById(ctx, baseId);
   await assertBaseWritable(ctx, base);
 
@@ -991,7 +991,7 @@ export async function writeFileByPath(
     if (input.title !== undefined || input.body !== undefined) {
       scheduleEntryEmbedding(saved);
     }
-    return saved;
+    return { entry: saved, base };
   }
 
   // Not found — but if the caller passed a precondition it expected to
@@ -1013,7 +1013,7 @@ export async function writeFileByPath(
     source: ctx.source,
   });
   scheduleEntryEmbedding(created);
-  return created;
+  return { entry: created, base };
 }
 
 /**

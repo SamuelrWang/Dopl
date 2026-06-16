@@ -383,7 +383,7 @@ export async function writeFile(
   fileName: string,
   input: SkillFileWriteInput,
   expectedUpdatedAt?: string
-): Promise<SkillFile> {
+): Promise<{ file: SkillFile; skill: Skill }> {
   const skill = await getSkillBySlug(ctx, slug);
   await assertAgentWriteAllowed(ctx, skill);
   const file = await repo.findFileByName(skill.id, fileName);
@@ -408,7 +408,7 @@ export async function writeFile(
       fresh?.updatedAt ?? "concurrent"
     );
   }
-  return saved;
+  return { file: saved, skill };
 }
 
 export async function renameFile(

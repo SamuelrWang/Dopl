@@ -120,7 +120,7 @@ async function main() {
 
     // Now flip the toggle and retry as agent.
     await updateBase(userCtx, base.id, { agentWriteEnabled: true });
-    const written = await writeFileByPath(agentCtx, base.id, "agent-test.md", {
+    const { entry: written } = await writeFileByPath(agentCtx, base.id, "agent-test.md", {
       body: "agent",
     });
     console.log(`  ✅ agent write ok after toggle on: lastEditedSource=${written.lastEditedSource}`);
@@ -175,7 +175,7 @@ async function main() {
       parentId: parent.id,
       name: "child",
     });
-    const leafEntry = await writeFileByPath(
+    const { entry: leafEntry } = await writeFileByPath(
       userCtx,
       cascadeBase.id,
       "parent/leaf.md",
@@ -231,7 +231,7 @@ async function main() {
     );
 
     // Create entry, capture its initial updated_at as the "stale" token.
-    const entry = await writeFileByPath(userCtx, raceBase.id, "race.md", {
+    const { entry } = await writeFileByPath(userCtx, raceBase.id, "race.md", {
       body: "v1",
     });
     const staleUpdatedAt = entry.updatedAt;

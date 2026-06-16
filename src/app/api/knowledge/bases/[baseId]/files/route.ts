@@ -3,6 +3,7 @@ import { z } from "zod";
 import { withWorkspaceAuth, type WorkspaceAuthContext } from "@/shared/auth/with-workspace-auth";
 import { parseJson } from "@/shared/api/parse-json";
 import { HttpError } from "@/shared/lib/http-error";
+import { knowledgeEntryUrl } from "@/shared/lib/url/resource-url";
 import { toKnowledgeErrorResponse } from "@/shared/api/knowledge-route";
 import {
   buildKnowledgeContext,
@@ -65,12 +66,18 @@ async function handlePut(request: NextRequest, auth: WorkspaceAuthContext) {
     // updated_at (mirrors the skills file route + ID-based entry route).
     // Mismatch → 412 KNOWLEDGE_STALE_VERSION.
     const expectedUpdatedAt = request.headers.get("x-updated-at") ?? undefined;
-    const entry = await writeFileByPath(ctx, baseId, input.path, {
+    const { entry, base } = await writeFileByPath(ctx, baseId, input.path, {
       body: input.body,
       title: input.title,
       expectedUpdatedAt,
     });
-    return NextResponse.json({ entry });
+    const webUrl = knowledgeEntryUrl({
+      origin: request.nextUrl.origin,
+      workspace: { slug: auth.workspaceSlug, publicId: auth.workspacePublicId },
+      base,
+      entryId: entry.id,
+    });
+    return NextResponse.json({ entry, webUrl });
   } catch (err) {
     return toKnowledgeErrorResponse(err);
   }

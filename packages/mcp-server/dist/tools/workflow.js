@@ -22,7 +22,7 @@ const WORKFLOW_DESCRIPTION = `Read and AUTHOR Dopl workflows (a header + its con
 - "remove_node" — delete a node (\`node_id\`); its edges go with it.
 - "connect" / "disconnect" — add/remove an edge (\`from\`,\`to\` = node id or "header").
 
-Typical authoring flow: create → set_graph (or add_node + connect) → get to verify. Node reads = [{kbId} | {kbId,entryId}]; actions = [{skillId}] (ids from dopl_kb / dopl_skill). KBs/skills must be public.`;
+Typical authoring flow: create → set_graph (or add_node + connect) → get to verify. Node reads = [{kbId} | {kbId,entryId}]; actions = [{skillId}]. kbId/skillId accept the SLUG or the id straight from dopl_kb(op='list_bases') / dopl_skill(op='list'); entryId is an entry uuid. KBs/skills must be public.`;
 const WORKFLOW_ADMIN_DESCRIPTION = `DESTRUCTIVE workflow operations — permanent and irreversible. Confirm intent if the user's phrasing is at all ambiguous. Set \`op\` to one of:
 - "delete_workflow" — permanently delete a workflow. Its nodes stay on the canvas; attached knowledge bases + skills are detached (not deleted).`;
 const zNode = zod_1.z.object({

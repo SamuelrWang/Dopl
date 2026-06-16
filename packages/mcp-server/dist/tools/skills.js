@@ -300,8 +300,8 @@ async function opCreateFile(client, slug, file_name, body) {
 }
 async function opWriteFile(client, slug, file_name, body, expected_version, force) {
     try {
-        const file = await client.writeSkillFile(slug, file_name, body, force ? null : expected_version);
-        return (0, respond_1.ok)(`Wrote \`${file.name}\` in \`${slug}\` (${file.body.length} chars). New version: \`${file.updatedAt}\`.`);
+        const { file, webUrl } = await client.writeSkillFile(slug, file_name, body, force ? null : expected_version);
+        return (0, respond_1.ok)(`Wrote \`${file.name}\` in \`${slug}\` (${file.body.length} chars). New version: \`${file.updatedAt}\`.\nView in Dopl: ${webUrl}`);
     }
     catch (e) {
         if ((0, respond_1.isConflict)(e)) {

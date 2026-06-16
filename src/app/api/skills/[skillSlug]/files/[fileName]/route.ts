@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { withWorkspaceAuth, type WorkspaceAuthContext } from "@/shared/auth/with-workspace-auth";
 import { parseJson } from "@/shared/api/parse-json";
 import { HttpError } from "@/shared/lib/http-error";
+import { skillUrl } from "@/shared/lib/url/resource-url";
 import { toSkillErrorResponse } from "@/shared/api/skill-route";
 import {
   buildSkillContext,
@@ -53,14 +54,19 @@ async function handlePut(request: NextRequest, auth: WorkspaceAuthContext) {
     // conflict resolution.
     const expectedUpdatedAt =
       request.headers.get("x-updated-at") ?? undefined;
-    const file = await writeFile(
+    const { file, skill } = await writeFile(
       ctx,
       requireSlug(auth),
       requireFileName(auth),
       input,
       expectedUpdatedAt
     );
-    return NextResponse.json({ file });
+    const webUrl = skillUrl({
+      origin: request.nextUrl.origin,
+      workspace: { slug: auth.workspaceSlug, publicId: auth.workspacePublicId },
+      skill,
+    });
+    return NextResponse.json({ file, webUrl });
   } catch (err) {
     return toSkillErrorResponse(err);
   }

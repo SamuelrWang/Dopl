@@ -76,7 +76,7 @@ async function main() {
 
   try {
     // ── writeFileByPath: mkdir -p + create ─────────────────────────
-    const entry = await writeFileByPath(ctx, base.id, "a/b/c.md", {
+    const { entry } = await writeFileByPath(ctx, base.id, "a/b/c.md", {
       body: "hello",
     });
     if (entry.body !== "hello") throw new Error("write body mismatch");
@@ -84,7 +84,7 @@ async function main() {
     console.log(`✅ writeFileByPath (create): a/b/c.md`);
 
     // ── writeFileByPath: same path → update ────────────────────────
-    const updated = await writeFileByPath(ctx, base.id, "a/b/c.md", {
+    const { entry: updated } = await writeFileByPath(ctx, base.id, "a/b/c.md", {
       body: "hello updated",
     });
     if (updated.id !== entry.id) throw new Error("upsert produced new entry");

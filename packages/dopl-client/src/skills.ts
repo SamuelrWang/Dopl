@@ -14,6 +14,7 @@ import type {
   Skill,
   SkillFile,
   SkillStatus,
+  SkillWriteFileResult,
 } from "./skill-types.js";
 
 const enc = encodeURIComponent;
@@ -137,7 +138,7 @@ export async function writeSkillFile(
   fileName: string,
   body: string,
   expectedVersion?: string | null
-): Promise<SkillFile> {
+): Promise<SkillWriteFileResult> {
   // Optimistic concurrency, tri-state on `expectedVersion`:
   //   - string    → atomic CAS against it (412 on mismatch).
   //   - undefined  → safe default: read the current version first so the
@@ -156,7 +157,7 @@ export async function writeSkillFile(
   } else {
     version = expectedVersion;
   }
-  const data = await t.request<{ file: SkillFile }>(
+  const data = await t.request<SkillWriteFileResult>(
     `/api/skills/${enc(slug)}/files/${enc(fileName)}`,
     {
       method: "PUT",
@@ -165,7 +166,7 @@ export async function writeSkillFile(
       customHeaders: version ? { "X-Updated-At": version } : undefined,
     }
   );
-  return data.file;
+  return data;
 }
 
 export async function renameSkillFile(

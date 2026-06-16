@@ -2,11 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { Check, Copy } from "lucide-react";
-import {
-  buildAgentConnectPrompt,
-  DEFAULT_MCP_URL,
-  MCP_SERVER_NAME,
-} from "../constants";
+import { DEFAULT_MCP_URL, MCP_SERVER_NAME } from "../constants";
+import { buildBootstrapPrompt } from "../bootstrap-prompt";
 
 interface McpConnectStepProps {
   connected: boolean;
@@ -73,8 +70,8 @@ export function McpConnectStep({
           onCopy={copy}
         />
         <CopyRow
-          label="Or paste this prompt to your agent"
-          text={buildAgentConnectPrompt(url)}
+          label="Or paste this prompt to set up your workspace"
+          text={buildBootstrapPrompt(url)}
           id="prompt"
           copied={copied}
           onCopy={copy}

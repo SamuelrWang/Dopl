@@ -93,7 +93,7 @@ async function writeSkillFile(t, slug, fileName, body, expectedVersion) {
         toolName: "skill_write_file",
         customHeaders: version ? { "X-Updated-At": version } : undefined,
     });
-    return data.file;
+    return data;
 }
 async function renameSkillFile(t, slug, currentName, newName) {
     const data = await t.request(`/api/skills/${enc(slug)}/files/${enc(currentName)}`, { method: "PATCH", body: { name: newName }, toolName: "skill_rename_file" });

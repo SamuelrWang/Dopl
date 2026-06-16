@@ -14,6 +14,7 @@ interface Props {
   folders: KnowledgeFolder[];
   entries: KnowledgeEntry[];
   initialEntry: KnowledgeEntry | null;
+  initialEntryId: string | null;
   currentUserId: string;
   role: Role;
 }
@@ -31,6 +32,7 @@ export function KbDetailPreview({
   folders,
   entries,
   initialEntry,
+  initialEntryId,
   currentUserId,
   role,
 }: Props) {
@@ -43,6 +45,7 @@ export function KbDetailPreview({
         folders={folders}
         entries={entries}
         initialEntry={initialEntry}
+        initialEntryId={initialEntryId}
         currentUserId={currentUserId}
         role={role}
       />

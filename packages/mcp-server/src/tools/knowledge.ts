@@ -381,13 +381,16 @@ async function opWriteFile(client: DoplClient, ref: string, path: string, body: 
   const base = await resolveBaseOr(client, ref);
   if (isErr(base)) return base;
   let entry;
+  let webUrl: string;
   try {
-    entry = await client.writeKbFileByPath(
+    const res = await client.writeKbFileByPath(
       base.id,
       path,
       { body, title },
       force ? null : expected_version
     );
+    entry = res.entry;
+    webUrl = res.webUrl;
   } catch (e) {
     if (isConflict(e)) {
       return err(
@@ -408,7 +411,7 @@ async function opWriteFile(client: DoplClient, ref: string, path: string, body: 
       ? ` Address future reads/moves with path \`${canonicalPath}\`.`
       : "";
   return ok(
-    `Wrote \`${canonicalPath}\` (entry id: \`${entry.id}\`, ${entry.body.length} chars). New version: \`${entry.updatedAt}\`.${note}`
+    `Wrote \`${canonicalPath}\` (entry id: \`${entry.id}\`, ${entry.body.length} chars). New version: \`${entry.updatedAt}\`.${note}\nView in Dopl: ${webUrl}`
   );
 }
 

@@ -76,6 +76,13 @@ export interface SkillFile {
     updatedAt: string;
     deletedAt: string | null;
 }
+export interface SkillWriteFileResult {
+    file: SkillFile;
+    /** Absolute web URL to the skill; built server-side from the access-
+     * checked skill, so it only ever points at a resource the caller is
+     * entitled to. */
+    webUrl: string;
+}
 export interface ResolvedSkillReference {
     kind: "kb" | "connector";
     slug?: string;

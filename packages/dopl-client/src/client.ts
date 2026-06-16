@@ -26,13 +26,19 @@ import type {
   KnowledgeTrashSnapshot,
   KnowledgeTreeSnapshot,
   KnowledgeWriteFileInput,
+  KnowledgeWriteFileResult,
 } from "./knowledge-types.js";
 import * as skills from "./skills.js";
 import type {
   CreateSkillInput,
   UpdateSkillPatch as SkillUpdatePatch,
 } from "./skills.js";
-import type { ResolvedSkill, Skill, SkillFile } from "./skill-types.js";
+import type {
+  ResolvedSkill,
+  Skill,
+  SkillFile,
+  SkillWriteFileResult,
+} from "./skill-types.js";
 
 export type { DoplTransportOptions as DoplClientOptions } from "./transport.js";
 export { parseRetryAfter } from "./retry.js";
@@ -354,7 +360,7 @@ export class DoplClient {
     path: string,
     input: KnowledgeWriteFileInput = {},
     expectedVersion?: string | null
-  ): Promise<KnowledgeEntry> {
+  ): Promise<KnowledgeWriteFileResult> {
     return kb.writeKbFileByPath(
       this.transport,
       baseId,
@@ -457,7 +463,7 @@ export class DoplClient {
     fileName: string,
     body: string,
     expectedVersion?: string | null
-  ): Promise<SkillFile> {
+  ): Promise<SkillWriteFileResult> {
     return skills.writeSkillFile(
       this.transport,
       slug,

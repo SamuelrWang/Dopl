@@ -47,6 +47,9 @@ interface Props {
   /** SSR-fetched body for the initially-selected entry. When provided,
    *  the entry hook seeds from this and skips the first network fetch. */
   initialEntry: KnowledgeEntry | null;
+  /** Entry to select on first paint — the validated `?entryId=` deep-link
+   *  target, or the first entry. Matches `initialEntry.id` when set. */
+  initialEntryId: string | null;
   /** Gate the Sharing section in settings (owner-or-admin rule). */
   currentUserId: string;
   role: Role;
@@ -59,13 +62,14 @@ export function KnowledgeBaseView({
   folders: initialFolders,
   entries: initialEntries,
   initialEntry,
+  initialEntryId,
   currentUserId,
   role,
 }: Props) {
   const [folders, setFolders] = useState(initialFolders);
   const [entries, setEntries] = useState(initialEntries);
   const [selectedId, setSelectedId] = useState<string>(
-    initialEntries[0]?.id ?? ""
+    initialEntryId ?? initialEntries[0]?.id ?? ""
   );
   // Audit A-005 / A-013: gate write affordances (rename context menu,
   // "+ New folder/entry") on the caller's effective access. Falls open

@@ -24,9 +24,13 @@ export const dynamic = "force-dynamic";
 
 interface PageProps {
   params: Promise<{ workspaceSlug: string; kbSlug: string }>;
+  searchParams: Promise<{ entryId?: string }>;
 }
 
-export default async function KnowledgeBaseDetailPage({ params }: PageProps) {
+export default async function KnowledgeBaseDetailPage({
+  params,
+  searchParams,
+}: PageProps) {
   const { workspaceSlug, kbSlug } = await params;
   const user = await getUser();
   if (!user) redirect("/login");
@@ -48,12 +52,21 @@ export default async function KnowledgeBaseDetailPage({ params }: PageProps) {
 
   const { folders, entries } = await getBaseTree(ctx, base.id);
 
-  // SSR the first entry's body so reload paints with content instead of
+  // Deep-link target: honor `?entryId=` only when it belongs to THIS
+  // base's already-visibility-filtered tree. Never trust the raw param to
+  // probe an entry the caller can't see — membership in `entries` is the
+  // access gate. Falls back to the first entry.
+  const { entryId } = await searchParams;
+  const selectedEntryId =
+    (entryId && entries.some((e) => e.id === entryId) ? entryId : null) ??
+    entries[0]?.id ??
+    null;
+
+  // SSR the selected entry's body so reload paints with content instead of
   // waiting on a client-side fetch after hydration. Tree responses strip
-  // bodies for size; this targeted second query brings the user's
-  // initially-selected entry onto the wire alongside the shell.
-  const initialEntry = entries[0]
-    ? await getEntry(ctx, entries[0].id)
+  // bodies for size; this targeted second query brings it onto the wire.
+  const initialEntry = selectedEntryId
+    ? await getEntry(ctx, selectedEntryId)
     : null;
 
   return (
@@ -64,6 +77,7 @@ export default async function KnowledgeBaseDetailPage({ params }: PageProps) {
       folders={folders}
       entries={entries}
       initialEntry={initialEntry}
+      initialEntryId={selectedEntryId}
       currentUserId={user.id}
       role={membership.role}
     />

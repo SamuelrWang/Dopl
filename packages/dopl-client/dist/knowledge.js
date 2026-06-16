@@ -90,7 +90,7 @@ async function writeKbFileByPath(t, baseId, path, input = {}, expectedVersion) {
         toolName: "kb_write_file",
         customHeaders: version ? { "X-Updated-At": version } : undefined,
     });
-    return data.entry;
+    return data;
 }
 async function listKbDirByPath(t, baseId, path = "") {
     const qs = path ? `?path=${enc(path)}` : "";

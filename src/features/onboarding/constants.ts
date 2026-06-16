@@ -1,6 +1,7 @@
 /**
- * Survey question data + the copyable agent-connect prompt for the
- * post-signup onboarding flow. Pure data — no React, no server code.
+ * Survey question data + MCP server constants for the post-signup
+ * onboarding flow. Pure data — no React, no server code. The paste-in
+ * bootstrap prompt + card template live in `./bootstrap-prompt.ts`.
  *
  * Copy here must stay MODEL-AGNOSTIC: no "Claude", "Codex", "Cursor",
  * etc. The MCP connect step addresses "your AI agent" only.
@@ -47,17 +48,3 @@ export const OTHER_OPTION_VALUE = "other";
 export const MCP_SERVER_NAME = "dopl";
 
 export const DEFAULT_MCP_URL = "https://www.usedopl.com/api/mcp";
-
-/**
- * The paste-into-your-agent prompt. Works with any MCP-capable agent —
- * it describes the server and the OAuth dance, and lets the agent pick
- * its own client-specific install mechanics.
- */
-export function buildAgentConnectPrompt(url: string): string {
-  return [
-    `Connect to my Dopl MCP server.`,
-    `Server name: ${MCP_SERVER_NAME}. Transport: HTTP (streamable). URL: ${url}.`,
-    `It uses OAuth — a browser window will open for me to sign in; no API key is needed.`,
-    `Once connected, list the available tools so I can see what you can do with my workspace.`,
-  ].join(" ");
-}

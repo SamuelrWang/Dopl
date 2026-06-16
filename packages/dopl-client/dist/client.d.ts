@@ -1,8 +1,8 @@
 import type { CanvasPanel, WorkspaceListItem, ClusterDetail, ClusterRow, WorkflowRow, WorkflowDetail, WorkflowGraphSpec, WorkflowNodeInput, Pack, PackFile, PackFileMeta, ResolvedWorkspace } from "./types.js";
 import { DoplTransport } from "./transport.js";
-import type { KnowledgeBase, KnowledgeBaseCreateInput, KnowledgeBaseUpdateInput, KnowledgeDirListing, KnowledgeEntry, KnowledgeFolder, KnowledgePathOpResult, KnowledgeSearchHit, KnowledgeTrashSnapshot, KnowledgeTreeSnapshot, KnowledgeWriteFileInput } from "./knowledge-types.js";
+import type { KnowledgeBase, KnowledgeBaseCreateInput, KnowledgeBaseUpdateInput, KnowledgeDirListing, KnowledgeEntry, KnowledgeFolder, KnowledgePathOpResult, KnowledgeSearchHit, KnowledgeTrashSnapshot, KnowledgeTreeSnapshot, KnowledgeWriteFileInput, KnowledgeWriteFileResult } from "./knowledge-types.js";
 import type { CreateSkillInput, UpdateSkillPatch as SkillUpdatePatch } from "./skills.js";
-import type { ResolvedSkill, Skill, SkillFile } from "./skill-types.js";
+import type { ResolvedSkill, Skill, SkillFile, SkillWriteFileResult } from "./skill-types.js";
 export type { DoplTransportOptions as DoplClientOptions } from "./transport.js";
 export { parseRetryAfter } from "./retry.js";
 export declare class DoplClient {
@@ -84,7 +84,7 @@ export declare class DoplClient {
     deleteKbBase(baseId: string): Promise<void>;
     restoreKbBase(baseId: string): Promise<KnowledgeBase>;
     readKbFileByPath(baseId: string, path: string): Promise<KnowledgeEntry>;
-    writeKbFileByPath(baseId: string, path: string, input?: KnowledgeWriteFileInput, expectedVersion?: string | null): Promise<KnowledgeEntry>;
+    writeKbFileByPath(baseId: string, path: string, input?: KnowledgeWriteFileInput, expectedVersion?: string | null): Promise<KnowledgeWriteFileResult>;
     listKbDirByPath(baseId: string, path?: string): Promise<KnowledgeDirListing>;
     createKbFolderByPath(baseId: string, path: string): Promise<KnowledgeFolder>;
     deleteKbByPath(baseId: string, path: string): Promise<KnowledgePathOpResult>;
@@ -110,7 +110,7 @@ export declare class DoplClient {
         name: string;
         body?: string;
     }): Promise<SkillFile>;
-    writeSkillFile(slug: string, fileName: string, body: string, expectedVersion?: string | null): Promise<SkillFile>;
+    writeSkillFile(slug: string, fileName: string, body: string, expectedVersion?: string | null): Promise<SkillWriteFileResult>;
     renameSkillFile(slug: string, currentName: string, newName: string): Promise<SkillFile>;
     deleteSkillFile(slug: string, fileName: string): Promise<void>;
 }
