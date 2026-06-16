@@ -92,38 +92,51 @@ export default async function AuthorizePage({
           <input type="hidden" name="scope" value={scope} />
           <input type="hidden" name="state" value={state} />
 
-          <p className="text-[13px] leading-relaxed text-text-secondary">
-            <span className="text-text-primary font-medium">{clientLabel}</span> wants
-            to access your Dopl workspaces as{" "}
-            <span className="text-text-primary">{user.email}</span>.
+          <p className="text-center text-[14px] leading-relaxed text-[#646d78]">
+            <span className="font-semibold text-[#232a31]">{clientLabel}</span>{" "}
+            wants to access your Dopl workspaces as{" "}
+            <span className="font-medium text-[#232a31]">{user.email}</span>.
           </p>
 
-          <div className="space-y-2 text-[12px] text-text-tertiary">
-            <div className="flex items-start gap-2">
-              <span className="text-text-muted font-mono">read</span>
-              <span>Search and read your setups, clusters, knowledge bases, and skills.</span>
+          <div className="space-y-3 rounded-[11px] border-[1.5px] border-[#d6dde5] bg-[#f6f8fb] px-4 py-3.5">
+            <div className="flex items-start gap-3">
+              <input
+                type="checkbox"
+                checked
+                disabled
+                aria-label="read access (always granted)"
+                className="mt-0.5 h-4 w-4 shrink-0 accent-[#1c2127]"
+              />
+              <p className="text-[13px] leading-relaxed text-[#3a414a]">
+                <span className="font-mono text-[11px] uppercase tracking-wide text-[#98a2ad]">
+                  read
+                </span>{" "}
+                Search and read your knowledge bases, skills, and clusters.
+              </p>
             </div>
-            <label className="flex items-start gap-2 cursor-pointer">
+            <label className="flex items-start gap-3 cursor-pointer">
               <input
                 type="checkbox"
                 name="grant_write"
                 defaultChecked={requestsWrite}
-                className="mt-0.5"
+                className="mt-0.5 h-4 w-4 shrink-0 accent-[#1c2127]"
               />
-              <span>
-                <span className="text-text-muted font-mono">write</span>{" "}
-                Create, update, and delete your content (canvas, clusters,
-                knowledge bases, skills, ingestion).
-              </span>
+              <p className="text-[13px] leading-relaxed text-[#3a414a]">
+                <span className="font-mono text-[11px] uppercase tracking-wide text-[#98a2ad]">
+                  write
+                </span>{" "}
+                Create, update, and delete your content — knowledge bases,
+                skills, clusters, and canvas.
+              </p>
             </label>
           </div>
 
-          <div className="flex gap-2 pt-2">
+          <div className="flex gap-2.5 pt-1">
             <button
               type="submit"
               name="decision"
               value="approve"
-              className="flex-1 h-9 rounded-[4px] bg-surface-raised-4 border border-border-highlight text-text-primary text-[12px] font-mono uppercase tracking-wider hover:bg-surface-selected transition-colors"
+              className="flex-1 h-11 rounded-[11px] bg-[#1c2127] text-[15px] font-semibold text-white hover:bg-[#2c3640] transition-colors cursor-pointer"
             >
               Approve
             </button>
@@ -131,7 +144,7 @@ export default async function AuthorizePage({
               type="submit"
               name="decision"
               value="deny"
-              className="h-9 px-4 rounded-[4px] border border-border-strong text-text-tertiary text-[12px] font-mono uppercase tracking-wider hover:text-text-primary hover:border-border-highlight transition-colors"
+              className="h-11 px-5 rounded-[11px] border-[1.5px] border-[#d6dde5] bg-white text-[15px] font-semibold text-[#646d78] hover:border-[#b9c6d3] hover:text-[#232a31] transition-colors cursor-pointer"
             >
               Deny
             </button>
@@ -144,21 +157,22 @@ export default async function AuthorizePage({
 
 function Screen({ title, body }: { title: string; body: React.ReactNode }) {
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-black px-6">
-      <div className="w-full max-w-sm rounded-[8px] border border-border-default bg-[var(--card-surface-elevated)] p-6">
-        <h1
-          className="text-2xl font-bold mb-5"
-          style={{
-            fontFamily: "var(--font-playfair), 'Playfair Display', serif",
-            fontStyle: "italic",
-            color: "white",
-          }}
-        >
-          Dopl
-        </h1>
-        <h2 className="text-[13px] font-mono uppercase tracking-wider text-text-secondary mb-4">
-          {title}
-        </h2>
+    <div
+      className="fixed inset-0 flex items-center justify-center overflow-y-auto bg-[#d6dee7] px-6 py-12"
+      style={{ fontFamily: "var(--font-geist-sans), system-ui, sans-serif" }}
+    >
+      <div className="w-full max-w-md rounded-[20px] border-[1.5px] border-[#d6dde5] bg-[#fbfcfd] p-8 shadow-[0_6px_30px_rgba(28,33,39,0.08)]">
+        <div className="mb-6 flex flex-col items-center gap-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/favicons/android-chrome-512x512.png"
+            alt="Dopl"
+            className="h-11 w-11 rounded-[11px]"
+          />
+          <h1 className="text-[22px] font-semibold leading-tight text-[#1e242b]">
+            {title}
+          </h1>
+        </div>
         {body}
       </div>
     </div>
@@ -167,9 +181,9 @@ function Screen({ title, body }: { title: string; body: React.ReactNode }) {
 
 function ErrorList({ errors }: { errors: string[] }) {
   return (
-    <ul className="space-y-1.5 text-[12px] text-[color:var(--coral)]">
+    <ul className="space-y-1.5 text-center text-[14px] text-[#b42318]">
       {errors.map((e, i) => (
-        <li key={i}>• {e}</li>
+        <li key={i}>{e}</li>
       ))}
     </ul>
   );

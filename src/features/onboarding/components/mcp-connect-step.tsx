@@ -119,14 +119,13 @@ export function McpConnectStep({
           ) : (
             <ol className="list-decimal space-y-1.5 pl-4 text-[13px] leading-relaxed text-[#3a414a] marker:text-[#98a2ad]">
               <li>
-                Add this to <Mono>~/.codex/config.toml</Mono>:
-                <pre className="mt-1.5 overflow-x-auto rounded-[8px] border-[1.5px] border-[#d6dde5] bg-[#eef1f5] px-3 py-2 font-mono text-[11.5px] leading-relaxed text-[#3a414a]">
-                  {`[mcp_servers.${MCP_SERVER_NAME}]\nurl = "${url}"`}
-                </pre>
+                In ChatGPT, go to <Strong>Settings → Apps &amp; Connectors →
+                Advanced</Strong> and turn on <Strong>Developer mode</Strong>.
               </li>
               <li>
-                Run <Mono>codex mcp login {MCP_SERVER_NAME}</Mono> and sign in.
+                Open <Strong>Settings → Connectors → Create</Strong>.
               </li>
+              <li>Enter a name and the server URL above.</li>
             </ol>
           )}
         </div>
@@ -167,12 +166,6 @@ export function McpConnectStep({
 
 function Strong({ children }: { children: React.ReactNode }) {
   return <span className="font-semibold text-[#232a31]">{children}</span>;
-}
-
-function Mono({ children }: { children: React.ReactNode }) {
-  return (
-    <code className="font-mono text-[12px] text-[#232a31]">{children}</code>
-  );
 }
 
 function CopyRow({
