@@ -9,16 +9,22 @@ interface McpConnectStepProps {
   connected: boolean;
   finishing: boolean;
   onSkip: () => void;
+  /** Onboarding hides skip (connection is the step); the recoverable
+   *  banner keeps it so the modal can be dismissed. */
+  showSkip?: boolean;
 }
 
+type Client = "claude" | "codex";
+
 /**
- * Onboarding step B — connect an AI agent over MCP. Copy is
- * model-agnostic by design: "your AI agent", never a specific client.
+ * Onboarding step 2 — connect an AI agent over MCP. Copy is model-agnostic
+ * in the blurb; the manual-setup instructions switch per client.
  */
 export function McpConnectStep({
   connected,
   finishing,
   onSkip,
+  showSkip = true,
 }: McpConnectStepProps) {
   const [origin, setOrigin] = useState("https://www.usedopl.com");
   useEffect(() => {
@@ -35,6 +41,8 @@ export function McpConnectStep({
     setTimeout(() => setCopied(null), 1500);
   }
 
+  const [client, setClient] = useState<Client>("claude");
+
   return (
     <div className="space-y-7">
       <div className="text-center">
@@ -42,9 +50,9 @@ export function McpConnectStep({
           Connect your AI agent
         </h1>
         <p className="mt-2 text-[15px] text-[#646d78] leading-relaxed">
-          Add the <span className="font-semibold text-[#232a31]">MCP</span>{" "}
-          server below to your agent, or paste the prompt to let it connect.
-          One browser sign-in — no API key.
+          Your agent accesses your workspaces through the Dopl{" "}
+          <span className="font-semibold text-[#232a31]">MCP</span> server.
+          Connect by following the instructions or pasting the prompt below.
         </p>
       </div>
 
@@ -73,6 +81,57 @@ export function McpConnectStep({
         />
       </div>
 
+      <div className="space-y-2.5">
+        <div className="flex items-center justify-between gap-3">
+          <p className="font-mono text-[10px] uppercase tracking-[0.06em] text-[#98a2ad]">
+            Add it manually
+          </p>
+          <div className="inline-flex rounded-full border-[1.5px] border-[#d6dde5] bg-[#eef1f5] p-0.5">
+            {(["claude", "codex"] as const).map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setClient(c)}
+                className={`rounded-full px-3.5 py-1 text-[12px] font-medium transition-colors cursor-pointer ${
+                  client === c
+                    ? "bg-white text-[#232a31] shadow-[0_1px_3px_rgba(28,33,39,0.12)]"
+                    : "text-[#646d78] hover:text-[#232a31]"
+                }`}
+              >
+                {c === "claude" ? "Claude" : "Codex"}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-[11px] border-[1.5px] border-[#d6dde5] bg-[#f6f8fb] px-4 py-3.5">
+          {client === "claude" ? (
+            <ol className="list-decimal space-y-1.5 pl-4 text-[13px] leading-relaxed text-[#3a414a] marker:text-[#98a2ad]">
+              <li>
+                Open <Strong>Customize</Strong> (left sidebar) →{" "}
+                <Strong>Connectors</Strong>.
+              </li>
+              <li>
+                Click <Strong>+ Add custom connector</Strong>.
+              </li>
+              <li>Enter the server name and URL above.</li>
+            </ol>
+          ) : (
+            <ol className="list-decimal space-y-1.5 pl-4 text-[13px] leading-relaxed text-[#3a414a] marker:text-[#98a2ad]">
+              <li>
+                Add this to <Mono>~/.codex/config.toml</Mono>:
+                <pre className="mt-1.5 overflow-x-auto rounded-[8px] border-[1.5px] border-[#d6dde5] bg-[#eef1f5] px-3 py-2 font-mono text-[11.5px] leading-relaxed text-[#3a414a]">
+                  {`[mcp_servers.${MCP_SERVER_NAME}]\nurl = "${url}"`}
+                </pre>
+              </li>
+              <li>
+                Run <Mono>codex mcp login {MCP_SERVER_NAME}</Mono> and sign in.
+              </li>
+            </ol>
+          )}
+        </div>
+      </div>
+
       <div className="flex items-center justify-between pt-1">
         {connected ? (
           <span className="flex items-center gap-2">
@@ -89,7 +148,7 @@ export function McpConnectStep({
             </span>
           </span>
         )}
-        {!connected && (
+        {showSkip && !connected && (
           <button
             type="button"
             onClick={onSkip}
@@ -103,6 +162,16 @@ export function McpConnectStep({
         )}
       </div>
     </div>
+  );
+}
+
+function Strong({ children }: { children: React.ReactNode }) {
+  return <span className="font-semibold text-[#232a31]">{children}</span>;
+}
+
+function Mono({ children }: { children: React.ReactNode }) {
+  return (
+    <code className="font-mono text-[12px] text-[#232a31]">{children}</code>
   );
 }
 

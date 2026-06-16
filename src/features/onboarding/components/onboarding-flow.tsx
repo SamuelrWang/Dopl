@@ -82,8 +82,13 @@ export function OnboardingFlow({ initialStep, redirectTo }: OnboardingFlowProps)
       className="w-full max-w-xl"
       style={{ animation: "loginFadeIn 0.6s ease-out both" }}
     >
-      <div className="mb-6 flex flex-col items-center gap-1">
-        <h2 className="text-2xl font-semibold text-[#232a31]">Dopl</h2>
+      <div className="mb-6 flex flex-col items-center gap-2">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/favicons/android-chrome-512x512.png"
+          alt="Dopl"
+          className="h-10 w-10 rounded-[10px]"
+        />
         <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-[#98a2ad]">
           {step === "survey"
             ? "01 / 03"
@@ -127,6 +132,7 @@ export function OnboardingFlow({ initialStep, redirectTo }: OnboardingFlowProps)
               connected={connected}
               finishing={finishing}
               onSkip={() => void finish(false)}
+              showSkip={false}
             />
           ) : (
             <SeedStep finishing={finishing} onFinish={() => void finish(true)} />
