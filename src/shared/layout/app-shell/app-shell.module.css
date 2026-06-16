@@ -10,23 +10,7 @@
  */
 
 .root {
-  --bg: #d6dee7;
-  --panel: #f5f7fa;
-  --sidebar: #d6dee7;
-  --ink: #232a31;
-  --ink-soft: #646d78;
-  --ink-faint: #98a2ad;
-  --line: #d6dde5;
-  --line-soft: #dce3ea;
-  --active: #d9e1e9;
-  --purple: #6f93bf;
-  --lavender: #e3eaf2;
-  --orange: #d8bca6;
-  --black: #1c2127;
-  --rail: #2c3640;
-  --rail-tile: #3a4651;
-  --rail-tile-hi: #46535f;
-
+  /* Palette promoted to globals.css :root — inherited here, not redefined. */
   position: fixed;
   inset: 0;
   z-index: 30;
@@ -383,12 +367,9 @@
   color: var(--text-primary);
 }
 
-/* Light semantic-token scope for embedded token-based components
-   (the KB tree, doc pane, editor, search). Mirrors the `html.light`
-   block in globals.css so the existing dark-first components render
-   light inside the new shell while the app html stays `.dark`.
-   Duplicated in settings-modal.module.css — promote to a shared layer
-   when the design language rolls out site-wide. */
+/* Redundant since the real palette became the global :root — this now
+   re-declares the exact same values it would already inherit, so it's a
+   no-op. Kept to avoid churn; safe to delete with its ~11 usages later. */
 .lightScope {
   color-scheme: light;
   --bg-base: #f5f7fa;

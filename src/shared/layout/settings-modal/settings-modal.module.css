@@ -2,11 +2,10 @@
  * Settings modal in the new design language (the KB/"Transforms" look).
  *
  * Two jobs:
- *  1. `.scope` re-declares the app's light semantic-token values on the
- *     modal subtree, so the existing token-based section components
- *     (Account / Appearance / Workspace / Members) render in light mode
- *     even though the app html still carries `.dark`. Copied from the
- *     `html.light {}` block in globals.css.
+ *  1. `.scope` re-declares semantic-token values on the modal subtree.
+ *     A few (surface-invert/cta) differ slightly from the global :root
+ *     palette and are kept so the modal renders exactly as before; unify
+ *     with :root in a follow-up.
  *  2. The chrome (overlay, card, nav, pane) and the Plans & Billing page
  *     are styled with the KB palette in literal hex so they match the
  *     knowledge-landing preview. Fonts reuse the globally-loaded

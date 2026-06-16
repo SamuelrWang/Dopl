@@ -94,19 +94,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en">
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} ${playfairDisplay.variable} ${inter.variable} antialiased mosaic-bg min-h-screen`}
       >
-        {/* Pre-hydration: the light-mode toggle was removed with the
-            new-design rollout — legacy surfaces are always dark (the new
-            (app) pages carry their own fixed palette). Pin the class so a
-            stale saved "light" preference can never flash. */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `(function(){try{var e=document.documentElement;e.classList.add('dark');e.classList.remove('light');}catch(e){}})();`,
-          }}
-        />
         {/* Pre-hydration: strip mosaic-bg before first paint on no-chrome
             routes so the grid pattern never flashes. Inline scripts in
             <body> are render-blocking, so this runs before the browser

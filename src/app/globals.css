@@ -4,12 +4,10 @@
 
 @plugin "@tailwindcss/typography";
 
-@custom-variant dark (&:is(.dark *));
-
 /* ─────────────────────────────────────────────────────────────────────
    Dopl — Design Tokens
-   Dark-first aesthetic: deep black background with subtle grid overlay,
-   dark elevated surfaces with gradient borders, and cyan-blue accents.
+   One palette, defined once in :root: light neutral surfaces, dark ink,
+   #1c2127 CTAs, and a single blue (--link #2f6fed). No dark/light split.
    ───────────────────────────────────────────────────────────────────── */
 
 @theme inline {
@@ -143,91 +141,118 @@
 }
 
 /* ─────────────────────────────────────────────────────────────────────
-   Token values — single dark theme
+   Token values — the one real palette (single system)
    ───────────────────────────────────────────────────────────────────── */
 
 :root {
-  /* Surfaces — pure neutral charcoal (no hue) */
-  --bg-base: oklch(0.15 0 0);
-  --bg-elevated: oklch(0.205 0 0);
-  --bg-elevated-hover: oklch(0.21 0 0);
-  --bg-inset: oklch(0.13 0 0);
-  --bg-inset-hover: oklch(0.16 0 0);
-  --bg-overlay: oklch(0.14 0 0);
+  /* Surfaces — the one real palette (promoted verbatim from the former
+     app-shell .lightScope so every surface inherits it from the root). */
+  --bg-base: #f5f7fa;
+  --bg-elevated: #fbfcfd;
+  --bg-elevated-hover: #f1f4f7;
+  --bg-inset: #eef1f5;
+  --bg-inset-hover: #e6ebf0;
+  --bg-overlay: #fefefe;
 
-  /* Opaque panel surfaces (replace glass/blur composites) */
-  --panel-surface: oklch(0.13 0 0);
-  --panel-surface-focus: oklch(0.12 0 0);
-  --input-surface: oklch(0.11 0 0);
-  --input-surface-focus: oklch(0.10 0 0);
-  --card-surface: oklch(0.21 0 0);
-  --card-surface-elevated: oklch(0.24 0 0);
-  --card-surface-subtle: oklch(0.19 0 0);
+  /* Opaque panel surfaces */
+  --panel-surface: #fbfcfd;
+  --panel-surface-focus: #ffffff;
+  --input-surface: #f1f4f7;
+  --input-surface-focus: #ffffff;
+  --card-surface: #fefefe;
+  --card-surface-elevated: #ffffff;
+  --card-surface-subtle: #f4f6f9;
   --navbar-surface: oklch(0.145 0 0);
   --cluster-tab-surface: oklch(0.08 0 0);
   --cluster-menu-surface: oklch(0.06 0 0);
   --tabs-surface: oklch(0.135 0 0);
 
-  /* Borders (white at low alpha) */
-  --border-subtle: oklch(1 0 0 / 6%);
-  --border-default: oklch(1 0 0 / 10%);
-  --border-strong: oklch(1 0 0 / 16%);
-  --border-highlight: oklch(1 0 0 / 22%);
+  /* Borders (dark hairlines on light surfaces) */
+  --border-subtle: oklch(0 0 0 / 6%);
+  --border-default: oklch(0 0 0 / 8%);
+  --border-strong: oklch(0 0 0 / 12%);
+  --border-highlight: oklch(0 0 0 / 16%);
 
   /* Text */
-  --text-primary: oklch(0.96 0 0);
-  --text-secondary: oklch(0.78 0 0);
-  --text-muted: oklch(0.58 0 0);
-  --text-disabled: oklch(0.38 0 0);
+  --text-primary: #232a31;
+  --text-secondary: #646d78;
+  --text-muted: #98a2ad;
+  --text-disabled: #c4cad1;
 
-  /* Accent — cyan/blue glow */
-  --accent-primary: oklch(0.78 0.16 240);
+  /* Accent — neutral UI ink. accent-glow/soft are the legacy cyan effect
+     tints still consumed by canvas/marketing glows; converted in the
+     canvas-effect + marketing passes, not here. */
+  --accent-primary: #3e3a3b;
   --accent-glow: oklch(0.68 0.22 250);
   --accent-soft: oklch(0.45 0.12 245);
 
   /* Status colors */
-  --success: oklch(0.72 0.16 155);
-  --warning: oklch(0.82 0.15 80);
-  --danger: oklch(0.65 0.22 25);
+  --success: oklch(0.55 0.15 155);
+  --warning: oklch(0.62 0.13 75);
+  --danger: oklch(0.55 0.22 25);
 
-  /* ── Tokenization layer — dark values (= today's exact literals) ──
-     These back the new --color-* tokens above. The light theme will
-     override them in `html.light {}`. Until components are migrated,
-     nothing references these, so they are visually inert. */
+  /* ── Tokenization layer ──
+     These back the --color-* tokens above. The effect tokens further down
+     (glows, gradients, cluster-outline, panel shadow/shine, navbar/cluster
+     surfaces) still hold legacy dark/cyan values consumed only by canvas
+     effects + marketing; they convert in the canvas-effect + marketing
+     passes, not here, so app surfaces stay pixel-identical. */
 
   /* Elevation tints — exact alpha equivalents of bg-white/[0.02/0.04/0.06/0.08] */
-  --surface-raised-1: oklch(1 0 0 / 2%);
-  --surface-raised-2: oklch(1 0 0 / 4%);
-  --surface-raised-3: oklch(1 0 0 / 6%);
-  --surface-raised-4: oklch(1 0 0 / 8%);
-  --surface-selected: oklch(1 0 0 / 8%);
-  --modal-surface: #0a0a0a;
-  --scrim: oklch(0 0 0 / 60%);
+  --surface-raised-1: oklch(0 0 0 / 2%);
+  --surface-raised-2: oklch(0 0 0 / 3.5%);
+  --surface-raised-3: oklch(0 0 0 / 5%);
+  --surface-raised-4: oklch(0 0 0 / 7%);
+  --surface-selected: oklch(0 0 0 / 8%);
+  --modal-surface: #fefefe;
+  --scrim: oklch(0 0 0 / 40%);
 
-  /* Text tier-3 (today's white/50–60 band) */
-  --text-tertiary: oklch(0.62 0 0);
+  /* Text tier-3 */
+  --text-tertiary: #7c858f;
 
-  /* Accent split */
-  --link: #4a9eff;
-  --accent-on: oklch(0.96 0 0);
+  /* Accent split — the only blue in the palette is --link */
+  --link: #2f6fed;
+  --accent-on: #fefefe;
 
   /* Inverted affordance + active indicator + inset hairline divider.
-     Dark = today's literals (solid white / black text / white/60 / white-alpha). */
-  --surface-invert: #ffffff;
-  --text-on-invert: #000000;
-  --surface-cta: #ffffff;
-  --text-on-cta: #000000;
-  --border-active: oklch(1 0 0 / 60%);
+     hairline-shine stays the subtle white inset (a canvas-panel effect,
+     not part of the surface palette). */
+  --surface-invert: #1c2127;
+  --text-on-invert: #ffffff;
+  --surface-cta: #1c2127;
+  --text-on-cta: #ffffff;
+  --border-active: #3e3a3b;
   --hairline-shine: rgba(255, 255, 255, 0.06);
 
   /* Cluster/agent active green */
-  --agent-on: oklch(0.84 0.15 162);
+  --agent-on: oklch(0.52 0.14 162);
 
-  /* Panel header — alpha tints of --accent-primary (the existing
-     cyan/blue accent) so panels aren't fully monochrome */
-  --panel-header-surface: oklch(0.78 0.16 240 / 10%);
-  --panel-header-border: oklch(0.78 0.16 240 / 30%);
-  --panel-header-text: var(--accent-primary);
+  /* Panel header — the dark frame surface (#1c2127) with white text. */
+  --panel-header-surface: var(--surface-cta);
+  --panel-header-border: rgba(255, 255, 255, 0.12);
+  --panel-header-text: #ffffff;
+
+  /* App-shell chrome palette — promoted from the former app-shell.module.css
+     `.root` scope so the shell inherits it from the global root like
+     everything else. Duplicates of semantic tokens are aliased to keep one
+     source; the rest (rail/purple/lavender/orange/line) have no semantic
+     equivalent and live here. */
+  --rail: #2c3640;
+  --rail-tile: #3a4651;
+  --rail-tile-hi: #46535f;
+  --bg: #d6dee7;
+  --sidebar: var(--bg);
+  --panel: var(--bg-base);
+  --ink: var(--text-primary);
+  --ink-soft: var(--text-secondary);
+  --ink-faint: var(--text-muted);
+  --line: #d6dde5;
+  --line-soft: #dce3ea;
+  --active: #d9e1e9;
+  --purple: #6f93bf;
+  --lavender: #e3eaf2;
+  --orange: #d8bca6;
+  --black: var(--surface-cta);
 
   /* Cluster outline (dashed region behind grouped panels) — drawn in SVG.
      Alpha variants of --accent-primary so the region reads clearly. */
@@ -294,119 +319,11 @@
   --inset-highlight-strong: inset 0 1px 0 0 oklch(1 0 0 / 22%);
 }
 
-/* ─────────────────────────────────────────────────────────────────────
-   Light theme — opt-in via `html.light`. Overrides ONLY the semantic
-   token values; the @theme inline mapping and every component utility
-   stay the same, so the whole authenticated product re-themes from here.
-   Palette from the owner's reference design. Marketing/auth/docs routes
-   never get `.light`, so they stay dark (see layout dark-forcing).
-   ───────────────────────────────────────────────────────────────────── */
-html.light {
-  color-scheme: light;
-
-  /* Surfaces */
-  --bg-base: #e1e2e6;
-  --bg-elevated: #fefefe;
-  --bg-elevated-hover: #f4f5f6;
-  --bg-inset: #ecedee;
-  --bg-inset-hover: #e4e5e7;
-  --bg-overlay: #fefefe;
-
-  --panel-surface: #fefefe;
-  --panel-surface-focus: #ffffff;
-  --input-surface: #f1f1f1;
-  --input-surface-focus: #ffffff;
-  --card-surface: #fefefe;
-  --card-surface-elevated: #ffffff;
-  --card-surface-subtle: #f6f6f7;
-  --navbar-surface: #ecedee;
-  --cluster-tab-surface: #e4e5e7;
-  --cluster-menu-surface: #ecedee;
-  --tabs-surface: #ecedee;
-  --modal-surface: #fefefe;
-  --scrim: oklch(0 0 0 / 40%);
-
-  /* Borders — dark hairlines on light surfaces */
-  --border-subtle: oklch(0 0 0 / 6%);
-  --border-default: oklch(0 0 0 / 8%);
-  --border-strong: oklch(0 0 0 / 12%);
-  --border-highlight: oklch(0 0 0 / 16%);
-
-  /* Text */
-  --text-primary: #302c2d;
-  --text-secondary: #7c7c7c;
-  --text-tertiary: #8a8a8a;
-  --text-muted: #aeaeae;
-  --text-disabled: #c4c4c4;
-
-  /* Accent — neutral UI, blue links only */
-  --accent-primary: #3e3a3b;
-  --accent-glow: #3e3a3b;
-  --accent-soft: oklch(0.35 0 0 / 35%);
-  --accent-on: #fefefe;
-  --link: #2f6fed;
-
-  /* Status — darkened for contrast on white */
-  --success: oklch(0.55 0.15 155);
-  --warning: oklch(0.62 0.13 75);
-  --danger: oklch(0.55 0.22 25);
-
-  /* Elevation tints — subtle dark tints over light surfaces */
-  --surface-raised-1: oklch(0 0 0 / 2%);
-  --surface-raised-2: oklch(0 0 0 / 3.5%);
-  --surface-raised-3: oklch(0 0 0 / 5%);
-  --surface-raised-4: oklch(0 0 0 / 7%);
-  --surface-selected: oklch(0 0 0 / 8%);
-
-  /* Inverted affordance → the reference's #7C7372 chip with light text.
-     CTA → strong neutral ink. Both legible because these flip their text. */
-  --surface-invert: #7c7372;
-  --text-on-invert: #fefefe;
-  --surface-cta: #302c2d;
-  --text-on-cta: #fefefe;
-  --border-active: #3e3a3b;
-  --hairline-shine: oklch(0 0 0 / 5%);
-
-  /* Cluster/agent green — darker emerald so it reads on white */
-  --agent-on: oklch(0.52 0.14 162);
-
-  /* Panel header — alpha tints of --link (#2f6fed), the only blue in
-     the light palette, so panels aren't fully monochrome */
-  --panel-header-surface: rgba(47, 111, 237, 0.07);
-  --panel-header-border: rgba(47, 111, 237, 0.25);
-  --panel-header-text: var(--link);
-
-  /* Cluster outline — alpha variants of --link (#2f6fed) so the dashed
-     region is clearly visible on light */
-  --cluster-outline-stroke: rgba(47, 111, 237, 0.55);
-  --cluster-outline-stroke-strong: rgba(47, 111, 237, 0.8);
-  --cluster-outline-fill: rgba(47, 111, 237, 0.04);
-  --cluster-outline-fill-strong: rgba(47, 111, 237, 0.07);
-
-  /* Panel shine inverts to a soft neutral shadow + faint inset */
-  --shine-top-gradient: transparent;
-  --ring-selected: 0 0 0 2px oklch(0 0 0 / 12%);
-  --shadow-panel: 0 1px 3px oklch(0 0 0 / 6%), 0 6px 16px oklch(0 0 0 / 8%);
-  --inset-highlight: inset 0 0 0 1px oklch(0 0 0 / 4%);
-  --inset-highlight-strong: inset 0 0 0 1px oklch(0 0 0 / 7%);
-
-  /* Drop shadows — softer on light */
-  --shadow-elevated: 0 8px 24px -8px oklch(0 0 0 / 16%),
-    0 2px 8px -2px oklch(0 0 0 / 10%);
-  --shadow-floating: 0 16px 48px -12px oklch(0 0 0 / 20%),
-    0 4px 16px -4px oklch(0 0 0 / 12%);
-
-  /* Legacy palette aliases still referenced in a few places */
-  --paper: #fefefe;
-  --forest: #302c2d;
-  --grid-line: #7c7c7c;
-  --body-bg: #e1e2e6;
-  --gradient-elevated: linear-gradient(180deg, #ffffff 0%, #f4f5f6 100%);
-}
-
-/* Dark is the default (no class). color-scheme paired per theme. */
+/* One palette — defined once in :root above. The former `html.light`
+   override block and the dark/light split are gone; every surface
+   inherits the single system from the root. */
 html {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 @layer base {
@@ -522,14 +439,9 @@ html {
     radial-gradient(ellipse 30% 28% at 38% 78%, #040404 0%, transparent 68%),
     linear-gradient(135deg, #070707 0%, #0c0c0c 50%, #080808 100%);
 }
-html.light .canvas-surface {
-  background-color: #e8e9ec;
-  background-image: none;
-}
-/* New-design canvas: flat light surface inside the AppShell panel area.
-   Applied alongside the lightScope token class on the canvas portal
-   container (html stays .dark, so this can't ride html.light). Slightly
-   gray so the white floating panels read against it. */
+/* Canvas: flat light surface inside the AppShell panel area, applied on
+   the canvas portal container. Slightly gray so the white floating panels
+   read against it. */
 .canvas-surface.canvas-surface-light {
   background-color: #eef1f5;
   background-image: none;
@@ -546,14 +458,6 @@ html.light .canvas-surface {
 
 .hairline-strong {
   border-color: rgba(255, 255, 255, 0.15);
-}
-
-html.light .hairline {
-  border-color: rgba(0, 0, 0, 0.08);
-}
-
-html.light .hairline-strong {
-  border-color: rgba(0, 0, 0, 0.12);
 }
 
 /* ─────────────────────────────────────────────────────────────────────
@@ -780,17 +684,5 @@ body.landing-active::after {
 *::-webkit-scrollbar-thumb:hover,
 .scrollbar-discreet::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.18);
-}
-html.light *,
-html.light .scrollbar-discreet {
-  scrollbar-color: rgba(0, 0, 0, 0.18) transparent;
-}
-html.light *::-webkit-scrollbar-thumb,
-html.light .scrollbar-discreet::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.18);
-}
-html.light *::-webkit-scrollbar-thumb:hover,
-html.light .scrollbar-discreet::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.3);
 }
 

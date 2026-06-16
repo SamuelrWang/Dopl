@@ -79,15 +79,15 @@ export function ConnectAgentBanner() {
   return (
     <>
       {!dismissed && (
-        <div className="fixed bottom-5 left-1/2 z-40 flex -translate-x-1/2 items-center gap-3 rounded-full border border-border-default bg-[var(--panel-surface,#0a0a0a)] px-4 py-2.5 shadow-xl">
-          <Bot size={15} className="text-sky-400" />
+        <div className="fixed bottom-5 left-1/2 z-40 flex -translate-x-1/2 items-center gap-3 rounded-full border border-border-default bg-bg-elevated px-4 py-2.5 shadow-lg">
+          <Bot size={15} className="text-link" />
           <span className="text-[13px] text-text-secondary">
             Connect your AI agent to build out your workspace
           </span>
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="rounded-full bg-sky-500/15 border border-sky-500/30 px-3 py-1 text-[12px] font-medium text-sky-300 transition-colors hover:bg-sky-500/25 cursor-pointer"
+            className="rounded-full bg-surface-cta px-3 py-1 text-[12px] font-medium text-text-on-cta transition-opacity hover:opacity-90 cursor-pointer"
           >
             Connect
           </button>
@@ -107,7 +107,7 @@ export function ConnectAgentBanner() {
           onClick={() => setOpen(false)}
         >
           <div
-            className="w-full max-w-lg rounded-2xl bg-[#f4f6f9] p-7 shadow-2xl"
+            className="w-full max-w-lg rounded-2xl bg-bg-overlay p-7 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <McpConnectStep

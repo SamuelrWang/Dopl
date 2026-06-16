@@ -3,7 +3,6 @@
 import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 import { FlushGrid } from "@/shared/design";
-import { useTheme } from "@/shared/hooks/use-theme";
 
 // Top-level routes that are NOT a workspace slug. Anything else is a
 // workspace route, where the new-design AppShell layouts ((app) group +
@@ -34,9 +33,6 @@ const NON_WORKSPACE_ROOTS = new Set([
  */
 export function LayoutShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  // Owns the <html> theme class (always dark since the light-mode
-  // toggle was removed; the new-design pages carry their own palette).
-  useTheme();
   const isLanding = pathname === "/";
   const isDocs = pathname.startsWith("/docs");
   const isNoChrome = isLanding || isDocs;
