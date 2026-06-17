@@ -1,0 +1,115 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { Check, Copy } from "lucide-react";
+import { DEFAULT_MCP_URL } from "../constants";
+import { buildBootstrapPrompt } from "../bootstrap-prompt";
+
+const WELCOME_KEY = "dopl:welcome";
+
+/**
+ * Founder's welcome — shown once, in the workspace, right after onboarding
+ * completes. Onboarding sets the `dopl:welcome` flag before redirecting in;
+ * this reads it on mount, shows the popup, and clears the flag.
+ */
+export function WelcomePopup() {
+  const [open, setOpen] = useState(false);
+  const [origin, setOrigin] = useState("https://www.usedopl.com");
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setOrigin(window.location.origin);
+    try {
+      if (window.localStorage.getItem(WELCOME_KEY) === "1") {
+        window.localStorage.removeItem(WELCOME_KEY);
+        setOpen(true);
+      }
+    } catch {
+      // storage unavailable — nothing to show
+    }
+  }, []);
+
+  if (!open) return null;
+
+  const prompt = buildBootstrapPrompt(
+    origin ? `${origin}/api/mcp` : DEFAULT_MCP_URL
+  );
+
+  function copy() {
+    if (typeof navigator === "undefined" || !navigator.clipboard) return;
+    void navigator.clipboard.writeText(prompt);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-scrim px-6 py-10"
+      onClick={() => setOpen(false)}
+      style={{ fontFamily: "var(--font-geist-sans), system-ui, sans-serif" }}
+    >
+      <div
+        className="w-full max-w-lg rounded-[20px] border-[1.5px] border-[#d6dde5] bg-[#fbfcfd] p-8 shadow-[0_12px_40px_rgba(28,33,39,0.18)]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-5 flex flex-col items-center gap-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/favicons/android-chrome-512x512.png"
+            alt="Dopl"
+            className="h-11 w-11 rounded-[11px]"
+          />
+          <h1 className="text-[24px] font-semibold leading-tight text-[#1e242b]">
+            Welcome to Dopl!
+          </h1>
+        </div>
+
+        <p className="text-[14.5px] leading-relaxed text-[#3a414a]">
+          I first built Dopl as a personal tool to organize everything I needed
+          my agent to know about me. After being asked for access by others, I
+          productized Dopl into the workspace for teams using agents. I hope you
+          find it as useful as we have!
+        </p>
+
+        <p className="mt-4 text-[14.5px] leading-relaxed text-[#3a414a]">
+          To help jumpstart your workspace, here&rsquo;s a prompt I wrote for
+          your agent:
+        </p>
+
+        <div className="relative mt-3">
+          <div className="h-[180px] overflow-y-auto rounded-[11px] border-[1.5px] border-[#d6dde5] bg-[#eef1f5] px-3.5 py-3 pr-10">
+            <code className="font-mono text-[12px] leading-relaxed text-[#3a414a] whitespace-pre-wrap break-words">
+              {prompt}
+            </code>
+          </div>
+          <button
+            type="button"
+            onClick={copy}
+            title="Copy"
+            className="absolute right-2.5 top-2.5 text-[#98a2ad] hover:text-[#232a31] transition-colors cursor-pointer"
+          >
+            {copied ? (
+              <Check className="h-4 w-4" />
+            ) : (
+              <Copy className="h-4 w-4" />
+            )}
+          </button>
+        </div>
+
+        <p className="mt-4 text-[14.5px] leading-relaxed text-[#3a414a]">
+          Happy building!
+        </p>
+        <p className="mt-1 text-[14.5px] text-[#646d78]">— Sam</p>
+
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          className="mt-6 w-full rounded-[11px] bg-[#1c2127] px-4 py-3 text-[15px] font-semibold text-white hover:bg-[#2c3640] transition-colors cursor-pointer"
+        >
+          Get started
+        </button>
+      </div>
+    </div>
+  );
+}

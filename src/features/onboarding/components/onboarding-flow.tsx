@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useMcpConnectionPoll } from "../hooks/use-mcp-connection-poll";
 import type { OnboardingStep, SurveySubmission } from "../types";
 import { McpConnectStep } from "./mcp-connect-step";
-import { SeedStep } from "./seed-step";
 import { SurveyStep } from "./survey-step";
 
 interface OnboardingFlowProps {
@@ -72,6 +71,11 @@ export function OnboardingFlow({ initialStep, redirectTo }: OnboardingFlowProps)
       });
       if (!res.ok) throw new Error("Complete failed");
       const body = (await res.json()) as { redirectTo: string };
+      try {
+        window.localStorage.setItem("dopl:welcome", "1");
+      } catch {
+        // storage unavailable — the welcome popup just won't show
+      }
       router.push(body.redirectTo);
     } catch {
       finishRef.current = false;
@@ -81,9 +85,9 @@ export function OnboardingFlow({ initialStep, redirectTo }: OnboardingFlowProps)
   }
 
   // Agent connected. Don't yank the user forward while they're away in their
-  // agent — if this tab is hidden, wait until they come back, THEN fade to
-  // the seeding step (after a short beat so they register the "Connected"
-  // state). No hidden auto-advance.
+  // agent — if this tab is hidden, wait until they come back, THEN complete
+  // onboarding and drop them into their workspace (after a short beat so they
+  // register the "Connected" state). No hidden auto-advance.
   useEffect(() => {
     if (step !== "connect" || !connected || advancedRef.current) return;
 
@@ -91,11 +95,7 @@ export function OnboardingFlow({ initialStep, redirectTo }: OnboardingFlowProps)
     const advance = () => {
       if (advancedRef.current) return;
       advancedRef.current = true;
-      setLeaving(true);
-      setTimeout(() => {
-        setStep("seed");
-        setLeaving(false);
-      }, 200);
+      void finish(true);
     };
     const schedule = () => {
       timer = setTimeout(
@@ -121,6 +121,7 @@ export function OnboardingFlow({ initialStep, redirectTo }: OnboardingFlowProps)
       document.removeEventListener("visibilitychange", onVisible);
       if (timer) clearTimeout(timer);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connected, step]);
 
   return (
@@ -136,11 +137,7 @@ export function OnboardingFlow({ initialStep, redirectTo }: OnboardingFlowProps)
           className="h-10 w-10 rounded-[10px]"
         />
         <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-[#98a2ad]">
-          {step === "survey"
-            ? "01 / 03"
-            : step === "connect"
-              ? "02 / 03"
-              : "03 / 03"}
+          {step === "survey" ? "01 / 02" : "02 / 02"}
         </span>
       </div>
 
@@ -180,15 +177,13 @@ export function OnboardingFlow({ initialStep, redirectTo }: OnboardingFlowProps)
               </div>
             ) : step === "survey" ? (
               <SurveyStep submitting={submitting} onSubmit={handleSurveySubmit} />
-            ) : step === "connect" ? (
+            ) : (
               <McpConnectStep
                 connected={connected}
                 finishing={finishing}
                 onSkip={() => void finish(false)}
                 showSkip={false}
               />
-            ) : (
-              <SeedStep finishing={finishing} onFinish={() => void finish(true)} />
             )}
           </div>
         </div>

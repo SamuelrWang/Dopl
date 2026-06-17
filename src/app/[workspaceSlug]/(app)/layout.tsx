@@ -22,7 +22,7 @@ import { resolveWorkspaceSegmentForUser } from "@/features/workspaces/server/seg
 import { workspaceSegment } from "@/features/workspaces/url";
 import { MyAccessProvider } from "@/features/members/hooks/use-my-access";
 import { JoinRequestNotices } from "@/features/workspaces/components/join-request-notices";
-import { ConnectAgentBanner } from "@/features/onboarding/components";
+import { ConnectAgentBanner, WelcomePopup } from "@/features/onboarding/components";
 import { AppShell } from "@/shared/layout/app-shell";
 
 export const dynamic = "force-dynamic";
@@ -53,6 +53,7 @@ export default async function WorkspaceAppLayout({ children, params }: LayoutPro
         {children}
         <JoinRequestNotices />
         <ConnectAgentBanner />
+        <WelcomePopup />
       </MyAccessProvider>
     </AppShell>
   );
