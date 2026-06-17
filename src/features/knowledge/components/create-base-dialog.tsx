@@ -115,7 +115,7 @@ export function CreateBaseDialog({
         <X size={18} />
       </button>
       <div className={modalStyles.narrowBody}>
-        <h2 className={modalStyles.narrowTitle}>New knowledge base</h2>
+        <h2 className={modalStyles.narrowTitle} style={{ textAlign: "center" }}>New knowledge base</h2>
         <p className="mb-6 text-sm leading-relaxed text-text-secondary">
           A knowledge base holds folders + files. Editable in the browser,
           also accessible to your agent over MCP once you flip the

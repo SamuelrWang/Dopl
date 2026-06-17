@@ -7,7 +7,7 @@
 import { redirect } from "next/navigation";
 import { getUser } from "@/shared/supabase/server";
 import { getOnboardingStatus } from "@/features/onboarding/server/service";
-import { OnboardingFlow } from "@/features/onboarding/components";
+import { OnboardingFlow, OnboardingShell } from "@/features/onboarding/components";
 import { safeRedirect } from "@/shared/lib/url/safe-redirect";
 
 export const dynamic = "force-dynamic";
@@ -29,18 +29,12 @@ export default async function OnboardingPage({ searchParams }: PageProps) {
     ? safeRedirect(params.redirectTo)
     : undefined;
 
-  // Colorway mirrors the knowledge-landing shell (app-shell.module.css).
   return (
-    <div
-      className="fixed inset-0 z-50 overflow-y-auto bg-[#d6dee7] text-[#232a31]"
-      style={{ fontFamily: "var(--font-geist-sans), system-ui, sans-serif" }}
-    >
-      <div className="min-h-full flex items-center justify-center px-6 py-12">
-        <OnboardingFlow
-          initialStep={status.surveyCompleted ? "connect" : "survey"}
-          redirectTo={redirectTo}
-        />
-      </div>
-    </div>
+    <OnboardingShell>
+      <OnboardingFlow
+        initialStep={status.surveyCompleted ? "connect" : "survey"}
+        redirectTo={redirectTo}
+      />
+    </OnboardingShell>
   );
 }

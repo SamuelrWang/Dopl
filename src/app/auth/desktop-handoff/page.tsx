@@ -75,7 +75,7 @@ export default function DesktopHandoffPage() {
                 fontWeight: 600,
                 color: "#fff",
                 background: "#1c2127",
-                borderRadius: 11,
+                borderRadius: 8,
                 textDecoration: "none",
               }}
             >

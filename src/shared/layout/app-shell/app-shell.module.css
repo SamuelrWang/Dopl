@@ -25,7 +25,7 @@
 }
 .root *, .root *::before, .root *::after { box-sizing: border-box; }
 
-.serif { font-family: var(--font-playfair), Georgia, serif; }
+.serif { font-family: var(--font-geist-sans), system-ui, sans-serif; }
 
 /* ---------- Titlebar ---------- */
 .titlebar {
@@ -56,7 +56,7 @@
   position: relative;
   width: 46px;
   height: 46px;
-  border-radius: 15px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -67,19 +67,18 @@
   text-decoration: none;
   transition: border-radius 0.16s ease, background 0.16s ease;
 }
-.wsTile:not(.wsActive):hover { border-radius: 13px; background: var(--rail-tile-hi); }
-/* Selected workspace: a detached border ring (gap rendered in the rail
-   color, then a light hairline) instead of a solid fill — matches the
-   reference rail's outlined-tile treatment. */
+.wsTile:not(.wsActive):hover { border-radius: 6px; background: var(--rail-tile-hi); }
+/* Selected workspace: a thin light hairline hugging the icon directly —
+   no inner gap ring, so the selected tile reads the same width as the others. */
 .wsActive {
-  box-shadow: 0 0 0 2px var(--rail), 0 0 0 4px rgba(233, 238, 243, 0.7);
+  box-shadow: 0 0 0 1.5px rgba(233, 238, 243, 0.9);
 }
 .wsTile img { width: 100%; height: 100%; object-fit: cover; }
-.wsLetter { font-family: var(--font-playfair), serif; font-size: 21px; font-weight: 500; }
+.wsLetter { font-family: var(--font-geist-sans), system-ui, sans-serif; font-size: 21px; font-weight: 500; }
 .wsAdd {
   width: 46px;
   height: 46px;
-  border-radius: 15px;
+  border-radius: 8px;
   flex: 0 0 auto;
   display: flex;
   align-items: center;
@@ -90,7 +89,7 @@
   text-decoration: none;
   transition: border-radius 0.16s ease, background 0.16s ease, color 0.16s ease;
 }
-.wsAdd:hover { border-radius: 13px; background: var(--rail-tile-hi); color: #dce4eb; }
+.wsAdd:hover { border-radius: 6px; background: var(--rail-tile-hi); color: #dce4eb; }
 .railSpacer { flex: 1; }
 .wsMe {
   width: 42px;
@@ -102,7 +101,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: var(--font-playfair), serif;
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
   font-size: 18px;
   font-weight: 500;
   cursor: pointer;
@@ -114,7 +113,7 @@
   flex: 1;
   min-width: 0;
   display: flex;
-  border-radius: 18px;
+  border-radius: 8px;
   overflow: hidden;
   margin: var(--shell-gap-top) var(--shell-gap-right) var(--shell-gap-bottom) var(--shell-gap-left);
   background: var(--sidebar);
@@ -146,7 +145,7 @@
   align-items: center;
   gap: 13px;
   padding: 9px 10px;
-  border-radius: 11px;
+  border-radius: 8px;
   color: #3a414a;
   font-size: 16px;
   font-weight: 500;
@@ -160,7 +159,7 @@
 .wordsCard {
   margin-top: auto;
   background: var(--lavender);
-  border-radius: 16px;
+  border-radius: 8px;
   padding: 18px;
 }
 .wcTitle { font-size: 16px; font-weight: 600; margin-bottom: 9px; letter-spacing: -0.01em; }
@@ -173,7 +172,7 @@
   background: var(--black);
   color: #fff;
   border: none;
-  border-radius: 11px;
+  border-radius: 8px;
   padding: 11px 0;
   font: inherit;
   font-size: 15px;
@@ -192,7 +191,7 @@
   font-size: 15.5px;
   font-weight: 500;
   text-decoration: none;
-  border-radius: 11px;
+  border-radius: 8px;
   background: none;
   border: none;
   cursor: pointer;
@@ -225,14 +224,14 @@
   font-size: 14px;
   font-weight: 600;
   padding: 5px 12px;
-  border-radius: 9px;
+  border-radius: 8px;
   letter-spacing: -0.01em;
 }
 
 /* hero */
 .hero {
   position: relative;
-  border-radius: 20px;
+  border-radius: 8px;
   overflow: hidden;
   color: #fff;
   min-height: 320px;
@@ -249,7 +248,7 @@
 }
 .heroInner { position: relative; z-index: 2; padding: 48px 50px; max-width: 62%; }
 .hero h2 {
-  font-family: var(--font-playfair), serif;
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
   font-weight: 400;
   font-size: 38px;
   line-height: 1.1;
@@ -262,7 +261,7 @@
   background: #e5d6ce;
   color: #232a31;
   border: none;
-  border-radius: 12px;
+  border-radius: 8px;
   padding: 13px 28px;
   font: inherit;
   font-size: 16px;
@@ -274,7 +273,7 @@
 /* section head */
 .sectionHead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 26px; gap: 20px; }
 .sectionTitle {
-  font-family: var(--font-playfair), serif;
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
   font-size: 32px;
   font-weight: 500;
   letter-spacing: -0.01em;
@@ -284,7 +283,7 @@
   background: var(--black);
   color: #fff;
   border: none;
-  border-radius: 11px;
+  border-radius: 8px;
   padding: 12px 24px;
   font: inherit;
   font-size: 16px;
@@ -302,7 +301,7 @@
 @media (max-width: 1100px) { .cards { grid-template-columns: repeat(2, 1fr); } }
 .card {
   border: 1.5px solid var(--line);
-  border-radius: 18px;
+  border-radius: 8px;
   background: #f6f8fb;
   padding: 24px 26px;
   min-height: 250px;

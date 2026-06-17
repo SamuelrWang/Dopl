@@ -58,7 +58,7 @@ function CanvasPortal() {
         left: "var(--app-panel-left)",
         right: "var(--app-panel-right)",
         bottom: "var(--app-panel-bottom)",
-        borderRadius: "var(--shell-panel-radius) 18px 18px 18px",
+        borderRadius: "var(--shell-panel-radius) 8px 8px 8px",
       }}
     >
       <Canvas />

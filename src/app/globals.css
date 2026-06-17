@@ -287,9 +287,9 @@
   --mint: #9EFFBF;        /* success */
   --gold: #F4D35E;        /* warnings */
 
-  /* App-frame background — near-black. Darker than the panel surface so the
-     content panel reads as an elevated gray card floating on the frame. */
-  --body-bg: #0a0a0a;
+  /* App-frame background — the rail/frame color, so the body behind the
+     shell matches it (no dark flash on route transitions). */
+  --body-bg: #2c3640;
 
   /* Gradients — neutral charcoal */
   --gradient-elevated: linear-gradient(
@@ -397,14 +397,14 @@ html {
    with the shell's white panel area. Change values here only.
    ───────────────────────────────────────────────────────────────────── */
 :root {
-  --shell-titlebar-h: 40px;
-  --shell-rail-w: 74px;
+  --shell-titlebar-h: 32px;
+  --shell-rail-w: 62px;
   --shell-sidebar-w: 204px;
   --shell-gap-top: 5px;
   --shell-gap-right: 6px;
   --shell-gap-bottom: 6px;
   --shell-gap-left: 4px;
-  --shell-panel-radius: 22px;
+  --shell-panel-radius: 0px;
   /* Derived: viewport insets of the white main panel. */
   --app-panel-top: calc(var(--shell-titlebar-h) + var(--shell-gap-top));
   --app-panel-left: calc(

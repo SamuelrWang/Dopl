@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, Copy } from "lucide-react";
+import { Check, Copy, X } from "lucide-react";
 import { DEFAULT_MCP_URL } from "../constants";
 import { buildBootstrapPrompt } from "../bootstrap-prompt";
 
@@ -9,26 +9,43 @@ const WELCOME_KEY = "dopl:welcome";
 
 /**
  * Founder's welcome — shown once, in the workspace, right after onboarding
- * completes. Onboarding sets the `dopl:welcome` flag before redirecting in;
- * this reads it on mount, shows the popup, and clears the flag.
+ * completes. Onboarding sets the `dopl:welcome` flag before redirecting in.
+ * The flag is cleared on DISMISS (not on read) so a remount / StrictMode
+ * double-mount keeps the popup open instead of flashing it away.
  */
 export function WelcomePopup() {
   const [open, setOpen] = useState(false);
+  const [shown, setShown] = useState(false);
   const [origin, setOrigin] = useState("https://www.usedopl.com");
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setOrigin(window.location.origin);
+    let raf = 0;
     try {
       if (window.localStorage.getItem(WELCOME_KEY) === "1") {
-        window.localStorage.removeItem(WELCOME_KEY);
         setOpen(true);
+        // Mount at opacity 0, then flip next frame so it fades in.
+        raf = requestAnimationFrame(() => setShown(true));
       }
     } catch {
       // storage unavailable — nothing to show
     }
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+    };
   }, []);
+
+  function dismiss() {
+    setShown(false);
+    try {
+      window.localStorage.removeItem(WELCOME_KEY);
+    } catch {
+      // storage unavailable
+    }
+    setTimeout(() => setOpen(false), 220);
+  }
 
   if (!open) return null;
 
@@ -45,14 +62,35 @@ export function WelcomePopup() {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-scrim px-6 py-10"
-      onClick={() => setOpen(false)}
-      style={{ fontFamily: "var(--font-geist-sans), system-ui, sans-serif" }}
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto px-6 py-10"
+      onClick={dismiss}
+      style={{
+        fontFamily: "var(--font-geist-sans), system-ui, sans-serif",
+        backgroundColor: "rgba(0,0,0,0.5)",
+        opacity: shown ? 1 : 0,
+        transition: "opacity 220ms ease",
+      }}
     >
       <div
-        className="w-full max-w-lg rounded-[20px] border-[1.5px] border-[#d6dde5] bg-[#fbfcfd] p-8 shadow-[0_12px_40px_rgba(28,33,39,0.18)]"
+        className="relative w-full max-w-lg rounded-[20px] border-[1.5px] border-[#d6dde5] bg-[#fbfcfd] p-8 shadow-[0_12px_40px_rgba(28,33,39,0.28)]"
         onClick={(e) => e.stopPropagation()}
+        style={{
+          opacity: shown ? 1 : 0,
+          transform: shown
+            ? "translateY(0) scale(1)"
+            : "translateY(8px) scale(0.98)",
+          transition: "opacity 220ms ease, transform 220ms ease",
+        }}
       >
+        <button
+          type="button"
+          onClick={dismiss}
+          aria-label="Close"
+          className="absolute right-4 top-4 text-[#98a2ad] hover:text-[#232a31] transition-colors cursor-pointer"
+        >
+          <X className="h-5 w-5" />
+        </button>
+
         <div className="mb-5 flex flex-col items-center gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -101,14 +139,6 @@ export function WelcomePopup() {
           Happy building!
         </p>
         <p className="mt-1 text-[14.5px] text-[#646d78]">— Sam</p>
-
-        <button
-          type="button"
-          onClick={() => setOpen(false)}
-          className="mt-6 w-full rounded-[11px] bg-[#1c2127] px-4 py-3 text-[15px] font-semibold text-white hover:bg-[#2c3640] transition-colors cursor-pointer"
-        >
-          Get started
-        </button>
       </div>
     </div>
   );

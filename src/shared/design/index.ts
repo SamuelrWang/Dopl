@@ -24,3 +24,6 @@ export { Surface, type SurfaceProps } from "./surface";
 export { Pill, type PillProps } from "./pill";
 export { PillBar } from "./pill-bar";
 export { GlowText } from "./glow-text";
+
+// ── Decorative backgrounds ─────────────────────────────────────────
+export { CrystalField, type CrystalFieldConfig } from "./crystal-field";
