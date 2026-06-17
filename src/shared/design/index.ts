@@ -26,4 +26,4 @@ export { PillBar } from "./pill-bar";
 export { GlowText } from "./glow-text";
 
 // ── Decorative backgrounds ─────────────────────────────────────────
-export { CrystalField, type CrystalFieldConfig } from "./crystal-field";
+export { CrystalField, CrystalShell, CRYSTAL_PANEL_ATTR, type CrystalFieldConfig } from "./crystal-field";

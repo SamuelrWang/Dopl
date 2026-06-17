@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getUser } from "@/shared/supabase/server";
 import { getClient } from "@/shared/auth/mcp-oauth";
+import { CrystalShell } from "@/shared/design/crystal-field";
 
 export const dynamic = "force-dynamic";
 
@@ -92,23 +93,23 @@ export default async function AuthorizePage({
           <input type="hidden" name="scope" value={scope} />
           <input type="hidden" name="state" value={state} />
 
-          <p className="text-center text-[14px] leading-relaxed text-[#646d78]">
-            <span className="font-semibold text-[#232a31]">{clientLabel}</span>{" "}
+          <p className="text-center text-[14px] leading-relaxed text-[#B4BFCB]">
+            <span className="font-semibold text-[#E4EAF1]">{clientLabel}</span>{" "}
             wants to access your Dopl workspaces as{" "}
-            <span className="font-medium text-[#232a31]">{user.email}</span>.
+            <span className="font-medium text-[#E4EAF1]">{user.email}</span>.
           </p>
 
-          <div className="space-y-3 rounded-[11px] border-[1.5px] border-[#d6dde5] bg-[#f6f8fb] px-4 py-3.5">
+          <div className="space-y-3 rounded-[11px] border-[1.5px] border-[#33414F] bg-[#1A222E] px-4 py-3.5">
             <div className="flex items-start gap-3">
               <input
                 type="checkbox"
                 checked
                 disabled
                 aria-label="read access (always granted)"
-                className="mt-0.5 h-4 w-4 shrink-0 accent-[#1c2127]"
+                className="mt-0.5 h-4 w-4 shrink-0 accent-[#2E6FD8]"
               />
-              <p className="text-[13px] leading-relaxed text-[#3a414a]">
-                <span className="font-mono text-[11px] uppercase tracking-wide text-[#98a2ad]">
+              <p className="text-[13px] leading-relaxed text-[#B4BFCB]">
+                <span className="font-mono text-[11px] uppercase tracking-wide text-[#74808C]">
                   read
                 </span>{" "}
                 Search and read your knowledge bases, skills, and clusters.
@@ -119,10 +120,10 @@ export default async function AuthorizePage({
                 type="checkbox"
                 name="grant_write"
                 defaultChecked={requestsWrite}
-                className="mt-0.5 h-4 w-4 shrink-0 accent-[#1c2127]"
+                className="mt-0.5 h-4 w-4 shrink-0 accent-[#2E6FD8]"
               />
-              <p className="text-[13px] leading-relaxed text-[#3a414a]">
-                <span className="font-mono text-[11px] uppercase tracking-wide text-[#98a2ad]">
+              <p className="text-[13px] leading-relaxed text-[#B4BFCB]">
+                <span className="font-mono text-[11px] uppercase tracking-wide text-[#74808C]">
                   write
                 </span>{" "}
                 Create, update, and delete your content — knowledge bases,
@@ -136,7 +137,7 @@ export default async function AuthorizePage({
               type="submit"
               name="decision"
               value="approve"
-              className="flex-1 h-11 rounded-[11px] bg-[#1c2127] text-[15px] font-semibold text-white hover:bg-[#2c3640] transition-colors cursor-pointer"
+              className="flex-1 h-11 rounded-[11px] bg-[#2E6FD8] text-[15px] font-semibold text-white hover:bg-[#3B82F6] transition-colors cursor-pointer"
             >
               Approve
             </button>
@@ -144,7 +145,7 @@ export default async function AuthorizePage({
               type="submit"
               name="decision"
               value="deny"
-              className="h-11 px-5 rounded-[11px] border-[1.5px] border-[#d6dde5] bg-white text-[15px] font-semibold text-[#646d78] hover:border-[#b9c6d3] hover:text-[#232a31] transition-colors cursor-pointer"
+              className="h-11 px-5 rounded-[11px] border-[1.5px] border-[#33414F] bg-transparent text-[15px] font-semibold text-[#B4BFCB] hover:border-[#44566A] hover:text-[#ECF1F6] transition-colors cursor-pointer"
             >
               Deny
             </button>
@@ -157,11 +158,9 @@ export default async function AuthorizePage({
 
 function Screen({ title, body }: { title: string; body: React.ReactNode }) {
   return (
-    <div
-      className="fixed inset-0 flex items-center justify-center overflow-y-auto bg-[#d6dee7] px-6 py-12"
-      style={{ fontFamily: "var(--font-geist-sans), system-ui, sans-serif" }}
-    >
-      <div className="w-full max-w-md rounded-[20px] border-[1.5px] border-[#d6dde5] bg-[#fbfcfd] p-8 shadow-[0_6px_30px_rgba(28,33,39,0.08)]">
+    <CrystalShell>
+      <div className="w-full max-w-md">
+        {/* Logo + title — outside the card, so they sit over the tiling */}
         <div className="mb-6 flex flex-col items-center gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -169,19 +168,24 @@ function Screen({ title, body }: { title: string; body: React.ReactNode }) {
             alt="Dopl"
             className="h-11 w-11 rounded-[11px]"
           />
-          <h1 className="text-[22px] font-semibold leading-tight text-[#1e242b]">
+          <h1 className="text-[22px] font-semibold leading-tight text-[#ECF1F6]">
             {title}
           </h1>
         </div>
-        {body}
+        <div
+          data-crystal-panel
+          className="rounded-[20px] border border-[#2C3A4E] bg-[#131A24] p-8 shadow-[0_12px_50px_rgba(0,0,0,0.6)]"
+        >
+          {body}
+        </div>
       </div>
-    </div>
+    </CrystalShell>
   );
 }
 
 function ErrorList({ errors }: { errors: string[] }) {
   return (
-    <ul className="space-y-1.5 text-center text-[14px] text-[#b42318]">
+    <ul className="space-y-1.5 text-center text-[14px] text-red-300">
       {errors.map((e, i) => (
         <li key={i}>{e}</li>
       ))}

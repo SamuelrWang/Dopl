@@ -60,8 +60,8 @@ export function ChipSelect({
               onClick={() => toggle(option.value)}
               className={`px-3.5 py-2 rounded-[11px] border-[1.5px] text-[14px] font-medium transition-colors cursor-pointer ${
                 selected
-                  ? "border-[#6f93bf] bg-[#e3eaf2] text-[#232a31]"
-                  : "border-[#d6dde5] bg-[#f6f8fb] text-[#3a414a] hover:border-[#b9c6d3] hover:bg-[#fdfefe]"
+                  ? "border-[#4C8DF5] bg-[#1C3252] text-[#EAF2FB] shadow-[0_0_0_1px_rgba(76,141,245,0.4)]"
+                  : "border-[#33414F] bg-[#1E2836] text-[#BCC6D2] hover:border-[#44566A] hover:bg-[#273341]"
               }`}
             >
               {option.label}
@@ -77,9 +77,9 @@ export function ChipSelect({
           maxLength={200}
           placeholder="Tell us more…"
           onChange={(e) => onOtherTextChange?.(e.target.value)}
-          className="w-full rounded-[11px] border-[1.5px] border-[#d6dde5] bg-white px-3.5 py-2.5
-            text-[14px] text-[#232a31] placeholder:text-[#98a2ad]
-            focus:outline-none focus:border-[#6f93bf] transition-colors"
+          className="w-full rounded-[11px] border-[1.5px] border-[#33414F] bg-[#1A222E] px-3.5 py-2.5
+            text-[14px] text-[#ECF1F6] placeholder:text-[#6B7682]
+            focus:outline-none focus:border-[#4C8DF5] transition-colors"
         />
       )}
     </div>

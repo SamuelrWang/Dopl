@@ -1,5 +1,18 @@
 import type { CrystalFieldConfig } from "./config";
-import { lerpRgb, makePalette, prismGradient, smoothstep, type Rgb } from "./color";
+import { hexToRgb, lerpRgb, makePalette, prismRamp, smoothstep, type Rgb } from "./color";
+
+// Fraction along a column (0 = off-screen base, 1 = tip) where the full-width
+// rectangular body starts coning down to the termination point.
+const BLADE_KNEE = 0.6;
+// Half-width (in local-facet units) of the bright edge line between faces.
+const FACET_EDGE_W = 0.16;
+// Direction the faces are lit from, in facet-normal radians (-PI/2..PI/2).
+const LIGHT_ANGLE = 0.5;
+// Focal point of the cave (where the crystal cluster glows brightest) and how
+// fast the vignette falls off toward the edges.
+const FOCAL_X = 0.5;
+const FOCAL_Y = 0.72;
+const ENV_RADIUS = 1.3;
 
 /** Static, per-tile data baked once per layout: diamond centers and the
  *  prism color sleeping behind each one. Dynamic flip state lives in the engine. */
@@ -24,19 +37,35 @@ type Blade = {
   cy: number;
   hl: number; // half length along the long axis
   hw: number; // half width across the short axis
-  lit: number;
+  depth: number;
+  hue: number; // center of this column's color window in the prism ramp (0..1)
 };
 
+// Sorted far -> near so the bake loop lets nearer blades override (occlude)
+// farther ones simply by processing them last.
 function precomputeBlades(cfg: CrystalFieldConfig, w: number, h: number, diag: number): Blade[] {
-  return cfg.shards.map((sh) => {
-    const rad = (sh.angle * Math.PI) / 180;
-    const ux = Math.cos(rad);
-    const uy = Math.sin(rad);
-    const sx = sh.ax * w;
-    const sy = sh.ay * h;
-    const hl = (sh.len * diag) / 2;
-    return { ux, uy, vx: -uy, vy: ux, cx: sx + ux * hl, cy: sy + uy * hl, hl, hw: sh.wid / 2, lit: sh.lit };
-  });
+  return cfg.shards
+    .map((sh) => {
+      const rad = (sh.angle * Math.PI) / 180;
+      const ux = Math.cos(rad);
+      const uy = Math.sin(rad);
+      const sx = sh.ax * w;
+      const sy = sh.ay * h;
+      const hl = (sh.len * diag) / 2;
+      return {
+        ux,
+        uy,
+        vx: -uy,
+        vy: ux,
+        cx: sx + ux * hl,
+        cy: sy + uy * hl,
+        hl,
+        hw: sh.wid / 2,
+        depth: sh.depth,
+        hue: sh.hue,
+      };
+    })
+    .sort((a, b) => a.depth - b.depth);
 }
 
 /** Build the diamond grid and bake each tile's hidden prism color. */
@@ -74,32 +103,72 @@ export function buildField(w: number, h: number, cfg: CrystalFieldConfig): TileF
 
   const blades = precomputeBlades(cfg, w, h, diag);
 
+  const haze = hexToRgb(cfg.hazeColor);
+  const rockRgb = hexToRgb(cfg.rockColor);
+
   for (let k = 0; k < n; k++) {
-    jit[k] = (Math.random() * 2 - 1) * cfg.rippleJitter;
+    jit[k] = Math.random() * 2 - 1; // unit; scaled by ambientJitter at runtime
+
     let col: Rgb = palette.empty;
     let inside = false;
-    // front-most matching blade wins, with a soft blend where they overlap
+    // blades are far -> near; a nearer match overrides (occludes) the running
+    // color, so the closest column wins each tile.
     for (const b of blades) {
       const dx = cx[k] - b.cx;
       const dy = cy[k] - b.cy;
-      const along = (dx * b.ux + dy * b.uy) / b.hl;
-      const across = (dx * b.vx + dy * b.vy) / b.hw;
-      if (Math.abs(along) + Math.abs(across) > 1) continue;
+      const along = (dx * b.ux + dy * b.uy) / b.hl; // -1 = base, +1 = tip
+      if (along < -1 || along > 1) continue;
 
-      const t = (across + 1) / 2; // 0..1 across the blade width
-      let c = prismGradient(palette, t);
-      // brighten toward the "lit" long edge
-      const edge = b.lit > 0 ? across : -across; // +1 = lit edge
-      c = lerpRgb(c, palette.spec, smoothstep(0.45, 1, edge) * 0.9);
-      // gentle dim toward the sharp tips
-      const taper = 1 - smoothstep(0.65, 1, Math.abs(along)) * 0.45;
-      c = [c[0] * taper + 6, c[1] * taper + 6, c[2] * taper + 8];
-      col = inside ? lerpRgb(col, c, 0.65) : c;
+      // width profile: full rectangle to the knee, then cone to a point
+      const s = (along + 1) / 2; // 0 base .. 1 tip
+      const prof = s < BLADE_KNEE ? 1 : 1 - (s - BLADE_KNEE) / (1 - BLADE_KNEE);
+      if (prof <= 0) continue;
+
+      const across = (dx * b.vx + dy * b.vy) / b.hw;
+      if (Math.abs(across) > prof) continue;
+      const acrossLocal = across / prof; // -1..1 across the local width
+
+      // split the width into vertical faces: each a distinct hue + light-angled
+      // shade, with a bright edge line between — this is what reads as a solid.
+      const u = (acrossLocal + 1) / 2; // 0..1
+      const fi = Math.min(cfg.facetCount - 1, Math.floor(u * cfg.facetCount));
+      const fLocal = u * cfg.facetCount - fi; // 0..1 within the face
+      const facetT = (fi + 0.5) / cfg.facetCount;
+
+      // each column occupies a narrow window of the ramp around its own hue, so
+      // some columns read cyan, others violet/magenta — faces vary within it.
+      let c = prismRamp(palette, b.hue + (facetT - 0.5) * cfg.hueSpread);
+      const faceLight = 0.5 + 0.5 * Math.cos((facetT - 0.5) * Math.PI - LIGHT_ANGLE);
+      const shade = 1 - cfg.facetShade * (1 - faceLight);
+      const edgeDist = Math.min(fLocal, 1 - fLocal);
+      const edgeHi = (1 - smoothstep(0, FACET_EDGE_W, edgeDist)) * cfg.facetEdge;
+      c = lerpRgb(c, palette.spec, edgeHi);
+
+      // dim into the point, by face shade, and by depth (far columns recede)
+      const tip = 1 - smoothstep(0.8, 1, s) * 0.5;
+      const dim = (1 - (1 - b.depth) * cfg.depthDarken) * shade * tip;
+      c = [c[0] * dim + 5, c[1] * dim + 5, c[2] * dim + 7];
+      col = inside ? lerpRgb(col, c, 0.85) : c;
       inside = true;
     }
-    backR[k] = col[0];
-    backG[k] = col[1];
-    backB[k] = col[2];
+
+    // voids become mottled rock (the cave walls), not flat black
+    if (!inside) {
+      const m = 0.5 + 0.5 * Math.sin(cx[k] * 0.05 + Math.sin(cy[k] * 0.04) * 1.5) * Math.cos(cy[k] * 0.06 - 1);
+      const mottle = Math.min(1, Math.max(0, m + jit[k] * 0.08));
+      col = lerpRgb(palette.empty, rockRgb, cfg.rock * mottle);
+    }
+
+    // cave environment: vignette toward the edges + central purple haze, so the
+    // field reads as a glowing cavern rather than columns on a flat void.
+    const dx = cx[k] / w - FOCAL_X;
+    const dy = cy[k] / h - FOCAL_Y;
+    const d = Math.min(1, Math.hypot(dx, dy) * ENV_RADIUS); // 0 focal .. 1 edge
+    const vig = 1 - cfg.vignette * smoothstep(0.3, 1, d);
+    const hz = cfg.haze * (1 - d);
+    backR[k] = col[0] * vig + haze[0] * hz;
+    backG[k] = col[1] * vig + haze[1] * hz;
+    backB[k] = col[2] * vig + haze[2] * hz;
     isPrism[k] = inside ? 1 : 0;
   }
 

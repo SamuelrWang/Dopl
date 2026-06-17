@@ -1,5 +1,5 @@
 import type { CrystalFieldConfig } from "./config";
-import { hexToRgb, type Rgb } from "./color";
+import { hexToRgb, smoothstep, type Rgb } from "./color";
 import { buildField, buildRestLayer, traceDiamond, type TileField } from "./field";
 import { drawActiveTiles } from "./render";
 
@@ -96,7 +96,9 @@ export class CrystalFieldEngine {
   private resize(): void {
     this.w = window.innerWidth;
     this.h = window.innerHeight;
-    this.dpr = Math.min(window.devicePixelRatio || 1, 2);
+    // capped low: decorative blurry background doesn't need full retina res,
+    // and fill-rate is the main per-frame cost.
+    this.dpr = Math.min(window.devicePixelRatio || 1, 1.5);
     this.canvas.width = Math.round(this.w * this.dpr);
     this.canvas.height = Math.round(this.h * this.dpr);
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
@@ -132,17 +134,10 @@ export class CrystalFieldEngine {
     const dt = Math.min(64, now - this.last);
     this.last = now;
 
-    // ambient ripple wavefronts for this frame
-    const rad = ((cfg.rippleAngle + now * cfg.rippleAngleDrift) * Math.PI) / 180;
-    const u1x = Math.cos(rad);
-    const u1y = Math.sin(rad);
-    const rad2 = rad + (cfg.ripple2AngleOffset * Math.PI) / 180;
-    const u2x = Math.cos(rad2);
-    const u2y = Math.sin(rad2);
-    const span = Math.hypot(this.w, this.h) + cfg.rippleBand * 2;
-    const w1 = -cfg.rippleBand + ((now % cfg.ripplePeriod) / cfg.ripplePeriod) * span;
-    const w2 = -cfg.rippleBand + ((now % cfg.ripple2Period) / cfg.ripple2Period) * span;
-    const halfBand = cfg.rippleBand / 2;
+    // organic ambient: a drifting, domain-warped noise field — morphing patches
+    // of reveal rather than a marching wavefront.
+    const at = now * cfg.ambientSpeed * 0.001;
+    const freq = 1 / cfg.ambientScale;
     const r2 = cfg.revealRadius * cfg.revealRadius;
     const glowDecay = dt / (cfg.driftBackDuration * cfg.afterglowFactor);
 
@@ -164,15 +159,21 @@ export class CrystalFieldEngine {
             excite = Math.pow(1 - Math.sqrt(d2) / cfg.revealRadius, cfg.cursorFalloff);
           }
         }
-        if (cfg.rippleEnabled) {
-          const proj = f.cx[k] * u1x + f.cy[k] * u1y + f.jit[k];
-          const e1 = (1 - smoothBand(halfBand, Math.abs(proj - w1))) * cfg.ripplePeak;
-          if (e1 > excite) excite = e1;
-          if (cfg.ripple2) {
-            const proj2 = f.cx[k] * u2x + f.cy[k] * u2y + f.jit[k];
-            const e2 = (1 - smoothBand(halfBand, Math.abs(proj2 - w2))) * cfg.ripple2Peak;
-            if (e2 > excite) excite = e2;
-          }
+        if (cfg.ambientEnabled) {
+          const fx = f.cx[k] * freq;
+          const fy = f.cy[k] * freq;
+          const wx = fx + cfg.ambientWarp * Math.sin(fy * 1.7 + at * 0.6);
+          const wy = fy + cfg.ambientWarp * Math.cos(fx * 1.5 - at * 0.5);
+          const nz =
+            Math.sin(wx + at) * 0.6 +
+            Math.sin((wx + wy) * 0.85 - at * 0.7) * 0.5 +
+            Math.sin(wy * 1.3 + at * 1.1) * 0.4 +
+            Math.sin((wx - wy) * 0.6 + at * 0.3) * 0.3;
+          const n01 = 0.5 + nz * 0.28 + f.jit[k] * cfg.ambientJitter;
+          const e =
+            smoothstep(cfg.ambientThreshold, cfg.ambientThreshold + cfg.ambientSoftness, n01) *
+            cfg.ambientPeak;
+          if (e > excite) excite = e;
         }
       }
 
@@ -218,10 +219,4 @@ export class CrystalFieldEngine {
     }
     ctx.globalAlpha = 1;
   }
-}
-
-// soft-edged ripple band: 0 at the wavefront center, 1 beyond the half-band.
-function smoothBand(halfBand: number, dist: number): number {
-  const t = Math.min(1, Math.max(0, dist / halfBand));
-  return t * t * (3 - 2 * t);
 }

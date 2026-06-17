@@ -73,14 +73,9 @@ export function drawActiveTiles(
     if (back) {
       const g = st.glow[k];
       const lit = (cfg.litFloor + (1 - cfg.litFloor) * Math.min(1, g + 0.15)) * turn;
-      if (g > cfg.glowThreshold) {
-        ctx.shadowColor = `rgba(${field.backR[k] | 0},${field.backG[k] | 0},${field.backB[k] | 0},${0.6 * g})`;
-        ctx.shadowBlur = cfg.glowStrength * g;
-      }
       ctx.fillStyle = `rgb(${(field.backR[k] * lit) | 0},${(field.backG[k] * lit) | 0},${(field.backB[k] * lit) | 0})`;
       quad();
       ctx.fill();
-      ctx.shadowBlur = 0;
       if (absx > 0.4) {
         ctx.strokeStyle = `rgba(${sl0},${sl1},${sl2},${0.5 * absx})`;
         ctx.lineWidth = 1;
@@ -93,15 +88,17 @@ export function drawActiveTiles(
       ctx.fill();
     }
 
-    // mid-flip white glint — "glass catching light" as the facet passes edge-on.
-    // Only prism tiles glint; empty near-black tiles must not flash.
+    // mid-flip glint — "glass catching light" as the facet passes edge-on. Uses
+    // a brightened version of the tile's OWN color (not white), so a cyan facet
+    // flashes cyan and a magenta one flashes magenta. Empty tiles don't glint.
     const glint = field.isPrism[k] ? (1 - Math.min(1, absx / 0.28)) * cfg.glintStrength : 0;
     if (glint > 0.01) {
-      ctx.globalCompositeOperation = "lighter";
-      ctx.fillStyle = `rgba(255,255,255,${glint})`;
+      const gr = Math.min(255, field.backR[k] * 1.8 + 26);
+      const gg = Math.min(255, field.backG[k] * 1.8 + 26);
+      const gb = Math.min(255, field.backB[k] * 1.8 + 26);
+      ctx.fillStyle = `rgba(${gr | 0},${gg | 0},${gb | 0},${glint})`;
       quad();
       ctx.fill();
-      ctx.globalCompositeOperation = "source-over";
     }
   }
 }

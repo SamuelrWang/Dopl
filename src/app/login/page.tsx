@@ -3,6 +3,7 @@
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { CrystalShell } from "@/shared/design/crystal-field";
 import { getSupabaseBrowser } from "@/shared/supabase/browser";
 import { safeRedirect } from "@/shared/lib/url/safe-redirect";
 import { isDesktopApp } from "@/shared/lib/desktop";
@@ -88,21 +89,17 @@ function LoginForm() {
     }
   }
 
-  // Colorway mirrors the knowledge-landing shell (app-shell.module.css):
-  // slate-blue page, near-white card, ink text, dark CTA, Newsreader serif.
+  // Dark crystal-cave shell: tiled field behind a single dark card.
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[#d6dee7] px-6 text-[#232a31]"
-      style={{ fontFamily: "var(--font-geist-sans), system-ui, sans-serif" }}
-    >
+    <CrystalShell>
       <div
         className="relative w-full max-w-sm"
         style={{ animation: "loginFadeIn 0.6s ease-out both" }}
       >
-        {/* Logo + tagline */}
+        {/* Logo + tagline — outside the card, so they sit over the tiling */}
         <div className="mb-8 text-center">
           <h1
-            className="text-4xl font-medium"
+            className="text-4xl font-medium text-[#ECF1F6]"
             style={{
               fontFamily: "var(--font-playfair), Georgia, serif",
               fontStyle: "italic",
@@ -110,18 +107,21 @@ function LoginForm() {
           >
             Dopl
           </h1>
-          <p className="mt-3 text-[15px] text-[#646d78]">
+          <p className="mt-3 text-[15px] text-[#B4BFCB]">
             Everything your agents know, in one place.
           </p>
         </div>
 
-        <div className="rounded-[20px] border-[1.5px] border-[#d6dde5] bg-[#fbfcfd] p-8 shadow-[0_6px_30px_rgba(28,33,39,0.08)]">
+        <div
+          data-crystal-panel
+          className="rounded-[20px] border border-[#2C3A4E] bg-[#131A24] p-8 shadow-[0_12px_50px_rgba(0,0,0,0.6)]"
+        >
           {/* Continue with Google */}
           <button
             type="button"
             onClick={handleGoogleLogin}
             className="w-full flex items-center justify-center gap-3 px-4 py-3 mb-3 rounded-[11px]
-              border-[1.5px] border-[#d6dde5] bg-white hover:border-[#b9c6d3] hover:bg-[#fdfefe]
+              border-[1.5px] border-[#33414F] bg-[#1E2836] text-[#ECF1F6] hover:border-[#44566A] hover:bg-[#273341]
               transition-colors cursor-pointer disabled:opacity-50"
           >
             <svg className="w-[17px] h-[17px]" viewBox="0 0 18 18" fill="none">
@@ -135,21 +135,21 @@ function LoginForm() {
 
           {/* Divider */}
           <div className="flex items-center gap-3 my-5">
-            <div className="flex-1 h-px bg-[#d6dde5]" />
-            <span className="font-mono text-[10px] text-[#98a2ad] uppercase tracking-wide">
+            <div className="flex-1 h-px bg-[#33414F]" />
+            <span className="font-mono text-[10px] text-[#74808C] uppercase tracking-wide">
               or
             </span>
-            <div className="flex-1 h-px bg-[#d6dde5]" />
+            <div className="flex-1 h-px bg-[#33414F]" />
           </div>
 
           {error && (
-            <div className="mb-3 p-3 rounded-[11px] border-[1.5px] border-red-200 bg-red-50">
-              <p className="text-[13px] text-red-600">{error}</p>
+            <div className="mb-3 p-3 rounded-[11px] border-[1.5px] border-red-500/30 bg-red-500/10">
+              <p className="text-[13px] text-red-300">{error}</p>
             </div>
           )}
           {message && (
-            <div className="mb-3 p-3 rounded-[11px] border-[1.5px] border-[#6f93bf]/40 bg-[#e3eaf2]">
-              <p className="text-[13px] text-[#232a31]">{message}</p>
+            <div className="mb-3 p-3 rounded-[11px] border-[1.5px] border-[#4C8DF5]/40 bg-[#1C3252]">
+              <p className="text-[13px] text-[#E4EAF1]">{message}</p>
             </div>
           )}
 
@@ -163,19 +163,19 @@ function LoginForm() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 placeholder=" "
-                className="peer w-full bg-transparent border-0 border-b-[1.5px] border-[#c4cfda]
-                  px-0 py-3 text-[15px] text-[#232a31]
+                className="peer w-full bg-transparent border-0 border-b-[1.5px] border-[#33414F]
+                  px-0 py-3 text-[15px] text-[#ECF1F6]
                   placeholder:text-transparent
-                  focus:outline-none focus:border-[#6f93bf] focus:ring-0
+                  focus:outline-none focus:border-[#4C8DF5] focus:ring-0
                   transition-colors"
               />
               <label
                 htmlFor="login-email"
                 className={`pointer-events-none absolute left-0 font-mono uppercase tracking-[0.1em] transition-all duration-300 ${
                   email.length > 0
-                    ? "-top-[10px] text-[9px] text-[#646d78]"
-                    : "top-[12px] text-[11px] text-[#98a2ad]"
-                } peer-focus:-top-[10px] peer-focus:text-[9px] peer-focus:text-[#6f93bf]`}
+                    ? "-top-[10px] text-[9px] text-[#B4BFCB]"
+                    : "top-[12px] text-[11px] text-[#74808C]"
+                } peer-focus:-top-[10px] peer-focus:text-[9px] peer-focus:text-[#4C8DF5]`}
               >
                 Email
               </label>
@@ -185,8 +185,8 @@ function LoginForm() {
               type="submit"
               disabled={loading}
               className="w-full mt-6 px-4 py-3 rounded-[11px] text-[15px] font-semibold
-                bg-[#1c2127] text-white hover:bg-[#2c3640]
-                transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                bg-[#2E6FD8] text-white hover:bg-[#3B82F6]
+                transition-colors disabled:bg-[#1E2836] disabled:text-[#7E8794] disabled:cursor-not-allowed cursor-pointer"
             >
               {loading ? "Sending link..." : "Continue with Email"}
             </button>
@@ -194,13 +194,13 @@ function LoginForm() {
         </div>
 
         {/* Footer */}
-        <p className="text-[12px] text-[#98a2ad] mt-6 text-center leading-relaxed">
+        <p className="text-[12px] text-[#74808C] mt-6 text-center leading-relaxed">
           By continuing, you agree to our{" "}
-          <Link href="/terms" className="underline hover:text-[#646d78] transition-colors">Terms of Service</Link>
+          <Link href="/terms" className="underline hover:text-[#B4BFCB] transition-colors">Terms of Service</Link>
           {" "}and{" "}
-          <Link href="/privacy" className="underline hover:text-[#646d78] transition-colors">Privacy Policy</Link>.
+          <Link href="/privacy" className="underline hover:text-[#B4BFCB] transition-colors">Privacy Policy</Link>.
         </p>
       </div>
-    </div>
+    </CrystalShell>
   );
 }

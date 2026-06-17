@@ -46,12 +46,12 @@ export function McpConnectStep({
   return (
     <div className="space-y-7">
       <div className="text-center">
-        <h1 className="text-[28px] font-semibold leading-tight text-[#1e242b]">
+        <h1 className="text-[28px] font-semibold leading-tight text-[#ECF1F6]">
           Connect your AI agent
         </h1>
-        <p className="mt-2 text-[15px] text-[#646d78] leading-relaxed">
+        <p className="mt-2 text-[15px] text-[#B4BFCB] leading-relaxed">
           Your agent accesses your workspaces through the Dopl{" "}
-          <span className="font-semibold text-[#232a31]">MCP</span> server.
+          <span className="font-semibold text-[#E4EAF1]">MCP</span> server.
           Connect by following the instructions or pasting the prompt below.
         </p>
       </div>
@@ -83,10 +83,10 @@ export function McpConnectStep({
 
       <div className="space-y-2.5">
         <div className="flex items-center justify-between gap-3">
-          <p className="font-mono text-[10px] uppercase tracking-[0.06em] text-[#98a2ad]">
+          <p className="font-mono text-[10px] uppercase tracking-[0.06em] text-[#74808C]">
             Add it manually
           </p>
-          <div className="inline-flex rounded-full border-[1.5px] border-[#d6dde5] bg-[#eef1f5] p-0.5">
+          <div className="inline-flex rounded-full border-[1.5px] border-[#33414F] bg-[#1A222E] p-0.5">
             {(["claude", "codex"] as const).map((c) => (
               <button
                 key={c}
@@ -94,8 +94,8 @@ export function McpConnectStep({
                 onClick={() => setClient(c)}
                 className={`rounded-full px-3.5 py-1 text-[12px] font-medium transition-colors cursor-pointer ${
                   client === c
-                    ? "bg-white text-[#232a31] shadow-[0_1px_3px_rgba(28,33,39,0.12)]"
-                    : "text-[#646d78] hover:text-[#232a31]"
+                    ? "bg-[#1C3252] text-[#EAF2FB] shadow-[0_1px_3px_rgba(0,0,0,0.4)]"
+                    : "text-[#8794A2] hover:text-[#ECF1F6]"
                 }`}
               >
                 {c === "claude" ? "Claude" : "Codex"}
@@ -104,9 +104,9 @@ export function McpConnectStep({
           </div>
         </div>
 
-        <div className="rounded-[11px] border-[1.5px] border-[#d6dde5] bg-[#f6f8fb] px-4 py-3.5">
+        <div className="rounded-[11px] border-[1.5px] border-[#33414F] bg-[#1A222E] px-4 py-3.5">
           {client === "claude" ? (
-            <ol className="list-decimal space-y-1.5 pl-4 text-[13px] leading-relaxed text-[#3a414a] marker:text-[#98a2ad]">
+            <ol className="list-decimal space-y-1.5 pl-4 text-[13px] leading-relaxed text-[#B4BFCB] marker:text-[#6E6886]">
               <li>
                 Open <Strong>Customize</Strong> (left sidebar) →{" "}
                 <Strong>Connectors</Strong>.
@@ -117,7 +117,7 @@ export function McpConnectStep({
               <li>Enter the server name and URL above.</li>
             </ol>
           ) : (
-            <ol className="list-decimal space-y-1.5 pl-4 text-[13px] leading-relaxed text-[#3a414a] marker:text-[#98a2ad]">
+            <ol className="list-decimal space-y-1.5 pl-4 text-[13px] leading-relaxed text-[#B4BFCB] marker:text-[#6E6886]">
               <li>
                 In ChatGPT, go to <Strong>Settings → Apps &amp; Connectors →
                 Advanced</Strong> and turn on <Strong>Developer mode</Strong>.
@@ -134,15 +134,15 @@ export function McpConnectStep({
       <div className="flex items-center justify-between pt-1">
         {connected ? (
           <span className="flex items-center gap-2">
-            <span className="w-2 h-2 bg-emerald-600" />
-            <span className="font-mono text-[10px] uppercase tracking-wide text-emerald-700">
+            <span className="w-2 h-2 bg-emerald-400" />
+            <span className="font-mono text-[10px] uppercase tracking-wide text-emerald-300">
               Connected
             </span>
           </span>
         ) : (
           <span className="flex items-center gap-2">
-            <span className="w-2 h-2 animate-pulse bg-[#6f93bf]" />
-            <span className="font-mono text-[10px] uppercase tracking-wide text-[#646d78]">
+            <span className="w-2 h-2 animate-pulse bg-[#4C8DF5]" />
+            <span className="font-mono text-[10px] uppercase tracking-wide text-[#7E8794]">
               Waiting for your agent…
             </span>
           </span>
@@ -152,8 +152,8 @@ export function McpConnectStep({
             type="button"
             onClick={onSkip}
             disabled={finishing}
-            className="text-[14px] font-semibold text-[#646d78]
-              hover:text-[#232a31] transition-colors cursor-pointer underline underline-offset-4
+            className="text-[14px] font-semibold text-[#7E8794]
+              hover:text-[#ECF1F6] transition-colors cursor-pointer underline underline-offset-4
               disabled:opacity-50"
           >
             Skip for now
@@ -165,7 +165,7 @@ export function McpConnectStep({
 }
 
 function Strong({ children }: { children: React.ReactNode }) {
-  return <span className="font-semibold text-[#232a31]">{children}</span>;
+  return <span className="font-semibold text-[#E4EAF1]">{children}</span>;
 }
 
 function CopyRow({
@@ -185,12 +185,12 @@ function CopyRow({
 }) {
   return (
     <div className="space-y-1.5">
-      <p className="font-mono text-[10px] uppercase tracking-[0.06em] text-[#98a2ad]">
+      <p className="font-mono text-[10px] uppercase tracking-[0.06em] text-[#74808C]">
         {label}
       </p>
-      <div className="flex items-start gap-2 rounded-[11px] border-[1.5px] border-[#d6dde5] bg-[#eef1f5] px-3.5 py-2.5">
+      <div className="flex items-start gap-2 rounded-[11px] border-[1.5px] border-[#33414F] bg-[#1A222E] px-3.5 py-2.5">
         <code
-          className={`flex-1 font-mono text-[12px] text-[#3a414a] leading-relaxed ${
+          className={`flex-1 font-mono text-[12px] text-[#B4BFCB] leading-relaxed ${
             multiline ? "whitespace-pre-wrap break-words" : "truncate"
           }`}
         >
@@ -199,7 +199,7 @@ function CopyRow({
         <button
           type="button"
           onClick={() => onCopy(text, id)}
-          className="shrink-0 mt-0.5 text-[#98a2ad] hover:text-[#232a31] transition-colors cursor-pointer"
+          className="shrink-0 mt-0.5 text-[#7E8794] hover:text-[#ECF1F6] transition-colors cursor-pointer"
           title="Copy"
         >
           {copied === id ? (

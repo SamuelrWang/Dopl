@@ -7,7 +7,8 @@
 import { redirect } from "next/navigation";
 import { getUser } from "@/shared/supabase/server";
 import { getOnboardingStatus } from "@/features/onboarding/server/service";
-import { OnboardingFlow, OnboardingShell } from "@/features/onboarding/components";
+import { OnboardingFlow } from "@/features/onboarding/components";
+import { CrystalShell } from "@/shared/design/crystal-field";
 import { safeRedirect } from "@/shared/lib/url/safe-redirect";
 
 export const dynamic = "force-dynamic";
@@ -30,11 +31,11 @@ export default async function OnboardingPage({ searchParams }: PageProps) {
     : undefined;
 
   return (
-    <OnboardingShell>
+    <CrystalShell>
       <OnboardingFlow
         initialStep={status.surveyCompleted ? "connect" : "survey"}
         redirectTo={redirectTo}
       />
-    </OnboardingShell>
+    </CrystalShell>
   );
 }

@@ -53,10 +53,10 @@ export function SurveyStep({ submitting, onSubmit }: SurveyStepProps) {
   return (
     <div className="space-y-8">
       <div className="text-center">
-        <h1 className="text-[28px] font-semibold leading-tight text-[#1e242b]">
+        <h1 className="text-[28px] font-semibold leading-tight text-[#ECF1F6]">
           Tell us about yourself
         </h1>
-        <p className="mt-2 text-[15px] text-[#646d78]">
+        <p className="mt-2 text-[15px] text-[#B4BFCB]">
           A few quick questions to tune Dopl to how you work.
         </p>
       </div>
@@ -111,9 +111,9 @@ export function SurveyStep({ submitting, onSubmit }: SurveyStepProps) {
         disabled={incomplete || submitting}
         onClick={handleSubmit}
         className="w-full px-4 py-3 rounded-[11px] text-[15px] font-semibold
-          bg-[#1c2127] text-white hover:bg-[#2c3640]
+          bg-[#2E6FD8] text-white hover:bg-[#3B82F6]
           transition-colors cursor-pointer
-          disabled:opacity-40 disabled:cursor-not-allowed"
+          disabled:bg-[#1E2836] disabled:text-[#7E8794] disabled:cursor-not-allowed"
       >
         {submitting ? "Saving…" : "Continue"}
       </button>
@@ -135,11 +135,11 @@ function Question({
   return (
     <div className="space-y-3">
       <div className="flex items-baseline gap-2.5">
-        <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-[#98a2ad]">
+        <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-[#74808C]">
           {index}
         </span>
-        <p className="text-[15px] font-semibold text-[#232a31]">{label}</p>
-        {hint && <span className="text-[12px] text-[#98a2ad]">{hint}</span>}
+        <p className="text-[15px] font-semibold text-[#E4EAF1]">{label}</p>
+        {hint && <span className="text-[12px] text-[#74808C]">{hint}</span>}
       </div>
       {children}
     </div>

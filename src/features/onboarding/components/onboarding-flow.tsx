@@ -136,24 +136,25 @@ export function OnboardingFlow({ initialStep, redirectTo }: OnboardingFlowProps)
           alt="Dopl"
           className="h-10 w-10 rounded-[10px]"
         />
-        <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-[#98a2ad]">
+        <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-[#A7A0BE]">
           {step === "survey" ? "01 / 02" : "02 / 02"}
         </span>
       </div>
 
       <div
-        className="flex flex-col overflow-hidden rounded-[20px] border-[1.5px] border-[#d6dde5] bg-[#fbfcfd] shadow-[0_6px_30px_rgba(28,33,39,0.08)]"
+        {...{ "data-crystal-panel": true }}
+        className="flex flex-col overflow-hidden rounded-[20px] border border-[#2C3A4E] bg-[#131A24] shadow-[0_12px_50px_rgba(0,0,0,0.6)]"
         style={{ height: "min(78vh, 640px)" }}
       >
         <div className="flex-1 min-h-0 overflow-y-auto p-8">
           {error && (
-            <div className="mb-5 p-3 rounded-[11px] border-[1.5px] border-red-200 bg-red-50">
-              <p className="text-[13px] text-red-600">{error}</p>
+            <div className="mb-5 p-3 rounded-[11px] border-[1.5px] border-red-500/30 bg-red-500/10">
+              <p className="text-[13px] text-red-300">{error}</p>
               {finishRef.current === false && step !== "survey" && (
                 <button
                   type="button"
                   onClick={() => void finish(connected)}
-                  className="mt-1.5 text-[13px] font-semibold text-red-600 underline underline-offset-2 cursor-pointer"
+                  className="mt-1.5 text-[13px] font-semibold text-red-300 underline underline-offset-2 cursor-pointer"
                 >
                   Retry
                 </button>
@@ -170,8 +171,8 @@ export function OnboardingFlow({ initialStep, redirectTo }: OnboardingFlowProps)
           >
             {finishing ? (
               <div className="py-16 flex flex-col items-center gap-4">
-                <div className="w-8 h-8 rounded-full border-2 border-[#6f93bf]/30 border-t-[#6f93bf] animate-spin" />
-                <p className="text-[15px] text-[#646d78]">
+                <div className="w-8 h-8 rounded-full border-2 border-[#4C8DF5]/30 border-t-[#4C8DF5] animate-spin" />
+                <p className="text-[15px] text-[#B4BFCB]">
                   Setting up your workspace…
                 </p>
               </div>
