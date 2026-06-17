@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Check, Copy, X } from "lucide-react";
 import { DEFAULT_MCP_URL } from "../constants";
 import { buildBootstrapPrompt } from "../bootstrap-prompt";
@@ -60,9 +61,13 @@ export function WelcomePopup() {
     setTimeout(() => setCopied(false), 1500);
   }
 
-  return (
+  // Portal to <body> so the popup escapes the AppShell root's z-30 stacking
+  // context. Without this its z-50 is local to that context and the canvas
+  // surface (portaled to <body> at z-31) paints over the card. `open` only
+  // flips true inside a client effect, so document.body is always defined here.
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto px-6 py-10"
+      className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto px-6 py-10"
       onClick={dismiss}
       style={{
         fontFamily: "var(--font-geist-sans), system-ui, sans-serif",
@@ -140,6 +145,7 @@ export function WelcomePopup() {
         </p>
         <p className="mt-1 text-[14.5px] text-[#646d78]">— Sam</p>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

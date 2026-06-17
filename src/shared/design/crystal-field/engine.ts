@@ -6,7 +6,6 @@ import { drawActiveTiles } from "./render";
 export type OcclusionRect = { l: number; t: number; r: number; b: number };
 
 const easeInOut = (t: number) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
-const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
 
 /**
  * Runtime for the crystal tile field. Owns the per-tile flip state machine,
@@ -187,7 +186,10 @@ export class CrystalFieldEngine {
 
       if (this.value[k] !== this.target[k] || this.tStart[k] === now) {
         const p = Math.min(1, (now - this.tStart[k]) / this.tDur[k]);
-        const e = this.target[k] === 1 ? easeInOut(p) : easeOut(p);
+        // Flip-out eases in/out (snappy reveal); flip-back runs at a steady
+        // linear rate so the return is a set, gradual speed — not the
+        // front-loaded easeOut snap that made it collapse as fast as the flip.
+        const e = this.target[k] === 1 ? easeInOut(p) : p;
         this.value[k] = this.vFrom[k] + (this.target[k] - this.vFrom[k]) * e;
       }
       if (this.glow[k] > 0) this.glow[k] = Math.max(0, this.glow[k] - glowDecay);

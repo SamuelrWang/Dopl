@@ -8,6 +8,20 @@ import { getSupabaseBrowser } from "@/shared/supabase/browser";
 import { safeRedirect } from "@/shared/lib/url/safe-redirect";
 import { isDesktopApp } from "@/shared/lib/desktop";
 
+/**
+ * Origin Supabase should send auth emails / OAuth callbacks back to. In
+ * production we pin to the canonical NEXT_PUBLIC_APP_URL so links never embed a
+ * preview or localhost origin — Supabase otherwise silently falls back to its
+ * dashboard Site URL. Local dev keeps window.location.origin so localhost links
+ * still work. NOTE: the deployed callback URL must also be in the Supabase
+ * dashboard's Auth → URL Configuration "Redirect URLs" allowlist.
+ */
+function authOrigin(): string {
+  const configured = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/+$/, "");
+  if (configured && process.env.NODE_ENV === "production") return configured;
+  return window.location.origin;
+}
+
 export default function LoginPage() {
   return (
     <Suspense>
@@ -31,7 +45,7 @@ function LoginForm() {
   function buildCallbackUrl(): string {
     const params = new URLSearchParams({ redirectTo });
     if (installCluster) params.set("installCluster", installCluster);
-    return `${window.location.origin}/auth/callback?${params.toString()}`;
+    return `${authOrigin()}/auth/callback?${params.toString()}`;
   }
 
   const [email, setEmail] = useState("");

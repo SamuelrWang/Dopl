@@ -63,7 +63,10 @@ export async function completeOnboarding(
     userId,
     workspaceName
   );
-  const canvas = await ensureDefaultCanvas(workspace.id);
+  // Provision the default canvas so the workspace is usable, but land the
+  // user on the overview page — not the canvas (the canvas portal would
+  // occlude the welcome popup, and overview is the proper workspace home).
+  await ensureDefaultCanvas(workspace.id);
 
   const won = await markOnboarded(userId);
   if (won) {
@@ -74,7 +77,7 @@ export async function completeOnboarding(
     });
   }
 
-  return { redirectPath: `/${workspaceSegment(workspace)}/${canvas.slug}` };
+  return { redirectPath: `/${workspaceSegment(workspace)}/overview` };
 }
 
 /** Re-export for the auth-callback gate (avoids a repository import there). */

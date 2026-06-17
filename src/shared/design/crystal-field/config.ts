@@ -139,7 +139,7 @@ export const DEFAULT_CRYSTAL_CONFIG: CrystalFieldConfig = {
   flipAxisDeg: 45,
   flipPerspective: 2.2,
   lingerDuration: 1200,
-  driftBackDuration: 900,
+  driftBackDuration: 1100, // steady linear return; longer = more gradual flip-back
   afterglowFactor: 1.45,
 
   litFloor: 0.74,
