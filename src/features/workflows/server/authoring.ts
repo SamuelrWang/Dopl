@@ -113,6 +113,29 @@ export async function spawnHeaderPanel(
   return panelId;
 }
 
+/**
+ * Keep the canvas header panel's label in sync with the workflow row after
+ * a rename / description edit. Without this, updateWorkflow changes the row
+ * but the header panel keeps its stale create-time name/description on the
+ * canvas. resolveHeaderPanelId spawns a header if one is somehow missing
+ * (already carrying the fresh values), so this is a no-op in that case.
+ */
+export async function syncHeaderPanel(
+  workflowId: string,
+  name: string,
+  description: string | null,
+  scope: WorkflowScope
+): Promise<void> {
+  const db = supabaseAdmin();
+  const headerId = await resolveHeaderPanelId(workflowId, scope);
+  const { error } = await db
+    .from("canvas_panels")
+    .update({ panel_data: { workflowId, name, description: description ?? "" } })
+    .eq("workspace_id", scope.workspaceId)
+    .eq("panel_id", headerId);
+  if (error) throw error;
+}
+
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -469,6 +492,73 @@ async function deleteEdgeByPair(workspaceId: string, from: string, to: string): 
   return data?.length ?? 0;
 }
 
+// ── Cycle detection ──────────────────────────────────────────────────
+// A workflow is a DAG — `dopl_workflow(op='get')` topologically orders the
+// steps, so a back-edge produces a self-contradictory, unexecutable plan.
+// Reject cycles at author time instead of letting them through.
+
+function buildAdjacency(
+  edges: Array<{ from: string; to: string }>
+): Map<string, string[]> {
+  const adj = new Map<string, string[]>();
+  for (const e of edges) {
+    if (e.from === e.to) continue;
+    const tos = adj.get(e.from);
+    if (tos) tos.push(e.to);
+    else adj.set(e.from, [e.to]);
+  }
+  return adj;
+}
+
+/** DFS three-colour cycle check over a directed graph. */
+function graphHasCycle(adj: Map<string, string[]>): boolean {
+  const GRAY = 1;
+  const BLACK = 2;
+  const color = new Map<string, number>();
+  const nodes = new Set<string>();
+  for (const [from, tos] of adj) {
+    nodes.add(from);
+    for (const t of tos) nodes.add(t);
+  }
+  const visit = (u: string): boolean => {
+    color.set(u, GRAY);
+    for (const v of adj.get(u) ?? []) {
+      const c = color.get(v);
+      if (c === GRAY) return true;
+      if (c === undefined && visit(v)) return true;
+    }
+    color.set(u, BLACK);
+    return false;
+  };
+  for (const n of nodes) {
+    if (color.get(n) === undefined && visit(n)) return true;
+  }
+  return false;
+}
+
+/** Can `start` reach `target` by following directed edges? Used by connect
+ *  to detect that a new from→to edge would close a cycle (to already reaches
+ *  from). Scoped to the given adjacency so unrelated graphs don't interfere. */
+function reaches(
+  adj: Map<string, string[]>,
+  start: string,
+  target: string
+): boolean {
+  const seen = new Set<string>([start]);
+  const stack = [start];
+  while (stack.length) {
+    const u = stack.pop()!;
+    for (const v of adj.get(u) ?? []) {
+      if (v === target) return true;
+      if (!seen.has(v)) {
+        seen.add(v);
+        stack.push(v);
+      }
+    }
+  }
+  return false;
+}
+
 // ── Public ops ───────────────────────────────────────────────────────
 
 /** Declarative: make the workflow's graph match `spec` exactly. */
@@ -497,6 +587,23 @@ export async function setGraph(
   // Team invariant: the workflow's audience must be able to read every
   // referenced KB — abort before any panel write.
   await validateKbsForWorkflow(workflowId, kbIdsOf(resolved.map((r) => r.data)), scope);
+
+  // Reject cycles BEFORE any write (keeps set_graph atomic). A workflow is
+  // a DAG; a back-edge yields a self-contradictory plan when op='get'
+  // topologically orders the steps. Only consider edges whose endpoints are
+  // valid (header or a declared ref) — unknown refs are dropped anyway.
+  {
+    const refSet = new Set(spec.nodes.map((n) => n.ref));
+    const valid = (t: string) => t === "header" || refSet.has(t);
+    const intended = spec.edges.filter((e) => valid(e.from) && valid(e.to));
+    if (graphHasCycle(buildAdjacency(intended))) {
+      throw new HttpError(
+        400,
+        "WORKFLOW_CYCLE",
+        "These edges form a cycle. A workflow must be acyclic (steps run in topological order) — remove the back-edge.",
+      );
+    }
+  }
 
   // Map existing member nodes by their stored ref.
   const { panels: existing } = await memberNodePanels(workflowId, scope);
@@ -676,6 +783,24 @@ export async function connect(
     if (owners && [...owners].some((w) => w !== workflowId)) {
       throw new HttpError(400, "NODE_IN_OTHER_WORKFLOW", `Panel ${endpoint} belongs to a different workflow; connect within one workflow.`);
     }
+  }
+
+  // Reject a back-edge: adding from→to closes a cycle iff `to` already
+  // reaches `from`. Keeps the workflow a DAG (op='get' assumes it).
+  const db = supabaseAdmin();
+  const { data: curEdges } = await db
+    .from("canvas_edges")
+    .select("from_panel_id, to_panel_id")
+    .eq("workspace_id", scope.workspaceId);
+  const adj = buildAdjacency(
+    (curEdges ?? []).map((e) => ({ from: e.from_panel_id, to: e.to_panel_id })),
+  );
+  if (reaches(adj, toId, fromId)) {
+    throw new HttpError(
+      400,
+      "WORKFLOW_CYCLE",
+      `Connecting ${from} → ${to} would form a cycle. A workflow must stay acyclic.`,
+    );
   }
 
   await insertEdge(scope.workspaceId, scope.userId, { id: crypto.randomUUID(), fromPanelId: fromId, toPanelId: toId });

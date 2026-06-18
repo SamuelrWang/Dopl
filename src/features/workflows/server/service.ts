@@ -10,7 +10,7 @@ import {
   resolveLevel,
 } from "@/features/teams/server/access";
 import { slugifyWorkflowName } from "../slug";
-import { spawnHeaderPanel } from "./authoring";
+import { spawnHeaderPanel, syncHeaderPanel } from "./authoring";
 import { composeWorkflow, type WorkflowGraph } from "./graph";
 import {
   listAttachedKnowledgeBasesById,
@@ -416,6 +416,13 @@ export async function updateWorkflow(
     .eq("id", wf.id)
     .single();
   if (refetchError || !updated) throw refetchError || new Error("Refetch failed");
+
+  // Keep the canvas header panel's label in step with the row, so a rename
+  // / description edit shows on the canvas instead of the stale create-time
+  // label (the row and the header panel are two writes that used to drift).
+  if (update.name !== undefined || update.description !== undefined) {
+    await syncHeaderPanel(wf.id, updated.name, updated.description ?? null, scope);
+  }
 
   // Real attachment summary — zeroed fields here would make a rename
   // response look like the workflow lost all its KBs/skills.
