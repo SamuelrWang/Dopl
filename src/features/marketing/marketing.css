@@ -1,103 +1,603 @@
-/* Landing-page-only animations. Imported by src/app/page.tsx. */
+/* =====================================================================
+ * Ported "Flow" landing design — imported by src/app/page.tsx.
+ * All rules are scoped under .flow-landing so nothing leaks into the app
+ * shell. Fonts are swapped to the site's next/font CSS variables; colors
+ * are kept from the original design (Sam's pass).
+ * ===================================================================== */
 
-/* Scroll reveal — toggled by the <Reveal> IntersectionObserver wrapper. */
-.mk-reveal {
-  opacity: 0;
-  transform: translateY(24px);
-  transition:
-    opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
-    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
-  transition-delay: var(--mk-delay, 0ms);
+.flow-landing {
+  /* palette (kept from flow-landing.css :root) */
+  --cream: #faf6e3;
+  --cream-nav: #fcf9ee;
+  --cream-line: #e9e2cc;
+  --ink: #1c1a15;
+  --gray: #9c968a;
+  --sub: #26241d;
+  --avail: #8b8678;
+  --lav: #e7d7fb;
+  --lav-border: #bb96ef;
+  --green-pill: #0e4c3e;
+  --dark: #15130d;
+  --green: #0f5345;
+  --green-ink: #f3eed9;
+
+  position: relative;
+  min-height: 100vh;
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  background: var(--cream);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: clip;
+}
+.flow-landing * {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+/* Headlines use the product's display font (Space Grotesk) — same family as
+ * the brand wordmark — not the original design's editorial serif. */
+.flow-landing .serif {
+  font-family: var(--font-display), system-ui, sans-serif;
 }
 
-.mk-reveal-visible {
-  opacity: 1;
-  transform: translateY(0);
+/* ---------- Nav ---------- */
+.flow-landing .nav {
+  position: fixed;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  width: min(1320px, calc(100% - 48px));
 }
-
-/* Horizontal marquee — content is duplicated once, so -50% loops seamlessly. */
-@keyframes mk-marquee {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(-50%);
-  }
-}
-
-.mk-marquee {
+.flow-landing .nav-pill {
   display: flex;
-  width: max-content;
-  animation: mk-marquee var(--mk-marquee-duration, 30s) linear infinite;
+  align-items: center;
+  gap: 8px;
+  background: var(--cream-nav);
+  border: 1px solid var(--cream-line);
+  border-radius: 20px;
+  padding: 14px 18px 14px 26px;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset;
+}
+.flow-landing .brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-right: auto;
+  text-decoration: none;
+  color: var(--ink);
+}
+.flow-landing .brand .logo {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 26px;
+}
+.flow-landing .brand .logo i {
+  width: 4px;
+  background: var(--ink);
+  border-radius: 2px;
+  display: block;
+}
+.flow-landing .brand .logo i:nth-child(1) {
+  height: 13px;
+}
+.flow-landing .brand .logo i:nth-child(2) {
+  height: 24px;
+}
+.flow-landing .brand .logo i:nth-child(3) {
+  height: 9px;
+}
+.flow-landing .brand .logo i:nth-child(4) {
+  height: 18px;
+}
+.flow-landing .brand .name {
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-size: 27px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.flow-landing .nav-links {
+  display: flex;
+  align-items: center;
+  gap: 34px;
+}
+.flow-landing .nav-links a {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #2a2820;
+  font-size: 18px;
+  font-weight: 500;
+  text-decoration: none;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+.flow-landing .nav-links a svg {
+  opacity: 0.85;
+  margin-top: 2px;
+}
+.flow-landing .nav-divider {
+  width: 1px;
+  height: 34px;
+  background: var(--cream-line);
+  margin: 0 20px;
+}
+.flow-landing .btn-dl {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  background: var(--lav);
+  border: 1.5px solid var(--lav-border);
+  border-radius: 13px;
+  padding: 13px 22px;
+  font: inherit;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.flow-landing .btn-dl svg {
+  width: 20px;
+  height: 20px;
 }
 
-.mk-marquee-reverse {
-  animation-direction: reverse;
+/* ---------- Hero ---------- */
+.flow-landing .hero {
+  position: relative;
+  min-height: 980px;
+  padding: 150px 0 90px;
+  overflow: hidden;
+}
+.flow-landing .hero-inner {
+  text-align: center;
+  position: relative;
+  z-index: 5;
+}
+.flow-landing .hero h1 {
+  font-weight: 500;
+  font-size: clamp(40px, 6.2vw, 92px);
+  line-height: 1.02;
+  letter-spacing: -0.03em;
+  margin: 24px 0 0;
+}
+.flow-landing .hero h1 .g1 {
+  color: var(--gray);
+}
+.flow-landing .hero h1 .g2 {
+  color: var(--ink);
+}
+.flow-landing .hero .sub {
+  font-size: clamp(22px, 2.1vw, 31px);
+  font-weight: 500;
+  line-height: 1.32;
+  color: var(--sub);
+  margin: 40px auto 0;
+  max-width: 640px;
+  letter-spacing: -0.01em;
+}
+.flow-landing .hero .btn-hero {
+  display: inline-flex;
+  align-items: center;
+  gap: 13px;
+  background: var(--lav);
+  border: 1.5px solid var(--lav-border);
+  border-radius: 15px;
+  padding: 20px 34px;
+  margin-top: 48px;
+  font: inherit;
+  font-size: 21px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  text-decoration: none;
+}
+.flow-landing .hero .btn-hero svg {
+  width: 25px;
+  height: 25px;
+}
+.flow-landing .hero .avail {
+  margin-top: 26px;
+  font-size: 19px;
+  color: var(--avail);
+  font-weight: 400;
 }
 
-/* Cascading pills — staggered slide-in, driven per-pill via --mk-delay. */
-@keyframes mk-pill-in {
-  from {
-    opacity: 0;
-    transform: translateX(var(--mk-pill-from, 40px));
+/* grammar + waveform cluster */
+.flow-landing .grammar {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  background: var(--green-pill);
+  color: #f3efe2;
+  border-radius: 999px;
+  padding: 15px 30px;
+  margin-top: 44px;
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.flow-landing .grammar .ck {
+  width: 22px;
+  height: 22px;
+}
+.flow-landing .waveform {
+  position: relative;
+  margin: 52px auto 0;
+  width: 280px;
+  height: 108px;
+  background: var(--cream);
+  border: 2px solid var(--ink);
+  border-radius: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  z-index: 6;
+}
+.flow-landing .waveform i {
+  width: 3px;
+  background: var(--ink);
+  border-radius: 3px;
+  display: block;
+}
+
+/* decorative curved text */
+.flow-landing .curve-left {
+  position: absolute;
+  left: -90px;
+  top: 430px;
+  width: 560px;
+  height: 760px;
+  z-index: 1;
+  pointer-events: none;
+}
+.flow-landing .curve-left text {
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 25px;
+  font-weight: 500;
+  fill: var(--gray);
+  letter-spacing: 0.01em;
+}
+.flow-landing .ribbon-right {
+  position: absolute;
+  right: -40px;
+  bottom: 30px;
+  width: 1180px;
+  height: 420px;
+  z-index: 4;
+  pointer-events: none;
+}
+.flow-landing .ribbon-right .band {
+  fill: none;
+  stroke: #111;
+  stroke-width: 78;
+  stroke-linecap: round;
+}
+.flow-landing .ribbon-right text {
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 30px;
+  font-weight: 600;
+  fill: #fff;
+  letter-spacing: 0.005em;
+}
+
+/* ---------- Dark section ---------- */
+.flow-landing .dark {
+  position: relative;
+  background: var(--dark);
+  color: var(--green-ink);
+  border-radius: 60px 60px 0 0;
+  margin-top: -20px;
+  padding: 120px 0 0;
+  overflow: hidden;
+  min-height: 1180px;
+}
+.flow-landing .wrap {
+  width: min(1320px, calc(100% - 96px));
+  margin: 0 auto;
+}
+.flow-landing .platform-pills {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 90px;
+}
+.flow-landing .ppill {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  border: 1.5px solid #4a463d;
+  border-radius: 999px;
+  padding: 13px 26px;
+  font-size: 21px;
+  font-weight: 600;
+  color: #f3eed9;
+  letter-spacing: -0.01em;
+}
+.flow-landing .ppill svg {
+  width: 22px;
+  height: 22px;
+}
+.flow-landing .ppill:nth-child(2),
+.flow-landing .ppill:nth-child(3) {
+  background: #fff;
+  color: #15130d;
+  border-color: #fff;
+}
+.flow-landing .dark h2 {
+  font-weight: 400;
+  font-size: clamp(48px, 6vw, 90px);
+  line-height: 1;
+  letter-spacing: -0.02em;
+  max-width: 760px;
+  color: var(--green-ink);
+}
+.flow-landing .dark .dsub {
+  font-size: clamp(22px, 2vw, 31px);
+  font-weight: 500;
+  line-height: 1.3;
+  color: #cfc9b4;
+  margin-top: 44px;
+  max-width: 540px;
+  letter-spacing: -0.01em;
+}
+.flow-landing .btn-watch {
+  display: inline-block;
+  margin-top: 50px;
+  background: var(--cream);
+  color: var(--ink);
+  border: none;
+  border-radius: 15px;
+  padding: 20px 40px;
+  font: inherit;
+  font-size: 21px;
+  font-weight: 600;
+  cursor: pointer;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+}
+
+/* phone mockup */
+.flow-landing .phone {
+  position: absolute;
+  right: max(40px, calc(50% - 660px));
+  top: 560px;
+  width: 430px;
+  background: #1c1b16;
+  border: 1.5px solid #3a382f;
+  border-radius: 42px;
+  padding: 30px 26px 0;
+  z-index: 14;
+}
+.flow-landing .phone .ph-top {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 22px;
+}
+.flow-landing .phone .ph-av {
+  width: 74px;
+  height: 74px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #3a382f;
+}
+.flow-landing .phone .ph-name {
+  margin-top: 11px;
+  font-size: 22px;
+  font-weight: 600;
+  color: #f3eed9;
+}
+.flow-landing .bubbles {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-bottom: 26px;
+}
+.flow-landing .bub {
+  max-width: 74%;
+  padding: 15px 19px;
+  border-radius: 20px;
+  font-size: 20px;
+  line-height: 1.3;
+  font-weight: 500;
+}
+.flow-landing .bub.in {
+  align-self: flex-start;
+  background: #2c2a22;
+  color: #e9e4d3;
+}
+.flow-landing .bub.out {
+  align-self: flex-end;
+  background: #3b392f;
+  color: #cfcab8;
+}
+.flow-landing .bub.dim {
+  color: #9b968a;
+}
+.flow-landing .ph-input {
+  display: flex;
+  align-items: center;
+  border-top: 1px solid #3a382f;
+  margin: 0 -26px;
+  padding: 20px 24px;
+}
+.flow-landing .ph-input .pi-field {
+  flex: 1;
+  background: #2c2a22;
+  border-radius: 999px;
+  padding: 15px 20px;
+  color: #8b8678;
+  font-size: 19px;
+}
+.flow-landing .ph-input .pi-mic {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: #f3eed9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 12px;
+}
+
+/* icon stream */
+.flow-landing .icon-stream {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+}
+.flow-landing .app-ic {
+  position: absolute;
+  width: 88px;
+  height: 88px;
+  border-radius: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.4);
+  font-weight: 800;
+  font-size: 34px;
+  overflow: hidden;
+}
+.flow-landing .app-ic svg {
+  width: 54px;
+  height: 54px;
+}
+.flow-landing .app-ic.sm {
+  width: 74px;
+  height: 74px;
+  border-radius: 18px;
+}
+
+/* ---------- Green section ---------- */
+.flow-landing .green {
+  background: var(--green);
+  color: var(--green-ink);
+  padding: 130px 0 90px;
+  position: relative;
+  overflow: hidden;
+}
+.flow-landing .green h2 {
+  text-align: center;
+  font-weight: 400;
+  font-size: clamp(34px, 4.4vw, 64px);
+  letter-spacing: -0.01em;
+  color: var(--green-ink);
+}
+.flow-landing .logos {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 80px;
+  margin-top: 130px;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+.flow-landing .logos .lg {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--green-ink);
+  font-weight: 800;
+  font-size: 42px;
+  letter-spacing: -0.01em;
+  opacity: 0.96;
+}
+.flow-landing .logos .lg.spaced {
+  letter-spacing: 0.18em;
+  font-weight: 600;
+  font-size: 38px;
+}
+.flow-landing .illo {
+  position: absolute;
+  left: 20px;
+  bottom: 0;
+  width: 380px;
+  z-index: 5;
+}
+.flow-landing .illo .img-slot {
+  width: 100%;
+  display: block;
+  border-radius: 0;
+  aspect-ratio: 3 / 4;
+}
+
+/* ---------- Fixed widgets ---------- */
+.flow-landing .w-finger {
+  position: fixed;
+  left: 46px;
+  bottom: 40px;
+  z-index: 90;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: #d9c4f7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10px 28px rgba(40, 30, 70, 0.22);
+}
+.flow-landing .w-finger svg {
+  width: 44px;
+  height: 44px;
+  color: #3a2d5e;
+}
+.flow-landing .w-spark {
+  position: fixed;
+  right: 24px;
+  bottom: 120px;
+  z-index: 90;
+  width: 58px;
+  height: 58px;
+  border-radius: 14px;
+  background: #15130d;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.flow-landing .w-spark svg {
+  width: 30px;
+  height: 30px;
+  color: #d8e84a;
+}
+
+/* image-slot placeholder (replaces the omelette custom element) */
+.flow-landing .img-slot {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.18);
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+.flow-landing .img-slot.circle {
+  border-radius: 50%;
+}
+
+/* responsive guard */
+@media (max-width: 1100px) {
+  .flow-landing .nav-links {
+    display: none;
   }
-  to {
-    opacity: 1;
-    transform: translateX(0);
+  .flow-landing .phone {
+    position: static;
+    margin: 60px auto 0;
   }
-}
-
-.mk-pill {
-  opacity: 0;
-  animation: mk-pill-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-  animation-delay: var(--mk-delay, 0ms);
-}
-
-/* Workflow mock — edges draw themselves in. */
-@keyframes mk-dash {
-  to {
-    stroke-dashoffset: 0;
+  .flow-landing .logos {
+    flex-wrap: wrap;
+    gap: 40px;
   }
-}
-
-.mk-edge {
-  stroke-dasharray: 120;
-  stroke-dashoffset: 120;
-  animation: mk-dash 1.2s ease-out forwards;
-  animation-delay: var(--mk-delay, 0ms);
-}
-
-/* Soft pulsing glow behind the hero pill / CTA section. */
-@keyframes mk-glow {
-  0%,
-  100% {
-    opacity: 0.55;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.9;
-    transform: scale(1.08);
-  }
-}
-
-.mk-glow {
-  animation: mk-glow 4.5s ease-in-out infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .mk-reveal {
-    opacity: 1;
-    transform: none;
-    transition: none;
-  }
-  .mk-marquee,
-  .mk-pill,
-  .mk-edge,
-  .mk-glow {
-    animation: none;
-    opacity: 1;
-  }
-  .mk-edge {
-    stroke-dashoffset: 0;
+  .flow-landing .logos .lg {
+    font-size: 32px;
   }
 }

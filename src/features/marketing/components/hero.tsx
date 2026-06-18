@@ -1,53 +1,82 @@
 import Link from "next/link";
 
-import { HeroRibbon } from "./hero-ribbon";
-import { Reveal } from "./reveal";
+import { CURVE_TEXT, HERO, RIBBON_TEXT, WAVEFORM_HEIGHTS } from "../constants";
 
-/**
- * Hero: oversized two-tone serif headline over the ice background, with
- * the context-in / actions-out ribbon animation flowing beneath it.
- */
+const LOOP_L =
+  "M 250 50 C 60 60, 20 250, 120 360 C 200 450, 360 430, 360 320 C 360 240, 250 230, 230 320 C 200 460, 320 600, 520 700";
+const RIBBON =
+  "M -20 360 C 250 300, 360 250, 620 250 C 880 250, 980 150, 1200 60";
+
+/** Hero — two-tone serif headline over the cream field, with the decorative
+ *  curved-text spiral, waveform pill, and black ribbon flowing around it. */
 export function Hero() {
   return (
-    <section className="relative overflow-hidden pt-40 pb-8">
-      <div className="mx-auto max-w-5xl px-6 text-center">
-        <Reveal>
-          <h1 className="font-(family-name:--font-playfair) text-5xl leading-[1.05] tracking-tight text-balance sm:text-7xl">
-            <span className="text-[#8a93a3]">Teach once,</span>{" "}
-            <span className="text-[#10131a]">delegate everywhere</span>
-          </h1>
-        </Reveal>
-        <Reveal delay={120}>
-          <p className="mx-auto mt-6 max-w-xl text-lg text-[#5b6573]">
-            One workspace for your team&apos;s knowledge, skills, and
-            workflows — connected to every AI agent your team uses.
-          </p>
-        </Reveal>
-        <Reveal delay={220}>
-          <div className="mt-8 flex items-center justify-center gap-3">
-            <Link
-              href="/login"
-              className="rounded-xl bg-[#2f6fed] px-6 py-3 font-semibold text-white shadow-[0_12px_28px_-10px_rgba(47,111,237,0.6)] transition-colors hover:bg-[#3d7bff]"
+    <header className="hero">
+      <svg className="curve-left" viewBox="0 0 560 760">
+        <defs>
+          <path id="loopL" d={LOOP_L} />
+        </defs>
+        <text>
+          <textPath href="#loopL" startOffset="0">
+            {CURVE_TEXT}
+          </textPath>
+        </text>
+      </svg>
+
+      <div className="hero-inner">
+        <h1 className="serif">
+          <span className="g1">{HERO.headlineGray}</span>
+          <br />
+          <span className="g2">{HERO.headlineInk}</span>
+        </h1>
+        <p className="sub">
+          {HERO.subLine1}
+          <br />
+          {HERO.subLine2}
+        </p>
+        <Link className="btn-hero" href="/login">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M5 12h14" />
+            <path d="m13 6 6 6-6 6" />
+          </svg>
+          {HERO.cta}
+        </Link>
+        <p className="avail">{HERO.avail}</p>
+        <div>
+          <span className="grammar">
+            <svg
+              className="ck"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
             >
-              Get started free
-            </Link>
-            <Link
-              href="/docs"
-              className="rounded-xl border border-[#10131a]/15 bg-white px-6 py-3 font-semibold text-[#10131a] transition-colors hover:border-[#10131a]/30"
-            >
-              See how it works
-            </Link>
-          </div>
-        </Reveal>
-        <Reveal delay={320}>
-          <p className="mt-5 text-sm text-[#8a93a3]">
-            Works with Claude Code, Codex, Cursor, and any MCP client
-          </p>
-        </Reveal>
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+            {HERO.loadedPill}
+          </span>
+        </div>
       </div>
-      <div className="mt-2 -mb-10">
-        <HeroRibbon />
+
+      <div className="waveform">
+        {WAVEFORM_HEIGHTS.map((h, i) => (
+          <i key={i} style={{ height: `${h}px` }} />
+        ))}
       </div>
-    </section>
+
+      <svg className="ribbon-right" viewBox="0 0 1180 420" preserveAspectRatio="none">
+        <defs>
+          <path id="ribbon" d={RIBBON} />
+        </defs>
+        <path className="band" d={RIBBON} />
+        <text>
+          <textPath href="#ribbon" startOffset="2%">
+            {RIBBON_TEXT}
+          </textPath>
+        </text>
+      </svg>
+    </header>
   );
 }

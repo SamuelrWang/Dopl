@@ -1,159 +1,105 @@
 /**
- * Landing page design tokens + section data.
+ * Landing page copy + decorative data.
  *
- * Palette translates the app's dark/cyan-blue identity (see globals.css
- * --accent-* tokens) into an alternating light/dark marketing rhythm.
+ * The landing visual system is the ported "Flow" design (see marketing.css,
+ * scoped under `.flow-landing`). Copy here is re-themed to the Dopl product;
+ * decorative arrays (waveform, app tiles, ribbon/curve flavor text) drive the
+ * background motifs. Colors live in marketing.css `:root`-equivalent block.
  */
 
-export const MARKETING = {
-  /** Light "ice" sections — cool white. */
-  ice: "#f2f5fa",
-  /** Dark "ink" sections. */
-  ink: "#0b0e14",
-  /** Slightly lifted card surface on ink. */
-  inkCard: "#12161f",
-  /** Deep blue full-bleed band. */
-  deep: "#0e2240",
-  /** Soft blue band (light accent strip). */
-  soft: "#dce7f8",
-  /** Primary accent — matches app --accent-primary family. */
-  accent: "#4a9eff",
-  /** Stronger glow accent — matches app --accent-glow family. */
-  glow: "#3d7bff",
-  /** Link blue — matches app --link (light theme). */
-  link: "#2f6fed",
-  /** Text on light surfaces. */
-  inkText: "#10131a",
-  /** Muted text on light surfaces. */
-  mutedText: "#5b6573",
-} as const;
-
-/** Agent tools shown in the marquee ribbon. Monogram chips until real logos land. */
-export const AGENT_TOOLS = [
-  { name: "Claude Code", mark: "C" },
-  { name: "Codex", mark: "X" },
-  { name: "Cursor", mark: "Cu" },
-  { name: "Gemini CLI", mark: "G" },
-  { name: "Copilot", mark: "Co" },
-  { name: "Windsurf", mark: "W" },
-  { name: "Goose", mark: "Go" },
-  { name: "claude.ai", mark: "ai" },
+/** Pill-nav links. `caret` shows the dropdown chevron (decorative). */
+export const NAV_LINKS = [
+  { label: "Product", caret: true },
+  { label: "For teams", caret: true },
+  { label: "Business", caret: false },
+  { label: "Resources", caret: true },
+  { label: "Company", caret: true },
 ] as const;
 
-/** Messy "scattered context" phrases — hero ribbon input side. */
-export const RIBBON_IN = [
-  "how do we deploy again?",
-  "ask Sarah about the API",
-  "what's our brand voice?",
-  "where's the onboarding doc?",
-  "paste the style guide… again",
-];
+/** Hero copy. */
+export const HERO = {
+  /** Two-tone headline, one tone per line. */
+  headlineGray: "Humans have offices",
+  headlineInk: "your agents should too",
+  subLine1: "The agent workspace that turns context",
+  subLine2: "into skills your whole team shares for good.",
+  cta: "Get started free",
+  avail: "Works in Claude Code, Cursor, Codex, and more",
+  loadedPill: "Knowledge loaded",
+} as const;
 
-/** Completed agent actions — hero ribbon output side. */
-export const RIBBON_OUT = [
-  "✓ PR opened",
-  "✓ report drafted",
-  "✓ campaign shipped",
-  "✓ docs updated",
-  "✓ leads enriched",
-];
+/** Showcase (dark) section copy. */
+export const SHOWCASE = {
+  heading: "Move faster across every agent and client.",
+  sub: "Seamless skills and knowledge across every agent you run, on any device.",
+  cta: "Watch in action",
+} as const;
 
-export interface TeamPreview {
-  id: string;
-  label: string;
-  skills: string[];
-  knowledge: string[];
+/** Social-proof (green) section copy. */
+export const SOCIAL = {
+  heading: "Used by teams everywhere to speed up their delivery",
+} as const;
+
+/**
+ * Decorative dictation-style flavor text bent along the hero SVG curves.
+ * Re-themed to "scattered team context" — length-matched to the originals so
+ * the textPath fills the same arc length.
+ */
+export const CURVE_TEXT =
+  "and honestly the whole setup's been kind of scattered, nobody really knows which skill does what so can you sync it up and check";
+
+export const RIBBON_TEXT =
+  "week's off to a strong start. I synced the new runbook earlier, and the";
+
+/** Waveform bar heights (px) for the hero mic pill. */
+export const WAVEFORM_HEIGHTS = [
+  14, 26, 40, 58, 30, 46, 70, 52, 34, 60, 80, 56, 30, 48, 66, 40, 22, 52, 72,
+  44, 28, 38, 56, 30, 18, 42, 60, 36, 20, 30, 46, 26, 16,
+] as const;
+
+export interface AppTile {
+  /** CSS background (solid or gradient). */
+  bg: string;
+  /** Foreground/text color. */
+  fg?: string;
+  /** Glyph rendered in the tile. */
+  glyph: string;
+  /** Position as vw (x) / % (y), rotation (deg), scale. */
+  x: number;
+  y: number;
+  r: number;
+  s: number;
 }
 
-/** Teams selector — chips + the resources each team's agents receive. */
-export const TEAMS: TeamPreview[] = [
-  {
-    id: "engineering",
-    label: "Engineering",
-    skills: ["Code review", "Release notes", "Incident triage"],
-    knowledge: ["Architecture docs", "API reference", "Runbooks"],
-  },
-  {
-    id: "marketing",
-    label: "Marketing",
-    skills: ["Campaign brief", "SEO audit", "Social calendar"],
-    knowledge: ["Brand voice", "Personas", "Past campaigns"],
-  },
-  {
-    id: "sales",
-    label: "Sales",
-    skills: ["Lead enrichment", "Outreach draft", "Call summary"],
-    knowledge: ["ICP definition", "Pricing sheet", "Battle cards"],
-  },
-  {
-    id: "ops",
-    label: "Ops",
-    skills: ["Weekly report", "Vendor compare", "SOP writer"],
-    knowledge: ["Process docs", "Tool inventory", "Policies"],
-  },
-  {
-    id: "support",
-    label: "Support",
-    skills: ["Ticket triage", "Macro drafts", "Escalation memo"],
-    knowledge: ["Product FAQ", "Known issues", "Tone guide"],
-  },
+/** Colorful rounded app tiles streaming down the dark section. Decorative. */
+export const APP_TILES: AppTile[] = [
+  { bg: "#fff", fg: "#000", glyph: "N", x: 44, y: 50, r: -8, s: 1 },
+  { bg: "linear-gradient(135deg,#7c4dff,#448aff)", glyph: "✦", x: 40, y: 56, r: 6, s: 0.92 },
+  { bg: "#3a7bf6", glyph: "✉", x: 36, y: 62, r: -12, s: 1 },
+  { bg: "linear-gradient(135deg,#feda75,#d62976,#4f5bd5)", glyph: "◎", x: 32, y: 68, r: 8, s: 0.86 },
+  { bg: "#0d0d0d", fg: "#fff", glyph: "❋", x: 28, y: 72, r: -6, s: 1 },
+  { bg: "#2dbe60", fg: "#fff", glyph: "🐘", x: 24, y: 77, r: 10, s: 0.9 },
+  { bg: "#fff", fg: "#ea4335", glyph: "M", x: 20, y: 81, r: -10, s: 1 },
+  { bg: "#34da50", fg: "#fff", glyph: "💬", x: 16, y: 84, r: 6, s: 0.84 },
+  { bg: "#161614", fg: "#fff", glyph: "⌥", x: 12, y: 87, r: -8, s: 1 },
+  { bg: "#fff", fg: "#4285f4", glyph: "📄", x: 8, y: 90, r: 9, s: 0.9 },
+  { bg: "#0a0a0a", fg: "#fff", glyph: "◆", x: 4.5, y: 92, r: -6, s: 1 },
+  { bg: "#2aabee", fg: "#fff", glyph: "➤", x: 1, y: 94, r: 7, s: 0.88 },
 ];
 
-export interface FeatureBlock {
-  id: string;
-  eyebrow: string;
-  title: string;
-  body: string;
-  mock: "skills" | "knowledge" | "workflows" | "admin";
+export interface PhoneBubble {
+  side: "in" | "out";
+  dim?: boolean;
+  text: string;
 }
 
-export const FEATURE_BLOCKS: FeatureBlock[] = [
-  {
-    id: "skills",
-    eyebrow: "Skills library",
-    title: "Skills your whole team shares",
-    body: "Package the prompts and procedures that work into named skills. Every agent on the team gets the same playbook, instantly.",
-    mock: "skills",
-  },
-  {
-    id: "knowledge",
-    eyebrow: "Knowledge bases",
-    title: "Everything your agents should know",
-    body: "Docs, decisions, and tribal knowledge live in one place — loaded into every session so nobody re-explains the basics.",
-    mock: "knowledge",
-  },
-  {
-    id: "workflows",
-    eyebrow: "Workflows",
-    title: "Multi-step work, mapped out",
-    body: "Chain skills and knowledge into workflows agents can follow end to end — not just answers, finished work.",
-    mock: "workflows",
-  },
-  {
-    id: "admin",
-    eyebrow: "Central management",
-    title: "One place to run it all",
-    body: "Distribute resources by team, manage access, and update a skill once to update it everywhere.",
-    mock: "admin",
-  },
+/** Phone-mock chat — an agent answering from the team's shared knowledge. */
+export const PHONE_BUBBLES: PhoneBubble[] = [
+  { side: "out", dim: true, text: "Sure — I'll pull the latest from the runbook." },
+  { side: "in", text: "Thanks, I know the docs are dense!" },
+  { side: "out", text: "Haha, you keep me sharp 💀" },
+  { side: "in", text: "Anytime." },
 ];
 
-export const SKILL_PILLS = [
-  "Cold outreach writer",
-  "Code review assistant",
-  "Ticket triager",
-  "Weekly report",
-  "SEO audit",
-  "Release notes",
-  "Call summary",
-];
-
-export const KNOWLEDGE_PILLS = [
-  "Brand voice",
-  "API reference",
-  "Onboarding guide",
-  "Pricing sheet",
-  "Architecture docs",
-  "Process SOPs",
-  "Known issues",
-];
+export const PHONE_NAME = "Jordan";
+export const PHONE_PLACEHOLDER = "Message...";
