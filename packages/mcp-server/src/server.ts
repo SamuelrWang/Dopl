@@ -32,15 +32,13 @@ You do NOT need to re-run these on every turn. Once per session is enough, excep
 
 Workspace beats local files as source of truth. If a user's CLAUDE.md or a skills file implies a different set of clusters than dopl_cluster(op='list') returns, trust the MCP result and flag the drift.
 
-## Workspaces — the agent can switch on the fly
+## Workspaces — targeting a specific workspace
 
-This MCP server can target any workspace the authenticated user is a member of. The active workspace appears in the _dopl_status footer of every response. Controls:
+This MCP server can target any workspace the authenticated user is a member of. The active (default) workspace appears in the _dopl_status footer of every response. Controls:
 
 1. list_workspaces — see every workspace the user is in, with role. Cached ~60s.
-2. set_workspace(workspace=<slug_or_id>) — sticky switch for the session default.
-3. workspace=<slug_or_id> arg on any tool — single-call override.
-
-After set_workspace, call current_workspace once to confirm and tell the user.
+2. workspace=<slug_or_id> arg on any tool — target that workspace for that ONE call. This connection is stateless (each call is independent), so this per-call arg is the reliable way to act in a non-default workspace.
+3. set_workspace(workspace=<slug_or_id>) — validates a workspace ref but does NOT persist across calls on this connection. Prefer the per-call workspace= arg; don't rely on set_workspace to change which workspace later calls hit.
 
 ## Decision tree — which tool
 
@@ -417,7 +415,7 @@ export function createServer(
 
   registerMetaTool(
     "set_workspace",
-    "Switch the session's active workspace. Subsequent tool calls without a `workspace` arg target this one. Accepts a slug or UUID from `list_workspaces`. Use when the user wants to work in a different workspace for several turns. For a single call, prefer the `workspace=<slug>` arg on that tool — no switch needed.",
+    "Resolve/validate a workspace by slug or UUID (from `list_workspaces`). IMPORTANT: this connection is STATELESS — the switch does NOT persist to your next call, so it does not change which workspace later tool calls target. To act in another workspace, pass `workspace=<slug_or_id>` on each tool call (the reliable mechanism). This op just confirms the ref is valid and echoes the resolved workspace.",
     {
       workspace: z
         .string()
@@ -456,7 +454,7 @@ export function createServer(
         content: [
           {
             type: "text" as const,
-            text: `Active workspace set to **${resolved.name}** (slug: \`${resolved.slug}\`, role: ${resolved.role}). Subsequent tool calls target this workspace by default.`,
+            text: `Resolved workspace **${resolved.name}** (slug: \`${resolved.slug}\`, role: ${resolved.role}). ⚠️ This connection is stateless, so this does NOT persist to your next call — pass \`workspace="${resolved.slug}"\` on each tool call to act there. (Applied to the current request only.)`,
           },
         ],
       };
@@ -465,7 +463,7 @@ export function createServer(
 
   registerMetaTool(
     "current_workspace",
-    "Return the session's currently active workspace (id, slug, name, role). Use after `set_workspace` to confirm the switch landed, or whenever the user asks 'which workspace am I in?'. Cheap — no DB hit if the session already knows.",
+    "Return the session's default workspace (id, slug, name, role) — the one tool calls hit when no `workspace=` arg is passed. Use when the user asks 'which workspace am I in?'. Note: a per-call `workspace=` override is NOT reflected here, and `set_workspace` does not change this on a stateless connection. Cheap — no DB hit if the session already knows.",
     {},
     async () => {
       if (!activeWorkspace) {

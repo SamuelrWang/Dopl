@@ -7,7 +7,7 @@
 
 import { z } from "zod";
 import type { DoplClient } from "@dopl/client";
-import { err, ok, missingParams, type RegisterTool, type ToolResponse } from "./respond";
+import { err, ok, isNotFound, missingParams, type RegisterTool, type ToolResponse } from "./respond";
 
 const CLUSTER_DESCRIPTION = `Read and non-destructively modify Dopl clusters (containers that group related workflows). Set \`op\` to one of:
 - "list" — discover all clusters and how many workflows each holds. Cheap metadata call; run it proactively to show the user their workspace.
@@ -168,6 +168,18 @@ async function opDeleteCluster(
   client: DoplClient,
   slug: string,
 ): Promise<ToolResponse> {
-  await client.deleteCluster(slug);
+  try {
+    await client.deleteCluster(slug);
+  } catch (e) {
+    // The backend now 404s when the slug matched no cluster in this
+    // workspace; turn that into a clear "nothing deleted" instead of a
+    // false success (or an opaque throw the framework would expose).
+    if (isNotFound(e)) {
+      return err(
+        `No cluster \`${slug}\` in this workspace — nothing deleted. Run dopl_cluster(op="list") to see valid slugs.`,
+      );
+    }
+    throw e;
+  }
   return ok(`Deleted cluster \`${slug}\`. Its workflows survive (ungrouped).`);
 }

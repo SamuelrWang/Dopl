@@ -330,6 +330,16 @@ async function opConnect(client, slug, from, to) {
     return (0, respond_1.ok)(`Connected \`${from}\` → \`${to}\` in workflow \`${slug}\`.`);
 }
 async function opDisconnect(client, slug, from, to) {
-    await client.disconnectWorkflow(slug, from, to);
+    try {
+        await client.disconnectWorkflow(slug, from, to);
+    }
+    catch (e) {
+        // Backend now 404s when no such edge existed; report that instead of a
+        // false "disconnected" success the author would trust.
+        if ((0, respond_1.isNotFound)(e)) {
+            return (0, respond_1.err)(`No edge \`${from}\` → \`${to}\` in workflow \`${slug}\` — nothing disconnected. Run op="get" to see current connections.`);
+        }
+        throw e;
+    }
     return (0, respond_1.ok)(`Disconnected \`${from}\` → \`${to}\` in workflow \`${slug}\`.`);
 }

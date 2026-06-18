@@ -52,13 +52,21 @@ async function opList(client) {
     return { content: [{ type: "text", text: lines.join("\n") }] };
 }
 async function opRenameChat(client, panel_id, title) {
+    // The backend PATCH /api/canvas/panels/{id} is generic — it will set the
+    // `title` of ANY panel and reports success even when no panel matched.
+    // rename_chat is documented as chat-only, so guard here: confirm the panel
+    // exists AND is a chat before writing, otherwise we'd silently corrupt a
+    // node/workflow/KB panel's title or return a false success for a typo'd id.
+    const panels = await client.listCanvasPanels();
+    const panel = panels.find((p) => p.panel_id === panel_id);
+    if (!panel) {
+        return (0, respond_1.err)(`No panel with id \`${panel_id}\` on the canvas — nothing renamed. Call dopl_canvas(op="list") to see what's there.`);
+    }
+    if (panel.panel_type !== "chat") {
+        return (0, respond_1.err)(`Panel \`${panel_id}\` is a ${panel.panel_type} panel, not a chat. rename_chat only renames chat panels.`);
+    }
     await client.renameChat(panel_id, title);
-    return {
-        content: [{
-                type: "text",
-                text: `Renamed chat to "${title}".`,
-            }],
-    };
+    return (0, respond_1.ok)(`Renamed chat \`${panel_id}\` to "${title}".`);
 }
 function panelLabel(type) {
     switch (type) {

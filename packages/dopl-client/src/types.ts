@@ -265,6 +265,12 @@ export type CanvasPanelType =
 
 export interface CanvasPanel {
   id: string;
+  /**
+   * Client-facing panel handle (e.g. "panel-3"), unique within a workspace.
+   * Distinct from `id` (the row UUID). This is what panel-addressed ops
+   * (e.g. rename_chat → PATCH /api/canvas/panels/{panel_id}) take.
+   */
+  panel_id: string;
   panel_type: CanvasPanelType;
   slug: string | null;
   title: string | null;

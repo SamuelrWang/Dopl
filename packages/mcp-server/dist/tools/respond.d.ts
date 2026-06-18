@@ -22,6 +22,12 @@ export declare function err(message: string): ToolResponse;
  */
 export declare function isConflict(e: unknown): boolean;
 /**
+ * True when a thrown error is a 404 from the Dopl API. Same duck-typing
+ * as `isConflict` — lets a tool turn a "nothing matched" backend response
+ * into a clean error instead of either an opaque throw or a false success.
+ */
+export declare function isNotFound(e: unknown): boolean;
+/**
  * Returns an error response when any of `required` params is absent for the
  * given op, or null when they're all present. Treats undefined / null /
  * empty-string as absent — the same "no value" semantics the old per-tool

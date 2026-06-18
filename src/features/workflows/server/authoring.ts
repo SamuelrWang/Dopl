@@ -453,9 +453,20 @@ async function writeNodePanel(
   if (error) throw error;
 }
 
-async function deleteEdgeByPair(workspaceId: string, from: string, to: string): Promise<void> {
+async function deleteEdgeByPair(workspaceId: string, from: string, to: string): Promise<number> {
   const db = supabaseAdmin();
-  await db.from("canvas_edges").delete().eq("workspace_id", workspaceId).eq("from_panel_id", from).eq("to_panel_id", to);
+  // `.select()` returns the deleted rows so callers can distinguish a real
+  // removal from a no-op. Reconcile (setGraph) ignores the count; `disconnect`
+  // uses it to 404 instead of reporting a false success.
+  const { data, error } = await db
+    .from("canvas_edges")
+    .delete()
+    .eq("workspace_id", workspaceId)
+    .eq("from_panel_id", from)
+    .eq("to_panel_id", to)
+    .select("id");
+  if (error) throw error;
+  return data?.length ?? 0;
 }
 
 // ── Public ops ───────────────────────────────────────────────────────
@@ -680,6 +691,13 @@ export async function disconnect(
   const headerId = await resolveHeaderPanelId(workflowId, scope);
   const fromId = from === "header" ? headerId : from;
   const toId = to === "header" ? headerId : to;
-  await deleteEdgeByPair(scope.workspaceId, fromId, toId);
+  const deleted = await deleteEdgeByPair(scope.workspaceId, fromId, toId);
+  if (deleted === 0) {
+    throw new HttpError(
+      404,
+      "EDGE_NOT_FOUND",
+      `No edge ${from} → ${to} in this workflow — nothing to disconnect.`,
+    );
+  }
   await reconcileAttachments(workflowId, scope);
 }

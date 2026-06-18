@@ -4,7 +4,7 @@
 
 import { z } from "zod";
 import type { CanvasPanel, DoplClient } from "@dopl/client";
-import { missingParams, type RegisterTool, type ToolResponse } from "./respond";
+import { err, ok, missingParams, type RegisterTool, type ToolResponse } from "./respond";
 
 const DESCRIPTION = `Manage the user's canvas — the workspace of panels (chat, knowledge bases, skills, artifacts). Set \`op\` to one of:
 - "list" — list every panel currently on the user's canvas. Use this when the user asks 'what's on my canvas?' or before operations that need to reason about the current workspace.
@@ -69,13 +69,25 @@ async function opRenameChat(
   panel_id: string,
   title: string,
 ): Promise<ToolResponse> {
+  // The backend PATCH /api/canvas/panels/{id} is generic — it will set the
+  // `title` of ANY panel and reports success even when no panel matched.
+  // rename_chat is documented as chat-only, so guard here: confirm the panel
+  // exists AND is a chat before writing, otherwise we'd silently corrupt a
+  // node/workflow/KB panel's title or return a false success for a typo'd id.
+  const panels = await client.listCanvasPanels();
+  const panel = panels.find((p) => p.panel_id === panel_id);
+  if (!panel) {
+    return err(
+      `No panel with id \`${panel_id}\` on the canvas — nothing renamed. Call dopl_canvas(op="list") to see what's there.`,
+    );
+  }
+  if (panel.panel_type !== "chat") {
+    return err(
+      `Panel \`${panel_id}\` is a ${panel.panel_type} panel, not a chat. rename_chat only renames chat panels.`,
+    );
+  }
   await client.renameChat(panel_id, title);
-  return {
-    content: [{
-      type: "text" as const,
-      text: `Renamed chat to "${title}".`,
-    }],
-  };
+  return ok(`Renamed chat \`${panel_id}\` to "${title}".`);
 }
 
 function panelLabel(type: CanvasPanel["panel_type"]): string {

@@ -129,6 +129,17 @@ async function opUpdate(client, slug, name, description) {
 }
 // ── dopl_cluster_admin ops ───────────────────────────────────────────
 async function opDeleteCluster(client, slug) {
-    await client.deleteCluster(slug);
+    try {
+        await client.deleteCluster(slug);
+    }
+    catch (e) {
+        // The backend now 404s when the slug matched no cluster in this
+        // workspace; turn that into a clear "nothing deleted" instead of a
+        // false success (or an opaque throw the framework would expose).
+        if ((0, respond_1.isNotFound)(e)) {
+            return (0, respond_1.err)(`No cluster \`${slug}\` in this workspace — nothing deleted. Run dopl_cluster(op="list") to see valid slugs.`);
+        }
+        throw e;
+    }
     return (0, respond_1.ok)(`Deleted cluster \`${slug}\`. Its workflows survive (ungrouped).`);
 }

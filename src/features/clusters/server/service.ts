@@ -225,10 +225,17 @@ export async function deleteCluster(
   const db = supabaseAdmin();
   // Deleting a container only removes the cluster row; its workflows
   // survive with cluster_id set null (FK ON DELETE SET NULL).
-  const { error } = await db
+  // `.select()` so we can tell a real delete from a no-op: a delete that
+  // matched zero rows (bad slug / wrong workspace) must surface as "not
+  // found" rather than a silent success the caller mistakes for a cleanup.
+  const { data, error } = await db
     .from("clusters")
     .delete()
     .eq("slug", slug)
-    .eq("workspace_id", scope.workspaceId);
+    .eq("workspace_id", scope.workspaceId)
+    .select("id");
   if (error) throw error;
+  if (!data || data.length === 0) {
+    throw new Error(`Cluster not found: ${slug}`);
+  }
 }

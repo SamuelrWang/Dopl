@@ -9,6 +9,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ok = ok;
 exports.err = err;
 exports.isConflict = isConflict;
+exports.isNotFound = isNotFound;
 exports.missingParams = missingParams;
 function ok(text) {
     return { content: [{ type: "text", text }] };
@@ -25,6 +26,16 @@ function isConflict(e) {
     return (typeof e === "object" &&
         e !== null &&
         e.status === 412);
+}
+/**
+ * True when a thrown error is a 404 from the Dopl API. Same duck-typing
+ * as `isConflict` — lets a tool turn a "nothing matched" backend response
+ * into a clean error instead of either an opaque throw or a false success.
+ */
+function isNotFound(e) {
+    return (typeof e === "object" &&
+        e !== null &&
+        e.status === 404);
 }
 /**
  * Returns an error response when any of `required` params is absent for the

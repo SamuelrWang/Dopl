@@ -9,7 +9,7 @@
 
 import { z } from "zod";
 import type { DoplClient, WorkflowDetail } from "@dopl/client";
-import { err, ok, missingParams, type RegisterTool, type ToolResponse } from "./respond";
+import { err, ok, isNotFound, missingParams, type RegisterTool, type ToolResponse } from "./respond";
 
 const WORKFLOW_DESCRIPTION = `Read and AUTHOR Dopl workflows (a header + its connected node graph; the agent-followable unit). Changes appear live on an open canvas. Set \`op\` to one of:
 - "list" — discover all workflows. Cheap metadata call; run it proactively to resolve a slug another op needs.
@@ -413,6 +413,17 @@ async function opDisconnect(
   from: string,
   to: string,
 ): Promise<ToolResponse> {
-  await client.disconnectWorkflow(slug, from, to);
+  try {
+    await client.disconnectWorkflow(slug, from, to);
+  } catch (e) {
+    // Backend now 404s when no such edge existed; report that instead of a
+    // false "disconnected" success the author would trust.
+    if (isNotFound(e)) {
+      return err(
+        `No edge \`${from}\` → \`${to}\` in workflow \`${slug}\` — nothing disconnected. Run op="get" to see current connections.`,
+      );
+    }
+    throw e;
+  }
   return ok(`Disconnected \`${from}\` → \`${to}\` in workflow \`${slug}\`.`);
 }
