@@ -58,9 +58,9 @@ export function ChipSelect({
               type="button"
               aria-pressed={selected}
               onClick={() => toggle(option.value)}
-              className={`px-3.5 py-2 rounded-[11px] border-[1.5px] text-[14px] font-medium transition-colors cursor-pointer ${
+              className={`px-3.5 py-2 rounded-[8px] border-[1.5px] text-[14px] font-medium transition-colors cursor-pointer ${
                 selected
-                  ? "border-[#4C8DF5] bg-[#1C3252] text-[#EAF2FB] shadow-[0_0_0_1px_rgba(76,141,245,0.4)]"
+                  ? "border-[#7E9CC4] bg-[#1C3252] text-[#EAF2FB] shadow-[0_0_0_1px_rgba(76,141,245,0.4)]"
                   : "border-[#33414F] bg-[#1E2836] text-[#BCC6D2] hover:border-[#44566A] hover:bg-[#273341]"
               }`}
             >
@@ -77,9 +77,9 @@ export function ChipSelect({
           maxLength={200}
           placeholder="Tell us more…"
           onChange={(e) => onOtherTextChange?.(e.target.value)}
-          className="w-full rounded-[11px] border-[1.5px] border-[#33414F] bg-[#1A222E] px-3.5 py-2.5
+          className="w-full rounded-[8px] border-[1.5px] border-[#33414F] bg-[#1A222E] px-3.5 py-2.5
             text-[14px] text-[#ECF1F6] placeholder:text-[#6B7682]
-            focus:outline-none focus:border-[#4C8DF5] transition-colors"
+            focus:outline-none focus:border-[#7E9CC4] transition-colors"
         />
       )}
     </div>

@@ -99,14 +99,14 @@ export default async function AuthorizePage({
             <span className="font-medium text-[#E4EAF1]">{user.email}</span>.
           </p>
 
-          <div className="space-y-3 rounded-[11px] border-[1.5px] border-[#33414F] bg-[#1A222E] px-4 py-3.5">
+          <div className="space-y-3 rounded-[8px] border-[1.5px] border-[#33414F] bg-[#1A222E] px-4 py-3.5">
             <div className="flex items-start gap-3">
               <input
                 type="checkbox"
                 checked
                 disabled
                 aria-label="read access (always granted)"
-                className="mt-0.5 h-4 w-4 shrink-0 accent-[#2E6FD8]"
+                className="mt-0.5 h-4 w-4 shrink-0 accent-[#3E5E9E]"
               />
               <p className="text-[13px] leading-relaxed text-[#B4BFCB]">
                 <span className="font-mono text-[11px] uppercase tracking-wide text-[#74808C]">
@@ -120,7 +120,7 @@ export default async function AuthorizePage({
                 type="checkbox"
                 name="grant_write"
                 defaultChecked={requestsWrite}
-                className="mt-0.5 h-4 w-4 shrink-0 accent-[#2E6FD8]"
+                className="mt-0.5 h-4 w-4 shrink-0 accent-[#3E5E9E]"
               />
               <p className="text-[13px] leading-relaxed text-[#B4BFCB]">
                 <span className="font-mono text-[11px] uppercase tracking-wide text-[#74808C]">
@@ -137,7 +137,7 @@ export default async function AuthorizePage({
               type="submit"
               name="decision"
               value="approve"
-              className="flex-1 h-11 rounded-[11px] bg-[#2E6FD8] text-[15px] font-semibold text-white hover:bg-[#3B82F6] transition-colors cursor-pointer"
+              className="flex-1 h-11 rounded-[8px] bg-[#3E5E9E] text-[15px] font-semibold text-white hover:bg-[#4A6BAC] transition-colors cursor-pointer"
             >
               Approve
             </button>
@@ -145,7 +145,7 @@ export default async function AuthorizePage({
               type="submit"
               name="decision"
               value="deny"
-              className="h-11 px-5 rounded-[11px] border-[1.5px] border-[#33414F] bg-transparent text-[15px] font-semibold text-[#B4BFCB] hover:border-[#44566A] hover:text-[#ECF1F6] transition-colors cursor-pointer"
+              className="h-11 px-5 rounded-[8px] border-[1.5px] border-[#33414F] bg-transparent text-[15px] font-semibold text-[#B4BFCB] hover:border-[#44566A] hover:text-[#ECF1F6] transition-colors cursor-pointer"
             >
               Deny
             </button>
@@ -166,7 +166,7 @@ function Screen({ title, body }: { title: string; body: React.ReactNode }) {
           <img
             src="/favicons/android-chrome-512x512.png"
             alt="Dopl"
-            className="h-11 w-11 rounded-[11px]"
+            className="h-11 w-11 rounded-[8px]"
           />
           <h1 className="text-[22px] font-semibold leading-tight text-[#ECF1F6]">
             {title}
@@ -174,7 +174,7 @@ function Screen({ title, body }: { title: string; body: React.ReactNode }) {
         </div>
         <div
           data-crystal-panel
-          className="rounded-[20px] border border-[#2C3A4E] bg-[#131A24] p-8 shadow-[0_12px_50px_rgba(0,0,0,0.6)]"
+          className="rounded-[14px] border border-[#2C3A4E] bg-[#131A24] p-8 shadow-[0_12px_50px_rgba(0,0,0,0.6)]"
         >
           {body}
         </div>

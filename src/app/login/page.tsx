@@ -128,13 +128,13 @@ function LoginForm() {
 
         <div
           data-crystal-panel
-          className="rounded-[20px] border border-[#2C3A4E] bg-[#131A24] p-8 shadow-[0_12px_50px_rgba(0,0,0,0.6)]"
+          className="rounded-[14px] border border-[#2C3A4E] bg-[#131A24] p-8 shadow-[0_12px_50px_rgba(0,0,0,0.6)]"
         >
           {/* Continue with Google */}
           <button
             type="button"
             onClick={handleGoogleLogin}
-            className="w-full flex items-center justify-center gap-3 px-4 py-3 mb-3 rounded-[11px]
+            className="w-full flex items-center justify-center gap-3 px-4 py-3 mb-3 rounded-[8px]
               border-[1.5px] border-[#33414F] bg-[#1E2836] text-[#ECF1F6] hover:border-[#44566A] hover:bg-[#273341]
               transition-colors cursor-pointer disabled:opacity-50"
           >
@@ -157,12 +157,12 @@ function LoginForm() {
           </div>
 
           {error && (
-            <div className="mb-3 p-3 rounded-[11px] border-[1.5px] border-red-500/30 bg-red-500/10">
+            <div className="mb-3 p-3 rounded-[8px] border-[1.5px] border-red-500/30 bg-red-500/10">
               <p className="text-[13px] text-red-300">{error}</p>
             </div>
           )}
           {message && (
-            <div className="mb-3 p-3 rounded-[11px] border-[1.5px] border-[#4C8DF5]/40 bg-[#1C3252]">
+            <div className="mb-3 p-3 rounded-[8px] border-[1.5px] border-[#7E9CC4]/40 bg-[#1C3252]">
               <p className="text-[13px] text-[#E4EAF1]">{message}</p>
             </div>
           )}
@@ -180,7 +180,7 @@ function LoginForm() {
                 className="peer w-full bg-transparent border-0 border-b-[1.5px] border-[#33414F]
                   px-0 py-3 text-[15px] text-[#ECF1F6]
                   placeholder:text-transparent
-                  focus:outline-none focus:border-[#4C8DF5] focus:ring-0
+                  focus:outline-none focus:border-[#7E9CC4] focus:ring-0
                   transition-colors"
               />
               <label
@@ -189,7 +189,7 @@ function LoginForm() {
                   email.length > 0
                     ? "-top-[10px] text-[9px] text-[#B4BFCB]"
                     : "top-[12px] text-[11px] text-[#74808C]"
-                } peer-focus:-top-[10px] peer-focus:text-[9px] peer-focus:text-[#4C8DF5]`}
+                } peer-focus:-top-[10px] peer-focus:text-[9px] peer-focus:text-[#7E9CC4]`}
               >
                 Email
               </label>
@@ -198,8 +198,8 @@ function LoginForm() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full mt-6 px-4 py-3 rounded-[11px] text-[15px] font-semibold
-                bg-[#2E6FD8] text-white hover:bg-[#3B82F6]
+              className="w-full mt-6 px-4 py-3 rounded-[8px] text-[15px] font-semibold
+                bg-[#3E5E9E] text-white hover:bg-[#4A6BAC]
                 transition-colors disabled:bg-[#1E2836] disabled:text-[#7E8794] disabled:cursor-not-allowed cursor-pointer"
             >
               {loading ? "Sending link..." : "Continue with Email"}

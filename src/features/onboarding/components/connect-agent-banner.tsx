@@ -107,7 +107,7 @@ export function ConnectAgentBanner() {
           onClick={() => setOpen(false)}
         >
           <div
-            className="w-full max-w-lg rounded-2xl bg-bg-overlay p-7 shadow-2xl"
+            className="w-full max-w-lg rounded-[14px] bg-bg-overlay p-7 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <McpConnectStep

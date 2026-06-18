@@ -77,7 +77,7 @@ export function WelcomePopup() {
       }}
     >
       <div
-        className="relative w-full max-w-lg rounded-[20px] border-[1.5px] border-[#d6dde5] bg-[#fbfcfd] p-8 shadow-[0_12px_40px_rgba(28,33,39,0.28)]"
+        className="relative w-full max-w-lg rounded-[14px] border-[1.5px] border-[#d6dde5] bg-[#fbfcfd] p-8 shadow-[0_12px_40px_rgba(28,33,39,0.28)]"
         onClick={(e) => e.stopPropagation()}
         style={{
           opacity: shown ? 1 : 0,
@@ -101,7 +101,7 @@ export function WelcomePopup() {
           <img
             src="/favicons/android-chrome-512x512.png"
             alt="Dopl"
-            className="h-11 w-11 rounded-[11px]"
+            className="h-11 w-11 rounded-[8px]"
           />
           <h1 className="text-[24px] font-semibold leading-tight text-[#1e242b]">
             Welcome to Dopl!
@@ -121,7 +121,7 @@ export function WelcomePopup() {
         </p>
 
         <div className="relative mt-3">
-          <div className="h-[180px] overflow-y-auto rounded-[11px] border-[1.5px] border-[#d6dde5] bg-[#eef1f5] px-3.5 py-3 pr-10">
+          <div className="h-[180px] overflow-y-auto rounded-[8px] border-[1.5px] border-[#d6dde5] bg-[#eef1f5] px-3.5 py-3 pr-10">
             <code className="font-mono text-[12px] leading-relaxed text-[#3a414a] whitespace-pre-wrap break-words">
               {prompt}
             </code>

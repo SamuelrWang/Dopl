@@ -104,7 +104,7 @@ export function McpConnectStep({
           </div>
         </div>
 
-        <div className="rounded-[11px] border-[1.5px] border-[#33414F] bg-[#1A222E] px-4 py-3.5">
+        <div className="rounded-[8px] border-[1.5px] border-[#33414F] bg-[#1A222E] px-4 py-3.5">
           {client === "claude" ? (
             <ol className="list-decimal space-y-1.5 pl-4 text-[13px] leading-relaxed text-[#B4BFCB] marker:text-[#6E6886]">
               <li>
@@ -141,7 +141,7 @@ export function McpConnectStep({
           </span>
         ) : (
           <span className="flex items-center gap-2">
-            <span className="w-2 h-2 animate-pulse bg-[#4C8DF5]" />
+            <span className="w-2 h-2 animate-pulse bg-[#7E9CC4]" />
             <span className="font-mono text-[10px] uppercase tracking-wide text-[#7E8794]">
               Waiting for your agent…
             </span>
@@ -188,7 +188,7 @@ function CopyRow({
       <p className="font-mono text-[10px] uppercase tracking-[0.06em] text-[#74808C]">
         {label}
       </p>
-      <div className="flex items-start gap-2 rounded-[11px] border-[1.5px] border-[#33414F] bg-[#1A222E] px-3.5 py-2.5">
+      <div className="flex items-start gap-2 rounded-[8px] border-[1.5px] border-[#33414F] bg-[#1A222E] px-3.5 py-2.5">
         <code
           className={`flex-1 font-mono text-[12px] text-[#B4BFCB] leading-relaxed ${
             multiline ? "whitespace-pre-wrap break-words" : "truncate"

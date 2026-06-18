@@ -110,8 +110,8 @@ export function SurveyStep({ submitting, onSubmit }: SurveyStepProps) {
         type="button"
         disabled={incomplete || submitting}
         onClick={handleSubmit}
-        className="w-full px-4 py-3 rounded-[11px] text-[15px] font-semibold
-          bg-[#2E6FD8] text-white hover:bg-[#3B82F6]
+        className="w-full px-4 py-3 rounded-[8px] text-[15px] font-semibold
+          bg-[#3E5E9E] text-white hover:bg-[#4A6BAC]
           transition-colors cursor-pointer
           disabled:bg-[#1E2836] disabled:text-[#7E8794] disabled:cursor-not-allowed"
       >
