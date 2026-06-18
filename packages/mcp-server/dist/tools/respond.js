@@ -10,6 +10,7 @@ exports.ok = ok;
 exports.err = err;
 exports.isConflict = isConflict;
 exports.isNotFound = isNotFound;
+exports.isAlreadyExists = isAlreadyExists;
 exports.missingParams = missingParams;
 function ok(text) {
     return { content: [{ type: "text", text }] };
@@ -36,6 +37,16 @@ function isNotFound(e) {
     return (typeof e === "object" &&
         e !== null &&
         e.status === 404);
+}
+/**
+ * True when a thrown error is a 409 conflict from the Dopl API (a
+ * name/title/slug already-exists collision). Lets a tool surface a clean
+ * "already exists" message instead of an opaque throw.
+ */
+function isAlreadyExists(e) {
+    return (typeof e === "object" &&
+        e !== null &&
+        e.status === 409);
 }
 /**
  * Returns an error response when any of `required` params is absent for the

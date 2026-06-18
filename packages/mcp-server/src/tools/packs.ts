@@ -38,8 +38,11 @@ export function registerPacksTools(
         .describe("op=list_files: restrict to one /docs/<category>/ subtree."),
       limit: z
         .number()
+        .int()
+        .min(1)
+        .max(500)
         .optional()
-        .describe("op=list_files: max results (default 50, max 500)."),
+        .describe("op=list_files: max results, 1–500 (default 50). 0 is rejected — omit for the default."),
       path: z
         .string()
         .optional()

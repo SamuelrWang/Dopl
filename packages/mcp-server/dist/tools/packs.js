@@ -31,8 +31,11 @@ function registerPacksTools(register, client) {
             .describe("op=list_files: restrict to one /docs/<category>/ subtree."),
         limit: zod_1.z
             .number()
+            .int()
+            .min(1)
+            .max(500)
             .optional()
-            .describe("op=list_files: max results (default 50, max 500)."),
+            .describe("op=list_files: max results, 1–500 (default 50). 0 is rejected — omit for the default."),
         path: zod_1.z
             .string()
             .optional()

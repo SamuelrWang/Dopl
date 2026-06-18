@@ -39,6 +39,7 @@ export function registerClusterTools(
         .describe("op=create: cluster name. op=update: new cluster name."),
       description: z
         .string()
+        .max(300, "description is capped at 300 chars")
         .optional()
         .describe("op=update: cluster description (max 300 chars)."),
     },
@@ -146,6 +147,9 @@ async function opCreate(
   client: DoplClient,
   name: string,
 ): Promise<ToolResponse> {
+  // missingParams catches "" but not a whitespace-only name, which would
+  // slugify to the generic "cluster" and land a blank-named junk row.
+  if (!name.trim()) return err("`name` can't be blank.");
   const result = await client.createCluster(name);
   return ok(
     `Created cluster **${result.name}** (slug: \`${result.slug}\`). Assign workflows to it from the canvas.`
@@ -158,6 +162,9 @@ async function opUpdate(
   name: string | undefined,
   description: string | undefined,
 ): Promise<ToolResponse> {
+  if (name !== undefined && !name.trim()) {
+    return err("`name` can't be blank.");
+  }
   const result = await client.updateCluster(slug, { name, description });
   return ok(`Updated cluster **${result.name}** (slug: \`${result.slug}\`).`);
 }

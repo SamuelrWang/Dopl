@@ -15,7 +15,7 @@
 
 import { z } from "zod";
 import type { DoplClient, KnowledgeBase } from "@dopl/client";
-import { ok, err, isConflict, missingParams, type RegisterTool, type ToolResponse } from "./respond";
+import { ok, err, isConflict, isAlreadyExists, missingParams, type RegisterTool, type ToolResponse } from "./respond";
 
 /**
  * Resolves a base reference (slug or UUID) to a `KnowledgeBase` row.
@@ -395,6 +395,11 @@ async function opWriteFile(client: DoplClient, ref: string, path: string, body: 
     if (isConflict(e)) {
       return err(
         `\`${path}\` changed since you last read it. Call dopl_kb(op="read_file", base, path) to get the current content + version, reconcile your changes, then retry write_file with that expected_version (or pass force=true to overwrite).`
+      );
+    }
+    if (isAlreadyExists(e)) {
+      return err(
+        `An entry titled "${title ?? path.split("/").filter(Boolean).pop()}" already exists in that folder. Pick a different title/path, or read+overwrite the existing entry with dopl_kb(op="read_file" → "write_file").`
       );
     }
     throw e;

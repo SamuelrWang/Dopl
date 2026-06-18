@@ -31,6 +31,7 @@ function registerClusterTools(register, client) {
             .describe("op=create: cluster name. op=update: new cluster name."),
         description: zod_1.z
             .string()
+            .max(300, "description is capped at 300 chars")
             .optional()
             .describe("op=update: cluster description (max 300 chars)."),
     }, async (args) => {
@@ -120,10 +121,17 @@ async function opGet(client, slug) {
     return (0, respond_1.ok)(lines.join("\n"));
 }
 async function opCreate(client, name) {
+    // missingParams catches "" but not a whitespace-only name, which would
+    // slugify to the generic "cluster" and land a blank-named junk row.
+    if (!name.trim())
+        return (0, respond_1.err)("`name` can't be blank.");
     const result = await client.createCluster(name);
     return (0, respond_1.ok)(`Created cluster **${result.name}** (slug: \`${result.slug}\`). Assign workflows to it from the canvas.`);
 }
 async function opUpdate(client, slug, name, description) {
+    if (name !== undefined && !name.trim()) {
+        return (0, respond_1.err)("`name` can't be blank.");
+    }
     const result = await client.updateCluster(slug, { name, description });
     return (0, respond_1.ok)(`Updated cluster **${result.name}** (slug: \`${result.slug}\`).`);
 }

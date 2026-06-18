@@ -376,6 +376,9 @@ async function opWriteFile(client, ref, path, body, title, expected_version, for
         if ((0, respond_1.isConflict)(e)) {
             return (0, respond_1.err)(`\`${path}\` changed since you last read it. Call dopl_kb(op="read_file", base, path) to get the current content + version, reconcile your changes, then retry write_file with that expected_version (or pass force=true to overwrite).`);
         }
+        if ((0, respond_1.isAlreadyExists)(e)) {
+            return (0, respond_1.err)(`An entry titled "${title ?? path.split("/").filter(Boolean).pop()}" already exists in that folder. Pick a different title/path, or read+overwrite the existing entry with dopl_kb(op="read_file" → "write_file").`);
+        }
         throw e;
     }
     // The addressable path's leaf is the entry's title (not the input

@@ -45,12 +45,15 @@ export type ResolvedPath =
 
 /**
  * Splits a path into clean segments. `"/foo//bar/"` → `["foo", "bar"]`.
- * Empty string returns `[]`. Throws on segments containing `/`-like
- * sentinels — caller passes the path as a string, so this should never
- * fire, but the check is cheap.
+ * Empty string returns `[]`. Relative-path sentinels `.` and `..` are
+ * dropped (this is a flat name tree, not a filesystem — they have no
+ * meaning), so `"../escape"` → `["escape"]` instead of creating a folder
+ * literally named `..`.
  */
 export function parsePath(path: string): string[] {
-  return path.split("/").filter((s) => s.length > 0);
+  return path
+    .split("/")
+    .filter((s) => s.length > 0 && s !== "." && s !== "..");
 }
 
 export function pathToString(segments: string[]): string {

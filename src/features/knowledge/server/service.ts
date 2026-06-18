@@ -971,16 +971,28 @@ export async function writeFileByPath(
         resolved.entry.updatedAt
       );
     }
-    const saved = await repo.updateEntryRow(
-      resolved.entry.id,
-      {
-        title: input.title,
-        body: input.body,
-        lastEditedBy: ctx.userId,
-        lastEditedSource: ctx.source,
-      },
-      input.expectedUpdatedAt
-    );
+    let saved;
+    try {
+      saved = await repo.updateEntryRow(
+        resolved.entry.id,
+        {
+          title: input.title,
+          body: input.body,
+          lastEditedBy: ctx.userId,
+          lastEditedSource: ctx.source,
+        },
+        input.expectedUpdatedAt
+      );
+    } catch (err) {
+      // Renaming onto a sibling's title trips the unique (kb, folder,
+      // title) index — surface a clean 409 conflict, not a raw 500.
+      if (errorCode(err) === "23505") {
+        throw new KnowledgePathConflictError(
+          [...parentSegments, input.title ?? leafName].join("/")
+        );
+      }
+      throw err;
+    }
     if (saved === null) {
       const fresh = await repo.findEntryById(resolved.entry.id, false);
       throw new KnowledgeStaleVersionError(
@@ -1003,15 +1015,28 @@ export async function writeFileByPath(
 
   // mkdir -p parents, then create.
   const parentFolder = await ensureFolderPath(ctx, base.id, parentSegments);
-  const created = await repo.insertEntry({
-    workspaceId: ctx.workspaceId,
-    knowledgeBaseId: base.id,
-    folderId: parentFolder?.id ?? null,
-    title: input.title ?? leafName,
-    body: input.body ?? "",
-    createdBy: ctx.userId,
-    source: ctx.source,
-  });
+  let created;
+  try {
+    created = await repo.insertEntry({
+      workspaceId: ctx.workspaceId,
+      knowledgeBaseId: base.id,
+      folderId: parentFolder?.id ?? null,
+      title: input.title ?? leafName,
+      body: input.body ?? "",
+      createdBy: ctx.userId,
+      source: ctx.source,
+    });
+  } catch (err) {
+    // An explicit `title` (or a leaf) that already names an active entry
+    // in this folder violates the unique (kb, folder, title) index. Map
+    // the raw 23505 to the clean 409 the move ops already return.
+    if (errorCode(err) === "23505") {
+      throw new KnowledgePathConflictError(
+        [...parentSegments, input.title ?? leafName].join("/")
+      );
+    }
+    throw err;
+  }
   scheduleEntryEmbedding(created);
   return { entry: created, base };
 }

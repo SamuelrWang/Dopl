@@ -54,6 +54,19 @@ export function isNotFound(e: unknown): boolean {
 }
 
 /**
+ * True when a thrown error is a 409 conflict from the Dopl API (a
+ * name/title/slug already-exists collision). Lets a tool surface a clean
+ * "already exists" message instead of an opaque throw.
+ */
+export function isAlreadyExists(e: unknown): boolean {
+  return (
+    typeof e === "object" &&
+    e !== null &&
+    (e as { status?: number }).status === 409
+  );
+}
+
+/**
  * Returns an error response when any of `required` params is absent for the
  * given op, or null when they're all present. Treats undefined / null /
  * empty-string as absent — the same "no value" semantics the old per-tool
