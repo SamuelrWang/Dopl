@@ -183,18 +183,59 @@ export function createServer(
     scopes?: string[];
   } = {},
 ): McpServer {
-  // OAuth scope gating: a read-only session (a token carrying `dopl.read`
-  // but not `dopl.write`) doesn't get the purely write/destructive tools
-  // registered at all. Absent scopes ⇒ full access (stdio + API-key callers),
-  // so behavior is unchanged for them. Mixed read+write tools stay registered;
-  // per-op write enforcement is a documented follow-up.
-  const canWrite = !options.scopes || options.scopes.includes("dopl.write");
+  // OAuth scope gating. Fail CLOSED: a session gets write/admin capability
+  // ONLY if it presents a scope set that explicitly includes `dopl.write`.
+  // Absent/empty scopes no longer grant write — the OAuth transport (the only
+  // caller) always forwards the token's scopes, so this is a no-op for real
+  // sessions, but it closes the prior fail-open default where a scope-less
+  // code path would have silently exposed every write/destructive tool.
+  const canWrite =
+    Array.isArray(options.scopes) && options.scopes.includes("dopl.write");
+  // Purely destructive tools aren't even registered for a read-only session.
   const READ_ONLY_BLOCKED_TOOLS = new Set([
     "dopl_cluster_admin",
     "dopl_kb_admin",
     "dopl_skill_admin",
     "dopl_workflow_admin",
   ]);
+  // Per-op write gating for the MIXED read+write tools (these stay registered
+  // for read-only sessions so reads still work, but their write ops are
+  // refused). Closes the gap where a `dopl.read`-only token could still write
+  // via a non-admin tool. Inert while every active token carries `dopl.write`
+  // — defense-in-depth for when read-only tokens are issued. Keep each set in
+  // sync with the tool's `op` enum; a new write op must be added here.
+  const WRITE_OPS: Record<string, Set<string>> = {
+    dopl_cluster: new Set(["create", "update"]),
+    dopl_kb: new Set([
+      "create_base",
+      "update_base",
+      "restore_base",
+      "create_folder",
+      "move_folder",
+      "write_file",
+      "move_file",
+      "restore_file",
+      "restore_folder",
+    ]),
+    dopl_skill: new Set([
+      "create",
+      "update",
+      "create_file",
+      "write_file",
+      "rename_file",
+    ]),
+    dopl_workflow: new Set([
+      "create",
+      "update",
+      "set_graph",
+      "add_node",
+      "update_node",
+      "remove_node",
+      "connect",
+      "disconnect",
+    ]),
+    dopl_canvas: new Set(["rename_chat"]),
+  };
   // Active workspace for this MCP session — seeded from the startup
   // handshake (index.ts) and mutated by `set_workspace` mid-session.
   // The slug threads into skill-writer calls so on-disk SKILL.md paths
@@ -299,6 +340,22 @@ export function createServer(
         workspace?: string;
       };
       const innerArgs = rest as unknown as z.infer<z.ZodObject<S>>;
+
+      // Refuse write ops on a read-only session before doing any work.
+      if (!canWrite) {
+        const op = (innerArgs as { op?: string }).op;
+        if (op && WRITE_OPS[name]?.has(op)) {
+          return {
+            isError: true,
+            content: [
+              {
+                type: "text" as const,
+                text: `This session is read-only — its token lacks the \`dopl.write\` scope. \`${name}\` op="${op}" is a write operation. Reconnect with write access to perform it.`,
+              },
+            ],
+          };
+        }
+      }
 
       if (workspaceRef) {
         // Audit B8: resolveWorkspaceRef calls listWorkspaces, which

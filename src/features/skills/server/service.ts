@@ -274,10 +274,14 @@ export async function updateSkill(
   expectedUpdatedAt?: string
 ): Promise<Skill> {
   const skill = await getSkillBySlug(ctx, slug);
-  // Agents can't flip the toggle itself, regardless of current state.
-  if (ctx.source === "agent" && patch.agentWriteEnabled !== undefined) {
-    throw new SkillAgentWriteDisabledError(slug);
-  }
+  // Agents can't flip the agent-write toggle (it's a human-controlled,
+  // per-skill setting). Silently IGNORE the field for agent callers rather
+  // than failing the whole update — agents routinely echo it back alongside
+  // legitimate metadata edits, and rejecting on mere presence (with a
+  // "writes disabled" message that is wrong when the toggle is ON) was a
+  // confusing dead end. Human callers may still set it.
+  const nextAgentWriteEnabled =
+    ctx.source === "agent" ? undefined : patch.agentWriteEnabled;
   // M-10: visibility flips are owner-only and one-way (private →
   // public). Schema already restricts to "public"; here we check the
   // prior state + caller is the owner. Agents can never publish.
@@ -312,7 +316,7 @@ export async function updateSkill(
         whenNotToUse: patch.whenNotToUse,
         slug: patch.slug,
         status: patch.status,
-        agentWriteEnabled: patch.agentWriteEnabled,
+        agentWriteEnabled: nextAgentWriteEnabled,
         visibility: effectiveVisibility,
         lastEditedBy: ctx.userId,
         lastEditedSource: ctx.source,
