@@ -52,6 +52,7 @@ function registerSkillTools(register, client) {
             "create_file",
             "write_file",
             "rename_file",
+            "set_visibility",
             "authoring_guide",
         ])
             .describe("Operation to perform."),
@@ -71,6 +72,7 @@ function registerSkillTools(register, client) {
         body: zod_1.z.string().max(1_048_576).optional().describe("op=create: initial SKILL.md content. op=create_file: optional initial body. op=write_file (required): the new full body."),
         expected_version: zod_1.z.string().optional().describe("op=write_file: the file's version from a prior read_file, to avoid overwriting a concurrent edit (412 on mismatch). Omit to auto-guard against the current version."),
         force: zod_1.z.boolean().optional().describe("op=write_file: overwrite even if the file changed since you read it. Discards the other edit — use only when intentional."),
+        visibility: zod_1.z.enum(["public", "private"]).optional().describe("op=set_visibility: 'public' to publish a skill you created (makes it workspace-visible + referenceable in workflows). One-way — 'private' is rejected."),
     }, async (args) => {
         switch (args.op) {
             case "list":
@@ -122,6 +124,12 @@ function registerSkillTools(register, client) {
                 if (miss)
                     return miss;
                 return opRenameFile(client, args.slug, args.file_name, args.new_name);
+            }
+            case "set_visibility": {
+                const miss = (0, respond_1.missingParams)("set_visibility", args, ["slug", "visibility"]);
+                if (miss)
+                    return miss;
+                return opSetVisibility(client, args.slug, args.visibility);
             }
             case "authoring_guide":
                 return (0, respond_1.ok)(skill_authoring_guide_js_1.SKILL_AUTHORING_GUIDE);
@@ -249,6 +257,18 @@ async function opUpdate(client, params) {
     }
     catch (e) {
         return (0, respond_1.err)(`Couldn't update skill \`${slug}\`: ${errorMessage(e)}`);
+    }
+}
+async function opSetVisibility(client, slug, visibility) {
+    if (visibility !== "public") {
+        return (0, respond_1.err)(`set_visibility only publishes (visibility="public") a skill you created. Un-publishing is human-only — do it from the Dopl web UI.`);
+    }
+    try {
+        const skill = await client.updateSkill(slug, { visibility: "public" });
+        return (0, respond_1.ok)(`Published skill **${skill.name}** (slug: \`${skill.slug}\`) — now visible workspace-wide and referenceable in workflows.`);
+    }
+    catch (e) {
+        return (0, respond_1.err)(`Couldn't publish \`${slug}\`: ${errorMessage(e)}`);
     }
 }
 async function opDelete(client, slug) {

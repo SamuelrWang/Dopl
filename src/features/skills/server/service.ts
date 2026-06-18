@@ -287,9 +287,11 @@ export async function updateSkill(
   // prior state + caller is the owner. Agents can never publish.
   let effectiveVisibility = patch.visibility;
   if (effectiveVisibility !== undefined) {
-    if (ctx.source === "agent") {
-      throw new SkillAgentWriteDisabledError(slug);
-    }
+    // Publishing is creator-gated and one-way (the schema restricts the
+    // value to "public"). Agents MAY publish a skill THEY created — needed
+    // so an agent can reference its own skill in a workflow, which requires
+    // public skills. Agents still can't publish others' skills, and the
+    // one-way schema means they can't un-publish.
     if (skill.createdBy !== ctx.userId) {
       throw new SkillNotFoundError(slug);
     }

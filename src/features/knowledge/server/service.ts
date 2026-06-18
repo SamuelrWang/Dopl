@@ -391,14 +391,27 @@ export async function updateBase(
   let dropAllGrants = false;
 
   if (sharingRequested) {
-    if (ctx.source === "agent") {
+    // Agents MAY publish (private→public) a base they created — needed so an
+    // agent can reference its own KB in a workflow (which requires public
+    // KBs). A "pure publish" is visibility:'public' with no accessMode/team
+    // change. Everything else about sharing scope (accessMode, team grants,
+    // un-publishing) stays human-only.
+    const agentPurePublish =
+      ctx.source === "agent" &&
+      patch.visibility === "public" &&
+      patch.accessMode === undefined &&
+      patch.teamGrants === undefined;
+    if (ctx.source === "agent" && !agentPurePublish) {
       throw new AgentWriteDisabledError(
         base.id,
-        "Sharing scope is a human-only setting — agents cannot change it."
+        "Sharing scope is a human-only setting — an agent can only publish (make public) a base it created."
       );
     }
     const isAdmin = meetsMinRole(ctx.role, "admin");
-    if (base.createdBy !== ctx.userId && !isAdmin) {
+    const isCreator = base.createdBy === ctx.userId;
+    // Agent publish is creator-only (no admin override — an agent acts only
+    // on its own resources). Human path keeps the creator-or-admin rule.
+    if (agentPurePublish ? !isCreator : !isCreator && !isAdmin) {
       throw new ScopeChangeForbiddenError();
     }
 

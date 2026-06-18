@@ -32,6 +32,9 @@ export interface UpdateSkillPatch {
     slug?: string;
     status?: SkillStatus;
     agentWriteEnabled?: boolean;
+    /** One-way publish: the API accepts only "public" here (you can't
+     *  un-publish a skill through this path). */
+    visibility?: "public";
 }
 export declare function updateSkill(t: DoplTransport, slug: string, patch: UpdateSkillPatch): Promise<Skill>;
 export declare function deleteSkill(t: DoplTransport, slug: string): Promise<void>;

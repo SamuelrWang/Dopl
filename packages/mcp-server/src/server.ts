@@ -216,6 +216,7 @@ export function createServer(
       "move_file",
       "restore_file",
       "restore_folder",
+      "set_visibility",
     ]),
     dopl_skill: new Set([
       "create",
@@ -223,6 +224,7 @@ export function createServer(
       "create_file",
       "write_file",
       "rename_file",
+      "set_visibility",
     ]),
     dopl_workflow: new Set([
       "create",

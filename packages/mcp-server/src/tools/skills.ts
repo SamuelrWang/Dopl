@@ -61,6 +61,7 @@ export function registerSkillTools(
           "create_file",
           "write_file",
           "rename_file",
+          "set_visibility",
           "authoring_guide",
         ])
         .describe("Operation to perform."),
@@ -80,6 +81,7 @@ export function registerSkillTools(
       body: z.string().max(1_048_576).optional().describe("op=create: initial SKILL.md content. op=create_file: optional initial body. op=write_file (required): the new full body."),
       expected_version: z.string().optional().describe("op=write_file: the file's version from a prior read_file, to avoid overwriting a concurrent edit (412 on mismatch). Omit to auto-guard against the current version."),
       force: z.boolean().optional().describe("op=write_file: overwrite even if the file changed since you read it. Discards the other edit — use only when intentional."),
+      visibility: z.enum(["public", "private"]).optional().describe("op=set_visibility: 'public' to publish a skill you created (makes it workspace-visible + referenceable in workflows). One-way — 'private' is rejected."),
     },
     async (args): Promise<ToolResponse> => {
       switch (args.op) {
@@ -131,6 +133,11 @@ export function registerSkillTools(
           const miss = missingParams("rename_file", args, ["slug", "file_name", "new_name"]);
           if (miss) return miss;
           return opRenameFile(client, args.slug as string, args.file_name as string, args.new_name as string);
+        }
+        case "set_visibility": {
+          const miss = missingParams("set_visibility", args, ["slug", "visibility"]);
+          if (miss) return miss;
+          return opSetVisibility(client, args.slug as string, args.visibility as string);
         }
         case "authoring_guide":
           return ok(SKILL_AUTHORING_GUIDE);
@@ -307,6 +314,26 @@ async function opUpdate(
     );
   } catch (e) {
     return err(`Couldn't update skill \`${slug}\`: ${errorMessage(e)}`);
+  }
+}
+
+async function opSetVisibility(
+  client: DoplClient,
+  slug: string,
+  visibility: string,
+): Promise<ToolResponse> {
+  if (visibility !== "public") {
+    return err(
+      `set_visibility only publishes (visibility="public") a skill you created. Un-publishing is human-only — do it from the Dopl web UI.`,
+    );
+  }
+  try {
+    const skill = await client.updateSkill(slug, { visibility: "public" });
+    return ok(
+      `Published skill **${skill.name}** (slug: \`${skill.slug}\`) — now visible workspace-wide and referenceable in workflows.`,
+    );
+  } catch (e) {
+    return err(`Couldn't publish \`${slug}\`: ${errorMessage(e)}`);
   }
 }
 

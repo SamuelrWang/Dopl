@@ -69,6 +69,9 @@ export interface UpdateSkillPatch {
   slug?: string;
   status?: SkillStatus;
   agentWriteEnabled?: boolean;
+  /** One-way publish: the API accepts only "public" here (you can't
+   *  un-publish a skill through this path). */
+  visibility?: "public";
 }
 
 export async function updateSkill(

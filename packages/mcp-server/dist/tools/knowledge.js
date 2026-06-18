@@ -69,6 +69,7 @@ function registerKnowledgeTools(register, client) {
             "list_bases", "get_tree", "list_dir", "create_base", "update_base",
             "restore_base", "create_folder", "move_folder", "read_file", "write_file",
             "move_file", "list_trash", "restore_file", "restore_folder", "search",
+            "set_visibility",
         ])
             .describe("Operation to perform."),
         base: zod_1.z.string().optional().describe("Base slug or id. Required for get_tree/list_dir/update_base/restore_base/create_folder/move_folder/read_file/write_file/move_file; optional scope for list_trash/search."),
@@ -86,6 +87,7 @@ function registerKnowledgeTools(register, client) {
         entry_id: zod_1.z.string().optional().describe("restore_file: required entry UUID (from list_trash)."),
         query: zod_1.z.string().optional().describe("search: required free-text query."),
         limit: zod_1.z.number().optional().describe("search: max hits (default 20)."),
+        visibility: zod_1.z.enum(["public", "private"]).optional().describe("op=set_visibility: 'public' to publish a base you created (makes it workspace-visible + referenceable in workflows). One-way — 'private' is rejected."),
     }, async (args) => {
         switch (args.op) {
             case "list_bases":
@@ -169,6 +171,12 @@ function registerKnowledgeTools(register, client) {
                 if (miss)
                     return miss;
                 return opSearch(client, args.query, args.base, args.limit);
+            }
+            case "set_visibility": {
+                const miss = (0, respond_1.missingParams)("set_visibility", args, ["base", "visibility"]);
+                if (miss)
+                    return miss;
+                return opSetVisibility(client, args.base, args.visibility);
             }
         }
     });
@@ -311,6 +319,16 @@ async function opUpdateBase(client, ref, name, description, slug) {
         slug,
     });
     return (0, respond_1.ok)(`Updated **${updated.name}** (slug: \`${updated.slug}\`).`);
+}
+async function opSetVisibility(client, ref, visibility) {
+    if (visibility !== "public") {
+        return (0, respond_1.err)(`set_visibility only publishes (visibility="public") a base you created. Un-publishing and team scope are human-only — use the Dopl web UI.`);
+    }
+    const base = await resolveBaseOr(client, ref);
+    if (isErr(base))
+        return base;
+    const updated = await client.updateKbBase(base.id, { visibility: "public" });
+    return (0, respond_1.ok)(`Published knowledge base **${updated.name}** (slug: \`${updated.slug}\`) — now visible workspace-wide and referenceable in workflows.`);
 }
 async function opRestoreBase(client, ref) {
     // Audit fix #30: was 3 round-trips (listKbBases → listKbTrash →

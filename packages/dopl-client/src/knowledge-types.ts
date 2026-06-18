@@ -98,6 +98,9 @@ export interface KnowledgeBaseUpdateInput {
   description?: string | null;
   slug?: string;
   agentWriteEnabled?: boolean;
+  /** Sharing scope. Via the MCP this is used only to publish
+   *  (private→public); accessMode / team grants stay human-only. */
+  visibility?: KnowledgeVisibility;
 }
 
 export interface KnowledgeWriteFileInput {

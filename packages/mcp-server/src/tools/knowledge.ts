@@ -77,6 +77,7 @@ export function registerKnowledgeTools(register: RegisterTool, client: DoplClien
           "list_bases", "get_tree", "list_dir", "create_base", "update_base",
           "restore_base", "create_folder", "move_folder", "read_file", "write_file",
           "move_file", "list_trash", "restore_file", "restore_folder", "search",
+          "set_visibility",
         ])
         .describe("Operation to perform."),
       base: z.string().optional().describe("Base slug or id. Required for get_tree/list_dir/update_base/restore_base/create_folder/move_folder/read_file/write_file/move_file; optional scope for list_trash/search."),
@@ -94,6 +95,7 @@ export function registerKnowledgeTools(register: RegisterTool, client: DoplClien
       entry_id: z.string().optional().describe("restore_file: required entry UUID (from list_trash)."),
       query: z.string().optional().describe("search: required free-text query."),
       limit: z.number().optional().describe("search: max hits (default 20)."),
+      visibility: z.enum(["public", "private"]).optional().describe("op=set_visibility: 'public' to publish a base you created (makes it workspace-visible + referenceable in workflows). One-way — 'private' is rejected."),
     },
     async (args): Promise<ToolResponse> => {
       switch (args.op) {
@@ -165,6 +167,11 @@ export function registerKnowledgeTools(register: RegisterTool, client: DoplClien
           const miss = missingParams("search", args, ["query"]);
           if (miss) return miss;
           return opSearch(client, args.query as string, args.base, args.limit);
+        }
+        case "set_visibility": {
+          const miss = missingParams("set_visibility", args, ["base", "visibility"]);
+          if (miss) return miss;
+          return opSetVisibility(client, args.base as string, args.visibility as string);
         }
       }
     }
@@ -317,6 +324,20 @@ async function opUpdateBase(client: DoplClient, ref: string, name?: string, desc
   });
   return ok(
     `Updated **${updated.name}** (slug: \`${updated.slug}\`).`
+  );
+}
+
+async function opSetVisibility(client: DoplClient, ref: string, visibility: string): Promise<ToolResponse> {
+  if (visibility !== "public") {
+    return err(
+      `set_visibility only publishes (visibility="public") a base you created. Un-publishing and team scope are human-only — use the Dopl web UI.`,
+    );
+  }
+  const base = await resolveBaseOr(client, ref);
+  if (isErr(base)) return base;
+  const updated = await client.updateKbBase(base.id, { visibility: "public" });
+  return ok(
+    `Published knowledge base **${updated.name}** (slug: \`${updated.slug}\`) — now visible workspace-wide and referenceable in workflows.`,
   );
 }
 
