@@ -465,12 +465,32 @@ async function opListTrash(client: DoplClient, ref?: string): Promise<ToolRespon
 }
 
 async function opRestoreFolder(client: DoplClient, folder_id: string): Promise<ToolResponse> {
-  const folder = await client.restoreKbFolder(folder_id);
+  let folder;
+  try {
+    folder = await client.restoreKbFolder(folder_id);
+  } catch (e) {
+    if (isAlreadyExists(e)) {
+      return err(
+        `Can't restore this folder — an ancestor folder is still in the trash. Restore the ancestor first (dopl_kb(op="list_trash") to find it); restoring a folder brings its contents back.`
+      );
+    }
+    throw e;
+  }
   return ok(`Restored folder **${folder.name}** (id: \`${folder.id}\`).`);
 }
 
 async function opRestoreFile(client: DoplClient, entry_id: string): Promise<ToolResponse> {
-  const entry = await client.restoreKbEntry(entry_id);
+  let entry;
+  try {
+    entry = await client.restoreKbEntry(entry_id);
+  } catch (e) {
+    if (isAlreadyExists(e)) {
+      return err(
+        `Can't restore this entry — its parent folder is still in the trash. Restore the folder first (dopl_kb(op="list_trash") to find it); restoring a folder brings its contents back.`
+      );
+    }
+    throw e;
+  }
   return ok(`Restored entry **${entry.title}** (id: \`${entry.id}\`).`);
 }
 

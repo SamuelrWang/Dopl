@@ -436,11 +436,29 @@ async function opListTrash(client, ref) {
     return (0, respond_1.ok)(lines.join("\n"));
 }
 async function opRestoreFolder(client, folder_id) {
-    const folder = await client.restoreKbFolder(folder_id);
+    let folder;
+    try {
+        folder = await client.restoreKbFolder(folder_id);
+    }
+    catch (e) {
+        if ((0, respond_1.isAlreadyExists)(e)) {
+            return (0, respond_1.err)(`Can't restore this folder — an ancestor folder is still in the trash. Restore the ancestor first (dopl_kb(op="list_trash") to find it); restoring a folder brings its contents back.`);
+        }
+        throw e;
+    }
     return (0, respond_1.ok)(`Restored folder **${folder.name}** (id: \`${folder.id}\`).`);
 }
 async function opRestoreFile(client, entry_id) {
-    const entry = await client.restoreKbEntry(entry_id);
+    let entry;
+    try {
+        entry = await client.restoreKbEntry(entry_id);
+    }
+    catch (e) {
+        if ((0, respond_1.isAlreadyExists)(e)) {
+            return (0, respond_1.err)(`Can't restore this entry — its parent folder is still in the trash. Restore the folder first (dopl_kb(op="list_trash") to find it); restoring a folder brings its contents back.`);
+        }
+        throw e;
+    }
     return (0, respond_1.ok)(`Restored entry **${entry.title}** (id: \`${entry.id}\`).`);
 }
 async function opSearch(client, query, base, limit) {

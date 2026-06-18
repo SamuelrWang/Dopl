@@ -43,6 +43,7 @@ import {
   KnowledgeBaseMismatchError,
   KnowledgeBaseNotFoundError,
   KnowledgeBaseSlugConflictError,
+  KnowledgeParentTrashedError,
   KnowledgePathConflictError,
   KnowledgeStaleVersionError,
   PathTraversalError,
@@ -689,6 +690,22 @@ export async function softDeleteFolder(
   await repo.markFolderDeleted(id);
 }
 
+/**
+ * Refuse a restore when an ancestor folder is still trashed. Restoring a
+ * child alone leaves it alive but unreachable (absent from both the tree
+ * and the trash); the caller must restore the ancestor first (which
+ * cascades to its contents). `folderId` is the parent to walk from —
+ * null (a root-level item) has no ancestors to check.
+ */
+async function assertAncestorsActive(folderId: string | null): Promise<void> {
+  if (!folderId) return;
+  const chain = await repo.listFolderAncestors(folderId);
+  const trashed = chain.find((f) => f.deletedAt !== null);
+  if (trashed) {
+    throw new KnowledgeParentTrashedError(trashed.name, trashed.id);
+  }
+}
+
 export async function restoreFolder(
   ctx: KnowledgeContext,
   id: string
@@ -697,6 +714,7 @@ export async function restoreFolder(
   const base = await repo.findBaseById(folder.knowledgeBaseId, true);
   if (!base) throw new KnowledgeBaseNotFoundError(folder.knowledgeBaseId);
   await assertBaseWritable(ctx, base);
+  await assertAncestorsActive(folder.parentId);
   return repo.restoreFolderRow(id);
 }
 
@@ -856,6 +874,7 @@ export async function restoreEntry(
   const base = await repo.findBaseById(entry.knowledgeBaseId, true);
   if (!base) throw new KnowledgeBaseNotFoundError(entry.knowledgeBaseId);
   await assertBaseWritable(ctx, base);
+  await assertAncestorsActive(entry.folderId);
   return repo.restoreEntryRow(id);
 }
 

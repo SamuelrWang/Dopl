@@ -218,10 +218,40 @@ export async function markSkillDeleted(
     .update({ deleted_at: deletedAt })
     .eq("id", id);
   if (error) throw error;
+  // Cascade-tombstone the skill's still-active files with the SAME
+  // timestamp so a later restore can bring back exactly this cascade
+  // (files trashed earlier on their own keep their own timestamp and
+  // stay in the trash). Without this the files keep deleted_at = NULL —
+  // orphaned, inconsistent rows under a deleted parent.
+  const { error: filesError } = await db
+    .from("skill_files")
+    .update({ deleted_at: deletedAt })
+    .eq("skill_id", id)
+    .is("deleted_at", null);
+  if (filesError) throw filesError;
 }
 
 export async function restoreSkillRow(id: string): Promise<Skill> {
   const db = supabaseAdmin();
+  // Read the deletion timestamp first so we restore only the files that
+  // went down with the skill — not ones the user trashed independently
+  // beforehand (those carry a different timestamp and stay trashed).
+  const { data: existing, error: readError } = await db
+    .from("skills")
+    .select("deleted_at")
+    .eq("id", id)
+    .single();
+  if (readError) throw readError;
+  const cascadeTs = (existing as { deleted_at: string | null } | null)
+    ?.deleted_at;
+  if (cascadeTs) {
+    const { error: filesError } = await db
+      .from("skill_files")
+      .update({ deleted_at: null })
+      .eq("skill_id", id)
+      .eq("deleted_at", cascadeTs);
+    if (filesError) throw filesError;
+  }
   const { data, error } = await db
     .from("skills")
     .update({ deleted_at: null })

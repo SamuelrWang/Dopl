@@ -352,7 +352,13 @@ export async function createFile(
   const skill = await getSkillBySlug(ctx, slug);
   await assertAgentWriteAllowed(ctx, skill);
   if (input.name === PRIMARY_SKILL_FILE_NAME) {
-    throw new SkillFileConflictError(input.name);
+    // The primary file is created by op=create and is immutable via the
+    // file ops — reject explicitly (rather than as a generic "already
+    // exists" conflict) so the reason is clear even if no SKILL.md row
+    // currently exists. Mirrors the rename/delete guards below.
+    throw new SkillPrimaryFileImmutableError(
+      "SKILL.md is the primary file (created with the skill) and can't be added via create_file."
+    );
   }
   const existing = await repo.findFileByName(skill.id, input.name);
   if (existing) throw new SkillFileConflictError(input.name);
