@@ -113,7 +113,7 @@ async function opList(client: DoplClient): Promise<ToolResponse> {
       ? ` (${c.workflow_names.join(", ")})`
       : "";
     const summary = count === 0 ? "empty" : `${plural(count, "workflow")}${names}`;
-    return `- **${c.name}** (slug: \`${c.slug}\`) — ${summary}`;
+    return `- **${c.name}** (slug: \`${c.slug}\` · id: \`${c.id}\`) — ${summary}`;
   });
   return ok(lines.join("\n"));
 }
@@ -122,7 +122,7 @@ async function opGet(client: DoplClient, slug: string): Promise<ToolResponse> {
   const cluster = await client.getCluster(slug);
   const lines: string[] = [];
   lines.push(`# Cluster: ${cluster.name}`);
-  lines.push(`Slug: \`${cluster.slug}\``);
+  lines.push(`Slug: \`${cluster.slug}\` · id: \`${cluster.id}\` · updated ${cluster.updated_at}`);
   if (cluster.description) lines.push(cluster.description);
   lines.push("");
 

@@ -177,7 +177,7 @@ async function opList(client: DoplClient): Promise<ToolResponse> {
     // Legacy `agent_write_enabled` is no longer the gate.
     const visBadge =
       s.visibility === "private" ? " _(private)_" : "";
-    lines.push(`### \`${s.slug}\` — ${s.name}${visBadge}`);
+    lines.push(`### \`${s.slug}\` (id: \`${s.id}\`) — ${s.name}${visBadge}`);
     lines.push(s.description);
     lines.push(`**When to use:** ${s.whenToUse}`);
     if (s.whenNotToUse) {
@@ -196,10 +196,12 @@ async function opGet(client: DoplClient, slug: string): Promise<ToolResponse> {
     const { skill, files, references } = await client.getSkill(slug);
     const lines: string[] = [];
     lines.push(`# ${skill.name} \`${skill.slug}\``);
-    lines.push(`Status: ${skill.status}`);
-    if (skill.visibility === "private") {
-      lines.push("Visibility: private");
-    }
+    lines.push(
+      `id: \`${skill.id}\` · status: ${skill.status} · visibility: ${skill.visibility} · agent-write ${skill.agentWriteEnabled ? "on" : "off"}`,
+    );
+    lines.push(
+      `invocations: ${skill.totalInvocations} · last edited by ${skill.lastEditedSource} · updated ${skill.updatedAt}`,
+    );
     lines.push(`When to use: ${skill.whenToUse}`);
     if (skill.whenNotToUse) {
       lines.push(`When NOT to use: ${skill.whenNotToUse}`);

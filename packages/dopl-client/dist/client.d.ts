@@ -30,6 +30,8 @@ export declare class DoplClient {
     updateWorkflow(idOrSlug: string, updates: {
         name?: string;
         description?: string | null;
+        /** Cluster UUID to group this workflow under, or null to ungroup. */
+        clusterId?: string | null;
     }): Promise<WorkflowRow>;
     deleteWorkflow(idOrSlug: string): Promise<void>;
     setWorkflowGraph(idOrSlug: string, spec: WorkflowGraphSpec): Promise<void>;

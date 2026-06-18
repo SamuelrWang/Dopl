@@ -21,6 +21,7 @@ const WORKFLOW_DESCRIPTION = `Read and AUTHOR Dopl workflows (a header + its con
 - "update_node" — patch a node's fields (\`node_id\` + \`node\`).
 - "remove_node" — delete a node (\`node_id\`); its edges go with it.
 - "connect" / "disconnect" — add/remove an edge (\`from\`,\`to\` = node id or "header").
+- "set_cluster" — group this workflow under a cluster (\`cluster\` = slug or id from dopl_cluster(op='list')); omit \`cluster\` to ungroup.
 
 Typical authoring flow: create → set_graph (or add_node + connect) → get to verify. Node reads = [{kbId} | {kbId,entryId}]; actions = [{skillId}]. kbId/skillId accept the SLUG or the id straight from dopl_kb(op='list_bases') / dopl_skill(op='list'); entryId is an entry uuid. KBs/skills must be public.`;
 const WORKFLOW_ADMIN_DESCRIPTION = `DESTRUCTIVE workflow operations — permanent and irreversible. Confirm intent if the user's phrasing is at all ambiguous. Set \`op\` to one of:
@@ -59,6 +60,7 @@ function registerWorkflowTools(register, client) {
             "remove_node",
             "connect",
             "disconnect",
+            "set_cluster",
         ])
             .describe("Operation to perform."),
         slug: zod_1.z
@@ -83,6 +85,10 @@ function registerWorkflowTools(register, client) {
         node_id: zod_1.z.string().optional().describe("op=update_node/remove_node: target node id (from op=get)."),
         from: zod_1.z.string().optional().describe("op=connect/disconnect: source node id or 'header'."),
         to: zod_1.z.string().optional().describe("op=connect/disconnect: target node id or 'header'."),
+        cluster: zod_1.z
+            .string()
+            .optional()
+            .describe("op=set_cluster: cluster slug or id (from dopl_cluster(op='list')) to group this workflow under. Omit/empty to ungroup it."),
     }, async (args) => {
         switch (args.op) {
             case "list":
@@ -147,6 +153,12 @@ function registerWorkflowTools(register, client) {
                     return miss;
                 return opDisconnect(client, args.slug, args.from, args.to);
             }
+            case "set_cluster": {
+                const miss = (0, respond_1.missingParams)("set_cluster", args, ["slug"]);
+                if (miss)
+                    return miss;
+                return opSetCluster(client, args.slug, args.cluster);
+            }
         }
     });
     register("dopl_workflow_admin", WORKFLOW_ADMIN_DESCRIPTION, {
@@ -191,7 +203,7 @@ async function opGet(client, slug) {
     const wf = await client.getWorkflow(slug);
     const lines = [];
     lines.push(`# Workflow: ${wf.name}`);
-    lines.push(`Slug: \`${wf.slug}\``);
+    lines.push(`Slug: \`${wf.slug}\` · id: \`${wf.id}\`${wf.cluster_id ? ` · cluster id: \`${wf.cluster_id}\`` : " · no cluster"} · updated ${wf.updated_at}`);
     if (wf.description)
         lines.push(wf.description);
     lines.push("");
@@ -342,4 +354,20 @@ async function opDisconnect(client, slug, from, to) {
         throw e;
     }
     return (0, respond_1.ok)(`Disconnected \`${from}\` → \`${to}\` in workflow \`${slug}\`.`);
+}
+async function opSetCluster(client, slug, cluster) {
+    // Empty / omitted → ungroup the workflow.
+    if (!cluster || !cluster.trim()) {
+        const wf = await client.updateWorkflow(slug, { clusterId: null });
+        return (0, respond_1.ok)(`Workflow **${wf.name}** (slug: \`${wf.slug}\`) is now ungrouped (no cluster).`);
+    }
+    // The API takes a cluster UUID; agents hold slugs, so resolve slug-or-id
+    // → id via the cluster list.
+    const { clusters } = await client.listClusters();
+    const match = clusters.find((c) => c.id === cluster || c.slug === cluster);
+    if (!match) {
+        return (0, respond_1.err)(`Cluster not found: \`${cluster}\`. Run dopl_cluster(op="list") to see valid clusters.`);
+    }
+    const wf = await client.updateWorkflow(slug, { clusterId: match.id });
+    return (0, respond_1.ok)(`Grouped workflow **${wf.name}** (slug: \`${wf.slug}\`) under cluster **${match.name}** (slug: \`${match.slug}\`).`);
 }

@@ -176,6 +176,7 @@ function createServer(client, options = {}) {
             "remove_node",
             "connect",
             "disconnect",
+            "set_cluster",
         ]),
         dopl_canvas: new Set(["rename_chat"]),
     };

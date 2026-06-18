@@ -212,13 +212,13 @@ async function opListBases(client: DoplClient): Promise<ToolResponse> {
     return ok("No knowledge bases yet. Create one with `dopl_kb(op='create_base')`.");
   const lines = ["## Knowledge bases\n"];
   for (const b of bases) {
-    // Show visibility — that's the access signal that matters.
-    // The legacy `agent_write_enabled` column is no longer a write
-    // gate; per-resource access lives in the workspace member matrix.
-    const visBadge =
-      b.visibility === "private" ? " _(private)_" : "";
+    // Surface the immutable id alongside the slug (the slug changes on
+    // rename; the id is a stable handle) plus the access signal.
+    const vis = b.visibility === "private" ? "private" : "public";
     const desc = b.description ? `\n  ${b.description}` : "";
-    lines.push(`- **${b.name}** (slug: \`${b.slug}\`)${visBadge}${desc}`);
+    lines.push(
+      `- **${b.name}** (slug: \`${b.slug}\` · id: \`${b.id}\` · ${vis})${desc}`,
+    );
   }
   return ok(lines.join("\n"));
 }
@@ -227,8 +227,10 @@ async function opGetTree(client: DoplClient, ref: string): Promise<ToolResponse>
   const base = await resolveBaseOr(client, ref);
   if (isErr(base)) return base;
   const tree = await client.getKbTree(base.id);
+  const vis = tree.base.visibility === "private" ? "private" : "public";
   const lines = [
     `## ${tree.base.name} \`${tree.base.slug}\``,
+    `id: \`${tree.base.id}\` · ${vis} · agent-write ${tree.base.agentWriteEnabled ? "on" : "off"}`,
     ...(tree.base.description ? [tree.base.description] : []),
     `Folders: ${tree.folders.length} · Entries: ${tree.entries.length}`,
     "",
@@ -368,7 +370,8 @@ async function opReadFile(client: DoplClient, ref: string, path: string): Promis
   const entry = await client.readKbFileByPath(base.id, path);
   const lines = [
     `# ${entry.title}`,
-    `Path: \`${path}\` · Version: \`${entry.updatedAt}\` (pass as expected_version to write_file) · last edited by ${entry.lastEditedSource}`,
+    `Path: \`${path}\` · entry id: \`${entry.id}\` · type: ${entry.entryType}`,
+    `Version: \`${entry.updatedAt}\` (pass as expected_version to write_file) · last edited by ${entry.lastEditedSource} · created ${entry.createdAt}`,
     "",
     "---",
     "",

@@ -94,7 +94,7 @@ async function opList(client) {
             ? ` (${c.workflow_names.join(", ")})`
             : "";
         const summary = count === 0 ? "empty" : `${plural(count, "workflow")}${names}`;
-        return `- **${c.name}** (slug: \`${c.slug}\`) — ${summary}`;
+        return `- **${c.name}** (slug: \`${c.slug}\` · id: \`${c.id}\`) — ${summary}`;
     });
     return (0, respond_1.ok)(lines.join("\n"));
 }
@@ -102,7 +102,7 @@ async function opGet(client, slug) {
     const cluster = await client.getCluster(slug);
     const lines = [];
     lines.push(`# Cluster: ${cluster.name}`);
-    lines.push(`Slug: \`${cluster.slug}\``);
+    lines.push(`Slug: \`${cluster.slug}\` · id: \`${cluster.id}\` · updated ${cluster.updated_at}`);
     if (cluster.description)
         lines.push(cluster.description);
     lines.push("");

@@ -233,6 +233,7 @@ export function createServer(
       "remove_node",
       "connect",
       "disconnect",
+      "set_cluster",
     ]),
     dopl_canvas: new Set(["rename_chat"]),
   };

@@ -125,7 +125,12 @@ export class DoplClient {
 
   async updateWorkflow(
     idOrSlug: string,
-    updates: { name?: string; description?: string | null }
+    updates: {
+      name?: string;
+      description?: string | null;
+      /** Cluster UUID to group this workflow under, or null to ungroup. */
+      clusterId?: string | null;
+    }
   ): Promise<WorkflowRow> {
     return this.transport.request<WorkflowRow>(
       `/api/workflows/${encodeURIComponent(idOrSlug)}`,

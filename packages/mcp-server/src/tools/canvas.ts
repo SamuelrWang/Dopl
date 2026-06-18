@@ -58,7 +58,9 @@ async function opList(client: DoplClient): Promise<ToolResponse> {
   for (const p of panels) {
     const label = panelLabel(p.panel_type);
     const detail = panelDetail(p);
-    lines.push(`- **${label}**${detail ? ` — ${detail}` : ""}`);
+    // Surface panel_id — it's the handle rename_chat (and future panel
+    // ops) take, and the old listing hid it entirely.
+    lines.push(`- **${label}** \`${p.panel_id}\`${detail ? ` — ${detail}` : ""}`);
   }
 
   return { content: [{ type: "text" as const, text: lines.join("\n") }] };

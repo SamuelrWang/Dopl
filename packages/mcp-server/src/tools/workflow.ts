@@ -21,6 +21,7 @@ const WORKFLOW_DESCRIPTION = `Read and AUTHOR Dopl workflows (a header + its con
 - "update_node" — patch a node's fields (\`node_id\` + \`node\`).
 - "remove_node" — delete a node (\`node_id\`); its edges go with it.
 - "connect" / "disconnect" — add/remove an edge (\`from\`,\`to\` = node id or "header").
+- "set_cluster" — group this workflow under a cluster (\`cluster\` = slug or id from dopl_cluster(op='list')); omit \`cluster\` to ungroup.
 
 Typical authoring flow: create → set_graph (or add_node + connect) → get to verify. Node reads = [{kbId} | {kbId,entryId}]; actions = [{skillId}]. kbId/skillId accept the SLUG or the id straight from dopl_kb(op='list_bases') / dopl_skill(op='list'); entryId is an entry uuid. KBs/skills must be public.`;
 
@@ -69,6 +70,7 @@ export function registerWorkflowTools(
           "remove_node",
           "connect",
           "disconnect",
+          "set_cluster",
         ])
         .describe("Operation to perform."),
       slug: z
@@ -93,6 +95,12 @@ export function registerWorkflowTools(
       node_id: z.string().optional().describe("op=update_node/remove_node: target node id (from op=get)."),
       from: z.string().optional().describe("op=connect/disconnect: source node id or 'header'."),
       to: z.string().optional().describe("op=connect/disconnect: target node id or 'header'."),
+      cluster: z
+        .string()
+        .optional()
+        .describe(
+          "op=set_cluster: cluster slug or id (from dopl_cluster(op='list')) to group this workflow under. Omit/empty to ungroup it.",
+        ),
     },
     async (args): Promise<ToolResponse> => {
       switch (args.op) {
@@ -153,6 +161,11 @@ export function registerWorkflowTools(
           if (miss) return miss;
           return opDisconnect(client, args.slug as string, args.from as string, args.to as string);
         }
+        case "set_cluster": {
+          const miss = missingParams("set_cluster", args, ["slug"]);
+          if (miss) return miss;
+          return opSetCluster(client, args.slug as string, args.cluster as string | undefined);
+        }
       }
     },
   );
@@ -209,7 +222,9 @@ async function opGet(client: DoplClient, slug: string): Promise<ToolResponse> {
   const wf: WorkflowDetail = await client.getWorkflow(slug);
   const lines: string[] = [];
   lines.push(`# Workflow: ${wf.name}`);
-  lines.push(`Slug: \`${wf.slug}\``);
+  lines.push(
+    `Slug: \`${wf.slug}\` · id: \`${wf.id}\`${wf.cluster_id ? ` · cluster id: \`${wf.cluster_id}\`` : " · no cluster"} · updated ${wf.updated_at}`,
+  );
   if (wf.description) lines.push(wf.description);
   lines.push("");
 
@@ -426,4 +441,29 @@ async function opDisconnect(
     throw e;
   }
   return ok(`Disconnected \`${from}\` → \`${to}\` in workflow \`${slug}\`.`);
+}
+
+async function opSetCluster(
+  client: DoplClient,
+  slug: string,
+  cluster: string | undefined,
+): Promise<ToolResponse> {
+  // Empty / omitted → ungroup the workflow.
+  if (!cluster || !cluster.trim()) {
+    const wf = await client.updateWorkflow(slug, { clusterId: null });
+    return ok(`Workflow **${wf.name}** (slug: \`${wf.slug}\`) is now ungrouped (no cluster).`);
+  }
+  // The API takes a cluster UUID; agents hold slugs, so resolve slug-or-id
+  // → id via the cluster list.
+  const { clusters } = await client.listClusters();
+  const match = clusters.find((c) => c.id === cluster || c.slug === cluster);
+  if (!match) {
+    return err(
+      `Cluster not found: \`${cluster}\`. Run dopl_cluster(op="list") to see valid clusters.`,
+    );
+  }
+  const wf = await client.updateWorkflow(slug, { clusterId: match.id });
+  return ok(
+    `Grouped workflow **${wf.name}** (slug: \`${wf.slug}\`) under cluster **${match.name}** (slug: \`${match.slug}\`).`,
+  );
 }
