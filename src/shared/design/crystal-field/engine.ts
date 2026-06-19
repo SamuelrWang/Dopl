@@ -46,6 +46,7 @@ export class CrystalFieldEngine {
   private tDur = new Float32Array(0);
   private glow = new Float32Array(0);
   private holdUntil = new Float32Array(0);
+  private cursorTile = new Uint8Array(0); // 1 = last excited by the cursor (uses fast cursor timing), 0 = ambient
 
   private px = -9999;
   private py = -9999;
@@ -145,6 +146,7 @@ export class CrystalFieldEngine {
     this.tDur = new Float32Array(n).fill(this.cfg.flipDuration);
     this.glow = new Float32Array(n);
     this.holdUntil = new Float32Array(n);
+    this.cursorTile = new Uint8Array(n);
   }
 
   private setTarget(k: number, tgt: number, dur: number, now: number): void {
@@ -173,7 +175,8 @@ export class CrystalFieldEngine {
 
     const draw: number[] = [];
     for (let k = 0; k < f.n; k++) {
-      let excite = 0;
+      let cursorExcite = 0;
+      let ambientExcite = 0;
       const occ = this.occ;
       const hidden =
         occ != null && f.cx[k] > occ.l && f.cx[k] < occ.r && f.cy[k] > occ.t && f.cy[k] < occ.b;
@@ -184,7 +187,7 @@ export class CrystalFieldEngine {
           const dy = f.cy[k] - this.py;
           const d2 = dx * dx + dy * dy;
           if (d2 < r2) {
-            excite = Math.pow(1 - Math.sqrt(d2) / cfg.revealRadius, cfg.cursorFalloff);
+            cursorExcite = Math.pow(1 - Math.sqrt(d2) / cfg.revealRadius, cfg.cursorFalloff);
           }
         }
         if (cfg.ambientEnabled) {
@@ -198,27 +201,37 @@ export class CrystalFieldEngine {
             Math.sin(wy * 1.3 + at * 1.1) * 0.4 +
             Math.sin((wx - wy) * 0.6 + at * 0.3) * 0.3;
           const n01 = 0.5 + nz * 0.28 + f.jit[k] * cfg.ambientJitter;
-          const e =
+          ambientExcite =
             smoothstep(cfg.ambientThreshold, cfg.ambientThreshold + cfg.ambientSoftness, n01) *
             cfg.ambientPeak;
-          if (e > excite) excite = e;
         }
       }
 
+      const excite = Math.max(cursorExcite, ambientExcite);
+
       if (excite > 0.04) {
-        this.holdUntil[k] = now + cfg.lingerDuration * (0.4 + 0.6 * excite);
-        this.setTarget(k, 1, cfg.flipDuration, now);
+        // Cursor-driven tiles use fast, no-delay timing; ambient tiles use the
+        // slow timing (excite-scaled linger off → flip-back trails the path).
+        if (cursorExcite >= ambientExcite) {
+          this.cursorTile[k] = 1;
+          this.holdUntil[k] = now + cfg.cursorLinger;
+          this.setTarget(k, 1, cfg.cursorFlipDuration, now);
+        } else {
+          this.cursorTile[k] = 0;
+          this.holdUntil[k] = now + cfg.lingerDuration * (cfg.lingerExciteScale ? 0.4 + 0.6 * excite : 1);
+          this.setTarget(k, 1, cfg.flipDuration, now);
+        }
         if (excite > this.glow[k]) this.glow[k] = excite;
       } else if (now > this.holdUntil[k]) {
-        this.setTarget(k, 0, cfg.driftBackDuration, now);
+        const backDur = this.cursorTile[k] ? cfg.cursorFlipDuration : cfg.driftBackDuration;
+        this.setTarget(k, 0, backDur, now);
       }
 
       if (this.value[k] !== this.target[k] || this.tStart[k] === now) {
         const p = Math.min(1, (now - this.tStart[k]) / this.tDur[k]);
-        // Flip-out eases in/out (snappy reveal); flip-back runs at a steady
-        // linear rate so the return is a set, gradual speed — not the
-        // front-loaded easeOut snap that made it collapse as fast as the flip.
-        const e = this.target[k] === 1 ? easeInOut(p) : p;
+        // flipLinear: one constant linear speed in both directions. Otherwise the
+        // original feel — eased reveal, linear return.
+        const e = cfg.flipLinear ? p : this.target[k] === 1 ? easeInOut(p) : p;
         this.value[k] = this.vFrom[k] + (this.target[k] - this.vFrom[k]) * e;
       }
       if (this.glow[k] > 0) this.glow[k] = Math.max(0, this.glow[k] - glowDecay);

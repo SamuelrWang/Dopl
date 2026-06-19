@@ -57,7 +57,7 @@ function precomputeBlades(cfg: CrystalFieldConfig, w: number, h: number, diag: n
         cx: sx + ux * hl,
         cy: sy + uy * hl,
         hl,
-        hw: sh.wid / 2,
+        hw: (sh.wid * cfg.shardWidthScale) / 2,
         depth: sh.depth,
         hue: sh.hue,
       };

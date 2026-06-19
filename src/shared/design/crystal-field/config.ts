@@ -42,6 +42,7 @@ export type CrystalFieldConfig = {
   // more of a straight-sided prism rising to a point near the top; lower = a
   // triangular/mountain silhouette.
   bladeKnee: number; // 0..1 (fraction of length kept full-width before coning)
+  shardWidthScale: number; // multiplies every shard's px width — <1 thins the columns for a small/contained field so they don't read as fat in a narrow panel
 
   // facets — vertical faces that give a column its 3D solidity
   facetCount: number; // faces across a column's width
@@ -76,6 +77,10 @@ export type CrystalFieldConfig = {
   lingerDuration: number; // hold lit after trigger passes
   driftBackDuration: number; // back -> front
   afterglowFactor: number; // bloom fades this much slower than the flip back
+  flipLinear: boolean; // true = one constant linear speed both directions; false = eased reveal + linear return (original)
+  lingerExciteScale: boolean; // true = brighter tiles linger longer (original); false = constant linger so flip-back trails the cursor's path
+  cursorFlipDuration: number; // flip duration for CURSOR-driven tiles (both ways) — keep short for a responsive, no-delay follow
+  cursorLinger: number; // hold for cursor-driven tiles before flipping back (0 = snap back as the cursor leaves). Ambient tiles still use lingerDuration.
 
   // look
   litFloor: number; // dimmest a revealed back face draws (afterglow base)
@@ -119,6 +124,7 @@ export const DEFAULT_CRYSTAL_CONFIG: CrystalFieldConfig = {
   hueSpread: 0.16,
 
   bladeKnee: 0.6,
+  shardWidthScale: 1,
   facetCount: 3,
   facetShade: 0.5,
   facetEdge: 0.45,
@@ -147,6 +153,10 @@ export const DEFAULT_CRYSTAL_CONFIG: CrystalFieldConfig = {
   lingerDuration: 1200,
   driftBackDuration: 1100, // steady linear return; longer = more gradual flip-back
   afterglowFactor: 1.45,
+  flipLinear: false,
+  lingerExciteScale: true,
+  cursorFlipDuration: 300,
+  cursorLinger: 1200,
 
   litFloor: 0.74,
   glintStrength: 0.95,
