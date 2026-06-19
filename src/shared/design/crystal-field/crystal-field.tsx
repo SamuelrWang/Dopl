@@ -11,6 +11,10 @@ type CrystalFieldProps = {
   /** CSS selector for the panel the field frames; its bounding box is skipped
    *  during excitation (perf). Re-read on resize. */
   occludeSelector?: string;
+  /** "window" (default) fills the viewport; "container" sizes to the canvas's
+   *  own laid-out box so the field can live inside a bounded panel. The parent
+   *  must be positioned (the canvas is absolutely inset to it). */
+  mode?: "window" | "container";
 };
 
 /**
@@ -18,20 +22,23 @@ type CrystalFieldProps = {
  * open — on cursor proximity and via a slow ambient ripple — to reveal hidden
  * iridescent crystal columns. Decorative; renders nothing for screen readers.
  */
-export function CrystalField({ className, config, occludeSelector }: CrystalFieldProps) {
+export function CrystalField({ className, config, occludeSelector, mode = "window" }: CrystalFieldProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const engine = new CrystalFieldEngine(canvas, { ...DEFAULT_CRYSTAL_CONFIG, ...config });
+    const engine = new CrystalFieldEngine(canvas, { ...DEFAULT_CRYSTAL_CONFIG, ...config }, mode);
 
     const syncOcclusion = () => {
       const el = occludeSelector ? document.querySelector(occludeSelector) : null;
       if (!el) return engine.setOcclusionRect(null);
       const r = el.getBoundingClientRect();
-      engine.setOcclusionRect({ l: r.left, t: r.top, r: r.right, b: r.bottom });
+      // Tiles are canvas-local; in container mode shift the occlusion box by the
+      // canvas origin so it lines up with the bounded field.
+      const o = mode === "container" ? canvas.getBoundingClientRect() : { left: 0, top: 0 };
+      engine.setOcclusionRect({ l: r.left - o.left, t: r.top - o.top, r: r.right - o.left, b: r.bottom - o.top });
     };
 
     engine.start();

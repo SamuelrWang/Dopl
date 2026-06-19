@@ -12,6 +12,7 @@
 
 // ── Liquid glass primitives (canonical) ────────────────────────────
 export { GlassCard, GlassDivider } from "./glass-card";
+export { LiquidGlass } from "./liquid-glass";
 export { GlassNavbar, GlassNavLink } from "./glass-navbar";
 export { StatusDot, type StatusDotState } from "./status-dot";
 export { MonoLabel } from "./mono-label";

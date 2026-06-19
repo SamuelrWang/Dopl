@@ -2,6 +2,17 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   /**
+   * Expose the Google OAuth client ID to the browser for Google One Tap. The
+   * client ID is not a secret (One Tap embeds it in the page), so we alias the
+   * existing server-side GOOGLE_CLIENT_ID into the NEXT_PUBLIC_ name the One Tap
+   * component reads — no duplicate Vercel env needed. Empty when unset → One Tap
+   * stays disabled.
+   */
+  env: {
+    NEXT_PUBLIC_GOOGLE_CLIENT_ID:
+      process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? process.env.GOOGLE_CLIENT_ID ?? "",
+  },
+  /**
    * Keep the workspace MCP packages external (require()'d from node_modules
    * at runtime) rather than bundled. They ship pre-compiled `dist/` and
    * `@dopl/mcp-server` reads its own package.json at runtime (version.ts),

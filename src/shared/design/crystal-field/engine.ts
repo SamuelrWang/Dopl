@@ -5,6 +5,11 @@ import { drawActiveTiles } from "./render";
 
 export type OcclusionRect = { l: number; t: number; r: number; b: number };
 
+/** Where the engine reads its size from. "window" = full viewport (default;
+ *  the auth-shell background). "container" = the canvas's own laid-out box, so
+ *  the field can live inside a bounded panel rather than the whole screen. */
+export type CrystalFieldMode = "window" | "container";
+
 const easeInOut = (t: number) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
 
 /**
@@ -17,6 +22,12 @@ export class CrystalFieldEngine {
   private readonly ctx: CanvasRenderingContext2D;
   private readonly cfg: CrystalFieldConfig;
   private readonly reduced: boolean;
+  private readonly mode: CrystalFieldMode;
+  private ro: ResizeObserver | null = null;
+  // canvas-origin offset in client coords; kept current so pointer math works
+  // when the field is a bounded panel rather than the full viewport.
+  private originX = 0;
+  private originY = 0;
 
   private readonly rest: HTMLCanvasElement;
   private readonly frontRgb: Rgb;
@@ -44,12 +55,13 @@ export class CrystalFieldEngine {
   private raf = 0;
   private last = 0;
 
-  constructor(canvas: HTMLCanvasElement, cfg: CrystalFieldConfig) {
+  constructor(canvas: HTMLCanvasElement, cfg: CrystalFieldConfig, mode: CrystalFieldMode = "window") {
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("CrystalFieldEngine: 2D context unavailable");
     this.canvas = canvas;
     this.ctx = ctx;
     this.cfg = cfg;
+    this.mode = mode;
     this.reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     this.rest = document.createElement("canvas");
     this.frontRgb = hexToRgb(cfg.tileFront);
@@ -62,6 +74,12 @@ export class CrystalFieldEngine {
 
   start(): void {
     this.resize();
+    // Container mode tracks its own box (panel resizes independently of the
+    // window); window mode only needs the viewport resize.
+    if (this.mode === "container") {
+      this.ro = new ResizeObserver(this.onResize);
+      this.ro.observe(this.canvas);
+    }
     window.addEventListener("resize", this.onResize);
     if (this.reduced) {
       this.drawStatic();
@@ -76,6 +94,7 @@ export class CrystalFieldEngine {
 
   destroy(): void {
     cancelAnimationFrame(this.raf);
+    this.ro?.disconnect();
     window.removeEventListener("resize", this.onResize);
     window.removeEventListener("mousemove", this.onMove);
     window.removeEventListener("mouseleave", this.onLeave);
@@ -84,8 +103,10 @@ export class CrystalFieldEngine {
 
   private onResize = () => this.resize();
   private onMove = (e: MouseEvent) => {
-    this.px = e.clientX;
-    this.py = e.clientY;
+    // Tiles live in canvas-local coords; in container mode subtract the canvas
+    // origin so cursor proximity lines up with the bounded field.
+    this.px = e.clientX - this.originX;
+    this.py = e.clientY - this.originY;
     this.pointerOn = true;
   };
   private onLeave = () => {
@@ -93,8 +114,16 @@ export class CrystalFieldEngine {
   };
 
   private resize(): void {
-    this.w = window.innerWidth;
-    this.h = window.innerHeight;
+    if (this.mode === "container") {
+      const rect = this.canvas.getBoundingClientRect();
+      this.w = Math.max(1, Math.round(rect.width));
+      this.h = Math.max(1, Math.round(rect.height));
+      this.originX = rect.left;
+      this.originY = rect.top;
+    } else {
+      this.w = window.innerWidth;
+      this.h = window.innerHeight;
+    }
     // capped low: decorative blurry background doesn't need full retina res,
     // and fill-rate is the main per-frame cost.
     this.dpr = Math.min(window.devicePixelRatio || 1, 1.5);
