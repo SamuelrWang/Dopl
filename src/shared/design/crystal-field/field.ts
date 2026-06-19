@@ -1,9 +1,6 @@
 import type { CrystalFieldConfig } from "./config";
 import { hexToRgb, lerpRgb, makePalette, prismRamp, smoothstep, type Rgb } from "./color";
 
-// Fraction along a column (0 = off-screen base, 1 = tip) where the full-width
-// rectangular body starts coning down to the termination point.
-const BLADE_KNEE = 0.6;
 // Half-width (in local-facet units) of the bright edge line between faces.
 const FACET_EDGE_W = 0.16;
 // Direction the faces are lit from, in facet-normal radians (-PI/2..PI/2).
@@ -121,7 +118,7 @@ export function buildField(w: number, h: number, cfg: CrystalFieldConfig): TileF
 
       // width profile: full rectangle to the knee, then cone to a point
       const s = (along + 1) / 2; // 0 base .. 1 tip
-      const prof = s < BLADE_KNEE ? 1 : 1 - (s - BLADE_KNEE) / (1 - BLADE_KNEE);
+      const prof = s < cfg.bladeKnee ? 1 : 1 - (s - cfg.bladeKnee) / (1 - cfg.bladeKnee);
       if (prof <= 0) continue;
 
       const across = (dx * b.vx + dy * b.vy) / b.hw;

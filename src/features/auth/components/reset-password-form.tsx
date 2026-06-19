@@ -79,7 +79,7 @@ export function ResetPasswordForm() {
         <button
           type="submit"
           disabled={pending}
-          className="mt-[30px] flex h-[50px] w-full items-center justify-center rounded-[10px] bg-[#181818] text-[16px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+          className="mt-[30px] flex h-[50px] w-full cursor-pointer items-center justify-center rounded-[10px] bg-[#181818] text-[16px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
         >
           {pending ? "Updating…" : "Update password"}
         </button>
@@ -132,7 +132,7 @@ function Field({
           <button
             type="button"
             onClick={toggle}
-            className="text-[#9a9a9a] transition-colors hover:text-[#181818]"
+            className="cursor-pointer text-[#9a9a9a] transition-colors hover:text-[#181818]"
             aria-label={showToggle ? "Hide password" : "Show password"}
           >
             <EyeIcon off={!!showToggle} />

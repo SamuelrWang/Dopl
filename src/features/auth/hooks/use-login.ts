@@ -43,6 +43,9 @@ export function useLogin() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [pending, setPending] = useState<Pending>(null);
+  // True after a failed password sign-in — used to surface the otherwise-hidden
+  // "Forgot password?" link only when it's actually relevant.
+  const [signInFailed, setSignInFailed] = useState(false);
 
   const supabase = getSupabaseBrowser();
 
@@ -61,13 +64,21 @@ export function useLogin() {
 
   async function signInWithPassword(e: React.FormEvent) {
     e.preventDefault();
-    await run("password", async () => {
+    setError(null);
+    setMessage(null);
+    setSignInFailed(false);
+    setPending("password");
+    try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
-      // Session persisted by the browser client; redirect is handled by the
-      // page once the session lands. Land on the resolved destination.
+      // Session persisted by the browser client; land on the resolved destination.
       window.location.assign(redirectTo);
-    });
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+      setSignInFailed(true);
+    } finally {
+      setPending(null);
+    }
   }
 
   async function signUpWithPassword() {
@@ -142,6 +153,7 @@ export function useLogin() {
     error,
     message,
     pending,
+    signInFailed,
     signInWithPassword,
     signUpWithPassword,
     sendMagicLink,

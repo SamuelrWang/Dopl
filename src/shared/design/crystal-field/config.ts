@@ -38,6 +38,11 @@ export type CrystalFieldConfig = {
   depthDarken: number; // how dark the farthest column (depth=0) goes vs nearest (depth=1); 0..1
   hueSpread: number; // width of the ramp window a single column spans across its faces; 0..1
 
+  // shape — where along a column the full-width body cones to its tip. Higher =
+  // more of a straight-sided prism rising to a point near the top; lower = a
+  // triangular/mountain silhouette.
+  bladeKnee: number; // 0..1 (fraction of length kept full-width before coning)
+
   // facets — vertical faces that give a column its 3D solidity
   facetCount: number; // faces across a column's width
   facetShade: number; // max brightness drop on faces angled away from the light; 0..1
@@ -113,6 +118,7 @@ export const DEFAULT_CRYSTAL_CONFIG: CrystalFieldConfig = {
   depthDarken: 0.74,
   hueSpread: 0.16,
 
+  bladeKnee: 0.6,
   facetCount: 3,
   facetShade: 0.5,
   facetEdge: 0.45,

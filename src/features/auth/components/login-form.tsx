@@ -18,6 +18,7 @@ export function LoginForm() {
     error,
     message,
     pending,
+    signInFailed,
     signInWithPassword,
     signUpWithPassword,
     sendMagicLink,
@@ -30,15 +31,19 @@ export function LoginForm() {
 
   return (
     <div className="w-full max-w-[376px]" style={{ animation: "loginFadeIn 0.6s ease-out both" }}>
-      {/* Brand */}
-      <h1
-        className="text-[26px] font-medium text-[#181818]"
-        style={{ fontFamily: "var(--font-playfair), Georgia, serif", fontStyle: "italic" }}
-      >
-        Dopl
-      </h1>
+      {/* Brand: logo mark above wordmark */}
+      <div className="flex flex-col items-start gap-2">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/favicons/android-chrome-512x512.png" alt="Dopl" className="h-9 w-9 rounded-[7px]" />
+        <span
+          className="text-[24px] font-medium text-[#181818]"
+          style={{ fontFamily: "var(--font-playfair), Georgia, serif", fontStyle: "italic" }}
+        >
+          Dopl
+        </span>
+      </div>
 
-      <h2 className="mt-12 text-[42px] font-bold leading-none tracking-[-1px] text-[#181818]">
+      <h2 className="mt-9 text-[38px] font-bold leading-none tracking-[-1px] text-[#181818]">
         Sign in
       </h2>
 
@@ -70,8 +75,7 @@ export function LoginForm() {
               autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="Johndoe@gmail.com"
-              className="w-full bg-transparent text-[15px] text-[#181818] placeholder:italic placeholder:text-[#9a9a9a] focus:outline-none"
+              className="w-full bg-transparent text-[15px] text-[#181818] focus:outline-none"
             />
           </div>
         </div>
@@ -89,13 +93,12 @@ export function LoginForm() {
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••"
-              className="w-full bg-transparent text-[15px] text-[#181818] placeholder:text-[#9a9a9a] focus:outline-none"
+              className="w-full bg-transparent text-[15px] text-[#181818] focus:outline-none"
             />
             <button
               type="button"
               onClick={() => setShowPassword((s) => !s)}
-              className="text-[#9a9a9a] transition-colors hover:text-[#181818]"
+              className="cursor-pointer text-[#9a9a9a] transition-colors hover:text-[#181818]"
               aria-label={showPassword ? "Hide password" : "Show password"}
             >
               <EyeIcon off={showPassword} />
@@ -103,6 +106,17 @@ export function LoginForm() {
           </div>
           {/* Meter only — the field doubles for sign-in, so no nagging checklist. */}
           <PasswordRequirements password={password} showChecklist={false} />
+          {/* Forgot link appears only after a failed sign-in, to reduce clutter. */}
+          {signInFailed && (
+            <button
+              type="button"
+              onClick={resetPassword}
+              disabled={busy}
+              className="mt-2 cursor-pointer text-[13px] text-[#181818] hover:underline disabled:opacity-60"
+            >
+              {pending === "reset" ? "Sending reset link…" : "Forgot password?"}
+            </button>
+          )}
         </div>
 
         {/* Remember */}
@@ -120,7 +134,7 @@ export function LoginForm() {
         <button
           type="submit"
           disabled={busy}
-          className="mt-[30px] flex h-[50px] w-full items-center justify-center rounded-[10px] bg-[#181818] text-[16px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+          className="mt-[30px] flex h-[50px] w-full cursor-pointer items-center justify-center rounded-[10px] bg-[#181818] text-[16px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
         >
           {pending === "password" ? "Signing in…" : "Sign in"}
         </button>
@@ -134,19 +148,11 @@ export function LoginForm() {
             type="button"
             onClick={signUpWithPassword}
             disabled={busy}
-            className="font-medium text-[#181818] hover:underline disabled:opacity-60"
+            className="cursor-pointer font-medium text-[#181818] hover:underline disabled:opacity-60"
           >
             {pending === "signup" ? "Creating…" : "Sign up"}
           </button>
         </p>
-        <button
-          type="button"
-          onClick={resetPassword}
-          disabled={busy}
-          className="text-[15px] text-[#181818] hover:underline disabled:opacity-60"
-        >
-          {pending === "reset" ? "Sending…" : "Forgot Password"}
-        </button>
       </div>
 
       {/* Magic-link fallback */}
@@ -154,13 +160,13 @@ export function LoginForm() {
         type="button"
         onClick={sendMagicLink}
         disabled={busy}
-        className="mt-2 block text-[13px] text-[#9a9a9a] hover:text-[#181818] hover:underline disabled:opacity-60"
+        className="mt-2 block cursor-pointer text-[13px] text-[#9a9a9a] hover:text-[#181818] hover:underline disabled:opacity-60"
       >
         {pending === "magic" ? "Sending link…" : "Email me a sign-in link instead"}
       </button>
 
       {/* Socials */}
-      <div className="mt-11 flex gap-7">
+      <div className="mt-8 flex gap-7">
         <SocialButton label="Continue with Google" onClick={() => signInWithProvider("google")} disabled={busy}>
           <GoogleIcon />
         </SocialButton>
@@ -169,7 +175,7 @@ export function LoginForm() {
         </SocialButton>
       </div>
 
-      <p className="mt-9 text-[12px] leading-relaxed text-[#9a9a9a]">
+      <p className="mt-7 text-[12px] leading-relaxed text-[#9a9a9a]">
         By continuing, you agree to our{" "}
         <Link href="/terms" className="text-[#181818] underline">Terms of Service</Link> and{" "}
         <Link href="/privacy" className="text-[#181818] underline">Privacy Policy</Link>.
@@ -196,7 +202,7 @@ function SocialButton({
       title={label}
       onClick={onClick}
       disabled={disabled}
-      className="flex h-16 w-16 items-center justify-center rounded-full bg-white shadow-[0_6px_18px_rgba(0,0,0,0.06)] transition-transform hover:-translate-y-0.5 disabled:opacity-60"
+      className="flex h-14 w-14 cursor-pointer items-center justify-center rounded-full bg-white shadow-[0_6px_18px_rgba(0,0,0,0.06)] transition-transform hover:-translate-y-0.5 disabled:opacity-60"
     >
       {children}
     </button>
@@ -233,7 +239,7 @@ function EyeIcon({ off }: { off: boolean }) {
 
 function GoogleIcon() {
   return (
-    <svg className="h-[30px] w-[30px]" viewBox="0 0 48 48">
+    <svg className="h-[26px] w-[26px]" viewBox="0 0 48 48">
       <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.7-6.1 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C36.2 6.6 30.5 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.3-.4-3.5z" />
       <path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 18.9 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C36.2 6.6 30.5 4 24 4 16.3 4 9.7 8.3 6.3 14.7z" />
       <path fill="#4CAF50" d="M24 44c6.4 0 12-2.5 16-6.5l-7.4-6.2C30.7 33 27.5 34 24 34c-5.2 0-9.6-3.3-11.3-7.9l-6.6 5C9.5 39.6 16.2 44 24 44z" />
@@ -244,7 +250,7 @@ function GoogleIcon() {
 
 function GitHubIcon() {
   return (
-    <svg className="h-[30px] w-[30px]" viewBox="0 0 24 24" fill="#181818">
+    <svg className="h-[26px] w-[26px]" viewBox="0 0 24 24" fill="#181818">
       <path d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.2.8-.5v-2c-3.2.7-3.9-1.4-3.9-1.4-.5-1.3-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.7 1.3 3.4 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.8 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.3 1.2 1-.3 2-.4 3-.4s2 .1 3 .4c2.3-1.6 3.3-1.2 3.3-1.2.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.5-2.7 5.5-5.3 5.8.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.5 4.6-1.5 7.9-5.8 7.9-10.9C23.5 5.7 18.3.5 12 .5z" />
     </svg>
   );

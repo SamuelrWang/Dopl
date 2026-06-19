@@ -1,16 +1,45 @@
 "use client";
 
-import { evaluatePassword, type PasswordStrength } from "../password-policy";
+import { useEffect, useState } from "react";
+import { evaluatePassword } from "../password-policy";
 
-const STRENGTH_META: Record<PasswordStrength, { label: string; color: string; bars: number }> = {
-  weak: { label: "Weak", color: "#e5534b", bars: 1 },
-  fair: { label: "Fair", color: "#d99b2b", bars: 2 },
-  good: { label: "Good", color: "#3e8e5a", bars: 3 },
-  strong: { label: "Strong", color: "#2f7d4f", bars: 4 },
-};
+// zxcvbn score 0–4 → meter presentation.
+const STRENGTH_META = [
+  { label: "Very weak", color: "#e5534b", bars: 1 },
+  { label: "Weak", color: "#e5534b", bars: 1 },
+  { label: "Fair", color: "#d99b2b", bars: 2 },
+  { label: "Good", color: "#3e8e5a", bars: 3 },
+  { label: "Strong", color: "#2f7d4f", bars: 4 },
+] as const;
 
-/** Strength meter + (optional) live requirements checklist for set-password
- *  surfaces. Light Arcana styling. Renders nothing for an empty password. */
+// zxcvbn is heavy (dictionaries); load it once, lazily, off the initial bundle.
+// Until it resolves, fall back to the policy check-count so the meter still moves.
+type Scorer = (pw: string) => number;
+let scorer: Scorer | null = null;
+let loading: Promise<void> | null = null;
+
+function ensureScorer(): Promise<void> {
+  if (scorer) return Promise.resolve();
+  if (!loading) {
+    loading = (async () => {
+      const [core, common, en] = await Promise.all([
+        import("@zxcvbn-ts/core"),
+        import("@zxcvbn-ts/language-common"),
+        import("@zxcvbn-ts/language-en"),
+      ]);
+      const factory = new core.ZxcvbnFactory({
+        dictionary: { ...common.dictionary, ...en.dictionary },
+        graphs: common.adjacencyGraphs,
+        translations: en.translations,
+      });
+      scorer = (pw) => factory.check(pw).score;
+    })();
+  }
+  return loading;
+}
+
+/** Strength meter (zxcvbn entropy estimate) + optional requirements checklist
+ *  for set-password surfaces. Renders nothing for an empty password. */
 export function PasswordRequirements({
   password,
   showChecklist = true,
@@ -18,9 +47,25 @@ export function PasswordRequirements({
   password: string;
   showChecklist?: boolean;
 }) {
+  const [score, setScore] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!password) return;
+    let active = true;
+    void ensureScorer().then(() => {
+      if (active && scorer) setScore(scorer(password));
+    });
+    return () => {
+      active = false;
+    };
+  }, [password]);
+
   if (!password) return null;
-  const { checks, strength } = evaluatePassword(password);
-  const meta = STRENGTH_META[strength];
+
+  const { checks } = evaluatePassword(password);
+  // Fallback before zxcvbn loads: rough score from met-requirement count.
+  const fallback = Math.min(4, Math.max(0, checks.filter((c) => c.met).length - 1));
+  const meta = STRENGTH_META[score ?? fallback];
 
   return (
     <div className="mt-3">

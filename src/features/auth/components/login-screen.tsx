@@ -9,16 +9,22 @@ import { LoginRightPanel } from "./login-right-panel";
  *  scoped here so it doesn't leak into the rest of the app. */
 export function LoginScreen() {
   return (
+    // Fixed full-viewport cover so the app's dark frame (--body-bg) never shows
+    // through and the page can't scroll — login fits the screen exactly.
     <main
-      className="min-h-screen w-full bg-[#F3F3F3]"
+      className="fixed inset-0 z-50 overflow-hidden bg-[#F3F3F3]"
       style={{ fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}
     >
       <GoogleOneTap />
-      <div className="mx-auto flex min-h-screen max-w-[1280px] items-center gap-12 px-6 py-10">
-        <div className="flex flex-1 items-center justify-center">
-          <LoginForm />
+      <div className="mx-auto flex h-full max-w-[1500px] items-stretch gap-12 p-6 md:p-12">
+        {/* Form column scrolls internally only when the viewport is too short to
+            fit it — the page itself never scrolls and the panel stays put. */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="flex min-h-full items-center justify-center">
+            <LoginForm />
+          </div>
         </div>
-        <div className="hidden h-[88vh] max-h-[920px] min-h-[600px] flex-1 md:block">
+        <div className="hidden flex-1 md:block">
           <LoginRightPanel />
         </div>
       </div>
