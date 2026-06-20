@@ -2,14 +2,14 @@
 
 import { useState } from "react";
 import {
-  OTHER_OPTION_VALUE,
-  REFERRAL_OPTIONS,
-  ROLE_OPTIONS,
-  TEAM_OPTIONS,
-  USE_CASE_OPTIONS,
+  DESCRIPTOR_OPTIONS,
+  DESCRIPTOR_QUESTION,
+  ENTITY_OPTIONS,
+  SIZE_BUCKETS,
+  SIZE_LABEL,
+  type EntityType,
 } from "../constants";
 import type { SurveySubmission } from "../types";
-import { ChipSelect } from "./chip-select";
 
 interface SurveyStepProps {
   submitting: boolean;
@@ -17,131 +17,130 @@ interface SurveyStepProps {
 }
 
 export function SurveyStep({ submitting, onSubmit }: SurveyStepProps) {
-  const [role, setRole] = useState<string[]>([]);
-  const [roleOther, setRoleOther] = useState("");
-  const [useCases, setUseCases] = useState<string[]>([]);
-  const [useCasesOther, setUseCasesOther] = useState("");
-  const [teamSize, setTeamSize] = useState<string[]>([]);
-  const [referral, setReferral] = useState<string[]>([]);
-  const [referralOther, setReferralOther] = useState("");
+  const [entity, setEntity] = useState<EntityType | null>("team");
+  const [descriptors, setDescriptors] = useState<string[]>([]);
+  const [sizeIndex, setSizeIndex] = useState(1);
 
-  const otherNeedsText = (selected: string[], text: string) =>
-    selected.includes(OTHER_OPTION_VALUE) && text.trim().length === 0;
+  const needsSize = entity === "team" || entity === "company";
+  const canContinue = entity !== null && descriptors.length > 0 && !submitting;
 
-  const incomplete =
-    role.length === 0 ||
-    useCases.length === 0 ||
-    teamSize.length === 0 ||
-    referral.length === 0 ||
-    otherNeedsText(role, roleOther) ||
-    otherNeedsText(useCases, useCasesOther) ||
-    otherNeedsText(referral, referralOther);
+  function chooseEntity(next: EntityType) {
+    setEntity(next);
+    setDescriptors([]); // descriptor options differ per identity
+  }
+
+  function toggleDescriptor(value: string) {
+    setDescriptors((prev) =>
+      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value],
+    );
+  }
 
   function handleSubmit() {
-    if (incomplete || submitting) return;
+    if (!canContinue || !entity) return;
     onSubmit({
-      role: role[0],
-      roleOther: roleOther.trim() || undefined,
-      useCases,
-      useCasesOther: useCasesOther.trim() || undefined,
-      teamSize: teamSize[0] as SurveySubmission["teamSize"],
-      referralSource: referral[0],
-      referralOther: referralOther.trim() || undefined,
+      entityType: entity,
+      descriptors,
+      size: needsSize ? SIZE_BUCKETS[sizeIndex] : undefined,
     });
   }
 
+  const fillPct = (sizeIndex / (SIZE_BUCKETS.length - 1)) * 100;
+
   return (
-    <div className="space-y-8">
-      <div className="text-center">
-        <h1 className="text-[28px] font-semibold leading-tight text-[#ECF1F6]">
-          Tell us about yourself
-        </h1>
-        <p className="mt-2 text-[15px] text-[#B4BFCB]">
-          A few quick questions to tune Dopl to how you work.
-        </p>
+    <div>
+      <h2 className="text-[30px] font-bold leading-tight tracking-[-0.5px] text-[#181818]">
+        About You
+      </h2>
+      <p className="mt-3 text-[15px] leading-relaxed text-[#9a9a9a]">
+        Dopl works whether you&apos;re flying solo or building with a whole team.
+      </p>
+
+      {/* Identity */}
+      <div className="mt-8">
+        <p className="mb-3 text-[16px] font-medium text-[#181818]">I&apos;m using Dopl as…</p>
+        <div className="flex flex-wrap gap-2.5">
+          {ENTITY_OPTIONS.map((opt) => (
+            <Pill key={opt.value} selected={entity === opt.value} onClick={() => chooseEntity(opt.value)}>
+              {opt.label}
+            </Pill>
+          ))}
+        </div>
       </div>
 
-      <Question index="01" label="What kind of work do you do?">
-        <ChipSelect
-          options={ROLE_OPTIONS}
-          mode="single"
-          value={role}
-          onChange={setRole}
-          allowOther
-          otherText={roleOther}
-          onOtherTextChange={setRoleOther}
-        />
-      </Question>
+      {/* Descriptors */}
+      {entity && (
+        <div className="mt-7" style={{ animation: "loginFadeIn 0.4s ease-out both" }}>
+          <p className="mb-3 text-[16px] font-medium text-[#181818]">{DESCRIPTOR_QUESTION[entity]}</p>
+          <div className="flex flex-wrap gap-2.5">
+            {DESCRIPTOR_OPTIONS[entity].map((opt) => (
+              <Pill
+                key={opt.value}
+                selected={descriptors.includes(opt.value)}
+                onClick={() => toggleDescriptor(opt.value)}
+              >
+                {opt.label}
+              </Pill>
+            ))}
+          </div>
+        </div>
+      )}
 
-      <Question index="02" label="What will you use Dopl for?" hint="Pick all that apply">
-        <ChipSelect
-          options={USE_CASE_OPTIONS}
-          mode="multi"
-          value={useCases}
-          onChange={setUseCases}
-          allowOther
-          otherText={useCasesOther}
-          onOtherTextChange={setUseCasesOther}
-        />
-      </Question>
+      {/* Size slider */}
+      {needsSize && entity && (
+        <div className="mt-8" style={{ animation: "loginFadeIn 0.4s ease-out both" }}>
+          <p className="mb-2 text-[16px] font-medium text-[#181818]">{SIZE_LABEL[entity]}</p>
+          <p className="text-[26px] font-bold text-[#181818]">{SIZE_BUCKETS[sizeIndex]} people</p>
+          <input
+            type="range"
+            min={0}
+            max={SIZE_BUCKETS.length - 1}
+            step={1}
+            value={sizeIndex}
+            onChange={(e) => setSizeIndex(Number(e.target.value))}
+            aria-label={SIZE_LABEL[entity]}
+            className="dopl-slider mt-4"
+            style={{
+              background: `linear-gradient(to right, #181818 ${fillPct}%, #e2e2e2 ${fillPct}%)`,
+            }}
+          />
+        </div>
+      )}
 
-      <Question index="03" label="Who are you using it with?">
-        <ChipSelect
-          options={TEAM_OPTIONS}
-          mode="single"
-          value={teamSize}
-          onChange={setTeamSize}
-        />
-      </Question>
-
-      <Question index="04" label="How did you hear about us?">
-        <ChipSelect
-          options={REFERRAL_OPTIONS}
-          mode="single"
-          value={referral}
-          onChange={setReferral}
-          allowOther
-          otherText={referralOther}
-          onOtherTextChange={setReferralOther}
-        />
-      </Question>
-
-      <button
-        type="button"
-        disabled={incomplete || submitting}
-        onClick={handleSubmit}
-        className="w-full px-4 py-3 rounded-[8px] text-[15px] font-semibold
-          bg-[#3E5E9E] text-white hover:bg-[#4A6BAC]
-          transition-colors cursor-pointer
-          disabled:bg-[#1E2836] disabled:text-[#7E8794] disabled:cursor-not-allowed"
-      >
-        {submitting ? "Saving…" : "Continue"}
-      </button>
+      {/* Continue (no go-back) */}
+      <div className="mt-9 flex justify-end">
+        <button
+          type="button"
+          disabled={!canContinue}
+          onClick={handleSubmit}
+          className="cursor-pointer rounded-[12px] bg-[#181818] px-9 py-3 text-[15px] font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {submitting ? "Saving…" : "Continue"}
+        </button>
+      </div>
     </div>
   );
 }
 
-function Question({
-  index,
-  label,
-  hint,
+function Pill({
+  selected,
+  onClick,
   children,
 }: {
-  index: string;
-  label: string;
-  hint?: string;
+  selected: boolean;
+  onClick: () => void;
   children: React.ReactNode;
 }) {
   return (
-    <div className="space-y-3">
-      <div className="flex items-baseline gap-2.5">
-        <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-[#74808C]">
-          {index}
-        </span>
-        <p className="text-[15px] font-semibold text-[#E4EAF1]">{label}</p>
-        {hint && <span className="text-[12px] text-[#74808C]">{hint}</span>}
-      </div>
+    <button
+      type="button"
+      onClick={onClick}
+      className={`cursor-pointer rounded-full px-4 py-2 text-[14px] font-medium transition-colors ${
+        selected
+          ? "bg-[#181818] text-white"
+          : "bg-[#d7d7d7] text-[#181818] hover:bg-[#cccccc]"
+      }`}
+    >
       {children}
-    </div>
+    </button>
   );
 }

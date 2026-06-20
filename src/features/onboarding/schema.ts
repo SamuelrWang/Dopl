@@ -6,13 +6,10 @@ import { z } from "zod";
  * the form and the analytics table.
  */
 export const SurveySubmissionSchema = z.object({
-  role: z.string().min(1).max(80),
-  roleOther: z.string().max(200).optional(),
-  useCases: z.array(z.string().min(1).max(80)).min(1).max(10),
-  useCasesOther: z.string().max(200).optional(),
-  teamSize: z.enum(["solo", "small_team", "company"]),
-  referralSource: z.string().min(1).max(80),
-  referralOther: z.string().max(200).optional(),
+  entityType: z.enum(["solo", "team", "company"]),
+  descriptors: z.array(z.string().min(1).max(80)).min(1).max(20),
+  // Only present for team / company (the slider). Absent for solo.
+  size: z.enum(["1-2", "2-10", "10-50", "50-100", "100-1000", "1000+"]).optional(),
 });
 
 export const CompleteOnboardingSchema = z.object({

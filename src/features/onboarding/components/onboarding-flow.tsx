@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { AuthSplitLayout } from "@/shared/layout/auth-split";
 import { useMcpConnectionPoll } from "../hooks/use-mcp-connection-poll";
 import type { OnboardingStep, SurveySubmission } from "../types";
 import { McpConnectStep } from "./mcp-connect-step";
@@ -14,10 +15,10 @@ interface OnboardingFlowProps {
 }
 
 /**
- * Client stepper for /onboarding: survey → MCP connect → (transition)
- * workspace. The workspace step is invisible — completion renames the
- * auto-provisioned workspace and routes straight into it. Styling
- * follows the knowledge-landing colorway (app-shell.module.css).
+ * Client stepper for /onboarding: survey → MCP connect → (transition) workspace.
+ * Reuses the login split layout — the questionnaire fades in on the left where
+ * the sign-in form was, crystal panel on the right. Completion renames the
+ * auto-provisioned workspace and routes into it.
  */
 export function OnboardingFlow({ initialStep, redirectTo }: OnboardingFlowProps) {
   const router = useRouter();
@@ -27,11 +28,9 @@ export function OnboardingFlow({ initialStep, redirectTo }: OnboardingFlowProps)
   const [error, setError] = useState<string | null>(null);
   const [leaving, setLeaving] = useState(false);
   const finishRef = useRef(false);
-  const advancedRef = useRef(false);
 
   const connected = useMcpConnectionPoll(step === "connect" && !finishing);
 
-  // Fade the current step out, swap, fade the next in.
   function changeStep(next: OnboardingStep) {
     setLeaving(true);
     setTimeout(() => {
@@ -84,111 +83,64 @@ export function OnboardingFlow({ initialStep, redirectTo }: OnboardingFlowProps)
     }
   }
 
-  // Agent connected. Don't yank the user forward while they're away in their
-  // agent — if this tab is hidden, wait until they come back, THEN complete
-  // onboarding and drop them into their workspace (after a short beat so they
-  // register the "Connected" state). No hidden auto-advance.
-  useEffect(() => {
-    if (step !== "connect" || !connected || advancedRef.current) return;
-
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const advance = () => {
-      if (advancedRef.current) return;
-      advancedRef.current = true;
-      void finish(true);
-    };
-    const schedule = () => {
-      timer = setTimeout(
-        advance,
-        document.visibilityState === "visible" ? 1200 : 600
-      );
-    };
-
-    if (document.visibilityState === "visible") {
-      schedule();
-      return () => {
-        if (timer) clearTimeout(timer);
-      };
-    }
-
-    const onVisible = () => {
-      if (document.visibilityState !== "visible") return;
-      document.removeEventListener("visibilitychange", onVisible);
-      schedule();
-    };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => {
-      document.removeEventListener("visibilitychange", onVisible);
-      if (timer) clearTimeout(timer);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [connected, step]);
+  // No auto-advance: the user clicks Continue (enabled once connected) to finish.
 
   return (
-    <div
-      className="w-full max-w-xl"
-      style={{ animation: "loginFadeIn 0.6s ease-out both" }}
-    >
-      <div className="mb-6 flex flex-col items-center gap-2">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/favicons/android-chrome-512x512.png"
-          alt="Dopl"
-          className="h-10 w-10 rounded-[8px]"
-        />
-        <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-[#A7A0BE]">
-          {step === "survey" ? "01 / 02" : "02 / 02"}
-        </span>
-      </div>
-
-      <div
-        {...{ "data-crystal-panel": true }}
-        className="flex flex-col overflow-hidden rounded-[14px] border border-[#2C3A4E] bg-[#131A24] shadow-[0_12px_50px_rgba(0,0,0,0.6)]"
-        style={{ height: "min(78vh, 640px)" }}
-      >
-        <div className="flex-1 min-h-0 overflow-y-auto p-8">
-          {error && (
-            <div className="mb-5 p-3 rounded-[8px] border-[1.5px] border-red-500/30 bg-red-500/10">
-              <p className="text-[13px] text-red-300">{error}</p>
-              {finishRef.current === false && step !== "survey" && (
-                <button
-                  type="button"
-                  onClick={() => void finish(connected)}
-                  className="mt-1.5 text-[13px] font-semibold text-red-300 underline underline-offset-2 cursor-pointer"
-                >
-                  Retry
-                </button>
-              )}
-            </div>
-          )}
-
-          <div
-            style={{
-              opacity: leaving ? 0 : 1,
-              transform: leaving ? "translateY(6px)" : "none",
-              transition: "opacity 200ms ease, transform 200ms ease",
-            }}
+    <AuthSplitLayout>
+      <div className="w-full max-w-[400px]" style={{ animation: "loginFadeIn 0.6s ease-out both" }}>
+        {/* Brand: logo + wordmark (matches login), then step indicator */}
+        <div className="mb-7 flex flex-col items-start gap-2">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/favicons/android-chrome-512x512.png" alt="Dopl" className="h-9 w-9 rounded-[7px]" />
+          <span
+            className="text-[24px] font-medium text-[#181818]"
+            style={{ fontFamily: "var(--font-playfair), Georgia, serif", fontStyle: "italic" }}
           >
-            {finishing ? (
-              <div className="py-16 flex flex-col items-center gap-4">
-                <div className="w-8 h-8 rounded-full border-2 border-[#7E9CC4]/30 border-t-[#7E9CC4] animate-spin" />
-                <p className="text-[15px] text-[#B4BFCB]">
-                  Setting up your workspace…
-                </p>
-              </div>
-            ) : step === "survey" ? (
-              <SurveyStep submitting={submitting} onSubmit={handleSurveySubmit} />
-            ) : (
-              <McpConnectStep
-                connected={connected}
-                finishing={finishing}
-                onSkip={() => void finish(false)}
-                showSkip={false}
-              />
+            Dopl
+          </span>
+          <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.12em] text-[#9a9a9a]">
+            Step {step === "survey" ? "1" : "2"} of 2
+          </p>
+        </div>
+
+        {error && (
+          <div className="mb-5 rounded-[10px] border border-red-300 bg-red-50 px-4 py-3 text-[14px] text-red-700">
+            {error}
+            {!finishRef.current && step !== "survey" && (
+              <button
+                type="button"
+                onClick={() => void finish(connected)}
+                className="ml-2 cursor-pointer font-semibold underline underline-offset-2"
+              >
+                Retry
+              </button>
             )}
           </div>
+        )}
+
+        <div
+          style={{
+            opacity: leaving ? 0 : 1,
+            transform: leaving ? "translateY(6px)" : "none",
+            transition: "opacity 200ms ease, transform 200ms ease",
+          }}
+        >
+          {finishing ? (
+            <div className="flex flex-col items-start gap-4 py-10">
+              <div className="h-7 w-7 animate-spin rounded-full border-2 border-[#181818]/20 border-t-[#181818]" />
+              <p className="text-[15px] text-[#666]">Setting up your workspace…</p>
+            </div>
+          ) : step === "survey" ? (
+            <SurveyStep submitting={submitting} onSubmit={handleSurveySubmit} />
+          ) : (
+            <McpConnectStep
+              connected={connected}
+              finishing={finishing}
+              onContinue={() => void finish(true)}
+            />
+          )}
         </div>
       </div>
-    </div>
+    </AuthSplitLayout>
   );
 }

@@ -584,6 +584,51 @@ body.panel-dragging *::after {
   66%      { transform: translate(-30px, 25px) scale(0.95); }
 }
 
+/* ─────────────────────────────────────────────────────────────────────
+   Onboarding size slider (light) — black fill set inline via background,
+   gray remainder, white knob.
+   ───────────────────────────────────────────────────────────────────── */
+
+.dopl-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 9999px;
+  outline: none;
+  cursor: pointer;
+  accent-color: #181818;
+}
+.dopl-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid #181818;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  margin-top: -8px;
+}
+.dopl-slider::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid #181818;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+}
+.dopl-slider::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 9999px;
+}
+.dopl-slider::-moz-range-track {
+  height: 6px;
+  border-radius: 9999px;
+}
+
 .login-orb {
   position: absolute;
   border-radius: 9999px;
