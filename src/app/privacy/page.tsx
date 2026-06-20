@@ -6,7 +6,10 @@ export const metadata = {
 
 export default function PrivacyPage() {
   return (
-    <div className="min-h-screen px-6 py-16 flex justify-center relative z-10">
+    <div
+      className="min-h-screen px-6 py-16 flex justify-center relative z-10"
+      style={{ fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}
+    >
       <div className="w-full max-w-2xl">
         {/* Back link */}
         <Link

@@ -3,27 +3,14 @@
 import { CrystalField } from "@/shared/design/crystal-field";
 import { LiquidGlass } from "@/shared/design";
 
-/** Login panel = the ORIGINAL full-page crystal verbatim (default shards,
- *  colors, shape, tile size, animation) — only the behavior the user asked for
- *  is overridden:
- *   - one constant slow speed in BOTH directions (flipLinear + equal durations),
- *     so a fast cursor still produces a gradual follow and a gradual return
- *   - flip-back trails the cursor's path instead of collapsing all at once
- *     (lingerExciteScale off → tiles revert in the order the cursor left them)
- *  Everything else inherits DEFAULT_CRYSTAL_CONFIG; sizing comes from
- *  mode="container". */
+/** Portrait tuning for the tall auth panel: the original thin, sparse crystal
+ *  look (default-style shards, hand-scaled for ~680px) with instant cursor
+ *  flips and a slow trailing ambient. Shared by login + onboarding. */
 const PANEL_CRYSTAL_CONFIG = {
   tileSize: 13,
   maxTiles: 9000,
-
-  // Hand-tuned for this ~680px portrait panel: mostly THIN stalactites (wid ~18-28)
-  // interspersed with a few SLIGHTLY thicker + longer ones (wid ~44-52). Plenty
-  // rising from the floor (angle ≈ -90, ay > 1) AND a dense row hanging from the
-  // top (angle ≈ +90, ay < 0). Hues spread across the ramp for color variance;
-  // depth mixes near/bright and far/dark. Widths are already panel-scale.
   shardWidthScale: 1,
   shards: [
-    // floor-rising
     { ax: 0.08, ay: 1.1, angle: -92, len: 0.46, wid: 22, depth: 0.4, hue: 0.15 },
     { ax: 0.16, ay: 1.12, angle: -88, len: 0.6, wid: 46, depth: 0.9, hue: 0.3 },
     { ax: 0.24, ay: 1.08, angle: -91, len: 0.42, wid: 20, depth: 0.3, hue: 0.55 },
@@ -34,7 +21,6 @@ const PANEL_CRYSTAL_CONFIG = {
     { ax: 0.7, ay: 1.1, angle: -87, len: 0.44, wid: 22, depth: 0.4, hue: 0.65 },
     { ax: 0.8, ay: 1.12, angle: -94, len: 0.62, wid: 48, depth: 0.92, hue: 0.12 },
     { ax: 0.9, ay: 1.08, angle: -90, len: 0.38, wid: 18, depth: 0.28, hue: 0.9 },
-    // ceiling-hangers (more at the top)
     { ax: 0.1, ay: -0.1, angle: 90, len: 0.4, wid: 20, depth: 0.35, hue: 0.5 },
     { ax: 0.22, ay: -0.08, angle: 92, len: 0.54, wid: 44, depth: 0.8, hue: 0.2 },
     { ax: 0.35, ay: -0.11, angle: 88, len: 0.36, wid: 18, depth: 0.3, hue: 0.78 },
@@ -43,45 +29,39 @@ const PANEL_CRYSTAL_CONFIG = {
     { ax: 0.78, ay: -0.08, angle: 92, len: 0.5, wid: 42, depth: 0.75, hue: 0.08 },
     { ax: 0.9, ay: -0.11, angle: 90, len: 0.38, wid: 20, depth: 0.4, hue: 0.92 },
   ],
-
-  // auto (ambient): one slow constant speed, flip-back trails the path
   flipDuration: 650,
   driftBackDuration: 650,
   lingerDuration: 700,
   flipLinear: true,
   lingerExciteScale: false,
-
-  // manual (cursor): responsive, no delay/linger
   cursorFlipDuration: 140,
   cursorLinger: 0,
 };
 
-/** Right column: a black rounded panel with the crystal field contained inside
- *  it (not full-screen), fronted by a liquid-glass card. Hidden on mobile. */
-export function LoginRightPanel() {
+/** Black rounded panel with the contained crystal field + a liquid-glass card.
+ *  The right half of the auth split layout. */
+export function AuthCrystalPanel() {
   return (
     <div className="relative h-full w-full overflow-hidden rounded-[32px] bg-[#060A0F]">
       <CrystalField mode="container" config={PANEL_CRYSTAL_CONFIG} />
 
-      {/* Liquid-glass card — refracts the crystal field behind it. Equal side
-          insets + matching bottom inset keep it balanced in the panel. */}
       <LiquidGlass
         radius={26}
-        scale={38}
-        blur={3}
+        scale={72}
+        blur={0}
         className="absolute inset-x-[7%] bottom-[7%] h-[24%] min-h-[150px]"
       >
         <div className="flex h-full flex-col justify-center p-[7%]">
-          <h3 className="max-w-[280px] text-[19px] font-semibold leading-[1.2] text-white">
-            Get your right job and right place apply now
+          <h3 className="max-w-[300px] text-[19px] font-semibold leading-[1.2] text-white">
+            Bring your whole team along to Dopl
           </h3>
-          <p className="mt-3 max-w-[230px] text-[13px] font-light leading-[1.45] text-[#d3d3d3]">
-            Be among the first founders to experience the easiest way to start run a business.
+          <p className="mt-3 max-w-[250px] text-[13px] font-light leading-[1.45] text-[#d3d3d3]">
+            Invite your teammates to build, share, and run your agent setups together — everything your team knows, in one shared workspace.
           </p>
           <div className="absolute bottom-[16%] right-[7%] flex">
-            <Avatar gradient="linear-gradient(135deg,#e6c4a8,#9c6b4a)" />
-            <Avatar gradient="linear-gradient(135deg,#3a3f4a,#1a1d24)" className="-ml-2.5" />
-            <Avatar gradient="linear-gradient(135deg,#d8b89a,#6e4a32)" className="-ml-2.5" />
+            <Avatar src="https://randomuser.me/api/portraits/women/44.jpg" />
+            <Avatar src="https://randomuser.me/api/portraits/men/32.jpg" className="-ml-2.5" />
+            <Avatar src="https://randomuser.me/api/portraits/women/68.jpg" className="-ml-2.5" />
             <div className="-ml-2.5 flex h-[30px] w-[30px] items-center justify-center rounded-full border-2 border-[#2b2b2b] bg-[#3a3a3a] text-[10px] font-medium text-white">
               +2
             </div>
@@ -92,11 +72,13 @@ export function LoginRightPanel() {
   );
 }
 
-function Avatar({ gradient, className = "" }: { gradient: string; className?: string }) {
+function Avatar({ src, className = "" }: { src: string; className?: string }) {
   return (
-    <div
-      className={`h-[30px] w-[30px] rounded-full border-2 border-[#2b2b2b] ${className}`}
-      style={{ background: gradient }}
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt=""
+      className={`h-[30px] w-[30px] rounded-full border-2 border-[#2b2b2b] object-cover ${className}`}
     />
   );
 }
