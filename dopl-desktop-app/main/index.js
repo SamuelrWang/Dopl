@@ -6,6 +6,13 @@ const Store = require('electron-store');
 const APP_URL = process.env.DOPL_APP_URL || 'https://www.usedopl.com/';
 const APP_ORIGIN = new URL(APP_URL).origin;
 
+// The desktop app opens straight into the product, never the marketing site —
+// someone who installed the app has no reason to see the landing page. `/canvas`
+// resolves server-side: signed-out → /login, brand-new user → /onboarding,
+// otherwise the user's default workspace canvas. So a signed-out user lands on
+// the auth screen, not the landing page.
+const HOME_URL = new URL('/canvas', APP_URL).toString();
+
 // Custom URL scheme used to hand the OAuth session back from the system browser
 // into this app (dopl://auth#access_token=…&refresh_token=…). Registered with
 // macOS via setAsDefaultProtocolClient + CFBundleURLTypes in package.json.
@@ -76,7 +83,7 @@ function createMainWindow() {
 }
 
 function loadApp() {
-  mainWindow.loadURL(APP_URL).catch((err) => {
+  mainWindow.loadURL(HOME_URL).catch((err) => {
     console.error('[load] failed:', err && err.message);
   });
 }

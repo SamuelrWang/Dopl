@@ -57,7 +57,7 @@ export function SurveyStep({ submitting, onSubmit }: SurveyStepProps) {
 
       {/* Identity */}
       <div className="mt-8">
-        <p className="mb-3 text-[16px] font-medium text-[#181818]">I&apos;m using Dopl as…</p>
+        <p className="mb-3 text-[15px] font-medium text-[#181818]">I&apos;m using Dopl as…</p>
         <div className="flex flex-wrap gap-2.5">
           {ENTITY_OPTIONS.map((opt) => (
             <Pill key={opt.value} selected={entity === opt.value} onClick={() => chooseEntity(opt.value)}>
@@ -70,7 +70,7 @@ export function SurveyStep({ submitting, onSubmit }: SurveyStepProps) {
       {/* Descriptors */}
       {entity && (
         <div className="mt-7" style={{ animation: "loginFadeIn 0.4s ease-out both" }}>
-          <p className="mb-3 text-[16px] font-medium text-[#181818]">{DESCRIPTOR_QUESTION[entity]}</p>
+          <p className="mb-3 text-[15px] font-medium text-[#181818]">{DESCRIPTOR_QUESTION[entity]}</p>
           <div className="flex flex-wrap gap-2.5">
             {DESCRIPTOR_OPTIONS[entity].map((opt) => (
               <Pill
@@ -88,7 +88,7 @@ export function SurveyStep({ submitting, onSubmit }: SurveyStepProps) {
       {/* Size slider */}
       {needsSize && entity && (
         <div className="mt-8" style={{ animation: "loginFadeIn 0.4s ease-out both" }}>
-          <p className="mb-2 text-[16px] font-medium text-[#181818]">{SIZE_LABEL[entity]}</p>
+          <p className="mb-2 text-[15px] font-medium text-[#181818]">{SIZE_LABEL[entity]}</p>
           <p className="text-[26px] font-bold text-[#181818]">{SIZE_BUCKETS[sizeIndex]} people</p>
           <input
             type="range"

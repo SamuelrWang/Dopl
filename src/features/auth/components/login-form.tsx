@@ -63,7 +63,7 @@ export function LoginForm() {
       <form onSubmit={signInWithPassword}>
         {/* Email */}
         <div className="mt-9">
-          <label htmlFor="login-email" className="mb-3 block text-[16px] font-medium text-[#181818]">
+          <label htmlFor="login-email" className="mb-3 block text-[15px] font-medium text-[#181818]">
             Email Address
           </label>
           <div className="flex h-[50px] items-center gap-3 rounded-[10px] bg-white px-[18px] shadow-[0_1px_2px_rgba(0,0,0,0.04)] focus-within:ring-2 focus-within:ring-[#181818]/10">
@@ -82,7 +82,7 @@ export function LoginForm() {
 
         {/* Password */}
         <div className="mt-[26px]">
-          <label htmlFor="login-password" className="mb-3 block text-[16px] font-medium text-[#181818]">
+          <label htmlFor="login-password" className="mb-3 block text-[15px] font-medium text-[#181818]">
             Password
           </label>
           <div className="flex h-[50px] items-center gap-3 rounded-[10px] bg-white px-[18px] shadow-[0_1px_2px_rgba(0,0,0,0.04)] focus-within:ring-2 focus-within:ring-[#181818]/10">

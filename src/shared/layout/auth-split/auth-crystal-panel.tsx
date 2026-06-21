@@ -47,8 +47,7 @@ export function AuthCrystalPanel() {
 
       <LiquidGlass
         radius={26}
-        scale={72}
-        blur={0}
+        scale={60}
         className="absolute inset-x-[7%] bottom-[7%] h-[24%] min-h-[150px]"
       >
         <div className="flex h-full flex-col justify-center p-[7%]">

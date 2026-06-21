@@ -113,7 +113,7 @@ function Field({
 }) {
   return (
     <div className="mt-[26px] first:mt-9">
-      <label htmlFor={id} className="mb-3 block text-[16px] font-medium text-[#181818]">
+      <label htmlFor={id} className="mb-3 block text-[15px] font-medium text-[#181818]">
         {label}
       </label>
       <div className="flex h-[50px] items-center gap-3 rounded-[10px] bg-white px-[18px] shadow-[0_1px_2px_rgba(0,0,0,0.04)] focus-within:ring-2 focus-within:ring-[#181818]/10">

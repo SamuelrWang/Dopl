@@ -187,7 +187,7 @@ function CopyRow({
 }) {
   return (
     <div className="space-y-1.5">
-      <p className="text-[16px] font-medium text-[#181818]">{label}</p>
+      <p className="text-[15px] font-medium text-[#181818]">{label}</p>
       <div className="flex items-start gap-2 rounded-[10px] border border-[#e2e2e2] bg-white px-3.5 py-2.5">
         <span
           className={`flex-1 text-[13px] leading-relaxed text-[#222] ${

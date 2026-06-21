@@ -42,7 +42,7 @@ export const DOPL_CARD_TEMPLATE = `<div style="font-family:system-ui,-apple-syst
  * to the MCP server; the richer seeding prompt comes on the next step.
  */
 export function buildConnectPrompt(url: string): string {
-  return `Connect to my Dopl MCP server. Server name: ${MCP_SERVER_NAME}. Transport: HTTP (streamable). URL: ${url}. It uses OAuth — a browser window will open for me to sign in; no API key. If your environment can't add an MCP server from a command or CLI (some desktop apps can't), walk me through adding it manually in your app's connector/settings UI instead, using the server name and URL above.`;
+  return `Connect to the Dopl MCP server using HTTP (streamable) at ${url}. If your environment can't add MCP servers via CLI or command, walk me through adding it manually using the server name and URL above and authenticating via OAuth.`;
 }
 
 /**
