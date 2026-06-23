@@ -659,6 +659,96 @@ body.panel-dragging *::after {
 }
 
 /* ─────────────────────────────────────────────────────────────────────
+   Auth 3D controls (login / onboarding / oauth consent / reset)
+   Raised primary button + raised light secondary + concave (indented) field.
+   Shared so every auth-adjacent surface stays consistent.
+   ───────────────────────────────────────────────────────────────────── */
+
+/* Raised primary button — top highlight, bottom shade, ambient drop. */
+.auth-btn-3d {
+  background: linear-gradient(180deg, #313131 0%, #1c1c1c 52%, #111 100%);
+  border: 1px solid #000;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.45),
+    0 2px 3px rgba(0, 0, 0, 0.22),
+    0 6px 16px rgba(0, 0, 0, 0.20);
+  transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
+}
+.auth-btn-3d:hover:not(:disabled) {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.45),
+    0 4px 7px rgba(0, 0, 0, 0.24),
+    0 10px 24px rgba(0, 0, 0, 0.24);
+}
+.auth-btn-3d:active:not(:disabled) {
+  transform: translateY(1px);
+  filter: brightness(0.96);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 1px 2px rgba(0, 0, 0, 0.2);
+}
+.auth-btn-3d:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Raised light secondary button — same volume, white face. */
+.auth-btn-3d-light {
+  background: linear-gradient(180deg, #ffffff 0%, #f2f2f2 100%);
+  border: 1px solid #d4d4d4;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.06),
+    0 2px 3px rgba(0, 0, 0, 0.08),
+    0 6px 14px rgba(0, 0, 0, 0.06);
+  transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
+}
+.auth-btn-3d-light:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(0.99);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 4px 7px rgba(0, 0, 0, 0.1),
+    0 10px 20px rgba(0, 0, 0, 0.08);
+}
+.auth-btn-3d-light:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.14),
+    0 1px 2px rgba(0, 0, 0, 0.06);
+}
+.auth-btn-3d-light:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Concave field — pressed-in look: dark inner top, light inner bottom +
+   outer bottom highlight to seat it on the page. */
+.auth-field-3d {
+  background: #e9eaec;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.13),
+    inset 0 1px 2px rgba(0, 0, 0, 0.07),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.9),
+    0 1px 0 rgba(255, 255, 255, 0.8);
+  transition: box-shadow 120ms ease, border-color 120ms ease;
+}
+.auth-field-3d:focus-within {
+  border-color: rgba(24, 24, 24, 0.22);
+  box-shadow:
+    inset 0 2px 5px rgba(0, 0, 0, 0.17),
+    inset 0 1px 2px rgba(0, 0, 0, 0.09),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.9),
+    0 0 0 3px rgba(24, 24, 24, 0.07);
+}
+
+/* ─────────────────────────────────────────────────────────────────────
    Landing page — capacity.so clone styles
    ───────────────────────────────────────────────────────────────────── */
 

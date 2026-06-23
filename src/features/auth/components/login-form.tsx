@@ -30,20 +30,20 @@ export function LoginForm() {
   const busy = pending !== null;
 
   return (
-    <div className="w-full max-w-[376px]" style={{ animation: "loginFadeIn 0.6s ease-out both" }}>
+    <div className="w-full max-w-[336px]" style={{ animation: "loginFadeIn 0.6s ease-out both" }}>
       {/* Brand: logo mark above wordmark */}
-      <div className="flex flex-col items-start gap-2">
+      <div className="flex flex-col items-start gap-1.5">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/favicons/android-chrome-512x512.png" alt="Dopl" className="h-9 w-9 rounded-[7px]" />
+        <img src="/favicons/android-chrome-512x512.png" alt="Dopl" className="h-8 w-8 rounded-[6px]" />
         <span
-          className="text-[24px] font-medium text-[#181818]"
+          className="text-[21px] font-medium text-[#181818]"
           style={{ fontFamily: "var(--font-playfair), Georgia, serif", fontStyle: "italic" }}
         >
           Dopl
         </span>
       </div>
 
-      <h2 className="mt-9 text-[38px] font-bold leading-none tracking-[-1px] text-[#181818]">
+      <h2 className="mt-7 text-[30px] font-bold leading-none tracking-[-0.8px] text-[#181818]">
         Sign in
       </h2>
 
@@ -62,11 +62,11 @@ export function LoginForm() {
 
       <form onSubmit={signInWithPassword}>
         {/* Email */}
-        <div className="mt-9">
-          <label htmlFor="login-email" className="mb-3 block text-[15px] font-medium text-[#181818]">
+        <div className="mt-7">
+          <label htmlFor="login-email" className="mb-2 block text-[14px] font-medium text-[#181818]">
             Email Address
           </label>
-          <div className="flex h-[50px] items-center gap-3 rounded-[10px] bg-white px-[18px] shadow-[0_1px_2px_rgba(0,0,0,0.04)] focus-within:ring-2 focus-within:ring-[#181818]/10">
+          <div className="auth-field-3d flex h-[46px] items-center gap-2.5 rounded-[10px] px-[16px]">
             <MailIcon />
             <input
               id="login-email"
@@ -75,17 +75,17 @@ export function LoginForm() {
               autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full bg-transparent text-[15px] text-[#181818] focus:outline-none"
+              className="w-full bg-transparent text-[14px] text-[#181818] focus:outline-none"
             />
           </div>
         </div>
 
         {/* Password */}
-        <div className="mt-[26px]">
-          <label htmlFor="login-password" className="mb-3 block text-[15px] font-medium text-[#181818]">
+        <div className="mt-5">
+          <label htmlFor="login-password" className="mb-2 block text-[14px] font-medium text-[#181818]">
             Password
           </label>
-          <div className="flex h-[50px] items-center gap-3 rounded-[10px] bg-white px-[18px] shadow-[0_1px_2px_rgba(0,0,0,0.04)] focus-within:ring-2 focus-within:ring-[#181818]/10">
+          <div className="auth-field-3d flex h-[46px] items-center gap-2.5 rounded-[10px] px-[16px]">
             <LockIcon />
             <input
               id="login-password"
@@ -93,7 +93,7 @@ export function LoginForm() {
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-transparent text-[15px] text-[#181818] focus:outline-none"
+              className="w-full bg-transparent text-[14px] text-[#181818] focus:outline-none"
             />
             <button
               type="button"
@@ -120,29 +120,29 @@ export function LoginForm() {
         </div>
 
         {/* Remember */}
-        <label className="mt-[26px] flex cursor-pointer items-center gap-3 select-none">
+        <label className="mt-5 flex cursor-pointer items-center gap-2.5 select-none">
           <input
             type="checkbox"
             checked={remember}
             onChange={(e) => setRemember(e.target.checked)}
-            className="h-5 w-5 rounded-[4px] border-2 border-[#181818] accent-[#181818]"
+            className="h-[18px] w-[18px] rounded-[4px] border-2 border-[#181818] accent-[#181818]"
           />
-          <span className="text-[16px] text-[#181818]">Remember me</span>
+          <span className="text-[14px] text-[#181818]">Remember me</span>
         </label>
 
         {/* Sign in */}
         <button
           type="submit"
           disabled={busy}
-          className="mt-[30px] flex h-[50px] w-full cursor-pointer items-center justify-center rounded-[10px] bg-[#181818] text-[16px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+          className="auth-btn-3d mt-7 flex h-[46px] w-full cursor-pointer items-center justify-center rounded-[10px] text-[15px] font-semibold text-white"
         >
           {pending === "password" ? "Signing in…" : "Sign in"}
         </button>
       </form>
 
       {/* Links */}
-      <div className="mt-[22px] leading-[1.55]">
-        <p className="text-[15px] text-[#9a9a9a]">
+      <div className="mt-5 leading-[1.55]">
+        <p className="text-[14px] text-[#9a9a9a]">
           Don&apos;t have an account?{" "}
           <button
             type="button"
@@ -166,7 +166,7 @@ export function LoginForm() {
       </button>
 
       {/* Socials */}
-      <div className="mt-8 flex gap-7">
+      <div className="mt-7 flex gap-5">
         <SocialButton label="Continue with Google" onClick={() => signInWithProvider("google")} disabled={busy}>
           <GoogleIcon />
         </SocialButton>
@@ -202,7 +202,7 @@ function SocialButton({
       title={label}
       onClick={onClick}
       disabled={disabled}
-      className="flex h-14 w-14 cursor-pointer items-center justify-center rounded-full bg-white shadow-[0_6px_18px_rgba(0,0,0,0.06)] transition-transform hover:-translate-y-0.5 disabled:opacity-60"
+      className="auth-btn-3d-light flex h-12 w-12 cursor-pointer items-center justify-center rounded-full"
     >
       {children}
     </button>

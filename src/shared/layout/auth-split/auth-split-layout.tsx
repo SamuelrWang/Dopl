@@ -16,11 +16,11 @@ export function AuthSplitLayout({ children }: { children: ReactNode }) {
       className="fixed inset-0 z-50 overflow-hidden bg-[#F3F3F3]"
       style={{ fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}
     >
-      <div className="mx-auto flex h-full max-w-[1500px] items-stretch gap-12 p-6 md:p-12">
-        <div className="flex-1 overflow-y-auto">
+      <div className="mx-auto flex h-full max-w-[1500px] items-stretch gap-10 p-6 md:p-10">
+        <div className="flex-[4] overflow-y-auto">
           <div className="flex min-h-full items-center justify-center">{children}</div>
         </div>
-        <div className="hidden flex-1 md:block">
+        <div className="hidden flex-[5] md:block">
           <AuthCrystalPanel />
         </div>
       </div>

@@ -87,13 +87,13 @@ export function OnboardingFlow({ initialStep, redirectTo }: OnboardingFlowProps)
 
   return (
     <AuthSplitLayout>
-      <div className="w-full max-w-[400px]" style={{ animation: "loginFadeIn 0.6s ease-out both" }}>
+      <div className="w-full max-w-[360px]" style={{ animation: "loginFadeIn 0.6s ease-out both" }}>
         {/* Brand: logo + wordmark (matches login), then step indicator */}
-        <div className="mb-7 flex flex-col items-start gap-2">
+        <div className="mb-6 flex flex-col items-start gap-1.5">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/favicons/android-chrome-512x512.png" alt="Dopl" className="h-9 w-9 rounded-[7px]" />
+          <img src="/favicons/android-chrome-512x512.png" alt="Dopl" className="h-8 w-8 rounded-[6px]" />
           <span
-            className="text-[24px] font-medium text-[#181818]"
+            className="text-[21px] font-medium text-[#181818]"
             style={{ fontFamily: "var(--font-playfair), Georgia, serif", fontStyle: "italic" }}
           >
             Dopl

@@ -10,9 +10,9 @@ export function ResetPasswordScreen() {
       className="flex min-h-screen w-full items-center justify-center bg-[#F3F3F3] px-6 py-10"
       style={{ fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}
     >
-      <div className="w-full max-w-[376px]">
+      <div className="w-full max-w-[336px]">
         <h1
-          className="mb-2 text-[26px] font-medium text-[#181818]"
+          className="mb-2 text-[22px] font-medium text-[#181818]"
           style={{ fontFamily: "var(--font-playfair), Georgia, serif", fontStyle: "italic" }}
         >
           Dopl

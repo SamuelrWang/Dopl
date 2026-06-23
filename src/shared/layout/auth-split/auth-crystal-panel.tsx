@@ -42,8 +42,27 @@ const PANEL_CRYSTAL_CONFIG = {
  *  The right half of the auth split layout. */
 export function AuthCrystalPanel() {
   return (
-    <div className="relative h-full w-full overflow-hidden rounded-[32px] bg-[#060A0F]">
+    <div
+      className="relative h-full w-full overflow-hidden rounded-[32px] bg-[#060A0F]"
+      // Seat the panel into the page: faint highlight just below the bottom lip.
+      style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.6)" }}
+    >
       <CrystalField mode="container" config={PANEL_CRYSTAL_CONFIG} />
+
+      {/* Concave recess — inner vignette layered above the opaque crystal canvas
+          (pointer-events-none so cursor flips still reach it), below the glass.
+          Dark upper lip + all-around inner shade + lit lower lip = pressed-in. */}
+      <div
+        className="pointer-events-none absolute inset-0 rounded-[32px]"
+        style={{
+          boxShadow:
+            "inset 0 8px 22px rgba(0,0,0,0.9), " +
+            "inset 0 40px 80px rgba(0,0,0,0.5), " +
+            "inset 0 0 50px rgba(0,0,0,0.45), " +
+            "inset 0 -2px 1px rgba(255,255,255,0.10), " +
+            "inset 0 0 0 1px rgba(0,0,0,0.45)",
+        }}
+      />
 
       <LiquidGlass
         radius={26}

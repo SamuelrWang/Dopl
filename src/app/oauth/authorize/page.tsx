@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getUser } from "@/shared/supabase/server";
 import { getClient } from "@/shared/auth/mcp-oauth";
-import { CrystalShell } from "@/shared/design/crystal-field";
+import { AuthSplitLayout } from "@/shared/layout/auth-split";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +16,9 @@ export const dynamic = "force-dynamic";
  *   3. Render a consent form. Approve POSTs to /api/oauth/authorize, which
  *      issues the authorization code and redirects back to the client.
  *
- * Server component with a plain HTML form — no client JS required.
+ * Shares the light split layout with /login + onboarding (left form column,
+ * right crystal panel). Server component with a plain HTML form — no client
+ * JS required.
  */
 
 function first(v: string | string[] | undefined): string {
@@ -80,7 +82,7 @@ export default async function AuthorizePage({
     <Screen
       title="Connect to Dopl"
       body={
-        <form method="POST" action="/api/oauth/authorize" className="space-y-5">
+        <form method="POST" action="/api/oauth/authorize">
           <input type="hidden" name="response_type" value={responseType} />
           <input type="hidden" name="client_id" value={clientId} />
           <input type="hidden" name="redirect_uri" value={redirectUri} />
@@ -93,51 +95,51 @@ export default async function AuthorizePage({
           <input type="hidden" name="scope" value={scope} />
           <input type="hidden" name="state" value={state} />
 
-          <p className="text-center text-[14px] leading-relaxed text-[#B4BFCB]">
-            <span className="font-semibold text-[#E4EAF1]">{clientLabel}</span>{" "}
+          <p className="text-[14px] leading-relaxed text-[#5a5a5a]">
+            <span className="font-semibold text-[#181818]">{clientLabel}</span>{" "}
             wants to access your Dopl workspaces as{" "}
-            <span className="font-medium text-[#E4EAF1]">{user.email}</span>.
+            <span className="font-medium text-[#181818]">{user.email}</span>.
           </p>
 
-          <div className="space-y-3 rounded-[8px] border-[1.5px] border-[#33414F] bg-[#1A222E] px-4 py-3.5">
+          <div className="auth-field-3d mt-6 space-y-3.5 rounded-[10px] px-[16px] py-4">
             <div className="flex items-start gap-3">
               <input
                 type="checkbox"
                 checked
                 disabled
                 aria-label="read access (always granted)"
-                className="mt-0.5 h-4 w-4 shrink-0 accent-[#3E5E9E]"
+                className="mt-0.5 h-[18px] w-[18px] shrink-0 rounded-[4px] accent-[#181818]"
               />
-              <p className="text-[13px] leading-relaxed text-[#B4BFCB]">
-                <span className="font-mono text-[11px] uppercase tracking-wide text-[#74808C]">
+              <p className="text-[13px] leading-relaxed text-[#5a5a5a]">
+                <span className="mr-1 font-mono text-[11px] uppercase tracking-wide text-[#9a9a9a]">
                   read
-                </span>{" "}
+                </span>
                 Search and read your knowledge bases, skills, and clusters.
               </p>
             </div>
-            <label className="flex items-start gap-3 cursor-pointer">
+            <label className="flex cursor-pointer items-start gap-3">
               <input
                 type="checkbox"
                 name="grant_write"
                 defaultChecked={requestsWrite}
-                className="mt-0.5 h-4 w-4 shrink-0 accent-[#3E5E9E]"
+                className="mt-0.5 h-[18px] w-[18px] shrink-0 rounded-[4px] accent-[#181818]"
               />
-              <p className="text-[13px] leading-relaxed text-[#B4BFCB]">
-                <span className="font-mono text-[11px] uppercase tracking-wide text-[#74808C]">
+              <p className="text-[13px] leading-relaxed text-[#5a5a5a]">
+                <span className="mr-1 font-mono text-[11px] uppercase tracking-wide text-[#9a9a9a]">
                   write
-                </span>{" "}
+                </span>
                 Create, update, and delete your content — knowledge bases,
                 skills, clusters, and canvas.
               </p>
             </label>
           </div>
 
-          <div className="flex gap-2.5 pt-1">
+          <div className="mt-7 flex gap-3">
             <button
               type="submit"
               name="decision"
               value="approve"
-              className="flex-1 h-11 rounded-[8px] bg-[#3E5E9E] text-[15px] font-semibold text-white hover:bg-[#4A6BAC] transition-colors cursor-pointer"
+              className="auth-btn-3d flex h-[46px] flex-1 cursor-pointer items-center justify-center rounded-[10px] text-[15px] font-semibold text-white"
             >
               Approve
             </button>
@@ -145,7 +147,7 @@ export default async function AuthorizePage({
               type="submit"
               name="decision"
               value="deny"
-              className="h-11 px-5 rounded-[8px] border-[1.5px] border-[#33414F] bg-transparent text-[15px] font-semibold text-[#B4BFCB] hover:border-[#44566A] hover:text-[#ECF1F6] transition-colors cursor-pointer"
+              className="auth-btn-3d-light h-[46px] cursor-pointer rounded-[10px] px-6 text-[15px] font-semibold text-[#181818]"
             >
               Deny
             </button>
@@ -156,36 +158,44 @@ export default async function AuthorizePage({
   );
 }
 
+/** Light split surface shared with /login: brand + title in the left column,
+ *  crystal panel on the right (collapses on mobile). */
 function Screen({ title, body }: { title: string; body: React.ReactNode }) {
   return (
-    <CrystalShell>
-      <div className="w-full max-w-md">
-        {/* Logo + title — outside the card, so they sit over the tiling */}
-        <div className="mb-6 flex flex-col items-center gap-3">
+    <AuthSplitLayout>
+      <div
+        className="w-full max-w-[336px]"
+        style={{ animation: "loginFadeIn 0.6s ease-out both" }}
+      >
+        {/* Brand: logo mark above wordmark — same as /login */}
+        <div className="flex flex-col items-start gap-1.5">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/favicons/android-chrome-512x512.png"
             alt="Dopl"
-            className="h-11 w-11 rounded-[8px]"
+            className="h-8 w-8 rounded-[6px]"
           />
-          <h1 className="text-[22px] font-semibold leading-tight text-[#ECF1F6]">
-            {title}
-          </h1>
+          <span
+            className="text-[21px] font-medium text-[#181818]"
+            style={{ fontFamily: "var(--font-playfair), Georgia, serif", fontStyle: "italic" }}
+          >
+            Dopl
+          </span>
         </div>
-        <div
-          data-crystal-panel
-          className="rounded-[14px] border border-[#2C3A4E] bg-[#131A24] p-8 shadow-[0_12px_50px_rgba(0,0,0,0.6)]"
-        >
-          {body}
-        </div>
+
+        <h2 className="mt-7 text-[30px] font-bold leading-tight tracking-[-0.8px] text-[#181818]">
+          {title}
+        </h2>
+
+        <div className="mt-7">{body}</div>
       </div>
-    </CrystalShell>
+    </AuthSplitLayout>
   );
 }
 
 function ErrorList({ errors }: { errors: string[] }) {
   return (
-    <ul className="space-y-1.5 text-center text-[14px] text-red-300">
+    <ul className="space-y-1.5 text-[14px] text-red-600">
       {errors.map((e, i) => (
         <li key={i}>{e}</li>
       ))}

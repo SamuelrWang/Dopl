@@ -43,10 +43,10 @@ export function McpConnectStep({ connected, finishing, onContinue, onSkip, showS
 
   return (
     <div>
-      <h2 className="text-[30px] font-bold leading-tight tracking-[-0.5px] text-[#181818]">
+      <h2 className="text-[26px] font-bold leading-tight tracking-[-0.5px] text-[#181818]">
         Connect Your Agent
       </h2>
-      <p className="mt-3 text-[15px] leading-relaxed text-[#9a9a9a]">
+      <p className="mt-2.5 text-[14px] leading-relaxed text-[#9a9a9a]">
         Your agent reaches your workspaces through the Dopl MCP server.
       </p>
 
@@ -137,12 +137,12 @@ export function McpConnectStep({ connected, finishing, onContinue, onSkip, showS
       )}
 
       {onContinue ? (
-        <div className="mt-9 flex justify-end">
+        <div className="mt-8 flex justify-end">
           <button
             type="button"
             onClick={onContinue}
             disabled={!connected || finishing}
-            className="cursor-pointer rounded-[12px] bg-[#181818] px-9 py-3 text-[15px] font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+            className="auth-btn-3d cursor-pointer rounded-[10px] px-8 py-2.5 text-[14px] font-semibold text-white"
           >
             {finishing ? "Setting up…" : "Continue"}
           </button>
@@ -187,8 +187,8 @@ function CopyRow({
 }) {
   return (
     <div className="space-y-1.5">
-      <p className="text-[15px] font-medium text-[#181818]">{label}</p>
-      <div className="flex items-start gap-2 rounded-[10px] border border-[#e2e2e2] bg-white px-3.5 py-2.5">
+      <p className="text-[14px] font-medium text-[#181818]">{label}</p>
+      <div className="auth-field-3d flex items-start gap-2 rounded-[10px] px-3.5 py-2.5">
         <span
           className={`flex-1 text-[13px] leading-relaxed text-[#222] ${
             multiline ? "max-h-[160px] overflow-y-auto whitespace-pre-wrap break-words" : "truncate"

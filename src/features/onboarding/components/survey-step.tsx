@@ -48,10 +48,10 @@ export function SurveyStep({ submitting, onSubmit }: SurveyStepProps) {
 
   return (
     <div>
-      <h2 className="text-[30px] font-bold leading-tight tracking-[-0.5px] text-[#181818]">
+      <h2 className="text-[26px] font-bold leading-tight tracking-[-0.5px] text-[#181818]">
         About You
       </h2>
-      <p className="mt-3 text-[15px] leading-relaxed text-[#9a9a9a]">
+      <p className="mt-2.5 text-[14px] leading-relaxed text-[#9a9a9a]">
         Dopl works whether you&apos;re flying solo or building with a whole team.
       </p>
 
@@ -107,12 +107,12 @@ export function SurveyStep({ submitting, onSubmit }: SurveyStepProps) {
       )}
 
       {/* Continue (no go-back) */}
-      <div className="mt-9 flex justify-end">
+      <div className="mt-8 flex justify-end">
         <button
           type="button"
           disabled={!canContinue}
           onClick={handleSubmit}
-          className="cursor-pointer rounded-[12px] bg-[#181818] px-9 py-3 text-[15px] font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+          className="auth-btn-3d cursor-pointer rounded-[10px] px-8 py-2.5 text-[14px] font-semibold text-white"
         >
           {submitting ? "Saving…" : "Continue"}
         </button>

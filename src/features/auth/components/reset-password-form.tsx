@@ -19,15 +19,15 @@ export function ResetPasswordForm() {
   if (status === "invalid") {
     return (
       <div>
-        <h2 className="text-[42px] font-bold leading-none tracking-[-1px] text-[#181818]">
+        <h2 className="text-[30px] font-bold leading-none tracking-[-0.8px] text-[#181818]">
           Link expired
         </h2>
-        <p className="mt-6 text-[15px] text-[#666]">
+        <p className="mt-5 text-[14px] text-[#666]">
           This password reset link is invalid or has expired.
         </p>
         <Link
           href="/login"
-          className="mt-8 inline-flex h-[50px] w-full items-center justify-center rounded-[10px] bg-[#181818] text-[16px] font-semibold text-white transition-opacity hover:opacity-90"
+          className="auth-btn-3d mt-7 inline-flex h-[46px] w-full items-center justify-center rounded-[10px] text-[15px] font-semibold text-white"
         >
           Back to sign in
         </Link>
@@ -37,10 +37,10 @@ export function ResetPasswordForm() {
 
   return (
     <div style={{ animation: "loginFadeIn 0.6s ease-out both" }}>
-      <h2 className="text-[42px] font-bold leading-none tracking-[-1px] text-[#181818]">
+      <h2 className="text-[30px] font-bold leading-tight tracking-[-0.8px] text-[#181818]">
         Set a new password
       </h2>
-      <p className="mt-4 text-[15px] text-[#666]">Choose a new password for your account.</p>
+      <p className="mt-3 text-[14px] text-[#666]">Choose a new password for your account.</p>
 
       {(error || message) && (
         <div
@@ -79,13 +79,13 @@ export function ResetPasswordForm() {
         <button
           type="submit"
           disabled={pending}
-          className="mt-[30px] flex h-[50px] w-full cursor-pointer items-center justify-center rounded-[10px] bg-[#181818] text-[16px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+          className="auth-btn-3d mt-7 flex h-[46px] w-full cursor-pointer items-center justify-center rounded-[10px] text-[15px] font-semibold text-white"
         >
           {pending ? "Updating…" : "Update password"}
         </button>
       </form>
 
-      <Link href="/login" className="mt-6 inline-block text-[15px] text-[#181818] hover:underline">
+      <Link href="/login" className="mt-6 inline-block text-[14px] text-[#181818] hover:underline">
         Back to sign in
       </Link>
     </div>
@@ -112,11 +112,11 @@ function Field({
   showToggle?: boolean;
 }) {
   return (
-    <div className="mt-[26px] first:mt-9">
-      <label htmlFor={id} className="mb-3 block text-[15px] font-medium text-[#181818]">
+    <div className="mt-5 first:mt-7">
+      <label htmlFor={id} className="mb-2 block text-[14px] font-medium text-[#181818]">
         {label}
       </label>
-      <div className="flex h-[50px] items-center gap-3 rounded-[10px] bg-white px-[18px] shadow-[0_1px_2px_rgba(0,0,0,0.04)] focus-within:ring-2 focus-within:ring-[#181818]/10">
+      <div className="auth-field-3d flex h-[46px] items-center gap-2.5 rounded-[10px] px-[16px]">
         <LockIcon />
         <input
           id={id}
@@ -126,7 +126,7 @@ function Field({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder="••••••••"
-          className="w-full bg-transparent text-[15px] text-[#181818] placeholder:text-[#9a9a9a] focus:outline-none"
+          className="w-full bg-transparent text-[14px] text-[#181818] placeholder:text-[#9a9a9a] focus:outline-none"
         />
         {toggle && (
           <button
