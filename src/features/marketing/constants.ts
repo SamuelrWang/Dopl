@@ -1,5 +1,4 @@
-/** Static copy + data for the landing page. Cloned 1:1 from the reference
- *  layout; only the brand (Amigo → Dopl) and palette differ. */
+/** Static copy + data for the landing page. */
 
 export const NAV_LINKS = [
   "Platform",
@@ -15,45 +14,73 @@ export const NAV_PILL = {
   label: "The Platform Approach",
 } as const;
 
-export const CTA_LABEL = "Book a Demo";
+export const CTA_LABEL = "Get started";
 
 export const HERO = {
-  headline: "Where teams and agents work together",
+  headline: "Where humans and agents build together",
   paragraph:
-    "Make your care team feel 10x bigger while meeting the safety and reliability standards of healthcare.",
+    "Dopl gives your team and your agents one shared workspace — the knowledge, skills, and tools they need to get real work done.",
 } as const;
 
-export const DIAGRAM = {
-  clinician: "Your Clinician",
-  agent: "Dopl Clinical Agent",
-  patient: "Patient 1",
-  highlight: "Outbound Patient Engagement",
-  capabilities: [
-    "Cardiovascular Risk Monitoring",
-    "Discharge & Transitions of Care",
-    "PT Plan of Care Processing",
-    "Pre-Op Preparation",
-    "Post-Op Recovery",
-    "PT Adherence",
-    "Substance Use Disorder Support",
-    "Mental Health Screening",
-    "Side-Effect Management",
-    "Patient-Provider Matching",
-    "Outbound Patient Engagement",
-    "Clinical Intake",
-    "Appointment Management",
-    "24/7 Health Assistant",
-    "Urgent Care Triage",
-    "Care Gap Closures",
-    "Annual Wellness Visit Prep",
-    "Chronic Care Management",
-    "Medication Monitoring",
-    "Patient Reactivation",
-    "Lab and Biomarker Insights",
-  ],
+/** The scroll-driven ontology stack: five layers revealed as you scroll. */
+export const ONTOLOGY_SECTION = {
+  eyebrow: "THE ONTOLOGY STACK",
+  heading: "One stack, from intent to action",
 } as const;
 
-export const TRUSTED_LABEL = "TRUSTED BY HEALTHCARE LEADERS WORLDWIDE";
+export type OntologyLayerId =
+  | "humans"
+  | "agents"
+  | "ontology"
+  | "tools"
+  | "actions";
+
+export type OntologyLayer = {
+  id: OntologyLayerId;
+  tag: string;
+  title: string;
+  blurb: string;
+};
+
+export const ONTOLOGY_LAYERS: readonly OntologyLayer[] = [
+  {
+    id: "humans",
+    tag: "01 — Humans",
+    title: "You set the intent",
+    blurb:
+      "Describe the outcome in plain language. Your team stays in command; agents do the legwork.",
+  },
+  {
+    id: "agents",
+    tag: "02 — Agents",
+    title: "Agents pick up the work",
+    blurb:
+      "Specialized agents plan, decide, and execute across your tools — in a loop, until it's done.",
+  },
+  {
+    id: "ontology",
+    tag: "03 — Ontology",
+    title: "Grounded in your world",
+    blurb:
+      "A living model of your objects, attributes, and methods, so agents reason over your real business — not guesses.",
+  },
+  {
+    id: "tools",
+    tag: "04 — Tools",
+    title: "Wired into your stack",
+    blurb:
+      "HubSpot, Salesforce, Slack, Gmail, and more — agents act through the tools you already run on.",
+  },
+  {
+    id: "actions",
+    tag: "05 — Actions",
+    title: "Real actions, real outcomes",
+    blurb:
+      "Records updated, messages sent, deals moved — work that shows up in the systems that matter.",
+  },
+] as const;
+
+export const TRUSTED_LABEL = "TRUSTED BY TEAMS BUILDING WITH AGENTS";
 
 export const LOGOS = [
   "SalvoHealth",
@@ -66,7 +93,7 @@ export const LOGOS = [
 ] as const;
 
 export const STATS = [
-  { value: "100M+", label: "Patient encounters worldwide" },
-  { value: "10x", label: "Increase in clinical capacity" },
+  { value: "100M+", label: "Agent actions run" },
+  { value: "10x", label: "Increase in team capacity" },
   { value: "5x", label: "Return on investment" },
 ] as const;

@@ -96,6 +96,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
+        // The inline script below mutates body's class before hydration (strips
+        // mosaic-bg / adds landing-active on / and /docs to avoid a flash), so
+        // the server/client class lists intentionally differ on first paint.
+        suppressHydrationWarning
         className={`${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} ${playfairDisplay.variable} ${inter.variable} antialiased mosaic-bg min-h-screen`}
       >
         {/* Pre-hydration: strip mosaic-bg before first paint on no-chrome

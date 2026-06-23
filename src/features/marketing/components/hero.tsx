@@ -1,10 +1,10 @@
 import Link from "next/link";
 
 import { CTA_LABEL, HERO } from "../constants";
-import { HeroDiagram } from "./hero-diagram";
+import { HeroVisual } from "./hero-visual";
 
-/** Hero — serif headline + lead + CTA on the left, dark agent-flow panel on
- *  the right. */
+/** Hero — headline + lead + CTA on the left, recessed crystal panel with a
+ *  raised liquid-glass card on the right. */
 export function Hero() {
   return (
     <header className="dopl-hero dopl-bound">
@@ -17,7 +17,7 @@ export function Hero() {
       </div>
 
       <div className="dopl-hero-visual">
-        <HeroDiagram />
+        <HeroVisual />
       </div>
     </header>
   );
