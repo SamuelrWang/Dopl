@@ -56,6 +56,9 @@
 }
 
 .lp-brand-word {
+  /* same Helvetica grotesk the "Lattice" wordmark used — set explicitly so the
+     brand never picks up a serif/display face from anywhere up the tree */
+  font-family: var(--grotesk);
   font-size: 20px;
   font-weight: 700;
   letter-spacing: -0.02em;
@@ -282,18 +285,30 @@
   height: 100%;
   width: var(--bodyW);
   border-radius: 24px;
-  /* tab (a child) juts past the right edge as part of the same shape; flat
-     fill + shared brightness make card + tab one colour */
+  /* size container so the tab (a child) can read the card's pixel HEIGHT via
+     100cqh and paint the same gradient continuously across card + tab */
+  container-type: size;
+  /* tab juts past the right edge but shares the card's gradient (aligned via
+     100cqh on .lp-tab), so card + tab read as one seamless poured piece */
   overflow: visible;
-  background: #e7ddce;
+  /* warm top-to-bottom sheen — the depth (pending) cards */
+  background: linear-gradient(180deg, #eee4d4 0%, #e7ddce 50%, #ddd1bd 100%);
+  /* inner volume: crisp top highlight + grounded bottom shade, like the buttons */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 253, 247, 0.6),
+    inset 0 -1px 0 rgba(74, 58, 36, 0.16),
+    inset 0 -13px 28px rgba(92, 72, 44, 0.06);
   /* transform is set inline per card (it depends on how many cards are done) */
   filter:
     brightness(calc(1 - max(var(--slot), 0) * 0.05))
-    drop-shadow(6px 7px 12px rgba(40, 32, 22, 0.2));
+    drop-shadow(0 3px 4px rgba(58, 45, 26, 0.16))
+    drop-shadow(0 13px 22px rgba(58, 45, 26, 0.12));
   /* slow, smooth glide between positions */
   transition:
     transform 2s cubic-bezier(0.4, 0, 0.2, 1),
     width 2s cubic-bezier(0.4, 0, 0.2, 1),
+    background 2s ease,
+    box-shadow 2s ease,
     filter 2s ease;
 }
 
@@ -302,20 +317,31 @@
    and it grows LONGER to the right as the rail fills (--done), so the right edge
    lands exactly where a shifted card's would — no white gap under the tabs. */
 .lp-panel[data-state="main"] {
-  background: #ece4d6;
+  background: linear-gradient(180deg, #f3ecdf 0%, #ece4d6 50%, #e3d8c6 100%);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 250, 0.85),
+    inset 0 -1px 0 rgba(74, 58, 36, 0.13),
+    inset 0 -15px 32px rgba(92, 72, 44, 0.05);
   width: calc(var(--bodyW) + var(--rail-step) * var(--done));
 }
 
-/* keep the title clear of the parked tabs that now overlap the panel's left */
+/* keep the title clear of the parked tabs. The tabs all stack flush at the same
+   left edge, so ONE rail-step of offset clears them — cap it there (min(done,1))
+   so Humans sits at base and every later panel sits at the Agents position
+   instead of marching further right each time. */
 .lp-panel[data-state="main"] .lp-panel-body {
-  left: calc(clamp(22px, 2.4vw, 40px) + var(--rail-step) * var(--done));
+  left: calc(clamp(22px, 2.4vw, 40px) + var(--rail-step) * min(var(--done), 1));
 }
 
 /* a retracting card stays the LIGHT top colour the whole way out — it's still
    the front-most card while sliding, identical in colour to the new active panel
    behind it. only its tab darkens (below), and only after it has fully parked. */
 .lp-panel[data-state="done"] {
-  background: #ece4d6;
+  background: linear-gradient(180deg, #f3ecdf 0%, #ece4d6 50%, #e3d8c6 100%);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 250, 0.85),
+    inset 0 -1px 0 rgba(74, 58, 36, 0.13),
+    inset 0 -15px 32px rgba(92, 72, 44, 0.05);
 }
 
 /* the retracting card keeps its title: render the body for done cards too, one
@@ -323,7 +349,7 @@
    the active panel (--done has already incremented), then glides off with the
    card. older parked cards have this body too, but it's clipped off-screen. */
 .lp-panel[data-state="done"] .lp-panel-body {
-  left: calc(clamp(22px, 2.4vw, 40px) + var(--rail-step) * (var(--done) - 1));
+  left: calc(clamp(22px, 2.4vw, 40px) + var(--rail-step) * min(var(--done) - 1, 1));
 }
 
 /* glossy ray highlight */
@@ -374,7 +400,15 @@
   align-items: center;
   justify-content: center;
   writing-mode: vertical-rl; /* label runs down the side of the tab */
-  background: inherit; /* exact same fill + brightness as the parent card */
+  /* paint the parent card's OWN gradient (inherited), sized to the full card
+     height (100cqh) and shifted UP by this tab's top offset — so the sheen runs
+     continuously from card into tab and the two read as one poured piece, with
+     the gradient perfectly aligned across the seam. No inset of its own. */
+  background-color: transparent;
+  background-image: inherit;
+  background-repeat: no-repeat;
+  background-size: 100% 100cqh;
+  background-position: 0 calc(-1 * (var(--tab-inset) + var(--i) * var(--tab-step)));
   border: none;
   border-radius: 0 14px 14px 0;
   color: rgba(48, 39, 28, 0.82);
@@ -391,13 +425,13 @@
    deck's left edge. Every parked tab therefore aligns on the exact same vertical
    line; they differ only in height (--i), never in horizontal offset. */
 .lp-panel[data-state="done"] .lp-tab {
-  /* stay the light top colour through the slide, then darken to the under-colour
-     only once the card has fully retracted and the tab is all that's left. the
-     1.6s delay lands the colour change at the tail of the 2s glide. */
-  background: #e7ddce;
+  /* keep the continuous gradient through the slide, then darken to the under-tone
+     only once parked. A delayed brightness (kept as a filter so the inherited
+     gradient stays intact) lands the colour change at the tail of the 2s glide. */
+  filter: brightness(0.9);
   transition:
     color 0.3s ease,
-    background 0.5s ease 1.6s;
+    filter 0.5s ease 1.6s;
 }
 
 /* auto-advance slider on the active panel's top edge. the element covers the

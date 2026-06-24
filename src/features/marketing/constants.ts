@@ -19,11 +19,11 @@ export const HERO = {
 
 /** Stacked deck panels under the hero. Front = active; rest fan to the right. */
 export const DECK_PANELS = [
-  { id: "human", eyebrow: "01", label: "Human" },
-  { id: "agent", eyebrow: "02", label: "Agent" },
+  { id: "human", eyebrow: "01", label: "Humans" },
+  { id: "agent", eyebrow: "02", label: "Agents" },
   { id: "ontology", eyebrow: "03", label: "Ontology" },
   { id: "tools", eyebrow: "04", label: "Tools" },
-  { id: "action", eyebrow: "05", label: "Action" },
+  { id: "action", eyebrow: "05", label: "Actions" },
 ] as const;
 
 /** Seconds the top slider takes to cross a panel before auto-advancing. */

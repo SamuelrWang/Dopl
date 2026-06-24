@@ -13,7 +13,7 @@ import { AuthCrystalPanel } from "./auth-crystal-panel";
 export function AuthSplitLayout({ children }: { children: ReactNode }) {
   return (
     <main
-      className="fixed inset-0 z-50 overflow-hidden bg-[#F3F3F3]"
+      className="fixed inset-0 z-50 overflow-hidden bg-white"
       style={{ fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}
     >
       <div className="mx-auto flex h-full max-w-[1500px] items-stretch gap-10 p-6 md:p-10">

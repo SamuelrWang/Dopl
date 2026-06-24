@@ -44,18 +44,29 @@ export function AuthCrystalPanel() {
   return (
     <div
       className="relative h-full w-full overflow-hidden rounded-[32px] bg-[#060A0F]"
-      // Seat the panel into the page: faint highlight just below the bottom lip.
-      style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.6)" }}
+      // Raise the whole slab off the page (layered drop-shadow = 3D float), then
+      // seat it with a faint highlight just below the bottom lip.
+      style={{
+        boxShadow:
+          "0 6px 16px rgba(8,10,15,0.28), " +
+          "0 28px 64px rgba(8,10,15,0.34), " +
+          "0 1px 0 rgba(255,255,255,0.6)",
+      }}
     >
       <CrystalField mode="container" config={PANEL_CRYSTAL_CONFIG} />
 
-      {/* Concave recess — inner vignette layered above the opaque crystal canvas
-          (pointer-events-none so cursor flips still reach it), below the glass.
-          Dark upper lip + all-around inner shade + lit lower lip = pressed-in. */}
+      {/* Concave recess + glossy raised rim — inner vignette layered above the
+          opaque crystal canvas (pointer-events-none so cursor flips still reach
+          it), below the glass. Lit edges (front-most shadows) catch the light like
+          a bevel = sheen; dark upper lip + inner shade + lit lower lip = the
+          screen pressed into that raised bezel. */}
       <div
         className="pointer-events-none absolute inset-0 rounded-[32px]"
         style={{
           boxShadow:
+            "inset 0 2px 0 rgba(255,255,255,0.24), " +
+            "inset 2px 0 0 rgba(255,255,255,0.07), " +
+            "inset -2px 0 0 rgba(255,255,255,0.07), " +
             "inset 0 8px 22px rgba(0,0,0,0.9), " +
             "inset 0 40px 80px rgba(0,0,0,0.5), " +
             "inset 0 0 50px rgba(0,0,0,0.45), " +

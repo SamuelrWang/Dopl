@@ -7,7 +7,7 @@ import { ResetPasswordForm } from "./reset-password-form";
 export function ResetPasswordScreen() {
   return (
     <main
-      className="flex min-h-screen w-full items-center justify-center bg-[#F3F3F3] px-6 py-10"
+      className="flex min-h-screen w-full items-center justify-center bg-white px-6 py-10"
       style={{ fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}
     >
       <div className="w-full max-w-[336px]">
