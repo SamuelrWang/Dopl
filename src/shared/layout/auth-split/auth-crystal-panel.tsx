@@ -64,28 +64,31 @@ export function AuthCrystalPanel() {
         }}
       />
 
-      <LiquidGlass
-        radius={26}
-        scale={60}
-        className="absolute inset-x-[7%] bottom-[7%] h-[24%] min-h-[150px]"
-      >
-        <div className="flex h-full flex-col justify-center p-[7%]">
-          <h3 className="max-w-[300px] text-[19px] font-semibold leading-[1.2] text-white">
-            Bring your whole team along to Dopl
-          </h3>
-          <p className="mt-3 max-w-[250px] text-[13px] font-light leading-[1.45] text-[#d3d3d3]">
-            Invite your teammates to build, share, and run your agent setups together — everything your team knows, in one shared workspace.
-          </p>
-          <div className="absolute bottom-[16%] right-[7%] flex">
-            <Avatar src="https://randomuser.me/api/portraits/women/44.jpg" />
-            <Avatar src="https://randomuser.me/api/portraits/men/32.jpg" className="-ml-2.5" />
-            <Avatar src="https://randomuser.me/api/portraits/women/68.jpg" className="-ml-2.5" />
-            <div className="-ml-2.5 flex h-[30px] w-[30px] items-center justify-center rounded-full border-2 border-[#2b2b2b] bg-[#3a3a3a] text-[10px] font-medium text-white">
-              +2
-            </div>
-          </div>
-        </div>
+      <LiquidGlass className="absolute inset-x-[7%] bottom-[7%] h-[24%] min-h-[150px]">
+        <TeamCardContent />
       </LiquidGlass>
+    </div>
+  );
+}
+
+/** Heading + blurb + avatar stack rendered inside the glass card. */
+function TeamCardContent() {
+  return (
+    <div className="flex h-full flex-col justify-center p-[7%]">
+      <h3 className="max-w-[300px] text-[19px] font-semibold leading-[1.2] text-white">
+        Bring your whole team along to Dopl
+      </h3>
+      <p className="mt-3 max-w-[250px] text-[13px] font-light leading-[1.45] text-[#d3d3d3]">
+        Invite your teammates to build, share, and run your agent setups together — everything your team knows, in one shared workspace.
+      </p>
+      <div className="absolute bottom-[16%] right-[7%] flex">
+        <Avatar src="https://randomuser.me/api/portraits/women/44.jpg" />
+        <Avatar src="https://randomuser.me/api/portraits/men/32.jpg" className="-ml-2.5" />
+        <Avatar src="https://randomuser.me/api/portraits/women/68.jpg" className="-ml-2.5" />
+        <div className="-ml-2.5 flex h-[30px] w-[30px] items-center justify-center rounded-full border-2 border-[#2b2b2b] bg-[#3a3a3a] text-[10px] font-medium text-white">
+          +2
+        </div>
+      </div>
     </div>
   );
 }

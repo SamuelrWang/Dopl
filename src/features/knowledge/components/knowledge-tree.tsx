@@ -74,6 +74,9 @@ interface Props {
   onRename: (item: ContextMenuItem) => void;
   onRequestMove: (item: ContextMenuItem) => void;
   onDelete: (item: ContextMenuItem) => void;
+  /** Download a row — folder → zip, entry → `.md`. Read action, shown
+   *  to read-only members too. */
+  onDownload: (item: ContextMenuItem) => void;
   /** Id of the row currently in inline-rename mode, or null. */
   editingNodeId: string | null;
   /** Tree calls this with the user-typed name when the inline editor
@@ -132,6 +135,7 @@ export function KnowledgeTree({
   onRename,
   onRequestMove,
   onDelete,
+  onDownload,
   editingNodeId,
   onCommitRename,
   onCancelStub,
@@ -305,6 +309,7 @@ export function KnowledgeTree({
           onRename={onRename}
           onMove={onRequestMove}
           onDelete={onDelete}
+          onDownload={onDownload}
           onClose={() => setMenu(null)}
           canEdit={canEdit}
         />

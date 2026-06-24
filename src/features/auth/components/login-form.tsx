@@ -34,7 +34,7 @@ export function LoginForm() {
       {/* Brand: logo mark above wordmark */}
       <div className="flex flex-col items-start gap-1.5">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/favicons/android-chrome-512x512.png" alt="Dopl" className="h-8 w-8 rounded-[6px]" />
+        <img src="/favicons/android-chrome-512x512.png" alt="Dopl" className="auth-logo-3d h-8 w-8 rounded-[6px]" />
         <span
           className="text-[21px] font-medium text-[#181818]"
           style={{ fontFamily: "var(--font-playfair), Georgia, serif", fontStyle: "italic" }}

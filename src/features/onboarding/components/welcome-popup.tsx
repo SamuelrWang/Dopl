@@ -101,7 +101,7 @@ export function WelcomePopup() {
           <img
             src="/favicons/android-chrome-512x512.png"
             alt="Dopl"
-            className="h-11 w-11 rounded-[8px]"
+            className="auth-logo-3d h-11 w-11 rounded-[8px]"
           />
           <h1 className="text-[24px] font-semibold leading-tight text-[#1e242b]">
             Welcome to Dopl!
@@ -121,10 +121,13 @@ export function WelcomePopup() {
         </p>
 
         <div className="relative mt-3">
-          <div className="h-[180px] overflow-y-auto rounded-[8px] border-[1.5px] border-[#d6dde5] bg-[#eef1f5] px-3.5 py-3 pr-10">
-            <code className="font-mono text-[12px] leading-relaxed text-[#3a414a] whitespace-pre-wrap break-words">
+          <div className="auth-field-3d h-[180px] overflow-y-auto rounded-[10px] px-3.5 py-3 pr-10">
+            <span
+              className="block text-[13px] leading-relaxed text-[#222] whitespace-pre-wrap break-words"
+              style={{ fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}
+            >
               {prompt}
-            </code>
+            </span>
           </div>
           <button
             type="button"

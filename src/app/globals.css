@@ -748,6 +748,16 @@ body.panel-dragging *::after {
     0 0 0 3px rgba(24, 24, 24, 0.07);
 }
 
+/* Brand mark as a raised black button — top highlight, bottom shade, drop. */
+.auth-logo-3d {
+  border: 1px solid rgba(0, 0, 0, 0.55);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.32),
+    inset 0 -2px 3px rgba(0, 0, 0, 0.55),
+    0 2px 3px rgba(0, 0, 0, 0.25),
+    0 6px 14px rgba(0, 0, 0, 0.2);
+}
+
 /* ─────────────────────────────────────────────────────────────────────
    Landing page — capacity.so clone styles
    ───────────────────────────────────────────────────────────────────── */

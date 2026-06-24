@@ -173,7 +173,7 @@ function Screen({ title, body }: { title: string; body: React.ReactNode }) {
           <img
             src="/favicons/android-chrome-512x512.png"
             alt="Dopl"
-            className="h-8 w-8 rounded-[6px]"
+            className="auth-logo-3d h-8 w-8 rounded-[6px]"
           />
           <span
             className="text-[21px] font-medium text-[#181818]"

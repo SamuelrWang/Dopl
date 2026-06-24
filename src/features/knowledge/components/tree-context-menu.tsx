@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { Edit2, FolderInput, Trash2 } from "lucide-react";
+import { Download, Edit2, FolderInput, Trash2 } from "lucide-react";
 import { useClampedFixedPosition } from "@/shared/hooks/use-clamped-fixed-position";
 
 export interface ContextMenuItem {
@@ -18,6 +18,10 @@ interface Props {
   onRename: (item: ContextMenuItem) => void;
   onMove: (item: ContextMenuItem) => void;
   onDelete: (item: ContextMenuItem) => void;
+  /** Download this row — a folder zips its subtree, an entry exports a
+   *  single `.md`. Always available (read action), independent of
+   *  `canEdit`. */
+  onDownload: (item: ContextMenuItem) => void;
   onClose: () => void;
   /** When false, hide write actions (Rename / Move / Delete) entirely
    *  — the user is read-only on this resource and the server would
@@ -43,6 +47,7 @@ export function TreeContextMenu({
   onRename,
   onMove,
   onDelete,
+  onDownload,
   onClose,
   canEdit = true,
 }: Props) {
@@ -70,8 +75,17 @@ export function TreeContextMenu({
       style={style}
       className="z-[1000] min-w-[160px] rounded-md border border-border-default bg-[var(--bg-inset-hover)] shadow-2xl shadow-black/60 py-1"
     >
+      <MenuItem
+        icon={<Download size={12} />}
+        label={item.type === "folder" ? "Download as .zip" : "Download .md"}
+        onClick={() => {
+          onClose();
+          onDownload(item);
+        }}
+      />
       {canEdit ? (
         <>
+          <div className="my-1 mx-1 h-px bg-surface-raised-3" />
           <MenuItem
             icon={<Edit2 size={12} />}
             label="Rename"

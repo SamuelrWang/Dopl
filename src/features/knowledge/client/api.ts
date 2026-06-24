@@ -289,6 +289,77 @@ export async function restoreEntry(
   return data.entry;
 }
 
+// ─── Export / download ──────────────────────────────────────────────
+
+export type KnowledgeExportKind = "base" | "folder" | "entry";
+
+/**
+ * Downloads a base/folder as a zip or a single entry as a `.md` file.
+ * The export routes return a blob with a `Content-Disposition`
+ * filename; we honor it, falling back to a sensible default. The
+ * workspace header is sent so the right workspace is targeted (the
+ * route otherwise falls back to the user's default workspace).
+ *
+ * Done with `fetch` + an object-URL anchor rather than a plain link so
+ * the `X-Workspace-Id` header rides along and HTTP errors surface as
+ * `KnowledgeApiError` instead of navigating to an error page.
+ */
+export async function downloadKnowledgeExport(
+  kind: KnowledgeExportKind,
+  id: string,
+  workspaceId?: string
+): Promise<void> {
+  const path =
+    kind === "base"
+      ? `/api/knowledge/bases/${id}/export`
+      : kind === "folder"
+        ? `/api/knowledge/folders/${id}/export`
+        : `/api/knowledge/entries/${id}/export`;
+
+  const headers: Record<string, string> = {};
+  if (workspaceId) headers["x-workspace-id"] = workspaceId;
+
+  const res = await fetch(new URL(path, window.location.origin).toString(), {
+    headers,
+    credentials: "same-origin",
+  });
+
+  if (!res.ok) {
+    let code = "INTERNAL_ERROR";
+    let message = res.statusText;
+    try {
+      const env = (await res.json()) as { error?: { code?: string; message?: string } };
+      code = env.error?.code ?? code;
+      message = env.error?.message ?? message;
+    } catch {
+      // Non-JSON error body — keep the status text.
+    }
+    throw new KnowledgeApiError(res.status, code, message);
+  }
+
+  const blob = await res.blob();
+  const fallback = kind === "entry" ? "entry.md" : "knowledge.zip";
+  const filename = filenameFromDisposition(res.headers.get("content-disposition")) ?? fallback;
+  triggerBlobDownload(blob, filename);
+}
+
+function filenameFromDisposition(header: string | null): string | null {
+  if (!header) return null;
+  const match = /filename="?([^"]+)"?/i.exec(header);
+  return match ? match[1] : null;
+}
+
+function triggerBlobDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 // ─── Search (Item 5.D) ──────────────────────────────────────────────
 
 export interface KnowledgeSearchHit {

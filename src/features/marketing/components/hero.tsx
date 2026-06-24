@@ -1,24 +1,33 @@
-import Link from "next/link";
+import { HERO } from "../constants";
+import { ArrowUpRight } from "./icons";
+import { ImageDeck } from "./image-deck";
 
-import { CTA_LABEL, HERO } from "../constants";
-import { HeroVisual } from "./hero-visual";
-
-/** Hero — headline + lead + CTA on the left, recessed crystal panel with a
- *  raised liquid-glass card on the right. */
+/** Centered headline + subhead + dual CTA, over an empty image placeholder. */
 export function Hero() {
   return (
-    <header className="dopl-hero dopl-bound">
-      <div className="dopl-hero-copy">
-        <h1 className="dopl-headline">{HERO.headline}</h1>
-        <p className="dopl-lead">{HERO.paragraph}</p>
-        <Link href="/login" className="dopl-cta dopl-cta--hero dopl-hero-cta">
-          {CTA_LABEL}
-        </Link>
+    <section className="lp-hero">
+      <h1 className="lp-headline">
+        {HERO.headlineLines.map((line, i) => (
+          <span key={i} className="lp-headline-line">
+            {line}
+          </span>
+        ))}
+      </h1>
+
+      <p className="lp-subhead">{HERO.subhead}</p>
+
+      <div className="lp-cta-row">
+        <a href="/login" className="lp-btn lp-btn--sm lp-btn--3d">
+          {HERO.primaryCta}
+          <ArrowUpRight size={14} />
+        </a>
+        <a href="#" className="lp-btn lp-btn--sm lp-btn--3d-light">
+          {HERO.secondaryCta}
+          <ArrowUpRight size={14} />
+        </a>
       </div>
 
-      <div className="dopl-hero-visual">
-        <HeroVisual />
-      </div>
-    </header>
+      <ImageDeck />
+    </section>
   );
 }

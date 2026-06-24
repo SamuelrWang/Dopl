@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronRight, Settings } from "lucide-react";
+import { ChevronRight, Download, Settings } from "lucide-react";
 import { toast } from "@/shared/ui/toast";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { KbScopeBadge } from "@/shared/ui/visibility-pill";
@@ -20,6 +20,7 @@ import {
   createFolder as apiCreateFolder,
   deleteEntry as apiDeleteEntry,
   deleteFolder as apiDeleteFolder,
+  downloadKnowledgeExport,
   fetchTree,
   moveEntry as apiMoveEntry,
   moveFolder as apiMoveFolder,
@@ -362,6 +363,32 @@ export function KnowledgeBaseView({
     setMoveTarget(item);
   }, []);
 
+  // Download a tree row: folder → zip of its subtree, entry → single
+  // `.md`. Read action, so it's offered to read-only members too.
+  const handleDownload = useCallback(
+    async (item: ContextMenuItem) => {
+      try {
+        await downloadKnowledgeExport(item.type, item.id, workspaceId);
+      } catch (err) {
+        reportError(err, "Couldn't download");
+      }
+    },
+    [workspaceId]
+  );
+
+  // Download the whole base as a zip whose folders mirror the KB tree.
+  const [downloadingBase, setDownloadingBase] = useState(false);
+  const handleDownloadBase = useCallback(async () => {
+    setDownloadingBase(true);
+    try {
+      await downloadKnowledgeExport("base", base.id, workspaceId);
+    } catch (err) {
+      reportError(err, "Couldn't download knowledge base");
+    } finally {
+      setDownloadingBase(false);
+    }
+  }, [base.id, workspaceId]);
+
   const handleConfirmMove = useCallback(
     async (newParentId: string | null) => {
       if (!moveTarget) return;
@@ -437,6 +464,16 @@ export function KnowledgeBaseView({
           </div>
           <button
             type="button"
+            onClick={handleDownloadBase}
+            disabled={downloadingBase}
+            title="Download this knowledge base as a .zip"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-text-secondary text-xs font-medium hover:bg-surface-raised-2 hover:text-text-primary transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-default"
+          >
+            <Download size={12} />
+            {downloadingBase ? "Preparing…" : "Download"}
+          </button>
+          <button
+            type="button"
             onClick={() => setSettingsOpen(true)}
             className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-surface-cta text-text-on-cta text-xs font-medium hover:bg-surface-cta/90 transition-colors cursor-pointer"
           >
@@ -468,6 +505,7 @@ export function KnowledgeBaseView({
                 onRename={handleRename}
                 onRequestMove={handleRequestMove}
                 onDelete={handleDelete}
+                onDownload={handleDownload}
                 editingNodeId={editingNodeId}
                 onCommitRename={handleCommitRename}
                 onCancelStub={handleCancelStub}
