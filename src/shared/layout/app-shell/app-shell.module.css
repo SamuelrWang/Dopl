@@ -51,6 +51,16 @@
   align-items: center;
   gap: 13px;
   padding: 6px 0 16px;
+  /* Layered drop-shadow = the tile floats off the rail (same 3D language as
+     the auth/onboarding crystal slab). Hairline at the end seats the edge. */
+  --ws-float:
+    0 2px 3px rgba(0, 0, 0, 0.32),
+    0 5px 12px rgba(0, 0, 0, 0.22),
+    0 0 0 1px rgba(0, 0, 0, 0.22);
+  --ws-float-hi:
+    0 4px 6px rgba(0, 0, 0, 0.34),
+    0 11px 22px rgba(0, 0, 0, 0.28),
+    0 0 0 1px rgba(0, 0, 0, 0.24);
 }
 .wsTile {
   position: relative;
@@ -61,21 +71,51 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  background: var(--rail-tile);
+  /* Raised face: lighter at the top, darker at the bottom — reads as a
+     convex tile catching light from above. */
+  background: linear-gradient(180deg, #44515d 0%, #333d47 100%);
   color: #cdd6df;
   overflow: hidden;
   text-decoration: none;
-  transition: border-radius 0.16s ease, background 0.16s ease;
+  box-shadow: var(--ws-float);
+  transition: border-radius 0.16s ease, background 0.16s ease,
+    box-shadow 0.16s ease, transform 0.12s ease;
 }
-.wsTile:not(.wsActive):hover { border-radius: 6px; background: var(--rail-tile-hi); }
-/* Selected workspace: a thin light hairline hugging the icon directly —
-   no inner gap ring, so the selected tile reads the same width as the others. */
+/* Glossy bevel rim, painted ABOVE the workspace image so the 3D edge shows
+   on icon tiles too: top specular highlight, dark lower lip, faint rim. */
+.wsTile::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 -1px 1px rgba(0, 0, 0, 0.30),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+.wsTile:not(.wsActive):hover {
+  border-radius: 6px;
+  background: linear-gradient(180deg, #4d5b67 0%, #3a4550 100%);
+  box-shadow: var(--ws-float-hi);
+  transform: translateY(-1.5px);
+}
+/* Press: sink the tile back into the rail. */
+.wsTile:active {
+  transform: translateY(1px);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(0, 0, 0, 0.22);
+}
+/* Selected workspace: the light hairline ring, layered over the raised
+   float so the active tile reads lifted and lit, not just outlined. */
 .wsActive {
-  box-shadow: 0 0 0 1.5px rgba(233, 238, 243, 0.9);
+  box-shadow: 0 0 0 1.5px rgba(233, 238, 243, 0.9), var(--ws-float);
 }
 .wsTile img { width: 100%; height: 100%; object-fit: cover; }
 .wsLetter { font-family: var(--font-geist-sans), system-ui, sans-serif; font-size: 21px; font-weight: 500; }
 .wsAdd {
+  position: relative;
   width: 46px;
   height: 46px;
   border-radius: 8px;
@@ -84,12 +124,37 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  background: var(--rail-tile);
+  background: linear-gradient(180deg, #44515d 0%, #333d47 100%);
   color: #9fb0bd;
   text-decoration: none;
-  transition: border-radius 0.16s ease, background 0.16s ease, color 0.16s ease;
+  box-shadow: var(--ws-float);
+  transition: border-radius 0.16s ease, background 0.16s ease,
+    color 0.16s ease, box-shadow 0.16s ease, transform 0.12s ease;
 }
-.wsAdd:hover { border-radius: 6px; background: var(--rail-tile-hi); color: #dce4eb; }
+.wsAdd::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 -1px 1px rgba(0, 0, 0, 0.30),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+.wsAdd:hover {
+  border-radius: 6px;
+  background: linear-gradient(180deg, #4d5b67 0%, #3a4550 100%);
+  color: #dce4eb;
+  box-shadow: var(--ws-float-hi);
+  transform: translateY(-1.5px);
+}
+.wsAdd:active {
+  transform: translateY(1px);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(0, 0, 0, 0.22);
+}
 .railSpacer { flex: 1; }
 .wsMe {
   width: 42px;
