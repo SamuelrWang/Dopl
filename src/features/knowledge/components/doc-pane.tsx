@@ -38,6 +38,9 @@ export interface DocPaneProps {
    *  tree + the active entry body so the user sees changes another
    *  tab/agent saved while away. */
   onFocusRefetch?: () => void;
+  /** Horizontal inset (Tailwind classes) for the editor's fixed toolbar
+   *  pill, so it centers over the host panel. Defaults to the v1 layout. */
+  toolbarInset?: string;
 }
 
 /**
@@ -87,6 +90,7 @@ export function DocPane({
   onSaved,
   onStaleVersion,
   onFocusRefetch,
+  toolbarInset,
 }: DocPaneProps) {
   const [title, setTitle] = useState(entry.title);
   const [body, setBody] = useState(entry.body);
@@ -418,6 +422,7 @@ export function DocPane({
         <DocEditor
           initialMarkdown={editorMd}
           resetKey={`${entry.id}:${editorReloadKey}`}
+          toolbarInset={toolbarInset}
           onChange={(md) => {
             setBody(md);
             scheduleSave(title, md);

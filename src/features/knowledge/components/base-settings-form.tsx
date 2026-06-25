@@ -105,9 +105,8 @@ export function BaseSettingsForm({
     try {
       await deleteBase(base.id, workspaceId);
       toast({ title: `"${base.name}" deleted` });
-      // The /knowledge index page no longer exists — bounce to the
-      // workspace home; the user can pick another KB from the sidebar.
-      router.replace(`/${workspaceSlug}`);
+      // Return to the knowledge list; the user can pick another base there.
+      router.replace(`/${workspaceSlug}/knowledge`);
       router.refresh();
     } catch (err) {
       const msg =

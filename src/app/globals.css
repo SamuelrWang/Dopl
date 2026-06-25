@@ -124,10 +124,13 @@
 
   /* Fonts — always fall back to a system sans (never the browser's
      serif default) if the loaded font variable is missing. */
-  --font-sans: var(--font-geist-sans), system-ui, -apple-system, "Segoe UI",
+  /* App UI font: match the landing page (lp-nav / hero use --grotesk =
+     Helvetica Neue). Single lever for the whole authenticated app. */
+  --font-app: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-sans: var(--font-app), system-ui, -apple-system, "Segoe UI",
     sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
-  --font-heading: var(--font-geist-sans), system-ui, sans-serif;
+  --font-heading: var(--font-app), system-ui, sans-serif;
 
   /* Radius scale */
   --radius-sm: calc(var(--radius) * 0.6);
@@ -334,9 +337,9 @@ html {
   body {
     background-color: var(--body-bg);
     color: var(--forest);
-    /* Use the real next/font variable (set on <body>), with a system-sans
+    /* App UI font — Helvetica Neue (matches the landing), with a system-sans
        fallback so it can never drop to the browser's serif default. */
-    font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+    font-family: var(--font-app), system-ui, -apple-system, sans-serif;
   }
 
   html {

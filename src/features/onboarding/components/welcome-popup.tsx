@@ -70,7 +70,7 @@ export function WelcomePopup() {
       className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto px-6 py-10"
       onClick={dismiss}
       style={{
-        fontFamily: "var(--font-geist-sans), system-ui, sans-serif",
+        fontFamily: "var(--font-app), system-ui, sans-serif",
         backgroundColor: "rgba(0,0,0,0.5)",
         opacity: shown ? 1 : 0,
         transition: "opacity 220ms ease",

@@ -17,6 +17,13 @@ export const HERO = {
   secondaryCta: "Download",
 } as const;
 
+/**
+ * Stable public URL of the notarized macOS desktop DMG. Served from the latest
+ * GitHub release; the version-less asset name keeps this link valid across builds.
+ */
+export const DOWNLOAD_URL =
+  "https://github.com/SamuelrWang/Dopl/releases/latest/download/Dopl-arm64.dmg";
+
 /** Stacked deck panels under the hero. Front = active; rest fan to the right. */
 export const DECK_PANELS = [
   { id: "human", eyebrow: "01", label: "Humans" },

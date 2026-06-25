@@ -5,35 +5,37 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Dopl — Offline</title>
   <style>
-    :root { color-scheme: dark; }
+    :root { color-scheme: light; }
     html, body {
       margin: 0; height: 100%;
-      background: #0b0b0f; color: #e7e7ea;
+      background: #ffffff; color: #0d0d0d;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       -webkit-user-select: none; user-select: none;
     }
     .wrap {
       height: 100%; display: flex; flex-direction: column;
       align-items: center; justify-content: center; text-align: center;
-      gap: 18px; padding: 24px;
+      gap: 16px; padding: 24px;
     }
-    .dot {
-      width: 14px; height: 14px; border-radius: 50%;
-      background: #ef4444; box-shadow: 0 0 0 6px rgba(239,68,68,.15);
+    .mark {
+      width: 44px; height: 44px; border-radius: 11px;
+      filter: drop-shadow(0 6px 14px rgba(0,0,0,.18));
     }
-    h1 { font-size: 19px; font-weight: 600; margin: 4px 0 0; }
-    p { margin: 0; color: #9a9aa3; font-size: 14px; max-width: 360px; line-height: 1.5; }
+    h1 { font-size: 19px; font-weight: 600; letter-spacing: -0.01em; margin: 6px 0 0; }
+    p { margin: 0; color: #8c8c8c; font-size: 14px; max-width: 360px; line-height: 1.5; }
     button {
-      margin-top: 8px; padding: 10px 22px; font-size: 14px; font-weight: 500;
-      color: #fff; background: #6366f1; border: 0; border-radius: 9px;
-      cursor: pointer; transition: background .15s ease;
+      margin-top: 10px; padding: 10px 22px; font-size: 14px; font-weight: 500;
+      color: #fff; background: linear-gradient(180deg, #313131 0%, #1c1c1c 52%, #111 100%);
+      border: 0; border-radius: 9px; cursor: pointer;
+      box-shadow: 0 1px 2px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.12);
+      transition: filter .15s ease;
     }
-    button:hover { background: #4f46e5; }
+    button:hover { filter: brightness(1.12); }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="dot"></div>
+    <img class="mark" src="assets/icon.png" alt="Dopl" onerror="this.style.display='none'" />
     <h1>Can’t reach Dopl</h1>
     <p>You appear to be offline, or usedopl.com is temporarily unavailable. Check your connection and try again.</p>
     <button id="retry">Retry</button>

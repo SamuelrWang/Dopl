@@ -16,7 +16,7 @@
   z-index: 30;
   background: var(--rail);
   color: var(--ink);
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-family: var(--font-app), system-ui, sans-serif;
   font-size: 15px;
   -webkit-font-smoothing: antialiased;
   display: flex;
@@ -25,7 +25,7 @@
 }
 .root *, .root *::before, .root *::after { box-sizing: border-box; }
 
-.serif { font-family: var(--font-geist-sans), system-ui, sans-serif; }
+.serif { font-family: var(--font-app), system-ui, sans-serif; }
 
 /* ---------- Titlebar ---------- */
 .titlebar {
@@ -113,7 +113,7 @@
   box-shadow: 0 0 0 1.5px rgba(233, 238, 243, 0.9), var(--ws-float);
 }
 .wsTile img { width: 100%; height: 100%; object-fit: cover; }
-.wsLetter { font-family: var(--font-geist-sans), system-ui, sans-serif; font-size: 21px; font-weight: 500; }
+.wsLetter { font-family: var(--font-app), system-ui, sans-serif; font-size: 21px; font-weight: 500; }
 .wsAdd {
   position: relative;
   width: 46px;
@@ -166,7 +166,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-family: var(--font-app), system-ui, sans-serif;
   font-size: 18px;
   font-weight: 500;
   cursor: pointer;
@@ -181,70 +181,128 @@
   border-radius: 8px;
   overflow: hidden;
   margin: var(--shell-gap-top) var(--shell-gap-right) var(--shell-gap-bottom) var(--shell-gap-left);
-  background: var(--sidebar);
+  /* Neutral gray frame behind the sidebar + content panels. */
+  background: #f4f4f2;
 }
 
-/* ---------- Sidebar ---------- */
+/* ─────────────────────────────────────────────────────────────────────
+   Sidebar — the canonical skin for every workspace page: gray surface,
+   small muted type, hairline-fenced nav group, an indented (concave) gray
+   selection, the Pro card under the nav, and the footer pinned to the
+   bottom. Brand is a raised workspace pill.
+   ───────────────────────────────────────────────────────────────────── */
 .sidebar {
   width: var(--shell-sidebar-w);
   flex: 0 0 var(--shell-sidebar-w);
-  background: var(--sidebar);
+  background: #f4f4f2;
   padding: 8px 12px 20px 12px;
   display: flex;
   flex-direction: column;
 }
-.brand { display: flex; align-items: center; padding: 6px 4px 0; margin-bottom: 28px; }
-.brandName {
-  font-size: 21px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: var(--ink);
+
+/* Brand → bordered raised workspace pill (avatar + name + chevrons). */
+.brand { padding: 2px 2px 0; margin-bottom: 14px; }
+.brandPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #ffffff 0%, #f6f6f6 100%);
+  border: 1px solid #e2e2e0;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 1px 2px rgba(0, 0, 0, 0.06),
+    0 3px 8px rgba(0, 0, 0, 0.05);
+}
+.brandAvatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: #2f7d57;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  flex: 0 0 22px;
+}
+.brandPillName {
+  flex: 1;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #26282c;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.brandChevron { color: #9a9ea4; flex: 0 0 auto; }
 
-.nav { display: flex; flex-direction: column; gap: 3px; }
+/* Nav group — fenced by top + bottom hairlines, tighter, muted. Fixed item
+   height (34px) + 1px gap = a 35px pitch the sliding thumb steps through. */
+.nav {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+}
+/* Indented (concave) selection that slides between items on navigation,
+   instead of the highlight jumping. */
+.navThumb {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 10px;
+  height: 34px;
+  border-radius: 8px;
+  background: #e9e9e7;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.12),
+    inset 0 1px 1px rgba(0, 0, 0, 0.06),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.7);
+  transition: transform 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+  z-index: 0;
+}
 .navItem {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
-  gap: 13px;
-  padding: 6px 10px;
+  gap: 11px;
+  height: 34px;
+  padding: 0 11px;
   border-radius: 8px;
-  border: 1px solid transparent; /* reserve space so active/hover don't shift */
-  color: var(--black);
-  font-size: 16px;
+  color: #3a3d42;
+  font-size: 14.5px;
   font-weight: 500;
   text-decoration: none;
-  transition: transform 120ms ease, box-shadow 120ms ease;
+  transition: color 120ms ease, background 120ms ease;
 }
-.navItem svg { flex: 0 0 auto; color: var(--black); }
+.navItem svg { flex: 0 0 auto; color: #8a8f97; width: 19px; height: 19px; }
 
-/* Active selector — raised dark button (same 3D recipe as the auth buttons). */
+/* Selected — just the text/icon tint; the sliding thumb draws the pill. */
 .navItem.navActive {
-  color: #fff;
-  background: linear-gradient(180deg, #313131 0%, #1c1c1c 52%, #111 100%);
-  border-color: #000;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.22),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.45),
-    0 2px 3px rgba(0, 0, 0, 0.22),
-    0 6px 16px rgba(0, 0, 0, 0.2);
+  color: #26282c;
 }
-.navItem.navActive svg { color: #fff; }
+.navItem.navActive svg { color: #4a4d52; }
 
-/* Hover — raised gray button. */
+/* Hover — flat subtle gray on non-active items. */
 .navItem:not(.navActive):hover {
-  background: linear-gradient(180deg, #eef2f6, #dce3ea);
-  border-color: rgba(0, 0, 0, 0.05);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.85),
-    0 1px 2px rgba(0, 0, 0, 0.1),
-    0 4px 10px rgba(0, 0, 0, 0.06);
+  background: rgba(0, 0, 0, 0.035);
 }
 
+/* Pro upsell card — seated in the open space right under the nav divider. */
 .wordsCard {
-  margin-top: auto;
+  margin-top: 16px;
   background: var(--lavender);
   border-radius: 8px;
   padding: 18px;
@@ -291,14 +349,22 @@
     0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
-.foot { margin-top: 18px; display: flex; flex-direction: column; gap: 4px; }
+/* Footer — pinned to the bottom, behind its own hairline. */
+.foot {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-subtle);
+}
 .footItem {
   display: flex;
   align-items: center;
-  gap: 13px;
-  padding: 6px 10px;
-  color: var(--black);
-  font-size: 15.5px;
+  gap: 11px;
+  padding: 7px 10px;
+  color: #3a3d42;
+  font-size: 14.5px;
   font-weight: 500;
   text-decoration: none;
   border-radius: 8px;
@@ -307,17 +373,12 @@
   cursor: pointer;
   width: 100%;
   text-align: left;
-  transition: transform 120ms ease, box-shadow 120ms ease;
+  transition: background 120ms ease;
 }
 .footItem:hover {
-  background: linear-gradient(180deg, #eef2f6, #dce3ea);
-  border-color: rgba(0, 0, 0, 0.05);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.85),
-    0 1px 2px rgba(0, 0, 0, 0.1),
-    0 4px 10px rgba(0, 0, 0, 0.06);
+  background: rgba(0, 0, 0, 0.035);
 }
-.footItem svg { color: var(--black); }
+.footItem svg { color: #8a8f97; width: 19px; height: 19px; }
 
 /* ---------- Main panel ---------- */
 .main {
@@ -366,7 +427,7 @@
 }
 .heroInner { position: relative; z-index: 2; padding: 48px 50px; max-width: 62%; }
 .hero h2 {
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-family: var(--font-app), system-ui, sans-serif;
   font-weight: 400;
   font-size: 38px;
   line-height: 1.1;
@@ -391,7 +452,7 @@
 /* section head */
 .sectionHead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 26px; gap: 20px; }
 .sectionTitle {
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-family: var(--font-app), system-ui, sans-serif;
   font-size: 32px;
   font-weight: 500;
   letter-spacing: -0.01em;

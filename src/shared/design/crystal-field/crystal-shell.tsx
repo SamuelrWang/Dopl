@@ -18,7 +18,7 @@ export function CrystalShell({ children }: { children: ReactNode }) {
   return (
     <div
       className="fixed inset-0 z-50 overflow-hidden bg-[#060A11] text-[#E4EAF1]"
-      style={{ fontFamily: "var(--font-geist-sans), system-ui, sans-serif" }}
+      style={{ fontFamily: "var(--font-app), system-ui, sans-serif" }}
     >
       <CrystalField occludeSelector={CRYSTAL_PANEL_SELECTOR} />
       <div className="absolute inset-0 overflow-y-auto">

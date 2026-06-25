@@ -82,7 +82,7 @@
   overflow: hidden;
   background: #f5f7fa;
   box-shadow: 0 30px 90px rgba(0, 0, 0, 0.45);
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-family: var(--font-app), system-ui, sans-serif;
   color: #232a31;
   opacity: 0;
   transform: scale(0.96) translateY(8px);
@@ -115,7 +115,7 @@
 }
 .confirmBody { padding: 26px 28px 24px; }
 .confirmTitle {
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-family: var(--font-app), system-ui, sans-serif;
   font-size: 22px;
   font-weight: 500;
   letter-spacing: -0.01em;
@@ -154,7 +154,7 @@
 
 .narrowBody { padding: 30px 34px 34px; }
 .narrowTitle {
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-family: var(--font-app), system-ui, sans-serif;
   font-size: 25px;
   font-weight: 500;
   letter-spacing: -0.01em;
@@ -254,7 +254,7 @@
 .pane::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.12); border-radius: 8px; }
 
 .paneTitle {
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-family: var(--font-app), system-ui, sans-serif;
   font-size: 31px;
   font-weight: 500;
   letter-spacing: -0.01em;

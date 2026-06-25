@@ -1,0 +1,836 @@
+/*
+ * Knowledge V2 — self-contained styles for the three-pane redesign.
+ *
+ * Deliberately isolated from app-shell.module.css and the global token
+ * system so the rework can iterate without touching the live knowledge
+ * page. Palette + type scale are tuned to match the reference mock
+ * (small fonts, hairline rules, neutral greys). Promote to global tokens
+ * only when v2 ships and replaces v1.
+ */
+
+.shell {
+  --kv-bg: #f7f7f5;
+  --kv-panel: #ffffff;
+  --kv-border: #ededeb;
+  --kv-border-strong: #e3e3e0;
+  --kv-text: #26282c;
+  --kv-text-2: #63676d;
+  --kv-text-3: #9a9ea4;
+  --kv-accent: #2f3033;
+  --kv-row-hover: #f6f6f4;
+  --kv-row-active: #eef0f2;
+  --kv-pill-bg: #f1f1ef;
+
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  background: var(--kv-panel);
+  /* Float the whole list+detail surface as ONE raised panel sitting above
+     the sidebar's panel: a margin reveals the lower panel as a frame, and a
+     layered drop-shadow + hairline border lift it off. */
+  margin: 7px 8px 9px 8px;
+  border-radius: 14px;
+  border: 1px solid var(--kv-border-strong);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.05),
+    0 10px 28px -8px rgba(0, 0, 0, 0.16);
+  overflow: hidden;
+  font-family: var(--font-app), system-ui, sans-serif;
+  color: var(--kv-text);
+  -webkit-font-smoothing: antialiased;
+}
+.shell *,
+.shell *::before,
+.shell *::after {
+  box-sizing: border-box;
+}
+
+/* ───────────────────────── List pane (middle) ───────────────────────── */
+
+.listPane {
+  width: 372px;
+  flex: 0 0 372px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--kv-panel);
+  border-right: 1px solid var(--kv-border);
+}
+
+/* List header: "Knowledge ▾" + trailing icon actions. */
+.listHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 14px 10px;
+}
+.listTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--kv-text);
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.listTitle:hover {
+  background: var(--kv-row-hover);
+}
+.listTitle svg {
+  color: var(--kv-text-3);
+}
+.headSpacer {
+  flex: 1;
+}
+.iconBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  border: none;
+  background: none;
+  color: var(--kv-text-2);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.iconBtn:hover {
+  background: var(--kv-row-hover);
+  color: var(--kv-text);
+}
+
+/* Search */
+/* Concave (pressed-in) search well — dark inner top, light inner bottom,
+   outer bottom highlight to seat it. Same language as the auth fields. */
+.search {
+  position: relative;
+  margin: 0 14px 12px;
+  border-radius: 9px;
+  background: #e9eaec;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.13),
+    inset 0 1px 2px rgba(0, 0, 0, 0.07),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.9),
+    0 1px 0 rgba(255, 255, 255, 0.8);
+  transition: box-shadow 0.12s ease, border-color 0.12s ease;
+}
+.search:focus-within {
+  border-color: rgba(24, 24, 24, 0.18);
+  box-shadow:
+    inset 0 2px 5px rgba(0, 0, 0, 0.17),
+    inset 0 1px 2px rgba(0, 0, 0, 0.09),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.9),
+    0 0 0 3px rgba(24, 24, 24, 0.06);
+}
+.search svg {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--kv-text-3);
+  pointer-events: none;
+}
+.search input {
+  width: 100%;
+  height: 36px;
+  padding: 0 12px 0 33px;
+  border: none;
+  background: transparent;
+  font-size: 13.5px;
+  color: var(--kv-text);
+  outline: none;
+}
+.search input::placeholder {
+  color: var(--kv-text-3);
+}
+
+/* Filter tabs — concave (recessed) track that the active tab sits raised
+   inside, like a key on a switchboard. A single thumb slides between slots
+   instead of the highlight jumping. */
+.tabs {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 14px 12px;
+  padding: 4px;
+  background: #e9eaec;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.12),
+    inset 0 1px 2px rgba(0, 0, 0, 0.06),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.85);
+}
+/* Raised sliding thumb — white face, top highlight, drop shadow popping out
+   of the recessed track. Slot width assumes 4 equal tabs (4px pad, 4px gap).
+   translateX is in the thumb's own width units, plus one gap per step. */
+.tabThumb {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  height: 27px;
+  width: calc((100% - 8px - 12px) / 4);
+  border-radius: 7px;
+  background: linear-gradient(180deg, #ffffff 0%, #f3f3f3 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 0 0 1px rgba(0, 0, 0, 0.05),
+    0 1px 2px rgba(0, 0, 0, 0.12),
+    0 3px 6px rgba(0, 0, 0, 0.08);
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+.tab {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  height: 27px;
+  border: none;
+  background: none;
+  border-radius: 7px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--kv-text-2);
+  cursor: pointer;
+  transition: color 0.18s ease;
+}
+.tab:hover {
+  color: var(--kv-text);
+}
+.tabActive {
+  color: var(--kv-text);
+}
+
+/* Scrolling list body. Top hairline closes off the search/tabs header zone. */
+.listBody {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 0 16px;
+  border-top: 1px solid var(--kv-border);
+}
+/* Each base block (row + its expanded tree) is delimited by a hairline,
+   matching the reference's separated list items. */
+.kbItem {
+  border-bottom: 1px solid var(--kv-border);
+}
+.listBody::-webkit-scrollbar {
+  width: 0;
+}
+
+/* Section label ("Knowledge bases", etc.) */
+.sectionLabel {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 12px 18px 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--kv-text-3);
+}
+.sectionLabel svg {
+  color: var(--kv-text-3);
+}
+
+/* ───────────────────────── KB rows ───────────────────────── */
+
+.kbRow {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 9px 16px 9px 14px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  transition: background 0.1s ease;
+}
+.kbRow:hover {
+  background: var(--kv-row-hover);
+}
+.kbRowActive {
+  background: var(--kv-row-active);
+}
+/* Left accent bar on the selected row. */
+.kbRowActive::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--kv-accent);
+}
+.disclosure {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 18px;
+  margin-top: 1px;
+  color: var(--kv-text-3);
+  flex: 0 0 16px;
+  transition: transform 0.14s ease;
+}
+.disclosureOpen {
+  transform: rotate(90deg);
+}
+.rowBtn {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 0;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.rowMain {
+  flex: 1;
+  min-width: 0;
+}
+.rowTopline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.rowTitle {
+  flex: 1;
+  min-width: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  color: var(--kv-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rowTime {
+  flex: 0 0 auto;
+  font-size: 11.5px;
+  color: var(--kv-text-3);
+}
+.rowSub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+  font-size: 12.5px;
+  color: var(--kv-text-2);
+}
+.rowSub svg {
+  color: var(--kv-text-3);
+  flex: 0 0 auto;
+}
+.rowSubText {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ───────────────────────── Tree rows (expanded KB) ───────────────────────── */
+
+.tree {
+  padding: 2px 0 6px;
+}
+.treeRow {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--kv-text);
+  padding: 6px 16px;
+  transition: background 0.1s ease;
+}
+.treeRow:hover {
+  background: var(--kv-row-hover);
+}
+.treeRowActive {
+  background: var(--kv-row-active);
+  color: var(--kv-text);
+}
+.treeChevron {
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  align-items: center;
+  justify-content: center;
+  color: var(--kv-text-3);
+  flex: 0 0 14px;
+  transition: transform 0.14s ease;
+}
+.treeChevronOpen {
+  transform: rotate(90deg);
+}
+.treeRow svg.leaf {
+  color: var(--kv-text-3);
+  flex: 0 0 auto;
+}
+.treeLabel {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.treeEmpty {
+  padding: 6px 16px;
+  font-size: 12px;
+  color: var(--kv-text-3);
+}
+.treeLoading {
+  padding: 8px 16px;
+  font-size: 12px;
+  color: var(--kv-text-3);
+}
+/* Hover-revealed row actions (+entry / +folder / more). */
+.treeRowGroup {
+  padding-right: 8px;
+}
+.treeRowActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  margin-left: auto;
+  flex: 0 0 auto;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+.treeRowGroup:hover .treeRowActions {
+  opacity: 1;
+}
+.treeActionBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: none;
+  border-radius: 5px;
+  color: var(--kv-text-3);
+  cursor: pointer;
+}
+.treeActionBtn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--kv-text);
+}
+.treeActionDisabled {
+  opacity: 0.4;
+  cursor: default;
+}
+/* Base-root create affordance. */
+.addRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 16px 4px 28px;
+}
+.addBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: none;
+  background: none;
+  padding: 4px 7px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  color: var(--kv-text-3);
+  cursor: pointer;
+  transition: background 0.1s ease, color 0.1s ease;
+}
+.addBtn:hover {
+  background: var(--kv-row-hover);
+  color: var(--kv-text);
+}
+.addBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.addBtn svg {
+  flex: 0 0 auto;
+}
+
+/* ───────────────────────── Detail pane (right) ───────────────────────── */
+
+.detailPane {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--kv-panel);
+}
+
+/* Detail top bar: close / nav / title / actions */
+.detailTop {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 52px;
+  flex: 0 0 52px;
+  padding: 0 14px 0 10px;
+  border-bottom: 1px solid var(--kv-border);
+}
+.detailTopTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin-left: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--kv-text);
+  min-width: 0;
+}
+.detailTopTitle span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Breadcrumb in the detail top bar (entry selection). */
+.crumbs {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.crumbBtn {
+  max-width: 160px;
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 500;
+  color: var(--kv-text-2);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.crumbBtn:hover {
+  color: var(--kv-text);
+}
+.crumbSep {
+  flex: 0 0 auto;
+  color: var(--kv-text-3);
+}
+.crumbCurrent {
+  max-width: 220px;
+  font-weight: 600;
+  color: var(--kv-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.divider {
+  width: 1px;
+  height: 22px;
+  background: var(--kv-border-strong);
+  margin: 0 4px;
+}
+.iconBtnRed:hover {
+  background: #fdecec;
+  color: #d9534f;
+}
+.iconBtnActive {
+  color: #e0a91b;
+}
+
+/* Tabs row */
+/* Tabs — pill style (active = gray pill), not an underline. */
+.detailTabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 11px 24px;
+  border-bottom: 1px solid var(--kv-border);
+}
+.detailTab {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: none;
+  background: none;
+  padding: 6px 13px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--kv-text-2);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.detailTab:hover {
+  color: var(--kv-text);
+  background: var(--kv-row-hover);
+}
+.detailTabActive {
+  color: var(--kv-text);
+  background: #ececea;
+}
+.detailTabActive:hover {
+  background: #ececea;
+}
+
+/* Scroll body — generous padding so content sits well off the edges. */
+.detailBody {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 34px 56px 64px;
+}
+.detailBody::-webkit-scrollbar {
+  width: 0;
+}
+
+/* Header block */
+.docTitle {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  font-size: 23px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--kv-text);
+}
+.docTitle .titleIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  color: #fff;
+  flex: 0 0 26px;
+}
+.docSub {
+  margin-top: 8px;
+  font-size: 14.5px;
+  color: var(--kv-text-2);
+  line-height: 1.5;
+}
+.hr {
+  height: 1px;
+  background: var(--kv-border);
+  margin: 26px 0;
+}
+
+/* Nested meta card */
+.metaCard {
+  border: 1px solid var(--kv-border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+/* Gray header bar over the white card body (reference: the "Website" strip). */
+.metaCardHead {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 13px 16px;
+  background: #f6f6f4;
+  border-bottom: 1px solid var(--kv-border);
+}
+.metaCardHead .label {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--kv-text);
+}
+.metaCardBody {
+  padding: 20px 22px 22px;
+}
+.metaTitle {
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--kv-text);
+}
+.metaAuthor {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 9px;
+  font-size: 13.5px;
+  color: var(--kv-text-2);
+}
+.metaFields {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+.metaRow {
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+}
+.metaKey {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  width: 168px;
+  flex: 0 0 168px;
+  color: var(--kv-text-2);
+}
+.metaKey svg {
+  color: var(--kv-text-3);
+}
+.metaVal {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--kv-text);
+  font-weight: 500;
+}
+/* Variant for rows whose value wraps (team chips) — key stays top-aligned. */
+.metaRowTop {
+  display: flex;
+  align-items: flex-start;
+  font-size: 14px;
+}
+.metaRowTop .metaKey {
+  padding-top: 3px;
+}
+.metaTeams {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* avatars + pills */
+.avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #e3e3e0;
+  flex: 0 0 auto;
+}
+.pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 7px;
+  font-size: 12.5px;
+  font-weight: 500;
+  background: var(--kv-pill-bg);
+  color: var(--kv-text);
+}
+.pillBlue {
+  background: #e8f0fd;
+  color: #3b73d9;
+}
+
+/* Shrink the shared DocEditor's prose to the v2 type scale (its defaults are
+   16px). Scoped to this wrapper so v1 KB detail keeps its larger size. */
+.editorScope :global(.ProseMirror) {
+  font-size: 14.5px;
+  line-height: 1.62;
+}
+.editorScope :global(.ProseMirror p),
+.editorScope :global(.ProseMirror li),
+.editorScope :global(.ProseMirror blockquote p) {
+  font-size: 14.5px;
+  line-height: 1.62;
+}
+.editorScope :global(.ProseMirror h1) {
+  font-size: 20px;
+}
+.editorScope :global(.ProseMirror h2) {
+  font-size: 17px;
+}
+.editorScope :global(.ProseMirror h3) {
+  font-size: 15px;
+}
+.editorScope :global(.ProseMirror table) {
+  font-size: 12.5px;
+}
+
+/* Description */
+.descHead {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin-bottom: 12px;
+}
+.descBody {
+  font-size: 15px;
+  line-height: 1.6;
+  color: #3c3f44;
+}
+.descBody p + p {
+  margin-top: 14px;
+}
+
+/* Subtasks */
+.subHead {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin-bottom: 14px;
+}
+.subDateRow {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 11px 14px;
+  border-radius: 9px;
+  background: var(--kv-bg);
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--kv-text-2);
+}
+.subDateRow svg {
+  color: var(--kv-text-3);
+}
+.subItem {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 14px;
+  font-size: 14px;
+  color: var(--kv-text);
+  border-bottom: 1px solid var(--kv-border);
+}
+.subCheck {
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  border: 1.6px solid var(--kv-border-strong);
+  flex: 0 0 17px;
+}
+
+/* Empty detail state */
+.detailEmpty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--kv-text-3);
+}
+.detailEmpty svg {
+  color: var(--kv-border-strong);
+}
+.detailEmpty p {
+  font-size: 13.5px;
+}

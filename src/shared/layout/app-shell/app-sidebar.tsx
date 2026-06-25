@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   BookOpen,
+  ChevronsUpDown,
   HelpCircle,
   Home,
   LayoutGrid,
@@ -65,10 +66,27 @@ export function AppSidebar({
   return (
     <aside className={styles.sidebar}>
       <div className={styles.brand}>
-        <span className={styles.brandName}>{workspaceName}</span>
+        <div className={styles.brandPill}>
+          <span className={styles.brandAvatar}>
+            {(workspaceName.trim()[0] || "?").toUpperCase()}
+          </span>
+          <span className={styles.brandPillName}>{workspaceName}</span>
+          <ChevronsUpDown size={15} className={styles.brandChevron} />
+        </div>
       </div>
 
       <nav className={styles.nav}>
+        <span
+          className={styles.navThumb}
+          style={{
+            transform: `translateY(${
+              Math.max(
+                0,
+                NAV.findIndex((n) => n.section === activeSection)
+              ) * 35
+            }px)`,
+          }}
+        />
         {NAV.map(({ label, icon: Icon, section }) => (
           <Link
             key={section}

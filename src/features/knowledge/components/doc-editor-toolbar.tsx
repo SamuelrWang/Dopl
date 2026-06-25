@@ -35,6 +35,10 @@ import { cn } from "@/shared/lib/utils";
 
 interface ToolbarProps {
   editor: Editor;
+  /** Tailwind classes for the fixed pill's horizontal inset at md+, so the
+   *  bar centers over the content panel rather than the viewport. Defaults
+   *  to the v1 KB-detail layout offset. */
+  toolbarInset?: string;
 }
 
 interface ToolbarItem {
@@ -45,7 +49,10 @@ interface ToolbarItem {
   run: () => void;
 }
 
-export function Toolbar({ editor }: ToolbarProps) {
+export function Toolbar({
+  editor,
+  toolbarInset = "md:left-[570px] md:right-[6px]",
+}: ToolbarProps) {
   const baseGroups: ReadonlyArray<ReadonlyArray<ToolbarItem>> = [
     [
       {
@@ -212,7 +219,12 @@ export function Toolbar({ editor }: ToolbarProps) {
   // right margin — so offset left/right to center over the panel (not the
   // viewport) at md+. Below md the tree/sidebars collapse.
   return (
-    <div className="pointer-events-none fixed bottom-4 left-0 right-0 z-[5] flex justify-center px-4 md:left-[570px] md:right-[6px]">
+    <div
+      className={cn(
+        "pointer-events-none fixed bottom-4 left-0 right-0 z-[5] flex justify-center px-4",
+        toolbarInset
+      )}
+    >
       <div className="pointer-events-auto flex items-center gap-1 rounded-full border border-border-default bg-[var(--panel-surface)] px-2 py-1 shadow-[var(--shadow-panel)] backdrop-blur-xl">
         {groups.map((group, gi) => (
           <div key={gi} className="flex items-center gap-0.5">

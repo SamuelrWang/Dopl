@@ -27,6 +27,9 @@ interface Props {
   onChange?: (markdown: string) => void;
   /** Read-only mode — disables editing entirely (e.g. trash view). */
   readOnly?: boolean;
+  /** Horizontal inset (Tailwind classes) for the fixed toolbar pill, so it
+   *  centers over the host panel. Defaults to the v1 KB-detail layout. */
+  toolbarInset?: string;
 }
 
 /**
@@ -42,7 +45,13 @@ interface Props {
  * `turndown` and bubbled up via `onChange` — the parent owns the
  * autosave debounce.
  */
-export function DocEditor({ initialMarkdown, resetKey, onChange, readOnly }: Props) {
+export function DocEditor({
+  initialMarkdown,
+  resetKey,
+  onChange,
+  readOnly,
+  toolbarInset,
+}: Props) {
   const initialHtml = useMemo(() => {
     const result = marked.parse(initialMarkdown, { async: false, gfm: true });
     return typeof result === "string" ? result : "";
@@ -164,7 +173,7 @@ export function DocEditor({ initialMarkdown, resetKey, onChange, readOnly }: Pro
         editor.commands.focus("end");
       }}
     >
-      <Toolbar editor={editor} />
+      <Toolbar editor={editor} toolbarInset={toolbarInset} />
       <div
         className="mx-auto w-full max-w-3xl px-6 pb-28 min-h-[60vh] cursor-text"
         onClick={(e) => {

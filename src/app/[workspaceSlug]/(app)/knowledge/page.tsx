@@ -1,12 +1,9 @@
 /**
- * /[workspaceSlug]/knowledge — knowledge area landing.
+ * /[workspaceSlug]/knowledge — knowledge area, V2 two-pane UI.
  *
- * The sidebar "Knowledge" link points here. This route renders the new
- * design-language preview: a self-contained shell (workspace rail +
- * restyled sidebar + main panel) showing a grid of every knowledge base.
- * Clicking a base enters the existing tree view. The layout-shell bypasses
- * its global chrome for this route so the preview paints full-screen
- * without the current dark colorway.
+ * The sidebar "Knowledge" link points here. Lists every base in the middle
+ * pane (expandable to its file tree) with the detail pane on the right. No
+ * base is pre-selected at the index; /knowledge/[kbSlug] handles deep links.
  */
 
 import { redirect } from "next/navigation";
@@ -20,8 +17,8 @@ import {
   buildKnowledgeContext,
   listBases,
 } from "@/features/knowledge/server/service";
-import { KnowledgeLandingPreview } from "@/features/knowledge/components/knowledge-landing/landing-preview";
-import type { KbTeamRef } from "@/features/knowledge/components/knowledge-landing/landing-content";
+import { KnowledgeV2Preview } from "@/features/knowledge/components/knowledge-v2/landing-preview";
+import type { KbTeamRef } from "@/features/knowledge/components/knowledge-v2/types";
 
 export const dynamic = "force-dynamic";
 
@@ -68,7 +65,7 @@ export default async function KnowledgeIndexPage({ params }: PageProps) {
   }
 
   return (
-    <KnowledgeLandingPreview
+    <KnowledgeV2Preview
       workspaceSegment={segment}
       workspaceId={workspace.id}
       bases={bases}

@@ -1,4 +1,4 @@
-import { HERO } from "../constants";
+import { DOWNLOAD_URL, HERO } from "../constants";
 import { ArrowUpRight } from "./icons";
 import { ImageDeck } from "./image-deck";
 
@@ -21,7 +21,7 @@ export function Hero() {
           {HERO.primaryCta}
           <ArrowUpRight size={14} />
         </a>
-        <a href="#" className="lp-btn lp-btn--sm lp-btn--3d-light">
+        <a href={DOWNLOAD_URL} download className="lp-btn lp-btn--sm lp-btn--3d-light">
           {HERO.secondaryCta}
           <ArrowUpRight size={14} />
         </a>
