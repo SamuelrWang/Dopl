@@ -22,7 +22,13 @@ export interface GraphState {
 
 export type GraphAction =
   | { type: "OBJECT_UPDATE"; id: string; patch: Partial<OntologyObject> }
-  | { type: "OBJECT_CREATE"; clusterId: string; object: OntologyObject }
+  | {
+      type: "OBJECT_CREATE";
+      clusterId: string;
+      /** When set, nest the new object inside this parent instead of the cluster root. */
+      parentId?: string;
+      object: OntologyObject;
+    }
   | { type: "OBJECT_DELETE"; id: string }
   | { type: "ATTRIBUTE_UPSERT"; id: string; index: number | null; attribute: ObjectAttribute }
   | { type: "ATTRIBUTE_DELETE"; id: string; index: number }
@@ -46,19 +52,41 @@ export function graphReducer(state: GraphState, action: GraphAction): GraphState
   switch (action.type) {
     case "OBJECT_UPDATE":
       return patchObject(state, action.id, (o) => ({ ...o, ...action.patch }));
-    case "OBJECT_CREATE":
+    case "OBJECT_CREATE": {
+      const objects = { ...state.objects, [action.object.id]: action.object };
+      if (action.parentId) {
+        const parent = objects[action.parentId];
+        if (parent) {
+          objects[action.parentId] = {
+            ...parent,
+            childIds: [...parent.childIds, action.object.id],
+          };
+        }
+        return { ...state, objects };
+      }
       return {
-        objects: { ...state.objects, [action.object.id]: action.object },
+        ...state,
+        objects,
         clusters: state.clusters.map((c) =>
           c.id === action.clusterId
             ? { ...c, objectIds: [...c.objectIds, action.object.id] }
             : c
         ),
       };
+    }
     case "OBJECT_DELETE": {
       const objects = { ...state.objects };
       delete objects[action.id];
+      for (const [oid, obj] of Object.entries(objects)) {
+        if (obj.childIds.includes(action.id)) {
+          objects[oid] = {
+            ...obj,
+            childIds: obj.childIds.filter((cid) => cid !== action.id),
+          };
+        }
+      }
       return {
+        ...state,
         objects,
         clusters: state.clusters.map((c) => ({
           ...c,
@@ -131,6 +159,7 @@ export function makeBlankObject(id: string, type: ObjectTypeId): OntologyObject 
     attributes: [],
     relationships: [],
     methods: [],
+    childIds: [],
   };
 }
 

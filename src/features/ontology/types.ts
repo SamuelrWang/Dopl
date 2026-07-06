@@ -41,6 +41,8 @@ export interface OntologyObject {
   attributes: ObjectAttribute[];
   relationships: ObjectRelationship[];
   methods: ObjectMethod[];
+  /** Nested objects (e.g. a client's correspondents). */
+  childIds: string[];
 }
 
 export interface OntologyCluster {
