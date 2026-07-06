@@ -7,8 +7,9 @@ import type {
 
 /**
  * Static seed data for the ontology page preview — the insurance-brokerage
- * example (reps, account team, client with nested correspondents, policies).
- * UI-only; delete when the real ontology service lands.
+ * example. Columns are container objects (Clients, Persons, …) whose
+ * children are the cards. UI-only; delete when the real ontology service
+ * lands.
  */
 
 export const OBJECT_TYPES: Record<ObjectTypeId, ObjectTypeMeta> = {
@@ -20,19 +21,89 @@ export const OBJECT_TYPES: Record<ObjectTypeId, ObjectTypeMeta> = {
 };
 
 export const OBJECTS: Record<string, OntologyObject> = {
+  "col-clients": {
+    id: "col-clients",
+    type: "client",
+    name: "Clients",
+    subtitle: "Accounts the sales team owns",
+    attributes: [],
+    relationships: [],
+    methods: [],
+    childIds: ["client-acme"],
+  },
+  "col-teams": {
+    id: "col-teams",
+    type: "team",
+    name: "Teams",
+    subtitle: "Account teams",
+    attributes: [],
+    relationships: [],
+    methods: [],
+    childIds: ["team-acme"],
+  },
+  "col-people": {
+    id: "col-people",
+    type: "person",
+    name: "Persons",
+    subtitle: "Reps and client contacts",
+    attributes: [],
+    relationships: [],
+    methods: [],
+    childIds: ["rep-dana", "rep-marcus", "rep-ines", "rep-theo", "corr-sarah", "corr-mike"],
+  },
+  "col-policies": {
+    id: "col-policies",
+    type: "policy",
+    name: "Policies",
+    subtitle: "Active coverage",
+    attributes: [],
+    relationships: [],
+    methods: [],
+    childIds: ["policy-4471", "policy-5108"],
+  },
+  "col-adjusters": {
+    id: "col-adjusters",
+    type: "person",
+    name: "Adjusters",
+    subtitle: "Claims staff",
+    attributes: [],
+    relationships: [],
+    methods: [],
+    childIds: ["adj-priya"],
+  },
+  "col-claims": {
+    id: "col-claims",
+    type: "document",
+    name: "Claims",
+    subtitle: "Open claims",
+    attributes: [],
+    relationships: [],
+    methods: [],
+    childIds: ["claim-2209"],
+  },
+  "col-claim-policies": {
+    id: "col-claim-policies",
+    type: "policy",
+    name: "Policies",
+    subtitle: "Policies with open claims",
+    attributes: [],
+    relationships: [],
+    methods: [],
+    childIds: ["policy-4471"],
+  },
   "client-acme": {
     id: "client-acme",
     type: "client",
     name: "Acme Logistics",
     subtitle: "Client since 2023 · $410k premium",
     attributes: [
+      { key: "correspondents", label: "Correspondents", value: { kind: "ref", value: ["corr-sarah", "corr-mike"] } },
       {
         key: "transcripts",
         label: "Call transcripts",
         value: { kind: "files", value: ["2026-06-27-renewal-call.md", "2026-05-14-fleet-review.md"] },
       },
       { key: "renewal", label: "Renewal date", value: { kind: "pill", value: "Sep 30, 2026" } },
-      { key: "segment", label: "Segment", value: { kind: "text", value: "Mid-market fleet & freight" } },
     ],
     relationships: [
       { label: "served by", targetIds: ["team-acme"] },
@@ -55,16 +126,17 @@ export const OBJECTS: Record<string, OntologyObject> = {
         requires: ["client.policies → coverage", "client.transcripts", "client.renewal date"],
       },
     ],
-    childIds: ["corr-sarah", "corr-mike"],
+    childIds: [],
   },
   "corr-sarah": {
     id: "corr-sarah",
     type: "person",
     name: "Sarah Chen",
-    subtitle: "VP Ops · primary correspondent",
+    subtitle: "VP Ops · primary correspondent, Acme",
     attributes: [
       { key: "email", label: "Email", value: { kind: "text", value: "s.chen@acmelogistics.com" } },
       { key: "prefers", label: "Prefers", value: { kind: "pill", value: "Email, concise" } },
+      { key: "contact-for", label: "Contact for", value: { kind: "ref", value: ["client-acme"] } },
     ],
     relationships: [],
     methods: [],
@@ -74,10 +146,11 @@ export const OBJECTS: Record<string, OntologyObject> = {
     id: "corr-mike",
     type: "person",
     name: "Mike Torres",
-    subtitle: "Fleet manager · technical contact",
+    subtitle: "Fleet manager · technical contact, Acme",
     attributes: [
       { key: "email", label: "Email", value: { kind: "text", value: "m.torres@acmelogistics.com" } },
       { key: "scope", label: "Loop in for", value: { kind: "pill", value: "Vehicle schedules, claims" } },
+      { key: "contact-for", label: "Contact for", value: { kind: "ref", value: ["client-acme"] } },
     ],
     relationships: [],
     methods: [],
@@ -90,7 +163,7 @@ export const OBJECTS: Record<string, OntologyObject> = {
     subtitle: "4 reps",
     attributes: [
       { key: "cc", label: "CC policy", value: { kind: "pill", value: "CC all members on client email" } },
-      { key: "lead", label: "Lead", value: { kind: "text", value: "Dana Whitfield" } },
+      { key: "roster", label: "Roster", value: { kind: "ref", value: ["col-people"] } },
     ],
     relationships: [
       { label: "members", targetIds: ["rep-dana", "rep-marcus", "rep-ines", "rep-theo"] },
@@ -225,21 +298,12 @@ export const CLUSTERS: OntologyCluster[] = [
     id: "cl-sales",
     name: "Brokerage — Sales",
     purpose: "Reps, account teams, clients, and policies. Anchors outbound + renewal work.",
-    objectIds: [
-      "client-acme",
-      "team-acme",
-      "rep-dana",
-      "rep-marcus",
-      "rep-ines",
-      "rep-theo",
-      "policy-4471",
-      "policy-5108",
-    ],
+    columnIds: ["col-clients", "col-teams", "col-people", "col-policies"],
   },
   {
     id: "cl-claims",
     name: "Claims Ops",
     purpose: "Adjusters and open claims. Anchors carrier chasing + client updates.",
-    objectIds: ["adj-priya", "claim-2209", "policy-4471"],
+    columnIds: ["col-adjusters", "col-claims", "col-claim-policies"],
   },
 ];

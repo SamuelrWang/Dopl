@@ -12,7 +12,9 @@ import type {
 
 /**
  * In-memory graph editor state. The whole page is a static preview —
- * edits mutate this local store only; nothing persists.
+ * edits mutate this local store only; nothing persists. Columns are
+ * container objects: a cluster holds columnIds, a column's childIds are
+ * its cards.
  */
 
 export interface GraphState {
@@ -24,8 +26,9 @@ export type GraphAction =
   | { type: "OBJECT_UPDATE"; id: string; patch: Partial<OntologyObject> }
   | {
       type: "OBJECT_CREATE";
+      /** Cluster to attach a new COLUMN to (when no parentId). */
       clusterId: string;
-      /** When set, nest the new object inside this parent instead of the cluster root. */
+      /** Container (column or object) the new object nests under. */
       parentId?: string;
       object: OntologyObject;
     }
@@ -69,7 +72,7 @@ export function graphReducer(state: GraphState, action: GraphAction): GraphState
         objects,
         clusters: state.clusters.map((c) =>
           c.id === action.clusterId
-            ? { ...c, objectIds: [...c.objectIds, action.object.id] }
+            ? { ...c, columnIds: [...c.columnIds, action.object.id] }
             : c
         ),
       };
@@ -90,7 +93,7 @@ export function graphReducer(state: GraphState, action: GraphAction): GraphState
         objects,
         clusters: state.clusters.map((c) => ({
           ...c,
-          objectIds: c.objectIds.filter((id) => id !== action.id),
+          columnIds: c.columnIds.filter((id) => id !== action.id),
         })),
       };
     }
@@ -150,11 +153,15 @@ export function newClusterId(): string {
   return `cl-new-${nextId++}`;
 }
 
-export function makeBlankObject(id: string, type: ObjectTypeId): OntologyObject {
+export function makeBlankObject(
+  id: string,
+  type: ObjectTypeId,
+  name = "New object"
+): OntologyObject {
   return {
     id,
     type,
-    name: "Untitled object",
+    name,
     subtitle: "",
     attributes: [],
     relationships: [],

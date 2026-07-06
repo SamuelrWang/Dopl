@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, CornerDownRight } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import type { GraphState } from "../graph-state";
-import { TypeDot } from "./ontology-bits";
+import type { AttributeValue } from "../types";
+import { ObjectHoverCard } from "./object-hover-card";
 
 interface Props {
   objectId: string;
@@ -14,17 +15,22 @@ interface Props {
 }
 
 /**
- * Compact card in a type column. Click selects (opens the editor
- * panel); the chevron drops the card open inline — key attributes and
- * the objects nested inside it.
+ * Compact card in a column. Click selects (opens the editor panel); the
+ * chevron drops the card open inline with its attribute values.
+ * Hovering shows the cursor-following quick view (suppressed while the
+ * dropdown is open).
  */
 export function KanbanCard({ objectId, graph, selected, onSelect }: Props) {
   const [open, setOpen] = useState(false);
+  const [hoverPos, setHoverPos] = useState<{ x: number; y: number } | null>(null);
   const object = graph.objects[objectId];
   if (!object) return null;
 
   return (
     <div
+      onMouseEnter={(e) => !open && setHoverPos({ x: e.clientX, y: e.clientY })}
+      onMouseMove={(e) => !open && setHoverPos({ x: e.clientX, y: e.clientY })}
+      onMouseLeave={() => setHoverPos(null)}
       className={cn(
         "overflow-hidden rounded-xl border bg-[#fbfcfd] transition-shadow",
         selected
@@ -53,6 +59,7 @@ export function KanbanCard({ objectId, graph, selected, onSelect }: Props) {
           aria-label={open ? "Collapse" : "Expand"}
           onClick={(e) => {
             e.stopPropagation();
+            setHoverPos(null);
             setOpen((o) => !o);
           }}
           onKeyDown={(e) => {
@@ -76,64 +83,49 @@ export function KanbanCard({ objectId, graph, selected, onSelect }: Props) {
         <span>{object.relationships.length} edges</span>
         <span aria-hidden>·</span>
         <span>{object.methods.length} actions</span>
-        {object.childIds.length > 0 && (
-          <>
-            <span aria-hidden>·</span>
-            <span className="font-medium text-[#646d78]">
-              {object.childIds.length} inside
-            </span>
-          </>
-        )}
       </div>
 
       {open && (
         <div className="border-t border-black/[0.06] bg-[#eef1f5] px-3 py-2 shadow-[inset_0_2px_4px_rgba(0,0,0,0.08),inset_0_1px_2px_rgba(0,0,0,0.05)]">
-          {object.attributes.length > 0 && (
+          {object.attributes.length > 0 ? (
             <div className="flex flex-col gap-1">
-              {object.attributes.slice(0, 4).map((attr) => (
+              {object.attributes.slice(0, 5).map((attr) => (
                 <div key={attr.key} className="flex items-baseline gap-2 text-[11.5px]">
                   <span className="w-24 shrink-0 truncate text-[#98a2ad]">
                     {attr.label}
                   </span>
                   <span className="min-w-0 flex-1 truncate text-[#232a31]">
-                    {attr.value.kind === "files"
-                      ? `${attr.value.value.length} file${attr.value.value.length === 1 ? "" : "s"}`
-                      : attr.value.value || "—"}
+                    {previewValue(attr.value, graph)}
                   </span>
                 </div>
               ))}
-              {object.attributes.length > 4 && (
+              {object.attributes.length > 5 && (
                 <span className="text-[10.5px] text-[#98a2ad]">
-                  +{object.attributes.length - 4} more
+                  +{object.attributes.length - 5} more
                 </span>
               )}
             </div>
-          )}
-          {object.childIds.length > 0 && (
-            <div className="mt-2 flex flex-col gap-0.5">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-[#98a2ad]">
-                Inside
-              </span>
-              {object.childIds.map((childId) => {
-                const child = graph.objects[childId];
-                if (!child) return null;
-                return (
-                  <button
-                    key={childId}
-                    type="button"
-                    onClick={() => onSelect(childId)}
-                    className="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-[12px] text-[#646d78] transition hover:bg-black/[0.04] hover:text-[#232a31]"
-                  >
-                    <CornerDownRight size={10} className="shrink-0 text-[#98a2ad]" />
-                    <TypeDot type={child.type} />
-                    <span className="truncate">{child.name}</span>
-                  </button>
-                );
-              })}
-            </div>
+          ) : (
+            <p className="text-[11.5px] text-[#98a2ad]">No attributes yet.</p>
           )}
         </div>
       )}
+      {hoverPos && !open && (
+        <ObjectHoverCard object={object} graph={graph} x={hoverPos.x} y={hoverPos.y} />
+      )}
     </div>
   );
+}
+
+function previewValue(value: AttributeValue, graph: GraphState): string {
+  if (value.kind === "files") {
+    return value.value.length
+      ? `${value.value.length} file${value.value.length === 1 ? "" : "s"}`
+      : "—";
+  }
+  if (value.kind === "ref") {
+    const names = value.value.map((id) => graph.objects[id]?.name).filter(Boolean);
+    return names.length ? names.join(", ") : "—";
+  }
+  return value.value || "—";
 }

@@ -3,23 +3,30 @@
 import { useState } from "react";
 import { FileText, Paperclip, Plus, X } from "lucide-react";
 import type { Dispatch } from "react";
-import type { GraphAction } from "../graph-state";
+import type { GraphAction, GraphState } from "../graph-state";
 import type { OntologyObject } from "../types";
-import { CHIP, FIELD_WELL, SectionBox } from "./ontology-bits";
+import { CascadeSelect } from "./cascade-select";
+import { CHIP, FIELD_WELL, SectionBox, TypeDot } from "./ontology-bits";
+
+type AttrKind = "text" | "pill" | "files" | "ref";
 
 /**
  * Attributes section — editable key/value rows. Value kinds: text, tag
- * (pill), files. Rows edit in place; ✕ removes; the footer row adds.
+ * (pill), files, and object references (picked via the tiered cascade —
+ * whole columns or individual objects). Rows edit in place; ✕ removes;
+ * the footer row adds.
  */
 export function AttributesEditor({
   object,
+  graph,
   dispatch,
 }: {
   object: OntologyObject;
+  graph: GraphState;
   dispatch: Dispatch<GraphAction>;
 }) {
   const [newLabel, setNewLabel] = useState("");
-  const [newKind, setNewKind] = useState<"text" | "pill" | "files">("text");
+  const [newKind, setNewKind] = useState<AttrKind>("text");
 
   const addAttribute = () => {
     const label = newLabel.trim();
@@ -32,8 +39,8 @@ export function AttributesEditor({
         key: label.toLowerCase().replace(/\s+/g, "-"),
         label,
         value:
-          newKind === "files"
-            ? { kind: "files", value: [] }
+          newKind === "files" || newKind === "ref"
+            ? { kind: newKind, value: [] }
             : { kind: newKind, value: "" },
       },
     });
@@ -45,11 +52,13 @@ export function AttributesEditor({
       <div className="divide-y divide-black/[0.05]">
         {object.attributes.map((attr, i) => (
           <div key={`${attr.key}-${i}`} className="group flex items-center gap-3 px-4 py-1.5">
-            <span className="w-36 shrink-0 text-[13px] text-[#646d78]">
+            <span className="w-32 shrink-0 text-[13px] text-[#646d78]">
               {attr.label}
             </span>
             <AttrValueEditor
               attr={attr}
+              object={object}
+              graph={graph}
               onChange={(attribute) =>
                 dispatch({ type: "ATTRIBUTE_UPSERT", id: object.id, index: i, attribute })
               }
@@ -71,17 +80,18 @@ export function AttributesEditor({
             onChange={(e) => setNewLabel(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && addAttribute()}
             placeholder="new attribute…"
-            className={`${FIELD_WELL} h-7 w-40 px-2.5 text-[12.5px] text-[#232a31] placeholder:text-[#98a2ad]`}
+            className={`${FIELD_WELL} h-7 w-36 px-2.5 text-[12.5px] text-[#232a31] placeholder:text-[#98a2ad]`}
           />
           <select
             value={newKind}
-            onChange={(e) => setNewKind(e.target.value as typeof newKind)}
+            onChange={(e) => setNewKind(e.target.value as AttrKind)}
             aria-label="Attribute type"
             className={`${FIELD_WELL} h-7 px-1.5 text-[12px] text-[#646d78]`}
           >
             <option value="text">Text</option>
             <option value="pill">Tag</option>
             <option value="files">Files</option>
+            <option value="ref">Object</option>
           </select>
           <button
             type="button"
@@ -98,21 +108,60 @@ export function AttributesEditor({
 
 function AttrValueEditor({
   attr,
+  object,
+  graph,
   onChange,
 }: {
   attr: OntologyObject["attributes"][number];
+  object: OntologyObject;
+  graph: GraphState;
   onChange: (attr: OntologyObject["attributes"][number]) => void;
 }) {
   const v = attr.value;
+
+  if (v.kind === "ref") {
+    return (
+      <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+        {v.value.map((id) => {
+          const target = graph.objects[id];
+          if (!target) return null;
+          return (
+            <span key={id} className={`flex items-center gap-1.5 ${CHIP}`}>
+              <TypeDot type={target.type} />
+              {target.name}
+              <button
+                type="button"
+                aria-label={`Remove ${target.name}`}
+                onClick={() =>
+                  onChange({ ...attr, value: { kind: "ref", value: v.value.filter((x) => x !== id) } })
+                }
+                className="text-[#98a2ad] hover:text-[#232a31]"
+              >
+                <X size={10} />
+              </button>
+            </span>
+          );
+        })}
+        <CascadeSelect
+          graph={graph}
+          excludeIds={[object.id, ...v.value]}
+          onPick={(id) => onChange({ ...attr, value: { kind: "ref", value: [...v.value, id] } })}
+          trigger={
+            <span className="flex items-center gap-1">
+              <Plus size={10} /> Link
+            </span>
+          }
+          triggerClassName="btn-light flex h-6 items-center rounded-full px-2 text-[11px] font-medium text-[#232a31]"
+        />
+      </span>
+    );
+  }
 
   if (v.kind === "files") {
     return (
       <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
         {v.value.map((f, i) => (
-          <span
-            key={`${f}-${i}`}
-            className={`group/file flex items-center gap-1 ${CHIP}`}
-          >
+          <span key={`${f}-${i}`} className={`flex items-center gap-1 ${CHIP}`}>
             <FileText size={10} className="text-[#98a2ad]" /> {f}
             <button
               type="button"

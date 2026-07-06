@@ -12,7 +12,9 @@ export interface ObjectTypeMeta {
 export type AttributeValue =
   | { kind: "text"; value: string }
   | { kind: "pill"; value: string }
-  | { kind: "files"; value: string[] };
+  | { kind: "files"; value: string[] }
+  /** References to other objects — individual cards or whole columns. */
+  | { kind: "ref"; value: string[] };
 
 export interface ObjectAttribute {
   key: string;
@@ -41,7 +43,7 @@ export interface OntologyObject {
   attributes: ObjectAttribute[];
   relationships: ObjectRelationship[];
   methods: ObjectMethod[];
-  /** Nested objects (e.g. a client's correspondents). */
+  /** Contained objects. Columns are objects too — their children are the cards. */
   childIds: string[];
 }
 
@@ -49,5 +51,6 @@ export interface OntologyCluster {
   id: string;
   name: string;
   purpose: string;
-  objectIds: string[];
+  /** The cluster's columns — each a container object whose children are the cards. */
+  columnIds: string[];
 }

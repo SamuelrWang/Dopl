@@ -9,14 +9,14 @@ import {
   newObjectId,
   useGraph,
 } from "../graph-state";
-import type { ObjectTypeId } from "../types";
 import { KanbanBoard } from "./kanban-board";
 import { ObjectPanel } from "./object-panel";
 
 /**
- * Ontology page root — static in-memory editor. One cluster per page as
- * columns of object cards grouped by type; selecting a card opens the
- * editor panel on the right. Edits live in local state only.
+ * Ontology page root — static in-memory editor. One cluster per page;
+ * its columns are container objects whose children are the cards.
+ * Selecting a card or a column header opens the editor panel on the
+ * right. Edits live in local state only.
  */
 export function OntologyView() {
   const [graph, dispatch] = useGraph();
@@ -27,13 +27,31 @@ export function OntologyView() {
     graph.clusters.find((c) => c.id === clusterId) ?? graph.clusters[0];
   const selected = selectedId ? (graph.objects[selectedId] ?? null) : null;
 
-  const createObject = (type: ObjectTypeId = "person", parentId?: string) => {
+  const createCard = (columnId: string) => {
+    const id = newObjectId();
+    const column = graph.objects[columnId];
+    dispatch({
+      type: "OBJECT_CREATE",
+      clusterId: cluster.id,
+      parentId: columnId,
+      object: makeBlankObject(id, column?.type ?? "person"),
+    });
+    setSelectedId(id);
+  };
+
+  const createColumn = () => {
     const id = newObjectId();
     dispatch({
       type: "OBJECT_CREATE",
       clusterId: cluster.id,
-      parentId,
-      object: makeBlankObject(id, type),
+      object: makeBlankObject(id, "person", "Untitled column"),
+    });
+    const firstCardId = newObjectId();
+    dispatch({
+      type: "OBJECT_CREATE",
+      clusterId: cluster.id,
+      parentId: id,
+      object: makeBlankObject(firstCardId, "person"),
     });
     setSelectedId(id);
   };
@@ -42,10 +60,23 @@ export function OntologyView() {
     const id = newClusterId();
     dispatch({
       type: "CLUSTER_CREATE",
-      cluster: { id, name: "New cluster", purpose: "", objectIds: [] },
+      cluster: { id, name: "New cluster", purpose: "", columnIds: [] },
+    });
+    const columnId = newObjectId();
+    dispatch({
+      type: "OBJECT_CREATE",
+      clusterId: id,
+      object: makeBlankObject(columnId, "person", "Untitled column"),
+    });
+    const firstCardId = newObjectId();
+    dispatch({
+      type: "OBJECT_CREATE",
+      clusterId: id,
+      parentId: columnId,
+      object: makeBlankObject(firstCardId, "person"),
     });
     setClusterId(id);
-    setSelectedId(null);
+    setSelectedId(firstCardId);
   };
 
   const selectCluster = (id: string) => {
@@ -54,11 +85,8 @@ export function OntologyView() {
   };
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-col gap-2 overflow-hidden bg-[#e6e8eb] p-2">
+    <div className="flex min-h-0 w-full flex-1 flex-col gap-2 overflow-hidden bg-[#e6e8eb] p-2">
       <div className="flex shrink-0 items-center gap-3 rounded-[14px] border border-black/[0.08] bg-[#fbfcfd] px-3 py-2 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_6px_18px_rgba(0,0,0,0.05)]">
-        <h1 className="px-1 text-sm font-semibold tracking-tight text-[#232a31]">
-          Ontology
-        </h1>
         <div className="flex items-center gap-1 rounded-[10px] border border-black/[0.06] bg-[#e9eaec] p-1 shadow-[inset_0_2px_4px_rgba(0,0,0,0.12),inset_0_1px_2px_rgba(0,0,0,0.06),inset_0_-1px_0_rgba(255,255,255,0.85)]">
           {graph.clusters.map((c) => (
             <button
@@ -73,7 +101,7 @@ export function OntologyView() {
               )}
             >
               {c.name}
-              <span className="text-[10px] text-[#98a2ad]">{c.objectIds.length}</span>
+              <span className="text-[10px] text-[#98a2ad]">{c.columnIds.length}</span>
             </button>
           ))}
           <button
@@ -90,10 +118,10 @@ export function OntologyView() {
         </span>
         <button
           type="button"
-          onClick={() => createObject()}
+          onClick={createColumn}
           className="btn-light flex h-7 shrink-0 items-center gap-1 rounded-md px-2.5 text-xs font-medium text-[#232a31]"
         >
-          <Plus size={12} /> Object
+          <Plus size={12} /> Column
         </button>
       </div>
 
@@ -104,7 +132,7 @@ export function OntologyView() {
             graph={graph}
             selectedId={selectedId}
             onSelect={setSelectedId}
-            onCreateObject={(type) => createObject(type)}
+            onCreateObject={createCard}
           />
         </div>
         {selected && selectedId && (
@@ -113,7 +141,6 @@ export function OntologyView() {
             graph={graph}
             dispatch={dispatch}
             onSelectObject={setSelectedId}
-            onCreateChild={(parentId) => createObject("person", parentId)}
             onDeleteObject={(id) => dispatch({ type: "OBJECT_DELETE", id })}
             onClose={() => setSelectedId(null)}
           />
