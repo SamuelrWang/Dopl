@@ -85,48 +85,48 @@ export function OntologyView() {
   };
 
   return (
-    <div className="flex min-h-0 w-full flex-1 flex-col gap-2 overflow-hidden bg-[#e6e8eb] p-2">
-      <div className="flex shrink-0 items-center gap-3 rounded-[14px] border border-black/[0.08] bg-[#fbfcfd] px-3 py-2 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_6px_18px_rgba(0,0,0,0.05)]">
-        <div className="flex items-center gap-1 rounded-[10px] border border-black/[0.06] bg-[#e9eaec] p-1 shadow-[inset_0_2px_4px_rgba(0,0,0,0.12),inset_0_1px_2px_rgba(0,0,0,0.06),inset_0_-1px_0_rgba(255,255,255,0.85)]">
-          {graph.clusters.map((c) => (
+    <div className="flex min-h-0 w-full flex-1 overflow-hidden bg-[#e6e8eb] p-2">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-[14px] border border-black/[0.1] bg-[#fbfcfd] shadow-[0_1px_2px_rgba(0,0,0,0.05),0_10px_28px_-8px_rgba(0,0,0,0.16)]">
+        <div className="flex shrink-0 items-center gap-3 border-b border-black/[0.06] px-3 py-2">
+          <div className="flex items-center gap-1 rounded-[10px] border border-black/[0.06] bg-[#e9eaec] p-1 shadow-[inset_0_2px_4px_rgba(0,0,0,0.12),inset_0_1px_2px_rgba(0,0,0,0.06),inset_0_-1px_0_rgba(255,255,255,0.85)]">
+            {graph.clusters.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => selectCluster(c.id)}
+                className={cn(
+                  "flex h-7 items-center gap-1.5 rounded-[7px] px-3 text-xs font-medium transition-colors",
+                  c.id === cluster.id
+                    ? "bg-gradient-to-b from-white to-[#f3f3f3] text-[#232a31] shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_0_0_1px_rgba(0,0,0,0.05),0_1px_2px_rgba(0,0,0,0.12),0_3px_6px_rgba(0,0,0,0.08)]"
+                    : "text-[#646d78] hover:text-[#232a31]"
+                )}
+              >
+                {c.name}
+                <span className="text-[10px] text-[#98a2ad]">{c.columnIds.length}</span>
+              </button>
+            ))}
             <button
-              key={c.id}
               type="button"
-              onClick={() => selectCluster(c.id)}
-              className={cn(
-                "flex h-7 items-center gap-1.5 rounded-[7px] px-3 text-xs font-medium transition-colors",
-                c.id === cluster.id
-                  ? "bg-gradient-to-b from-white to-[#f3f3f3] text-[#232a31] shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_0_0_1px_rgba(0,0,0,0.05),0_1px_2px_rgba(0,0,0,0.12),0_3px_6px_rgba(0,0,0,0.08)]"
-                  : "text-[#646d78] hover:text-[#232a31]"
-              )}
+              onClick={createCluster}
+              aria-label="New cluster"
+              className="flex h-7 w-7 items-center justify-center rounded-[7px] text-[#98a2ad] transition hover:text-[#232a31]"
             >
-              {c.name}
-              <span className="text-[10px] text-[#98a2ad]">{c.columnIds.length}</span>
+              <Plus size={13} />
             </button>
-          ))}
+          </div>
+          <span className="min-w-0 flex-1 truncate text-[12.5px] text-[#646d78]">
+            {cluster.purpose}
+          </span>
           <button
             type="button"
-            onClick={createCluster}
-            aria-label="New cluster"
-            className="flex h-7 w-7 items-center justify-center rounded-[7px] text-[#98a2ad] transition hover:text-[#232a31]"
+            onClick={createColumn}
+            className="btn-light flex h-7 shrink-0 items-center gap-1 rounded-md px-2.5 text-xs font-medium text-[#232a31]"
           >
-            <Plus size={13} />
+            <Plus size={12} /> Column
           </button>
         </div>
-        <span className="min-w-0 flex-1 truncate text-[12.5px] text-[#646d78]">
-          {cluster.purpose}
-        </span>
-        <button
-          type="button"
-          onClick={createColumn}
-          className="btn-light flex h-7 shrink-0 items-center gap-1 rounded-md px-2.5 text-xs font-medium text-[#232a31]"
-        >
-          <Plus size={12} /> Column
-        </button>
-      </div>
 
-      <div className="flex min-h-0 flex-1 gap-2 overflow-hidden">
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[14px] border border-black/[0.08] bg-[#eef1f5] shadow-[inset_0_2px_4px_rgba(0,0,0,0.1),inset_0_1px_2px_rgba(0,0,0,0.06),inset_0_-1px_0_rgba(255,255,255,0.9)]">
+        <div className="flex min-h-0 flex-1 overflow-hidden">
           <KanbanBoard
             cluster={cluster}
             graph={graph}
@@ -134,17 +134,17 @@ export function OntologyView() {
             onSelect={setSelectedId}
             onCreateObject={createCard}
           />
+          {selected && selectedId && (
+            <ObjectPanel
+              objectId={selectedId}
+              graph={graph}
+              dispatch={dispatch}
+              onSelectObject={setSelectedId}
+              onDeleteObject={(id) => dispatch({ type: "OBJECT_DELETE", id })}
+              onClose={() => setSelectedId(null)}
+            />
+          )}
         </div>
-        {selected && selectedId && (
-          <ObjectPanel
-            objectId={selectedId}
-            graph={graph}
-            dispatch={dispatch}
-            onSelectObject={setSelectedId}
-            onDeleteObject={(id) => dispatch({ type: "OBJECT_DELETE", id })}
-            onClose={() => setSelectedId(null)}
-          />
-        )}
       </div>
     </div>
   );

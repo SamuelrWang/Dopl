@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Bell, UserRound } from "lucide-react";
 import { useAuthUser } from "@/shared/auth/use-auth-user";
 import type { WorkspaceLike } from "./workspace-types";
 import { SettingsModal, type SettingsSection } from "@/shared/layout/settings-modal";
@@ -20,11 +19,11 @@ interface Props {
 
 /**
  * Full-screen shell for the new design language (knowledge preview):
- * dark top titlebar (bell + profile), workspace rail, restyled sidebar,
- * and a rounded surface whose main area is supplied by `children`.
- * Owns the workspaces fetch for the rail and the settings modal that the
- * sidebar / titlebar buttons open. Used by the knowledge landing page and
- * the KB detail page; routes that use it bypass the global layout chrome.
+ * workspace rail, restyled sidebar, and a rounded surface whose main
+ * area is supplied by `children`. Owns the workspaces fetch for the
+ * rail and the settings modal the sidebar buttons open. Used by the
+ * knowledge landing page and the KB detail page; routes that use it
+ * bypass the global layout chrome.
  */
 export function AppShell({
   workspaceSegment,
@@ -49,23 +48,6 @@ export function AppShell({
 
   return (
     <div className={styles.root}>
-      <div className={styles.titlebar}>
-        <div className={styles.spacer} />
-        <div className={styles.topIcons}>
-          <button type="button" aria-label="Notifications">
-            <Bell size={22} strokeWidth={1.7} />
-          </button>
-          <button
-            type="button"
-            aria-label="Account"
-            style={{ color: "inherit", display: "flex" }}
-            onClick={() => openSettings("account")}
-          >
-            <UserRound size={22} strokeWidth={1.7} />
-          </button>
-        </div>
-      </div>
-
       <div className={styles.body}>
         <AppRail
           workspaces={workspaces}

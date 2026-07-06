@@ -400,10 +400,12 @@ html {
    with the shell's white panel area. Change values here only.
    ───────────────────────────────────────────────────────────────────── */
 :root {
-  --shell-titlebar-h: 32px;
+  /* Titlebar removed (was 32px) — kept at 0 so derived panel insets stay valid. */
+  --shell-titlebar-h: 0px;
   --shell-rail-w: 62px;
   --shell-sidebar-w: 204px;
-  --shell-gap-top: 5px;
+  /* Matches --shell-gap-bottom so the panel's top and bottom margins are equal. */
+  --shell-gap-top: 6px;
   --shell-gap-right: 6px;
   --shell-gap-bottom: 6px;
   --shell-gap-left: 4px;

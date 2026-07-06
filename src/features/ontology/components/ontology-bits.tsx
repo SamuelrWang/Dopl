@@ -10,26 +10,6 @@ import type { ObjectTypeId } from "../types";
 
 const MIN_BODY_H = 56;
 
-/** Floating bento card (study-notes `.bento`). */
-export function Bento({
-  className,
-  children,
-}: {
-  className?: string;
-  children: ReactNode;
-}) {
-  return (
-    <div
-      className={cn(
-        "rounded-[14px] border border-black/[0.08] bg-[#fbfcfd] shadow-[0_1px_2px_rgba(0,0,0,0.04),0_6px_18px_rgba(0,0,0,0.05)]",
-        className
-      )}
-    >
-      {children}
-    </div>
-  );
-}
-
 /**
  * Bordered section — the study-notes intro-panel, verbatim: uppercase
  * label strip (card-2) over a concave inset body, with the corner grip

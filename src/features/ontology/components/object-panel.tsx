@@ -40,7 +40,7 @@ export function ObjectPanel({
   const isColumn = graph.clusters.some((c) => c.columnIds.includes(objectId));
 
   return (
-    <div className="flex min-h-0 w-[420px] shrink-0 flex-col overflow-hidden rounded-[14px] border border-black/[0.08] bg-[#fbfcfd] shadow-[0_1px_2px_rgba(0,0,0,0.04),0_6px_18px_rgba(0,0,0,0.05)]">
+    <div className="flex min-h-0 w-[420px] shrink-0 flex-col overflow-hidden border-l border-black/[0.08] bg-[#fbfcfd]">
       <div className="flex shrink-0 items-center gap-2 border-b border-black/[0.06] bg-[#f4f6f9] px-3 py-2">
         <select
           value={object.type}

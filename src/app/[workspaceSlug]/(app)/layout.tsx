@@ -5,7 +5,7 @@
  * over the dynamic match).
  *
  * Mounting the AppShell here — instead of per-page — means the rail,
- * sidebar, titlebar, workspaces fetch, and settings-modal state all
+ * sidebar, workspaces fetch, and settings-modal state all
  * survive navigation between every page, canvas included. Only the white
  * content panel re-renders, covered by each route's loading skeleton.
  * MyAccessProvider lives here too so the access fetch is shared instead

@@ -27,18 +27,6 @@
 
 .serif { font-family: var(--font-app), system-ui, sans-serif; }
 
-/* ---------- Titlebar ---------- */
-.titlebar {
-  height: var(--shell-titlebar-h);
-  flex: 0 0 var(--shell-titlebar-h);
-  display: flex;
-  align-items: center;
-  padding: 0 22px 0 18px;
-}
-.titlebar .spacer { flex: 1; }
-.topIcons { display: flex; align-items: center; gap: 22px; color: #aab6c2; }
-.topIcons button { background: none; border: none; color: inherit; cursor: pointer; display: flex; padding: 0; }
-
 /* ---------- Body layout ---------- */
 .body { flex: 1; display: flex; min-height: 0; }
 
