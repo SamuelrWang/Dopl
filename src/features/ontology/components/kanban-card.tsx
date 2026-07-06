@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
+import { resourceName } from "../seed";
 import type { GraphState } from "../graph-state";
 import type { AttributeValue } from "../types";
 import { ObjectHoverCard } from "./object-hover-card";
@@ -118,10 +119,9 @@ export function KanbanCard({ objectId, graph, selected, onSelect }: Props) {
 }
 
 function previewValue(value: AttributeValue, graph: GraphState): string {
-  if (value.kind === "files") {
-    return value.value.length
-      ? `${value.value.length} file${value.value.length === 1 ? "" : "s"}`
-      : "—";
+  if (value.kind === "knowledge" || value.kind === "skill") {
+    const names = value.value.map((id) => resourceName(id)).filter(Boolean);
+    return names.length ? names.join(", ") : "—";
   }
   if (value.kind === "ref") {
     const names = value.value.map((id) => graph.objects[id]?.name).filter(Boolean);

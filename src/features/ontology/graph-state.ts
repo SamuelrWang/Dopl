@@ -36,6 +36,7 @@ export type GraphAction =
   | { type: "ATTRIBUTE_UPSERT"; id: string; index: number | null; attribute: ObjectAttribute }
   | { type: "ATTRIBUTE_DELETE"; id: string; index: number }
   | { type: "RELATIONSHIP_SET"; id: string; label: string; targetIds: string[] }
+  | { type: "RELATIONSHIP_RENAME"; id: string; index: number; label: string }
   | { type: "RELATIONSHIP_DELETE"; id: string; label: string }
   | { type: "METHOD_UPSERT"; id: string; index: number | null; method: ObjectMethod }
   | { type: "METHOD_DELETE"; id: string; index: number }
@@ -120,6 +121,13 @@ export function graphReducer(state: GraphState, action: GraphAction): GraphState
           : [...o.relationships, { label: action.label, targetIds: action.targetIds }];
         return { ...o, relationships: next.filter((r) => r.targetIds.length > 0) };
       });
+    case "RELATIONSHIP_RENAME":
+      return patchObject(state, action.id, (o) => ({
+        ...o,
+        relationships: o.relationships.map((r, i) =>
+          i === action.index ? { ...r, label: action.label } : r
+        ),
+      }));
     case "RELATIONSHIP_DELETE":
       return patchObject(state, action.id, (o) => ({
         ...o,

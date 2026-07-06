@@ -12,9 +12,12 @@ export interface ObjectTypeMeta {
 export type AttributeValue =
   | { kind: "text"; value: string }
   | { kind: "pill"; value: string }
-  | { kind: "files"; value: string[] }
   /** References to other objects — individual cards or whole columns. */
-  | { kind: "ref"; value: string[] };
+  | { kind: "ref"; value: string[] }
+  /** Workspace knowledge-base entries the agent should read (access-gated). */
+  | { kind: "knowledge"; value: string[] }
+  /** Workspace skills the agent should use (access-gated). */
+  | { kind: "skill"; value: string[] };
 
 export interface ObjectAttribute {
   key: string;
@@ -53,4 +56,14 @@ export interface OntologyCluster {
   purpose: string;
   /** The cluster's columns — each a container object whose children are the cards. */
   columnIds: string[];
+}
+
+/** A workspace knowledge base or skill, with the caller's access resolved. */
+export interface WorkspaceResource {
+  id: string;
+  name: string;
+  /** Where it's shared from — groups the picker. */
+  scope: string;
+  /** Resolved per caller — the picker only ever shows accessible items. */
+  accessible: boolean;
 }

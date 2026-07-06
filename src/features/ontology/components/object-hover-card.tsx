@@ -1,7 +1,7 @@
 "use client";
 
 import { createPortal } from "react-dom";
-import { OBJECT_TYPES } from "../seed";
+import { OBJECT_TYPES, resourceName } from "../seed";
 import type { GraphState } from "../graph-state";
 import type { OntologyObject } from "../types";
 
@@ -52,8 +52,11 @@ export function ObjectHoverCard({
             {object.attributes.slice(0, 5).map((attr) => (
               <p key={attr.key} className="text-[12.5px] leading-snug text-[#232a31]">
                 <span className="font-semibold text-[#98a2ad]">{attr.label}</span>{" "}
-                {attr.value.kind === "files"
-                  ? attr.value.value.join(", ") || "—"
+                {attr.value.kind === "knowledge" || attr.value.kind === "skill"
+                  ? attr.value.value
+                      .map((id) => resourceName(id))
+                      .filter(Boolean)
+                      .join(", ") || "—"
                   : attr.value.kind === "ref"
                     ? attr.value.value
                         .map((id) => graph.objects[id]?.name)

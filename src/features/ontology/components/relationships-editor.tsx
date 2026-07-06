@@ -35,11 +35,23 @@ export function RelationshipsEditor({
   return (
     <SectionBox label="Relationships" meta={`${object.relationships.length}`}>
       <div className="divide-y divide-black/[0.05]">
-        {object.relationships.map((rel) => (
-          <div key={rel.label} className="group flex items-center gap-3 px-4 py-1.5">
-            <span className="w-32 shrink-0 text-[13px] italic text-[#646d78]">
-              {rel.label}
-            </span>
+        {object.relationships.map((rel, i) => (
+          <div key={i} className="group flex items-center gap-3 px-4 py-1.5">
+            <input
+              type="text"
+              value={rel.label}
+              onChange={(e) =>
+                dispatch({
+                  type: "RELATIONSHIP_RENAME",
+                  id: object.id,
+                  index: i,
+                  label: e.target.value,
+                })
+              }
+              aria-label="Edge label"
+              placeholder="edge label…"
+              className="w-32 shrink-0 bg-transparent text-[13px] italic text-[#646d78] placeholder:text-[#98a2ad] focus:text-[#232a31] focus:outline-none"
+            />
             <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
               {rel.targetIds.map((id) => {
                 const target = graph.objects[id];

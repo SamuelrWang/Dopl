@@ -1,20 +1,24 @@
 "use client";
 
 import { useState } from "react";
-import { FileText, Paperclip, Plus, X } from "lucide-react";
+import { ChevronDown, Plus, X } from "lucide-react";
 import type { Dispatch } from "react";
+import { accessibleKnowledge, accessibleSkills, resourceName } from "../seed";
 import type { GraphAction, GraphState } from "../graph-state";
 import type { OntologyObject } from "../types";
 import { CascadeSelect } from "./cascade-select";
 import { CHIP, FIELD_WELL, SectionBox } from "./ontology-bits";
+import { PickMenu } from "./pick-menu";
 
-type AttrKind = "text" | "pill" | "files" | "ref";
+type AttrKind = "text" | "pill" | "ref" | "knowledge" | "skill";
+
+type Attribute = OntologyObject["attributes"][number];
 
 /**
- * Attributes section — editable key/value rows. Value kinds: text, tag
- * (pill), files, and object references (picked via the tiered cascade —
- * whole columns or individual objects). Rows edit in place; ✕ removes;
- * the footer row adds.
+ * Attributes section — fully editable key/value rows. Labels edit in
+ * place. Value kinds: text, tag, object refs (cascade picker), and
+ * access-gated knowledge / skills (click-driven PickMenu — only
+ * resources the caller can see are offered).
  */
 export function AttributesEditor({
   object,
@@ -31,18 +35,15 @@ export function AttributesEditor({
   const addAttribute = () => {
     const label = newLabel.trim();
     if (!label) return;
+    const value: Attribute["value"] =
+      newKind === "text" || newKind === "pill"
+        ? { kind: newKind, value: "" }
+        : { kind: newKind, value: [] };
     dispatch({
       type: "ATTRIBUTE_UPSERT",
       id: object.id,
       index: null,
-      attribute: {
-        key: label.toLowerCase().replace(/\s+/g, "-"),
-        label,
-        value:
-          newKind === "files" || newKind === "ref"
-            ? { kind: newKind, value: [] }
-            : { kind: newKind, value: "" },
-      },
+      attribute: { key: label.toLowerCase().replace(/\s+/g, "-"), label, value },
     });
     setNewLabel("");
   };
@@ -52,9 +53,21 @@ export function AttributesEditor({
       <div className="divide-y divide-black/[0.05]">
         {object.attributes.map((attr, i) => (
           <div key={`${attr.key}-${i}`} className="group flex items-center gap-3 px-4 py-1.5">
-            <span className="w-32 shrink-0 text-[13px] text-[#646d78]">
-              {attr.label}
-            </span>
+            <input
+              type="text"
+              value={attr.label}
+              onChange={(e) =>
+                dispatch({
+                  type: "ATTRIBUTE_UPSERT",
+                  id: object.id,
+                  index: i,
+                  attribute: { ...attr, label: e.target.value },
+                })
+              }
+              aria-label="Attribute label"
+              className="w-32 shrink-0 bg-transparent text-[13px] text-[#646d78] placeholder:text-[#98a2ad] focus:text-[#232a31] focus:outline-none"
+              placeholder="label…"
+            />
             <AttrValueEditor
               attr={attr}
               object={object}
@@ -90,8 +103,9 @@ export function AttributesEditor({
           >
             <option value="text">Text</option>
             <option value="pill">Tag</option>
-            <option value="files">Files</option>
             <option value="ref">Object</option>
+            <option value="knowledge">Knowledge</option>
+            <option value="skill">Skill</option>
           </select>
           <button
             type="button"
@@ -112,12 +126,47 @@ function AttrValueEditor({
   graph,
   onChange,
 }: {
-  attr: OntologyObject["attributes"][number];
+  attr: Attribute;
   object: OntologyObject;
   graph: GraphState;
-  onChange: (attr: OntologyObject["attributes"][number]) => void;
+  onChange: (attr: Attribute) => void;
 }) {
   const v = attr.value;
+
+  if (v.kind === "knowledge" || v.kind === "skill") {
+    const resources = v.kind === "knowledge" ? accessibleKnowledge() : accessibleSkills();
+    return (
+      <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+        {v.value.map((id) => (
+          <span key={id} className={`flex items-center gap-1.5 ${CHIP}`}>
+            {resourceName(id) ?? id}
+            <button
+              type="button"
+              aria-label="Remove"
+              onClick={() =>
+                onChange({ ...attr, value: { kind: v.kind, value: v.value.filter((x) => x !== id) } })
+              }
+              className="text-[#98a2ad] hover:text-[#232a31]"
+            >
+              <X size={10} />
+            </button>
+          </span>
+        ))}
+        <PickMenu
+          items={resources.map((r) => ({ id: r.id, name: r.name, group: r.scope }))}
+          excludeIds={v.value}
+          onPick={(id) => onChange({ ...attr, value: { kind: v.kind, value: [...v.value, id] } })}
+          trigger={
+            <>
+              <span>{v.kind === "knowledge" ? "Select knowledge" : "Select skill"}</span>
+              <ChevronDown size={11} className="text-[#98a2ad]" />
+            </>
+          }
+          triggerClassName="btn-light flex h-6 w-40 items-center justify-between rounded-full px-3 text-[11px] font-medium text-[#232a31]"
+        />
+      </span>
+    );
+  }
 
   if (v.kind === "ref") {
     return (
@@ -152,40 +201,6 @@ function AttrValueEditor({
           }
           triggerClassName="btn-light flex h-6 items-center rounded-full px-2 text-[11px] font-medium text-[#232a31]"
         />
-      </span>
-    );
-  }
-
-  if (v.kind === "files") {
-    return (
-      <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
-        {v.value.map((f, i) => (
-          <span key={`${f}-${i}`} className={`flex items-center gap-1 ${CHIP}`}>
-            <FileText size={10} className="text-[#98a2ad]" /> {f}
-            <button
-              type="button"
-              aria-label={`Remove ${f}`}
-              onClick={() =>
-                onChange({ ...attr, value: { kind: "files", value: v.value.filter((_, j) => j !== i) } })
-              }
-              className="text-[#98a2ad] hover:text-[#232a31]"
-            >
-              <X size={10} />
-            </button>
-          </span>
-        ))}
-        <button
-          type="button"
-          onClick={() =>
-            onChange({
-              ...attr,
-              value: { kind: "files", value: [...v.value, `upload-${v.value.length + 1}.md`] },
-            })
-          }
-          className="btn-light flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium text-[#232a31]"
-        >
-          <Paperclip size={10} /> Upload
-        </button>
       </span>
     );
   }

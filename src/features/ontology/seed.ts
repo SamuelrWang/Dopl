@@ -3,6 +3,7 @@ import type {
   ObjectTypeMeta,
   OntologyCluster,
   OntologyObject,
+  WorkspaceResource,
 } from "./types";
 
 /**
@@ -11,6 +12,44 @@ import type {
  * children are the cards. UI-only; delete when the real ontology service
  * lands.
  */
+
+/**
+ * Workspace knowledge bases / skills with the caller's access already
+ * resolved (mocked here). The pickers read ONLY through
+ * `accessibleKnowledge()` / `accessibleSkills()` — the single gate to
+ * swap for the real role-checked fetch when the service lands.
+ */
+const KNOWLEDGE_RESOURCES: WorkspaceResource[] = [
+  { id: "kb-call-notes", name: "Acme call notes", scope: "Sales team", accessible: true },
+  { id: "kb-voice-guide", name: "Dana voice guide", scope: "Sales team", accessible: true },
+  { id: "kb-brand", name: "Brand guidelines", scope: "Workspace", accessible: true },
+  { id: "kb-sales-playbook", name: "Sales playbook", scope: "Sales team", accessible: true },
+  { id: "kb-claim-docs", name: "Claim C-2209 documents", scope: "Claims team", accessible: true },
+  { id: "kb-eng", name: "Eng handbook", scope: "Workspace", accessible: false },
+  { id: "kb-finance", name: "Finance vault", scope: "Finance team", accessible: false },
+];
+
+const SKILL_RESOURCES: WorkspaceResource[] = [
+  { id: "sk-brand-voice", name: "Brand voice", scope: "Workspace", accessible: true },
+  { id: "sk-lead-enrichment", name: "Lead enrichment", scope: "Sales team", accessible: true },
+  { id: "sk-weekly-report", name: "Weekly report", scope: "Sales team", accessible: true },
+  { id: "sk-claim-chaser", name: "Claim chaser", scope: "Claims team", accessible: true },
+  { id: "sk-billing-export", name: "Billing export", scope: "Finance team", accessible: false },
+];
+
+export function accessibleKnowledge(): WorkspaceResource[] {
+  return KNOWLEDGE_RESOURCES.filter((r) => r.accessible);
+}
+
+export function accessibleSkills(): WorkspaceResource[] {
+  return SKILL_RESOURCES.filter((r) => r.accessible);
+}
+
+/** Name lookup across both resource kinds (chips, previews). */
+export function resourceName(id: string): string | null {
+  const all = [...KNOWLEDGE_RESOURCES, ...SKILL_RESOURCES];
+  return all.find((r) => r.id === id)?.name ?? null;
+}
 
 export const OBJECT_TYPES: Record<ObjectTypeId, ObjectTypeMeta> = {
   person: { id: "person", label: "Person", border: "#2c5f9e", bg: "#e8f0fb", text: "#2c5f9e" },
@@ -101,7 +140,7 @@ export const OBJECTS: Record<string, OntologyObject> = {
       {
         key: "transcripts",
         label: "Call transcripts",
-        value: { kind: "files", value: ["2026-06-27-renewal-call.md", "2026-05-14-fleet-review.md"] },
+        value: { kind: "knowledge", value: ["kb-call-notes"] },
       },
       { key: "renewal", label: "Renewal date", value: { kind: "pill", value: "Sep 30, 2026" } },
     ],
@@ -183,8 +222,9 @@ export const OBJECTS: Record<string, OntologyObject> = {
       {
         key: "voice",
         label: "Email voice",
-        value: { kind: "files", value: ["dana-voice-guide.md", "sent-samples-2026.md"] },
+        value: { kind: "knowledge", value: ["kb-voice-guide"] },
       },
+      { key: "skills", label: "Skills", value: { kind: "skill", value: ["sk-brand-voice", "sk-lead-enrichment"] } },
     ],
     relationships: [
       { label: "member of", targetIds: ["team-acme"] },
@@ -276,7 +316,7 @@ export const OBJECTS: Record<string, OntologyObject> = {
     subtitle: "Acme Logistics · vehicle damage",
     attributes: [
       { key: "status", label: "Status", value: { kind: "pill", value: "Awaiting carrier response" } },
-      { key: "docs", label: "Documents", value: { kind: "files", value: ["incident-report.pdf", "repair-estimate.pdf"] } },
+      { key: "docs", label: "Documents", value: { kind: "knowledge", value: ["kb-claim-docs"] } },
     ],
     relationships: [
       { label: "against", targetIds: ["policy-4471"] },
