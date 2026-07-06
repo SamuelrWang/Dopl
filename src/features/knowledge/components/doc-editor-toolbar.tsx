@@ -225,11 +225,11 @@ export function Toolbar({
         toolbarInset
       )}
     >
-      <div className="pointer-events-auto flex items-center gap-1 rounded-full border border-border-default bg-[var(--panel-surface)] px-2 py-1 shadow-[var(--shadow-panel)] backdrop-blur-xl">
+      <div className="pointer-events-auto flex items-center gap-1 rounded-[14px] border border-black/[0.08] bg-[var(--panel-surface)] px-2 py-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_6px_18px_rgba(0,0,0,0.12)]">
         {groups.map((group, gi) => (
-          <div key={gi} className="flex items-center gap-0.5">
+          <div key={gi} className="flex items-center gap-1">
             {gi > 0 && (
-              <span className="mx-1 h-4 w-px bg-surface-raised-4" aria-hidden />
+              <span className="mx-1 h-4 w-px bg-black/10" aria-hidden />
             )}
             {group.map((item) => (
               <ToolbarButton key={item.label} {...item} />
@@ -254,12 +254,9 @@ function ToolbarButton({ icon: Icon, label, active, disabled, run }: ToolbarItem
       onMouseDown={(e) => e.preventDefault()}
       disabled={disabled}
       className={cn(
-        "w-7 h-7 rounded flex items-center justify-center transition-colors",
-        disabled
-          ? "text-text-secondary/30 cursor-not-allowed"
-          : active
-            ? "bg-surface-selected text-text-primary cursor-pointer"
-            : "text-text-secondary hover:bg-surface-raised-2 hover:text-text-primary cursor-pointer",
+        "flex h-7 w-8 items-center justify-center rounded-md text-text-primary",
+        active ? "btn-pressed cursor-pointer" : "btn-light",
+        !disabled && !active && "cursor-pointer",
       )}
     >
       <Icon size={13} />

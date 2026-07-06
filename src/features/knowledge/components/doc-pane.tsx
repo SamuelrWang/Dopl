@@ -1,12 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle } from "lucide-react";
 import { useRefetchOnFocus } from "@/shared/hooks/use-refetch-on-focus";
 import { useCurrentProfile } from "@/shared/auth/use-current-profile";
 import { usePresence } from "@/shared/realtime/use-presence";
 import { AvatarStack } from "@/shared/ui/avatar-stack";
-import { toast } from "@/shared/ui/toast";
 import {
   KnowledgeApiError,
   fetchEntry as apiFetchEntry,
@@ -15,6 +13,7 @@ import {
 import { DESCRIPTION_MAX } from "@/config";
 import type { KnowledgeEntry } from "../types";
 import { DocEditor, SaveStatusIndicator, type SaveStatus } from "./doc-editor";
+import { ConflictBanner, DocBodySkeleton, reportError } from "./doc-pane-chrome";
 
 const AUTOSAVE_DELAY_MS = 1500;
 
@@ -381,9 +380,17 @@ export function DocPane({
       )}
       {/* Floating header panel — the single place the file's name shows,
           plus the agent-facing description (entry `excerpt`) that streams
-          to MCP clients in tree / directory listings. */}
-      <div className="mx-auto mt-4 mb-1 w-[calc(100%-3rem)] max-w-3xl rounded-xl border border-border-default bg-surface-raised-1 px-5 pt-3.5 pb-2.5">
-        <div className="flex items-center gap-3">
+          to MCP clients in tree / directory listings. Framed like the
+          study-notes intro panel: uppercase label strip over an inset body. */}
+      <div className="mx-auto mt-4 mb-1 w-[calc(100%-3rem)] max-w-3xl overflow-hidden rounded-[14px] border border-black/[0.12]">
+        <div className="flex items-center gap-3 bg-[#f4f6f9] px-4 py-1.5">
+          <span className="flex-1 text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
+            Overview
+          </span>
+          <AvatarStack users={otherEditors} />
+          <SaveStatusIndicator state={status} />
+        </div>
+        <div className="border-t border-black/[0.06] bg-bg-inset px-4 pt-2.5 pb-2">
           <input
             type="text"
             value={title}
@@ -393,27 +400,25 @@ export function DocPane({
               scheduleSave(next, body);
             }}
             placeholder="Untitled"
-            className="flex-1 min-w-0 bg-transparent text-[24px] font-semibold text-text-primary tracking-tight focus:outline-none placeholder:text-text-secondary/40"
+            className="w-full min-w-0 bg-transparent text-lg font-semibold leading-snug tracking-tight text-text-primary focus:outline-none placeholder:text-text-muted"
           />
-          <AvatarStack users={otherEditors} />
-          <SaveStatusIndicator state={status} />
-        </div>
-        <div className="mt-1 flex items-end gap-2">
-          <textarea
-            value={description}
-            onChange={(e) =>
-              setDescription(e.target.value.slice(0, DESCRIPTION_MAX))
-            }
-            onBlur={handleDescriptionBlur}
-            rows={2}
-            maxLength={DESCRIPTION_MAX}
-            aria-label="Description for agents"
-            placeholder="Add a short description — agents see this when browsing the tree, before opening the file…"
-            className="flex-1 min-w-0 resize-none bg-transparent text-[13px] leading-relaxed text-text-secondary placeholder:text-text-muted focus:outline-none"
-          />
-          <span className="shrink-0 pb-0.5 font-mono text-[10px] text-text-muted">
-            {description.length}/{DESCRIPTION_MAX}
-          </span>
+          <div className="mt-1 flex items-end gap-2">
+            <textarea
+              value={description}
+              onChange={(e) =>
+                setDescription(e.target.value.slice(0, DESCRIPTION_MAX))
+              }
+              onBlur={handleDescriptionBlur}
+              rows={2}
+              maxLength={DESCRIPTION_MAX}
+              aria-label="Description for agents"
+              placeholder="Add a short description — agents see this when browsing the tree, before opening the file…"
+              className="flex-1 min-w-0 resize-none bg-transparent text-sm leading-relaxed text-text-secondary placeholder:text-text-muted focus:outline-none"
+            />
+            <span className="shrink-0 pb-0.5 font-mono text-[10px] text-text-muted">
+              {description.length}/{DESCRIPTION_MAX}
+            </span>
+          </div>
         </div>
       </div>
       {bodyLoading ? (
@@ -433,83 +438,3 @@ export function DocPane({
   );
 }
 
-/**
- * Placeholder shown in the editor column while the per-entry body fetch
- * is in flight. Mirrors the editor's geometry (`mx-auto … max-w-3xl
- * px-6`) and the route loader's paragraph-bar treatment so the swap to
- * real content is seamless. A 0%-width entry renders as a paragraph gap.
- */
-function DocBodySkeleton() {
-  return (
-    <div
-      className="mx-auto w-full max-w-3xl px-6 pt-5 flex flex-col gap-2.5"
-      aria-hidden
-    >
-      {DOC_SKELETON_LINE_WIDTHS.map((w, i) => (
-        <div
-          key={i}
-          className="h-3.5 rounded bg-surface-raised-3 animate-pulse"
-          style={{ width: w }}
-        />
-      ))}
-    </div>
-  );
-}
-
-const DOC_SKELETON_LINE_WIDTHS = [
-  "42%", "96%", "88%", "92%", "60%", "0%", "78%", "94%", "85%", "70%", "0%",
-  "64%", "90%", "52%",
-];
-
-function ConflictBanner({
-  resolving,
-  onKeepMine,
-  onDiscardMine,
-}: {
-  resolving: boolean;
-  onKeepMine: () => void;
-  onDiscardMine: () => void;
-}) {
-  return (
-    <div
-      role="alert"
-      className="border-y border-amber-500/20 bg-amber-500/[0.06] px-6 py-3 flex flex-wrap items-center gap-3"
-    >
-      <AlertTriangle size={14} className="shrink-0 text-amber-300/90" />
-      <div className="min-w-0 flex-1 text-[12px] leading-relaxed text-amber-100/90">
-        <strong className="font-semibold">Edited elsewhere.</strong> The server
-        has a newer version of this entry. Choose how to resolve — your edits
-        are preserved until you do.
-      </div>
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={onDiscardMine}
-          disabled={resolving}
-          className="rounded-md border border-border-default bg-surface-raised-1 px-2.5 py-1 text-[11px] text-text-secondary transition-colors hover:bg-surface-raised-3 hover:text-text-primary disabled:opacity-40"
-        >
-          Discard mine, reload
-        </button>
-        <button
-          type="button"
-          onClick={onKeepMine}
-          disabled={resolving}
-          className="rounded-md border border-amber-400/30 bg-amber-400/10 px-2.5 py-1 text-[11px] text-amber-100/95 transition-colors hover:bg-amber-400/15 disabled:opacity-40"
-        >
-          {resolving ? "Saving…" : "Save mine, overwrite"}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function reportError(err: unknown, fallback: string): void {
-  if (err instanceof KnowledgeApiError) {
-    toast({ title: fallback, description: err.message });
-    return;
-  }
-  toast({
-    title: fallback,
-    description: err instanceof Error ? err.message : "Unknown error",
-  });
-}

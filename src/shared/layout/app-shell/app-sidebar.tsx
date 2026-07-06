@@ -9,7 +9,9 @@ import {
   Home,
   LayoutGrid,
   MessageSquare,
+  Network,
   Settings,
+  SlidersHorizontal,
   Sparkles,
   Users,
 } from "lucide-react";
@@ -24,6 +26,8 @@ type NavSection =
   | "chat"
   | "knowledge"
   | "skills"
+  | "ontology"
+  | "configuration"
   | "members";
 
 const NAV: ReadonlyArray<{ label: string; icon: LucideIcon; section: NavSection }> = [
@@ -32,6 +36,8 @@ const NAV: ReadonlyArray<{ label: string; icon: LucideIcon; section: NavSection 
   { label: "Chat", icon: MessageSquare, section: "chat" },
   { label: "Knowledge", icon: BookOpen, section: "knowledge" },
   { label: "Skills", icon: Sparkles, section: "skills" },
+  { label: "Ontology", icon: Network, section: "ontology" },
+  { label: "Configuration", icon: SlidersHorizontal, section: "configuration" },
   { label: "Members", icon: Users, section: "members" },
 ];
 

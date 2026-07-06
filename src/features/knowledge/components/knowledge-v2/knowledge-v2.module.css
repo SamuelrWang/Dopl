@@ -572,7 +572,7 @@
   background: none;
   padding: 6px 13px;
   border-radius: 8px;
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--kv-text-2);
   cursor: pointer;
@@ -582,12 +582,20 @@
   color: var(--kv-text);
   background: var(--kv-row-hover);
 }
+/* Concave (pressed-in) active tab — same selection language as the
+   study-notes sidebar. Ring via box-shadow so layout never shifts. */
 .detailTabActive {
   color: var(--kv-text);
-  background: #ececea;
+  font-weight: 600;
+  background: #e9e9e7;
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.12),
+    inset 0 1px 1px rgba(0, 0, 0, 0.06),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.7),
+    0 0 0 1px rgba(0, 0, 0, 0.05);
 }
 .detailTabActive:hover {
-  background: #ececea;
+  background: #e9e9e7;
 }
 
 /* Scroll body — generous padding so content sits well off the edges. */
@@ -601,14 +609,15 @@
   width: 0;
 }
 
-/* Header block */
+/* Header block — title sized to the study-notes note title (18px). */
 .docTitle {
   display: flex;
   align-items: center;
   gap: 11px;
-  font-size: 23px;
+  font-size: 18px;
   font-weight: 600;
   letter-spacing: -0.02em;
+  line-height: 1.375;
   color: var(--kv-text);
 }
 .docTitle .titleIcon {
@@ -623,9 +632,9 @@
 }
 .docSub {
   margin-top: 8px;
-  font-size: 14.5px;
+  font-size: 14px;
   color: var(--kv-text-2);
-  line-height: 1.5;
+  line-height: 1.625;
 }
 .hr {
   height: 1px;
@@ -633,32 +642,34 @@
   margin: 26px 0;
 }
 
-/* Nested meta card */
+/* Nested meta card — framed like the study-notes intro panel: strong
+   hairline, 14px radius, uppercase label strip over the body. */
 .metaCard {
-  border: 1px solid var(--kv-border);
-  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 14px;
   overflow: hidden;
 }
-/* Gray header bar over the white card body (reference: the "Website" strip). */
 .metaCardHead {
   display: flex;
   align-items: center;
   gap: 9px;
-  padding: 13px 16px;
-  background: #f6f6f4;
+  padding: 7px 16px;
+  background: #f4f6f9;
   border-bottom: 1px solid var(--kv-border);
 }
 .metaCardHead .label {
   flex: 1;
-  font-size: 14px;
+  font-size: 11px;
   font-weight: 600;
-  color: var(--kv-text);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--kv-text-2);
 }
 .metaCardBody {
   padding: 20px 22px 22px;
 }
 .metaTitle {
-  font-size: 19px;
+  font-size: 16px;
   font-weight: 600;
   letter-spacing: -0.01em;
   color: var(--kv-text);
@@ -668,7 +679,7 @@
   align-items: center;
   gap: 8px;
   margin-top: 9px;
-  font-size: 13.5px;
+  font-size: 13px;
   color: var(--kv-text-2);
 }
 .metaFields {
@@ -680,7 +691,7 @@
 .metaRow {
   display: flex;
   align-items: center;
-  font-size: 14px;
+  font-size: 13.5px;
 }
 .metaKey {
   display: inline-flex;
@@ -704,7 +715,7 @@
 .metaRowTop {
   display: flex;
   align-items: flex-start;
-  font-size: 14px;
+  font-size: 13.5px;
 }
 .metaRowTop .metaKey {
   padding-top: 3px;
@@ -742,20 +753,20 @@
 /* Shrink the shared DocEditor's prose to the v2 type scale (its defaults are
    16px). Scoped to this wrapper so v1 KB detail keeps its larger size. */
 .editorScope :global(.ProseMirror) {
-  font-size: 14.5px;
-  line-height: 1.62;
+  font-size: 14px;
+  line-height: 1.625;
 }
 .editorScope :global(.ProseMirror p),
 .editorScope :global(.ProseMirror li),
 .editorScope :global(.ProseMirror blockquote p) {
-  font-size: 14.5px;
-  line-height: 1.62;
+  font-size: 14px;
+  line-height: 1.625;
 }
 .editorScope :global(.ProseMirror h1) {
-  font-size: 20px;
+  font-size: 18px;
 }
 .editorScope :global(.ProseMirror h2) {
-  font-size: 17px;
+  font-size: 16px;
 }
 .editorScope :global(.ProseMirror h3) {
   font-size: 15px;
@@ -764,16 +775,19 @@
   font-size: 12.5px;
 }
 
-/* Description */
+/* Description — section label matches the study-notes panel headers
+   (11px uppercase muted). */
 .descHead {
-  font-size: 18px;
+  font-size: 11px;
   font-weight: 600;
-  letter-spacing: -0.01em;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--kv-text-2);
   margin-bottom: 12px;
 }
 .descBody {
-  font-size: 15px;
-  line-height: 1.6;
+  font-size: 14px;
+  line-height: 1.625;
   color: #3c3f44;
 }
 .descBody p + p {
@@ -782,9 +796,11 @@
 
 /* Subtasks */
 .subHead {
-  font-size: 18px;
+  font-size: 11px;
   font-weight: 600;
-  letter-spacing: -0.01em;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--kv-text-2);
   margin-bottom: 14px;
 }
 .subDateRow {

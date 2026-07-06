@@ -181,8 +181,9 @@
   border-radius: 8px;
   overflow: hidden;
   margin: var(--shell-gap-top) var(--shell-gap-right) var(--shell-gap-bottom) var(--shell-gap-left);
-  /* Neutral gray frame behind the sidebar + content panels. */
-  background: #f4f4f2;
+  /* Neutral gray frame behind the sidebar + content panels. Matches the
+     study-notes sidebar surface so both products share one rail color. */
+  background: #f1f2f4;
 }
 
 /* ─────────────────────────────────────────────────────────────────────
@@ -194,7 +195,7 @@
 .sidebar {
   width: var(--shell-sidebar-w);
   flex: 0 0 var(--shell-sidebar-w);
-  background: #f4f4f2;
+  background: #f1f2f4;
   padding: 8px 12px 20px 12px;
   display: flex;
   flex-direction: column;
