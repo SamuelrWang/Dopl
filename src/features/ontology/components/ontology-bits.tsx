@@ -3,8 +3,6 @@
 import { useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { cn } from "@/shared/lib/utils";
-import { OBJECT_TYPES } from "../seed";
-import type { ObjectTypeId } from "../types";
 
 /** Shared atoms — study-notes design language, verbatim. */
 
@@ -115,14 +113,3 @@ export const FIELD_WELL =
 /** Raised chip sitting on an inset body — verse-pill on a concave field. */
 export const CHIP =
   "rounded-full border border-black/[0.12] bg-[#fbfcfd] px-2.5 py-0.5 text-xs font-medium text-[#232a31] shadow-[0_1px_2px_rgba(0,0,0,0.05)]";
-
-/** Small colored dot for an object type (cards, cascade rows, chips). */
-export function TypeDot({ type }: { type: ObjectTypeId }) {
-  return (
-    <span
-      className="h-2 w-2 shrink-0 rounded-full"
-      style={{ background: OBJECT_TYPES[type].border }}
-      aria-hidden
-    />
-  );
-}

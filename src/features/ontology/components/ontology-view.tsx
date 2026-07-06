@@ -130,6 +130,7 @@ export function OntologyView() {
           <KanbanBoard
             cluster={cluster}
             graph={graph}
+            dispatch={dispatch}
             selectedId={selectedId}
             onSelect={setSelectedId}
             onCreateObject={createCard}

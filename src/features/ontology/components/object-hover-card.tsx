@@ -4,7 +4,6 @@ import { createPortal } from "react-dom";
 import { OBJECT_TYPES } from "../seed";
 import type { GraphState } from "../graph-state";
 import type { OntologyObject } from "../types";
-import { TypeDot } from "./ontology-bits";
 
 /**
  * Cursor-following quick view for an object (study-notes verse-tooltip
@@ -97,9 +96,9 @@ export function ObjectHoverCard({
               return (
                 <span
                   key={childId}
-                  className="flex items-center gap-1.5 rounded-full border border-black/[0.12] bg-[#eef1f5] px-2 py-0.5 text-[11px] font-medium text-[#232a31]"
+                  className="rounded-full border border-black/[0.12] bg-[#eef1f5] px-2 py-0.5 text-[11px] font-medium text-[#232a31]"
                 >
-                  <TypeDot type={child.type} /> {child.name}
+                  {child.name}
                 </span>
               );
             })}

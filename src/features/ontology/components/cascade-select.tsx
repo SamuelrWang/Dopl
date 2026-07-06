@@ -6,7 +6,6 @@ import { ChevronRight } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/shared/lib/utils";
 import type { GraphState } from "../graph-state";
-import { TypeDot } from "./ontology-bits";
 
 const PANEL_W = 264;
 const PANEL_MAX_H = 384;
@@ -124,7 +123,6 @@ export function CascadeSelect({
                             onHover={() => setColumnId(cid)}
                             onPick={excluded.has(cid) ? undefined : () => pick(cid)}
                           >
-                            <TypeDot type={col.type} />
                             <span className="min-w-0 flex-1 truncate">{col.name}</span>
                             <span className="text-[10px] text-[#98a2ad]">
                               {col.childIds.length}
@@ -141,7 +139,6 @@ export function CascadeSelect({
                                   disabled={excluded.has(oid)}
                                   onPick={excluded.has(oid) ? undefined : () => pick(oid)}
                                 >
-                                  <TypeDot type={obj.type} />
                                   <span className="min-w-0 flex-1 truncate">{obj.name}</span>
                                 </Row>
                               );

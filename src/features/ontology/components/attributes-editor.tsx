@@ -6,7 +6,7 @@ import type { Dispatch } from "react";
 import type { GraphAction, GraphState } from "../graph-state";
 import type { OntologyObject } from "../types";
 import { CascadeSelect } from "./cascade-select";
-import { CHIP, FIELD_WELL, SectionBox, TypeDot } from "./ontology-bits";
+import { CHIP, FIELD_WELL, SectionBox } from "./ontology-bits";
 
 type AttrKind = "text" | "pill" | "files" | "ref";
 
@@ -127,7 +127,6 @@ function AttrValueEditor({
           if (!target) return null;
           return (
             <span key={id} className={`flex items-center gap-1.5 ${CHIP}`}>
-              <TypeDot type={target.type} />
               {target.name}
               <button
                 type="button"
