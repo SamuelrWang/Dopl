@@ -230,6 +230,8 @@ async function opListBases(client: DoplClient): Promise<ToolResponse> {
   return ok(lines.join("\n"));
 }
 
+const TREE_ENTRY_CAP = 400;
+
 async function opGetTree(client: DoplClient, ref: string): Promise<ToolResponse> {
   const base = await resolveBaseOr(client, ref);
   if (isErr(base)) return base;
@@ -242,6 +244,8 @@ async function opGetTree(client: DoplClient, ref: string): Promise<ToolResponse>
     `Folders: ${tree.folders.length} · Entries: ${tree.entries.length}`,
     "",
   ];
+  let printedEntries = 0;
+  let truncated = false;
   // Build a tree view by walking parent_id / folder_id.
   const childFolders = new Map<string | null, typeof tree.folders>();
   for (const f of tree.folders) {
@@ -265,10 +269,21 @@ async function opGetTree(client: DoplClient, ref: string): Promise<ToolResponse>
       dump(f.id, prefix + "  ");
     }
     for (const e of childEntries.get(parentId) ?? []) {
+      if (printedEntries >= TREE_ENTRY_CAP) {
+        truncated = true;
+        return;
+      }
+      printedEntries += 1;
       lines.push(`${prefix}📄 ${e.title}${descSuffix(e.excerpt)}`);
     }
   }
   dump(null, "");
+  if (truncated) {
+    lines.push(
+      "",
+      `_Tree truncated at ${TREE_ENTRY_CAP} of ${tree.entries.length} entries. Browse a folder with op="list_dir" or find entries by content with op="search"._`
+    );
+  }
   return ok(lines.join("\n"));
 }
 

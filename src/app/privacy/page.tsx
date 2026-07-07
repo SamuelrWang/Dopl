@@ -141,7 +141,6 @@ export default function PrivacyPage() {
             </p>
             <ul className="list-disc list-inside mt-2 space-y-1 text-white/60">
               <li>Supabase — database, authentication, and real-time infrastructure</li>
-              <li>Anthropic — AI model provider (Claude)</li>
               <li>OpenAI — AI model provider</li>
               <li>Vercel — hosting and deployment</li>
               <li>Google — OAuth authentication</li>

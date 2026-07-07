@@ -69,3 +69,12 @@ export type {
   SkillStatus,
   SkillWriteSource,
 } from "./skill-types.js";
+export type {
+  OntologyAttribute,
+  OntologyAttributeValue,
+  OntologyCluster,
+  OntologyMethod,
+  OntologyObject,
+  OntologyRelationship,
+  OntologySnapshot,
+} from "./ontology-types.js";

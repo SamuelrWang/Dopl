@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { ChevronDown, Plus, X } from "lucide-react";
 import type { Dispatch } from "react";
-import { accessibleKnowledge, accessibleSkills, resourceName } from "../seed";
+import { useWorkspaceResources } from "../hooks/use-workspace-resources";
 import type { GraphAction, GraphState } from "../graph-state";
 import type { OntologyObject } from "../types";
 import { CascadeSelect } from "./cascade-select";
@@ -132,14 +132,16 @@ function AttrValueEditor({
   onChange: (attr: Attribute) => void;
 }) {
   const v = attr.value;
+  const workspaceResources = useWorkspaceResources();
 
   if (v.kind === "knowledge" || v.kind === "skill") {
-    const resources = v.kind === "knowledge" ? accessibleKnowledge() : accessibleSkills();
+    const resources =
+      v.kind === "knowledge" ? workspaceResources.knowledge : workspaceResources.skills;
     return (
       <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
         {v.value.map((id) => (
           <span key={id} className={`flex items-center gap-1.5 ${CHIP}`}>
-            {resourceName(id) ?? id}
+            {workspaceResources.nameOf(id) ?? "Unavailable"}
             <button
               type="button"
               aria-label="Remove"

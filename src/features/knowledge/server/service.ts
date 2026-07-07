@@ -237,16 +237,6 @@ export async function getBaseBySlug(
   return base;
 }
 
-export async function getBaseByPublicId(
-  ctx: KnowledgeContext,
-  publicId: string
-): Promise<KnowledgeBase> {
-  const base = await repo.findBaseByPublicId(ctx.workspaceId, publicId, false);
-  if (!base) throw new KnowledgeBaseNotFoundError(publicId);
-  await assertBaseVisible(ctx, base);
-  return base;
-}
-
 // ─── Base writes ────────────────────────────────────────────────────
 
 export async function createBase(

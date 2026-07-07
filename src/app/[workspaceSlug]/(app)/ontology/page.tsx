@@ -1,14 +1,12 @@
 /**
- * /[workspaceSlug]/ontology — ontology workspace page.
- *
- * Static seeded preview: resolves the workspace for auth/canonical
- * routing, then renders the seed-driven view. Real object-graph reads
- * land with the ontology service.
+ * /[workspaceSlug]/ontology — ontology workspace page (first cluster).
+ * Cluster deep links live at ./[clusterSlug].
  */
 
 import { redirect } from "next/navigation";
 import { getUser } from "@/shared/supabase/server";
 import { resolvePageWorkspace } from "@/features/workspaces/server/segment";
+import { workspaceSegment } from "@/features/workspaces/url";
 import { AppPanel } from "@/shared/layout/app-shell";
 import { OntologyView } from "@/features/ontology/components/ontology-view";
 
@@ -22,11 +20,14 @@ export default async function OntologyPage({ params }: PageProps) {
   const { workspaceSlug } = await params;
   const user = await getUser();
   if (!user) redirect("/login");
-  await resolvePageWorkspace(workspaceSlug, user.id, "ontology");
+  const workspace = await resolvePageWorkspace(workspaceSlug, user.id, "ontology");
 
   return (
     <AppPanel scroll={false}>
-      <OntologyView />
+      <OntologyView
+        workspaceId={workspace.id}
+        workspaceSegment={workspaceSegment(workspace)}
+      />
     </AppPanel>
   );
 }

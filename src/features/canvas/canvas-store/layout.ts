@@ -101,9 +101,7 @@ export function findNonOverlappingPosition(
  * blindly from the counter would make every create a silent no-op.
  *
  * `offset` requests the (offset+1)-th free suffix, for call sites that
- * mint several ids from one state snapshot before any dispatch lands
- * (e.g. workflow-create consumes the first, its auto chat panel the
- * second).
+ * mint several ids from one state snapshot before any dispatch lands.
  */
 export function nextPanelIdString(state: CanvasState, offset = 0): string {
   const taken = new Set(state.panels.map((p) => p.id));

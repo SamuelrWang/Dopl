@@ -8,7 +8,6 @@ import {
   HelpCircle,
   Home,
   LayoutGrid,
-  MessageSquare,
   Network,
   Settings,
   SlidersHorizontal,
@@ -23,7 +22,6 @@ import styles from "./app-shell.module.css";
 type NavSection =
   | "overview"
   | "canvas"
-  | "chat"
   | "knowledge"
   | "skills"
   | "ontology"
@@ -33,7 +31,6 @@ type NavSection =
 const NAV: ReadonlyArray<{ label: string; icon: LucideIcon; section: NavSection }> = [
   { label: "Overview", icon: Home, section: "overview" },
   { label: "Canvas", icon: LayoutGrid, section: "canvas" },
-  { label: "Chat", icon: MessageSquare, section: "chat" },
   { label: "Knowledge", icon: BookOpen, section: "knowledge" },
   { label: "Skills", icon: Sparkles, section: "skills" },
   { label: "Ontology", icon: Network, section: "ontology" },

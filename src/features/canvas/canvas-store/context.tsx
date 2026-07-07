@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, type Dispatch, type MutableRefObject } from "react";
-import type { CanvasState, CanvasAction, Panel } from "../types";
+import type { CanvasState, CanvasAction } from "../types";
 
 // ── Context value types ───────────────────────────────────────────
 
@@ -11,17 +11,6 @@ interface CanvasContextValue {
 }
 
 export const CanvasContext = createContext<CanvasContextValue | null>(null);
-
-/**
- * Separate context carrying only panels + dispatch. Components that don't
- * need camera can subscribe to this instead of CanvasContext, avoiding
- * re-renders on camera/zoom changes.
- */
-interface PanelsContextValue {
-  panels: Panel[];
-  dispatch: Dispatch<CanvasAction>;
-}
-export const PanelsContext = createContext<PanelsContextValue | null>(null);
 
 /**
  * Ref-based context for non-rendering reads of canvas state.
@@ -87,15 +76,6 @@ export function useCanvas(): CanvasContextValue {
   return ctx;
 }
 
-/**
- * Subscribe to panels + clusters without re-rendering on camera changes.
- * Use this in fixed UI (e.g. FixedChatPanel) that doesn't need camera.
- */
-export function usePanelsContext(): PanelsContextValue {
-  const ctx = useContext(PanelsContext);
-  if (!ctx) throw new Error("usePanelsContext must be used inside <CanvasProvider>");
-  return ctx;
-}
 
 /**
  * Returns a stable ref that always points to the latest CanvasState.

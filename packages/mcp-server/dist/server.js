@@ -11,6 +11,9 @@ const cluster_js_1 = require("./tools/cluster.js");
 const workflow_js_1 = require("./tools/workflow.js");
 const canvas_js_1 = require("./tools/canvas.js");
 const packs_js_1 = require("./tools/packs.js");
+const map_js_1 = require("./tools/map.js");
+const search_js_1 = require("./tools/search.js");
+const ontology_js_1 = require("./tools/ontology.js");
 const skill_authoring_guide_js_1 = require("./prompts/skill-authoring-guide.js");
 const version_js_1 = require("./version.js");
 exports.SERVER_INSTRUCTIONS = `You are connected to **Dopl** — the user's workspace of knowledge bases, skills, and clusters for AI/automation work.
@@ -21,7 +24,7 @@ Use the Dopl tools to read and organize the user's workspace: their knowledge ba
 
 ## Session start — preload the user's workspace
 
-At the very start of every new session, before your first substantive reply, call dopl_cluster(op='list') and dopl_canvas(op='list') in parallel. This loads the user's current clusters and canvas panels so questions about their workspace are grounded in real state from turn one.
+At the very start of every new session, before your first substantive reply, call dopl_map (one cheap call: every knowledge base, skill, workflow, and ontology cluster with one-liners). For "my/me" requests also call dopl_ontology(op='anchor') to learn who the caller is in the workspace graph. Ground answers in that real state, not stale local files.
 
 You do NOT need to re-run these on every turn. Once per session is enough, except:
 
@@ -435,5 +438,8 @@ function createServer(client, options = {}) {
     (0, packs_js_1.registerPacksTools)(registerTool, client); // curated read-only knowledge packs
     (0, knowledge_js_1.registerKnowledgeTools)(registerTool, client); // dopl_kb + dopl_kb_admin (user bases)
     (0, skills_js_1.registerSkillTools)(registerTool, client); // dopl_skill + dopl_skill_admin
+    (0, map_js_1.registerMapTool)(registerTool, client); // dopl_map — compact workspace manifest
+    (0, search_js_1.registerSearchTool)(registerTool, client); // dopl_search — cross-domain search
+    (0, ontology_js_1.registerOntologyTool)(registerTool, client); // dopl_ontology — routing graph (read-only)
     return server;
 }

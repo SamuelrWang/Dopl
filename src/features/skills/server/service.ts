@@ -116,16 +116,6 @@ export async function getSkillBySlug(
   return skill;
 }
 
-export async function getSkillByPublicId(
-  ctx: SkillContext,
-  publicId: string
-): Promise<Skill> {
-  const skill = await repo.findSkillByPublicId(ctx.workspaceId, publicId);
-  if (!skill) throw new SkillNotFoundError(publicId);
-  if (!canSeeSkill(ctx, skill)) throw new SkillNotFoundError(publicId);
-  return skill;
-}
-
 export async function listFiles(
   ctx: SkillContext,
   slug: string,

@@ -387,67 +387,6 @@ async function joinInvitationTeams(
   }
 }
 
-export interface PendingInvitationForUser {
-  token: string;
-  invitedRole: InvitedRole;
-  workspaceId: string;
-  workspaceSlug: string;
-  workspacePublicId: string;
-  workspaceName: string;
-  createdAt: string;
-}
-
-/**
- * List the live (unaccepted, unrevoked, unexpired) invitations addressed
- * to a given email. Used by the sidebar to surface "you've been invited"
- * notifications + accept buttons.
- */
-export async function listPendingInvitationsForUser(
-  email: string
-): Promise<PendingInvitationForUser[]> {
-  const normalized = email.trim().toLowerCase();
-  if (!normalized) return [];
-
-  const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("workspace_invitations")
-    .select(
-      `${INVITATION_COLS}, workspace:workspaces!inner(id, slug, public_id, name)`
-    )
-    .eq("email", normalized)
-    .is("accepted_at", null)
-    .is("revoked_at", null)
-    .gt("expires_at", new Date().toISOString())
-    .order("created_at", { ascending: false });
-  if (error) throw error;
-
-  type WorkspaceJoin = {
-    id: string;
-    slug: string;
-    public_id: string;
-    name: string;
-  };
-  type Row = InvitationRow & {
-    workspace: WorkspaceJoin | WorkspaceJoin[] | null;
-  };
-
-  return ((data ?? []) as unknown as Row[])
-    .map((r) => {
-      const ws = Array.isArray(r.workspace) ? r.workspace[0] : r.workspace;
-      if (!ws) return null;
-      return {
-        token: r.token,
-        invitedRole: r.invited_role,
-        workspaceId: ws.id,
-        workspaceSlug: ws.slug,
-        workspacePublicId: ws.public_id,
-        workspaceName: ws.name,
-        createdAt: r.created_at,
-      };
-    })
-    .filter((r): r is PendingInvitationForUser => r !== null);
-}
-
 /**
  * Update a member's role. Owner can promote/demote anyone (including
  * themselves), admin can manage member/viewer but never owners, other
@@ -577,14 +516,3 @@ async function countActiveOwners(workspaceId: string): Promise<number> {
   return count ?? 0;
 }
 
-/**
- * Lookup helper used by the members API — confirms the caller can read
- * the member list (any active member can; admin gates apply only to
- * write actions).
- */
-export async function ensureCanRead(
-  workspaceId: string,
-  userId: string
-): Promise<void> {
-  await resolveMembershipOrThrow(workspaceId, userId);
-}

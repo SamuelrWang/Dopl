@@ -1,37 +1,38 @@
 "use client";
 
-import { useReducer } from "react";
-import { CLUSTERS, OBJECTS } from "./seed";
 import type {
   ObjectAttribute,
   ObjectMethod,
-  ObjectTypeId,
   OntologyCluster,
   OntologyObject,
+  OntologySnapshot,
 } from "./types";
 
 /**
- * In-memory graph editor state. The whole page is a static preview —
- * edits mutate this local store only; nothing persists. Columns are
- * container objects: a cluster holds columnIds, a column's childIds are
- * its cards.
+ * Client-side graph store. Actions mutate this local state
+ * optimistically; `use-ontology.ts` mirrors them to the API. Columns
+ * are container objects: a cluster holds columnIds, a column's
+ * childIds are its cards.
  */
 
 export interface GraphState {
-  objects: Record<string, OntologyObject>;
   clusters: OntologyCluster[];
+  objects: Record<string, OntologyObject>;
 }
 
+export const EMPTY_GRAPH: GraphState = { clusters: [], objects: {} };
+
 export type GraphAction =
-  | { type: "OBJECT_UPDATE"; id: string; patch: Partial<OntologyObject> }
+  | { type: "SNAPSHOT_SET"; snapshot: OntologySnapshot }
+  | { type: "CLUSTER_ADD"; cluster: OntologyCluster }
+  | { type: "CLUSTER_UPDATE"; id: string; patch: { name?: string; purpose?: string } }
   | {
-      type: "OBJECT_CREATE";
-      /** Cluster to attach a new COLUMN to (when no parentId). */
-      clusterId: string;
-      /** Container (column or object) the new object nests under. */
-      parentId?: string;
+      type: "OBJECT_ADD";
       object: OntologyObject;
+      clusterId?: string;
+      parentObjectId?: string;
     }
+  | { type: "OBJECT_UPDATE"; id: string; patch: Partial<OntologyObject> }
   | { type: "OBJECT_DELETE"; id: string }
   | { type: "ATTRIBUTE_UPSERT"; id: string; index: number | null; attribute: ObjectAttribute }
   | { type: "ATTRIBUTE_DELETE"; id: string; index: number }
@@ -39,8 +40,24 @@ export type GraphAction =
   | { type: "RELATIONSHIP_RENAME"; id: string; index: number; label: string }
   | { type: "RELATIONSHIP_DELETE"; id: string; label: string }
   | { type: "METHOD_UPSERT"; id: string; index: number | null; method: ObjectMethod }
-  | { type: "METHOD_DELETE"; id: string; index: number }
-  | { type: "CLUSTER_CREATE"; cluster: OntologyCluster };
+  | { type: "METHOD_DELETE"; id: string; index: number };
+
+/** Actions whose target object should be synced to the API (debounced). */
+export function objectIdToSync(action: GraphAction): string | null {
+  switch (action.type) {
+    case "OBJECT_UPDATE":
+    case "ATTRIBUTE_UPSERT":
+    case "ATTRIBUTE_DELETE":
+    case "RELATIONSHIP_SET":
+    case "RELATIONSHIP_RENAME":
+    case "RELATIONSHIP_DELETE":
+    case "METHOD_UPSERT":
+    case "METHOD_DELETE":
+      return action.id;
+    default:
+      return null;
+  }
+}
 
 function patchObject(
   state: GraphState,
@@ -54,14 +71,23 @@ function patchObject(
 
 export function graphReducer(state: GraphState, action: GraphAction): GraphState {
   switch (action.type) {
-    case "OBJECT_UPDATE":
-      return patchObject(state, action.id, (o) => ({ ...o, ...action.patch }));
-    case "OBJECT_CREATE": {
+    case "SNAPSHOT_SET":
+      return { clusters: action.snapshot.clusters, objects: action.snapshot.objects };
+    case "CLUSTER_ADD":
+      return { ...state, clusters: [...state.clusters, action.cluster] };
+    case "CLUSTER_UPDATE":
+      return {
+        ...state,
+        clusters: state.clusters.map((c) =>
+          c.id === action.id ? { ...c, ...action.patch } : c
+        ),
+      };
+    case "OBJECT_ADD": {
       const objects = { ...state.objects, [action.object.id]: action.object };
-      if (action.parentId) {
-        const parent = objects[action.parentId];
+      if (action.parentObjectId) {
+        const parent = objects[action.parentObjectId];
         if (parent) {
-          objects[action.parentId] = {
+          objects[action.parentObjectId] = {
             ...parent,
             childIds: [...parent.childIds, action.object.id],
           };
@@ -69,7 +95,6 @@ export function graphReducer(state: GraphState, action: GraphAction): GraphState
         return { ...state, objects };
       }
       return {
-        ...state,
         objects,
         clusters: state.clusters.map((c) =>
           c.id === action.clusterId
@@ -78,19 +103,24 @@ export function graphReducer(state: GraphState, action: GraphAction): GraphState
         ),
       };
     }
+    case "OBJECT_UPDATE":
+      return patchObject(state, action.id, (o) => ({ ...o, ...action.patch }));
     case "OBJECT_DELETE": {
       const objects = { ...state.objects };
       delete objects[action.id];
       for (const [oid, obj] of Object.entries(objects)) {
-        if (obj.childIds.includes(action.id)) {
-          objects[oid] = {
-            ...obj,
-            childIds: obj.childIds.filter((cid) => cid !== action.id),
-          };
-        }
+        const isParent = obj.childIds.includes(action.id);
+        const isSource = obj.relationships.some((r) => r.targetIds.includes(action.id));
+        if (!isParent && !isSource) continue;
+        objects[oid] = {
+          ...obj,
+          childIds: obj.childIds.filter((cid) => cid !== action.id),
+          relationships: obj.relationships
+            .map((r) => ({ ...r, targetIds: r.targetIds.filter((t) => t !== action.id) }))
+            .filter((r) => r.targetIds.length > 0),
+        };
       }
       return {
-        ...state,
         objects,
         clusters: state.clusters.map((c) => ({
           ...c,
@@ -146,38 +176,5 @@ export function graphReducer(state: GraphState, action: GraphAction): GraphState
         ...o,
         methods: o.methods.filter((_, i) => i !== action.index),
       }));
-    case "CLUSTER_CREATE":
-      return { ...state, clusters: [...state.clusters, action.cluster] };
   }
-}
-
-let nextId = 1;
-
-export function newObjectId(): string {
-  return `obj-new-${nextId++}`;
-}
-
-export function newClusterId(): string {
-  return `cl-new-${nextId++}`;
-}
-
-export function makeBlankObject(
-  id: string,
-  type: ObjectTypeId,
-  name = "New object"
-): OntologyObject {
-  return {
-    id,
-    type,
-    name,
-    subtitle: "",
-    attributes: [],
-    relationships: [],
-    methods: [],
-    childIds: [],
-  };
-}
-
-export function useGraph() {
-  return useReducer(graphReducer, { objects: OBJECTS, clusters: CLUSTERS });
 }

@@ -52,10 +52,18 @@ export interface OntologyObject {
 
 export interface OntologyCluster {
   id: string;
+  /** URL handle (`/[workspace]/ontology/[slug]`). Stable across renames. */
+  slug: string;
   name: string;
   purpose: string;
   /** The cluster's columns — each a container object whose children are the cards. */
   columnIds: string[];
+}
+
+/** Full workspace ontology as the API serves it — the UI store's shape. */
+export interface OntologySnapshot {
+  clusters: OntologyCluster[];
+  objects: Record<string, OntologyObject>;
 }
 
 /** A workspace knowledge base or skill, with the caller's access resolved. */

@@ -14,10 +14,7 @@
 
 import { notFound, redirect } from "next/navigation";
 import { getUser } from "@/shared/supabase/server";
-import {
-  loadCanvasConversations,
-  loadCanvasInitialState,
-} from "@/features/canvas/server/load-server-state";
+import { loadCanvasInitialState } from "@/features/canvas/server/load-server-state";
 import { resolveMembershipOrThrow } from "@/features/workspaces/server/service";
 import { resolvePageWorkspace } from "@/features/workspaces/server/segment";
 import { findCanvasBySlug } from "@/features/workspaces/server/canvases";
@@ -42,8 +39,7 @@ export default async function WorkspaceCanvasPage({ params }: PageProps) {
   if (!canvas) notFound();
 
   const scope = { userId: user.id, workspaceId: workspace.id };
-  const conversations = await loadCanvasConversations(scope);
-  const initialState = await loadCanvasInitialState(scope, conversations);
+  const initialState = await loadCanvasInitialState(scope);
 
   return (
     <CanvasClientShell
@@ -52,7 +48,6 @@ export default async function WorkspaceCanvasPage({ params }: PageProps) {
       workspaceSlug={workspaceSlug}
       canvasSlug={canvas.slug}
       initialState={initialState}
-      initialConversations={conversations}
     />
   );
 }

@@ -5,22 +5,6 @@
  * Single-use constants stay co-located with their consumers.
  */
 
-// ── Chat attachment limits ──────────────────────────────────────────
-export const MAX_CHAT_ATTACHMENT_SIZE = 10 * 1024 * 1024; // 10MB per file
-export const MAX_CHAT_ATTACHMENTS_PER_MESSAGE = 5;
-export const MAX_CHAT_MESSAGE_SIZE = 25 * 1024 * 1024; // 25MB total per send
-export const ALLOWED_CHAT_ATTACHMENT_TYPES = [
-  "image/png",
-  "image/jpeg",
-  "image/webp",
-  "image/gif",
-  "application/pdf",
-  "text/plain",
-  "text/markdown",
-  "text/csv",
-  "application/json",
-] as const;
-
 // ── Context budgets ─────────────────────────────────────────────────
 export const CONTEXT_CHAR_BUDGET_PER_FIELD = 2000;
 

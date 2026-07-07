@@ -26,8 +26,8 @@ export const GET = withWorkspaceAuth(async (_request, { workspaceId }) => {
 
 /**
  * POST /api/canvas/panels — add a panel to the active canvas.
- * Supported panel types: chat, connection, knowledge, skills,
- * knowledge-base, skill, artifact.
+ * Supported panel types: connection, knowledge, skills,
+ * knowledge-base, skill, artifact, node, workflow.
  * Body: { panel_id, panel_type, x, y, width?, height?, title?, summary?, source_url?, panel_data? }
  */
 export const POST = withWorkspaceAuth(
@@ -47,7 +47,6 @@ export const POST = withWorkspaceAuth(
     // src/features/canvas/types.ts and the cases in panel-dto.ts.
     // When adding a new panel type, update all three sites.
     const VALID_PANEL_TYPES = [
-      "chat",
       "connection",
       "knowledge",
       "skills",

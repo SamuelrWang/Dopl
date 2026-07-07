@@ -549,14 +549,6 @@ export async function listEntriesForBase(
   );
 }
 
-export async function listEntriesForFolder(
-  folderId: string | null,
-  baseId: string,
-  opts: Omit<ListEntriesOpts, "folderId"> = {}
-): Promise<KnowledgeEntry[]> {
-  return listEntriesForBase(baseId, { ...opts, folderId });
-}
-
 export interface InsertEntryArgs {
   workspaceId: string;
   knowledgeBaseId: string;

@@ -5,8 +5,6 @@
  * the camera offset translates world → screen for rendering.
  */
 
-import type { ChatMessage } from "@/shared/types/chat";
-
 export interface BasePanelData {
   id: string;
   /** World coordinates (top-left of the panel box) */
@@ -14,27 +12,6 @@ export interface BasePanelData {
   y: number;
   width: number;
   height: number;
-}
-
-export interface ChatPanelData extends BasePanelData {
-  type: "chat";
-  title: string;
-  messages: ChatMessage[];
-  isProcessing: boolean;
-  /**
-   * Seed message typed in the FixedInputBar when the panel was spawned.
-   * The chat panel consumes this on mount, clears it, and fires a normal
-   * chat send. Makes the "type in the bottom bar → new chat panel with
-   * that message as the first send" flow work without crossing component
-   * boundaries.
-   */
-  pendingInput?: string;
-  /** Supabase row ID once the conversation has been persisted. */
-  conversationId?: string;
-  /** When true, conversation persists indefinitely (no auto-delete). */
-  pinned?: boolean;
-  /** ISO timestamp when the conversation will auto-delete (if not pinned). */
-  expiresAt?: string;
 }
 
 /**
@@ -91,19 +68,13 @@ export interface SkillPanelData extends BasePanelData {
 }
 
 /**
- * ArtifactPanelData — workspace-shared markdown document spawned by
- * promoting a private-chat artifact (Agent Prompt or Context File) onto
- * the canvas. Editable in place via the same MarkdownMessage renderer
- * the rest of the app uses. Visibility flips from private → shared at
- * the moment of promotion.
+ * ArtifactPanelData — workspace-shared markdown document panel. Editable
+ * in place via the same MarkdownMessage renderer the rest of the app uses.
  */
 export interface ArtifactPanelData extends BasePanelData {
   type: "artifact";
   title: string;
   markdown: string;
-  /** Where the promotion came from (private chat conversation + message). */
-  sourceConversationId?: string;
-  sourceMessageId?: string;
 }
 
 /**
@@ -167,7 +138,6 @@ export interface NodePanelData extends BasePanelData {
 
 /** Discriminated union — add more panel types here later */
 export type Panel =
-  | ChatPanelData
   | ConnectionPanelData
   | KnowledgePanelData
   | SkillsPanelData
@@ -324,11 +294,6 @@ export const INITIAL_CANVAS_STATE: CanvasState = {
   history: { past: [], future: [] },
 };
 
-export const DEFAULT_PANEL_SIZE = {
-  width: 480,
-  height: 600,
-} as const;
-
 /**
  * Compute the axis-aligned bounding box of all panels.
  * Returns null if the array is empty.
@@ -394,56 +359,7 @@ export type CanvasAction =
       type: "MOVE_PANELS";
       moves: Array<{ id: string; x: number; y: number }>;
     }
-  | {
-      type: "CREATE_CHAT_PANEL";
-      id: string;
-      x: number;
-      y: number;
-      title: string;
-      /** Optional first message the panel will send as soon as it mounts. */
-      pendingInput?: string;
-    }
-  | {
-      /**
-       * Clear a chat panel's `pendingInput`. Dispatched by the chat
-       * panel after it consumes the seed input.
-       */
-      type: "CLEAR_PENDING_INPUT";
-      panelId: string;
-    }
   | { type: "CLOSE_PANEL"; id: string }
-  | { type: "UPDATE_CHAT_TITLE"; panelId: string; title: string }
-  | { type: "SET_CHAT_PINNED"; panelId: string; pinned: boolean }
-  | {
-      /** Replace a chat panel's messages wholesale with server-loaded data. */
-      type: "HYDRATE_CHAT_MESSAGES";
-      panelId: string;
-      messages: ChatMessage[];
-      conversationId: string;
-    }
-  | { type: "APPEND_MESSAGE"; panelId: string; message: ChatMessage }
-  | {
-      /**
-       * Update the content of the LAST `streaming`-type message in a
-       * chat panel. If the last message isn't a streaming message, a
-       * new one is appended. Used by the real-chat SSE loop to stream
-       * tokens into a single bubble without bloating the message log.
-       */
-      type: "UPDATE_STREAMING_MESSAGE";
-      panelId: string;
-      content: string;
-    }
-  | {
-      /**
-       * Convert the LAST `streaming` message in a chat panel to a
-       * finalised `text` message with the given content. Used at the
-       * end of an AI response to commit the streamed text. If the last
-       * message isn't a streaming message, this is a no-op.
-       */
-      type: "FINALISE_STREAMING_MESSAGE";
-      panelId: string;
-      content: string;
-    }
   | {
       /**
        * Replace the selection with a specific set of panel ids. Pass an
@@ -451,7 +367,6 @@ export type CanvasAction =
        *  - Normal click on a panel → [panelId]
        *  - Shift-click toggle → recomputed array
        *  - Canvas marquee → live-updated as the box changes
-       *  - Chat textarea focus → [panelId]
        *  - Canvas background click → []
        */
       type: "SET_SELECTION";
@@ -557,9 +472,8 @@ export type CanvasAction =
     }
   | {
       /**
-       * Spawn an artifact panel at (x, y) with synthesized markdown.
-       * Used by the private-chat "Promote to canvas" flow. Caller picks
-       * (x, y) — typically the canvas viewport center via
+       * Spawn an artifact panel at (x, y) with the given markdown.
+       * Caller picks (x, y) — typically the canvas viewport center via
        * computeNewPanelPosition.
        */
       type: "CREATE_ARTIFACT_PANEL";
@@ -568,8 +482,6 @@ export type CanvasAction =
       y: number;
       title: string;
       markdown: string;
-      sourceConversationId?: string;
-      sourceMessageId?: string;
     }
   | {
       /** In-place edit of an artifact panel's markdown body. */

@@ -215,8 +215,8 @@ export function withMcpAccess(
         ? sub.tier
         : "free";
 
-    // UI (session) calls are unmetered and unlogged — in-app usage is
-    // tracked via the conversations table. MCP calls get gated + logged.
+    // UI (session) calls are unmetered and unlogged. MCP calls get
+    // gated + logged.
     if (!isMcpCaller) {
       return handler(request, { ...ctx, tier: resolvedTier });
     }

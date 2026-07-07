@@ -6,8 +6,7 @@
  * (notably an MCP agent authoring a workflow) into the canvas reducer live.
  *
  * Scope: only `node` + `workflow` panels are applied (the workflow-authoring
- * surface). Chat/KB/skill panels are left to their own syncs — replacing a
- * chat panel here would wipe its in-memory messages.
+ * surface). KB/skill panels are left to their own syncs.
  *
  * Loop safety: the write-through db-sync re-emits at most one idempotent
  * (UPSERT) write per applied remote change, then quiesces — its effects only

@@ -1,6 +1,5 @@
 import {
   BookOpen,
-  MessageSquare,
   Sparkles,
   SquarePlus,
   Workflow,
@@ -10,7 +9,6 @@ import {
 export type MenuItemId =
   | "new-workflow"
   | "new-node"
-  | "new-chat"
   | "open-knowledge"
   | "open-skills";
 
@@ -38,13 +36,6 @@ export const MENU_SECTIONS: MenuItem[][] = [
       id: "new-node",
       label: "New node",
       icon: SquarePlus,
-    },
-  ],
-  [
-    {
-      id: "new-chat",
-      label: "New chat",
-      icon: MessageSquare,
     },
   ],
   [

@@ -68,17 +68,3 @@ export async function deleteChunksFrom(
   if (error) throw error;
 }
 
-/** Entry ids in a workspace that have at least one chunk (backfill skip-list). */
-export async function listEmbeddedEntryIds(
-  workspaceId: string
-): Promise<Set<string>> {
-  const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("knowledge_entry_chunks")
-    .select("entry_id")
-    .eq("workspace_id", workspaceId);
-  if (error) throw error;
-  return new Set(
-    ((data ?? []) as Array<{ entry_id: string }>).map((r) => r.entry_id)
-  );
-}

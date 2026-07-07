@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Trash2, X } from "lucide-react";
 import type { Dispatch } from "react";
-import { OBJECT_TYPES } from "../seed";
+import { OBJECT_TYPES } from "../constants";
 import type { GraphAction, GraphState } from "../graph-state";
 import type { ObjectTypeId } from "../types";
 import { ActionsEditor } from "./actions-editor";

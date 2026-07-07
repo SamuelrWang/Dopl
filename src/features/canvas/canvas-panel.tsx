@@ -5,7 +5,7 @@
  *
  * Provides:
  *  - World-coordinate positioning (absolute left/top)
- *  - Liquid-glass chrome (matches the chat input box style)
+ *  - Liquid-glass chrome (matches the fixed input bar style)
  *  - Header with drag handle, title, and close button
  *  - Routes the panel.type to the correct body component
  *
@@ -14,9 +14,8 @@
  * logic; this file is the render shell + selection/close/dialog glue.
  */
 
-import React, { useCallback, useState, type Dispatch } from "react";
+import React, { useCallback, type Dispatch } from "react";
 import { useCapabilities } from "./canvas-store";
-import { ChatPanelBody } from "@/features/chat/components/chat-panel";
 import { ConnectionPanelBody } from "./panels/connection-panel";
 import { KnowledgePanelBody } from "./panels/knowledge/knowledge-panel";
 import { SkillsPanelBody } from "./panels/skills/skills-panel";
@@ -25,19 +24,9 @@ import { SkillPanelBody } from "./panels/skill/skill-panel";
 import { ArtifactPanelBody } from "./panels/artifact/artifact-panel";
 import { WorkflowPanelBody } from "./panels/workflow/workflow-panel";
 import { NodePanelBody } from "./panels/node/node-panel";
-import { ChatExpiryBar } from "./canvas-panel-expiry";
 import { useCanvasPanelDrag } from "./use-canvas-panel-drag";
 import { useCanvasPanelResize } from "./use-canvas-panel-resize";
 import { isPanelDeletable, isPanelResizable, type CanvasAction, type Panel } from "./types";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/shared/ui/dialog";
-import { Button } from "@/shared/ui/button";
 
 interface CanvasPanelProps {
   panel: Panel;
@@ -66,46 +55,29 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
     handleEdgePointerUp,
   } = useCanvasPanelResize(panel, dispatch);
 
-  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
-
   const handleClose = useCallback(() => {
-    // Chat panels: close is now non-destructive. The conversation stays
-    // in the DB (on its 7-day timer for unpinned chats, indefinite for
-    // pinned), and the user can re-open it from the chat drawer. We
-    // simply remove the canvas panel; the sync layer DELETEs the
-    // canvas_panels row, leaving the conversations row untouched.
     dispatch({ type: "CLOSE_PANEL", id: panel.id });
   }, [dispatch, panel]);
 
-  const handleConfirmClose = useCallback(() => {
-    // Legacy path — close is now non-destructive, so this just closes
-    // the canvas panel. The dialog is no longer wired up for chats, but
-    // we keep the handler in case it's reached via another path.
-    dispatch({ type: "CLOSE_PANEL", id: panel.id });
-    setShowCloseConfirm(false);
-  }, [dispatch, panel.id]);
-
   const deletable = isPanelDeletable(panel) && capabilities.canDelete;
   const headerTitle =
-    panel.type === "chat"
-      ? panel.title
-      : panel.type === "connection"
-        ? "API & MCP Connection"
-        : panel.type === "knowledge"
-                ? "Knowledge Bases"
-                : panel.type === "skills"
-                  ? "Skills"
-                  : panel.type === "knowledge-base"
-                    ? `Knowledge · ${panel.name}`
-                    : panel.type === "skill"
-                      ? `Skill · ${panel.name}`
-                      : panel.type === "artifact"
-                        ? `Artifact · ${panel.title}`
-                        : panel.type === "workflow"
-                          ? "Workflow"
-                          : panel.type === "node"
-                            ? `Node${panel.title ? ` · ${panel.title}` : ""}`
-                            : "Panel";
+    panel.type === "connection"
+      ? "API & MCP Connection"
+      : panel.type === "knowledge"
+        ? "Knowledge Bases"
+        : panel.type === "skills"
+          ? "Skills"
+          : panel.type === "knowledge-base"
+            ? `Knowledge · ${panel.name}`
+            : panel.type === "skill"
+              ? `Skill · ${panel.name}`
+              : panel.type === "artifact"
+                ? `Artifact · ${panel.title}`
+                : panel.type === "workflow"
+                  ? "Workflow"
+                  : panel.type === "node"
+                    ? `Node${panel.title ? ` · ${panel.title}` : ""}`
+                    : "Panel";
 
   return (
     <div
@@ -164,7 +136,7 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
           : "shadow-[var(--shadow-panel)]")
       }
     >
-      {/* Top specular highlight — same shine as the chat input bar. */}
+      {/* Top specular highlight — same shine as the fixed input bar. */}
       <div
         className="pointer-events-none absolute inset-x-0 top-0 h-px z-10"
         style={{ background: "var(--shine-top-gradient)" }}
@@ -253,14 +225,8 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
         )}
       </div>
 
-      {/* Timer / pin bar for chat panels */}
-      {panel.type === "chat" && panel.messages.length > 0 && (
-        <ChatExpiryBar panel={panel} dispatch={dispatch} />
-      )}
-
       {/* Body — routes by panel type */}
       <div className="flex-1 min-h-0 flex flex-col">
-        {panel.type === "chat" && <ChatPanelBody panel={panel} />}
         {panel.type === "connection" && <ConnectionPanelBody />}
         {panel.type === "knowledge" && <KnowledgePanelBody panel={panel} />}
         {panel.type === "skills" && <SkillsPanelBody panel={panel} />}
@@ -270,28 +236,6 @@ function CanvasPanelInner({ panel, isSelected, dispatch }: CanvasPanelProps) {
         {panel.type === "workflow" && <WorkflowPanelBody panel={panel} />}
         {panel.type === "node" && <NodePanelBody panel={panel} />}
       </div>
-
-      {/* Confirmation dialog for closing chat panels with messages */}
-      {showCloseConfirm && (
-        <Dialog open onOpenChange={(open) => { if (!open) setShowCloseConfirm(false); }}>
-          <DialogContent showCloseButton={false}>
-            <DialogHeader>
-              <DialogTitle>Delete chat history?</DialogTitle>
-              <DialogDescription>
-                By closing this, you will delete this entire chat history. This action cannot be undone.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setShowCloseConfirm(false)}>
-                Cancel
-              </Button>
-              <Button variant="destructive" onClick={handleConfirmClose}>
-                Delete
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
 
       {/* Resize edges & corners — browse + individual knowledge-base / skill */}
       {isPanelResizable(panel) && (

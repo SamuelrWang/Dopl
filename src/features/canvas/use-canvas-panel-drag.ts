@@ -138,7 +138,7 @@ export function useCanvasPanelDrag(
         return;
       }
 
-      // 3. Explicit opt-outs (chat input wrapper).
+      // 3. Explicit opt-outs via data-no-drag.
       if (targetEl.closest("[data-no-drag]")) return;
 
       // 4. Semantic text tags — let native text selection win.

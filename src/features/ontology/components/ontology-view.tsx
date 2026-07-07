@@ -3,90 +3,99 @@
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
-import {
-  makeBlankObject,
-  newClusterId,
-  newObjectId,
-  useGraph,
-} from "../graph-state";
+import { useOntology } from "../hooks/use-ontology";
+import { OntologyResourcesProvider } from "../hooks/use-workspace-resources";
+import type { ObjectTypeId } from "../types";
 import { KanbanBoard } from "./kanban-board";
 import { ObjectPanel } from "./object-panel";
 
+interface Props {
+  workspaceId: string;
+  workspaceSegment: string;
+  /** Deep-linked cluster (`/[ws]/ontology/[clusterSlug]`); first cluster when omitted. */
+  initialClusterSlug?: string;
+}
+
 /**
- * Ontology page root — static in-memory editor. One cluster per page;
- * its columns are container objects whose children are the cards.
- * Selecting a card or a column header opens the editor panel on the
- * right. Edits live in local state only.
+ * Ontology page root. One cluster per page; its columns are container
+ * objects whose children are the cards. Selecting a card opens the
+ * editor panel; every edit persists through use-ontology. The active
+ * cluster is URL-addressed by slug (history.replaceState on switch, so
+ * tab flips don't remount the page).
  */
-export function OntologyView() {
-  const [graph, dispatch] = useGraph();
-  const [clusterId, setClusterId] = useState(graph.clusters[0].id);
+export function OntologyView({ workspaceId, workspaceSegment, initialClusterSlug }: Props) {
+  const { graph, status, dispatch, createCluster, createObject } = useOntology(workspaceId);
+  const [clusterId, setClusterId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const cluster =
-    graph.clusters.find((c) => c.id === clusterId) ?? graph.clusters[0];
+    graph.clusters.find((c) => c.id === clusterId) ??
+    graph.clusters.find((c) => c.slug === initialClusterSlug) ??
+    graph.clusters[0] ??
+    null;
   const selected = selectedId ? (graph.objects[selectedId] ?? null) : null;
-
-  const createCard = (columnId: string) => {
-    const id = newObjectId();
-    const column = graph.objects[columnId];
-    dispatch({
-      type: "OBJECT_CREATE",
-      clusterId: cluster.id,
-      parentId: columnId,
-      object: makeBlankObject(id, column?.type ?? "person"),
-    });
-    setSelectedId(id);
-  };
-
-  const createColumn = () => {
-    const id = newObjectId();
-    dispatch({
-      type: "OBJECT_CREATE",
-      clusterId: cluster.id,
-      object: makeBlankObject(id, "person", "Untitled column"),
-    });
-    const firstCardId = newObjectId();
-    dispatch({
-      type: "OBJECT_CREATE",
-      clusterId: cluster.id,
-      parentId: id,
-      object: makeBlankObject(firstCardId, "person"),
-    });
-    setSelectedId(id);
-  };
-
-  const createCluster = () => {
-    const id = newClusterId();
-    dispatch({
-      type: "CLUSTER_CREATE",
-      cluster: { id, name: "New cluster", purpose: "", columnIds: [] },
-    });
-    const columnId = newObjectId();
-    dispatch({
-      type: "OBJECT_CREATE",
-      clusterId: id,
-      object: makeBlankObject(columnId, "person", "Untitled column"),
-    });
-    const firstCardId = newObjectId();
-    dispatch({
-      type: "OBJECT_CREATE",
-      clusterId: id,
-      parentId: columnId,
-      object: makeBlankObject(firstCardId, "person"),
-    });
-    setClusterId(id);
-    setSelectedId(firstCardId);
-  };
 
   const selectCluster = (id: string) => {
     setClusterId(id);
     setSelectedId(null);
+    const slug = graph.clusters.find((c) => c.id === id)?.slug;
+    if (slug) {
+      window.history.replaceState(null, "", `/${workspaceSegment}/ontology/${slug}`);
+    }
   };
 
+  const handleCreateCluster = async () => {
+    const created = await createCluster();
+    if (created) selectCluster(created.id);
+  };
+
+  const handleCreateObject = async (
+    target: { clusterId: string } | { parentObjectId: string },
+    objectType: ObjectTypeId = "person"
+  ) => {
+    const object = await createObject(target, objectType);
+    if (object) setSelectedId(object.id);
+  };
+
+  if (status === "loading") {
+    return (
+      <Frame>
+        <p className="m-auto text-[13px] text-[#98a2ad]">Loading ontology…</p>
+      </Frame>
+    );
+  }
+  if (status === "error") {
+    return (
+      <Frame>
+        <p className="m-auto text-[13px] text-[#c04543]">
+          Couldn&apos;t load the ontology. Refresh to retry.
+        </p>
+      </Frame>
+    );
+  }
+  if (graph.clusters.length === 0) {
+    return (
+      <Frame>
+        <div className="m-auto flex flex-col items-center gap-3">
+          <p className="text-[13px] text-[#646d78]">
+            No ontology yet — start with your first cluster.
+          </p>
+          <button
+            type="button"
+            onClick={handleCreateCluster}
+            className="auth-btn-3d rounded-lg px-4 py-2 text-[13px] font-semibold text-white"
+          >
+            New cluster
+          </button>
+        </div>
+      </Frame>
+    );
+  }
+  if (!cluster) return <Frame />;
+
   return (
-    <div className="flex min-h-0 w-full flex-1 overflow-hidden bg-[#e6e8eb] p-2">
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-[14px] border border-black/[0.1] bg-[#fbfcfd] shadow-[0_1px_2px_rgba(0,0,0,0.05),0_10px_28px_-8px_rgba(0,0,0,0.16)]">
+    <OntologyResourcesProvider workspaceId={workspaceId}>
+      <Frame>
         <div className="flex shrink-0 items-center gap-3 border-b border-black/[0.06] px-3 py-2">
           <div className="flex items-center gap-1 rounded-[10px] border border-black/[0.06] bg-[#e9eaec] p-1 shadow-[inset_0_2px_4px_rgba(0,0,0,0.12),inset_0_1px_2px_rgba(0,0,0,0.06),inset_0_-1px_0_rgba(255,255,255,0.85)]">
             {graph.clusters.map((c) => (
@@ -107,19 +116,42 @@ export function OntologyView() {
             ))}
             <button
               type="button"
-              onClick={createCluster}
+              onClick={handleCreateCluster}
               aria-label="New cluster"
               className="flex h-7 w-7 items-center justify-center rounded-[7px] text-[#98a2ad] transition hover:text-[#232a31]"
             >
               <Plus size={13} />
             </button>
           </div>
-          <span className="min-w-0 flex-1 truncate text-[12.5px] text-[#646d78]">
-            {cluster.purpose}
-          </span>
+          <div className="flex min-w-0 flex-1 items-baseline gap-2">
+            <input
+              type="text"
+              value={cluster.name}
+              onChange={(e) =>
+                dispatch({ type: "CLUSTER_UPDATE", id: cluster.id, patch: { name: e.target.value } })
+              }
+              aria-label="Cluster name"
+              className="w-40 shrink-0 bg-transparent text-[13px] font-semibold tracking-tight text-[#232a31] placeholder:text-[#98a2ad] focus:outline-none"
+              placeholder="Cluster name"
+            />
+            <input
+              type="text"
+              value={cluster.purpose}
+              onChange={(e) =>
+                dispatch({
+                  type: "CLUSTER_UPDATE",
+                  id: cluster.id,
+                  patch: { purpose: e.target.value },
+                })
+              }
+              aria-label="Cluster purpose"
+              className="min-w-0 flex-1 bg-transparent text-[12.5px] text-[#646d78] placeholder:text-[#98a2ad] focus:outline-none"
+              placeholder="What this ontology anchors (agents read this to route)…"
+            />
+          </div>
           <button
             type="button"
-            onClick={createColumn}
+            onClick={() => handleCreateObject({ clusterId: cluster.id })}
             className="btn-light flex h-7 shrink-0 items-center gap-1 rounded-md px-2.5 text-xs font-medium text-[#232a31]"
           >
             <Plus size={12} /> Column
@@ -133,7 +165,7 @@ export function OntologyView() {
             dispatch={dispatch}
             selectedId={selectedId}
             onSelect={setSelectedId}
-            onCreateObject={createCard}
+            onCreateObject={(columnId) => handleCreateObject({ parentObjectId: columnId })}
           />
           {selected && selectedId && (
             <ObjectPanel
@@ -146,6 +178,16 @@ export function OntologyView() {
             />
           )}
         </div>
+      </Frame>
+    </OntologyResourcesProvider>
+  );
+}
+
+function Frame({ children }: { children?: React.ReactNode }) {
+  return (
+    <div className="flex min-h-0 w-full flex-1 overflow-hidden bg-[#e6e8eb] p-2">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-[14px] border border-black/[0.1] bg-[#fbfcfd] shadow-[0_1px_2px_rgba(0,0,0,0.05),0_10px_28px_-8px_rgba(0,0,0,0.16)]">
+        {children}
       </div>
     </div>
   );

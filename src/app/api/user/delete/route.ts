@@ -18,7 +18,7 @@ export async function DELETE() {
     // early without side effects). If the caller owns any workspace
     // that still has other active members, refuse the delete. Cascading
     // the workspace away here would vaporize co-members' KBs / skills /
-    // clusters / conversations along with it. Force the user to either
+    // clusters along with it. Force the user to either
     // transfer ownership or remove the other members first.
     //
     // Two-query manual join — PostgREST `!inner` joins have been
@@ -107,36 +107,7 @@ export async function DELETE() {
       }
     }
 
-    // Clean up chat attachment storage objects before cascade deletes the DB rows.
-    // List all files in the user's folder and delete them.
-    const { data: userFiles } = await admin.storage
-      .from("chat-attachments")
-      .list(user.id, { limit: 1000 });
-
-    if (userFiles && userFiles.length > 0) {
-      // List files in each subfolder (panel_id level)
-      const allPaths: string[] = [];
-      for (const item of userFiles) {
-        if (item.id === null) {
-          // It's a folder — list its contents
-          const { data: subFiles } = await admin.storage
-            .from("chat-attachments")
-            .list(`${user.id}/${item.name}`, { limit: 1000 });
-          if (subFiles) {
-            for (const f of subFiles) {
-              allPaths.push(`${user.id}/${item.name}/${f.name}`);
-            }
-          }
-        } else {
-          allPaths.push(`${user.id}/${item.name}`);
-        }
-      }
-      if (allPaths.length > 0) {
-        await admin.storage.from("chat-attachments").remove(allPaths);
-      }
-    }
-
-    // Also clean up community thumbnail storage
+    // Clean up community thumbnail storage
     const { data: thumbFiles } = await admin.storage
       .from("community-thumbnails")
       .list(user.id, { limit: 100 });
@@ -145,18 +116,8 @@ export async function DELETE() {
       await admin.storage.from("community-thumbnails").remove(thumbPaths);
     }
 
-    // Explicit belt-and-suspenders cleanup of tables whose FK cascade
-    // behavior isn't visible in the local migration set. If the FK is
-    // already CASCADE these are no-ops (rows already gone by the time
-    // we get here). If it isn't, this prevents orphaned user data.
-    // Best-effort — we proceed with the delete either way.
-    await Promise.all([
-      admin.from("conversations").delete().eq("user_id", user.id),
-    ]).catch(() => {});
-
     // Delete the auth user — all per-user data cascades automatically:
-    // profiles, api_keys, canvas_panels, user-scoped clusters, chat_attachments,
-    // user_preferences
+    // profiles, canvas_panels, user-scoped clusters, user_preferences
     // mcp_events.user_id / system_events.user_id are SET NULL (analytics retained)
     const { error } = await admin.auth.admin.deleteUser(user.id);
 

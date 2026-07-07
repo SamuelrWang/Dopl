@@ -1,9 +1,7 @@
 "use client";
 
 /**
- * ArtifactPanelBody — workspace-shared markdown panel spawned when the
- * user promotes a private-chat artifact (Agent Prompt or Context File)
- * onto the canvas.
+ * ArtifactPanelBody — workspace-shared markdown document panel.
  *
  * Two views, toggled by the eye/pencil button in the header:
  *   - Render: MarkdownMessage rendering, read-friendly.

@@ -10,7 +10,6 @@ import {
 import type { CanvasState, Panel } from "../types";
 import {
   CanvasContext,
-  PanelsContext,
   CanvasStateRefContext,
   CapabilitiesContext,
   DEFAULT_CAPABILITIES,
@@ -21,11 +20,6 @@ import { reducer } from "./reducer";
 import { useCanvasDbSync } from "../use-canvas-db-sync";
 import { useWorkflowAttachmentSync } from "../use-workflow-attachment-sync";
 import { useCanvasRealtime } from "../use-canvas-realtime";
-import {
-  useConversationSync,
-  ChatConversationsProvider,
-  type ServerConversation,
-} from "../use-conversation-sync";
 import { CanvasScopeContext } from "./context";
 import { CANVAS_STORAGE_KEY_PREFIX, CANVAS_ACTIVE_USER_KEY } from "@/config";
 
@@ -39,9 +33,9 @@ function getStorageKey(userId?: string): string {
 
 /**
  * How the canvas should persist state.
- *   "user"   → default. Writes to the user's canvas_panels / canvas_state /
- *              conversations tables via useCanvasDbSync + useConversationSync,
- *              plus localStorage write-through. Used by `/canvas`.
+ *   "user"   → default. Writes to the user's canvas_panels / canvas_state
+ *              tables via useCanvasDbSync, plus localStorage write-through.
+ *              Used by `/canvas`.
  *   "shared" → skip user tables. Mount a caller-supplied bridge via
  *              `onPanelsMove` that persists panel drags to a different
  *              endpoint (e.g. /api/community/[slug]/panels). Used by the
@@ -72,8 +66,6 @@ interface CanvasProviderProps {
    * so `useReducer` has real data on first render — no hydration step.
    */
   initialState: CanvasState;
-  /** Server-rendered conversations list, paired with initialState. */
-  initialConversations: ServerConversation[];
   /** Default "user" preserves existing `/canvas` behavior. */
   syncStrategy?: CanvasSyncStrategy;
   /**
@@ -101,7 +93,6 @@ export function CanvasProvider({
   workspaceSlug,
   canvasSlug,
   initialState,
-  initialConversations,
   syncStrategy = "user",
   capabilities,
   onPanelsMove,
@@ -157,33 +148,23 @@ export function CanvasProvider({
     };
   }, [state, storageKey, syncStrategy]);
 
-  const panelsCtx = useMemo(
-    () => ({ panels: state.panels, dispatch }),
-    [state.panels, dispatch]
-  );
-
   const effectiveCapabilities = capabilities ?? DEFAULT_CAPABILITIES;
 
   return (
     <CanvasScopeContext.Provider value={scope}>
       <CanvasContext.Provider value={{ state, dispatch }}>
-        <PanelsContext.Provider value={panelsCtx}>
-          <CanvasStateRefContext.Provider value={stateRef}>
-            <CapabilitiesContext.Provider value={effectiveCapabilities}>
-              <ChatConversationsProvider initialConversations={initialConversations}>
-                {syncStrategy === "user" && <CanvasDbSyncBridge />}
-                {syncStrategy === "user" && <ConversationSyncBridge />}
-                {syncStrategy === "user" && <WorkflowAttachmentSyncBridge />}
-                {syncStrategy === "user" && <CanvasRealtimeBridge />}
-                {syncStrategy === "user" && <AutoFocusNewPanelBridge />}
-                {syncStrategy === "shared" && (
-                  <SharedPanelMoveBridge onPanelsMove={onPanelsMove} />
-                )}
-                {children}
-              </ChatConversationsProvider>
-            </CapabilitiesContext.Provider>
-          </CanvasStateRefContext.Provider>
-        </PanelsContext.Provider>
+        <CanvasStateRefContext.Provider value={stateRef}>
+          <CapabilitiesContext.Provider value={effectiveCapabilities}>
+            {syncStrategy === "user" && <CanvasDbSyncBridge />}
+            {syncStrategy === "user" && <WorkflowAttachmentSyncBridge />}
+            {syncStrategy === "user" && <CanvasRealtimeBridge />}
+            {syncStrategy === "user" && <AutoFocusNewPanelBridge />}
+            {syncStrategy === "shared" && (
+              <SharedPanelMoveBridge onPanelsMove={onPanelsMove} />
+            )}
+            {children}
+          </CapabilitiesContext.Provider>
+        </CanvasStateRefContext.Provider>
       </CanvasContext.Provider>
     </CanvasScopeContext.Provider>
   );
@@ -251,12 +232,6 @@ function AutoFocusNewPanelBridge() {
 /** Bridge for DB-backed canvas state sync (write-through only). */
 function CanvasDbSyncBridge() {
   useCanvasDbSync();
-  return null;
-}
-
-/** Bridge for conversation persistence — saves chat messages to Supabase. */
-function ConversationSyncBridge() {
-  useConversationSync();
   return null;
 }
 

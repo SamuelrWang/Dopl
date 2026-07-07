@@ -317,15 +317,6 @@ export function Canvas({ showMinimap = true }: CanvasProps = {}) {
             y: worldY,
           });
           break;
-        case "new-chat":
-          dispatch({
-            type: "CREATE_CHAT_PANEL",
-            id: nextPanelIdString(state),
-            x: worldX,
-            y: worldY,
-            title: "New Chat",
-          });
-          break;
         case "open-knowledge":
           dispatch({
             type: "CREATE_KNOWLEDGE_PANEL",

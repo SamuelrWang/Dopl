@@ -37,6 +37,7 @@ exports.DoplClient = exports.parseRetryAfter = void 0;
 const transport_js_1 = require("./transport.js");
 const kb = __importStar(require("./knowledge.js"));
 const skills = __importStar(require("./skills.js"));
+const ontology = __importStar(require("./ontology.js"));
 var retry_js_1 = require("./retry.js");
 Object.defineProperty(exports, "parseRetryAfter", { enumerable: true, get: function () { return retry_js_1.parseRetryAfter; } });
 class DoplClient {
@@ -233,6 +234,13 @@ class DoplClient {
     }
     searchKb(query, opts = {}) {
         return kb.searchKb(this.transport, query, opts);
+    }
+    // ─── Ontology (read-only; edited in the web UI) ─────────────────────
+    getOntology() {
+        return ontology.getOntology(this.transport);
+    }
+    getOntologyAnchor() {
+        return ontology.getOntologyAnchor(this.transport);
     }
     // ─── Skills ─────────────────────────────────────────────────────────
     // Read paths are unrestricted; write paths are gated server-side by

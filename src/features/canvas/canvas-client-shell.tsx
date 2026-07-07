@@ -2,9 +2,9 @@
 
 /**
  * CanvasClientShell — client-side entry point for the server-rendered
- * canvas. Receives `initialState` + `initialConversations` as props from
- * the server component and seeds CanvasProvider with them directly. No
- * loading spinners — the reducer has real state on first render.
+ * canvas. Receives `initialState` as a prop from the server component
+ * and seeds CanvasProvider with it directly. No loading spinners — the
+ * reducer has real state on first render.
  *
  * Compare with LegacyCanvasClientPage, which fetches state client-side
  * and shows spinners while it waits.
@@ -17,12 +17,9 @@ import { CanvasProvider } from "@/features/canvas/canvas-store";
 import { CanvasGridSync } from "@/features/canvas/canvas-grid-sync";
 import { useLayoutSnapshot } from "@/features/canvas/use-layout-snapshot";
 import { Canvas } from "@/features/canvas/canvas";
-import { FixedInputBar } from "@/features/canvas/fixed-input-bar";
-import { FixedChatPanel } from "@/features/canvas/fixed-chat-panel";
-import { DrawerProvider } from "@/features/canvas/chat-drawer-context";
+import { FixedActionBar } from "@/features/canvas/fixed-action-bar";
 import { PaywallGate } from "@/features/billing/components/paywall-gate";
 import type { CanvasState } from "@/features/canvas/types";
-import type { ServerConversation } from "@/features/canvas/use-conversation-sync";
 
 /**
  * The canvas renders via a portal to document.body so it escapes the root
@@ -73,7 +70,6 @@ interface Props {
   workspaceSlug: string;
   canvasSlug: string;
   initialState: CanvasState;
-  initialConversations: ServerConversation[];
 }
 
 export default function CanvasClientShell({
@@ -82,7 +78,6 @@ export default function CanvasClientShell({
   workspaceSlug,
   canvasSlug,
   initialState,
-  initialConversations,
 }: Props) {
   return (
     <CanvasProvider
@@ -91,24 +86,20 @@ export default function CanvasClientShell({
       workspaceSlug={workspaceSlug}
       canvasSlug={canvasSlug}
       initialState={initialState}
-      initialConversations={initialConversations}
     >
-      <DrawerProvider>
-        <CanvasGridSync />
-        <LayoutSnapshotSync
-          workspaceSlug={workspaceSlug}
-          canvasSlug={canvasSlug}
-        />
-        <CanvasPortal />
-        {/* Fixed overlays render outside the portal; the wrapper div has no
-            layout but carries the light token scope so they match the new
-            canvas palette. */}
-        <div className={shellStyles.lightScope}>
-          <FixedInputBar />
-          <FixedChatPanel />
-        </div>
-        <PaywallGate />
-      </DrawerProvider>
+      <CanvasGridSync />
+      <LayoutSnapshotSync
+        workspaceSlug={workspaceSlug}
+        canvasSlug={canvasSlug}
+      />
+      <CanvasPortal />
+      {/* Fixed overlays render outside the portal; the wrapper div has no
+          layout but carries the light token scope so they match the new
+          canvas palette. */}
+      <div className={shellStyles.lightScope}>
+        <FixedActionBar />
+      </div>
+      <PaywallGate />
     </CanvasProvider>
   );
 }

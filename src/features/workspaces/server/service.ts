@@ -152,16 +152,11 @@ export async function renameDefaultWorkspaceIfUntitled(
   });
 }
 
-export async function listMyWorkspaces(userId: string): Promise<Workspace[]> {
-  return listWorkspacesForUser(userId);
-}
-
 /**
- * Same as `listMyWorkspaces` but each row carries the caller's role on
+ * List the caller's workspaces; each row carries the caller's role on
  * the workspace. Used by `GET /api/workspaces` (so the agent's
  * `list_workspaces` MCP tool gets `{id, slug, name, role, ...}` in one
- * round trip) and the workspace switcher UI. Both behaviors are
- * additive — the role-less callers can ignore the new field.
+ * round trip) and the workspace switcher UI.
  */
 export async function listMyWorkspacesWithRole(
   userId: string
@@ -326,13 +321,6 @@ export function requireMinRole(role: Role, min: Role): void {
       `Requires ${min} role or higher`
     );
   }
-}
-
-export function findWorkspaceBySlugForUser(
-  ownerId: string,
-  slug: string
-): Promise<Workspace | null> {
-  return findWorkspaceBySlug(ownerId, slug);
 }
 
 /**

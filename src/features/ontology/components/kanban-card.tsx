@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
-import { resourceName } from "../seed";
+import { useWorkspaceResources } from "../hooks/use-workspace-resources";
 import type { GraphState } from "../graph-state";
 import type { AttributeValue } from "../types";
 import { ObjectHoverCard } from "./object-hover-card";
@@ -24,6 +24,7 @@ interface Props {
 export function KanbanCard({ objectId, graph, selected, onSelect }: Props) {
   const [open, setOpen] = useState(false);
   const [hoverPos, setHoverPos] = useState<{ x: number; y: number } | null>(null);
+  const { nameOf } = useWorkspaceResources();
   const object = graph.objects[objectId];
   if (!object) return null;
 
@@ -96,7 +97,7 @@ export function KanbanCard({ objectId, graph, selected, onSelect }: Props) {
                     {attr.label}
                   </span>
                   <span className="min-w-0 flex-1 truncate text-[#232a31]">
-                    {previewValue(attr.value, graph)}
+                    {previewValue(attr.value, graph, nameOf)}
                   </span>
                 </div>
               ))}
@@ -118,9 +119,13 @@ export function KanbanCard({ objectId, graph, selected, onSelect }: Props) {
   );
 }
 
-function previewValue(value: AttributeValue, graph: GraphState): string {
+function previewValue(
+  value: AttributeValue,
+  graph: GraphState,
+  nameOf: (id: string) => string | null
+): string {
   if (value.kind === "knowledge" || value.kind === "skill") {
-    const names = value.value.map((id) => resourceName(id)).filter(Boolean);
+    const names = value.value.map((id) => nameOf(id)).filter(Boolean);
     return names.length ? names.join(", ") : "—";
   }
   if (value.kind === "ref") {

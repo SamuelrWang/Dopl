@@ -39,6 +39,8 @@ import type {
   SkillFile,
   SkillWriteFileResult,
 } from "./skill-types.js";
+import * as ontology from "./ontology.js";
+import type { OntologyObject, OntologySnapshot } from "./ontology-types.js";
 
 export type { DoplTransportOptions as DoplClientOptions } from "./transport.js";
 export { parseRetryAfter } from "./retry.js";
@@ -418,6 +420,16 @@ export class DoplClient {
     opts: { baseSlug?: string; limit?: number } = {}
   ): Promise<KnowledgeSearchHit[]> {
     return kb.searchKb(this.transport, query, opts);
+  }
+
+  // ─── Ontology (read-only; edited in the web UI) ─────────────────────
+
+  getOntology(): Promise<OntologySnapshot> {
+    return ontology.getOntology(this.transport);
+  }
+
+  getOntologyAnchor(): Promise<OntologyObject | null> {
+    return ontology.getOntologyAnchor(this.transport);
   }
 
   // ─── Skills ─────────────────────────────────────────────────────────

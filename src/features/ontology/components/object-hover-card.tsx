@@ -1,7 +1,8 @@
 "use client";
 
 import { createPortal } from "react-dom";
-import { OBJECT_TYPES, resourceName } from "../seed";
+import { OBJECT_TYPES } from "../constants";
+import { useWorkspaceResources } from "../hooks/use-workspace-resources";
 import type { GraphState } from "../graph-state";
 import type { OntologyObject } from "../types";
 
@@ -21,6 +22,7 @@ export function ObjectHoverCard({
   x: number;
   y: number;
 }) {
+  const { nameOf } = useWorkspaceResources();
   if (typeof document === "undefined") return null;
   const vw = window.innerWidth;
   const vh = window.innerHeight;
@@ -54,7 +56,7 @@ export function ObjectHoverCard({
                 <span className="font-semibold text-[#98a2ad]">{attr.label}</span>{" "}
                 {attr.value.kind === "knowledge" || attr.value.kind === "skill"
                   ? attr.value.value
-                      .map((id) => resourceName(id))
+                      .map((id) => nameOf(id))
                       .filter(Boolean)
                       .join(", ") || "—"
                   : attr.value.kind === "ref"

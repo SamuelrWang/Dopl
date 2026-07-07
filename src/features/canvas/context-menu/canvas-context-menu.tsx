@@ -2,7 +2,7 @@
 
 /**
  * CanvasContextMenu — custom right-click / double-click menu for empty
- * canvas space. A flat action list (New cluster / New chat / browsers);
+ * canvas space. A flat action list (workflow / node / browsers);
  * every row fires `onAction(id)` and closes. Clamped to the viewport via
  * useClampedFixedPosition; closes on click outside or Escape.
  */

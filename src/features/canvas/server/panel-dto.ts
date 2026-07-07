@@ -12,7 +12,6 @@
 import type {
   Panel,
   ArtifactPanelData,
-  ChatPanelData,
   WorkflowPanelData,
   NodePanelData,
   NodeRef,
@@ -39,14 +38,6 @@ export function panelToDbRow(panel: Panel) {
   };
 
   switch (panel.type) {
-    case "chat":
-      base.title = panel.title;
-      base.panel_data = {
-        conversationId: panel.conversationId,
-        pinned: panel.pinned,
-        expiresAt: panel.expiresAt,
-      };
-      break;
     case "connection":
       break;
     case "knowledge":
@@ -75,8 +66,6 @@ export function panelToDbRow(panel: Panel) {
       base.title = panel.title;
       base.panel_data = {
         markdown: panel.markdown,
-        sourceConversationId: panel.sourceConversationId,
-        sourceMessageId: panel.sourceMessageId,
       };
       break;
     case "workflow":
@@ -118,17 +107,6 @@ export function dbRowToPanel(row: Record<string, unknown>): Panel | null {
   const type = row.panel_type as string;
 
   switch (type) {
-    case "chat":
-      return {
-        ...base,
-        type: "chat",
-        title: (row.title as string) || "New Chat",
-        messages: [],
-        isProcessing: false,
-        conversationId: (data.conversationId as string) || undefined,
-        pinned: (data.pinned as boolean) || false,
-        expiresAt: (data.expiresAt as string) || undefined,
-      } as ChatPanelData;
     case "connection":
       return { ...base, type: "connection" } as ConnectionPanelData;
     case "knowledge":
@@ -161,9 +139,6 @@ export function dbRowToPanel(row: Record<string, unknown>): Panel | null {
         type: "artifact",
         title: (row.title as string) || "Untitled artifact",
         markdown: (data.markdown as string) || "",
-        sourceConversationId:
-          (data.sourceConversationId as string) || undefined,
-        sourceMessageId: (data.sourceMessageId as string) || undefined,
       } as ArtifactPanelData;
     case "workflow":
       return {

@@ -196,9 +196,7 @@ export function CanvasMinimap({
               background:
                 panel.type === "connection"
                   ? "rgba(139, 92, 246, 0.5)"
-                  : panel.type === "chat"
-                    ? "rgba(16, 185, 129, 0.5)"
-                    : "rgba(255, 255, 255, 0.3)",
+                  : "rgba(255, 255, 255, 0.3)",
             }}
           />
         );

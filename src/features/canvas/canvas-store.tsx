@@ -7,7 +7,7 @@
  * sub-modules under `./canvas-store/`:
  *
  *   context.tsx    — React contexts + hook gates (useCanvas,
- *                    usePanelsContext, useCanvasStateRef, useCapabilities).
+ *                    useCanvasStateRef, useCapabilities).
  *   reducer.ts     — the `reducer` function (the entire canvas state
  *                    machine — single switch statement, grandfathered
  *                    past the 500-line cap per ENGINEERING.md §2
@@ -26,7 +26,6 @@
 // Hooks + context types
 export {
   useCanvas,
-  usePanelsContext,
   useCanvasStateRef,
   useCapabilities,
   useCanvasScope,
@@ -45,11 +44,4 @@ export {
 } from "./canvas-store/layout";
 
 // Re-export domain types
-export type {
-  Panel,
-  ChatPanelData,
-  CanvasState,
-  CanvasAction,
-} from "./types";
-
-export type { ChatMessage } from "@/shared/types/chat";
+export type { Panel, CanvasState, CanvasAction } from "./types";

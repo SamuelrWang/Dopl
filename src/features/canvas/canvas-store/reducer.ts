@@ -2,7 +2,6 @@ import type {
   ArtifactPanelData,
   CanvasAction,
   CanvasState,
-  ChatPanelData,
   KnowledgeBasePanelData,
   KnowledgePanelData,
   SkillPanelData,
@@ -60,7 +59,6 @@ function counterAfterMint(state: CanvasState, id: string): number {
  *  actions stay out of this set. Camera + selection are never
  *  history-worthy. */
 const UNDOABLE_ACTIONS = new Set<CanvasAction["type"]>([
-  "CREATE_CHAT_PANEL",
   "CREATE_KNOWLEDGE_PANEL",
   "CREATE_SKILLS_PANEL",
   "CREATE_KNOWLEDGE_BASE_PANEL",
@@ -76,7 +74,6 @@ const UNDOABLE_ACTIONS = new Set<CanvasAction["type"]>([
   "NODE_UNDOCK_REF",
   "UPDATE_NODE_FIELDS",
   "UPDATE_WORKFLOW_INFO",
-  "UPDATE_CHAT_TITLE",
   "UPDATE_ARTIFACT_MARKDOWN",
   "UPDATE_ARTIFACT_TITLE",
 ]);
@@ -219,44 +216,6 @@ function baseReducer(state: CanvasState, action: CanvasAction): CanvasState {
       };
     }
 
-    case "CREATE_CHAT_PANEL": {
-      if (panelIdTaken(state, action.id)) return state;
-      const { x, y } = findNonOverlappingPosition(
-        action.x,
-        action.y,
-        480,
-        600,
-        state.panels
-      );
-      const newPanel: ChatPanelData = {
-        id: action.id,
-        type: "chat",
-        x,
-        y,
-        width: 480,
-        height: 600,
-        title: action.title,
-        messages: [],
-        isProcessing: false,
-        pendingInput: action.pendingInput,
-      };
-      return {
-        ...state,
-        panels: [...state.panels, newPanel],
-        nextPanelId: counterAfterMint(state, action.id),
-      };
-    }
-
-    case "CLEAR_PENDING_INPUT":
-      return {
-        ...state,
-        panels: state.panels.map((p) =>
-          p.id === action.panelId && p.type === "chat"
-            ? { ...p, pendingInput: undefined }
-            : p
-        ),
-      };
-
     case "CLOSE_PANEL": {
       // Refuse to close undeletable panels (currently: connection panel)
       const target = state.panels.find((p) => p.id === action.id);
@@ -294,37 +253,6 @@ function baseReducer(state: CanvasState, action: CanvasAction): CanvasState {
       };
     }
 
-    case "HYDRATE_CHAT_MESSAGES": {
-      return {
-        ...state,
-        panels: state.panels.map((p) =>
-          p.id === action.panelId && p.type === "chat"
-            ? { ...p, messages: action.messages, conversationId: action.conversationId }
-            : p
-        ),
-      };
-    }
-
-    case "UPDATE_CHAT_TITLE":
-      return {
-        ...state,
-        panels: state.panels.map((p) =>
-          p.id === action.panelId && p.type === "chat"
-            ? { ...p, title: action.title }
-            : p
-        ),
-      };
-
-    case "SET_CHAT_PINNED":
-      return {
-        ...state,
-        panels: state.panels.map((p) =>
-          p.id === action.panelId && p.type === "chat"
-            ? { ...p, pinned: action.pinned }
-            : p
-        ),
-      };
-
     case "SET_SELECTION": {
       // Bail on no-op updates so React doesn't re-render every panel when
       // the marquee drags across empty space and hands us the same array.
@@ -338,61 +266,6 @@ function baseReducer(state: CanvasState, action: CanvasAction): CanvasState {
       }
       return { ...state, selectedPanelIds: next };
     }
-
-    case "APPEND_MESSAGE":
-      return {
-        ...state,
-        panels: state.panels.map((p) =>
-          p.id === action.panelId && p.type === "chat"
-            ? { ...p, messages: [...p.messages, action.message] }
-            : p
-        ),
-      };
-
-    case "UPDATE_STREAMING_MESSAGE":
-      return {
-        ...state,
-        panels: state.panels.map((p) => {
-          if (p.id !== action.panelId || p.type !== "chat") return p;
-          const last = p.messages[p.messages.length - 1];
-          if (last && last.role === "ai" && last.type === "streaming") {
-            const updated = [...p.messages];
-            updated[updated.length - 1] = {
-              role: "ai",
-              type: "streaming",
-              content: action.content,
-            };
-            return { ...p, messages: updated };
-          }
-          // No streaming bubble yet — append one.
-          return {
-            ...p,
-            messages: [
-              ...p.messages,
-              { role: "ai", type: "streaming", content: action.content },
-            ],
-          };
-        }),
-      };
-
-    case "FINALISE_STREAMING_MESSAGE":
-      return {
-        ...state,
-        panels: state.panels.map((p) => {
-          if (p.id !== action.panelId || p.type !== "chat") return p;
-          const last = p.messages[p.messages.length - 1];
-          if (!last || last.role !== "ai" || last.type !== "streaming") {
-            return p;
-          }
-          const updated = [...p.messages];
-          updated[updated.length - 1] = {
-            role: "ai",
-            type: "text",
-            content: action.content,
-          };
-          return { ...p, messages: updated };
-        }),
-      };
 
     case "CREATE_WORKFLOW": {
       if (panelIdTaken(state, action.panel.id)) return state;
@@ -637,8 +510,6 @@ function baseReducer(state: CanvasState, action: CanvasAction): CanvasState {
         height: ARTIFACT_PANEL_SIZE.height,
         title: action.title,
         markdown: action.markdown,
-        sourceConversationId: action.sourceConversationId,
-        sourceMessageId: action.sourceMessageId,
       };
       return {
         ...state,
