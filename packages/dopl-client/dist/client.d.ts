@@ -3,7 +3,7 @@ import { DoplTransport } from "./transport.js";
 import type { KnowledgeBase, KnowledgeBaseCreateInput, KnowledgeBaseUpdateInput, KnowledgeDirListing, KnowledgeEntry, KnowledgeFolder, KnowledgePathOpResult, KnowledgeSearchHit, KnowledgeTrashSnapshot, KnowledgeTreeSnapshot, KnowledgeWriteFileInput, KnowledgeWriteFileResult } from "./knowledge-types.js";
 import type { CreateSkillInput, UpdateSkillPatch as SkillUpdatePatch } from "./skills.js";
 import type { ResolvedSkill, Skill, SkillFile, SkillWriteFileResult } from "./skill-types.js";
-import type { OntologyObject, OntologySnapshot } from "./ontology-types.js";
+import type { OntologyCluster, OntologyClusterCreateInput, OntologyClusterPatch, OntologyObject, OntologyObjectCreateInput, OntologyObjectPatch, OntologySnapshot } from "./ontology-types.js";
 export type { DoplTransportOptions as DoplClientOptions } from "./transport.js";
 export { parseRetryAfter } from "./retry.js";
 export declare class DoplClient {
@@ -101,6 +101,13 @@ export declare class DoplClient {
     }): Promise<KnowledgeSearchHit[]>;
     getOntology(): Promise<OntologySnapshot>;
     getOntologyAnchor(): Promise<OntologyObject | null>;
+    createOntologyCluster(input: OntologyClusterCreateInput): Promise<OntologyCluster>;
+    updateOntologyCluster(clusterId: string, patch: OntologyClusterPatch): Promise<OntologyCluster>;
+    deleteOntologyCluster(clusterId: string): Promise<void>;
+    createOntologyObject(input: OntologyObjectCreateInput): Promise<OntologyObject>;
+    updateOntologyObject(objectId: string, patch: OntologyObjectPatch): Promise<OntologyObject>;
+    deleteOntologyObject(objectId: string): Promise<void>;
+    claimOntologyAnchor(objectId: string): Promise<OntologyObject>;
     listSkills(): Promise<Skill[]>;
     getSkill(slug: string): Promise<ResolvedSkill>;
     createSkill(input: CreateSkillInput): Promise<{

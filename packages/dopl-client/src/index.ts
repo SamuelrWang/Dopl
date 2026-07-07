@@ -73,8 +73,12 @@ export type {
   OntologyAttribute,
   OntologyAttributeValue,
   OntologyCluster,
+  OntologyClusterCreateInput,
+  OntologyClusterPatch,
   OntologyMethod,
   OntologyObject,
+  OntologyObjectCreateInput,
+  OntologyObjectPatch,
   OntologyRelationship,
   OntologySnapshot,
 } from "./ontology-types.js";

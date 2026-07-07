@@ -40,7 +40,15 @@ import type {
   SkillWriteFileResult,
 } from "./skill-types.js";
 import * as ontology from "./ontology.js";
-import type { OntologyObject, OntologySnapshot } from "./ontology-types.js";
+import type {
+  OntologyCluster,
+  OntologyClusterCreateInput,
+  OntologyClusterPatch,
+  OntologyObject,
+  OntologyObjectCreateInput,
+  OntologyObjectPatch,
+  OntologySnapshot,
+} from "./ontology-types.js";
 
 export type { DoplTransportOptions as DoplClientOptions } from "./transport.js";
 export { parseRetryAfter } from "./retry.js";
@@ -422,7 +430,7 @@ export class DoplClient {
     return kb.searchKb(this.transport, query, opts);
   }
 
-  // ─── Ontology (read-only; edited in the web UI) ─────────────────────
+  // ─── Ontology ────────────────────────────────────────────────────────
 
   getOntology(): Promise<OntologySnapshot> {
     return ontology.getOntology(this.transport);
@@ -430,6 +438,34 @@ export class DoplClient {
 
   getOntologyAnchor(): Promise<OntologyObject | null> {
     return ontology.getOntologyAnchor(this.transport);
+  }
+
+  createOntologyCluster(input: OntologyClusterCreateInput): Promise<OntologyCluster> {
+    return ontology.createOntologyCluster(this.transport, input);
+  }
+
+  updateOntologyCluster(clusterId: string, patch: OntologyClusterPatch): Promise<OntologyCluster> {
+    return ontology.updateOntologyCluster(this.transport, clusterId, patch);
+  }
+
+  deleteOntologyCluster(clusterId: string): Promise<void> {
+    return ontology.deleteOntologyCluster(this.transport, clusterId);
+  }
+
+  createOntologyObject(input: OntologyObjectCreateInput): Promise<OntologyObject> {
+    return ontology.createOntologyObject(this.transport, input);
+  }
+
+  updateOntologyObject(objectId: string, patch: OntologyObjectPatch): Promise<OntologyObject> {
+    return ontology.updateOntologyObject(this.transport, objectId, patch);
+  }
+
+  deleteOntologyObject(objectId: string): Promise<void> {
+    return ontology.deleteOntologyObject(this.transport, objectId);
+  }
+
+  claimOntologyAnchor(objectId: string): Promise<OntologyObject> {
+    return ontology.claimOntologyAnchor(this.transport, objectId);
   }
 
   // ─── Skills ─────────────────────────────────────────────────────────

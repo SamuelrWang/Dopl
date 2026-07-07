@@ -235,12 +235,33 @@ class DoplClient {
     searchKb(query, opts = {}) {
         return kb.searchKb(this.transport, query, opts);
     }
-    // ─── Ontology (read-only; edited in the web UI) ─────────────────────
+    // ─── Ontology ────────────────────────────────────────────────────────
     getOntology() {
         return ontology.getOntology(this.transport);
     }
     getOntologyAnchor() {
         return ontology.getOntologyAnchor(this.transport);
+    }
+    createOntologyCluster(input) {
+        return ontology.createOntologyCluster(this.transport, input);
+    }
+    updateOntologyCluster(clusterId, patch) {
+        return ontology.updateOntologyCluster(this.transport, clusterId, patch);
+    }
+    deleteOntologyCluster(clusterId) {
+        return ontology.deleteOntologyCluster(this.transport, clusterId);
+    }
+    createOntologyObject(input) {
+        return ontology.createOntologyObject(this.transport, input);
+    }
+    updateOntologyObject(objectId, patch) {
+        return ontology.updateOntologyObject(this.transport, objectId, patch);
+    }
+    deleteOntologyObject(objectId) {
+        return ontology.deleteOntologyObject(this.transport, objectId);
+    }
+    claimOntologyAnchor(objectId) {
+        return ontology.claimOntologyAnchor(this.transport, objectId);
     }
     // ─── Skills ─────────────────────────────────────────────────────────
     // Read paths are unrestricted; write paths are gated server-side by

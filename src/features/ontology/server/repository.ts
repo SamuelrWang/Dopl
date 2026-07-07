@@ -316,6 +316,36 @@ export async function replaceRelationshipsForSource(
   if (insertError) throw insertError;
 }
 
+/**
+ * Point the caller's identity anchor at one object — a user has at most
+ * one anchor per workspace, so any previous link is cleared first.
+ */
+export async function setAnchor(
+  workspaceId: string,
+  userId: string,
+  objectId: string
+): Promise<OntologyObjectRow | null> {
+  const db = supabaseAdmin();
+  const { error: clearError } = await db
+    .from("ontology_objects")
+    .update({ user_id: null })
+    .eq("workspace_id", workspaceId)
+    .eq("user_id", userId)
+    .neq("id", objectId);
+  if (clearError) throw clearError;
+
+  const { data, error } = await db
+    .from("ontology_objects")
+    .update({ user_id: userId })
+    .eq("workspace_id", workspaceId)
+    .eq("id", objectId)
+    .is("deleted_at", null)
+    .select(ONTOLOGY_OBJECT_COLS)
+    .maybeSingle();
+  if (error) throw error;
+  return data as OntologyObjectRow | null;
+}
+
 export async function findAnchorObject(
   workspaceId: string,
   userId: string

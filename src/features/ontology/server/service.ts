@@ -226,6 +226,18 @@ export async function deleteObject(ctx: OntologyContext, objectId: string): Prom
   await repo.markObjectDeleted(ctx.workspaceId, objectId);
 }
 
+/** Link the caller's account to an object (their identity anchor). */
+export async function claimAnchor(
+  ctx: OntologyContext,
+  objectId: string
+): Promise<OntologyObject> {
+  const row = await repo.setAnchor(ctx.workspaceId, ctx.userId, objectId);
+  if (!row) throw HttpError.notFound("Object not found");
+  const object = mapObjectRow(row);
+  object.relationships = await currentRelationships(ctx, objectId);
+  return object;
+}
+
 /**
  * The caller's identity anchor — the ontology object linked to their
  * user account (ontology_objects.user_id), or null when none is linked.

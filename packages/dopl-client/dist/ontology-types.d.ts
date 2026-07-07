@@ -50,3 +50,26 @@ export interface OntologySnapshot {
     clusters: OntologyCluster[];
     objects: Record<string, OntologyObject>;
 }
+export interface OntologyClusterCreateInput {
+    name: string;
+    purpose?: string;
+}
+export interface OntologyClusterPatch {
+    name?: string;
+    purpose?: string;
+}
+export interface OntologyObjectCreateInput {
+    /** Exactly one of clusterId (new column) or parentObjectId (new card). */
+    clusterId?: string;
+    parentObjectId?: string;
+    objectType: string;
+    name: string;
+}
+export interface OntologyObjectPatch {
+    name?: string;
+    subtitle?: string;
+    objectType?: string;
+    attributes?: OntologyAttribute[];
+    methods?: OntologyMethod[];
+    relationships?: OntologyRelationship[];
+}

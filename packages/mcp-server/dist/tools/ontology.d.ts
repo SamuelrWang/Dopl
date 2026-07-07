@@ -1,9 +1,9 @@
 /**
- * `dopl_ontology` — the workspace object graph as a ROUTING layer.
- * Read-only (edited in the web UI). The intended funnel: anchor (who is
- * calling) → map (which cluster) → resolve (which objects) → get (the
- * object's attributes, relationships, and action recipes, with linked
- * knowledge/skills resolved to addressable handles).
+ * `dopl_ontology` + `dopl_ontology_admin` — the workspace object graph
+ * as a ROUTING layer, fully agent-authorable (like dopl_kb for bases).
+ * Read funnel: anchor → map → resolve → get. Write ops edit one thing
+ * at a time (attribute / relationship / action upserts) so agents never
+ * have to round-trip whole objects.
  */
 import type { DoplClient } from "@dopl/client";
 import { type RegisterTool } from "./respond";

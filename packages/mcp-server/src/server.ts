@@ -200,6 +200,7 @@ export function createServer(
     "dopl_kb_admin",
     "dopl_skill_admin",
     "dopl_workflow_admin",
+    "dopl_ontology_admin",
   ]);
   // Per-op write gating for the MIXED read+write tools (these stay registered
   // for read-only sessions so reads still work, but their write ops are
@@ -209,6 +210,20 @@ export function createServer(
   // sync with the tool's `op` enum; a new write op must be added here.
   const WRITE_OPS: Record<string, Set<string>> = {
     dopl_cluster: new Set(["create", "update"]),
+    dopl_ontology: new Set([
+      "create_cluster",
+      "update_cluster",
+      "create_column",
+      "create_object",
+      "update_object",
+      "set_attribute",
+      "remove_attribute",
+      "set_relationship",
+      "remove_relationship",
+      "set_action",
+      "remove_action",
+      "claim_anchor",
+    ]),
     dopl_kb: new Set([
       "create_base",
       "update_base",
