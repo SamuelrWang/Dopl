@@ -9,32 +9,23 @@
  */
 
 .shell {
-  --kv-bg: #f7f7f5;
-  --kv-panel: #ffffff;
-  --kv-border: #ededeb;
-  --kv-border-strong: #e3e3e0;
-  --kv-text: #26282c;
-  --kv-text-2: #63676d;
-  --kv-text-3: #9a9ea4;
-  --kv-accent: #2f3033;
-  --kv-row-hover: #f6f6f4;
-  --kv-row-active: #eef0f2;
-  --kv-pill-bg: #f1f1ef;
+  /* All values alias the global design tokens (docs/DESIGN-SYSTEM.md);
+     the --kv-* names are kept so the rules below stay readable. */
+  --kv-bg: var(--card-surface-subtle);
+  --kv-panel: var(--panel-surface);
+  --kv-border: var(--border-default);
+  --kv-border-strong: var(--border-strong);
+  --kv-text: var(--text-primary);
+  --kv-text-2: var(--text-secondary);
+  --kv-text-3: var(--text-muted);
+  --kv-accent: var(--text-primary);
+  --kv-row-hover: var(--surface-raised-1);
+  --kv-row-active: var(--surface-raised-3);
+  --kv-pill-bg: var(--bg-inset);
 
-  flex: 1;
-  min-width: 0;
+  /* Surface geometry (margins/border/shadow/radius) comes from the global
+     .page-float composed alongside this class in knowledge-v2.tsx. */
   display: flex;
-  background: var(--kv-panel);
-  /* Float the whole list+detail surface as ONE raised panel sitting above
-     the sidebar's panel: a margin reveals the lower panel as a frame, and a
-     layered drop-shadow + hairline border lift it off. */
-  margin: 7px 8px 9px 8px;
-  border-radius: 14px;
-  border: 1px solid var(--kv-border-strong);
-  box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.05),
-    0 10px 28px -8px rgba(0, 0, 0, 0.16);
-  overflow: hidden;
   font-family: var(--font-app), system-ui, sans-serif;
   color: var(--kv-text);
   -webkit-font-smoothing: antialiased;
@@ -68,7 +59,7 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 14px;
+  font-size: var(--text-title);
   font-weight: 600;
   letter-spacing: -0.01em;
   color: var(--kv-text);
@@ -109,25 +100,11 @@
 /* Concave (pressed-in) search well — dark inner top, light inner bottom,
    outer bottom highlight to seat it. Same language as the auth fields. */
 .search {
+  /* Pressed-in recipe comes from the global .concave-field composed
+     alongside this class in list-panel.tsx. */
   position: relative;
   margin: 0 14px 12px;
   border-radius: 9px;
-  background: #e9eaec;
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  box-shadow:
-    inset 0 2px 4px rgba(0, 0, 0, 0.13),
-    inset 0 1px 2px rgba(0, 0, 0, 0.07),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.9),
-    0 1px 0 rgba(255, 255, 255, 0.8);
-  transition: box-shadow 0.12s ease, border-color 0.12s ease;
-}
-.search:focus-within {
-  border-color: rgba(24, 24, 24, 0.18);
-  box-shadow:
-    inset 0 2px 5px rgba(0, 0, 0, 0.17),
-    inset 0 1px 2px rgba(0, 0, 0, 0.09),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.9),
-    0 0 0 3px rgba(24, 24, 24, 0.06);
 }
 .search svg {
   position: absolute;
@@ -143,7 +120,7 @@
   padding: 0 12px 0 33px;
   border: none;
   background: transparent;
-  font-size: 12.5px;
+  font-size: var(--text-body);
   color: var(--kv-text);
   outline: none;
 }
@@ -155,19 +132,13 @@
    inside, like a key on a switchboard. A single thumb slides between slots
    instead of the highlight jumping. */
 .tabs {
+  /* Recessed-track recipe comes from the global .concave-track composed
+     alongside this class in list-panel.tsx. */
   position: relative;
   display: flex;
   align-items: center;
   gap: 4px;
   margin: 0 14px 12px;
-  padding: 4px;
-  background: #e9eaec;
-  border-radius: 10px;
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  box-shadow:
-    inset 0 2px 4px rgba(0, 0, 0, 0.12),
-    inset 0 1px 2px rgba(0, 0, 0, 0.06),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.85);
 }
 /* Raised sliding thumb — white face, top highlight, drop shadow popping out
    of the recessed track. Slot width assumes 4 equal tabs (4px pad, 4px gap).
@@ -179,12 +150,8 @@
   height: 27px;
   width: calc((100% - 8px - 12px) / 4);
   border-radius: 7px;
-  background: linear-gradient(180deg, #ffffff 0%, #f3f3f3 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.95),
-    0 0 0 1px rgba(0, 0, 0, 0.05),
-    0 1px 2px rgba(0, 0, 0, 0.12),
-    0 3px 6px rgba(0, 0, 0, 0.08);
+  /* White raised face comes from the global .raised-tab composed
+     alongside this class in list-panel.tsx. */
   transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
   pointer-events: none;
 }
@@ -196,7 +163,7 @@
   border: none;
   background: none;
   border-radius: 7px;
-  font-size: 11.5px;
+  font-size: var(--text-caption);
   font-weight: 500;
   color: var(--kv-text-2);
   cursor: pointer;
@@ -232,7 +199,7 @@
   align-items: center;
   gap: 7px;
   padding: 12px 18px 6px;
-  font-size: 11px;
+  font-size: var(--text-label);
   font-weight: 500;
   color: var(--kv-text-3);
 }
@@ -310,7 +277,7 @@
 .rowTitle {
   flex: 1;
   min-width: 0;
-  font-size: 12.5px;
+  font-size: var(--text-body);
   font-weight: 600;
   letter-spacing: -0.005em;
   color: var(--kv-text);
@@ -320,7 +287,7 @@
 }
 .rowTime {
   flex: 0 0 auto;
-  font-size: 10.5px;
+  font-size: var(--text-micro);
   color: var(--kv-text-3);
 }
 .rowSub {
@@ -328,7 +295,7 @@
   align-items: center;
   gap: 6px;
   margin-top: 3px;
-  font-size: 11.5px;
+  font-size: var(--text-caption);
   color: var(--kv-text-2);
 }
 .rowSub svg {
@@ -357,7 +324,7 @@
   border: none;
   background: none;
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--text-small);
   color: var(--kv-text);
   padding: 6px 16px;
   transition: background 0.1s ease;
@@ -395,12 +362,12 @@
 }
 .treeEmpty {
   padding: 6px 16px;
-  font-size: 11px;
+  font-size: var(--text-label);
   color: var(--kv-text-3);
 }
 .treeLoading {
   padding: 8px 16px;
-  font-size: 11px;
+  font-size: var(--text-label);
   color: var(--kv-text-3);
 }
 /* Hover-revealed row actions (+entry / +folder / more). */
@@ -454,7 +421,7 @@
   background: none;
   padding: 4px 7px;
   border-radius: 6px;
-  font-size: 11.5px;
+  font-size: var(--text-caption);
   color: var(--kv-text-3);
   cursor: pointer;
   transition: background 0.1s ease, color 0.1s ease;
@@ -496,7 +463,7 @@
   align-items: center;
   gap: 9px;
   margin-left: 6px;
-  font-size: 13px;
+  font-size: var(--text-lead);
   font-weight: 600;
   color: var(--kv-text);
   min-width: 0;
@@ -572,7 +539,7 @@
   background: none;
   padding: 6px 13px;
   border-radius: 8px;
-  font-size: 12px;
+  font-size: var(--text-small);
   font-weight: 500;
   color: var(--kv-text-2);
   cursor: pointer;
@@ -585,17 +552,10 @@
 /* Concave (pressed-in) active tab — same selection language as the
    study-notes sidebar. Ring via box-shadow so layout never shifts. */
 .detailTabActive {
+  /* Pressed recipe comes from the global .concave-sel composed alongside
+     this class in detail-panel.tsx. */
   color: var(--kv-text);
   font-weight: 600;
-  background: #e9e9e7;
-  box-shadow:
-    inset 0 1px 2px rgba(0, 0, 0, 0.12),
-    inset 0 1px 1px rgba(0, 0, 0, 0.06),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.7),
-    0 0 0 1px rgba(0, 0, 0, 0.05);
-}
-.detailTabActive:hover {
-  background: #e9e9e7;
 }
 
 /* Scroll body — generous padding so content sits well off the edges. */
@@ -614,7 +574,7 @@
   display: flex;
   align-items: center;
   gap: 11px;
-  font-size: 18px;
+  font-size: var(--text-display);
   font-weight: 600;
   letter-spacing: -0.02em;
   line-height: 1.375;
@@ -632,7 +592,7 @@
 }
 .docSub {
   margin-top: 8px;
-  font-size: 13px;
+  font-size: var(--text-lead);
   color: var(--kv-text-2);
   line-height: 1.625;
 }
@@ -659,7 +619,7 @@
 }
 .metaCardHead .label {
   flex: 1;
-  font-size: 11px;
+  font-size: var(--text-label);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -669,7 +629,7 @@
   padding: 20px 22px 22px;
 }
 .metaTitle {
-  font-size: 14px;
+  font-size: var(--text-title);
   font-weight: 600;
   letter-spacing: -0.01em;
   color: var(--kv-text);
@@ -679,7 +639,7 @@
   align-items: center;
   gap: 8px;
   margin-top: 9px;
-  font-size: 12px;
+  font-size: var(--text-small);
   color: var(--kv-text-2);
 }
 .metaFields {
@@ -691,7 +651,7 @@
 .metaRow {
   display: flex;
   align-items: center;
-  font-size: 12.5px;
+  font-size: var(--text-body);
 }
 .metaKey {
   display: inline-flex;
@@ -715,7 +675,7 @@
 .metaRowTop {
   display: flex;
   align-items: flex-start;
-  font-size: 12.5px;
+  font-size: var(--text-body);
 }
 .metaRowTop .metaKey {
   padding-top: 3px;
@@ -740,7 +700,7 @@
   align-items: center;
   padding: 3px 10px;
   border-radius: 7px;
-  font-size: 11.5px;
+  font-size: var(--text-caption);
   font-weight: 500;
   background: var(--kv-pill-bg);
   color: var(--kv-text);
@@ -753,32 +713,32 @@
 /* Shrink the shared DocEditor's prose to the v2 type scale (its defaults are
    16px). Scoped to this wrapper so v1 KB detail keeps its larger size. */
 .editorScope :global(.ProseMirror) {
-  font-size: 13px;
+  font-size: var(--text-lead);
   line-height: 1.625;
 }
 .editorScope :global(.ProseMirror p),
 .editorScope :global(.ProseMirror li),
 .editorScope :global(.ProseMirror blockquote p) {
-  font-size: 13px;
+  font-size: var(--text-lead);
   line-height: 1.625;
 }
 .editorScope :global(.ProseMirror h1) {
-  font-size: 18px;
+  font-size: var(--text-display);
 }
 .editorScope :global(.ProseMirror h2) {
-  font-size: 14px;
+  font-size: var(--text-title);
 }
 .editorScope :global(.ProseMirror h3) {
-  font-size: 13px;
+  font-size: var(--text-lead);
 }
 .editorScope :global(.ProseMirror table) {
-  font-size: 11.5px;
+  font-size: var(--text-caption);
 }
 
 /* Description — section label matches the study-notes panel headers
    (11px uppercase muted). */
 .descHead {
-  font-size: 11px;
+  font-size: var(--text-label);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -786,7 +746,7 @@
   margin-bottom: 12px;
 }
 .descBody {
-  font-size: 13px;
+  font-size: var(--text-lead);
   line-height: 1.625;
   color: #3c3f44;
 }
@@ -796,7 +756,7 @@
 
 /* Subtasks */
 .subHead {
-  font-size: 11px;
+  font-size: var(--text-label);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -810,7 +770,7 @@
   padding: 11px 14px;
   border-radius: 9px;
   background: var(--kv-bg);
-  font-size: 12.5px;
+  font-size: var(--text-body);
   font-weight: 500;
   color: var(--kv-text-2);
 }
@@ -822,7 +782,7 @@
   align-items: center;
   gap: 11px;
   padding: 11px 14px;
-  font-size: 13px;
+  font-size: var(--text-lead);
   color: var(--kv-text);
   border-bottom: 1px solid var(--kv-border);
 }
@@ -848,5 +808,5 @@
   color: var(--kv-border-strong);
 }
 .detailEmpty p {
-  font-size: 12.5px;
+  font-size: var(--text-body);
 }

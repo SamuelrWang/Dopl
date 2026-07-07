@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { cn } from "@/shared/lib/utils";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import type { Role } from "@/features/workspaces/types";
 import { BaseSettingsModal } from "../base-settings-modal";
@@ -55,7 +56,7 @@ export function KnowledgeV2({
   const settingsBase = c.selection?.base ?? null;
 
   return (
-    <div className={styles.shell}>
+    <div className={cn("page-float", styles.shell)}>
       <ListPanel
         bases={c.visibleBases}
         query={c.query}

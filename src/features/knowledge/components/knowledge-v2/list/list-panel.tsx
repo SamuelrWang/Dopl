@@ -83,7 +83,7 @@ export function ListPanel({
         </button>
       </div>
 
-      <div className={styles.search}>
+      <div className={cn("concave-field", styles.search)}>
         <Search size={15} />
         <input
           value={query}
@@ -93,9 +93,9 @@ export function ListPanel({
         />
       </div>
 
-      <div className={styles.tabs}>
+      <div className={cn("concave-track", styles.tabs)}>
         <span
-          className={styles.tabThumb}
+          className={cn("raised-tab", styles.tabThumb)}
           style={{
             transform: `translateX(calc(${Math.max(
               0,

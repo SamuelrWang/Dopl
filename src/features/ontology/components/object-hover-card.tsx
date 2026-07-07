@@ -30,30 +30,30 @@ export function ObjectHoverCard({
 
   return createPortal(
     <div
-      className="pointer-events-none fixed z-[9999] w-[22rem] max-w-[80vw] overflow-hidden rounded-xl border border-black/[0.12] bg-white shadow-xl"
+      className="pointer-events-none fixed z-[9999] w-[22rem] max-w-[80vw] overflow-hidden rounded-xl border border-border-strong bg-white shadow-xl"
       style={{ left: Math.min(x + 14, vw - 366), top: Math.min(y + 14, vh - 340) }}
     >
-      <div className="flex items-center gap-2 bg-[#f4f6f9] px-3.5 py-1.5">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-[#646d78]">
+      <div className="flex items-center gap-2 bg-card-surface-subtle px-3.5 py-1.5">
+        <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
           {object.name}
         </span>
         <span className="flex-1" />
         <span
-          className="rounded-full border px-2 py-px text-[11.5px] font-semibold"
+          className="rounded-full border px-2 py-px text-micro font-semibold"
           style={{ borderColor: typeMeta.border, background: typeMeta.bg, color: typeMeta.text }}
         >
           {typeMeta.label}
         </span>
       </div>
-      <div className="max-h-72 space-y-2.5 overflow-hidden p-3.5 text-sm">
+      <div className="max-h-72 space-y-2.5 overflow-hidden p-3.5 text-lead">
         {object.subtitle && (
-          <p className="leading-snug text-[#646d78]">{object.subtitle}</p>
+          <p className="leading-snug text-text-secondary">{object.subtitle}</p>
         )}
         {object.attributes.length > 0 && (
           <div className="space-y-1">
             {object.attributes.slice(0, 5).map((attr) => (
-              <p key={attr.key} className="text-[13.5px] leading-snug text-[#232a31]">
-                <span className="font-semibold text-[#98a2ad]">{attr.label}</span>{" "}
+              <p key={attr.key} className="text-body leading-snug text-text-primary">
+                <span className="font-semibold text-text-muted">{attr.label}</span>{" "}
                 {attr.value.kind === "knowledge" || attr.value.kind === "skill"
                   ? attr.value.value
                       .map((id) => nameOf(id))
@@ -68,7 +68,7 @@ export function ObjectHoverCard({
               </p>
             ))}
             {object.attributes.length > 5 && (
-              <p className="text-[12px] text-[#98a2ad]">
+              <p className="text-caption text-text-muted">
                 +{object.attributes.length - 5} more attributes
               </p>
             )}
@@ -77,8 +77,8 @@ export function ObjectHoverCard({
         {object.relationships.length > 0 && (
           <div className="space-y-1">
             {object.relationships.map((rel) => (
-              <p key={rel.label} className="text-[13.5px] leading-snug text-[#232a31]">
-                <span className="italic text-[#98a2ad]">{rel.label}</span>{" "}
+              <p key={rel.label} className="text-body leading-snug text-text-primary">
+                <span className="italic text-text-muted">{rel.label}</span>{" "}
                 {rel.targetIds
                   .map((id) => graph.objects[id]?.name)
                   .filter(Boolean)
@@ -88,8 +88,8 @@ export function ObjectHoverCard({
           </div>
         )}
         {object.methods.length > 0 && (
-          <p className="text-[13.5px] leading-snug text-[#232a31]">
-            <span className="font-semibold text-[#98a2ad]">Actions</span>{" "}
+          <p className="text-body leading-snug text-text-primary">
+            <span className="font-semibold text-text-muted">Actions</span>{" "}
             {object.methods.map((m) => m.name).join(" · ")}
           </p>
         )}
@@ -101,7 +101,7 @@ export function ObjectHoverCard({
               return (
                 <span
                   key={childId}
-                  className="rounded-full border border-black/[0.12] bg-[#eef1f5] px-2 py-0.5 text-[12px] font-medium text-[#232a31]"
+                  className="rounded-full border border-border-strong bg-bg-inset px-2 py-0.5 text-caption font-medium text-text-primary"
                 >
                   {child.name}
                 </span>

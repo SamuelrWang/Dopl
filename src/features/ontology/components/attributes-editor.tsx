@@ -50,7 +50,7 @@ export function AttributesEditor({
 
   return (
     <SectionBox label="Attributes" meta={`${object.attributes.length}`}>
-      <div className="divide-y divide-black/[0.05]">
+      <div className="divide-y divide-border-subtle">
         {object.attributes.map((attr, i) => (
           <div key={`${attr.key}-${i}`} className="group flex items-center gap-3 px-4 py-1.5">
             <input
@@ -65,7 +65,7 @@ export function AttributesEditor({
                 })
               }
               aria-label="Attribute label"
-              className="w-32 shrink-0 bg-transparent text-[14px] text-[#646d78] placeholder:text-[#98a2ad] focus:text-[#232a31] focus:outline-none"
+              className="w-32 shrink-0 bg-transparent text-lead text-text-secondary placeholder:text-text-muted focus:text-text-primary focus:outline-none"
               placeholder="label…"
             />
             <AttrValueEditor
@@ -80,26 +80,26 @@ export function AttributesEditor({
               type="button"
               aria-label={`Remove ${attr.label}`}
               onClick={() => dispatch({ type: "ATTRIBUTE_DELETE", id: object.id, index: i })}
-              className="rounded-md p-1 text-[#98a2ad] opacity-0 transition hover:bg-black/[0.05] hover:text-[#232a31] group-hover:opacity-100"
+              className="rounded-md p-1 text-text-muted opacity-0 transition hover:bg-surface-raised-3 hover:text-text-primary group-hover:opacity-100"
             >
               <X size={12} />
             </button>
           </div>
         ))}
-        <div className="flex items-center gap-1.5 border-t border-black/[0.06] bg-[#f4f6f9] px-4 py-2">
+        <div className="flex items-center gap-1.5 border-t border-border-subtle bg-card-surface-subtle px-4 py-2">
           <input
             type="text"
             value={newLabel}
             onChange={(e) => setNewLabel(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && addAttribute()}
             placeholder="new attribute…"
-            className={`${FIELD_WELL} h-7 w-36 px-2.5 text-[13.5px] text-[#232a31] placeholder:text-[#98a2ad]`}
+            className={`${FIELD_WELL} h-7 w-36 px-2.5 text-body text-text-primary placeholder:text-text-muted`}
           />
           <select
             value={newKind}
             onChange={(e) => setNewKind(e.target.value as AttrKind)}
             aria-label="Attribute type"
-            className={`${FIELD_WELL} h-7 px-1.5 text-[13px] text-[#646d78]`}
+            className={`${FIELD_WELL} h-7 px-1.5 text-small text-text-secondary`}
           >
             <option value="text">Text</option>
             <option value="pill">Tag</option>
@@ -110,7 +110,7 @@ export function AttributesEditor({
           <button
             type="button"
             onClick={addAttribute}
-            className="btn-light flex h-7 items-center gap-1 rounded-md px-2.5 text-[13px] font-medium text-[#232a31]"
+            className="btn-light flex h-7 items-center gap-1 rounded-md px-2.5 text-small font-medium text-text-primary"
           >
             <Plus size={11} /> Add
           </button>
@@ -148,7 +148,7 @@ function AttrValueEditor({
               onClick={() =>
                 onChange({ ...attr, value: { kind: v.kind, value: v.value.filter((x) => x !== id) } })
               }
-              className="text-[#98a2ad] hover:text-[#232a31]"
+              className="text-text-muted hover:text-text-primary"
             >
               <X size={10} />
             </button>
@@ -161,10 +161,10 @@ function AttrValueEditor({
           trigger={
             <>
               <span>{v.kind === "knowledge" ? "Select knowledge" : "Select skill"}</span>
-              <ChevronDown size={11} className="text-[#98a2ad]" />
+              <ChevronDown size={11} className="text-text-muted" />
             </>
           }
-          triggerClassName="btn-light flex h-6 w-40 items-center justify-between rounded-full px-3 text-[12px] font-medium text-[#232a31]"
+          triggerClassName="btn-light flex h-6 w-40 items-center justify-between rounded-full px-3 text-caption font-medium text-text-primary"
         />
       </span>
     );
@@ -185,7 +185,7 @@ function AttrValueEditor({
                 onClick={() =>
                   onChange({ ...attr, value: { kind: "ref", value: v.value.filter((x) => x !== id) } })
                 }
-                className="text-[#98a2ad] hover:text-[#232a31]"
+                className="text-text-muted hover:text-text-primary"
               >
                 <X size={10} />
               </button>
@@ -201,7 +201,7 @@ function AttrValueEditor({
               <Plus size={10} /> Link
             </span>
           }
-          triggerClassName="btn-light flex h-6 items-center rounded-full px-2 text-[12px] font-medium text-[#232a31]"
+          triggerClassName="btn-light flex h-6 items-center rounded-full px-2 text-caption font-medium text-text-primary"
         />
       </span>
     );
@@ -214,7 +214,7 @@ function AttrValueEditor({
         value={v.value}
         onChange={(e) => onChange({ ...attr, value: { kind: "pill", value: e.target.value } })}
         placeholder="tag…"
-        className={`w-fit min-w-24 ${CHIP} placeholder:text-[#98a2ad] focus:border-black/[0.3] focus:outline-none`}
+        className={`w-fit min-w-24 ${CHIP} placeholder:text-text-muted focus:border-border-highlight focus:outline-none`}
       />
     );
   }
@@ -225,7 +225,7 @@ function AttrValueEditor({
       value={v.value}
       onChange={(e) => onChange({ ...attr, value: { kind: "text", value: e.target.value } })}
       placeholder="value…"
-      className="min-w-0 flex-1 bg-transparent text-[14px] text-[#232a31] placeholder:text-[#98a2ad] focus:outline-none"
+      className="min-w-0 flex-1 bg-transparent text-lead text-text-primary placeholder:text-text-muted focus:outline-none"
     />
   );
 }

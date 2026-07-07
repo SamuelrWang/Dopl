@@ -60,14 +60,14 @@ export function OntologyView({ workspaceId, workspaceSegment, initialClusterSlug
   if (status === "loading") {
     return (
       <Frame>
-        <p className="m-auto text-[14px] text-[#98a2ad]">Loading ontology…</p>
+        <p className="m-auto text-lead text-text-muted">Loading ontology…</p>
       </Frame>
     );
   }
   if (status === "error") {
     return (
       <Frame>
-        <p className="m-auto text-[14px] text-[#c04543]">
+        <p className="m-auto text-lead text-danger">
           Couldn&apos;t load the ontology. Refresh to retry.
         </p>
       </Frame>
@@ -77,13 +77,13 @@ export function OntologyView({ workspaceId, workspaceSegment, initialClusterSlug
     return (
       <Frame>
         <div className="m-auto flex flex-col items-center gap-3">
-          <p className="text-[14px] text-[#646d78]">
+          <p className="text-lead text-text-secondary">
             No ontology yet — start with your first cluster.
           </p>
           <button
             type="button"
             onClick={handleCreateCluster}
-            className="auth-btn-3d rounded-lg px-4 py-2 text-[14px] font-semibold text-white"
+            className="auth-btn-3d rounded-lg px-4 py-2 text-lead font-semibold text-white"
           >
             New cluster
           </button>
@@ -96,29 +96,29 @@ export function OntologyView({ workspaceId, workspaceSegment, initialClusterSlug
   return (
     <OntologyResourcesProvider workspaceId={workspaceId}>
       <Frame>
-        <div className="flex shrink-0 items-center gap-3 border-b border-black/[0.06] px-3 py-2">
-          <div className="flex items-center gap-1 rounded-[10px] border border-black/[0.06] bg-[#e9eaec] p-1 shadow-[inset_0_2px_4px_rgba(0,0,0,0.12),inset_0_1px_2px_rgba(0,0,0,0.06),inset_0_-1px_0_rgba(255,255,255,0.85)]">
+        <div className="flex shrink-0 items-center gap-3 border-b border-border-subtle px-3 py-2">
+          <div className="concave-track flex items-center gap-1">
             {graph.clusters.map((c) => (
               <button
                 key={c.id}
                 type="button"
                 onClick={() => selectCluster(c.id)}
                 className={cn(
-                  "flex h-7 items-center gap-1.5 rounded-[7px] px-3 text-[13px] font-medium transition-colors",
+                  "flex h-7 items-center gap-1.5 rounded-[7px] px-3 text-small font-medium transition-colors",
                   c.id === cluster.id
-                    ? "bg-gradient-to-b from-white to-[#f3f3f3] text-[#232a31] shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_0_0_1px_rgba(0,0,0,0.05),0_1px_2px_rgba(0,0,0,0.12),0_3px_6px_rgba(0,0,0,0.08)]"
-                    : "text-[#646d78] hover:text-[#232a31]"
+                    ? "raised-tab text-text-primary"
+                    : "text-text-secondary hover:text-text-primary"
                 )}
               >
                 {c.name}
-                <span className="text-[11.5px] text-[#98a2ad]">{c.columnIds.length}</span>
+                <span className="text-micro text-text-muted">{c.columnIds.length}</span>
               </button>
             ))}
             <button
               type="button"
               onClick={handleCreateCluster}
               aria-label="New cluster"
-              className="flex h-7 w-7 items-center justify-center rounded-[7px] text-[#98a2ad] transition hover:text-[#232a31]"
+              className="flex h-7 w-7 items-center justify-center rounded-[7px] text-text-muted transition hover:text-text-primary"
             >
               <Plus size={13} />
             </button>
@@ -131,7 +131,7 @@ export function OntologyView({ workspaceId, workspaceSegment, initialClusterSlug
                 dispatch({ type: "CLUSTER_UPDATE", id: cluster.id, patch: { name: e.target.value } })
               }
               aria-label="Cluster name"
-              className="w-40 shrink-0 bg-transparent text-[14px] font-semibold tracking-tight text-[#232a31] placeholder:text-[#98a2ad] focus:outline-none"
+              className="w-40 shrink-0 bg-transparent text-lead font-semibold tracking-tight text-text-primary placeholder:text-text-muted focus:outline-none"
               placeholder="Cluster name"
             />
             <input
@@ -145,14 +145,14 @@ export function OntologyView({ workspaceId, workspaceSegment, initialClusterSlug
                 })
               }
               aria-label="Cluster purpose"
-              className="min-w-0 flex-1 bg-transparent text-[13.5px] text-[#646d78] placeholder:text-[#98a2ad] focus:outline-none"
+              className="min-w-0 flex-1 bg-transparent text-body text-text-secondary placeholder:text-text-muted focus:outline-none"
               placeholder="What this ontology anchors (agents read this to route)…"
             />
           </div>
           <button
             type="button"
             onClick={() => handleCreateObject({ clusterId: cluster.id })}
-            className="btn-light flex h-7 shrink-0 items-center gap-1 rounded-md px-2.5 text-[13px] font-medium text-[#232a31]"
+            className="btn-light flex h-7 shrink-0 items-center gap-1 rounded-md px-2.5 text-small font-medium text-text-primary"
           >
             <Plus size={12} /> Column
           </button>
@@ -184,14 +184,11 @@ export function OntologyView({ workspaceId, workspaceSegment, initialClusterSlug
 }
 
 /**
- * Floats the ontology surface as ONE raised white card above the shell's
- * sidebar panel — same geometry as knowledge-v2's `.shell` (margins reveal
- * the lower panel as a frame; no intermediate background of its own).
+ * Floats the ontology surface as ONE raised card above the shell's
+ * sidebar panel — the global .page-float surface (same as knowledge-v2).
  */
 function Frame({ children }: { children?: React.ReactNode }) {
   return (
-    <div className="mt-[7px] mr-2 mb-[9px] ml-2 flex min-w-0 flex-1 flex-col overflow-hidden rounded-[14px] border border-[#e3e3e0] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.05),0_10px_28px_-8px_rgba(0,0,0,0.16)] antialiased">
-      {children}
-    </div>
+    <div className="page-float flex flex-col antialiased">{children}</div>
   );
 }

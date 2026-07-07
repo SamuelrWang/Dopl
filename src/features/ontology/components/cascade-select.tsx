@@ -81,7 +81,7 @@ export function CascadeSelect({
         createPortal(
           <div
             ref={rootRef}
-            className="fixed z-[9999] overflow-y-auto rounded-xl border border-black/[0.12] bg-[#fbfcfd] p-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.06),0_10px_28px_rgba(0,0,0,0.14)]"
+            className="fixed z-[9999] overflow-y-auto rounded-xl border border-border-strong bg-bg-elevated p-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.06),0_10px_28px_rgba(0,0,0,0.14)]"
             style={{
               width: PANEL_W,
               maxHeight: PANEL_MAX_H,
@@ -89,7 +89,7 @@ export function CascadeSelect({
               top: Math.min(anchor.y, window.innerHeight - PANEL_MAX_H - 16),
             }}
           >
-            <div className="px-2 pt-1 pb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#98a2ad]">
+            <div className="px-2 pt-1 pb-1.5 text-label font-semibold uppercase tracking-wide text-text-muted">
               Link an object
             </div>
             {graph.clusters.map((c) => {
@@ -106,7 +106,7 @@ export function CascadeSelect({
                     }}
                   >
                     <span className="min-w-0 flex-1 truncate font-semibold">{c.name}</span>
-                    <span className="text-[11.5px] text-[#98a2ad]">{c.columnIds.length}</span>
+                    <span className="text-micro text-text-muted">{c.columnIds.length}</span>
                   </Row>
                   {clusterOpen &&
                     c.columnIds.map((cid) => {
@@ -124,7 +124,7 @@ export function CascadeSelect({
                             onPick={excluded.has(cid) ? undefined : () => pick(cid)}
                           >
                             <span className="min-w-0 flex-1 truncate">{col.name}</span>
-                            <span className="text-[11.5px] text-[#98a2ad]">
+                            <span className="text-micro text-text-muted">
                               {col.childIds.length}
                             </span>
                           </Row>
@@ -144,7 +144,7 @@ export function CascadeSelect({
                               );
                             })}
                           {colOpen && col.childIds.length === 0 && (
-                            <p className="py-1 pr-2 pl-12 text-[13px] text-[#98a2ad]">
+                            <p className="py-1 pr-2 pl-12 text-small text-text-muted">
                               No objects yet
                             </p>
                           )}
@@ -186,12 +186,12 @@ function Row({
       onClick={onPick}
       style={{ paddingLeft: 8 + depth * 16 }}
       className={cn(
-        "flex w-full items-center gap-2 rounded-lg py-1.5 pr-2 text-left text-[14px] transition-colors",
+        "flex w-full items-center gap-2 rounded-lg py-1.5 pr-2 text-left text-lead transition-colors",
         expanded
-          ? "bg-[#e9e9e7] font-medium text-[#232a31] shadow-[inset_0_1px_2px_rgba(0,0,0,0.1),inset_0_-1px_0_rgba(255,255,255,0.7),0_0_0_1px_rgba(0,0,0,0.04)]"
+          ? "concave-sel font-medium text-text-primary"
           : disabled
-            ? "cursor-default text-[#c4cad1]"
-            : "text-[#646d78] hover:bg-black/[0.04] hover:text-[#232a31]",
+            ? "cursor-default text-text-disabled"
+            : "text-text-secondary hover:bg-surface-raised-2 hover:text-text-primary",
         onPick && !disabled && "cursor-pointer"
       )}
     >
@@ -200,7 +200,7 @@ function Row({
         <ChevronRight
           size={12}
           className={cn(
-            "shrink-0 text-[#98a2ad] transition-transform",
+            "shrink-0 text-text-muted transition-transform",
             expanded && "rotate-90"
           )}
         />

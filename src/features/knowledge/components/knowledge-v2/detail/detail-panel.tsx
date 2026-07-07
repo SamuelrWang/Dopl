@@ -198,7 +198,7 @@ export function DetailPanel({
           <button
             key={t}
             type="button"
-            className={cn(styles.detailTab, tab === t && styles.detailTabActive)}
+            className={cn(styles.detailTab, tab === t && cn("concave-sel", styles.detailTabActive))}
             onClick={() => setTab(t)}
           >
             {t}

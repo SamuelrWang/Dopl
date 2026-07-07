@@ -34,10 +34,10 @@ export function KanbanCard({ objectId, graph, selected, onSelect }: Props) {
       onMouseMove={(e) => !open && setHoverPos({ x: e.clientX, y: e.clientY })}
       onMouseLeave={() => setHoverPos(null)}
       className={cn(
-        "overflow-hidden rounded-xl border bg-[#fbfcfd] transition-shadow",
+        "overflow-hidden rounded-xl border bg-bg-elevated transition-shadow",
         selected
-          ? "border-black/[0.2] shadow-[0_0_0_1px_rgba(0,0,0,0.12),0_2px_6px_rgba(0,0,0,0.08)]"
-          : "border-black/[0.1] shadow-[0_1px_2px_rgba(0,0,0,0.05)] hover:shadow-[0_2px_6px_rgba(0,0,0,0.08)]"
+          ? "border-border-highlight shadow-[0_0_0_1px_rgba(0,0,0,0.12),0_2px_6px_rgba(0,0,0,0.08)]"
+          : "border-border-default shadow-[0_1px_2px_rgba(0,0,0,0.05)] hover:shadow-[0_2px_6px_rgba(0,0,0,0.08)]"
       )}
     >
       <button
@@ -46,11 +46,11 @@ export function KanbanCard({ objectId, graph, selected, onSelect }: Props) {
         className="flex w-full items-start gap-2 px-3 pt-2.5 pb-1 text-left"
       >
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[14px] font-semibold tracking-tight text-[#232a31]">
+          <div className="truncate text-lead font-semibold tracking-tight text-text-primary">
             {object.name}
           </div>
           {object.subtitle && (
-            <div className="mt-0.5 truncate text-[12.5px] text-[#646d78]">
+            <div className="mt-0.5 truncate text-caption text-text-secondary">
               {object.subtitle}
             </div>
           )}
@@ -71,7 +71,7 @@ export function KanbanCard({ objectId, graph, selected, onSelect }: Props) {
               setOpen((o) => !o);
             }
           }}
-          className="rounded-md p-1 text-[#98a2ad] transition hover:bg-black/[0.05] hover:text-[#232a31]"
+          className="rounded-md p-1 text-text-muted transition hover:bg-surface-raised-3 hover:text-text-primary"
         >
           <ChevronDown
             size={13}
@@ -79,7 +79,7 @@ export function KanbanCard({ objectId, graph, selected, onSelect }: Props) {
           />
         </span>
       </button>
-      <div className="flex items-center gap-2 px-3 pb-2 text-[11.5px] text-[#98a2ad]">
+      <div className="flex items-center gap-2 px-3 pb-2 text-micro text-text-muted">
         <span>{object.attributes.length} attrs</span>
         <span aria-hidden>·</span>
         <span>{object.relationships.length} edges</span>
@@ -88,27 +88,27 @@ export function KanbanCard({ objectId, graph, selected, onSelect }: Props) {
       </div>
 
       {open && (
-        <div className="border-t border-black/[0.06] bg-[#eef1f5] px-3 py-2 shadow-[inset_0_2px_4px_rgba(0,0,0,0.08),inset_0_1px_2px_rgba(0,0,0,0.05)]">
+        <div className="border-t border-border-subtle bg-bg-inset px-3 py-2 shadow-[inset_0_2px_4px_rgba(0,0,0,0.08),inset_0_1px_2px_rgba(0,0,0,0.05)]">
           {object.attributes.length > 0 ? (
             <div className="flex flex-col gap-1">
               {object.attributes.slice(0, 5).map((attr) => (
-                <div key={attr.key} className="flex items-baseline gap-2 text-[12.5px]">
-                  <span className="w-24 shrink-0 truncate text-[#98a2ad]">
+                <div key={attr.key} className="flex items-baseline gap-2 text-caption">
+                  <span className="w-24 shrink-0 truncate text-text-muted">
                     {attr.label}
                   </span>
-                  <span className="min-w-0 flex-1 truncate text-[#232a31]">
+                  <span className="min-w-0 flex-1 truncate text-text-primary">
                     {previewValue(attr.value, graph, nameOf)}
                   </span>
                 </div>
               ))}
               {object.attributes.length > 5 && (
-                <span className="text-[11.5px] text-[#98a2ad]">
+                <span className="text-micro text-text-muted">
                   +{object.attributes.length - 5} more
                 </span>
               )}
             </div>
           ) : (
-            <p className="text-[12.5px] text-[#98a2ad]">No attributes yet.</p>
+            <p className="text-caption text-text-muted">No attributes yet.</p>
           )}
         </div>
       )}

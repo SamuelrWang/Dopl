@@ -141,6 +141,37 @@
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
   --radius-pill: 9999px;
+
+  /* Header-strip / subtle card surface (see .section-card usage) */
+  --color-card-surface-subtle: var(--card-surface-subtle);
+
+  /* ── Type scale — the official UI ramp (docs/DESIGN-SYSTEM.md).
+     Semantic text-* utilities for ALL interface text; never raw px.
+       micro   10.5px  timestamps, counts, mono ids
+       label   11px    uppercase section labels (always with uppercase
+                       tracking-wide font-semibold)
+       caption 11.5px  metadata, sublines, secondary chips
+       small   12px    tree rows, tabs, menu items, compact buttons
+       body    12.5px  default body, row titles, inputs
+       lead    13px    prose/document body, emphasized text
+       title   14px    pane headers, card titles
+       display 18px    page/document titles                          ── */
+  --text-micro: 10.5px;
+  --text-micro--line-height: 1.4;
+  --text-label: 11px;
+  --text-label--line-height: 1.4;
+  --text-caption: 11.5px;
+  --text-caption--line-height: 1.4;
+  --text-small: 12px;
+  --text-small--line-height: 1.45;
+  --text-body: 12.5px;
+  --text-body--line-height: 1.5;
+  --text-lead: 13px;
+  --text-lead--line-height: 1.55;
+  --text-title: 14px;
+  --text-title--line-height: 1.4;
+  --text-display: 18px;
+  --text-display--line-height: 1.375;
 }
 
 /* ─────────────────────────────────────────────────────────────────────
@@ -733,7 +764,9 @@ body.panel-dragging *::after {
 }
 
 /* Concave field — pressed-in look: dark inner top, light inner bottom +
-   outer bottom highlight to seat it on the page. */
+   outer bottom highlight to seat it on the page. `.concave-field` is the
+   official kit name; `.auth-field-3d` is the legacy alias (same recipe). */
+.concave-field,
 .auth-field-3d {
   background: #e9eaec;
   border: 1px solid rgba(0, 0, 0, 0.06);
@@ -744,6 +777,8 @@ body.panel-dragging *::after {
     0 1px 0 rgba(255, 255, 255, 0.8);
   transition: box-shadow 120ms ease, border-color 120ms ease;
 }
+.concave-field:focus-within,
+.concave-field:focus,
 .auth-field-3d:focus-within {
   border-color: rgba(24, 24, 24, 0.22);
   box-shadow:
@@ -780,7 +815,9 @@ body.panel-dragging *::after {
 
 /* Concave (pressed-in) selection — the active state for .btn-light controls
    and other selected chrome. Border drawn via box-shadow ring so toggling
-   it on borderless elements never shifts layout. */
+   it on borderless elements never shifts layout. `.concave-sel` is the
+   official kit name; `.btn-pressed` is the legacy alias. */
+.concave-sel,
 .btn-pressed {
   background: #e9e9e7;
   box-shadow:
@@ -798,6 +835,60 @@ body.panel-dragging *::after {
     inset 0 -2px 3px rgba(0, 0, 0, 0.55),
     0 2px 3px rgba(0, 0, 0, 0.25),
     0 6px 14px rgba(0, 0, 0, 0.2);
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   UI kit — official global surface components (docs/DESIGN-SYSTEM.md).
+   Every page composes these; never re-hardcode their recipes locally.
+   ───────────────────────────────────────────────────────────────────── */
+
+/* Floating page surface — the ONE raised card a full-page view renders
+   into, sitting on the shell's sidebar panel. Margins reveal the lower
+   panel as a frame. (Knowledge + Ontology pattern.) */
+.page-float {
+  flex: 1;
+  min-width: 0;
+  margin: 7px 8px 9px 8px;
+  background: var(--panel-surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.05),
+    0 10px 28px -8px rgba(0, 0, 0, 0.16);
+  overflow: hidden;
+}
+
+/* Soft floating card (bento) — inner cards/tiles on a panel surface. */
+.bento {
+  background: var(--panel-surface);
+  border: 1px solid var(--border-default);
+  border-radius: 14px;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    0 6px 18px rgba(0, 0, 0, 0.05);
+}
+
+/* Recessed switcher track — tab/pill groups sit inside; pair the active
+   item with .raised-tab. Same pressed-in language as .concave-field. */
+.concave-track {
+  background: #e9eaec;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 10px;
+  padding: 4px;
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.12),
+    inset 0 1px 2px rgba(0, 0, 0, 0.06),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.85);
+}
+
+/* Raised active tab face — white gradient popping out of a concave track. */
+.raised-tab {
+  background: linear-gradient(180deg, #ffffff 0%, #f3f3f3 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 0 0 1px rgba(0, 0, 0, 0.05),
+    0 1px 2px rgba(0, 0, 0, 0.12),
+    0 3px 6px rgba(0, 0, 0, 0.08);
 }
 
 /* ─────────────────────────────────────────────────────────────────────

@@ -34,7 +34,7 @@ export function RelationshipsEditor({
 
   return (
     <SectionBox label="Relationships" meta={`${object.relationships.length}`}>
-      <div className="divide-y divide-black/[0.05]">
+      <div className="divide-y divide-border-subtle">
         {object.relationships.map((rel, i) => (
           <div key={i} className="group flex items-center gap-3 px-4 py-1.5">
             <input
@@ -50,7 +50,7 @@ export function RelationshipsEditor({
               }
               aria-label="Edge label"
               placeholder="edge label…"
-              className="w-32 shrink-0 bg-transparent text-[14px] italic text-[#646d78] placeholder:text-[#98a2ad] focus:text-[#232a31] focus:outline-none"
+              className="w-32 shrink-0 bg-transparent text-lead italic text-text-secondary placeholder:text-text-muted focus:text-text-primary focus:outline-none"
             />
             <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
               {rel.targetIds.map((id) => {
@@ -76,7 +76,7 @@ export function RelationshipsEditor({
                           targetIds: rel.targetIds.filter((t) => t !== id),
                         })
                       }
-                      className="text-[#98a2ad] hover:text-[#232a31]"
+                      className="text-text-muted hover:text-text-primary"
                     >
                       <X size={10} />
                     </button>
@@ -99,26 +99,26 @@ export function RelationshipsEditor({
                     <Plus size={10} /> Link
                   </span>
                 }
-                triggerClassName="btn-light flex h-6 items-center rounded-full px-2 text-[12px] font-medium text-[#232a31]"
+                triggerClassName="btn-light flex h-6 items-center rounded-full px-2 text-caption font-medium text-text-primary"
               />
             </span>
             <button
               type="button"
               aria-label={`Remove ${rel.label}`}
               onClick={() => dispatch({ type: "RELATIONSHIP_DELETE", id: object.id, label: rel.label })}
-              className="rounded-md p-1 text-[#98a2ad] opacity-0 transition hover:bg-black/[0.05] hover:text-[#232a31] group-hover:opacity-100"
+              className="rounded-md p-1 text-text-muted opacity-0 transition hover:bg-surface-raised-3 hover:text-text-primary group-hover:opacity-100"
             >
               <X size={12} />
             </button>
           </div>
         ))}
-        <div className="flex items-center gap-1.5 border-t border-black/[0.06] bg-[#f4f6f9] px-4 py-2">
+        <div className="flex items-center gap-1.5 border-t border-border-subtle bg-card-surface-subtle px-4 py-2">
           <input
             type="text"
             value={newLabel}
             onChange={(e) => setNewLabel(e.target.value)}
             placeholder="edge label (e.g. assigned to)…"
-            className={`${FIELD_WELL} h-7 w-52 px-2.5 text-[13.5px] text-[#232a31] placeholder:text-[#98a2ad]`}
+            className={`${FIELD_WELL} h-7 w-52 px-2.5 text-body text-text-primary placeholder:text-text-muted`}
           />
           <CascadeSelect
             graph={graph}
@@ -129,7 +129,7 @@ export function RelationshipsEditor({
                 <Plus size={11} /> Link target
               </span>
             }
-            triggerClassName="btn-light flex h-7 items-center rounded-md px-2.5 text-[13px] font-medium text-[#232a31]"
+            triggerClassName="btn-light flex h-7 items-center rounded-md px-2.5 text-small font-medium text-text-primary"
           />
         </div>
       </div>

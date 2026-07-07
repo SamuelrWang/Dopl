@@ -83,7 +83,7 @@ export function PickMenu({
         createPortal(
           <div
             ref={rootRef}
-            className="fixed z-[9999] overflow-y-auto rounded-xl border border-black/[0.12] bg-[#fbfcfd] p-1 shadow-[0_1px_2px_rgba(0,0,0,0.06),0_10px_28px_rgba(0,0,0,0.14)]"
+            className="fixed z-[9999] overflow-y-auto rounded-xl border border-border-strong bg-bg-elevated p-1 shadow-[0_1px_2px_rgba(0,0,0,0.06),0_10px_28px_rgba(0,0,0,0.14)]"
             style={{
               width: MENU_W,
               maxHeight: MENU_MAX_H,
@@ -92,7 +92,7 @@ export function PickMenu({
             }}
           >
             {groups.length === 0 && (
-              <p className="px-2 py-1.5 text-[13px] text-[#98a2ad]">
+              <p className="px-2 py-1.5 text-small text-text-muted">
                 Nothing available to add
               </p>
             )}
@@ -105,21 +105,21 @@ export function PickMenu({
                     type="button"
                     onClick={() => setOpenGroup(open ? null : group)}
                     className={cn(
-                      "flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-left text-[13px] font-semibold transition-colors",
+                      "flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-left text-small font-semibold transition-colors",
                       open
-                        ? "text-[#232a31]"
-                        : "text-[#646d78] hover:bg-black/[0.04] hover:text-[#232a31]"
+                        ? "text-text-primary"
+                        : "text-text-secondary hover:bg-surface-raised-2 hover:text-text-primary"
                     )}
                   >
                     <ChevronRight
                       size={11}
                       className={cn(
-                        "shrink-0 text-[#98a2ad] transition-transform",
+                        "shrink-0 text-text-muted transition-transform",
                         open && "rotate-90"
                       )}
                     />
                     <span className="min-w-0 flex-1 truncate">{group}</span>
-                    <span className="text-[11.5px] font-normal text-[#98a2ad]">
+                    <span className="text-micro font-normal text-text-muted">
                       {groupItems.length}
                     </span>
                   </button>
@@ -132,7 +132,7 @@ export function PickMenu({
                           onPick(item.id);
                           close();
                         }}
-                        className="flex w-full items-center rounded-lg py-1.5 pr-2 pl-6 text-left text-[13.5px] text-[#646d78] transition-colors hover:bg-black/[0.04] hover:text-[#232a31]"
+                        className="flex w-full items-center rounded-lg py-1.5 pr-2 pl-6 text-left text-body text-text-secondary transition-colors hover:bg-surface-raised-2 hover:text-text-primary"
                       >
                         <span className="min-w-0 flex-1 truncate">{item.name}</span>
                       </button>

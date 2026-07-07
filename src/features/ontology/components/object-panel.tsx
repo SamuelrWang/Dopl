@@ -40,8 +40,8 @@ export function ObjectPanel({
   const isColumn = graph.clusters.some((c) => c.columnIds.includes(objectId));
 
   return (
-    <div className="my-2 mr-2 flex min-h-0 w-[420px] shrink-0 flex-col overflow-hidden rounded-[14px] border border-black/[0.14] bg-[#fbfcfd] shadow-[0_2px_6px_rgba(0,0,0,0.07),0_16px_40px_-10px_rgba(0,0,0,0.22)]">
-      <div className="flex shrink-0 items-center gap-2 border-b border-black/[0.06] bg-[#f4f6f9] px-3 py-2">
+    <div className="my-2 mr-2 flex min-h-0 w-[420px] shrink-0 flex-col overflow-hidden rounded-[14px] border border-border-highlight bg-bg-elevated shadow-[0_2px_6px_rgba(0,0,0,0.07),0_16px_40px_-10px_rgba(0,0,0,0.22)]">
+      <div className="flex shrink-0 items-center gap-2 border-b border-border-subtle bg-card-surface-subtle px-3 py-2">
         <select
           value={object.type}
           onChange={(e) =>
@@ -52,7 +52,7 @@ export function ObjectPanel({
             })
           }
           aria-label="Object type"
-          className="shrink-0 cursor-pointer appearance-none rounded-full border px-2.5 py-0.5 text-[12px] font-semibold focus:outline-none"
+          className="shrink-0 cursor-pointer appearance-none rounded-full border px-2.5 py-0.5 text-caption font-semibold focus:outline-none"
           style={{ borderColor: typeMeta.border, background: typeMeta.bg, color: typeMeta.text }}
         >
           {Object.values(OBJECT_TYPES).map((t) => (
@@ -62,11 +62,11 @@ export function ObjectPanel({
           ))}
         </select>
         {isColumn && (
-          <span className="shrink-0 rounded-full border border-black/[0.12] px-2 py-px text-[11px] font-semibold uppercase tracking-wide text-[#646d78]">
+          <span className="shrink-0 rounded-full border border-border-strong px-2 py-px text-label font-semibold uppercase tracking-wide text-text-secondary">
             Column · {object.childIds.length}
           </span>
         )}
-        <span className="min-w-0 flex-1 truncate font-mono text-[11.5px] text-[#98a2ad]">
+        <span className="min-w-0 flex-1 truncate font-mono text-micro text-text-muted">
           {objectId}
         </span>
         {confirmDelete ? (
@@ -77,14 +77,14 @@ export function ObjectPanel({
                 onDeleteObject(objectId);
                 onClose();
               }}
-              className="rounded-md bg-[#fdecec] px-2 py-1 text-[12px] font-semibold text-[#c04543]"
+              className="rounded-md bg-danger/10 px-2 py-1 text-caption font-semibold text-danger"
             >
               Delete
             </button>
             <button
               type="button"
               onClick={() => setConfirmDelete(false)}
-              className="btn-light rounded-md px-2 py-1 text-[12px] font-medium text-[#232a31]"
+              className="btn-light rounded-md px-2 py-1 text-caption font-medium text-text-primary"
             >
               Keep
             </button>
@@ -95,7 +95,7 @@ export function ObjectPanel({
             aria-label={`Delete ${object.name}`}
             title="Delete object"
             onClick={() => setConfirmDelete(true)}
-            className="btn-light flex h-6 w-7 shrink-0 items-center justify-center rounded-md text-[#232a31]"
+            className="btn-light flex h-6 w-7 shrink-0 items-center justify-center rounded-md text-text-primary"
           >
             <Trash2 size={11} />
           </button>
@@ -104,7 +104,7 @@ export function ObjectPanel({
           type="button"
           aria-label="Close"
           onClick={onClose}
-          className="btn-light flex h-6 w-7 shrink-0 items-center justify-center rounded-md text-[#232a31]"
+          className="btn-light flex h-6 w-7 shrink-0 items-center justify-center rounded-md text-text-primary"
         >
           <X size={12} />
         </button>
@@ -119,7 +119,7 @@ export function ObjectPanel({
               onChange={(e) =>
                 dispatch({ type: "OBJECT_UPDATE", id: objectId, patch: { name: e.target.value } })
               }
-              className="w-full bg-transparent text-lg font-semibold leading-snug tracking-tight text-[#232a31] placeholder:text-[#98a2ad] focus:outline-none"
+              className="w-full bg-transparent text-display font-semibold leading-snug tracking-tight text-text-primary placeholder:text-text-muted focus:outline-none"
               placeholder="Object name"
               aria-label="Object name"
             />
@@ -130,7 +130,7 @@ export function ObjectPanel({
                 dispatch({ type: "OBJECT_UPDATE", id: objectId, patch: { subtitle: e.target.value } })
               }
               placeholder="Short description (agents see this when browsing)…"
-              className="mt-0.5 w-full bg-transparent text-[14px] text-[#646d78] placeholder:text-[#98a2ad] focus:outline-none"
+              className="mt-0.5 w-full bg-transparent text-lead text-text-secondary placeholder:text-text-muted focus:outline-none"
               aria-label="Object description"
             />
           </div>

@@ -51,12 +51,12 @@ export function SectionBox({
   };
 
   return (
-    <section className="w-full overflow-hidden rounded-[14px] border border-black/[0.12]">
-      <div className="flex items-center gap-2 bg-[#f4f6f9] px-4 py-1.5">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-[#646d78]">
+    <section className="w-full overflow-hidden rounded-[14px] border border-border-strong">
+      <div className="flex items-center gap-2 bg-card-surface-subtle px-4 py-1.5">
+        <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
           {label}
         </span>
-        {meta && <span className="text-[12px] text-[#98a2ad]">{meta}</span>}
+        {meta && <span className="text-caption text-text-muted">{meta}</span>}
         <span className="flex-1" />
         {action}
       </div>
@@ -65,7 +65,7 @@ export function SectionBox({
           ref={bodyRef}
           style={height !== null ? { height } : undefined}
           className={cn(
-            "border-t border-black/[0.06] bg-[#eef1f5] shadow-[inset_0_2px_4px_rgba(0,0,0,0.1),inset_0_1px_2px_rgba(0,0,0,0.06),inset_0_-1px_0_rgba(255,255,255,0.9)]",
+            "border-t border-border-subtle bg-bg-inset shadow-[inset_0_2px_4px_rgba(0,0,0,0.1),inset_0_1px_2px_rgba(0,0,0,0.06),inset_0_-1px_0_rgba(255,255,255,0.9)]",
             height !== null && "overflow-y-auto overscroll-contain"
           )}
         >
@@ -76,7 +76,7 @@ export function SectionBox({
           onPointerDown={onGripDown}
           title="Drag to resize"
           aria-label={`Resize ${label}`}
-          className="absolute right-1.5 bottom-1.5 z-10 flex h-4 w-4 cursor-ns-resize items-center justify-center text-[#98a2ad] hover:text-[#646d78]"
+          className="absolute right-1.5 bottom-1.5 z-10 flex h-4 w-4 cursor-ns-resize items-center justify-center text-text-muted hover:text-text-secondary"
         >
           <ResizeGrip />
         </button>
@@ -106,10 +106,9 @@ function ResizeGrip() {
   );
 }
 
-/** Concave input well — study-notes auth-field treatment for add-row fields. */
-export const FIELD_WELL =
-  "rounded-lg border border-black/[0.06] bg-[#e9eaec] shadow-[inset_0_2px_4px_rgba(0,0,0,0.13),inset_0_1px_2px_rgba(0,0,0,0.07),inset_0_-1px_0_rgba(255,255,255,0.9)] focus:border-black/[0.22] focus:outline-none";
+/** Concave input well — the global .concave-field recipe for add-row fields. */
+export const FIELD_WELL = "concave-field rounded-lg focus:outline-none";
 
 /** Raised chip sitting on an inset body — verse-pill on a concave field. */
 export const CHIP =
-  "rounded-full border border-black/[0.12] bg-[#fbfcfd] px-2.5 py-0.5 text-[13px] font-medium text-[#232a31] shadow-[0_1px_2px_rgba(0,0,0,0.05)]";
+  "rounded-full border border-border-strong bg-bg-elevated px-2.5 py-0.5 text-small font-medium text-text-primary shadow-[0_1px_2px_rgba(0,0,0,0.05)]";
