@@ -38,7 +38,7 @@ export function MemberDrawerTeams({
   return (
     <section>
       <div className="flex items-center justify-between mb-2">
-        <h4 className="text-label font-mono uppercase tracking-wider text-text-muted">
+        <h4 className="text-label uppercase tracking-wider text-text-muted">
           Teams
         </h4>
         {canManage && availableTeams.length > 0 && (
@@ -145,7 +145,7 @@ function TeamRow({
         <span className="flex-1 min-w-0 truncate text-small text-text-primary">
           {team.name}
         </span>
-        <span className="shrink-0 text-micro font-mono text-text-muted">
+        <span className="shrink-0 text-micro text-text-muted">
           {grantRows.length === 0
             ? "No scoping"
             : `${grantRows.length} scoped`}

@@ -55,7 +55,7 @@ export function PendingInvitations({
 
   return (
     <section className="rounded-lg border border-warning/30 bg-warning/5 px-3 py-2.5">
-      <h3 className="flex items-center gap-1.5 text-label font-mono uppercase tracking-wider text-text-secondary mb-1.5">
+      <h3 className="flex items-center gap-1.5 text-label uppercase tracking-wider text-text-secondary mb-1.5">
         <Mail size={11} />
         {invitations.length} pending invitation{invitations.length > 1 ? "s" : ""}
       </h3>
@@ -65,7 +65,7 @@ export function PendingInvitations({
           <li key={inv.id} className="py-2 flex items-center justify-between gap-3">
             <div className="min-w-0 flex items-center gap-2 flex-wrap">
               <p className="text-body text-text-primary truncate">{inv.email}</p>
-              <p className="text-label font-mono uppercase tracking-wider text-text-muted">
+              <p className="text-label uppercase tracking-wider text-text-muted">
                 {inv.invitedRole} · sent {formatRelativeTime(inv.createdAt)}
               </p>
               {(inv.teamIds ?? []).map((teamId) => {

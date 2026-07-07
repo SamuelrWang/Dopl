@@ -12,7 +12,7 @@ import {
 } from "../client/api";
 import { DESCRIPTION_MAX } from "@/config";
 import type { KnowledgeEntry } from "../types";
-import { DocEditor, SaveStatusIndicator, type SaveStatus } from "./doc-editor";
+import { DocEditor, SaveStatusIndicator, type SaveStatus } from "@/shared/editor/doc-editor";
 import { ConflictBanner, DocBodySkeleton, reportError } from "./doc-pane-chrome";
 
 const AUTOSAVE_DELAY_MS = 1500;

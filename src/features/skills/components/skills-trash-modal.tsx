@@ -104,11 +104,11 @@ export function SkillsTrashModal({
 
         <div className="mt-2 max-h-[60vh] overflow-y-auto pr-1">
           {isLoading && (
-            <p className="text-xs text-text-secondary">Loading…</p>
+            <p className="text-small text-text-secondary">Loading…</p>
           )}
-          {error && <p className="text-xs text-red-400">{error}</p>}
+          {error && <p className="text-small text-danger">{error}</p>}
           {trash && isEmpty && (
-            <p className="text-xs text-text-secondary py-6 text-center">
+            <p className="text-small text-text-secondary py-6 text-center">
               Trash is empty.
             </p>
           )}
@@ -118,7 +118,7 @@ export function SkillsTrashModal({
               {trash.skills.map((s) => (
                 <TrashRow
                   key={s.id}
-                  icon={<FileCode size={12} className="text-text-secondary/70" />}
+                  icon={<FileCode size={12} className="text-text-muted" />}
                   label={s.name}
                   meta={`Deleted ${formatRelative(s.deletedAt ?? s.updatedAt)}`}
                   onRestore={() => handleRestore("skill", s.id, s.name)}
@@ -131,7 +131,7 @@ export function SkillsTrashModal({
               {trash.files.map((f) => (
                 <TrashRow
                   key={f.id}
-                  icon={<FileText size={12} className="text-violet-300" />}
+                  icon={<FileText size={12} className="text-text-muted" />}
                   label={f.name}
                   meta={`Deleted ${formatRelative(f.deletedAt ?? f.updatedAt)}`}
                   onRestore={() => handleRestore("file", f.id, f.name)}
@@ -154,7 +154,7 @@ function Section({
 }) {
   return (
     <div className="mt-3 first:mt-0">
-      <p className="text-[10px] font-medium text-text-muted uppercase tracking-wider mb-1.5">
+      <p className="text-label font-medium text-text-muted uppercase tracking-wider mb-1.5">
         {title}
       </p>
       <div className="rounded-md border border-border-subtle divide-y divide-border-subtle">
@@ -179,13 +179,13 @@ function TrashRow({
     <div className="flex items-center gap-3 px-3 py-2">
       {icon}
       <div className="flex-1 min-w-0">
-        <p className="text-sm text-text-primary truncate">{label}</p>
-        <p className="text-[11px] text-text-secondary/70">{meta}</p>
+        <p className="text-body text-text-primary truncate">{label}</p>
+        <p className="text-caption text-text-muted">{meta}</p>
       </div>
       <button
         type="button"
         onClick={onRestore}
-        className="flex items-center gap-1 px-2 py-1 rounded-md text-xs text-text-secondary hover:text-text-primary hover:bg-surface-raised-2 cursor-pointer"
+        className="flex items-center gap-1 px-2 py-1 rounded-md text-small text-text-secondary hover:text-text-primary hover:bg-surface-raised-2 cursor-pointer"
       >
         <RotateCcw size={11} />
         Restore

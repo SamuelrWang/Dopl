@@ -8,8 +8,8 @@ recipes in a component. If a recipe you need is missing, add it HERE (globals
 Source of truth: `src/app/globals.css` (`@theme` block + `:root` palette +
 "UI kit" section). Design language: Samuel's study-notes app, verbatim —
 neutral grays, hairline borders, floating bento cards, concave (pressed-in)
-fields and raised 3D buttons. Currently wired: Knowledge (v2) + Ontology.
-Every new page starts on this system.
+fields and raised 3D buttons. Currently wired: Knowledge (v2), Ontology,
+Members, Conversations. Every new page starts on this system.
 
 ## Type scale
 
@@ -91,8 +91,9 @@ tokens; shared atoms in `ontology-bits.tsx` — `SectionBox`, `FIELD_WELL`,
 - **Section box**: 14px-radius `border-border-strong` card; header strip
   `bg-card-surface-subtle px-4 py-1.5` holding a `text-label` uppercase
   title; body `bg-bg-inset` with the concave inset shadow. Implemented as
-  `SectionBox` in ontology-bits — promote to `src/shared/ui` when a second
-  feature needs it.
+  `SectionBox` in `src/shared/ui/section-box.tsx` (promoted when
+  Conversations became the second consumer; `resizable={false}` for
+  static cards).
 - **Pills/chips**: `rounded-full border border-border-strong` +
   `bg-bg-elevated` (raised, on inset bodies) or `bg-bg-inset` (flat, on
   cards), `text-caption`/`text-small` medium.

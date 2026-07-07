@@ -123,7 +123,7 @@ export function AccessTab({
       <table className="w-max min-w-full text-left">
         <thead>
           <tr className="border-b border-border-subtle">
-            <th className="sticky left-0 bg-[var(--card-surface)] px-4 py-2 text-label font-mono uppercase tracking-wider text-text-muted font-normal min-w-[160px]">
+            <th className="sticky left-0 bg-[var(--card-surface)] px-4 py-2 text-label uppercase tracking-wider text-text-muted font-normal min-w-[160px]">
               Team
             </th>
             {ordered.map((r) => (
@@ -131,7 +131,7 @@ export function AccessTab({
                 key={r.resourceId}
                 className="px-3 py-2 font-normal min-w-[130px] align-bottom"
               >
-                <span className="flex items-center gap-1 text-label font-mono uppercase tracking-wider text-text-muted">
+                <span className="flex items-center gap-1 text-label uppercase tracking-wider text-text-muted">
                   {r.resourceType === "knowledge_base" ? (
                     <BookOpen size={10} />
                   ) : (
@@ -145,7 +145,7 @@ export function AccessTab({
             ))}
           </tr>
           <tr className="border-b border-border-subtle">
-            <th className="sticky left-0 bg-[var(--card-surface)] px-4 py-2 text-label font-mono uppercase tracking-wider text-text-secondary/40 font-normal">
+            <th className="sticky left-0 bg-[var(--card-surface)] px-4 py-2 text-label uppercase tracking-wider text-text-secondary/40 font-normal">
               Scope
             </th>
             {ordered.map((r) => (
@@ -160,7 +160,7 @@ export function AccessTab({
                       : "Teams only — click to open to the whole workspace"
                   }
                   className={cn(
-                    "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-label font-mono uppercase tracking-wider border transition-colors",
+                    "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-label uppercase tracking-wider border transition-colors",
                     r.accessMode === "workspace"
                       ? "bg-surface-raised-1 border-border-subtle text-text-muted"
                       : "bg-bg-inset border-border-strong text-text-primary",
@@ -196,7 +196,7 @@ export function AccessTab({
                     style={{ backgroundColor: team.color ?? "#8b5cf6" }}
                   />
                   <span className="truncate max-w-[130px]">{team.name}</span>
-                  <span className="text-micro font-mono text-text-muted">
+                  <span className="text-micro text-text-muted">
                     {team.memberCount}
                   </span>
                 </span>
@@ -210,7 +210,7 @@ export function AccessTab({
                   <td key={r.resourceId} className="px-3 py-2.5">
                     {r.accessMode === "workspace" ? (
                       <span
-                        className="text-micro font-mono text-text-secondary/40"
+                        className="text-micro text-text-secondary/40"
                         title="Workspace-wide — grants don't apply"
                       >
                         —

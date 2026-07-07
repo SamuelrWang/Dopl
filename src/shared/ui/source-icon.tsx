@@ -8,7 +8,7 @@ import {
   NotebookPen,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import type { SourceProvider } from "../source-types";
+import type { SourceProvider } from "@/shared/lib/source-types";
 
 interface ProviderConfig {
   icon: LucideIcon;

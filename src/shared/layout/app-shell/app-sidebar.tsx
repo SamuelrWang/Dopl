@@ -8,6 +8,7 @@ import {
   HelpCircle,
   Home,
   LayoutGrid,
+  MessagesSquare,
   Network,
   Settings,
   SlidersHorizontal,
@@ -24,6 +25,7 @@ type NavSection =
   | "canvas"
   | "knowledge"
   | "skills"
+  | "conversations"
   | "ontology"
   | "configuration"
   | "members";
@@ -33,6 +35,7 @@ const NAV: ReadonlyArray<{ label: string; icon: LucideIcon; section: NavSection 
   { label: "Canvas", icon: LayoutGrid, section: "canvas" },
   { label: "Knowledge", icon: BookOpen, section: "knowledge" },
   { label: "Skills", icon: Sparkles, section: "skills" },
+  { label: "Conversations", icon: MessagesSquare, section: "conversations" },
   { label: "Ontology", icon: Network, section: "ontology" },
   { label: "Configuration", icon: SlidersHorizontal, section: "configuration" },
   { label: "Members", icon: Users, section: "members" },

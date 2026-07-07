@@ -7,6 +7,7 @@ import { findMembership } from "@/features/workspaces/server/repository";
 import { PRIMARY_SKILL_FILE_NAME } from "../types";
 import type {
   ResolvedSkill,
+  SkillUsage,
   ResolvedSkillReference,
   Skill,
   SkillContext,
@@ -32,6 +33,7 @@ import {
   WorkspaceKeyPrivateSkillError,
 } from "./errors";
 import * as repo from "./repository";
+import * as history from "./history";
 import { buildSeedSkills } from "./seed";
 
 /**
@@ -242,6 +244,14 @@ export async function createSkill(
       createdBy: ctx.userId,
       source: ctx.source,
     });
+    await history.recordVersion({
+      ctx,
+      skillId: skill.id,
+      fileId: primaryFile.id,
+      fileName: primaryFile.name,
+      body: primaryFile.body,
+    });
+    await history.recordEvent({ ctx, skillId: skill.id, type: "skill.created" });
     return { skill, primaryFile };
   } catch (fileErr) {
     // Roll back the skill row so the failure doesn't leave a
@@ -320,6 +330,20 @@ export async function updateSkill(
       const fresh = await getSkillBySlug(ctx, slug);
       throw new SkillStaleVersionError(expectedUpdatedAt!, fresh.updatedAt);
     }
+    if (effectiveVisibility === "public") {
+      await history.recordEvent({ ctx, skillId: skill.id, type: "skill.published" });
+    }
+    const changed = (
+      ["name", "description", "whenToUse", "whenNotToUse", "slug", "status"] as const
+    ).filter((k) => patch[k] !== undefined && patch[k] !== skill[k]);
+    if (changed.length > 0) {
+      await history.recordEvent({
+        ctx,
+        skillId: skill.id,
+        type: "skill.updated",
+        detail: { fields: changed },
+      });
+    }
     return saved;
   } catch (err) {
     if (repo.pgErrorCode(err) === "23505" && patch.slug) {
@@ -336,6 +360,7 @@ export async function deleteSkill(
   const skill = await getSkillBySlug(ctx, slug);
   await assertAgentWriteAllowed(ctx, skill);
   await repo.markSkillDeleted(skill.id);
+  await history.recordEvent({ ctx, skillId: skill.id, type: "skill.trashed" });
 }
 
 // ─── File writes ────────────────────────────────────────────────────
@@ -361,8 +386,9 @@ export async function createFile(
   const siblings = await repo.listFilesForSkill(skill.id, { includeBody: false });
   const nextPos =
     siblings.length === 0 ? 1 : Math.max(...siblings.map((f) => f.position)) + 1;
+  let created: SkillFile;
   try {
-    return await repo.insertFile({
+    created = await repo.insertFile({
       workspaceId: ctx.workspaceId,
       skillId: skill.id,
       name: input.name,
@@ -377,6 +403,21 @@ export async function createFile(
     }
     throw err;
   }
+  await history.recordVersion({
+    ctx,
+    skillId: skill.id,
+    fileId: created.id,
+    fileName: created.name,
+    body: created.body,
+  });
+  await history.recordEvent({
+    ctx,
+    skillId: skill.id,
+    type: "file.created",
+    fileId: created.id,
+    detail: { name: created.name },
+  });
+  return created;
 }
 
 export async function writeFile(
@@ -392,6 +433,11 @@ export async function writeFile(
   if (!file) throw new SkillFileNotFoundError(slug, fileName);
   if (expectedUpdatedAt && file.updatedAt !== expectedUpdatedAt) {
     throw new SkillStaleVersionError(expectedUpdatedAt, file.updatedAt);
+  }
+  // No-op saves (autosave echoes, agent re-writes of identical content)
+  // neither touch the row nor mint a version.
+  if (input.body === file.body) {
+    return { file, skill };
   }
   const saved = await repo.updateFileRow(
     file.id,
@@ -410,6 +456,13 @@ export async function writeFile(
       fresh?.updatedAt ?? "concurrent"
     );
   }
+  await history.recordVersion({
+    ctx,
+    skillId: skill.id,
+    fileId: saved.id,
+    fileName: saved.name,
+    body: saved.body,
+  });
   return { file: saved, skill };
 }
 
@@ -433,11 +486,19 @@ export async function renameFile(
   const collision = await repo.findFileByName(skill.id, input.name);
   if (collision) throw new SkillFileConflictError(input.name);
   try {
-    return await repo.updateFileRow(file.id, {
+    const renamed = await repo.updateFileRow(file.id, {
       name: input.name,
       lastEditedBy: ctx.userId,
       lastEditedSource: ctx.source,
     });
+    await history.recordEvent({
+      ctx,
+      skillId: skill.id,
+      type: "file.renamed",
+      fileId: file.id,
+      detail: { from: currentName, to: input.name },
+    });
+    return renamed;
   } catch (err) {
     if (repo.pgErrorCode(err) === "23505") {
       throw new SkillFileConflictError(input.name);
@@ -459,6 +520,13 @@ export async function deleteFile(
   const file = await repo.findFileByName(skill.id, fileName);
   if (!file) throw new SkillFileNotFoundError(slug, fileName);
   await repo.markFileDeleted(file.id);
+  await history.recordEvent({
+    ctx,
+    skillId: skill.id,
+    type: "file.trashed",
+    fileId: file.id,
+    detail: { name: file.name },
+  });
 }
 
 // ─── Trash ──────────────────────────────────────────────────────────
@@ -481,7 +549,9 @@ export async function restoreSkill(
   const skill = await repo.findSkillById(ctx.workspaceId, id, true);
   if (!skill) throw new SkillNotFoundError(id);
   await assertAgentWriteAllowed(ctx, skill);
-  return repo.restoreSkillRow(id);
+  const restored = await repo.restoreSkillRow(id);
+  await history.recordEvent({ ctx, skillId: skill.id, type: "skill.restored" });
+  return restored;
 }
 
 export async function restoreSkillFile(
@@ -496,7 +566,15 @@ export async function restoreSkillFile(
   const skill = await repo.findSkillById(ctx.workspaceId, file.skillId, true);
   if (!skill) throw new SkillNotFoundError(file.skillId);
   await assertAgentWriteAllowed(ctx, skill);
-  return repo.restoreFileRow(id);
+  const restored = await repo.restoreFileRow(id);
+  await history.recordEvent({
+    ctx,
+    skillId: skill.id,
+    type: "file.restored",
+    fileId: restored.id,
+    detail: { name: restored.name },
+  });
+  return restored;
 }
 
 /**
@@ -580,6 +658,148 @@ export async function assertAgentWriteAllowed(
   }
 }
 
+// ─── Duplicate ──────────────────────────────────────────────────────
+
+/**
+ * Fork a skill: copies metadata + every file into a new private draft
+ * ("<name> (copy)"). Composed from createSkill/createFile so history
+ * records the fork like any other authored skill.
+ */
+export async function duplicateSkill(
+  ctx: SkillContext,
+  slug: string
+): Promise<{ skill: Skill; primaryFile: SkillFile }> {
+  const source = await getSkillBySlug(ctx, slug);
+  const files = await repo.listFilesForSkill(source.id);
+  const primary = files.find((f) => f.name === PRIMARY_SKILL_FILE_NAME);
+
+  const created = await createSkill(ctx, {
+    name: `${source.name} (copy)`,
+    description: source.description,
+    whenToUse: source.whenToUse,
+    whenNotToUse: source.whenNotToUse,
+    status: "draft",
+    body: primary?.body ?? "",
+  });
+  for (const file of files) {
+    if (file.name === PRIMARY_SKILL_FILE_NAME) continue;
+    await createFile(ctx, created.skill.slug, {
+      name: file.name,
+      body: file.body,
+    });
+  }
+  return created;
+}
+
+// ─── Insights ───────────────────────────────────────────────────────
+
+/**
+ * Agent read activity from mcp_events (workspace-scoped via the
+ * workspace_id column added in the phase-3 migration; rows logged
+ * before that migration have NULL workspace_id and are excluded).
+ * Matches both the skill read and its file reads.
+ */
+export async function getSkillUsage(
+  ctx: SkillContext,
+  slug: string
+): Promise<SkillUsage> {
+  const skill = await getSkillBySlug(ctx, slug);
+  const db = supabaseAdmin();
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const exact = `GET /api/skills/${skill.slug}`;
+  const prefix = `GET /api/skills/${skill.slug}/%`;
+  const scoped = () =>
+    db
+      .from("mcp_events")
+      .select("created_at", { count: "exact" })
+      .eq("workspace_id", ctx.workspaceId)
+      .or(`endpoint.eq.${exact},endpoint.like.${prefix}`);
+  const [countRes, lastRes] = await Promise.all([
+    scoped().gte("created_at", since).limit(1),
+    scoped().order("created_at", { ascending: false }).limit(1),
+  ]);
+  if (countRes.error) throw countRes.error;
+  if (lastRes.error) throw lastRes.error;
+  const last = (lastRes.data as Array<{ created_at: string }> | null)?.[0];
+  return {
+    count30d: countRes.count ?? 0,
+    lastUsedAt: last?.created_at ?? null,
+  };
+}
+
+/** Clusters + workflows this skill is attached to. */
+export async function getSkillUsedBy(ctx: SkillContext, slug: string) {
+  const skill = await getSkillBySlug(ctx, slug);
+  return repo.listSkillUsedBy(ctx.workspaceId, skill.id);
+}
+
+// ─── History (versions + audit timeline) ───────────────────────────
+
+/** Version metadata + events for the history panel, newest first. */
+export async function getSkillHistory(
+  ctx: SkillContext,
+  slug: string,
+  opts: { limit?: number } = {}
+) {
+  const skill = await getSkillBySlug(ctx, slug);
+  return history.listHistory(ctx, skill.id, opts);
+}
+
+/** One snapshot with its full body (for the diff view). */
+export async function getFileVersion(ctx: SkillContext, versionId: string) {
+  const version = await history.findVersionWithBody(ctx, versionId);
+  if (!version) {
+    throw new SkillFileNotFoundError("(version)", versionId);
+  }
+  // Visibility check rides on the parent skill: if the caller can't see
+  // the skill, the version doesn't exist for them either.
+  const skill = await repo.findSkillById(ctx.workspaceId, version.skillId);
+  if (!skill || !canSeeSkill(ctx, skill)) {
+    throw new SkillFileNotFoundError("(version)", versionId);
+  }
+  return version;
+}
+
+/**
+ * Roll a file back to a snapshot. Restore never rewrites history: it
+ * writes the old body as a NEW save (minting a fresh version) and logs
+ * a `file.rolled_back` event. No-ops when the file already matches.
+ */
+export async function restoreFileVersion(
+  ctx: SkillContext,
+  versionId: string
+): Promise<SkillFile> {
+  const version = await getFileVersion(ctx, versionId);
+  const skill = await repo.findSkillById(ctx.workspaceId, version.skillId);
+  if (!skill) throw new SkillNotFoundError(version.skillId);
+  await assertAgentWriteAllowed(ctx, skill);
+  // findFileById excludes trashed files — restoring into a trashed file
+  // 404s (restore the file from trash first).
+  const file = await repo.findFileById(version.fileId);
+  if (!file) throw new SkillFileNotFoundError(skill.slug, version.fileName);
+  if (file.body === version.body) return file;
+  const saved = await repo.updateFileRow(file.id, {
+    body: version.body,
+    lastEditedBy: ctx.userId,
+    lastEditedSource: ctx.source,
+  });
+  await history.recordVersion({
+    ctx,
+    skillId: skill.id,
+    fileId: saved.id,
+    fileName: saved.name,
+    body: saved.body,
+  });
+  await history.recordEvent({
+    ctx,
+    skillId: skill.id,
+    type: "file.rolled_back",
+    fileId: saved.id,
+    detail: { versionId, fileName: version.fileName },
+  });
+  return saved;
+}
+
 // ─── Seeding ────────────────────────────────────────────────────────
 
 export async function seedWorkspace(
@@ -598,9 +818,6 @@ export async function seedWorkspace(
       whenToUse: fixture.whenToUse,
       whenNotToUse: fixture.whenNotToUse,
       connectors: fixture.connectors,
-      examples: fixture.examples,
-      recentRuns: fixture.recentRuns,
-      totalInvocations: fixture.totalInvocations,
       status: fixture.status,
       // Seeded fixtures are starter content — public so every member
       // can see and run them. Owner-explicit `createSkill` defaults

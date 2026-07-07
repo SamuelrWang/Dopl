@@ -141,7 +141,7 @@ export function MembersTab({
             ...teams.map((t) => ({ value: t.id, label: t.name })),
           ]}
         />
-        <span className="ml-auto text-label font-mono uppercase tracking-wider text-text-muted">
+        <span className="ml-auto text-caption text-text-muted">
           {visibleMembers.length} of {members.length}
         </span>
       </div>
@@ -168,16 +168,16 @@ export function MembersTab({
         <div
           className={`${MEMBER_ROW_GRID} border-b border-border-default bg-surface-raised-1 !py-2.5`}
         >
-          <span className="text-label font-mono uppercase tracking-wider text-text-muted">
+          <span className="text-label uppercase tracking-wider text-text-muted">
             Member
           </span>
-          <span className="text-label font-mono uppercase tracking-wider text-text-muted">
+          <span className="text-label uppercase tracking-wider text-text-muted">
             Role
           </span>
-          <span className="text-label font-mono uppercase tracking-wider text-text-muted">
+          <span className="text-label uppercase tracking-wider text-text-muted">
             Teams
           </span>
-          <span className="text-label font-mono uppercase tracking-wider text-text-muted">
+          <span className="text-label uppercase tracking-wider text-text-muted">
             Last active
           </span>
           <span />

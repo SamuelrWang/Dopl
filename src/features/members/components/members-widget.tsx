@@ -54,7 +54,7 @@ export function MembersWidget({ workspaceSlug }: Props) {
             ))}
           </div>
           {remaining > 0 && (
-            <span className="ml-3 text-small text-text-tertiary font-mono">
+            <span className="ml-3 text-small text-text-tertiary">
               +{remaining} more
             </span>
           )}

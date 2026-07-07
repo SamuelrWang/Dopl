@@ -207,7 +207,7 @@ async function opGet(client: DoplClient, slug: string): Promise<ToolResponse> {
       `id: \`${skill.id}\` · status: ${skill.status} · visibility: ${skill.visibility} · agent-write ${skill.agentWriteEnabled ? "on" : "off"}`,
     );
     lines.push(
-      `invocations: ${skill.totalInvocations} · last edited by ${skill.lastEditedSource} · updated ${skill.updatedAt}`,
+      `last edited by ${skill.lastEditedSource} · updated ${skill.updatedAt}`,
     );
     lines.push(`When to use: ${skill.whenToUse}`);
     if (skill.whenNotToUse) {

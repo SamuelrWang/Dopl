@@ -163,7 +163,7 @@
   border: none;
   background: none;
   border-radius: 7px;
-  font-size: var(--text-small);
+  font-size: var(--text-caption);
   font-weight: 500;
   color: var(--kv-text-2);
   cursor: pointer;

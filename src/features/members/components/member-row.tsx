@@ -120,13 +120,13 @@ export function MemberRow({
           <TeamChip key={t.teamId} name={t.name} color={t.color} />
         ))}
         {extraChips > 0 && (
-          <span className="text-micro font-mono text-text-muted">
+          <span className="text-micro text-text-muted">
             +{extraChips}
           </span>
         )}
       </div>
 
-      <div className="flex items-center gap-2 text-caption font-mono text-text-muted">
+      <div className="flex items-center gap-2 text-caption text-text-muted">
         <span
           className={cn("h-1.5 w-1.5 shrink-0 rounded-full", DOT_STYLE[activity.dot])}
         />

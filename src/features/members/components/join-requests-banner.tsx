@@ -92,7 +92,7 @@ export function JoinRequestsBanner({ workspaceSlug, enabled, onResolved }: Props
 
   return (
     <section className="rounded-lg border border-border-strong bg-card-surface-subtle px-3 py-2.5">
-      <h3 className="flex items-center gap-1.5 text-label font-mono uppercase tracking-wider text-text-secondary mb-1.5">
+      <h3 className="flex items-center gap-1.5 text-label uppercase tracking-wider text-text-secondary mb-1.5">
         <UserPlus size={11} />
         {requests.length} join request{requests.length > 1 ? "s" : ""} awaiting approval
       </h3>
@@ -113,7 +113,7 @@ export function JoinRequestsBanner({ workspaceSlug, enabled, onResolved }: Props
               <p className="text-body text-text-primary truncate">
                 {r.displayName || r.email || r.userId}
               </p>
-              <p className="text-label font-mono uppercase tracking-wider text-text-muted">
+              <p className="text-label uppercase tracking-wider text-text-muted">
                 {r.email && r.displayName ? `${r.email} · ` : ""}requested{" "}
                 {formatRelativeTime(r.requestedAt)}
               </p>

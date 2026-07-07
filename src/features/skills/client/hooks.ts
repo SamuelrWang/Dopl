@@ -39,11 +39,11 @@ function useFetch<T>(
   // Reset cached `data` + `error` when the cache key changes so the
   // previous workspace's skills don't leak into a new workspace's
   // sidebar/panel. Tick-driven refetches (same key) keep their value
-  // for the no-flicker behavior. Mirrors the same fix in
-  // src/features/knowledge/client/hooks.ts.
-  const lastKeyRef = useRef(key);
-  if (lastKeyRef.current !== key) {
-    lastKeyRef.current = key;
+  // for the no-flicker behavior. Uses React's sanctioned
+  // adjust-state-during-render pattern (no ref access in render).
+  const [lastKey, setLastKey] = useState(key);
+  if (lastKey !== key) {
+    setLastKey(key);
     setData(null);
     setError(null);
   }

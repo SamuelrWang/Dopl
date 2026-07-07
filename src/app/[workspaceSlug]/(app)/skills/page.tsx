@@ -14,7 +14,6 @@ import {
   buildSkillContext,
   listSkills,
 } from "@/features/skills/server/service";
-import { AppPanel } from "@/shared/layout/app-shell";
 import { SkillsList } from "@/features/skills/components/skills-list";
 
 export const dynamic = "force-dynamic";
@@ -38,12 +37,10 @@ export default async function SkillsIndexPage({ params }: PageProps) {
   const skills = await listSkills(ctx);
 
   return (
-    <AppPanel scroll={false}>
-      <SkillsList
-        workspaceSlug={workspaceSegment(workspace)}
-        workspaceId={workspace.id}
-        skills={skills}
-      />
-    </AppPanel>
+    <SkillsList
+      workspaceSlug={workspaceSegment(workspace)}
+      workspaceId={workspace.id}
+      skills={skills}
+    />
   );
 }

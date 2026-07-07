@@ -248,7 +248,7 @@ function SectionLabel({
   return (
     <h4
       className={cn(
-        "text-label font-mono uppercase tracking-wider text-text-muted mb-2",
+        "text-label uppercase tracking-wider text-text-muted mb-2",
         className
       )}
     >
@@ -267,7 +267,7 @@ function AccessSection({
   if (rows.length === 0) return null;
   return (
     <div className="mb-4 last:mb-0">
-      <h5 className="text-label font-mono uppercase tracking-wider text-text-muted mb-1.5">
+      <h5 className="text-label uppercase tracking-wider text-text-muted mb-1.5">
         {label}
       </h5>
       <ul className="rounded-lg border border-border-subtle divide-y divide-border-subtle overflow-hidden">

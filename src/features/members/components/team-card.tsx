@@ -81,7 +81,7 @@ export function TeamCard({
       </div>
 
       <div className="border-t border-border-subtle pt-2.5 mt-auto">
-        <h4 className="text-label font-mono uppercase tracking-wider text-text-muted mb-1.5">
+        <h4 className="text-label uppercase tracking-wider text-text-muted mb-1.5">
           Resource access
         </h4>
         {shownGrants.length === 0 && (
@@ -99,7 +99,7 @@ export function TeamCard({
           ))}
         </ul>
         {grants.length > GRANT_PREVIEW_MAX && (
-          <p className="mt-1 text-micro font-mono text-text-muted">
+          <p className="mt-1 text-micro text-text-muted">
             +{grants.length - GRANT_PREVIEW_MAX} more
           </p>
         )}

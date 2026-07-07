@@ -57,7 +57,7 @@ function DrawerContent({
         data-slot="drawer-content"
         className={cn(
           "fixed inset-y-0 right-0 z-50 flex h-full w-full max-w-md flex-col",
-          "bg-modal-surface border-l border-border-strong text-text-primary text-sm",
+          "bg-modal-surface border-l border-border-strong text-text-primary text-body",
           "outline-none duration-200",
           "data-open:animate-in data-open:slide-in-from-right",
           "data-closed:animate-out data-closed:slide-out-to-right",
@@ -103,7 +103,7 @@ function DrawerTitle({ className, ...props }: DialogPrimitive.Title.Props) {
   return (
     <DialogPrimitive.Title
       data-slot="drawer-title"
-      className={cn("text-base leading-none font-medium", className)}
+      className={cn("text-title leading-none font-medium", className)}
       {...props}
     />
   )

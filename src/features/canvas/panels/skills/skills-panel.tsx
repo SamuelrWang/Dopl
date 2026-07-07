@@ -226,9 +226,12 @@ function SkillRow({ skill, onClick }: { skill: Skill; onClick: () => void }) {
             )}
           </div>
           <div className="flex shrink-0 flex-col items-end gap-2">
-            <div className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-text-muted">
-              <Play size={9} />
-              {skill.totalInvocations.toLocaleString()} runs
+            <div className="text-micro uppercase tracking-wider text-text-muted">
+              {skill.lastEditedSource === "agent" ? "agent-edited" : "edited"}{" "}
+              {new Date(skill.updatedAt).toLocaleDateString(undefined, {
+                month: "short",
+                day: "numeric",
+              })}
             </div>
           </div>
         </div>

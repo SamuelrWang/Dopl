@@ -2,23 +2,20 @@ import "server-only";
 import type {
   Skill,
   SkillConnector,
-  SkillExample,
   SkillFile,
-  SkillRun,
   SkillStatus,
   SkillWriteSource,
 } from "../types";
 
 /**
  * Row shapes for the `skills` and `skill_files` tables and the
- * snake_case → camelCase mappers consumed by the repository. JSONB
- * columns (`connectors`, `examples`, `recent_runs`) come back as
- * parsed arrays from the Supabase client; we cast through the row
- * interfaces below.
+ * snake_case → camelCase mappers consumed by the repository. The
+ * `connectors` JSONB column comes back as a parsed array from the
+ * Supabase client; we cast through the row interfaces below.
  */
 
 export const SKILL_COLS =
-  "id, workspace_id, slug, public_id, name, description, when_to_use, when_not_to_use, connectors, examples, recent_runs, total_invocations, status, agent_write_enabled, visibility, created_by, last_edited_by, last_edited_source, created_at, updated_at, deleted_at";
+  "id, workspace_id, slug, public_id, name, description, when_to_use, when_not_to_use, connectors, status, agent_write_enabled, visibility, created_by, last_edited_by, last_edited_source, created_at, updated_at, deleted_at";
 
 /**
  * Lighter projection for `skill_list` and the index page row — drops
@@ -26,7 +23,7 @@ export const SKILL_COLS =
  * camelCase domain shape stays consistent.
  */
 export const SKILL_SUMMARY_COLS =
-  "id, workspace_id, slug, public_id, name, description, when_to_use, when_not_to_use, status, agent_write_enabled, visibility, total_invocations, created_by, last_edited_by, last_edited_source, created_at, updated_at, deleted_at";
+  "id, workspace_id, slug, public_id, name, description, when_to_use, when_not_to_use, status, agent_write_enabled, visibility, created_by, last_edited_by, last_edited_source, created_at, updated_at, deleted_at";
 
 export const SKILL_FILE_COLS =
   "id, workspace_id, skill_id, name, body, position, created_by, last_edited_by, last_edited_source, created_at, updated_at, deleted_at";
@@ -44,9 +41,6 @@ export interface SkillRow {
   when_to_use: string;
   when_not_to_use: string | null;
   connectors: SkillConnector[];
-  examples: SkillExample[];
-  recent_runs: SkillRun[];
-  total_invocations: number;
   status: string;
   agent_write_enabled: boolean;
   visibility: "public" | "private";
@@ -58,10 +52,7 @@ export interface SkillRow {
   deleted_at: string | null;
 }
 
-export type SkillSummaryRow = Omit<
-  SkillRow,
-  "connectors" | "examples" | "recent_runs"
->;
+export type SkillSummaryRow = Omit<SkillRow, "connectors">;
 
 export interface SkillFileRow {
   id: string;
@@ -91,9 +82,6 @@ export function mapSkillRow(row: SkillRow): Skill {
     whenToUse: row.when_to_use,
     whenNotToUse: row.when_not_to_use,
     connectors: Array.isArray(row.connectors) ? row.connectors : [],
-    examples: Array.isArray(row.examples) ? row.examples : [],
-    recentRuns: Array.isArray(row.recent_runs) ? row.recent_runs : [],
-    totalInvocations: row.total_invocations,
     status: row.status as SkillStatus,
     agentWriteEnabled: row.agent_write_enabled,
     visibility: row.visibility,
@@ -107,12 +95,7 @@ export function mapSkillRow(row: SkillRow): Skill {
 }
 
 export function mapSkillSummaryRow(row: SkillSummaryRow): Skill {
-  return mapSkillRow({
-    ...row,
-    connectors: [],
-    examples: [],
-    recent_runs: [],
-  });
+  return mapSkillRow({ ...row, connectors: [] });
 }
 
 export function mapSkillFileRow(row: SkillFileRow): SkillFile {

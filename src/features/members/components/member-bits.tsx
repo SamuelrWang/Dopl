@@ -35,7 +35,7 @@ export function RolePill({ role }: { role: MemberRole }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded border px-1.5 py-0.5 font-mono text-label uppercase tracking-wider",
+        "inline-flex items-center rounded border px-1.5 py-0.5 text-label uppercase tracking-wider",
         ROLE_STYLE[role]
       )}
     >
@@ -68,7 +68,7 @@ export function RoleSelect({
         aria-haspopup="listbox"
         aria-expanded={open}
         className={cn(
-          "inline-flex items-center gap-1 rounded border px-1.5 py-0.5 font-mono text-label uppercase tracking-wider transition-colors",
+          "inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-label uppercase tracking-wider transition-colors",
           ROLE_STYLE[value],
           disabled
             ? "cursor-not-allowed opacity-60"

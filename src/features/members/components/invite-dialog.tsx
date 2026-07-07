@@ -255,7 +255,7 @@ export function InviteDialog({
         )}
       >
         <div className="flex flex-col items-center text-center gap-1.5 pt-2">
-          <DialogTitle className="text-text-primary text-lg">Add members</DialogTitle>
+          <DialogTitle className="text-text-primary">Add members</DialogTitle>
           <p className="text-body text-text-tertiary">
             Type or paste in emails below, separated by commas
           </p>

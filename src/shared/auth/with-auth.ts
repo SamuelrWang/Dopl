@@ -223,6 +223,14 @@ export function withMcpAccess(
 
     const endpoint = `${request.method} ${request.nextUrl.pathname}`;
     const toolName = request.headers.get("x-mcp-tool") || action;
+    // Workspace attribution — the loopback always sends the workspace
+    // UUID; ignore anything that isn't one (slugs, garbage).
+    const rawWorkspace = request.headers.get("x-workspace-id");
+    const eventWorkspaceId =
+      rawWorkspace &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawWorkspace)
+        ? rawWorkspace
+        : null;
     const queryParams = Object.fromEntries(request.nextUrl.searchParams.entries());
     let argsPayload: unknown = Object.keys(queryParams).length > 0 ? queryParams : null;
     if (request.method !== "GET" && request.method !== "DELETE") {
@@ -242,6 +250,7 @@ export function withMcpAccess(
       const response = NextResponse.json(body, { status: 402 });
       logMcpEvent({
         userId: ctx.userId,
+        workspaceId: eventWorkspaceId,
         agentTokenId: ctx.agentTokenId ?? null,
         toolName,
         endpoint,
@@ -263,6 +272,7 @@ export function withMcpAccess(
       const message = err instanceof Error ? err.message : String(err);
       logMcpEvent({
         userId: ctx.userId,
+        workspaceId: eventWorkspaceId,
         agentTokenId: ctx.agentTokenId ?? null,
         toolName,
         endpoint,
@@ -302,6 +312,7 @@ export function withMcpAccess(
 
     logMcpEvent({
       userId: ctx.userId,
+      workspaceId: eventWorkspaceId,
       agentTokenId: ctx.agentTokenId ?? null,
       toolName,
       endpoint,

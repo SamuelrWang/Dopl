@@ -104,7 +104,7 @@ export function OntologyView({ workspaceId, workspaceSegment, initialClusterSlug
                 type="button"
                 onClick={() => selectCluster(c.id)}
                 className={cn(
-                  "flex h-6 items-center gap-1.5 rounded-[6px] px-2.5 text-small font-medium transition-colors",
+                  "flex h-6 items-center gap-1.5 rounded-[6px] px-2.5 text-caption font-medium transition-colors",
                   c.id === cluster.id
                     ? "raised-tab text-text-primary"
                     : "text-text-secondary hover:text-text-primary"

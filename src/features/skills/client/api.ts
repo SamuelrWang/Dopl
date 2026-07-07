@@ -6,7 +6,13 @@
  * header passthrough, JSON-only request/response.
  */
 
-import type { ResolvedSkill, Skill, SkillFile } from "@/features/skills/types";
+import type {
+  ResolvedSkill,
+  Skill,
+  SkillEvent,
+  SkillFile,
+  SkillFileVersion,
+} from "@/features/skills/types";
 
 export class SkillApiError extends Error {
   readonly status: number;
@@ -128,28 +134,7 @@ export async function updateSkill(
   return data.skill;
 }
 
-export async function deleteSkill(
-  slug: string,
-  workspaceId?: string
-): Promise<void> {
-  await request<void>(`/api/skills/${enc(slug)}`, {
-    method: "DELETE",
-    workspaceId,
-  });
-}
-
 // ─── Skill files ────────────────────────────────────────────────────
-
-export async function listSkillFiles(
-  slug: string,
-  workspaceId?: string
-): Promise<SkillFile[]> {
-  const data = await request<{ files: SkillFile[] }>(
-    `/api/skills/${enc(slug)}/files`,
-    { workspaceId }
-  );
-  return data.files;
-}
 
 export async function readSkillFile(
   slug: string,
@@ -248,13 +233,53 @@ export async function restoreSkillFile(
   return data.file;
 }
 
-export async function purgeSkillsTrash(
-  beforeIso: string,
+// ─── History (versions + audit timeline) ────────────────────────────
+
+export interface SkillHistoryPayload {
+  versions: SkillFileVersion[];
+  events: SkillEvent[];
+}
+
+export async function fetchSkillHistory(
+  slug: string,
   workspaceId?: string
-): Promise<{ deleted: number }> {
-  return request<{ deleted: number }>("/api/skills/trash/purge", {
-    method: "POST",
-    body: { beforeIso },
-    workspaceId,
-  });
+): Promise<SkillHistoryPayload> {
+  return request<SkillHistoryPayload>(
+    `/api/skills/${enc(slug)}/history`,
+    { workspaceId }
+  );
+}
+
+export async function fetchSkillVersion(
+  versionId: string,
+  workspaceId?: string
+): Promise<SkillFileVersion & { body: string }> {
+  const data = await request<{ version: SkillFileVersion & { body: string } }>(
+    `/api/skills/versions/${enc(versionId)}`,
+    { workspaceId }
+  );
+  return data.version;
+}
+
+export async function restoreSkillVersion(
+  versionId: string,
+  workspaceId?: string
+): Promise<SkillFile> {
+  const data = await request<{ file: SkillFile }>(
+    `/api/skills/versions/${enc(versionId)}/restore`,
+    { method: "POST", workspaceId }
+  );
+  return data.file;
+}
+
+// ─── Duplicate ──────────────────────────────────────────────────────
+
+export async function duplicateSkill(
+  slug: string,
+  workspaceId?: string
+): Promise<{ skill: Skill; primaryFile: SkillFile }> {
+  return request<{ skill: Skill; primaryFile: SkillFile }>(
+    `/api/skills/${enc(slug)}/duplicate`,
+    { method: "POST", workspaceId }
+  );
 }

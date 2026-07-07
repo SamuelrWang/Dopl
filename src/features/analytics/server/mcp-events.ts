@@ -17,6 +17,8 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
 
 export interface McpEventInput {
   userId: string | null;
+  /** From the x-workspace-id header the MCP loopback always sends. */
+  workspaceId: string | null;
   agentTokenId: string | null;
   toolName: string;
   endpoint: string;
@@ -77,6 +79,7 @@ export async function logMcpEvent(event: McpEventInput): Promise<void> {
       // the insert is valid both before and after the api_keys drop migration.
       api_key_id: null,
       user_id: event.userId,
+      workspace_id: event.workspaceId,
       tool_name: event.toolName,
       endpoint: event.endpoint,
       arguments: truncate(event.arguments) ?? null,

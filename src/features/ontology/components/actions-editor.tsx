@@ -3,9 +3,10 @@
 import { useState } from "react";
 import { Plus, X } from "lucide-react";
 import type { Dispatch } from "react";
+import { SectionBox } from "@/shared/ui/section-box";
 import type { GraphAction } from "../graph-state";
 import type { ObjectMethod, OntologyObject } from "../types";
-import { FIELD_WELL, SectionBox } from "./ontology-bits";
+import { FIELD_WELL } from "./ontology-bits";
 
 /**
  * Actions section — the object's methods. Name/description edit in

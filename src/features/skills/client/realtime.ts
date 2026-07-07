@@ -71,10 +71,7 @@ export function useSkillsRealtime(
         activeChannel = null;
       }
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const chan = supabase.channel(
-        `skills-realtime-${wsId}-${instanceId}`
-      ) as any;
+      const chan = supabase.channel(`skills-realtime-${wsId}-${instanceId}`);
 
       const channel = chan
         .on(

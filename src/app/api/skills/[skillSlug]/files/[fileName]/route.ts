@@ -3,7 +3,7 @@ import { withWorkspaceAuth, type WorkspaceAuthContext } from "@/shared/auth/with
 import { parseJson } from "@/shared/api/parse-json";
 import { HttpError } from "@/shared/lib/http-error";
 import { skillUrl } from "@/shared/lib/url/resource-url";
-import { toSkillErrorResponse } from "@/shared/api/skill-route";
+import { requireSkillSlug, toSkillErrorResponse } from "@/shared/api/skill-route";
 import {
   buildSkillContext,
   deleteFile,
@@ -15,16 +15,7 @@ import {
   SkillFileNameSchema,
   SkillFileRenameSchema,
   SkillFileWriteSchema,
-  SkillSlugSchema,
 } from "@/features/skills/schema";
-
-function requireSlug(auth: WorkspaceAuthContext): string {
-  const raw = auth.params?.skillSlug;
-  if (!raw) throw HttpError.badRequest("skillSlug is required");
-  const result = SkillSlugSchema.safeParse(raw);
-  if (!result.success) throw HttpError.badRequest("Invalid skill slug");
-  return result.data;
-}
 
 function requireFileName(auth: WorkspaceAuthContext): string {
   const raw = auth.params?.fileName;
@@ -38,7 +29,7 @@ function requireFileName(auth: WorkspaceAuthContext): string {
 async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const ctx = buildSkillContext(auth);
-    const file = await readFile(ctx, requireSlug(auth), requireFileName(auth));
+    const file = await readFile(ctx, requireSkillSlug(auth.params), requireFileName(auth));
     return NextResponse.json({ file });
   } catch (err) {
     return toSkillErrorResponse(err);
@@ -56,7 +47,7 @@ async function handlePut(request: NextRequest, auth: WorkspaceAuthContext) {
       request.headers.get("x-updated-at") ?? undefined;
     const { file, skill } = await writeFile(
       ctx,
-      requireSlug(auth),
+      requireSkillSlug(auth.params),
       requireFileName(auth),
       input,
       expectedUpdatedAt
@@ -78,7 +69,7 @@ async function handlePatch(request: NextRequest, auth: WorkspaceAuthContext) {
     const input = await parseJson(request, SkillFileRenameSchema);
     const file = await renameFile(
       ctx,
-      requireSlug(auth),
+      requireSkillSlug(auth.params),
       requireFileName(auth),
       input
     );
@@ -91,7 +82,7 @@ async function handlePatch(request: NextRequest, auth: WorkspaceAuthContext) {
 async function handleDelete(_request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const ctx = buildSkillContext(auth);
-    await deleteFile(ctx, requireSlug(auth), requireFileName(auth));
+    await deleteFile(ctx, requireSkillSlug(auth.params), requireFileName(auth));
     return new NextResponse(null, { status: 204 });
   } catch (err) {
     return toSkillErrorResponse(err);

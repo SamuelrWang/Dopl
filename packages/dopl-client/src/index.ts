@@ -63,9 +63,7 @@ export type {
   ResolvedSkillReference,
   Skill,
   SkillConnector,
-  SkillExample,
   SkillProvider,
-  SkillRun,
   SkillStatus,
   SkillWriteSource,
 } from "./skill-types.js";

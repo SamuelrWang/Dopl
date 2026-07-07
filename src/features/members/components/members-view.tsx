@@ -101,7 +101,7 @@ export function MembersView({ workspaceSlug, currentUserId, myRole }: Props) {
               type="button"
               onClick={() => setTab(key)}
               className={cn(
-                "flex h-6 items-center gap-1.5 rounded-[6px] px-2.5 text-small font-medium transition-colors",
+                "flex h-6 items-center gap-1.5 rounded-[6px] px-2.5 text-caption font-medium transition-colors",
                 tab === key
                   ? "raised-tab text-text-primary"
                   : "text-text-secondary hover:text-text-primary"

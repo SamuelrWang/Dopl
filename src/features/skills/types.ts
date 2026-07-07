@@ -9,27 +9,11 @@
  * snake_case row shape lives in `server/dto.ts`.
  */
 
-import type { SourceProvider, SourceConnection } from "@/features/knowledge/source-types";
+import type { SourceProvider, SourceConnection } from "@/shared/lib/source-types";
 
 export type SkillStatus = "active" | "draft";
 
 export type SkillWriteSource = "user" | "agent";
-
-export interface SkillExample {
-  id: string;
-  title: string;
-  input: string;
-  output: string;
-}
-
-export interface SkillRun {
-  id: string;
-  invokedBy: string;
-  invokedAt: string;
-  durationMs: number;
-  status: "success" | "error";
-  summary: string;
-}
 
 export interface SkillConnector extends SourceConnection {
   /** Human-readable note about why this skill calls this connector. */
@@ -53,9 +37,6 @@ export interface Skill {
   whenToUse: string;
   whenNotToUse: string | null;
   connectors: SkillConnector[];
-  examples: SkillExample[];
-  recentRuns: SkillRun[];
-  totalInvocations: number;
   status: SkillStatus;
   agentWriteEnabled: boolean;
   visibility: Visibility;
@@ -87,6 +68,53 @@ export interface SkillFile {
   deletedAt: string | null;
 }
 
+/**
+ * One append-only snapshot of a file body, taken after every content
+ * save (user or agent). Metadata shape — the body itself is fetched
+ * separately by version id (it can be large; lists never carry it).
+ * `fileName` is denormalized at snapshot time so history stays legible
+ * across renames.
+ */
+export interface SkillFileVersion {
+  id: string;
+  skillId: string;
+  fileId: string;
+  fileName: string;
+  authorId: string | null;
+  source: SkillWriteSource;
+  createdAt: string;
+  bodyBytes: number;
+}
+
+export type SkillEventType =
+  | "skill.created"
+  | "skill.updated"
+  | "skill.published"
+  | "skill.trashed"
+  | "skill.restored"
+  | "file.created"
+  | "file.renamed"
+  | "file.trashed"
+  | "file.restored"
+  | "file.rolled_back";
+
+/**
+ * One structural change in a skill's audit timeline. Content edits are
+ * NOT events — they're `SkillFileVersion` rows; the history UI merges
+ * both streams by `createdAt`.
+ */
+export interface SkillEvent {
+  id: string;
+  skillId: string;
+  fileId: string | null;
+  type: SkillEventType;
+  /** Event-specific payload, e.g. `{from, to}` for renames or `{fields}` for metadata updates. */
+  detail: Record<string, unknown>;
+  authorId: string | null;
+  source: SkillWriteSource;
+  createdAt: string;
+}
+
 export const PRIMARY_SKILL_FILE_NAME = "SKILL.md";
 
 /**
@@ -114,7 +142,6 @@ export interface SkillSummary {
   status: SkillStatus;
   agentWriteEnabled: boolean;
   visibility: Visibility;
-  totalInvocations: number;
   updatedAt: string;
 }
 
@@ -157,3 +184,16 @@ export interface SkillContext {
 }
 
 export type { SourceProvider };
+
+/** Clusters + workflows a skill is attached to (detail-page insights). */
+export interface SkillUsedBy {
+  clusters: Array<{ id: string; name: string; slug: string }>;
+  workflows: Array<{ id: string; name: string }>;
+}
+
+/** Agent read activity for a skill, derived from mcp_events. */
+export interface SkillUsage {
+  /** MCP reads in the last 30 days (workspace-scoped attribution). */
+  count30d: number;
+  lastUsedAt: string | null;
+}

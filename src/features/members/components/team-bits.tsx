@@ -98,7 +98,7 @@ export function ScopePill({
 }) {
   const key = level ?? "none";
   const base = cn(
-    "inline-flex items-center px-1.5 py-0.5 rounded text-label font-mono uppercase tracking-wider border whitespace-nowrap",
+    "inline-flex items-center px-1.5 py-0.5 rounded text-label uppercase tracking-wider border whitespace-nowrap",
     SCOPE_STYLE[key],
     className
   );
@@ -156,7 +156,7 @@ export function AccessLevelControl({
             disabled={disabled}
             onClick={() => !active && onChange(seg.key)}
             className={cn(
-              "px-2.5 py-1 text-label font-mono uppercase tracking-wider transition-colors",
+              "px-2.5 py-1 text-label uppercase tracking-wider transition-colors",
               active
                 ? "bg-surface-selected text-text-primary"
                 : "text-text-muted hover:text-text-primary hover:bg-surface-raised-2",

@@ -30,22 +30,6 @@ export interface SkillConnector {
   usedFor: string;
 }
 
-export interface SkillExample {
-  id: string;
-  title: string;
-  input: string;
-  output: string;
-}
-
-export interface SkillRun {
-  id: string;
-  invokedBy: string;
-  invokedAt: string;
-  durationMs: number;
-  status: "success" | "error";
-  summary: string;
-}
-
 export interface Skill {
   id: string;
   workspaceId: string;
@@ -56,9 +40,6 @@ export interface Skill {
   whenToUse: string;
   whenNotToUse: string | null;
   connectors: SkillConnector[];
-  examples: SkillExample[];
-  recentRuns: SkillRun[];
-  totalInvocations: number;
   status: SkillStatus;
   agentWriteEnabled: boolean;
   visibility: SkillVisibility;

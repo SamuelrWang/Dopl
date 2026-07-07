@@ -73,7 +73,7 @@ export function FileTabs({
         <button
           type="button"
           onClick={onAdd}
-          className="ml-1 my-1.5 flex items-center gap-1 px-2 py-1 rounded-md text-[11px] text-text-secondary/70 hover:bg-surface-raised-2 hover:text-text-primary transition-colors cursor-pointer"
+          className="ml-1 my-1.5 flex items-center gap-1 px-2 py-1 rounded-md text-caption text-text-muted hover:bg-surface-raised-2 hover:text-text-primary transition-colors cursor-pointer"
         >
           <Plus size={11} />
           Add file
@@ -169,21 +169,21 @@ function FileTab({
             }}
             onClick={(e) => e.stopPropagation()}
             className={cn(
-              "bg-transparent border rounded px-1 py-0.5 text-[12px] font-mono w-32 outline-none",
+              "bg-transparent border rounded px-1 py-0.5 text-small w-32 outline-none",
               error
-                ? "border-red-500/50 focus:border-red-500/70"
+                ? "border-danger/50 focus:border-danger/70"
                 : "border-border-default focus:border-border-highlight"
             )}
           />
           {error && (
-            <span className="text-[10px] text-red-400/90 max-w-[180px] truncate">
+            <span className="text-micro text-danger/90 max-w-[180px] truncate">
               {error}
             </span>
           )}
         </span>
       ) : (
         <span
-          className="text-[12px] font-mono py-2"
+          className="text-small py-2"
           onDoubleClick={(e) => {
             if (isPrimary) return;
             // Audit A-013: read-only members can't double-click to
@@ -207,7 +207,7 @@ function FileTab({
           aria-label={`Remove ${file.name}`}
           className="opacity-0 group-hover:opacity-100 w-4 h-4 rounded flex items-center justify-center hover:bg-surface-raised-3 transition-opacity"
         >
-          <X size={10} className="text-text-secondary/70" />
+          <X size={10} className="text-text-muted" />
         </button>
       )}
       {active && (

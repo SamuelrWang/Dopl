@@ -143,7 +143,7 @@ export function TeamDrawer({
                         if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                       }}
                       aria-label="Team name"
-                      className="w-full bg-transparent text-base font-medium text-[var(--text-on-cta)] outline-none border-b border-transparent focus:border-white/30 transition-colors"
+                      className="w-full bg-transparent text-title font-medium text-[var(--text-on-cta)] outline-none border-b border-transparent focus:border-white/30 transition-colors"
                     />
                   ) : (
                     <DrawerTitle className="truncate text-[var(--text-on-cta)]">
@@ -175,7 +175,7 @@ export function TeamDrawer({
 
               <section>
                 <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-label font-mono uppercase tracking-wider text-text-muted">
+                  <h4 className="text-label uppercase tracking-wider text-text-muted">
                     Members · {teamMembers.length}
                   </h4>
                   {canManage && availableMembers.length > 0 && (
@@ -307,7 +307,7 @@ function GrantSection({
   if (resources.length === 0) return null;
   return (
     <section>
-      <h4 className="text-label font-mono uppercase tracking-wider text-text-muted mb-2">
+      <h4 className="text-label uppercase tracking-wider text-text-muted mb-2">
         {label}
       </h4>
       <ul className="rounded-lg border border-border-subtle divide-y divide-border-subtle overflow-hidden">

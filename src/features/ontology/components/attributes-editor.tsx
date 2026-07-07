@@ -4,10 +4,11 @@ import { useState } from "react";
 import { ChevronDown, Plus, X } from "lucide-react";
 import type { Dispatch } from "react";
 import { useWorkspaceResources } from "../hooks/use-workspace-resources";
+import { SectionBox } from "@/shared/ui/section-box";
 import type { GraphAction, GraphState } from "../graph-state";
 import type { OntologyObject } from "../types";
 import { CascadeSelect } from "./cascade-select";
-import { CHIP, FIELD_WELL, SectionBox } from "./ontology-bits";
+import { CHIP, FIELD_WELL } from "./ontology-bits";
 import { PickMenu } from "./pick-menu";
 
 type AttrKind = "text" | "pill" | "ref" | "knowledge" | "skill";

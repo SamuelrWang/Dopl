@@ -136,7 +136,7 @@ export function CreateTeamDialog({
         )}
       >
         <div className="flex flex-col items-center text-center gap-1.5 pt-2">
-          <DialogTitle className="text-text-primary text-lg">Create team</DialogTitle>
+          <DialogTitle className="text-text-primary">Create team</DialogTitle>
           <p className="text-body text-text-tertiary">
             Group members and control which resources they can reach
           </p>

@@ -4,11 +4,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BookOpen,
   Check,
-  MoreHorizontal,
-  Play,
+  Copy,
+  Download,
+  History,
+  Layers,
+  ShieldCheck,
+  Workflow,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { cn } from "@/shared/lib/utils";
-import { PageTopBar } from "@/shared/layout/page-top-bar";
 import { EditableTitle } from "@/shared/layout/editable-title";
 import { VisibilityPill, MakePublicAction } from "@/shared/ui/visibility-pill";
 import { useMyAccessContext } from "@/features/members/hooks/use-my-access";
@@ -27,21 +31,25 @@ import {
   DocEditor,
   SaveStatusIndicator,
   type SaveStatus,
-} from "@/features/knowledge/components/doc-editor";
-import { SourceIcon } from "@/features/knowledge/components/source-icon";
-import type { SourceProvider } from "@/features/knowledge/source-types";
+} from "@/shared/editor/doc-editor";
+import { SourceIcon } from "@/shared/ui/source-icon";
+import type { SourceProvider } from "@/shared/lib/source-types";
 import {
   PRIMARY_SKILL_FILE_NAME,
   type ResolvedSkill,
   type Skill,
   type SkillFile,
+  type SkillUsage,
+  type SkillUsedBy,
   type WorkspaceKbSummary,
 } from "@/features/skills/types";
 import { parseSkillBody } from "@/features/skills/skill-body";
+import { lintSkill, type SkillLintIssue } from "@/features/skills/skill-lint";
 import {
   SkillApiError,
   createSkillFile,
   deleteSkillFile,
+  duplicateSkill,
   fetchSkill,
   readSkillFile,
   renameSkillFile,
@@ -50,6 +58,7 @@ import {
 } from "@/features/skills/client/api";
 import { useSkillsRealtime } from "../client/realtime";
 import { FileTabs } from "./skill-file-tabs";
+import { SkillHistoryPanel } from "./skill-history-panel";
 import {
   errMessage,
   escapeRegExp,
@@ -62,6 +71,10 @@ interface Props {
   resolved: ResolvedSkill;
   workspaceKbs: WorkspaceKbSummary[];
   workspaceSlug: string;
+  /** Clusters + workflows this skill is attached to (server-fetched). */
+  usedBy: SkillUsedBy;
+  /** Agent read activity (server-fetched from mcp_events). */
+  usage: SkillUsage;
   /** True if the current user is the skill's owner — gates the inline
    *  "Make public" button next to the visibility pill. */
   isOwner: boolean;
@@ -95,6 +108,8 @@ export function SkillView({
   resolved,
   workspaceKbs,
   workspaceSlug,
+  usedBy,
+  usage,
   isOwner,
 }: Props) {
   const { skill } = resolved;
@@ -103,15 +118,23 @@ export function SkillView({
   // commits a rename, then drive from local state so the bar updates
   // immediately without a route reload.
   const [displayedName, setDisplayedName] = useState(skill.name);
-  useEffect(() => {
-    setDisplayedName(skill.name);
-  }, [skill.name]);
   const [displayedVisibility, setDisplayedVisibility] = useState(
-    skill.visibility,
+    skill.visibility
   );
-  useEffect(() => {
+  // Re-sync the mirrors when the server prop changes (sanctioned
+  // adjust-state-during-render pattern — no effect round-trip).
+  const [lastSkillProps, setLastSkillProps] = useState({
+    name: skill.name,
+    visibility: skill.visibility,
+  });
+  if (
+    lastSkillProps.name !== skill.name ||
+    lastSkillProps.visibility !== skill.visibility
+  ) {
+    setLastSkillProps({ name: skill.name, visibility: skill.visibility });
+    setDisplayedName(skill.name);
     setDisplayedVisibility(skill.visibility);
-  }, [skill.visibility]);
+  }
 
   // Audit A-005 / A-013: gate write affordances on the caller's
   // effective access. Falls open to true while access is loading.
@@ -126,6 +149,9 @@ export function SkillView({
     () => primaryFileId(resolved.files) ?? resolved.files[0]?.id ?? ""
   );
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const [historyOpen, setHistoryOpen] = useState(false);
+  // Bumped whenever a save lands so the open history panel refetches.
+  const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
   // 412 surfaced from the autosave path. While set, the conflicting
   // file's editor shows a banner with explicit Save mine / Discard
   // mine buttons; debounced autosave is paused for that file.
@@ -163,11 +189,15 @@ export function SkillView({
   useEffect(() => {
     slugRef.current = skill.slug;
   }, [skill.slug]);
+  // Mirrors for event handlers / unmount cleanup. Written in an effect
+  // (not during render) per react-hooks/refs; consumers only read them
+  // asynchronously, so post-render timing is equivalent.
   const conflictRef = useRef<typeof conflict>(null);
-  conflictRef.current = conflict;
-  // Mirror save status so the realtime gate can read it synchronously.
   const saveStatusRef = useRef<SaveStatus>(saveStatus);
-  saveStatusRef.current = saveStatus;
+  useEffect(() => {
+    conflictRef.current = conflict;
+    saveStatusRef.current = saveStatus;
+  }, [conflict, saveStatus]);
 
   // Presence: who else has this skill open, and whether they're editing.
   const selfProfile = useCurrentProfile();
@@ -205,6 +235,7 @@ export function SkillView({
         setFiles((prev) =>
           prev.map((f) => (f.id === fileId ? updated : f))
         );
+        setHistoryRefreshKey((k) => k + 1);
         setSaveStatus("saved");
         setTimeout(() => {
           setSaveStatus((prev) => (prev === "saved" ? "idle" : prev));
@@ -518,6 +549,11 @@ export function SkillView({
     return set;
   }, [files]);
 
+  const lintIssues = useMemo(
+    () => lintSkill({ ...resolved, skill, files }),
+    [resolved, skill, files]
+  );
+
   const toggleKb = useCallback(
     (kb: WorkspaceKbSummary) => {
       if (!activeFile) return;
@@ -541,10 +577,9 @@ export function SkillView({
   );
 
   return (
-    <>
-      <PageTopBar
-        title={
-          <div className="flex items-center gap-2 min-w-0">
+    <div className="page-float flex flex-col antialiased">
+      <div className="flex h-11 shrink-0 items-center gap-2 border-b border-border-subtle px-4">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
             <EditableTitle
               value={displayedName}
               onSave={async (next) => {
@@ -574,29 +609,29 @@ export function SkillView({
                 }}
               />
             ) : null}
-          </div>
-        }
-        trailing={
-          <>
-            <AvatarStack users={otherEditors} />
-            <SaveStatusIndicator state={saveStatus} />
-            <button
-              type="button"
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-border-default hover:bg-surface-raised-2 transition-colors text-xs text-text-primary cursor-pointer"
-            >
-              <Play size={12} />
-              Test in Claude Code
-            </button>
-            <button
-              type="button"
-              aria-label="More"
-              className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-surface-raised-2 transition-colors cursor-pointer"
-            >
-              <MoreHorizontal size={13} className="text-text-secondary" />
-            </button>
-          </>
-        }
-      />
+        </div>
+        <AvatarStack users={otherEditors} />
+        <SaveStatusIndicator state={saveStatus} />
+        <HeaderActions
+          slug={skill.slug}
+          workspaceSlug={workspaceSlug}
+          canEdit={canEdit}
+        />
+        <button
+          type="button"
+          onClick={() => setHistoryOpen((v) => !v)}
+          aria-pressed={historyOpen}
+          className={cn(
+            "flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-small font-medium transition-colors",
+            historyOpen
+              ? "concave-sel text-text-primary"
+              : "btn-light text-text-primary"
+          )}
+        >
+          <History size={12} />
+          History
+        </button>
+      </div>
 
       <div className="flex-1 min-h-0">
         <div className="h-full overflow-hidden flex">
@@ -615,12 +650,9 @@ export function SkillView({
               {activeFile && conflict && conflict.fileId === activeFile.id && (
                 <div
                   role="alert"
-                  className="flex flex-wrap items-center gap-2 border-b border-amber-500/20 bg-amber-500/[0.06] px-4 py-2 text-[12px] leading-relaxed text-amber-100/90"
+                  className="flex flex-wrap items-center gap-2 border-b border-warning/25 bg-warning/5 px-4 py-2 text-small leading-relaxed text-text-primary"
                 >
-                  <AlertTriangle
-                    size={13}
-                    className="shrink-0 text-amber-300/90"
-                  />
+                  <AlertTriangle size={13} className="shrink-0 text-warning" />
                   <span className="min-w-0 flex-1">
                     <strong className="font-semibold">
                       Edited elsewhere.
@@ -632,7 +664,7 @@ export function SkillView({
                     type="button"
                     onClick={handleDiscardMine}
                     disabled={saveStatus === "saving"}
-                    className="rounded-md border border-border-default bg-surface-raised-1 px-2.5 py-1 text-[11px] text-text-secondary transition-colors hover:bg-surface-raised-3 hover:text-text-primary disabled:opacity-40"
+                    className="btn-light rounded-md px-2.5 py-1 text-caption text-text-primary disabled:opacity-40"
                   >
                     Discard mine, reload
                   </button>
@@ -640,7 +672,7 @@ export function SkillView({
                     type="button"
                     onClick={handleKeepMine}
                     disabled={saveStatus === "saving"}
-                    className="rounded-md border border-amber-400/30 bg-amber-400/10 px-2.5 py-1 text-[11px] text-amber-100/95 transition-colors hover:bg-amber-400/15 disabled:opacity-40"
+                    className="rounded-md border border-warning/30 bg-warning/10 px-2.5 py-1 text-caption font-medium text-text-primary transition-colors hover:bg-warning/15 disabled:opacity-40"
                   >
                     {saveStatus === "saving"
                       ? "Saving…"
@@ -665,6 +697,19 @@ export function SkillView({
             </div>
           </div>
 
+          {historyOpen && (
+            <SkillHistoryPanel
+              slug={skill.slug}
+              canEdit={canEdit}
+              refreshKey={historyRefreshKey}
+              onClose={() => setHistoryOpen(false)}
+              onRestored={() => {
+                setHistoryRefreshKey((k) => k + 1);
+                if (isEditorAtRest()) void pullFreshSkill();
+              }}
+            />
+          )}
+
           {/* Right rail */}
           <aside className="w-72 shrink-0 flex flex-col border-l border-border-default overflow-hidden">
             <KbPicker
@@ -673,11 +718,166 @@ export function SkillView({
               onToggle={toggleKb}
               workspaceSlug={workspaceSlug}
             />
+            <HealthStrip issues={lintIssues} />
+            <ActivityStrip usage={usage} />
+            <UsedByStrip usedBy={usedBy} />
             <ConnectorsStrip connectors={skill.connectors} />
           </aside>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Header actions (duplicate / export) ─────────────────────────────
+
+function HeaderActions({
+  slug,
+  workspaceSlug,
+  canEdit,
+}: {
+  slug: string;
+  workspaceSlug: string;
+  canEdit: boolean;
+}) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  return (
+    <>
+      <a
+        href={`/api/skills/${encodeURIComponent(slug)}/export`}
+        download
+        title="Download as a Claude-Code-compatible skill zip"
+        className="btn-light flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-small font-medium text-text-primary"
+      >
+        <Download size={12} />
+        Export
+      </a>
+      {canEdit && (
+        <button
+          type="button"
+          disabled={busy}
+          title="Fork into a new private draft"
+          onClick={async () => {
+            setBusy(true);
+            try {
+              const created = await duplicateSkill(slug);
+              toast({ title: "Skill duplicated", description: created.skill.name });
+              router.push(`/${workspaceSlug}/skills/${created.skill.slug}`);
+            } catch (err) {
+              toast({ title: "Couldn't duplicate", description: errMessage(err) });
+              setBusy(false);
+            }
+          }}
+          className="btn-light flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-small font-medium text-text-primary disabled:opacity-50"
+        >
+          <Copy size={12} />
+          {busy ? "Duplicating…" : "Duplicate"}
+        </button>
+      )}
     </>
+  );
+}
+
+// ── Health strip ─────────────────────────────────────────────────────
+
+function HealthStrip({ issues }: { issues: SkillLintIssue[] }) {
+  const errors = issues.filter((i) => i.level === "error").length;
+  return (
+    <div className="border-t border-border-subtle px-4 py-3">
+      <div className="mb-1 flex items-center justify-between">
+        <span className="flex items-center gap-1.5 text-label font-semibold uppercase tracking-wide text-text-secondary">
+          <ShieldCheck size={11} className={errors > 0 ? "text-danger" : issues.length > 0 ? "text-warning" : "text-success"} />
+          Health
+        </span>
+        <span className="text-micro text-text-muted">
+          {issues.length === 0 ? "all checks pass" : `${issues.length} issue${issues.length === 1 ? "" : "s"}`}
+        </span>
+      </div>
+      {issues.length > 0 && (
+        <ul className="space-y-1">
+          {issues.map((issue, i) => (
+            <li
+              key={i}
+              className={cn(
+                "text-caption leading-snug",
+                issue.level === "error" ? "text-danger" : "text-text-secondary"
+              )}
+            >
+              {issue.message}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// ── Agent-activity strip ─────────────────────────────────────────────
+
+function ActivityStrip({ usage }: { usage: SkillUsage }) {
+  const last = usage.lastUsedAt
+    ? new Date(usage.lastUsedAt).toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+      })
+    : null;
+  return (
+    <div className="border-t border-border-subtle px-4 py-3">
+      <div className="mb-1 flex items-center justify-between">
+        <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
+          Agent activity
+        </span>
+        <span className="text-micro text-text-muted">30d</span>
+      </div>
+      <p className="text-caption leading-relaxed text-text-secondary">
+        {usage.count30d === 0
+          ? "No agent reads yet."
+          : `${usage.count30d} read${usage.count30d === 1 ? "" : "s"}${last ? ` · last ${last}` : ""}`}
+      </p>
+    </div>
+  );
+}
+
+// ── Used-by strip ────────────────────────────────────────────────────
+
+function UsedByStrip({ usedBy }: { usedBy: SkillUsedBy }) {
+  const total = usedBy.clusters.length + usedBy.workflows.length;
+  return (
+    <div className="border-t border-border-subtle px-4 py-3">
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
+          Used by
+        </span>
+        <span className="text-micro text-text-muted">{total}</span>
+      </div>
+      {total === 0 ? (
+        <p className="text-caption leading-relaxed text-text-muted">
+          Not attached to any cluster or workflow yet.
+        </p>
+      ) : (
+        <div className="flex flex-wrap gap-1.5">
+          {usedBy.clusters.map((c) => (
+            <span
+              key={`c-${c.id}`}
+              className="inline-flex items-center gap-1.5 rounded-full border border-border-strong bg-bg-inset px-2 py-0.5 text-caption text-text-primary"
+            >
+              <Layers size={10} className="text-text-muted" />
+              <span className="max-w-[140px] truncate">{c.name}</span>
+            </span>
+          ))}
+          {usedBy.workflows.map((w) => (
+            <span
+              key={`w-${w.id}`}
+              className="inline-flex items-center gap-1.5 rounded-full border border-border-default bg-surface-raised-1 px-2 py-0.5 text-caption text-text-secondary"
+            >
+              <Workflow size={10} className="text-text-muted" />
+              <span className="max-w-[140px] truncate">{w.name}</span>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -694,16 +894,16 @@ function KbPicker({ kbs, referenced, onToggle }: KbPickerProps) {
   return (
     <div className="flex-1 min-h-0 flex flex-col">
       <div className="px-4 pt-4 pb-2 flex items-center justify-between">
-        <span className="text-[10px] font-mono uppercase tracking-wider text-text-secondary/70">
+        <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
           Knowledge bases
         </span>
-        <span className="text-[10px] font-mono text-text-secondary/50">
+        <span className="text-micro text-text-muted">
           {referenced.size}/{kbs.length}
         </span>
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto px-2 pb-2 space-y-0.5">
         {kbs.length === 0 ? (
-          <p className="px-2 py-3 text-[12px] text-text-secondary/60 leading-relaxed">
+          <p className="px-2 py-3 text-caption text-text-muted leading-relaxed">
             No knowledge bases in this workspace yet.
           </p>
         ) : (
@@ -717,7 +917,7 @@ function KbPicker({ kbs, referenced, onToggle }: KbPickerProps) {
                 className={cn(
                   "w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md text-left transition-colors cursor-pointer",
                   linked
-                    ? "bg-violet-500/10 hover:bg-violet-500/15"
+                    ? "bg-bg-inset hover:bg-bg-inset-hover"
                     : "hover:bg-surface-raised-2"
                 )}
               >
@@ -725,23 +925,23 @@ function KbPicker({ kbs, referenced, onToggle }: KbPickerProps) {
                   className={cn(
                     "shrink-0 w-4 h-4 rounded border flex items-center justify-center transition-colors",
                     linked
-                      ? "border-violet-400/60 bg-violet-500/20"
+                      ? "border-border-active bg-surface-invert"
                       : "border-border-strong"
                   )}
                 >
-                  {linked && <Check size={10} className="text-violet-200" />}
+                  {linked && <Check size={10} className="text-text-on-invert" />}
                 </span>
                 <BookOpen
                   size={11}
                   className={cn(
                     "shrink-0",
-                    linked ? "text-violet-300" : "text-text-secondary/60"
+                    linked ? "text-text-primary" : "text-text-muted"
                   )}
                 />
-                <span className="flex-1 min-w-0 truncate text-[12.5px] text-text-primary/90">
+                <span className="flex-1 min-w-0 truncate text-body text-text-primary">
                   {kb.name}
                 </span>
-                <span className="shrink-0 font-mono text-[10px] text-text-secondary/50">
+                <span className="shrink-0 text-micro text-text-muted">
                   {kb.slug}
                 </span>
               </button>
@@ -764,7 +964,7 @@ function ConnectorsStrip({
   return (
     <div className="border-t border-border-subtle px-4 py-3">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-[10px] font-mono uppercase tracking-wider text-text-secondary/70">
+        <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
           Connectors
         </span>
       </div>
@@ -775,9 +975,9 @@ function ConnectorsStrip({
             <span
               key={c.provider}
               className={cn(
-                "inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded text-[11px]",
+                "inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded text-caption",
                 c.status === "connected"
-                  ? "bg-emerald-500/10 text-text-primary border border-emerald-500/20"
+                  ? "bg-bg-inset text-text-primary border border-border-strong"
                   : "bg-surface-raised-1 text-text-secondary border border-border-subtle"
               )}
               title={c.usedFor}

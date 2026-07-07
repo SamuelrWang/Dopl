@@ -1,5 +1,5 @@
 import "server-only";
-import type { SkillConnector, SkillExample, SkillRun, SkillStatus } from "../types";
+import type { SkillConnector, SkillStatus } from "../types";
 
 /**
  * Seed fixtures inserted by `seedWorkspace` when a brand-new workspace
@@ -23,10 +23,7 @@ export interface SkillSeed {
   whenNotToUse: string;
   body: string;
   connectors: SkillConnector[];
-  examples: SkillExample[];
   status: SkillStatus;
-  totalInvocations: number;
-  recentRuns: SkillRun[];
 }
 
 export function buildSeedSkills(): SkillSeed[] {
@@ -72,67 +69,7 @@ Return the draft as a single message. If the user asked for a subject line, prep
           usedFor: "Optional: post completed drafts to #outbound for review",
         },
       ],
-      examples: [
-        {
-          id: "ex-1",
-          title: "Cold open to a founder",
-          input: "Email Anya at Vector — wanted to compare notes on their realtime launch.",
-          output:
-            "Hi Anya,\n\nYour Vector realtime launch last month is the cleanest thing I've seen ship in this space all year — the 12k signups in 48h thread you posted is making the rounds internally here. I'm working on something adjacent and would love 20 minutes to compare notes on what surprised you on the rollout.\n\nWorth half a coffee Thursday or next week?\n\nSam",
-        },
-        {
-          id: "ex-2",
-          title: "Re-engagement after 6 months",
-          input:
-            "Follow up with Diego — last time we talked he said to reach back out in Q4.",
-          output:
-            'Hi Diego,\n\nIn April you said to circle back in Q4 once we shipped the team-sharing flow — well, here we are. The "send me a real demo" you asked for is finally a real demo. \n\nThirty minutes when you have time?\n\nSam',
-        },
-        {
-          id: "ex-3",
-          title: "Follow-up on a warm intro",
-          input:
-            "Send a follow-up to Liane who Marcus introduced — just want to thank Marcus and propose a time.",
-          output:
-            'Hi Liane,\n\nThanks for the kind words back to Marcus — he said to "get on the phone with this one" so I want to make that easy. I have Tuesday or Thursday after 2pm Pacific open this week if either works for you.\n\nSam',
-        },
-      ],
       status: "active",
-      totalInvocations: 47,
-      recentRuns: [
-        {
-          id: "r-1",
-          invokedBy: "Sam Wang",
-          invokedAt: "12 min ago",
-          durationMs: 1380,
-          status: "success",
-          summary: 'Drafted cold open to "Anya Lerner" referencing Vector realtime launch.',
-        },
-        {
-          id: "r-2",
-          invokedBy: "Sam Wang",
-          invokedAt: "2 hours ago",
-          durationMs: 1620,
-          status: "success",
-          summary: "Re-engagement draft for Diego, referencing April thread.",
-        },
-        {
-          id: "r-3",
-          invokedBy: "Alice Chen",
-          invokedAt: "Yesterday, 4:12 PM",
-          durationMs: 940,
-          status: "success",
-          summary: "Warm-intro follow-up to Liane, prefilled the Tuesday/Thursday slot.",
-        },
-        {
-          id: "r-4",
-          invokedBy: "Alice Chen",
-          invokedAt: "Yesterday, 11:30 AM",
-          durationMs: 2110,
-          status: "error",
-          summary: "Could not load tone from Networking emails (KB sync stale).",
-        },
-      ],
     },
     {
       slug: "competitor-research-synthesis",
@@ -172,35 +109,7 @@ Use the same structure as the existing recaps in [Competitor intel](dopl://kb/co
           usedFor: "Pricing screenshots, positioning decks",
         },
       ],
-      examples: [
-        {
-          id: "ex-1",
-          title: "Q3 competitor recap",
-          input: "Give me a recap of what shifted in our space in Q3.",
-          output:
-            'Three competitors raised entry-tier pricing 18–25% in July–September. Acme repositioned from "fastest" to "most accurate" with a marketing refresh on 9/12. Two competitors shipped CRDT-backed realtime, putting us a quarter behind on that surface. Implications: pricing power may be back, and realtime is no longer a differentiator we can lean on past Q1.',
-        },
-      ],
       status: "active",
-      totalInvocations: 12,
-      recentRuns: [
-        {
-          id: "r-1",
-          invokedBy: "Sam Wang",
-          invokedAt: "Today, 9:04 AM",
-          durationMs: 4280,
-          status: "success",
-          summary: "Q3 recap, 2 paragraphs, surfaced 3 pricing changes from #compete.",
-        },
-        {
-          id: "r-2",
-          invokedBy: "Sam Wang",
-          invokedAt: "5 days ago",
-          durationMs: 3910,
-          status: "success",
-          summary: "Acme positioning teardown — pulled the 9/12 marketing refresh deck.",
-        },
-      ],
     },
     {
       slug: "customer-feedback-rollup",
@@ -246,35 +155,7 @@ Write a digest with: top 3 themes by volume, one quote per theme, count, and tre
           usedFor: "Optional: cross-reference call transcripts in Customer DB",
         },
       ],
-      examples: [
-        {
-          id: "ex-1",
-          title: "Weekly digest",
-          input: "What are users saying this week?",
-          output:
-            'Top 3 themes: (1) Onboarding confusion at first canvas (12 mentions, ↑ from 9). (2) Notion sync still missing (8 mentions, flat). (3) Speed praise — "Notion if it was actually fast" repeated by 3 separate users this week. New theme candidate: workspace-sharing role granularity (4 mentions, all enterprise pilot accounts).',
-        },
-      ],
       status: "active",
-      totalInvocations: 28,
-      recentRuns: [
-        {
-          id: "r-1",
-          invokedBy: "Sam Wang",
-          invokedAt: "Today, 10:14 AM",
-          durationMs: 5240,
-          status: "success",
-          summary: "Weekly digest — surfaced new role-granularity theme candidate.",
-        },
-        {
-          id: "r-2",
-          invokedBy: "Alice Chen",
-          invokedAt: "Yesterday",
-          durationMs: 4890,
-          status: "success",
-          summary: "Pulled 4 quotes for the all-hands deck.",
-        },
-      ],
     },
     {
       slug: "spec-doc-writer",
@@ -318,27 +199,7 @@ End every doc with at least one explicit open question. The team expects them. I
           usedFor: "Pull existing ADR headers for the related-docs section",
         },
       ],
-      examples: [
-        {
-          id: "ex-1",
-          title: "ADR — connector token storage",
-          input: "Write an ADR for whether we store connector tokens per-user or per-workspace.",
-          output:
-            '## ADR-021: Per-user connector tokens\n\n**Context.** Workspaces share resources but each member has their own Gmail / Slack / Drive.\n\n**Decision.** Tokens are scoped to (workspace, user). Skills declare "needs Gmail" abstractly; bindings resolve at run time per invoker.\n\n**Consequences.** A skill Alice built with her Gmail breaks when Bob runs it unless Bob also connected. Tradeoff is acceptable; alternative (workspace tokens) means anyone on the team can send as anyone\'s account.\n\n**Alternatives considered.** Workspace-level tokens (rejected: blast radius). Per-skill tokens (rejected: too granular for the team to maintain).\n\n**Open questions.** Do we want a workspace-fallback for skills that don\'t need user identity (e.g., a public-Slack-read skill)?',
-        },
-      ],
       status: "draft",
-      totalInvocations: 4,
-      recentRuns: [
-        {
-          id: "r-1",
-          invokedBy: "Sam Wang",
-          invokedAt: "5 days ago",
-          durationMs: 6720,
-          status: "success",
-          summary: "Drafted ADR-014 on workspace_id scoping.",
-        },
-      ],
     },
     {
       slug: "voice-memo-to-note",
@@ -371,35 +232,7 @@ Write a 2–4 sentence summary of the memo. Surface any decisions, action items,
           usedFor: "Archive raw audio + linked transcript",
         },
       ],
-      examples: [
-        {
-          id: "ex-1",
-          title: "Customer call → feedback KB",
-          input: "Capture this — 30-min call with Liane from Acme.",
-          output:
-            'Routed to [Customer feedback](dopl://kb/customer-feedback). Summary: 30-min call with Liane (Acme PM). Key quote at 14:20 about workflow integration: "feels like Notion if it was actually fast". Action item flagged for the workspace-sharing role granularity theme. Filed to pending intake — incorporate after review.',
-        },
-      ],
       status: "active",
-      totalInvocations: 9,
-      recentRuns: [
-        {
-          id: "r-1",
-          invokedBy: "Sam Wang",
-          invokedAt: "Yesterday",
-          durationMs: 8420,
-          status: "success",
-          summary: "Routed Sept conf takeaways memo to networking-emails KB.",
-        },
-        {
-          id: "r-2",
-          invokedBy: "Sam Wang",
-          invokedAt: "3 days ago",
-          durationMs: 9810,
-          status: "success",
-          summary: "Filed customer call to customer-feedback pending intake.",
-        },
-      ],
     },
   ];
 }

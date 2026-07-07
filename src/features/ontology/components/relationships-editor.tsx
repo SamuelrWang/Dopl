@@ -3,10 +3,11 @@
 import { useState } from "react";
 import { Plus, X } from "lucide-react";
 import type { Dispatch } from "react";
+import { SectionBox } from "@/shared/ui/section-box";
 import type { GraphAction, GraphState } from "../graph-state";
 import type { OntologyObject } from "../types";
 import { CascadeSelect } from "./cascade-select";
-import { CHIP, FIELD_WELL, SectionBox } from "./ontology-bits";
+import { CHIP, FIELD_WELL } from "./ontology-bits";
 
 /**
  * Relationships section — editable edges. Each row: edge label, target

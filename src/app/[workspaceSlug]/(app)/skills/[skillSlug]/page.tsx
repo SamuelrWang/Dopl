@@ -12,11 +12,12 @@ import { resolvePageWorkspace } from "@/features/workspaces/server/segment";
 import { workspaceSegment } from "@/features/workspaces/url";
 import {
   buildSkillContext,
+  getSkillUsage,
+  getSkillUsedBy,
   listWorkspaceKnowledgeBases,
   resolveSkillBody,
 } from "@/features/skills/server/service";
 import { resolvePageSkill } from "@/features/skills/server/segment";
-import { AppPanel } from "@/shared/layout/app-shell";
 import { SkillView } from "@/features/skills/components/skill-view";
 
 export const dynamic = "force-dynamic";
@@ -42,19 +43,21 @@ export default async function SkillDetailPage({ params }: PageProps) {
   });
 
   const skill = await resolvePageSkill(ctx, workspace, skillSlug);
-  const [resolved, workspaceKbs] = await Promise.all([
+  const [resolved, workspaceKbs, usedBy, usage] = await Promise.all([
     resolveSkillBody(ctx, skill.slug),
     listWorkspaceKnowledgeBases(ctx),
+    getSkillUsedBy(ctx, skill.slug),
+    getSkillUsage(ctx, skill.slug),
   ]);
 
   return (
-    <AppPanel scroll={false}>
     <SkillView
       resolved={resolved}
       workspaceKbs={workspaceKbs}
       workspaceSlug={workspaceSegment(workspace)}
+      usedBy={usedBy}
+      usage={usage}
       isOwner={skill.createdBy === user.id}
     />
-    </AppPanel>
   );
 }

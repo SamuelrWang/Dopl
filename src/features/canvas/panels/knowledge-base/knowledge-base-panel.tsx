@@ -39,7 +39,7 @@ import { toast } from "@/shared/ui/toast";
 import { useMyAccessContext } from "@/features/members/hooks/use-my-access";
 import { meetsLevel } from "@/features/teams/access-levels";
 import { VisibilityPill } from "@/shared/ui/visibility-pill";
-import { DocEditor } from "@/features/knowledge/components/doc-editor";
+import { DocEditor } from "@/shared/editor/doc-editor";
 
 interface Props {
   panel: KnowledgeBasePanelData;

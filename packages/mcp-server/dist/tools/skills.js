@@ -184,7 +184,7 @@ async function opGet(client, slug) {
         const lines = [];
         lines.push(`# ${skill.name} \`${skill.slug}\``);
         lines.push(`id: \`${skill.id}\` · status: ${skill.status} · visibility: ${skill.visibility} · agent-write ${skill.agentWriteEnabled ? "on" : "off"}`);
-        lines.push(`invocations: ${skill.totalInvocations} · last edited by ${skill.lastEditedSource} · updated ${skill.updatedAt}`);
+        lines.push(`last edited by ${skill.lastEditedSource} · updated ${skill.updatedAt}`);
         lines.push(`When to use: ${skill.whenToUse}`);
         if (skill.whenNotToUse) {
             lines.push(`When NOT to use: ${skill.whenNotToUse}`);
