@@ -1,12 +1,12 @@
 /**
- * /[workspaceSlug]/conversations — the agent-exported conversation
- * archive. Mock-backed UI until the archive backend lands.
+ * /[workspaceSlug]/chats — the agent-exported chat archive. Mock-backed
+ * UI until the archive backend lands.
  */
 
 import { redirect } from "next/navigation";
 import { getUser } from "@/shared/supabase/server";
 import { resolvePageWorkspace } from "@/features/workspaces/server/segment";
-import { ConversationsView } from "@/features/conversations/components/conversations-view";
+import { ChatsView } from "@/features/chats/components/chats-view";
 
 export const dynamic = "force-dynamic";
 
@@ -14,11 +14,11 @@ interface PageProps {
   params: Promise<{ workspaceSlug: string }>;
 }
 
-export default async function ConversationsPage({ params }: PageProps) {
+export default async function ChatsPage({ params }: PageProps) {
   const { workspaceSlug } = await params;
   const user = await getUser();
   if (!user) redirect("/login");
-  await resolvePageWorkspace(workspaceSlug, user.id, "conversations");
+  await resolvePageWorkspace(workspaceSlug, user.id, "chats");
 
-  return <ConversationsView />;
+  return <ChatsView />;
 }

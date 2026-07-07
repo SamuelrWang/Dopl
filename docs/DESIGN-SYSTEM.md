@@ -9,7 +9,7 @@ Source of truth: `src/app/globals.css` (`@theme` block + `:root` palette +
 "UI kit" section). Design language: Samuel's study-notes app, verbatim —
 neutral grays, hairline borders, floating bento cards, concave (pressed-in)
 fields and raised 3D buttons. Currently wired: Knowledge (v2), Ontology,
-Members, Conversations. Every new page starts on this system.
+Members, Chats. Every new page starts on this system.
 
 ## Type scale
 
@@ -91,9 +91,9 @@ tokens; shared atoms in `ontology-bits.tsx` — `SectionBox`, `FIELD_WELL`,
 - **Section box**: 14px-radius `border-border-strong` card; header strip
   `bg-card-surface-subtle px-4 py-1.5` holding a `text-label` uppercase
   title; body `bg-bg-inset` with the concave inset shadow. Implemented as
-  `SectionBox` in `src/shared/ui/section-box.tsx` (promoted when
-  Conversations became the second consumer; `resizable={false}` for
-  static cards).
+  `SectionBox` in `src/shared/ui/section-box.tsx`; it also exports
+  `SECTION_BOX_INSET` so sibling section patterns (e.g. the chats
+  header-card disclosures) reuse the identical concave-body recipe.
 - **Pills/chips**: `rounded-full border border-border-strong` +
   `bg-bg-elevated` (raised, on inset bodies) or `bg-bg-inset` (flat, on
   cards), `text-caption`/`text-small` medium.

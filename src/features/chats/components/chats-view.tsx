@@ -12,12 +12,12 @@ export type FolderGroup = {
 };
 
 /**
- * Conversations page root — the agent-exported conversation archive.
- * Two-pane .page-float surface: folder-grouped list on the left, the
- * selected conversation's static document on the right. Mock-backed
- * until the archive backend lands.
+ * Chats page root — the agent-exported conversation archive. Two-pane
+ * .page-float surface: folder-grouped list on the left, the selected
+ * chat's static document on the right. Mock-backed until the archive
+ * backend lands.
  */
-export function ConversationsView() {
+export function ChatsView() {
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(
     MOCK_CONVERSATIONS[0]?.id ?? null

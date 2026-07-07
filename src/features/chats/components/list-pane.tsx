@@ -5,7 +5,7 @@ import { cn } from "@/shared/lib/utils";
 import type { Conversation } from "../types";
 import { SOURCE_LABELS, UNFILED_LABEL } from "../constants";
 import { formatShortDate } from "../format";
-import type { FolderGroup } from "./conversations-view";
+import type { FolderGroup } from "./chats-view";
 
 const ICON_BTN =
   "flex h-7 w-7 items-center justify-center rounded-[7px] text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary";
@@ -40,7 +40,7 @@ export function ListPane({
     <div className="flex w-[372px] shrink-0 flex-col border-r border-border-default">
       <div className="flex items-center gap-2 px-3.5 pb-2.5 pt-3.5">
         <h1 className="text-title font-semibold tracking-tight text-text-primary">
-          Conversations
+          Chats
         </h1>
         <span className="text-caption text-text-muted">{total}</span>
         <span className="flex-1" />
@@ -60,7 +60,7 @@ export function ListPane({
         <input
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
-          placeholder="Search conversations"
+          placeholder="Search chats"
           spellCheck={false}
           className="h-9 w-full bg-transparent pl-[33px] pr-3 text-body text-text-primary outline-none placeholder:text-text-muted"
         />

@@ -3,16 +3,12 @@
 import { ChevronRight, Copy, MessagesSquare, MoreHorizontal, Star } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import type { Conversation, ConversationFolder } from "../types";
-import { FORMAT_LABELS, SOURCE_LABELS, UNFILED_LABEL } from "../constants";
-import { formatDate } from "../format";
-import { SessionSections } from "./session-sections";
+import { FORMAT_LABELS, UNFILED_LABEL } from "../constants";
+import { HeaderCard } from "./header-card";
 import { MessageList } from "./message-list";
 
 const ICON_BTN =
   "flex h-7 w-7 items-center justify-center rounded-[7px] text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary";
-
-const META_CHIP =
-  "rounded-full border border-border-strong bg-bg-inset px-2.5 py-0.5 text-caption font-medium text-text-secondary";
 
 interface Props {
   conversation: Conversation | null;
@@ -20,16 +16,16 @@ interface Props {
 }
 
 /**
- * Right detail pane — the archived conversation as a static document:
- * crumb top bar, display title + agent-written overview, the session
- * header sections, then the summarized transcript.
+ * Right detail pane — the archived chat as a static document: crumb top
+ * bar, the header box (title + collapsed session detail), then the
+ * summarized transcript.
  */
 export function DetailPane({ conversation, folder }: Props) {
   if (!conversation) {
     return (
       <div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-2.5 text-text-muted">
         <MessagesSquare size={30} className="text-border-strong" />
-        <p className="text-body">Select a conversation to read it.</p>
+        <p className="text-body">Select a chat to read it.</p>
       </div>
     );
   }
@@ -60,31 +56,11 @@ export function DetailPane({ conversation, folder }: Props) {
         </button>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-14 pb-16 pt-9">
+      <div className="min-h-0 flex-1 overflow-y-auto px-14 pb-16 pt-8">
         <div className="mx-auto max-w-[760px]">
-          <h2 className="text-display font-semibold tracking-tight text-text-primary">
-            {conversation.title}
-          </h2>
-          <p className="mt-2 text-lead leading-relaxed text-text-secondary">
-            {conversation.overview}
-          </p>
-          <div className="mt-3.5 flex flex-wrap items-center gap-1.5">
-            <span className={META_CHIP}>{formatDate(conversation.sessionDate)}</span>
-            <span className={META_CHIP}>{SOURCE_LABELS[conversation.source]}</span>
-            {conversation.project && (
-              <span className={META_CHIP}>{conversation.project}</span>
-            )}
-            <span className={META_CHIP}>
-              {conversation.messages.length} messages
-            </span>
-            <span className={META_CHIP}>{FORMAT_LABELS[conversation.format]}</span>
-          </div>
+          <HeaderCard conversation={conversation} />
 
-          <div className="my-6 h-px bg-border-default" />
-
-          <SessionSections conversation={conversation} />
-
-          <div className="mb-3 mt-8 flex items-baseline gap-2">
+          <div className="mb-3 mt-7 flex items-baseline gap-2">
             <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
               Conversation
             </span>

@@ -25,7 +25,7 @@ type NavSection =
   | "canvas"
   | "knowledge"
   | "skills"
-  | "conversations"
+  | "chats"
   | "ontology"
   | "configuration"
   | "members";
@@ -35,7 +35,7 @@ const NAV: ReadonlyArray<{ label: string; icon: LucideIcon; section: NavSection 
   { label: "Canvas", icon: LayoutGrid, section: "canvas" },
   { label: "Knowledge", icon: BookOpen, section: "knowledge" },
   { label: "Skills", icon: Sparkles, section: "skills" },
-  { label: "Conversations", icon: MessagesSquare, section: "conversations" },
+  { label: "Chats", icon: MessagesSquare, section: "chats" },
   { label: "Ontology", icon: Network, section: "ontology" },
   { label: "Configuration", icon: SlidersHorizontal, section: "configuration" },
   { label: "Members", icon: Users, section: "members" },

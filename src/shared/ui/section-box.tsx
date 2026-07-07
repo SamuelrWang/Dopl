@@ -7,22 +7,28 @@ import { cn } from "@/shared/lib/utils";
 const MIN_BODY_H = 56;
 
 /**
+ * The concave-body recipe SectionBox seats its children in — exported so
+ * sibling section patterns (e.g. the chats header-card disclosures) use
+ * the identical inset instead of forking the shadow stack.
+ */
+export const SECTION_BOX_INSET =
+  "border-t border-border-subtle bg-bg-inset shadow-[inset_0_2px_4px_rgba(0,0,0,0.1),inset_0_1px_2px_rgba(0,0,0,0.06),inset_0_-1px_0_rgba(255,255,255,0.9)]";
+
+/**
  * Bordered section — the study-notes intro-panel, verbatim: uppercase
  * label strip (card-2) over a concave inset body, with the corner grip
  * to drag-resize the body (clamped to its content height). Promoted from
- * ontology-bits when Conversations became the second consumer.
+ * ontology-bits when a second feature needed it.
  */
 export function SectionBox({
   label,
   meta,
   action,
-  resizable = true,
   children,
 }: {
   label: string;
   meta?: string;
   action?: ReactNode;
-  resizable?: boolean;
   children: ReactNode;
 }) {
   const bodyRef = useRef<HTMLDivElement | null>(null);
@@ -66,23 +72,21 @@ export function SectionBox({
           ref={bodyRef}
           style={height !== null ? { height } : undefined}
           className={cn(
-            "border-t border-border-subtle bg-bg-inset shadow-[inset_0_2px_4px_rgba(0,0,0,0.1),inset_0_1px_2px_rgba(0,0,0,0.06),inset_0_-1px_0_rgba(255,255,255,0.9)]",
+            SECTION_BOX_INSET,
             height !== null && "overflow-y-auto overscroll-contain"
           )}
         >
           {children}
         </div>
-        {resizable && (
-          <button
-            type="button"
-            onPointerDown={onGripDown}
-            title="Drag to resize"
-            aria-label={`Resize ${label}`}
-            className="absolute right-1.5 bottom-1.5 z-10 flex h-4 w-4 cursor-ns-resize items-center justify-center text-text-muted hover:text-text-secondary"
-          >
-            <ResizeGrip />
-          </button>
-        )}
+        <button
+          type="button"
+          onPointerDown={onGripDown}
+          title="Drag to resize"
+          aria-label={`Resize ${label}`}
+          className="absolute right-1.5 bottom-1.5 z-10 flex h-4 w-4 cursor-ns-resize items-center justify-center text-text-muted hover:text-text-secondary"
+        >
+          <ResizeGrip />
+        </button>
       </div>
     </section>
   );
