@@ -10,10 +10,10 @@ export const MEMBER_ROW_GRID =
   "grid grid-cols-[minmax(200px,1.4fr)_110px_minmax(150px,1fr)_130px_32px] items-center gap-3 px-4 py-3";
 
 const DOT_STYLE: Record<ActivityDot, string> = {
-  active: "bg-emerald-400",
+  active: "bg-success",
   idle: "bg-surface-raised-4 ring-1 ring-border-default",
-  invited: "bg-amber-400",
-  deactivated: "bg-red-400/60",
+  invited: "bg-warning",
+  deactivated: "bg-danger/60",
 };
 
 interface Props {
@@ -84,16 +84,16 @@ export function MemberRow({
       <div className="flex items-center gap-3 min-w-0">
         <Avatar person={m} />
         <div className="min-w-0">
-          <p className="text-sm text-text-primary truncate">
+          <p className="text-body text-text-primary truncate">
             {m.displayName || m.email || m.userId}
             {isSelf && (
-              <span className="ml-2 text-[10px] uppercase tracking-wider text-text-secondary/50">
+              <span className="ml-2 text-label uppercase tracking-wider text-text-muted">
                 You
               </span>
             )}
           </p>
           {m.email && m.displayName && (
-            <p className="text-[11px] text-text-secondary/60 truncate">
+            <p className="text-caption text-text-muted truncate">
               {m.email}
             </p>
           )}
@@ -114,19 +114,19 @@ export function MemberRow({
 
       <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
         {chips.length === 0 && (
-          <span className="text-[11px] text-text-secondary/50">No team</span>
+          <span className="text-caption text-text-muted">No team</span>
         )}
         {chips.map((t) => (
           <TeamChip key={t.teamId} name={t.name} color={t.color} />
         ))}
         {extraChips > 0 && (
-          <span className="text-[10px] font-mono text-text-secondary/60">
+          <span className="text-micro font-mono text-text-muted">
             +{extraChips}
           </span>
         )}
       </div>
 
-      <div className="flex items-center gap-2 text-[11px] font-mono text-text-secondary/60">
+      <div className="flex items-center gap-2 text-caption font-mono text-text-muted">
         <span
           className={cn("h-1.5 w-1.5 shrink-0 rounded-full", DOT_STYLE[activity.dot])}
         />

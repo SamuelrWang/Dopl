@@ -109,7 +109,7 @@ export function KnowledgeSearch({
           }}
           onFocus={() => setOpen(true)}
           placeholder="Search content"
-          className="w-full pl-7 pr-7 py-1 text-xs bg-surface-raised-1 border border-border-subtle rounded-md text-text-primary placeholder:text-text-secondary/50 focus:outline-none focus:border-border-strong"
+          className="w-full pl-7 pr-7 py-1 text-small bg-surface-raised-1 border border-border-subtle rounded-md text-text-primary placeholder:text-text-secondary/50 focus:outline-none focus:border-border-strong"
         />
         {query ? (
           <button
@@ -132,15 +132,15 @@ export function KnowledgeSearch({
           className="absolute z-30 left-0 right-0 mt-1 rounded-md border border-border-default bg-[var(--bg-inset-hover)] shadow-2xl shadow-black/60 max-h-80 overflow-y-auto"
         >
           {loading && hits === null ? (
-            <p className="px-3 py-2 text-xs text-text-secondary">
+            <p className="px-3 py-2 text-small text-text-secondary">
               Searching…
             </p>
           ) : null}
           {error ? (
-            <p className="px-3 py-2 text-xs text-red-400">{error}</p>
+            <p className="px-3 py-2 text-small text-red-400">{error}</p>
           ) : null}
           {hits && hits.length === 0 ? (
-            <p className="px-3 py-2 text-xs text-text-secondary">
+            <p className="px-3 py-2 text-small text-text-secondary">
               No results.
             </p>
           ) : null}
@@ -156,10 +156,10 @@ export function KnowledgeSearch({
                 "w-full text-left px-3 py-2 hover:bg-surface-raised-2 cursor-pointer border-b border-border-subtle last:border-b-0"
               )}
             >
-              <p className="text-xs font-medium text-text-primary truncate">
+              <p className="text-small font-medium text-text-primary truncate">
                 {hit.title}
               </p>
-              <p className="mt-0.5 text-[11px] text-text-secondary leading-relaxed line-clamp-2">
+              <p className="mt-0.5 text-label text-text-secondary leading-relaxed line-clamp-2">
                 {renderSnippet(hit.snippet)}
               </p>
             </button>

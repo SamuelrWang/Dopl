@@ -46,7 +46,7 @@ export function KanbanCard({ objectId, graph, selected, onSelect }: Props) {
         className="flex w-full items-start gap-2 px-3 pt-2.5 pb-1 text-left"
       >
         <div className="min-w-0 flex-1">
-          <div className="truncate text-lead font-semibold tracking-tight text-text-primary">
+          <div className="truncate text-body font-semibold tracking-tight text-text-primary">
             {object.name}
           </div>
           {object.subtitle && (

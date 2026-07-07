@@ -212,8 +212,8 @@ export function SaveStatusIndicator({ state }: { state: SaveStatus }) {
     <span
       className={
         state === "error"
-          ? "text-xs text-red-400"
-          : "text-xs text-text-secondary/60"
+          ? "text-small text-red-400"
+          : "text-small text-text-secondary/60"
       }
     >
       {label}

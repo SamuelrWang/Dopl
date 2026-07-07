@@ -3,7 +3,6 @@ import { getUser } from "@/shared/supabase/server";
 import { resolveMembershipOrThrow } from "@/features/workspaces/server/service";
 import { resolvePageWorkspace } from "@/features/workspaces/server/segment";
 import { workspaceSegment } from "@/features/workspaces/url";
-import { AppPanel } from "@/shared/layout/app-shell";
 import { MembersView } from "@/features/members/components/members-view";
 
 export const dynamic = "force-dynamic";
@@ -20,12 +19,10 @@ export default async function MembersPage({ params }: PageProps) {
   const { membership } = await resolveMembershipOrThrow(workspace.id, user.id);
 
   return (
-    <AppPanel>
-      <MembersView
-        workspaceSlug={workspaceSegment(workspace)}
-        currentUserId={user.id}
-        myRole={membership.role}
-      />
-    </AppPanel>
+    <MembersView
+      workspaceSlug={workspaceSegment(workspace)}
+      currentUserId={user.id}
+      myRole={membership.role}
+    />
   );
 }

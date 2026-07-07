@@ -163,7 +163,7 @@
   border: none;
   background: none;
   border-radius: 7px;
-  font-size: var(--text-caption);
+  font-size: var(--text-small);
   font-weight: 500;
   color: var(--kv-text-2);
   cursor: pointer;
@@ -191,20 +191,6 @@
 }
 .listBody::-webkit-scrollbar {
   width: 0;
-}
-
-/* Section label ("Knowledge bases", etc.) */
-.sectionLabel {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 12px 18px 6px;
-  font-size: var(--text-label);
-  font-weight: 500;
-  color: var(--kv-text-3);
-}
-.sectionLabel svg {
-  color: var(--kv-text-3);
 }
 
 /* ───────────────────────── KB rows ───────────────────────── */
@@ -349,7 +335,7 @@
 .treeChevronOpen {
   transform: rotate(90deg);
 }
-.treeRow svg.leaf {
+.treeRow svg:global(.leaf) {
   color: var(--kv-text-3);
   flex: 0 0 auto;
 }
@@ -362,12 +348,12 @@
 }
 .treeEmpty {
   padding: 6px 16px;
-  font-size: var(--text-label);
+  font-size: var(--text-caption);
   color: var(--kv-text-3);
 }
 .treeLoading {
   padding: 8px 16px;
-  font-size: var(--text-label);
+  font-size: var(--text-caption);
   color: var(--kv-text-3);
 }
 /* Hover-revealed row actions (+entry / +folder / more). */
@@ -399,7 +385,7 @@
   cursor: pointer;
 }
 .treeActionBtn:hover {
-  background: rgba(0, 0, 0, 0.06);
+  background: var(--surface-raised-4);
   color: var(--kv-text);
 }
 .treeActionDisabled {
@@ -421,7 +407,7 @@
   background: none;
   padding: 4px 7px;
   border-radius: 6px;
-  font-size: var(--text-caption);
+  font-size: var(--text-small);
   color: var(--kv-text-3);
   cursor: pointer;
   transition: background 0.1s ease, color 0.1s ease;
@@ -515,11 +501,11 @@
   margin: 0 4px;
 }
 .iconBtnRed:hover {
-  background: #fdecec;
-  color: #d9534f;
+  background: color-mix(in oklab, var(--danger) 10%, transparent);
+  color: var(--danger);
 }
 .iconBtnActive {
-  color: #e0a91b;
+  color: var(--warning);
 }
 
 /* Tabs row */
@@ -536,7 +522,6 @@
   align-items: center;
   gap: 5px;
   border: none;
-  background: none;
   padding: 6px 13px;
   border-radius: 8px;
   font-size: var(--text-small);
@@ -545,9 +530,17 @@
   cursor: pointer;
   transition: background 0.12s ease, color 0.12s ease;
 }
-.detailTab:hover {
+/* Reset + hover backgrounds only when the tab is NOT the active
+   .concave-sel — module CSS loads after globals and would win the tie. */
+.detailTab:not(:global(.concave-sel)) {
+  background: none;
+}
+.detailTab:not(:global(.concave-sel)):hover {
   color: var(--kv-text);
   background: var(--kv-row-hover);
+}
+.detailTab:hover {
+  color: var(--kv-text);
 }
 /* Concave (pressed-in) active tab — same selection language as the
    study-notes sidebar. Ring via box-shadow so layout never shifts. */
@@ -605,7 +598,7 @@
 /* Nested meta card — framed like the study-notes intro panel: strong
    hairline, 14px radius, uppercase label strip over the body. */
 .metaCard {
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  border: 1px solid var(--kv-border-strong);
   border-radius: 14px;
   overflow: hidden;
 }
@@ -614,7 +607,7 @@
   align-items: center;
   gap: 9px;
   padding: 7px 16px;
-  background: #f4f6f9;
+  background: var(--card-surface-subtle);
   border-bottom: 1px solid var(--kv-border);
 }
 .metaCardHead .label {
@@ -692,7 +685,7 @@
   height: 22px;
   border-radius: 50%;
   object-fit: cover;
-  background: #e3e3e0;
+  background: var(--bg-inset);
   flex: 0 0 auto;
 }
 .pill {
@@ -706,8 +699,8 @@
   color: var(--kv-text);
 }
 .pillBlue {
-  background: #e8f0fd;
-  color: #3b73d9;
+  background: color-mix(in oklab, var(--link) 10%, white);
+  color: var(--link);
 }
 
 /* Shrink the shared DocEditor's prose to the v2 type scale (its defaults are
@@ -734,6 +727,13 @@
 .editorScope :global(.ProseMirror table) {
   font-size: var(--text-caption);
 }
+.editorScope :global(.ProseMirror h4) {
+  font-size: var(--text-lead);
+}
+.editorScope :global(.ProseMirror code),
+.editorScope :global(.ProseMirror pre) {
+  font-size: var(--text-body);
+}
 
 /* Description — section label matches the study-notes panel headers
    (11px uppercase muted). */
@@ -748,7 +748,7 @@
 .descBody {
   font-size: var(--text-lead);
   line-height: 1.625;
-  color: #3c3f44;
+  color: var(--kv-text);
 }
 .descBody p + p {
   margin-top: 14px;

@@ -54,18 +54,18 @@ export function PendingInvitations({
   if (invitations.length === 0) return null;
 
   return (
-    <section className="rounded-lg border border-amber-400/30 bg-amber-400/[0.08] px-3 py-2.5">
-      <h3 className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-amber-700/90 mb-1.5">
+    <section className="rounded-lg border border-warning/30 bg-warning/5 px-3 py-2.5">
+      <h3 className="flex items-center gap-1.5 text-label font-mono uppercase tracking-wider text-text-secondary mb-1.5">
         <Mail size={11} />
         {invitations.length} pending invitation{invitations.length > 1 ? "s" : ""}
       </h3>
-      {error && <p className="text-xs text-red-400 mb-2">{error}</p>}
-      <ul className="divide-y divide-amber-400/10">
+      {error && <p className="text-small text-danger mb-2">{error}</p>}
+      <ul className="divide-y divide-border-subtle">
         {invitations.map((inv) => (
           <li key={inv.id} className="py-2 flex items-center justify-between gap-3">
             <div className="min-w-0 flex items-center gap-2 flex-wrap">
-              <p className="text-sm text-text-primary truncate">{inv.email}</p>
-              <p className="text-[10px] font-mono uppercase tracking-wider text-text-secondary/50">
+              <p className="text-body text-text-primary truncate">{inv.email}</p>
+              <p className="text-label font-mono uppercase tracking-wider text-text-muted">
                 {inv.invitedRole} · sent {formatRelativeTime(inv.createdAt)}
               </p>
               {(inv.teamIds ?? []).map((teamId) => {
@@ -79,7 +79,7 @@ export function PendingInvitations({
               type="button"
               onClick={() => revoke(inv)}
               disabled={busyId === inv.id}
-              className="shrink-0 text-[10px] uppercase tracking-wider text-text-secondary/50 hover:text-red-300 transition-colors disabled:opacity-40 cursor-pointer"
+              className="shrink-0 text-label uppercase tracking-wider text-text-muted hover:text-danger transition-colors disabled:opacity-40 cursor-pointer"
             >
               Revoke
             </button>

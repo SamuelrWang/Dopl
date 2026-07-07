@@ -103,7 +103,7 @@ export function AccessTab({
 
   if (resources.length === 0) {
     return (
-      <p className="px-4 py-10 text-center text-sm text-text-secondary/60">
+      <p className="px-4 py-10 text-center text-body text-text-muted">
         No knowledge bases or workflows yet.
       </p>
     );
@@ -111,19 +111,19 @@ export function AccessTab({
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-xs text-text-tertiary max-w-2xl">
+      <p className="text-small text-text-tertiary max-w-2xl">
         Members inherit the highest access level from any team they belong to.
         Workspace-wide resources are open to every member at their role&apos;s
         default level; teams-only resources are visible to granted teams (plus
         admins and the creator). Click a cell to cycle its level.
       </p>
-      {error && <p className="text-xs text-red-400">{error}</p>}
+      {error && <p className="text-small text-danger">{error}</p>}
 
       <div className="rounded-xl border border-border-default bg-[var(--card-surface)] overflow-x-auto">
       <table className="w-max min-w-full text-left">
         <thead>
           <tr className="border-b border-border-subtle">
-            <th className="sticky left-0 bg-[var(--card-surface)] px-4 py-2 text-[10px] font-mono uppercase tracking-wider text-text-secondary/60 font-normal min-w-[160px]">
+            <th className="sticky left-0 bg-[var(--card-surface)] px-4 py-2 text-label font-mono uppercase tracking-wider text-text-muted font-normal min-w-[160px]">
               Team
             </th>
             {ordered.map((r) => (
@@ -131,7 +131,7 @@ export function AccessTab({
                 key={r.resourceId}
                 className="px-3 py-2 font-normal min-w-[130px] align-bottom"
               >
-                <span className="flex items-center gap-1 text-[10px] font-mono uppercase tracking-wider text-text-secondary/60">
+                <span className="flex items-center gap-1 text-label font-mono uppercase tracking-wider text-text-muted">
                   {r.resourceType === "knowledge_base" ? (
                     <BookOpen size={10} />
                   ) : (
@@ -145,7 +145,7 @@ export function AccessTab({
             ))}
           </tr>
           <tr className="border-b border-border-subtle">
-            <th className="sticky left-0 bg-[var(--card-surface)] px-4 py-2 text-[10px] font-mono uppercase tracking-wider text-text-secondary/40 font-normal">
+            <th className="sticky left-0 bg-[var(--card-surface)] px-4 py-2 text-label font-mono uppercase tracking-wider text-text-secondary/40 font-normal">
               Scope
             </th>
             {ordered.map((r) => (
@@ -160,10 +160,10 @@ export function AccessTab({
                       : "Teams only — click to open to the whole workspace"
                   }
                   className={cn(
-                    "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider border transition-colors",
+                    "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-label font-mono uppercase tracking-wider border transition-colors",
                     r.accessMode === "workspace"
-                      ? "bg-surface-raised-1 border-border-subtle text-text-secondary/70"
-                      : "bg-violet-500/10 border-violet-600/30 text-violet-700",
+                      ? "bg-surface-raised-1 border-border-subtle text-text-muted"
+                      : "bg-bg-inset border-border-strong text-text-primary",
                     canManage
                       ? "cursor-pointer hover:brightness-110"
                       : "cursor-default"
@@ -181,7 +181,7 @@ export function AccessTab({
             <tr>
               <td
                 colSpan={ordered.length + 1}
-                className="px-4 py-8 text-center text-sm text-text-secondary/60"
+                className="px-4 py-8 text-center text-body text-text-muted"
               >
                 No teams yet — create one to start granting access.
               </td>
@@ -190,13 +190,13 @@ export function AccessTab({
           {teams.map((team) => (
             <tr key={team.id} className="hover:bg-surface-raised-1 transition-colors">
               <td className="sticky left-0 bg-[var(--card-surface)] px-4 py-2.5">
-                <span className="flex items-center gap-2 text-xs text-text-primary">
+                <span className="flex items-center gap-2 text-small text-text-primary">
                   <span
                     className="h-2 w-2 rounded-full shrink-0"
                     style={{ backgroundColor: team.color ?? "#8b5cf6" }}
                   />
                   <span className="truncate max-w-[130px]">{team.name}</span>
-                  <span className="text-[10px] font-mono text-text-secondary/50">
+                  <span className="text-micro font-mono text-text-muted">
                     {team.memberCount}
                   </span>
                 </span>
@@ -210,7 +210,7 @@ export function AccessTab({
                   <td key={r.resourceId} className="px-3 py-2.5">
                     {r.accessMode === "workspace" ? (
                       <span
-                        className="text-[10px] font-mono text-text-secondary/40"
+                        className="text-micro font-mono text-text-secondary/40"
                         title="Workspace-wide — grants don't apply"
                       >
                         —

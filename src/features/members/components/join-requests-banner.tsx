@@ -91,13 +91,13 @@ export function JoinRequestsBanner({ workspaceSlug, enabled, onResolved }: Props
   if (!enabled || requests.length === 0) return null;
 
   return (
-    <section className="rounded-lg border border-sky-500/30 bg-sky-500/[0.06] px-3 py-2.5">
-      <h3 className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-sky-700/90 mb-1.5">
+    <section className="rounded-lg border border-border-strong bg-card-surface-subtle px-3 py-2.5">
+      <h3 className="flex items-center gap-1.5 text-label font-mono uppercase tracking-wider text-text-secondary mb-1.5">
         <UserPlus size={11} />
         {requests.length} join request{requests.length > 1 ? "s" : ""} awaiting approval
       </h3>
-      {error && <p className="text-xs text-red-400 mb-2">{error}</p>}
-      <ul className="divide-y divide-sky-500/10">
+      {error && <p className="text-small text-danger mb-2">{error}</p>}
+      <ul className="divide-y divide-border-subtle">
         {requests.map((r) => (
           <li key={r.id} className="py-2 flex items-center gap-3">
             <Avatar
@@ -110,10 +110,10 @@ export function JoinRequestsBanner({ workspaceSlug, enabled, onResolved }: Props
               size="xs"
             />
             <div className="min-w-0 flex-1">
-              <p className="text-sm text-text-primary truncate">
+              <p className="text-body text-text-primary truncate">
                 {r.displayName || r.email || r.userId}
               </p>
-              <p className="text-[10px] font-mono uppercase tracking-wider text-text-secondary/50">
+              <p className="text-label font-mono uppercase tracking-wider text-text-muted">
                 {r.email && r.displayName ? `${r.email} · ` : ""}requested{" "}
                 {formatRelativeTime(r.requestedAt)}
               </p>
@@ -127,7 +127,7 @@ export function JoinRequestsBanner({ workspaceSlug, enabled, onResolved }: Props
               type="button"
               disabled={busyId === r.id}
               onClick={() => void resolve(r, "approve")}
-              className="shrink-0 px-2.5 py-1 rounded-md text-[11px] font-medium bg-emerald-500/10 border border-emerald-600/30 text-emerald-700 hover:brightness-105 transition-all disabled:opacity-40 cursor-pointer"
+              className="shrink-0 px-2.5 py-1 rounded-md text-caption font-medium bg-bg-inset border border-border-strong text-text-primary hover:brightness-105 transition-all disabled:opacity-40 cursor-pointer"
             >
               Approve
             </button>
@@ -135,7 +135,7 @@ export function JoinRequestsBanner({ workspaceSlug, enabled, onResolved }: Props
               type="button"
               disabled={busyId === r.id}
               onClick={() => void resolve(r, "decline")}
-              className="shrink-0 text-[10px] uppercase tracking-wider text-text-secondary/50 hover:text-red-400 transition-colors disabled:opacity-40 cursor-pointer"
+              className="shrink-0 text-label uppercase tracking-wider text-text-muted hover:text-danger transition-colors disabled:opacity-40 cursor-pointer"
             >
               Decline
             </button>

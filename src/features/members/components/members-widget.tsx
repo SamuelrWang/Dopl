@@ -22,11 +22,11 @@ export function MembersWidget({ workspaceSlug }: Props) {
   const remaining = Math.max(0, list.length - visible.length);
 
   return (
-    <section className="rounded-2xl bg-[var(--panel-surface)] border border-border-default p-5">
+    <section className="bento p-5">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-sm font-medium text-text-primary">Members</h2>
-          <p className="text-xs text-text-tertiary mt-1">
+          <h2 className="text-body font-medium text-text-primary">Members</h2>
+          <p className="text-small text-text-tertiary mt-1">
             {loading
               ? "Loading…"
               : `${list.length} ${list.length === 1 ? "person" : "people"} in this workspace`}
@@ -34,7 +34,7 @@ export function MembersWidget({ workspaceSlug }: Props) {
         </div>
         <Link
           href={`/${workspaceSlug}/members`}
-          className="flex items-center gap-1 text-xs text-text-tertiary hover:text-text-primary transition-colors"
+          className="flex items-center gap-1 text-small text-text-tertiary hover:text-text-primary transition-colors"
         >
           View all
           <ArrowRight size={11} />
@@ -54,7 +54,7 @@ export function MembersWidget({ workspaceSlug }: Props) {
             ))}
           </div>
           {remaining > 0 && (
-            <span className="ml-3 text-xs text-text-tertiary font-mono">
+            <span className="ml-3 text-small text-text-tertiary font-mono">
               +{remaining} more
             </span>
           )}

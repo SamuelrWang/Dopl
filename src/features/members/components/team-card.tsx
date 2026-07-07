@@ -49,9 +49,9 @@ export function TeamCard({
       <div className="flex items-start gap-3">
         <TeamColorTile color={team.color} />
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-text-primary truncate">{team.name}</p>
+          <p className="text-body font-medium text-text-primary truncate">{team.name}</p>
           {team.description && (
-            <p className="text-[11px] text-text-secondary/60 truncate">
+            <p className="text-caption text-text-muted truncate">
               {team.description}
             </p>
           )}
@@ -75,17 +75,17 @@ export function TeamCard({
             avatarUrl: m.avatarUrl,
           }))}
         />
-        <span className="text-[11px] text-text-secondary/60">
+        <span className="text-caption text-text-muted">
           {team.memberCount} member{team.memberCount !== 1 ? "s" : ""}
         </span>
       </div>
 
       <div className="border-t border-border-subtle pt-2.5 mt-auto">
-        <h4 className="text-[10px] font-mono uppercase tracking-wider text-text-secondary/50 mb-1.5">
+        <h4 className="text-label font-mono uppercase tracking-wider text-text-muted mb-1.5">
           Resource access
         </h4>
         {shownGrants.length === 0 && (
-          <p className="text-[11px] text-text-secondary/50">No resources granted</p>
+          <p className="text-caption text-text-muted">No resources granted</p>
         )}
         <ul className="space-y-1">
           {shownGrants.map((g) => (
@@ -93,13 +93,13 @@ export function TeamCard({
               key={`${g.resourceType}:${g.resourceId}`}
               className="flex items-center justify-between gap-2"
             >
-              <span className="text-xs text-text-secondary truncate">{g.name}</span>
+              <span className="text-small text-text-secondary truncate">{g.name}</span>
               <ScopePill level={g.level} />
             </li>
           ))}
         </ul>
         {grants.length > GRANT_PREVIEW_MAX && (
-          <p className="mt-1 text-[10px] font-mono text-text-secondary/50">
+          <p className="mt-1 text-micro font-mono text-text-muted">
             +{grants.length - GRANT_PREVIEW_MAX} more
           </p>
         )}

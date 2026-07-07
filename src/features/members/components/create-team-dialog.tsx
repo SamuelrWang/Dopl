@@ -137,32 +137,32 @@ export function CreateTeamDialog({
       >
         <div className="flex flex-col items-center text-center gap-1.5 pt-2">
           <DialogTitle className="text-text-primary text-lg">Create team</DialogTitle>
-          <p className="text-sm text-text-tertiary">
+          <p className="text-body text-text-tertiary">
             Group members and control which resources they can reach
           </p>
         </div>
 
         <div className="flex flex-col gap-4 py-2 max-h-[60vh] overflow-y-auto pr-1">
           <label className="flex flex-col gap-1.5">
-            <span className="text-xs font-medium text-text-tertiary">Team name</span>
+            <span className="text-small font-medium text-text-tertiary">Team name</span>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Outreach, Engineering, Research"
               autoFocus
-              className="h-10 px-3 rounded-md bg-surface-raised-2 border border-border-strong text-sm text-text-primary placeholder:text-text-muted outline-none focus:border-border-highlight transition-colors"
+              className="h-10 px-3 rounded-md bg-surface-raised-2 border border-border-strong text-body text-text-primary placeholder:text-text-muted outline-none focus:border-border-highlight transition-colors"
             />
           </label>
 
           <div className="flex flex-col gap-1.5">
-            <span className="text-xs font-medium text-text-tertiary">Color</span>
+            <span className="text-small font-medium text-text-tertiary">Color</span>
             <ColorSwatchPicker value={color} onChange={setColor} />
           </div>
 
           {pickable.length > 0 && (
             <div className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium text-text-tertiary">Add members</span>
+              <span className="text-small font-medium text-text-tertiary">Add members</span>
               <ul className="rounded-md border border-border-strong divide-y divide-border-subtle overflow-hidden max-h-44 overflow-y-auto bg-surface-raised-1">
                 {pickable.map((m) => {
                   const on = selected.has(m.userId);
@@ -174,7 +174,7 @@ export function CreateTeamDialog({
                         className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-surface-raised-2 transition-colors cursor-pointer"
                       >
                         <Avatar person={m} size="xs" />
-                        <span className="flex-1 text-xs text-text-primary truncate">
+                        <span className="flex-1 text-small text-text-primary truncate">
                           {m.displayName || m.email || m.userId}
                         </span>
                         <span
@@ -197,7 +197,7 @@ export function CreateTeamDialog({
 
           {resources.length > 0 && (
             <div className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium text-text-tertiary">
+              <span className="text-small font-medium text-text-tertiary">
                 Resource access
               </span>
               <ul className="rounded-md border border-border-strong divide-y divide-border-subtle overflow-hidden max-h-44 overflow-y-auto bg-surface-raised-1">
@@ -208,7 +208,7 @@ export function CreateTeamDialog({
                       key={key}
                       className="flex items-center justify-between gap-3 px-3 py-2"
                     >
-                      <span className="text-xs text-text-primary truncate">{r.name}</span>
+                      <span className="text-small text-text-primary truncate">{r.name}</span>
                       <AccessLevelControl
                         value={grants.get(key) ?? null}
                         onChange={(level) => setGrant(key, level)}
@@ -220,7 +220,7 @@ export function CreateTeamDialog({
             </div>
           )}
 
-          {error && <p className="text-xs text-red-400">{error}</p>}
+          {error && <p className="text-small text-danger">{error}</p>}
         </div>
 
         <div className="flex flex-col gap-1.5 pt-1">
@@ -228,14 +228,14 @@ export function CreateTeamDialog({
             type="button"
             onClick={() => void submit(false)}
             disabled={submitting || name.trim() === ""}
-            className="h-10 rounded-md bg-accent-primary text-accent-on text-sm font-medium hover:bg-accent-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+            className="h-10 rounded-md bg-accent-primary text-accent-on text-body font-medium hover:bg-accent-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
           >
             {submitting ? "Creating…" : "Create team"}
           </button>
           <button
             type="button"
             onClick={() => onOpenChange(false)}
-            className="h-10 rounded-md text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-raised-2 transition-colors cursor-pointer"
+            className="h-10 rounded-md text-body font-medium text-text-secondary hover:text-text-primary hover:bg-surface-raised-2 transition-colors cursor-pointer"
           >
             Cancel
           </button>

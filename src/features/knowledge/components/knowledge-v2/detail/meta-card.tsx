@@ -140,11 +140,11 @@ export function MetaCard({
 function avatarStyle(tint: string): React.CSSProperties {
   return {
     background: tint,
-    color: "#fff",
+    color: "var(--text-on-invert)",
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    fontSize: 10,
+    fontSize: "var(--text-micro)",
     fontWeight: 600,
   };
 }

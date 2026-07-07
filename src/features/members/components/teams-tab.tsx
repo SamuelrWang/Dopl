@@ -67,16 +67,16 @@ export function TeamsTab({
             <button
               type="button"
               onClick={onCreateTeam}
-              className="rounded-xl border border-dashed border-border-default hover:border-border-strong hover:bg-surface-raised-1 transition-colors flex flex-col items-center justify-center gap-2 text-text-secondary/70 hover:text-text-primary min-h-[176px] cursor-pointer"
+              className="rounded-xl border border-dashed border-border-default hover:border-border-strong hover:bg-surface-raised-1 transition-colors flex flex-col items-center justify-center gap-2 text-text-muted hover:text-text-primary min-h-[176px] cursor-pointer"
             >
               <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-surface-raised-2">
                 <Plus size={16} />
               </span>
-              <span className="text-xs">Create a team</span>
+              <span className="text-small">Create a team</span>
             </button>
           )}
           {!canManage && teams.length === 0 && (
-            <p className="col-span-full px-4 py-10 text-center text-sm text-text-secondary/60">
+            <p className="col-span-full px-4 py-10 text-center text-body text-text-muted">
               No teams yet.
             </p>
           )}

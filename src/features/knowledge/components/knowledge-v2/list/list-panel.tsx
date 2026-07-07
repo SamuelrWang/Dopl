@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  ChevronDown,
-  Database,
-  ListFilter,
-  Plus,
-  Search,
-} from "lucide-react";
+import { ChevronDown, ListFilter, Plus, Search } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import type { KnowledgeBase, KnowledgeEntry } from "../../../types";
 import type { BaseTree, ListFilter as Filter } from "../types";
@@ -116,11 +110,6 @@ export function ListPanel({
       </div>
 
       <div className={styles.listBody}>
-        <div className={styles.sectionLabel}>
-          <Database size={13} />
-          Knowledge bases
-        </div>
-
         {bases.length === 0 ? (
           <p className={styles.treeEmpty} style={{ padding: "10px 18px" }}>
             No knowledge bases match.

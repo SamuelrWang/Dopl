@@ -55,7 +55,7 @@ export interface UseMyAccessResult {
   refetch: () => void;
 }
 
-export function useMyAccess(workspaceSegment: string | null): UseMyAccessResult {
+function useMyAccess(workspaceSegment: string | null): UseMyAccessResult {
   const [data, setData] = useState<MyAccessPayload | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [tick, setTick] = useState(0);

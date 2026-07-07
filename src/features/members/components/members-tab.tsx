@@ -11,7 +11,7 @@ import type {
   WorkspaceInvitationView,
   WorkspaceMemberView,
 } from "../types";
-import { removeMember, updateMemberRole } from "../members-client";
+import { removeMember, updateMemberRole } from "../teams-client";
 import { SelectFilter } from "./member-bits";
 import { MEMBER_ROW_GRID, MemberRow } from "./member-row";
 import { PendingInvitations } from "./pending-invitations";
@@ -112,14 +112,14 @@ export function MembersTab({
         <div className="relative flex-1 max-w-sm">
           <Search
             size={12}
-            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-secondary/50"
+            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted"
           />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search members"
-            className="w-full pl-7 pr-3 py-1.5 rounded-md bg-[var(--card-surface)] border border-border-default text-xs placeholder:text-text-secondary/40 outline-none focus:border-border-strong transition-colors"
+            className="w-full pl-7 pr-3 py-1.5 rounded-md bg-[var(--card-surface)] border border-border-default text-small placeholder:text-text-secondary/40 outline-none focus:border-border-strong transition-colors"
           />
         </div>
         <SelectFilter
@@ -141,12 +141,12 @@ export function MembersTab({
             ...teams.map((t) => ({ value: t.id, label: t.name })),
           ]}
         />
-        <span className="ml-auto text-[10px] font-mono uppercase tracking-wider text-text-secondary/60">
+        <span className="ml-auto text-label font-mono uppercase tracking-wider text-text-muted">
           {visibleMembers.length} of {members.length}
         </span>
       </div>
 
-      {error && <p className="text-xs text-red-400">{error}</p>}
+      {error && <p className="text-small text-danger">{error}</p>}
 
       <JoinRequestsBanner
         workspaceSlug={workspaceSlug}
@@ -168,16 +168,16 @@ export function MembersTab({
         <div
           className={`${MEMBER_ROW_GRID} border-b border-border-default bg-surface-raised-1 !py-2.5`}
         >
-          <span className="text-[10px] font-mono uppercase tracking-wider text-text-secondary/60">
+          <span className="text-label font-mono uppercase tracking-wider text-text-muted">
             Member
           </span>
-          <span className="text-[10px] font-mono uppercase tracking-wider text-text-secondary/60">
+          <span className="text-label font-mono uppercase tracking-wider text-text-muted">
             Role
           </span>
-          <span className="text-[10px] font-mono uppercase tracking-wider text-text-secondary/60">
+          <span className="text-label font-mono uppercase tracking-wider text-text-muted">
             Teams
           </span>
-          <span className="text-[10px] font-mono uppercase tracking-wider text-text-secondary/60">
+          <span className="text-label font-mono uppercase tracking-wider text-text-muted">
             Last active
           </span>
           <span />
@@ -185,7 +185,7 @@ export function MembersTab({
 
         {loading && members.length === 0 && <MembersTableSkeleton />}
         {!loading && visibleMembers.length === 0 && (
-          <div className="px-4 py-10 text-center text-sm text-text-secondary/60">
+          <div className="px-4 py-10 text-center text-body text-text-muted">
             {members.length === 0
               ? "No members yet."
               : "No members match these filters."}

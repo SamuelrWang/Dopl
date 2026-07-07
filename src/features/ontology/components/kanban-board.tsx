@@ -82,7 +82,7 @@ function Column({
             onChange={(e) =>
               dispatch({ type: "OBJECT_UPDATE", id: col.id, patch: { name: e.target.value } })
             }
-            className="min-w-0 flex-1 bg-transparent text-lead font-semibold tracking-tight text-text-primary placeholder:text-text-muted focus:outline-none"
+            className="min-w-0 flex-1 bg-transparent text-body font-semibold tracking-tight text-text-primary placeholder:text-text-muted focus:outline-none"
             placeholder="Column name"
             aria-label="Column name"
           />

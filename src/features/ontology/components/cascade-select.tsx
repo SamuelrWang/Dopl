@@ -186,7 +186,7 @@ function Row({
       onClick={onPick}
       style={{ paddingLeft: 8 + depth * 16 }}
       className={cn(
-        "flex w-full items-center gap-2 rounded-lg py-1.5 pr-2 text-left text-lead transition-colors",
+        "flex w-full items-center gap-2 rounded-lg py-1.5 pr-2 text-left text-small transition-colors",
         expanded
           ? "concave-sel font-medium text-text-primary"
           : disabled

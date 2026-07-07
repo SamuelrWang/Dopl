@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ChevronRight, Plus } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
+import { Popover } from "@/shared/ui/popover-menu";
 import type { AccessMatrixResource, TeamView } from "@/features/teams/types";
 import { DEFAULT_TEAM_COLOR } from "../constants";
 import { ScopePill } from "./team-bits";
@@ -37,7 +38,7 @@ export function MemberDrawerTeams({
   return (
     <section>
       <div className="flex items-center justify-between mb-2">
-        <h4 className="text-[10px] font-mono uppercase tracking-wider text-text-secondary/60">
+        <h4 className="text-label font-mono uppercase tracking-wider text-text-muted">
           Teams
         </h4>
         {canManage && availableTeams.length > 0 && (
@@ -45,46 +46,37 @@ export function MemberDrawerTeams({
             <button
               type="button"
               onClick={() => setPickerOpen((v) => !v)}
-              className="flex items-center gap-1 text-[11px] text-text-secondary hover:text-text-primary transition-colors cursor-pointer"
+              className="flex items-center gap-1 text-caption text-text-secondary hover:text-text-primary transition-colors cursor-pointer"
             >
               <Plus size={11} />
               Add to team
             </button>
-            {pickerOpen && (
-              <>
-                <div
-                  className="fixed inset-0 z-10"
-                  onClick={() => setPickerOpen(false)}
-                  aria-hidden
-                />
-                <div className="absolute right-0 top-full mt-1 min-w-[170px] rounded-md border border-border-default bg-[var(--bg-inset-hover)] shadow-[var(--shadow-elevated)] py-1 z-20">
-                  {availableTeams.map((t) => (
-                    <button
-                      key={t.id}
-                      type="button"
-                      disabled={busy}
-                      onClick={() => {
-                        setPickerOpen(false);
-                        onAddToTeam(t.id);
-                      }}
-                      className="w-full flex items-center gap-2 text-left px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-raised-2 hover:text-text-primary transition-colors cursor-pointer"
-                    >
-                      <span
-                        className="h-1.5 w-1.5 rounded-full shrink-0"
-                        style={{ backgroundColor: t.color ?? DEFAULT_TEAM_COLOR }}
-                      />
-                      {t.name}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
+            <Popover open={pickerOpen} onClose={() => setPickerOpen(false)} align="right" className="min-w-[170px]">
+              {availableTeams.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    setPickerOpen(false);
+                    onAddToTeam(t.id);
+                  }}
+                  className="w-full flex items-center gap-2 text-left px-3 py-1.5 text-small text-text-secondary hover:bg-surface-raised-2 hover:text-text-primary transition-colors cursor-pointer"
+                >
+                  <span
+                    className="h-1.5 w-1.5 rounded-full shrink-0"
+                    style={{ backgroundColor: t.color ?? DEFAULT_TEAM_COLOR }}
+                  />
+                  {t.name}
+                </button>
+              ))}
+            </Popover>
           </div>
         )}
       </div>
 
       {memberTeams.length === 0 ? (
-        <span className="text-[11px] text-text-secondary/50">Not in any team</span>
+        <span className="text-caption text-text-muted">Not in any team</span>
       ) : (
         <ul className="rounded-lg border border-border-subtle divide-y divide-border-subtle overflow-hidden">
           {memberTeams.map((t) => (
@@ -142,7 +134,7 @@ function TeamRow({
         <ChevronRight
           size={11}
           className={cn(
-            "shrink-0 text-text-secondary/60 transition-transform",
+            "shrink-0 text-text-muted transition-transform",
             open && "rotate-90"
           )}
         />
@@ -150,10 +142,10 @@ function TeamRow({
           className="h-1.5 w-1.5 shrink-0 rounded-full"
           style={{ backgroundColor: team.color ?? DEFAULT_TEAM_COLOR }}
         />
-        <span className="flex-1 min-w-0 truncate text-xs text-text-primary">
+        <span className="flex-1 min-w-0 truncate text-small text-text-primary">
           {team.name}
         </span>
-        <span className="shrink-0 text-[10px] font-mono text-text-secondary/60">
+        <span className="shrink-0 text-micro font-mono text-text-muted">
           {grantRows.length === 0
             ? "No scoping"
             : `${grantRows.length} scoped`}
@@ -163,7 +155,7 @@ function TeamRow({
       {open && (
         <div className="px-3 pb-2.5 bg-surface-raised-1 border-t border-border-subtle">
           {grantRows.length === 0 ? (
-            <p className="pt-2 text-[11px] text-text-secondary/60">
+            <p className="pt-2 text-caption text-text-muted">
               No scoped resources — this team only sees workspace-wide items.
             </p>
           ) : (
@@ -174,8 +166,8 @@ function TeamRow({
                   className="flex items-center justify-between gap-3 py-1"
                 >
                   <div className="min-w-0">
-                    <p className="text-xs text-text-primary truncate">{g.name}</p>
-                    <p className="text-[10px] text-text-secondary/50">
+                    <p className="text-small text-text-primary truncate">{g.name}</p>
+                    <p className="text-micro text-text-muted">
                       {g.resourceType === "knowledge_base"
                         ? "Knowledge base"
                         : "Workflow"}
@@ -191,7 +183,7 @@ function TeamRow({
               type="button"
               disabled={busy}
               onClick={onRemove}
-              className="mt-2 text-[11px] text-red-400 hover:text-red-300 transition-colors cursor-pointer disabled:opacity-60"
+              className="mt-2 text-caption text-danger hover:text-danger transition-colors cursor-pointer disabled:opacity-60"
             >
               Remove from this team
             </button>

@@ -2,14 +2,13 @@
 
 import { useCallback, useState } from "react";
 import { Plus, Users } from "lucide-react";
-import appShell from "@/shared/layout/app-shell/app-shell.module.css";
+import { cn } from "@/shared/lib/utils";
 import { meetsMinRole } from "@/features/workspaces/types";
 import type { MemberRole } from "../types";
 import { useMembers } from "../hooks/use-members";
 import { useInvitations } from "../hooks/use-invitations";
 import { useTeams } from "../hooks/use-teams";
 import { useWorkspaceResources } from "../hooks/use-workspace-resources";
-import { TabButton } from "./member-bits";
 import { MembersTab } from "./members-tab";
 import { MemberDrawer } from "./member-drawer";
 import { TeamsTab } from "./teams-tab";
@@ -20,6 +19,12 @@ import { ConflictDialog, type ConflictState } from "./conflict-dialog";
 
 type Tab = "members" | "teams" | "access";
 
+const TABS: Array<{ key: Tab; label: string }> = [
+  { key: "members", label: "Members" },
+  { key: "teams", label: "Teams" },
+  { key: "access", label: "Access" },
+];
+
 interface Props {
   workspaceSlug: string;
   currentUserId: string;
@@ -27,10 +32,10 @@ interface Props {
 }
 
 /**
- * Members page — knowledge-landing layout language: big title, hero
- * explainer card, then the tab strip (Members | Teams | Access) with the
- * Create team / Add member actions, then the tab content. Page scrolls
- * as one surface.
+ * Members page — the workspace's access-control console. One .page-float
+ * surface: compact header bar (title + counts + admin actions), a
+ * concave-track tab switcher (Members | Teams | Access), scrolling tab
+ * body below.
  */
 export function MembersView({ workspaceSlug, currentUserId, myRole }: Props) {
   const canManage = meetsMinRole(myRole, "admin");
@@ -73,75 +78,49 @@ export function MembersView({ workspaceSlug, currentUserId, myRole }: Props) {
     memberList.find((m) => m.userId === selectedMemberId) ?? null;
   const pendingCount = inviteList.length;
 
+  const tabCount = (key: Tab) =>
+    key === "members" ? memberList.length : key === "teams" ? teamList.length : null;
+
   return (
-    <div className="px-9 pt-8 pb-16">
-      {/* Title row — mirrors the Knowledge landing head. */}
-      <div className="flex items-center gap-3.5 mb-6">
-        <h1 className="text-[30px] font-semibold tracking-[-0.02em] text-text-primary">
+    <div className="page-float flex flex-col antialiased">
+      {/* Header bar — title, counts, tab switcher, admin actions. */}
+      <div className="flex shrink-0 items-center gap-3 border-b border-border-subtle px-4 py-2">
+        <h1 className="shrink-0 text-title font-semibold tracking-tight text-text-primary">
           Members
         </h1>
-        <span className="text-sm text-text-secondary">
+        <span className="min-w-0 truncate text-caption text-text-muted">
           {memberList.length} {memberList.length === 1 ? "person" : "people"} ·{" "}
           {teamList.length} {teamList.length === 1 ? "team" : "teams"}
           {pendingCount > 0 && ` · ${pendingCount} pending`}
         </span>
-      </div>
 
-      {/* Hero explainer card. */}
-      <section className={appShell.hero} style={{ minHeight: 240, marginBottom: 34 }}>
-        <div className={appShell.heroBlobs}>
-          <span style={{ width: 62, height: 62, top: 30, right: 118 }} />
-          <span style={{ width: 66, height: 66, top: 26, right: 34 }} />
-          <span style={{ width: 70, height: 70, top: 128, right: 178 }} />
-          <span style={{ width: 72, height: 72, top: 132, right: 74 }} />
+        <div className="concave-track ml-2 flex items-center gap-1">
+          {TABS.map(({ key, label }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setTab(key)}
+              className={cn(
+                "flex h-6 items-center gap-1.5 rounded-[6px] px-2.5 text-small font-medium transition-colors",
+                tab === key
+                  ? "raised-tab text-text-primary"
+                  : "text-text-secondary hover:text-text-primary"
+              )}
+            >
+              {label}
+              {tabCount(key) !== null && (
+                <span className="text-micro text-text-muted">{tabCount(key)}</span>
+              )}
+            </button>
+          ))}
         </div>
-        <div className={appShell.heroInner} style={{ padding: "38px 50px" }}>
-          <h2>One workspace, organized into teams</h2>
-          <p>
-            Invite your people, group them into teams, and control which
-            knowledge bases and workflows each team can reach.
-          </p>
-          {canManage && (
-            <div className={appShell.heroActions}>
-              <button
-                type="button"
-                className={appShell.tryit}
-                onClick={() => setInviteOpen(true)}
-              >
-                Add member
-              </button>
-              <button
-                type="button"
-                className={appShell.howit}
-                style={{ background: "none", border: "none", font: "inherit" }}
-                onClick={() => setCreateTeamOpen(true)}
-              >
-                Create a team
-              </button>
-            </div>
-          )}
-        </div>
-      </section>
 
-      {/* Tab strip + actions. */}
-      <div className="flex items-center border-b border-border-default">
-        <TabButton active={tab === "members"} onClick={() => setTab("members")}>
-          Members
-          <Count value={memberList.length} />
-        </TabButton>
-        <TabButton active={tab === "teams"} onClick={() => setTab("teams")}>
-          Teams
-          <Count value={teamList.length} />
-        </TabButton>
-        <TabButton active={tab === "access"} onClick={() => setTab("access")}>
-          Access
-        </TabButton>
         {canManage && (
-          <div className="ml-auto flex items-center gap-2 pb-2">
+          <div className="ml-auto flex shrink-0 items-center gap-2">
             <button
               type="button"
               onClick={() => setCreateTeamOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border-default bg-[var(--card-surface)] hover:bg-surface-raised-2 transition-colors text-xs text-text-primary cursor-pointer"
+              className="btn-light flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-small font-medium text-text-primary"
             >
               <Users size={12} />
               Create team
@@ -149,11 +128,7 @@ export function MembersView({ workspaceSlug, currentUserId, myRole }: Props) {
             <button
               type="button"
               onClick={() => setInviteOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md hover:opacity-90 transition-opacity text-xs cursor-pointer"
-              style={{
-                background: "var(--surface-cta)",
-                color: "var(--text-on-cta)",
-              }}
+              className="flex h-7 cursor-pointer items-center gap-1.5 rounded-md bg-surface-cta px-2.5 text-small font-medium text-text-on-cta transition-opacity hover:opacity-90"
             >
               <Plus size={12} />
               Add member
@@ -162,7 +137,8 @@ export function MembersView({ workspaceSlug, currentUserId, myRole }: Props) {
         )}
       </div>
 
-      <div className="pt-4">
+      {/* Tab body — the page's single scroll surface. */}
+      <div className="min-h-0 flex-1 overflow-y-auto px-6 pt-4 pb-10">
         {tab === "members" && (
           <MembersTab
             workspaceSlug={workspaceSlug}
@@ -247,13 +223,5 @@ export function MembersView({ workspaceSlug, currentUserId, myRole }: Props) {
         }}
       />
     </div>
-  );
-}
-
-function Count({ value }: { value: number }) {
-  return (
-    <span className="text-[10px] font-mono text-text-secondary/70 bg-surface-raised-2 rounded-full px-1.5 py-0.5">
-      {value}
-    </span>
   );
 }

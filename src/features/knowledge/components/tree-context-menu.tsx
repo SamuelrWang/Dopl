@@ -114,7 +114,7 @@ export function TreeContextMenu({
           />
         </>
       ) : (
-        <div className="px-3 py-1.5 text-[11px] text-text-secondary/70">
+        <div className="px-3 py-1.5 text-label text-text-secondary/70">
           Read-only — ask an admin for edit access.
         </div>
       )}
@@ -140,8 +140,8 @@ function MenuItem({
       onClick={onClick}
       className={
         destructive
-          ? "w-full flex items-center gap-2 px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/[0.08] cursor-pointer"
-          : "w-full flex items-center gap-2 px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-raised-2 hover:text-text-primary cursor-pointer"
+          ? "w-full flex items-center gap-2 px-3 py-1.5 text-small text-red-400 hover:bg-red-500/[0.08] cursor-pointer"
+          : "w-full flex items-center gap-2 px-3 py-1.5 text-small text-text-secondary hover:bg-surface-raised-2 hover:text-text-primary cursor-pointer"
       }
     >
       {icon}

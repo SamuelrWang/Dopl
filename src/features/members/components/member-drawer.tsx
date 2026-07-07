@@ -15,10 +15,16 @@ import {
 } from "@/shared/ui/drawer";
 import { meetsMinRole } from "@/features/workspaces/types";
 import type { AccessMatrixResource, TeamView } from "@/features/teams/types";
+import type { EffectiveAccessRow } from "@/features/teams/effective-access";
+import { useApiGet } from "@/shared/hooks/use-api-get";
 import type { AssignableRole, MemberRole, WorkspaceMemberView } from "../types";
-import { addTeamMembers, removeTeamMember } from "../teams-client";
-import { removeMember, updateMemberRole } from "../members-client";
-import { computeEffectiveAccess } from "../effective-access";
+import { DEFAULT_TEAM_COLOR } from "../constants";
+import {
+  addTeamMembers,
+  removeTeamMember,
+  removeMember,
+  updateMemberRole,
+} from "../teams-client";
 import { Avatar, RolePill, RoleSelect } from "./member-bits";
 import { ScopePill } from "./team-bits";
 import { MemberDrawerTeams } from "./member-drawer-teams";
@@ -75,20 +81,16 @@ export function MemberDrawer({
     [member, teams]
   );
 
-  const access = useMemo(
-    () =>
-      member
-        ? computeEffectiveAccess({
-            memberUserId: member.userId,
-            memberRole: member.role,
-            teams,
-            resources,
-          })
-        : [],
-    [member, teams, resources]
+  // Server-resolved effective access — same implementation as the
+  // enforcement path (see /members/[userId]/access), no client mirror.
+  const { data: access } = useApiGet(
+    member
+      ? `/api/workspaces/${encodeURIComponent(workspaceSlug)}/members/${encodeURIComponent(member.userId)}/access`
+      : null,
+    (body) => (body as { rows: EffectiveAccessRow[] }).rows ?? []
   );
-  const kbRows = access.filter((r) => r.resourceType === "knowledge_base");
-  const wfRows = access.filter((r) => r.resourceType === "workflow");
+  const kbRows = (access ?? []).filter((r) => r.resourceType === "knowledge_base");
+  const wfRows = (access ?? []).filter((r) => r.resourceType === "workflow");
 
   async function mutate(fn: () => Promise<void>, onDone?: () => void) {
     setBusy(true);
@@ -135,7 +137,7 @@ export function MemberDrawer({
                     {member.displayName || member.email || member.userId}
                   </DrawerTitle>
                   {member.email && (
-                    <p className="mt-1 text-[11px] text-white/60 truncate">
+                    <p className="mt-1 text-caption text-white/60 truncate">
                       {member.email}
                     </p>
                   )}
@@ -184,11 +186,11 @@ export function MemberDrawer({
                   )
                 }
               />
-              {error && <p className="text-xs text-red-400">{error}</p>}
+              {error && <p className="text-small text-danger">{error}</p>}
 
               <section>
                 <SectionLabel>Effective access</SectionLabel>
-                <p className="text-[11px] text-text-secondary/60 mb-3">
+                <p className="text-caption text-text-muted mb-3">
                   Highest level from any team they belong to.
                   {(member.role === "owner" || member.role === "admin") &&
                     " Owners and admins always have full access."}
@@ -204,7 +206,7 @@ export function MemberDrawer({
                     type="button"
                     disabled={busy}
                     onClick={() => setConfirmRemove(true)}
-                    className="px-3 py-1.5 rounded-md border border-red-500/30 text-xs text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer disabled:opacity-60"
+                    className="px-3 py-1.5 rounded-md border border-danger/30 text-small text-danger hover:bg-danger/10 transition-colors cursor-pointer disabled:opacity-60"
                   >
                     Remove from workspace
                   </button>
@@ -246,7 +248,7 @@ function SectionLabel({
   return (
     <h4
       className={cn(
-        "text-[10px] font-mono uppercase tracking-wider text-text-secondary/60 mb-2",
+        "text-label font-mono uppercase tracking-wider text-text-muted mb-2",
         className
       )}
     >
@@ -260,12 +262,12 @@ function AccessSection({
   rows,
 }: {
   label: string;
-  rows: ReturnType<typeof computeEffectiveAccess>;
+  rows: EffectiveAccessRow[];
 }) {
   if (rows.length === 0) return null;
   return (
     <div className="mb-4 last:mb-0">
-      <h5 className="text-[10px] font-mono uppercase tracking-wider text-text-secondary/50 mb-1.5">
+      <h5 className="text-label font-mono uppercase tracking-wider text-text-muted mb-1.5">
         {label}
       </h5>
       <ul className="rounded-lg border border-border-subtle divide-y divide-border-subtle overflow-hidden">
@@ -275,12 +277,12 @@ function AccessSection({
             className="flex items-center justify-between gap-3 px-3 py-2"
           >
             <div className="min-w-0">
-              <p className="text-xs text-text-primary truncate">{r.resourceName}</p>
+              <p className="text-small text-text-primary truncate">{r.resourceName}</p>
               {r.viaTeam && (
-                <p className="text-[10px] text-text-secondary/50 flex items-center gap-1">
+                <p className="text-micro text-text-muted flex items-center gap-1">
                   <span
                     className="h-1 w-1 rounded-full"
-                    style={{ backgroundColor: r.viaTeam.color ?? "#8b5cf6" }}
+                    style={{ backgroundColor: r.viaTeam.color ?? DEFAULT_TEAM_COLOR }}
                   />
                   via {r.viaTeam.name}
                 </p>

@@ -99,7 +99,7 @@ function ShareLinkSection({
   return (
     <div className="flex flex-col gap-1.5 border-t border-border-subtle pt-3">
       <div className="flex items-center justify-between">
-        <label className="text-xs font-medium text-text-tertiary">
+        <label className="text-small font-medium text-text-tertiary">
           Or share an invite link
         </label>
         <button
@@ -107,7 +107,7 @@ function ShareLinkSection({
           onClick={() => void reset()}
           disabled={busy || !token}
           title="Reset link — previously shared copies stop working"
-          className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-text-secondary/50 hover:text-text-primary transition-colors disabled:opacity-40 cursor-pointer"
+          className="flex items-center gap-1 text-label uppercase tracking-wider text-text-muted hover:text-text-primary transition-colors disabled:opacity-40 cursor-pointer"
         >
           <RotateCcw size={10} />
           Reset
@@ -120,19 +120,19 @@ function ShareLinkSection({
             readOnly
             value={url ?? "Generating link…"}
             onFocus={(e) => e.target.select()}
-            className="flex-1 min-w-0 bg-transparent text-xs text-text-secondary outline-none truncate"
+            className="flex-1 min-w-0 bg-transparent text-small text-text-secondary outline-none truncate"
           />
         </div>
         <button
           type="button"
           onClick={() => void copy()}
           disabled={!url}
-          className="shrink-0 h-9 px-3 rounded-md border border-border-strong bg-surface-raised-2 hover:bg-surface-raised-3 text-xs font-medium text-text-primary transition-colors disabled:opacity-40 cursor-pointer"
+          className="shrink-0 h-9 px-3 rounded-md border border-border-strong bg-surface-raised-2 hover:bg-surface-raised-3 text-small font-medium text-text-primary transition-colors disabled:opacity-40 cursor-pointer"
         >
           {copied ? "Copied!" : "Copy link"}
         </button>
       </div>
-      <p className="text-[11px] text-text-muted">
+      <p className="text-caption text-text-muted">
         Anyone with the link can request to join — you approve them from the
         members page.
       </p>
@@ -256,24 +256,24 @@ export function InviteDialog({
       >
         <div className="flex flex-col items-center text-center gap-1.5 pt-2">
           <DialogTitle className="text-text-primary text-lg">Add members</DialogTitle>
-          <p className="text-sm text-text-tertiary">
+          <p className="text-body text-text-tertiary">
             Type or paste in emails below, separated by commas
           </p>
         </div>
 
         {sentCount != null ? (
           <div className="flex flex-col gap-2 py-4 text-center">
-            <p className="text-sm text-text-primary">
+            <p className="text-body text-text-primary">
               {sentCount === 1 ? "Invitation sent." : `${sentCount} invitations sent.`}
             </p>
-            <p className="text-xs text-text-tertiary">
+            <p className="text-small text-text-tertiary">
               They&apos;ll see it in their sidebar the next time they log in and
               can accept from there. Invites expire in 7 days.
             </p>
             <button
               type="button"
               onClick={() => onOpenChange(false)}
-              className="mt-2 h-9 rounded-md bg-accent-primary text-accent-on text-sm font-medium hover:bg-accent-primary/90 transition-colors cursor-pointer"
+              className="mt-2 h-9 rounded-md bg-accent-primary text-accent-on text-body font-medium hover:bg-accent-primary/90 transition-colors cursor-pointer"
             >
               Done
             </button>
@@ -286,11 +286,11 @@ export function InviteDialog({
               onChange={(e) => setEmailsInput(e.target.value)}
               placeholder="Search names or emails"
               autoFocus
-              className="h-10 px-3 rounded-md bg-surface-raised-2 border border-border-strong text-sm text-text-primary placeholder:text-text-muted outline-none focus:border-border-highlight transition-colors"
+              className="h-10 px-3 rounded-md bg-surface-raised-2 border border-border-strong text-body text-text-primary placeholder:text-text-muted outline-none focus:border-border-highlight transition-colors"
             />
 
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-text-tertiary">Select role</label>
+              <label className="text-small font-medium text-text-tertiary">Select role</label>
               <div className="relative">
                 <button
                   type="button"
@@ -298,8 +298,8 @@ export function InviteDialog({
                   className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-md bg-surface-raised-2 border border-border-strong text-left hover:bg-surface-raised-3 transition-colors cursor-pointer"
                 >
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-text-primary">{selectedRole.label}</p>
-                    <p className="text-xs text-text-muted">{selectedRole.hint}</p>
+                    <p className="text-body font-medium text-text-primary">{selectedRole.label}</p>
+                    <p className="text-small text-text-muted">{selectedRole.hint}</p>
                   </div>
                   <ChevronDown size={16} className="shrink-0 text-text-muted" />
                 </button>
@@ -319,8 +319,8 @@ export function InviteDialog({
                           r.value === role ? "bg-surface-selected" : "hover:bg-surface-raised-2",
                         )}
                       >
-                        <p className="text-sm font-medium text-text-primary">{r.label}</p>
-                        <p className="text-xs text-text-muted">{r.hint}</p>
+                        <p className="text-body font-medium text-text-primary">{r.label}</p>
+                        <p className="text-small text-text-muted">{r.hint}</p>
                       </button>
                     ))}
                   </div>
@@ -332,7 +332,7 @@ export function InviteDialog({
 
             {teams.length > 0 && (
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-text-tertiary">
+                <label className="text-small font-medium text-text-tertiary">
                   Add to teams (optional)
                 </label>
                 <ul className="rounded-md border border-border-strong divide-y divide-border-subtle overflow-hidden max-h-36 overflow-y-auto bg-surface-raised-1">
@@ -349,7 +349,7 @@ export function InviteDialog({
                             className="h-1.5 w-1.5 rounded-full shrink-0"
                             style={{ backgroundColor: t.color ?? "#8b5cf6" }}
                           />
-                          <span className="flex-1 text-xs text-text-primary truncate">
+                          <span className="flex-1 text-small text-text-primary truncate">
                             {t.name}
                           </span>
                           <span
@@ -370,21 +370,21 @@ export function InviteDialog({
               </div>
             )}
 
-            {error && <p className="text-xs text-red-400">{error}</p>}
+            {error && <p className="text-small text-danger">{error}</p>}
 
             <div className="flex flex-col gap-1.5 pt-1">
               <button
                 type="button"
                 onClick={handleInvite}
                 disabled={submitting || emailsInput.trim() === ""}
-                className="h-10 rounded-md bg-accent-primary text-accent-on text-sm font-medium hover:bg-accent-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                className="h-10 rounded-md bg-accent-primary text-accent-on text-body font-medium hover:bg-accent-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
               >
                 {submitting ? "Sending…" : "Send invite"}
               </button>
               <button
                 type="button"
                 onClick={() => onOpenChange(false)}
-                className="h-10 rounded-md text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-raised-2 transition-colors cursor-pointer"
+                className="h-10 rounded-md text-body font-medium text-text-secondary hover:text-text-primary hover:bg-surface-raised-2 transition-colors cursor-pointer"
               >
                 Cancel
               </button>

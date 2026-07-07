@@ -93,7 +93,7 @@ function ActionRow({
           type="text"
           value={method.name}
           onChange={(e) => onChange({ ...method, name: e.target.value })}
-          className="min-w-0 flex-1 bg-transparent text-lead font-semibold tracking-tight text-text-primary focus:outline-none"
+          className="min-w-0 flex-1 bg-transparent text-body font-semibold tracking-tight text-text-primary focus:outline-none"
           aria-label="Action name"
         />
         <button

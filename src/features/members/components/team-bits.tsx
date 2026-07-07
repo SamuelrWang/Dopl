@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { MoreHorizontal, Users } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
+import { Popover } from "@/shared/ui/popover-menu";
 import type { AccessLevel } from "@/features/teams/access-levels";
 import { DEFAULT_TEAM_COLOR, TEAM_COLORS } from "../constants";
 
@@ -23,7 +24,7 @@ export function TeamChip({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] text-text-primary max-w-[140px]",
+        "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-caption text-text-primary max-w-[140px]",
         className
       )}
       style={{ backgroundColor: `${hex}1f`, borderColor: `${hex}3d` }}
@@ -41,7 +42,7 @@ export function TeamChip({
             e.stopPropagation();
             onRemove();
           }}
-          className="shrink-0 text-text-secondary/60 hover:text-red-300 transition-colors cursor-pointer leading-none"
+          className="shrink-0 text-text-muted hover:text-danger transition-colors cursor-pointer leading-none"
         >
           ×
         </button>
@@ -71,8 +72,8 @@ export function TeamColorTile({
 }
 
 const SCOPE_STYLE: Record<"edit" | "read" | "none", string> = {
-  edit: "bg-emerald-500/10 border-emerald-600/30 text-emerald-700",
-  read: "bg-sky-500/10 border-sky-600/25 text-sky-700",
+  edit: "bg-bg-inset border-border-strong text-text-primary",
+  read: "bg-surface-raised-2 border-border-default text-text-secondary",
   none: "border-dashed border-border-strong text-text-tertiary bg-transparent",
 };
 
@@ -97,7 +98,7 @@ export function ScopePill({
 }) {
   const key = level ?? "none";
   const base = cn(
-    "inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider border whitespace-nowrap",
+    "inline-flex items-center px-1.5 py-0.5 rounded text-label font-mono uppercase tracking-wider border whitespace-nowrap",
     SCOPE_STYLE[key],
     className
   );
@@ -155,10 +156,10 @@ export function AccessLevelControl({
             disabled={disabled}
             onClick={() => !active && onChange(seg.key)}
             className={cn(
-              "px-2.5 py-1 text-[10px] font-mono uppercase tracking-wider transition-colors",
+              "px-2.5 py-1 text-label font-mono uppercase tracking-wider transition-colors",
               active
                 ? "bg-surface-selected text-text-primary"
-                : "text-text-secondary/60 hover:text-text-primary hover:bg-surface-raised-2",
+                : "text-text-muted hover:text-text-primary hover:bg-surface-raised-2",
               disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"
             )}
           >
@@ -204,7 +205,7 @@ export function ColorSwatchPicker({
   );
 }
 
-/** House-pattern kebab menu (fixed click-trap + absolute popover). */
+/** Kebab menu on the shared kit Popover. */
 export function KebabMenu({
   items,
   ariaLabel = "More actions",
@@ -221,43 +222,31 @@ export function KebabMenu({
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="flex h-6 w-6 items-center justify-center rounded-md text-text-secondary/60 hover:text-text-primary hover:bg-surface-raised-2 transition-colors cursor-pointer"
+        className="flex h-6 w-6 items-center justify-center rounded-md text-text-muted hover:text-text-primary hover:bg-surface-raised-2 transition-colors cursor-pointer"
       >
         <MoreHorizontal size={14} />
       </button>
-      {open && (
-        <>
-          <div
-            className="fixed inset-0 z-10"
-            onClick={() => setOpen(false)}
-            aria-hidden
-          />
-          <div
-            role="menu"
-            className="absolute right-0 top-full mt-1 min-w-[150px] rounded-md border border-border-default bg-[var(--bg-inset-hover)] shadow-[var(--shadow-elevated)] py-1 z-20"
+      <Popover open={open} onClose={() => setOpen(false)} align="right" className="min-w-[150px]">
+        {items.map((item) => (
+          <button
+            key={item.label}
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              item.onSelect();
+            }}
+            className={cn(
+              "w-full text-left px-3 py-1.5 text-small cursor-pointer transition-colors",
+              item.destructive
+                ? "text-danger hover:bg-danger/10"
+                : "text-text-secondary hover:bg-surface-raised-2 hover:text-text-primary"
+            )}
           >
-            {items.map((item) => (
-              <button
-                key={item.label}
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  setOpen(false);
-                  item.onSelect();
-                }}
-                className={cn(
-                  "w-full text-left px-3 py-1.5 text-xs cursor-pointer transition-colors",
-                  item.destructive
-                    ? "text-red-300 hover:bg-red-500/10"
-                    : "text-text-secondary hover:bg-surface-raised-2 hover:text-text-primary"
-                )}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
+            {item.label}
+          </button>
+        ))}
+      </Popover>
     </div>
   );
 }

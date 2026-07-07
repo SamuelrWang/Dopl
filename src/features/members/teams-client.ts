@@ -1,11 +1,12 @@
 /**
- * Client-side fetch helpers for the teams API. Mutations throw
- * `TeamAccessConflictError` on 409 TEAM_KB_ACCESS_CONFLICT so callers
- * can offer the "grant read access?" retry with `autoGrant: true`.
+ * Client-side fetch helpers for the teams + members APIs. Team mutations
+ * throw `TeamAccessConflictError` on 409 TEAM_KB_ACCESS_CONFLICT so
+ * callers can offer the "grant read access?" retry with `autoGrant: true`.
  */
 
 import type { AccessLevel, TeamResourceType } from "@/features/teams/access-levels";
 import type { KbTeamConflict, TeamView } from "@/features/teams/types";
+import type { AssignableRole } from "./types";
 
 export interface TeamConflictDetails {
   workflowId: string;
@@ -151,5 +152,24 @@ export async function setResourceAccessMode(
       accessMode,
       autoGrant: opts?.autoGrant,
     }),
+  });
+}
+
+// ── Member mutations (role change + removal) ─────────────────────────
+
+export async function updateMemberRole(
+  slug: string,
+  userId: string,
+  role: AssignableRole
+): Promise<void> {
+  await request(`${ws(slug)}/members/${encodeURIComponent(userId)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ role }),
+  });
+}
+
+export async function removeMember(slug: string, userId: string): Promise<void> {
+  await request(`${ws(slug)}/members/${encodeURIComponent(userId)}`, {
+    method: "DELETE",
   });
 }

@@ -700,6 +700,8 @@ body.panel-dragging *::after {
    Shared so every auth-adjacent surface stays consistent.
    ───────────────────────────────────────────────────────────────────── */
 
+@layer components {
+
 /* Raised primary button — top highlight, bottom shade, ambient drop. */
 .auth-btn-3d {
   background: linear-gradient(180deg, #313131 0%, #1c1c1c 52%, #111 100%);
@@ -890,6 +892,8 @@ body.panel-dragging *::after {
     0 1px 2px rgba(0, 0, 0, 0.12),
     0 3px 6px rgba(0, 0, 0, 0.08);
 }
+
+} /* @layer components */
 
 /* ─────────────────────────────────────────────────────────────────────
    Landing page — capacity.so clone styles

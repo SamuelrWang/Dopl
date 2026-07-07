@@ -70,6 +70,14 @@ Composition pattern (CSS modules welcome for layout, recipes come from kit):
 <button className={cn(styles.tab, active && "concave-sel")}>
 ```
 
+Shared React primitives (`src/shared/ui` + `src/shared/hooks`):
+
+| Primitive | Use |
+| --------- | --- |
+| `Popover` / `MenuItem` (`popover-menu.tsx`) | ALL dropdowns/kebabs/filter menus. Never hand-roll the fixed-backdrop pattern. |
+| `Avatar` (`avatar.tsx`) | Profile pictures with neutral initials fallback. No gradients — identity color belongs to teams. |
+| `useApiGet` (`use-api-get.ts`) | Every client GET-with-refresh hook. Wrap it per endpoint; never copy the fetch/tick pattern. |
+
 Reference implementations: `src/features/knowledge/components/knowledge-v2/`
 (CSS-module layout + kit recipes + `--kv-*` aliases onto global tokens) and
 `src/features/ontology/components/` (utility-class styling on the same

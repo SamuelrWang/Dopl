@@ -104,7 +104,7 @@ export function OntologyView({ workspaceId, workspaceSegment, initialClusterSlug
                 type="button"
                 onClick={() => selectCluster(c.id)}
                 className={cn(
-                  "flex h-7 items-center gap-1.5 rounded-[7px] px-3 text-small font-medium transition-colors",
+                  "flex h-6 items-center gap-1.5 rounded-[6px] px-2.5 text-small font-medium transition-colors",
                   c.id === cluster.id
                     ? "raised-tab text-text-primary"
                     : "text-text-secondary hover:text-text-primary"
@@ -118,9 +118,9 @@ export function OntologyView({ workspaceId, workspaceSegment, initialClusterSlug
               type="button"
               onClick={handleCreateCluster}
               aria-label="New cluster"
-              className="flex h-7 w-7 items-center justify-center rounded-[7px] text-text-muted transition hover:text-text-primary"
+              className="flex h-6 w-6 items-center justify-center rounded-[6px] text-text-muted transition hover:text-text-primary"
             >
-              <Plus size={13} />
+              <Plus size={12} />
             </button>
           </div>
           <div className="flex min-w-0 flex-1 items-baseline gap-2">
@@ -131,7 +131,7 @@ export function OntologyView({ workspaceId, workspaceSegment, initialClusterSlug
                 dispatch({ type: "CLUSTER_UPDATE", id: cluster.id, patch: { name: e.target.value } })
               }
               aria-label="Cluster name"
-              className="w-40 shrink-0 bg-transparent text-lead font-semibold tracking-tight text-text-primary placeholder:text-text-muted focus:outline-none"
+              className="w-40 shrink-0 bg-transparent text-title font-semibold tracking-tight text-text-primary placeholder:text-text-muted focus:outline-none"
               placeholder="Cluster name"
             />
             <input
