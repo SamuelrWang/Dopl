@@ -65,7 +65,7 @@ export function AttributesEditor({
                 })
               }
               aria-label="Attribute label"
-              className="w-32 shrink-0 bg-transparent text-[13px] text-[#646d78] placeholder:text-[#98a2ad] focus:text-[#232a31] focus:outline-none"
+              className="w-32 shrink-0 bg-transparent text-[14px] text-[#646d78] placeholder:text-[#98a2ad] focus:text-[#232a31] focus:outline-none"
               placeholder="label…"
             />
             <AttrValueEditor
@@ -93,13 +93,13 @@ export function AttributesEditor({
             onChange={(e) => setNewLabel(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && addAttribute()}
             placeholder="new attribute…"
-            className={`${FIELD_WELL} h-7 w-36 px-2.5 text-[12.5px] text-[#232a31] placeholder:text-[#98a2ad]`}
+            className={`${FIELD_WELL} h-7 w-36 px-2.5 text-[13.5px] text-[#232a31] placeholder:text-[#98a2ad]`}
           />
           <select
             value={newKind}
             onChange={(e) => setNewKind(e.target.value as AttrKind)}
             aria-label="Attribute type"
-            className={`${FIELD_WELL} h-7 px-1.5 text-[12px] text-[#646d78]`}
+            className={`${FIELD_WELL} h-7 px-1.5 text-[13px] text-[#646d78]`}
           >
             <option value="text">Text</option>
             <option value="pill">Tag</option>
@@ -110,7 +110,7 @@ export function AttributesEditor({
           <button
             type="button"
             onClick={addAttribute}
-            className="btn-light flex h-7 items-center gap-1 rounded-md px-2.5 text-xs font-medium text-[#232a31]"
+            className="btn-light flex h-7 items-center gap-1 rounded-md px-2.5 text-[13px] font-medium text-[#232a31]"
           >
             <Plus size={11} /> Add
           </button>
@@ -164,7 +164,7 @@ function AttrValueEditor({
               <ChevronDown size={11} className="text-[#98a2ad]" />
             </>
           }
-          triggerClassName="btn-light flex h-6 w-40 items-center justify-between rounded-full px-3 text-[11px] font-medium text-[#232a31]"
+          triggerClassName="btn-light flex h-6 w-40 items-center justify-between rounded-full px-3 text-[12px] font-medium text-[#232a31]"
         />
       </span>
     );
@@ -201,7 +201,7 @@ function AttrValueEditor({
               <Plus size={10} /> Link
             </span>
           }
-          triggerClassName="btn-light flex h-6 items-center rounded-full px-2 text-[11px] font-medium text-[#232a31]"
+          triggerClassName="btn-light flex h-6 items-center rounded-full px-2 text-[12px] font-medium text-[#232a31]"
         />
       </span>
     );
@@ -225,7 +225,7 @@ function AttrValueEditor({
       value={v.value}
       onChange={(e) => onChange({ ...attr, value: { kind: "text", value: e.target.value } })}
       placeholder="value…"
-      className="min-w-0 flex-1 bg-transparent text-[13px] text-[#232a31] placeholder:text-[#98a2ad] focus:outline-none"
+      className="min-w-0 flex-1 bg-transparent text-[14px] text-[#232a31] placeholder:text-[#98a2ad] focus:outline-none"
     />
   );
 }

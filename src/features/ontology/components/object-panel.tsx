@@ -52,7 +52,7 @@ export function ObjectPanel({
             })
           }
           aria-label="Object type"
-          className="shrink-0 cursor-pointer appearance-none rounded-full border px-2.5 py-0.5 text-[11px] font-semibold focus:outline-none"
+          className="shrink-0 cursor-pointer appearance-none rounded-full border px-2.5 py-0.5 text-[12px] font-semibold focus:outline-none"
           style={{ borderColor: typeMeta.border, background: typeMeta.bg, color: typeMeta.text }}
         >
           {Object.values(OBJECT_TYPES).map((t) => (
@@ -62,11 +62,11 @@ export function ObjectPanel({
           ))}
         </select>
         {isColumn && (
-          <span className="shrink-0 rounded-full border border-black/[0.12] px-2 py-px text-[10px] font-semibold uppercase tracking-wide text-[#646d78]">
+          <span className="shrink-0 rounded-full border border-black/[0.12] px-2 py-px text-[11px] font-semibold uppercase tracking-wide text-[#646d78]">
             Column · {object.childIds.length}
           </span>
         )}
-        <span className="min-w-0 flex-1 truncate font-mono text-[10px] text-[#98a2ad]">
+        <span className="min-w-0 flex-1 truncate font-mono text-[11.5px] text-[#98a2ad]">
           {objectId}
         </span>
         {confirmDelete ? (
@@ -77,14 +77,14 @@ export function ObjectPanel({
                 onDeleteObject(objectId);
                 onClose();
               }}
-              className="rounded-md bg-[#fdecec] px-2 py-1 text-[11px] font-semibold text-[#c04543]"
+              className="rounded-md bg-[#fdecec] px-2 py-1 text-[12px] font-semibold text-[#c04543]"
             >
               Delete
             </button>
             <button
               type="button"
               onClick={() => setConfirmDelete(false)}
-              className="btn-light rounded-md px-2 py-1 text-[11px] font-medium text-[#232a31]"
+              className="btn-light rounded-md px-2 py-1 text-[12px] font-medium text-[#232a31]"
             >
               Keep
             </button>
@@ -130,7 +130,7 @@ export function ObjectPanel({
                 dispatch({ type: "OBJECT_UPDATE", id: objectId, patch: { subtitle: e.target.value } })
               }
               placeholder="Short description (agents see this when browsing)…"
-              className="mt-0.5 w-full bg-transparent text-[13px] text-[#646d78] placeholder:text-[#98a2ad] focus:outline-none"
+              className="mt-0.5 w-full bg-transparent text-[14px] text-[#646d78] placeholder:text-[#98a2ad] focus:outline-none"
               aria-label="Object description"
             />
           </div>

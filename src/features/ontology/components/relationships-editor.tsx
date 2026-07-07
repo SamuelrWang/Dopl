@@ -50,7 +50,7 @@ export function RelationshipsEditor({
               }
               aria-label="Edge label"
               placeholder="edge label…"
-              className="w-32 shrink-0 bg-transparent text-[13px] italic text-[#646d78] placeholder:text-[#98a2ad] focus:text-[#232a31] focus:outline-none"
+              className="w-32 shrink-0 bg-transparent text-[14px] italic text-[#646d78] placeholder:text-[#98a2ad] focus:text-[#232a31] focus:outline-none"
             />
             <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
               {rel.targetIds.map((id) => {
@@ -99,7 +99,7 @@ export function RelationshipsEditor({
                     <Plus size={10} /> Link
                   </span>
                 }
-                triggerClassName="btn-light flex h-6 items-center rounded-full px-2 text-[11px] font-medium text-[#232a31]"
+                triggerClassName="btn-light flex h-6 items-center rounded-full px-2 text-[12px] font-medium text-[#232a31]"
               />
             </span>
             <button
@@ -118,7 +118,7 @@ export function RelationshipsEditor({
             value={newLabel}
             onChange={(e) => setNewLabel(e.target.value)}
             placeholder="edge label (e.g. assigned to)…"
-            className={`${FIELD_WELL} h-7 w-52 px-2.5 text-[12.5px] text-[#232a31] placeholder:text-[#98a2ad]`}
+            className={`${FIELD_WELL} h-7 w-52 px-2.5 text-[13.5px] text-[#232a31] placeholder:text-[#98a2ad]`}
           />
           <CascadeSelect
             graph={graph}
@@ -129,7 +129,7 @@ export function RelationshipsEditor({
                 <Plus size={11} /> Link target
               </span>
             }
-            triggerClassName="btn-light flex h-7 items-center rounded-md px-2.5 text-xs font-medium text-[#232a31]"
+            triggerClassName="btn-light flex h-7 items-center rounded-md px-2.5 text-[13px] font-medium text-[#232a31]"
           />
         </div>
       </div>

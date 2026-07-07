@@ -53,12 +53,12 @@ export function ActionsEditor({
             onChange={(e) => setNewName(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && addAction()}
             placeholder="new action (e.g. Send follow-up email)…"
-            className={`${FIELD_WELL} h-7 w-64 px-2.5 text-[12.5px] text-[#232a31] placeholder:text-[#98a2ad]`}
+            className={`${FIELD_WELL} h-7 w-64 px-2.5 text-[13.5px] text-[#232a31] placeholder:text-[#98a2ad]`}
           />
           <button
             type="button"
             onClick={addAction}
-            className="btn-light flex h-7 items-center gap-1 rounded-md px-2.5 text-xs font-medium text-[#232a31]"
+            className="btn-light flex h-7 items-center gap-1 rounded-md px-2.5 text-[13px] font-medium text-[#232a31]"
           >
             <Plus size={11} /> Add
           </button>
@@ -93,7 +93,7 @@ function ActionRow({
           type="text"
           value={method.name}
           onChange={(e) => onChange({ ...method, name: e.target.value })}
-          className="min-w-0 flex-1 bg-transparent text-[13px] font-semibold tracking-tight text-[#232a31] focus:outline-none"
+          className="min-w-0 flex-1 bg-transparent text-[14px] font-semibold tracking-tight text-[#232a31] focus:outline-none"
           aria-label="Action name"
         />
         <button
@@ -110,17 +110,17 @@ function ActionRow({
         value={method.description}
         onChange={(e) => onChange({ ...method, description: e.target.value })}
         placeholder="What this action does…"
-        className="mt-0.5 w-full bg-transparent text-[13px] leading-relaxed text-[#646d78] placeholder:text-[#98a2ad] focus:outline-none"
+        className="mt-0.5 w-full bg-transparent text-[14px] leading-relaxed text-[#646d78] placeholder:text-[#98a2ad] focus:outline-none"
         aria-label="Action description"
       />
-      <div className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-[#98a2ad]">
+      <div className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-[#98a2ad]">
         Pulls
       </div>
       <div className="mt-1 flex flex-wrap items-center gap-1.5">
         {method.requires.map((r, i) => (
           <span
             key={`${r}-${i}`}
-            className="flex items-center gap-1 rounded-md border border-black/[0.1] bg-[#fbfcfd] px-2 py-0.5 font-mono text-[11px] text-[#232a31] shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
+            className="flex items-center gap-1 rounded-md border border-black/[0.1] bg-[#fbfcfd] px-2 py-0.5 font-mono text-[12px] text-[#232a31] shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
           >
             {r}
             <button
@@ -141,7 +141,7 @@ function ActionRow({
           onChange={(e) => setNewReq(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && addReq()}
           placeholder="+ attribute path (e.g. client.transcripts)"
-          className="w-60 rounded-md border border-dashed border-black/[0.15] bg-transparent px-2 py-0.5 font-mono text-[11px] text-[#232a31] placeholder:text-[#98a2ad] focus:border-black/[0.3] focus:outline-none"
+          className="w-60 rounded-md border border-dashed border-black/[0.15] bg-transparent px-2 py-0.5 font-mono text-[12px] text-[#232a31] placeholder:text-[#98a2ad] focus:border-black/[0.3] focus:outline-none"
         />
       </div>
     </div>

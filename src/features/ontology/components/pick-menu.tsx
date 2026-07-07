@@ -92,7 +92,7 @@ export function PickMenu({
             }}
           >
             {groups.length === 0 && (
-              <p className="px-2 py-1.5 text-[12px] text-[#98a2ad]">
+              <p className="px-2 py-1.5 text-[13px] text-[#98a2ad]">
                 Nothing available to add
               </p>
             )}
@@ -105,7 +105,7 @@ export function PickMenu({
                     type="button"
                     onClick={() => setOpenGroup(open ? null : group)}
                     className={cn(
-                      "flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-left text-[12px] font-semibold transition-colors",
+                      "flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-left text-[13px] font-semibold transition-colors",
                       open
                         ? "text-[#232a31]"
                         : "text-[#646d78] hover:bg-black/[0.04] hover:text-[#232a31]"
@@ -119,7 +119,7 @@ export function PickMenu({
                       )}
                     />
                     <span className="min-w-0 flex-1 truncate">{group}</span>
-                    <span className="text-[10px] font-normal text-[#98a2ad]">
+                    <span className="text-[11.5px] font-normal text-[#98a2ad]">
                       {groupItems.length}
                     </span>
                   </button>
@@ -132,7 +132,7 @@ export function PickMenu({
                           onPick(item.id);
                           close();
                         }}
-                        className="flex w-full items-center rounded-lg py-1.5 pr-2 pl-6 text-left text-[12.5px] text-[#646d78] transition-colors hover:bg-black/[0.04] hover:text-[#232a31]"
+                        className="flex w-full items-center rounded-lg py-1.5 pr-2 pl-6 text-left text-[13.5px] text-[#646d78] transition-colors hover:bg-black/[0.04] hover:text-[#232a31]"
                       >
                         <span className="min-w-0 flex-1 truncate">{item.name}</span>
                       </button>

@@ -39,7 +39,7 @@ export function ObjectHoverCard({
         </span>
         <span className="flex-1" />
         <span
-          className="rounded-full border px-2 py-px text-[10px] font-semibold"
+          className="rounded-full border px-2 py-px text-[11.5px] font-semibold"
           style={{ borderColor: typeMeta.border, background: typeMeta.bg, color: typeMeta.text }}
         >
           {typeMeta.label}
@@ -52,7 +52,7 @@ export function ObjectHoverCard({
         {object.attributes.length > 0 && (
           <div className="space-y-1">
             {object.attributes.slice(0, 5).map((attr) => (
-              <p key={attr.key} className="text-[12.5px] leading-snug text-[#232a31]">
+              <p key={attr.key} className="text-[13.5px] leading-snug text-[#232a31]">
                 <span className="font-semibold text-[#98a2ad]">{attr.label}</span>{" "}
                 {attr.value.kind === "knowledge" || attr.value.kind === "skill"
                   ? attr.value.value
@@ -68,7 +68,7 @@ export function ObjectHoverCard({
               </p>
             ))}
             {object.attributes.length > 5 && (
-              <p className="text-[11px] text-[#98a2ad]">
+              <p className="text-[12px] text-[#98a2ad]">
                 +{object.attributes.length - 5} more attributes
               </p>
             )}
@@ -77,7 +77,7 @@ export function ObjectHoverCard({
         {object.relationships.length > 0 && (
           <div className="space-y-1">
             {object.relationships.map((rel) => (
-              <p key={rel.label} className="text-[12.5px] leading-snug text-[#232a31]">
+              <p key={rel.label} className="text-[13.5px] leading-snug text-[#232a31]">
                 <span className="italic text-[#98a2ad]">{rel.label}</span>{" "}
                 {rel.targetIds
                   .map((id) => graph.objects[id]?.name)
@@ -88,7 +88,7 @@ export function ObjectHoverCard({
           </div>
         )}
         {object.methods.length > 0 && (
-          <p className="text-[12.5px] leading-snug text-[#232a31]">
+          <p className="text-[13.5px] leading-snug text-[#232a31]">
             <span className="font-semibold text-[#98a2ad]">Actions</span>{" "}
             {object.methods.map((m) => m.name).join(" · ")}
           </p>
@@ -101,7 +101,7 @@ export function ObjectHoverCard({
               return (
                 <span
                   key={childId}
-                  className="rounded-full border border-black/[0.12] bg-[#eef1f5] px-2 py-0.5 text-[11px] font-medium text-[#232a31]"
+                  className="rounded-full border border-black/[0.12] bg-[#eef1f5] px-2 py-0.5 text-[12px] font-medium text-[#232a31]"
                 >
                   {child.name}
                 </span>

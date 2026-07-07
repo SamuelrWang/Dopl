@@ -82,11 +82,11 @@ function Column({
             onChange={(e) =>
               dispatch({ type: "OBJECT_UPDATE", id: col.id, patch: { name: e.target.value } })
             }
-            className="min-w-0 flex-1 bg-transparent text-[13px] font-semibold tracking-tight text-[#232a31] placeholder:text-[#98a2ad] focus:outline-none"
+            className="min-w-0 flex-1 bg-transparent text-[14px] font-semibold tracking-tight text-[#232a31] placeholder:text-[#98a2ad] focus:outline-none"
             placeholder="Column name"
             aria-label="Column name"
           />
-          <span className="rounded-full bg-black/[0.06] px-1.5 py-px text-[10.5px] font-medium text-[#646d78]">
+          <span className="rounded-full bg-black/[0.06] px-1.5 py-px text-[11.5px] font-medium text-[#646d78]">
             {col.childIds.length}
           </span>
           <button
@@ -109,7 +109,7 @@ function Column({
             dispatch({ type: "OBJECT_UPDATE", id: col.id, patch: { subtitle: e.target.value } })
           }
           placeholder="Describe this column…"
-          className="w-full bg-transparent px-3 pb-2 text-[11.5px] text-[#646d78] placeholder:text-[#98a2ad] focus:outline-none"
+          className="w-full bg-transparent px-3 pb-2 text-[12.5px] text-[#646d78] placeholder:text-[#98a2ad] focus:outline-none"
           aria-label="Column description"
         />
         {detailsOpen && (
@@ -138,7 +138,7 @@ function Column({
         <button
           type="button"
           onClick={() => onCreateObject(col.id)}
-          className="btn-light flex shrink-0 items-center justify-center gap-1 rounded-md px-3 py-1.5 text-xs font-medium text-[#232a31]"
+          className="btn-light flex shrink-0 items-center justify-center gap-1 rounded-md px-3 py-1.5 text-[13px] font-medium text-[#232a31]"
         >
           <Plus size={12} /> Add new
         </button>

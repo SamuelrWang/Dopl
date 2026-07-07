@@ -56,7 +56,7 @@ export function SectionBox({
         <span className="text-[11px] font-semibold uppercase tracking-wide text-[#646d78]">
           {label}
         </span>
-        {meta && <span className="text-[11px] text-[#98a2ad]">{meta}</span>}
+        {meta && <span className="text-[12px] text-[#98a2ad]">{meta}</span>}
         <span className="flex-1" />
         {action}
       </div>
@@ -112,4 +112,4 @@ export const FIELD_WELL =
 
 /** Raised chip sitting on an inset body — verse-pill on a concave field. */
 export const CHIP =
-  "rounded-full border border-black/[0.12] bg-[#fbfcfd] px-2.5 py-0.5 text-xs font-medium text-[#232a31] shadow-[0_1px_2px_rgba(0,0,0,0.05)]";
+  "rounded-full border border-black/[0.12] bg-[#fbfcfd] px-2.5 py-0.5 text-[13px] font-medium text-[#232a31] shadow-[0_1px_2px_rgba(0,0,0,0.05)]";
