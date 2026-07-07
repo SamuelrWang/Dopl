@@ -571,33 +571,21 @@ export function pgErrorCode(err: unknown): string | null {
 
 // ─── Used-by (attachment graph) ─────────────────────────────────────
 
-/** Clusters + workflows referencing a skill (for the detail insights). */
+/** Workflows referencing a skill (for the detail insights). */
 export async function listSkillUsedBy(
   workspaceId: string,
   skillId: string
 ): Promise<SkillUsedBy> {
   const db = supabaseAdmin();
-  const [clustersRes, workflowsRes] = await Promise.all([
-    db
-      .from("cluster_skills")
-      .select("clusters(id, name, slug)")
-      .eq("workspace_id", workspaceId)
-      .eq("skill_id", skillId),
-    db
-      .from("workflow_skills")
-      .select("workflows(id, name)")
-      .eq("workspace_id", workspaceId)
-      .eq("skill_id", skillId),
-  ]);
-  if (clustersRes.error) throw clustersRes.error;
-  if (workflowsRes.error) throw workflowsRes.error;
-  type ClusterJoin = { clusters: { id: string; name: string; slug: string } | null };
+  const { data, error } = await db
+    .from("workflow_skills")
+    .select("workflows(id, name)")
+    .eq("workspace_id", workspaceId)
+    .eq("skill_id", skillId);
+  if (error) throw error;
   type WorkflowJoin = { workflows: { id: string; name: string } | null };
   return {
-    clusters: ((clustersRes.data ?? []) as unknown as ClusterJoin[])
-      .map((r) => r.clusters)
-      .filter((c): c is NonNullable<typeof c> => c !== null),
-    workflows: ((workflowsRes.data ?? []) as unknown as WorkflowJoin[])
+    workflows: ((data ?? []) as unknown as WorkflowJoin[])
       .map((r) => r.workflows)
       .filter((w): w is NonNullable<typeof w> => w !== null),
   };

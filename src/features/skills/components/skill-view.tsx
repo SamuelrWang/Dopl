@@ -7,7 +7,6 @@ import {
   Copy,
   Download,
   History,
-  Layers,
   ShieldCheck,
   Workflow,
 } from "lucide-react";
@@ -842,7 +841,7 @@ function ActivityStrip({ usage }: { usage: SkillUsage }) {
 // ── Used-by strip ────────────────────────────────────────────────────
 
 function UsedByStrip({ usedBy }: { usedBy: SkillUsedBy }) {
-  const total = usedBy.clusters.length + usedBy.workflows.length;
+  const total = usedBy.workflows.length;
   return (
     <div className="border-t border-border-subtle px-4 py-3">
       <div className="mb-2 flex items-center justify-between">
@@ -853,19 +852,10 @@ function UsedByStrip({ usedBy }: { usedBy: SkillUsedBy }) {
       </div>
       {total === 0 ? (
         <p className="text-caption leading-relaxed text-text-muted">
-          Not attached to any cluster or workflow yet.
+          Not attached to any workflow yet.
         </p>
       ) : (
         <div className="flex flex-wrap gap-1.5">
-          {usedBy.clusters.map((c) => (
-            <span
-              key={`c-${c.id}`}
-              className="inline-flex items-center gap-1.5 rounded-full border border-border-strong bg-bg-inset px-2 py-0.5 text-caption text-text-primary"
-            >
-              <Layers size={10} className="text-text-muted" />
-              <span className="max-w-[140px] truncate">{c.name}</span>
-            </span>
-          ))}
           {usedBy.workflows.map((w) => (
             <span
               key={`w-${w.id}`}

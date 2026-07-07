@@ -185,9 +185,8 @@ export interface SkillContext {
 
 export type { SourceProvider };
 
-/** Clusters + workflows a skill is attached to (detail-page insights). */
+/** Workflows a skill is attached to (detail-page insights). */
 export interface SkillUsedBy {
-  clusters: Array<{ id: string; name: string; slug: string }>;
   workflows: Array<{ id: string; name: string }>;
 }
 
