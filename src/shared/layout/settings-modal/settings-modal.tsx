@@ -1,13 +1,5 @@
 "use client";
 
-import {
-  CreditCard,
-  Settings as SettingsIcon,
-  User,
-  Users,
-  X,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import type { Role } from "@/features/workspaces/types";
 import { AccountSection } from "./sections/account-section";
@@ -26,22 +18,21 @@ export type SettingsSection =
 interface NavItem {
   id: SettingsSection;
   label: string;
-  icon: LucideIcon;
 }
 
 const NAV: ReadonlyArray<{ label: string; items: NavItem[] }> = [
   {
     label: "Workspace",
     items: [
-      { id: "workspace", label: "General", icon: SettingsIcon },
-      { id: "members", label: "Members", icon: Users },
+      { id: "workspace", label: "General" },
+      { id: "members", label: "Members" },
     ],
   },
   {
     label: "Account",
     items: [
-      { id: "account", label: "Account", icon: User },
-      { id: "billing", label: "Plans & Billing", icon: CreditCard },
+      { id: "account", label: "Account" },
+      { id: "billing", label: "Plans & Billing" },
     ],
   },
 ];
@@ -56,14 +47,16 @@ interface Props {
   currentUserId: string;
   role: Role;
   onWorkspaceChanged: () => void;
+  /** True when opened from a Stripe checkout return — Plans & Billing
+   *  polls the subscription status until the webhook lands. */
+  billingReturn?: boolean;
 }
 
 /**
- * Settings modal in the new design language: a darkened scrim with a
- * scaled-down "page" card that fades / pops in. Grouped left nav +
- * scrolling right pane. The Account / Appearance / General / Members
- * sections are reused as-is (rendered light via the module's token scope);
- * Plans & Billing is the new cloned billing layout.
+ * Settings modal in the study-notes popup language: darkened scrim, a
+ * floating card, inset left nav with concave-pressed active tabs, and a
+ * scrolling right pane. All section content styles with the global
+ * tokens + kit classes.
  */
 export function SettingsModal({
   open,
@@ -75,39 +68,38 @@ export function SettingsModal({
   currentUserId,
   role,
   onWorkspaceChanged,
+  billingReturn = false,
 }: Props) {
   return (
     <ModalShell open={open} onClose={() => onOpenChange(false)} label="Settings">
-      <button
-        type="button"
-        className={styles.close}
-        onClick={() => onOpenChange(false)}
-        aria-label="Close settings"
-      >
-        <X size={18} />
-      </button>
-
       <nav className={styles.nav}>
         {NAV.map((group) => (
           <div key={group.label} className={styles.navGroup}>
             <p className={styles.navGroupLabel}>{group.label}</p>
-            {group.items.map((item) => {
-              const Icon = item.icon;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => onSectionChange(item.id)}
-                  className={cn(styles.navItem, section === item.id && styles.navActive)}
-                >
-                  <Icon size={18} strokeWidth={1.8} />
-                  {item.label}
-                </button>
-              );
-            })}
+            {group.items.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => onSectionChange(item.id)}
+                className={cn(
+                  styles.navItem,
+                  section === item.id && ["concave-sel", styles.navActive]
+                )}
+              >
+                {item.label}
+              </button>
+            ))}
           </div>
         ))}
-        <div className={styles.navFoot}>Dopl</div>
+        <div className={styles.navFoot}>
+          <button
+            type="button"
+            onClick={() => onOpenChange(false)}
+            className="btn-light w-full rounded-md px-2.5 py-1.5 text-small font-medium text-text-primary"
+          >
+            Close
+          </button>
+        </div>
       </nav>
 
       <div className={styles.pane}>
@@ -126,9 +118,8 @@ export function SettingsModal({
             role={role}
           />
         )}
-        {section === "billing" && <PlansBilling />}
+        {section === "billing" && <PlansBilling pollOnMount={billingReturn} />}
       </div>
     </ModalShell>
   );
 }
-

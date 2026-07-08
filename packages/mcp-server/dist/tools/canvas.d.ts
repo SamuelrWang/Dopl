@@ -1,5 +1,5 @@
 /**
- * `dopl_canvas` — inspect and rename panels on the user's canvas.
+ * `dopl_canvas` — inspect the panels on the user's canvas.
  */
 import type { DoplClient } from "@dopl/client";
 import { type RegisterTool } from "./respond";

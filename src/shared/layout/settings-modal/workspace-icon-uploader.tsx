@@ -77,7 +77,7 @@ export function WorkspaceIconUploader({ workspace, onChanged }: Props) {
             type="button"
             disabled={busy}
             onClick={() => inputRef.current?.click()}
-            className="h-8 px-3 rounded-md bg-surface-raised-3 border border-border-strong text-xs font-medium text-text-primary hover:bg-surface-raised-4 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+            className="btn-light cursor-pointer rounded-md px-2.5 py-1 text-small font-medium text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
           >
             {busy ? "Uploading…" : iconUrl ? "Replace image" : "Upload image"}
           </button>
@@ -86,14 +86,14 @@ export function WorkspaceIconUploader({ workspace, onChanged }: Props) {
               type="button"
               disabled={busy}
               onClick={handleRemove}
-              className="h-8 px-3 rounded-md text-xs font-medium text-text-tertiary hover:text-text-secondary disabled:opacity-40 transition-colors cursor-pointer"
+              className="cursor-pointer rounded-md px-2.5 py-1 text-small font-medium text-text-secondary transition-colors hover:text-danger disabled:opacity-40"
             >
               Remove
             </button>
           )}
         </div>
-        <p className="text-[11px] text-text-muted">PNG, JPG, WebP, GIF, or SVG · up to 2 MB</p>
-        {error && <p className="text-[11px] text-red-400">{error}</p>}
+        <p className="text-micro text-text-muted">PNG, JPG, WebP, GIF, or SVG · up to 2 MB</p>
+        {error && <p className="text-caption text-danger">{error}</p>}
       </div>
       <input
         ref={inputRef}

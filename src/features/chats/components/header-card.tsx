@@ -11,101 +11,136 @@ import {
   FolderGit2,
   Lightbulb,
   UploadCloud,
+  User,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
+import { Avatar } from "@/shared/ui/avatar";
 import { SECTION_BOX_INSET } from "@/shared/ui/section-box";
-import type { Conversation } from "../types";
+import type { Chat } from "../types";
 import { FORMAT_LABELS, SOURCE_LABELS } from "../constants";
 import { formatDate } from "../format";
 
 /**
  * The chat's header box: title, agent-written overview, and a compact
- * meta line up top; the agent-filled detail (session metadata, what was
- * done, learnings) stacked below as collapsed disclosure strips inside
- * the same card.
+ * meta line up top (plus the owner when the chat is shared); the
+ * agent-filled detail (session metadata, what was done, learnings)
+ * stacked below as collapsed disclosure strips inside the same card.
  */
-export function HeaderCard({ conversation }: { conversation: Conversation }) {
-  const done = conversation.deliverables.filter((d) => d.done).length;
+export function HeaderCard({
+  chat,
+  currentUserId,
+}: {
+  chat: Chat;
+  currentUserId: string;
+}) {
+  const done = chat.deliverables.filter((d) => d.done).length;
+  const isMine = chat.owner.userId === currentUserId;
 
   return (
     <section className="overflow-hidden rounded-[14px] border border-border-strong bg-bg-elevated">
       <div className="px-5 pb-4 pt-4">
-        <h2 className="text-display font-semibold tracking-tight text-text-primary">
-          {conversation.title}
+        <h2 className="break-words text-display font-semibold tracking-tight text-text-primary">
+          {chat.title}
         </h2>
-        <p className="mt-1.5 text-lead leading-relaxed text-text-secondary">
-          {conversation.overview}
-        </p>
+        {chat.overview && (
+          <p className="mt-1.5 break-words text-lead leading-relaxed text-text-secondary">
+            {chat.overview}
+          </p>
+        )}
         <p className="mt-2.5 text-caption text-text-muted">
-          {formatDate(conversation.sessionDate)} ·{" "}
-          {SOURCE_LABELS[conversation.source]}
-          {conversation.project && <> · {conversation.project}</>} ·{" "}
-          {conversation.messages.length} messages ·{" "}
-          {FORMAT_LABELS[conversation.format]}
+          {formatDate(chat.sessionDate)} · {SOURCE_LABELS[chat.source]}
+          {chat.project && <> · {chat.project}</>} · {chat.messageCount}{" "}
+          messages · {FORMAT_LABELS[chat.format]}
         </p>
+        {chat.visibility === "public" && (
+          <div className="mt-3 flex items-center gap-2">
+            <Avatar
+              size="xs"
+              person={{
+                userId: chat.owner.userId,
+                email: null,
+                displayName: chat.owner.name,
+                avatarUrl: chat.owner.avatarUrl,
+              }}
+            />
+            <span className="text-caption text-text-secondary">
+              Shared by{" "}
+              <span className="font-medium text-text-primary">
+                {isMine ? "you" : chat.owner.name}
+              </span>
+            </span>
+          </div>
+        )}
       </div>
 
       <Disclosure label="Session details">
         <div className="flex flex-col gap-3 px-4 py-3.5">
+          <MetaRow icon={User} label="Owner">
+            {isMine ? "You" : chat.owner.name}
+          </MetaRow>
           <MetaRow icon={CalendarDays} label="Session date">
-            {formatDate(conversation.sessionDate)}
+            {formatDate(chat.sessionDate)}
           </MetaRow>
           <MetaRow icon={Bot} label="Source agent">
-            {SOURCE_LABELS[conversation.source]}
+            {SOURCE_LABELS[chat.source]}
           </MetaRow>
-          {conversation.project && (
+          {chat.project && (
             <MetaRow icon={FolderGit2} label="Project">
-              {conversation.project}
+              {chat.project}
             </MetaRow>
           )}
           <MetaRow icon={UploadCloud} label="Exported">
-            {formatDate(conversation.exportedAt)}
+            {formatDate(chat.exportedAt)}
           </MetaRow>
           <MetaRow icon={FileText} label="Format">
-            {FORMAT_LABELS[conversation.format]}
+            {FORMAT_LABELS[chat.format]}
           </MetaRow>
         </div>
       </Disclosure>
 
-      <Disclosure
-        label="What was done"
-        meta={`${done}/${conversation.deliverables.length}`}
-      >
-        <ul className="divide-y divide-border-subtle">
-          {conversation.deliverables.map((d) => (
-            <li
-              key={d.label}
-              className="flex items-center gap-3 px-4 py-2.5 text-body text-text-primary"
-            >
-              {d.done ? (
-                <CheckCircle2 size={14} className="shrink-0 text-text-primary" />
-              ) : (
-                <Circle size={14} className="shrink-0 text-text-disabled" />
-              )}
-              <span className="min-w-0 flex-1">{d.label}</span>
-            </li>
-          ))}
-        </ul>
-      </Disclosure>
+      {chat.deliverables.length > 0 && (
+        <Disclosure
+          label="What was done"
+          meta={`${done}/${chat.deliverables.length}`}
+        >
+          <ul className="divide-y divide-border-subtle">
+            {chat.deliverables.map((d, i) => (
+              <li
+                key={i}
+                className="flex items-center gap-3 px-4 py-2.5 text-body text-text-primary"
+              >
+                {d.done ? (
+                  <CheckCircle2 size={14} className="shrink-0 text-text-primary" />
+                ) : (
+                  <Circle size={14} className="shrink-0 text-text-disabled" />
+                )}
+                <span className="min-w-0 flex-1 break-words">{d.label}</span>
+              </li>
+            ))}
+          </ul>
+        </Disclosure>
+      )}
 
-      <Disclosure
-        label="Memories & learnings"
-        meta={String(conversation.learnings.length)}
-      >
-        <ul className="divide-y divide-border-subtle">
-          {conversation.learnings.map((learning) => (
-            <li
-              key={learning}
-              className="flex items-start gap-2.5 px-4 py-2.5 text-body leading-relaxed text-text-primary"
-            >
-              <Lightbulb size={13} className="mt-0.5 shrink-0 text-text-muted" />
-              <span className="min-w-0 flex-1">{learning}</span>
-            </li>
-          ))}
-        </ul>
-      </Disclosure>
+      {chat.learnings.length > 0 && (
+        <Disclosure
+          label="Memories & learnings"
+          meta={String(chat.learnings.length)}
+        >
+          <ul className="divide-y divide-border-subtle">
+            {chat.learnings.map((learning, i) => (
+              <li
+                key={i}
+                className="flex items-start gap-2.5 px-4 py-2.5 text-body leading-relaxed text-text-primary"
+              >
+                <Lightbulb size={13} className="mt-0.5 shrink-0 text-text-muted" />
+                <span className="min-w-0 flex-1 break-words">{learning}</span>
+              </li>
+            ))}
+          </ul>
+        </Disclosure>
+      )}
     </section>
   );
 }

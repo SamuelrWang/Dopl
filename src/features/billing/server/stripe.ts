@@ -34,7 +34,7 @@ export async function createCheckoutSession(
     ui_mode: "embedded_page",
     mode: "subscription",
     line_items: [{ price: priceId, quantity: 1 }],
-    return_url: `${appUrl}/settings/billing?session_id={CHECKOUT_SESSION_ID}`,
+    return_url: `${appUrl}/canvas?billing=success&session_id={CHECKOUT_SESSION_ID}`,
     // Only userId metadata matters now; tier/interval gone.
     metadata: { userId },
     subscription_data: {
@@ -69,7 +69,7 @@ export async function createPortalSession(
 
   const session = await stripe.billingPortal.sessions.create({
     customer: stripeCustomerId,
-    return_url: `${appUrl}/settings/billing?portal=return`,
+    return_url: `${appUrl}/canvas?billing=return`,
   });
 
   return session.url;

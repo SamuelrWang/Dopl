@@ -1,8 +1,7 @@
 /**
  * /[workspaceSlug]/settings — per-workspace settings. Shows General
- * (rename + description) for admins/owners, the Members section (any
- * member can read; admins can invite/re-role/remove), and the Danger
- * zone (delete) for owners.
+ * (rename + description) for admins/owners, the MCP connect + connected
+ * apps sections (any member), and the Danger zone (delete) for owners.
  */
 
 import { redirect } from "next/navigation";
@@ -10,8 +9,8 @@ import { getUser } from "@/shared/supabase/server";
 import { resolveMembershipOrThrow } from "@/features/workspaces/server/service";
 import { resolvePageWorkspace } from "@/features/workspaces/server/segment";
 import { WorkspaceSettingsForm } from "@/features/workspaces/components/workspace-settings-form";
+import { WorkspaceDangerZone } from "@/features/workspaces/components/workspace-danger-zone";
 import { RemoteConnect, ConnectedAppsSection } from "@/features/mcp-connect";
-import { AppPanel } from "@/shared/layout/app-shell";
 
 export const dynamic = "force-dynamic";
 
@@ -29,26 +28,24 @@ export default async function WorkspaceSettingsPage({ params }: PageProps) {
   const { membership } = await resolveMembershipOrThrow(workspace.id, user.id);
 
   return (
-    <AppPanel>
-    <div className="container mx-auto px-4 pt-10 pb-16 max-w-2xl">
-      <div className="mt-3 mb-6">
-        <h1 className="text-2xl font-semibold text-text-primary">{workspace.name}</h1>
-        <p className="text-xs text-text-muted mt-1 font-mono">
-          /{workspace.slug}
-        </p>
+    <div className="page-float flex flex-col antialiased">
+      <div className="flex shrink-0 items-center gap-3 border-b border-border-subtle px-4 py-2">
+        <h1 className="shrink-0 text-title font-semibold tracking-tight text-text-primary">
+          Settings
+        </h1>
+        <span className="min-w-0 truncate text-caption text-text-muted">
+          {workspace.name} · <span className="font-mono">/{workspace.slug}</span>
+        </span>
       </div>
-      <div className="space-y-8">
-        <WorkspaceSettingsForm workspace={workspace} role={membership.role} />
-        <section>
-          <h2 className="text-sm font-semibold text-text-primary mb-3">Connect an MCP client</h2>
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-6 pt-5 pb-10">
+        <div className="max-w-2xl space-y-6">
+          <WorkspaceSettingsForm workspace={workspace} role={membership.role} />
           <RemoteConnect />
-        </section>
-        <section>
-          <h2 className="text-sm font-semibold text-text-primary mb-3">Connected apps</h2>
           <ConnectedAppsSection />
-        </section>
+          {membership.role === "owner" && <WorkspaceDangerZone workspace={workspace} />}
+        </div>
       </div>
     </div>
-    </AppPanel>
   );
 }

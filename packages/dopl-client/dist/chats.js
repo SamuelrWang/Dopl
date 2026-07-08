@@ -1,0 +1,77 @@
+"use strict";
+/**
+ * Chat-archive methods for `DoplClient`.
+ *
+ * The archive is agent-written: agents export conversation summaries
+ * into Dopl (`exportChat`), extend them mid-session (`appendChatMessages`),
+ * and read them back later as context (`listChats` / `getChat`).
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.listChats = listChats;
+exports.getChat = getChat;
+exports.listChatFolders = listChatFolders;
+exports.exportChat = exportChat;
+exports.appendChatMessages = appendChatMessages;
+exports.updateChat = updateChat;
+exports.deleteChat = deleteChat;
+exports.createChatFolder = createChatFolder;
+exports.deleteChatFolder = deleteChatFolder;
+const enc = encodeURIComponent;
+// ─── Read ───────────────────────────────────────────────────────────
+async function listChats(t) {
+    const data = await t.request("/api/chats", {
+        toolName: "chat_list",
+    });
+    return data.chats;
+}
+async function getChat(t, chatId) {
+    const data = await t.request(`/api/chats/${enc(chatId)}`, {
+        toolName: "chat_get",
+    });
+    return data.chat;
+}
+async function listChatFolders(t) {
+    const data = await t.request("/api/chats/folders", {
+        toolName: "chat_folders",
+    });
+    return data.folders;
+}
+// ─── Write ──────────────────────────────────────────────────────────
+async function exportChat(t, input) {
+    const data = await t.request("/api/chats", {
+        method: "POST",
+        body: input,
+        toolName: "chat_export",
+    });
+    return data.chat;
+}
+async function appendChatMessages(t, chatId, messages) {
+    const data = await t.request(`/api/chats/${enc(chatId)}/messages`, {
+        method: "POST",
+        body: { messages },
+        toolName: "chat_append",
+    });
+    return data.chat;
+}
+async function updateChat(t, chatId, patch) {
+    const data = await t.request(`/api/chats/${enc(chatId)}`, {
+        method: "PATCH",
+        body: patch,
+        toolName: "chat_update",
+    });
+    return data.chat;
+}
+async function deleteChat(t, chatId) {
+    await t.requestNoContent(`/api/chats/${enc(chatId)}`, "DELETE", "chat_delete");
+}
+async function createChatFolder(t, name) {
+    const data = await t.request("/api/chats/folders", {
+        method: "POST",
+        body: { name },
+        toolName: "chat_folder_create",
+    });
+    return data.folder;
+}
+async function deleteChatFolder(t, folderId) {
+    await t.requestNoContent(`/api/chats/folders/${enc(folderId)}`, "DELETE", "chat_folder_delete");
+}

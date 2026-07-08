@@ -68,6 +68,21 @@ export type {
   SkillWriteSource,
 } from "./skill-types.js";
 export type {
+  Chat,
+  ChatDeliverable,
+  ChatDetail,
+  ChatExportFormat,
+  ChatExportInput,
+  ChatFolder,
+  ChatMessage,
+  ChatMessageInput,
+  ChatMessageRole,
+  ChatOwner,
+  ChatSource,
+  ChatUpdateInput,
+  ChatVisibility,
+} from "./chat-types.js";
+export type {
   OntologyAttribute,
   OntologyAttributeValue,
   OntologyCluster,

@@ -54,17 +54,17 @@ export function EmbeddedCheckoutForm() {
 
   if (error) {
     return (
-      <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4">
-        <h3 className="text-sm font-medium text-red-300 mb-1">
+      <div className="rounded-lg border border-danger/30 bg-danger/5 p-4">
+        <h3 className="mb-1 text-body font-medium text-danger">
           Checkout couldn&apos;t load
         </h3>
-        <p className="text-sm text-red-400/90 mb-3">{error}</p>
+        <p className="mb-3 text-body text-danger/90">{error}</p>
         <button
           onClick={() => {
             setError(null);
             setLoading(true);
           }}
-          className="text-sm text-red-300 hover:text-red-200 underline underline-offset-2"
+          className="text-body text-danger underline underline-offset-2 hover:opacity-80"
         >
           Try again
         </button>

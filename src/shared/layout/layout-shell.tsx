@@ -35,7 +35,8 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isLanding = pathname === "/";
   const isDocs = pathname.startsWith("/docs");
-  const isNoChrome = isLanding || isDocs;
+  const isPricing = pathname === "/pricing";
+  const isNoChrome = isLanding || isDocs || isPricing;
   const segments = pathname.split("/").filter(Boolean);
   const isAppShellRoute =
     segments.length >= 1 && !NON_WORKSPACE_ROOTS.has(segments[0]);

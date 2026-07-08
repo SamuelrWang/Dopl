@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { DeleteAccount } from "@/app/settings/delete-account";
+import { DeleteAccount } from "./delete-account";
 import { SectionShell } from "./section-shell";
 
 interface ProfileData {
@@ -70,42 +70,42 @@ export function AccountSection() {
           <img
             src={profile.avatar_url}
             alt=""
-            className="w-14 h-14 rounded-full border border-border-default object-cover"
+            className="h-14 w-14 rounded-full border border-border-default object-cover"
           />
         ) : (
-          <div className="w-14 h-14 rounded-full bg-surface-raised-3 border border-border-default flex items-center justify-center text-lg text-text-secondary">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full border border-border-default bg-bg-inset text-title text-text-secondary">
             {(displayName[0] || profile?.email?.[0] || "?").toUpperCase()}
           </div>
         )}
         <div className="min-w-0">
-          <p className="text-sm font-medium text-text-primary truncate">
+          <p className="truncate text-body font-medium text-text-primary">
             {profile?.display_name || "User"}
           </p>
-          <p className="text-xs text-text-muted truncate">{profile?.email}</p>
+          <p className="truncate text-caption text-text-muted">{profile?.email}</p>
         </div>
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-text-tertiary uppercase tracking-wider">
+      <label className="flex max-w-sm flex-col gap-1">
+        <span className="text-label font-semibold uppercase tracking-wide text-text-muted">
           Display name
-        </label>
+        </span>
         <input
           type="text"
           value={displayName}
           onChange={(e) => setDisplayName(e.target.value)}
-          className="h-9 px-3 rounded-md bg-surface-raised-3 border border-border-strong text-sm text-text-primary placeholder:text-text-muted outline-none focus:border-border-highlight transition-colors"
+          className="concave-field rounded-lg px-2.5 py-1.5 text-body text-text-primary outline-none"
         />
-      </div>
+      </label>
 
-      {error && <p className="text-xs text-red-400">{error}</p>}
-      {status && <p className="text-xs text-emerald-400">{status}</p>}
+      {error && <p className="text-caption text-danger">{error}</p>}
+      {status && <p className="text-caption text-success">{status}</p>}
 
-      <div className="flex justify-end">
+      <div className="flex max-w-sm justify-end">
         <button
           type="button"
           disabled={!dirty || saving}
           onClick={handleSave}
-          className="h-8 px-4 rounded-md bg-surface-cta text-text-on-cta text-xs font-medium hover:bg-surface-cta/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+          className="flex h-7 cursor-pointer items-center rounded-md bg-surface-cta px-2.5 text-small font-medium text-text-on-cta transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
         >
           {saving ? "Saving…" : "Save changes"}
         </button>

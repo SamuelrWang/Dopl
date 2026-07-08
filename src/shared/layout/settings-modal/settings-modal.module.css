@@ -1,60 +1,13 @@
 /*
- * Settings modal in the new design language (the KB/"Transforms" look).
+ * Settings modal — study-notes popup language on the global design tokens.
  *
- * Two jobs:
- *  1. `.scope` re-declares semantic-token values on the modal subtree.
- *     A few (surface-invert/cta) differ slightly from the global :root
- *     palette and are kept so the modal renders exactly as before; unify
- *     with :root in a follow-up.
- *  2. The chrome (overlay, card, nav, pane) and the Plans & Billing page
- *     are styled with the KB palette in literal hex so they match the
- *     knowledge-landing preview. Fonts reuse the globally-loaded
- *     Hanken Grotesk (--font-geist-sans) + Newsreader (--font-playfair).
+ * Chrome only (overlay, card, nav, pane). Section content is styled with
+ * the token utilities + kit classes (concave-field, concave-sel, btn-light,
+ * SECTION_BOX_INSET) in the TSX. Values come from :root — no palette fork.
  */
 
 .scope {
   color-scheme: light;
-  --bg-base: #e1e2e6;
-  --bg-elevated: #fefefe;
-  --bg-elevated-hover: #f4f5f6;
-  --bg-inset: #ecedee;
-  --bg-inset-hover: #e4e5e7;
-  --bg-overlay: #fefefe;
-  --panel-surface: #fefefe;
-  --panel-surface-focus: #ffffff;
-  --input-surface: #f1f1f1;
-  --input-surface-focus: #ffffff;
-  --card-surface: #fefefe;
-  --card-surface-elevated: #ffffff;
-  --card-surface-subtle: #f6f6f7;
-  --modal-surface: #fefefe;
-  --scrim: oklch(0 0 0 / 40%);
-  --border-subtle: oklch(0 0 0 / 6%);
-  --border-default: oklch(0 0 0 / 8%);
-  --border-strong: oklch(0 0 0 / 12%);
-  --border-highlight: oklch(0 0 0 / 16%);
-  --text-primary: #302c2d;
-  --text-secondary: #7c7c7c;
-  --text-tertiary: #8a8a8a;
-  --text-muted: #aeaeae;
-  --text-disabled: #c4c4c4;
-  --accent-primary: #3e3a3b;
-  --accent-on: #fefefe;
-  --link: #2f6fed;
-  --success: oklch(0.55 0.15 155);
-  --warning: oklch(0.62 0.13 75);
-  --danger: oklch(0.55 0.22 25);
-  --surface-raised-1: oklch(0 0 0 / 2%);
-  --surface-raised-2: oklch(0 0 0 / 3.5%);
-  --surface-raised-3: oklch(0 0 0 / 5%);
-  --surface-raised-4: oklch(0 0 0 / 7%);
-  --surface-selected: oklch(0 0 0 / 8%);
-  --surface-invert: #7c7372;
-  --text-on-invert: #fefefe;
-  --surface-cta: #302c2d;
-  --text-on-cta: #fefefe;
-  --border-active: #3e3a3b;
-  --agent-on: oklch(0.52 0.14 162);
 }
 
 /* ---------- Overlay + card (fade / pop in) ---------- */
@@ -69,26 +22,28 @@
   background: rgba(18, 22, 26, 0);
   transition: background 0.2s ease;
 }
-.overlayVisible { background: rgba(18, 22, 26, 0.55); }
+.overlayVisible { background: rgba(18, 22, 26, 0.4); }
 
 .card {
   position: relative;
-  width: 86vw;
-  max-width: 1080px;
-  height: 85vh;
-  max-height: 820px;
+  width: 880px;
+  max-width: 94vw;
+  height: 620px;
+  max-height: 88vh;
   display: flex;
-  border-radius: 8px;
+  border-radius: 16px;
   overflow: hidden;
-  background: #f5f7fa;
-  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.45);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   font-family: var(--font-app), system-ui, sans-serif;
-  color: #232a31;
+  color: var(--text-primary);
   opacity: 0;
-  transform: scale(0.96) translateY(8px);
-  transition: opacity 0.2s ease, transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transform: scale(0.96) translateY(12px);
+  transition: opacity 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.cardVisible { opacity: 1; transform: scale(1) translateY(0); }
+.cardVisible { opacity: 1; transform: none; }
 .card *, .card *::before, .card *::after { box-sizing: border-box; }
 
 /* Narrow variant — single-pane dialog (e.g. per-KB settings) instead of
@@ -99,7 +54,7 @@
   height: auto;
   max-height: 85vh;
   overflow-y: auto;
-  background: #fbfcfd;
+  background: var(--bg-elevated);
 }
 .cardNarrow::-webkit-scrollbar { width: 8px; }
 .cardNarrow::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.12); border-radius: 8px; }
@@ -111,7 +66,7 @@
   height: auto;
   max-height: 80vh;
   overflow-y: auto;
-  background: #fbfcfd;
+  background: var(--bg-elevated);
 }
 .confirmBody { padding: 26px 28px 24px; }
 .confirmTitle {
@@ -171,6 +126,7 @@
   overflow-wrap: anywhere;
 }
 
+/* X button — used by the narrow/compact dialog variants. */
 .close {
   position: absolute;
   top: 16px;
@@ -181,194 +137,78 @@
   border-radius: 8px;
   border: none;
   background: transparent;
-  color: #8a93a0;
+  color: var(--text-muted);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   transition: background 0.14s ease, color 0.14s ease;
 }
-.close:hover { background: rgba(0, 0, 0, 0.06); color: #4a535d; }
+.close:hover { background: rgba(0, 0, 0, 0.06); color: var(--text-secondary); }
 
-/* ---------- Left nav ---------- */
+/* ---------- Left nav (study-notes settings rail) ---------- */
 .nav {
-  width: 232px;
-  flex: 0 0 232px;
-  background: #eef1f5;
-  border-right: 1px solid #dce3ea;
-  padding: 26px 14px 18px;
+  width: 192px;
+  flex: 0 0 192px;
+  background: var(--bg-inset);
+  border-right: 1px solid var(--border-subtle);
+  padding: 12px;
   display: flex;
   flex-direction: column;
   overflow-y: auto;
 }
-.navGroup { margin-bottom: 18px; }
+.navGroup { margin-bottom: 14px; }
 .navGroupLabel {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  font-size: var(--text-label);
+  font-weight: 600;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: #98a2ad;
-  padding: 0 10px;
-  margin-bottom: 8px;
+  color: var(--text-muted);
+  padding: 4px 10px 6px;
 }
 .navItem {
   width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 9px 10px;
+  display: block;
+  margin-bottom: 2px;
+  padding: 6px 10px;
   border-radius: 8px;
-  border: none;
+  border: 1px solid transparent;
   background: none;
-  color: #3a414a;
+  color: var(--text-secondary);
   font: inherit;
-  font-size: 15px;
-  font-weight: 500;
+  font-size: var(--text-small);
   text-align: left;
   cursor: pointer;
   transition: background 0.14s ease, color 0.14s ease;
 }
-.navItem svg { flex: 0 0 auto; color: #5a626c; }
-.navItem:not(.navActive):hover { background: #e1e7ee; }
-.navActive { background: #1c2127; color: #fff; }
-.navActive svg { color: #fff; }
-
-.navFoot {
-  margin-top: auto;
-  padding: 12px 10px 0;
-  font-family: var(--font-mono), monospace;
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  color: #aab3bd;
+.navItem:not(.navActive):hover {
+  background: rgba(0, 0, 0, 0.035);
+  color: var(--text-primary);
 }
+/* Surface comes from the global .concave-sel composed in the TSX;
+   this class only carries the active typography. */
+.navActive {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.navFoot { margin-top: auto; padding-top: 12px; }
 
 /* ---------- Right pane ---------- */
 .pane {
   flex: 1;
   min-width: 0;
-  background: #fbfcfd;
+  background: var(--bg-elevated);
   overflow-y: auto;
-  padding: 40px 44px 48px;
+  padding: 24px 28px 32px;
 }
 .pane::-webkit-scrollbar { width: 8px; }
 .pane::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.12); border-radius: 8px; }
 
 .paneTitle {
-  font-family: var(--font-app), system-ui, sans-serif;
-  font-size: 31px;
-  font-weight: 500;
+  font-size: var(--text-title);
+  font-weight: 600;
   letter-spacing: -0.01em;
-  color: #1e242b;
-  margin-bottom: 24px;
-}
-
-/* ============ Plans & Billing ============ */
-.usage {
-  border-radius: 8px;
-  background: #efe9f6;
-  border: 1px solid #e4dcf0;
-  padding: 20px 22px;
-  margin-bottom: 30px;
-}
-.usageHead {
-  font-size: 17px;
-  font-weight: 600;
-  color: #2b2533;
-  letter-spacing: -0.01em;
-}
-.usageBarTrack {
-  margin: 14px 0 12px;
-  height: 7px;
-  border-radius: 6px;
-  background: #ddd3ec;
-  overflow: hidden;
-}
-.usageBarFill {
-  height: 100%;
-  border-radius: 6px;
-  background: linear-gradient(90deg, #7b5fb0, #6f93bf);
-}
-.usageSub { font-size: 13.5px; color: #6c6577; }
-.usageSub a { color: #5a3fa0; font-weight: 600; text-decoration: underline; cursor: pointer; }
-
-.toggleWrap { display: flex; justify-content: center; margin-bottom: 28px; }
-.toggle {
-  display: inline-flex;
-  background: #e7ecf1;
-  border: 1px solid #dce3ea;
-  border-radius: 8px;
-  padding: 4px;
-  gap: 4px;
-}
-.toggleBtn {
-  border: none;
-  background: none;
-  font: inherit;
-  font-size: 15px;
-  font-weight: 600;
-  color: #5a626c;
-  padding: 8px 26px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background 0.14s ease, color 0.14s ease, box-shadow 0.14s ease;
-}
-.toggleActive { background: #fff; color: #1e242b; box-shadow: 0 1px 3px rgba(40, 36, 28, 0.12); }
-
-.plans { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; border: 1px solid #e2e8ee; border-radius: 8px; overflow: hidden; background: #fff; }
-.plan { display: flex; flex-direction: column; padding: 26px 26px 28px; border-right: 1px solid #eaeff4; }
-.plan:last-child { border-right: none; }
-.planFor { font-size: 13.5px; color: #8a93a0; margin-bottom: 14px; }
-.planName { font-size: 21px; font-weight: 700; color: #1e242b; letter-spacing: -0.01em; display: flex; align-items: center; gap: 10px; }
-.planDiscount { font-size: 12px; font-weight: 700; color: #6f5aa8; background: #ece5f7; padding: 3px 8px; border-radius: 7px; }
-.planPrice { font-size: 18px; font-weight: 600; color: #2f353c; margin-top: 6px; }
-.planPrice span { font-size: 14px; font-weight: 500; color: #8a93a0; }
-.planFeatures { list-style: none; margin: 22px 0 0; padding: 22px 0 0; border-top: 1px solid #eef2f6; display: flex; flex-direction: column; gap: 14px; }
-.planFeatures li { display: flex; align-items: flex-start; gap: 10px; font-size: 15px; line-height: 1.35; color: #2f353c; }
-.planFeatures svg { flex: 0 0 auto; margin-top: 2px; color: #4a9e6f; }
-.planCta {
-  margin-top: 26px;
-  width: 100%;
-  border: none;
-  border-radius: 8px;
-  padding: 13px 0;
-  font: inherit;
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-  text-align: center;
-}
-.ctaPrimary { background: #1c2127; color: #fff; }
-.ctaPrimary:hover { background: #2c333c; }
-.ctaGhost { background: #f0ece6; color: #3a3128; }
-.ctaGhost:hover { filter: brightness(0.98); }
-.ctaCurrent { background: none; color: #1e242b; font-weight: 700; cursor: default; }
-
-.checkoutBack {
-  background: none;
-  border: none;
-  font: inherit;
-  font-size: 15px;
-  color: #6c757f;
-  cursor: pointer;
-  margin-bottom: 18px;
-  padding: 0;
-}
-.checkoutBack:hover { color: #3a414a; }
-
-.refreshBtn {
-  position: absolute;
-  top: 38px;
-  right: 64px;
-  background: none;
-  border: none;
-  color: #98a2ad;
-  cursor: pointer;
-  display: flex;
-  padding: 4px;
-}
-.refreshBtn:hover { color: #5a626c; }
-
-@media (max-width: 900px) {
-  .plans { grid-template-columns: 1fr; }
-  .plan { border-right: none; border-bottom: 1px solid #eaeff4; }
+  color: var(--text-primary);
+  margin-bottom: 16px;
 }

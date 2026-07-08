@@ -1,4 +1,4 @@
-export type ConversationSource =
+export type ChatSource =
   | "claude-code"
   | "claude-desktop"
   | "cursor"
@@ -6,15 +6,25 @@ export type ConversationSource =
 
 export type ExportFormat = "summarized" | "verbatim" | "mixed";
 
+/** Private = owner-only. Public = every workspace member can read it. */
+export type ChatVisibility = "private" | "public";
+
 export type MessageRole = "user" | "agent";
 
-export type ConversationMessage = {
+export type ChatOwner = {
+  userId: string;
+  name: string;
+  avatarUrl: string | null;
+};
+
+export type ChatMessage = {
+  /** 1-based position in the transcript. */
   index: number;
   role: MessageRole;
   /** Concise agent-written summary — the default export form. */
   summary: string;
   /** Exact original text; present only when the user asked for verbatim. */
-  verbatim?: string;
+  verbatim: string | null;
 };
 
 export type Deliverable = {
@@ -22,26 +32,32 @@ export type Deliverable = {
   done: boolean;
 };
 
-export type ConversationFolder = {
+export type ChatFolder = {
   id: string;
   name: string;
 };
 
-export type Conversation = {
+/** List-level chat: everything but the transcript. */
+export type Chat = {
   id: string;
   folderId: string | null;
   title: string;
+  /** One-paragraph agent-written framing of what the session was about. */
+  overview: string;
   pinned: boolean;
-  source: ConversationSource;
+  visibility: ChatVisibility;
+  owner: ChatOwner;
+  source: ChatSource;
   project: string | null;
   format: ExportFormat;
   /** ISO date the session happened. */
   sessionDate: string;
   /** ISO datetime the agent exported it into Dopl. */
   exportedAt: string;
-  /** One-paragraph agent-written framing of what the session was about. */
-  overview: string;
+  updatedAt: string;
+  messageCount: number;
   deliverables: Deliverable[];
   learnings: string[];
-  messages: ConversationMessage[];
 };
+
+export type ChatDetail = Chat & { messages: ChatMessage[] };

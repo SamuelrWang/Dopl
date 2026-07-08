@@ -38,6 +38,7 @@ const transport_js_1 = require("./transport.js");
 const kb = __importStar(require("./knowledge.js"));
 const skills = __importStar(require("./skills.js"));
 const ontology = __importStar(require("./ontology.js"));
+const chats = __importStar(require("./chats.js"));
 var retry_js_1 = require("./retry.js");
 Object.defineProperty(exports, "parseRetryAfter", { enumerable: true, get: function () { return retry_js_1.parseRetryAfter; } });
 class DoplClient {
@@ -153,13 +154,6 @@ class DoplClient {
             body: updates,
         });
     }
-    async renameChat(panelId, title) {
-        await this.transport.request(`/api/canvas/panels/${encodeURIComponent(panelId)}`, {
-            method: "PATCH",
-            toolName: "rename_chat",
-            body: { title },
-        });
-    }
     async deleteCluster(slug) {
         await this.transport.requestNoContent(`/api/clusters/${encodeURIComponent(slug)}`, "DELETE", "delete_cluster");
     }
@@ -262,6 +256,37 @@ class DoplClient {
     }
     claimOntologyAnchor(objectId) {
         return ontology.claimOntologyAnchor(this.transport, objectId);
+    }
+    // ─── Chats (archive) ───────────────────────────────────────────────
+    // Agent-exported conversation archive. Reads return the caller's own
+    // chats plus workspace-public ones; writes are owner-scoped
+    // server-side.
+    listChats() {
+        return chats.listChats(this.transport);
+    }
+    getChat(chatId) {
+        return chats.getChat(this.transport, chatId);
+    }
+    exportChat(input) {
+        return chats.exportChat(this.transport, input);
+    }
+    appendChatMessages(chatId, messages) {
+        return chats.appendChatMessages(this.transport, chatId, messages);
+    }
+    updateChat(chatId, patch) {
+        return chats.updateChat(this.transport, chatId, patch);
+    }
+    deleteChat(chatId) {
+        return chats.deleteChat(this.transport, chatId);
+    }
+    listChatFolders() {
+        return chats.listChatFolders(this.transport);
+    }
+    createChatFolder(name) {
+        return chats.createChatFolder(this.transport, name);
+    }
+    deleteChatFolder(folderId) {
+        return chats.deleteChatFolder(this.transport, folderId);
     }
     // ─── Skills ─────────────────────────────────────────────────────────
     // Read paths are unrestricted; write paths are gated server-side by

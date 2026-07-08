@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { Role, Workspace } from "@/features/workspaces/types";
 import { WorkspaceSettingsForm } from "@/features/workspaces/components/workspace-settings-form";
+import { WorkspaceDangerZone } from "@/features/workspaces/components/workspace-danger-zone";
 import { RemoteConnect } from "@/features/mcp-connect";
 import { WorkspaceIconUploader } from "../workspace-icon-uploader";
 import { SectionShell } from "./section-shell";
@@ -45,7 +46,7 @@ export function WorkspaceSection({ workspaceSegment, onWorkspaceChanged }: Props
   if (error) {
     return (
       <SectionShell title="General">
-        <p className="text-sm text-red-400">{error}</p>
+        <p className="text-caption text-danger">{error}</p>
       </SectionShell>
     );
   }
@@ -64,7 +65,7 @@ export function WorkspaceSection({ workspaceSegment, onWorkspaceChanged }: Props
     <SectionShell title="General" subtitle="Manage this workspace">
       {canEdit && (
         <div className="flex flex-col gap-2">
-          <label className="text-xs font-medium text-text-tertiary uppercase tracking-wider">
+          <label className="text-label font-semibold uppercase tracking-wide text-text-muted">
             Workspace image
           </label>
           <WorkspaceIconUploader workspace={workspace} onChanged={onWorkspaceChanged} />
@@ -72,6 +73,7 @@ export function WorkspaceSection({ workspaceSegment, onWorkspaceChanged }: Props
       )}
       <WorkspaceSettingsForm workspace={workspace} role={role} />
       <RemoteConnect />
+      {role === "owner" && <WorkspaceDangerZone workspace={workspace} />}
     </SectionShell>
   );
 }

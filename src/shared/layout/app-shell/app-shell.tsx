@@ -36,7 +36,29 @@ export function AppShell({
   const { workspaces, refresh: refreshWorkspaces } = useRailWorkspaces();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("billing");
+  const [billingReturn, setBillingReturn] = useState(false);
   const [createWsOpen, setCreateWsOpen] = useState(false);
+
+  // Stripe checkout/portal return URLs land on the app with a `billing`
+  // query param (via the /canvas legacy redirect). Open the settings
+  // modal on Plans & Billing and strip the params from the URL.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const billing = params.get("billing");
+    if (!billing) return;
+    // setState inside rAF so the open runs on a separate paint (and the
+    // set-state-in-effect rule is satisfied), matching ModalShell.
+    const id = requestAnimationFrame(() => {
+      setBillingReturn(billing === "success");
+      setSettingsSection("billing");
+      setSettingsOpen(true);
+    });
+    params.delete("billing");
+    params.delete("session_id");
+    const query = params.size > 0 ? `?${params.toString()}` : "";
+    window.history.replaceState(null, "", `${window.location.pathname}${query}`);
+    return () => cancelAnimationFrame(id);
+  }, []);
 
   const activeRole =
     workspaces.find((w) => w.publicId === workspacePublicId)?.role ?? "viewer";
@@ -75,6 +97,7 @@ export function AppShell({
         onOpenChange={setSettingsOpen}
         section={settingsSection}
         onSectionChange={setSettingsSection}
+        billingReturn={billingReturn}
         workspaceSegment={workspaceSegment}
         workspaceId={workspaceId}
         currentUserId={user?.id ?? ""}

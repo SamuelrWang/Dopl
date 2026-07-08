@@ -49,7 +49,9 @@ The workspace beats local files as source of truth; flag drift.
 - Browse/read/write knowledge → \`dopl_kb\` (read entries with
   \`op:'read_file'\`); destructive ops → \`dopl_kb_admin\`.
 - List/read/author the user's skills → \`dopl_skill\` (+ \`dopl_skill_admin\`).
-- See the canvas / rename a chat panel → \`dopl_canvas(op:'list'|'rename_chat')\`.
+- See the canvas → \`dopl_canvas(op:'list')\`.
+- Archive this conversation → \`dopl_chats(op:'export')\` (read
+  \`op:'guide'\` first); recall past sessions → \`dopl_chats(op:'list'|'get')\`.
 - Workspace targeting → \`list_workspaces\`, \`set_workspace\`, or a
   \`workspace\` arg on any call.
 

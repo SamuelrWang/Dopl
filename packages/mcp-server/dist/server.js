@@ -10,6 +10,7 @@ const skills_js_1 = require("./tools/skills.js");
 const cluster_js_1 = require("./tools/cluster.js");
 const workflow_js_1 = require("./tools/workflow.js");
 const canvas_js_1 = require("./tools/canvas.js");
+const chats_js_1 = require("./tools/chats.js");
 const packs_js_1 = require("./tools/packs.js");
 const map_js_1 = require("./tools/map.js");
 const search_js_1 = require("./tools/search.js");
@@ -51,7 +52,8 @@ This MCP server can target any workspace the authenticated user is a member of. 
 - Create / rename a cluster -> dopl_cluster(op='create' | 'update'); delete one -> dopl_cluster_admin(op='delete_cluster').
 - Browse / read / write the user's knowledge bases -> dopl_kb (+ dopl_kb_admin for destructive ops).
 - List / read / author the user's skills -> dopl_skill (+ dopl_skill_admin).
-- See what's on the canvas / rename a chat panel -> dopl_canvas(op='list' | 'rename_chat').
+- See what's on the canvas -> dopl_canvas(op='list').
+- Archive this conversation for future sessions -> dopl_chats(op='export'); recall a past session -> dopl_chats(op='list' | 'get'). Read dopl_chats(op='guide') before your first export — summaries per message, verbatim only on request.
 
 ## Workspace skills
 
@@ -139,6 +141,7 @@ function createServer(client, options = {}) {
     const canWrite = Array.isArray(options.scopes) && options.scopes.includes("dopl.write");
     // Purely destructive tools aren't even registered for a read-only session.
     const READ_ONLY_BLOCKED_TOOLS = new Set([
+        "dopl_chats_admin",
         "dopl_cluster_admin",
         "dopl_kb_admin",
         "dopl_skill_admin",
@@ -198,7 +201,7 @@ function createServer(client, options = {}) {
             "disconnect",
             "set_cluster",
         ]),
-        dopl_canvas: new Set(["rename_chat"]),
+        dopl_chats: new Set(["export", "append", "update", "create_folder"]),
     };
     // Active workspace for this MCP session — seeded from the startup
     // handshake (index.ts) and mutated by `set_workspace` mid-session.
@@ -453,6 +456,7 @@ function createServer(client, options = {}) {
     (0, packs_js_1.registerPacksTools)(registerTool, client); // curated read-only knowledge packs
     (0, knowledge_js_1.registerKnowledgeTools)(registerTool, client); // dopl_kb + dopl_kb_admin (user bases)
     (0, skills_js_1.registerSkillTools)(registerTool, client); // dopl_skill + dopl_skill_admin
+    (0, chats_js_1.registerChatTools)(registerTool, client); // dopl_chats + dopl_chats_admin (archive)
     (0, map_js_1.registerMapTool)(registerTool, client); // dopl_map — compact workspace manifest
     (0, search_js_1.registerSearchTool)(registerTool, client); // dopl_search — cross-domain search
     (0, ontology_js_1.registerOntologyTool)(registerTool, client); // dopl_ontology — routing graph (read-only)

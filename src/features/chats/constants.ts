@@ -1,6 +1,6 @@
-import type { ConversationSource, ExportFormat } from "./types";
+import type { ChatSource, ExportFormat } from "./types";
 
-export const SOURCE_LABELS: Record<ConversationSource, string> = {
+export const SOURCE_LABELS: Record<ChatSource, string> = {
   "claude-code": "Claude Code",
   "claude-desktop": "Claude Desktop",
   cursor: "Cursor",

@@ -49,6 +49,15 @@ import type {
   OntologyObjectPatch,
   OntologySnapshot,
 } from "./ontology-types.js";
+import * as chats from "./chats.js";
+import type {
+  Chat,
+  ChatDetail,
+  ChatExportInput,
+  ChatFolder,
+  ChatMessageInput,
+  ChatUpdateInput,
+} from "./chat-types.js";
 
 export type { DoplTransportOptions as DoplClientOptions } from "./transport.js";
 export { parseRetryAfter } from "./retry.js";
@@ -284,17 +293,6 @@ export class DoplClient {
     );
   }
 
-  async renameChat(panelId: string, title: string): Promise<void> {
-    await this.transport.request<unknown>(
-      `/api/canvas/panels/${encodeURIComponent(panelId)}`,
-      {
-        method: "PATCH",
-        toolName: "rename_chat",
-        body: { title },
-      }
-    );
-  }
-
   async deleteCluster(slug: string): Promise<void> {
     await this.transport.requestNoContent(
       `/api/clusters/${encodeURIComponent(slug)}`,
@@ -466,6 +464,50 @@ export class DoplClient {
 
   claimOntologyAnchor(objectId: string): Promise<OntologyObject> {
     return ontology.claimOntologyAnchor(this.transport, objectId);
+  }
+
+  // ─── Chats (archive) ───────────────────────────────────────────────
+  // Agent-exported conversation archive. Reads return the caller's own
+  // chats plus workspace-public ones; writes are owner-scoped
+  // server-side.
+
+  listChats(): Promise<Chat[]> {
+    return chats.listChats(this.transport);
+  }
+
+  getChat(chatId: string): Promise<ChatDetail> {
+    return chats.getChat(this.transport, chatId);
+  }
+
+  exportChat(input: ChatExportInput): Promise<ChatDetail> {
+    return chats.exportChat(this.transport, input);
+  }
+
+  appendChatMessages(
+    chatId: string,
+    messages: ChatMessageInput[]
+  ): Promise<ChatDetail> {
+    return chats.appendChatMessages(this.transport, chatId, messages);
+  }
+
+  updateChat(chatId: string, patch: ChatUpdateInput): Promise<Chat> {
+    return chats.updateChat(this.transport, chatId, patch);
+  }
+
+  deleteChat(chatId: string): Promise<void> {
+    return chats.deleteChat(this.transport, chatId);
+  }
+
+  listChatFolders(): Promise<ChatFolder[]> {
+    return chats.listChatFolders(this.transport);
+  }
+
+  createChatFolder(name: string): Promise<ChatFolder> {
+    return chats.createChatFolder(this.transport, name);
+  }
+
+  deleteChatFolder(folderId: string): Promise<void> {
+    return chats.deleteChatFolder(this.transport, folderId);
   }
 
   // ─── Skills ─────────────────────────────────────────────────────────

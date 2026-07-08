@@ -18,7 +18,11 @@ import { isOnboarded } from "@/features/onboarding/server/service";
 
 export const dynamic = "force-dynamic";
 
-export default async function CanvasLegacyRedirectPage() {
+interface PageProps {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}
+
+export default async function CanvasLegacyRedirectPage({ searchParams }: PageProps) {
   const user = await getUser();
   if (!user) redirect("/login");
 
@@ -28,5 +32,14 @@ export default async function CanvasLegacyRedirectPage() {
 
   const workspace = await ensureDefaultWorkspace(user.id);
   const canvas = await ensureDefaultCanvas(workspace.id);
-  redirect(`/${workspaceSegment(workspace)}/${canvas.slug}`);
+
+  // Forward the query string — Stripe checkout/portal return URLs point
+  // here with `billing` params the app shell reads to open the settings
+  // modal on the Plans & Billing pane.
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(await searchParams)) {
+    if (typeof value === "string") params.set(key, value);
+  }
+  const query = params.size > 0 ? `?${params.toString()}` : "";
+  redirect(`/${workspaceSegment(workspace)}/${canvas.slug}${query}`);
 }

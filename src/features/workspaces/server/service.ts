@@ -1,6 +1,5 @@
 import "server-only";
 import { HttpError } from "@/shared/lib/http-error";
-import { supabaseAdmin } from "@/shared/supabase/admin";
 import type {
   Workspace,
   WorkspaceMembership,
@@ -15,12 +14,10 @@ import {
   deleteWorkspace,
   findWorkspaceById,
   findWorkspaceByPublicId,
-  findWorkspaceBySlug,
   findDefaultWorkspaceForUser,
   findMemberWorkspaceBySlug,
   findMembership,
   insertWorkspaceWithOwnerMembership,
-  listWorkspacesForUser,
   listWorkspacesWithRoleForUser,
   listMembers,
   updateWorkspace,
@@ -252,57 +249,7 @@ export async function deleteWorkspaceForUser(
     );
   }
 
-  // Clean up chat-attachments storage objects BEFORE the row delete.
-  // chat_attachments.workspace_id has FK CASCADE, so the rows go with
-  // the workspace, but the bucket files don't — they'd orphan forever
-  // otherwise. Best-effort: if the listing or remove fails we still
-  // proceed with the workspace delete (the user-visible action), and
-  // log so a sweep job can find leaked files later.
-  await cleanupWorkspaceChatAttachmentStorage(workspaceId);
-
   await deleteWorkspace(workspaceId);
-}
-
-async function cleanupWorkspaceChatAttachmentStorage(
-  workspaceId: string
-): Promise<void> {
-  const db = supabaseAdmin();
-  // Page through chat_attachments for this workspace and remove each
-  // file from the bucket. Page size is generous (1000) — a workspace
-  // with millions of attachments would need a background sweep, but
-  // typical usage is far below.
-  const PAGE_SIZE = 1000;
-  let from = 0;
-  for (;;) {
-    const { data, error } = await db
-      .from("chat_attachments")
-      .select("storage_path")
-      .eq("workspace_id", workspaceId)
-      .range(from, from + PAGE_SIZE - 1);
-    if (error) {
-      console.error(
-        `[workspaces] Failed to list chat_attachments for workspace ${workspaceId}:`,
-        error.message
-      );
-      return;
-    }
-    const paths = (data ?? [])
-      .map((r) => (r as { storage_path: string | null }).storage_path)
-      .filter((p): p is string => typeof p === "string" && p.length > 0);
-    if (paths.length > 0) {
-      const { error: removeError } = await db.storage
-        .from("chat-attachments")
-        .remove(paths);
-      if (removeError) {
-        console.error(
-          `[workspaces] Failed to remove ${paths.length} chat-attachments objects for workspace ${workspaceId}:`,
-          removeError.message
-        );
-      }
-    }
-    if ((data ?? []).length < PAGE_SIZE) return;
-    from += PAGE_SIZE;
-  }
 }
 
 export async function listWorkspaceMembers(

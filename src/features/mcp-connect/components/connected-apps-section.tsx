@@ -2,12 +2,14 @@
 
 /**
  * ConnectedAppsSection — lists the user's active MCP OAuth grants (apps
- * connected via "Connect → log in") with a Disconnect (revoke) action.
- * Backed by /api/oauth/grants.
+ * connected via "Connect → log in") with a Disconnect (revoke) action,
+ * framed in the standard section box. Backed by /api/oauth/grants.
  */
 
 import { useEffect, useState } from "react";
 import { toast } from "@/shared/ui/toast";
+import { SECTION_BOX_INSET } from "@/shared/ui/section-box";
+import { cn } from "@/shared/lib/utils";
 
 interface Grant {
   id: string;
@@ -52,31 +54,30 @@ export function ConnectedAppsSection() {
     }
   }
 
+  let body: React.ReactNode;
   if (grants === null) {
-    return <p className="text-[11px] text-text-muted font-mono">Loading…</p>;
-  }
-  if (grants.length === 0) {
-    return (
-      <p className="text-[11px] text-text-muted leading-relaxed">
+    body = <p className="text-caption font-mono text-text-muted">Loading…</p>;
+  } else if (grants.length === 0) {
+    body = (
+      <p className="text-caption leading-relaxed text-text-muted">
         No connected apps yet. When you connect an MCP client via
         &ldquo;Connect &amp; log in,&rdquo; it appears here and you can revoke it
         anytime.
       </p>
     );
-  }
-
-  return (
-    <ul className="space-y-2">
-      {grants.map((g) => (
+  } else {
+    body = (
+      <ul className="space-y-1.5">
+        {grants.map((g) => (
         <li
           key={g.id}
-          className="flex items-center gap-3 rounded-[3px] border border-border-default bg-surface-raised-1 px-3 py-2"
+          className="flex items-center gap-3 rounded-lg border border-border-default bg-bg-elevated px-3 py-2"
         >
           <div className="min-w-0 flex-1">
-            <p className="text-[12px] text-text-primary truncate">
+            <p className="truncate text-body text-text-primary">
               {g.client_name || "MCP client"}
             </p>
-            <p className="text-[10px] text-text-muted font-mono truncate">
+            <p className="truncate text-micro font-mono text-text-muted">
               {g.scopes.join(" ") || "dopl.read"}
               {g.last_used_at
                 ? ` · last used ${new Date(g.last_used_at).toLocaleDateString()}`
@@ -87,12 +88,24 @@ export function ConnectedAppsSection() {
             type="button"
             onClick={() => void revoke(g.id)}
             disabled={revoking === g.id}
-            className="shrink-0 text-[11px] text-text-tertiary hover:text-red-400/90 transition-colors disabled:opacity-50"
+            className="shrink-0 text-caption text-text-secondary transition-colors hover:text-danger disabled:opacity-50"
           >
             {revoking === g.id ? "…" : "Disconnect"}
           </button>
-        </li>
-      ))}
-    </ul>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
+  return (
+    <section className="w-full overflow-hidden rounded-[14px] border border-border-strong">
+      <div className="flex items-center bg-card-surface-subtle px-4 py-1.5">
+        <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
+          Connected apps
+        </span>
+      </div>
+      <div className={cn(SECTION_BOX_INSET, "p-4")}>{body}</div>
+    </section>
   );
 }

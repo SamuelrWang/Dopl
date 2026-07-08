@@ -9,7 +9,8 @@ Source of truth: `src/app/globals.css` (`@theme` block + `:root` palette +
 "UI kit" section). Design language: Samuel's study-notes app, verbatim —
 neutral grays, hairline borders, floating bento cards, concave (pressed-in)
 fields and raised 3D buttons. Currently wired: Knowledge (v2), Ontology,
-Members, Chats. Every new page starts on this system.
+Members, Chats, Settings (the modal in `shared/layout/settings-modal` and
+the `/[workspaceSlug]/settings` page). Every new page starts on this system.
 
 ## Type scale
 

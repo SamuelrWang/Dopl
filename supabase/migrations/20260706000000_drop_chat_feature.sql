@@ -29,9 +29,10 @@ ALTER TABLE canvas_panels ADD CONSTRAINT canvas_panels_panel_type_check
 DROP TABLE IF EXISTS chat_attachments CASCADE;
 DROP TABLE IF EXISTS conversations CASCADE;
 
--- 4. Storage: objects, bucket-scoped policies, then the bucket itself.
-DELETE FROM storage.objects WHERE bucket_id = 'chat-attachments';
-
+-- 4. Storage: the chat-attachments bucket never existed in this project
+--    (verified when this was applied, 2026-07-07), and Supabase's
+--    storage.protect_delete() forbids direct table deletes anyway.
+--    Sweep any stray bucket-scoped policies only.
 DO $$
 DECLARE
   pol record;

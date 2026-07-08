@@ -62,9 +62,9 @@ export function MembersSection({
           <button
             type="button"
             onClick={() => setInviteOpen(true)}
-            className="flex items-center gap-1.5 px-3 h-8 rounded-md border border-border-strong bg-surface-raised-3 hover:bg-surface-raised-4 transition-colors text-xs text-text-primary cursor-pointer"
+            className="flex h-7 cursor-pointer items-center gap-1.5 rounded-md bg-surface-cta px-2.5 text-small font-medium text-text-on-cta transition-opacity hover:opacity-90"
           >
-            <Plus size={13} />
+            <Plus size={12} />
             Add members
           </button>
         </div>

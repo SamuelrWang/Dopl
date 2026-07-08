@@ -1,10 +1,10 @@
 "use client";
 
 import { cn } from "@/shared/lib/utils";
-import type { ConversationMessage } from "../types";
+import type { ChatMessage } from "../types";
 
 interface Props {
-  messages: ConversationMessage[];
+  messages: ChatMessage[];
 }
 
 /**
@@ -36,12 +36,12 @@ export function MessageList({ messages }: Props) {
               </span>
             )}
           </div>
-          <p className="text-body leading-relaxed text-text-primary">
+          <p className="break-words text-body leading-relaxed text-text-primary">
             {message.summary}
           </p>
           {message.verbatim && (
             <div className="concave-field mt-2 rounded-lg px-3 py-2.5">
-              <p className="whitespace-pre-wrap text-body leading-relaxed text-text-primary">
+              <p className="whitespace-pre-wrap break-words text-body leading-relaxed text-text-primary">
                 {message.verbatim}
               </p>
             </div>

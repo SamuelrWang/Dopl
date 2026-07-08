@@ -11,6 +11,7 @@ import { registerSkillTools } from "./tools/skills.js";
 import { registerClusterTools } from "./tools/cluster.js";
 import { registerWorkflowTools } from "./tools/workflow.js";
 import { registerCanvasTools } from "./tools/canvas.js";
+import { registerChatTools } from "./tools/chats.js";
 import { registerPacksTools } from "./tools/packs.js";
 import { registerMapTool } from "./tools/map.js";
 import { registerSearchTool } from "./tools/search.js";
@@ -53,7 +54,8 @@ This MCP server can target any workspace the authenticated user is a member of. 
 - Create / rename a cluster -> dopl_cluster(op='create' | 'update'); delete one -> dopl_cluster_admin(op='delete_cluster').
 - Browse / read / write the user's knowledge bases -> dopl_kb (+ dopl_kb_admin for destructive ops).
 - List / read / author the user's skills -> dopl_skill (+ dopl_skill_admin).
-- See what's on the canvas / rename a chat panel -> dopl_canvas(op='list' | 'rename_chat').
+- See what's on the canvas -> dopl_canvas(op='list').
+- Archive this conversation for future sessions -> dopl_chats(op='export'); recall a past session -> dopl_chats(op='list' | 'get'). Read dopl_chats(op='guide') before your first export — summaries per message, verbatim only on request.
 
 ## Workspace skills
 
@@ -196,6 +198,7 @@ export function createServer(
     Array.isArray(options.scopes) && options.scopes.includes("dopl.write");
   // Purely destructive tools aren't even registered for a read-only session.
   const READ_ONLY_BLOCKED_TOOLS = new Set([
+    "dopl_chats_admin",
     "dopl_cluster_admin",
     "dopl_kb_admin",
     "dopl_skill_admin",
@@ -255,7 +258,7 @@ export function createServer(
       "disconnect",
       "set_cluster",
     ]),
-    dopl_canvas: new Set(["rename_chat"]),
+    dopl_chats: new Set(["export", "append", "update", "create_folder"]),
   };
   // Active workspace for this MCP session — seeded from the startup
   // handshake (index.ts) and mutated by `set_workspace` mid-session.
@@ -576,6 +579,7 @@ export function createServer(
   registerPacksTools(registerTool, client); // curated read-only knowledge packs
   registerKnowledgeTools(registerTool, client); // dopl_kb + dopl_kb_admin (user bases)
   registerSkillTools(registerTool, client); // dopl_skill + dopl_skill_admin
+  registerChatTools(registerTool, client); // dopl_chats + dopl_chats_admin (archive)
   registerMapTool(registerTool, client); // dopl_map — compact workspace manifest
   registerSearchTool(registerTool, client); // dopl_search — cross-domain search
   registerOntologyTool(registerTool, client); // dopl_ontology — routing graph (read-only)

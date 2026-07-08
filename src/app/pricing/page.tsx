@@ -1,16 +1,20 @@
 "use client";
 
+import "@/features/marketing/marketing.css";
+
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
-import { Button } from "@/shared/ui/button";
 import { getSupabaseBrowser } from "@/shared/supabase/browser";
 import { EmbeddedCheckoutForm } from "@/features/billing/components/embedded-checkout";
+import { SiteNav } from "@/features/marketing/components/site-nav";
+import { PLANS, type PlanDef } from "@/features/billing/plans";
 import type { User } from "@supabase/supabase-js";
 
 /**
- * Launch pricing: one tier. 24-hour free trial (no card) → $7.99/mo Pro.
- * Feature tiers and credits UI are gone.
+ * Public pricing — the landing-page (light Lattice) language: three plan
+ * cards from the shared plan defs, Pro highlighted. Checkout only sells
+ * the live monthly Pro price; Basic maps to the 24-hour free trial and
+ * Team is a contact CTA.
  */
 
 export default function PricingPage() {
@@ -63,110 +67,174 @@ export default function PricingPage() {
 
   if (showCheckout) {
     return (
-      <div className="min-h-screen flex flex-col items-center pt-24 px-4">
-        <div className="w-full max-w-lg">
+      <div className="lp">
+        <SiteNav />
+        <section className="lp-checkout">
           <button
+            type="button"
+            className="lp-checkout-back"
             onClick={() => setShowCheckout(false)}
-            className="text-sm text-white/50 hover:text-white/80 transition-colors mb-4"
           >
             &larr; Back to pricing
           </button>
-          <h1 className="text-2xl font-semibold text-white mb-2">
-            Subscribe to Dopl Pro
-          </h1>
-          <p className="text-sm text-white/60 mb-6">$7.99/month</p>
+          <h1 className="lp-checkout-title">Subscribe to Dopl Pro</h1>
+          <p className="lp-checkout-sub">$7.99/month · cancel anytime</p>
           <EmbeddedCheckoutForm />
-        </div>
+        </section>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
-      {/* Header */}
-      <section className="pt-28 pb-4 px-4">
-        <div className="flex items-center justify-center gap-2.5 mb-3">
-          <Image
-            src="/favicons/android-chrome-192x192.png"
-            alt="Dopl"
-            width={28}
-            height={28}
-            className="rounded-md"
-          />
-          <h1 className="text-2xl font-semibold text-white tracking-tight">
-            Pricing
-          </h1>
+    <div className="lp">
+      <SiteNav />
+      <section className="lp-pricing">
+        <div className="lp-pricing-head">
+          <h1 className="lp-pricing-title">Pricing</h1>
+          <p className="lp-pricing-sub">
+            Try Dopl free for 24 hours. No credit card required.
+          </p>
         </div>
-        <p className="text-sm text-white/55 text-center max-w-md mx-auto leading-relaxed">
-          Try Dopl free for 24 hours. No credit card required.
-        </p>
-      </section>
 
-      {/* Single Pro card */}
-      <section className="flex-1 px-4 pt-10 pb-16">
-        <div className="max-w-md mx-auto">
-          <div className="flex flex-col h-full rounded-xl p-8 border border-white/[0.15] bg-white/[0.04]">
-            <div className="text-xl font-semibold text-white mb-1.5">Pro</div>
-            <p className="text-sm text-white/55 leading-relaxed mb-6">
-              Everything Dopl can do, billed monthly.
-            </p>
-
-            <div className="mb-1 flex items-baseline gap-2">
-              <span className="text-4xl font-semibold text-white">$7.99</span>
-              <span className="text-sm text-white/50">per month</span>
-            </div>
-            <p className="text-xs text-white/40 mb-6">
-              Cancel anytime. 24-hour free trial on signup.
-            </p>
-
-            {isPaid ? (
-              <Button variant="outline" size="lg" className="w-full mb-6" disabled>
-                Current plan
-              </Button>
-            ) : user ? (
-              <Button
-                size="lg"
-                className="w-full mb-6 cursor-pointer"
-                onClick={handleSubscribe}
-                disabled={!authChecked}
-              >
-                Subscribe
-              </Button>
-            ) : (
-              <Button
-                size="lg"
-                className="w-full mb-6 cursor-pointer"
-                onClick={handleGetStarted}
-              >
-                Start free trial
-              </Button>
-            )}
-
-            <ul className="space-y-2.5">
-              <li className="flex items-start gap-2.5 text-sm text-white/75 leading-6">
-                <Check /> <span>Unlimited ingestion</span>
-              </li>
-              <li className="flex items-start gap-2.5 text-sm text-white/75 leading-6">
-                <Check /> <span>MCP server access for your AI agent</span>
-              </li>
-              <li className="flex items-start gap-2.5 text-sm text-white/75 leading-6">
-                <Check /> <span>Canvas, clusters, and skill sync</span>
-              </li>
-              <li className="flex items-start gap-2.5 text-sm text-white/75 leading-6">
-                <Check /> <span>Auto-update tracking for GitHub sources</span>
-              </li>
-            </ul>
-          </div>
+        <div className="lp-plans">
+          {PLANS.map((plan) => (
+            <PlanCard
+              key={plan.id}
+              plan={plan}
+              isPaid={isPaid}
+              authChecked={authChecked}
+              onSubscribe={handleSubscribe}
+              onGetStarted={handleGetStarted}
+            />
+          ))}
         </div>
       </section>
     </div>
   );
 }
 
-function Check() {
+function PlanCard({
+  plan,
+  isPaid,
+  authChecked,
+  onSubscribe,
+  onGetStarted,
+}: {
+  plan: PlanDef;
+  isPaid: boolean;
+  authChecked: boolean;
+  onSubscribe: () => void;
+  onGetStarted: () => void;
+}) {
+  const popular = plan.id === "pro";
+
+  return (
+    <div className={`lp-plan${popular ? " lp-plan--popular" : ""}`}>
+      <div className="lp-plan-top">
+        <span className="lp-plan-audience">{plan.audience}</span>
+        {popular && <span className="lp-plan-badge">Popular</span>}
+      </div>
+
+      <h2 className="lp-plan-name">{plan.name}</h2>
+      <div className="lp-plan-price">
+        <span className="lp-plan-price-figure">{plan.priceMonthly}</span>
+        {plan.priceNote && (
+          <span className="lp-plan-price-note">{plan.priceNote}</span>
+        )}
+      </div>
+      <p className="lp-plan-fine">
+        {plan.id === "basic" && "24-hour full-access trial on signup."}
+        {plan.id === "pro" && "Cancel anytime."}
+        {plan.id === "team" && "We'll tailor a plan to your team."}
+      </p>
+
+      <PlanCardCta
+        plan={plan}
+        isPaid={isPaid}
+        authChecked={authChecked}
+        onSubscribe={onSubscribe}
+        onGetStarted={onGetStarted}
+      />
+
+      <ul className="lp-plan-features">
+        {plan.features.map((f) => (
+          <li key={f}>
+            <span className="lp-plan-check">
+              <CheckIcon />
+            </span>
+            {f}
+          </li>
+        ))}
+      </ul>
+
+      {popular && (
+        <p className="lp-plan-guarantee">
+          <strong>Try before you pay</strong>
+          Every account starts with a 24-hour free trial — no card required.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function PlanCardCta({
+  plan,
+  isPaid,
+  authChecked,
+  onSubscribe,
+  onGetStarted,
+}: {
+  plan: PlanDef;
+  isPaid: boolean;
+  authChecked: boolean;
+  onSubscribe: () => void;
+  onGetStarted: () => void;
+}) {
+  if (plan.id === "pro") {
+    if (isPaid) {
+      return (
+        <button type="button" className="lp-btn lp-btn--3d-light lp-plan-cta" disabled>
+          Current plan
+        </button>
+      );
+    }
+    return (
+      <button
+        type="button"
+        className="lp-btn lp-btn--3d lp-plan-cta"
+        onClick={onSubscribe}
+        disabled={!authChecked}
+      >
+        Upgrade to Pro
+      </button>
+    );
+  }
+  if (plan.id === "team") {
+    return (
+      <a
+        href="mailto:support@usedopl.com?subject=Dopl%20Team%20plan"
+        className="lp-btn lp-btn--3d-light lp-plan-cta"
+      >
+        Talk to us
+      </a>
+    );
+  }
+  return (
+    <button
+      type="button"
+      className="lp-btn lp-btn--3d-light lp-plan-cta"
+      onClick={onGetStarted}
+    >
+      Try today
+    </button>
+  );
+}
+
+function CheckIcon() {
   return (
     <svg
-      className="size-4 shrink-0 mt-0.5 text-white/40"
+      width="11"
+      height="11"
       viewBox="0 0 16 16"
       fill="none"
       stroke="currentColor"

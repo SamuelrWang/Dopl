@@ -9,8 +9,12 @@ export function SectionShell({ title, subtitle, children }: Props) {
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <h2 className="text-xl font-semibold text-text-primary">{title}</h2>
-        {subtitle && <p className="text-sm text-text-tertiary mt-0.5">{subtitle}</p>}
+        <h2 className="text-title font-semibold tracking-tight text-text-primary">
+          {title}
+        </h2>
+        {subtitle && (
+          <p className="mt-0.5 text-caption text-text-secondary">{subtitle}</p>
+        )}
       </div>
       {children}
     </div>

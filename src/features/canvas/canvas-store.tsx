@@ -15,8 +15,7 @@
  *   layout.ts      — computeNewPanelPosition, findNonOverlappingPosition,
  *                    nextPanelIdString (pure geometry helpers).
  *   provider.tsx   — CanvasProvider + all the sync-bridge components
- *                    (DB / conversations / realtime / auto-focus /
- *                    shared-panel-move).
+ *                    (DB / realtime / auto-focus / shared-panel-move).
  *
  * Importers keep using `@/features/canvas/canvas-store` — this barrel
  * preserves every public symbol that existed before the split. Prefer
