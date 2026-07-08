@@ -138,6 +138,12 @@ export function ObjectPanel({
           </div>
 
           {isColumn && <TemplateEditor column={object} dispatch={dispatch} />}
+          {isColumn && (
+            <p className="px-1 text-caption text-text-muted">
+              New objects also start with a copy of this column&apos;s relationships and
+              actions below.
+            </p>
+          )}
           <AttributesEditor object={object} graph={graph} dispatch={dispatch} />
           <RelationshipsEditor
             object={object}

@@ -150,6 +150,7 @@ export async function insertObject(input: {
   name: string;
   createdBy: string;
   attributes?: OntologyObject["attributes"];
+  methods?: OntologyObject["methods"];
 }): Promise<OntologyObjectRow> {
   const db = supabaseAdmin();
   const { data, error } = await db
@@ -160,6 +161,7 @@ export async function insertObject(input: {
       name: input.name,
       created_by: input.createdBy,
       ...(input.attributes?.length ? { attributes: input.attributes } : {}),
+      ...(input.methods?.length ? { methods: input.methods } : {}),
     })
     .select(ONTOLOGY_OBJECT_COLS)
     .single();

@@ -118,6 +118,8 @@ export async function createObject(
 ): Promise<OntologyObject> {
   let objectType = input.objectType;
   let attributes: OntologyObject["attributes"] | undefined;
+  let methods: OntologyObject["methods"] | undefined;
+  let inheritedEdges: OntologyObject["relationships"] | undefined;
   if (input.clusterId) {
     const cluster = await repo.findClusterById(ctx.workspaceId, input.clusterId);
     if (!cluster) throw HttpError.notFound("Cluster not found");
@@ -125,8 +127,9 @@ export async function createObject(
     const parent = await repo.findObjectById(ctx.workspaceId, input.parentObjectId);
     if (!parent) throw HttpError.notFound("Parent object not found");
     // Columns act as templates: a new card inherits the column's type
-    // (unless the caller picked one) and is born with the column's
-    // default fields as empty attributes, ready to fill.
+    // (unless the caller picked one), is born with the column's default
+    // fields as empty attributes ready to fill, and copies the column's
+    // relationships and actions as its starting set.
     objectType ??= parent.object_type;
     attributes = (parent.template ?? []).map((f) => ({
       key: f.key,
@@ -136,6 +139,8 @@ export async function createObject(
           ? { kind: f.kind, value: "" }
           : { kind: f.kind, value: [] },
     }));
+    methods = parent.methods ?? [];
+    inheritedEdges = await currentRelationships(ctx, parent.id);
   }
 
   const row = await repo.insertObject({
@@ -144,6 +149,7 @@ export async function createObject(
     name: input.name,
     createdBy: ctx.userId,
     attributes,
+    methods,
   });
   const position = await repo.countMembershipSiblings(
     ctx.workspaceId,
@@ -158,7 +164,12 @@ export async function createObject(
     childObjectId: row.id,
     position,
   });
-  return mapObjectRow(row);
+  if (inheritedEdges?.length) {
+    await repo.replaceRelationshipsForSource(ctx.workspaceId, row.id, inheritedEdges);
+  }
+  const object = mapObjectRow(row);
+  object.relationships = inheritedEdges ?? [];
+  return object;
 }
 
 export async function updateObject(

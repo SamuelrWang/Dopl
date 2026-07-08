@@ -28,7 +28,7 @@ WRITE — set \`op\` to:
 - "create_cluster" — new ontology board. Requires: name. Optional: purpose (agents read it to route — write a good one).
 - "update_cluster" — rename / repurpose. Requires: cluster. Optional: name, purpose.
 - "create_column" — new column (container object) in a cluster. Requires: cluster, name. Optional: type.
-- "create_object" — new object inside a column (or nested in any object). Requires: parent, name. Optional: type.
+- "create_object" — new object inside a column (or nested in any object). Inherits from the parent: its type (unless \`type\` given), its template as empty fields, and a copy of its relationships and actions. Requires: parent, name. Optional: type.
 - "update_object" — rename / redescribe / retype. Requires: object. Optional: name, subtitle, type.
 - "set_template_field" — upsert one DEFAULT field on a column (or any container): new objects created inside it are born with these fields, empty. Requires: object, label. Optional: kind (default text).
 - "remove_template_field" — Requires: object, label.
@@ -36,7 +36,7 @@ WRITE — set \`op\` to:
 - "remove_attribute" — Requires: object, label.
 - "set_relationship" — replace one labeled edge. Requires: object, label, targets (object ids/names).
 - "remove_relationship" — Requires: object, label.
-- "set_action" — upsert an action recipe by name. Requires: object, name. Optional: description, requires (attribute paths the action pulls, e.g. "client.transcripts").
+- "set_action" — upsert an action by name: something the OBJECT can do day to day, performed by an agent on its behalf (e.g. "Send email", "Search LinkedIn"). Requires: object, name. Optional: description (how/when to do it), requires (attribute paths the action pulls, e.g. "client.transcripts").
 - "remove_action" — Requires: object, name.
 - "claim_anchor" — link the CALLING user to an object as their identity anchor. Requires: object.
 
@@ -232,18 +232,22 @@ async function dispatch(client: DoplClient, args: OntologyArgs): Promise<ToolRes
       const snapshot = await client.getOntology();
       const resolved = resolveObjectRef(snapshot, args.parent as string);
       if ("fail" in resolved) return resolved.fail;
-      // No explicit type → the server inherits the parent column's type
-      // and instantiates its template as empty attributes.
+      // No explicit type → the server inherits the parent column's type;
+      // template fields, relationships, and actions copy over regardless.
       const object = await client.createOntologyObject({
         parentObjectId: resolved.hit.id,
         objectType: args.type,
         name: args.name as string,
       });
-      const born = object.attributes.length
-        ? ` Born with template fields: ${object.attributes.map((a) => a.label).join(", ")}.`
-        : "";
+      const born: string[] = [];
+      if (object.attributes.length) {
+        born.push(`fields ${object.attributes.map((a) => a.label).join(", ")}`);
+      }
+      if (object.relationships.length) born.push(`${object.relationships.length} relationship(s)`);
+      if (object.methods.length) born.push(`${object.methods.length} action(s)`);
+      const bornNote = born.length ? ` Born with ${born.join(" · ")}.` : "";
       return ok(
-        `Created **${object.name}** (${object.type} · id: \`${object.id}\`) inside ${resolved.hit.name}.${born}`
+        `Created **${object.name}** (${object.type} · id: \`${object.id}\`) inside ${resolved.hit.name}.${bornNote}`
       );
     }
     case "update_object":
