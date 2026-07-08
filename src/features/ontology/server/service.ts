@@ -116,19 +116,34 @@ export async function createObject(
   ctx: OntologyContext,
   input: OntologyObjectCreateInput
 ): Promise<OntologyObject> {
+  let objectType = input.objectType;
+  let attributes: OntologyObject["attributes"] | undefined;
   if (input.clusterId) {
     const cluster = await repo.findClusterById(ctx.workspaceId, input.clusterId);
     if (!cluster) throw HttpError.notFound("Cluster not found");
   } else if (input.parentObjectId) {
     const parent = await repo.findObjectById(ctx.workspaceId, input.parentObjectId);
     if (!parent) throw HttpError.notFound("Parent object not found");
+    // Columns act as templates: a new card inherits the column's type
+    // (unless the caller picked one) and is born with the column's
+    // default fields as empty attributes, ready to fill.
+    objectType ??= parent.object_type;
+    attributes = (parent.template ?? []).map((f) => ({
+      key: f.key,
+      label: f.label,
+      value:
+        f.kind === "text" || f.kind === "pill"
+          ? { kind: f.kind, value: "" }
+          : { kind: f.kind, value: [] },
+    }));
   }
 
   const row = await repo.insertObject({
     workspaceId: ctx.workspaceId,
-    objectType: input.objectType,
+    objectType: objectType ?? "person",
     name: input.name,
     createdBy: ctx.userId,
+    attributes,
   });
   const position = await repo.countMembershipSiblings(
     ctx.workspaceId,

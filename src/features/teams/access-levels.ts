@@ -15,7 +15,8 @@ export type TeamResourceType =
   | "knowledge_base"
   | "workflow"
   | "chat"
-  | "chat_folder";
+  | "chat_folder"
+  | "skill";
 export type AccessMode = "workspace" | "teams";
 
 export function defaultLevelForRole(role: Role): AccessLevel {

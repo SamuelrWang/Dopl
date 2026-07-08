@@ -149,7 +149,7 @@ async function assertSkillAttachable(
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("skills")
-    .select("id, agent_write_enabled, visibility")
+    .select("id, agent_write_enabled, visibility, access_mode")
     .eq("id", skillId)
     .eq("workspace_id", scope.workspaceId)
     .is("deleted_at", null)
@@ -157,8 +157,13 @@ async function assertSkillAttachable(
   if (error) throw error;
   if (!data)
     throw new HttpError(404, "SKILL_NOT_FOUND", "Skill not found in this workspace");
+  // Workflows only reference workspace-public skills: every workflow
+  // reader must be able to load the skill. (KBs get the richer team
+  // invariant machinery; skills keep the simple rule.)
   if (data.visibility === "private")
     throw new HttpError(403, "PRIVATE_RESOURCE", "This skill is private. Make it public before adding it to a workflow.");
+  if (data.access_mode === "teams")
+    throw new HttpError(403, "PRIVATE_RESOURCE", "This skill is team-scoped. Share it with the whole workspace before adding it to a workflow.");
   if (scope.source === "agent" && !data.agent_write_enabled)
     throw new HttpError(403, "AGENT_WRITE_DISABLED", "agent_write_enabled is off for this skill");
 }

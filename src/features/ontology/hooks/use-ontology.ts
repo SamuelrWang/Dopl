@@ -29,7 +29,7 @@ export function useOntology(workspaceId: string): {
   createCluster: () => Promise<OntologyCluster | null>;
   createObject: (
     target: { clusterId: string } | { parentObjectId: string },
-    objectType: ObjectTypeId
+    objectType?: ObjectTypeId
   ) => Promise<OntologyObject | null>;
 } {
   const [graph, rawDispatch] = useReducer(graphReducer, EMPTY_GRAPH);
@@ -82,6 +82,7 @@ export function useOntology(workspaceId: string): {
                 attributes: object.attributes,
                 methods: object.methods,
                 relationships: object.relationships,
+                template: object.template,
               })
               .catch(() => undefined);
           }
@@ -103,6 +104,7 @@ export function useOntology(workspaceId: string): {
           attributes: object.attributes,
           methods: object.methods,
           relationships: object.relationships,
+          template: object.template,
         })
         .catch((err) => reportSaveError("object", err));
     },
@@ -191,7 +193,7 @@ export function useOntology(workspaceId: string): {
   const createObject = useCallback(
     async (
       target: { clusterId: string } | { parentObjectId: string },
-      objectType: ObjectTypeId
+      objectType?: ObjectTypeId
     ): Promise<OntologyObject | null> => {
       const isColumn = "clusterId" in target;
       try {

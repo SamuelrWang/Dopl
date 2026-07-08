@@ -211,7 +211,7 @@ function FileTab({
         </button>
       )}
       {active && (
-        <span className="absolute left-2 right-2 -bottom-px h-px bg-text-text-primary" />
+        <span className="absolute left-2 right-2 -bottom-px h-px bg-text-primary" />
       )}
     </div>
   );

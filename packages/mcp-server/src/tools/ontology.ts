@@ -30,6 +30,8 @@ WRITE — set \`op\` to:
 - "create_column" — new column (container object) in a cluster. Requires: cluster, name. Optional: type.
 - "create_object" — new object inside a column (or nested in any object). Requires: parent, name. Optional: type.
 - "update_object" — rename / redescribe / retype. Requires: object. Optional: name, subtitle, type.
+- "set_template_field" — upsert one DEFAULT field on a column (or any container): new objects created inside it are born with these fields, empty. Requires: object, label. Optional: kind (default text).
+- "remove_template_field" — Requires: object, label.
 - "set_attribute" — upsert one attribute by label. Requires: object, label. kind="text"|"pill" need \`value\`; kind="ref" needs \`values\` (object ids/names); kind="knowledge"|"skill" need \`values\` (KB/skill slugs or ids). Default kind: text.
 - "remove_attribute" — Requires: object, label.
 - "set_relationship" — replace one labeled edge. Requires: object, label, targets (object ids/names).
@@ -62,6 +64,8 @@ export function registerOntologyTool(register: RegisterTool, client: DoplClient)
           "create_column",
           "create_object",
           "update_object",
+          "set_template_field",
+          "remove_template_field",
           "set_attribute",
           "remove_attribute",
           "set_relationship",
@@ -81,12 +85,17 @@ export function registerOntologyTool(register: RegisterTool, client: DoplClient)
       name: z.string().optional().describe("A name (cluster/column/object/action)."),
       purpose: z.string().optional().describe("create_cluster/update_cluster: routing one-liner."),
       subtitle: z.string().optional().describe("update_object: short description agents browse."),
-      type: z.enum(OBJECT_TYPES).optional().describe("Object type (default person)."),
-      label: z.string().optional().describe("Attribute or relationship label."),
+      type: z
+        .enum(OBJECT_TYPES)
+        .optional()
+        .describe(
+          "Object type. Omit on create_object to inherit the parent column's type (columns default to person)."
+        ),
+      label: z.string().optional().describe("Attribute, relationship, or template-field label."),
       kind: z
         .enum(["text", "pill", "ref", "knowledge", "skill"])
         .optional()
-        .describe("set_attribute: value kind (default text)."),
+        .describe("set_attribute / set_template_field: value kind (default text)."),
       value: z.string().optional().describe("set_attribute (text/pill): the value."),
       values: z
         .array(z.string())
@@ -160,6 +169,8 @@ const REQUIRED: Record<string, string[]> = {
   create_column: ["cluster", "name"],
   create_object: ["parent", "name"],
   update_object: ["object"],
+  set_template_field: ["object", "label"],
+  remove_template_field: ["object", "label"],
   set_attribute: ["object", "label"],
   remove_attribute: ["object", "label"],
   set_relationship: ["object", "label", "targets"],
@@ -221,13 +232,18 @@ async function dispatch(client: DoplClient, args: OntologyArgs): Promise<ToolRes
       const snapshot = await client.getOntology();
       const resolved = resolveObjectRef(snapshot, args.parent as string);
       if ("fail" in resolved) return resolved.fail;
+      // No explicit type → the server inherits the parent column's type
+      // and instantiates its template as empty attributes.
       const object = await client.createOntologyObject({
         parentObjectId: resolved.hit.id,
-        objectType: args.type ?? "person",
+        objectType: args.type,
         name: args.name as string,
       });
+      const born = object.attributes.length
+        ? ` Born with template fields: ${object.attributes.map((a) => a.label).join(", ")}.`
+        : "";
       return ok(
-        `Created **${object.name}** (${object.type} · id: \`${object.id}\`) inside ${resolved.hit.name}.`
+        `Created **${object.name}** (${object.type} · id: \`${object.id}\`) inside ${resolved.hit.name}.${born}`
       );
     }
     case "update_object":
@@ -238,6 +254,38 @@ async function dispatch(client: DoplClient, args: OntologyArgs): Promise<ToolRes
           objectType: args.type,
         });
         return ok(`Updated **${args.name ?? object.name}** (\`${object.id}\`).`);
+      });
+    case "set_template_field":
+      return withObject(client, args.object as string, async (object) => {
+        const label = (args.label as string).trim();
+        if (!label) return err("set_template_field needs a non-empty `label`.");
+        const kind = args.kind ?? "text";
+        const needle = label.toLowerCase();
+        const current = object.template ?? [];
+        const existing = current.find((f) => f.label.toLowerCase() === needle);
+        const field = {
+          key: existing?.key ?? label.toLowerCase().replace(/\s+/g, "-"),
+          label,
+          kind,
+        };
+        const template = existing
+          ? current.map((f) => (f === existing ? field : f))
+          : [...current, field];
+        await client.updateOntologyObject(object.id, { template });
+        return ok(
+          `Set default field **${label}** (${kind}) on **${object.name}** — new objects created inside it are born with it, empty. Fields now: ${template.map((f) => f.label).join(", ")}.`
+        );
+      });
+    case "remove_template_field":
+      return withObject(client, args.object as string, async (object) => {
+        const needle = (args.label as string).toLowerCase();
+        const current = object.template ?? [];
+        const template = current.filter((f) => f.label.toLowerCase() !== needle);
+        if (template.length === current.length) {
+          return err(`**${object.name}** has no default field "${args.label}".`);
+        }
+        await client.updateOntologyObject(object.id, { template });
+        return ok(`Removed default field "${args.label}" from **${object.name}**.`);
       });
     case "set_attribute":
       return opSetAttribute(client, args);

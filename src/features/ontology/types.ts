@@ -25,6 +25,17 @@ export interface ObjectAttribute {
   value: AttributeValue;
 }
 
+/**
+ * One field of a column's object template: a label + kind with no
+ * value. New children of the column are born with these as empty
+ * attributes, ready to fill.
+ */
+export interface TemplateField {
+  key: string;
+  label: string;
+  kind: AttributeValue["kind"];
+}
+
 export interface ObjectRelationship {
   /** Edge label, e.g. "member of", "assigned to". */
   label: string;
@@ -48,6 +59,11 @@ export interface OntologyObject {
   methods: ObjectMethod[];
   /** Contained objects. Columns are objects too — their children are the cards. */
   childIds: string[];
+  /**
+   * Column-only: default fields for new children. The column's own
+   * `type` doubles as the default type of new children.
+   */
+  template: TemplateField[];
 }
 
 export interface OntologyCluster {

@@ -9,6 +9,7 @@ import type { ObjectTypeId } from "../types";
 import { ActionsEditor } from "./actions-editor";
 import { AttributesEditor } from "./attributes-editor";
 import { RelationshipsEditor } from "./relationships-editor";
+import { TemplateEditor } from "./template-editor";
 
 interface Props {
   objectId: string;
@@ -51,7 +52,8 @@ export function ObjectPanel({
               patch: { type: e.target.value as ObjectTypeId },
             })
           }
-          aria-label="Object type"
+          aria-label={isColumn ? "Column type — the default for new objects in it" : "Object type"}
+          title={isColumn ? "Column type — new objects in this column default to it" : undefined}
           className="shrink-0 cursor-pointer appearance-none rounded-full border px-2.5 py-0.5 text-caption font-semibold focus:outline-none"
           style={{ borderColor: typeMeta.border, background: typeMeta.bg, color: typeMeta.text }}
         >
@@ -135,6 +137,7 @@ export function ObjectPanel({
             />
           </div>
 
+          {isColumn && <TemplateEditor column={object} dispatch={dispatch} />}
           <AttributesEditor object={object} graph={graph} dispatch={dispatch} />
           <RelationshipsEditor
             object={object}

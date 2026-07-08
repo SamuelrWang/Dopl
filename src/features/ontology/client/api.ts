@@ -78,7 +78,8 @@ export async function createObject(
   input: {
     clusterId?: string;
     parentObjectId?: string;
-    objectType: ObjectTypeId;
+    /** Omitted on a card create → inherits the parent column's type. */
+    objectType?: ObjectTypeId;
     name: string;
   }
 ): Promise<OntologyObject> {

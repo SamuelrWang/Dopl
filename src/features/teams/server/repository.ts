@@ -349,12 +349,12 @@ export interface TeamsModeResourceRow {
   createdBy: string | null;
 }
 
-/** Every teams-mode resource in the workspace (live KBs + workflows). */
+/** Every teams-mode resource in the workspace (live KBs + workflows + skills). */
 export async function listTeamsModeResources(
   workspaceId: string
 ): Promise<TeamsModeResourceRow[]> {
   const db = supabaseAdmin();
-  const [kbs, wfs] = await Promise.all([
+  const [kbs, wfs, skills] = await Promise.all([
     db
       .from("knowledge_bases")
       .select("id, created_by")
@@ -366,9 +366,16 @@ export async function listTeamsModeResources(
       .select("id, user_id")
       .eq("workspace_id", workspaceId)
       .eq("access_mode", "teams"),
+    db
+      .from("skills")
+      .select("id, created_by")
+      .eq("workspace_id", workspaceId)
+      .eq("access_mode", "teams")
+      .is("deleted_at", null),
   ]);
   if (kbs.error) throw kbs.error;
   if (wfs.error) throw wfs.error;
+  if (skills.error) throw skills.error;
   return [
     ...((kbs.data ?? []) as Array<{ id: string; created_by: string | null }>).map(
       (r) => ({
@@ -382,6 +389,13 @@ export async function listTeamsModeResources(
         resourceType: "workflow" as const,
         resourceId: r.id,
         createdBy: r.user_id,
+      })
+    ),
+    ...((skills.data ?? []) as Array<{ id: string; created_by: string | null }>).map(
+      (r) => ({
+        resourceType: "skill" as const,
+        resourceId: r.id,
+        createdBy: r.created_by,
       })
     ),
   ];
@@ -424,9 +438,9 @@ export async function getResourceAccessMeta(
   resourceId: string
 ): Promise<ResourceAccessMeta | null> {
   const db = supabaseAdmin();
-  if (resourceType === "knowledge_base") {
+  if (resourceType === "knowledge_base" || resourceType === "skill") {
     const { data, error } = await db
-      .from("knowledge_bases")
+      .from(resourceType === "knowledge_base" ? "knowledge_bases" : "skills")
       .select("name, access_mode, created_by")
       .eq("workspace_id", workspaceId)
       .eq("id", resourceId)

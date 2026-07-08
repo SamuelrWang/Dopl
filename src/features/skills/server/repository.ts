@@ -30,17 +30,29 @@ import {
 // ─── Skills ─────────────────────────────────────────────────────────
 
 export async function listSkillsForWorkspace(
-  workspaceId: string
+  workspaceId: string,
+  opts: { includeConnectors?: boolean } = {}
 ): Promise<Skill[]> {
+  // The summary projection drops the connectors JSONB to keep the MCP
+  // skill_list payload lean; callers that render connector chips (the
+  // index page) opt into the full row. mapSkillSummaryRow fills
+  // `connectors: []` for the lean shape.
+  const includeConnectors = opts.includeConnectors ?? false;
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("skills")
-    .select(SKILL_SUMMARY_COLS)
+    // Dynamic projection: cast to the full-col string so PostgREST's
+    // literal-type inference doesn't explode into a giant union; the
+    // row casts below carry the real shape per branch.
+    .select((includeConnectors ? SKILL_COLS : SKILL_SUMMARY_COLS) as typeof SKILL_COLS)
     .eq("workspace_id", workspaceId)
     .is("deleted_at", null)
     .order("created_at", { ascending: true });
   if (error) throw error;
-  return ((data ?? []) as SkillSummaryRow[]).map(mapSkillSummaryRow);
+  if (includeConnectors) {
+    return ((data ?? []) as unknown as SkillRow[]).map((r) => mapSkillRow(r));
+  }
+  return ((data ?? []) as unknown as SkillSummaryRow[]).map(mapSkillSummaryRow);
 }
 
 export async function findSkillBySlug(
@@ -73,6 +85,23 @@ export async function findSkillByPublicId(
     .maybeSingle();
   if (error) throw error;
   return data ? mapSkillRow(data as SkillRow) : null;
+}
+
+/** Batch id lookup — trash visibility filtering (parents of trashed
+ *  files may be live or trashed, so deleted rows are included). */
+export async function listSkillsByIds(
+  workspaceId: string,
+  ids: string[]
+): Promise<Skill[]> {
+  if (ids.length === 0) return [];
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("skills")
+    .select(SKILL_COLS)
+    .eq("workspace_id", workspaceId)
+    .in("id", ids);
+  if (error) throw error;
+  return ((data ?? []) as SkillRow[]).map((r) => mapSkillRow(r));
 }
 
 export async function findSkillById(
@@ -156,9 +185,13 @@ export interface UpdateSkillPatch {
   slug?: string;
   status?: "active" | "draft";
   agentWriteEnabled?: boolean;
-  /** Visibility is one-way private → public. Service layer rejects
-   *  the reverse; this repo trusts whatever it gets. */
+  /** Full three-way sharing since skill_team_sharing — the service
+   *  enforces who may change it; this repo trusts whatever it gets. */
   visibility?: "public" | "private";
+  accessMode?: "workspace" | "teams";
+  /** Display metadata (JSONB) — set by seed and duplicate, never by
+   *  the REST/MCP update surface. */
+  connectors?: unknown[];
   lastEditedBy?: string | null;
   lastEditedSource?: SkillWriteSource;
 }
@@ -188,6 +221,8 @@ export async function updateSkillRow(
   if (patch.agentWriteEnabled !== undefined)
     update.agent_write_enabled = patch.agentWriteEnabled;
   if (patch.visibility !== undefined) update.visibility = patch.visibility;
+  if (patch.accessMode !== undefined) update.access_mode = patch.accessMode;
+  if (patch.connectors !== undefined) update.connectors = patch.connectors;
   if (patch.lastEditedBy !== undefined) update.last_edited_by = patch.lastEditedBy;
   if (patch.lastEditedSource !== undefined)
     update.last_edited_source = patch.lastEditedSource;
@@ -445,7 +480,7 @@ export async function listDeletedForWorkspace(
   if (filesRes.error) throw filesRes.error;
 
   return {
-    skills: ((skillsRes.data ?? []) as SkillRow[]).map(mapSkillRow),
+    skills: ((skillsRes.data ?? []) as SkillRow[]).map((r) => mapSkillRow(r)),
     files: ((filesRes.data ?? []) as unknown as SkillFileMetaRow[]).map(
       (row) => mapSkillFileRow({ ...row, body: "" })
     ),

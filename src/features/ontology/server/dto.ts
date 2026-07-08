@@ -12,7 +12,7 @@ export const ONTOLOGY_CLUSTER_COLS =
   "id, workspace_id, slug, name, purpose, position, created_at, updated_at, deleted_at";
 
 export const ONTOLOGY_OBJECT_COLS =
-  "id, workspace_id, object_type, name, subtitle, attributes, methods, user_id, created_at, updated_at, deleted_at";
+  "id, workspace_id, object_type, name, subtitle, attributes, methods, template, user_id, created_at, updated_at, deleted_at";
 
 export const ONTOLOGY_MEMBERSHIP_COLS =
   "id, workspace_id, cluster_id, parent_object_id, child_object_id, position";
@@ -40,6 +40,7 @@ export interface OntologyObjectRow {
   subtitle: string;
   attributes: OntologyObject["attributes"];
   methods: OntologyObject["methods"];
+  template: OntologyObject["template"];
   user_id: string | null;
   created_at: string;
   updated_at: string;
@@ -73,6 +74,7 @@ export function mapObjectRow(row: OntologyObjectRow): OntologyObject {
     subtitle: row.subtitle,
     attributes: row.attributes ?? [],
     methods: row.methods ?? [],
+    template: row.template ?? [],
     relationships: [],
     childIds: [],
   };

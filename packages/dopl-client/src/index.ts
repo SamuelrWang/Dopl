@@ -62,9 +62,11 @@ export type {
   ResolvedSkill,
   ResolvedSkillReference,
   Skill,
+  SkillAccessMode,
   SkillConnector,
   SkillProvider,
   SkillStatus,
+  SkillVisibility,
   SkillWriteSource,
 } from "./skill-types.js";
 export type {
@@ -109,4 +111,5 @@ export type {
   OntologyObjectPatch,
   OntologyRelationship,
   OntologySnapshot,
+  OntologyTemplateField,
 } from "./ontology-types.js";

@@ -102,6 +102,17 @@ export function renderObject(
     }
   }
 
+  if ((object.template ?? []).length > 0) {
+    lines.push(
+      "",
+      "## Default fields (template)",
+      "_New objects created inside this one are born with these fields, empty:_"
+    );
+    for (const f of object.template) {
+      lines.push(`- ${f.label} (${f.kind})`);
+    }
+  }
+
   if (object.childIds.length > 0) {
     lines.push("", "## Objects inside");
     for (const id of object.childIds) {

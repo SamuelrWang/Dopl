@@ -16,6 +16,7 @@ import {
   deleteGrantRow,
   deleteGrantsForResource,
   listGrantsForResource,
+  listGrantsForResources,
   listTeamIdsForUser,
   upsertGrant,
 } from "@/features/teams/server/repository";
@@ -580,6 +581,9 @@ export async function restoreBase(
   const base = await repo.findBaseById(id, true);
   if (!base) throw new KnowledgeBaseNotFoundError(id);
   assertSameWorkspace(base.workspaceId, ctx.workspaceId, `knowledge base ${id}`);
+  // Forged-id guard: a base the caller can't SEE must 404 before the
+  // writable check, exactly like the read paths (M-10 + team scoping).
+  await assertBaseVisible(ctx, base);
   await assertBaseWritable(ctx, base);
   return repo.restoreBaseRow(id);
 }
@@ -737,6 +741,7 @@ export async function restoreFolder(
   const folder = await getFolderInternal(ctx, id, true);
   const base = await repo.findBaseById(folder.knowledgeBaseId, true);
   if (!base) throw new KnowledgeBaseNotFoundError(folder.knowledgeBaseId);
+  await assertBaseVisible(ctx, base);
   await assertBaseWritable(ctx, base);
   await assertAncestorsActive(folder.parentId);
   return repo.restoreFolderRow(id);
@@ -897,6 +902,7 @@ export async function restoreEntry(
   assertSameWorkspace(entry.workspaceId, ctx.workspaceId, `entry ${id}`);
   const base = await repo.findBaseById(entry.knowledgeBaseId, true);
   if (!base) throw new KnowledgeBaseNotFoundError(entry.knowledgeBaseId);
+  await assertBaseVisible(ctx, base);
   await assertBaseWritable(ctx, base);
   await assertAncestorsActive(entry.folderId);
   return repo.restoreEntryRow(id);
@@ -1266,12 +1272,81 @@ export async function listTrash(
   if (baseId) {
     // Validate the base belongs to this workspace before scoping.
     // Use includeDeleted=true so a soft-deleted base can still be
-    // browsed via trash.
+    // browsed via trash — but only by callers who may see it.
     const base = await repo.findBaseById(baseId, true);
     if (!base) throw new KnowledgeBaseNotFoundError(baseId);
     assertSameWorkspace(base.workspaceId, ctx.workspaceId, `knowledge base ${baseId}`);
+    await assertBaseVisible(ctx, base);
   }
-  return repo.listDeletedForWorkspace(ctx.workspaceId, baseId);
+  const deleted = await repo.listDeletedForWorkspace(ctx.workspaceId, baseId);
+  // Visibility filter — same rules as the live list (M-10 + team
+  // scoping). Without it the trash leaks other members' private and
+  // non-granted team-scoped bases' names. Trashed folders/entries may
+  // belong to LIVE parents, so resolve every parent base first.
+  const parents = new Map(deleted.bases.map((b) => [b.id, b]));
+  const missingIds = [
+    ...new Set(
+      [...deleted.folders, ...deleted.entries]
+        .map((r) => r.knowledgeBaseId)
+        .filter((id) => !parents.has(id))
+    ),
+  ];
+  for (const b of await repo.listBasesByIds(ctx.workspaceId, missingIds)) {
+    parents.set(b.id, b);
+  }
+  const visibleIds = await visibleBaseIdSet(ctx, [...parents.values()]);
+  return {
+    bases: deleted.bases.filter((b) => visibleIds.has(b.id)),
+    folders: deleted.folders.filter((f) => visibleIds.has(f.knowledgeBaseId)),
+    entries: deleted.entries.filter((e) => visibleIds.has(e.knowledgeBaseId)),
+  };
+}
+
+/**
+ * Batch trash-visibility resolver. `filterTeamVisibleBases` can't be
+ * reused here: it rides on `listEffectiveAccess`, whose teams-mode
+ * index only covers LIVE bases — a trashed teams-mode base would
+ * resolve null even for its own creator. This one checks grants
+ * directly, so trashed rows resolve the same as live ones.
+ */
+async function visibleBaseIdSet(
+  ctx: KnowledgeContext,
+  bases: KnowledgeBase[]
+): Promise<Set<string>> {
+  const out = new Set<string>();
+  const candidates = bases.filter((b) => canSeeBase(ctx, b));
+  const isAdmin = meetsMinRole(ctx.role, "admin");
+  const needGrants = candidates.filter(
+    (b) =>
+      b.accessMode === "teams" && b.createdBy !== ctx.userId && !isAdmin
+  );
+  const granted = new Set<string>();
+  if (needGrants.length > 0) {
+    const myTeams = new Set(
+      await listTeamIdsForUser(ctx.workspaceId, ctx.userId)
+    );
+    if (myTeams.size > 0) {
+      const grants = await listGrantsForResources(
+        ctx.workspaceId,
+        "knowledge_base",
+        needGrants.map((b) => b.id)
+      );
+      for (const g of grants) {
+        if (myTeams.has(g.teamId)) granted.add(g.resourceId);
+      }
+    }
+  }
+  for (const b of candidates) {
+    if (
+      b.accessMode !== "teams" ||
+      b.createdBy === ctx.userId ||
+      isAdmin ||
+      granted.has(b.id)
+    ) {
+      out.add(b.id);
+    }
+  }
+  return out;
 }
 
 /**

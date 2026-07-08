@@ -2,8 +2,16 @@ import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { slugify } from "@/shared/lib/slug/slugify";
 import { HttpError } from "@/shared/lib/http-error";
-import { meetsMinRole } from "@/features/workspaces/types";
+import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import { findMembership } from "@/features/workspaces/server/repository";
+import { meetsLevel } from "@/features/teams/access-levels";
+import { effectiveResourceAccess } from "@/features/teams/server/access";
+import {
+  deleteGrantsForResource,
+  insertReadGrantsIfMissing,
+  listGrantsForResources,
+  listTeamIdsForUser,
+} from "@/features/teams/server/repository";
 import { PRIMARY_SKILL_FILE_NAME } from "../types";
 import type {
   ResolvedSkill,
@@ -55,6 +63,7 @@ const SLUG_RETRY_MAX = 3;
 export interface AuthLike {
   userId: string;
   workspaceId: string;
+  role?: Role | null;
   agentTokenId?: string | null;
   apiKeyWorkspaceId?: string | null;
 }
@@ -64,28 +73,100 @@ export function buildSkillContext(auth: AuthLike): SkillContext {
     workspaceId: auth.workspaceId,
     userId: auth.userId,
     source: auth.agentTokenId ? "agent" : "user",
+    role: auth.role ?? null,
     apiKeyWorkspaceId: auth.apiKeyWorkspaceId ?? null,
   };
 }
 
+/** Precomputed grant context for visibility checks over a set of rows.
+ *  Mirrors `grantsForRows` in the chats service. */
+interface SkillGrantCtx {
+  /** Teams the caller belongs to. Fetched only when needed. */
+  myTeamIds: Set<string>;
+  /** skillId → teamIds granted read access. */
+  bySkill: Map<string, string[]>;
+}
+
+const EMPTY_SKILL_GRANTS: SkillGrantCtx = {
+  myTeamIds: new Set(),
+  bySkill: new Map(),
+};
+
+/** Fetch the caller's teams + skill grants — but only when some row is
+ *  team-scoped and not the caller's own (fixed query count per request). */
+async function grantsForSkills(
+  ctx: SkillContext,
+  rows: Skill[]
+): Promise<SkillGrantCtx> {
+  const teamScoped = rows.filter(
+    (s) => s.visibility === "public" && s.accessMode === "teams"
+  );
+  if (teamScoped.length === 0) return EMPTY_SKILL_GRANTS;
+  const needsMembership = teamScoped.some((s) => s.createdBy !== ctx.userId);
+  const [myTeams, grants] = await Promise.all([
+    needsMembership && !ctx.apiKeyWorkspaceId
+      ? listTeamIdsForUser(ctx.workspaceId, ctx.userId)
+      : Promise.resolve([]),
+    listGrantsForResources(
+      ctx.workspaceId,
+      "skill",
+      teamScoped.map((s) => s.id)
+    ),
+  ]);
+  const bySkill = new Map<string, string[]>();
+  for (const g of grants) {
+    bySkill.set(g.resourceId, [...(bySkill.get(g.resourceId) ?? []), g.teamId]);
+  }
+  return { myTeamIds: new Set(myTeams), bySkill };
+}
+
 /**
- * M-10 visibility filter for skills — see `canSeeBase` in
- * features/knowledge/server/service.ts for the matching rationale.
- *   - Public: always.
- *   - Private via session or personal API key: owner-only.
+ * Three-way visibility filter (M-10 extended for team scoping — the
+ * exact model `canSeeChat` uses):
+ *   - Public + workspace mode: always.
+ *   - Public + teams mode: owner, workspace admins, or members of a
+ *     granted team. Never via a workspace-scoped API key.
+ *   - Private via session or personal credential: owner-only.
  *   - Private via workspace-scoped API key: never.
  */
-function canSeeSkill(ctx: SkillContext, skill: Skill): boolean {
-  if (skill.visibility === "public") return true;
+function canSeeSkill(
+  ctx: SkillContext,
+  skill: Skill,
+  grants: SkillGrantCtx
+): boolean {
+  if (skill.visibility === "public" && skill.accessMode !== "teams") return true;
   if (ctx.apiKeyWorkspaceId) return false;
-  return skill.createdBy === ctx.userId;
+  if (skill.createdBy === ctx.userId) return true;
+  if (skill.visibility !== "public") return false;
+  if (ctx.role !== null && meetsMinRole(ctx.role, "admin")) return true;
+  const granted = grants.bySkill.get(skill.id) ?? [];
+  return granted.some((teamId) => grants.myTeamIds.has(teamId));
+}
+
+/** Grant set for the DTO — owners (and admins) see it; other viewers get
+ *  an empty list so team composition doesn't leak through a shared skill. */
+function withGrantSet(
+  ctx: SkillContext,
+  skill: Skill,
+  grants: SkillGrantCtx
+): Skill {
+  if (skill.accessMode !== "teams") return skill;
+  const isAdmin = ctx.role !== null && meetsMinRole(ctx.role, "admin");
+  if (skill.createdBy !== ctx.userId && !isAdmin) return skill;
+  return { ...skill, grantedTeamIds: grants.bySkill.get(skill.id) ?? [] };
 }
 
 // ─── Skill reads ────────────────────────────────────────────────────
 
-export async function listSkills(ctx: SkillContext): Promise<Skill[]> {
-  const all = await repo.listSkillsForWorkspace(ctx.workspaceId);
-  const visible = all.filter((s) => canSeeSkill(ctx, s));
+export async function listSkills(
+  ctx: SkillContext,
+  opts: { includeConnectors?: boolean } = {}
+): Promise<Skill[]> {
+  const all = await repo.listSkillsForWorkspace(ctx.workspaceId, opts);
+  const grants = await grantsForSkills(ctx, all);
+  const visible = all
+    .filter((s) => canSeeSkill(ctx, s, grants))
+    .map((s) => withGrantSet(ctx, s, grants));
   if (visible.length > 0) return visible;
   // CRITICAL: same reasoning as `listBases` — seed only when the
   // workspace has NO skills at all, not when the caller sees zero.
@@ -102,8 +183,11 @@ export async function listSkills(ctx: SkillContext): Promise<Skill[]> {
     Date.now() - workspaceCreatedAt.getTime() < TWENTY_FOUR_HOURS_MS
   ) {
     await seedWorkspace(ctx);
-    const seeded = await repo.listSkillsForWorkspace(ctx.workspaceId);
-    return seeded.filter((s) => canSeeSkill(ctx, s));
+    const seeded = await repo.listSkillsForWorkspace(ctx.workspaceId, opts);
+    const seededGrants = await grantsForSkills(ctx, seeded);
+    return seeded
+      .filter((s) => canSeeSkill(ctx, s, seededGrants))
+      .map((s) => withGrantSet(ctx, s, seededGrants));
   }
   return visible;
 }
@@ -114,8 +198,9 @@ export async function getSkillBySlug(
 ): Promise<Skill> {
   const skill = await repo.findSkillBySlug(ctx.workspaceId, slug);
   if (!skill) throw new SkillNotFoundError(slug);
-  if (!canSeeSkill(ctx, skill)) throw new SkillNotFoundError(slug);
-  return skill;
+  const grants = await grantsForSkills(ctx, [skill]);
+  if (!canSeeSkill(ctx, skill, grants)) throw new SkillNotFoundError(slug);
+  return withGrantSet(ctx, skill, grants);
 }
 
 export async function listFiles(
@@ -282,22 +367,66 @@ export async function updateSkill(
   // confusing dead end. Human callers may still set it.
   const nextAgentWriteEnabled =
     ctx.source === "agent" ? undefined : patch.agentWriteEnabled;
-  // M-10: visibility flips are owner-only and one-way (private →
-  // public). Schema already restricts to "public"; here we check the
-  // prior state + caller is the owner. Agents can never publish.
-  let effectiveVisibility = patch.visibility;
-  if (effectiveVisibility !== undefined) {
-    // Publishing is creator-gated and one-way (the schema restricts the
-    // value to "public"). Agents MAY publish a skill THEY created — needed
-    // so an agent can reference its own skill in a workflow, which requires
-    // public skills. Agents still can't publish others' skills, and the
-    // one-way schema means they can't un-publish.
-    if (skill.createdBy !== ctx.userId) {
-      throw new SkillNotFoundError(slug);
+  // Sharing scope (full three-way model). Changing it is owner-or-
+  // workspace-admin only; agents may re-scope skills THEY created
+  // (needed so an agent can publish its own skill for workflow refs).
+  // Going team-scoped replaces the grant set wholesale; any other scope
+  // drops all grants. Non-admin owners may only grant teams they belong
+  // to (plus already-granted teams) — the KB/chat rule.
+  const isAdmin = ctx.role !== null && meetsMinRole(ctx.role, "admin");
+  let sharingPatch: {
+    visibility?: "public" | "private";
+    accessMode?: "workspace" | "teams";
+  } = {};
+  let grantTeamIds: string[] | null = null;
+  if (patch.visibility !== undefined) {
+    if (skill.createdBy !== ctx.userId && !isAdmin) {
+      throw new HttpError(
+        403,
+        "RESOURCE_ACCESS_DENIED",
+        "Only the skill's owner or a workspace admin can change sharing"
+      );
     }
-    if (skill.visibility === "public") {
-      // Already public — no-op (UI may double-submit).
-      effectiveVisibility = undefined;
+    const wantsTeams =
+      patch.visibility === "public" && patch.accessMode === "teams";
+    sharingPatch = {
+      visibility: patch.visibility,
+      accessMode: wantsTeams ? "teams" : "workspace",
+    };
+    // Workflow invariant: attached skills must stay workspace-public
+    // (attachment requires it — see assertSkillAttachable). Narrowing
+    // to private or team scope would silently break every workflow
+    // that references the skill, so it's rejected with the list.
+    const narrows = patch.visibility === "private" || wantsTeams;
+    if (narrows) {
+      const usedBy = await repo.listSkillUsedBy(ctx.workspaceId, skill.id);
+      if (usedBy.workflows.length > 0) {
+        const names = usedBy.workflows.map((w) => `"${w.name}"`).join(", ");
+        throw new HttpError(
+          409,
+          "SKILL_ATTACHED_TO_WORKFLOWS",
+          `This skill is attached to ${usedBy.workflows.length} workflow${
+            usedBy.workflows.length === 1 ? "" : "s"
+          } (${names}) — detach it before narrowing its sharing`
+        );
+      }
+    }
+    if (wantsTeams) {
+      grantTeamIds = [...new Set(patch.teamIds ?? [])];
+      if (!isAdmin && grantTeamIds.length > 0) {
+        const [myTeams, existing] = await Promise.all([
+          listTeamIdsForUser(ctx.workspaceId, ctx.userId),
+          listGrantsForResources(ctx.workspaceId, "skill", [skill.id]),
+        ]);
+        const allowed = new Set([...myTeams, ...existing.map((g) => g.teamId)]);
+        if (grantTeamIds.some((id) => !allowed.has(id))) {
+          throw new HttpError(
+            403,
+            "RESOURCE_ACCESS_DENIED",
+            "You can only grant teams you belong to"
+          );
+        }
+      }
     }
   }
   await assertAgentWriteAllowed(ctx, skill);
@@ -319,7 +448,7 @@ export async function updateSkill(
         slug: patch.slug,
         status: patch.status,
         agentWriteEnabled: nextAgentWriteEnabled,
-        visibility: effectiveVisibility,
+        ...sharingPatch,
         lastEditedBy: ctx.userId,
         lastEditedSource: ctx.source,
       },
@@ -330,8 +459,30 @@ export async function updateSkill(
       const fresh = await getSkillBySlug(ctx, slug);
       throw new SkillStaleVersionError(expectedUpdatedAt!, fresh.updatedAt);
     }
-    if (effectiveVisibility === "public") {
-      await history.recordEvent({ ctx, skillId: skill.id, type: "skill.published" });
+    if (patch.visibility !== undefined) {
+      // Replace-set semantics: clear, then re-insert the new grant set.
+      await deleteGrantsForResource(ctx.workspaceId, "skill", skill.id);
+      if (grantTeamIds && grantTeamIds.length > 0) {
+        await insertReadGrantsIfMissing(
+          ctx.workspaceId,
+          "skill",
+          skill.id,
+          grantTeamIds
+        );
+      }
+      if (skill.visibility === "private" && patch.visibility === "public") {
+        await history.recordEvent({ ctx, skillId: skill.id, type: "skill.published" });
+      } else if (
+        patch.visibility !== skill.visibility ||
+        sharingPatch.accessMode !== skill.accessMode
+      ) {
+        await history.recordEvent({
+          ctx,
+          skillId: skill.id,
+          type: "skill.updated",
+          detail: { fields: ["sharing"] },
+        });
+      }
     }
     const changed = (
       ["name", "description", "whenToUse", "whenNotToUse", "slug", "status"] as const
@@ -344,13 +495,31 @@ export async function updateSkill(
         detail: { fields: changed },
       });
     }
-    return saved;
+    // Keep the returned grant set honest for the caller's UI — but only
+    // owners/admins get to see it (no team-composition leak), and the
+    // fetch is skipped entirely for everyone else.
+    const seesGrants = saved.createdBy === ctx.userId || isAdmin;
+    const teamIds =
+      saved.accessMode === "teams" && seesGrants
+        ? (grantTeamIds ?? (await currentGrantIds(ctx, saved)))
+        : [];
+    return { ...saved, grantedTeamIds: teamIds };
   } catch (err) {
     if (repo.pgErrorCode(err) === "23505" && patch.slug) {
       throw new SkillSlugConflictError(patch.slug);
     }
     throw err;
   }
+}
+
+/** The skill's current team grant set (empty unless team-scoped). */
+async function currentGrantIds(
+  ctx: SkillContext,
+  skill: Skill
+): Promise<string[]> {
+  if (skill.accessMode !== "teams" || skill.visibility !== "public") return [];
+  const grants = await listGrantsForResources(ctx.workspaceId, "skill", [skill.id]);
+  return grants.map((g) => g.teamId);
 }
 
 export async function deleteSkill(
@@ -532,14 +701,48 @@ export async function deleteFile(
 // ─── Trash ──────────────────────────────────────────────────────────
 
 /**
- * Returns every soft-deleted skill and skill_file row in the workspace,
- * sorted newest-deletion-first. Used by the trash modal. Mirrors
- * `listTrash` in the knowledge service.
+ * Returns the soft-deleted skill and skill_file rows the CALLER MAY
+ * SEE, sorted newest-deletion-first. Used by the trash modal. The
+ * visibility rule is the same `canSeeSkill` the live list uses —
+ * without it the trash would leak other members' private (or
+ * non-granted team-scoped) skills' names.
  */
 export async function listTrash(
   ctx: SkillContext
 ): Promise<repo.DeletedSkillRows> {
-  return repo.listDeletedForWorkspace(ctx.workspaceId);
+  const deleted = await repo.listDeletedForWorkspace(ctx.workspaceId);
+  // Trashed files may belong to LIVE parents (file trashed alone), so
+  // resolve every parent skill before filtering.
+  const parents = new Map(deleted.skills.map((s) => [s.id, s]));
+  const missingIds = [
+    ...new Set(
+      deleted.files
+        .map((f) => f.skillId)
+        .filter((id) => !parents.has(id))
+    ),
+  ];
+  for (const s of await repo.listSkillsByIds(ctx.workspaceId, missingIds)) {
+    parents.set(s.id, s);
+  }
+  const grants = await grantsForSkills(ctx, [...parents.values()]);
+  const canSee = (skillId: string) => {
+    const s = parents.get(skillId);
+    return s !== undefined && canSeeSkill(ctx, s, grants);
+  };
+  return {
+    skills: deleted.skills.filter((s) => canSee(s.id)),
+    files: deleted.files.filter((f) => canSee(f.skillId)),
+  };
+}
+
+/** Restore-path visibility gate — a forged id for a skill the caller
+ *  can't see must 404, exactly like the read paths. */
+async function assertTrashedSkillVisible(
+  ctx: SkillContext,
+  skill: Skill
+): Promise<void> {
+  const grants = await grantsForSkills(ctx, [skill]);
+  if (!canSeeSkill(ctx, skill, grants)) throw new SkillNotFoundError(skill.id);
 }
 
 export async function restoreSkill(
@@ -548,6 +751,7 @@ export async function restoreSkill(
 ): Promise<Skill> {
   const skill = await repo.findSkillById(ctx.workspaceId, id, true);
   if (!skill) throw new SkillNotFoundError(id);
+  await assertTrashedSkillVisible(ctx, skill);
   await assertAgentWriteAllowed(ctx, skill);
   const restored = await repo.restoreSkillRow(id);
   await history.recordEvent({ ctx, skillId: skill.id, type: "skill.restored" });
@@ -565,6 +769,7 @@ export async function restoreSkillFile(
   // forged id from another workspace still 404s.
   const skill = await repo.findSkillById(ctx.workspaceId, file.skillId, true);
   if (!skill) throw new SkillNotFoundError(file.skillId);
+  await assertTrashedSkillVisible(ctx, skill);
   await assertAgentWriteAllowed(ctx, skill);
   const restored = await repo.restoreFileRow(id);
   await history.recordEvent({
@@ -631,10 +836,10 @@ async function resolveReference(
 // ─── Agent-write enforcement ────────────────────────────────────────
 
 /**
- * Gate for agent-origin skill writes. The per-(member, skill) override
- * matrix is gone (teams scope knowledge bases and workflows, not
- * skills), so the rule collapses to the role default: member+ can
- * write, viewer cannot.
+ * Gate for agent-origin skill writes. Skills participate in the team
+ * access matrix now (skill_team_sharing), so the rule is the effective
+ * access level: role default on workspace-mode skills, grant level on
+ * team-mode ones. Writes need 'edit'.
  *
  * `SkillAgentWriteDisabledError` is still thrown when an agent tries
  * to flip `agentWriteEnabled` itself in updateSkill — that path
@@ -642,14 +847,21 @@ async function resolveReference(
  */
 export async function assertAgentWriteAllowed(
   ctx: SkillContext,
-  _skill: Skill
+  skill: Skill
 ): Promise<void> {
   if (ctx.source !== "agent") return;
   const membership = await findMembership(ctx.workspaceId, ctx.userId);
   if (!membership || membership.status !== "active") {
     throw new HttpError(404, "WORKSPACE_NOT_FOUND", "Workspace not found");
   }
-  if (!meetsMinRole(membership.role, "member")) {
+  const level = await effectiveResourceAccess(
+    ctx.userId,
+    ctx.workspaceId,
+    "skill",
+    skill.id,
+    { role: membership.role }
+  );
+  if (level === null || !meetsLevel(level, "edit")) {
     throw new HttpError(
       403,
       "RESOURCE_ACCESS_DENIED",
@@ -681,6 +893,15 @@ export async function duplicateSkill(
     status: "draft",
     body: primary?.body ?? "",
   });
+  // createSkill's input has no connectors field (they're display
+  // metadata, not caller-authored) — copy them onto the fork directly
+  // so the duplicate keeps its connector chips.
+  let skill = created.skill;
+  if (source.connectors.length > 0) {
+    skill = await repo.updateSkillRow(skill.id, {
+      connectors: source.connectors,
+    });
+  }
   for (const file of files) {
     if (file.name === PRIMARY_SKILL_FILE_NAME) continue;
     await createFile(ctx, created.skill.slug, {
@@ -688,7 +909,7 @@ export async function duplicateSkill(
       body: file.body,
     });
   }
-  return created;
+  return { skill, primaryFile: created.primaryFile };
 }
 
 // ─── Insights ───────────────────────────────────────────────────────
@@ -754,7 +975,7 @@ export async function getFileVersion(ctx: SkillContext, versionId: string) {
   // Visibility check rides on the parent skill: if the caller can't see
   // the skill, the version doesn't exist for them either.
   const skill = await repo.findSkillById(ctx.workspaceId, version.skillId);
-  if (!skill || !canSeeSkill(ctx, skill)) {
+  if (!skill || !canSeeSkill(ctx, skill, await grantsForSkills(ctx, [skill]))) {
     throw new SkillFileNotFoundError("(version)", versionId);
   }
   return version;

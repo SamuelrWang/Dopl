@@ -9,6 +9,7 @@
  * snake_case row shape lives in `server/dto.ts`.
  */
 
+import type { Role } from "@/features/workspaces/types";
 import type { SourceProvider, SourceConnection } from "@/shared/lib/source-types";
 
 export type SkillStatus = "active" | "draft";
@@ -21,11 +22,20 @@ export interface SkillConnector extends SourceConnection {
 }
 
 /**
- * Per-resource visibility (M-10). Mirrors the KB type — see
- * src/features/knowledge/types.ts for the full doc. Once-public-stays-
- * public: no path from `'public'` back to `'private'`.
+ * Per-resource visibility. Skills use the full KB/chat three-way model
+ * (since the skill_team_sharing migration):
+ *
+ *   private   → visibility 'private'                          (owner only)
+ *   team      → visibility 'public' + accessMode 'teams'      (granted teams)
+ *   workspace → visibility 'public' + accessMode 'workspace'  (everyone)
+ *
+ * Sharing is fully re-scopable by the owner or a workspace admin — the
+ * old M-10 "once public, always public" rule is retired.
  */
 export type Visibility = "public" | "private";
+
+/** Public reach: the whole workspace, or only specifically granted teams. */
+export type SkillAccessMode = "workspace" | "teams";
 
 export interface Skill {
   id: string;
@@ -40,6 +50,10 @@ export interface Skill {
   status: SkillStatus;
   agentWriteEnabled: boolean;
   visibility: Visibility;
+  accessMode: SkillAccessMode;
+  /** Teams granted read access — populated only when accessMode is
+   *  'teams', and only for the owner / workspace admins. */
+  grantedTeamIds: string[];
   createdBy: string | null;
   lastEditedBy: string | null;
   lastEditedSource: SkillWriteSource;
@@ -142,6 +156,7 @@ export interface SkillSummary {
   status: SkillStatus;
   agentWriteEnabled: boolean;
   visibility: Visibility;
+  accessMode: SkillAccessMode;
   updatedAt: string;
 }
 
@@ -175,6 +190,10 @@ export interface SkillContext {
   workspaceId: string;
   userId: string;
   source: SkillWriteSource;
+  /** Caller's workspace role; null when the auth layer didn't resolve
+   *  one (treated as non-admin — team-scoped skills then require a
+   *  grant). Mirrors `ChatContext.role`. */
+  role: Role | null;
   /**
    * Same semantics as `KnowledgeContext.apiKeyWorkspaceId` — non-null
    * only when the request used a workspace-scoped API key. Service

@@ -53,6 +53,24 @@ export async function findBaseById(
   return data ? mapBaseRow(data as KnowledgeBaseRow) : null;
 }
 
+/** Batch id lookup — trash visibility filtering (parents of trashed
+ *  folders/entries may be live or trashed, so deleted rows are
+ *  included). Workspace-filtered because callers pass untrusted ids. */
+export async function listBasesByIds(
+  workspaceId: string,
+  ids: string[]
+): Promise<KnowledgeBase[]> {
+  if (ids.length === 0) return [];
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("knowledge_bases")
+    .select(KNOWLEDGE_BASE_COLS)
+    .eq("workspace_id", workspaceId)
+    .in("id", ids);
+  if (error) throw error;
+  return ((data ?? []) as KnowledgeBaseRow[]).map(mapBaseRow);
+}
+
 export async function findBaseBySlug(
   workspaceId: string,
   slug: string,

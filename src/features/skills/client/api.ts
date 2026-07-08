@@ -114,9 +114,11 @@ export interface UpdateSkillPatch {
   slug?: string;
   status?: "active" | "draft";
   agentWriteEnabled?: boolean;
-  /** Promote a private skill to public. M-10 product rule: this is a
-   *  one-way street; the server rejects `'private'` here. */
-  visibility?: "public";
+  /** Full three-way sharing — owner or workspace admin only. */
+  visibility?: "public" | "private";
+  accessMode?: "workspace" | "teams";
+  /** Teams granted read access; only with visibility 'public' + accessMode 'teams'. */
+  teamIds?: string[];
 }
 
 export async function updateSkill(

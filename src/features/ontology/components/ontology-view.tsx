@@ -49,9 +49,11 @@ export function OntologyView({ workspaceId, workspaceSegment, initialClusterSlug
     if (created) selectCluster(created.id);
   };
 
+  // No type passed: cards inherit the column's type (+ its template
+  // fields) server-side; columns default to person until retyped.
   const handleCreateObject = async (
     target: { clusterId: string } | { parentObjectId: string },
-    objectType: ObjectTypeId = "person"
+    objectType?: ObjectTypeId
   ) => {
     const object = await createObject(target, objectType);
     if (object) setSelectedId(object.id);

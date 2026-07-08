@@ -13,7 +13,6 @@ import {
 import { useRouter } from "next/navigation";
 import { cn } from "@/shared/lib/utils";
 import { EditableTitle } from "@/shared/layout/editable-title";
-import { VisibilityPill, MakePublicAction } from "@/shared/ui/visibility-pill";
 import { useMyAccessContext } from "@/features/members/hooks/use-my-access";
 import { meetsLevel } from "@/features/teams/access-levels";
 import { useRefetchOnFocus } from "@/shared/hooks/use-refetch-on-focus";
@@ -58,6 +57,7 @@ import {
 import { useSkillsRealtime } from "../client/realtime";
 import { FileTabs } from "./skill-file-tabs";
 import { SkillHistoryPanel } from "./skill-history-panel";
+import { SkillShareControl } from "./skill-share-control";
 import {
   errMessage,
   escapeRegExp,
@@ -74,9 +74,10 @@ interface Props {
   usedBy: SkillUsedBy;
   /** Agent read activity (server-fetched from mcp_events). */
   usage: SkillUsage;
-  /** True if the current user is the skill's owner — gates the inline
-   *  "Make public" button next to the visibility pill. */
-  isOwner: boolean;
+  /** With `currentUserId`, gates the sharing control next to the title
+   *  (owner or workspace admin). */
+  isAdmin: boolean;
+  currentUserId: string;
 }
 
 const KNOWN_PROVIDERS = new Set<SourceProvider>([
@@ -109,30 +110,38 @@ export function SkillView({
   workspaceSlug,
   usedBy,
   usage,
-  isOwner,
+  isAdmin,
+  currentUserId,
 }: Props) {
   const { skill } = resolved;
 
-  // Inline-editable display name. Mirror the prop until the user
-  // commits a rename, then drive from local state so the bar updates
-  // immediately without a route reload.
+  // Inline-editable display name + sharing. Mirror the props until the
+  // user commits a change, then drive from local state so the bar
+  // updates immediately without a route reload.
   const [displayedName, setDisplayedName] = useState(skill.name);
-  const [displayedVisibility, setDisplayedVisibility] = useState(
-    skill.visibility
-  );
+  const [displayedSharing, setDisplayedSharing] = useState({
+    visibility: skill.visibility,
+    accessMode: skill.accessMode,
+    grantedTeamIds: skill.grantedTeamIds,
+  });
   // Re-sync the mirrors when the server prop changes (sanctioned
-  // adjust-state-during-render pattern — no effect round-trip).
+  // adjust-state-during-render pattern — no effect round-trip). The
+  // grant set is part of the comparison (joined — order is stable from
+  // the server) so a remote team-set change with an unchanged scope
+  // still refreshes the share popover.
+  const sharingKey = `${skill.visibility}:${skill.accessMode}:${skill.grantedTeamIds.join(",")}`;
   const [lastSkillProps, setLastSkillProps] = useState({
     name: skill.name,
-    visibility: skill.visibility,
+    sharingKey,
   });
-  if (
-    lastSkillProps.name !== skill.name ||
-    lastSkillProps.visibility !== skill.visibility
-  ) {
-    setLastSkillProps({ name: skill.name, visibility: skill.visibility });
+  if (lastSkillProps.name !== skill.name || lastSkillProps.sharingKey !== sharingKey) {
+    setLastSkillProps({ name: skill.name, sharingKey });
     setDisplayedName(skill.name);
-    setDisplayedVisibility(skill.visibility);
+    setDisplayedSharing({
+      visibility: skill.visibility,
+      accessMode: skill.accessMode,
+      grantedTeamIds: skill.grantedTeamIds,
+    });
   }
 
   // Audit A-005 / A-013: gate write affordances on the caller's
@@ -590,24 +599,34 @@ export function SkillView({
               }
               placeholder="Untitled skill"
             />
-            <VisibilityPill visibility={displayedVisibility} />
-            {displayedVisibility === "private" && isOwner ? (
-              <MakePublicAction
-                resourceType="skill"
-                onConfirm={async () => {
-                  try {
-                    await updateSkill(skill.slug, { visibility: "public" });
-                    setDisplayedVisibility("public");
-                    toast({ title: "Skill is now public" });
-                  } catch (err) {
-                    toast({
-                      title: "Couldn't publish",
-                      description: errMessage(err),
-                    });
-                  }
-                }}
-              />
-            ) : null}
+            <SkillShareControl
+              skill={{ ...skill, ...displayedSharing }}
+              workspaceSlug={workspaceSlug}
+              currentUserId={currentUserId}
+              isAdmin={isAdmin}
+              onShareChange={async (scope, teamIds) => {
+                try {
+                  const saved = await updateSkill(
+                    skill.slug,
+                    scope === "private"
+                      ? { visibility: "private" }
+                      : scope === "team"
+                        ? { visibility: "public", accessMode: "teams", teamIds }
+                        : { visibility: "public", accessMode: "workspace" }
+                  );
+                  setDisplayedSharing({
+                    visibility: saved.visibility,
+                    accessMode: saved.accessMode,
+                    grantedTeamIds: saved.grantedTeamIds,
+                  });
+                } catch (err) {
+                  toast({
+                    title: "Couldn't change sharing",
+                    description: errMessage(err),
+                  });
+                }
+              }}
+            />
         </div>
         <AvatarStack users={otherEditors} />
         <SaveStatusIndicator state={saveStatus} />

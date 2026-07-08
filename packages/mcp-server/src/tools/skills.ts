@@ -34,6 +34,7 @@ const SKILL_DESCRIPTION = `Read and author the user's skills. Each skill is a fo
 - "create_file" — create a new supplementary file SKILL.md links to (\`examples.md\`, \`references/<topic>.md\`, \`templates/<name>.md\`). Cannot recreate SKILL.md (created by op="create"). Names must match \`[A-Za-z0-9._-]+\\.md\` (no slashes — flat namespace). Requires: slug, file_name.
 - "write_file" — overwrite a skill file's body (PUT semantics). The whole body is replaced — read it first with op="read_file" for a partial edit AND to get the Version token; pass that as \`expected_version\` so a concurrent edit can't be silently overwritten (you'll get a 412 to reconcile instead). Requires: slug, file_name, body.
 - "rename_file" — rename a file inside a skill. Cannot rename SKILL.md. Requires: slug, file_name, new_name.
+- "set_visibility" — change a skill's sharing: "public" (workspace-visible) or "private" (owner-only). Owner or workspace-admin only. Team-scoped sharing (specific teams) is managed from the web UI; a team-scoped skill set here to "public" becomes workspace-wide. Requires: slug, visibility.
 - "authoring_guide" — fetch the canonical skill-authoring framework: what makes a high-quality skill, how to write description + when_to_use, the canonical body section order, anti-patterns, and a quality checklist. Call before authoring any new skill (every op="create"). The framework is also loaded into the system prompt at session start; this op is the explicit affordance to re-read it deliberately when you're about to write.
 
 Destructive deletes live in the separate \`dopl_skill_admin\` tool.`;
@@ -81,7 +82,7 @@ export function registerSkillTools(
       body: z.string().max(1_048_576).optional().describe("op=create: initial SKILL.md content. op=create_file: optional initial body. op=write_file (required): the new full body."),
       expected_version: z.string().optional().describe("op=write_file: the file's version from a prior read_file, to avoid overwriting a concurrent edit (412 on mismatch). Omit to auto-guard against the current version."),
       force: z.boolean().optional().describe("op=write_file: overwrite even if the file changed since you read it. Discards the other edit — use only when intentional."),
-      visibility: z.enum(["public", "private"]).optional().describe("op=set_visibility: 'public' to publish a skill you created (makes it workspace-visible + referenceable in workflows). One-way — 'private' is rejected."),
+      visibility: z.enum(["public", "private"]).optional().describe("op=set_visibility: 'public' shares the skill workspace-wide (referenceable in workflows); 'private' makes it owner-only again. Owner or workspace-admin only. Team-scoped sharing is web-UI-managed."),
     },
     async (args): Promise<ToolResponse> => {
       switch (args.op) {
@@ -180,10 +181,14 @@ async function opList(client: DoplClient): Promise<ToolResponse> {
   }
   const lines = ["## Skills\n"];
   for (const s of active) {
-    // Show visibility — that's the access signal that matters.
+    // Show sharing scope — that's the access signal that matters.
     // Legacy `agent_write_enabled` is no longer the gate.
     const visBadge =
-      s.visibility === "private" ? " _(private)_" : "";
+      s.visibility === "private"
+        ? " _(private)_"
+        : s.accessMode === "teams"
+          ? " _(team-shared)_"
+          : "";
     lines.push(`### \`${s.slug}\` (id: \`${s.id}\`) — ${s.name}${visBadge}`);
     lines.push(s.description);
     lines.push(`**When to use:** ${s.whenToUse}`);
@@ -203,8 +208,14 @@ async function opGet(client: DoplClient, slug: string): Promise<ToolResponse> {
     const { skill, files, references } = await client.getSkill(slug);
     const lines: string[] = [];
     lines.push(`# ${skill.name} \`${skill.slug}\``);
+    const scope =
+      skill.visibility === "private"
+        ? "private"
+        : skill.accessMode === "teams"
+          ? "team-shared"
+          : "workspace-shared";
     lines.push(
-      `id: \`${skill.id}\` · status: ${skill.status} · visibility: ${skill.visibility} · agent-write ${skill.agentWriteEnabled ? "on" : "off"}`,
+      `id: \`${skill.id}\` · status: ${skill.status} · sharing: ${scope} · agent-write ${skill.agentWriteEnabled ? "on" : "off"}`,
     );
     lines.push(
       `last edited by ${skill.lastEditedSource} · updated ${skill.updatedAt}`,
@@ -322,18 +333,18 @@ async function opSetVisibility(
   slug: string,
   visibility: string,
 ): Promise<ToolResponse> {
-  if (visibility !== "public") {
-    return err(
-      `set_visibility only publishes (visibility="public") a skill you created. Un-publishing is human-only — do it from the Dopl web UI.`,
-    );
+  if (visibility !== "public" && visibility !== "private") {
+    return err(`set_visibility takes visibility="public" or "private".`);
   }
   try {
-    const skill = await client.updateSkill(slug, { visibility: "public" });
+    const skill = await client.updateSkill(slug, { visibility });
     return ok(
-      `Published skill **${skill.name}** (slug: \`${skill.slug}\`) — now visible workspace-wide and referenceable in workflows.`,
+      visibility === "public"
+        ? `Published skill **${skill.name}** (slug: \`${skill.slug}\`) — now visible workspace-wide and referenceable in workflows.`
+        : `Skill **${skill.name}** (slug: \`${skill.slug}\`) is now private — only its owner can see it.`,
     );
   } catch (e) {
-    return err(`Couldn't publish \`${slug}\`: ${errorMessage(e)}`);
+    return err(`Couldn't change sharing on \`${slug}\`: ${errorMessage(e)}`);
   }
 }
 

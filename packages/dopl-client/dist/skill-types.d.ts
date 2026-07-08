@@ -8,10 +8,13 @@
 export type SkillStatus = "active" | "draft";
 export type SkillWriteSource = "user" | "agent";
 /**
- * Per-resource visibility (M-10). Mirrors KnowledgeVisibility — see
- * knowledge-types.ts for the full doc.
+ * Per-resource visibility. Skills use the full three-way model:
+ * private (owner only), public+workspace (everyone), public+teams
+ * (granted teams). Sharing is fully re-scopable by the owner or a
+ * workspace admin.
  */
 export type SkillVisibility = "public" | "private";
+export type SkillAccessMode = "workspace" | "teams";
 export type SkillProvider = "slack" | "google-drive" | "gmail" | "notion" | "github";
 export interface SkillConnector {
     provider: SkillProvider;
@@ -33,6 +36,10 @@ export interface Skill {
     status: SkillStatus;
     agentWriteEnabled: boolean;
     visibility: SkillVisibility;
+    accessMode: SkillAccessMode;
+    /** Teams granted read access — populated only for owners/admins on
+     *  teams-mode skills. */
+    grantedTeamIds: string[];
     createdBy: string | null;
     lastEditedBy: string | null;
     lastEditedSource: SkillWriteSource;

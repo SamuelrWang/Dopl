@@ -149,6 +149,7 @@ export async function insertObject(input: {
   objectType: ObjectTypeId;
   name: string;
   createdBy: string;
+  attributes?: OntologyObject["attributes"];
 }): Promise<OntologyObjectRow> {
   const db = supabaseAdmin();
   const { data, error } = await db
@@ -158,6 +159,7 @@ export async function insertObject(input: {
       object_type: input.objectType,
       name: input.name,
       created_by: input.createdBy,
+      ...(input.attributes?.length ? { attributes: input.attributes } : {}),
     })
     .select(ONTOLOGY_OBJECT_COLS)
     .single();
@@ -174,6 +176,7 @@ export async function updateObject(
     objectType?: ObjectTypeId;
     attributes?: OntologyObject["attributes"];
     methods?: OntologyObject["methods"];
+    template?: OntologyObject["template"];
   }
 ): Promise<OntologyObjectRow | null> {
   const db = supabaseAdmin();
@@ -183,6 +186,7 @@ export async function updateObject(
   if (patch.objectType !== undefined) update.object_type = patch.objectType;
   if (patch.attributes !== undefined) update.attributes = patch.attributes;
   if (patch.methods !== undefined) update.methods = patch.methods;
+  if (patch.template !== undefined) update.template = patch.template;
   const { data, error } = await db
     .from("ontology_objects")
     .update(update)

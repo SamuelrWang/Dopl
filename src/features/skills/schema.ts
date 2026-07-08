@@ -52,21 +52,39 @@ export const SkillCreateSchema = z.object({
 });
 export type SkillCreateInput = z.infer<typeof SkillCreateSchema>;
 
-export const SkillUpdateSchema = z.object({
-  name: z.string().min(1).max(120).optional(),
-  description: z.string().min(1).max(2000).optional(),
-  whenToUse: z.string().min(1).max(2000).optional(),
-  whenNotToUse: z.string().max(2000).nullable().optional(),
-  slug: z.string().min(1).max(80).regex(slugRegex).optional(),
-  status: SkillStatusSchema.optional(),
-  agentWriteEnabled: z.boolean().optional(),
-  /**
-   * One-way visibility update: only `'public'` is accepted, so a
-   * private skill can be promoted to public but never the reverse.
-   * (M-10 product decision: once public, always public.)
-   */
-  visibility: z.literal("public").optional(),
-});
+export const SkillUpdateSchema = z
+  .object({
+    name: z.string().min(1).max(120).optional(),
+    description: z.string().min(1).max(2000).optional(),
+    whenToUse: z.string().min(1).max(2000).optional(),
+    whenNotToUse: z.string().max(2000).nullable().optional(),
+    slug: z.string().min(1).max(80).regex(slugRegex).optional(),
+    status: SkillStatusSchema.optional(),
+    agentWriteEnabled: z.boolean().optional(),
+    /**
+     * Full three-way sharing (skill_team_sharing migration): visibility
+     * is two-way, and 'public' pairs with accessMode 'workspace'
+     * (everyone) or 'teams' (granted teams only). Owner or workspace
+     * admin only — enforced in the service.
+     */
+    visibility: z.enum(["public", "private"]).optional(),
+    accessMode: z.enum(["workspace", "teams"]).optional(),
+    /** Teams granted read access; only meaningful with accessMode 'teams'. */
+    teamIds: z.array(z.string().uuid()).max(50).optional(),
+  })
+  .refine(
+    (patch) =>
+      patch.teamIds === undefined ||
+      (patch.visibility === "public" && patch.accessMode === "teams"),
+    { message: "teamIds requires visibility 'public' + accessMode 'teams'" }
+  )
+  .refine(
+    (patch) => patch.accessMode === undefined || patch.visibility !== undefined,
+    {
+      message:
+        "accessMode is only meaningful alongside visibility — pass both to change sharing",
+    }
+  );
 export type SkillUpdateInput = z.infer<typeof SkillUpdateSchema>;
 
 // ─── Skill files ────────────────────────────────────────────────────

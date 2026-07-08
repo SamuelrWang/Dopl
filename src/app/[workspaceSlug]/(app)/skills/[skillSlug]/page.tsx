@@ -9,6 +9,8 @@
 import { redirect } from "next/navigation";
 import { getUser } from "@/shared/supabase/server";
 import { resolvePageWorkspace } from "@/features/workspaces/server/segment";
+import { resolveMembershipOrThrow } from "@/features/workspaces/server/service";
+import { meetsMinRole } from "@/features/workspaces/types";
 import { workspaceSegment } from "@/features/workspaces/url";
 import {
   buildSkillContext,
@@ -36,9 +38,11 @@ export default async function SkillDetailPage({ params }: PageProps) {
     `skills/${skillSlug}`
   );
 
+  const { membership } = await resolveMembershipOrThrow(workspace.id, user.id);
   const ctx = buildSkillContext({
     userId: user.id,
     workspaceId: workspace.id,
+    role: membership.role,
     agentTokenId: null,
   });
 
@@ -57,7 +61,8 @@ export default async function SkillDetailPage({ params }: PageProps) {
       workspaceSlug={workspaceSegment(workspace)}
       usedBy={usedBy}
       usage={usage}
-      isOwner={skill.createdBy === user.id}
+      isAdmin={meetsMinRole(membership.role, "admin")}
+      currentUserId={user.id}
     />
   );
 }

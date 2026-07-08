@@ -1,15 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import { ChevronDown, Plus } from "lucide-react";
+import { Plus, Settings2 } from "lucide-react";
 import type { Dispatch } from "react";
-import { cn } from "@/shared/lib/utils";
+import { OBJECT_TYPES } from "../constants";
 import type { GraphAction, GraphState } from "../graph-state";
 import type { OntologyCluster, OntologyObject } from "../types";
-import { ActionsEditor } from "./actions-editor";
-import { AttributesEditor } from "./attributes-editor";
 import { KanbanCard } from "./kanban-card";
-import { RelationshipsEditor } from "./relationships-editor";
 
 interface Props {
   cluster: OntologyCluster;
@@ -23,8 +19,9 @@ interface Props {
 /**
  * The cluster as columns of object cards. Each column is itself an
  * object: its header edits the name/description in place, and the
- * chevron drops the column's own attributes / relationships / actions
- * open inline. Its children are the cards.
+ * settings button opens it in the editor panel — where its object
+ * template (default fields for new cards) lives. Its children are the
+ * cards.
  */
 export function KanbanBoard({
   cluster,
@@ -70,7 +67,8 @@ function Column({
   onSelect: (id: string) => void;
   onCreateObject: (columnId: string) => void;
 }) {
-  const [detailsOpen, setDetailsOpen] = useState(false);
+  // Legacy/unknown object_type values in the DB must not crash the board.
+  const typeMeta = OBJECT_TYPES[col.type] ?? OBJECT_TYPES.person;
 
   return (
     <div className="bento flex w-72 shrink-0 flex-col overflow-hidden bg-bg-inset">
@@ -86,20 +84,24 @@ function Column({
             placeholder="Column name"
             aria-label="Column name"
           />
+          <span
+            className="shrink-0 rounded-full border px-1.5 py-px text-micro font-semibold"
+            style={{ borderColor: typeMeta.border, background: typeMeta.bg, color: typeMeta.text }}
+            title={`New objects here default to ${typeMeta.label}`}
+          >
+            {typeMeta.label}
+          </span>
           <span className="rounded-full bg-surface-raised-4 px-1.5 py-px text-micro font-medium text-text-secondary">
             {col.childIds.length}
           </span>
           <button
             type="button"
-            aria-label={detailsOpen ? "Hide column details" : "Show column details"}
-            title="Column details"
-            onClick={() => setDetailsOpen((o) => !o)}
+            aria-label={`Column settings for ${col.name || "untitled column"}`}
+            title="Column settings — object template & fields"
+            onClick={() => onSelect(col.id)}
             className="rounded-md p-1 text-text-muted transition hover:bg-surface-raised-3 hover:text-text-primary"
           >
-            <ChevronDown
-              size={13}
-              className={cn("transition-transform", detailsOpen && "rotate-180")}
-            />
+            <Settings2 size={13} />
           </button>
         </div>
         <input
@@ -112,18 +114,6 @@ function Column({
           className="w-full bg-transparent px-3 pb-2 text-caption text-text-secondary placeholder:text-text-muted focus:outline-none"
           aria-label="Column description"
         />
-        {detailsOpen && (
-          <div className="flex flex-col gap-2.5 border-t border-border-subtle p-2.5">
-            <AttributesEditor object={col} graph={graph} dispatch={dispatch} />
-            <RelationshipsEditor
-              object={col}
-              graph={graph}
-              dispatch={dispatch}
-              onSelectObject={onSelect}
-            />
-            <ActionsEditor object={col} dispatch={dispatch} />
-          </div>
-        )}
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-2 py-2">
         {col.childIds.map((id) => (

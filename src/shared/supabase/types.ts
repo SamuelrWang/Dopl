@@ -1462,6 +1462,7 @@ export type Database = {
       }
       skills: {
         Row: {
+          access_mode: string
           agent_write_enabled: boolean
           connectors: Json
           created_at: string
@@ -1482,6 +1483,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          access_mode?: string
           agent_write_enabled?: boolean
           connectors?: Json
           created_at?: string
@@ -1502,6 +1504,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          access_mode?: string
           agent_write_enabled?: boolean
           connectors?: Json
           created_at?: string

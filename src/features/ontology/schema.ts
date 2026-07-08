@@ -14,6 +14,12 @@ const attributeSchema = z.object({
   value: attributeValueSchema,
 });
 
+const templateFieldSchema = z.object({
+  key: z.string().min(1).max(200),
+  label: z.string().max(200),
+  kind: z.enum(["text", "pill", "ref", "knowledge", "skill"]),
+});
+
 const methodSchema = z.object({
   name: z.string().max(300),
   description: z.string().max(2000),
@@ -43,7 +49,8 @@ export const OntologyObjectCreateSchema = z
   .object({
     clusterId: z.string().uuid().optional(),
     parentObjectId: z.string().uuid().optional(),
-    objectType: objectTypeSchema.default("person"),
+    /** Omitted on a card create → inherits the parent column's type. */
+    objectType: objectTypeSchema.optional(),
     name: z.string().min(1).max(300),
   })
   .refine((v) => Boolean(v.clusterId) !== Boolean(v.parentObjectId), {
@@ -58,5 +65,6 @@ export const OntologyObjectUpdateSchema = z.object({
   attributes: z.array(attributeSchema).max(100).optional(),
   methods: z.array(methodSchema).max(50).optional(),
   relationships: z.array(relationshipSchema).max(100).optional(),
+  template: z.array(templateFieldSchema).max(100).optional(),
 });
 export type OntologyObjectUpdateInput = z.infer<typeof OntologyObjectUpdateSchema>;

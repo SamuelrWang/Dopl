@@ -24,6 +24,12 @@ export interface OntologyRelationship {
   targetIds: string[];
 }
 
+export interface OntologyTemplateField {
+  key: string;
+  label: string;
+  kind: OntologyAttributeValue["kind"];
+}
+
 export interface OntologyObject {
   id: string;
   type: string;
@@ -33,6 +39,8 @@ export interface OntologyObject {
   methods: OntologyMethod[];
   relationships: OntologyRelationship[];
   childIds: string[];
+  /** Column-only: default fields new children are born with. */
+  template: OntologyTemplateField[];
 }
 
 export interface OntologyCluster {
@@ -62,7 +70,8 @@ export interface OntologyObjectCreateInput {
   /** Exactly one of clusterId (new column) or parentObjectId (new card). */
   clusterId?: string;
   parentObjectId?: string;
-  objectType: string;
+  /** Omitted on a card create → inherits the parent column's type. */
+  objectType?: string;
   name: string;
 }
 
@@ -73,4 +82,5 @@ export interface OntologyObjectPatch {
   attributes?: OntologyAttribute[];
   methods?: OntologyMethod[];
   relationships?: OntologyRelationship[];
+  template?: OntologyTemplateField[];
 }
