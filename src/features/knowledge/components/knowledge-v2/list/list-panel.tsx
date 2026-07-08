@@ -2,6 +2,7 @@
 
 import { ChevronDown, ListFilter, Plus, Search } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
+import { SegmentedControl } from "@/shared/ui/segmented-control";
 import type { KnowledgeBase, KnowledgeEntry } from "../../../types";
 import type { BaseTree, ListFilter as Filter } from "../types";
 import type { TreeHandlers } from "../use-knowledge-v2-controller";
@@ -87,27 +88,12 @@ export function ListPanel({
         />
       </div>
 
-      <div className={cn("concave-track", styles.tabs)}>
-        <span
-          className={cn("raised-tab", styles.tabThumb)}
-          style={{
-            transform: `translateX(calc(${Math.max(
-              0,
-              FILTERS.findIndex((f) => f.key === filter)
-            )} * (100% + 4px)))`,
-          }}
-        />
-        {FILTERS.map(({ key, label }) => (
-          <button
-            key={key}
-            type="button"
-            className={cn(styles.tab, filter === key && styles.tabActive)}
-            onClick={() => onFilterChange(key)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <SegmentedControl
+        options={FILTERS}
+        value={filter}
+        onChange={onFilterChange}
+        className="mx-3.5 mb-3"
+      />
 
       <div className={styles.listBody}>
         {bases.length === 0 ? (

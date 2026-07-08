@@ -6,8 +6,11 @@ export type ChatSource =
 
 export type ExportFormat = "summarized" | "verbatim" | "mixed";
 
-/** Private = owner-only. Public = every workspace member can read it. */
+/** Private = owner-only. Public = shared; access_mode says with whom. */
 export type ChatVisibility = "private" | "public";
+
+/** Public reach: the whole workspace, or only specifically granted teams. */
+export type ChatAccessMode = "workspace" | "teams";
 
 export type MessageRole = "user" | "agent";
 
@@ -46,6 +49,9 @@ export type Chat = {
   overview: string;
   pinned: boolean;
   visibility: ChatVisibility;
+  accessMode: ChatAccessMode;
+  /** Teams granted read access — populated only when accessMode is 'teams'. */
+  grantedTeamIds: string[];
   owner: ChatOwner;
   source: ChatSource;
   project: string | null;

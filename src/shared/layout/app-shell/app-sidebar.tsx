@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import {
   BookOpen,
   ChevronsUpDown,
-  HelpCircle,
   Home,
   LayoutGrid,
   MessagesSquare,
@@ -130,10 +129,6 @@ export function AppSidebar({
           <Settings size={20} strokeWidth={1.8} />
           Settings
         </button>
-        <Link href="/docs" className={styles.footItem}>
-          <HelpCircle size={20} strokeWidth={1.8} />
-          Help
-        </Link>
       </div>
     </aside>
   );

@@ -128,53 +128,9 @@
   color: var(--kv-text-3);
 }
 
-/* Filter tabs — concave (recessed) track that the active tab sits raised
-   inside, like a key on a switchboard. A single thumb slides between slots
-   instead of the highlight jumping. */
-.tabs {
-  /* Recessed-track recipe comes from the global .concave-track composed
-     alongside this class in list-panel.tsx. */
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin: 0 14px 12px;
-}
-/* Raised sliding thumb — white face, top highlight, drop shadow popping out
-   of the recessed track. Slot width assumes 4 equal tabs (4px pad, 4px gap).
-   translateX is in the thumb's own width units, plus one gap per step. */
-.tabThumb {
-  position: absolute;
-  top: 4px;
-  left: 4px;
-  height: 27px;
-  width: calc((100% - 8px - 12px) / 4);
-  border-radius: 7px;
-  /* White raised face comes from the global .raised-tab composed
-     alongside this class in list-panel.tsx. */
-  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
-  pointer-events: none;
-}
-.tab {
-  position: relative;
-  z-index: 1;
-  flex: 1;
-  height: 27px;
-  border: none;
-  background: none;
-  border-radius: 7px;
-  font-size: var(--text-caption);
-  font-weight: 500;
-  color: var(--kv-text-2);
-  cursor: pointer;
-  transition: color 0.18s ease;
-}
-.tab:hover {
-  color: var(--kv-text);
-}
-.tabActive {
-  color: var(--kv-text);
-}
+/* Filter tabs live in the shared <SegmentedControl> primitive
+   (src/shared/ui/segmented-control.tsx) — sliding raised-tab thumb on a
+   concave track. */
 
 /* Scrolling list body. Top hairline closes off the search/tabs header zone. */
 .listBody {

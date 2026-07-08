@@ -286,6 +286,7 @@ export type Database = {
       }
       chats: {
         Row: {
+          access_mode: string
           client_session_id: string | null
           created_at: string
           deliverables: Json
@@ -306,6 +307,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          access_mode?: string
           client_session_id?: string | null
           created_at?: string
           deliverables?: Json
@@ -326,6 +328,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          access_mode?: string
           client_session_id?: string | null
           created_at?: string
           deliverables?: Json

@@ -12,7 +12,6 @@ const NON_WORKSPACE_ROOTS = new Set([
   "auth",
   "canvas",
   "design",
-  "docs",
   "invite",
   "login",
   "oauth",
@@ -27,21 +26,20 @@ const NON_WORKSPACE_ROOTS = new Set([
  * Legacy chrome shell. After the new-design rollout it only dresses
  * non-workspace pages (login, pricing, /workspaces, /settings, admin,
  * invite, oauth, legal) with the dark centered-column look; the marketing
- * landing and docs pass through with no chrome at all. Every workspace
+ * landing passes through with no chrome at all. Every workspace
  * route (named sub-pages AND the canvas) is dressed by its own AppShell
  * layout and bypasses this component entirely.
  */
 export function LayoutShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isLanding = pathname === "/";
-  const isDocs = pathname.startsWith("/docs");
   const isPricing = pathname === "/pricing";
-  const isNoChrome = isLanding || isDocs || isPricing;
+  const isNoChrome = isLanding || isPricing;
   const segments = pathname.split("/").filter(Boolean);
   const isAppShellRoute =
     segments.length >= 1 && !NON_WORKSPACE_ROOTS.has(segments[0]);
 
-  // Body background: landing/docs manage their own; app-shell routes get
+  // Body background: landing manages its own; app-shell routes get
   // the new dark rail color; legacy routes keep the flat dark frame.
   useEffect(() => {
     if (isNoChrome) {

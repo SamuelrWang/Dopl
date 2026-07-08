@@ -19,7 +19,6 @@ const PUBLIC_ROUTES = [
   "/terms",
   "/privacy",
   "/pricing",
-  "/docs",
   // Canvas invite acceptance — invitee may not be signed in yet. The
   // landing page shows what they're being invited to; the underlying
   // accept POST is still auth-gated by withUserAuth, so non-members

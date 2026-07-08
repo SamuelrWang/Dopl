@@ -11,7 +11,7 @@
 import type { Role } from "@/features/workspaces/types";
 
 export type AccessLevel = "read" | "edit";
-export type TeamResourceType = "knowledge_base" | "workflow";
+export type TeamResourceType = "knowledge_base" | "workflow" | "chat";
 export type AccessMode = "workspace" | "teams";
 
 export function defaultLevelForRole(role: Role): AccessLevel {

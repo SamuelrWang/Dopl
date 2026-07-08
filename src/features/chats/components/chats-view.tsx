@@ -2,7 +2,9 @@
 
 import { useMemo, useState } from "react";
 import { toast } from "@/shared/ui/toast";
-import type { Chat, ChatFolder, ChatVisibility } from "../types";
+import { meetsMinRole, type Role } from "@/features/workspaces/types";
+import type { Chat, ChatFolder } from "../types";
+import { chatScope, type ChatScope } from "../scope";
 import {
   createChatFolder,
   deleteChat as apiDeleteChat,
@@ -17,75 +19,80 @@ export type FolderGroup = {
   chats: Chat[];
 };
 
-/** A chat belongs on the Private tab only when the viewer owns it; the
- *  Public tab shows every workspace-shared chat regardless of owner. */
-function chatOnTab(c: Chat, tab: ChatVisibility, currentUserId: string): boolean {
-  return (
-    c.visibility === tab && (tab === "public" || c.owner.userId === currentUserId)
-  );
+/** List filter — All, or one sharing scope (scope 'workspace' = Shared). */
+export type ChatFilter = "all" | ChatScope;
+
+function chatOnFilter(c: Chat, filter: ChatFilter, currentUserId: string): boolean {
+  if (filter === "all") return true;
+  const scope = chatScope(c);
+  if (filter === "private") {
+    return scope === "private" && c.owner.userId === currentUserId;
+  }
+  return scope === filter;
 }
 
 interface Props {
   workspaceId: string;
+  workspaceSlug: string;
   currentUserId: string;
+  role: Role;
   initialChats: Chat[];
   initialFolders: ChatFolder[];
 }
 
 /**
  * Chats page root — the agent-exported conversation archive. Two-pane
- * .page-float surface: folder-grouped list on the left (Private tab =
- * your chats in your folders; Public tab = a flat list of every chat
- * shared with the workspace), the selected chat's document on the
- * right. Server-fetched headers live here as the single source of
- * truth; the transcript loads per selection.
+ * .page-float surface: the scope-filtered list on the left (All /
+ * Private / Team / Shared, mirroring the knowledge-base scopes), the
+ * selected chat's document on the right. Server-fetched headers live
+ * here as the single source of truth; the transcript loads per
+ * selection.
  */
 export function ChatsView({
   workspaceId,
+  workspaceSlug,
   currentUserId,
+  role,
   initialChats,
   initialFolders,
 }: Props) {
-  // Seed tab + selection together so the first render never shows a
-  // document whose row isn't on the visible tab.
-  const firstPrivate = initialChats.find((c) =>
-    chatOnTab(c, "private", currentUserId)
-  );
-  const firstPublic = initialChats.find((c) =>
-    chatOnTab(c, "public", currentUserId)
-  );
-  const initialTab: ChatVisibility =
-    firstPrivate || !firstPublic ? "private" : "public";
-
   const [chats, setChats] = useState(initialChats);
   const [folders, setFolders] = useState(initialFolders);
-  const [tab, setTab] = useState<ChatVisibility>(initialTab);
+  const [filter, setFilter] = useState<ChatFilter>("all");
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(
-    (initialTab === "private" ? firstPrivate : firstPublic)?.id ?? null
+    initialChats[0]?.id ?? null
   );
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
 
-  const privateCount = chats.filter((c) =>
-    chatOnTab(c, "private", currentUserId)
-  ).length;
-  const publicCount = chats.filter((c) =>
-    chatOnTab(c, "public", currentUserId)
-  ).length;
+  const counts = useMemo<Record<ChatFilter, number>>(() => {
+    const c: Record<ChatFilter, number> = { all: 0, private: 0, team: 0, workspace: 0 };
+    for (const chat of chats) {
+      c.all += 1;
+      for (const f of ["private", "team", "workspace"] as const) {
+        if (chatOnFilter(chat, f, currentUserId)) c[f] += 1;
+      }
+    }
+    return c;
+  }, [chats, currentUserId]);
+
+  // Folder grouping only makes sense over the caller's own archive — the
+  // Private filter. Every other filter renders a flat, owner-labeled list.
+  const showFolders = filter === "private";
 
   const groups = useMemo<FolderGroup[]>(() => {
     const q = query.trim().toLowerCase();
     const matches = (c: Chat) =>
-      chatOnTab(c, tab, currentUserId) &&
+      chatOnFilter(c, filter, currentUserId) &&
       (q === "" ||
         c.title.toLowerCase().includes(q) ||
         c.overview.toLowerCase().includes(q));
     const pinnedFirst = (list: Chat[]) =>
       [...list].sort((a, b) => Number(b.pinned) - Number(a.pinned));
 
-    if (tab === "public") {
-      const shared = pinnedFirst(chats.filter(matches));
-      return shared.length > 0 ? [{ folder: null, chats: shared }] : [];
+    if (!showFolders) {
+      const flat = pinnedFirst(chats.filter(matches));
+      return flat.length > 0 ? [{ folder: null, chats: flat }] : [];
     }
 
     const grouped: FolderGroup[] = folders.map((folder) => ({
@@ -105,18 +112,18 @@ export function ChatsView({
       ),
     });
     return grouped.filter((g) => g.chats.length > 0);
-  }, [chats, folders, query, tab, currentUserId]);
+  }, [chats, folders, query, filter, currentUserId, showFolders]);
 
   const selected = chats.find((c) => c.id === selectedId) ?? null;
   const selectedFolder = selected
     ? (folders.find((f) => f.id === selected.folderId) ?? null)
     : null;
 
-  const handleTabChange = (next: ChatVisibility) => {
-    setTab(next);
-    if (!selected || !chatOnTab(selected, next, currentUserId)) {
+  const handleFilterChange = (next: ChatFilter) => {
+    setFilter(next);
+    if (!selected || !chatOnFilter(selected, next, currentUserId)) {
       setSelectedId(
-        chats.find((c) => chatOnTab(c, next, currentUserId))?.id ?? null
+        chats.find((c) => chatOnFilter(c, next, currentUserId))?.id ?? null
       );
     }
   };
@@ -132,35 +139,43 @@ export function ChatsView({
 
   const patchChat = async (
     id: string,
-    patch: Parameters<typeof apiUpdateChat>[1],
-    followVisibility = false
-  ) => {
+    patch: Parameters<typeof apiUpdateChat>[1]
+  ): Promise<Chat | null> => {
     try {
       const updated = await apiUpdateChat(id, patch, workspaceId);
       setChats((prev) => prev.map((c) => (c.id === id ? updated : c)));
-      // Follow the chat onto its new tab so it never vanishes mid-action.
-      if (followVisibility && patch.visibility) setTab(patch.visibility);
+      return updated;
     } catch (err) {
       toast({
         title: err instanceof ChatApiError ? err.message : "Update failed",
       });
+      return null;
     }
   };
 
-  const handleToggleVisibility = (id: string): Promise<void> => {
-    const chat = chats.find((c) => c.id === id);
-    if (!chat) return Promise.resolve();
-    return patchChat(
+  const handleShareChange = async (
+    id: string,
+    scope: ChatScope,
+    teamIds: string[]
+  ): Promise<void> => {
+    const updated = await patchChat(
       id,
-      { visibility: chat.visibility === "private" ? "public" : "private" },
-      true
+      scope === "private"
+        ? { visibility: "private" }
+        : scope === "team"
+          ? { visibility: "public", accessMode: "teams", teamIds }
+          : { visibility: "public", accessMode: "workspace" }
     );
+    // Follow the chat onto its new filter so it never vanishes mid-action.
+    if (updated && filter !== "all" && !chatOnFilter(updated, filter, currentUserId)) {
+      setFilter(scope);
+    }
   };
 
-  const handleTogglePin = (id: string): Promise<void> => {
+  const handleTogglePin = async (id: string): Promise<void> => {
     const chat = chats.find((c) => c.id === id);
-    if (!chat) return Promise.resolve();
-    return patchChat(id, { pinned: !chat.pinned });
+    if (!chat) return;
+    await patchChat(id, { pinned: !chat.pinned });
   };
 
   const handleDelete = async (id: string) => {
@@ -170,7 +185,8 @@ export function ChatsView({
       setChats(remaining);
       if (selectedId === id) {
         setSelectedId(
-          remaining.find((c) => chatOnTab(c, tab, currentUserId))?.id ?? null
+          remaining.find((c) => chatOnFilter(c, filter, currentUserId))?.id ??
+            null
         );
       }
     } catch (err) {
@@ -200,10 +216,11 @@ export function ChatsView({
     <div className="page-float flex antialiased">
       <ListPane
         groups={groups}
-        tab={tab}
-        onTabChange={handleTabChange}
-        privateCount={privateCount}
-        publicCount={publicCount}
+        filter={filter}
+        onFilterChange={handleFilterChange}
+        counts={counts}
+        showFolders={showFolders}
+        currentUserId={currentUserId}
         query={query}
         onQueryChange={setQuery}
         selectedId={selectedId}
@@ -216,9 +233,11 @@ export function ChatsView({
         chat={selected}
         folder={selectedFolder}
         workspaceId={workspaceId}
+        workspaceSlug={workspaceSlug}
         currentUserId={currentUserId}
+        isAdmin={meetsMinRole(role, "admin")}
         totalChats={chats.length}
-        onToggleVisibility={handleToggleVisibility}
+        onShareChange={handleShareChange}
         onTogglePin={handleTogglePin}
         onDelete={handleDelete}
       />

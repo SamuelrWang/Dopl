@@ -1,6 +1,7 @@
 import type { Database, Json } from "@/shared/supabase/types";
 import type {
   Chat,
+  ChatAccessMode,
   ChatFolder,
   ChatMessage,
   ChatOwner,
@@ -55,7 +56,8 @@ function mapLearnings(value: Json): string[] {
 export function mapChatRow(
   row: ChatRow,
   owner: ChatOwner,
-  messageCount: number
+  messageCount: number,
+  grantedTeamIds: string[] = []
 ): Chat {
   return {
     id: row.id,
@@ -64,6 +66,8 @@ export function mapChatRow(
     overview: row.overview,
     pinned: row.pinned,
     visibility: row.visibility as ChatVisibility,
+    accessMode: row.access_mode as ChatAccessMode,
+    grantedTeamIds,
     owner,
     source: row.source as ChatSource,
     project: row.project,

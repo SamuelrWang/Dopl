@@ -3,25 +3,37 @@
 import { useState } from "react";
 import { ChevronRight, Folder, FolderPlus, Search, Star, X } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
-import type { Chat, ChatVisibility } from "../types";
+import { SegmentedControl } from "@/shared/ui/segmented-control";
+import type { Chat } from "../types";
 import { SOURCE_LABELS, UNFILED_LABEL } from "../constants";
 import { formatShortDate } from "../format";
-import type { FolderGroup } from "./chats-view";
+import type { ChatFilter, FolderGroup } from "./chats-view";
 
 const ICON_BTN =
   "flex h-7 w-7 items-center justify-center rounded-[7px] text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary";
 
-const TABS: ReadonlyArray<{ key: ChatVisibility; label: string }> = [
+const FILTERS: ReadonlyArray<{ key: ChatFilter; label: string }> = [
+  { key: "all", label: "All" },
   { key: "private", label: "Private" },
-  { key: "public", label: "Public" },
+  { key: "team", label: "Team" },
+  { key: "workspace", label: "Shared" },
 ];
+
+const EMPTY_COPY: Record<ChatFilter, string> = {
+  all: "No chats yet — your agent exports conversations here via dopl_chats.",
+  private:
+    "No private chats yet — your agent exports conversations here via dopl_chats.",
+  team: "No chats have been shared with your teams yet.",
+  workspace: "No chats have been shared with the workspace yet.",
+};
 
 interface Props {
   groups: FolderGroup[];
-  tab: ChatVisibility;
-  onTabChange: (tab: ChatVisibility) => void;
-  privateCount: number;
-  publicCount: number;
+  filter: ChatFilter;
+  onFilterChange: (filter: ChatFilter) => void;
+  counts: Record<ChatFilter, number>;
+  showFolders: boolean;
+  currentUserId: string;
   query: string;
   onQueryChange: (q: string) => void;
   selectedId: string | null;
@@ -33,16 +45,17 @@ interface Props {
 }
 
 /**
- * Left list pane: header with counts, concave search well, the
- * private/public scope tabs, and the chat list — folder-grouped on the
- * Private tab, flat (with owners) on the Public tab.
+ * Left list pane: header with count, concave search well, the
+ * All/Private/Team/Shared scope filter, and the chat list —
+ * folder-grouped on the Private filter, flat (with owners) elsewhere.
  */
 export function ListPane({
   groups,
-  tab,
-  onTabChange,
-  privateCount,
-  publicCount,
+  filter,
+  onFilterChange,
+  counts,
+  showFolders,
+  currentUserId,
   query,
   onQueryChange,
   selectedId,
@@ -52,7 +65,6 @@ export function ListPane({
   onCreateFolder,
 }: Props) {
   const [folderDraft, setFolderDraft] = useState<string | null>(null);
-  const showFolders = tab === "private";
 
   const submitFolder = async () => {
     const name = folderDraft?.trim();
@@ -71,9 +83,7 @@ export function ListPane({
         <h1 className="text-title font-semibold tracking-tight text-text-primary">
           Chats
         </h1>
-        <span className="text-caption text-text-muted">
-          {privateCount + publicCount}
-        </span>
+        <span className="text-caption text-text-muted">{counts.all}</span>
         <span className="flex-1" />
         <button
           type="button"
@@ -99,26 +109,12 @@ export function ListPane({
         />
       </div>
 
-      <div className="concave-track mx-3.5 mb-3 flex items-center gap-1">
-        {TABS.map(({ key, label }) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => onTabChange(key)}
-            className={cn(
-              "flex h-6 flex-1 items-center justify-center gap-1.5 rounded-[6px] text-caption font-medium transition-colors",
-              tab === key
-                ? "raised-tab text-text-primary"
-                : "text-text-secondary hover:text-text-primary"
-            )}
-          >
-            {label}
-            <span className="text-micro text-text-muted">
-              {key === "private" ? privateCount : publicCount}
-            </span>
-          </button>
-        ))}
-      </div>
+      <SegmentedControl
+        options={FILTERS}
+        value={filter}
+        onChange={onFilterChange}
+        className="mx-3.5 mb-3"
+      />
 
       {folderDraft !== null && (
         <div className="concave-field relative mx-3.5 mb-3 flex items-center rounded-[9px]">
@@ -153,11 +149,7 @@ export function ListPane({
       <div className="min-h-0 flex-1 overflow-y-auto border-t border-border-default pb-4">
         {groups.length === 0 ? (
           <p className="px-4 py-2.5 text-caption leading-relaxed text-text-muted">
-            {query.trim()
-              ? "No chats match."
-              : tab === "public"
-                ? "No chats have been shared with the workspace yet."
-                : "No chats yet — your agent exports conversations here via dopl_chats."}
+            {query.trim() ? "No chats match." : EMPTY_COPY[filter]}
           </p>
         ) : (
           groups.map((group) => {
@@ -168,7 +160,7 @@ export function ListPane({
                   key={c.id}
                   chat={c}
                   selected={c.id === selectedId}
-                  showOwner
+                  showOwner={c.owner.userId !== currentUserId}
                   flat
                   onSelect={onSelect}
                 />

@@ -1,4 +1,10 @@
-import type { Chat, ChatDetail, ChatFolder, ChatVisibility } from "../types";
+import type {
+  Chat,
+  ChatAccessMode,
+  ChatDetail,
+  ChatFolder,
+  ChatVisibility,
+} from "../types";
 
 export class ChatApiError extends Error {
   constructor(
@@ -60,6 +66,9 @@ export async function fetchChat(
 
 export interface ChatHeaderPatch {
   visibility?: ChatVisibility;
+  accessMode?: ChatAccessMode;
+  /** Teams granted read access; only with visibility 'public' + accessMode 'teams'. */
+  teamIds?: string[];
   pinned?: boolean;
   folderId?: string | null;
 }

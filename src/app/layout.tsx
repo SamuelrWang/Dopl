@@ -97,7 +97,7 @@ export default function RootLayout({
     <html lang="en">
       <body
         // The inline script below mutates body's class before hydration (strips
-        // mosaic-bg / adds landing-active on / and /docs to avoid a flash), so
+        // mosaic-bg / adds landing-active on / and /pricing to avoid a flash), so
         // the server/client class lists intentionally differ on first paint.
         suppressHydrationWarning
         className={`${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} ${playfairDisplay.variable} ${inter.variable} antialiased mosaic-bg min-h-screen`}
@@ -109,7 +109,7 @@ export default function RootLayout({
             isNoChrome in layout-shell.tsx. */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var p=location.pathname;if(p==='/'||p==='/pricing'||p.indexOf('/docs')===0){document.body.classList.remove('mosaic-bg');document.body.classList.add('landing-active');}}catch(e){}})();`,
+            __html: `(function(){try{var p=location.pathname;if(p==='/'||p==='/pricing'){document.body.classList.remove('mosaic-bg');document.body.classList.add('landing-active');}}catch(e){}})();`,
           }}
         />
         <LayoutShell>{children}</LayoutShell>

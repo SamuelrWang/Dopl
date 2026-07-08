@@ -5,6 +5,8 @@
 import { redirect } from "next/navigation";
 import { getUser } from "@/shared/supabase/server";
 import { resolvePageWorkspace } from "@/features/workspaces/server/segment";
+import { resolveMembershipOrThrow } from "@/features/workspaces/server/service";
+import { workspaceSegment } from "@/features/workspaces/url";
 import {
   buildChatContext,
   listChats,
@@ -23,10 +25,12 @@ export default async function ChatsPage({ params }: PageProps) {
   const user = await getUser();
   if (!user) redirect("/login");
   const workspace = await resolvePageWorkspace(workspaceSlug, user.id, "chats");
+  const { membership } = await resolveMembershipOrThrow(workspace.id, user.id);
 
   const ctx = buildChatContext({
     userId: user.id,
     workspaceId: workspace.id,
+    role: membership.role,
     agentTokenId: null,
   });
   const [chats, folders] = await Promise.all([listChats(ctx), listFolders(ctx)]);
@@ -34,7 +38,9 @@ export default async function ChatsPage({ params }: PageProps) {
   return (
     <ChatsView
       workspaceId={workspace.id}
+      workspaceSlug={workspaceSegment(workspace)}
       currentUserId={user.id}
+      role={membership.role}
       initialChats={chats}
       initialFolders={folders}
     />

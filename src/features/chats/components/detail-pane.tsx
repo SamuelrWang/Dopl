@@ -4,8 +4,6 @@ import { useState } from "react";
 import {
   ChevronRight,
   Copy,
-  Globe,
-  Lock,
   MessagesSquare,
   MoreHorizontal,
   Star,
@@ -16,45 +14,47 @@ import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { MenuItem, Popover } from "@/shared/ui/popover-menu";
 import { toast } from "@/shared/ui/toast";
 import type { Chat, ChatDetail, ChatFolder } from "../types";
+import type { ChatScope } from "../scope";
 import { FORMAT_LABELS, SOURCE_LABELS, UNFILED_LABEL } from "../constants";
 import { formatDate } from "../format";
 import { useChatDetail } from "../client/hooks";
 import { HeaderCard } from "./header-card";
 import { MessageList } from "./message-list";
+import { ShareControl } from "./share-control";
 
 const ICON_BTN =
   "flex h-7 w-7 items-center justify-center rounded-[7px] text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary";
-
-const VISIBILITY_PILL =
-  "flex h-6 shrink-0 items-center gap-1.5 rounded-full border border-border-strong bg-bg-inset px-2.5 text-caption font-medium";
 
 interface Props {
   chat: Chat | null;
   folder: ChatFolder | null;
   workspaceId: string;
+  workspaceSlug: string;
   currentUserId: string;
+  isAdmin: boolean;
   totalChats: number;
-  onToggleVisibility: (id: string) => Promise<void>;
+  onShareChange: (id: string, scope: ChatScope, teamIds: string[]) => Promise<void>;
   onTogglePin: (id: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
 }
 
 /**
  * Right detail pane — the archived chat as a static document: crumb top
- * bar (owner-gated private/public control, pin, copy, delete), the
- * header box, then the summarized transcript (loaded per selection).
+ * bar (owner-gated sharing control, pin, copy, delete), the header box,
+ * then the summarized transcript (loaded per selection).
  */
 export function DetailPane({
   chat,
   folder,
   workspaceId,
+  workspaceSlug,
   currentUserId,
+  isAdmin,
   totalChats,
-  onToggleVisibility,
+  onShareChange,
   onTogglePin,
   onDelete,
 }: Props) {
-  const [shareConfirmOpen, setShareConfirmOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const { detail, status, retry } = useChatDetail(chat?.id ?? null, workspaceId);
@@ -82,7 +82,6 @@ export function DetailPane({
   }
 
   const isMine = chat.owner.userId === currentUserId;
-  const isPublic = chat.visibility === "public";
 
   const copyMarkdown = async () => {
     if (!detail) return;
@@ -98,7 +97,7 @@ export function DetailPane({
     <div className="flex min-w-0 flex-1 flex-col">
       <div className="flex h-[52px] shrink-0 items-center gap-1.5 border-b border-border-default px-3.5">
         <span className="shrink-0 text-small font-medium text-text-secondary">
-          {isPublic && !isMine ? "Shared" : (folder?.name ?? UNFILED_LABEL)}
+          {!isMine ? "Shared" : (folder?.name ?? UNFILED_LABEL)}
         </span>
         <ChevronRight size={13} className="shrink-0 text-text-muted" />
         <span className="min-w-0 truncate text-lead font-semibold text-text-primary">
@@ -106,33 +105,15 @@ export function DetailPane({
         </span>
         <span className="flex-1" />
 
-        {isMine ? (
-          <button
-            type="button"
-            onClick={() =>
-              isPublic
-                ? void onToggleVisibility(chat.id)
-                : setShareConfirmOpen(true)
-            }
-            title={
-              isPublic
-                ? "Public — every workspace member can read this. Click to make it private again."
-                : "Private — only you can read this. Click to share it with the workspace."
-            }
-            className={cn(
-              VISIBILITY_PILL,
-              "text-text-secondary transition-colors hover:text-text-primary"
-            )}
-          >
-            {isPublic ? <Globe size={11} /> : <Lock size={11} />}
-            {isPublic ? "Public" : "Private"}
-          </button>
-        ) : (
-          <span className={cn(VISIBILITY_PILL, "text-text-secondary")}>
-            <Globe size={11} />
-            Public
-          </span>
-        )}
+        <ShareControl
+          chat={chat}
+          workspaceSlug={workspaceSlug}
+          currentUserId={currentUserId}
+          isAdmin={isAdmin}
+          onShareChange={(scope, teamIds) =>
+            onShareChange(chat.id, scope, teamIds)
+          }
+        />
 
         {isMine && (
           <button
@@ -212,14 +193,6 @@ export function DetailPane({
         </div>
       </div>
 
-      <ConfirmDialog
-        open={shareConfirmOpen}
-        onOpenChange={setShareConfirmOpen}
-        title="Share this chat with the workspace?"
-        description="Every member of this workspace will be able to read the full summary and transcript. You can make it private again at any time."
-        confirmLabel="Make public"
-        onConfirm={() => onToggleVisibility(chat.id)}
-      />
       <ConfirmDialog
         open={deleteConfirmOpen}
         onOpenChange={setDeleteConfirmOpen}

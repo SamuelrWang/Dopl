@@ -77,6 +77,7 @@ Shared React primitives (`src/shared/ui` + `src/shared/hooks`):
 | --------- | --- |
 | `Popover` / `MenuItem` (`popover-menu.tsx`) | ALL dropdowns/kebabs/filter menus. Never hand-roll the fixed-backdrop pattern. |
 | `Avatar` (`avatar.tsx`) | Profile pictures with neutral initials fallback. No gradients — identity color belongs to teams. |
+| `SegmentedControl` (`segmented-control.tsx`) | ALL scope/filter tab rows. Concave track + a raised thumb that slides between slots (0.28s ease-out-quint). Never compose `.concave-track`/`.raised-tab` tabs by hand. |
 | `useApiGet` (`use-api-get.ts`) | Every client GET-with-refresh hook. Wrap it per endpoint; never copy the fetch/tick pattern. |
 
 Reference implementations: `src/features/knowledge/components/knowledge-v2/`

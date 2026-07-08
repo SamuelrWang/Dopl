@@ -1,4 +1,11 @@
 import "server-only";
+import { meetsMinRole, type Role } from "@/features/workspaces/types";
+import {
+  deleteGrantsForResource,
+  insertReadGrantsIfMissing,
+  listGrantsForResources,
+  listTeamIdsForUser,
+} from "@/features/teams/server/repository";
 import type { Chat, ChatDetail, ChatFolder, ExportFormat } from "../types";
 import type {
   ChatAppendInput,
@@ -19,6 +26,9 @@ export interface ChatContext {
   workspaceId: string;
   userId: string;
   source: "user" | "agent";
+  /** Caller's workspace role; null when the auth layer didn't resolve one
+   *  (treated as non-admin — team-scoped chats then require a grant). */
+  role: Role | null;
   /** Set when the caller authenticated with a workspace-scoped API key
    *  (shared credential) — private chats are hidden entirely (M-10). */
   apiKeyWorkspaceId: string | null;
@@ -27,6 +37,7 @@ export interface ChatContext {
 export interface AuthLike {
   userId: string;
   workspaceId: string;
+  role?: Role | null;
   agentTokenId?: string | null;
   apiKeyWorkspaceId?: string | null;
 }
@@ -36,6 +47,7 @@ export function buildChatContext(auth: AuthLike): ChatContext {
     workspaceId: auth.workspaceId,
     userId: auth.userId,
     source: auth.agentTokenId ? "agent" : "user",
+    role: auth.role ?? null,
     apiKeyWorkspaceId: auth.apiKeyWorkspaceId ?? null,
   };
 }
@@ -44,23 +56,32 @@ const UNIQUE_VIOLATION = "23505";
 
 // ─── Reads ──────────────────────────────────────────────────────────
 
-/** Everything the caller may read: their own chats + workspace-public ones. */
+/** Everything the caller may read: own chats, workspace-shared ones, and
+ *  team-scoped ones granted to one of the caller's teams. */
 export async function listChats(ctx: ChatContext): Promise<Chat[]> {
   const rows = await repo.listVisibleChats(ctx.workspaceId, ctx.userId);
-  const visible = rows.filter((row) => canSeeChat(ctx, row));
+  const grants = await grantsForRows(ctx, rows);
+  const visible = rows.filter((row) => canSeeChat(ctx, row, grants));
   const profiles = await profilesById(visible.map((r) => r.owner_id));
   return visible.map((row) =>
     withFolderPrivacy(
       ctx,
       row,
-      mapChatRow(row, mapOwner(row.owner_id, profiles.get(row.owner_id)), repo.countOf(row))
+      mapChatRow(
+        row,
+        mapOwner(row.owner_id, profiles.get(row.owner_id)),
+        repo.countOf(row),
+        grantedTeamIdsFor(ctx, row, grants.byChat)
+      )
     )
   );
 }
 
 export async function getChat(ctx: ChatContext, chatId: string): Promise<ChatDetail> {
   const row = await repo.findChatById(ctx.workspaceId, chatId);
-  if (!row || !canSeeChat(ctx, row)) throw new ChatNotFoundError(chatId);
+  if (!row) throw new ChatNotFoundError(chatId);
+  const grants = await grantsForRows(ctx, [row]);
+  if (!canSeeChat(ctx, row, grants)) throw new ChatNotFoundError(chatId);
   const [messages, profiles] = await Promise.all([
     repo.listMessages(chatId),
     profilesById([row.owner_id]),
@@ -69,7 +90,12 @@ export async function getChat(ctx: ChatContext, chatId: string): Promise<ChatDet
     ...withFolderPrivacy(
       ctx,
       row,
-      mapChatRow(row, mapOwner(row.owner_id, profiles.get(row.owner_id)), messages.length)
+      mapChatRow(
+        row,
+        mapOwner(row.owner_id, profiles.get(row.owner_id)),
+        messages.length,
+        grantedTeamIdsFor(ctx, row, grants.byChat)
+      )
     ),
     messages: messages.map(mapMessageRow),
   };
@@ -200,23 +226,72 @@ export async function updateChatHeader(
     };
   }
 
+  // Sharing scope. Going team-scoped replaces the grant set wholesale;
+  // any other scope drops all grants. Non-admin owners may only grant
+  // teams they belong to (plus already-granted teams, which the share
+  // UI renders locked) — mirrors the KB rule.
+  let sharingPatch: { visibility?: string; access_mode?: string } = {};
+  let grantTeamIds: string[] | null = null;
+  if (patch.visibility !== undefined) {
+    const wantsTeams = patch.visibility === "public" && patch.accessMode === "teams";
+    sharingPatch = {
+      visibility: patch.visibility,
+      access_mode: wantsTeams ? "teams" : "workspace",
+    };
+    if (wantsTeams) {
+      grantTeamIds = [...new Set(patch.teamIds ?? [])];
+      const isAdmin = ctx.role !== null && meetsMinRole(ctx.role, "admin");
+      if (!isAdmin && grantTeamIds.length > 0) {
+        const [myTeams, existing] = await Promise.all([
+          listTeamIdsForUser(ctx.workspaceId, ctx.userId),
+          listGrantsForResources(ctx.workspaceId, "chat", [chat.id]),
+        ]);
+        const allowed = new Set([...myTeams, ...existing.map((g) => g.teamId)]);
+        if (grantTeamIds.some((id) => !allowed.has(id))) {
+          throw new ChatForbiddenError("grant teams you don't belong to");
+        }
+      }
+    }
+  }
+
   const row = await repo.updateChat(chat.id, {
     ...(patch.title !== undefined ? { title: patch.title } : {}),
     ...(patch.overview !== undefined ? { overview: patch.overview } : {}),
     ...(patch.project !== undefined ? { project: patch.project } : {}),
     ...(patch.sessionDate !== undefined ? { session_date: patch.sessionDate } : {}),
-    ...(patch.visibility !== undefined ? { visibility: patch.visibility } : {}),
+    ...sharingPatch,
     ...(patch.pinned !== undefined ? { pinned: patch.pinned } : {}),
     ...(patch.deliverables !== undefined ? { deliverables: patch.deliverables } : {}),
     ...(patch.learnings !== undefined ? { learnings: patch.learnings } : {}),
     ...(folderPatch ?? {}),
   });
 
+  if (patch.visibility !== undefined) {
+    // Replace-set semantics: clear, then re-insert the new grant set.
+    await deleteGrantsForResource(ctx.workspaceId, "chat", chat.id);
+    if (grantTeamIds && grantTeamIds.length > 0) {
+      await insertReadGrantsIfMissing(ctx.workspaceId, "chat", chat.id, grantTeamIds);
+    }
+  }
+
   const [count, profiles] = await Promise.all([
     repo.countMessages(row.id),
     profilesById([row.owner_id]),
   ]);
-  return mapChatRow(row, mapOwner(row.owner_id, profiles.get(row.owner_id)), count);
+  // Keep the returned grant set honest even when sharing wasn't touched.
+  const teamIds =
+    grantTeamIds ??
+    (row.access_mode === "teams"
+      ? (await listGrantsForResources(ctx.workspaceId, "chat", [row.id])).map(
+          (g) => g.teamId
+        )
+      : []);
+  return mapChatRow(
+    row,
+    mapOwner(row.owner_id, profiles.get(row.owner_id)),
+    count,
+    teamIds
+  );
 }
 
 export async function deleteChat(ctx: ChatContext, chatId: string): Promise<void> {
@@ -270,16 +345,74 @@ export async function deleteFolderForUser(
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
+/** Precomputed grant context for visibility checks over a set of rows. */
+interface GrantCtx {
+  /** Teams the caller belongs to. Fetched only when needed. */
+  myTeamIds: Set<string>;
+  /** chatId → teamIds granted read access. */
+  byChat: Map<string, string[]>;
+}
+
+const EMPTY_GRANTS: GrantCtx = { myTeamIds: new Set(), byChat: new Map() };
+
+/** Fetch the caller's teams + chat grants — but only when some row is
+ *  team-scoped and not the caller's own (fixed query count per request). */
+async function grantsForRows(
+  ctx: ChatContext,
+  rows: ChatRow[]
+): Promise<GrantCtx> {
+  const teamScoped = rows.filter(
+    (r) => r.visibility === "public" && r.access_mode === "teams"
+  );
+  if (teamScoped.length === 0) return EMPTY_GRANTS;
+  const needsMembership = teamScoped.some((r) => r.owner_id !== ctx.userId);
+  const [myTeams, grants] = await Promise.all([
+    needsMembership && !ctx.apiKeyWorkspaceId
+      ? listTeamIdsForUser(ctx.workspaceId, ctx.userId)
+      : Promise.resolve([]),
+    listGrantsForResources(
+      ctx.workspaceId,
+      "chat",
+      teamScoped.map((r) => r.id)
+    ),
+  ]);
+  const byChat = new Map<string, string[]>();
+  for (const g of grants) {
+    byChat.set(g.resourceId, [...(byChat.get(g.resourceId) ?? []), g.teamId]);
+  }
+  return { myTeamIds: new Set(myTeams), byChat };
+}
+
 /**
- * M-10 visibility filter — same rationale as `canSeeSkill`:
- *   - Public: always.
+ * M-10 visibility filter, extended for team scoping:
+ *   - Public + workspace mode: always.
+ *   - Public + teams mode: owner, workspace admins, or members of a
+ *     granted team. Never via a workspace-scoped API key (shared
+ *     credential — same conservatism as private).
  *   - Private via session or personal credential: owner-only.
- *   - Private via workspace-scoped API key (shared credential): never.
+ *   - Private via workspace-scoped API key: never.
  */
-function canSeeChat(ctx: ChatContext, chat: ChatRow): boolean {
-  if (chat.visibility === "public") return true;
+function canSeeChat(ctx: ChatContext, chat: ChatRow, grants: GrantCtx): boolean {
+  if (chat.visibility === "public" && chat.access_mode !== "teams") return true;
   if (ctx.apiKeyWorkspaceId) return false;
-  return chat.owner_id === ctx.userId;
+  if (chat.owner_id === ctx.userId) return true;
+  if (chat.visibility !== "public") return false;
+  if (ctx.role !== null && meetsMinRole(ctx.role, "admin")) return true;
+  const granted = grants.byChat.get(chat.id) ?? [];
+  return granted.some((teamId) => grants.myTeamIds.has(teamId));
+}
+
+/** Grant set for the DTO — owners (and admins) see it; other viewers get
+ *  an empty list so team composition doesn't leak through a shared chat. */
+function grantedTeamIdsFor(
+  ctx: ChatContext,
+  row: ChatRow,
+  byChat: Map<string, string[]>
+): string[] {
+  if (row.access_mode !== "teams") return [];
+  const isAdmin = ctx.role !== null && meetsMinRole(ctx.role, "admin");
+  if (row.owner_id !== ctx.userId && !isAdmin) return [];
+  return byChat.get(row.id) ?? [];
 }
 
 async function requireOwnChat(
@@ -288,7 +421,9 @@ async function requireOwnChat(
   action: string
 ): Promise<ChatRow> {
   const chat = await repo.findChatById(ctx.workspaceId, chatId);
-  if (!chat || !canSeeChat(ctx, chat)) throw new ChatNotFoundError(chatId);
+  if (!chat) throw new ChatNotFoundError(chatId);
+  const grants = await grantsForRows(ctx, [chat]);
+  if (!canSeeChat(ctx, chat, grants)) throw new ChatNotFoundError(chatId);
   if (chat.owner_id !== ctx.userId || ctx.apiKeyWorkspaceId) {
     throw new ChatForbiddenError(action);
   }

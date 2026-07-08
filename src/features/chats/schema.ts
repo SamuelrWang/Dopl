@@ -13,6 +13,7 @@ export const DeliverableSchema = z.object({
 
 const SourceSchema = z.enum(["claude-code", "claude-desktop", "cursor", "other"]);
 const VisibilitySchema = z.enum(["private", "public"]);
+const AccessModeSchema = z.enum(["workspace", "teams"]);
 const SessionDateSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD")
@@ -61,6 +62,9 @@ export const ChatUpdateSchema = z
     folderId: z.string().uuid().nullable().optional(),
     folder: z.string().min(1).max(80).nullable().optional(),
     visibility: VisibilitySchema.optional(),
+    accessMode: AccessModeSchema.optional(),
+    /** Teams granted read access; only meaningful with accessMode 'teams'. */
+    teamIds: z.array(z.string().uuid()).max(50).optional(),
     pinned: z.boolean().optional(),
     deliverables: z.array(DeliverableSchema).max(50).optional(),
     learnings: z.array(z.string().min(1).max(1000)).max(50).optional(),
@@ -68,6 +72,12 @@ export const ChatUpdateSchema = z
   .refine(
     (patch) => !(patch.folderId !== undefined && patch.folder !== undefined),
     { message: "Pass folderId or folder, not both" }
+  )
+  .refine(
+    (patch) =>
+      patch.teamIds === undefined ||
+      (patch.visibility === "public" && patch.accessMode === "teams"),
+    { message: "teamIds requires visibility 'public' + accessMode 'teams'" }
   )
   .refine((patch) => Object.keys(patch).length > 0, {
     message: "Empty patch",
