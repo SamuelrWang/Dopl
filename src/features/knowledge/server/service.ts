@@ -195,6 +195,27 @@ export async function listBases(
 }
 
 /**
+ * Owner display names for a set of bases, keyed by user id — list-pane
+ * attribution for bases shared by other members. Skips the query when
+ * every base is the caller's own (the common solo case).
+ */
+export async function listBaseOwnerNames(
+  ctx: KnowledgeContext,
+  bases: KnowledgeBase[]
+): Promise<Record<string, string>> {
+  const foreign = [
+    ...new Set(
+      bases
+        .map((b) => b.createdBy)
+        .filter((id): id is string => id !== null && id !== ctx.userId)
+    ),
+  ];
+  if (foreign.length === 0) return {};
+  const names = await repo.fetchProfileNames(foreign);
+  return Object.fromEntries(names);
+}
+
+/**
  * Team-scope list filter: drops teams-mode bases the caller can't read.
  * One batch query regardless of base count; workspace-mode bases pass
  * through untouched.

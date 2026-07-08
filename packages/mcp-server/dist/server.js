@@ -11,6 +11,7 @@ const cluster_js_1 = require("./tools/cluster.js");
 const workflow_js_1 = require("./tools/workflow.js");
 const canvas_js_1 = require("./tools/canvas.js");
 const chats_js_1 = require("./tools/chats.js");
+const members_js_1 = require("./tools/members.js");
 const packs_js_1 = require("./tools/packs.js");
 const map_js_1 = require("./tools/map.js");
 const search_js_1 = require("./tools/search.js");
@@ -53,6 +54,7 @@ This MCP server can target any workspace the authenticated user is a member of. 
 - Browse / read / write the user's knowledge bases -> dopl_kb (+ dopl_kb_admin for destructive ops).
 - List / read / author the user's skills -> dopl_skill (+ dopl_skill_admin).
 - See what's on the canvas -> dopl_canvas(op='list').
+- Who's in the workspace / who's on which team / who can access what / what can I touch -> dopl_members(op='whoami' | 'list' | 'get' | 'teams' | 'get_team' | 'access_matrix' | 'my_access'). READ-ONLY — role, team, and access changes happen in the web UI.
 - Archive this conversation for future sessions -> dopl_chats(op='export'); recall a past session -> dopl_chats(op='list' | 'get'). Read dopl_chats(op='guide') before your first export — summaries per message, verbatim only on request.
 
 ## Workspace skills
@@ -457,6 +459,7 @@ function createServer(client, options = {}) {
     (0, knowledge_js_1.registerKnowledgeTools)(registerTool, client); // dopl_kb + dopl_kb_admin (user bases)
     (0, skills_js_1.registerSkillTools)(registerTool, client); // dopl_skill + dopl_skill_admin
     (0, chats_js_1.registerChatTools)(registerTool, client); // dopl_chats + dopl_chats_admin (archive)
+    (0, members_js_1.registerMembersTool)(registerTool, client); // dopl_members — membership/teams/access (read-only)
     (0, map_js_1.registerMapTool)(registerTool, client); // dopl_map — compact workspace manifest
     (0, search_js_1.registerSearchTool)(registerTool, client); // dopl_search — cross-domain search
     (0, ontology_js_1.registerOntologyTool)(registerTool, client); // dopl_ontology — routing graph (read-only)

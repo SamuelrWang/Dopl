@@ -10,7 +10,9 @@ import { HttpError } from "@/shared/lib/http-error";
  *
  * Used by the MCP server's startup handshake to confirm the requested
  * workspace exists and the caller is an active member, and to print the
- * workspace name in stderr boot output.
+ * workspace name in stderr boot output. `userId` lets MCP tools
+ * self-identify the caller (e.g. dopl_members whoami) without a
+ * separate lookup.
  */
 export const GET = withUserAuth(async (request: NextRequest, { userId }) => {
   try {
@@ -19,7 +21,7 @@ export const GET = withUserAuth(async (request: NextRequest, { userId }) => {
       userId,
       headerWorkspaceId
     );
-    return NextResponse.json({ workspace, role: membership.role });
+    return NextResponse.json({ workspace, role: membership.role, userId });
   } catch (err) {
     if (err instanceof HttpError) {
       return NextResponse.json(err.toResponseBody(), { status: err.status });

@@ -206,24 +206,30 @@ export type Database = {
       }
       chat_folders: {
         Row: {
+          access_mode: string
           created_at: string
           id: string
           name: string
           user_id: string
+          visibility: string
           workspace_id: string
         }
         Insert: {
+          access_mode?: string
           created_at?: string
           id?: string
           name: string
           user_id: string
+          visibility?: string
           workspace_id: string
         }
         Update: {
+          access_mode?: string
           created_at?: string
           id?: string
           name?: string
           user_id?: string
+          visibility?: string
           workspace_id?: string
         }
         Relationships: [

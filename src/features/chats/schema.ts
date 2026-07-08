@@ -79,6 +79,16 @@ export const ChatUpdateSchema = z
       (patch.visibility === "public" && patch.accessMode === "teams"),
     { message: "teamIds requires visibility 'public' + accessMode 'teams'" }
   )
+  .refine(
+    (patch) =>
+      patch.visibility === undefined ||
+      ((patch.folderId === undefined || patch.folderId === null) &&
+        (patch.folder === undefined || patch.folder === null)),
+    {
+      message:
+        "Can't set visibility while filing into a folder — filed chats inherit the folder's sharing",
+    }
+  )
   .refine((patch) => Object.keys(patch).length > 0, {
     message: "Empty patch",
   });
@@ -94,7 +104,26 @@ export const ChatFolderCreateSchema = z.object({
 });
 export type ChatFolderCreateInput = z.infer<typeof ChatFolderCreateSchema>;
 
-export const ChatFolderRenameSchema = z.object({
-  name: z.string().min(1).max(80),
-});
-export type ChatFolderRenameInput = z.infer<typeof ChatFolderRenameSchema>;
+/**
+ * Folder update — rename and/or scope change. Changing the scope
+ * propagates to every chat filed in the folder (the folder's scope is
+ * authoritative for its chats).
+ */
+export const ChatFolderUpdateSchema = z
+  .object({
+    name: z.string().min(1).max(80).optional(),
+    visibility: VisibilitySchema.optional(),
+    accessMode: AccessModeSchema.optional(),
+    /** Teams granted read access; only meaningful with accessMode 'teams'. */
+    teamIds: z.array(z.string().uuid()).max(50).optional(),
+  })
+  .refine(
+    (patch) =>
+      patch.teamIds === undefined ||
+      (patch.visibility === "public" && patch.accessMode === "teams"),
+    { message: "teamIds requires visibility 'public' + accessMode 'teams'" }
+  )
+  .refine((patch) => Object.keys(patch).length > 0, {
+    message: "Empty patch",
+  });
+export type ChatFolderUpdateInput = z.infer<typeof ChatFolderUpdateSchema>;

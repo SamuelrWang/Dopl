@@ -74,6 +74,8 @@ export type {
   ChatExportFormat,
   ChatExportInput,
   ChatFolder,
+  ChatFolderAccessMode,
+  ChatFolderUpdateInput,
   ChatMessage,
   ChatMessageInput,
   ChatMessageRole,
@@ -82,6 +84,19 @@ export type {
   ChatUpdateInput,
   ChatVisibility,
 } from "./chat-types.js";
+export type {
+  AccessMatrix,
+  AccessMatrixResource,
+  EffectiveAccessRow,
+  MemberAccessLevel,
+  MembershipStatus,
+  MemberTeamRef,
+  MyAccess,
+  MyMembership,
+  TeamGrant,
+  WorkspaceMember,
+  WorkspaceTeam,
+} from "./member-types.js";
 export type {
   OntologyAttribute,
   OntologyAttributeValue,

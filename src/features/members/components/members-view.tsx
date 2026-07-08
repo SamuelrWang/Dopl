@@ -1,29 +1,36 @@
 "use client";
 
-import { useCallback, useState } from "react";
-import { Plus, Users } from "lucide-react";
-import { cn } from "@/shared/lib/utils";
+import { useCallback, useMemo, useState } from "react";
+import { UsersRound } from "lucide-react";
+import { toast } from "@/shared/ui/toast";
 import { meetsMinRole } from "@/features/workspaces/types";
-import type { MemberRole } from "../types";
+import type { AssignableRole, MemberRole } from "../types";
 import { useMembers } from "../hooks/use-members";
 import { useInvitations } from "../hooks/use-invitations";
 import { useTeams } from "../hooks/use-teams";
 import { useWorkspaceResources } from "../hooks/use-workspace-resources";
-import { MembersTab } from "./members-tab";
-import { MemberDrawer } from "./member-drawer";
-import { TeamsTab } from "./teams-tab";
-import { AccessTab } from "./access-tab";
+import { useJoinRequests } from "../hooks/use-join-requests";
+import { MembersListPane } from "./members-list-pane";
+import { MemberDetail } from "./member-detail";
+import { TeamDetail } from "./team-detail";
+import { ResourceDetail } from "./resource-detail";
 import { CreateTeamDialog } from "./create-team-dialog";
 import { InviteDialog } from "./invite-dialog";
 import { ConflictDialog, type ConflictState } from "./conflict-dialog";
 
-type Tab = "members" | "teams" | "access";
+export type MembersTabKey = "members" | "teams" | "access";
 
-const TABS: Array<{ key: Tab; label: string }> = [
-  { key: "members", label: "Members" },
-  { key: "teams", label: "Teams" },
-  { key: "access", label: "Access" },
-];
+export type Selection = {
+  kind: "member" | "team" | "resource";
+  /** userId / teamId / `${resourceType}:${resourceId}`. */
+  id: string;
+} | null;
+
+const TAB_KIND: Record<MembersTabKey, NonNullable<Selection>["kind"]> = {
+  members: "member",
+  teams: "team",
+  access: "resource",
+};
 
 interface Props {
   workspaceSlug: string;
@@ -32,17 +39,18 @@ interface Props {
 }
 
 /**
- * Members page — the workspace's access-control console. One .page-float
- * surface: compact header bar (title + counts + admin actions), a
- * concave-track tab switcher (Members | Teams | Access), scrolling tab
- * body below.
+ * Members page — the workspace's access-control console as a two-pane
+ * master-detail surface (same layout language as Chats and Knowledge):
+ * roster/teams/resources list on the left behind a segmented switcher,
+ * the selection's document on the right. No slide-out drawers.
  */
 export function MembersView({ workspaceSlug, currentUserId, myRole }: Props) {
   const canManage = meetsMinRole(myRole, "admin");
-  const [tab, setTab] = useState<Tab>("members");
+  const [tab, setTab] = useState<MembersTabKey>("members");
+  const [query, setQuery] = useState("");
+  const [selection, setSelection] = useState<Selection>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [createTeamOpen, setCreateTeamOpen] = useState(false);
-  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const [conflict, setConflict] = useState<ConflictState | null>(null);
 
   const { members, loading, refresh: refreshMembers } = useMembers(workspaceSlug);
@@ -50,13 +58,13 @@ export function MembersView({ workspaceSlug, currentUserId, myRole }: Props) {
     workspaceSlug,
     canManage
   );
-  const { teams, loading: teamsLoading, refresh: refreshTeams } = useTeams(workspaceSlug);
+  const { teams, refresh: refreshTeams } = useTeams(workspaceSlug);
   const { resources, refresh: refreshResources } = useWorkspaceResources(workspaceSlug);
+  const joinRequests = useJoinRequests(workspaceSlug, canManage);
 
-  const memberList = members ?? [];
-  const inviteList = invitations ?? [];
-  const teamList = teams ?? [];
-  const resourceList = resources ?? [];
+  const memberList = useMemo(() => members ?? [], [members]);
+  const teamList = useMemo(() => teams ?? [], [teams]);
+  const resourceList = useMemo(() => resources ?? [], [resources]);
 
   const onTeamsChanged = useCallback(() => {
     refreshTeams();
@@ -64,131 +72,160 @@ export function MembersView({ workspaceSlug, currentUserId, myRole }: Props) {
     refreshResources();
   }, [refreshTeams, refreshMembers, refreshResources]);
 
-  // Regular members only get a detail drawer for themselves; admins+
-  // can inspect anyone. Backstop for the row-level gating in MembersTab.
-  const selectMember = useCallback(
-    (userId: string) => {
-      if (!canManage && userId !== currentUserId) return;
-      setSelectedMemberId(userId);
-    },
-    [canManage, currentUserId]
-  );
+  // Effective selection is DERIVED: an explicit pick that still exists
+  // on the active tab wins; otherwise the tab's first row. Data arrives
+  // async, entities get deleted — deriving (instead of syncing state)
+  // means the detail pane always shows something real.
+  const effectiveSelection = useMemo<Selection>(() => {
+    const firstOfTab = (): Selection => {
+      if (tab === "members" && memberList.length > 0) {
+        return { kind: "member", id: memberList[0].userId };
+      }
+      if (tab === "teams" && teamList.length > 0) {
+        return { kind: "team", id: teamList[0].id };
+      }
+      if (tab === "access" && resourceList.length > 0) {
+        return {
+          kind: "resource",
+          id: `${resourceList[0].resourceType}:${resourceList[0].resourceId}`,
+        };
+      }
+      return null;
+    };
+    if (!selection || selection.kind !== TAB_KIND[tab]) return firstOfTab();
+    const exists =
+      (selection.kind === "member" &&
+        memberList.some((m) => m.userId === selection.id)) ||
+      (selection.kind === "team" && teamList.some((t) => t.id === selection.id)) ||
+      (selection.kind === "resource" &&
+        resourceList.some(
+          (r) => `${r.resourceType}:${r.resourceId}` === selection.id
+        ));
+    return exists ? selection : firstOfTab();
+  }, [selection, tab, memberList, teamList, resourceList]);
 
   const selectedMember =
-    memberList.find((m) => m.userId === selectedMemberId) ?? null;
-  const pendingCount = inviteList.length;
+    effectiveSelection?.kind === "member"
+      ? (memberList.find((m) => m.userId === effectiveSelection.id) ?? null)
+      : null;
+  const selectedTeam =
+    effectiveSelection?.kind === "team"
+      ? (teamList.find((t) => t.id === effectiveSelection.id) ?? null)
+      : null;
+  const selectedResource =
+    effectiveSelection?.kind === "resource"
+      ? (resourceList.find(
+          (r) => `${r.resourceType}:${r.resourceId}` === effectiveSelection.id
+        ) ?? null)
+      : null;
 
-  const tabCount = (key: Tab) =>
-    key === "members" ? memberList.length : key === "teams" ? teamList.length : null;
+  const handleTabChange = (next: MembersTabKey) => {
+    setTab(next);
+    setQuery("");
+    setSelection(null);
+  };
+
+  const handleRevokeInvitation = async (id: string) => {
+    try {
+      const res = await fetch(
+        `/api/workspaces/${encodeURIComponent(workspaceSlug)}/invitations/${encodeURIComponent(id)}`,
+        { method: "DELETE", credentials: "same-origin" }
+      );
+      if (!res.ok && res.status !== 204) throw new Error("Couldn't revoke invitation");
+      refreshInvitations();
+    } catch (err) {
+      toast({ title: err instanceof Error ? err.message : "Couldn't revoke invitation" });
+    }
+  };
+
+  const handleResolveJoinRequest = (
+    id: string,
+    action: "approve" | "decline",
+    role: AssignableRole
+  ) => {
+    joinRequests
+      .resolve(id, action, role)
+      .then(() => {
+        if (action === "approve") refreshMembers();
+      })
+      .catch((err: unknown) => {
+        toast({
+          title: err instanceof Error ? err.message : "Couldn't resolve request",
+        });
+      });
+  };
 
   return (
-    <div className="page-float flex flex-col antialiased">
-      {/* Header bar — title, counts, tab switcher, admin actions. */}
-      <div className="flex shrink-0 items-center gap-3 border-b border-border-subtle px-4 py-2">
-        <h1 className="shrink-0 text-title font-semibold tracking-tight text-text-primary">
-          Members
-        </h1>
-        <span className="min-w-0 truncate text-caption text-text-muted">
-          {memberList.length} {memberList.length === 1 ? "person" : "people"} ·{" "}
-          {teamList.length} {teamList.length === 1 ? "team" : "teams"}
-          {pendingCount > 0 && ` · ${pendingCount} pending`}
-        </span>
-
-        <div className="concave-track ml-2 flex items-center gap-1">
-          {TABS.map(({ key, label }) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setTab(key)}
-              className={cn(
-                "flex h-6 items-center gap-1.5 rounded-[6px] px-2.5 text-caption font-medium transition-colors",
-                tab === key
-                  ? "raised-tab text-text-primary"
-                  : "text-text-secondary hover:text-text-primary"
-              )}
-            >
-              {label}
-              {tabCount(key) !== null && (
-                <span className="text-micro text-text-muted">{tabCount(key)}</span>
-              )}
-            </button>
-          ))}
-        </div>
-
-        {canManage && (
-          <div className="ml-auto flex shrink-0 items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setCreateTeamOpen(true)}
-              className="btn-light flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-small font-medium text-text-primary"
-            >
-              <Users size={12} />
-              Create team
-            </button>
-            <button
-              type="button"
-              onClick={() => setInviteOpen(true)}
-              className="flex h-7 cursor-pointer items-center gap-1.5 rounded-md bg-surface-cta px-2.5 text-small font-medium text-text-on-cta transition-opacity hover:opacity-90"
-            >
-              <Plus size={12} />
-              Add member
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Tab body — the page's single scroll surface. */}
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 pt-4 pb-10">
-        {tab === "members" && (
-          <MembersTab
-            workspaceSlug={workspaceSlug}
-            currentUserId={currentUserId}
-            myRole={myRole}
-            members={memberList}
-            invitations={inviteList}
-            teams={teamList}
-            loading={loading}
-            onChanged={refreshMembers}
-            onInvitationsChanged={refreshInvitations}
-            onSelectMember={selectMember}
-          />
-        )}
-        {tab === "teams" && (
-          <TeamsTab
-            workspaceSlug={workspaceSlug}
-            teams={teamList}
-            members={memberList}
-            resources={resourceList}
-            loading={teamsLoading}
-            canManage={canManage}
-            onTeamsChanged={onTeamsChanged}
-            onCreateTeam={() => setCreateTeamOpen(true)}
-            openConflict={setConflict}
-          />
-        )}
-        {tab === "access" && (
-          <AccessTab
-            workspaceSlug={workspaceSlug}
-            teams={teamList}
-            resources={resourceList}
-            canManage={canManage}
-            onTeamsChanged={onTeamsChanged}
-            openConflict={setConflict}
-          />
-        )}
-      </div>
-
-      <MemberDrawer
-        workspaceSlug={workspaceSlug}
-        member={selectedMember}
+    <div className="page-float flex antialiased">
+      <MembersListPane
+        tab={tab}
+        onTabChange={handleTabChange}
+        query={query}
+        onQueryChange={setQuery}
+        selection={effectiveSelection}
+        onSelect={setSelection}
+        canManage={canManage}
+        members={memberList}
         teams={teamList}
         resources={resourceList}
-        myRole={myRole}
+        invitations={invitations ?? []}
+        joinRequests={joinRequests.requests}
         currentUserId={currentUserId}
-        onClose={() => setSelectedMemberId(null)}
-        onTeamsChanged={onTeamsChanged}
-        onMemberChanged={refreshMembers}
+        onInvite={() => setInviteOpen(true)}
+        onCreateTeam={() => setCreateTeamOpen(true)}
+        onRevokeInvitation={(id) => void handleRevokeInvitation(id)}
+        onResolveJoinRequest={handleResolveJoinRequest}
       />
+
+      {selectedMember ? (
+        <MemberDetail
+          key={selectedMember.userId}
+          workspaceSlug={workspaceSlug}
+          member={selectedMember}
+          teams={teamList}
+          myRole={myRole}
+          currentUserId={currentUserId}
+          onMemberChanged={refreshMembers}
+          onTeamsChanged={onTeamsChanged}
+          onRemoved={() => {
+            setSelection(null);
+            refreshMembers();
+            onTeamsChanged();
+          }}
+        />
+      ) : selectedTeam ? (
+        <TeamDetail
+          key={selectedTeam.id}
+          workspaceSlug={workspaceSlug}
+          team={selectedTeam}
+          members={memberList}
+          resources={resourceList}
+          canManage={canManage}
+          onTeamsChanged={onTeamsChanged}
+          onDeleted={() => {
+            setSelection(null);
+            onTeamsChanged();
+          }}
+          openConflict={setConflict}
+        />
+      ) : selectedResource ? (
+        <ResourceDetail
+          key={`${selectedResource.resourceType}:${selectedResource.resourceId}`}
+          workspaceSlug={workspaceSlug}
+          resource={selectedResource}
+          teams={teamList}
+          canManage={canManage}
+          onTeamsChanged={onTeamsChanged}
+          openConflict={setConflict}
+        />
+      ) : (
+        <div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-2.5 px-10 text-text-muted">
+          <UsersRound size={30} className="text-border-strong" />
+          <p className="text-body">
+            {loading ? "Loading members…" : "Nothing to show yet."}
+          </p>
+        </div>
+      )}
 
       <CreateTeamDialog
         workspaceSlug={workspaceSlug}
@@ -200,6 +237,7 @@ export function MembersView({ workspaceSlug, currentUserId, myRole }: Props) {
         onCreated={() => {
           onTeamsChanged();
           setTab("teams");
+          setSelection(null);
         }}
         openConflict={setConflict}
       />

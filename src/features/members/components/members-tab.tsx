@@ -30,7 +30,9 @@ interface Props {
   loading: boolean;
   onChanged: () => void;
   onInvitationsChanged: () => void;
-  onSelectMember: (userId: string) => void;
+  /** Row-click detail hook — omit to render rows non-clickable (the
+   *  settings modal has no detail surface; the full page does). */
+  onSelectMember?: (userId: string) => void;
 }
 
 /**
@@ -200,8 +202,10 @@ export function MembersTab({
                 !isSelf &&
                 m.role !== "owner" &&
                 (myRole === "owner" || m.role !== "admin");
-              // Regular members only open their own detail drawer.
-              const clickable = canManage || isSelf;
+              // Regular members only open their own detail view; no
+              // handler at all means rows render non-clickable.
+              const clickable =
+                onSelectMember !== undefined && (canManage || isSelf);
               return (
                 <li key={m.userId}>
                   <MemberRow
@@ -211,7 +215,7 @@ export function MembersTab({
                     canEditTarget={canEditTarget}
                     clickable={clickable}
                     busy={busyId === m.userId}
-                    onOpen={() => clickable && onSelectMember(m.userId)}
+                    onOpen={() => clickable && onSelectMember?.(m.userId)}
                     onChangeRole={(role) => void changeRole(m, role)}
                     onRemove={() => setRemoveTarget(m)}
                   />

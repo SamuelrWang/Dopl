@@ -11,6 +11,8 @@ interface Props {
   workspaceSegment: string;
   workspaceId: string;
   bases: KnowledgeBase[];
+  /** Display names for foreign base owners, keyed by user id. */
+  ownerNames?: Record<string, string>;
   currentUserId: string;
   role: Role;
   /** Admin-only: kbId → teams granted, for the base overview. */
@@ -30,6 +32,7 @@ export function KnowledgeV2Preview({
   workspaceSegment,
   workspaceId,
   bases,
+  ownerNames,
   currentUserId,
   role,
   kbTeams,
@@ -44,6 +47,7 @@ export function KnowledgeV2Preview({
         workspaceId={workspaceId}
         workspaceSegment={workspaceSegment}
         bases={bases}
+        ownerNames={ownerNames}
         currentUserId={currentUserId}
         role={role}
         kbTeams={kbTeams}

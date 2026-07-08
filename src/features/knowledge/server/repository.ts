@@ -242,6 +242,27 @@ export async function restoreBaseRow(id: string): Promise<KnowledgeBase> {
   return restored;
 }
 
+/** Display names for base owners (list-pane attribution). */
+export async function fetchProfileNames(
+  userIds: string[]
+): Promise<Map<string, string>> {
+  if (userIds.length === 0) return new Map();
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("profiles")
+    .select("id, email, display_name")
+    .in("id", userIds);
+  if (error) throw error;
+  return new Map(
+    (data ?? []).map((p) => [
+      p.id as string,
+      (p.display_name as string | null) ||
+        (p.email as string | null) ||
+        "Unknown member",
+    ])
+  );
+}
+
 // ─── Folders ────────────────────────────────────────────────────────
 
 export async function findFolderById(

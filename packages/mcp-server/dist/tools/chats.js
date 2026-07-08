@@ -56,17 +56,25 @@ op="append" to extend the transcript.
 file the chat; the folder is created if missing. Ask the user before
 inventing a new taxonomy.
 
+**Folder sharing is authoritative.** A folder has its own sharing scope
+(private by default). Filing a chat into a folder makes the chat inherit
+the folder's scope — any \`visibility\` you pass alongside \`folder\` is
+superseded. Changing a folder's scope (op="update_folder") re-scopes
+every chat inside it. Sharing a FILED chat directly is rejected: unfile
+it first, or change the folder's scope.
+
 **Privacy.** Exports default to private (owner-only). Only set
 visibility="public" when the user explicitly says to share it with the
 workspace.`;
 const CHATS_DESCRIPTION = `The user's chat archive — exported conversation records this and future sessions can recall. Set \`op\` to one of:
 - "export" — save the current (or a finished) conversation into the archive. Requires: title, messages (array of {role: "user"|"agent", summary, verbatim?}). Strongly recommended: client_session_id (stable session id — makes re-export update instead of duplicate), overview, deliverables, learnings, session_date, source, project, folder. Read op="guide" before your first export: summarize per message, verbatim only on explicit request.
 - "append" — add messages to an already-exported chat (mid-session incremental export). Requires: chat_id, messages.
-- "update" — update a chat's header (title, overview, project, session_date, deliverables, learnings, folder, pinned) or share/unshare it (visibility). Owner-only. Requires: chat_id plus the fields to change.
+- "update" — update a chat's header (title, overview, project, session_date, deliverables, learnings, folder, pinned) or share/unshare it (visibility). Owner-only. Requires: chat_id plus the fields to change. NOTE: a chat filed in a folder inherits the folder's sharing — moving it into a folder re-scopes it, and setting visibility on a filed chat is rejected (unfile first or use op="update_folder").
 - "list" — list chats the user can read (their own + workspace-shared), newest first, with id/title/date/source/visibility/owner. Optional: scope ("private" = the user's unshared chats | "shared" = workspace-public ones | "all", default "all"), query (case-insensitive title/overview filter).
 - "get" — read one chat in full: header, deliverables, learnings, and the summarized transcript. Requires: chat_id. Use this to pull past-session context the user references.
-- "folders" — list the user's chat folders.
-- "create_folder" — create a chat folder. Requires: name.
+- "folders" — list the user's chat folders with their sharing scope.
+- "create_folder" — create a chat folder (private by default). Requires: name.
+- "update_folder" — rename a folder and/or change its sharing (visibility "private"|"public" = whole workspace). Changing sharing re-scopes EVERY chat in the folder — confirm with the user first. Team-scoped folder sharing is web-UI only. Requires: folder_id plus name and/or visibility.
 - "guide" — the export etiquette guide (message style, header discipline, idempotency, privacy). Read before your first export of a session.
 
 Destructive delete lives in the separate \`dopl_chats_admin\` tool.`;
@@ -85,7 +93,7 @@ const DeliverableShape = zod_1.z.object({
 function registerChatTools(register, client) {
     register("dopl_chats", CHATS_DESCRIPTION, {
         op: zod_1.z
-            .enum(["export", "append", "update", "list", "get", "folders", "create_folder", "guide"])
+            .enum(["export", "append", "update", "list", "get", "folders", "create_folder", "update_folder", "guide"])
             .describe("Operation to perform."),
         chat_id: zod_1.z.string().optional().describe("Chat id. Required for append, update, get."),
         title: zod_1.z.string().min(1).max(200).optional().describe("op=export (required) / op=update: chat title — specific enough to disambiguate later."),
@@ -97,12 +105,13 @@ function registerChatTools(register, client) {
         session_date: zod_1.z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe("op=export / op=update: date the session happened (YYYY-MM-DD)."),
         source: zod_1.z.enum(["claude-code", "claude-desktop", "cursor", "other"]).optional().describe("op=export: which client the session ran in."),
         project: zod_1.z.string().max(120).optional().describe("op=export / op=update: repo or project name the session worked on. op=update: pass empty string to clear it."),
-        folder: zod_1.z.string().max(80).optional().describe("op=export / op=update: folder NAME to file the chat under (created if missing). op=update: pass empty string to unfile."),
-        visibility: zod_1.z.enum(["private", "public"]).optional().describe("op=update: share ('public') or unshare ('private') with the workspace. op=export: defaults to private — only set public when the user explicitly says so."),
+        folder: zod_1.z.string().max(80).optional().describe("op=export / op=update: folder NAME to file the chat under (created if missing). Filing makes the chat INHERIT the folder's sharing scope. op=update: pass empty string to unfile."),
+        visibility: zod_1.z.enum(["private", "public"]).optional().describe("op=update / op=update_folder: share ('public') or unshare ('private') with the workspace. Rejected on a chat that sits in a folder — the folder's scope is authoritative. op=export: defaults to private — only set public when the user explicitly says so (superseded when folder is passed)."),
         pinned: zod_1.z.boolean().optional().describe("op=update: pin/unpin the chat."),
         scope: zod_1.z.enum(["private", "shared", "all"]).optional().describe("op=list: which chats to list (default all)."),
         query: zod_1.z.string().max(200).optional().describe("op=list: case-insensitive title/overview filter."),
-        name: zod_1.z.string().min(1).max(80).optional().describe("op=create_folder (required): folder name."),
+        name: zod_1.z.string().min(1).max(80).optional().describe("op=create_folder (required) / op=update_folder: folder name."),
+        folder_id: zod_1.z.string().optional().describe("op=update_folder (required): folder id."),
     }, async (args) => {
         switch (args.op) {
             case "guide":
@@ -146,6 +155,18 @@ function registerChatTools(register, client) {
                 if (miss)
                     return miss;
                 return opCreateFolder(client, args.name);
+            }
+            case "update_folder": {
+                const miss = (0, respond_1.missingParams)("update_folder", args, ["folder_id"]);
+                if (miss)
+                    return miss;
+                if (args.name === undefined && args.visibility === undefined) {
+                    return (0, respond_1.err)(`op="update_folder" needs name and/or visibility to change.`);
+                }
+                return opUpdateFolder(client, args.folder_id, {
+                    name: args.name,
+                    visibility: args.visibility,
+                });
             }
         }
     });
@@ -313,21 +334,38 @@ async function opGet(client, chatId) {
     }
     return (0, respond_1.ok)(lines.join("\n"));
 }
+function folderScopeLabel(f) {
+    if (f.visibility === "private")
+        return "private";
+    return f.accessMode === "teams" ? "team-shared" : "workspace-shared";
+}
 async function opFolders(client) {
     const folders = await client.listChatFolders();
     if (folders.length === 0) {
         return (0, respond_1.ok)(`No chat folders yet. Pass folder="<name>" on export (or op="create_folder") to create one.`);
     }
-    const lines = folders.map((f) => `- **${f.name}** \`${f.id}\``);
-    return (0, respond_1.ok)(`## Chat folders — ${folders.length}\n\n${lines.join("\n")}`);
+    const lines = folders.map((f) => `- **${f.name}** \`${f.id}\` — ${folderScopeLabel(f)}`);
+    return (0, respond_1.ok)(`## Chat folders — ${folders.length}\n\n${lines.join("\n")}\n\nA folder's scope is authoritative: chats filed in it inherit its sharing.`);
 }
 async function opCreateFolder(client, name) {
     try {
         const folder = await client.createChatFolder(name);
-        return (0, respond_1.ok)(`Created folder **${folder.name}** (\`${folder.id}\`).`);
+        return (0, respond_1.ok)(`Created folder **${folder.name}** (\`${folder.id}\`) — private.`);
     }
     catch (e) {
         return (0, respond_1.err)(`Folder create failed: ${errorMessage(e)}`);
+    }
+}
+async function opUpdateFolder(client, folderId, patch) {
+    try {
+        const folder = await client.updateChatFolder(folderId, patch);
+        const scopeNote = patch.visibility !== undefined
+            ? ` Every chat in the folder now inherits this scope.`
+            : "";
+        return (0, respond_1.ok)(`Updated folder **${folder.name}** (\`${folder.id}\`) — ${folderScopeLabel(folder)}.${scopeNote}`);
+    }
+    catch (e) {
+        return (0, respond_1.err)(`Folder update failed: ${errorMessage(e)}`);
     }
 }
 function formatChatLine(c) {

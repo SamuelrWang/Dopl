@@ -35,9 +35,19 @@ export type Deliverable = {
   done: boolean;
 };
 
+/**
+ * A personal folder whose sharing scope is AUTHORITATIVE for the chats
+ * filed in it: chats inherit the folder's visibility/access on move and
+ * whenever the folder's scope changes. Filed chats can't be shared
+ * individually — unfile first or change the folder's scope.
+ */
 export type ChatFolder = {
   id: string;
   name: string;
+  visibility: ChatVisibility;
+  accessMode: ChatAccessMode;
+  /** Teams granted read access — populated only when accessMode is 'teams'. */
+  grantedTeamIds: string[];
 };
 
 /** List-level chat: everything but the transcript. */

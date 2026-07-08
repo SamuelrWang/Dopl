@@ -90,9 +90,15 @@ export function mapMessageRow(row: ChatMessageRow): ChatMessage {
   };
 }
 
-export function mapFolderRow(row: ChatFolderRow): ChatFolder {
+export function mapFolderRow(
+  row: ChatFolderRow,
+  grantedTeamIds: string[] = []
+): ChatFolder {
   return {
     id: row.id,
     name: row.name,
+    visibility: row.visibility as ChatVisibility,
+    accessMode: row.access_mode as ChatAccessMode,
+    grantedTeamIds,
   };
 }

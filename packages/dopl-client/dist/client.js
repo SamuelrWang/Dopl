@@ -39,6 +39,7 @@ const kb = __importStar(require("./knowledge.js"));
 const skills = __importStar(require("./skills.js"));
 const ontology = __importStar(require("./ontology.js"));
 const chats = __importStar(require("./chats.js"));
+const members = __importStar(require("./members.js"));
 var retry_js_1 = require("./retry.js");
 Object.defineProperty(exports, "parseRetryAfter", { enumerable: true, get: function () { return retry_js_1.parseRetryAfter; } });
 class DoplClient {
@@ -285,8 +286,32 @@ class DoplClient {
     createChatFolder(name) {
         return chats.createChatFolder(this.transport, name);
     }
+    updateChatFolder(folderId, patch) {
+        return chats.updateChatFolder(this.transport, folderId, patch);
+    }
     deleteChatFolder(folderId) {
         return chats.deleteChatFolder(this.transport, folderId);
+    }
+    // ─── Members / teams / access (READ-ONLY) ──────────────────────────
+    // Membership, team, and access changes are human decisions made in
+    // the web UI — this client deliberately exposes no write path.
+    getMyMembership() {
+        return members.getMyMembership(this.transport);
+    }
+    listWorkspaceMembers() {
+        return members.listMembers(this.transport);
+    }
+    listWorkspaceTeams() {
+        return members.listTeams(this.transport);
+    }
+    getAccessMatrix() {
+        return members.getAccessMatrix(this.transport);
+    }
+    getMyAccess() {
+        return members.getMyAccess(this.transport);
+    }
+    getMemberAccess(targetUserId) {
+        return members.getMemberAccess(this.transport, targetUserId);
     }
     // ─── Skills ─────────────────────────────────────────────────────────
     // Read paths are unrestricted; write paths are gated server-side by

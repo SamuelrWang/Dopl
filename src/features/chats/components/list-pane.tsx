@@ -1,12 +1,26 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronRight, Folder, FolderPlus, Search, Star, X } from "lucide-react";
+import {
+  ChevronRight,
+  Folder,
+  FolderPlus,
+  Search,
+  Star,
+  X,
+} from "lucide-react";
 import { cn } from "@/shared/lib/utils";
+import { Popover } from "@/shared/ui/popover-menu";
 import { SegmentedControl } from "@/shared/ui/segmented-control";
-import type { Chat } from "../types";
-import { SOURCE_LABELS, UNFILED_LABEL } from "../constants";
+import type { Chat, ChatFolder } from "../types";
+import { chatScope, type ChatScope } from "../scope";
+import {
+  SHARED_WITH_ME_LABEL,
+  SOURCE_LABELS,
+  UNFILED_LABEL,
+} from "../constants";
 import { formatShortDate } from "../format";
+import { SCOPE_ICONS, ShareMenu } from "./share-control";
 import type { ChatFilter, FolderGroup } from "./chats-view";
 
 const ICON_BTN =
@@ -33,6 +47,8 @@ interface Props {
   onFilterChange: (filter: ChatFilter) => void;
   counts: Record<ChatFilter, number>;
   showFolders: boolean;
+  workspaceSlug: string;
+  isAdmin: boolean;
   currentUserId: string;
   query: string;
   onQueryChange: (q: string) => void;
@@ -42,12 +58,21 @@ interface Props {
   onToggleFolder: (key: string) => void;
   /** Resolves true on success — the draft input clears only then. */
   onCreateFolder: (name: string) => Promise<boolean>;
+  /** Folder scope change — propagates to every chat in the folder. */
+  onFolderShareChange: (
+    folderId: string,
+    scope: ChatScope,
+    teamIds: string[]
+  ) => Promise<void>;
 }
 
 /**
  * Left list pane: header with count, concave search well, the
  * All/Private/Team/Shared scope filter, and the chat list —
- * folder-grouped on the Private filter, flat (with owners) elsewhere.
+ * folder-grouped on the Private and All filters (All appends a
+ * "Shared with me" group), flat (with owners) elsewhere. Folder
+ * headers carry the folder's share control: the folder's scope is
+ * authoritative for the chats inside it.
  */
 export function ListPane({
   groups,
@@ -55,6 +80,8 @@ export function ListPane({
   onFilterChange,
   counts,
   showFolders,
+  workspaceSlug,
+  isAdmin,
   currentUserId,
   query,
   onQueryChange,
@@ -63,6 +90,7 @@ export function ListPane({
   collapsed,
   onToggleFolder,
   onCreateFolder,
+  onFolderShareChange,
 }: Props) {
   const [folderDraft, setFolderDraft] = useState<string | null>(null);
 
@@ -153,7 +181,7 @@ export function ListPane({
           </p>
         ) : (
           groups.map((group) => {
-            const key = group.folder?.id ?? "unfiled";
+            const key = group.folder?.id ?? group.kind;
             if (!showFolders) {
               return group.chats.map((c) => (
                 <ChatRow
@@ -167,34 +195,57 @@ export function ListPane({
               ));
             }
             const isOpen = !collapsed.has(key);
+            const label =
+              group.kind === "shared"
+                ? SHARED_WITH_ME_LABEL
+                : (group.folder?.name ?? UNFILED_LABEL);
             return (
               <div key={key} className="border-b border-border-subtle">
-                <button
-                  type="button"
-                  onClick={() => onToggleFolder(key)}
-                  className="flex w-full items-center gap-2 px-3.5 py-2 text-left transition-colors hover:bg-surface-raised-1"
-                >
-                  <ChevronRight
-                    size={12}
-                    className={cn(
-                      "shrink-0 text-text-muted transition-transform",
-                      isOpen && "rotate-90"
-                    )}
-                  />
-                  <Folder size={13} className="shrink-0 text-text-muted" />
-                  <span className="min-w-0 flex-1 truncate text-small font-semibold text-text-primary">
-                    {group.folder?.name ?? UNFILED_LABEL}
-                  </span>
+                <div className="flex w-full items-center gap-2 pr-3.5 transition-colors hover:bg-surface-raised-1">
+                  <button
+                    type="button"
+                    onClick={() => onToggleFolder(key)}
+                    className="flex min-w-0 flex-1 items-center gap-2 py-2 pl-3.5 text-left"
+                  >
+                    <ChevronRight
+                      size={12}
+                      className={cn(
+                        "shrink-0 text-text-muted transition-transform",
+                        isOpen && "rotate-90"
+                      )}
+                    />
+                    <Folder size={13} className="shrink-0 text-text-muted" />
+                    <span className="min-w-0 flex-1 truncate text-small font-semibold text-text-primary">
+                      {label}
+                    </span>
+                  </button>
+                  {group.folder && !query.trim() && (
+                    // Hidden during search: a filtered folder shows only
+                    // matching chats, so the share popover's "applies to
+                    // all N" would understate the real blast radius (the
+                    // server re-scopes every chat in the folder).
+                    <FolderShareControl
+                      folder={group.folder}
+                      chatCount={group.chats.length}
+                      workspaceSlug={workspaceSlug}
+                      currentUserId={currentUserId}
+                      isAdmin={isAdmin}
+                      onShareChange={(scope, teamIds) =>
+                        onFolderShareChange(group.folder!.id, scope, teamIds)
+                      }
+                    />
+                  )}
                   <span className="text-micro text-text-muted">
                     {group.chats.length}
                   </span>
-                </button>
+                </div>
                 {isOpen &&
                   group.chats.map((c) => (
                     <ChatRow
                       key={c.id}
                       chat={c}
                       selected={c.id === selectedId}
+                      showOwner={group.kind === "shared"}
                       onSelect={onSelect}
                     />
                   ))}
@@ -203,6 +254,74 @@ export function ListPane({
           })
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * The folder's share control — a scope icon on the folder header. A
+ * folder's scope is authoritative: applying a change here re-scopes
+ * every chat filed in the folder.
+ */
+function FolderShareControl({
+  folder,
+  chatCount,
+  workspaceSlug,
+  currentUserId,
+  isAdmin,
+  onShareChange,
+}: {
+  folder: ChatFolder;
+  chatCount: number;
+  workspaceSlug: string;
+  currentUserId: string;
+  isAdmin: boolean;
+  onShareChange: (scope: ChatScope, teamIds: string[]) => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const scope = chatScope(folder);
+  const Icon = SCOPE_ICONS[scope];
+
+  return (
+    <div className="relative flex items-center">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        title="Change who can read the chats in this folder"
+        aria-label={`Folder sharing: ${scope}`}
+        className={cn(
+          "flex h-6 w-6 items-center justify-center rounded-[6px] transition-colors hover:bg-surface-raised-3",
+          scope === "private"
+            ? "text-text-muted"
+            : "text-text-secondary"
+        )}
+      >
+        <Icon size={12} />
+      </button>
+      <Popover
+        open={open}
+        onClose={() => setOpen(false)}
+        align="right"
+        className="w-[264px] p-1.5"
+      >
+        {/* Mounted only while open so the teams fetch is lazy. */}
+        <ShareMenu
+          scope={scope}
+          grantedTeamIds={folder.grantedTeamIds}
+          workspaceSlug={workspaceSlug}
+          currentUserId={currentUserId}
+          isAdmin={isAdmin}
+          warning={
+            chatCount > 0
+              ? `Applies to all ${chatCount} chat${chatCount === 1 ? "" : "s"} in "${folder.name}" — chats in a folder follow the folder's sharing.`
+              : `Chats filed into "${folder.name}" will get this sharing.`
+          }
+          onApply={async (nextScope, teamIds) => {
+            await onShareChange(nextScope, teamIds);
+            setOpen(false);
+          }}
+        />
+      </Popover>
     </div>
   );
 }

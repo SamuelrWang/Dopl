@@ -107,6 +107,7 @@ export function DetailPane({
 
         <ShareControl
           chat={chat}
+          folderName={folder?.name ?? null}
           workspaceSlug={workspaceSlug}
           currentUserId={currentUserId}
           isAdmin={isAdmin}

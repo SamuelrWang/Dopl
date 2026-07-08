@@ -15,6 +15,7 @@ import { workspaceSegment } from "@/features/workspaces/url";
 import { listTeams } from "@/features/teams/server/service";
 import {
   buildKnowledgeContext,
+  listBaseOwnerNames,
   listBases,
 } from "@/features/knowledge/server/service";
 import { KnowledgeV2Preview } from "@/features/knowledge/components/knowledge-v2/landing-preview";
@@ -44,6 +45,7 @@ export default async function KnowledgeIndexPage({ params }: PageProps) {
     agentTokenId: null,
   });
   const bases = await listBases(ctx);
+  const ownerNames = await listBaseOwnerNames(ctx, bases);
   const segment = workspaceSegment(workspace);
 
   // Admin view: which teams have a grant on each teams-mode KB, for the
@@ -69,6 +71,7 @@ export default async function KnowledgeIndexPage({ params }: PageProps) {
       workspaceSegment={segment}
       workspaceId={workspace.id}
       bases={bases}
+      ownerNames={ownerNames}
       currentUserId={user.id}
       role={membership.role}
       kbTeams={kbTeams}

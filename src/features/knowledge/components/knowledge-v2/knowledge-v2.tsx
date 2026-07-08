@@ -17,6 +17,8 @@ interface Props {
   workspaceId: string;
   workspaceSegment: string;
   bases: KnowledgeBase[];
+  /** Display names for foreign base owners, keyed by user id. */
+  ownerNames?: Record<string, string>;
   currentUserId: string;
   role: Role;
   /** Admin-only: kbId → teams granted, for the base overview. */
@@ -38,6 +40,7 @@ export function KnowledgeV2({
   workspaceId,
   workspaceSegment,
   bases,
+  ownerNames,
   currentUserId,
   role,
   kbTeams,
@@ -59,6 +62,8 @@ export function KnowledgeV2({
     <div className={cn("page-float", styles.shell)}>
       <ListPanel
         bases={c.visibleBases}
+        ownerNames={ownerNames}
+        currentUserId={currentUserId}
         query={c.query}
         onQueryChange={c.setQuery}
         filter={c.filter}

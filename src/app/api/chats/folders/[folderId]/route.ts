@@ -8,18 +8,18 @@ import { requireFolderId, toChatErrorResponse } from "@/shared/api/chat-route";
 import {
   buildChatContext,
   deleteFolderForUser,
-  renameFolderForUser,
+  updateFolderForUser,
 } from "@/features/chats/server/service";
-import { ChatFolderRenameSchema } from "@/features/chats/schema";
+import { ChatFolderUpdateSchema } from "@/features/chats/schema";
 
 async function handlePatch(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
-    const input = await parseJson(request, ChatFolderRenameSchema);
+    const input = await parseJson(request, ChatFolderUpdateSchema);
     const ctx = buildChatContext(auth);
-    const folder = await renameFolderForUser(
+    const folder = await updateFolderForUser(
       ctx,
       requireFolderId(auth.params),
-      input.name
+      input
     );
     return NextResponse.json({ folder });
   } catch (err) {

@@ -145,6 +145,17 @@
 .kbItem {
   border-bottom: 1px solid var(--kv-border);
 }
+/* "Shared with me" section divider on the All filter — the standard
+   11px uppercase panel label. */
+.listSection {
+  font-size: var(--text-label);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--kv-text-2);
+  padding: 12px 16px 6px 14px;
+  border-bottom: 1px solid var(--kv-border);
+}
 .listBody::-webkit-scrollbar {
   width: 0;
 }

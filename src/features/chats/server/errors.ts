@@ -28,3 +28,12 @@ export class ChatFolderConflictError extends ChatError {
     super(`A folder named "${name}" already exists`);
   }
 }
+
+/** Direct share change on a filed chat — sharing follows the folder. */
+export class ChatFolderScopeError extends ChatError {
+  constructor(folderName: string) {
+    super(
+      `This chat is in the folder "${folderName}" and inherits its sharing — change the folder's sharing or unfile the chat first`
+    );
+  }
+}

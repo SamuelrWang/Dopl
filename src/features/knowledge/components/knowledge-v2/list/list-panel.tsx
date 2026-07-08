@@ -18,6 +18,9 @@ const FILTERS: ReadonlyArray<{ key: Filter; label: string }> = [
 
 interface Props {
   bases: KnowledgeBase[];
+  /** Display names for foreign base owners, keyed by user id. */
+  ownerNames?: Record<string, string>;
+  currentUserId: string;
   query: string;
   onQueryChange: (q: string) => void;
   filter: Filter;
@@ -41,6 +44,8 @@ interface Props {
  */
 export function ListPanel({
   bases,
+  ownerNames,
+  currentUserId,
   query,
   onQueryChange,
   filter,
@@ -101,24 +106,57 @@ export function ListPanel({
             No knowledge bases match.
           </p>
         ) : (
-          bases.map((base) => (
-            <KbRow
-              key={base.id}
-              base={base}
-              selected={selectedBaseId === base.id}
-              expanded={expanded.has(base.id)}
-              tree={trees[base.id]}
-              selectedEntryId={selectedEntryId}
-              canEdit={canEdit(base.id)}
-              editingNodeId={editingNodeId}
-              handlers={treeHandlers}
-              onSelectBase={onSelectBase}
-              onToggleExpand={onToggleExpand}
-              onSelectEntry={onSelectEntry}
-            />
+          groupBases(bases, filter, currentUserId).map(({ label, items }) => (
+            <div key={label ?? "own"}>
+              {label && <p className={styles.listSection}>{label}</p>}
+              {items.map((base) => (
+                <KbRow
+                  key={base.id}
+                  base={base}
+                  ownerName={
+                    base.createdBy && base.createdBy !== currentUserId
+                      ? (ownerNames?.[base.createdBy] ?? "Another member")
+                      : null
+                  }
+                  selected={selectedBaseId === base.id}
+                  expanded={expanded.has(base.id)}
+                  tree={trees[base.id]}
+                  selectedEntryId={selectedEntryId}
+                  canEdit={canEdit(base.id)}
+                  editingNodeId={editingNodeId}
+                  handlers={treeHandlers}
+                  onSelectBase={onSelectBase}
+                  onToggleExpand={onToggleExpand}
+                  onSelectEntry={onSelectEntry}
+                />
+              ))}
+            </div>
           ))
         )}
       </div>
     </div>
   );
+}
+
+/**
+ * On the All filter, other members' bases sit under a trailing
+ * "Shared with me" section (mirrors the chats list). Other filters
+ * render one unlabeled group.
+ */
+function groupBases(
+  bases: KnowledgeBase[],
+  filter: Filter,
+  currentUserId: string
+): Array<{ label: string | null; items: KnowledgeBase[] }> {
+  if (filter !== "all") return [{ label: null, items: bases }];
+  const own = bases.filter(
+    (b) => b.createdBy === null || b.createdBy === currentUserId
+  );
+  const shared = bases.filter(
+    (b) => b.createdBy !== null && b.createdBy !== currentUserId
+  );
+  const groups: Array<{ label: string | null; items: KnowledgeBase[] }> = [];
+  if (own.length > 0) groups.push({ label: null, items: own });
+  if (shared.length > 0) groups.push({ label: "Shared with me", items: shared });
+  return groups;
 }

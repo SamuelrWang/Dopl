@@ -9,12 +9,16 @@ import {
   createChatFolder,
   deleteChat as apiDeleteChat,
   updateChat as apiUpdateChat,
+  updateChatFolder as apiUpdateChatFolder,
   ChatApiError,
 } from "../client/api";
 import { ListPane } from "./list-pane";
 import { DetailPane } from "./detail-pane";
 
 export type FolderGroup = {
+  /** 'folder'/'unfiled' hold the caller's own chats; 'shared' holds
+   *  other members' chats surfaced on the All filter. */
+  kind: "folder" | "unfiled" | "shared";
   folder: ChatFolder | null;
   chats: Chat[];
 };
@@ -76,9 +80,10 @@ export function ChatsView({
     return c;
   }, [chats, currentUserId]);
 
-  // Folder grouping only makes sense over the caller's own archive — the
-  // Private filter. Every other filter renders a flat, owner-labeled list.
-  const showFolders = filter === "private";
+  // Folder grouping covers the caller's own archive — the Private and
+  // All filters. Team/Shared render a flat, owner-labeled list. On All,
+  // other members' chats sit in a trailing "Shared with me" group.
+  const showFolders = filter === "private" || filter === "all";
 
   const groups = useMemo<FolderGroup[]>(() => {
     const q = query.trim().toLowerCase();
@@ -87,31 +92,48 @@ export function ChatsView({
       (q === "" ||
         c.title.toLowerCase().includes(q) ||
         c.overview.toLowerCase().includes(q));
+    const mine = (c: Chat) => c.owner.userId === currentUserId;
     const pinnedFirst = (list: Chat[]) =>
       [...list].sort((a, b) => Number(b.pinned) - Number(a.pinned));
 
     if (!showFolders) {
       const flat = pinnedFirst(chats.filter(matches));
-      return flat.length > 0 ? [{ folder: null, chats: flat }] : [];
+      return flat.length > 0
+        ? [{ kind: "shared" as const, folder: null, chats: flat }]
+        : [];
     }
 
     const grouped: FolderGroup[] = folders.map((folder) => ({
+      kind: "folder" as const,
       folder,
       chats: pinnedFirst(
-        chats.filter((c) => c.folderId === folder.id && matches(c))
+        chats.filter((c) => mine(c) && c.folderId === folder.id && matches(c))
       ),
     }));
     grouped.push({
+      kind: "unfiled",
       folder: null,
       chats: pinnedFirst(
         chats.filter(
           (c) =>
+            mine(c) &&
             (c.folderId === null || !folders.some((f) => f.id === c.folderId)) &&
             matches(c)
         )
       ),
     });
-    return grouped.filter((g) => g.chats.length > 0);
+    if (filter === "all") {
+      grouped.push({
+        kind: "shared",
+        folder: null,
+        chats: pinnedFirst(chats.filter((c) => !mine(c) && matches(c))),
+      });
+    }
+    // Empty folders stay visible (outside a search) so their sharing
+    // and future contents remain reachable; empty pseudo-groups don't.
+    return grouped.filter(
+      (g) => g.chats.length > 0 || (g.kind === "folder" && q === "")
+    );
   }, [chats, folders, query, filter, currentUserId, showFolders]);
 
   const selected = chats.find((c) => c.id === selectedId) ?? null;
@@ -212,6 +234,44 @@ export function ChatsView({
     }
   };
 
+  // The folder's scope is authoritative — the server re-scopes every
+  // chat in the folder, so mirror that propagation in local state.
+  const handleFolderShareChange = async (
+    folderId: string,
+    scope: ChatScope,
+    teamIds: string[]
+  ): Promise<void> => {
+    try {
+      const folder = await apiUpdateChatFolder(
+        folderId,
+        scope === "private"
+          ? { visibility: "private" }
+          : scope === "team"
+            ? { visibility: "public", accessMode: "teams", teamIds }
+            : { visibility: "public", accessMode: "workspace" },
+        workspaceId
+      );
+      setFolders((prev) => prev.map((f) => (f.id === folder.id ? folder : f)));
+      setChats((prev) =>
+        prev.map((c) =>
+          c.folderId === folder.id
+            ? {
+                ...c,
+                visibility: folder.visibility,
+                accessMode: folder.accessMode,
+                grantedTeamIds: folder.grantedTeamIds,
+              }
+            : c
+        )
+      );
+    } catch (err) {
+      toast({
+        title:
+          err instanceof ChatApiError ? err.message : "Couldn't update folder",
+      });
+    }
+  };
+
   return (
     <div className="page-float flex antialiased">
       <ListPane
@@ -220,6 +280,8 @@ export function ChatsView({
         onFilterChange={handleFilterChange}
         counts={counts}
         showFolders={showFolders}
+        workspaceSlug={workspaceSlug}
+        isAdmin={meetsMinRole(role, "admin")}
         currentUserId={currentUserId}
         query={query}
         onQueryChange={setQuery}
@@ -228,6 +290,7 @@ export function ChatsView({
         collapsed={collapsed}
         onToggleFolder={toggleFolder}
         onCreateFolder={handleCreateFolder}
+        onFolderShareChange={handleFolderShareChange}
       />
       <DetailPane
         chat={selected}

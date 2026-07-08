@@ -3,6 +3,7 @@ import { HttpError } from "@/shared/lib/http-error";
 import {
   ChatFolderConflictError,
   ChatFolderNotFoundError,
+  ChatFolderScopeError,
   ChatForbiddenError,
   ChatNotFoundError,
 } from "@/features/chats/server/errors";
@@ -19,6 +20,9 @@ function mapChatError(err: unknown): HttpError | null {
   }
   if (err instanceof ChatFolderConflictError) {
     return new HttpError(409, "CHAT_FOLDER_CONFLICT", err.message);
+  }
+  if (err instanceof ChatFolderScopeError) {
+    return new HttpError(409, "CHAT_FOLDER_SCOPE", err.message);
   }
   return null;
 }

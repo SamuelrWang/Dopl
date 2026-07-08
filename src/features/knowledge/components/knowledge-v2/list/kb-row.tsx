@@ -1,8 +1,8 @@
 "use client";
 
-import { ChevronRight } from "lucide-react";
+import { Building2, ChevronRight, Lock, Users } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
-import { KB_SCOPE_LABEL, kbScope } from "../../../scope";
+import { KB_SCOPE_LABEL, kbScope, type KbScope } from "../../../scope";
 import type { KnowledgeBase, KnowledgeEntry } from "../../../types";
 import type { BaseTree as BaseTreeData } from "../types";
 import type { TreeHandlers } from "../use-knowledge-v2-controller";
@@ -10,8 +10,16 @@ import { shortWhen } from "../utils";
 import { BaseTree } from "./base-tree";
 import styles from "../knowledge-v2.module.css";
 
+const SCOPE_ICONS: Record<KbScope, typeof Lock> = {
+  private: Lock,
+  team: Users,
+  workspace: Building2,
+};
+
 interface Props {
   base: KnowledgeBase;
+  /** Owner display name — set only for another member's base. */
+  ownerName?: string | null;
   selected: boolean;
   expanded: boolean;
   tree: BaseTreeData | undefined;
@@ -32,6 +40,7 @@ interface Props {
  */
 export function KbRow({
   base,
+  ownerName,
   selected,
   expanded,
   tree,
@@ -43,7 +52,8 @@ export function KbRow({
   onToggleExpand,
   onSelectEntry,
 }: Props) {
-  const sub = base.description || `${KB_SCOPE_LABEL[kbScope(base)]} knowledge base`;
+  const scope = kbScope(base);
+  const ScopeIcon = SCOPE_ICONS[scope];
 
   return (
     <div className={styles.kbItem}>
@@ -68,7 +78,20 @@ export function KbRow({
               <span className={styles.rowTime}>{shortWhen(base.updatedAt)}</span>
             </span>
             <span className={styles.rowSub}>
-              <span className={styles.rowSubText}>{sub}</span>
+              <ScopeIcon size={11} />
+              <span>{KB_SCOPE_LABEL[scope]}</span>
+              {ownerName && (
+                <>
+                  <span>·</span>
+                  <span className={styles.rowSubText}>{ownerName}</span>
+                </>
+              )}
+              {base.description && (
+                <>
+                  <span>·</span>
+                  <span className={styles.rowSubText}>{base.description}</span>
+                </>
+              )}
             </span>
           </span>
         </button>

@@ -36,16 +36,21 @@ const PILL =
 /**
  * Owner-facing sharing control — the KB three-way scope model on a
  * compact popover: Private / Team (pick teams) / Shared (workspace).
- * Non-owners get a read-only scope pill.
+ * Non-owners get a read-only scope pill. A chat filed in a folder
+ * inherits the folder's scope, so its pill is locked with an
+ * explanation instead of a menu.
  */
 export function ShareControl({
   chat,
+  folderName,
   workspaceSlug,
   currentUserId,
   isAdmin,
   onShareChange,
 }: {
   chat: Chat;
+  /** Name of the folder the chat is filed in — locks the control. */
+  folderName?: string | null;
   workspaceSlug: string;
   currentUserId: string;
   isAdmin: boolean;
@@ -63,6 +68,41 @@ export function ShareControl({
         <Icon size={11} />
         {label}
       </span>
+    );
+  }
+
+  // Filed chat: sharing follows the folder. Show the inherited scope
+  // and explain where to change it instead of offering the menu.
+  if (chat.folderId !== null && folderName) {
+    return (
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          title={`Sharing follows the folder "${folderName}"`}
+          className={cn(
+            PILL,
+            "cursor-pointer text-text-secondary transition-colors hover:text-text-primary"
+          )}
+        >
+          <Icon size={11} />
+          {label}
+          <Lock size={9} className="text-text-muted" />
+        </button>
+        <Popover
+          open={open}
+          onClose={() => setOpen(false)}
+          align="right"
+          className="w-[264px] p-3"
+        >
+          <p className="text-caption leading-relaxed text-text-secondary">
+            This chat is in the folder{" "}
+            <span className="font-semibold text-text-primary">{folderName}</span>{" "}
+            and inherits its sharing. Change the folder&apos;s sharing (from the
+            chat list), or unfile the chat to share it on its own.
+          </p>
+        </Popover>
+      </div>
     );
   }
 
@@ -88,8 +128,8 @@ export function ShareControl({
       >
         {/* Mounted only while open so the teams fetch is lazy. */}
         <ShareMenu
-          chat={chat}
           scope={scope}
+          grantedTeamIds={chat.grantedTeamIds}
           workspaceSlug={workspaceSlug}
           currentUserId={currentUserId}
           isAdmin={isAdmin}
@@ -103,25 +143,32 @@ export function ShareControl({
   );
 }
 
-function ShareMenu({
-  chat,
+/**
+ * The scope picker itself — shared between the chat share control and
+ * the folder share control (folders use `warning` to flag that the
+ * scope propagates to every chat inside).
+ */
+export function ShareMenu({
   scope,
+  grantedTeamIds,
   workspaceSlug,
   currentUserId,
   isAdmin,
+  warning,
   onApply,
 }: {
-  chat: Chat;
   scope: ChatScope;
+  grantedTeamIds: string[];
   workspaceSlug: string;
   currentUserId: string;
   isAdmin: boolean;
+  warning?: string;
   onApply: (scope: ChatScope, teamIds: string[]) => Promise<void>;
 }) {
   const { teams, loading, error } = useTeams(workspaceSlug);
   const [draftScope, setDraftScope] = useState<ChatScope>(scope);
   const [draftTeams, setDraftTeams] = useState<Set<string>>(
-    new Set(chat.grantedTeamIds)
+    new Set(grantedTeamIds)
   );
   const [saving, setSaving] = useState(false);
 
@@ -140,14 +187,13 @@ function ShareMenu({
     const all = teams ?? [];
     if (isAdmin) return all;
     return all.filter(
-      (t) => myTeamIds.has(t.id) || chat.grantedTeamIds.includes(t.id)
+      (t) => myTeamIds.has(t.id) || grantedTeamIds.includes(t.id)
     );
-  }, [teams, isAdmin, myTeamIds, chat.grantedTeamIds]);
+  }, [teams, isAdmin, myTeamIds, grantedTeamIds]);
 
   const dirty =
     draftScope !== scope ||
-    (draftScope === "team" &&
-      !sameSet(draftTeams, new Set(chat.grantedTeamIds)));
+    (draftScope === "team" && !sameSet(draftTeams, new Set(grantedTeamIds)));
 
   const toggleTeam = (teamId: string) => {
     if (!isAdmin && !myTeamIds.has(teamId)) return; // locked foreign grant
@@ -252,6 +298,12 @@ function ShareMenu({
             </p>
           )}
         </div>
+      )}
+
+      {warning && dirty && (
+        <p className="mx-1 mt-0.5 rounded-[7px] bg-bg-inset px-2 py-1.5 text-micro leading-relaxed text-text-secondary">
+          {warning}
+        </p>
       )}
 
       <div className="mt-0.5 border-t border-border-subtle px-1 pt-1.5">

@@ -55,9 +55,19 @@ import type {
   ChatDetail,
   ChatExportInput,
   ChatFolder,
+  ChatFolderUpdateInput,
   ChatMessageInput,
   ChatUpdateInput,
 } from "./chat-types.js";
+import * as members from "./members.js";
+import type {
+  AccessMatrix,
+  EffectiveAccessRow,
+  MyAccess,
+  MyMembership,
+  WorkspaceMember,
+  WorkspaceTeam,
+} from "./member-types.js";
 
 export type { DoplTransportOptions as DoplClientOptions } from "./transport.js";
 export { parseRetryAfter } from "./retry.js";
@@ -506,8 +516,43 @@ export class DoplClient {
     return chats.createChatFolder(this.transport, name);
   }
 
+  updateChatFolder(
+    folderId: string,
+    patch: ChatFolderUpdateInput
+  ): Promise<ChatFolder> {
+    return chats.updateChatFolder(this.transport, folderId, patch);
+  }
+
   deleteChatFolder(folderId: string): Promise<void> {
     return chats.deleteChatFolder(this.transport, folderId);
+  }
+
+  // ─── Members / teams / access (READ-ONLY) ──────────────────────────
+  // Membership, team, and access changes are human decisions made in
+  // the web UI — this client deliberately exposes no write path.
+
+  getMyMembership(): Promise<MyMembership> {
+    return members.getMyMembership(this.transport);
+  }
+
+  listWorkspaceMembers(): Promise<WorkspaceMember[]> {
+    return members.listMembers(this.transport);
+  }
+
+  listWorkspaceTeams(): Promise<WorkspaceTeam[]> {
+    return members.listTeams(this.transport);
+  }
+
+  getAccessMatrix(): Promise<AccessMatrix> {
+    return members.getAccessMatrix(this.transport);
+  }
+
+  getMyAccess(): Promise<MyAccess> {
+    return members.getMyAccess(this.transport);
+  }
+
+  getMemberAccess(targetUserId: string): Promise<EffectiveAccessRow[]> {
+    return members.getMemberAccess(this.transport, targetUserId);
   }
 
   // ─── Skills ─────────────────────────────────────────────────────────

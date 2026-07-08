@@ -14,3 +14,5 @@ export const FORMAT_LABELS: Record<ExportFormat, string> = {
 };
 
 export const UNFILED_LABEL = "Unfiled";
+
+export const SHARED_WITH_ME_LABEL = "Shared with me";

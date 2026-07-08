@@ -15,6 +15,7 @@ exports.appendChatMessages = appendChatMessages;
 exports.updateChat = updateChat;
 exports.deleteChat = deleteChat;
 exports.createChatFolder = createChatFolder;
+exports.updateChatFolder = updateChatFolder;
 exports.deleteChatFolder = deleteChatFolder;
 const enc = encodeURIComponent;
 // ─── Read ───────────────────────────────────────────────────────────
@@ -69,6 +70,14 @@ async function createChatFolder(t, name) {
         method: "POST",
         body: { name },
         toolName: "chat_folder_create",
+    });
+    return data.folder;
+}
+async function updateChatFolder(t, folderId, patch) {
+    const data = await t.request(`/api/chats/folders/${enc(folderId)}`, {
+        method: "PATCH",
+        body: patch,
+        toolName: "chat_folder_update",
     });
     return data.folder;
 }

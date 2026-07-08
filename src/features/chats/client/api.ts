@@ -106,3 +106,24 @@ export async function createChatFolder(
   });
   return data.folder;
 }
+
+export interface ChatFolderPatch {
+  name?: string;
+  visibility?: ChatVisibility;
+  accessMode?: ChatAccessMode;
+  /** Teams granted read access; only with visibility 'public' + accessMode 'teams'. */
+  teamIds?: string[];
+}
+
+/** Scope changes propagate to every chat filed in the folder. */
+export async function updateChatFolder(
+  folderId: string,
+  patch: ChatFolderPatch,
+  workspaceId: string
+): Promise<ChatFolder> {
+  const data = await request<{ folder: ChatFolder }>(
+    `/api/chats/folders/${encodeURIComponent(folderId)}`,
+    { method: "PATCH", body: patch, workspaceId }
+  );
+  return data.folder;
+}

@@ -21,9 +21,27 @@ export interface ChatDeliverable {
     label: string;
     done: boolean;
 }
+export type ChatFolderAccessMode = "workspace" | "teams";
+/**
+ * A personal folder whose sharing scope is authoritative for the chats
+ * filed in it — chats inherit the folder's visibility on move, and a
+ * folder scope change propagates to every chat inside. Filed chats
+ * can't be shared individually.
+ */
 export interface ChatFolder {
     id: string;
     name: string;
+    visibility: ChatVisibility;
+    accessMode: ChatFolderAccessMode;
+    /** Teams granted read access — populated only when accessMode is 'teams'. */
+    grantedTeamIds: string[];
+}
+export interface ChatFolderUpdateInput {
+    name?: string;
+    visibility?: ChatVisibility;
+    accessMode?: ChatFolderAccessMode;
+    /** Teams granted read access; only with visibility 'public' + accessMode 'teams'. */
+    teamIds?: string[];
 }
 export interface Chat {
     id: string;

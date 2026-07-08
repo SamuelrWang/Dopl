@@ -10,16 +10,18 @@ import type { Chat, ChatDetail, ChatFolder, ExportFormat } from "../types";
 import type {
   ChatAppendInput,
   ChatExportInput,
+  ChatFolderUpdateInput,
   ChatUpdateInput,
 } from "../schema";
 import {
   ChatFolderConflictError,
   ChatFolderNotFoundError,
+  ChatFolderScopeError,
   ChatForbiddenError,
   ChatNotFoundError,
 } from "./errors";
 import { mapChatRow, mapFolderRow, mapMessageRow, mapOwner } from "./dto";
-import type { ChatRow, ProfileRef } from "./dto";
+import type { ChatFolderRow, ChatRow, ProfileRef } from "./dto";
 import * as repo from "./repository";
 
 export interface ChatContext {
@@ -115,8 +117,15 @@ export async function exportChat(
   ctx: ChatContext,
   input: ChatExportInput
 ): Promise<ChatDetail> {
-  const folderId = input.folder
-    ? (await resolveOrCreateFolder(ctx, input.folder)).id
+  // Filing into a folder means inheriting the folder's sharing — the
+  // folder's scope is authoritative, so any caller-passed visibility is
+  // superseded when a folder is named.
+  const folderRow = input.folder
+    ? await resolveOrCreateFolderRow(ctx, input.folder)
+    : null;
+  const folderId = folderRow?.id ?? null;
+  const inherited = folderRow
+    ? { visibility: folderRow.visibility, access_mode: folderRow.access_mode }
     : null;
 
   const existing = input.clientSessionId
@@ -140,7 +149,7 @@ export async function exportChat(
   if (existing) {
     chat = await repo.updateChat(existing.id, {
       ...header,
-      ...(folderId ? { folder_id: folderId } : {}),
+      ...(folderId ? { folder_id: folderId, ...inherited } : {}),
     });
     await repo.replaceMessages(chat.id, ctx.workspaceId, payload);
   } else {
@@ -152,6 +161,7 @@ export async function exportChat(
         client_session_id: input.clientSessionId ?? null,
         visibility: input.visibility,
         ...header,
+        ...(inherited ?? {}),
       });
     } catch (err) {
       // Lost a first-export race on client_session_id — converge on the
@@ -167,7 +177,7 @@ export async function exportChat(
       if (!raced) throw err;
       chat = await repo.updateChat(raced.id, {
         ...header,
-        ...(folderId ? { folder_id: folderId } : {}),
+        ...(folderId ? { folder_id: folderId, ...inherited } : {}),
       });
     }
     try {
@@ -180,6 +190,12 @@ export async function exportChat(
       }
       throw err;
     }
+  }
+
+  // Inheritance covers grants too: a chat filed into a team-scoped
+  // folder gets the folder's team grant set (replace-set).
+  if (folderRow) {
+    await syncChatGrantsToFolder(ctx, chat.id, folderRow);
   }
 
   return getChat(ctx, chat.id);
@@ -212,27 +228,52 @@ export async function updateChatHeader(
 ): Promise<Chat> {
   const chat = await requireOwnChat(ctx, chatId, "update it");
 
+  // Resolve the folder move first — inheritance and the filed-chat
+  // sharing guard both depend on where the chat ends up.
   let folderPatch: { folder_id: string | null } | undefined;
+  let targetFolder: ChatFolderRow | null = null;
   if (patch.folderId !== undefined) {
     if (patch.folderId !== null) {
-      const folder = await repo.findFolderById(ctx.workspaceId, ctx.userId, patch.folderId);
-      if (!folder) throw new ChatFolderNotFoundError(patch.folderId);
+      targetFolder = await repo.findFolderById(ctx.workspaceId, ctx.userId, patch.folderId);
+      if (!targetFolder) throw new ChatFolderNotFoundError(patch.folderId);
     }
     folderPatch = { folder_id: patch.folderId };
   } else if (patch.folder !== undefined) {
-    folderPatch = {
-      folder_id:
-        patch.folder === null ? null : (await resolveOrCreateFolder(ctx, patch.folder)).id,
-    };
+    if (patch.folder !== null) {
+      targetFolder = await resolveOrCreateFolderRow(ctx, patch.folder);
+    }
+    folderPatch = { folder_id: targetFolder?.id ?? null };
+  }
+
+  // Filed chats inherit their folder's sharing — a direct visibility
+  // change is rejected unless this same patch unfiles the chat. (The
+  // schema already blocks visibility combined with filing INTO a folder.)
+  if (
+    patch.visibility !== undefined &&
+    chat.folder_id !== null &&
+    !(folderPatch && folderPatch.folder_id === null)
+  ) {
+    const currentFolder = await repo.findFolderById(
+      ctx.workspaceId,
+      ctx.userId,
+      chat.folder_id
+    );
+    throw new ChatFolderScopeError(currentFolder?.name ?? "its folder");
   }
 
   // Sharing scope. Going team-scoped replaces the grant set wholesale;
   // any other scope drops all grants. Non-admin owners may only grant
   // teams they belong to (plus already-granted teams, which the share
-  // UI renders locked) — mirrors the KB rule.
+  // UI renders locked) — mirrors the KB rule. Moving into a folder
+  // instead inherits the folder's scope + grants.
   let sharingPatch: { visibility?: string; access_mode?: string } = {};
   let grantTeamIds: string[] | null = null;
-  if (patch.visibility !== undefined) {
+  if (targetFolder) {
+    sharingPatch = {
+      visibility: targetFolder.visibility,
+      access_mode: targetFolder.access_mode,
+    };
+  } else if (patch.visibility !== undefined) {
     const wantsTeams = patch.visibility === "public" && patch.accessMode === "teams";
     sharingPatch = {
       visibility: patch.visibility,
@@ -266,7 +307,10 @@ export async function updateChatHeader(
     ...(folderPatch ?? {}),
   });
 
-  if (patch.visibility !== undefined) {
+  if (targetFolder) {
+    // Inheritance covers grants too — the chat adopts the folder's set.
+    await syncChatGrantsToFolder(ctx, chat.id, targetFolder);
+  } else if (patch.visibility !== undefined) {
     // Replace-set semantics: clear, then re-insert the new grant set.
     await deleteGrantsForResource(ctx.workspaceId, "chat", chat.id);
     if (grantTeamIds && grantTeamIds.length > 0) {
@@ -303,7 +347,19 @@ export async function deleteChat(ctx: ChatContext, chatId: string): Promise<void
 
 export async function listFolders(ctx: ChatContext): Promise<ChatFolder[]> {
   const rows = await repo.listFolders(ctx.workspaceId, ctx.userId);
-  return rows.map(mapFolderRow);
+  const teamScoped = rows.filter((r) => r.access_mode === "teams");
+  const byFolder = new Map<string, string[]>();
+  if (teamScoped.length > 0) {
+    const grants = await listGrantsForResources(
+      ctx.workspaceId,
+      "chat_folder",
+      teamScoped.map((r) => r.id)
+    );
+    for (const g of grants) {
+      byFolder.set(g.resourceId, [...(byFolder.get(g.resourceId) ?? []), g.teamId]);
+    }
+  }
+  return rows.map((row) => mapFolderRow(row, byFolder.get(row.id) ?? []));
 }
 
 export async function createFolder(ctx: ChatContext, name: string): Promise<ChatFolder> {
@@ -317,21 +373,81 @@ export async function createFolder(ctx: ChatContext, name: string): Promise<Chat
   }
 }
 
-export async function renameFolderForUser(
+/**
+ * Rename and/or re-scope a folder. The folder's scope is authoritative,
+ * so a scope change propagates to every chat filed in it: sharing
+ * columns are aligned and each chat's grant set is replaced with the
+ * folder's. Team-grant permission mirrors the chat rule (non-admins
+ * grant only teams they belong to, plus already-granted ones).
+ */
+export async function updateFolderForUser(
   ctx: ChatContext,
   folderId: string,
-  name: string
+  patch: ChatFolderUpdateInput
 ): Promise<ChatFolder> {
   const folder = await repo.findFolderById(ctx.workspaceId, ctx.userId, folderId);
   if (!folder) throw new ChatFolderNotFoundError(folderId);
+
+  let sharingPatch: { visibility?: string; access_mode?: string } = {};
+  let grantTeamIds: string[] | null = null;
+  if (patch.visibility !== undefined) {
+    const wantsTeams = patch.visibility === "public" && patch.accessMode === "teams";
+    sharingPatch = {
+      visibility: patch.visibility,
+      access_mode: wantsTeams ? "teams" : "workspace",
+    };
+    if (wantsTeams) {
+      grantTeamIds = [...new Set(patch.teamIds ?? [])];
+      const isAdmin = ctx.role !== null && meetsMinRole(ctx.role, "admin");
+      if (!isAdmin && grantTeamIds.length > 0) {
+        const [myTeams, existing] = await Promise.all([
+          listTeamIdsForUser(ctx.workspaceId, ctx.userId),
+          listGrantsForResources(ctx.workspaceId, "chat_folder", [folder.id]),
+        ]);
+        const allowed = new Set([...myTeams, ...existing.map((g) => g.teamId)]);
+        if (grantTeamIds.some((id) => !allowed.has(id))) {
+          throw new ChatForbiddenError("grant teams you don't belong to");
+        }
+      }
+    }
+  }
+
+  let row: ChatFolderRow;
   try {
-    return mapFolderRow(await repo.renameFolder(folder.id, name));
+    row = await repo.updateFolder(folder.id, {
+      ...(patch.name !== undefined ? { name: patch.name } : {}),
+      ...sharingPatch,
+    });
   } catch (err) {
     if (repo.pgErrorCode(err) === UNIQUE_VIOLATION) {
-      throw new ChatFolderConflictError(name);
+      throw new ChatFolderConflictError(patch.name ?? folder.name);
     }
     throw err;
   }
+
+  if (patch.visibility !== undefined) {
+    // Folder grants are replace-set, then the scope + grants propagate
+    // to every filed chat so the invariant holds.
+    await deleteGrantsForResource(ctx.workspaceId, "chat_folder", row.id);
+    if (grantTeamIds && grantTeamIds.length > 0) {
+      await insertReadGrantsIfMissing(
+        ctx.workspaceId,
+        "chat_folder",
+        row.id,
+        grantTeamIds
+      );
+    }
+    await repo.updateChatsScopeInFolder(row.id, row.visibility, row.access_mode);
+    const chatIds = await repo.listChatIdsInFolder(row.id);
+    for (const chatId of chatIds) {
+      await deleteGrantsForResource(ctx.workspaceId, "chat", chatId);
+      if (grantTeamIds && grantTeamIds.length > 0) {
+        await insertReadGrantsIfMissing(ctx.workspaceId, "chat", chatId, grantTeamIds);
+      }
+    }
+  }
+
+  return mapFolderRow(row, grantTeamIds ?? (await folderGrantIds(ctx, row)));
 }
 
 export async function deleteFolderForUser(
@@ -437,21 +553,46 @@ function withFolderPrivacy(ctx: ChatContext, row: ChatRow, chat: Chat): Chat {
   return { ...chat, folderId: null };
 }
 
-async function resolveOrCreateFolder(
+async function resolveOrCreateFolderRow(
   ctx: ChatContext,
   name: string
-): Promise<ChatFolder> {
+): Promise<ChatFolderRow> {
   const existing = await repo.findFolderByName(ctx.workspaceId, ctx.userId, name);
-  if (existing) return mapFolderRow(existing);
+  if (existing) return existing;
   try {
-    return mapFolderRow(await repo.insertFolder(ctx.workspaceId, ctx.userId, name));
+    return await repo.insertFolder(ctx.workspaceId, ctx.userId, name);
   } catch (err) {
     // Lost a create race — the concurrent winner is the folder we want.
     if (repo.pgErrorCode(err) === UNIQUE_VIOLATION) {
       const winner = await repo.findFolderByName(ctx.workspaceId, ctx.userId, name);
-      if (winner) return mapFolderRow(winner);
+      if (winner) return winner;
     }
     throw err;
+  }
+}
+
+/** The folder's team grant set (empty unless team-scoped). */
+async function folderGrantIds(
+  ctx: ChatContext,
+  folder: ChatFolderRow
+): Promise<string[]> {
+  if (folder.access_mode !== "teams" || folder.visibility !== "public") return [];
+  const grants = await listGrantsForResources(ctx.workspaceId, "chat_folder", [
+    folder.id,
+  ]);
+  return grants.map((g) => g.teamId);
+}
+
+/** Inheritance: replace the chat's grant set with its folder's. */
+async function syncChatGrantsToFolder(
+  ctx: ChatContext,
+  chatId: string,
+  folder: ChatFolderRow
+): Promise<void> {
+  const teamIds = await folderGrantIds(ctx, folder);
+  await deleteGrantsForResource(ctx.workspaceId, "chat", chatId);
+  if (teamIds.length > 0) {
+    await insertReadGrantsIfMissing(ctx.workspaceId, "chat", chatId, teamIds);
   }
 }
 

@@ -18,6 +18,7 @@ import {
   buildKnowledgeContext,
   getBaseTree,
   getEntry,
+  listBaseOwnerNames,
   listBases,
 } from "@/features/knowledge/server/service";
 import { resolvePageKbWithWorkspace } from "@/features/knowledge/server/segment";
@@ -74,6 +75,7 @@ export default async function KnowledgeBaseDetailPage({
     : null;
 
   const bases = await listBases(ctx);
+  const ownerNames = await listBaseOwnerNames(ctx, bases);
   const segment = workspaceSegment(workspace);
 
   // Admin view: kbId → teams granted, for the base overview's Teams row.
@@ -105,6 +107,7 @@ export default async function KnowledgeBaseDetailPage({
       workspaceSegment={segment}
       workspaceId={workspace.id}
       bases={bases}
+      ownerNames={ownerNames}
       currentUserId={user.id}
       role={membership.role}
       kbTeams={kbTeams}

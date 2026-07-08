@@ -237,19 +237,54 @@ export async function insertFolder(
   return data;
 }
 
-export async function renameFolder(
+type ChatFolderPatch = Partial<{
+  name: string;
+  visibility: string;
+  access_mode: string;
+}>;
+
+export async function updateFolder(
   folderId: string,
-  name: string
+  patch: ChatFolderPatch
 ): Promise<ChatFolderRow> {
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("chat_folders")
-    .update({ name })
+    .update(patch)
     .eq("id", folderId)
     .select("*")
     .single();
   if (error) throw error;
   return data;
+}
+
+/** Ids of every chat filed in the folder — the propagation target set. */
+export async function listChatIdsInFolder(folderId: string): Promise<string[]> {
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("chats")
+    .select("id")
+    .eq("folder_id", folderId);
+  if (error) throw error;
+  return (data ?? []).map((r) => r.id);
+}
+
+/** Folder-scope propagation: align every filed chat's sharing columns. */
+export async function updateChatsScopeInFolder(
+  folderId: string,
+  visibility: string,
+  accessMode: string
+): Promise<void> {
+  const db = supabaseAdmin();
+  const { error } = await db
+    .from("chats")
+    .update({
+      visibility,
+      access_mode: accessMode,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("folder_id", folderId);
+  if (error) throw error;
 }
 
 /** Chats in the folder survive — their folder_id FK is ON DELETE SET NULL. */

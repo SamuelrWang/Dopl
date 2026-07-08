@@ -12,6 +12,7 @@ import type {
   ChatDetail,
   ChatExportInput,
   ChatFolder,
+  ChatFolderUpdateInput,
   ChatMessageInput,
   ChatUpdateInput,
 } from "./chat-types.js";
@@ -97,6 +98,22 @@ export async function createChatFolder(
     body: { name },
     toolName: "chat_folder_create",
   });
+  return data.folder;
+}
+
+export async function updateChatFolder(
+  t: DoplTransport,
+  folderId: string,
+  patch: ChatFolderUpdateInput
+): Promise<ChatFolder> {
+  const data = await t.request<{ folder: ChatFolder }>(
+    `/api/chats/folders/${enc(folderId)}`,
+    {
+      method: "PATCH",
+      body: patch,
+      toolName: "chat_folder_update",
+    }
+  );
   return data.folder;
 }
 

@@ -4,7 +4,8 @@ import type { KnowledgeBase, KnowledgeBaseCreateInput, KnowledgeBaseUpdateInput,
 import type { CreateSkillInput, UpdateSkillPatch as SkillUpdatePatch } from "./skills.js";
 import type { ResolvedSkill, Skill, SkillFile, SkillWriteFileResult } from "./skill-types.js";
 import type { OntologyCluster, OntologyClusterCreateInput, OntologyClusterPatch, OntologyObject, OntologyObjectCreateInput, OntologyObjectPatch, OntologySnapshot } from "./ontology-types.js";
-import type { Chat, ChatDetail, ChatExportInput, ChatFolder, ChatMessageInput, ChatUpdateInput } from "./chat-types.js";
+import type { Chat, ChatDetail, ChatExportInput, ChatFolder, ChatFolderUpdateInput, ChatMessageInput, ChatUpdateInput } from "./chat-types.js";
+import type { AccessMatrix, EffectiveAccessRow, MyAccess, MyMembership, WorkspaceMember, WorkspaceTeam } from "./member-types.js";
 export type { DoplTransportOptions as DoplClientOptions } from "./transport.js";
 export { parseRetryAfter } from "./retry.js";
 export declare class DoplClient {
@@ -116,7 +117,14 @@ export declare class DoplClient {
     deleteChat(chatId: string): Promise<void>;
     listChatFolders(): Promise<ChatFolder[]>;
     createChatFolder(name: string): Promise<ChatFolder>;
+    updateChatFolder(folderId: string, patch: ChatFolderUpdateInput): Promise<ChatFolder>;
     deleteChatFolder(folderId: string): Promise<void>;
+    getMyMembership(): Promise<MyMembership>;
+    listWorkspaceMembers(): Promise<WorkspaceMember[]>;
+    listWorkspaceTeams(): Promise<WorkspaceTeam[]>;
+    getAccessMatrix(): Promise<AccessMatrix>;
+    getMyAccess(): Promise<MyAccess>;
+    getMemberAccess(targetUserId: string): Promise<EffectiveAccessRow[]>;
     listSkills(): Promise<Skill[]>;
     getSkill(slug: string): Promise<ResolvedSkill>;
     createSkill(input: CreateSkillInput): Promise<{

@@ -12,6 +12,7 @@ import { registerClusterTools } from "./tools/cluster.js";
 import { registerWorkflowTools } from "./tools/workflow.js";
 import { registerCanvasTools } from "./tools/canvas.js";
 import { registerChatTools } from "./tools/chats.js";
+import { registerMembersTool } from "./tools/members.js";
 import { registerPacksTools } from "./tools/packs.js";
 import { registerMapTool } from "./tools/map.js";
 import { registerSearchTool } from "./tools/search.js";
@@ -55,6 +56,7 @@ This MCP server can target any workspace the authenticated user is a member of. 
 - Browse / read / write the user's knowledge bases -> dopl_kb (+ dopl_kb_admin for destructive ops).
 - List / read / author the user's skills -> dopl_skill (+ dopl_skill_admin).
 - See what's on the canvas -> dopl_canvas(op='list').
+- Who's in the workspace / who's on which team / who can access what / what can I touch -> dopl_members(op='whoami' | 'list' | 'get' | 'teams' | 'get_team' | 'access_matrix' | 'my_access'). READ-ONLY — role, team, and access changes happen in the web UI.
 - Archive this conversation for future sessions -> dopl_chats(op='export'); recall a past session -> dopl_chats(op='list' | 'get'). Read dopl_chats(op='guide') before your first export — summaries per message, verbatim only on request.
 
 ## Workspace skills
@@ -580,6 +582,7 @@ export function createServer(
   registerKnowledgeTools(registerTool, client); // dopl_kb + dopl_kb_admin (user bases)
   registerSkillTools(registerTool, client); // dopl_skill + dopl_skill_admin
   registerChatTools(registerTool, client); // dopl_chats + dopl_chats_admin (archive)
+  registerMembersTool(registerTool, client); // dopl_members — membership/teams/access (read-only)
   registerMapTool(registerTool, client); // dopl_map — compact workspace manifest
   registerSearchTool(registerTool, client); // dopl_search — cross-domain search
   registerOntologyTool(registerTool, client); // dopl_ontology — routing graph (read-only)
