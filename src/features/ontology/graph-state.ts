@@ -59,6 +59,18 @@ export function objectIdToSync(action: GraphAction): string | null {
   }
 }
 
+/**
+ * What an object IS, as the UI presents it: the name of its container
+ * (its column, or the object it's nested in). Null for top-level
+ * columns and orphans.
+ */
+export function containerNameOf(state: GraphState, id: string): string | null {
+  for (const obj of Object.values(state.objects)) {
+    if (obj.childIds.includes(id)) return obj.name || null;
+  }
+  return null;
+}
+
 function patchObject(
   state: GraphState,
   id: string,

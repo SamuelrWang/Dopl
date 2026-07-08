@@ -5,7 +5,6 @@ import { Plus } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { useOntology } from "../hooks/use-ontology";
 import { OntologyResourcesProvider } from "../hooks/use-workspace-resources";
-import type { ObjectTypeId } from "../types";
 import { KanbanBoard } from "./kanban-board";
 import { ObjectPanel } from "./object-panel";
 
@@ -49,13 +48,12 @@ export function OntologyView({ workspaceId, workspaceSegment, initialClusterSlug
     if (created) selectCluster(created.id);
   };
 
-  // No type passed: cards inherit the column's type (+ its template
-  // fields) server-side; columns default to person until retyped.
+  // Cards inherit the column's template fields, relationships, and
+  // actions server-side.
   const handleCreateObject = async (
-    target: { clusterId: string } | { parentObjectId: string },
-    objectType?: ObjectTypeId
+    target: { clusterId: string } | { parentObjectId: string }
   ) => {
-    const object = await createObject(target, objectType);
+    const object = await createObject(target);
     if (object) setSelectedId(object.id);
   };
 

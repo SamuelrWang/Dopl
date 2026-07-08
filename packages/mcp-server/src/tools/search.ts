@@ -66,8 +66,12 @@ export function registerSearchTool(register: RegisterTool, client: DoplClient): 
         .slice(0, limit);
       lines.push("", "## Ontology objects");
       if (objectHits.length === 0) lines.push("_No matches._");
+      const containerOf = (id: string) =>
+        Object.values(ontology.objects).find((c) => c.childIds.includes(id))?.name ?? "column";
       for (const o of objectHits) {
-        lines.push(`- **${o.name}** (${o.type} · id: \`${o.id}\`)${o.subtitle ? ` — ${o.subtitle}` : ""}`);
+        lines.push(
+          `- **${o.name}** (${containerOf(o.id)} · id: \`${o.id}\`)${o.subtitle ? ` — ${o.subtitle}` : ""}`
+        );
       }
 
       return ok(lines.join("\n"));

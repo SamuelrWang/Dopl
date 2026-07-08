@@ -1,9 +1,8 @@
 "use client";
 
 import { createPortal } from "react-dom";
-import { OBJECT_TYPES } from "../constants";
 import { useWorkspaceResources } from "../hooks/use-workspace-resources";
-import type { GraphState } from "../graph-state";
+import { containerNameOf, type GraphState } from "../graph-state";
 import type { OntologyObject } from "../types";
 
 /**
@@ -26,7 +25,7 @@ export function ObjectHoverCard({
   if (typeof document === "undefined") return null;
   const vw = window.innerWidth;
   const vh = window.innerHeight;
-  const typeMeta = OBJECT_TYPES[object.type];
+  const containerName = containerNameOf(graph, object.id);
 
   return createPortal(
     <div
@@ -38,12 +37,11 @@ export function ObjectHoverCard({
           {object.name}
         </span>
         <span className="flex-1" />
-        <span
-          className="rounded-full border px-2 py-px text-micro font-semibold"
-          style={{ borderColor: typeMeta.border, background: typeMeta.bg, color: typeMeta.text }}
-        >
-          {typeMeta.label}
-        </span>
+        {containerName && (
+          <span className="rounded-full border border-border-strong bg-bg-inset px-2 py-px text-micro font-semibold text-text-secondary">
+            {containerName}
+          </span>
+        )}
       </div>
       <div className="max-h-72 space-y-2.5 overflow-hidden p-3.5 text-lead">
         {object.subtitle && (

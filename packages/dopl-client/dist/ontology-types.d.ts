@@ -23,7 +23,8 @@ export interface OntologyAttribute {
 export interface OntologyMethod {
     name: string;
     description: string;
-    requires: string[];
+    /** What the result of the action should be. */
+    outcome: string;
 }
 export interface OntologyRelationship {
     label: string;
@@ -36,7 +37,6 @@ export interface OntologyTemplateField {
 }
 export interface OntologyObject {
     id: string;
-    type: string;
     name: string;
     subtitle: string;
     attributes: OntologyAttribute[];
@@ -69,14 +69,11 @@ export interface OntologyObjectCreateInput {
     /** Exactly one of clusterId (new column) or parentObjectId (new card). */
     clusterId?: string;
     parentObjectId?: string;
-    /** Omitted on a card create → inherits the parent column's type. */
-    objectType?: string;
     name: string;
 }
 export interface OntologyObjectPatch {
     name?: string;
     subtitle?: string;
-    objectType?: string;
     attributes?: OntologyAttribute[];
     methods?: OntologyMethod[];
     relationships?: OntologyRelationship[];

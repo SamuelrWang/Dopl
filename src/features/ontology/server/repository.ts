@@ -1,6 +1,6 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
-import type { ObjectTypeId, OntologyObject } from "../types";
+import type { OntologyObject } from "../types";
 import {
   ONTOLOGY_CLUSTER_COLS,
   ONTOLOGY_MEMBERSHIP_COLS,
@@ -146,7 +146,6 @@ export async function findObjectById(
 
 export async function insertObject(input: {
   workspaceId: string;
-  objectType: ObjectTypeId;
   name: string;
   createdBy: string;
   attributes?: OntologyObject["attributes"];
@@ -157,7 +156,6 @@ export async function insertObject(input: {
     .from("ontology_objects")
     .insert({
       workspace_id: input.workspaceId,
-      object_type: input.objectType,
       name: input.name,
       created_by: input.createdBy,
       ...(input.attributes?.length ? { attributes: input.attributes } : {}),
@@ -175,7 +173,6 @@ export async function updateObject(
   patch: {
     name?: string;
     subtitle?: string;
-    objectType?: ObjectTypeId;
     attributes?: OntologyObject["attributes"];
     methods?: OntologyObject["methods"];
     template?: OntologyObject["template"];
@@ -185,7 +182,6 @@ export async function updateObject(
   const update: Record<string, unknown> = {};
   if (patch.name !== undefined) update.name = patch.name;
   if (patch.subtitle !== undefined) update.subtitle = patch.subtitle;
-  if (patch.objectType !== undefined) update.object_type = patch.objectType;
   if (patch.attributes !== undefined) update.attributes = patch.attributes;
   if (patch.methods !== undefined) update.methods = patch.methods;
   if (patch.template !== undefined) update.template = patch.template;

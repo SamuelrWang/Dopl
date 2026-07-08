@@ -1,5 +1,5 @@
 import "server-only";
-import type { ObjectTypeId, OntologyObject } from "../types";
+import type { OntologyObject } from "../types";
 
 /**
  * Row interfaces and row→domain mappers for the ontology tables. Row
@@ -12,7 +12,7 @@ export const ONTOLOGY_CLUSTER_COLS =
   "id, workspace_id, slug, name, purpose, position, created_at, updated_at, deleted_at";
 
 export const ONTOLOGY_OBJECT_COLS =
-  "id, workspace_id, object_type, name, subtitle, attributes, methods, template, user_id, created_at, updated_at, deleted_at";
+  "id, workspace_id, name, subtitle, attributes, methods, template, user_id, created_at, updated_at, deleted_at";
 
 export const ONTOLOGY_MEMBERSHIP_COLS =
   "id, workspace_id, cluster_id, parent_object_id, child_object_id, position";
@@ -35,7 +35,6 @@ export interface OntologyClusterRow {
 export interface OntologyObjectRow {
   id: string;
   workspace_id: string;
-  object_type: ObjectTypeId;
   name: string;
   subtitle: string;
   attributes: OntologyObject["attributes"];
@@ -69,7 +68,6 @@ export interface OntologyRelationshipRow {
 export function mapObjectRow(row: OntologyObjectRow): OntologyObject {
   return {
     id: row.id,
-    type: row.object_type,
     name: row.name,
     subtitle: row.subtitle,
     attributes: row.attributes ?? [],

@@ -30,7 +30,7 @@ export function ActionsEditor({
       type: "METHOD_UPSERT",
       id: object.id,
       index: null,
-      method: { name, description: "", requires: [] },
+      method: { name, description: "", outcome: "" },
     });
     setNewName("");
   };
@@ -84,15 +84,6 @@ function ActionRow({
   onChange: (m: ObjectMethod) => void;
   onDelete: () => void;
 }) {
-  const [newReq, setNewReq] = useState("");
-
-  const addReq = () => {
-    const req = newReq.trim();
-    if (!req) return;
-    onChange({ ...method, requires: [...method.requires, req] });
-    setNewReq("");
-  };
-
   return (
     <div className="bento group px-3.5 py-2.5">
       <div className="flex items-center gap-2">
@@ -122,36 +113,16 @@ function ActionRow({
         aria-label="Action description"
       />
       <div className="mt-2 text-label font-semibold uppercase tracking-wide text-text-muted">
-        Pulls
+        Outcome
       </div>
-      <div className="mt-1 flex flex-wrap items-center gap-1.5">
-        {method.requires.map((r, i) => (
-          <span
-            key={`${r}-${i}`}
-            className="flex items-center gap-1 rounded-md border border-border-default bg-bg-elevated px-2 py-0.5 font-mono text-caption text-text-primary shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
-          >
-            {r}
-            <button
-              type="button"
-              aria-label={`Remove ${r}`}
-              onClick={() =>
-                onChange({ ...method, requires: method.requires.filter((_, j) => j !== i) })
-              }
-              className="text-text-muted hover:text-text-primary"
-            >
-              <X size={10} />
-            </button>
-          </span>
-        ))}
-        <input
-          type="text"
-          value={newReq}
-          onChange={(e) => setNewReq(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && addReq()}
-          placeholder="+ attribute path (e.g. client.transcripts)"
-          className="w-60 rounded-md border border-dashed border-border-highlight bg-transparent px-2 py-0.5 font-mono text-caption text-text-primary placeholder:text-text-muted focus:border-border-highlight focus:outline-none"
-        />
-      </div>
+      <input
+        type="text"
+        value={method.outcome}
+        onChange={(e) => onChange({ ...method, outcome: e.target.value })}
+        placeholder="What the outcome should be… (e.g. Follow-up email sent and logged)"
+        className="mt-1 w-full bg-transparent text-lead leading-relaxed text-text-secondary placeholder:text-text-muted focus:outline-none"
+        aria-label="Action outcome"
+      />
     </div>
   );
 }

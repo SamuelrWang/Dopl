@@ -23,15 +23,13 @@ const templateFieldSchema = z.object({
 const methodSchema = z.object({
   name: z.string().max(300),
   description: z.string().max(2000),
-  requires: z.array(z.string().max(300)).max(50),
+  outcome: z.string().max(2000),
 });
 
 const relationshipSchema = z.object({
   label: z.string().max(200),
   targetIds: z.array(z.string().uuid()).max(100),
 });
-
-const objectTypeSchema = z.enum(["person", "team", "client", "policy", "document"]);
 
 export const OntologyClusterCreateSchema = z.object({
   name: z.string().min(1).max(200),
@@ -49,8 +47,6 @@ export const OntologyObjectCreateSchema = z
   .object({
     clusterId: z.string().uuid().optional(),
     parentObjectId: z.string().uuid().optional(),
-    /** Omitted on a card create → inherits the parent column's type. */
-    objectType: objectTypeSchema.optional(),
     name: z.string().min(1).max(300),
   })
   .refine((v) => Boolean(v.clusterId) !== Boolean(v.parentObjectId), {
@@ -61,7 +57,6 @@ export type OntologyObjectCreateInput = z.infer<typeof OntologyObjectCreateSchem
 export const OntologyObjectUpdateSchema = z.object({
   name: z.string().min(1).max(300).optional(),
   subtitle: z.string().max(1000).optional(),
-  objectType: objectTypeSchema.optional(),
   attributes: z.array(attributeSchema).max(100).optional(),
   methods: z.array(methodSchema).max(50).optional(),
   relationships: z.array(relationshipSchema).max(100).optional(),

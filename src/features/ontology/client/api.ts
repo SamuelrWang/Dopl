@@ -1,6 +1,6 @@
 "use client";
 
-import type { ObjectTypeId, OntologyCluster, OntologyObject, OntologySnapshot } from "../types";
+import type { OntologyCluster, OntologyObject, OntologySnapshot } from "../types";
 import type { OntologyObjectUpdateInput } from "../schema";
 
 export class OntologyApiError extends Error {
@@ -78,8 +78,6 @@ export async function createObject(
   input: {
     clusterId?: string;
     parentObjectId?: string;
-    /** Omitted on a card create → inherits the parent column's type. */
-    objectType?: ObjectTypeId;
     name: string;
   }
 ): Promise<OntologyObject> {

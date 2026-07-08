@@ -26,7 +26,9 @@ export function resolveObjectRef(
   );
   if (matches.length === 1) return { hit: matches[0] };
   if (matches.length > 1) {
-    const list = matches.map((o) => `\`${o.id}\` (${o.type})`).join(", ");
+    const containerOf = (id: string) =>
+      Object.values(snapshot.objects).find((o) => o.childIds.includes(id))?.name ?? "column";
+    const list = matches.map((o) => `\`${o.id}\` (${containerOf(o.id)})`).join(", ");
     return { fail: err(`Multiple objects named "${ref}" — use an id: ${list}`) };
   }
   return {
@@ -83,9 +85,15 @@ export function renderObject(
   handles: ResourceHandles = new Map()
 ): string {
   const nameOf = (id: string) => snapshot.objects[id]?.name ?? id;
+  // What the object IS = the name of its container (its column, or the
+  // object it's nested in); top-level containers read as "column".
+  const container = Object.values(snapshot.objects).find((o) =>
+    o.childIds.includes(object.id)
+  );
+  const kindLabel = container?.name || "column";
   const lines: string[] = [];
   if (headline) lines.push(headline, "");
-  lines.push(`# ${object.name} (${object.type} · id: \`${object.id}\`)`);
+  lines.push(`# ${object.name} (${kindLabel} · id: \`${object.id}\`)`);
   if (object.subtitle) lines.push(object.subtitle);
 
   if (object.attributes.length > 0) {
@@ -117,7 +125,7 @@ export function renderObject(
     lines.push("", "## Objects inside");
     for (const id of object.childIds) {
       const child = snapshot.objects[id];
-      if (child) lines.push(`- **${child.name}** (${child.type} · id: \`${id}\`)`);
+      if (child) lines.push(`- **${child.name}** (id: \`${id}\`)`);
     }
   }
 
@@ -126,8 +134,8 @@ export function renderObject(
     for (const m of object.methods) {
       lines.push(`### ${m.name}`);
       if (m.description) lines.push(m.description);
-      if (m.requires.length > 0) {
-        lines.push(`Pulls: ${m.requires.map((r) => `\`${r}\``).join(" · ")}`);
+      if (m.outcome) {
+        lines.push(`Outcome: ${m.outcome}`);
       }
     }
   }

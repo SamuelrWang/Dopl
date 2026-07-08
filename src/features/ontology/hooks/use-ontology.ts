@@ -10,7 +10,7 @@ import {
   type GraphAction,
   type GraphState,
 } from "../graph-state";
-import type { ObjectTypeId, OntologyCluster, OntologyObject } from "../types";
+import type { OntologyCluster, OntologyObject } from "../types";
 
 const OBJECT_SYNC_DELAY_MS = 800;
 
@@ -28,8 +28,7 @@ export function useOntology(workspaceId: string): {
   dispatch: (action: GraphAction) => void;
   createCluster: () => Promise<OntologyCluster | null>;
   createObject: (
-    target: { clusterId: string } | { parentObjectId: string },
-    objectType?: ObjectTypeId
+    target: { clusterId: string } | { parentObjectId: string }
   ) => Promise<OntologyObject | null>;
 } {
   const [graph, rawDispatch] = useReducer(graphReducer, EMPTY_GRAPH);
@@ -78,7 +77,6 @@ export function useOntology(workspaceId: string): {
               .updateObject(workspaceId, key, {
                 name: object.name || "Untitled",
                 subtitle: object.subtitle,
-                objectType: object.type,
                 attributes: object.attributes,
                 methods: object.methods,
                 relationships: object.relationships,
@@ -100,7 +98,6 @@ export function useOntology(workspaceId: string): {
         .updateObject(workspaceId, objectId, {
           name: object.name || "Untitled",
           subtitle: object.subtitle,
-          objectType: object.type,
           attributes: object.attributes,
           methods: object.methods,
           relationships: object.relationships,
@@ -173,13 +170,11 @@ export function useOntology(workspaceId: string): {
       rawDispatch({ type: "CLUSTER_ADD", cluster });
       const column = await api.createObject(workspaceId, {
         clusterId: cluster.id,
-        objectType: "person",
         name: "Untitled column",
       });
       rawDispatch({ type: "OBJECT_ADD", object: column, clusterId: cluster.id });
       const card = await api.createObject(workspaceId, {
         parentObjectId: column.id,
-        objectType: "person",
         name: "New object",
       });
       rawDispatch({ type: "OBJECT_ADD", object: card, parentObjectId: column.id });
@@ -192,14 +187,12 @@ export function useOntology(workspaceId: string): {
 
   const createObject = useCallback(
     async (
-      target: { clusterId: string } | { parentObjectId: string },
-      objectType?: ObjectTypeId
+      target: { clusterId: string } | { parentObjectId: string }
     ): Promise<OntologyObject | null> => {
       const isColumn = "clusterId" in target;
       try {
         const object = await api.createObject(workspaceId, {
           ...target,
-          objectType,
           name: isColumn ? "Untitled column" : "New object",
         });
         rawDispatch({ type: "OBJECT_ADD", object, ...target });

@@ -116,7 +116,6 @@ export async function createObject(
   ctx: OntologyContext,
   input: OntologyObjectCreateInput
 ): Promise<OntologyObject> {
-  let objectType = input.objectType;
   let attributes: OntologyObject["attributes"] | undefined;
   let methods: OntologyObject["methods"] | undefined;
   let inheritedEdges: OntologyObject["relationships"] | undefined;
@@ -126,11 +125,9 @@ export async function createObject(
   } else if (input.parentObjectId) {
     const parent = await repo.findObjectById(ctx.workspaceId, input.parentObjectId);
     if (!parent) throw HttpError.notFound("Parent object not found");
-    // Columns act as templates: a new card inherits the column's type
-    // (unless the caller picked one), is born with the column's default
-    // fields as empty attributes ready to fill, and copies the column's
-    // relationships and actions as its starting set.
-    objectType ??= parent.object_type;
+    // Columns act as templates: a new card is born with the column's
+    // default fields as empty attributes ready to fill, and copies the
+    // column's relationships and actions as its starting set.
     attributes = (parent.template ?? []).map((f) => ({
       key: f.key,
       label: f.label,
@@ -145,7 +142,6 @@ export async function createObject(
 
   const row = await repo.insertObject({
     workspaceId: ctx.workspaceId,
-    objectType: objectType ?? "person",
     name: input.name,
     createdBy: ctx.userId,
     attributes,
@@ -177,13 +173,12 @@ export async function updateObject(
   objectId: string,
   input: OntologyObjectUpdateInput
 ): Promise<OntologyObject> {
-  const { relationships, objectType, ...rest } = input;
+  const { relationships, ...rest } = input;
 
-  const hasFieldPatch =
-    Object.values(rest).some((v) => v !== undefined) || objectType !== undefined;
+  const hasFieldPatch = Object.values(rest).some((v) => v !== undefined);
 
   const row = hasFieldPatch
-    ? await repo.updateObject(ctx.workspaceId, objectId, { ...rest, objectType })
+    ? await repo.updateObject(ctx.workspaceId, objectId, rest)
     : await repo.findObjectById(ctx.workspaceId, objectId);
   if (!row) throw HttpError.notFound("Object not found");
 
