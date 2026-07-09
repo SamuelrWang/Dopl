@@ -11,8 +11,9 @@ import { FIELD_WELL } from "./ontology-bits";
 /**
  * Actions section — what the object CAN DO: the day-to-day things an
  * agent performs for it (send email, search LinkedIn, …). Each action
- * is its own raised card on the inset body; the "pulls" recipe is a
- * chip list with add/remove; footer adds a new action.
+ * is its own raised card on the inset body: name on the card, then
+ * concave entry wells for description / outcome / tools. Footer adds a
+ * new action.
  */
 export function ActionsEditor({
   object,
@@ -30,18 +31,15 @@ export function ActionsEditor({
       type: "METHOD_UPSERT",
       id: object.id,
       index: null,
-      method: { name, description: "", outcome: "" },
+      method: { name, description: "", outcome: "", tools: "" },
     });
     setNewName("");
   };
 
   return (
     <SectionBox label="Actions" meta={`${object.methods.length}`}>
-      <p className="px-4 pt-2 text-caption text-text-muted">
-        What this object can do — the day-to-day things an agent performs for it.
-      </p>
       {object.methods.length > 0 && (
-        <div className="flex flex-col gap-2 px-3 pb-3 pt-2">
+        <div className="flex flex-col gap-2 px-3 py-3">
           {object.methods.map((m, i) => (
             <ActionRow
               key={`${m.name}-${i}`}
@@ -60,7 +58,7 @@ export function ActionsEditor({
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && addAction()}
-          placeholder="what can it do? (e.g. Send email, Search LinkedIn)…"
+          placeholder="action name (e.g. Send email)…"
           className={`${FIELD_WELL} h-7 w-64 px-2.5 text-body text-text-primary placeholder:text-text-muted`}
         />
         <button
@@ -104,25 +102,32 @@ function ActionRow({
           <X size={12} />
         </button>
       </div>
-      <input
-        type="text"
-        value={method.description}
-        onChange={(e) => onChange({ ...method, description: e.target.value })}
-        placeholder="How / when the agent should do this…"
-        className="mt-0.5 w-full bg-transparent text-lead leading-relaxed text-text-secondary placeholder:text-text-muted focus:outline-none"
-        aria-label="Action description"
-      />
-      <div className="mt-2 text-label font-semibold uppercase tracking-wide text-text-muted">
-        Outcome
+      <div className="mt-2 flex flex-col gap-1.5">
+        <input
+          type="text"
+          value={method.description}
+          onChange={(e) => onChange({ ...method, description: e.target.value })}
+          placeholder="Description"
+          className={`${FIELD_WELL} h-7 w-full px-2.5 text-body text-text-primary placeholder:text-text-muted`}
+          aria-label="Action description"
+        />
+        <input
+          type="text"
+          value={method.outcome}
+          onChange={(e) => onChange({ ...method, outcome: e.target.value })}
+          placeholder="Outcome"
+          className={`${FIELD_WELL} h-7 w-full px-2.5 text-body text-text-primary placeholder:text-text-muted`}
+          aria-label="Action outcome"
+        />
+        <input
+          type="text"
+          value={method.tools ?? ""}
+          onChange={(e) => onChange({ ...method, tools: e.target.value })}
+          placeholder="Tools"
+          className={`${FIELD_WELL} h-7 w-full px-2.5 text-body text-text-primary placeholder:text-text-muted`}
+          aria-label="Action tools"
+        />
       </div>
-      <input
-        type="text"
-        value={method.outcome}
-        onChange={(e) => onChange({ ...method, outcome: e.target.value })}
-        placeholder="What the outcome should be… (e.g. Follow-up email sent and logged)"
-        className="mt-1 w-full bg-transparent text-lead leading-relaxed text-text-secondary placeholder:text-text-muted focus:outline-none"
-        aria-label="Action outcome"
-      />
     </div>
   );
 }

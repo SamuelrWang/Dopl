@@ -51,9 +51,10 @@ export function AttributesEditor({
 
   return (
     <SectionBox label="Attributes" meta={`${object.attributes.length}`}>
-      <div className="divide-y divide-border-subtle">
-        {object.attributes.map((attr, i) => (
-          <div key={`${attr.key}-${i}`} className="group flex items-center gap-3 px-4 py-1.5">
+      {object.attributes.length > 0 && (
+        <div className="flex flex-col gap-2 px-3 py-3">
+          {object.attributes.map((attr, i) => (
+            <div key={`${attr.key}-${i}`} className="bento group flex items-center gap-3 px-3.5 py-1.5">
             <input
               type="text"
               value={attr.label}
@@ -86,8 +87,10 @@ export function AttributesEditor({
               <X size={12} />
             </button>
           </div>
-        ))}
-        <div className="flex items-center gap-1.5 border-t border-border-subtle bg-card-surface-subtle px-4 py-2">
+          ))}
+        </div>
+      )}
+      <div className="flex items-center gap-1.5 border-t border-border-subtle bg-card-surface-subtle px-4 py-2">
           <input
             type="text"
             value={newLabel}
@@ -108,14 +111,13 @@ export function AttributesEditor({
             <option value="knowledge">Knowledge</option>
             <option value="skill">Skill</option>
           </select>
-          <button
-            type="button"
-            onClick={addAttribute}
-            className="btn-light flex h-7 items-center gap-1 rounded-md px-2.5 text-small font-medium text-text-primary"
-          >
-            <Plus size={11} /> Add
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={addAttribute}
+          className="btn-light flex h-7 items-center gap-1 rounded-md px-2.5 text-small font-medium text-text-primary"
+        >
+          <Plus size={11} /> Add
+        </button>
       </div>
     </SectionBox>
   );

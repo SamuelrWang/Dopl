@@ -36,7 +36,7 @@ WRITE — set \`op\` to:
 - "remove_attribute" — Requires: object, label.
 - "set_relationship" — replace one labeled edge. Requires: object, label, targets (object ids/names).
 - "remove_relationship" — Requires: object, label.
-- "set_action" — upsert an action by name: something the OBJECT can do day to day, performed by an agent on its behalf (e.g. "Send email", "Search LinkedIn"). Requires: object, name. Optional: description (how/when to do it), outcome (what the result should be, e.g. "Follow-up email sent and logged").
+- "set_action" — upsert an action by name: something the OBJECT can do day to day, performed by an agent on its behalf (e.g. "Send email", "Search LinkedIn"). Requires: object, name. Optional: description (how/when to do it), outcome (what the result should be, e.g. "Follow-up email sent and logged"), tools (what to use, e.g. "Gmail").
 - "remove_action" — Requires: object, name.
 - "claim_anchor" — link the CALLING user to an object as their identity anchor. Requires: object.
 
@@ -102,6 +102,10 @@ export function registerOntologyTool(register: RegisterTool, client: DoplClient)
         .string()
         .optional()
         .describe("set_action: what the outcome of the action should be."),
+      tools: z
+        .string()
+        .optional()
+        .describe("set_action: tools the agent should use to perform it."),
     },
     (args): Promise<ToolResponse> => dispatch(client, args)
   );
@@ -150,6 +154,7 @@ interface OntologyArgs {
   targets?: string[];
   description?: string;
   outcome?: string;
+  tools?: string;
 }
 
 const REQUIRED: Record<string, string[]> = {
@@ -304,6 +309,7 @@ async function dispatch(client: DoplClient, args: OntologyArgs): Promise<ToolRes
           name,
           description: args.description ?? existing?.description ?? "",
           outcome: args.outcome ?? existing?.outcome ?? "",
+          tools: args.tools ?? existing?.tools ?? "",
         };
         const methods = existing
           ? object.methods.map((m) => (m === existing ? method : m))

@@ -137,6 +137,9 @@ export function renderObject(
       if (m.outcome) {
         lines.push(`Outcome: ${m.outcome}`);
       }
+      if (m.tools) {
+        lines.push(`Tools: ${m.tools}`);
+      }
     }
   }
 

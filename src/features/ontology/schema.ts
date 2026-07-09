@@ -24,6 +24,9 @@ const methodSchema = z.object({
   name: z.string().max(300),
   description: z.string().max(2000),
   outcome: z.string().max(2000),
+  // Default, not required: methods stored before the field existed
+  // sync back without it.
+  tools: z.string().max(2000).default(""),
 });
 
 const relationshipSchema = z.object({

@@ -36,6 +36,8 @@ export interface ObjectMethod {
   description: string;
   /** What the result of the action should be, e.g. "Follow-up email sent and logged". */
   outcome: string;
+  /** Tools the agent should use to perform it, e.g. "Gmail, LinkedIn". */
+  tools: string;
 }
 
 export interface OntologyObject {

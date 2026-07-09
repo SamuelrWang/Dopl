@@ -18,6 +18,8 @@ export interface OntologyMethod {
   description: string;
   /** What the result of the action should be. */
   outcome: string;
+  /** Tools the agent should use to perform it. */
+  tools: string;
 }
 
 export interface OntologyRelationship {

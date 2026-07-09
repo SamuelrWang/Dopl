@@ -35,9 +35,10 @@ export function RelationshipsEditor({
 
   return (
     <SectionBox label="Relationships" meta={`${object.relationships.length}`}>
-      <div className="divide-y divide-border-subtle">
-        {object.relationships.map((rel, i) => (
-          <div key={i} className="group flex items-center gap-3 px-4 py-1.5">
+      {object.relationships.length > 0 && (
+        <div className="flex flex-col gap-2 px-3 py-3">
+          {object.relationships.map((rel, i) => (
+            <div key={i} className="bento group flex items-center gap-3 px-3.5 py-1.5">
             <input
               type="text"
               value={rel.label}
@@ -112,8 +113,10 @@ export function RelationshipsEditor({
               <X size={12} />
             </button>
           </div>
-        ))}
-        <div className="flex items-center gap-1.5 border-t border-border-subtle bg-card-surface-subtle px-4 py-2">
+          ))}
+        </div>
+      )}
+      <div className="flex items-center gap-1.5 border-t border-border-subtle bg-card-surface-subtle px-4 py-2">
           <input
             type="text"
             value={newLabel}
@@ -132,7 +135,6 @@ export function RelationshipsEditor({
             }
             triggerClassName="btn-light flex h-7 items-center rounded-md px-2.5 text-small font-medium text-text-primary"
           />
-        </div>
       </div>
     </SectionBox>
   );

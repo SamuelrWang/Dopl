@@ -71,7 +71,9 @@ export function mapObjectRow(row: OntologyObjectRow): OntologyObject {
     name: row.name,
     subtitle: row.subtitle,
     attributes: row.attributes ?? [],
-    methods: row.methods ?? [],
+    // Backfill fields added after rows were written (additive-only —
+    // never assume stored JSON has the newest shape).
+    methods: (row.methods ?? []).map((m) => ({ ...m, tools: m.tools ?? "" })),
     template: row.template ?? [],
     relationships: [],
     childIds: [],
