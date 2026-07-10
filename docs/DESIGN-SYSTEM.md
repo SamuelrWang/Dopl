@@ -75,10 +75,20 @@ Shared React primitives (`src/shared/ui` + `src/shared/hooks`):
 
 | Primitive | Use |
 | --------- | --- |
-| `Popover` / `MenuItem` (`popover-menu.tsx`) | ALL dropdowns/kebabs/filter menus. Never hand-roll the fixed-backdrop pattern. |
+| `Popover` / `MenuItem` (`popover-menu.tsx`) | ALL dropdowns/kebabs/filter/context menus. Trigger-anchored by default; pass `at={{x,y}}` for portal/cursor-positioned menus (viewport-clamped). `MenuItem` takes `icon` + `destructive`. Never hand-roll the backdrop/Escape/clamp pattern. |
 | `Avatar` (`avatar.tsx`) | Profile pictures with neutral initials fallback. No gradients — identity color belongs to teams. |
 | `SegmentedControl` (`segmented-control.tsx`) | ALL scope/filter tab rows. Concave track + a raised thumb that slides between slots (0.28s ease-out-quint). Never compose `.concave-track`/`.raised-tab` tabs by hand. |
-| `useApiGet` (`use-api-get.ts`) | Every client GET-with-refresh hook. Wrap it per endpoint; never copy the fetch/tick pattern. |
+| `SectionBox` (`section-box.tsx`) | Labelled section card (see Patterns below). |
+| `EmptyState` (`empty-state.tsx`) | Centered icon + title + description placeholder for empty panes. |
+| `SearchField` (`search-field.tsx`) | Search-icon + concave-field input well (`sm`/`md`). Never inline the recipe. |
+| `Switch` (`switch.tsx`) | Boolean toggles (concave track, raised thumb). |
+| `Skeleton` / `SkeletonBar` (`skeleton.tsx`) | Loading placeholders — `animate-pulse` on `surface-raised-2`. No local `Bar` clones. |
+| `CopyButton` (`copy-button.tsx`) + `useCopyToClipboard` (hook) | Copy-to-clipboard. Icon-button case = `CopyButton`; custom chrome keeps its JSX and uses the hook. |
+| `ScopeSharePopover` / `ScopeShareMenu` (`scope-share-popover.tsx`) | The private/team/workspace sharing control (chats + skills wrap it). |
+| `ConfirmDialog` (`confirm-dialog.tsx`) | In-app confirmations. |
+| `useApiQuery` (`use-api-query.ts`) | Every client GET hook (TanStack Query over `apiRequest`). `useApiGet` is legacy — migrate, don't extend. |
+| `useDismissable` (`use-dismissable.ts`) | Escape + click-outside dismissal for custom floating UI that can't use `Popover`. |
+| `formatRelativeTime` / `formatDate` / `formatLastActive` (`shared/lib/format-time.ts`) | All timestamp display. No per-feature date formatters. |
 
 Reference implementations: `src/features/knowledge/components/knowledge-v2/`
 (CSS-module layout + kit recipes + `--kv-*` aliases onto global tokens) and

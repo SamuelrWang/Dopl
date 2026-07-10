@@ -10,13 +10,15 @@ import {
   Trash2,
 } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
+import { useCopyToClipboard } from "@/shared/hooks/use-copy-to-clipboard";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
+import { EmptyState } from "@/shared/ui/empty-state";
 import { MenuItem, Popover } from "@/shared/ui/popover-menu";
 import { toast } from "@/shared/ui/toast";
 import type { Chat, ChatDetail, ChatFolder } from "../types";
 import type { ChatScope } from "../scope";
 import { FORMAT_LABELS, SOURCE_LABELS, UNFILED_LABEL } from "../constants";
-import { formatDate } from "../format";
+import { formatDate } from "@/shared/lib/format-time";
 import { useChatDetail } from "../client/hooks";
 import { HeaderCard } from "./header-card";
 import { MessageList } from "./message-list";
@@ -58,26 +60,23 @@ export function DetailPane({
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const { detail, status, retry } = useChatDetail(chat?.id ?? null, workspaceId);
+  const { copy } = useCopyToClipboard();
 
   if (!chat) {
-    return (
-      <div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-2.5 px-10 text-text-muted">
-        <MessagesSquare size={30} className="text-border-strong" />
-        {totalChats === 0 ? (
+    return totalChats === 0 ? (
+      <EmptyState
+        icon={MessagesSquare}
+        title="No chats in the archive yet."
+        description={
           <>
-            <p className="text-body font-medium text-text-secondary">
-              No chats in the archive yet.
-            </p>
-            <p className="max-w-[380px] text-center text-caption leading-relaxed">
-              Connect your agent over MCP and have it call dopl_chats
-              (op=&quot;export&quot;) at the end of a session — summaries land
-              here, organized into folders, ready to recall later.
-            </p>
+            Connect your agent over MCP and have it call dopl_chats
+            (op=&quot;export&quot;) at the end of a session — summaries land
+            here, organized into folders, ready to recall later.
           </>
-        ) : (
-          <p className="text-body">Select a chat to read it.</p>
-        )}
-      </div>
+        }
+      />
+    ) : (
+      <EmptyState icon={MessagesSquare} title="Select a chat to read it." />
     );
   }
 
@@ -85,12 +84,11 @@ export function DetailPane({
 
   const copyMarkdown = async () => {
     if (!detail) return;
-    try {
-      await navigator.clipboard.writeText(toMarkdown(detail));
-      toast({ title: "Copied as Markdown" });
-    } catch {
-      toast({ title: "Couldn't copy to clipboard" });
-    }
+    toast({
+      title: (await copy(toMarkdown(detail)))
+        ? "Copied as Markdown"
+        : "Couldn't copy to clipboard",
+    });
   };
 
   return (

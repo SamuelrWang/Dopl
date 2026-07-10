@@ -13,8 +13,8 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { Search, X } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
+import { SearchField } from "@/shared/ui/search-field";
 import {
   KnowledgeApiError,
   searchKnowledge,
@@ -95,37 +95,21 @@ export function KnowledgeSearch({
 
   return (
     <div ref={containerRef} className="relative">
-      <div className="relative">
-        <Search
-          size={12}
-          className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-secondary/50"
-        />
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            setOpen(true);
-          }}
-          onFocus={() => setOpen(true)}
-          placeholder="Search content"
-          className="w-full pl-7 pr-7 py-1 text-small bg-surface-raised-1 border border-border-subtle rounded-md text-text-primary placeholder:text-text-secondary/50 focus:outline-none focus:border-border-strong"
-        />
-        {query ? (
-          <button
-            type="button"
-            aria-label="Clear search"
-            onClick={() => {
-              setQuery("");
-              setHits(null);
-              setOpen(false);
-            }}
-            className="absolute right-1.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded flex items-center justify-center hover:bg-surface-raised-3"
-          >
-            <X size={10} className="text-text-secondary/70" />
-          </button>
-        ) : null}
-      </div>
+      <SearchField
+        value={query}
+        onChange={(next) => {
+          setQuery(next);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        onClear={() => {
+          setQuery("");
+          setHits(null);
+          setOpen(false);
+        }}
+        placeholder="Search content"
+        size="sm"
+      />
 
       {open && query.trim().length > 0 ? (
         <div

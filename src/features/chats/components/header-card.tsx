@@ -20,7 +20,7 @@ import { Avatar } from "@/shared/ui/avatar";
 import { SECTION_BOX_INSET } from "@/shared/ui/section-box";
 import type { Chat } from "../types";
 import { FORMAT_LABELS, SOURCE_LABELS } from "../constants";
-import { formatDate } from "../format";
+import { formatDate } from "@/shared/lib/format-time";
 
 /**
  * The chat's header box: title, agent-written overview, and a compact

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { UserPlus } from "lucide-react";
 import type { AssignableRole } from "../types";
-import { formatRelativeTime } from "../format-last-active";
+import { formatRelativeTime } from "@/shared/lib/format-time";
 import { Avatar, RoleSelect } from "./member-bits";
 
 interface JoinRequestView {

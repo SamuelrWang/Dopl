@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Workspace, Role } from "../types";
+import { meetsMinRole, type Workspace, type Role } from "../types";
 import { workspaceSegment } from "../url";
 
 interface Props {
@@ -23,7 +23,7 @@ export function WorkspaceSettingsForm({ workspace, role }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const canEdit = role === "owner" || role === "admin";
+  const canEdit = meetsMinRole(role, "admin");
   const dirty =
     name.trim() !== workspace.name ||
     (description.trim() || null) !== (workspace.description ?? null);

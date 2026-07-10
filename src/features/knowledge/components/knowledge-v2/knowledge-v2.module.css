@@ -96,37 +96,8 @@
   color: var(--kv-text);
 }
 
-/* Search */
-/* Concave (pressed-in) search well — dark inner top, light inner bottom,
-   outer bottom highlight to seat it. Same language as the auth fields. */
-.search {
-  /* Pressed-in recipe comes from the global .concave-field composed
-     alongside this class in list-panel.tsx. */
-  position: relative;
-  margin: 0 14px 12px;
-  border-radius: 9px;
-}
-.search svg {
-  position: absolute;
-  left: 11px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--kv-text-3);
-  pointer-events: none;
-}
-.search input {
-  width: 100%;
-  height: 36px;
-  padding: 0 12px 0 33px;
-  border: none;
-  background: transparent;
-  font-size: var(--text-body);
-  color: var(--kv-text);
-  outline: none;
-}
-.search input::placeholder {
-  color: var(--kv-text-3);
-}
+/* The search well lives in the shared <SearchField> primitive
+   (src/shared/ui/search-field.tsx) — concave well + leading icon. */
 
 /* Filter tabs live in the shared <SegmentedControl> primitive
    (src/shared/ui/segmented-control.tsx) — sliding raised-tab thumb on a

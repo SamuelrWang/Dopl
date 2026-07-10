@@ -1,16 +1,20 @@
 import { NextResponse } from "next/server";
+import { withUserAuth } from "@/shared/auth/with-auth";
 import { supabaseAdmin } from "@/shared/supabase/admin";
-import { getUser } from "@/shared/supabase/server";
 import { getStripe } from "@/features/billing/server/stripe";
 import { getUserSubscription } from "@/features/billing/server/subscriptions";
 
-export async function DELETE() {
+export const DELETE = withUserAuth(async (_request, { userId, agentTokenId }) => {
   try {
-    const user = await getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    // Session-only: an MCP agent token must not be able to delete the
+    // account it authenticates for.
+    if (agentTokenId) {
+      return NextResponse.json(
+        { error: "Account deletion requires an interactive session" },
+        { status: 403 }
+      );
     }
+    const user = { id: userId };
 
     const admin = supabaseAdmin();
 
@@ -137,4 +141,4 @@ export async function DELETE() {
       { status: 500 }
     );
   }
-}
+});

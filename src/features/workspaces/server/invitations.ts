@@ -8,7 +8,8 @@ import type {
   InvitedRole,
   Role,
 } from "../types";
-import { meetsMinRole } from "../types";
+import { canGrantRole, memberManageDenial } from "../member-policy";
+import { requireWorkspaceRole } from "./authz";
 import {
   type InvitationRow,
   mapInvitationRow,
@@ -41,25 +42,6 @@ function expiresAtFromNow(ttlDays = DEFAULT_TTL_DAYS): string {
   return new Date(Date.now() + ttlDays * 24 * 60 * 60 * 1000).toISOString();
 }
 
-async function requireRole(
-  workspaceId: string,
-  userId: string,
-  minRole: Role
-): Promise<{ role: Role }> {
-  const membership = await findMembership(workspaceId, userId);
-  if (!membership || membership.status !== "active") {
-    throw new HttpError(404, "WORKSPACE_NOT_FOUND", "Workspace not found");
-  }
-  if (!meetsMinRole(membership.role, minRole)) {
-    throw new HttpError(
-      403,
-      "WORKSPACE_FORBIDDEN",
-      `Requires ${minRole} role or higher`
-    );
-  }
-  return { role: membership.role };
-}
-
 export interface CreateInvitationInput {
   workspaceId: string;
   invitedBy: string;
@@ -80,7 +62,7 @@ export interface CreateInvitationInput {
 export async function createInvitation(
   input: CreateInvitationInput
 ): Promise<Invitation> {
-  await requireRole(input.workspaceId, input.invitedBy, "admin");
+  await requireWorkspaceRole(input.workspaceId, input.invitedBy, "admin");
 
   const normalizedEmail = input.email.trim().toLowerCase();
   if (!normalizedEmail) {
@@ -158,7 +140,7 @@ export async function listWorkspaceInvitations(
   workspaceId: string,
   callerId: string
 ): Promise<Invitation[]> {
-  await requireRole(workspaceId, callerId, "admin");
+  await requireWorkspaceRole(workspaceId, callerId, "admin");
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("workspace_invitations")
@@ -199,7 +181,7 @@ export async function revokeInvitation(
     throw new HttpError(404, "INVITATION_NOT_FOUND", "Invitation not found");
   }
   const inv = mapInvitationRow(row as InvitationRow);
-  await requireRole(inv.workspaceId, callerId, "admin");
+  await requireWorkspaceRole(inv.workspaceId, callerId, "admin");
 
   if (inv.acceptedAt) {
     throw new HttpError(
@@ -399,34 +381,32 @@ export async function updateMemberRole(
   targetUserId: string,
   newRole: Role
 ): Promise<void> {
-  const { role: callerRole } = await requireRole(workspaceId, callerId, "admin");
+  const callerRole = await requireWorkspaceRole(workspaceId, callerId, "admin");
 
   const target = await findMembership(workspaceId, targetUserId);
   if (!target || target.status !== "active") {
     throw new HttpError(404, "MEMBER_NOT_FOUND", "Member not found");
   }
 
-  // Self-demote block: an admin cannot change their own role. They must
-  // be demoted by another admin or the owner. Owners can still change
-  // their own role (last-owner protection below catches the unsafe case).
-  if (callerRole === "admin" && targetUserId === callerId) {
+  // Hierarchy rules single-sourced in ../member-policy (shared with the
+  // members UI). Owners can still change their own role (last-owner
+  // protection below catches the unsafe case).
+  const denial = memberManageDenial(callerRole, target.role, targetUserId === callerId);
+  if (denial === "self") {
     throw new HttpError(
       403,
       "WORKSPACE_FORBIDDEN",
       "You cannot change your own role — ask another admin or the owner"
     );
   }
-
-  // Admin cannot touch owners or other admins.
-  if (callerRole === "admin" && (target.role === "owner" || target.role === "admin")) {
+  if (denial === "target-protected") {
     throw new HttpError(
       403,
       "WORKSPACE_FORBIDDEN",
       "Admins can only change member / viewer roles"
     );
   }
-  // Admin cannot promote anyone to owner or admin.
-  if (callerRole === "admin" && (newRole === "owner" || newRole === "admin")) {
+  if (!canGrantRole(callerRole, newRole)) {
     throw new HttpError(
       403,
       "WORKSPACE_FORBIDDEN",
@@ -465,18 +445,18 @@ export async function removeMember(
   callerId: string,
   targetUserId: string
 ): Promise<void> {
-  const { role: callerRole } = await requireRole(workspaceId, callerId, "admin");
+  const callerRole = await requireWorkspaceRole(workspaceId, callerId, "admin");
 
   const target = await findMembership(workspaceId, targetUserId);
   if (!target || target.status !== "active") {
     return; // Idempotent — nothing to remove.
   }
 
-  if (callerRole === "admin" && (target.role === "owner" || target.role === "admin")) {
+  if (memberManageDenial(callerRole, target.role, targetUserId === callerId) !== null) {
     throw new HttpError(
       403,
       "WORKSPACE_FORBIDDEN",
-      "Admins cannot remove owners or admins"
+      "Admins cannot remove owners, admins, or themselves"
     );
   }
 

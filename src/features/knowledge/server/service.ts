@@ -1349,24 +1349,6 @@ async function visibleBaseIdSet(
   return out;
 }
 
-/**
- * Hard-delete every soft-deleted row in the workspace older than
- * `beforeIso`. Idempotent — repeated calls only re-process rows that
- * weren't already purged.
- */
-export async function purgeTrashOlderThan(
-  ctx: KnowledgeContext,
-  beforeIso: string
-): Promise<{ deleted: number }> {
-  // Only allow user-origin purges. Agents would otherwise be able to
-  // wipe trash with no visible UI cue. Tighten to admin-role-only at
-  // the route layer in Item 2.
-  if (ctx.source === "agent") {
-    throw new AgentWriteDisabledError("trash");
-  }
-  return repo.hardDeleteOlderThan(ctx.workspaceId, beforeIso);
-}
-
 // ─── Write enforcement ──────────────────────────────────────────────
 
 /**

@@ -1,13 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useState } from "react";
 import { ChevronRight } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/shared/lib/utils";
-
-const MENU_W = 224;
-const MENU_MAX_H = 256;
+import { Popover } from "@/shared/ui/popover-menu";
 
 export interface PickMenuItem {
   id: string;
@@ -39,7 +36,6 @@ export function PickMenu({
 }: Props) {
   const [anchor, setAnchor] = useState<{ x: number; y: number } | null>(null);
   const [openGroup, setOpenGroup] = useState<string | null>(null);
-  const rootRef = useRef<HTMLDivElement | null>(null);
 
   const excluded = new Set(excludeIds);
   const visible = items.filter((i) => !excluded.has(i.id));
@@ -49,22 +45,6 @@ export function PickMenu({
     setAnchor(null);
     setOpenGroup(null);
   };
-
-  useEffect(() => {
-    if (!anchor) return;
-    const onDown = (e: MouseEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) close();
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close();
-    };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [anchor]);
 
   return (
     <>
@@ -78,71 +58,62 @@ export function PickMenu({
       >
         {trigger}
       </button>
-      {anchor &&
-        typeof document !== "undefined" &&
-        createPortal(
-          <div
-            ref={rootRef}
-            className="fixed z-[9999] overflow-y-auto rounded-xl border border-border-strong bg-bg-elevated p-1 shadow-[0_1px_2px_rgba(0,0,0,0.06),0_10px_28px_rgba(0,0,0,0.14)]"
-            style={{
-              width: MENU_W,
-              maxHeight: MENU_MAX_H,
-              left: Math.min(anchor.x, window.innerWidth - MENU_W - 16),
-              top: Math.min(anchor.y, window.innerHeight - MENU_MAX_H - 16),
-            }}
-          >
-            {groups.length === 0 && (
-              <p className="px-2 py-1.5 text-small text-text-muted">
-                Nothing available to add
-              </p>
-            )}
-            {groups.map((group) => {
-              const open = group === openGroup;
-              const groupItems = visible.filter((i) => i.group === group);
-              return (
-                <div key={group}>
-                  <button
-                    type="button"
-                    onClick={() => setOpenGroup(open ? null : group)}
-                    className={cn(
-                      "flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-left text-small font-semibold transition-colors",
-                      open
-                        ? "text-text-primary"
-                        : "text-text-secondary hover:bg-surface-raised-2 hover:text-text-primary"
-                    )}
-                  >
-                    <ChevronRight
-                      size={11}
-                      className={cn(
-                        "shrink-0 text-text-muted transition-transform",
-                        open && "rotate-90"
-                      )}
-                    />
-                    <span className="min-w-0 flex-1 truncate">{group}</span>
-                    <span className="text-micro font-normal text-text-muted">
-                      {groupItems.length}
-                    </span>
-                  </button>
-                  {open &&
-                    groupItems.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => {
-                          onPick(item.id);
-                          close();
-                        }}
-                        className="flex w-full items-center rounded-lg py-1.5 pr-2 pl-6 text-left text-body text-text-secondary transition-colors hover:bg-surface-raised-2 hover:text-text-primary"
-                      >
-                        <span className="min-w-0 flex-1 truncate">{item.name}</span>
-                      </button>
-                    ))}
-                </div>
-              );
-            })}
-          </div>,
-          document.body
+      <Popover
+        open={anchor !== null}
+        at={anchor ?? undefined}
+        onClose={close}
+        className="max-h-64 w-56 overflow-y-auto rounded-xl border-border-strong p-1"
+      >
+        {groups.length === 0 && (
+          <p className="px-2 py-1.5 text-small text-text-muted">
+            Nothing available to add
+          </p>
         )}
+        {groups.map((group) => {
+          const open = group === openGroup;
+          const groupItems = visible.filter((i) => i.group === group);
+          return (
+            <div key={group}>
+              <button
+                type="button"
+                onClick={() => setOpenGroup(open ? null : group)}
+                className={cn(
+                  "flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-left text-small font-semibold transition-colors",
+                  open
+                    ? "text-text-primary"
+                    : "text-text-secondary hover:bg-surface-raised-2 hover:text-text-primary"
+                )}
+              >
+                <ChevronRight
+                  size={11}
+                  className={cn(
+                    "shrink-0 text-text-muted transition-transform",
+                    open && "rotate-90"
+                  )}
+                />
+                <span className="min-w-0 flex-1 truncate">{group}</span>
+                <span className="text-micro font-normal text-text-muted">
+                  {groupItems.length}
+                </span>
+              </button>
+              {open &&
+                groupItems.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      onPick(item.id);
+                      close();
+                    }}
+                    className="flex w-full items-center rounded-lg py-1.5 pr-2 pl-6 text-left text-body text-text-secondary transition-colors hover:bg-surface-raised-2 hover:text-text-primary"
+                  >
+                    <span className="min-w-0 flex-1 truncate">{item.name}</span>
+                  </button>
+                ))}
+            </div>
+          );
+        })}
+      </Popover>
     </>
   );
 }

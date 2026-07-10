@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { UsersRound } from "lucide-react";
+import { EmptyState } from "@/shared/ui/empty-state";
 import { toast } from "@/shared/ui/toast";
 import { meetsMinRole } from "@/features/workspaces/types";
 import type { AssignableRole, MemberRole } from "../types";
@@ -219,12 +220,10 @@ export function MembersView({ workspaceSlug, currentUserId, myRole }: Props) {
           openConflict={setConflict}
         />
       ) : (
-        <div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-2.5 px-10 text-text-muted">
-          <UsersRound size={30} className="text-border-strong" />
-          <p className="text-body">
-            {loading ? "Loading members…" : "Nothing to show yet."}
-          </p>
-        </div>
+        <EmptyState
+          icon={UsersRound}
+          title={loading ? "Loading members…" : "Nothing to show yet."}
+        />
       )}
 
       <CreateTeamDialog

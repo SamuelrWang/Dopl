@@ -11,7 +11,7 @@ import type {
   WorkspaceMemberView,
 } from "../types";
 import { ROLE_RANK } from "@/features/workspaces/types";
-import { formatLastActive, formatRelativeTime, type ActivityDot } from "../format-last-active";
+import { formatLastActive, formatRelativeTime, type ActivityDot } from "@/shared/lib/format-time";
 import type { JoinRequestView } from "../hooks/use-join-requests";
 import { Avatar, RoleSelect } from "./member-bits";
 import { TeamColorTile } from "./team-bits";

@@ -52,15 +52,6 @@ export async function createCheckoutSession(
   return session.client_secret!;
 }
 
-export async function getCheckoutSessionStatus(sessionId: string) {
-  const stripe = getStripe();
-  const session = await stripe.checkout.sessions.retrieve(sessionId);
-  return {
-    status: session.status,
-    customer_email: session.customer_details?.email || null,
-  };
-}
-
 export async function createPortalSession(
   stripeCustomerId: string
 ): Promise<string> {

@@ -13,6 +13,7 @@
  * data doesn't reflow the layout.
  */
 import { cn } from "@/shared/lib/utils";
+import { SkeletonBar } from "@/shared/ui/skeleton";
 
 const ROWS = 6;
 const ROW_GRID = "grid grid-cols-[16px_1fr_140px_140px_60px] items-center gap-3 px-4 py-3";
@@ -32,9 +33,9 @@ export function MembersTableSkeleton({ withToolbar = false, className }: Props) 
 
       {withToolbar && (
         <div className="flex items-center gap-2 px-4 py-3 border-b border-border-subtle">
-          <Bar className="h-7 w-full max-w-sm flex-1" />
-          <Bar className="h-7 w-28" />
-          <Bar className="ml-auto h-3 w-20" />
+          <SkeletonBar h={28} w="100%" className="max-w-sm flex-1" />
+          <SkeletonBar h={28} w={112} />
+          <SkeletonBar h={12} w={80} className="ml-auto" />
         </div>
       )}
 
@@ -44,14 +45,14 @@ export function MembersTableSkeleton({ withToolbar = false, className }: Props) 
             {/* chevron column kept empty for alignment */}
             <span aria-hidden="true" />
             <div className="flex items-center gap-3 min-w-0">
-              <Bar className="h-7 w-7 rounded-full" />
+              <SkeletonBar h={28} w={28} className="rounded-full" />
               <div className="min-w-0 space-y-1.5">
-                <Bar className="h-3 w-40" />
-                <Bar className="h-2.5 w-56" />
+                <SkeletonBar h={12} w={160} />
+                <SkeletonBar h={10} w={224} />
               </div>
             </div>
-            <Bar className="h-5 w-20 rounded-full" />
-            <Bar className="h-3 w-24" />
+            <SkeletonBar h={20} w={80} className="rounded-full" />
+            <SkeletonBar h={12} w={96} />
             <span aria-hidden="true" />
           </li>
         ))}
@@ -59,13 +60,3 @@ export function MembersTableSkeleton({ withToolbar = false, className }: Props) 
     </div>
   );
 }
-
-function Bar({ className }: { className?: string }) {
-  return (
-    <div
-      aria-hidden="true"
-      className={cn("animate-pulse rounded bg-surface-raised-2", className)}
-    />
-  );
-}
-

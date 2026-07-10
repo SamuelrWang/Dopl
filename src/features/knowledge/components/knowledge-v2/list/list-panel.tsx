@@ -1,7 +1,7 @@
 "use client";
 
-import { ChevronDown, ListFilter, Plus, Search } from "lucide-react";
-import { cn } from "@/shared/lib/utils";
+import { ChevronDown, ListFilter, Plus } from "lucide-react";
+import { SearchField } from "@/shared/ui/search-field";
 import { SegmentedControl } from "@/shared/ui/segmented-control";
 import type { KnowledgeBase, KnowledgeEntry } from "../../../types";
 import type { BaseTree, ListFilter as Filter } from "../types";
@@ -83,15 +83,11 @@ export function ListPanel({
         </button>
       </div>
 
-      <div className={cn("concave-field", styles.search)}>
-        <Search size={15} />
-        <input
-          value={query}
-          onChange={(e) => onQueryChange(e.target.value)}
-          placeholder="Search"
-          spellCheck={false}
-        />
-      </div>
+      <SearchField
+        value={query}
+        onChange={onQueryChange}
+        className="mx-3.5 mb-3"
+      />
 
       <SegmentedControl
         options={FILTERS}

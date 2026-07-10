@@ -93,9 +93,9 @@ export function ToastHost() {
       className="fixed bottom-4 right-4 z-[9999] max-w-sm rounded-lg border border-border-strong bg-modal-surface shadow-[var(--shadow-elevated)] px-4 py-3 flex items-start gap-3 text-text-primary animate-in fade-in slide-in-from-bottom-2 duration-200"
     >
       <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium text-text-primary">{active.title}</div>
+        <div className="text-body font-medium text-text-primary">{active.title}</div>
         {active.description && (
-          <div className="mt-0.5 text-xs text-text-tertiary truncate" title={active.description}>
+          <div className="mt-0.5 text-caption text-text-tertiary truncate" title={active.description}>
             {active.description}
           </div>
         )}
@@ -107,7 +107,7 @@ export function ToastHost() {
             active.action?.onClick();
             setCurrent(null);
           }}
-          className="shrink-0 h-7 px-2.5 rounded-md bg-surface-invert text-text-on-invert text-xs font-medium hover:bg-surface-invert transition-colors"
+          className="shrink-0 h-7 px-2.5 rounded-md bg-surface-invert text-text-on-invert text-small font-medium hover:bg-surface-invert transition-colors"
         >
           {active.action.label}
         </button>

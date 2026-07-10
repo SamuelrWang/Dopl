@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Mail } from "lucide-react";
 import type { TeamView } from "@/features/teams/types";
 import type { WorkspaceInvitationView } from "../types";
-import { formatRelativeTime } from "../format-last-active";
+import { formatRelativeTime } from "@/shared/lib/format-time";
 import { TeamChip } from "./team-bits";
 
 interface Props {

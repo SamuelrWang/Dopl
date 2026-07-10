@@ -8,11 +8,12 @@ import { Popover } from "@/shared/ui/popover-menu";
 import { SectionBox } from "@/shared/ui/section-box";
 import { useApiGet } from "@/shared/hooks/use-api-get";
 import { meetsMinRole } from "@/features/workspaces/types";
+import { canShowMemberControls } from "@/features/workspaces/member-policy";
 import type { TeamView } from "@/features/teams/types";
 import type { EffectiveAccessRow } from "@/features/teams/effective-access";
 import type { AssignableRole, MemberRole, WorkspaceMemberView } from "../types";
 import { DEFAULT_TEAM_COLOR } from "../constants";
-import { formatLastActive } from "../format-last-active";
+import { formatLastActive } from "@/shared/lib/format-time";
 import {
   addTeamMembers,
   removeMember,
@@ -50,13 +51,7 @@ export function MemberDetail({
 }: Props) {
   const canManage = meetsMinRole(myRole, "admin");
   const isSelf = m.userId === currentUserId;
-  // Admins manage members/viewers; only owners manage admins. Nobody
-  // edits the owner or themselves here.
-  const canEditTarget =
-    canManage &&
-    !isSelf &&
-    m.role !== "owner" &&
-    (myRole === "owner" || m.role !== "admin");
+  const canEditTarget = canShowMemberControls(myRole, m.role, isSelf);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);

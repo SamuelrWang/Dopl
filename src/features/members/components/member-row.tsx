@@ -2,7 +2,7 @@
 
 import { cn } from "@/shared/lib/utils";
 import type { AssignableRole, WorkspaceMemberView } from "../types";
-import { formatLastActive, type ActivityDot } from "../format-last-active";
+import { formatLastActive, type ActivityDot } from "@/shared/lib/format-time";
 import { Avatar, RolePill, RoleSelect } from "./member-bits";
 import { KebabMenu, TeamChip } from "./team-bits";
 
@@ -19,7 +19,6 @@ const DOT_STYLE: Record<ActivityDot, string> = {
 interface Props {
   member: WorkspaceMemberView;
   isSelf: boolean;
-  canManage: boolean;
   canEditTarget: boolean;
   /** Whether clicking the row opens the detail drawer (admins see
    *  everyone; regular members only themselves). */
@@ -37,7 +36,6 @@ interface Props {
 export function MemberRow({
   member: m,
   isSelf,
-  canManage,
   canEditTarget,
   clickable,
   busy,
@@ -50,7 +48,9 @@ export function MemberRow({
   const extraChips = m.teams.length - chips.length;
   const kebabItems = [
     ...(clickable ? [{ label: "View details", onSelect: onOpen }] : []),
-    ...(canManage && !isSelf && m.role !== "owner"
+    // Same predicate as the role select — canEditTarget comes from
+    // canShowMemberControls, matching what the server will accept.
+    ...(canEditTarget
       ? [
           {
             label: "Remove from workspace",

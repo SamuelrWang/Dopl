@@ -5,7 +5,10 @@
  * Replaces the hand-rolled fixed-backdrop menus that were copy-pasted
  * across members/teams components.
  *
- * Usage: render inside a `relative` wrapper next to the trigger.
+ * Two positioning modes:
+ *
+ * Trigger-anchored (default) — render inside a `relative` wrapper next
+ * to the trigger; opens below it, closes on backdrop click and Escape:
  *
  *   <div className="relative">
  *     <button onClick={() => setOpen(v => !v)}>…</button>
@@ -14,23 +17,35 @@
  *     </Popover>
  *   </div>
  *
- * Closes on backdrop click and Escape.
+ * Coordinate (`at={{ x, y }}`) — portals to <body> at fixed viewport
+ * coords, clamped fully on-screen (context menus, cursor-anchored
+ * pickers); closes on outside mousedown and Escape:
+ *
+ *   <Popover open={!!anchor} at={anchor ?? undefined} onClose={close}>…</Popover>
  */
 
 import { useEffect, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Check } from "lucide-react";
+import { useClampedFixedPosition } from "@/shared/hooks/use-clamped-fixed-position";
 import { cn } from "@/shared/lib/utils";
+
+const SURFACE =
+  "min-w-[160px] rounded-lg border border-border-default bg-bg-elevated py-1 shadow-[0_1px_2px_rgba(0,0,0,0.05),0_10px_28px_-8px_rgba(0,0,0,0.16)]";
 
 export function Popover({
   open,
   onClose,
   align = "left",
+  at,
   className,
   children,
 }: {
   open: boolean;
   onClose: () => void;
   align?: "left" | "right";
+  /** Coordinate mode: open at these viewport px, portaled + clamped. */
+  at?: { x: number; y: number };
   className?: string;
   children: ReactNode;
 }) {
@@ -45,13 +60,24 @@ export function Popover({
 
   if (!open) return null;
 
+  if (at) {
+    if (typeof document === "undefined") return null;
+    return createPortal(
+      <CoordinatePanel at={at} onClose={onClose} className={className}>
+        {children}
+      </CoordinatePanel>,
+      document.body
+    );
+  }
+
   return (
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} aria-hidden />
       <div
         role="menu"
         className={cn(
-          "absolute top-full z-50 mt-1 min-w-[160px] rounded-lg border border-border-default bg-bg-elevated py-1 shadow-[0_1px_2px_rgba(0,0,0,0.05),0_10px_28px_-8px_rgba(0,0,0,0.16)]",
+          "absolute top-full z-50 mt-1",
+          SURFACE,
           align === "left" ? "left-0" : "right-0",
           className
         )}
@@ -62,12 +88,46 @@ export function Popover({
   );
 }
 
+/**
+ * Mounted only while open so useClampedFixedPosition's measure-and-clamp
+ * layout effect runs on every open, not just on coordinate changes.
+ */
+function CoordinatePanel({
+  at,
+  onClose,
+  className,
+  children,
+}: {
+  at: { x: number; y: number };
+  onClose: () => void;
+  className?: string;
+  children: ReactNode;
+}) {
+  const { ref, style } = useClampedFixedPosition<HTMLDivElement>(at.x, at.y);
+
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node)) onClose();
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [onClose, ref]);
+
+  return (
+    <div role="menu" ref={ref} style={style} className={cn("z-[1000]", SURFACE, className)}>
+      {children}
+    </div>
+  );
+}
+
 export function MenuItem({
   active,
   onSelect,
   children,
   description,
   showCheck,
+  icon,
+  destructive,
 }: {
   active?: boolean;
   onSelect: () => void;
@@ -76,6 +136,10 @@ export function MenuItem({
   description?: string;
   /** Reserve a leading check column (option-list style menus). */
   showCheck?: boolean;
+  /** Optional leading icon (inherits the row's text color). */
+  icon?: ReactNode;
+  /** Danger-token styling for irreversible actions. */
+  destructive?: boolean;
 }) {
   return (
     <button
@@ -84,9 +148,11 @@ export function MenuItem({
       onClick={onSelect}
       className={cn(
         "flex w-full cursor-pointer items-start gap-2 px-3 py-1.5 text-left text-small transition-colors",
-        active
-          ? "bg-surface-selected text-text-primary"
-          : "text-text-secondary hover:bg-surface-raised-2 hover:text-text-primary"
+        destructive
+          ? "text-danger hover:bg-danger/10"
+          : active
+            ? "bg-surface-selected text-text-primary"
+            : "text-text-secondary hover:bg-surface-raised-2 hover:text-text-primary"
       )}
     >
       {showCheck && (
@@ -95,8 +161,11 @@ export function MenuItem({
           className={cn("mt-1 shrink-0 text-text-primary", !active && "opacity-0")}
         />
       )}
+      {icon && <span className="mt-0.5 shrink-0">{icon}</span>}
       <span className="min-w-0">
-        <span className="block text-text-primary">{children}</span>
+        <span className={cn("block", destructive ? "text-danger" : "text-text-primary")}>
+          {children}
+        </span>
         {description && (
           <span className="block text-caption leading-snug text-text-muted">
             {description}

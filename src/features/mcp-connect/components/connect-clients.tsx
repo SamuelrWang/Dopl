@@ -13,7 +13,8 @@
  */
 
 import { useEffect, useState } from "react";
-import { ArrowUpRight, Check, Copy } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
+import { CopyButton } from "@/shared/ui/copy-button";
 
 const DOCS = {
   claudeCode: "https://code.claude.com/docs/en/mcp",
@@ -83,14 +84,6 @@ function ClientCard({
   snippets: Array<{ id: string; label: string; text: string }>;
   steps: string[];
 }) {
-  const [copied, setCopied] = useState<string | null>(null);
-  function copy(text: string, id: string) {
-    if (typeof navigator === "undefined" || !navigator.clipboard) return;
-    void navigator.clipboard.writeText(text);
-    setCopied(id);
-    setTimeout(() => setCopied(null), 1500);
-  }
-
   return (
     <section className="rounded-xl border border-border-default bg-[var(--card-surface)] p-4">
       <div className="flex items-center justify-between gap-3">
@@ -116,19 +109,7 @@ function ClientCard({
               <code className="flex-1 truncate font-mono text-[12px] text-text-secondary">
                 {s.text}
               </code>
-              <button
-                type="button"
-                onClick={() => copy(s.text, s.id)}
-                className="shrink-0 text-text-muted hover:text-text-secondary transition-colors cursor-pointer"
-                title="Copy"
-                aria-label={`Copy ${s.label}`}
-              >
-                {copied === s.id ? (
-                  <Check className="w-3.5 h-3.5" />
-                ) : (
-                  <Copy className="w-3.5 h-3.5" />
-                )}
-              </button>
+              <CopyButton text={s.text} label={`Copy ${s.label}`} />
             </div>
           </div>
         ))}

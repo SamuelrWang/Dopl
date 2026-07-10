@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import { Check, ChevronDown, Link2, RotateCcw } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/shared/ui/dialog";
+import { SearchField } from "@/shared/ui/search-field";
 import { cn } from "@/shared/lib/utils";
+import { useCopyToClipboard } from "@/shared/hooks/use-copy-to-clipboard";
 import appShell from "@/shared/layout/app-shell/app-shell.module.css";
 import type { TeamView } from "@/features/teams/types";
 import type { AssignableRole } from "../types";
@@ -41,8 +43,8 @@ function ShareLinkSection({
   open: boolean;
 }) {
   const [token, setToken] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
+  const { copied, copy } = useCopyToClipboard(2000);
 
   useEffect(() => {
     if (!open) return;
@@ -68,17 +70,6 @@ function ShareLinkSection({
       ? `${window.location.origin}/join/${token}`
       : null;
 
-  async function copy() {
-    if (!url) return;
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      /* clipboard can be blocked — the input below stays selectable */
-    }
-  }
-
   async function reset() {
     setBusy(true);
     try {
@@ -89,7 +80,6 @@ function ShareLinkSection({
       if (res.ok) {
         const body = (await res.json()) as { token: string };
         setToken(body.token);
-        setCopied(false);
       }
     } finally {
       setBusy(false);
@@ -125,7 +115,7 @@ function ShareLinkSection({
         </div>
         <button
           type="button"
-          onClick={() => void copy()}
+          onClick={() => url && void copy(url)}
           disabled={!url}
           className="shrink-0 h-9 px-3 rounded-md border border-border-strong bg-surface-raised-2 hover:bg-surface-raised-3 text-small font-medium text-text-primary transition-colors disabled:opacity-40 cursor-pointer"
         >
@@ -280,13 +270,11 @@ export function InviteDialog({
           </div>
         ) : (
           <div className="flex flex-col gap-4 py-2">
-            <input
-              type="text"
+            <SearchField
               value={emailsInput}
-              onChange={(e) => setEmailsInput(e.target.value)}
+              onChange={setEmailsInput}
               placeholder="Search names or emails"
               autoFocus
-              className="h-10 px-3 rounded-md bg-surface-raised-2 border border-border-strong text-body text-text-primary placeholder:text-text-muted outline-none focus:border-border-highlight transition-colors"
             />
 
             <div className="flex flex-col gap-1.5">

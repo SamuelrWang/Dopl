@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireCronSecret } from "@/shared/auth/require-cron-secret";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { logConversionEvent } from "@/features/analytics/server/conversion-events";
 
@@ -19,20 +20,8 @@ import { logConversionEvent } from "@/features/analytics/server/conversion-event
 const REACTIVATION_DELAY_MS = 48 * 60 * 60 * 1000;
 
 export async function GET(request: NextRequest) {
-  // Simple shared-secret auth. Set CRON_SECRET in env; Vercel Cron will
-  // send it as Authorization: Bearer <secret>. Fail closed when unset
-  // so an unconfigured env can't silently expose a destructive cron.
-  const auth = request.headers.get("authorization");
-  const secret = process.env.CRON_SECRET;
-  if (!secret) {
-    return NextResponse.json(
-      { error: "CRON_SECRET not configured" },
-      { status: 503 }
-    );
-  }
-  if (auth !== `Bearer ${secret}`) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
+  const denied = requireCronSecret(request);
+  if (denied) return denied;
 
   const supabase = supabaseAdmin();
   const now = new Date().toISOString();

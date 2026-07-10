@@ -782,25 +782,6 @@ export async function restoreSkillFile(
   return restored;
 }
 
-/**
- * Hard-delete every soft-deleted skill / file in the workspace older
- * than `beforeIso`. Idempotent. Agents are blocked — purge is a
- * destructive admin-only action with no UI undo.
- */
-export async function purgeTrashOlderThan(
-  ctx: SkillContext,
-  beforeIso: string
-): Promise<{ deleted: number }> {
-  if (ctx.source === "agent") {
-    throw new SkillAgentWriteDisabledError("trash");
-  }
-  const counts = await repo.hardDeleteForWorkspaceOlderThan(
-    ctx.workspaceId,
-    beforeIso
-  );
-  return { deleted: counts.skills + counts.files };
-}
-
 // ─── Workspace KB list ──────────────────────────────────────────────
 
 export async function listWorkspaceKnowledgeBases(

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { Role, Workspace } from "@/features/workspaces/types";
+import { meetsMinRole, type Role, type Workspace } from "@/features/workspaces/types";
 import { WorkspaceSettingsForm } from "@/features/workspaces/components/workspace-settings-form";
 import { WorkspaceDangerZone } from "@/features/workspaces/components/workspace-danger-zone";
 import { RemoteConnect } from "@/features/mcp-connect";
@@ -59,7 +59,7 @@ export function WorkspaceSection({ workspaceSegment, onWorkspaceChanged }: Props
     );
   }
 
-  const canEdit = role === "owner" || role === "admin";
+  const canEdit = meetsMinRole(role, "admin");
 
   return (
     <SectionShell title="General" subtitle="Manage this workspace">

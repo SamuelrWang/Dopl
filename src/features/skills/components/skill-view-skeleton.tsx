@@ -4,7 +4,7 @@
  * `loading.tsx` so click → page-paint feels instant while the server
  * resolves auth, workspace, skill, and KB list.
  */
-import { cn } from "@/shared/lib/utils";
+import { SkeletonBar } from "@/shared/ui/skeleton";
 
 export function SkillViewSkeleton() {
   return (
@@ -18,38 +18,29 @@ export function SkillViewSkeleton() {
         {/* Main column — file tabs + editor */}
         <div className="flex-1 min-w-0 flex flex-col">
           <div className="shrink-0 flex items-center gap-2 border-b border-border-subtle px-3 py-2">
-            <Bar className="h-6 w-28 rounded-md" />
-            <Bar className="h-6 w-24 rounded-md" />
-            <Bar className="h-6 w-20 rounded-md" />
-            <Bar className="ml-auto h-6 w-6 rounded-md" />
+            <SkeletonBar h={24} w={112} className="rounded-md" />
+            <SkeletonBar h={24} w={96} className="rounded-md" />
+            <SkeletonBar h={24} w={80} className="rounded-md" />
+            <SkeletonBar h={24} w={24} className="ml-auto rounded-md" />
           </div>
           <div className="flex-1 min-h-0 overflow-hidden">
             <div className="max-w-3xl mx-auto px-8 py-10 space-y-5">
-              <Bar className="h-6 w-1/2" />
+              <SkeletonBar h={24} w="50%" />
               <div className="space-y-2.5">
-                <Bar className="h-3 w-full" />
-                <Bar className="h-3 w-[92%]" />
-                <Bar className="h-3 w-[85%]" />
-                <Bar className="h-3 w-3/4" />
+                <SkeletonBar h={12} w="100%" />
+                <SkeletonBar h={12} w="92%" />
+                <SkeletonBar h={12} w="85%" />
+                <SkeletonBar h={12} w="75%" />
               </div>
               <div className="space-y-2.5 pt-3">
-                <Bar className="h-4 w-1/3" />
-                <Bar className="h-3 w-full" />
-                <Bar className="h-3 w-[88%]" />
+                <SkeletonBar h={16} w="33.333%" />
+                <SkeletonBar h={12} w="100%" />
+                <SkeletonBar h={12} w="88%" />
               </div>
             </div>
           </div>
         </div>
       </div>
     </div>
-  );
-}
-
-function Bar({ className }: { className?: string }) {
-  return (
-    <div
-      aria-hidden
-      className={cn("animate-pulse rounded bg-surface-raised-2", className)}
-    />
   );
 }

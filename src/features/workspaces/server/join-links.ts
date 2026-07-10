@@ -2,8 +2,8 @@ import "server-only";
 import { randomBytes } from "crypto";
 import { HttpError } from "@/shared/lib/http-error";
 import { supabaseAdmin } from "@/shared/supabase/admin";
-import type { Role } from "../types";
-import { meetsMinRole } from "../types";
+import { canGrantRole } from "../member-policy";
+import { requireWorkspaceRole } from "./authz";
 import { findMembership, findWorkspaceById } from "./repository";
 
 /**
@@ -45,17 +45,6 @@ function normalizeToken(token: string): string {
   return token.trim().toLowerCase();
 }
 
-async function requireAdmin(workspaceId: string, callerId: string): Promise<Role> {
-  const membership = await findMembership(workspaceId, callerId);
-  if (!membership || membership.status !== "active") {
-    throw new HttpError(404, "WORKSPACE_NOT_FOUND", "Workspace not found");
-  }
-  if (!meetsMinRole(membership.role, "admin")) {
-    throw new HttpError(403, "WORKSPACE_FORBIDDEN", "Admin role or higher required");
-  }
-  return membership.role;
-}
-
 /* ----------------------------- link ------------------------------ */
 
 /** Get the workspace's standing join link, creating it on first ask. Admin+. */
@@ -63,7 +52,7 @@ export async function getOrCreateJoinLink(
   workspaceId: string,
   callerId: string
 ): Promise<{ token: string }> {
-  await requireAdmin(workspaceId, callerId);
+  await requireWorkspaceRole(workspaceId, callerId, "admin");
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("workspace_join_links")
@@ -97,7 +86,7 @@ export async function rotateJoinLink(
   workspaceId: string,
   callerId: string
 ): Promise<{ token: string }> {
-  await requireAdmin(workspaceId, callerId);
+  await requireWorkspaceRole(workspaceId, callerId, "admin");
   const token = generateToken();
   const db = supabaseAdmin();
   const { error } = await db.from("workspace_join_links").upsert(
@@ -235,7 +224,7 @@ export async function listPendingJoinRequests(
   workspaceId: string,
   callerId: string
 ): Promise<PendingJoinRequestView[]> {
-  await requireAdmin(workspaceId, callerId);
+  await requireWorkspaceRole(workspaceId, callerId, "admin");
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("workspace_join_requests")
@@ -291,10 +280,10 @@ export async function resolveJoinRequest(
   requestId: string,
   action: { kind: "approve"; role: "admin" | "member" | "viewer" } | { kind: "decline" }
 ): Promise<void> {
-  const callerRole = await requireAdmin(workspaceId, callerId);
-  // Mirror updateMemberRole's policy: only the owner can mint admins —
-  // otherwise an admin could elevate an accomplice via the join queue.
-  if (action.kind === "approve" && action.role === "admin" && callerRole !== "owner") {
+  const callerRole = await requireWorkspaceRole(workspaceId, callerId, "admin");
+  // Same policy as updateMemberRole (member-policy.ts): only the owner can
+  // mint admins — otherwise an admin could elevate an accomplice here.
+  if (action.kind === "approve" && !canGrantRole(callerRole, action.role)) {
     throw new HttpError(
       403,
       "WORKSPACE_FORBIDDEN",

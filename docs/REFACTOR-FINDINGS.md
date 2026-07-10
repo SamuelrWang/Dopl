@@ -212,6 +212,38 @@ See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture and [plan 
 - Proposed resolution: defer — once the teams model is stable in prod, ship a `DROP TABLE workspace_resource_access` migration (and its orphaned `cleanup_resource_access_on_*` trigger functions, which also trip the SECURITY DEFINER advisor).
 - Status: open
 
+### F-022: Legacy shadcn primitives (`ui/button.tsx`, `ui/dialog.tsx`) are off-token — retire, don't polish
+- Location: `src/shared/ui/button.tsx`, `src/shared/ui/dialog.tsx` (shadcn tokens `bg-popover`/`bg-muted`, raw `text-sm`/`text-xs`)
+- Found during: shared-kit cleanup pass (2026-07-10)
+- Severity: smell
+- Description: The base-ui `Dialog` + cva `Button` predate the design system and violate it. They are one of THREE parallel modal systems (`Dialog`, settings-modal `ModalShell`, `ConfirmDialog`). Consumers: workspaces dialogs, knowledge move-to-dialog, members create-team/invite, skills trash-modal, billing paywall. Re-skinning them was deliberately skipped — the end state is consolidating onto `ModalShell`/`ConfirmDialog` during the per-feature cleanup passes, then deleting both files.
+- Proposed resolution: defer — retire during feature passes; do not add new consumers. NOTE: the `shadcn` npm dependency looks unused to a JS-import grep but `globals.css:3` imports `shadcn/tailwind.css` (the token theme these primitives style against) — removing the dep breaks the build until this finding is resolved; drop the dep and the `@import` together when Button/Dialog retire.
+- Status: open
+
+### F-023: Effective-access rules encoded twice (pure display fn vs server enforcement)
+- Location: `src/features/teams/effective-access.ts` (`computeEffectiveAccess`, server-invoked display) and `src/features/teams/server/access.ts` (`effectiveResourceAccess`/`listEffectiveAccess`, enforcement)
+- Found during: RBAC consolidation (2026-07-10)
+- Severity: conflict (latent drift risk)
+- Description: Same rule ladder (admin→edit; workspace-mode→role ceiling; creator→ceiling; else max team grant capped) in two shapes. A forced merge was evaluated and rejected: the server fns early-return specifically to skip team-grant queries (admin/workspace-mode paths), so a shared core would either change query patterns or shrink to a trivial helper. Both file headers now cross-reference each other; a rule change must touch both.
+- Proposed resolution: defer — revisit if the rules ever change (that's when drift becomes real). Never import `effective-access.ts` from client code.
+- Status: open (documented)
+
+### F-024: Post-extraction aliases pending deletion in feature passes
+- Location: `src/features/chats/components/share-control.tsx` (`SCOPE_ICONS` alias), `src/features/skills/components/skill-share-control.tsx` (`SKILL_SCOPE_ICONS` alias), `src/features/members/components/member-row.tsx` (unused `canManage` in Props at extraction time — since removed)
+- Found during: shared-kit cleanup pass (2026-07-10)
+- Severity: smell
+- Description: The ScopeSharePopover extraction left thin per-feature icon-map aliases so `list-pane.tsx` / `skills-browser.tsx` imports kept working. Deletion trigger: the chats and skills feature cleanup passes point those imports at `SHARE_SCOPE_ICONS` in `shared/ui/scope-share-popover.tsx` and drop the aliases.
+- Proposed resolution: defer-to-feature-passes.
+- Status: open
+
+### F-025: Likely-dead API routes
+- Location: `src/app/api/billing/checkout/status/route.ts`, `src/app/api/knowledge/trash/purge/route.ts`, `src/app/api/skills/trash/purge/route.ts` (all three DELETED 2026-07-10 with their handler-only service exports); `src/app/api/workspaces/[workspaceSlug]/canvases/` (2 routes, KEPT)
+- Found during: dead-code audit (2026-07-10)
+- Severity: smell
+- Description: Zero callers found across src/, packages/dopl-client, packages/mcp-server, dopl-desktop-app. checkout/status: the Stripe return flow strips `session_id` without calling it (webhook + `/api/billing/status` polling confirm payment instead). trash/purge ×2: the daily cron calls the repository fns directly, bypassing these admin routes. The two canvases routes remain because they ride the owner's pending canvas keep/remove decision — they die with the feature if it's cut.
+- Proposed resolution: first three deleted (owner delegated the call); canvases routes ride the canvas decision.
+- Status: open (canvases only)
+
 ### F-021: Canvas panels don't team-filter workflow headers/nodes
 - Location: `src/features/canvas/server/load-server-state.ts` (panel load), canvas realtime
 - Found during: Teams feature build (2026-06-11)

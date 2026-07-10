@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireCronSecret } from "@/shared/auth/require-cron-secret";
 import { hardDeleteOlderThanGlobal as purgeKnowledge } from "@/features/knowledge/server/repository";
 import { hardDeleteOlderThanGlobal as purgeSkills } from "@/features/skills/server/repository";
 import { logSystemEvent } from "@/features/analytics/server/system-events";
@@ -18,21 +19,8 @@ import { logSystemEvent } from "@/features/analytics/server/system-events";
 const TRASH_RETENTION_DAYS = 30;
 
 export async function GET(request: NextRequest) {
-  const auth = request.headers.get("authorization");
-  const secret = process.env.CRON_SECRET;
-
-  // Fail closed when the secret isn't configured — without this, the
-  // bare `if (expected && auth !== ...)` pattern lets every caller in
-  // and a public hit hard-deletes 30-day-old trash globally.
-  if (!secret) {
-    return NextResponse.json(
-      { error: "CRON_SECRET not configured" },
-      { status: 503 }
-    );
-  }
-  if (auth !== `Bearer ${secret}`) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
+  const denied = requireCronSecret(request);
+  if (denied) return denied;
 
   const beforeIso = new Date(
     Date.now() - TRASH_RETENTION_DAYS * 24 * 60 * 60 * 1000

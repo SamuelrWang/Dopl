@@ -1,9 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Search } from "lucide-react";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
+import { SearchField } from "@/shared/ui/search-field";
 import { ROLE_RANK, meetsMinRole } from "@/features/workspaces/types";
+import { canShowMemberControls } from "@/features/workspaces/member-policy";
 import type { TeamView } from "@/features/teams/types";
 import type {
   AssignableRole,
@@ -111,19 +112,13 @@ export function MembersTab({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-2">
-        <div className="relative flex-1 max-w-sm">
-          <Search
-            size={12}
-            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted"
-          />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search members"
-            className="w-full pl-7 pr-3 py-1.5 rounded-md bg-[var(--card-surface)] border border-border-default text-small placeholder:text-text-secondary/40 outline-none focus:border-border-strong transition-colors"
-          />
-        </div>
+        <SearchField
+          value={search}
+          onChange={setSearch}
+          placeholder="Search members"
+          size="sm"
+          className="max-w-sm flex-1"
+        />
         <SelectFilter
           value={roleFilter}
           onChange={(v) => setRoleFilter(v as RoleFilter)}
@@ -197,11 +192,7 @@ export function MembersTab({
           <ul className="divide-y divide-border-subtle">
             {visibleMembers.map((m) => {
               const isSelf = m.userId === currentUserId;
-              const canEditTarget =
-                canManage &&
-                !isSelf &&
-                m.role !== "owner" &&
-                (myRole === "owner" || m.role !== "admin");
+              const canEditTarget = canShowMemberControls(myRole, m.role, isSelf);
               // Regular members only open their own detail view; no
               // handler at all means rows render non-clickable.
               const clickable =
@@ -211,7 +202,6 @@ export function MembersTab({
                   <MemberRow
                     member={m}
                     isSelf={isSelf}
-                    canManage={canManage}
                     canEditTarget={canEditTarget}
                     clickable={clickable}
                     busy={busyId === m.userId}

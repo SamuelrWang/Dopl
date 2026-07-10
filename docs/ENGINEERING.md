@@ -18,7 +18,7 @@ Stack: Next.js 16 (App Router) · React 19 · TypeScript (strict) · Supabase ·
 
 See [docs/REFACTOR-FINDINGS.md](REFACTOR-FINDINGS.md) for the current list of open findings (`F-NNN` ids). At a glance: pre-existing lint errors (F-006), chrome-extension PascalCase filenames (F-007), a few files still over the 500-line cap (§2), the canvas store still syncs server data it should push out to a query library (§7). None block shipping; all are tracked.
 
-Client-side data fetching uses `useEffect + fetch + useState` (e.g. `useWorkspaces` in `src/shared/layout/sidebar.tsx`, `useKnowledgeBases` in `src/features/knowledge/client/hooks.ts`). Worth evaluating React Query / SWR in a future polish pass for cache, optimistic updates, and revalidation on focus.
+TanStack Query is now the server-state layer (§7). Legacy `useEffect + fetch + useState` hooks (`useApiGet`, the per-feature `useFetch` copies in knowledge/skills/chats) remain until each feature's cleanup pass migrates them to `useApiQuery` — don't add new call sites to the legacy pattern.
 
 ---
 
@@ -275,9 +275,11 @@ This repo has three layers of state. Keep them separate.
 
 | Layer | Tool | What lives here |
 |-------|------|-----------------|
-| **Server state** | TanStack Query (future — not yet adopted) | Anything that comes from Supabase or an API |
+| **Server state** | TanStack Query (adopted 2026-07; provider in `src/shared/api/query-provider.tsx`) | Anything that comes from Supabase or an API |
 | **Canvas client state** | `canvas-store` (context + reducer) | Viewport, panel positions, in-flight chat streams |
 | **Local UI state** | `useState` / `useReducer` | Form values, open/closed, hover |
+
+New client data code uses `useApiQuery` (`src/shared/hooks/use-api-query.ts`) over `apiRequest` (`src/shared/api/api-client.ts` — the single typed fetch wrapper: workspace header, error envelope, 204s). The legacy `useApiGet` + per-feature `useFetch`/`request<T>` copies are migration targets, feature by feature — do not add new call sites to them. Realtime refetch signals go through `useWorkspaceTablesRealtime` (`src/shared/realtime/`). List endpoints paginate with `Paginated<T>` (`src/shared/types/paginated.ts`) + `parsePageParams` (`src/shared/api/pagination.ts`).
 
 **Known debt — do not add to it:** the canvas store currently syncs server entities (entries, clusters, panels) via `useCanvasDbSync` and the realtime hooks. That's duplication the future query-library adoption is meant to eliminate. Until then, don't add more server data to the canvas store — if you need to read an entity, add a new hook that reads directly, don't shove it through the reducer.
 
@@ -386,13 +388,16 @@ export const POST = withUserAuth(async (req, { userId }) => {
 
 ### Auth wrappers (reuse — do not reinvent)
 
-All auth wrappers live in `src/shared/auth/with-auth.ts`:
+Auth wrappers live in `src/shared/auth/`:
 
-- `withExternalAuth(handler)` — remote-MCP OAuth token OR session; 401 if neither.
-- `withUserAuth(handler)` — same, plus injects `userId` into the handler context.
-- `withSubscriptionAuth(handler)` — also resolves the user's subscription tier.
-- `withMcpAccess(action, handler)` — gates MCP calls by trial/paid status, logs analytics. Alias `withMcpCredits` exists pending cleanup.
-- `withAdminAuth(handler)` — requires `ADMIN_USER_ID` env var match.
+- `withExternalAuth(handler)` (`with-auth.ts`) — remote-MCP OAuth token OR session; 401 if neither.
+- `withUserAuth(handler)` (`with-auth.ts`) — same, plus injects `{ userId, agentTokenId?, apiKeyWorkspaceId?, params }`.
+- `withMcpAccess(action, handler)` (`with-auth.ts`) — composes `withUserAuth`; paywall-gates MCP (bearer) callers, logs analytics.
+- `withWorkspaceAuth(handler, { minRole })` (`with-workspace-auth.ts`) — composes `withUserAuth`; resolves the active workspace, verifies membership + `meetsMinRole`. The default for workspace-scoped content routes.
+- `isAdmin(userId)` (`with-auth.ts`) — site-admin check vs `ADMIN_USER_ID` env.
+- `requireCronSecret(request)` (`require-cron-secret.ts`) — bearer gate for `/api/cron/*`, fail-closed 503 when unset.
+
+Service-layer gates: `requireWorkspaceRole(workspaceId, userId, minRole)` in `src/features/workspaces/server/authz.ts` (the one membership-fetch + role-check helper — don't re-roll it), and the pure member-management hierarchy in `src/features/workspaces/member-policy.ts` (`memberManageDenial` / `canGrantRole` / `canShowMemberControls`, shared with the members UI).
 
 They handle: Bearer OAuth access tokens (`dopl_at_`, validated via `mcp-oauth.ts`), Supabase session cookies, OAuth-subject rate limiting, and automatic 5xx system-event logging.
 

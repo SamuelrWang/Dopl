@@ -1,16 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import {
-  ChevronRight,
-  Folder,
-  FolderPlus,
-  Search,
-  Star,
-  X,
-} from "lucide-react";
+import { ChevronRight, Folder, FolderPlus, Star, X } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { Popover } from "@/shared/ui/popover-menu";
+import { SearchField } from "@/shared/ui/search-field";
 import { SegmentedControl } from "@/shared/ui/segmented-control";
 import type { Chat, ChatFolder } from "../types";
 import { chatScope, type ChatScope } from "../scope";
@@ -19,7 +13,7 @@ import {
   SOURCE_LABELS,
   UNFILED_LABEL,
 } from "../constants";
-import { formatShortDate } from "../format";
+import { formatShortDate } from "@/shared/lib/format-time";
 import { SCOPE_ICONS, ShareMenu } from "./share-control";
 import type { ChatFilter, FolderGroup } from "./chats-view";
 
@@ -123,19 +117,12 @@ export function ListPane({
         </button>
       </div>
 
-      <div className="concave-field relative mx-3.5 mb-3 rounded-[9px]">
-        <Search
-          size={15}
-          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"
-        />
-        <input
-          value={query}
-          onChange={(e) => onQueryChange(e.target.value)}
-          placeholder="Search chats"
-          spellCheck={false}
-          className="h-9 w-full bg-transparent pl-[33px] pr-3 text-body text-text-primary outline-none placeholder:text-text-muted"
-        />
-      </div>
+      <SearchField
+        value={query}
+        onChange={onQueryChange}
+        placeholder="Search chats"
+        className="mx-3.5 mb-3"
+      />
 
       <SegmentedControl
         options={FILTERS}

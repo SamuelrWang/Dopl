@@ -180,13 +180,7 @@ export async function renameWorkspace(
   patch: { name?: string; description?: string | null; slug?: string }
 ): Promise<Workspace> {
   const { workspace, membership } = await resolveMembershipOrThrow(workspaceId, userId);
-  if (!meetsMinRole(membership.role, "admin")) {
-    throw new HttpError(
-      403,
-      "WORKSPACE_FORBIDDEN",
-      "Only admins can edit workspace settings"
-    );
-  }
+  requireMinRole(membership.role, "admin");
 
   const update: { name?: string; slug?: string; description?: string | null } = {};
   if (patch.description !== undefined) update.description = patch.description;
@@ -226,13 +220,7 @@ export async function updateWorkspaceIcon(
   iconUrl: string | null
 ): Promise<Workspace> {
   const { membership } = await resolveMembershipOrThrow(workspaceId, userId);
-  if (!meetsMinRole(membership.role, "admin")) {
-    throw new HttpError(
-      403,
-      "WORKSPACE_FORBIDDEN",
-      "Only admins can change the workspace icon"
-    );
-  }
+  requireMinRole(membership.role, "admin");
   return updateWorkspace(workspaceId, { iconUrl });
 }
 
@@ -241,13 +229,7 @@ export async function deleteWorkspaceForUser(
   userId: string
 ): Promise<void> {
   const { membership } = await resolveMembershipOrThrow(workspaceId, userId);
-  if (membership.role !== "owner") {
-    throw new HttpError(
-      403,
-      "WORKSPACE_FORBIDDEN",
-      "Only the workspace owner can delete it"
-    );
-  }
+  requireMinRole(membership.role, "owner");
 
   await deleteWorkspace(workspaceId);
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Check, Copy } from "lucide-react";
+import { useCopyToClipboard } from "@/shared/hooks/use-copy-to-clipboard";
 import { DEFAULT_MCP_URL } from "../constants";
 import { buildConnectPrompt } from "../bootstrap-prompt";
 
@@ -30,13 +31,8 @@ export function McpConnectStep({ connected, finishing, onContinue, onSkip, showS
   }, []);
   const url = origin ? `${origin}/api/mcp` : DEFAULT_MCP_URL;
 
-  const [copied, setCopied] = useState<string | null>(null);
-  function copy(text: string, id: string) {
-    if (typeof navigator === "undefined" || !navigator.clipboard) return;
-    void navigator.clipboard.writeText(text);
-    setCopied(id);
-    setTimeout(() => setCopied(null), 1500);
-  }
+  const { copiedId, copy } = useCopyToClipboard();
+  const onCopy = (text: string, id: string) => void copy(text, id);
 
   const [client, setClient] = useState<Client>("claude");
   const [manualOpen, setManualOpen] = useState(false);
@@ -52,14 +48,14 @@ export function McpConnectStep({ connected, finishing, onContinue, onSkip, showS
 
       {/* Server details + the paste-to-connect prompt */}
       <div className="mt-7 space-y-4">
-        <CopyRow label="Server name" text="Dopl" id="name" copied={copied} onCopy={copy} />
-        <CopyRow label="Server URL" text={url} id="url" copied={copied} onCopy={copy} />
+        <CopyRow label="Server name" text="Dopl" id="name" copied={copiedId} onCopy={onCopy} />
+        <CopyRow label="Server URL" text={url} id="url" copied={copiedId} onCopy={onCopy} />
         <CopyRow
           label="Paste this into your agent"
           text={buildConnectPrompt(url)}
           id="prompt"
-          copied={copied}
-          onCopy={copy}
+          copied={copiedId}
+          onCopy={onCopy}
           multiline
         />
       </div>

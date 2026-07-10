@@ -1,7 +1,7 @@
 import "server-only";
 import { HttpError } from "@/shared/lib/http-error";
+import { requireWorkspaceRole } from "@/features/workspaces/server/authz";
 import { meetsMinRole, type Role } from "@/features/workspaces/types";
-import { findMembership } from "@/features/workspaces/server/repository";
 import type { AccessLevel, AccessMode, TeamResourceType } from "../access-levels";
 import type {
   AccessMatrix,
@@ -36,24 +36,6 @@ import {
 } from "./repository";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 
-/* --------------------------- role gates --------------------------- */
-
-async function requireMember(workspaceId: string, callerId: string): Promise<Role> {
-  const membership = await findMembership(workspaceId, callerId);
-  if (!membership || membership.status !== "active") {
-    throw new HttpError(404, "WORKSPACE_NOT_FOUND", "Workspace not found");
-  }
-  return membership.role;
-}
-
-async function requireAdmin(workspaceId: string, callerId: string): Promise<Role> {
-  const role = await requireMember(workspaceId, callerId);
-  if (!meetsMinRole(role, "admin")) {
-    throw new HttpError(403, "WORKSPACE_FORBIDDEN", "Admin role or higher required");
-  }
-  return role;
-}
-
 /* --------------------------- team CRUD ---------------------------- */
 
 export async function createTeam(
@@ -61,7 +43,7 @@ export async function createTeam(
   callerId: string,
   input: TeamCreateInput
 ): Promise<TeamView> {
-  const role = await requireAdmin(workspaceId, callerId);
+  const role = await requireWorkspaceRole(workspaceId, callerId, "admin");
 
   const team = await insertTeamOrConflict({
     workspaceId,
@@ -111,7 +93,7 @@ export async function updateTeam(
   teamId: string,
   patch: TeamUpdateInput
 ): Promise<Team> {
-  await requireAdmin(workspaceId, callerId);
+  await requireWorkspaceRole(workspaceId, callerId, "admin");
   const team = await findTeamById(workspaceId, teamId);
   if (!team) throw new TeamNotFoundError();
   try {
@@ -126,7 +108,7 @@ export async function deleteTeam(
   callerId: string,
   teamId: string
 ): Promise<void> {
-  await requireAdmin(workspaceId, callerId);
+  await requireWorkspaceRole(workspaceId, callerId, "admin");
   const team = await findTeamById(workspaceId, teamId);
   if (!team) throw new TeamNotFoundError();
   // Members + grants cascade via FK. Removing a team's grants can never
@@ -138,7 +120,7 @@ export async function listTeams(
   workspaceId: string,
   callerId: string
 ): Promise<TeamView[]> {
-  await requireMember(workspaceId, callerId);
+  await requireWorkspaceRole(workspaceId, callerId, "viewer");
   const [teams, memberRows, grants] = await Promise.all([
     listTeamsForWorkspace(workspaceId),
     listTeamMembersForWorkspace(workspaceId),
@@ -159,7 +141,7 @@ export async function getTeam(
   callerId: string,
   teamId: string
 ): Promise<TeamView> {
-  await requireMember(workspaceId, callerId);
+  await requireWorkspaceRole(workspaceId, callerId, "viewer");
   const team = await findTeamById(workspaceId, teamId);
   if (!team) throw new TeamNotFoundError();
   return hydrateTeamView(team);
@@ -173,7 +155,7 @@ export async function addTeamMembers(
   teamId: string,
   userIds: string[]
 ): Promise<void> {
-  await requireAdmin(workspaceId, callerId);
+  await requireWorkspaceRole(workspaceId, callerId, "admin");
   const team = await findTeamById(workspaceId, teamId);
   if (!team) throw new TeamNotFoundError();
   await assertActiveMembers(workspaceId, userIds);
@@ -186,7 +168,7 @@ export async function removeTeamMember(
   teamId: string,
   userId: string
 ): Promise<void> {
-  await requireAdmin(workspaceId, callerId);
+  await requireWorkspaceRole(workspaceId, callerId, "admin");
   const team = await findTeamById(workspaceId, teamId);
   if (!team) throw new TeamNotFoundError();
   await deleteTeamMemberRow(teamId, userId);
@@ -208,7 +190,7 @@ export async function setTeamGrant(
   level: AccessLevel,
   opts?: { autoGrant?: boolean; role?: Role }
 ): Promise<void> {
-  const role = opts?.role ?? (await requireAdmin(workspaceId, callerId));
+  const role = opts?.role ?? (await requireWorkspaceRole(workspaceId, callerId, "admin"));
   const team = await findTeamById(workspaceId, teamId);
   if (!team) throw new TeamNotFoundError();
   const meta = await getResourceAccessMeta(workspaceId, resourceType, resourceId);
@@ -244,7 +226,7 @@ export async function removeTeamGrant(
   resourceType: TeamResourceType,
   resourceId: string
 ): Promise<void> {
-  await requireAdmin(workspaceId, callerId);
+  await requireWorkspaceRole(workspaceId, callerId, "admin");
   const team = await findTeamById(workspaceId, teamId);
   if (!team) throw new TeamNotFoundError();
 
@@ -282,7 +264,7 @@ export async function setResourceAccessMode(
   mode: AccessMode,
   opts?: { autoGrant?: boolean }
 ): Promise<void> {
-  const role = await requireAdmin(workspaceId, callerId);
+  const role = await requireWorkspaceRole(workspaceId, callerId, "admin");
   const meta = await getResourceAccessMeta(workspaceId, resourceType, resourceId);
   if (!meta) {
     throw new HttpError(404, "RESOURCE_NOT_FOUND", `${resourceType.replace("_", " ")} not found`);
@@ -319,7 +301,7 @@ export async function getAccessMatrix(
   workspaceId: string,
   callerId: string
 ): Promise<AccessMatrix> {
-  const callerRole = await requireMember(workspaceId, callerId);
+  const callerRole = await requireWorkspaceRole(workspaceId, callerId, "viewer");
   const db = supabaseAdmin();
   const [teams, kbs, wfs] = await Promise.all([
     listTeams(workspaceId, callerId),

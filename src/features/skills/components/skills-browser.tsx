@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Search, Trash2, Zap } from "lucide-react";
+import { Plus, Trash2, Zap } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
+import { EmptyState } from "@/shared/ui/empty-state";
+import { SearchField } from "@/shared/ui/search-field";
 import { SegmentedControl } from "@/shared/ui/segmented-control";
 import type { ResolvedSkill, Skill, SkillStatus } from "@/features/skills/types";
 import { skillScope, SKILL_SCOPE_LABEL, type SkillScope } from "@/features/skills/scope";
@@ -122,19 +124,12 @@ export function SkillsBrowser({
           </button>
         </div>
 
-        <div className="concave-field relative mx-3.5 mb-3 rounded-[9px]">
-          <Search
-            size={15}
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"
-          />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search skills"
-            spellCheck={false}
-            className="h-9 w-full bg-transparent pl-[33px] pr-3 text-body text-text-primary outline-none placeholder:text-text-muted"
-          />
-        </div>
+        <SearchField
+          value={query}
+          onChange={setQuery}
+          placeholder="Search skills"
+          className="mx-3.5 mb-3"
+        />
 
         <SegmentedControl
           options={FILTERS}
@@ -296,24 +291,20 @@ function DetailPane({
   }, [slug]);
 
   if (!skill) {
-    return (
-      <div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-2.5 px-10 text-text-muted">
-        <Zap size={30} className="text-border-strong" />
-        {totalSkills === 0 ? (
+    return totalSkills === 0 ? (
+      <EmptyState
+        icon={Zap}
+        title="No skills yet."
+        description={
           <>
-            <p className="text-body font-medium text-text-secondary">
-              No skills yet.
-            </p>
-            <p className="max-w-[380px] text-center text-caption leading-relaxed">
-              Skills are procedural prompts your connected agent discovers
-              over MCP. Ask your agent to create one with{" "}
-              <code className="rounded bg-bg-inset px-1">dopl_skill</code>.
-            </p>
+            Skills are procedural prompts your connected agent discovers over
+            MCP. Ask your agent to create one with{" "}
+            <code className="rounded bg-bg-inset px-1">dopl_skill</code>.
           </>
-        ) : (
-          <p className="text-body">Select a skill to read it.</p>
-        )}
-      </div>
+        }
+      />
+    ) : (
+      <EmptyState icon={Zap} title="Select a skill to read it." />
     );
   }
 

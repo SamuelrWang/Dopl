@@ -11,7 +11,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { Copy, Check } from "lucide-react";
+import { CopyButton } from "@/shared/ui/copy-button";
 import { SECTION_BOX_INSET } from "@/shared/ui/section-box";
 import { cn } from "@/shared/lib/utils";
 import { buildClaudeCliHttp } from "../snippets";
@@ -25,14 +25,6 @@ export function RemoteConnect() {
 
   const url = `${origin}/api/mcp`;
   const cli = buildClaudeCliHttp(url);
-  const [copied, setCopied] = useState<string | null>(null);
-
-  function copy(text: string, id: string) {
-    if (typeof navigator === "undefined" || !navigator.clipboard) return;
-    void navigator.clipboard.writeText(text);
-    setCopied(id);
-    setTimeout(() => setCopied(null), 1500);
-  }
 
   return (
     <section className="w-full overflow-hidden rounded-[14px] border border-border-strong">
@@ -48,38 +40,14 @@ export function RemoteConnect() {
           once to sign in to Dopl — no API key to copy, and server updates roll
           out automatically.
         </p>
-        <Row
-          label="Claude Code"
-          text={cli}
-          id="http-cli"
-          copied={copied}
-          onCopy={copy}
-        />
-        <Row
-          label="MCP server URL (Desktop / Claude.ai)"
-          text={url}
-          id="http-url"
-          copied={copied}
-          onCopy={copy}
-        />
+        <Row label="Claude Code" text={cli} />
+        <Row label="MCP server URL (Desktop / Claude.ai)" text={url} />
       </div>
     </section>
   );
 }
 
-function Row({
-  label,
-  text,
-  id,
-  copied,
-  onCopy,
-}: {
-  label: string;
-  text: string;
-  id: string;
-  copied: string | null;
-  onCopy: (text: string, id: string) => void;
-}) {
+function Row({ label, text }: { label: string; text: string }) {
   return (
     <div className="space-y-1">
       <p className="text-micro font-mono uppercase tracking-wider text-text-muted">
@@ -89,18 +57,7 @@ function Row({
         <code className="flex-1 truncate font-mono text-small text-text-secondary">
           {text}
         </code>
-        <button
-          type="button"
-          onClick={() => onCopy(text, id)}
-          className="shrink-0 text-text-muted transition-colors hover:text-text-secondary"
-          title="Copy"
-        >
-          {copied === id ? (
-            <Check className="h-3.5 w-3.5" />
-          ) : (
-            <Copy className="h-3.5 w-3.5" />
-          )}
-        </button>
+        <CopyButton text={text} />
       </div>
     </div>
   );

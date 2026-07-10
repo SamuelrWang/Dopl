@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Check, Copy, X } from "lucide-react";
+import { useCopyToClipboard } from "@/shared/hooks/use-copy-to-clipboard";
 import { DEFAULT_MCP_URL } from "../constants";
 import { buildBootstrapPrompt } from "../bootstrap-prompt";
 
@@ -18,7 +19,7 @@ export function WelcomePopup() {
   const [open, setOpen] = useState(false);
   const [shown, setShown] = useState(false);
   const [origin, setOrigin] = useState("https://www.usedopl.com");
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopyToClipboard();
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -53,13 +54,6 @@ export function WelcomePopup() {
   const prompt = buildBootstrapPrompt(
     origin ? `${origin}/api/mcp` : DEFAULT_MCP_URL
   );
-
-  function copy() {
-    if (typeof navigator === "undefined" || !navigator.clipboard) return;
-    void navigator.clipboard.writeText(prompt);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  }
 
   // Portal to <body> so the popup escapes the AppShell root's z-30 stacking
   // context. Without this its z-50 is local to that context and the canvas
@@ -131,7 +125,7 @@ export function WelcomePopup() {
           </div>
           <button
             type="button"
-            onClick={copy}
+            onClick={() => void copy(prompt)}
             title="Copy"
             className="absolute right-2.5 top-2.5 text-[#98a2ad] hover:text-[#232a31] transition-colors cursor-pointer"
           >

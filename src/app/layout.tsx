@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Hanken_Grotesk, Geist_Mono, Space_Grotesk, JetBrains_Mono, Newsreader, Inter } from "next/font/google";
 import "./globals.css";
+import { QueryProvider } from "@/shared/api/query-provider";
 import { LayoutShell } from "@/shared/layout/layout-shell";
 import { ToastHost } from "@/shared/ui/toast";
 
@@ -112,7 +113,9 @@ export default function RootLayout({
             __html: `(function(){try{var p=location.pathname;if(p==='/'||p==='/pricing'){document.body.classList.remove('mosaic-bg');document.body.classList.add('landing-active');}}catch(e){}})();`,
           }}
         />
-        <LayoutShell>{children}</LayoutShell>
+        <QueryProvider>
+          <LayoutShell>{children}</LayoutShell>
+        </QueryProvider>
         <ToastHost />
       </body>
     </html>

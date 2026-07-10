@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { AlertTriangle } from "lucide-react";
-import { cn } from "@/shared/lib/utils";
+import { Switch } from "@/shared/ui/switch";
 import { toast } from "@/shared/ui/toast";
 import { KnowledgeApiError, updateBase } from "../client/api";
 
@@ -80,25 +80,12 @@ export function AgentWriteToggle({
             </div>
           ) : null}
         </div>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={enabled}
+        <Switch
+          checked={enabled}
           disabled={submitting}
-          onClick={() => handleToggle(!enabled)}
-          className={cn(
-            "shrink-0 inline-flex h-6 w-11 items-center rounded-full transition-colors",
-            enabled ? "bg-violet-500" : "bg-surface-raised-4",
-            submitting && "opacity-50 cursor-not-allowed"
-          )}
-        >
-          <span
-            className={cn(
-              "inline-block h-5 w-5 rounded-full bg-white shadow transition-transform",
-              enabled ? "translate-x-5" : "translate-x-0.5"
-            )}
-          />
-        </button>
+          onChange={(next) => void handleToggle(next)}
+          aria-label="Allow agent writes"
+        />
       </div>
     </div>
   );
