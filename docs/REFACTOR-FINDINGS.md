@@ -252,6 +252,14 @@ See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture and [plan 
 - Proposed resolution: defer — revisit when a workspace graph is large enough that the snapshot payload is felt (likely shape then: light cluster index + per-cluster object pages + id→name directory for cross-cluster refs).
 - Status: open
 
+### F-027: Chat transcripts + chat list are unbounded — deferred until transcripts have real size
+- Location: `GET /api/chats/[chatId]` (`chats/server/service.ts::getChat` → `repo.listMessages`, no limit), `GET /api/chats` (`listVisibleChats`, no limit)
+- Found during: chats cleanup pass (2026-07-10)
+- Severity: smell (scale)
+- Description: Opening a chat ships the entire transcript including `verbatim`. Measured live at decision time: 3 chats, 14 messages total, largest transcript < 1 KB — pagination now would be speculative. It also isn't free: the detail pane's copy-as-markdown builds from the full message array, and the MCP `dopl_chats` get op expects a complete transcript, so windowing needs a UI load-more + a full-fetch copy path + an explicit MCP contract decision. The repository `select("*")` sites were reviewed and left: the chats tables are consumed column-for-column by their DTO mappers (table ≈ DTO), so explicit lists would add typo fragility without shedding payload.
+- Proposed resolution: defer — trigger is transcripts reaching real size (large MCP session exports). Shape then: `GET /api/chats/[chatId]/messages?cursor=&limit=` (cursor = position) via `parsePageParams`/`Paginated<T>`, detail endpoint returns the first page + messageCount, UI loads more on scroll, copy/MCP fetch full explicitly.
+- Status: open
+
 ### F-021: Canvas panels don't team-filter workflow headers/nodes
 - Location: `src/features/canvas/server/load-server-state.ts` (panel load), canvas realtime
 - Found during: Teams feature build (2026-06-11)

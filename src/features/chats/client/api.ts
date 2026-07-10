@@ -1,3 +1,4 @@
+import { ApiError, apiRequest } from "@/shared/api/api-client";
 import type {
   Chat,
   ChatAccessMode,
@@ -24,33 +25,14 @@ interface RequestOpts {
 }
 
 async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
-  const headers: Record<string, string> = {};
-  if (opts.workspaceId) headers["x-workspace-id"] = opts.workspaceId;
-  if (opts.body !== undefined) headers["content-type"] = "application/json";
-
-  const res = await fetch(path, {
-    headers,
-    method: opts.method ?? "GET",
-    body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
-    credentials: "include",
-  });
-
-  if (res.status === 204) return undefined as unknown as T;
-  if (!res.ok) {
-    let code = "INTERNAL_ERROR";
-    let message = `Request failed with ${res.status}`;
-    try {
-      const body = (await res.json()) as {
-        error?: { code?: string; message?: string };
-      };
-      if (body?.error) {
-        code = body.error.code ?? code;
-        message = body.error.message ?? message;
-      }
-    } catch {}
-    throw new ChatApiError(res.status, code, message);
+  try {
+    return await apiRequest<T>(path, opts);
+  } catch (err) {
+    if (err instanceof ApiError) {
+      throw new ChatApiError(err.status, err.code, err.message);
+    }
+    throw err;
   }
-  return (await res.json()) as T;
 }
 
 export async function fetchChat(
