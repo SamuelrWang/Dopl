@@ -1,7 +1,8 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useMemo } from "react";
 import type { ReactNode } from "react";
+import { useApiQuery } from "@/shared/hooks/use-api-query";
 import type { WorkspaceResource } from "../types";
 
 interface WorkspaceResources {
@@ -14,11 +15,30 @@ const EMPTY: WorkspaceResources = { knowledge: [], skills: [], nameOf: () => nul
 
 const ResourcesContext = createContext<WorkspaceResources>(EMPTY);
 
+interface ResourceRow {
+  id: string;
+  name: string;
+  visibility: string;
+}
+
+const toResources = (rows: ResourceRow[] | undefined): WorkspaceResource[] =>
+  (rows ?? []).map((r) => ({
+    id: r.id,
+    name: r.name,
+    scope: r.visibility === "private" ? "Private" : "Workspace",
+    accessible: true,
+  }));
+
+const selectBases = (body: { bases: ResourceRow[] }) => toResources(body.bases);
+const selectSkills = (body: { skills: ResourceRow[] }) => toResources(body.skills);
+
 /**
  * The knowledge bases and skills the caller can reference from
- * ontology attributes. Both endpoints already enforce visibility
- * server-side, so whatever arrives here is what the caller may see —
- * the pickers never filter for security themselves.
+ * ontology attributes (ref pickers + name resolution on rendered ref
+ * attributes). Both endpoints already enforce visibility server-side,
+ * so whatever arrives here is what the caller may see — the pickers
+ * never filter for security themselves. Query-cached: revisits render
+ * names instantly without re-pulling both collections.
  */
 export function OntologyResourcesProvider({
   workspaceId,
@@ -27,52 +47,23 @@ export function OntologyResourcesProvider({
   workspaceId: string;
   children: ReactNode;
 }) {
-  const [knowledge, setKnowledge] = useState<WorkspaceResource[]>([]);
-  const [skills, setSkills] = useState<WorkspaceResource[]>([]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const headers = { "x-workspace-id": workspaceId };
-
-    fetch("/api/knowledge/bases", { headers })
-      .then((r) => (r.ok ? r.json() : { bases: [] }))
-      .then((body: { bases?: Array<{ id: string; name: string; visibility: string }> }) => {
-        if (cancelled) return;
-        setKnowledge(
-          (body.bases ?? []).map((b) => ({
-            id: b.id,
-            name: b.name,
-            scope: b.visibility === "private" ? "Private" : "Workspace",
-            accessible: true,
-          }))
-        );
-      })
-      .catch(() => undefined);
-
-    fetch("/api/skills", { headers })
-      .then((r) => (r.ok ? r.json() : { skills: [] }))
-      .then((body: { skills?: Array<{ id: string; name: string; visibility: string }> }) => {
-        if (cancelled) return;
-        setSkills(
-          (body.skills ?? []).map((s) => ({
-            id: s.id,
-            name: s.name,
-            scope: s.visibility === "private" ? "Private" : "Workspace",
-            accessible: true,
-          }))
-        );
-      })
-      .catch(() => undefined);
-
-    return () => {
-      cancelled = true;
-    };
-  }, [workspaceId]);
+  const basesQuery = useApiQuery("/api/knowledge/bases", {
+    workspaceId,
+    select: selectBases,
+  });
+  const skillsQuery = useApiQuery("/api/skills", {
+    workspaceId,
+    select: selectSkills,
+  });
+  const knowledge = basesQuery.data;
+  const skills = skillsQuery.data;
 
   const value = useMemo<WorkspaceResources>(() => {
+    const k = knowledge ?? [];
+    const s = skills ?? [];
     const byId = new Map<string, string>();
-    for (const r of [...knowledge, ...skills]) byId.set(r.id, r.name);
-    return { knowledge, skills, nameOf: (id) => byId.get(id) ?? null };
+    for (const r of [...k, ...s]) byId.set(r.id, r.name);
+    return { knowledge: k, skills: s, nameOf: (id) => byId.get(id) ?? null };
   }, [knowledge, skills]);
 
   return <ResourcesContext.Provider value={value}>{children}</ResourcesContext.Provider>;

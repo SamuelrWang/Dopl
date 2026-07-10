@@ -1,5 +1,6 @@
 "use client";
 
+import { ApiError, apiRequest } from "@/shared/api/api-client";
 import type { OntologyCluster, OntologyObject, OntologySnapshot } from "../types";
 import type { OntologyObjectUpdateInput } from "../schema";
 
@@ -17,27 +18,20 @@ export class OntologyApiError extends Error {
 async function request<T>(
   workspaceId: string,
   path: string,
-  init: RequestInit = {}
+  init: { method?: "GET" | "POST" | "PATCH" | "DELETE"; body?: unknown } = {}
 ): Promise<T> {
-  const res = await fetch(path, {
-    ...init,
-    headers: {
-      "content-type": "application/json",
-      "x-workspace-id": workspaceId,
-      ...init.headers,
-    },
-  });
-  if (res.status === 204) return undefined as T;
-  const body = await res.json().catch(() => null);
-  if (!res.ok) {
-    const err = body?.error ?? {};
-    throw new OntologyApiError(
-      res.status,
-      err.code ?? "UNKNOWN",
-      err.message ?? `Request failed (${res.status})`
-    );
+  try {
+    return await apiRequest<T>(path, {
+      workspaceId,
+      method: init.method,
+      body: init.body,
+    });
+  } catch (err) {
+    if (err instanceof ApiError) {
+      throw new OntologyApiError(err.status, err.code, err.message);
+    }
+    throw err;
   }
-  return body as T;
 }
 
 export function fetchSnapshot(workspaceId: string): Promise<OntologySnapshot> {
@@ -51,7 +45,7 @@ export async function createCluster(
   const { cluster } = await request<{ cluster: OntologyCluster }>(
     workspaceId,
     "/api/ontology/clusters",
-    { method: "POST", body: JSON.stringify(input) }
+    { method: "POST", body: input }
   );
   return cluster;
 }
@@ -64,7 +58,7 @@ export async function updateCluster(
   const { cluster } = await request<{ cluster: OntologyCluster }>(
     workspaceId,
     `/api/ontology/clusters/${clusterId}`,
-    { method: "PATCH", body: JSON.stringify(input) }
+    { method: "PATCH", body: input }
   );
   return cluster;
 }
@@ -84,7 +78,7 @@ export async function createObject(
   const { object } = await request<{ object: OntologyObject }>(
     workspaceId,
     "/api/ontology/objects",
-    { method: "POST", body: JSON.stringify(input) }
+    { method: "POST", body: input }
   );
   return object;
 }
@@ -97,7 +91,7 @@ export async function updateObject(
   const { object } = await request<{ object: OntologyObject }>(
     workspaceId,
     `/api/ontology/objects/${objectId}`,
-    { method: "PATCH", body: JSON.stringify(input) }
+    { method: "PATCH", body: input }
   );
   return object;
 }

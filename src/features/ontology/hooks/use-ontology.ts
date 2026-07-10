@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "@/shared/ui/toast";
 import * as api from "../client/api";
 import {
@@ -32,28 +33,50 @@ export function useOntology(workspaceId: string): {
   ) => Promise<OntologyObject | null>;
 } {
   const [graph, rawDispatch] = useReducer(graphReducer, EMPTY_GRAPH);
-  const [status, setStatus] = useState<OntologyStatus>("loading");
   const graphRef = useRef(graph);
   useEffect(() => {
     graphRef.current = graph;
   }, [graph]);
   const timersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
 
+  // Snapshot through the query cache: a revisit paints instantly from the
+  // cached graph while a background refetch brings it current. Focus
+  // refetch stays OFF — the reducer holds optimistic edits and a surprise
+  // SNAPSHOT_SET mid-edit would clobber them.
+  const snapshotQuery = useQuery({
+    queryKey: ["ontology-snapshot", workspaceId],
+    queryFn: () => api.fetchSnapshot(workspaceId),
+    refetchOnWindowFocus: false,
+    refetchOnMount: "always",
+    staleTime: 0,
+  });
+
+  // Seed/refresh the reducer from query data — but never over local edits:
+  // once the user has dispatched anything, later refetch results are
+  // ignored (the debounced writes own persistence; next mount refetches).
+  const dirtyRef = useRef(false);
+  const seededRef = useRef(false);
+  const snapshot = snapshotQuery.data;
   useEffect(() => {
-    let cancelled = false;
-    api
-      .fetchSnapshot(workspaceId)
-      .then((snapshot) => {
-        if (cancelled) return;
-        rawDispatch({ type: "SNAPSHOT_SET", snapshot });
-        setStatus("ready");
-      })
-      .catch(() => {
-        if (!cancelled) setStatus("error");
-      });
+    dirtyRef.current = false;
+    seededRef.current = false;
+  }, [workspaceId]);
+  useEffect(() => {
+    if (!snapshot) return;
+    if (seededRef.current && dirtyRef.current) return;
+    rawDispatch({ type: "SNAPSHOT_SET", snapshot });
+    seededRef.current = true;
+  }, [snapshot]);
+
+  const status: OntologyStatus = snapshotQuery.error
+    ? "error"
+    : snapshot
+      ? "ready"
+      : "loading";
+
+  useEffect(() => {
     const timers = timersRef.current;
     return () => {
-      cancelled = true;
       // Flush (not drop) pending debounced saves so edits made within
       // the debounce window survive navigating away.
       for (const [key, timer] of timers) {
@@ -150,6 +173,7 @@ export function useOntology(workspaceId: string): {
 
   const dispatch = useCallback(
     (action: GraphAction) => {
+      dirtyRef.current = true;
       rawDispatch(action);
       const objectId = objectIdToSync(action);
       if (objectId) scheduleObjectSync(objectId);
@@ -166,6 +190,7 @@ export function useOntology(workspaceId: string): {
 
   const createCluster = useCallback(async (): Promise<OntologyCluster | null> => {
     try {
+      dirtyRef.current = true;
       const cluster = await api.createCluster(workspaceId, { name: "New cluster" });
       rawDispatch({ type: "CLUSTER_ADD", cluster });
       const column = await api.createObject(workspaceId, {
@@ -191,6 +216,7 @@ export function useOntology(workspaceId: string): {
     ): Promise<OntologyObject | null> => {
       const isColumn = "clusterId" in target;
       try {
+        dirtyRef.current = true;
         const object = await api.createObject(workspaceId, {
           ...target,
           name: isColumn ? "Untitled column" : "New object",

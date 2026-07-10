@@ -244,6 +244,14 @@ See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture and [plan 
 - Proposed resolution: first three deleted (owner delegated the call); canvases routes ride the canvas decision.
 - Status: open (canvases only)
 
+### F-026: Ontology loads the whole workspace graph per visit — deliberate, revisit at scale
+- Location: `GET /api/ontology` (`ontology/server/service.ts::getSnapshot`), `use-ontology.ts`
+- Found during: ontology cleanup pass (2026-07-10)
+- Severity: smell (scale)
+- Description: The snapshot pulls every cluster/object/membership/relationship. Per-cluster lazy loading was evaluated and deferred: the whole-graph client model is load-bearing — cluster tabs switch instantly client-side (history.replaceState, no remount), relationship/ref editors address objects across clusters, and the optimistic reducer assumes a complete graph. Splitting it means "objects may be missing" handling through the reducer + editors — break risk on a live feature for no perceptible gain at current graph sizes. Mitigations shipped instead: snapshot served through the query cache (instant repaint on revisit, background refresh with a dirty-guard so refetches never clobber optimistic edits) and the resources provider cached.
+- Proposed resolution: defer — revisit when a workspace graph is large enough that the snapshot payload is felt (likely shape then: light cluster index + per-cluster object pages + id→name directory for cross-cluster refs).
+- Status: open
+
 ### F-021: Canvas panels don't team-filter workflow headers/nodes
 - Location: `src/features/canvas/server/load-server-state.ts` (panel load), canvas realtime
 - Found during: Teams feature build (2026-06-11)
