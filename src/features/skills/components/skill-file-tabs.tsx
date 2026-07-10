@@ -42,10 +42,12 @@ interface FileTabsProps {
 }
 
 /**
- * Horizontal tab strip over a skill's `.md` files. SKILL.md is pinned
- * leftmost and is non-removable / non-renamable. Double-click any
- * other tab name to rename. The "+ Add file" button at the end calls
- * `onAdd` which the parent wires to the API.
+ * Horizontal tab strip over a skill's `.md` files — a `.concave-track`
+ * with a `.raised-tab` active pill, same switcher language as the
+ * ontology cluster tabs. SKILL.md is pinned leftmost and is
+ * non-removable / non-renamable. Double-click any other tab name to
+ * rename. The "+ Add file" button at the end calls `onAdd` which the
+ * parent wires to the API.
  */
 export function FileTabs({
   files,
@@ -57,23 +59,25 @@ export function FileTabs({
   onRename,
 }: FileTabsProps) {
   return (
-    <div className="flex items-stretch border-b border-border-subtle px-2 overflow-x-auto">
-      {files.map((file) => (
-        <FileTab
-          key={file.id}
-          file={file}
-          active={file.id === activeId}
-          canEdit={canEdit}
-          onSelect={() => onSelect(file.id)}
-          onRemove={() => onRemove(file)}
-          onRename={(name) => onRename(file, name)}
-        />
-      ))}
+    <div className="flex items-center gap-2 border-b border-border-subtle px-3 py-2 overflow-x-auto">
+      <div className="concave-track flex items-center gap-1">
+        {files.map((file) => (
+          <FileTab
+            key={file.id}
+            file={file}
+            active={file.id === activeId}
+            canEdit={canEdit}
+            onSelect={() => onSelect(file.id)}
+            onRemove={() => onRemove(file)}
+            onRename={(name) => onRename(file, name)}
+          />
+        ))}
+      </div>
       {canEdit && (
         <button
           type="button"
           onClick={onAdd}
-          className="ml-1 my-1.5 flex items-center gap-1 px-2 py-1 rounded-md text-caption text-text-muted hover:bg-surface-raised-2 hover:text-text-primary transition-colors cursor-pointer"
+          className="flex shrink-0 items-center gap-1 px-2 py-1 rounded-md text-caption text-text-muted hover:bg-surface-raised-2 hover:text-text-primary transition-colors cursor-pointer"
         >
           <Plus size={11} />
           Add file
@@ -125,9 +129,9 @@ function FileTab({
   return (
     <div
       className={cn(
-        "group relative flex items-center gap-1.5 pl-3 pr-2 cursor-pointer transition-colors",
+        "group relative flex h-6 items-center gap-1.5 rounded-[6px] pl-2.5 pr-1.5 cursor-pointer transition-colors",
         active
-          ? "text-text-primary"
+          ? "raised-tab text-text-primary"
           : "text-text-secondary hover:text-text-primary"
       )}
       onClick={onSelect}
@@ -183,7 +187,7 @@ function FileTab({
         </span>
       ) : (
         <span
-          className="text-small py-2"
+          className="text-caption font-medium whitespace-nowrap"
           onDoubleClick={(e) => {
             if (isPrimary) return;
             // Audit A-013: read-only members can't double-click to
@@ -209,9 +213,6 @@ function FileTab({
         >
           <X size={10} className="text-text-muted" />
         </button>
-      )}
-      {active && (
-        <span className="absolute left-2 right-2 -bottom-px h-px bg-text-primary" />
       )}
     </div>
   );

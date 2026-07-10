@@ -7,7 +7,7 @@ import { useWorkspaceResources } from "../hooks/use-workspace-resources";
 import { SectionBox } from "@/shared/ui/section-box";
 import type { GraphAction, GraphState } from "../graph-state";
 import type { OntologyObject } from "../types";
-import { CascadeSelect } from "./cascade-select";
+import { ObjectPickMenu } from "./object-pick-menu";
 import { CHIP, FIELD_WELL } from "./ontology-bits";
 import { PickMenu } from "./pick-menu";
 
@@ -195,7 +195,7 @@ function AttrValueEditor({
             </span>
           );
         })}
-        <CascadeSelect
+        <ObjectPickMenu
           graph={graph}
           excludeIds={[object.id, ...v.value]}
           onPick={(id) => onChange({ ...attr, value: { kind: "ref", value: [...v.value, id] } })}

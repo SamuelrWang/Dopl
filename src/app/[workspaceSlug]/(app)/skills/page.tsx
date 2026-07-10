@@ -11,6 +11,7 @@ import { redirect } from "next/navigation";
 import { getUser } from "@/shared/supabase/server";
 import { resolvePageWorkspace } from "@/features/workspaces/server/segment";
 import { resolveMembershipOrThrow } from "@/features/workspaces/server/service";
+import { meetsMinRole } from "@/features/workspaces/types";
 import { workspaceSegment } from "@/features/workspaces/url";
 import {
   buildSkillContext,
@@ -45,6 +46,7 @@ export default async function SkillsIndexPage({ params }: PageProps) {
       workspaceSlug={workspaceSegment(workspace)}
       workspaceId={workspace.id}
       currentUserId={user.id}
+      isAdmin={meetsMinRole(membership.role, "admin")}
       skills={skills}
     />
   );

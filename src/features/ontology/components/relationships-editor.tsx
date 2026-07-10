@@ -6,7 +6,7 @@ import type { Dispatch } from "react";
 import { SectionBox } from "@/shared/ui/section-box";
 import type { GraphAction, GraphState } from "../graph-state";
 import type { OntologyObject } from "../types";
-import { CascadeSelect } from "./cascade-select";
+import { ObjectPickMenu } from "./object-pick-menu";
 import { CHIP, FIELD_WELL } from "./ontology-bits";
 
 /**
@@ -85,7 +85,7 @@ export function RelationshipsEditor({
                   </span>
                 );
               })}
-              <CascadeSelect
+              <ObjectPickMenu
                 graph={graph}
                 excludeIds={[object.id, ...rel.targetIds]}
                 onPick={(id) =>
@@ -124,7 +124,7 @@ export function RelationshipsEditor({
             placeholder="edge label (e.g. assigned to)…"
             className={`${FIELD_WELL} h-7 w-52 px-2.5 text-body text-text-primary placeholder:text-text-muted`}
           />
-          <CascadeSelect
+          <ObjectPickMenu
             graph={graph}
             excludeIds={[object.id]}
             onPick={addEdge}

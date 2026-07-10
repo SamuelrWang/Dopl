@@ -1,24 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import Link from "next/link";
-import {
-  ArrowUpRight,
-  FileText,
-  Plus,
-  Search,
-  Trash2,
-  Zap,
-} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Plus, Search, Trash2, Zap } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { SegmentedControl } from "@/shared/ui/segmented-control";
-import { SectionBox } from "@/shared/ui/section-box";
-import { SourceIcon } from "@/shared/ui/source-icon";
-import type { SourceProvider } from "@/shared/lib/source-types";
-import type { Skill, SkillStatus } from "@/features/skills/types";
+import type { ResolvedSkill, Skill, SkillStatus } from "@/features/skills/types";
 import { skillScope, SKILL_SCOPE_LABEL, type SkillScope } from "@/features/skills/scope";
-import { skillSegment } from "@/features/skills/url";
+import { fetchSkill } from "@/features/skills/client/api";
 import { SKILL_SCOPE_ICONS } from "./skill-share-control";
+import { SkillView } from "./skill-view";
+import { SkillViewSkeleton } from "./skill-view-skeleton";
 import { SkillsTrashModal } from "./skills-trash-modal";
 
 const ICON_BTN =
@@ -40,14 +31,6 @@ const EMPTY_COPY: Record<SkillFilter, string> = {
   workspace: "No skills have been shared with the workspace yet.",
 };
 
-const KNOWN_PROVIDERS = new Set<SourceProvider>([
-  "slack",
-  "google-drive",
-  "gmail",
-  "notion",
-  "github",
-]);
-
 /** Postgres timestamps are full ISO strings; render "Jul 8". */
 function shortDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", {
@@ -60,19 +43,21 @@ interface Props {
   workspaceSlug: string;
   workspaceId: string;
   currentUserId: string;
+  isAdmin: boolean;
   skills: Skill[];
 }
 
 /**
  * Skills index — two-pane .page-float browser matching the chats /
  * knowledge pattern: the scope-filtered list on the left (All / Private
- * / Shared), the selected skill's overview on the right with the CTA
- * into the tabbed editor at /skills/[slug].
+ * / Shared), the selected skill's FULL tabbed editor on the right. No
+ * separate detail route — selecting a row loads the editor in place.
  */
 export function SkillsBrowser({
   workspaceSlug,
   workspaceId,
   currentUserId,
+  isAdmin,
   skills,
 }: Props) {
   const [trashOpen, setTrashOpen] = useState(false);
@@ -176,12 +161,14 @@ export function SkillsBrowser({
         </div>
       </div>
 
-      {/* Right detail pane */}
+      {/* Right pane — the full editor for the selected skill */}
       <DetailPane
         skill={selected}
         workspaceSlug={workspaceSlug}
         currentUserId={currentUserId}
+        isAdmin={isAdmin}
         totalSkills={skills.length}
+        onDuplicated={(created) => setSelectedId(created.id)}
       />
 
       <SkillsTrashModal
@@ -260,28 +247,54 @@ function StatusChip({ status }: { status: SkillStatus }) {
   );
 }
 
-function ScopePill({ skill }: { skill: Skill }) {
-  const scope = skillScope(skill);
-  const Icon = SKILL_SCOPE_ICONS[scope];
-  return (
-    <span className="flex h-6 shrink-0 items-center gap-1.5 rounded-full border border-border-strong bg-bg-inset px-2.5 text-caption font-medium text-text-secondary">
-      <Icon size={11} />
-      {SKILL_SCOPE_LABEL[scope]}
-    </span>
-  );
-}
-
+/**
+ * Right pane: loads the selected skill's full body client-side and
+ * renders the inline `SkillView` editor, keyed by skill id so switching
+ * rows remounts fresh editor state (and flushes pending saves).
+ */
 function DetailPane({
   skill,
   workspaceSlug,
   currentUserId,
+  isAdmin,
   totalSkills,
+  onDuplicated,
 }: {
   skill: Skill | null;
   workspaceSlug: string;
   currentUserId: string;
+  isAdmin: boolean;
   totalSkills: number;
+  onDuplicated: (skill: Skill) => void;
 }) {
+  const [resolved, setResolved] = useState<ResolvedSkill | null>(null);
+  const [failed, setFailed] = useState(false);
+  const slug = skill?.slug ?? null;
+
+  // Reset for the incoming skill during render (sanctioned
+  // adjust-state-during-render pattern — no effect round-trip).
+  const [lastSlug, setLastSlug] = useState(slug);
+  if (lastSlug !== slug) {
+    setLastSlug(slug);
+    setResolved(null);
+    setFailed(false);
+  }
+
+  useEffect(() => {
+    if (!slug) return;
+    let cancelled = false;
+    fetchSkill(slug)
+      .then((r) => {
+        if (!cancelled) setResolved(r);
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [slug]);
+
   if (!skill) {
     return (
       <div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-2.5 px-10 text-text-muted">
@@ -304,101 +317,32 @@ function DetailPane({
     );
   }
 
-  const isMine = skill.createdBy === currentUserId;
+  if (failed) {
+    return (
+      <div className="flex min-w-0 flex-1 items-center justify-center px-10">
+        <p className="text-body text-text-muted">
+          Couldn&apos;t load {skill.name} — select it again to retry.
+        </p>
+      </div>
+    );
+  }
+
+  if (!resolved || resolved.skill.id !== skill.id) {
+    return (
+      <div className="min-w-0 flex-1 overflow-hidden">
+        <SkillViewSkeleton />
+      </div>
+    );
+  }
 
   return (
-    <div className="flex min-w-0 flex-1 flex-col">
-      <div className="flex h-[52px] shrink-0 items-center gap-2 border-b border-border-default px-3.5">
-        <span className="min-w-0 truncate text-lead font-semibold text-text-primary">
-          {skill.name}
-        </span>
-        <StatusChip status={skill.status} />
-        <span className="flex-1" />
-        <ScopePill skill={skill} />
-        <Link
-          href={`/${workspaceSlug}/skills/${skillSegment(skill)}`}
-          className="btn-light flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-small font-medium text-text-primary"
-        >
-          <FileText size={12} />
-          Open skill
-          <ArrowUpRight size={12} className="text-text-muted" />
-        </Link>
-      </div>
-
-      <div className="min-h-0 flex-1 overflow-y-auto px-14 pb-16 pt-8">
-        <div className="mx-auto flex max-w-[760px] flex-col gap-5">
-          <SectionBox label="Description">
-            <p className="px-4 py-3.5 text-lead leading-relaxed text-text-primary">
-              {skill.description || "No description yet."}
-            </p>
-          </SectionBox>
-
-          <SectionBox label="Triggers">
-            <div className="flex flex-col gap-3 px-4 py-3.5">
-              <div>
-                <p className="mb-1 text-label font-semibold uppercase tracking-wide text-text-secondary">
-                  When to use
-                </p>
-                <p className="text-lead leading-relaxed text-text-primary">
-                  {skill.whenToUse}
-                </p>
-              </div>
-              {skill.whenNotToUse && (
-                <div>
-                  <p className="mb-1 text-label font-semibold uppercase tracking-wide text-text-secondary">
-                    When NOT to use
-                  </p>
-                  <p className="text-lead leading-relaxed text-text-primary">
-                    {skill.whenNotToUse}
-                  </p>
-                </div>
-              )}
-            </div>
-          </SectionBox>
-
-          {skill.connectors.length > 0 && (
-            <SectionBox
-              label="Connectors"
-              meta={`${skill.connectors.length}`}
-            >
-              <div className="flex flex-wrap gap-2 px-4 py-3.5">
-                {skill.connectors.map((c) => (
-                  <span
-                    key={c.provider}
-                    title={c.usedFor}
-                    className={cn(
-                      "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-caption",
-                      c.status === "connected"
-                        ? "border-border-strong bg-bg-elevated text-text-primary"
-                        : "border-border-subtle bg-surface-raised-1 text-text-secondary"
-                    )}
-                  >
-                    {KNOWN_PROVIDERS.has(c.provider) && (
-                      <SourceIcon
-                        provider={c.provider as SourceProvider}
-                        size="sm"
-                      />
-                    )}
-                    <span>{c.name}</span>
-                    {c.status === "available" && (
-                      <span className="text-micro text-text-muted">
-                        Not connected
-                      </span>
-                    )}
-                  </span>
-                ))}
-              </div>
-            </SectionBox>
-          )}
-
-          <p className="px-1 text-caption text-text-muted">
-            Updated {shortDate(skill.updatedAt)} · slug{" "}
-            <code className="rounded bg-bg-inset px-1">{skill.slug}</code>
-            {isMine ? " · created by you" : ""} · agent write{" "}
-            {skill.agentWriteEnabled ? "on" : "off"}
-          </p>
-        </div>
-      </div>
-    </div>
+    <SkillView
+      key={resolved.skill.id}
+      resolved={resolved}
+      workspaceSlug={workspaceSlug}
+      isAdmin={isAdmin}
+      currentUserId={currentUserId}
+      onDuplicated={onDuplicated}
+    />
   );
 }

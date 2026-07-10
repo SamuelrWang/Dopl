@@ -1,15 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  BookOpen,
-  Check,
-  Copy,
-  Download,
-  History,
-  ShieldCheck,
-  Workflow,
-} from "lucide-react";
+import { Copy, Download, History } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/shared/lib/utils";
 import { EditableTitle } from "@/shared/layout/editable-title";
@@ -30,19 +22,12 @@ import {
   SaveStatusIndicator,
   type SaveStatus,
 } from "@/shared/editor/doc-editor";
-import { SourceIcon } from "@/shared/ui/source-icon";
-import type { SourceProvider } from "@/shared/lib/source-types";
 import {
   PRIMARY_SKILL_FILE_NAME,
   type ResolvedSkill,
   type Skill,
   type SkillFile,
-  type SkillUsage,
-  type SkillUsedBy,
-  type WorkspaceKbSummary,
 } from "@/features/skills/types";
-import { parseSkillBody } from "@/features/skills/skill-body";
-import { lintSkill, type SkillLintIssue } from "@/features/skills/skill-lint";
 import {
   SkillApiError,
   createSkillFile,
@@ -60,7 +45,6 @@ import { SkillHistoryPanel } from "./skill-history-panel";
 import { SkillShareControl } from "./skill-share-control";
 import {
   errMessage,
-  escapeRegExp,
   primaryFileId,
   renameErrDescription,
   sortFiles,
@@ -68,50 +52,36 @@ import {
 
 interface Props {
   resolved: ResolvedSkill;
-  workspaceKbs: WorkspaceKbSummary[];
   workspaceSlug: string;
-  /** Clusters + workflows this skill is attached to (server-fetched). */
-  usedBy: SkillUsedBy;
-  /** Agent read activity (server-fetched from mcp_events). */
-  usage: SkillUsage;
   /** With `currentUserId`, gates the sharing control next to the title
    *  (owner or workspace admin). */
   isAdmin: boolean;
   currentUserId: string;
+  /** Duplicate landed — the browser selects the new skill. */
+  onDuplicated?: (skill: Skill) => void;
 }
-
-const KNOWN_PROVIDERS = new Set<SourceProvider>([
-  "slack",
-  "google-drive",
-  "gmail",
-  "notion",
-  "github",
-]);
 
 const AUTOSAVE_DELAY_MS = 1500;
 
 /**
- * Skill detail page — single chat-shell-style panel.
+ * The skill editor pane — rendered inline in the skills browser's
+ * detail pane (no separate route).
  *
- * Layout: file tabs across the top, DocEditor for the active file,
- * right rail with workspace KB picker + connectors strip. Dropping
- * a tab, renaming, or adding a file all hit the API; body edits
- * autosave per file.
+ * Layout: title/share/save header, file tabs across the top, DocEditor
+ * for the active file. Dropping a tab, renaming, or adding a file all
+ * hit the API; body edits autosave per file.
  *
  * State model: `files` mirrors the server, updated optimistically on
- * each successful save / create / rename / delete. The body the editor
- * shows lives in this mirror, so KB-toggle insertions and user typing
- * are immediately visible. Per-file debounce timers fire a PUT after
- * 1.5s of inactivity.
+ * each successful save / create / rename / delete. Per-file debounce
+ * timers fire a PUT after 1.5s of inactivity. Parent must key this
+ * component by skill id so switching skills remounts fresh state.
  */
 export function SkillView({
   resolved,
-  workspaceKbs,
   workspaceSlug,
-  usedBy,
-  usage,
   isAdmin,
   currentUserId,
+  onDuplicated,
 }: Props) {
   const { skill } = resolved;
 
@@ -149,6 +119,8 @@ export function SkillView({
   const access = useMyAccessContext();
   const accessLevel = access.resolve("skill", skill.id);
   const canEdit = accessLevel == null ? true : meetsLevel(accessLevel, "edit");
+
+  const router = useRouter();
 
   const [files, setFiles] = useState<SkillFile[]>(() =>
     sortFiles(resolved.files)
@@ -544,48 +516,8 @@ export function SkillView({
     [skill.slug]
   );
 
-  // KB references parsed from every file's current body — drives the
-  // right-rail checkbox state.
-  const referencedKbSlugs = useMemo(() => {
-    const set = new Set<string>();
-    for (const file of files) {
-      const refs = parseSkillBody(file.body).references;
-      for (const ref of refs) {
-        if (ref.kind === "kb") set.add(ref.slug);
-      }
-    }
-    return set;
-  }, [files]);
-
-  const lintIssues = useMemo(
-    () => lintSkill({ ...resolved, skill, files }),
-    [resolved, skill, files]
-  );
-
-  const toggleKb = useCallback(
-    (kb: WorkspaceKbSummary) => {
-      if (!activeFile) return;
-      const linked = referencedKbSlugs.has(kb.slug);
-      const current = activeFile.body;
-      if (linked) {
-        const re = new RegExp(
-          `\\[[^\\]]+\\]\\(dopl://kb/${escapeRegExp(kb.slug)}\\)`,
-          "g"
-        );
-        updateActiveBody(current.replace(re, kb.name));
-      } else {
-        const insert = `[${kb.name}](dopl://kb/${kb.slug})`;
-        const next = current.trim()
-          ? `${current.replace(/\s*$/, "")}\n\n${insert}\n`
-          : `${insert}\n`;
-        updateActiveBody(next);
-      }
-    },
-    [activeFile, referencedKbSlugs, updateActiveBody]
-  );
-
   return (
-    <div className="page-float flex flex-col antialiased">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col antialiased">
       <div className="flex h-11 shrink-0 items-center gap-2 border-b border-border-subtle px-4">
         <div className="flex items-center gap-2 min-w-0 flex-1">
             <EditableTitle
@@ -593,6 +525,9 @@ export function SkillView({
               onSave={async (next) => {
                 const saved = await updateSkill(skill.slug, { name: next });
                 setDisplayedName(saved.name);
+                // The browser's list pane renders server-fetched names —
+                // refresh so the row matches the new title.
+                router.refresh();
               }}
               onError={(err) =>
                 toast({ title: "Couldn't rename", description: errMessage(err) })
@@ -630,11 +565,7 @@ export function SkillView({
         </div>
         <AvatarStack users={otherEditors} />
         <SaveStatusIndicator state={saveStatus} />
-        <HeaderActions
-          slug={skill.slug}
-          workspaceSlug={workspaceSlug}
-          canEdit={canEdit}
-        />
+        <HeaderActions slug={skill.slug} canEdit={canEdit} onDuplicated={onDuplicated} />
         <button
           type="button"
           onClick={() => setHistoryOpen((v) => !v)}
@@ -727,20 +658,6 @@ export function SkillView({
               }}
             />
           )}
-
-          {/* Right rail */}
-          <aside className="w-72 shrink-0 flex flex-col border-l border-border-default overflow-hidden">
-            <KbPicker
-              kbs={workspaceKbs}
-              referenced={referencedKbSlugs}
-              onToggle={toggleKb}
-              workspaceSlug={workspaceSlug}
-            />
-            <HealthStrip issues={lintIssues} />
-            <ActivityStrip usage={usage} />
-            <UsedByStrip usedBy={usedBy} />
-            <ConnectorsStrip connectors={skill.connectors} />
-          </aside>
         </div>
       </div>
     </div>
@@ -751,12 +668,12 @@ export function SkillView({
 
 function HeaderActions({
   slug,
-  workspaceSlug,
   canEdit,
+  onDuplicated,
 }: {
   slug: string;
-  workspaceSlug: string;
   canEdit: boolean;
+  onDuplicated?: (skill: Skill) => void;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -781,7 +698,9 @@ function HeaderActions({
             try {
               const created = await duplicateSkill(slug);
               toast({ title: "Skill duplicated", description: created.skill.name });
-              router.push(`/${workspaceSlug}/skills/${created.skill.slug}`);
+              onDuplicated?.(created.skill);
+              router.refresh();
+              setBusy(false);
             } catch (err) {
               toast({ title: "Couldn't duplicate", description: errMessage(err) });
               setBusy(false);
@@ -796,208 +715,3 @@ function HeaderActions({
     </>
   );
 }
-
-// ── Health strip ─────────────────────────────────────────────────────
-
-function HealthStrip({ issues }: { issues: SkillLintIssue[] }) {
-  const errors = issues.filter((i) => i.level === "error").length;
-  return (
-    <div className="border-t border-border-subtle px-4 py-3">
-      <div className="mb-1 flex items-center justify-between">
-        <span className="flex items-center gap-1.5 text-label font-semibold uppercase tracking-wide text-text-secondary">
-          <ShieldCheck size={11} className={errors > 0 ? "text-danger" : issues.length > 0 ? "text-warning" : "text-success"} />
-          Health
-        </span>
-        <span className="text-micro text-text-muted">
-          {issues.length === 0 ? "all checks pass" : `${issues.length} issue${issues.length === 1 ? "" : "s"}`}
-        </span>
-      </div>
-      {issues.length > 0 && (
-        <ul className="space-y-1">
-          {issues.map((issue, i) => (
-            <li
-              key={i}
-              className={cn(
-                "text-caption leading-snug",
-                issue.level === "error" ? "text-danger" : "text-text-secondary"
-              )}
-            >
-              {issue.message}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
-// ── Agent-activity strip ─────────────────────────────────────────────
-
-function ActivityStrip({ usage }: { usage: SkillUsage }) {
-  const last = usage.lastUsedAt
-    ? new Date(usage.lastUsedAt).toLocaleDateString(undefined, {
-        month: "short",
-        day: "numeric",
-      })
-    : null;
-  return (
-    <div className="border-t border-border-subtle px-4 py-3">
-      <div className="mb-1 flex items-center justify-between">
-        <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
-          Agent activity
-        </span>
-        <span className="text-micro text-text-muted">30d</span>
-      </div>
-      <p className="text-caption leading-relaxed text-text-secondary">
-        {usage.count30d === 0
-          ? "No agent reads yet."
-          : `${usage.count30d} read${usage.count30d === 1 ? "" : "s"}${last ? ` · last ${last}` : ""}`}
-      </p>
-    </div>
-  );
-}
-
-// ── Used-by strip ────────────────────────────────────────────────────
-
-function UsedByStrip({ usedBy }: { usedBy: SkillUsedBy }) {
-  const total = usedBy.workflows.length;
-  return (
-    <div className="border-t border-border-subtle px-4 py-3">
-      <div className="mb-2 flex items-center justify-between">
-        <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
-          Used by
-        </span>
-        <span className="text-micro text-text-muted">{total}</span>
-      </div>
-      {total === 0 ? (
-        <p className="text-caption leading-relaxed text-text-muted">
-          Not attached to any workflow yet.
-        </p>
-      ) : (
-        <div className="flex flex-wrap gap-1.5">
-          {usedBy.workflows.map((w) => (
-            <span
-              key={`w-${w.id}`}
-              className="inline-flex items-center gap-1.5 rounded-full border border-border-default bg-surface-raised-1 px-2 py-0.5 text-caption text-text-secondary"
-            >
-              <Workflow size={10} className="text-text-muted" />
-              <span className="max-w-[140px] truncate">{w.name}</span>
-            </span>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── KB picker rail ───────────────────────────────────────────────────
-
-interface KbPickerProps {
-  kbs: WorkspaceKbSummary[];
-  referenced: Set<string>;
-  onToggle: (kb: WorkspaceKbSummary) => void;
-  workspaceSlug: string;
-}
-
-function KbPicker({ kbs, referenced, onToggle }: KbPickerProps) {
-  return (
-    <div className="flex-1 min-h-0 flex flex-col">
-      <div className="px-4 pt-4 pb-2 flex items-center justify-between">
-        <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
-          Knowledge bases
-        </span>
-        <span className="text-micro text-text-muted">
-          {referenced.size}/{kbs.length}
-        </span>
-      </div>
-      <div className="flex-1 min-h-0 overflow-y-auto px-2 pb-2 space-y-0.5">
-        {kbs.length === 0 ? (
-          <p className="px-2 py-3 text-caption text-text-muted leading-relaxed">
-            No knowledge bases in this workspace yet.
-          </p>
-        ) : (
-          kbs.map((kb) => {
-            const linked = referenced.has(kb.slug);
-            return (
-              <button
-                key={kb.slug}
-                type="button"
-                onClick={() => onToggle(kb)}
-                className={cn(
-                  "w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md text-left transition-colors cursor-pointer",
-                  linked
-                    ? "bg-bg-inset hover:bg-bg-inset-hover"
-                    : "hover:bg-surface-raised-2"
-                )}
-              >
-                <span
-                  className={cn(
-                    "shrink-0 w-4 h-4 rounded border flex items-center justify-center transition-colors",
-                    linked
-                      ? "border-border-active bg-surface-invert"
-                      : "border-border-strong"
-                  )}
-                >
-                  {linked && <Check size={10} className="text-text-on-invert" />}
-                </span>
-                <BookOpen
-                  size={11}
-                  className={cn(
-                    "shrink-0",
-                    linked ? "text-text-primary" : "text-text-muted"
-                  )}
-                />
-                <span className="flex-1 min-w-0 truncate text-body text-text-primary">
-                  {kb.name}
-                </span>
-                <span className="shrink-0 text-micro text-text-muted">
-                  {kb.slug}
-                </span>
-              </button>
-            );
-          })
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ── Connectors strip ─────────────────────────────────────────────────
-
-function ConnectorsStrip({
-  connectors,
-}: {
-  connectors: Skill["connectors"];
-}) {
-  if (connectors.length === 0) return null;
-  return (
-    <div className="border-t border-border-subtle px-4 py-3">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
-          Connectors
-        </span>
-      </div>
-      <div className="flex flex-wrap gap-1.5">
-        {connectors.map((c) => {
-          const known = KNOWN_PROVIDERS.has(c.provider);
-          return (
-            <span
-              key={c.provider}
-              className={cn(
-                "inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded text-caption",
-                c.status === "connected"
-                  ? "bg-bg-inset text-text-primary border border-border-strong"
-                  : "bg-surface-raised-1 text-text-secondary border border-border-subtle"
-              )}
-              title={c.usedFor}
-            >
-              {known && <SourceIcon provider={c.provider as SourceProvider} size="sm" />}
-              <span>{c.name}</span>
-            </span>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-

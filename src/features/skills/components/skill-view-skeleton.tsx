@@ -40,16 +40,6 @@ export function SkillViewSkeleton() {
             </div>
           </div>
         </div>
-
-        {/* Right rail — KB picker placeholder */}
-        <aside className="hidden lg:flex w-72 shrink-0 flex-col border-l border-border-subtle p-3 gap-3">
-          <Bar className="h-3 w-24" />
-          <div className="space-y-2">
-            {[0, 1, 2, 3].map((i) => (
-              <Bar key={i} className="h-9 w-full rounded-md" />
-            ))}
-          </div>
-        </aside>
       </div>
     </div>
   );
