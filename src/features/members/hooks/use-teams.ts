@@ -1,13 +1,20 @@
 "use client";
 
-import { useApiGet } from "@/shared/hooks/use-api-get";
+import { useApiQuery } from "@/shared/hooks/use-api-query";
 import type { TeamView } from "@/features/teams/types";
+
+const selectTeams = (body: { teams: TeamView[] }) => body.teams ?? [];
 
 /** Workspace teams (with member ids + grants). */
 export function useTeams(workspaceSlug: string) {
-  const { data, loading, error, refresh } = useApiGet(
+  const query = useApiQuery(
     `/api/workspaces/${encodeURIComponent(workspaceSlug)}/teams`,
-    (body) => (body as { teams: TeamView[] }).teams ?? []
+    { select: selectTeams }
   );
-  return { teams: data, loading, error, refresh };
+  return {
+    teams: query.data ?? null,
+    loading: query.isPending,
+    error: query.error ? query.error.message : null,
+    refresh: query.refetch,
+  };
 }

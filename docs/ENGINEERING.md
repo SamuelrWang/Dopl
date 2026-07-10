@@ -18,7 +18,7 @@ Stack: Next.js 16 (App Router) · React 19 · TypeScript (strict) · Supabase ·
 
 See [docs/REFACTOR-FINDINGS.md](REFACTOR-FINDINGS.md) for the current list of open findings (`F-NNN` ids). At a glance: pre-existing lint errors (F-006), chrome-extension PascalCase filenames (F-007), a few files still over the 500-line cap (§2), the canvas store still syncs server data it should push out to a query library (§7). None block shipping; all are tracked.
 
-TanStack Query is now the server-state layer (§7). Legacy `useEffect + fetch + useState` hooks (`useApiGet`, the per-feature `useFetch` copies in knowledge/skills/chats) remain until each feature's cleanup pass migrates them to `useApiQuery` — don't add new call sites to the legacy pattern.
+TanStack Query is now the server-state layer (§7). Legacy `useEffect + fetch + useState` hooks (the per-feature `useFetch` copies in knowledge/skills/chats) remain until each feature's cleanup pass migrates them to `useApiQuery` — don't add new call sites to the legacy pattern. (`useApiGet` already deleted — members was its last consumer.)
 
 ---
 
@@ -279,7 +279,7 @@ This repo has three layers of state. Keep them separate.
 | **Canvas client state** | `canvas-store` (context + reducer) | Viewport, panel positions, in-flight chat streams |
 | **Local UI state** | `useState` / `useReducer` | Form values, open/closed, hover |
 
-New client data code uses `useApiQuery` (`src/shared/hooks/use-api-query.ts`) over `apiRequest` (`src/shared/api/api-client.ts` — the single typed fetch wrapper: workspace header, error envelope, 204s). The legacy `useApiGet` + per-feature `useFetch`/`request<T>` copies are migration targets, feature by feature — do not add new call sites to them. Realtime refetch signals go through `useWorkspaceTablesRealtime` (`src/shared/realtime/`). List endpoints paginate with `Paginated<T>` (`src/shared/types/paginated.ts`) + `parsePageParams` (`src/shared/api/pagination.ts`).
+New client data code uses `useApiQuery` (`src/shared/hooks/use-api-query.ts`) over `apiRequest` (`src/shared/api/api-client.ts` — the single typed fetch wrapper: workspace header, error envelope, 204s). The legacy per-feature `useFetch`/`request<T>` copies are migration targets, feature by feature — do not add new call sites to them. Realtime refetch signals go through `useWorkspaceTablesRealtime` (`src/shared/realtime/`). List endpoints paginate with `Paginated<T>` (`src/shared/types/paginated.ts`) + `parsePageParams` (`src/shared/api/pagination.ts`).
 
 **Known debt — do not add to it:** the canvas store currently syncs server entities (entries, clusters, panels) via `useCanvasDbSync` and the realtime hooks. That's duplication the future query-library adoption is meant to eliminate. Until then, don't add more server data to the canvas store — if you need to read an entity, add a new hook that reads directly, don't shove it through the reducer.
 

@@ -6,7 +6,7 @@ import { cn } from "@/shared/lib/utils";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { Popover } from "@/shared/ui/popover-menu";
 import { SectionBox } from "@/shared/ui/section-box";
-import { useApiGet } from "@/shared/hooks/use-api-get";
+import { useApiQuery } from "@/shared/hooks/use-api-query";
 import { meetsMinRole } from "@/features/workspaces/types";
 import { canShowMemberControls } from "@/features/workspaces/member-policy";
 import type { TeamView } from "@/features/teams/types";
@@ -22,6 +22,9 @@ import {
 } from "../teams-client";
 import { Avatar, RolePill, RoleSelect } from "./member-bits";
 import { ScopePill } from "./team-bits";
+
+const selectAccessRows = (body: { rows: EffectiveAccessRow[] }) =>
+  body.rows ?? [];
 
 interface Props {
   workspaceSlug: string;
@@ -70,11 +73,9 @@ export function MemberDetail({
   // Server-resolved effective access — same implementation as the
   // enforcement path. Admin-only for others (the hook just gets a 404).
   const canSeeAccess = canManage || isSelf;
-  const { data: access } = useApiGet(
-    canSeeAccess
-      ? `/api/workspaces/${encodeURIComponent(workspaceSlug)}/members/${encodeURIComponent(m.userId)}/access`
-      : null,
-    (body) => (body as { rows: EffectiveAccessRow[] }).rows ?? []
+  const { data: access } = useApiQuery(
+    `/api/workspaces/${encodeURIComponent(workspaceSlug)}/members/${encodeURIComponent(m.userId)}/access`,
+    { select: selectAccessRows, enabled: canSeeAccess }
   );
 
   const activity = formatLastActive(m.lastSeenAt, m.status, m.invitedAt);
@@ -236,7 +237,7 @@ export function MemberDetail({
               <EffectiveAccessBody
                 rows={access ?? []}
                 role={m.role}
-                loaded={access !== null}
+                loaded={access !== undefined}
               />
             </SectionBox>
           )}

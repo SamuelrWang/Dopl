@@ -1,6 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/shared/api/api-client";
+import { useApiQuery } from "@/shared/hooks/use-api-query";
 import type { AssignableRole } from "../types";
 
 export interface JoinRequestView {
@@ -12,61 +15,40 @@ export interface JoinRequestView {
   avatarUrl: string | null;
 }
 
+const selectRequests = (body: { requests: JoinRequestView[] }) =>
+  body.requests ?? [];
+
 /**
  * Pending join-link requests + approve/decline actions. Fetches only
  * when `enabled` (the endpoint is admin-gated server-side); disabled
  * callers get an empty list and no network traffic.
  */
 export function useJoinRequests(workspaceSlug: string, enabled: boolean) {
-  const [requests, setRequests] = useState<JoinRequestView[]>([]);
-  const [tick, setTick] = useState(0);
-
-  useEffect(() => {
-    if (!enabled) return;
-    let cancelled = false;
-    fetch(`/api/workspaces/${encodeURIComponent(workspaceSlug)}/join-requests`, {
-      credentials: "same-origin",
-    })
-      .then(async (res) => (res.ok ? res.json() : { requests: [] }))
-      .then((body: { requests?: JoinRequestView[] }) => {
-        if (!cancelled) setRequests(body.requests ?? []);
-      })
-      .catch(() => {
-        if (!cancelled) setRequests([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [workspaceSlug, enabled, tick]);
-
-  const refresh = useCallback(() => setTick((t) => t + 1), []);
+  const path = `/api/workspaces/${encodeURIComponent(workspaceSlug)}/join-requests`;
+  const queryClient = useQueryClient();
+  const query = useApiQuery(path, { select: selectRequests, enabled });
 
   const resolve = useCallback(
     async (requestId: string, action: "approve" | "decline", role: AssignableRole) => {
-      const res = await fetch(
-        `/api/workspaces/${encodeURIComponent(workspaceSlug)}/join-requests/${encodeURIComponent(requestId)}`,
-        {
-          method: "PATCH",
-          credentials: "same-origin",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(action === "approve" ? { action, role } : { action }),
-        }
+      await apiRequest<void>(`${path}/${encodeURIComponent(requestId)}`, {
+        method: "PATCH",
+        body: action === "approve" ? { action, role } : { action },
+      });
+      // Optimistically drop the resolved row from the cached list.
+      queryClient.setQueryData(
+        [path, undefined, undefined],
+        (prev: { requests: JoinRequestView[] } | undefined) =>
+          prev
+            ? { requests: (prev.requests ?? []).filter((r) => r.id !== requestId) }
+            : prev
       );
-      if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as {
-          error?: { message?: string } | string;
-        };
-        const err = body?.error;
-        throw new Error(
-          (typeof err === "string" ? err : err?.message) || "Request failed"
-        );
-      }
-      setRequests((prev) => prev.filter((r) => r.id !== requestId));
     },
-    [workspaceSlug]
+    [path, queryClient]
   );
 
-  // Disabled callers (non-admins) always see an empty queue — state is
-  // kept but never surfaced, so flipping roles mid-session stays clean.
-  return { requests: enabled ? requests : [], refresh, resolve };
+  return {
+    requests: enabled ? (query.data ?? []) : [],
+    refresh: query.refetch,
+    resolve,
+  };
 }

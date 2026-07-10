@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { withUserAuth } from "@/shared/auth/with-auth";
 import { HttpError } from "@/shared/lib/http-error";
 import { listWorkspaceMembers } from "@/features/workspaces/server/service";
+import { listProfileSummaries } from "@/features/workspaces/server/repository";
 import { resolveApiWorkspace } from "@/features/workspaces/server/segment";
 import { listTeamRefsByUser } from "@/features/teams/server/repository";
-import { supabaseAdmin } from "@/shared/supabase/admin";
 
 interface Ctx {
   userId: string;
@@ -36,44 +36,18 @@ export const GET = withUserAuth(
         listTeamRefsByUser(workspace.id),
       ]);
 
-      // Hydrate email + display name + avatar from auth.users so the UI
-      // can render real names and profile pics. auth.admin.getUserById
-      // is one call per user; n is small so no batching is needed yet,
-      // but we cap at 100 just in case.
-      const db = supabaseAdmin();
-      const emails = new Map<string, string | null>();
-      const displayNames = new Map<string, string | null>();
-      const avatarUrls = new Map<string, string | null>();
-      for (const m of members.slice(0, 100)) {
-        try {
-          const { data } = await db.auth.admin.getUserById(m.userId);
-          const u = data?.user;
-          const meta = (u?.user_metadata ?? {}) as {
-            display_name?: string;
-            full_name?: string;
-            name?: string;
-            avatar_url?: string;
-          };
-          emails.set(m.userId, u?.email ?? null);
-          displayNames.set(
-            m.userId,
-            meta.display_name ?? meta.full_name ?? meta.name ?? null
-          );
-          avatarUrls.set(m.userId, meta.avatar_url ?? null);
-        } catch {
-          emails.set(m.userId, null);
-          displayNames.set(m.userId, null);
-          avatarUrls.set(m.userId, null);
-        }
-      }
+      const profiles = await listProfileSummaries(members.map((m) => m.userId));
 
-      const hydrated = members.map((m) => ({
-        ...m,
-        email: emails.get(m.userId) ?? null,
-        displayName: displayNames.get(m.userId) ?? null,
-        avatarUrl: avatarUrls.get(m.userId) ?? null,
-        teams: teamsByUser.get(m.userId) ?? [],
-      }));
+      const hydrated = members.map((m) => {
+        const p = profiles.get(m.userId);
+        return {
+          ...m,
+          email: p?.email ?? null,
+          displayName: p?.displayName ?? null,
+          avatarUrl: p?.avatarUrl ?? null,
+          teams: teamsByUser.get(m.userId) ?? [],
+        };
+      });
 
       return NextResponse.json({ members: hydrated });
     } catch (err) {

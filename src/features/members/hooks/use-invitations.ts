@@ -1,22 +1,25 @@
 "use client";
 
-import { useApiGet } from "@/shared/hooks/use-api-get";
+import { useApiQuery } from "@/shared/hooks/use-api-query";
 import type { WorkspaceInvitationView } from "../types";
+
+const selectPending = (body: { invitations: WorkspaceInvitationView[] }) =>
+  (body.invitations ?? []).filter((i) => !i.acceptedAt && !i.revokedAt);
 
 /**
  * Pending workspace invitations for the admin members panel. Disabled
- * (null url) for non-admins, who can't read this list. Accepted/revoked
- * rows are filtered out so the UI only shows actionable invites.
+ * for non-admins, who can't read this list. Accepted/revoked rows are
+ * filtered out so the UI only shows actionable invites.
  */
 export function useInvitations(workspaceSlug: string, enabled: boolean) {
-  const { data, loading, error, refresh } = useApiGet(
-    enabled
-      ? `/api/workspaces/${encodeURIComponent(workspaceSlug)}/invitations`
-      : null,
-    (body) =>
-      ((body as { invitations: WorkspaceInvitationView[] }).invitations ?? []).filter(
-        (i) => !i.acceptedAt && !i.revokedAt
-      )
+  const query = useApiQuery(
+    `/api/workspaces/${encodeURIComponent(workspaceSlug)}/invitations`,
+    { select: selectPending, enabled }
   );
-  return { invitations: data, loading, error, refresh };
+  return {
+    invitations: query.data ?? null,
+    loading: query.isPending,
+    error: query.error ? query.error.message : null,
+    refresh: query.refetch,
+  };
 }

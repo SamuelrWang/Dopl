@@ -4,31 +4,19 @@
  * useMyAccess — single-fetch hook that returns the caller's effective
  * access on every resource in a workspace.
  *
- * Backed by GET /api/workspaces/[slug]/my-access. The response carries a
- * role-derived `defaultLevel` plus any per-resource `overrides`. Look
- * up a specific resource via the returned `resolve()` helper rather
- * than indexing the array yourself.
+ * Backed by GET /api/workspaces/[slug]/my-access via TanStack Query.
+ * Look up a specific resource via the returned `resolve()` helper
+ * rather than indexing the array yourself.
  *
  * Use the `MyAccessProvider` + `useMyAccessContext` flow at the
  * application shell so multiple consumers (sidebar nav, KB/skill
- * detail pages, canvas panels) share one fetch instead of duplicating.
- * The bare `useMyAccess(workspaceSegment)` hook is still exported for
- * tests or one-off callers who don't have a provider in scope.
- *
- * Pattern matches the existing client hooks (useEffect + fetch +
- * cancelled flag, `tick`-based refresh).
+ * detail pages, canvas panels) share one cache entry. Focus
+ * revalidation comes from the query layer (only when stale — the old
+ * hand-rolled listener re-pulled the payload on EVERY window focus).
  */
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { createContext, useCallback, useContext, useMemo, type ReactNode } from "react";
+import { useApiQuery } from "@/shared/hooks/use-api-query";
 import type { AccessLevel } from "@/features/teams/access-levels";
 
 /** Resource kinds the badge UI may ask about. Teams-mode resolution only
@@ -56,47 +44,16 @@ export interface UseMyAccessResult {
 }
 
 function useMyAccess(workspaceSegment: string | null): UseMyAccessResult {
-  const [data, setData] = useState<MyAccessPayload | null>(null);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [tick, setTick] = useState(0);
-  const cancelledRef = useRef(false);
+  const query = useApiQuery<MyAccessPayload>(
+    workspaceSegment
+      ? `/api/workspaces/${encodeURIComponent(workspaceSegment)}/my-access`
+      : null
+  );
 
-  useEffect(() => {
-    cancelledRef.current = false;
-    if (!workspaceSegment) {
-      setData(null);
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    fetch(
-      `/api/workspaces/${encodeURIComponent(workspaceSegment)}/my-access`,
-      { credentials: "same-origin" }
-    )
-      .then(async (res) => {
-        if (cancelledRef.current) return;
-        if (!res.ok) {
-          // 403 (not a member) or 404 (workspace not found) — quietly
-          // treat as "no info" so the sidebar just doesn't badge.
-          setData(null);
-          return;
-        }
-        const json = (await res.json()) as MyAccessPayload;
-        if (cancelledRef.current) return;
-        setData(json);
-      })
-      .catch(() => {
-        if (cancelledRef.current) return;
-        setData(null);
-      })
-      .finally(() => {
-        if (cancelledRef.current) return;
-        setLoading(false);
-      });
-    return () => {
-      cancelledRef.current = true;
-    };
-  }, [workspaceSegment, tick]);
+  // 403 (not a member) or 404 (workspace not found) — quietly treat as
+  // "no info" so the sidebar just doesn't badge (query retry already
+  // skips 4xx; error state maps to null data here).
+  const data = query.data ?? null;
 
   // Index overrides by `${type}:${id}` for cheap lookups.
   const overrideIndex = useMemo(() => {
@@ -119,9 +76,17 @@ function useMyAccess(workspaceSegment: string | null): UseMyAccessResult {
     [data, overrideIndex]
   );
 
-  const refetch = useCallback(() => setTick((t) => t + 1), []);
+  const refetchQuery = query.refetch;
+  const refetch = useCallback(() => {
+    void refetchQuery();
+  }, [refetchQuery]);
 
-  return { data, loading, resolve, refetch };
+  return {
+    data,
+    loading: workspaceSegment !== null && query.isPending,
+    resolve,
+    refetch,
+  };
 }
 
 // ── Context-based shared instance ──────────────────────────────────────
@@ -135,13 +100,6 @@ const MyAccessCtx = createContext<UseMyAccessResult | null>(null);
  * the provider, `useMyAccessContext` returns a no-op shape (data null,
  * resolve always null, refetch a no-op) so consumers don't crash on
  * pages that don't have a workspace in scope.
- *
- * Audit A-021: refetches automatically when the window regains focus,
- * so an admin change in another tab is reflected without a hard
- * reload. The ideal would be a Supabase realtime subscription on
- * `workspace_resource_access` but the focus pattern is enough for
- * v1 (access changes are rare; same-tab admin actions already call
- * `access.refetch()` explicitly).
  */
 export function MyAccessProvider({
   workspaceSegment,
@@ -151,20 +109,6 @@ export function MyAccessProvider({
   children: ReactNode;
 }) {
   const value = useMyAccess(workspaceSegment);
-  const refetchRef = useRef(value.refetch);
-  useEffect(() => {
-    refetchRef.current = value.refetch;
-  });
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    function onFocus() {
-      refetchRef.current();
-    }
-    window.addEventListener("focus", onFocus);
-    return () => {
-      window.removeEventListener("focus", onFocus);
-    };
-  }, []);
   return <MyAccessCtx.Provider value={value}>{children}</MyAccessCtx.Provider>;
 }
 

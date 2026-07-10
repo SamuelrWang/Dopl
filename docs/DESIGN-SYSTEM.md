@@ -86,7 +86,7 @@ Shared React primitives (`src/shared/ui` + `src/shared/hooks`):
 | `CopyButton` (`copy-button.tsx`) + `useCopyToClipboard` (hook) | Copy-to-clipboard. Icon-button case = `CopyButton`; custom chrome keeps its JSX and uses the hook. |
 | `ScopeSharePopover` / `ScopeShareMenu` (`scope-share-popover.tsx`) | The private/team/workspace sharing control (chats + skills wrap it). |
 | `ConfirmDialog` (`confirm-dialog.tsx`) | In-app confirmations. |
-| `useApiQuery` (`use-api-query.ts`) | Every client GET hook (TanStack Query over `apiRequest`). `useApiGet` is legacy — migrate, don't extend. |
+| `useApiQuery` (`use-api-query.ts`) | Every client GET hook (TanStack Query over `apiRequest`). `useApiGet` is gone (members pass migrated the last consumers). |
 | `useDismissable` (`use-dismissable.ts`) | Escape + click-outside dismissal for custom floating UI that can't use `Popover`. |
 | `formatRelativeTime` / `formatDate` / `formatLastActive` (`shared/lib/format-time.ts`) | All timestamp display. No per-feature date formatters. |
 
