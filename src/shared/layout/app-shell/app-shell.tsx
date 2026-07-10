@@ -103,7 +103,7 @@ export function AppShell({
         workspaceId={workspaceId}
         currentUserId={user?.id ?? ""}
         role={activeRole}
-        onWorkspaceChanged={() => {}}
+        onWorkspaceChanged={refreshWorkspaces}
       />
     </div>
   );

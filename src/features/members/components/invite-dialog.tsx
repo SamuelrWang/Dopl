@@ -51,8 +51,13 @@ function ShareLinkSection({
 
   const linkPath = `/api/workspaces/${encodeURIComponent(workspaceSlug)}/join-link`;
   // Fetches only while the dialog is open; errors keep the loading state
-  // (same as the old hand-rolled effect).
-  const linkQuery = useApiQuery<{ token: string }>(linkPath, { enabled: open });
+  // (same as the old hand-rolled effect). staleTime 0: every open must
+  // revalidate — another admin may have rotated the link, and a cached
+  // token would be a dead invite.
+  const linkQuery = useApiQuery<{ token: string }>(linkPath, {
+    enabled: open,
+    staleTime: 0,
+  });
   const token = linkQuery.data?.token ?? null;
 
   const url =

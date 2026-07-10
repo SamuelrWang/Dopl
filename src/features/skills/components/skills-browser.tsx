@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Plus, Trash2, Zap } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { EmptyState } from "@/shared/ui/empty-state";
@@ -62,6 +63,7 @@ export function SkillsBrowser({
   isAdmin,
   skills,
 }: Props) {
+  const router = useRouter();
   const [trashOpen, setTrashOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<SkillFilter>("all");
@@ -170,6 +172,9 @@ export function SkillsBrowser({
         open={trashOpen}
         onOpenChange={setTrashOpen}
         workspaceId={workspaceId}
+        // The list is SSR data — pull the restored skill back in (same
+        // pattern as skill-view's duplicate flow).
+        onRestored={() => router.refresh()}
       />
     </div>
   );
