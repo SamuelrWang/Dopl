@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { notFound, redirect } from "next/navigation";
 import { logSystemEvent } from "@/features/analytics/server/system-events";
 import { parseSegment } from "@/shared/lib/url/parse-segment";
@@ -32,10 +33,11 @@ export interface ResolvedWorkspaceSegment {
  * Returns null when neither path resolves. Callers are responsible for
  * the 301 / 404 / render decision based on `needsRedirect`.
  */
-export async function resolveWorkspaceSegmentForUser(
-  segment: string,
-  userId: string
-): Promise<ResolvedWorkspaceSegment | null> {
+export const resolveWorkspaceSegmentForUser = cache(
+  async (
+    segment: string,
+    userId: string
+  ): Promise<ResolvedWorkspaceSegment | null> => {
   const parsed = parseSegment(segment);
   if (parsed) {
     const workspace = await findWorkspaceForMemberByPublicId(
@@ -70,7 +72,8 @@ export async function resolveWorkspaceSegmentForUser(
     };
   }
   return null;
-}
+  }
+);
 
 /**
  * Page-level wrapper around `resolveWorkspaceSegmentForUser`. 404s when

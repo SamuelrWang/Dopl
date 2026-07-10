@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuthUser } from "@/shared/auth/use-auth-user";
+import { useApiQuery } from "@/shared/hooks/use-api-query";
 import type { WorkspaceLike } from "./workspace-types";
 import { SettingsModal, type SettingsSection } from "@/shared/layout/settings-modal";
 import { CreateWorkspaceDialog } from "@/features/workspaces/components/create-workspace-dialog";
@@ -108,30 +109,16 @@ export function AppShell({
   );
 }
 
-/** Loads the user's workspaces for the rail. Empty until the fetch
- *  resolves; `refresh` refetches (e.g. after creating a workspace). */
+const selectWorkspaces = (body: { workspaces?: WorkspaceLike[] }) =>
+  body.workspaces ?? [];
+
+/** Loads the user's workspaces for the rail via the query cache. Empty
+ *  until the fetch resolves; `refresh` refetches (e.g. after creating a
+ *  workspace). */
 function useRailWorkspaces(): {
   workspaces: WorkspaceLike[];
   refresh: () => void;
 } {
-  const [workspaces, setWorkspaces] = useState<WorkspaceLike[]>([]);
-  const [tick, setTick] = useState(0);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/workspaces")
-      .then((r) => (r.ok ? r.json() : { workspaces: [] }))
-      .then((body: { workspaces?: WorkspaceLike[] }) => {
-        if (!cancelled) setWorkspaces(body.workspaces ?? []);
-      })
-      .catch(() => {
-        if (!cancelled) setWorkspaces([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [tick]);
-
-  const refresh = useCallback(() => setTick((t) => t + 1), []);
-  return { workspaces, refresh };
+  const query = useApiQuery("/api/workspaces", { select: selectWorkspaces });
+  return { workspaces: query.data ?? [], refresh: query.refetch };
 }

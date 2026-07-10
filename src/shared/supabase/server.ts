@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { createServerSupabaseClient } from "./admin";
 
@@ -12,11 +13,13 @@ export async function getServerClient() {
 
 /**
  * Get the currently authenticated user, or null if not logged in.
+ * Wrapped in React cache(): layout + page both call this during one
+ * request — memoization collapses the duplicate auth round-trips.
  */
-export async function getUser() {
+export const getUser = cache(async () => {
   const client = await getServerClient();
   const {
     data: { user },
   } = await client.auth.getUser();
   return user;
-}
+});
