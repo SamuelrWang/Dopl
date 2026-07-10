@@ -1,6 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/shared/api/api-client";
+import { useApiQuery } from "@/shared/hooks/use-api-query";
 import { DeleteAccount } from "./delete-account";
 import { SectionShell } from "./section-shell";
 
@@ -10,31 +13,30 @@ interface ProfileData {
   email: string | null;
 }
 
+const PROFILE_PATH = "/api/user/profile";
+
 /**
  * Account section — edit display name, view the signed-in email/avatar,
  * and the danger-zone account deletion. Backed by `/api/user/profile`.
  */
 export function AccountSection() {
-  const [profile, setProfile] = useState<ProfileData | null>(null);
+  const queryClient = useQueryClient();
+  const query = useApiQuery<ProfileData>(PROFILE_PATH);
+  const profile = query.data ?? null;
+
   const [displayName, setDisplayName] = useState("");
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Seed the input once when the profile first arrives; after that the
+  // field is user-owned (a background refetch must not overwrite typing).
+  const seededRef = useRef(false);
   useEffect(() => {
-    let cancelled = false;
-    fetch("/api/user/profile")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data: ProfileData | null) => {
-        if (cancelled || !data) return;
-        setProfile(data);
-        setDisplayName(data.display_name ?? "");
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    if (seededRef.current || !query.data) return;
+    seededRef.current = true;
+    setDisplayName(query.data.display_name ?? "");
+  }, [query.data]);
 
   const dirty = profile != null && displayName.trim() !== (profile.display_name ?? "");
 
@@ -43,17 +45,11 @@ export function AccountSection() {
     setError(null);
     setStatus(null);
     try {
-      const res = await fetch("/api/user/profile", {
+      const updated = await apiRequest<ProfileData>(PROFILE_PATH, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ display_name: displayName.trim() || null }),
+        body: { display_name: displayName.trim() || null },
       });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body?.error || "Failed to save");
-      }
-      const updated = (await res.json()) as ProfileData;
-      setProfile(updated);
+      queryClient.setQueryData([PROFILE_PATH, undefined, undefined], updated);
       setStatus("Saved.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");

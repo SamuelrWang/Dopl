@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useApiQuery } from "@/shared/hooks/use-api-query";
 import { ModalShell } from "@/shared/layout/settings-modal";
 import styles from "@/shared/layout/settings-modal/settings-modal.module.css";
 import type { JoinRequestNotice } from "../server/join-links";
@@ -26,25 +27,12 @@ type Notice = Pick<
  */
 export function JoinRequestNotices() {
   const router = useRouter();
-  const [queue, setQueue] = useState<Notice[]>([]);
+  // Notices are best-effort — errors just render nothing.
+  const query = useApiQuery<{ notices: Notice[] }>("/api/me/join-requests");
+  const [ackedIds, setAckedIds] = useState<Set<string>>(() => new Set());
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/me/join-requests", { credentials: "same-origin" })
-      .then(async (res) => {
-        if (cancelled || !res.ok) return;
-        const body = (await res.json()) as { notices: Notice[] };
-        if (!cancelled) setQueue(body.notices ?? []);
-      })
-      .catch(() => {
-        /* notices are best-effort */
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
+  const queue = (query.data?.notices ?? []).filter((n) => !ackedIds.has(n.id));
   const current = queue[0] ?? null;
 
   const dismiss = useCallback(
@@ -59,7 +47,7 @@ export function JoinRequestNotices() {
       } catch {
         /* ack is best-effort — worst case the popup shows again */
       }
-      setQueue((q) => q.filter((n) => n.id !== notice.id));
+      setAckedIds((prev) => new Set(prev).add(notice.id));
       setBusy(false);
       if (goToWorkspace) {
         router.push(`/${notice.workspaceSlug}-${notice.workspacePublicId}`);

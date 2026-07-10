@@ -85,14 +85,14 @@ function ClientCard({
   steps: string[];
 }) {
   return (
-    <section className="rounded-xl border border-border-default bg-[var(--card-surface)] p-4">
+    <section className="rounded-xl border border-border-default bg-bg-elevated p-4">
       <div className="flex items-center justify-between gap-3">
-        <h3 className="text-sm font-medium text-text-primary">{name}</h3>
+        <h3 className="text-title font-medium text-text-primary">{name}</h3>
         <a
           href={docsHref}
           target="_blank"
           rel="noreferrer"
-          className="flex items-center gap-0.5 text-[11px] text-text-tertiary hover:text-text-primary transition-colors"
+          className="flex items-center gap-0.5 text-caption text-text-tertiary hover:text-text-primary transition-colors"
         >
           Setup docs
           <ArrowUpRight size={11} />
@@ -102,11 +102,11 @@ function ClientCard({
       <div className="mt-3 space-y-2">
         {snippets.map((s) => (
           <div key={s.id} className="space-y-1">
-            <p className="text-[10px] font-mono uppercase tracking-wider text-text-secondary/60">
+            <p className="text-micro font-mono uppercase tracking-wider text-text-secondary/60">
               {s.label}
             </p>
             <div className="flex items-center gap-2 rounded-md border border-border-default bg-surface-raised-1 px-3 py-2">
-              <code className="flex-1 truncate font-mono text-[12px] text-text-secondary">
+              <code className="flex-1 truncate font-mono text-small text-text-secondary">
                 {s.text}
               </code>
               <CopyButton text={s.text} label={`Copy ${s.label}`} />
@@ -117,8 +117,8 @@ function ClientCard({
 
       <ol className="mt-3 space-y-1">
         {steps.map((step, i) => (
-          <li key={i} className="flex gap-2 text-[12px] leading-relaxed text-text-tertiary">
-            <span className="shrink-0 font-mono text-[10px] text-text-secondary/50 pt-0.5">
+          <li key={i} className="flex gap-2 text-small leading-relaxed text-text-tertiary">
+            <span className="shrink-0 font-mono text-micro text-text-secondary/50 pt-0.5">
               {i + 1}.
             </span>
             {step}

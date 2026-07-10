@@ -71,13 +71,13 @@ export function AcceptInviteCard({ status, token, needsAuth }: Props) {
 
   return (
     <div className="rounded-xl bg-surface-raised-2 border border-border-default p-7 max-w-md w-full">
-      <p className="text-[10px] uppercase tracking-wider text-text-muted font-mono">
+      <p className="text-micro uppercase tracking-wider text-text-muted font-mono">
         Workspace invitation
       </p>
-      <h1 className="mt-2 text-xl font-semibold text-text-primary">
+      <h1 className="mt-2 text-display font-semibold text-text-primary">
         {status.workspace.name}
       </h1>
-      <p className="mt-2 text-sm text-text-tertiary">
+      <p className="mt-2 text-lead text-text-tertiary">
         {status.inviter.email ? (
           <>
             <span className="text-text-primary">{status.inviter.email}</span> invited
@@ -101,39 +101,39 @@ export function AcceptInviteCard({ status, token, needsAuth }: Props) {
       </p>
 
       {dead ? (
-        <div className="mt-6 rounded-md bg-red-500/10 border border-red-500/20 p-3">
-          <p className="text-xs text-red-200">{reason}</p>
-          <p className="text-[11px] text-text-muted mt-1.5">
+        <div className="mt-6 rounded-md bg-danger/10 border border-danger/20 p-3">
+          <p className="text-small text-danger">{reason}</p>
+          <p className="text-caption text-text-muted mt-1.5">
             Ask the workspace admin to send a fresh invitation.
           </p>
         </div>
       ) : needsAuth ? (
         <div className="mt-6 flex flex-col gap-3">
-          <p className="text-xs text-text-tertiary">
+          <p className="text-caption text-text-tertiary">
             Sign in to accept. We'll bring you back here.
           </p>
           <a
             href={`/login?redirectTo=${encodeURIComponent(`/invite/${token}`)}`}
-            className="h-9 px-4 rounded-md bg-surface-cta text-text-on-cta text-xs font-medium hover:bg-surface-cta/90 transition-colors inline-flex items-center justify-center"
+            className="h-9 px-4 rounded-md bg-surface-cta text-text-on-cta text-small font-medium hover:bg-surface-cta/90 transition-colors inline-flex items-center justify-center"
           >
             Sign in to accept
           </a>
         </div>
       ) : (
         <div className="mt-6 flex flex-col gap-3">
-          {error && <p className="text-xs text-red-400">{error}</p>}
+          {error && <p className="text-small text-danger">{error}</p>}
           <button
             type="button"
             onClick={accept}
             disabled={accepting}
-            className="h-9 px-4 rounded-md bg-surface-cta text-text-on-cta text-xs font-medium hover:bg-surface-cta/90 disabled:opacity-40 transition-colors"
+            className="h-9 px-4 rounded-md bg-surface-cta text-text-on-cta text-small font-medium hover:bg-surface-cta/90 disabled:opacity-40 transition-colors"
           >
             {accepting ? "Joining..." : `Join ${status.workspace.name}`}
           </button>
         </div>
       )}
 
-      <p className="mt-6 text-[10px] uppercase tracking-wider text-text-muted font-mono">
+      <p className="mt-6 text-micro uppercase tracking-wider text-text-muted font-mono">
         Expires {new Date(status.invitation.expiresAt).toLocaleString()}
       </p>
     </div>

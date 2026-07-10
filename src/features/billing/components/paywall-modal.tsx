@@ -22,7 +22,7 @@ export function PaywallModal({ open, onClose }: Props) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-scrim p-4">
       <div
-        className="w-full max-w-md rounded-2xl bg-[var(--panel-surface,#0a0a0a)] border border-border-default p-6 max-h-[85vh] overflow-y-auto"
+        className="w-full max-w-md rounded-2xl bg-bg-elevated border border-border-default p-6 max-h-[85vh] overflow-y-auto"
         style={{
           boxShadow:
             "0 12px 40px rgba(0,0,0,0.5), inset 0 1px 0 var(--hairline-shine)",
@@ -33,7 +33,7 @@ export function PaywallModal({ open, onClose }: Props) {
             <button
               type="button"
               onClick={() => setShowCheckout(false)}
-              className="mb-3 text-sm text-text-tertiary hover:text-text-secondary transition-colors"
+              className="mb-3 text-small text-text-tertiary hover:text-text-secondary transition-colors"
             >
               &larr; Back
             </button>
@@ -41,10 +41,10 @@ export function PaywallModal({ open, onClose }: Props) {
           </>
         ) : (
           <>
-            <h2 className="text-xl font-semibold text-text-primary">
+            <h2 className="text-display font-semibold text-text-primary">
               Your free trial has ended
             </h2>
-            <p className="mt-2 text-sm text-text-tertiary leading-relaxed">
+            <p className="mt-2 text-lead text-text-tertiary leading-relaxed">
               Subscribe for <strong className="text-text-secondary">$7.99/mo</strong> to
               keep using Dopl — unlimited ingestion, MCP access, canvas, and
               cluster sync.

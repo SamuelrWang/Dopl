@@ -4,6 +4,7 @@
  * callers can offer the "grant read access?" retry with `autoGrant: true`.
  */
 
+import { ApiError, apiRequest } from "@/shared/api/api-client";
 import type { AccessLevel, TeamResourceType } from "@/features/teams/access-levels";
 import type { KbTeamConflict, TeamView } from "@/features/teams/types";
 import type { AssignableRole } from "./types";
@@ -24,25 +25,25 @@ export class TeamAccessConflictError extends Error {
   }
 }
 
-async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, {
-    credentials: "same-origin",
-    ...init,
-    headers: { "Content-Type": "application/json", ...init?.headers },
-  });
-  if (res.status === 204) return undefined as T;
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const err = body?.error;
-    if (res.status === 409 && err?.code === "TEAM_KB_ACCESS_CONFLICT") {
-      throw new TeamAccessConflictError(
-        err.message ?? "Team access conflict",
-        err.details as TeamConflictDetails
-      );
+async function request<T>(
+  url: string,
+  init?: { method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE"; body?: unknown }
+): Promise<T> {
+  try {
+    return await apiRequest<T>(url, init);
+  } catch (err) {
+    if (err instanceof ApiError) {
+      if (err.status === 409 && err.code === "TEAM_KB_ACCESS_CONFLICT") {
+        throw new TeamAccessConflictError(
+          err.message || "Team access conflict",
+          err.details as TeamConflictDetails
+        );
+      }
+      // Callers catch generic Error and surface .message.
+      throw new Error(err.message || "Request failed");
     }
-    throw new Error(err?.message || err || "Request failed");
+    throw err;
   }
-  return body as T;
 }
 
 const ws = (slug: string) => `/api/workspaces/${encodeURIComponent(slug)}`;
@@ -67,7 +68,7 @@ export async function createTeam(
 ): Promise<TeamView> {
   const body = await request<{ team: TeamView }>(`${ws(slug)}/teams`, {
     method: "POST",
-    body: JSON.stringify(input),
+    body: input,
   });
   return body.team;
 }
@@ -84,7 +85,7 @@ export async function updateTeam(
 ): Promise<void> {
   await request(`${ws(slug)}/teams/${encodeURIComponent(teamId)}`, {
     method: "PATCH",
-    body: JSON.stringify(patch),
+    body: patch,
   });
 }
 
@@ -101,7 +102,7 @@ export async function addTeamMembers(
 ): Promise<void> {
   await request(`${ws(slug)}/teams/${encodeURIComponent(teamId)}/members`, {
     method: "POST",
-    body: JSON.stringify({ userIds }),
+    body: { userIds },
   });
 }
 
@@ -127,7 +128,7 @@ export async function setTeamGrant(
 ): Promise<void> {
   await request(`${ws(slug)}/teams/${encodeURIComponent(teamId)}/access`, {
     method: "PUT",
-    body: JSON.stringify({
+    body: ({
       resourceType,
       resourceId,
       level,
@@ -146,7 +147,7 @@ export async function setResourceAccessMode(
 ): Promise<void> {
   await request(`${ws(slug)}/access-matrix`, {
     method: "PUT",
-    body: JSON.stringify({
+    body: ({
       resourceType,
       resourceId,
       accessMode,
@@ -164,7 +165,7 @@ export async function updateMemberRole(
 ): Promise<void> {
   await request(`${ws(slug)}/members/${encodeURIComponent(userId)}`, {
     method: "PATCH",
-    body: JSON.stringify({ role }),
+    body: { role },
   });
 }
 

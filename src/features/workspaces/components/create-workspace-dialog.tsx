@@ -100,7 +100,7 @@ export function CreateWorkspaceDialog({
 
         <div className="flex flex-col gap-4 py-2">
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-text-tertiary uppercase tracking-wider">
+            <label className="text-label font-medium text-text-tertiary uppercase tracking-wider">
               Name
             </label>
             <input
@@ -109,12 +109,12 @@ export function CreateWorkspaceDialog({
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Marketing automation"
               autoFocus
-              className="h-9 px-3 rounded-md bg-surface-raised-3 border border-border-strong text-sm text-text-primary placeholder:text-text-muted outline-none focus:border-border-highlight transition-colors"
+              className="h-9 px-3 rounded-md bg-surface-raised-3 border border-border-strong text-body text-text-primary placeholder:text-text-muted outline-none focus:border-border-highlight transition-colors"
             />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-text-tertiary uppercase tracking-wider">
+            <label className="text-label font-medium text-text-tertiary uppercase tracking-wider">
               Description{" "}
               <span className="text-text-muted normal-case tracking-normal">
                 (optional)
@@ -125,18 +125,18 @@ export function CreateWorkspaceDialog({
               onChange={(e) => setDescription(e.target.value)}
               placeholder="What lives in this workspace?"
               rows={3}
-              className="px-3 py-2 rounded-md bg-surface-raised-3 border border-border-strong text-sm text-text-primary placeholder:text-text-muted outline-none focus:border-border-highlight transition-colors resize-none"
+              className="px-3 py-2 rounded-md bg-surface-raised-3 border border-border-strong text-body text-text-primary placeholder:text-text-muted outline-none focus:border-border-highlight transition-colors resize-none"
             />
           </div>
 
-          {error && <p className="text-xs text-red-400">{error}</p>}
+          {error && <p className="text-small text-danger">{error}</p>}
         </div>
 
         <DialogFooter className="bg-transparent border-border-default">
           <button
             type="button"
             onClick={() => onOpenChange(false)}
-            className="h-8 px-4 rounded-md text-xs font-medium text-text-tertiary hover:text-text-secondary transition-colors"
+            className="h-8 px-4 rounded-md text-small font-medium text-text-tertiary hover:text-text-secondary transition-colors"
           >
             Cancel
           </button>
@@ -144,7 +144,7 @@ export function CreateWorkspaceDialog({
             type="button"
             onClick={handleCreate}
             disabled={submitting || !name.trim()}
-            className="h-8 px-4 rounded-md bg-surface-cta text-text-on-cta text-xs font-medium hover:bg-surface-cta/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="h-8 px-4 rounded-md bg-surface-cta text-text-on-cta text-small font-medium hover:bg-surface-cta/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             {submitting ? "Creating..." : "Create workspace"}
           </button>

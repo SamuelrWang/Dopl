@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useApiQuery } from "@/shared/hooks/use-api-query";
 import { meetsMinRole, type Role, type Workspace } from "@/features/workspaces/types";
 import { WorkspaceSettingsForm } from "@/features/workspaces/components/workspace-settings-form";
 import { WorkspaceDangerZone } from "@/features/workspaces/components/workspace-danger-zone";
@@ -19,29 +19,12 @@ interface Props {
  * rename/description/delete form, and the MCP connection block.
  */
 export function WorkspaceSection({ workspaceSegment, onWorkspaceChanged }: Props) {
-  const [workspace, setWorkspace] = useState<Workspace | null>(null);
-  const [role, setRole] = useState<Role | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch(`/api/workspaces/${workspaceSegment}`)
-      .then(async (r) => {
-        if (!r.ok) throw new Error("Failed to load workspace");
-        return r.json() as Promise<{ workspace: Workspace; role: Role }>;
-      })
-      .then((body) => {
-        if (cancelled) return;
-        setWorkspace(body.workspace);
-        setRole(body.role);
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [workspaceSegment]);
+  const query = useApiQuery<{ workspace: Workspace; role: Role }>(
+    `/api/workspaces/${workspaceSegment}`
+  );
+  const workspace = query.data?.workspace ?? null;
+  const role = query.data?.role ?? null;
+  const error = query.error ? "Failed to load workspace" : null;
 
   if (error) {
     return (

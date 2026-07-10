@@ -75,7 +75,7 @@ export function EmbeddedCheckoutForm() {
   return (
     <div id="checkout" className="relative min-h-[200px]">
       {loading && (
-        <div className="absolute inset-0 flex items-center justify-center text-sm text-text-muted">
+        <div className="absolute inset-0 flex items-center justify-center text-small text-text-muted">
           Loading checkout…
         </div>
       )}
