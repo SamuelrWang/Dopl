@@ -72,7 +72,7 @@ export function Canvas2View() {
         <Legend />
       </div>
 
-      <div className="flex min-h-0 flex-1 overflow-hidden">
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
         <div
           className="relative min-w-0 flex-1 overflow-auto bg-bg-inset shadow-[inset_0_2px_6px_rgba(0,0,0,0.06)]"
           onClick={(e) => {
@@ -113,11 +113,13 @@ export function Canvas2View() {
           </div>
         </div>
         {selected && (
-          <Inspector
-            node={selected}
-            onSelect={setSelectedId}
-            onClose={() => setSelectedId(null)}
-          />
+          <div className="absolute bottom-3 right-3 top-3 z-20 w-[400px]">
+            <Inspector
+              node={selected}
+              onSelect={setSelectedId}
+              onClose={() => setSelectedId(null)}
+            />
+          </div>
         )}
       </div>
     </div>

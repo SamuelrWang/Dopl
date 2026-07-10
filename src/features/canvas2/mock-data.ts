@@ -46,16 +46,25 @@ export interface MockNode {
 
 export type MockEdgeKind = "containment" | "relationship" | "ref";
 
+export type EdgeSide = "top" | "right" | "bottom" | "left";
+
 export interface MockEdge {
   id: string;
   kind: MockEdgeKind;
   from: string;
   to: string;
   label?: string;
+  /** Orthogonal-routing hints: exit/entry side + fraction along it. */
+  fromSide?: EdgeSide;
+  toSide?: EdgeSide;
+  fromT?: number;
+  toT?: number;
+  /** Absolute world coordinate for the middle segment (x for HVH, y for VHV). */
+  mid?: number;
 }
 
-export const WORLD_WIDTH = 1560;
-export const WORLD_HEIGHT = 980;
+export const WORLD_WIDTH = 1800;
+export const WORLD_HEIGHT = 1000;
 
 export const MOCK_CLUSTER = {
   name: "AI Operator Outreach",
@@ -68,8 +77,8 @@ export const MOCK_NODES: MockNode[] = [
     kind: "column",
     name: "Prospects",
     subtitle: "People being pursued",
-    x: 100,
-    y: 120,
+    x: 150,
+    y: 80,
     width: 240,
     purpose: "Qualified humans the agents source and message.",
     template: [
@@ -87,7 +96,7 @@ export const MOCK_NODES: MockNode[] = [
     kind: "column",
     name: "Subagents",
     subtitle: "Automated operators",
-    x: 650,
+    x: 780,
     y: 80,
     width: 240,
     purpose: "Agents that run the outreach loop end to end.",
@@ -105,8 +114,8 @@ export const MOCK_NODES: MockNode[] = [
     kind: "column",
     name: "Campaigns",
     subtitle: "Active pushes",
-    x: 1200,
-    y: 120,
+    x: 1410,
+    y: 80,
     width: 240,
     purpose: "Time-boxed outreach pushes with a goal and channel.",
     template: [
@@ -122,9 +131,9 @@ export const MOCK_NODES: MockNode[] = [
     kind: "object",
     name: "Jane Rivera",
     subtitle: "VP Ops · Meridian Capital",
-    x: 60,
-    y: 340,
-    width: 270,
+    x: 130,
+    y: 620,
+    width: 280,
     attributes: [
       { key: "role", label: "Role", kind: "text", display: "VP of Operations" },
       { key: "company", label: "Company", kind: "text", display: "Meridian Capital" },
@@ -140,9 +149,9 @@ export const MOCK_NODES: MockNode[] = [
     kind: "object",
     name: "Marcus Chen",
     subtitle: "Head of Platform · Northwind PE",
-    x: 390,
-    y: 450,
-    width: 270,
+    x: 130,
+    y: 330,
+    width: 280,
     attributes: [
       { key: "role", label: "Role", kind: "text", display: "Head of Platform" },
       { key: "company", label: "Company", kind: "text", display: "Northwind PE" },
@@ -156,9 +165,9 @@ export const MOCK_NODES: MockNode[] = [
     kind: "object",
     name: "Find & Qualify Agent",
     subtitle: "Sources and scores new leads",
-    x: 640,
-    y: 310,
-    width: 280,
+    x: 750,
+    y: 330,
+    width: 300,
     attributes: [
       { key: "model", label: "Model", kind: "text", display: "claude-sonnet-5" },
       { key: "cadence", label: "Cadence", kind: "text", display: "Daily, 7am" },
@@ -189,9 +198,9 @@ export const MOCK_NODES: MockNode[] = [
     kind: "object",
     name: "Connect & Message Agent",
     subtitle: "Drafts and sends outreach",
-    x: 980,
-    y: 490,
-    width: 280,
+    x: 750,
+    y: 680,
+    width: 300,
     attributes: [
       { key: "model", label: "Model", kind: "text", display: "claude-fable-5" },
       { key: "cadence", label: "Cadence", kind: "text", display: "On qualify" },
@@ -215,9 +224,9 @@ export const MOCK_NODES: MockNode[] = [
     kind: "object",
     name: "PE Ops Q3",
     subtitle: "Advisory push, Jul–Sep",
-    x: 1230,
-    y: 340,
-    width: 270,
+    x: 1390,
+    y: 330,
+    width: 280,
     attributes: [
       { key: "goal", label: "Goal", kind: "text", display: "8 discovery calls" },
       { key: "channel", label: "Channel", kind: "pill", display: "Email" },
@@ -229,21 +238,58 @@ export const MOCK_NODES: MockNode[] = [
 ];
 
 export const MOCK_EDGES: MockEdge[] = [
-  // Containment (column → child)
-  { id: "c1", kind: "containment", from: "col-prospects", to: "obj-jane" },
-  { id: "c2", kind: "containment", from: "col-prospects", to: "obj-marcus" },
-  { id: "c3", kind: "containment", from: "col-subagents", to: "obj-find-qualify" },
-  { id: "c4", kind: "containment", from: "col-subagents", to: "obj-connect-message" },
-  { id: "c5", kind: "containment", from: "col-campaigns", to: "obj-campaign-q3" },
+  // Containment (column → child). Verticals where the child sits under
+  // its column; left-side loops for second children.
+  {
+    id: "c1", kind: "containment", from: "col-prospects", to: "obj-marcus",
+    fromSide: "bottom", toSide: "top",
+  },
+  {
+    id: "c2", kind: "containment", from: "col-prospects", to: "obj-jane",
+    fromSide: "left", toSide: "left", mid: 70,
+  },
+  {
+    id: "c3", kind: "containment", from: "col-subagents", to: "obj-find-qualify",
+    fromSide: "bottom", toSide: "top",
+  },
+  {
+    id: "c4", kind: "containment", from: "col-subagents", to: "obj-connect-message",
+    fromSide: "left", toSide: "left", mid: 690, fromT: 0.5, toT: 0.5,
+  },
+  {
+    id: "c5", kind: "containment", from: "col-campaigns", to: "obj-campaign-q3",
+    fromSide: "bottom", toSide: "top",
+  },
   // Labeled relationships
-  { id: "r1", kind: "relationship", from: "obj-find-qualify", to: "obj-jane", label: "qualifies" },
-  { id: "r2", kind: "relationship", from: "obj-find-qualify", to: "obj-marcus", label: "qualifies" },
-  { id: "r3", kind: "relationship", from: "obj-find-qualify", to: "obj-connect-message", label: "feeds" },
-  { id: "r4", kind: "relationship", from: "obj-connect-message", to: "obj-jane", label: "messages" },
-  { id: "r5", kind: "relationship", from: "obj-connect-message", to: "obj-campaign-q3", label: "runs in" },
-  { id: "r6", kind: "relationship", from: "obj-campaign-q3", to: "col-prospects", label: "targets" },
-  // Ref attribute (implicit link)
-  { id: "f1", kind: "ref", from: "obj-jane", to: "obj-campaign-q3", label: "campaign" },
+  {
+    id: "r1", kind: "relationship", from: "obj-find-qualify", to: "obj-jane",
+    label: "qualifies", fromSide: "left", toSide: "right", fromT: 0.75, toT: 0.3, mid: 560,
+  },
+  {
+    id: "r2", kind: "relationship", from: "obj-find-qualify", to: "obj-marcus",
+    label: "qualifies", fromSide: "left", toSide: "right", fromT: 0.3, toT: 0.4, mid: 580,
+  },
+  {
+    id: "r3", kind: "relationship", from: "obj-find-qualify", to: "obj-connect-message",
+    label: "feeds", fromSide: "bottom", toSide: "top",
+  },
+  {
+    id: "r4", kind: "relationship", from: "obj-connect-message", to: "obj-jane",
+    label: "messages", fromSide: "left", toSide: "right", fromT: 0.5, toT: 0.7, mid: 620,
+  },
+  {
+    id: "r5", kind: "relationship", from: "obj-connect-message", to: "obj-campaign-q3",
+    label: "runs in", fromSide: "right", toSide: "bottom", fromT: 0.4,
+  },
+  {
+    id: "r6", kind: "relationship", from: "obj-campaign-q3", to: "col-prospects",
+    label: "targets", fromSide: "top", toSide: "bottom", fromT: 0.2, toT: 0.75, mid: 280,
+  },
+  // Ref attribute (implicit link) — routed through the clear lane below.
+  {
+    id: "f1", kind: "ref", from: "obj-jane", to: "obj-campaign-q3",
+    label: "campaign", fromSide: "bottom", toSide: "bottom", fromT: 0.7, toT: 0.4, mid: 940,
+  },
 ];
 
 /** Column an object sits in (containment lookup) — "what it is". */

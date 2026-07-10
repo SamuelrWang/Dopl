@@ -21,15 +21,16 @@ const KIND_LABEL: Record<string, string> = {
 };
 
 /**
- * Right-hand detail pane for the selected graph node — the ObjectPanel
- * shape (identity header + section boxes), read-only over mock data.
+ * Detail pane for the selected graph node — the ObjectPanel shape
+ * (identity header + section boxes), read-only over mock data.
+ * Floats over the graph as a raised card (positioned by its parent).
  */
 export function Inspector({ node, onSelect, onClose }: Props) {
   const container = containerNameOf(node.id);
   const isColumn = node.kind === "column";
 
   return (
-    <aside className="flex w-[400px] shrink-0 flex-col overflow-hidden border-l border-border-default">
+    <aside className="flex h-full w-full flex-col overflow-hidden rounded-[14px] border border-border-strong bg-bg-elevated shadow-[0_1px_2px_rgba(0,0,0,0.05),0_12px_32px_rgba(0,0,0,0.14)]">
       <div className="flex items-center gap-2 border-b border-border-subtle px-4 py-2.5">
         <span className={cn(CHIP, "px-2 py-px text-micro")}>
           {isColumn ? "Column" : (container ?? "Object")}
