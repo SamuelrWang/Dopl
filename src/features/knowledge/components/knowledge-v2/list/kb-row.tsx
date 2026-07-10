@@ -33,10 +33,10 @@ interface Props {
 }
 
 /**
- * One knowledge base in the list pane. The disclosure chevron toggles the
- * inline folder/file tree (lazy-loaded); clicking the body selects the base
- * so the detail pane shows its overview. The expanded tree is the v2
- * `TreeRows` (CRUD + context menu, no drag-drop) via base-tree.tsx.
+ * One knowledge base in the list pane. Clicking the body selects the base
+ * (detail pane shows its overview) AND opens its inline folder/file tree;
+ * the disclosure chevron is the only way to collapse. The expanded tree is
+ * the v2 `TreeRows` (CRUD + context menu, no drag-drop) via base-tree.tsx.
  */
 export function KbRow({
   base,

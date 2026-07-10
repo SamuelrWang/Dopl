@@ -158,9 +158,21 @@ export function useKnowledgeV2Controller({
     [trees, loadTree]
   );
 
-  const handleSelectBase = useCallback((base: KnowledgeBase) => {
-    setSelection({ kind: "base", base });
-  }, []);
+  const handleSelectBase = useCallback(
+    (base: KnowledgeBase) => {
+      setSelection({ kind: "base", base });
+      // Selecting a base also opens its file tree; collapsing stays on
+      // the chevron only, so re-clicking a selected base never folds it.
+      setExpanded((prev) => {
+        if (prev.has(base.id)) return prev;
+        const next = new Set(prev);
+        next.add(base.id);
+        return next;
+      });
+      if (!trees[base.id]) void loadTree(base.id);
+    },
+    [trees, loadTree]
+  );
 
   const handleSelectEntry = useCallback(
     (base: KnowledgeBase, entry: KnowledgeEntry) => {
