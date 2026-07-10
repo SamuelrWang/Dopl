@@ -62,17 +62,17 @@ export function AgentWriteToggle({
     <div className="rounded-lg border border-border-default p-4 bg-surface-raised-1">
       <div className="flex items-start gap-4">
         <div className="flex-1">
-          <p className="text-sm font-medium text-text-primary">
+          <p className="text-title font-medium text-text-primary">
             Allow agent writes
           </p>
-          <p className="mt-1 text-xs text-text-secondary leading-relaxed">
+          <p className="mt-1 text-caption text-text-secondary leading-relaxed">
             Lets your connected agent (e.g. Claude Code via MCP) create,
             edit, move, and delete folders + entries in this knowledge
             base. Reads are always allowed regardless. Off by default
             for safety.
           </p>
           {enabled ? (
-            <div className="mt-2 flex items-center gap-1.5 text-[11px] text-amber-300/80">
+            <div className="mt-2 flex items-center gap-1.5 text-caption text-warning/80">
               <AlertTriangle size={11} />
               <span>
                 Agent edits land directly. There&rsquo;s no review step.

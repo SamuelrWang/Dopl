@@ -18,7 +18,7 @@ Stack: Next.js 16 (App Router) · React 19 · TypeScript (strict) · Supabase ·
 
 See [docs/REFACTOR-FINDINGS.md](REFACTOR-FINDINGS.md) for the current list of open findings (`F-NNN` ids). At a glance: pre-existing lint errors (F-006), chrome-extension PascalCase filenames (F-007), a few files still over the 500-line cap (§2), the canvas store still syncs server data it should push out to a query library (§7). None block shipping; all are tracked.
 
-TanStack Query is now the server-state layer (§7). Legacy `useEffect + fetch + useState` hooks (the per-feature `useFetch` copies in knowledge/skills/chats) remain until each feature's cleanup pass migrates them to `useApiQuery` — don't add new call sites to the legacy pattern. (`useApiGet` already deleted — members was its last consumer.)
+TanStack Query is now the server-state layer (§7) and every feature's client data hooks are on it — the legacy `useApiGet` / per-feature `useFetch` copies are gone. Don't reintroduce `useEffect + fetch + useState` for mount-time GETs; mutations in event handlers use `apiRequest` (plus a `queryClient.setQueryData`/`invalidateQueries` when a cached list must reflect the change).
 
 ---
 

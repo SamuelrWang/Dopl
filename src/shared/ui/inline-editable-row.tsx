@@ -251,7 +251,7 @@ export function InlineEditableRow({
         }}
         className={cn(
           "min-w-0 flex-1 rounded border border-border-strong bg-surface-raised-2",
-          "px-1.5 py-0.5 text-[12px] text-text-primary placeholder:text-text-muted",
+          "px-1.5 py-0.5 text-small text-text-primary placeholder:text-text-muted",
           "focus:border-border-highlight focus:bg-surface-raised-3 focus:outline-none",
           "disabled:opacity-60",
           inputClassName,

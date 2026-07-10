@@ -234,9 +234,9 @@ export function MembersTab({
           try {
             await remove(removeTarget);
           } catch (err) {
-            // Surface the server's reason ("Admins cannot remove owners or
-            // admins", last-owner protection, …) — ConfirmDialog swallows
-            // the throw and only keeps itself open.
+            // Surface the server's reason ("Admins cannot remove owners,
+            // admins, or themselves", last-owner protection, …) —
+            // ConfirmDialog swallows the throw and only keeps itself open.
             setError(err instanceof Error ? err.message : "Failed to remove");
           }
         }}

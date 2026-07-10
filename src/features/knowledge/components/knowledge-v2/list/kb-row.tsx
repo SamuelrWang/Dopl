@@ -1,20 +1,15 @@
 "use client";
 
-import { Building2, ChevronRight, Lock, Users } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
-import { KB_SCOPE_LABEL, kbScope, type KbScope } from "../../../scope";
+import { SHARE_SCOPE_ICONS } from "@/shared/ui/scope-share-popover";
+import { KB_SCOPE_LABEL, kbScope } from "../../../scope";
 import type { KnowledgeBase, KnowledgeEntry } from "../../../types";
 import type { BaseTree as BaseTreeData } from "../types";
 import type { TreeHandlers } from "../use-knowledge-v2-controller";
 import { shortWhen } from "../utils";
 import { BaseTree } from "./base-tree";
 import styles from "../knowledge-v2.module.css";
-
-const SCOPE_ICONS: Record<KbScope, typeof Lock> = {
-  private: Lock,
-  team: Users,
-  workspace: Building2,
-};
 
 interface Props {
   base: KnowledgeBase;
@@ -53,7 +48,7 @@ export function KbRow({
   onSelectEntry,
 }: Props) {
   const scope = kbScope(base);
-  const ScopeIcon = SCOPE_ICONS[scope];
+  const ScopeIcon = SHARE_SCOPE_ICONS[scope];
 
   return (
     <div className={styles.kbItem}>

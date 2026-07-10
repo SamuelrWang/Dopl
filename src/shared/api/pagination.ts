@@ -5,6 +5,10 @@ import type { PageParams } from "@/shared/types/paginated";
 /**
  * Parse `?cursor=&limit=` from a route request URL. `limit` is clamped
  * to [1, maxLimit]; a non-numeric limit is a 400.
+ *
+ * No consumer yet by design: this is the sanctioned pagination shape
+ * (ENGINEERING §7/§15) — the first paginated list route adopts it
+ * (chat transcripts are the expected first customer, see F-027).
  */
 export function parsePageParams(
   url: URL,

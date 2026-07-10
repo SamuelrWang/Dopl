@@ -24,7 +24,9 @@ export function WorkspaceSection({ workspaceSegment, onWorkspaceChanged }: Props
   );
   const workspace = query.data?.workspace ?? null;
   const role = query.data?.role ?? null;
-  const error = query.error ? "Failed to load workspace" : null;
+  // Error only when there's nothing to show — a failed background
+  // refetch must not replace the (possibly mid-edit) settings form.
+  const error = query.error && !query.data ? "Failed to load workspace" : null;
 
   if (error) {
     return (

@@ -3,14 +3,10 @@
 import {
   ScopeShareMenu,
   ScopeSharePopover,
-  SHARE_SCOPE_ICONS,
 } from "@/shared/ui/scope-share-popover";
 import { useTeams } from "@/features/members/hooks/use-teams";
 import { skillScope, type SkillScope } from "../scope";
 import type { Skill } from "../types";
-
-// Kept as a named export — skills-browser renders scope icons from this map.
-export const SKILL_SCOPE_ICONS = SHARE_SCOPE_ICONS;
 
 /**
  * Skill sharing control — thin wrapper over the shared ScopeSharePopover.

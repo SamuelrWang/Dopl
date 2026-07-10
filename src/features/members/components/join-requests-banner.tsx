@@ -1,19 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { UserPlus } from "lucide-react";
 import type { AssignableRole } from "../types";
 import { formatRelativeTime } from "@/shared/lib/format-time";
+import { useJoinRequests, type JoinRequestView } from "../hooks/use-join-requests";
 import { Avatar, RoleSelect } from "./member-bits";
-
-interface JoinRequestView {
-  id: string;
-  userId: string;
-  requestedAt: string;
-  email: string | null;
-  displayName: string | null;
-  avatarUrl: string | null;
-}
 
 interface Props {
   workspaceSlug: string;
@@ -26,35 +18,14 @@ interface Props {
 /**
  * Pending join requests from the shareable link — the admin approval
  * queue. Each row: requester identity, role picker (default Member),
- * Approve / Decline. Renders nothing while empty.
+ * Approve / Decline. Renders nothing while empty. Data flows through
+ * useJoinRequests — the same query cache entry as the members view.
  */
 export function JoinRequestsBanner({ workspaceSlug, enabled, onResolved }: Props) {
-  const [requests, setRequests] = useState<JoinRequestView[]>([]);
+  const { requests, resolve: resolveRequest } = useJoinRequests(workspaceSlug, enabled);
   const [roles, setRoles] = useState<Record<string, AssignableRole>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [tick, setTick] = useState(0);
-
-  useEffect(() => {
-    if (!enabled) return;
-    let cancelled = false;
-    fetch(`/api/workspaces/${encodeURIComponent(workspaceSlug)}/join-requests`, {
-      credentials: "same-origin",
-    })
-      .then(async (res) => {
-        if (cancelled || !res.ok) return;
-        const body = (await res.json()) as { requests: JoinRequestView[] };
-        if (!cancelled) setRequests(body.requests ?? []);
-      })
-      .catch(() => {
-        /* queue is re-fetched on next refresh */
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [workspaceSlug, enabled, tick]);
-
-  const refresh = useCallback(() => setTick((t) => t + 1), []);
 
   async function resolve(
     request: JoinRequestView,
@@ -63,23 +34,7 @@ export function JoinRequestsBanner({ workspaceSlug, enabled, onResolved }: Props
     setBusyId(request.id);
     setError(null);
     try {
-      const res = await fetch(
-        `/api/workspaces/${encodeURIComponent(workspaceSlug)}/join-requests/${encodeURIComponent(request.id)}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(
-            action === "approve"
-              ? { action, role: roles[request.id] ?? "member" }
-              : { action }
-          ),
-        }
-      );
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body?.error?.message || body?.error || "Failed to resolve");
-      }
-      refresh();
+      await resolveRequest(request.id, action, roles[request.id] ?? "member");
       onResolved();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");

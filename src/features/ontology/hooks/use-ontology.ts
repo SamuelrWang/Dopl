@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useReducer, useRef } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "@/shared/ui/toast";
 import * as api from "../client/api";
@@ -56,22 +56,37 @@ export function useOntology(workspaceId: string): {
   // ignored (the debounced writes own persistence; next mount refetches).
   const dirtyRef = useRef(false);
   const seededRef = useRef(false);
+  // `seeded` mirrors seededRef as state: status must track when the
+  // REDUCER has the snapshot, not when the query cache does — a cached
+  // revisit is "ready" only after the seed effect dispatches, otherwise
+  // the empty-graph frame flashes the "create your first cluster" CTA.
+  const [seeded, setSeeded] = useState(false);
   const snapshot = snapshotQuery.data;
   useEffect(() => {
     dirtyRef.current = false;
     seededRef.current = false;
+    // One-shot flag reset on workspace switch, not a render-loop risk —
+    // same sanctioned pattern as connect-agent-banner's mount read.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSeeded(false);
   }, [workspaceId]);
   useEffect(() => {
     if (!snapshot) return;
     if (seededRef.current && dirtyRef.current) return;
     rawDispatch({ type: "SNAPSHOT_SET", snapshot });
     seededRef.current = true;
+    // Flips exactly once per (workspace, first-snapshot) pair.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSeeded(true);
   }, [snapshot]);
 
-  const status: OntologyStatus = snapshotQuery.error
-    ? "error"
-    : snapshot
-      ? "ready"
+  // Seeded wins over error: a failed background refetch (e.g. reconnect)
+  // must not blank a working — possibly mid-edit — board into the error
+  // screen. "error" is only reachable before the first successful load.
+  const status: OntologyStatus = seeded
+    ? "ready"
+    : snapshotQuery.error
+      ? "error"
       : "loading";
 
   useEffect(() => {

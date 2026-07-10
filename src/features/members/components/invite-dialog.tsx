@@ -1,10 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronDown, Link2, RotateCcw } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/shared/ui/dialog";
 import { SearchField } from "@/shared/ui/search-field";
 import { cn } from "@/shared/lib/utils";
+import { apiRequest } from "@/shared/api/api-client";
+import { useApiQuery } from "@/shared/hooks/use-api-query";
 import { useCopyToClipboard } from "@/shared/hooks/use-copy-to-clipboard";
 import appShell from "@/shared/layout/app-shell/app-shell.module.css";
 import type { TeamView } from "@/features/teams/types";
@@ -42,28 +45,15 @@ function ShareLinkSection({
   workspaceSlug: string;
   open: boolean;
 }) {
-  const [token, setToken] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const { copied, copy } = useCopyToClipboard(2000);
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    if (!open) return;
-    let cancelled = false;
-    fetch(`/api/workspaces/${encodeURIComponent(workspaceSlug)}/join-link`, {
-      credentials: "same-origin",
-    })
-      .then(async (res) => {
-        if (cancelled || !res.ok) return;
-        const body = (await res.json()) as { token: string };
-        if (!cancelled) setToken(body.token);
-      })
-      .catch(() => {
-        /* section just stays in its loading state */
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [workspaceSlug, open]);
+  const linkPath = `/api/workspaces/${encodeURIComponent(workspaceSlug)}/join-link`;
+  // Fetches only while the dialog is open; errors keep the loading state
+  // (same as the old hand-rolled effect).
+  const linkQuery = useApiQuery<{ token: string }>(linkPath, { enabled: open });
+  const token = linkQuery.data?.token ?? null;
 
   const url =
     token && typeof window !== "undefined"
@@ -73,14 +63,10 @@ function ShareLinkSection({
   async function reset() {
     setBusy(true);
     try {
-      const res = await fetch(
-        `/api/workspaces/${encodeURIComponent(workspaceSlug)}/join-link`,
-        { method: "POST" }
-      );
-      if (res.ok) {
-        const body = (await res.json()) as { token: string };
-        setToken(body.token);
-      }
+      const body = await apiRequest<{ token: string }>(linkPath, { method: "POST" });
+      queryClient.setQueryData([linkPath, undefined, undefined], body);
+    } catch {
+      /* keep the current link on failure */
     } finally {
       setBusy(false);
     }

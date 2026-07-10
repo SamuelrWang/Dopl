@@ -9,7 +9,7 @@ import { SegmentedControl } from "@/shared/ui/segmented-control";
 import type { ResolvedSkill, Skill, SkillStatus } from "@/features/skills/types";
 import { skillScope, SKILL_SCOPE_LABEL, type SkillScope } from "@/features/skills/scope";
 import { fetchSkill } from "@/features/skills/client/api";
-import { SKILL_SCOPE_ICONS } from "./skill-share-control";
+import { SHARE_SCOPE_ICONS } from "@/shared/ui/scope-share-popover";
 import { SkillView } from "./skill-view";
 import { SkillViewSkeleton } from "./skill-view-skeleton";
 import { SkillsTrashModal } from "./skills-trash-modal";
@@ -185,7 +185,7 @@ function SkillRow({
   onSelect: () => void;
 }) {
   const scope = skillScope(skill);
-  const ScopeIcon = SKILL_SCOPE_ICONS[scope];
+  const ScopeIcon = SHARE_SCOPE_ICONS[scope];
   return (
     <button
       type="button"

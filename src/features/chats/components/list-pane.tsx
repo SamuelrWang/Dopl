@@ -14,7 +14,8 @@ import {
   UNFILED_LABEL,
 } from "../constants";
 import { formatShortDate } from "@/shared/lib/format-time";
-import { SCOPE_ICONS, ShareMenu } from "./share-control";
+import { ShareMenu } from "./share-control";
+import { SHARE_SCOPE_ICONS } from "@/shared/ui/scope-share-popover";
 import type { ChatFilter, FolderGroup } from "./chats-view";
 
 const ICON_BTN =
@@ -267,7 +268,7 @@ function FolderShareControl({
 }) {
   const [open, setOpen] = useState(false);
   const scope = chatScope(folder);
-  const Icon = SCOPE_ICONS[scope];
+  const Icon = SHARE_SCOPE_ICONS[scope];
 
   return (
     <div className="relative flex items-center">

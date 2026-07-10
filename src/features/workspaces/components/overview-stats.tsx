@@ -61,14 +61,14 @@ export function OverviewStats({
         >
           <div className="flex items-center justify-between">
             <Icon size={14} className="text-text-secondary/70" />
-            <span className="text-[10px] font-mono uppercase tracking-wider text-text-secondary/50">
+            <span className="text-label font-mono uppercase tracking-wider text-text-secondary/50">
               {label}
             </span>
           </div>
           <p className="mt-3 text-2xl font-semibold tabular-nums text-text-primary">
             {count}
           </p>
-          <p className="mt-0.5 text-[11px] text-text-tertiary group-hover:text-text-secondary transition-colors">
+          <p className="mt-0.5 text-caption text-text-tertiary group-hover:text-text-secondary transition-colors">
             {hint}
           </p>
         </Link>

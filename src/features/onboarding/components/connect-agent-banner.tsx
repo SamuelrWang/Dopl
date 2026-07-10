@@ -53,7 +53,9 @@ export function ConnectAgentBanner() {
     "/api/onboarding/mcp-status",
     { enabled: !skip }
   );
-  const loaded = skip || statusQuery.data !== undefined;
+  // Fail-open: a failed status fetch still shows the banner (the live
+  // poll below keeps retrying), matching the pre-query-layer behavior.
+  const loaded = skip || statusQuery.data !== undefined || statusQuery.isError;
   const connected = !!statusQuery.data?.connected;
 
   // Live detection so the banner + modal auto-resolve once the agent

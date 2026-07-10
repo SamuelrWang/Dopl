@@ -121,7 +121,7 @@ export function KnowledgeSearch({
             </p>
           ) : null}
           {error ? (
-            <p className="px-3 py-2 text-small text-red-400">{error}</p>
+            <p className="px-3 py-2 text-small text-danger">{error}</p>
           ) : null}
           {hits && hits.length === 0 ? (
             <p className="px-3 py-2 text-small text-text-secondary">

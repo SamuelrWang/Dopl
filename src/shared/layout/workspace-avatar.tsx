@@ -3,9 +3,9 @@ import { cn } from "@/shared/lib/utils";
 type AvatarSize = "sm" | "md" | "lg";
 
 const SIZE_CLASSES: Record<AvatarSize, string> = {
-  sm: "w-5 h-5 text-[10px] rounded",
-  md: "w-7 h-7 text-xs rounded-md",
-  lg: "w-9 h-9 text-sm rounded-lg",
+  sm: "w-5 h-5 text-micro rounded",
+  md: "w-7 h-7 text-caption rounded-md",
+  lg: "w-9 h-9 text-body rounded-lg",
 };
 
 interface Props {

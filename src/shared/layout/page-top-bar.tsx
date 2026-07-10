@@ -34,7 +34,7 @@ export function PageTopBar({ title, leading, trailing, className }: Props) {
     >
       {leading}
       {typeof title === "string" ? (
-        <span className="text-sm font-medium text-text-primary truncate">
+        <span className="text-title font-medium text-text-primary truncate">
           {title}
         </span>
       ) : (

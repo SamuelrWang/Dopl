@@ -4,6 +4,7 @@ import "@/features/marketing/marketing.css";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useApiQuery } from "@/shared/hooks/use-api-query";
 import { getSupabaseBrowser } from "@/shared/supabase/browser";
 import { EmbeddedCheckoutForm } from "@/features/billing/components/embedded-checkout";
 import { SiteNav } from "@/features/marketing/components/site-nav";
@@ -20,7 +21,6 @@ import type { User } from "@supabase/supabase-js";
 export default function PricingPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
-  const [isPaid, setIsPaid] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
 
@@ -30,24 +30,14 @@ export default function PricingPage() {
       setUser(data.user);
       setAuthChecked(true);
     });
+  }, []);
 
-    if (user) {
-      fetch("/api/billing/status")
-        .then(async (r) => {
-          if (!r.ok) return null;
-          return r.json();
-        })
-        .then((data) => {
-          if (data && data.status === "active") {
-            setIsPaid(true);
-          }
-        })
-        .catch((err) => {
-          console.error("[pricing] status fetch failed:", err);
-        });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
+  // Fires once the auth check finds a session (the old version read a
+  // stale `user` closure and only worked via a dep-triggered second run).
+  const statusQuery = useApiQuery<{ status?: string }>("/api/billing/status", {
+    enabled: user !== null,
+  });
+  const isPaid = statusQuery.data?.status === "active";
 
   function handleSubscribe() {
     if (!user) {

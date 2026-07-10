@@ -241,7 +241,7 @@ export function ScopeShareMenu({
                     >
                       <span
                         className="h-2 w-2 shrink-0 rounded-full"
-                        style={{ backgroundColor: t.color ?? "#98a2ad" }}
+                        style={{ backgroundColor: t.color ?? "var(--text-muted)" }}
                       />
                       <span className="min-w-0 flex-1 truncate text-small text-text-primary">
                         {t.name}

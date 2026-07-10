@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { ChatDetail } from "../types";
 import { fetchChat } from "./api";
@@ -23,17 +24,25 @@ export function useChatDetail(
     enabled: chatId !== null,
   });
 
+  // Data wins over error: a failed background refetch must not blank a
+  // rendered transcript into the error card.
   const status: ChatDetailStatus = !chatId
     ? "idle"
-    : query.error
-      ? "error"
-      : query.data !== undefined
-        ? "success"
+    : query.data !== undefined
+      ? "success"
+      : query.error
+        ? "error"
         : "loading";
+
+  // v5 refetch() ignores `enabled`; no-op while no chat is selected.
+  const rawRefetch = query.refetch;
+  const retry = useCallback(() => {
+    if (chatId !== null) void rawRefetch();
+  }, [chatId, rawRefetch]);
 
   return {
     detail: query.data ?? null,
     status,
-    retry: query.refetch,
+    retry,
   };
 }

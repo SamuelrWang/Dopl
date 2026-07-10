@@ -24,8 +24,8 @@ function Avatar({ user }: { user: AvatarStackUser }) {
     <div className="relative" title={title}>
       <div
         className={cn(
-          "flex h-6 w-6 items-center justify-center rounded-full ring-2 ring-[var(--background,#0a0a0a)] overflow-hidden",
-          "bg-surface-raised-4 text-[9px] font-semibold uppercase tracking-wide text-text-secondary"
+          "flex h-6 w-6 items-center justify-center rounded-full ring-2 ring-bg-elevated overflow-hidden",
+          "bg-surface-raised-4 text-micro font-semibold uppercase tracking-wide text-text-secondary"
         )}
       >
         {user.avatarUrl ? (
@@ -41,7 +41,7 @@ function Avatar({ user }: { user: AvatarStackUser }) {
       </div>
       {user.editing && (
         <span
-          className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-400 ring-2 ring-[var(--background,#0a0a0a)]"
+          className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-success ring-2 ring-bg-elevated"
           aria-hidden
         />
       )}
@@ -69,7 +69,7 @@ export function AvatarStack({
         <Avatar key={u.userId} user={u} />
       ))}
       {overflow > 0 && (
-        <div className="flex h-6 w-6 items-center justify-center rounded-full ring-2 ring-[var(--background,#0a0a0a)] bg-surface-raised-3 text-[9px] font-semibold text-text-tertiary">
+        <div className="flex h-6 w-6 items-center justify-center rounded-full ring-2 ring-bg-elevated bg-surface-raised-3 text-micro font-semibold text-text-tertiary">
           +{overflow}
         </div>
       )}

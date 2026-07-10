@@ -40,11 +40,10 @@ export function useSkills(workspaceId?: string): Result<Skill[]> {
       ),
   });
 
-  const status: SkillFetchStatus = query.error
-    ? "error"
-    : query.data !== undefined
-      ? "success"
-      : "loading";
+  // Data wins over error: a failed background refetch must not blank an
+  // already-rendered list into the error state.
+  const status: SkillFetchStatus =
+    query.data !== undefined ? "success" : query.error ? "error" : "loading";
 
   return {
     data: query.data ?? null,

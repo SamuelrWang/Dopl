@@ -75,7 +75,14 @@ export async function apiRequest<T>(
   try {
     parsed = await res.json();
   } catch {
-    if (!res.ok) throw new ApiError(res.status, "INTERNAL_ERROR", res.statusText);
+    if (!res.ok) {
+      // statusText is "" over HTTP/2 — never surface an empty message.
+      throw new ApiError(
+        res.status,
+        "INTERNAL_ERROR",
+        res.statusText || `Request failed (${res.status})`
+      );
+    }
     return undefined as T;
   }
 
@@ -88,7 +95,7 @@ export async function apiRequest<T>(
     throw new ApiError(
       res.status,
       err?.code ?? "INTERNAL_ERROR",
-      err?.message ?? res.statusText,
+      err?.message || res.statusText || `Request failed (${res.status})`,
       err?.details
     );
   }

@@ -18,7 +18,8 @@ export function useInvitations(workspaceSlug: string, enabled: boolean) {
   );
   return {
     invitations: query.data ?? null,
-    loading: query.isPending,
+    // Disabled (non-admin) callers are "not loading", not pending-forever.
+    loading: enabled && query.isPending,
     error: query.error ? query.error.message : null,
     refresh: query.refetch,
   };

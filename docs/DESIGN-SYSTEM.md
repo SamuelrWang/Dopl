@@ -8,9 +8,12 @@ recipes in a component. If a recipe you need is missing, add it HERE (globals
 Source of truth: `src/app/globals.css` (`@theme` block + `:root` palette +
 "UI kit" section). Design language: Samuel's study-notes app, verbatim —
 neutral grays, hairline borders, floating bento cards, concave (pressed-in)
-fields and raised 3D buttons. Currently wired: Knowledge (v2), Ontology,
-Members, Chats, Settings (the modal in `shared/layout/settings-modal` and
-the `/[workspaceSlug]/settings` page). Every new page starts on this system.
+fields and raised 3D buttons. Currently wired: Knowledge (v2 + the shared
+dialogs/doc-pane), Ontology, Members, Chats, Skills, Settings, Workspaces
+(invite/join/create cards), Billing, MCP-connect. Exempt: marketing pages,
+auth + onboarding (their own crystal/3D kit), frozen canvas/configuration,
+and the F-022 legacy Button/Dialog primitives pending retirement. Every
+new page starts on this system.
 
 ## Type scale
 
@@ -87,7 +90,6 @@ Shared React primitives (`src/shared/ui` + `src/shared/hooks`):
 | `ScopeSharePopover` / `ScopeShareMenu` (`scope-share-popover.tsx`) | The private/team/workspace sharing control (chats + skills wrap it). |
 | `ConfirmDialog` (`confirm-dialog.tsx`) | In-app confirmations. |
 | `useApiQuery` (`use-api-query.ts`) | Every client GET hook (TanStack Query over `apiRequest`). `useApiGet` is gone (members pass migrated the last consumers). |
-| `useDismissable` (`use-dismissable.ts`) | Escape + click-outside dismissal for custom floating UI that can't use `Popover`. |
 | `formatRelativeTime` / `formatDate` / `formatLastActive` (`shared/lib/format-time.ts`) | All timestamp display. No per-feature date formatters. |
 
 Reference implementations: `src/features/knowledge/components/knowledge-v2/`

@@ -6,10 +6,12 @@
  * framed in the standard section box. Backed by /api/oauth/grants.
  */
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/shared/ui/toast";
 import { SECTION_BOX_INSET } from "@/shared/ui/section-box";
 import { cn } from "@/shared/lib/utils";
+import { useApiQuery } from "@/shared/hooks/use-api-query";
 
 interface Grant {
   id: string;
@@ -19,33 +21,26 @@ interface Grant {
   created_at: string;
 }
 
-export function ConnectedAppsSection() {
-  const [grants, setGrants] = useState<Grant[] | null>(null);
-  const [revoking, setRevoking] = useState<string | null>(null);
+const GRANTS_PATH = "/api/oauth/grants";
+const selectGrants = (body: { grants?: Grant[] }) => body.grants ?? [];
 
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const res = await fetch("/api/oauth/grants");
-        if (!res.ok) throw new Error();
-        const data = (await res.json()) as { grants?: Grant[] };
-        if (!cancelled) setGrants(data.grants ?? []);
-      } catch {
-        if (!cancelled) setGrants([]);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+export function ConnectedAppsSection() {
+  const queryClient = useQueryClient();
+  const query = useApiQuery(GRANTS_PATH, { select: selectGrants });
+  // Errors degrade to "no connected apps", matching the old behavior.
+  const grants = query.isError ? [] : (query.data ?? null);
+  const [revoking, setRevoking] = useState<string | null>(null);
 
   async function revoke(id: string) {
     setRevoking(id);
     try {
       const res = await fetch(`/api/oauth/grants/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error();
-      setGrants((g) => (g ? g.filter((x) => x.id !== id) : g));
+      queryClient.setQueryData(
+        [GRANTS_PATH, undefined, undefined],
+        (prev: { grants?: Grant[] } | undefined) =>
+          prev ? { grants: (prev.grants ?? []).filter((x) => x.id !== id) } : prev
+      );
       toast({ title: "Disconnected" });
     } catch {
       toast({ title: "Couldn't disconnect" });

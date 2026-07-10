@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest, type ApiRequestOpts } from "@/shared/api/api-client";
 
@@ -31,7 +32,8 @@ export function useApiQuery<T, S = T>(
   path: string | null,
   opts: UseApiQueryOpts<T, S> = {}
 ) {
-  return useQuery({
+  const enabled = path !== null && (opts.enabled ?? true);
+  const query = useQuery({
     queryKey: [path, opts.workspaceId, opts.query] as const,
     queryFn: ({ signal }) =>
       apiRequest<T>(path as string, {
@@ -39,9 +41,20 @@ export function useApiQuery<T, S = T>(
         query: opts.query,
         signal,
       }),
-    enabled: path !== null && (opts.enabled ?? true),
+    enabled,
     select: opts.select,
     staleTime: opts.staleTime,
     refetchInterval: opts.refetchInterval,
   });
+
+  // TanStack v5 refetch() IGNORES `enabled` — on a null-path/disabled
+  // query it would fire a real request at a garbage URL. Restore the
+  // old hooks' contract: refetch on a disabled query is a no-op.
+  const rawRefetch = query.refetch;
+  const refetch = useCallback<typeof rawRefetch>(
+    (...args) => (enabled ? rawRefetch(...args) : Promise.resolve(undefined as never)),
+    [enabled, rawRefetch]
+  );
+
+  return { ...query, refetch };
 }

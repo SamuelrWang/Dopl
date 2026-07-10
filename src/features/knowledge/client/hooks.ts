@@ -12,6 +12,7 @@
  * `KnowledgeApiError`, `data` kept while a same-key refetch is in
  * flight (no flicker), cleared on key change (no cross-workspace leak).
  */
+import { useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type {
   KnowledgeBase,
@@ -69,20 +70,31 @@ function useKnowledgeQuery<T>(
         : undefined,
   });
 
+  // Data wins over error: a failed BACKGROUND refetch (focus/reconnect)
+  // must not blank already-rendered content into an error card. "error"
+  // is only reachable while there is nothing to show.
   const status: FetchStatus =
     key === null
       ? "idle"
-      : query.error
-        ? "error"
-        : query.data !== undefined
-          ? "success"
+      : query.data !== undefined
+        ? "success"
+        : query.error
+          ? "error"
           : "loading";
+
+  // v5 refetch() ignores `enabled` — a null-key hook would fire a real
+  // request at a garbage URL (e.g. /api/knowledge/entries/null from the
+  // controller's unconditional realtime refetch). No-op while idle.
+  const rawRefetch = query.refetch;
+  const refetch = useCallback(() => {
+    if (key !== null) void rawRefetch();
+  }, [key, rawRefetch]);
 
   return {
     data: query.data ?? null,
     error: query.error ? toApiError(query.error) : null,
     status,
-    refetch: query.refetch,
+    refetch,
   };
 }
 

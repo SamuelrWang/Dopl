@@ -3,14 +3,10 @@
 import {
   ScopeShareMenu,
   ScopeSharePopover,
-  SHARE_SCOPE_ICONS,
 } from "@/shared/ui/scope-share-popover";
 import { useTeams } from "@/features/members/hooks/use-teams";
 import { chatScope, type ChatScope } from "../scope";
 import type { Chat } from "../types";
-
-// Kept as a named export — list-pane renders scope icons from this map.
-export const SCOPE_ICONS = SHARE_SCOPE_ICONS;
 
 /**
  * Owner-facing chat sharing control — thin wrapper over the shared
