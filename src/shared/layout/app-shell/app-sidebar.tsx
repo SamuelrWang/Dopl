@@ -13,6 +13,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   Users,
+  Waypoints,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
@@ -22,6 +23,7 @@ import styles from "./app-shell.module.css";
 type NavSection =
   | "overview"
   | "canvas"
+  | "canvas2"
   | "knowledge"
   | "skills"
   | "chats"
@@ -32,6 +34,7 @@ type NavSection =
 const NAV: ReadonlyArray<{ label: string; icon: LucideIcon; section: NavSection }> = [
   { label: "Overview", icon: Home, section: "overview" },
   { label: "Canvas", icon: LayoutGrid, section: "canvas" },
+  { label: "Canvas 2", icon: Waypoints, section: "canvas2" },
   { label: "Knowledge", icon: BookOpen, section: "knowledge" },
   { label: "Skills", icon: Sparkles, section: "skills" },
   { label: "Chats", icon: MessagesSquare, section: "chats" },
