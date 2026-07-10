@@ -1,12 +1,15 @@
 "use client";
 
 /**
- * Client-side hooks for the skills feature. Same `useEffect + fetch +
- * useState` pattern as `useKnowledgeBases` — see ENGINEERING.md
- * "Known debt" for the planned migration to a query library.
+ * Client-side hooks for the skills feature, backed by TanStack Query
+ * (ENGINEERING §7). Return shape keeps the original `Result<T>`
+ * contract — the frozen canvas panels consume `{ data, status, error,
+ * refetch }` — with `SkillApiError` typing intact. Data is kept while
+ * a same-key refetch is in flight (no flicker) and scoped per
+ * workspace key (no cross-workspace leak).
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import type { Skill } from "@/features/skills/types";
 import { SkillApiError, fetchSkills } from "./api";
 
@@ -28,63 +31,25 @@ function toApiError(err: unknown): SkillApiError {
   );
 }
 
-function useFetch<T>(
-  key: string | null | undefined,
-  loader: () => Promise<T>
-): Result<T> {
-  const [data, setData] = useState<T | null>(null);
-  const [error, setError] = useState<SkillApiError | null>(null);
-  const [tick, setTick] = useState(0);
-
-  // Reset cached `data` + `error` when the cache key changes so the
-  // previous workspace's skills don't leak into a new workspace's
-  // sidebar/panel. Tick-driven refetches (same key) keep their value
-  // for the no-flicker behavior. Uses React's sanctioned
-  // adjust-state-during-render pattern (no ref access in render).
-  const [lastKey, setLastKey] = useState(key);
-  if (lastKey !== key) {
-    setLastKey(key);
-    setData(null);
-    setError(null);
-  }
-
-  const loaderRef = useRef(loader);
-  useEffect(() => {
-    loaderRef.current = loader;
+export function useSkills(workspaceId?: string): Result<Skill[]> {
+  const query = useQuery({
+    queryKey: ["skills", workspaceId ?? "default"],
+    queryFn: () =>
+      fetchSkills(workspaceId).catch((err: unknown) =>
+        Promise.reject(toApiError(err))
+      ),
   });
 
-  useEffect(() => {
-    if (!key) return;
-    let cancelled = false;
-    loaderRef
-      .current()
-      .then((next) => {
-        if (cancelled) return;
-        setError(null);
-        setData(next);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setError(toApiError(err));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [key, tick]);
+  const status: SkillFetchStatus = query.error
+    ? "error"
+    : query.data !== undefined
+      ? "success"
+      : "loading";
 
-  const refetch = useCallback(() => setTick((t) => t + 1), []);
-  const status: SkillFetchStatus = !key
-    ? "idle"
-    : error
-      ? "error"
-      : data !== null
-        ? "success"
-        : "loading";
-  return { data, error, status, refetch };
-}
-
-export function useSkills(workspaceId?: string): Result<Skill[]> {
-  return useFetch<Skill[]>(workspaceId ?? "default", () =>
-    fetchSkills(workspaceId)
-  );
+  return {
+    data: query.data ?? null,
+    error: query.error ? toApiError(query.error) : null,
+    status,
+    refetch: query.refetch,
+  };
 }

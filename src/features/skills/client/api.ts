@@ -6,6 +6,7 @@
  * header passthrough, JSON-only request/response.
  */
 
+import { ApiError, apiRequest } from "@/shared/api/api-client";
 import type {
   ResolvedSkill,
   Skill,
@@ -38,34 +39,16 @@ interface RequestOpts {
 }
 
 async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
-  const headers: Record<string, string> = {};
-  if (opts.workspaceId) headers["x-workspace-id"] = opts.workspaceId;
-  if (opts.body !== undefined) headers["content-type"] = "application/json";
-  if (opts.expectedUpdatedAt) headers["x-updated-at"] = opts.expectedUpdatedAt;
-  const res = await fetch(path, {
-    headers,
-    method: opts.method ?? "GET",
-    body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
-    credentials: "include",
-  });
-  if (res.status === 204) return undefined as unknown as T;
-  if (!res.ok) {
-    let code = "INTERNAL_ERROR";
-    let message = `Request failed with ${res.status}`;
-    try {
-      const body = (await res.json()) as {
-        error?: { code?: string; message?: string };
-      };
-      if (body?.error) {
-        code = body.error.code ?? code;
-        message = body.error.message ?? message;
-      }
-    } catch {
-      // Empty / non-JSON body — leave defaults.
+  try {
+    return await apiRequest<T>(path, opts);
+  } catch (err) {
+    if (err instanceof ApiError) {
+      // Re-type onto the feature error — skill-view branches on
+      // SkillApiError instances (e.g. 412 SKILL_STALE_VERSION).
+      throw new SkillApiError(err.status, err.code, err.message);
     }
-    throw new SkillApiError(res.status, code, message);
+    throw err;
   }
-  return (await res.json()) as T;
 }
 
 const enc = encodeURIComponent;

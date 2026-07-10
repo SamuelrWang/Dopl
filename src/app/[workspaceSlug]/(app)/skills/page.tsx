@@ -39,7 +39,9 @@ export default async function SkillsIndexPage({ params }: PageProps) {
     agentTokenId: null,
   });
 
-  const skills = await listSkills(ctx, { includeConnectors: true });
+  // Summary columns only — nothing in the browser list renders
+  // connectors; the detail view fetches the full skill per slug.
+  const skills = await listSkills(ctx);
 
   return (
     <SkillsBrowser
