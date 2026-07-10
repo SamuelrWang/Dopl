@@ -118,9 +118,9 @@ export function MoveToDialog({
             type="button"
             onClick={() => setSelected(null)}
             className={cn(
-              "w-full flex items-center gap-2 px-3 py-1.5 text-xs cursor-pointer",
+              "w-full flex items-center gap-2 px-3 py-1.5 text-small cursor-pointer",
               selected === null
-                ? "bg-violet-500/[0.12] text-text-primary"
+                ? "bg-surface-selected text-text-primary"
                 : "text-text-secondary hover:bg-surface-raised-2"
             )}
           >
@@ -185,11 +185,11 @@ function FolderList({
               disabled={isBlocked}
               style={{ paddingLeft: `${12 + depth * 16}px` }}
               className={cn(
-                "w-full flex items-center gap-1.5 pr-3 py-1.5 text-xs",
+                "w-full flex items-center gap-1.5 pr-3 py-1.5 text-small",
                 isBlocked
                   ? "text-text-secondary/30 cursor-not-allowed"
                   : selected === folder.id
-                    ? "bg-violet-500/[0.12] text-text-primary cursor-pointer"
+                    ? "bg-surface-selected text-text-primary cursor-pointer"
                     : "text-text-secondary hover:bg-surface-raised-2 cursor-pointer"
               )}
             >

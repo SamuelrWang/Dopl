@@ -44,27 +44,34 @@ export default async function KnowledgeIndexPage({ params }: PageProps) {
     role: membership.role,
     agentTokenId: null,
   });
-  const bases = await listBases(ctx);
-  const ownerNames = await listBaseOwnerNames(ctx, bases);
-  const segment = workspaceSegment(workspace);
-
-  // Admin view: which teams have a grant on each teams-mode KB, for the
-  // card pills. Members only get the scope label, so skip the query.
-  let kbTeams: Record<string, KbTeamRef[]> | undefined;
-  if (meetsMinRole(membership.role, "admin")) {
-    const teams = await listTeams(workspace.id, user.id);
-    kbTeams = {};
-    for (const team of teams) {
-      for (const grant of team.grants) {
-        if (grant.resourceType !== "knowledge_base") continue;
-        (kbTeams[grant.resourceId] ??= []).push({
-          teamId: team.id,
-          name: team.name,
-          color: team.color,
-        });
+  // Bases chain and admin teams query are independent — run concurrently.
+  const [baseList, kbTeams] = await Promise.all([
+    (async () => {
+      const bases = await listBases(ctx);
+      const ownerNames = await listBaseOwnerNames(ctx, bases);
+      return { bases, ownerNames };
+    })(),
+    (async () => {
+      // Admin view: which teams have a grant on each teams-mode KB, for the
+      // card pills. Members only get the scope label, so skip the query.
+      if (!meetsMinRole(membership.role, "admin")) return undefined;
+      const teams = await listTeams(workspace.id, user.id);
+      const map: Record<string, KbTeamRef[]> = {};
+      for (const team of teams) {
+        for (const grant of team.grants) {
+          if (grant.resourceType !== "knowledge_base") continue;
+          (map[grant.resourceId] ??= []).push({
+            teamId: team.id,
+            name: team.name,
+            color: team.color,
+          });
+        }
       }
-    }
-  }
+      return map;
+    })(),
+  ]);
+  const { bases, ownerNames } = baseList;
+  const segment = workspaceSegment(workspace);
 
   return (
     <KnowledgeV2Preview

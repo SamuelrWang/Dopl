@@ -139,7 +139,7 @@ export function KbSharingSection({
 
   if (!canManage) {
     return (
-      <p className="text-xs text-text-secondary leading-relaxed">
+      <p className="text-caption text-text-secondary leading-relaxed">
         {kbScope(base) === "team"
           ? "Shared with specific teams. Only the owner or a workspace admin can change sharing."
           : kbScope(base) === "private"
@@ -160,9 +160,9 @@ export function KbSharingSection({
 
       {scope === "team" ? (
         teamsLoading ? (
-          <p className="text-xs text-text-secondary">Loading teams…</p>
+          <p className="text-small text-text-secondary">Loading teams…</p>
         ) : teamsError ? (
-          <p className="text-xs text-danger">{teamsError}</p>
+          <p className="text-small text-danger">{teamsError}</p>
         ) : (
           <>
             <TeamGrantEditor
@@ -173,7 +173,7 @@ export function KbSharingSection({
               lockedTeamIds={lockedTeamIds}
             />
             {grants.length === 0 ? (
-              <p className="text-[11px] text-amber-600">
+              <p className="text-caption text-warning">
                 No teams granted — only you and workspace admins will see
                 this knowledge base. Consider switching to Private instead.
               </p>
@@ -183,7 +183,7 @@ export function KbSharingSection({
       ) : null}
 
       {scope === "private" && kbScope(base) !== "private" ? (
-        <p className="text-[11px] text-text-secondary">
+        <p className="text-caption text-text-secondary">
           Making this private removes all team grants — only you (and
           workspace admins via settings) will see it.
         </p>
@@ -194,7 +194,7 @@ export function KbSharingSection({
           type="button"
           onClick={handleSave}
           disabled={!dirty || saving}
-          className="h-8 px-4 rounded-md bg-surface-cta text-text-on-cta text-xs font-medium hover:bg-surface-cta/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="h-8 px-4 rounded-md bg-surface-cta text-text-on-cta text-small font-medium hover:bg-surface-cta/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           {saving ? "Saving…" : "Update sharing"}
         </button>

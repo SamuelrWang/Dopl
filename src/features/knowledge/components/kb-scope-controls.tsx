@@ -70,11 +70,11 @@ export function ScopeSelector({
               blocked ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
             )}
           >
-            <span className="flex items-center gap-1.5 text-sm font-medium text-text-primary">
+            <span className="flex items-center gap-1.5 text-body font-medium text-text-primary">
               <Icon size={13} />
               {label}
             </span>
-            <span className="text-[11px] leading-snug text-text-secondary">
+            <span className="text-caption leading-snug text-text-secondary">
               {key === "team" && teamsDisabled
                 ? "You're not in any team yet"
                 : desc}
@@ -116,7 +116,7 @@ export function TeamGrantEditor({
 
   if (teams.length === 0) {
     return (
-      <p className="text-xs text-text-secondary">
+      <p className="text-small text-text-secondary">
         No teams available. Create teams from workspace settings → Members.
       </p>
     );
@@ -132,10 +132,10 @@ export function TeamGrantEditor({
           <span className="flex min-w-0 items-center gap-2.5">
             <TeamColorTile color={team.color} size="sm" />
             <span className="flex min-w-0 flex-col">
-              <span className="truncate text-sm font-medium text-text-primary">
+              <span className="truncate text-body font-medium text-text-primary">
                 {team.name}
               </span>
-              <span className="text-[10px] text-text-muted">
+              <span className="text-micro text-text-muted">
                 {team.memberCount} member{team.memberCount === 1 ? "" : "s"}
               </span>
             </span>

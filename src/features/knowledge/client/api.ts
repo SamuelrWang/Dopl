@@ -13,6 +13,7 @@
  *
  * Conventions match the route handlers in `src/app/api/knowledge/`.
  */
+import { ApiError, apiRequest } from "@/shared/api/api-client";
 import type {
   KnowledgeBase,
   KnowledgeFolder,
@@ -62,45 +63,16 @@ interface RequestOpts {
 }
 
 async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
-  const headers: Record<string, string> = {};
-  if (opts.workspaceId) headers["x-workspace-id"] = opts.workspaceId;
-  if (opts.body !== undefined) headers["content-type"] = "application/json";
-  if (opts.expectedUpdatedAt) headers["x-updated-at"] = opts.expectedUpdatedAt;
-
-  const url = new URL(path, window.location.origin);
-  if (opts.query) {
-    for (const [k, v] of Object.entries(opts.query)) {
-      if (v !== undefined) url.searchParams.set(k, v);
-    }
-  }
-
-  const res = await fetch(url.toString(), {
-    method: opts.method ?? "GET",
-    headers,
-    body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
-    credentials: "same-origin",
-  });
-
-  if (res.status === 204) return undefined as T;
-
-  let parsed: unknown;
   try {
-    parsed = await res.json();
-  } catch {
-    if (!res.ok) {
-      throw new KnowledgeApiError(res.status, "INTERNAL_ERROR", res.statusText);
+    return await apiRequest<T>(path, opts);
+  } catch (err) {
+    if (err instanceof ApiError) {
+      // Re-type onto the feature error — doc-pane branches on
+      // KnowledgeApiError instances (e.g. 412 KNOWLEDGE_STALE_VERSION).
+      throw new KnowledgeApiError(err.status, err.code, err.message, err.details);
     }
-    return undefined as T;
+    throw err;
   }
-
-  if (!res.ok) {
-    const env = parsed as { error?: { code?: string; message?: string; details?: unknown } };
-    const code = env.error?.code ?? "INTERNAL_ERROR";
-    const message = env.error?.message ?? res.statusText;
-    throw new KnowledgeApiError(res.status, code, message, env.error?.details);
-  }
-
-  return parsed as T;
 }
 
 // ─── Bases ──────────────────────────────────────────────────────────

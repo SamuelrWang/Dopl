@@ -130,7 +130,7 @@ export function BaseSettingsForm({
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="h-9 px-3 rounded-md bg-surface-raised-3 border border-border-strong text-sm text-text-primary placeholder:text-text-muted outline-none focus:border-border-highlight transition-colors"
+            className="h-9 px-3 rounded-md bg-surface-raised-3 border border-border-strong text-body text-text-primary placeholder:text-text-muted outline-none focus:border-border-highlight transition-colors"
           />
         </Field>
         <Field label="Description">
@@ -142,9 +142,9 @@ export function BaseSettingsForm({
             rows={3}
             maxLength={DESCRIPTION_MAX}
             placeholder="What's in this knowledge base? Agents see this when listing bases."
-            className="px-3 py-2 rounded-md bg-surface-raised-3 border border-border-strong text-sm text-text-primary placeholder:text-text-muted outline-none focus:border-border-highlight transition-colors resize-none"
+            className="px-3 py-2 rounded-md bg-surface-raised-3 border border-border-strong text-body text-text-primary placeholder:text-text-muted outline-none focus:border-border-highlight transition-colors resize-none"
           />
-          <p className="text-right font-mono text-[10px] text-text-muted">
+          <p className="text-right font-mono text-micro text-text-muted">
             {description.length}/{DESCRIPTION_MAX}
           </p>
         </Field>
@@ -153,7 +153,7 @@ export function BaseSettingsForm({
             type="button"
             onClick={handleSave}
             disabled={!dirty || saving}
-            className="h-8 px-4 rounded-md bg-surface-cta text-text-on-cta text-xs font-medium hover:bg-surface-cta/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="h-8 px-4 rounded-md bg-surface-cta text-text-on-cta text-small font-medium hover:bg-surface-cta/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             {saving ? "Saving…" : "Save changes"}
           </button>
@@ -175,7 +175,7 @@ export function BaseSettingsForm({
           tree / directory listings alongside the folder names. */}
       {folders.length > 0 ? (
         <Section title="Folder descriptions">
-          <p className="text-xs text-text-secondary leading-relaxed -mt-1">
+          <p className="text-caption text-text-secondary leading-relaxed -mt-1">
             Short summaries of what each folder holds. Agents see these when
             browsing the tree, so they can navigate without opening every
             file.
@@ -208,7 +208,7 @@ export function BaseSettingsForm({
         <button
           type="button"
           onClick={() => setShowAdvanced((v) => !v)}
-          className="text-xs text-text-secondary hover:text-text-primary cursor-pointer"
+          className="text-small text-text-secondary hover:text-text-primary cursor-pointer"
         >
           {showAdvanced ? "Hide" : "Show"} URL slug
         </button>
@@ -218,9 +218,9 @@ export function BaseSettingsForm({
               type="text"
               value={slug}
               onChange={(e) => setSlug(e.target.value)}
-              className="h-9 px-3 rounded-md bg-surface-raised-3 border border-border-strong text-sm font-mono text-text-primary outline-none focus:border-border-highlight transition-colors"
+              className="h-9 px-3 rounded-md bg-surface-raised-3 border border-border-strong text-body font-mono text-text-primary outline-none focus:border-border-highlight transition-colors"
             />
-            <p className="mt-1 text-[11px] text-text-secondary/60">
+            <p className="mt-1 text-caption text-text-secondary/60">
               Lowercase letters, numbers, and hyphens. Changing it
               updates the URL — links to the old slug will 404.
             </p>
@@ -230,11 +230,11 @@ export function BaseSettingsForm({
 
       {/* Danger zone */}
       <Section title="Danger zone">
-        <div className="rounded-lg border border-red-400/30 bg-red-500/[0.04] p-4">
-          <p className="text-sm font-medium text-text-primary">
+        <div className="rounded-lg border border-danger/30 bg-danger/5 p-4">
+          <p className="text-title font-medium text-text-primary">
             Delete this knowledge base
           </p>
-          <p className="mt-1 text-xs text-text-secondary leading-relaxed">
+          <p className="mt-1 text-caption text-text-secondary leading-relaxed">
             Soft-deletes the base and all its folders + entries. You
             can restore from the trash modal until it&rsquo;s purged.
           </p>
@@ -242,7 +242,7 @@ export function BaseSettingsForm({
             type="button"
             onClick={() => setConfirmDeleteOpen(true)}
             disabled={deleting}
-            className="mt-3 h-8 px-4 rounded-md bg-red-500 text-white text-xs font-medium hover:bg-red-500/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="mt-3 h-8 px-4 rounded-md bg-danger text-white text-small font-medium hover:bg-danger/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             {deleting ? "Deleting…" : "Delete knowledge base"}
           </button>
@@ -271,7 +271,7 @@ function Section({
 }) {
   return (
     <section>
-      <h2 className="text-[10px] font-medium text-text-muted uppercase tracking-wider mb-3">
+      <h2 className="text-label font-medium text-text-muted uppercase tracking-wider mb-3">
         {title}
       </h2>
       <div className="flex flex-col gap-4">{children}</div>
@@ -288,7 +288,7 @@ function Field({
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label className="text-xs font-medium text-text-tertiary uppercase tracking-wider">
+      <label className="text-label font-medium text-text-tertiary uppercase tracking-wider">
         {label}
       </label>
       {children}
@@ -357,10 +357,10 @@ function FolderDescriptionRow({
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-baseline justify-between gap-2">
-        <span className="text-xs font-medium text-text-primary truncate">
+        <span className="text-small font-medium text-text-primary truncate">
           {pathLabel}
         </span>
-        <span className="shrink-0 font-mono text-[10px] text-text-muted">
+        <span className="shrink-0 font-mono text-micro text-text-muted">
           {value.length}/{DESCRIPTION_MAX}
         </span>
       </div>
@@ -371,7 +371,7 @@ function FolderDescriptionRow({
         rows={2}
         maxLength={DESCRIPTION_MAX}
         placeholder="What's in this folder?"
-        className="px-3 py-2 rounded-md bg-surface-raised-3 border border-border-strong text-sm text-text-primary placeholder:text-text-muted outline-none focus:border-border-highlight transition-colors resize-none"
+        className="px-3 py-2 rounded-md bg-surface-raised-3 border border-border-strong text-body text-text-primary placeholder:text-text-muted outline-none focus:border-border-highlight transition-colors resize-none"
       />
     </div>
   );

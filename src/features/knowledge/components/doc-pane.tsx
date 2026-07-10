@@ -382,15 +382,15 @@ export function DocPane({
           plus the agent-facing description (entry `excerpt`) that streams
           to MCP clients in tree / directory listings. Framed like the
           study-notes intro panel: uppercase label strip over an inset body. */}
-      <div className="mx-auto mt-4 mb-1 w-[calc(100%-3rem)] max-w-3xl overflow-hidden rounded-[14px] border border-black/[0.12]">
-        <div className="flex items-center gap-3 bg-[#f4f6f9] px-4 py-1.5">
-          <span className="flex-1 text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
+      <div className="mx-auto mt-4 mb-1 w-[calc(100%-3rem)] max-w-3xl overflow-hidden rounded-[14px] border border-border-strong">
+        <div className="flex items-center gap-3 bg-card-surface-subtle px-4 py-1.5">
+          <span className="flex-1 text-label font-semibold uppercase tracking-wide text-text-secondary">
             Overview
           </span>
           <AvatarStack users={otherEditors} />
           <SaveStatusIndicator state={status} />
         </div>
-        <div className="border-t border-black/[0.06] bg-bg-inset px-4 pt-2.5 pb-2">
+        <div className="border-t border-border-subtle bg-bg-inset px-4 pt-2.5 pb-2">
           <input
             type="text"
             value={title}
@@ -400,7 +400,7 @@ export function DocPane({
               scheduleSave(next, body);
             }}
             placeholder="Untitled"
-            className="w-full min-w-0 bg-transparent text-lg font-semibold leading-snug tracking-tight text-text-primary focus:outline-none placeholder:text-text-muted"
+            className="w-full min-w-0 bg-transparent text-display font-semibold leading-snug tracking-tight text-text-primary focus:outline-none placeholder:text-text-muted"
           />
           <div className="mt-1 flex items-end gap-2">
             <textarea
@@ -413,9 +413,9 @@ export function DocPane({
               maxLength={DESCRIPTION_MAX}
               aria-label="Description for agents"
               placeholder="Add a short description — agents see this when browsing the tree, before opening the file…"
-              className="flex-1 min-w-0 resize-none bg-transparent text-sm leading-relaxed text-text-secondary placeholder:text-text-muted focus:outline-none"
+              className="flex-1 min-w-0 resize-none bg-transparent text-body leading-relaxed text-text-secondary placeholder:text-text-muted focus:outline-none"
             />
-            <span className="shrink-0 pb-0.5 font-mono text-[10px] text-text-muted">
+            <span className="shrink-0 pb-0.5 font-mono text-micro text-text-muted">
               {description.length}/{DESCRIPTION_MAX}
             </span>
           </div>

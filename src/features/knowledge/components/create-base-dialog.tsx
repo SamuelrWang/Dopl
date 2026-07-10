@@ -116,7 +116,7 @@ export function CreateBaseDialog({
       </button>
       <div className={modalStyles.narrowBody}>
         <h2 className={modalStyles.narrowTitle} style={{ textAlign: "center" }}>New knowledge base</h2>
-        <p className="mb-6 text-sm leading-relaxed text-text-secondary">
+        <p className="mb-6 text-lead leading-relaxed text-text-secondary">
           A knowledge base holds folders + files. Editable in the browser,
           also accessible to your agent over MCP once you flip the
           agent-write toggle in settings.
@@ -124,7 +124,7 @@ export function CreateBaseDialog({
 
         <div className="flex flex-col gap-5">
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-text-tertiary uppercase tracking-wider">
+            <label className="text-label font-medium text-text-tertiary uppercase tracking-wider">
               Name
             </label>
             <input
@@ -133,12 +133,12 @@ export function CreateBaseDialog({
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Product specs"
               autoFocus
-              className="h-9 px-3 rounded-md bg-surface-raised-3 border border-border-strong text-sm text-text-primary placeholder:text-text-muted outline-none focus:border-border-highlight transition-colors"
+              className="h-9 px-3 rounded-md bg-surface-raised-3 border border-border-strong text-body text-text-primary placeholder:text-text-muted outline-none focus:border-border-highlight transition-colors"
             />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-text-tertiary uppercase tracking-wider">
+            <label className="text-label font-medium text-text-tertiary uppercase tracking-wider">
               Description{" "}
               <span className="text-text-muted normal-case tracking-normal">
                 (optional)
@@ -149,12 +149,12 @@ export function CreateBaseDialog({
               onChange={(e) => setDescription(e.target.value)}
               placeholder="What lives in this knowledge base?"
               rows={3}
-              className="px-3 py-2 rounded-md bg-surface-raised-3 border border-border-strong text-sm text-text-primary placeholder:text-text-muted outline-none focus:border-border-highlight transition-colors resize-none"
+              className="px-3 py-2 rounded-md bg-surface-raised-3 border border-border-strong text-body text-text-primary placeholder:text-text-muted outline-none focus:border-border-highlight transition-colors resize-none"
             />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-text-tertiary uppercase tracking-wider">
+            <label className="text-label font-medium text-text-tertiary uppercase tracking-wider">
               Who can access
             </label>
             <ScopePicker
@@ -168,7 +168,7 @@ export function CreateBaseDialog({
             />
           </div>
 
-          {error && <p className="text-xs text-danger">{error}</p>}
+          {error && <p className="text-small text-danger">{error}</p>}
         </div>
 
         <div className={modalStyles.confirmActions}>
@@ -246,17 +246,17 @@ function TeamGrantPane({
 }) {
   const { teams, loading, error } = useTeams(workspaceSlug);
   if (loading) {
-    return <p className="text-xs text-text-secondary">Loading teams…</p>;
+    return <p className="text-small text-text-secondary">Loading teams…</p>;
   }
   if (error) {
-    return <p className="text-xs text-danger">{error}</p>;
+    return <p className="text-small text-danger">{error}</p>;
   }
   const pickable = meetsMinRole(role, "admin")
     ? (teams ?? [])
     : (teams ?? []).filter((t) => t.memberIds.includes(currentUserId));
   if (pickable.length === 0) {
     return (
-      <p className="text-xs text-text-secondary">
+      <p className="text-small text-text-secondary">
         {meetsMinRole(role, "admin")
           ? "No teams in this workspace yet — create one from settings → Members."
           : "You're not in any team yet — ask an admin to add you, or pick another scope."}

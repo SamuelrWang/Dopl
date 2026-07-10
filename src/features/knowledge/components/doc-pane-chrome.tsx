@@ -50,10 +50,10 @@ export function ConflictBanner({
   return (
     <div
       role="alert"
-      className="border-y border-amber-500/20 bg-amber-500/[0.06] px-6 py-3 flex flex-wrap items-center gap-3"
+      className="border-y border-warning/25 bg-warning/5 px-6 py-3 flex flex-wrap items-center gap-3"
     >
-      <AlertTriangle size={14} className="shrink-0 text-amber-300/90" />
-      <div className="min-w-0 flex-1 text-[12px] leading-relaxed text-amber-100/90">
+      <AlertTriangle size={14} className="shrink-0 text-warning" />
+      <div className="min-w-0 flex-1 text-small leading-relaxed text-text-primary">
         <strong className="font-semibold">Edited elsewhere.</strong> The server
         has a newer version of this entry. Choose how to resolve — your edits
         are preserved until you do.
@@ -63,7 +63,7 @@ export function ConflictBanner({
           type="button"
           onClick={onDiscardMine}
           disabled={resolving}
-          className="rounded-md border border-border-default bg-surface-raised-1 px-2.5 py-1 text-[11px] text-text-secondary transition-colors hover:bg-surface-raised-3 hover:text-text-primary disabled:opacity-40"
+          className="rounded-md border border-border-default bg-surface-raised-1 px-2.5 py-1 text-caption text-text-secondary transition-colors hover:bg-surface-raised-3 hover:text-text-primary disabled:opacity-40"
         >
           Discard mine, reload
         </button>
@@ -71,7 +71,7 @@ export function ConflictBanner({
           type="button"
           onClick={onKeepMine}
           disabled={resolving}
-          className="rounded-md border border-amber-400/30 bg-amber-400/10 px-2.5 py-1 text-[11px] text-amber-100/95 transition-colors hover:bg-amber-400/15 disabled:opacity-40"
+          className="rounded-md border border-warning/30 bg-warning/10 px-2.5 py-1 text-caption text-text-primary transition-colors hover:bg-warning/15 disabled:opacity-40"
         >
           {resolving ? "Saving…" : "Save mine, overwrite"}
         </button>

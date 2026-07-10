@@ -57,13 +57,45 @@ export default async function KnowledgeBaseDetailPage({
     agentTokenId: null,
   });
 
-  // Canonical 301 on stale/legacy slug; 404 on miss.
-  const base = await resolvePageKbWithWorkspace(ctx, workspace, kbSlug);
-  const { folders, entries } = await getBaseTree(ctx, base.id);
+  // Three independent read chains — run them concurrently instead of the
+  // old 8-await waterfall. (getEntry stays sequential below: it needs the
+  // visibility-filtered tree to validate the deep-link target.)
+  const [{ entryId }, treeChain, baseList, kbTeams] = await Promise.all([
+    searchParams,
+    (async () => {
+      // Canonical 301 on stale/legacy slug; 404 on miss.
+      const base = await resolvePageKbWithWorkspace(ctx, workspace, kbSlug);
+      const { folders, entries } = await getBaseTree(ctx, base.id);
+      return { base, folders, entries };
+    })(),
+    (async () => {
+      const bases = await listBases(ctx);
+      const ownerNames = await listBaseOwnerNames(ctx, bases);
+      return { bases, ownerNames };
+    })(),
+    (async () => {
+      // Admin view: kbId → teams granted, for the base overview's Teams row.
+      if (!meetsMinRole(membership.role, "admin")) return undefined;
+      const teams = await listTeams(workspace.id, user.id);
+      const map: Record<string, KbTeamRef[]> = {};
+      for (const team of teams) {
+        for (const grant of team.grants) {
+          if (grant.resourceType !== "knowledge_base") continue;
+          (map[grant.resourceId] ??= []).push({
+            teamId: team.id,
+            name: team.name,
+            color: team.color,
+          });
+        }
+      }
+      return map;
+    })(),
+  ]);
+  const { base, folders, entries } = treeChain;
+  const { bases, ownerNames } = baseList;
 
   // Deep-link target: honor `?entryId=` only when it belongs to THIS base's
   // already-visibility-filtered tree. Falls back to the first entry.
-  const { entryId } = await searchParams;
   const selectedEntryId =
     (entryId && entries.some((e) => e.id === entryId) ? entryId : null) ??
     entries[0]?.id ??
@@ -74,26 +106,7 @@ export default async function KnowledgeBaseDetailPage({
     ? await getEntry(ctx, selectedEntryId)
     : null;
 
-  const bases = await listBases(ctx);
-  const ownerNames = await listBaseOwnerNames(ctx, bases);
   const segment = workspaceSegment(workspace);
-
-  // Admin view: kbId → teams granted, for the base overview's Teams row.
-  let kbTeams: Record<string, KbTeamRef[]> | undefined;
-  if (meetsMinRole(membership.role, "admin")) {
-    const teams = await listTeams(workspace.id, user.id);
-    kbTeams = {};
-    for (const team of teams) {
-      for (const grant of team.grants) {
-        if (grant.resourceType !== "knowledge_base") continue;
-        (kbTeams[grant.resourceId] ??= []).push({
-          teamId: team.id,
-          name: team.name,
-          color: team.color,
-        });
-      }
-    }
-  }
 
   const initialTrees: Record<string, BaseTree> = {
     [base.id]: { status: "ready", folders, entries },

@@ -30,7 +30,9 @@ const FolderIdSchema = z.string().uuid();
  *   - folderId not present  → don't filter by folder.
  *   - folderId=null (literal) → root entries only (folder_id IS NULL).
  *   - folderId=<uuid>       → that folder.
- *   - includeBody=false     → strip body for tree/list views.
+ *   - includeBody=true      → include entry bodies. Default is STRIPPED:
+ *     shipping every body in a list response is a payload footgun, so
+ *     bodies are opt-in (single-entry reads use /api/knowledge/entries/[id]).
  *
  * Throws `HttpError.badRequest` if `folderId` is neither "null" nor a
  * valid UUID — without this guard a non-UUID value gets forwarded to
@@ -52,9 +54,7 @@ function parseListOpts(url: URL): ListEntriesOpts {
       opts.folderId = parsed.data;
     }
   }
-  if (url.searchParams.get("includeBody") === "false") {
-    opts.includeBody = false;
-  }
+  opts.includeBody = url.searchParams.get("includeBody") === "true";
   return opts;
 }
 
