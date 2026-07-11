@@ -32,10 +32,9 @@ async function updateOntologyCluster(t, clusterId, patch) {
     return data.cluster;
 }
 async function deleteOntologyCluster(t, clusterId) {
-    await t.request(`/api/ontology/clusters/${enc(clusterId)}`, {
-        toolName: "ontology_delete_cluster",
-        method: "DELETE",
-    });
+    // The route replies 204 No Content — request<T>() would choke on the
+    // empty body ("Unexpected end of JSON input") AFTER the delete applied.
+    await t.requestNoContent(`/api/ontology/clusters/${enc(clusterId)}`, "DELETE", "ontology_delete_cluster");
 }
 async function createOntologyObject(t, input) {
     const data = await t.request("/api/ontology/objects", { toolName: "ontology_create_object", method: "POST", body: input });
@@ -46,10 +45,8 @@ async function updateOntologyObject(t, objectId, patch) {
     return data.object;
 }
 async function deleteOntologyObject(t, objectId) {
-    await t.request(`/api/ontology/objects/${enc(objectId)}`, {
-        toolName: "ontology_delete_object",
-        method: "DELETE",
-    });
+    // 204 route — see deleteOntologyCluster.
+    await t.requestNoContent(`/api/ontology/objects/${enc(objectId)}`, "DELETE", "ontology_delete_object");
 }
 async function claimOntologyAnchor(t, objectId) {
     const data = await t.request(`/api/ontology/objects/${enc(objectId)}/anchor`, { toolName: "ontology_claim_anchor", method: "POST", body: {} });

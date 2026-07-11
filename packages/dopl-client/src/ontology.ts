@@ -59,10 +59,13 @@ export async function deleteOntologyCluster(
   t: DoplTransport,
   clusterId: string
 ): Promise<void> {
-  await t.request<void>(`/api/ontology/clusters/${enc(clusterId)}`, {
-    toolName: "ontology_delete_cluster",
-    method: "DELETE",
-  });
+  // The route replies 204 No Content — request<T>() would choke on the
+  // empty body ("Unexpected end of JSON input") AFTER the delete applied.
+  await t.requestNoContent(
+    `/api/ontology/clusters/${enc(clusterId)}`,
+    "DELETE",
+    "ontology_delete_cluster"
+  );
 }
 
 export async function createOntologyObject(
@@ -92,10 +95,12 @@ export async function deleteOntologyObject(
   t: DoplTransport,
   objectId: string
 ): Promise<void> {
-  await t.request<void>(`/api/ontology/objects/${enc(objectId)}`, {
-    toolName: "ontology_delete_object",
-    method: "DELETE",
-  });
+  // 204 route — see deleteOntologyCluster.
+  await t.requestNoContent(
+    `/api/ontology/objects/${enc(objectId)}`,
+    "DELETE",
+    "ontology_delete_object"
+  );
 }
 
 export async function claimOntologyAnchor(

@@ -66,7 +66,15 @@ class DoplTransport {
                 const duration = Date.now() - started;
                 if (res.ok) {
                     log("%s %s → %d in %dms", method, path, res.status, duration);
-                    return (await res.json());
+                    // No-body successes (204, or an empty 200) must not explode in
+                    // res.json() AFTER the server applied the operation — a caller
+                    // that can't tell success from failure retries destructive ops.
+                    if (res.status === 204)
+                        return undefined;
+                    const text = await res.text();
+                    if (text === "")
+                        return undefined;
+                    return JSON.parse(text);
                 }
                 const text = await res.text();
                 log("%s %s → %d in %dms (attempt %d/%d)", method, path, res.status, duration, attempt + 1, maxAttempts);

@@ -86,8 +86,10 @@ function registerKnowledgeTools(register, client) {
         folder_id: zod_1.z.string().optional().describe("restore_folder: required folder UUID (from list_trash)."),
         entry_id: zod_1.z.string().optional().describe("restore_file: required entry UUID (from list_trash)."),
         query: zod_1.z.string().optional().describe("search: required free-text query."),
-        limit: zod_1.z.number().optional().describe("search: max hits (default 20)."),
-        entry_limit: zod_1.z.number().optional().describe("get_tree: max entries per page (default 400, max 1000). Folders always ship in full."),
+        // coerce: MCP clients sometimes send numbers as strings; strict
+        // z.number() rejects them with an opaque -32602.
+        limit: zod_1.z.coerce.number().optional().describe("search: max hits (default 20)."),
+        entry_limit: zod_1.z.coerce.number().optional().describe("get_tree: max entries per page (default 400, max 1000). Folders always ship in full."),
         entry_cursor: zod_1.z.string().optional().describe("get_tree: opaque cursor from a prior page's 'more entries' notice — fetches the next page."),
         visibility: zod_1.z.enum(["public", "private"]).optional().describe("op=set_visibility: 'public' to publish a base you created (makes it workspace-visible + referenceable in workflows). One-way — 'private' is rejected."),
     }, async (args) => {

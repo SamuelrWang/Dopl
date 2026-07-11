@@ -136,7 +136,13 @@ export class DoplTransport {
 
         if (res.ok) {
           log("%s %s → %d in %dms", method, path, res.status, duration);
-          return (await res.json()) as T;
+          // No-body successes (204, or an empty 200) must not explode in
+          // res.json() AFTER the server applied the operation — a caller
+          // that can't tell success from failure retries destructive ops.
+          if (res.status === 204) return undefined as T;
+          const text = await res.text();
+          if (text === "") return undefined as T;
+          return JSON.parse(text) as T;
         }
 
         const text = await res.text();

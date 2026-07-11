@@ -19,7 +19,9 @@ export function registerSearchTool(register: RegisterTool, client: DoplClient): 
     SEARCH_DESCRIPTION,
     {
       query: z.string().min(1).describe("What to find."),
-      limit: z.number().int().min(1).max(25).optional().describe("Max hits per group (default 8)."),
+      // coerce: MCP clients sometimes send numbers as strings; strict
+      // z.number() rejects them with an opaque -32602.
+      limit: z.coerce.number().int().min(1).max(25).optional().describe("Max hits per group (default 8)."),
     },
     async (args): Promise<ToolResponse> => {
       const limit = args.limit ?? 8;

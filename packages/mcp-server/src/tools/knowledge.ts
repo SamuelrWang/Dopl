@@ -94,8 +94,10 @@ export function registerKnowledgeTools(register: RegisterTool, client: DoplClien
       folder_id: z.string().optional().describe("restore_folder: required folder UUID (from list_trash)."),
       entry_id: z.string().optional().describe("restore_file: required entry UUID (from list_trash)."),
       query: z.string().optional().describe("search: required free-text query."),
-      limit: z.number().optional().describe("search: max hits (default 20)."),
-      entry_limit: z.number().optional().describe("get_tree: max entries per page (default 400, max 1000). Folders always ship in full."),
+      // coerce: MCP clients sometimes send numbers as strings; strict
+      // z.number() rejects them with an opaque -32602.
+      limit: z.coerce.number().optional().describe("search: max hits (default 20)."),
+      entry_limit: z.coerce.number().optional().describe("get_tree: max entries per page (default 400, max 1000). Folders always ship in full."),
       entry_cursor: z.string().optional().describe("get_tree: opaque cursor from a prior page's 'more entries' notice — fetches the next page."),
       visibility: z.enum(["public", "private"]).optional().describe("op=set_visibility: 'public' to publish a base you created (makes it workspace-visible + referenceable in workflows). One-way — 'private' is rejected."),
     },
