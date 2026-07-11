@@ -287,6 +287,11 @@ export async function createSkill(
     resolvedVisibility = resolvedVisibility ?? "private";
   }
 
+  if (input.slug && isUuid(input.slug)) {
+    throw HttpError.badRequest(
+      "Slug may not be UUID-shaped — UUID-form references resolve to skill ids."
+    );
+  }
   let attempt = 0;
   let baseSlug =
     input.slug ??
@@ -442,6 +447,11 @@ export async function updateSkill(
     throw new SkillStaleVersionError(expectedUpdatedAt, skill.updatedAt);
   }
   if (patch.slug && patch.slug !== skill.slug) {
+    if (isUuid(patch.slug)) {
+      throw HttpError.badRequest(
+        "Slug may not be UUID-shaped — UUID-form references resolve to skill ids."
+      );
+    }
     const taken = await repo.listSlugsForWorkspace(ctx.workspaceId);
     if (taken.includes(patch.slug)) throw new SkillSlugConflictError(patch.slug);
   }

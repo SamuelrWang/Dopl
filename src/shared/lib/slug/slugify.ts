@@ -1,3 +1,5 @@
+import { isUuid } from "@/shared/lib/id/uuid";
+
 /**
  * Generic slug generator.
  * Output matches ^[a-z0-9-]+$ so it's safe for URLs and MCP prompt names.
@@ -30,6 +32,10 @@ export function slugify(
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
   if (!base) base = fallback;
+  // Slug-space and id-space must stay disjoint: services route
+  // UUID-shaped refs to the id column (stable-handle acceptance), so a
+  // verbatim-UUID slug would make the row unreachable by its own slug.
+  if (isUuid(base)) base = `${base}-x`;
   const existing = new Set(existingSlugs);
   let slug = base;
   let n = 2;
