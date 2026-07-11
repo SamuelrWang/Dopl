@@ -19,7 +19,8 @@ function resolveObjectRef(snapshot, ref) {
     if (matches.length === 1)
         return { hit: matches[0] };
     if (matches.length > 1) {
-        const list = matches.map((o) => `\`${o.id}\` (${o.type})`).join(", ");
+        const containerOf = (id) => Object.values(snapshot.objects).find((o) => o.childIds.includes(id))?.name ?? "column";
+        const list = matches.map((o) => `\`${o.id}\` (${containerOf(o.id)})`).join(", ");
         return { fail: (0, respond_1.err)(`Multiple objects named "${ref}" — use an id: ${list}`) };
     }
     return {
@@ -55,10 +56,14 @@ async function resolveResourceHandles(client, object) {
 }
 function renderObject(object, snapshot, headline, handles = new Map()) {
     const nameOf = (id) => snapshot.objects[id]?.name ?? id;
+    // What the object IS = the name of its container (its column, or the
+    // object it's nested in); top-level containers read as "column".
+    const container = Object.values(snapshot.objects).find((o) => o.childIds.includes(object.id));
+    const kindLabel = container?.name || "column";
     const lines = [];
     if (headline)
         lines.push(headline, "");
-    lines.push(`# ${object.name} (${object.type} · id: \`${object.id}\`)`);
+    lines.push(`# ${object.name} (${kindLabel} · id: \`${object.id}\`)`);
     if (object.subtitle)
         lines.push(object.subtitle);
     if (object.attributes.length > 0) {
@@ -84,7 +89,7 @@ function renderObject(object, snapshot, headline, handles = new Map()) {
         for (const id of object.childIds) {
             const child = snapshot.objects[id];
             if (child)
-                lines.push(`- **${child.name}** (${child.type} · id: \`${id}\`)`);
+                lines.push(`- **${child.name}** (id: \`${id}\`)`);
         }
     }
     if (object.methods.length > 0) {
@@ -93,8 +98,11 @@ function renderObject(object, snapshot, headline, handles = new Map()) {
             lines.push(`### ${m.name}`);
             if (m.description)
                 lines.push(m.description);
-            if (m.requires.length > 0) {
-                lines.push(`Pulls: ${m.requires.map((r) => `\`${r}\``).join(" · ")}`);
+            if (m.outcome) {
+                lines.push(`Outcome: ${m.outcome}`);
+            }
+            if (m.tools) {
+                lines.push(`Tools: ${m.tools}`);
             }
         }
     }

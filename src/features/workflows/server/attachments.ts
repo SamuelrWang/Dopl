@@ -1,6 +1,7 @@
 import "server-only";
 
 import { supabaseAdmin } from "@/shared/supabase/admin";
+import { isUuid } from "@/shared/lib/id/uuid";
 import { CONTEXT_CHAR_BUDGET_PER_FIELD } from "@/config";
 import { HttpError } from "@/shared/lib/http-error";
 import {
@@ -53,14 +54,10 @@ export async function resolveWorkflowId(
   scope: WorkflowScope
 ): Promise<string> {
   const db = supabaseAdmin();
-  const isUuid =
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-      idOrSlug
-    );
   const { data, error } = await db
     .from("workflows")
     .select("id")
-    .eq(isUuid ? "id" : "slug", idOrSlug)
+    .eq(isUuid(idOrSlug) ? "id" : "slug", idOrSlug)
     .eq("workspace_id", scope.workspaceId)
     .maybeSingle();
   if (error) throw error;

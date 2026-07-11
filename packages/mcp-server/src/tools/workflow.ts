@@ -76,7 +76,7 @@ export function registerWorkflowTools(
       slug: z
         .string()
         .optional()
-        .describe("Workflow slug (from op=list) — required for every op except list/create."),
+        .describe("Workflow slug OR stable id (the uuid from op=list — survives renames, prefer it for held references). Required for every op except list/create."),
       name: z
         .string()
         .optional()
@@ -101,6 +101,10 @@ export function registerWorkflowTools(
         .describe(
           "op=set_cluster: cluster slug or id (from dopl_cluster(op='list')) to group this workflow under. Omit/empty to ungroup it.",
         ),
+      detail: z
+        .enum(["summary", "full"])
+        .optional()
+        .describe("op=get: 'summary' returns the header + step titles + attachment names WITHOUT entry indexes or skill bodies (cheap orientation); 'full' (default) includes everything."),
     },
     async (args): Promise<ToolResponse> => {
       switch (args.op) {
@@ -109,7 +113,7 @@ export function registerWorkflowTools(
         case "get": {
           const miss = missingParams("get", args, ["slug"]);
           if (miss) return miss;
-          return opGet(client, args.slug as string);
+          return opGet(client, args.slug as string, args.detail);
         }
         case "create": {
           const miss = missingParams("create", args, ["name"]);
@@ -218,8 +222,13 @@ async function opList(client: DoplClient): Promise<ToolResponse> {
   return ok(lines.join("\n"));
 }
 
-async function opGet(client: DoplClient, slug: string): Promise<ToolResponse> {
+async function opGet(
+  client: DoplClient,
+  slug: string,
+  detail?: "summary" | "full"
+): Promise<ToolResponse> {
   const wf: WorkflowDetail = await client.getWorkflow(slug);
+  const summaryOnly = detail === "summary";
   const lines: string[] = [];
   lines.push(`# Workflow: ${wf.name}`);
   lines.push(
@@ -254,6 +263,16 @@ async function opGet(client: DoplClient, slug: string): Promise<ToolResponse> {
       graphEdges.filter((e) => e.from === id).map((e) => e.to);
     const stageCount = Math.max(...[...stage.values()]) + 1;
 
+    if (summaryOnly) {
+      lines.push(`## Steps (${steps.length}) — ${plural(stageCount, "stage")}`);
+      for (let i = 0; i < steps.length; i++) {
+        const n = steps[i];
+        lines.push(
+          `- Step ${i + 1}: ${n.title || "(untitled)"} \`${n.id}\` — stage ${(stage.get(n.id) ?? 0) + 1}`
+        );
+      }
+      lines.push("");
+    } else {
     lines.push(`## Steps (${steps.length}) — execution order`);
     lines.push(
       `Topologically ordered into ${plural(stageCount, "stage")}. Stages run IN SEQUENCE; steps in the SAME stage have no dependency between them and are parallel branches — do them in any order (or concurrently) before moving to the next stage. Each step's "Depends on" / "Leads to" lines give the exact edges. Per step: READ (knowledge), ACTIONS (skills), expected user input, the output to produce, and when to advance.`
@@ -307,12 +326,21 @@ async function opGet(client: DoplClient, slug: string): Promise<ToolResponse> {
       );
       lines.push("");
     }
+    }
   } else {
     lines.push("_No nodes wired into this workflow yet._");
     lines.push("");
   }
 
   if (wf.knowledge_bases.length > 0) {
+    if (summaryOnly) {
+      lines.push(
+        `## Knowledge Bases: ${wf.knowledge_bases
+          .map((kb) => `${kb.name} (\`${kb.slug}\`, ${kb.entries_index.length} entries)`)
+          .join(", ")}`
+      );
+      lines.push("");
+    } else {
     lines.push(`## Knowledge Bases\n`);
     for (const kb of wf.knowledge_bases) {
       lines.push(`### ${kb.name}`);
@@ -327,9 +355,18 @@ async function opGet(client: DoplClient, slug: string): Promise<ToolResponse> {
       }
       lines.push("");
     }
+    }
   }
 
   if (wf.skills.length > 0) {
+    if (summaryOnly) {
+      lines.push(
+        `## Skills: ${wf.skills
+          .map((sk) => `${sk.name} (\`${sk.slug}\`, ${sk.status})`)
+          .join(", ")}`
+      );
+      lines.push("");
+    } else {
     lines.push(`## Skills\n`);
     for (const sk of wf.skills) {
       lines.push(`### ${sk.name}`);
@@ -339,6 +376,13 @@ async function opGet(client: DoplClient, slug: string): Promise<ToolResponse> {
       if (sk.body) lines.push(`\nProcedure (truncated):\n${sk.body}`);
       lines.push("");
     }
+    }
+  }
+
+  if (summaryOnly) {
+    lines.push(
+      `_Summary view — pass detail="full" for step details, entry indexes, and skill procedures._`
+    );
   }
 
   return ok(lines.join("\n"));

@@ -95,6 +95,8 @@ export function registerKnowledgeTools(register: RegisterTool, client: DoplClien
       entry_id: z.string().optional().describe("restore_file: required entry UUID (from list_trash)."),
       query: z.string().optional().describe("search: required free-text query."),
       limit: z.number().optional().describe("search: max hits (default 20)."),
+      entry_limit: z.number().optional().describe("get_tree: max entries per page (default 400, max 1000). Folders always ship in full."),
+      entry_cursor: z.string().optional().describe("get_tree: opaque cursor from a prior page's 'more entries' notice — fetches the next page."),
       visibility: z.enum(["public", "private"]).optional().describe("op=set_visibility: 'public' to publish a base you created (makes it workspace-visible + referenceable in workflows). One-way — 'private' is rejected."),
     },
     async (args): Promise<ToolResponse> => {
@@ -104,7 +106,7 @@ export function registerKnowledgeTools(register: RegisterTool, client: DoplClien
         case "get_tree": {
           const miss = missingParams("get_tree", args, ["base"]);
           if (miss) return miss;
-          return opGetTree(client, args.base as string);
+          return opGetTree(client, args.base as string, args.entry_limit, args.entry_cursor);
         }
         case "list_dir": {
           const miss = missingParams("list_dir", args, ["base"]);
@@ -231,21 +233,33 @@ async function opListBases(client: DoplClient): Promise<ToolResponse> {
 }
 
 const TREE_ENTRY_CAP = 400;
+const TREE_ENTRY_MAX = 1000;
 
-async function opGetTree(client: DoplClient, ref: string): Promise<ToolResponse> {
+async function opGetTree(
+  client: DoplClient,
+  ref: string,
+  entryLimit?: number,
+  entryCursor?: string
+): Promise<ToolResponse> {
   const base = await resolveBaseOr(client, ref);
   if (isErr(base)) return base;
-  const tree = await client.getKbTree(base.id);
+  // Entries are paged at the API (folders always ship in full), so the
+  // wire payload matches what gets rendered instead of always shipping
+  // the whole base.
+  const limit = Math.min(Math.max(1, Math.floor(entryLimit ?? TREE_ENTRY_CAP)), TREE_ENTRY_MAX);
+  const tree = await client.getKbTree(base.id, {
+    entryLimit: limit,
+    entryCursor,
+  });
+  const entryTotal = tree.entryTotal ?? tree.entries.length;
   const vis = tree.base.visibility === "private" ? "private" : "public";
   const lines = [
     `## ${tree.base.name} \`${tree.base.slug}\``,
     `id: \`${tree.base.id}\` · ${vis} · agent-write ${tree.base.agentWriteEnabled ? "on" : "off"}`,
     ...(tree.base.description ? [tree.base.description] : []),
-    `Folders: ${tree.folders.length} · Entries: ${tree.entries.length}`,
+    `Folders: ${tree.folders.length} · Entries: ${entryTotal}${tree.entries.length < entryTotal ? ` (showing ${tree.entries.length})` : ""}`,
     "",
   ];
-  let printedEntries = 0;
-  let truncated = false;
   // Build a tree view by walking parent_id / folder_id.
   const childFolders = new Map<string | null, typeof tree.folders>();
   for (const f of tree.folders) {
@@ -269,19 +283,14 @@ async function opGetTree(client: DoplClient, ref: string): Promise<ToolResponse>
       dump(f.id, prefix + "  ");
     }
     for (const e of childEntries.get(parentId) ?? []) {
-      if (printedEntries >= TREE_ENTRY_CAP) {
-        truncated = true;
-        return;
-      }
-      printedEntries += 1;
       lines.push(`${prefix}📄 ${e.title}${descSuffix(e.excerpt)}`);
     }
   }
   dump(null, "");
-  if (truncated) {
+  if (tree.nextEntryCursor) {
     lines.push(
       "",
-      `_Tree truncated at ${TREE_ENTRY_CAP} of ${tree.entries.length} entries. Browse a folder with op="list_dir" or find entries by content with op="search"._`
+      `_Showing ${tree.entries.length} of ${entryTotal} entries. Pass entry_cursor="${tree.nextEntryCursor}" for the next page, or narrow with op="list_dir" / op="search"._`
     );
   }
   return ok(lines.join("\n"));

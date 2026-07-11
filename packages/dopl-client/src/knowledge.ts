@@ -50,10 +50,15 @@ export async function getKbBase(
 
 export async function getKbTree(
   t: DoplTransport,
-  baseId: string
+  baseId: string,
+  opts?: { entryLimit?: number; entryCursor?: string }
 ): Promise<KnowledgeTreeSnapshot> {
+  const params = new URLSearchParams();
+  if (opts?.entryLimit !== undefined) params.set("entryLimit", String(opts.entryLimit));
+  if (opts?.entryCursor !== undefined) params.set("entryCursor", opts.entryCursor);
+  const qs = params.toString();
   return t.request<KnowledgeTreeSnapshot>(
-    `/api/knowledge/bases/${enc(baseId)}/tree`,
+    `/api/knowledge/bases/${enc(baseId)}/tree${qs ? `?${qs}` : ""}`,
     { toolName: "kb_get_tree" }
   );
 }

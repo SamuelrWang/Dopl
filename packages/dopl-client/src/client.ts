@@ -351,8 +351,11 @@ export class DoplClient {
     return kb.getKbBase(this.transport, baseId);
   }
 
-  getKbTree(baseId: string): Promise<KnowledgeTreeSnapshot> {
-    return kb.getKbTree(this.transport, baseId);
+  getKbTree(
+    baseId: string,
+    opts?: { entryLimit?: number; entryCursor?: string }
+  ): Promise<KnowledgeTreeSnapshot> {
+    return kb.getKbTree(this.transport, baseId, opts);
   }
 
   createKbBase(input: KnowledgeBaseCreateInput): Promise<KnowledgeBase> {

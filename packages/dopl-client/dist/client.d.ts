@@ -82,7 +82,10 @@ export declare class DoplClient {
     }>;
     listKbBases(): Promise<KnowledgeBase[]>;
     getKbBase(baseId: string): Promise<KnowledgeBase>;
-    getKbTree(baseId: string): Promise<KnowledgeTreeSnapshot>;
+    getKbTree(baseId: string, opts?: {
+        entryLimit?: number;
+        entryCursor?: string;
+    }): Promise<KnowledgeTreeSnapshot>;
     createKbBase(input: KnowledgeBaseCreateInput): Promise<KnowledgeBase>;
     updateKbBase(baseId: string, patch: KnowledgeBaseUpdateInput): Promise<KnowledgeBase>;
     deleteKbBase(baseId: string): Promise<void>;

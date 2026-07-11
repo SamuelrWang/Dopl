@@ -1,5 +1,6 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
+import { isUuid } from "@/shared/lib/id/uuid";
 import { slugifyClusterName } from "../slug";
 import { normalizeClusterName } from "@/shared/lib/cluster-name";
 
@@ -93,10 +94,12 @@ export async function getCluster(
   scope: ClusterScope
 ): Promise<ClusterDetail> {
   const db = supabaseAdmin();
+  // `slug` may also be the stable UUID id — renames change the slug, so
+  // agents hold the id (MCP-14).
   const { data: cluster, error } = await db
     .from("clusters")
     .select(SELECT_COLS)
-    .eq("slug", slug)
+    .eq(isUuid(slug) ? "id" : "slug", slug)
     .eq("workspace_id", scope.workspaceId)
     .single();
   if (error || !cluster) throw new Error(`Cluster not found: ${slug}`);
@@ -178,7 +181,7 @@ export async function updateCluster(
   const { data: cluster, error: lookupError } = await db
     .from("clusters")
     .select(SELECT_COLS)
-    .eq("slug", slug)
+    .eq(isUuid(slug) ? "id" : "slug", slug)
     .eq("workspace_id", scope.workspaceId)
     .single();
   if (lookupError || !cluster) throw new Error(`Cluster not found: ${slug}`);
@@ -231,7 +234,7 @@ export async function deleteCluster(
   const { data, error } = await db
     .from("clusters")
     .delete()
-    .eq("slug", slug)
+    .eq(isUuid(slug) ? "id" : "slug", slug)
     .eq("workspace_id", scope.workspaceId)
     .select("id");
   if (error) throw error;

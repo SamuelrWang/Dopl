@@ -57,8 +57,9 @@ function registerSearchTool(register, client) {
         lines.push("", "## Ontology objects");
         if (objectHits.length === 0)
             lines.push("_No matches._");
+        const containerOf = (id) => Object.values(ontology.objects).find((c) => c.childIds.includes(id))?.name ?? "column";
         for (const o of objectHits) {
-            lines.push(`- **${o.name}** (${o.type} · id: \`${o.id}\`)${o.subtitle ? ` — ${o.subtitle}` : ""}`);
+            lines.push(`- **${o.name}** (${containerOf(o.id)} · id: \`${o.id}\`)${o.subtitle ? ` — ${o.subtitle}` : ""}`);
         }
         return (0, respond_1.ok)(lines.join("\n"));
     });

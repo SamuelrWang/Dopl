@@ -69,7 +69,7 @@ export function registerSkillTools(
       slug: z
         .string()
         .optional()
-        .describe("Skill slug. Required for get, update, list_files, read_file, create_file, write_file, rename_file."),
+        .describe("Skill slug OR stable id (the uuid from list/get output — survives renames, prefer it for held references). Required for get, update, list_files, read_file, create_file, write_file, rename_file."),
       name: z.string().min(1).max(120).optional().describe("op=create (required) / op=update: skill name."),
       description: z.string().min(1).max(2000).optional().describe("op=create (required) / op=update: skill description."),
       when_to_use: z.string().min(1).max(2000).optional().describe("op=create (required) / op=update: when_to_use trigger."),
@@ -83,6 +83,7 @@ export function registerSkillTools(
       expected_version: z.string().optional().describe("op=write_file: the file's version from a prior read_file, to avoid overwriting a concurrent edit (412 on mismatch). Omit to auto-guard against the current version."),
       force: z.boolean().optional().describe("op=write_file: overwrite even if the file changed since you read it. Discards the other edit — use only when intentional."),
       visibility: z.enum(["public", "private"]).optional().describe("op=set_visibility: 'public' shares the skill workspace-wide (referenceable in workflows); 'private' makes it owner-only again. Owner or workspace-admin only. Team-scoped sharing is web-UI-managed."),
+      detail: z.enum(["summary", "full"]).optional().describe("op=get: 'summary' returns metadata + the file list WITHOUT file bodies (cheap orientation); 'full' (default) includes every file body."),
     },
     async (args): Promise<ToolResponse> => {
       switch (args.op) {
@@ -91,7 +92,7 @@ export function registerSkillTools(
         case "get": {
           const miss = missingParams("get", args, ["slug"]);
           if (miss) return miss;
-          return opGet(client, args.slug as string);
+          return opGet(client, args.slug as string, args.detail);
         }
         case "create": {
           const miss = missingParams("create", args, ["name", "description", "when_to_use"]);
@@ -203,7 +204,11 @@ async function opList(client: DoplClient): Promise<ToolResponse> {
   return ok(lines.join("\n"));
 }
 
-async function opGet(client: DoplClient, slug: string): Promise<ToolResponse> {
+async function opGet(
+  client: DoplClient,
+  slug: string,
+  detail?: "summary" | "full"
+): Promise<ToolResponse> {
   try {
     const { skill, files, references } = await client.getSkill(slug);
     const lines: string[] = [];
@@ -246,11 +251,25 @@ async function opGet(client: DoplClient, slug: string): Promise<ToolResponse> {
       }
     }
 
-    for (const file of files) {
+    if (detail === "summary") {
+      // Orientation mode: file inventory without the bodies. read_file /
+      // detail="full" fetch the content.
       lines.push("");
-      lines.push(`## \`${file.name}\``);
+      lines.push("## Files");
+      for (const file of files) {
+        lines.push(`- \`${file.name}\` (${file.body.length.toLocaleString()} chars)`);
+      }
       lines.push("");
-      lines.push(file.body);
+      lines.push(
+        `_Summary view — pass detail="full" or op="read_file" for file bodies._`
+      );
+    } else {
+      for (const file of files) {
+        lines.push("");
+        lines.push(`## \`${file.name}\``);
+        lines.push("");
+        lines.push(file.body);
+      }
     }
     return ok(lines.join("\n"));
   } catch (e) {

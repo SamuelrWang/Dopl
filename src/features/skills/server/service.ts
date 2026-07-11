@@ -1,5 +1,6 @@
 import "server-only";
 import { supabaseAdmin } from "@/shared/supabase/admin";
+import { isUuid } from "@/shared/lib/id/uuid";
 import { slugify } from "@/shared/lib/slug/slugify";
 import { HttpError } from "@/shared/lib/http-error";
 import { meetsMinRole, type Role } from "@/features/workspaces/types";
@@ -192,14 +193,21 @@ export async function listSkills(
   return visible;
 }
 
+/**
+ * Resolve a skill by slug OR stable UUID id (MCP-14: renames change the
+ * slug, so agents need an immutable handle). Every skill read/write op
+ * funnels through here, so id acceptance applies uniformly.
+ */
 export async function getSkillBySlug(
   ctx: SkillContext,
-  slug: string
+  ref: string
 ): Promise<Skill> {
-  const skill = await repo.findSkillBySlug(ctx.workspaceId, slug);
-  if (!skill) throw new SkillNotFoundError(slug);
+  const skill = isUuid(ref)
+    ? await repo.findSkillById(ctx.workspaceId, ref)
+    : await repo.findSkillBySlug(ctx.workspaceId, ref);
+  if (!skill) throw new SkillNotFoundError(ref);
   const grants = await grantsForSkills(ctx, [skill]);
-  if (!canSeeSkill(ctx, skill, grants)) throw new SkillNotFoundError(slug);
+  if (!canSeeSkill(ctx, skill, grants)) throw new SkillNotFoundError(ref);
   return withGrantSet(ctx, skill, grants);
 }
 

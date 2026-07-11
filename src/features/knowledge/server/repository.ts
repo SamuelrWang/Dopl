@@ -480,6 +480,10 @@ export interface ListEntriesOpts {
   /** Default true. Set false to skip the heavy `body` column. */
   includeBody?: boolean;
   includeDeleted?: boolean;
+  /** Page size; absent = all rows (legacy full-list behavior). */
+  limit?: number;
+  /** Row offset for paging; only meaningful with `limit`. */
+  offset?: number;
 }
 
 export async function findEntryById(
@@ -577,7 +581,14 @@ export async function listEntriesForBase(
   if (!includeDeleted) query = query.is("deleted_at", null);
   query = query
     .order("position", { ascending: true })
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: true })
+    // Deterministic tiebreak so paged reads never repeat/skip rows on
+    // position/created_at ties.
+    .order("id", { ascending: true });
+  if (opts.limit !== undefined) {
+    const offset = opts.offset ?? 0;
+    query = query.range(offset, offset + opts.limit - 1);
+  }
   const { data, error } = await query;
   if (error) throw error;
   if (includeBody) {
@@ -586,6 +597,18 @@ export async function listEntriesForBase(
   return ((data ?? []) as unknown as KnowledgeEntryMetaRow[]).map((row) =>
     mapEntryRow({ ...row, body: "" })
   );
+}
+
+/** Active (non-deleted) entry count for a base — tree paging metadata. */
+export async function countEntriesForBase(baseId: string): Promise<number> {
+  const db = supabaseAdmin();
+  const { count, error } = await db
+    .from("knowledge_entries")
+    .select("id", { count: "exact", head: true })
+    .eq("knowledge_base_id", baseId)
+    .is("deleted_at", null);
+  if (error) throw error;
+  return count ?? 0;
 }
 
 export interface InsertEntryArgs {

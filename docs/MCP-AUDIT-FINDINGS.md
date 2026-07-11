@@ -181,3 +181,12 @@ Agents reason off what the read ops return; these fields exist in the schema but
 ## 7. Coverage limitations
 - All tests ran as **owner of both workspaces**, so isolation checks validate **scoping**, not **non-member permission denial**. Recommend a 2-account test (a user who is NOT a member of the target workspace) to close that gap.
 - Large-payload writes (~400 KB KB body, near-1 MiB skill body) were not transmitted end-to-end due to harness output limits; the client-side Zod caps were confirmed but server acceptance of large-but-valid bodies is unverified.
+
+## 8. Status addendum (2026-07-10)
+
+Fixes landed after the audit (this doc stays observations-as-written; statuses tracked here):
+
+- **MCP-14 (stable handles): RESOLVED for skills, clusters, workflows.** Service-layer resolution now accepts the immutable UUID id anywhere a slug is accepted — skills (`getSkillBySlug`, every op funnels through it), clusters (`getCluster`/`updateCluster`/`deleteCluster`), workflows (already did; the tool param docs now say so). Ids were already surfaced in list/get output; tool descriptions now tell agents to prefer them for held references. `public_id` for clusters/workflows (F-017) remains deferred — the UUID id is the stable handle.
+- **P1 #4 (accept id everywhere): DONE** per above.
+- **P3 #11 (verbosity option): PARTIAL.** `detail: summary|full` shipped on `dopl_skill` op=get (metadata + file list, no bodies) and `dopl_workflow` op=get (steps + attachment names, no entry indexes / skill bodies). The §3 hidden-fields exposure (a `fields`/`verbose` flag returning extra columns) is still open.
+- **get_tree paging (unnumbered): DONE.** `GET /bases/[baseId]/tree` takes optional `entryLimit`/`entryCursor` (folders always full; opaque cursor; `entryTotal` + `nextEntryCursor` in paged responses; absent params = legacy full snapshot). `dopl_kb` op=get_tree defaults to 400 entries per page — the wire payload now matches what was previously only a render-side print cap — and the truncation notice teaches the cursor.

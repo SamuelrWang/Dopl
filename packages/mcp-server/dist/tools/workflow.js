@@ -66,7 +66,7 @@ function registerWorkflowTools(register, client) {
         slug: zod_1.z
             .string()
             .optional()
-            .describe("Workflow slug (from op=list) — required for every op except list/create."),
+            .describe("Workflow slug OR stable id (the uuid from op=list — survives renames, prefer it for held references). Required for every op except list/create."),
         name: zod_1.z
             .string()
             .optional()
@@ -89,6 +89,10 @@ function registerWorkflowTools(register, client) {
             .string()
             .optional()
             .describe("op=set_cluster: cluster slug or id (from dopl_cluster(op='list')) to group this workflow under. Omit/empty to ungroup it."),
+        detail: zod_1.z
+            .enum(["summary", "full"])
+            .optional()
+            .describe("op=get: 'summary' returns the header + step titles + attachment names WITHOUT entry indexes or skill bodies (cheap orientation); 'full' (default) includes everything."),
     }, async (args) => {
         switch (args.op) {
             case "list":
@@ -97,7 +101,7 @@ function registerWorkflowTools(register, client) {
                 const miss = (0, respond_1.missingParams)("get", args, ["slug"]);
                 if (miss)
                     return miss;
-                return opGet(client, args.slug);
+                return opGet(client, args.slug, args.detail);
             }
             case "create": {
                 const miss = (0, respond_1.missingParams)("create", args, ["name"]);
@@ -199,8 +203,9 @@ async function opList(client) {
     });
     return (0, respond_1.ok)(lines.join("\n"));
 }
-async function opGet(client, slug) {
+async function opGet(client, slug, detail) {
     const wf = await client.getWorkflow(slug);
+    const summaryOnly = detail === "summary";
     const lines = [];
     lines.push(`# Workflow: ${wf.name}`);
     lines.push(`Slug: \`${wf.slug}\` · id: \`${wf.id}\`${wf.cluster_id ? ` · cluster id: \`${wf.cluster_id}\`` : " · no cluster"} · updated ${wf.updated_at}`);
@@ -228,46 +233,56 @@ async function opGet(client, slug) {
         const prevOf = (id) => graphEdges.filter((e) => e.to === id).map((e) => e.from);
         const nextOf = (id) => graphEdges.filter((e) => e.from === id).map((e) => e.to);
         const stageCount = Math.max(...[...stage.values()]) + 1;
-        lines.push(`## Steps (${steps.length}) — execution order`);
-        lines.push(`Topologically ordered into ${plural(stageCount, "stage")}. Stages run IN SEQUENCE; steps in the SAME stage have no dependency between them and are parallel branches — do them in any order (or concurrently) before moving to the next stage. Each step's "Depends on" / "Leads to" lines give the exact edges. Per step: READ (knowledge), ACTIONS (skills), expected user input, the output to produce, and when to advance.`);
-        lines.push("");
-        for (let i = 0; i < steps.length; i++) {
-            const n = steps[i];
-            lines.push(`### Step ${i + 1}: ${n.title || "(untitled)"} \`${n.id}\` — stage ${(stage.get(n.id) ?? 0) + 1} of ${stageCount}`);
-            if (n.description)
-                lines.push(n.description);
-            const prev = prevOf(n.id);
-            const next = nextOf(n.id);
-            lines.push(prev.length === 0
-                ? `- Depends on: nothing — entry step`
-                : `- Depends on: ${prev.map(label).join(", ")}${prev.length > 1 ? " (all must be done first)" : ""}`);
-            lines.push(next.length === 0
-                ? `- Leads to: nothing — terminal step`
-                : `- Leads to: ${next.map(label).join(", ")}${next.length > 1 ? " (fans out into parallel branches)" : ""}`);
-            if (n.reads.length > 0) {
-                lines.push(`- Read: ${n.reads
-                    .map((r) => r.kind === "file"
-                    ? `${r.name} (file, kb_id: ${r.kbId}, entry_id: ${r.entryId})`
-                    : `${r.name} (knowledge base, kb_id: ${r.kbId})`)
-                    .join("; ")}`);
+        if (summaryOnly) {
+            lines.push(`## Steps (${steps.length}) — ${plural(stageCount, "stage")}`);
+            for (let i = 0; i < steps.length; i++) {
+                const n = steps[i];
+                lines.push(`- Step ${i + 1}: ${n.title || "(untitled)"} \`${n.id}\` — stage ${(stage.get(n.id) ?? 0) + 1}`);
             }
-            if (n.actions.length > 0) {
-                lines.push(`- Action: ${n.actions
-                    .map((a) => `${a.name} (skill, skill_id: ${a.skillId})`)
-                    .join("; ")}`);
-            }
-            if (n.userInput)
-                lines.push(`- User input: ${n.userInput}`);
-            if (n.agentOutput)
-                lines.push(`- Agent output: ${n.agentOutput}`);
-            if (n.nextInstructions)
-                lines.push(`- Next: ${n.nextInstructions}`);
             lines.push("");
         }
-        const edges = wf.graph?.edges ?? [];
-        if (edges.length > 0) {
-            lines.push(`Connections: ${edges.map((e) => `\`${e.from}\` → \`${e.to}\``).join(", ")}`);
+        else {
+            lines.push(`## Steps (${steps.length}) — execution order`);
+            lines.push(`Topologically ordered into ${plural(stageCount, "stage")}. Stages run IN SEQUENCE; steps in the SAME stage have no dependency between them and are parallel branches — do them in any order (or concurrently) before moving to the next stage. Each step's "Depends on" / "Leads to" lines give the exact edges. Per step: READ (knowledge), ACTIONS (skills), expected user input, the output to produce, and when to advance.`);
             lines.push("");
+            for (let i = 0; i < steps.length; i++) {
+                const n = steps[i];
+                lines.push(`### Step ${i + 1}: ${n.title || "(untitled)"} \`${n.id}\` — stage ${(stage.get(n.id) ?? 0) + 1} of ${stageCount}`);
+                if (n.description)
+                    lines.push(n.description);
+                const prev = prevOf(n.id);
+                const next = nextOf(n.id);
+                lines.push(prev.length === 0
+                    ? `- Depends on: nothing — entry step`
+                    : `- Depends on: ${prev.map(label).join(", ")}${prev.length > 1 ? " (all must be done first)" : ""}`);
+                lines.push(next.length === 0
+                    ? `- Leads to: nothing — terminal step`
+                    : `- Leads to: ${next.map(label).join(", ")}${next.length > 1 ? " (fans out into parallel branches)" : ""}`);
+                if (n.reads.length > 0) {
+                    lines.push(`- Read: ${n.reads
+                        .map((r) => r.kind === "file"
+                        ? `${r.name} (file, kb_id: ${r.kbId}, entry_id: ${r.entryId})`
+                        : `${r.name} (knowledge base, kb_id: ${r.kbId})`)
+                        .join("; ")}`);
+                }
+                if (n.actions.length > 0) {
+                    lines.push(`- Action: ${n.actions
+                        .map((a) => `${a.name} (skill, skill_id: ${a.skillId})`)
+                        .join("; ")}`);
+                }
+                if (n.userInput)
+                    lines.push(`- User input: ${n.userInput}`);
+                if (n.agentOutput)
+                    lines.push(`- Agent output: ${n.agentOutput}`);
+                if (n.nextInstructions)
+                    lines.push(`- Next: ${n.nextInstructions}`);
+                lines.push("");
+            }
+            const edges = wf.graph?.edges ?? [];
+            if (edges.length > 0) {
+                lines.push(`Connections: ${edges.map((e) => `\`${e.from}\` → \`${e.to}\``).join(", ")}`);
+                lines.push("");
+            }
         }
     }
     else {
@@ -275,35 +290,54 @@ async function opGet(client, slug) {
         lines.push("");
     }
     if (wf.knowledge_bases.length > 0) {
-        lines.push(`## Knowledge Bases\n`);
-        for (const kb of wf.knowledge_bases) {
-            lines.push(`### ${kb.name}`);
-            lines.push(`slug: \`${kb.slug}\` · id: \`${kb.knowledge_base_id}\``);
-            if (kb.description)
-                lines.push(kb.description);
-            if (kb.entries_index.length > 0) {
-                lines.push(`\nEntries (${kb.entries_index.length}):`);
-                for (const e of kb.entries_index.slice(0, 50)) {
-                    const path = e.folder_path ? `${e.folder_path}/${e.title}` : e.title;
-                    lines.push(`- ${path}  \`(entry_id: ${e.entry_id})\``);
-                }
-            }
+        if (summaryOnly) {
+            lines.push(`## Knowledge Bases: ${wf.knowledge_bases
+                .map((kb) => `${kb.name} (\`${kb.slug}\`, ${kb.entries_index.length} entries)`)
+                .join(", ")}`);
             lines.push("");
+        }
+        else {
+            lines.push(`## Knowledge Bases\n`);
+            for (const kb of wf.knowledge_bases) {
+                lines.push(`### ${kb.name}`);
+                lines.push(`slug: \`${kb.slug}\` · id: \`${kb.knowledge_base_id}\``);
+                if (kb.description)
+                    lines.push(kb.description);
+                if (kb.entries_index.length > 0) {
+                    lines.push(`\nEntries (${kb.entries_index.length}):`);
+                    for (const e of kb.entries_index.slice(0, 50)) {
+                        const path = e.folder_path ? `${e.folder_path}/${e.title}` : e.title;
+                        lines.push(`- ${path}  \`(entry_id: ${e.entry_id})\``);
+                    }
+                }
+                lines.push("");
+            }
         }
     }
     if (wf.skills.length > 0) {
-        lines.push(`## Skills\n`);
-        for (const sk of wf.skills) {
-            lines.push(`### ${sk.name}`);
-            lines.push(`slug: \`${sk.slug}\` · id: \`${sk.skill_id}\` · status: ${sk.status}`);
-            if (sk.description)
-                lines.push(sk.description);
-            if (sk.when_to_use)
-                lines.push(`\n**When to use:** ${sk.when_to_use}`);
-            if (sk.body)
-                lines.push(`\nProcedure (truncated):\n${sk.body}`);
+        if (summaryOnly) {
+            lines.push(`## Skills: ${wf.skills
+                .map((sk) => `${sk.name} (\`${sk.slug}\`, ${sk.status})`)
+                .join(", ")}`);
             lines.push("");
         }
+        else {
+            lines.push(`## Skills\n`);
+            for (const sk of wf.skills) {
+                lines.push(`### ${sk.name}`);
+                lines.push(`slug: \`${sk.slug}\` · id: \`${sk.skill_id}\` · status: ${sk.status}`);
+                if (sk.description)
+                    lines.push(sk.description);
+                if (sk.when_to_use)
+                    lines.push(`\n**When to use:** ${sk.when_to_use}`);
+                if (sk.body)
+                    lines.push(`\nProcedure (truncated):\n${sk.body}`);
+                lines.push("");
+            }
+        }
+    }
+    if (summaryOnly) {
+        lines.push(`_Summary view — pass detail="full" for step details, entry indexes, and skill procedures._`);
     }
     return (0, respond_1.ok)(lines.join("\n"));
 }

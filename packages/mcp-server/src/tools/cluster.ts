@@ -32,7 +32,7 @@ export function registerClusterTools(
       slug: z
         .string()
         .optional()
-        .describe("op=get/update: cluster slug from op=list."),
+        .describe("op=get/update: cluster slug OR stable id (the uuid from op=list — survives renames, prefer it for held references)."),
       name: z
         .string()
         .optional()
@@ -84,7 +84,7 @@ export function registerClusterTools(
       slug: z
         .string()
         .optional()
-        .describe("op=delete_cluster: cluster slug."),
+        .describe("op=delete_cluster: cluster slug or stable id."),
     },
     async (args): Promise<ToolResponse> => {
       switch (args.op) {

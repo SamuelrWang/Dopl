@@ -38,8 +38,14 @@ async function getKbBase(t, baseId) {
     const data = await t.request(`/api/knowledge/bases/${enc(baseId)}`, { toolName: "kb_get_base" });
     return data.base;
 }
-async function getKbTree(t, baseId) {
-    return t.request(`/api/knowledge/bases/${enc(baseId)}/tree`, { toolName: "kb_get_tree" });
+async function getKbTree(t, baseId, opts) {
+    const params = new URLSearchParams();
+    if (opts?.entryLimit !== undefined)
+        params.set("entryLimit", String(opts.entryLimit));
+    if (opts?.entryCursor !== undefined)
+        params.set("entryCursor", opts.entryCursor);
+    const qs = params.toString();
+    return t.request(`/api/knowledge/bases/${enc(baseId)}/tree${qs ? `?${qs}` : ""}`, { toolName: "kb_get_tree" });
 }
 async function createKbBase(t, input) {
     const data = await t.request("/api/knowledge/bases", { method: "POST", body: input, toolName: "kb_create_base" });

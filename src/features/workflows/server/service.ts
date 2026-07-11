@@ -1,6 +1,7 @@
 import "server-only";
 
 import { supabaseAdmin } from "@/shared/supabase/admin";
+import { isUuid } from "@/shared/lib/id/uuid";
 import { normalizeClusterName } from "@/shared/lib/cluster-name";
 import { HttpError } from "@/shared/lib/http-error";
 import type { Role } from "@/features/workspaces/types";
@@ -434,10 +435,7 @@ export async function deleteWorkflow(
   scope: WorkflowScope
 ): Promise<void> {
   const db = supabaseAdmin();
-  const isUuid =
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-      idOrSlug
-    );
+  const byId = isUuid(idOrSlug);
 
   // Resolve the row first so we can also remove its header panel — without
   // this an MCP delete leaves an orphan workflow card on the canvas pointing
@@ -446,7 +444,7 @@ export async function deleteWorkflow(
   const { data: wf, error: lookupError } = await db
     .from("workflows")
     .select("id")
-    .eq(isUuid ? "id" : "slug", idOrSlug)
+    .eq(byId ? "id" : "slug", idOrSlug)
     .eq("workspace_id", scope.workspaceId)
     .maybeSingle();
   if (lookupError) throw lookupError;
@@ -486,7 +484,7 @@ export async function deleteWorkflow(
   const { error } = await db
     .from("workflows")
     .delete()
-    .eq(isUuid ? "id" : "slug", idOrSlug)
+    .eq(byId ? "id" : "slug", idOrSlug)
     .eq("workspace_id", scope.workspaceId);
   if (error) throw error;
 }

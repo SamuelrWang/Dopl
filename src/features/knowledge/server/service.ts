@@ -600,24 +600,45 @@ export async function listFolders(
 
 /**
  * Snapshot of a base + its folders + entries (metadata only — bodies
- * stripped). Used by `GET /api/knowledge/bases/[baseId]/tree` and
- * (eventually) MCP `kb_list_tree`. Lives here so REST and MCP share
- * one composition and one auth path.
+ * stripped). Used by `GET /api/knowledge/bases/[baseId]/tree` and the
+ * MCP get_tree op. Lives here so REST and MCP share one composition and
+ * one auth path.
+ *
+ * Entry paging is opt-in (`entryLimit` + `entryOffset`): folders always
+ * ship in full (they're the light structure), entries page. Without
+ * `entryLimit` the response is the legacy full snapshot — no extra
+ * fields, no count query.
  */
 export async function getBaseTree(
   ctx: KnowledgeContext,
-  baseId: string
+  baseId: string,
+  opts?: { entryLimit: number; entryOffset: number }
 ): Promise<{
   base: KnowledgeBase;
   folders: KnowledgeFolder[];
   entries: KnowledgeEntry[];
+  entryTotal?: number;
+  nextEntryCursor?: string | null;
 }> {
   const base = await getBaseById(ctx, baseId);
-  const [folders, entries] = await Promise.all([
+  const [folders, entries, entryTotal] = await Promise.all([
     repo.listFoldersForBase(base.id, false),
-    repo.listEntriesForBase(base.id, { includeBody: false, includeDeleted: false }),
+    repo.listEntriesForBase(base.id, {
+      includeBody: false,
+      includeDeleted: false,
+      ...(opts ? { limit: opts.entryLimit, offset: opts.entryOffset } : {}),
+    }),
+    opts ? repo.countEntriesForBase(base.id) : Promise.resolve(undefined),
   ]);
-  return { base, folders, entries };
+  if (!opts || entryTotal === undefined) return { base, folders, entries };
+  const nextOffset = opts.entryOffset + entries.length;
+  return {
+    base,
+    folders,
+    entries,
+    entryTotal,
+    nextEntryCursor: nextOffset < entryTotal ? String(nextOffset) : null,
+  };
 }
 
 // ─── Folder writes ──────────────────────────────────────────────────

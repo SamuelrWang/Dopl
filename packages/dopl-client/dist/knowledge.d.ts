@@ -12,7 +12,10 @@ import type { DoplTransport } from "./transport.js";
 import type { KnowledgeBase, KnowledgeBaseCreateInput, KnowledgeBaseUpdateInput, KnowledgeDirListing, KnowledgeEntry, KnowledgePathOpResult, KnowledgeSearchHit, KnowledgeTrashSnapshot, KnowledgeTreeSnapshot, KnowledgeWriteFileInput, KnowledgeWriteFileResult } from "./knowledge-types.js";
 export declare function listKbBases(t: DoplTransport): Promise<KnowledgeBase[]>;
 export declare function getKbBase(t: DoplTransport, baseId: string): Promise<KnowledgeBase>;
-export declare function getKbTree(t: DoplTransport, baseId: string): Promise<KnowledgeTreeSnapshot>;
+export declare function getKbTree(t: DoplTransport, baseId: string, opts?: {
+    entryLimit?: number;
+    entryCursor?: string;
+}): Promise<KnowledgeTreeSnapshot>;
 export declare function createKbBase(t: DoplTransport, input: KnowledgeBaseCreateInput): Promise<KnowledgeBase>;
 export declare function updateKbBase(t: DoplTransport, baseId: string, patch: KnowledgeBaseUpdateInput): Promise<KnowledgeBase>;
 export declare function deleteKbBase(t: DoplTransport, baseId: string): Promise<void>;

@@ -185,8 +185,8 @@ class DoplClient {
     getKbBase(baseId) {
         return kb.getKbBase(this.transport, baseId);
     }
-    getKbTree(baseId) {
-        return kb.getKbTree(this.transport, baseId);
+    getKbTree(baseId, opts) {
+        return kb.getKbTree(this.transport, baseId, opts);
     }
     createKbBase(input) {
         return kb.createKbBase(this.transport, input);

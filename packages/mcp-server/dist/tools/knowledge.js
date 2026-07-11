@@ -87,6 +87,8 @@ function registerKnowledgeTools(register, client) {
         entry_id: zod_1.z.string().optional().describe("restore_file: required entry UUID (from list_trash)."),
         query: zod_1.z.string().optional().describe("search: required free-text query."),
         limit: zod_1.z.number().optional().describe("search: max hits (default 20)."),
+        entry_limit: zod_1.z.number().optional().describe("get_tree: max entries per page (default 400, max 1000). Folders always ship in full."),
+        entry_cursor: zod_1.z.string().optional().describe("get_tree: opaque cursor from a prior page's 'more entries' notice — fetches the next page."),
         visibility: zod_1.z.enum(["public", "private"]).optional().describe("op=set_visibility: 'public' to publish a base you created (makes it workspace-visible + referenceable in workflows). One-way — 'private' is rejected."),
     }, async (args) => {
         switch (args.op) {
@@ -96,7 +98,7 @@ function registerKnowledgeTools(register, client) {
                 const miss = (0, respond_1.missingParams)("get_tree", args, ["base"]);
                 if (miss)
                     return miss;
-                return opGetTree(client, args.base);
+                return opGetTree(client, args.base, args.entry_limit, args.entry_cursor);
             }
             case "list_dir": {
                 const miss = (0, respond_1.missingParams)("list_dir", args, ["base"]);
@@ -228,21 +230,28 @@ async function opListBases(client) {
     return (0, respond_1.ok)(lines.join("\n"));
 }
 const TREE_ENTRY_CAP = 400;
-async function opGetTree(client, ref) {
+const TREE_ENTRY_MAX = 1000;
+async function opGetTree(client, ref, entryLimit, entryCursor) {
     const base = await resolveBaseOr(client, ref);
     if (isErr(base))
         return base;
-    const tree = await client.getKbTree(base.id);
+    // Entries are paged at the API (folders always ship in full), so the
+    // wire payload matches what gets rendered instead of always shipping
+    // the whole base.
+    const limit = Math.min(Math.max(1, Math.floor(entryLimit ?? TREE_ENTRY_CAP)), TREE_ENTRY_MAX);
+    const tree = await client.getKbTree(base.id, {
+        entryLimit: limit,
+        entryCursor,
+    });
+    const entryTotal = tree.entryTotal ?? tree.entries.length;
     const vis = tree.base.visibility === "private" ? "private" : "public";
     const lines = [
         `## ${tree.base.name} \`${tree.base.slug}\``,
         `id: \`${tree.base.id}\` · ${vis} · agent-write ${tree.base.agentWriteEnabled ? "on" : "off"}`,
         ...(tree.base.description ? [tree.base.description] : []),
-        `Folders: ${tree.folders.length} · Entries: ${tree.entries.length}`,
+        `Folders: ${tree.folders.length} · Entries: ${entryTotal}${tree.entries.length < entryTotal ? ` (showing ${tree.entries.length})` : ""}`,
         "",
     ];
-    let printedEntries = 0;
-    let truncated = false;
     // Build a tree view by walking parent_id / folder_id.
     const childFolders = new Map();
     for (const f of tree.folders) {
@@ -266,17 +275,12 @@ async function opGetTree(client, ref) {
             dump(f.id, prefix + "  ");
         }
         for (const e of childEntries.get(parentId) ?? []) {
-            if (printedEntries >= TREE_ENTRY_CAP) {
-                truncated = true;
-                return;
-            }
-            printedEntries += 1;
             lines.push(`${prefix}📄 ${e.title}${descSuffix(e.excerpt)}`);
         }
     }
     dump(null, "");
-    if (truncated) {
-        lines.push("", `_Tree truncated at ${TREE_ENTRY_CAP} of ${tree.entries.length} entries. Browse a folder with op="list_dir" or find entries by content with op="search"._`);
+    if (tree.nextEntryCursor) {
+        lines.push("", `_Showing ${tree.entries.length} of ${entryTotal} entries. Pass entry_cursor="${tree.nextEntryCursor}" for the next page, or narrow with op="list_dir" / op="search"._`);
     }
     return (0, respond_1.ok)(lines.join("\n"));
 }

@@ -66,6 +66,10 @@ export interface KnowledgeTreeSnapshot {
     base: KnowledgeBase;
     folders: KnowledgeFolder[];
     entries: KnowledgeEntry[];
+    /** Present only when entry paging was requested (`entryLimit`). */
+    entryTotal?: number;
+    /** Opaque cursor for the next entry page; null = last page. */
+    nextEntryCursor?: string | null;
 }
 export interface KnowledgeDirListing {
     folder: KnowledgeFolder | null;

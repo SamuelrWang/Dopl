@@ -24,7 +24,7 @@ function registerClusterTools(register, client) {
         slug: zod_1.z
             .string()
             .optional()
-            .describe("op=get/update: cluster slug from op=list."),
+            .describe("op=get/update: cluster slug OR stable id (the uuid from op=list — survives renames, prefer it for held references)."),
         name: zod_1.z
             .string()
             .optional()
@@ -68,7 +68,7 @@ function registerClusterTools(register, client) {
         slug: zod_1.z
             .string()
             .optional()
-            .describe("op=delete_cluster: cluster slug."),
+            .describe("op=delete_cluster: cluster slug or stable id."),
     }, async (args) => {
         switch (args.op) {
             case "delete_cluster": {
