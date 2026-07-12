@@ -267,3 +267,11 @@ See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture and [plan 
 - Description: Teams-mode workflows are enforced at every workflow API read/write (list, get, graph/node/edge/attachment ops) and in KB reads, but the shared canvas still renders the workflow header/node panels themselves to all members — canvas_panels load is workspace-scoped, not team-scoped. A non-granted member sees the panel shell but every interaction (open, edit, node ops) 404s/403s.
 - Proposed resolution: defer — decide whether teams-mode workflows should disappear from the canvas for non-granted members (needs per-user canvas state filtering + realtime predicate) or render a locked placeholder.
 - Status: open
+
+### F-028: Web ontology UI can't name or pick entry-level knowledge refs
+- Location: `src/features/ontology/hooks/use-workspace-resources.tsx` (`nameOf`), `components/attributes-editor.tsx` (knowledge PickMenu), `kanban-card.tsx` / `object-hover-card.tsx` previews
+- Found during: MCP entry-ref support (2026-07-11)
+- Severity: smell
+- Description: `dopl_ontology` set_attribute kind="knowledge" now accepts KB ENTRY refs (`<base>/<entry path>` or entry uuid) and the MCP renderer resolves them to read_file handles. The web UI still resolves knowledge attribute ids only against `/api/knowledge/bases`, so an entry id renders as "Unavailable" in the attributes editor and is silently dropped from card/hover previews. The picker also can't add entry refs.
+- Proposed resolution: extend the resources provider with lazy entry-name resolution (light `GET /api/knowledge/entries?ids=` or per-base tree fetch on demand) and add a base→entry drill-in to the knowledge PickMenu.
+- Status: open

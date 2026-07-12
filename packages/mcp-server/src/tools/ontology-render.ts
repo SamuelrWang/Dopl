@@ -51,7 +51,8 @@ export function resolveClusterRef(
 
 export type ResourceHandles = Map<
   string,
-  { name: string; slug: string; kind: "kb" | "skill" }
+  | { name: string; slug: string; kind: "kb" | "skill" }
+  | { name: string; slug: string; kind: "kb-entry"; path: string }
 >;
 
 export async function resolveResourceHandles(
@@ -74,6 +75,32 @@ export async function resolveResourceHandles(
   }
   for (const s of skills) {
     if (wanted.has(s.id)) handles.set(s.id, { name: s.name, slug: s.slug, kind: "skill" });
+  }
+  // Leftover ids are entry-level knowledge refs — hunt them in the
+  // accessible bases' trees and hand back a read_file-addressable path.
+  const unresolved = [...wanted].filter((id) => !handles.has(id));
+  if (unresolved.length === 0) return handles;
+  const trees = await Promise.all(bases.map((b) => client.getKbTree(b.id).catch(() => null)));
+  for (const tree of trees) {
+    if (!tree) continue;
+    const folderById = new Map(tree.folders.map((f) => [f.id, f]));
+    for (const entry of tree.entries) {
+      if (!unresolved.includes(entry.id)) continue;
+      const segments = [entry.title];
+      for (
+        let folder = entry.folderId ? folderById.get(entry.folderId) : undefined;
+        folder;
+        folder = folder.parentId ? folderById.get(folder.parentId) : undefined
+      ) {
+        segments.unshift(folder.name);
+      }
+      handles.set(entry.id, {
+        name: `${tree.base.name} / ${entry.title}`,
+        slug: tree.base.slug,
+        kind: "kb-entry",
+        path: segments.join("/"),
+      });
+    }
   }
   return handles;
 }
@@ -167,7 +194,9 @@ function renderValue(
             const opener =
               h.kind === "kb"
                 ? `dopl_kb op="get_tree" base="${h.slug}"`
-                : `dopl_skill op="get" slug="${h.slug}"`;
+                : h.kind === "kb-entry"
+                  ? `dopl_kb op="read_file" base="${h.slug}" path="${h.path}"`
+                  : `dopl_skill op="get" slug="${h.slug}"`;
             return `**${h.name}** (${opener})`;
           })
           .join(", ") || "—"

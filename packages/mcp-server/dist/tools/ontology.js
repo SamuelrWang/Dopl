@@ -27,7 +27,7 @@ WRITE — set \`op\` to:
 - "update_object" — rename / redescribe. Requires: object. Optional: name, subtitle.
 - "set_template_field" — upsert one DEFAULT field on a column (or any container): new objects created inside it are born with these fields, empty. Requires: object, label. Optional: kind (default text).
 - "remove_template_field" — Requires: object, label.
-- "set_attribute" — upsert one attribute by label. Requires: object, label. kind="text"|"pill" need \`value\`; kind="ref" needs \`values\` (object ids/names); kind="knowledge"|"skill" need \`values\` (KB/skill slugs or ids). Default kind: text.
+- "set_attribute" — upsert one attribute by label. Requires: object, label. kind="text"|"pill" need \`value\`; kind="ref" needs \`values\` (object ids/names); kind="knowledge"|"skill" need \`values\` — KB/skill slugs or ids, and for kind="knowledge" also specific ENTRIES as \`<base>/<entry path>\` (e.g. "ai-ops-leads/Track 1 leads") or an entry uuid. Default kind: text.
 - "remove_attribute" — Requires: object, label.
 - "set_relationship" — replace one labeled edge. Requires: object, label, targets (object ids/names).
 - "remove_relationship" — Requires: object, label.
@@ -82,7 +82,7 @@ function registerOntologyTool(register, client) {
         values: zod_1.z
             .array(zod_1.z.string())
             .optional()
-            .describe("set_attribute (ref/knowledge/skill): ids, slugs, or exact names."),
+            .describe("set_attribute (ref/knowledge/skill): ids, slugs, or exact names. kind=knowledge also accepts entry refs: `<base>/<entry path>` or an entry uuid."),
         targets: zod_1.z
             .array(zod_1.z.string())
             .optional()
@@ -372,6 +372,7 @@ function resolveObjectValues(snapshot, refs) {
     }
     return { ids };
 }
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 async function resolveResourceValues(client, kind, refs) {
     const resources = kind === "knowledge"
         ? (await client.listKbBases().catch(() => [])).map((b) => ({
@@ -388,16 +389,64 @@ async function resolveResourceValues(client, kind, refs) {
     for (const ref of refs) {
         const needle = ref.toLowerCase();
         const hit = resources.find((r) => r.id === ref || r.slug === needle || r.name.toLowerCase() === needle);
-        if (!hit) {
-            const known = resources.map((r) => `\`${r.slug}\``).join(", ") || "none";
-            return {
-                fail: (0, respond_1.err)(`No ${kind === "knowledge" ? "knowledge base" : "skill"} \`${ref}\`. Available: ${known}.`),
-            };
+        if (hit) {
+            if (!ids.includes(hit.id))
+                ids.push(hit.id);
+            continue;
         }
-        if (!ids.includes(hit.id))
-            ids.push(hit.id);
+        if (kind === "knowledge") {
+            const entry = await resolveKbEntryRef(client, resources, ref);
+            if ("fail" in entry)
+                return entry;
+            if (entry.id) {
+                if (!ids.includes(entry.id))
+                    ids.push(entry.id);
+                continue;
+            }
+        }
+        const known = resources.map((r) => `\`${r.slug}\``).join(", ") || "none";
+        const entryHint = kind === "knowledge"
+            ? ` For a specific entry, pass \`<base>/<entry path>\` or the entry's uuid.`
+            : "";
+        return {
+            fail: (0, respond_1.err)(`No ${kind === "knowledge" ? "knowledge base" : "skill"} \`${ref}\`. Available: ${known}.${entryHint}`),
+        };
     }
     return { ids };
+}
+/**
+ * Entry-level knowledge refs: `<base>/<entry path>` (base by id/slug/name)
+ * or a bare entry uuid, hunted across the caller's accessible bases.
+ * Returns `{ id: null }` when the ref simply doesn't match an entry, so
+ * the caller can fall through to its "no such base" error.
+ */
+async function resolveKbEntryRef(client, bases, ref) {
+    const slash = ref.indexOf("/");
+    if (slash > 0) {
+        const baseRef = ref.slice(0, slash);
+        const path = ref.slice(slash + 1);
+        const needle = baseRef.toLowerCase();
+        const base = bases.find((b) => b.id === baseRef || b.slug === needle || b.name.toLowerCase() === needle);
+        if (!base || !path)
+            return { id: null };
+        try {
+            const entry = await client.readKbFileByPath(base.id, path);
+            return { id: entry.id };
+        }
+        catch {
+            return {
+                fail: (0, respond_1.err)(`No entry at \`${path}\` in knowledge base \`${base.slug}\`. Check the path with dopl_kb op="get_tree" base="${base.slug}".`),
+            };
+        }
+    }
+    if (!UUID_RE.test(ref))
+        return { id: null };
+    const trees = await Promise.all(bases.map((b) => client.getKbTree(b.id).catch(() => null)));
+    for (const tree of trees) {
+        if (tree?.entries.some((e) => e.id === ref))
+            return { id: ref };
+    }
+    return { id: null };
 }
 async function opMap(client) {
     const snapshot = await client.getOntology();

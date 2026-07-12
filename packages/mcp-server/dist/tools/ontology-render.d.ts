@@ -16,6 +16,11 @@ export type ResourceHandles = Map<string, {
     name: string;
     slug: string;
     kind: "kb" | "skill";
+} | {
+    name: string;
+    slug: string;
+    kind: "kb-entry";
+    path: string;
 }>;
 export declare function resolveResourceHandles(client: DoplClient, object: OntologyObject): Promise<ResourceHandles>;
 export declare function renderObject(object: OntologyObject, snapshot: OntologySnapshot, headline?: string, handles?: ResourceHandles): string;
