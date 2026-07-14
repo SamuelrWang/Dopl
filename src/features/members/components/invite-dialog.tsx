@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronDown, Link2, RotateCcw } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/shared/ui/dialog";

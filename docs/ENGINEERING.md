@@ -16,7 +16,7 @@ Stack: Next.js 16 (App Router) · React 19 · TypeScript (strict) · Supabase ·
 
 ### Known debt
 
-See [docs/REFACTOR-FINDINGS.md](REFACTOR-FINDINGS.md) for the current list of open findings (`F-NNN` ids). At a glance: pre-existing lint errors (F-006), chrome-extension PascalCase filenames (F-007), a few files still over the 500-line cap (§2), the canvas store still syncs server data it should push out to a query library (§7). None block shipping; all are tracked.
+See [docs/REFACTOR-FINDINGS.md](REFACTOR-FINDINGS.md) for the current list of open findings (`F-NNN` ids). At a glance: chrome-extension PascalCase filenames (F-007), files still over the 500-line cap (§2, remeasured 2026-07-11), the canvas store still syncs server data it should push out to a query library (§7), skill_files single-row collapse (F-029). Lint debt is ZERO as of 2026-07-11 (F-006 resolved) — keep `npx eslint` at 0 errors; the invariant test suites (root `npx vitest run` + `packages/mcp-server` `npx vitest run`) are part of definition-of-done for MCP/tool and service changes.
 
 TanStack Query is now the server-state layer (§7) and every feature's client data hooks are on it — the legacy `useApiGet` / per-feature `useFetch` copies are gone. Don't reintroduce `useEffect + fetch + useState` for mount-time GETs; mutations in event handlers use `apiRequest` (plus a `queryClient.setQueryData`/`invalidateQueries` when a cached list must reflect the change).
 
@@ -104,18 +104,26 @@ setup-intelligence-engine/
 
 These are allowed under the exceptions above OR scheduled for a future split. If you touch one, either shrink it or split it in the same PR.
 
+Remeasured 2026-07-11 (after the knowledge-service / skills-service / KB-panel splits — see F-030). Generated `src/shared/supabase/types.ts` and `*seed-fixtures*` data tables are exempt (§2 carve-outs).
+
 | File | Lines | Reason |
 |------|-------|--------|
-| `src/features/canvas/canvas-store/reducer.ts` | ~800 | Exception: cohesive state-machine reducer |
-| `src/features/canvas/canvas.tsx` | ~720 | Scheduled: imperative pointer/wheel handlers await extraction into `use-viewport` + `use-interactions` hooks |
-| `src/features/canvas/use-panel-ingestion.ts` | ~820 | Scheduled: split into glue hook + pure `ingestion-client` |
-| `packages/mcp-server/src/server.ts` | ~2000 | Scheduled: split per-tool registrations into per-domain modules (packs, clusters, canvas, ingest) — see CLI as the precedent. Tracked in [TRACKED-DEBT.md](TRACKED-DEBT.md#20). |
-| `packages/dopl-client/src/client.ts` | ~640 | Scheduled: split into per-domain method groups (knowledge.ts already extracted; canvas/clusters/ingest next). |
-| `src/features/knowledge/server/service.ts` | ~960 | Scheduled: split per-domain (`bases.ts` / `folders.ts` / `entries.ts` / `path-ops.ts` / `trash.ts`). Tracked in [TRACKED-DEBT.md](TRACKED-DEBT.md#19). |
-| `src/features/knowledge/server/repository.ts` | ~695 | Scheduled: mirror the service split. Tracked in [TRACKED-DEBT.md](TRACKED-DEBT.md#19). |
-| `src/features/knowledge/server/seed-fixtures-data.ts` | ~670 | Exception: pure data table (string literals + types) — qualifies under the §2 "Pure data/config tables" carve-out. |
-| `src/features/knowledge/components/knowledge-tree.tsx` | ~640 | Scheduled: extract drag-drop hook + `TreeNode` sub-component. Tracked in [TRACKED-DEBT.md](TRACKED-DEBT.md#19). |
-| `src/features/knowledge/components/knowledge-base-view.tsx` | ~630 | Scheduled: extract `DocPane` to its own file. Tracked in [TRACKED-DEBT.md](TRACKED-DEBT.md#19). |
+| `src/features/knowledge/server/repository.ts` | ~890 | Scheduled: mirror the service-module split (F-030 follow-up). |
+| `src/features/workflows/server/authoring.ts` | ~830 | Scheduled: split graph authoring vs node/edge ops. |
+| `src/features/canvas/canvas.tsx` | ~720 | Scheduled: imperative pointer/wheel handlers await extraction into `use-viewport` + `use-interactions` hooks. |
+| `src/features/canvas/panels/skill/skill-panel.tsx` | ~645 | Scheduled: extract editor body vs panel shell. |
+| `src/features/skills/server/repository.ts` | ~635 | Scheduled: mirror the service-module split (F-030 follow-up). |
+| `src/features/chats/server/service.ts` | ~620 | Scheduled: split export/append vs read/folders. |
+| `src/features/skills/components/skill-view.tsx` | ~620 | Scheduled: extract detail-rail sections. |
+| `src/features/canvas/canvas-store/reducer.ts` | ~595 | Exception: cohesive state-machine reducer. |
+| `packages/dopl-client/src/client.ts` | ~600 | Scheduled: continue per-domain method-group extraction. |
+| `packages/mcp-server/src/tools/knowledge.ts` | ~600 | Borderline: single-tool module; split ops-vs-render if it grows. |
+| `packages/mcp-server/src/server.ts` | ~595 | Borderline: registration + gating core; watch it. |
+| `packages/mcp-server/src/tools/ontology.ts` | ~590 | Borderline: single-tool module (render half already in ontology-render.ts). |
+| `src/features/canvas/use-canvas-db-sync.ts` | ~540 | Scheduled: split seed vs write-through effects. |
+| `src/features/canvas/types.ts` | ~530 | Exception: type-only domain model. |
+| `packages/mcp-server/src/tools/workflow.ts` | ~515 | Borderline: single-tool module. |
+| `src/features/teams/server/repository.ts` | ~510 | Borderline: watch it. |
 
 ---
 

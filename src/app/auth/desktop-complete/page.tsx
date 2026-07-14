@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { getSupabaseBrowser } from "@/shared/supabase/browser";
 
 /**
@@ -22,12 +23,11 @@ export default function DesktopCompletePage() {
     const accessToken = params.get("access_token");
     const refreshToken = params.get("refresh_token");
 
-    if (!accessToken || !refreshToken) {
-      setError("Missing sign-in tokens. Please try signing in again.");
-      return;
-    }
-
     (async () => {
+      if (!accessToken || !refreshToken) {
+        setError("Missing sign-in tokens. Please try signing in again.");
+        return;
+      }
       const supabase = getSupabaseBrowser();
       const { error } = await supabase.auth.setSession({
         access_token: accessToken,
@@ -63,7 +63,7 @@ export default function DesktopCompletePage() {
         <>
           <p style={{ fontWeight: 600 }}>Sign-in failed</p>
           <p style={{ color: "#646d78", fontSize: 14, maxWidth: 360 }}>{error}</p>
-          <a
+          <Link
             href="/login"
             style={{
               marginTop: 8,
@@ -77,7 +77,7 @@ export default function DesktopCompletePage() {
             }}
           >
             Back to sign in
-          </a>
+          </Link>
         </>
       ) : (
         <>

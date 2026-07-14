@@ -90,7 +90,7 @@ export function AcceptInviteCard({ status, token, needsAuth }: Props) {
           </>
         ) : (
           <>
-            You've been invited as{" "}
+            You&apos;ve been invited as{" "}
             <span className="text-text-primary">
               {ROLE_LABELS[status.invitation.invitedRole] ??
                 status.invitation.invitedRole}
@@ -110,7 +110,7 @@ export function AcceptInviteCard({ status, token, needsAuth }: Props) {
       ) : needsAuth ? (
         <div className="mt-6 flex flex-col gap-3">
           <p className="text-caption text-text-tertiary">
-            Sign in to accept. We'll bring you back here.
+            Sign in to accept. We&apos;ll bring you back here.
           </p>
           <a
             href={`/login?redirectTo=${encodeURIComponent(`/invite/${token}`)}`}

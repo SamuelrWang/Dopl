@@ -14,6 +14,7 @@ import {
 } from "@/features/skills/client/api";
 import type { ResolvedSkill, SkillFile } from "@/features/skills/types";
 import { PRIMARY_SKILL_FILE_NAME } from "@/features/skills/types";
+import { useApiQuery } from "@/shared/hooks/use-api-query";
 import { Skeleton } from "@/shared/ui/skeleton";
 import { VisibilityPill } from "@/shared/ui/visibility-pill";
 
@@ -23,37 +24,22 @@ interface Props {
 
 export function SkillPanelBody({ panel }: Props) {
   const scope = useCanvasScope();
-  const [resolved, setResolved] = useState<ResolvedSkill | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [errorText, setErrorText] = useState<string | null>(null);
-  const [tick, setTick] = useState(0);
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    fetchSkill(panel.slug, scope?.workspaceId)
-      .then((r) => {
-        if (cancelled) return;
-        setResolved(r);
-        setLoading(false);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setErrorText(err instanceof Error ? err.message : "Failed to load");
-        setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [panel.slug, tick, scope?.workspaceId]);
+  // Mount-time GET via the standard query hook — caching, dedupe, and
+  // refetch replace the old useEffect+fetch+useState load.
+  const skillQuery = useApiQuery<ResolvedSkill>(
+    `/api/skills/${encodeURIComponent(panel.slug)}`,
+    { workspaceId: scope?.workspaceId }
+  );
+  const refetch = skillQuery.refetch;
 
-  function refetch() {
-    setTick((t) => t + 1);
-  }
-
+  // Realtime echo → refetch the skill (same signal the tick bump gave).
   useSkillsRealtime(scope?.workspaceId, refetch);
 
-  if (loading && !resolved) {
+  const resolved = skillQuery.data ?? null;
+  const errorText = skillQuery.error ? skillQuery.error.message : null;
+
+  if (skillQuery.isLoading && !resolved) {
     return <SkillPanelSkeleton />;
   }
 

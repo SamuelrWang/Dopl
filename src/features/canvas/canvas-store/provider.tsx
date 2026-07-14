@@ -179,8 +179,14 @@ export function CanvasProvider({
 function useAutoFocusNewPanel() {
   const { state, dispatch } = useCanvas();
   const knownIdsRef = useRef<Set<string> | null>(null);
+  // Latest committed state, so the effect below can read the current
+  // camera zoom without depending on `state.camera` (which would make
+  // it re-run on every pan). Updated in an effect (declared first, so it
+  // lands before the focus effect on any commit) rather than in render.
   const stateRef = useRef(state);
-  stateRef.current = state;
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   useEffect(() => {
     const panels = state.panels;

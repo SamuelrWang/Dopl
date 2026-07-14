@@ -91,7 +91,7 @@ See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture and [plan 
 - Severity: smell
 - Description: Pre-existing lint debt. Refactor gate accepts these as baseline — new commits must not increase the count.
 - Proposed resolution: defer-to-post-refactor — not in scope of this refactor; track for future cleanup PR.
-- Status: open
+- Status: RESOLVED — `npx eslint src packages/mcp-server/src packages/dopl-client/src` now reports **0 errors** (was 38 errors / 20 warnings at the start of the cleanup pass). Fixes were behavior-preserving: `<a>`→`next/link` on marketing/auth internal nav; escaped apostrophes in accept-invite-card; `react-hooks/immutability` in markdown-message via a non-global presence-test regex; `set-state-in-effect` fixed by migrating skill-panel's load to `useApiQuery`, moving desktop-complete's early `setError` into the async IIFE, and converting workflow-panel's prop-sync to the adjust-during-render pattern (focus tracked in state, not a ref); `react-hooks/refs` fixed by moving the canvas-db-sync seed + `latestStateRef`/`stateRef` writes out of render into effects (seed reads an initial-state ref, declared first so it lands before the write-through effects). 11 warnings remain, all pre-existing and intentionally left: 8 `react-hooks/exhaustive-deps` (canvas-db-sync `workspaceId` ×7 + canvas.tsx `dispatch` — deliberate omissions; adding the deps changes save/effect behavior) and 3 `no-unused-vars` that are intentional patterns (`_grid`, the `{ history: _, ...rest }` omit, and proxy.ts `options` signature param).
 
 ### F-007: Chrome extension source uses PascalCase filenames — inconsistent with main app
 - Location: `packages/chrome-extension/src/panel/{App.tsx,components/*,views/*,hooks/*}`
@@ -283,3 +283,29 @@ See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture and [plan 
 - Description: Skills became single-file: every skill now has exactly one active `skill_files` row (its SKILL.md), enforced by the `skill_files_single_active` partial unique index (migration `20260711000000`). The multi-file surface (create/rename/delete/list-files ops, per-file-name API routes, the tab UI) is gone. The table was deliberately KEPT as the storage layer so version history (`skill_file_versions`), export, duplicate, and realtime kept working with minimal rework — but it now carries a single row per skill, plus a `file_id` FK on every version. The clean end-state is to fold the body into a `skills.body` column and drop `skill_files` (re-pointing `skill_file_versions` at the skill), which removes a join and a table from every skill read/write.
 - Proposed resolution: defer — a follow-up migration moves `SKILL.md.body` → `skills.body`, migrates `skill_file_versions.file_id` to key off `skill_id` only, and deletes `skill_files`; the repository/service then read/write the column directly.
 - Status: open
+
+### F-030: Three worst over-cap files split into cohesive modules (§2 "Files end, not grow")
+- Location: `src/features/knowledge/server/service.ts`, `src/features/canvas/panels/knowledge-base/knowledge-base-panel.tsx`, `src/features/skills/server/service.ts`
+- Found during: 500-line-cap split pass (2026-07-13)
+- Severity: smell (resolved)
+- Description: The three largest over-cap files were split behavior-preserving (pure code motion + import updates; no logic/signature/API changes). Each original file became a re-export barrel keeping its full public surface, so every existing importer keeps working with zero import churn. Both invariant suites (`knowledge/server/service.test.ts`, `skills/server/service.test.ts`) stayed green unchanged.
+  - **knowledge/server/service.ts** (1549 → 81 barrel) → `service-shared.ts` (188: context, `canSeeBase`/`assertBaseVisible`/`filterTeamVisibleBases`, `assertBaseWritable`, generic helpers), `service-bases.ts` (122: base reads incl. the `getBaseById` gate), `service-base-writes.ts` (371: create/update/delete/restore), `service-folders.ts` (203), `service-entries.ts` (224: incl. `resolveEntryRefs`), `service-paths.ts` (379: path-addressed ops), `service-trash.ts` (104), `service-seed.ts` (62).
+  - **knowledge-base-panel.tsx** (957 → 394 panel shell + `TreePaneSkeleton`) → `knowledge-tree.tsx` (278: `buildTree` + `TreeNodes`/`FolderRow`/`EntryRow`/`IconButton`), `entry-editor.tsx` (298: `EntryEditor` + its CAS/conflict model). `KnowledgeBasePanelBody` export path unchanged.
+  - **skills/server/service.ts** (941 → 60 barrel) → `service-shared.ts` (154: context, `canSeeSkill` matrix + grant helpers, `assertAgentWriteAllowed`), `service-reads.ts` (160: reads incl. the `getSkillBySlug` gate), `service-writes.ts` (365: create/update/delete/duplicate), `service-body.ts` (76: SKILL.md read + CAS write), `service-trash.ts` (74), `service-history.ts` (81), `service-insights.ts` (50), `service-seed.ts` (43). The history-recording choke-point (`./history` `recordVersion`/`recordEvent`) is imported by the domain modules, never duplicated.
+  - Every resulting file is ≤ 379 lines. Dependency graphs are acyclic (domain modules → `service-shared` / the reads gate → repo; barrels re-export only the original public symbols, so shared internals stay internal).
+- Verification: root `tsc --noEmit` clean; `vitest run` 7 files / 51 tests green; `eslint` on all 20 created/touched files → 0 errors, 0 warnings.
+- Remaining over-cap files repo-wide after this pass (`wc -l`, excluding generated `src/shared/supabase/types.ts`, `*seed-fixtures*` data, tests, and `node_modules`/`dist`):
+  - `src/features/knowledge/server/repository.ts` (892) — scheduled to mirror the service split (§2 / F-012-adjacent).
+  - `src/features/workflows/server/authoring.ts` (828).
+  - `src/features/canvas/canvas.tsx` (719) — scheduled (viewport/interaction hook extraction).
+  - `src/features/canvas/panels/skill/skill-panel.tsx` (644).
+  - `src/features/skills/server/repository.ts` (633) — scheduled to mirror the service split.
+  - `src/features/chats/server/service.ts` (622).
+  - `src/features/skills/components/skill-view.tsx` (621).
+  - `src/features/canvas/canvas-store/reducer.ts` (594) — §2 exception (cohesive state-machine reducer).
+  - `src/features/canvas/use-canvas-db-sync.ts` (542).
+  - `src/features/canvas/types.ts` (530) — type-only cohesive domain model (§2 exception candidate).
+  - `src/features/teams/server/repository.ts` (508).
+  - `packages/` (out of scope this pass): `dopl-client/src/client.ts` (599), `mcp-server/src/tools/knowledge.ts` (597), `mcp-server/src/server.ts` (593), `mcp-server/src/tools/ontology.ts` (586), `mcp-server/src/tools/workflow.ts` (513) — all already scheduled in ENGINEERING §2 / TRACKED-DEBT.
+- Proposed resolution: fixed for the three target files; remaining list tracked for future cap passes (repositories next, to mirror their service splits).
+- Status: fixed (three target files); remaining over-cap files defer

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { LOGIN_LABEL, MENU_LABEL, NAV_LINKS } from "../constants";
 import { ArrowUpRight, MenuIcon, SearchIcon } from "./icons";
 import { Logo } from "./logo";
@@ -19,10 +20,10 @@ export function SiteNav() {
           ))}
         </nav>
         <span className="lp-divider" aria-hidden />
-        <a href="/login" className="lp-btn lp-btn--sm lp-btn--3d">
+        <Link href="/login" className="lp-btn lp-btn--sm lp-btn--3d">
           {LOGIN_LABEL}
           <ArrowUpRight size={13} />
-        </a>
+        </Link>
       </div>
 
       <div className="lp-nav-right">

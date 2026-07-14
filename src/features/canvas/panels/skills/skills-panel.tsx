@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plug, Plus, Sparkles, Play } from "lucide-react";
+import { Plug, Plus, Sparkles } from "lucide-react";
 import {
   findNonOverlappingPosition,
   nextPanelIdString,

@@ -10,7 +10,7 @@
  * single connector site (rendered by NodePortsLayer) sits at its bottom.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { toast } from "@/shared/ui/toast";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
@@ -27,19 +27,33 @@ export function WorkflowPanelBody({ panel }: { panel: WorkflowPanelData }) {
   const [name, setName] = useState(panel.name);
   const [description, setDescription] = useState(panel.description ?? "");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // Focus tracked as state (not a ref) so the re-seed logic below can
+  // read it during render without tripping the refs rule.
+  const [nameFocused, setNameFocused] = useState(false);
+  const [descFocused, setDescFocused] = useState(false);
+  // Baseline of the prop values we last absorbed — drives the re-seed.
+  const [seededName, setSeededName] = useState(panel.name);
+  const [seededDescription, setSeededDescription] = useState(
+    panel.description ?? ""
+  );
 
-  const nameFocusedRef = useRef(false);
-  const descFocusedRef = useRef(false);
   // Serialize PATCHes so a quick rename + describe land in order.
   const patchQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   // Re-seed local fields when panel_data changes underneath us (realtime
   // panel sync, an agent editing over MCP) — but never clobber a field
-  // the user is currently editing.
-  useEffect(() => {
-    if (!nameFocusedRef.current) setName(panel.name);
-    if (!descFocusedRef.current) setDescription(panel.description ?? "");
-  }, [panel.name, panel.description]);
+  // the user is currently editing. Done by adjusting state during render
+  // (React's "storing information from previous renders" pattern) rather
+  // than in an effect, so there's no extra commit + re-render.
+  if (panel.name !== seededName) {
+    setSeededName(panel.name);
+    if (!nameFocused) setName(panel.name);
+  }
+  const nextDescription = panel.description ?? "";
+  if (nextDescription !== seededDescription) {
+    setSeededDescription(nextDescription);
+    if (!descFocused) setDescription(nextDescription);
+  }
 
   function patchWorkflowDb(body: { name?: string; description?: string | null }) {
     patchQueueRef.current = patchQueueRef.current
@@ -123,11 +137,9 @@ export function WorkflowPanelBody({ panel }: { panel: WorkflowPanelData }) {
           value={name}
           data-no-drag
           onChange={(e) => setName(e.target.value)}
-          onFocus={() => {
-            nameFocusedRef.current = true;
-          }}
+          onFocus={() => setNameFocused(true)}
           onBlur={() => {
-            nameFocusedRef.current = false;
+            setNameFocused(false);
             commitName();
           }}
           onKeyDown={(e) => {
@@ -152,11 +164,9 @@ export function WorkflowPanelBody({ panel }: { panel: WorkflowPanelData }) {
         value={description}
         data-no-drag
         onChange={(e) => setDescription(e.target.value.slice(0, DESCRIPTION_MAX))}
-        onFocus={() => {
-          descFocusedRef.current = true;
-        }}
+        onFocus={() => setDescFocused(true)}
         onBlur={() => {
-          descFocusedRef.current = false;
+          setDescFocused(false);
           commitDescription();
         }}
         rows={3}

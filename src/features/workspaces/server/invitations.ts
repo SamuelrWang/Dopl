@@ -15,7 +15,6 @@ import {
   mapInvitationRow,
 } from "./dto";
 import { findWorkspaceById, findMembership } from "./repository";
-import { resolveMembershipOrThrow } from "./service";
 import {
   insertTeamMembers,
   listInvitationTeamIds,

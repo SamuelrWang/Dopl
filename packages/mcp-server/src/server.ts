@@ -221,6 +221,8 @@ export function createServer(
       "create_column",
       "create_object",
       "update_object",
+      "set_template_field",
+      "remove_template_field",
       "set_attribute",
       "remove_attribute",
       "set_relationship",
@@ -258,7 +260,7 @@ export function createServer(
       "disconnect",
       "set_cluster",
     ]),
-    dopl_chats: new Set(["export", "append", "update", "create_folder"]),
+    dopl_chats: new Set(["export", "append", "update", "create_folder", "update_folder"]),
   };
   // Active workspace for this MCP session — seeded from the startup
   // handshake (index.ts) and mutated by `set_workspace` mid-session.

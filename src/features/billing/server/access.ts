@@ -32,7 +32,6 @@ export async function hasActiveAccess(
   // and its narrowing keeps working.
   const DEMO_PAYWALL_BYPASS: boolean = true;
   if (DEMO_PAYWALL_BYPASS) {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     void userId;
     return { allowed: true, reason: "paid", trial_expires_at: null };
   }

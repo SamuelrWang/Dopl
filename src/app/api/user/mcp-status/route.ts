@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
-import { withExternalAuth, withUserAuth, isAdmin } from "@/shared/auth/with-auth";
+import { NextResponse } from "next/server";
+import { withUserAuth, isAdmin } from "@/shared/auth/with-auth";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 
 export const dynamic = "force-dynamic";

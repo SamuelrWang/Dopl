@@ -138,35 +138,41 @@ export function useCanvasDbSync() {
     };
   }, [workspaceId]);
 
-  // Seed tracking refs SYNCHRONOUSLY from the server-rendered initial
-  // state — not inside a useEffect — so the write-through effects below
-  // (which fire on first render) don't see an empty prevPanelIdsRef and
-  // treat every pre-hydrated panel as "new", redundantly POSTing them.
-  //
-  // This block runs on every render but is guarded by syncedRef so the
-  // expensive serialization only happens once.
-  if (!syncedRef.current) {
-    syncedRef.current = true;
-    prevCameraRef.current = cameraKey(state.camera);
-    prevPanelIdsRef.current = panelIdSet(state.panels);
-    prevPositionsRef.current = panelPositionKey(state.panels);
-    prevCountersRef.current = `${state.nextPanelId}`;
+  // Snapshot of the server-rendered initial state, captured on first
+  // render (useRef ignores its arg after mount). The seed effect reads
+  // from here so it can carry an empty dependency array without an
+  // exhaustive-deps warning and without re-seeding on later renders.
+  const initialStateRef = useRef(state);
+
+  // Seed tracking refs from the initial state BEFORE the write-through
+  // effects run, so they don't see an empty prevPanelIdsRef and treat
+  // every pre-hydrated panel as "new", redundantly POSTing them. This
+  // effect is declared first, so on mount React runs it ahead of the
+  // write-through effects below; ref writes belong in an effect, not in
+  // render. The `syncedRef` flag then gates those effects.
+  useEffect(() => {
+    const initial = initialStateRef.current;
+    prevCameraRef.current = cameraKey(initial.camera);
+    prevPanelIdsRef.current = panelIdSet(initial.panels);
+    prevPositionsRef.current = panelPositionKey(initial.panels);
+    prevCountersRef.current = `${initial.nextPanelId}`;
     const titles = new Map<string, string>();
-    for (const p of state.panels) {
+    for (const p of initial.panels) {
       if ("title" in p && typeof p.title === "string") {
         titles.set(p.id, p.title);
       }
     }
     prevTitlesRef.current = titles;
-    prevWorkflowsRef.current = workflowIdMap(state.panels);
-    prevEdgesRef.current = new Map(state.edges.map((e) => [e.id, e]));
+    prevWorkflowsRef.current = workflowIdMap(initial.panels);
+    prevEdgesRef.current = new Map(initial.edges.map((e) => [e.id, e]));
     const dataMap = new Map<string, string>();
-    for (const p of state.panels) {
+    for (const p of initial.panels) {
       const row = panelToDbRow(p);
       dataMap.set(p.id, JSON.stringify(row.panel_data));
     }
     prevPanelDataRef.current = dataMap;
-  }
+    syncedRef.current = true;
+  }, []);
 
   // ── Track changes and sync to DB (split into focused effects) ─────
 
@@ -429,9 +435,13 @@ export function useCanvasDbSync() {
   // the DB accepts idempotent writes here.
   //
   // We keep a ref to the latest state so the unload handler isn't
-  // reading stale closure values.
+  // reading stale closure values. Written in an effect (post-commit) —
+  // the unload handlers only ever fire after paint, so they always read
+  // the latest committed state.
   const latestStateRef = useRef(state);
-  latestStateRef.current = state;
+  useEffect(() => {
+    latestStateRef.current = state;
+  });
 
   useEffect(() => {
     function flushPendingSaves() {

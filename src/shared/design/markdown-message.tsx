@@ -23,6 +23,10 @@ interface MarkdownMessageProps {
 }
 
 const CITE_REGEX = /\[cite:([a-f0-9-]+)\]/gi;
+// Non-global twin for a stateless presence check — `.test()` on the
+// global regex above advances its `lastIndex`, which would mean mutating
+// shared module state during render.
+const HAS_CITE_REGEX = /\[cite:[a-f0-9-]+\]/i;
 
 /**
  * Replace [cite:UUID] markers with placeholder tokens that survive
@@ -73,9 +77,7 @@ function processCitations(
 
 export function MarkdownMessage({ content, className, entryNames }: MarkdownMessageProps) {
   const rendered = useMemo(() => {
-    if (entryNames && CITE_REGEX.test(content)) {
-      // Reset lastIndex since we used the `g` flag
-      CITE_REGEX.lastIndex = 0;
+    if (entryNames && HAS_CITE_REGEX.test(content)) {
       return processCitations(content, entryNames);
     }
     return <ReactMarkdown>{content}</ReactMarkdown>;
