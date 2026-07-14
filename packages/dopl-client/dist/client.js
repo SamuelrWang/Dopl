@@ -316,8 +316,7 @@ class DoplClient {
     // ─── Skills ─────────────────────────────────────────────────────────
     // Read paths are unrestricted; write paths are gated server-side by
     // the per-skill `agent_write_enabled` toggle for API-key (agent)
-    // callers. Skills are folders of `.md` files; SKILL.md is the
-    // canonical procedure.
+    // callers. Skills are single-file: one SKILL.md procedure body.
     listSkills() {
         return skills.listSkills(this.transport);
     }
@@ -333,23 +332,11 @@ class DoplClient {
     deleteSkill(slug) {
         return skills.deleteSkill(this.transport, slug);
     }
-    listSkillFiles(slug) {
-        return skills.listSkillFiles(this.transport, slug);
+    readSkillBody(slug) {
+        return skills.readSkillBody(this.transport, slug);
     }
-    readSkillFile(slug, fileName) {
-        return skills.readSkillFile(this.transport, slug, fileName);
-    }
-    createSkillFile(slug, input) {
-        return skills.createSkillFile(this.transport, slug, input);
-    }
-    writeSkillFile(slug, fileName, body, expectedVersion) {
-        return skills.writeSkillFile(this.transport, slug, fileName, body, expectedVersion);
-    }
-    renameSkillFile(slug, currentName, newName) {
-        return skills.renameSkillFile(this.transport, slug, currentName, newName);
-    }
-    deleteSkillFile(slug, fileName) {
-        return skills.deleteSkillFile(this.transport, slug, fileName);
+    writeSkillBody(slug, body, expectedVersion) {
+        return skills.writeSkillBody(this.transport, slug, body, expectedVersion);
     }
 }
 exports.DoplClient = DoplClient;

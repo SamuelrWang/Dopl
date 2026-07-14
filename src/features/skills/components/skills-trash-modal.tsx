@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FileCode, FileText, RotateCcw } from "lucide-react";
+import { FileCode, RotateCcw } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -14,9 +14,8 @@ import {
   SkillApiError,
   fetchSkillsTrash,
   restoreSkill,
-  restoreSkillFile,
 } from "../client/api";
-import type { Skill, SkillFile } from "../types";
+import type { Skill } from "../types";
 
 interface Props {
   open: boolean;
@@ -28,14 +27,13 @@ interface Props {
 
 interface TrashState {
   skills: Skill[];
-  files: SkillFile[];
 }
 
 /**
- * Recently-deleted skills + skill files for the workspace. Mirrors the
- * KB trash modal — load on open, restore inline with optimistic toast,
- * empty/loading/error states. Workspace-wide only (skills aren't per-
- * base scoped like KB entries).
+ * Recently-deleted skills for the workspace. Mirrors the KB trash modal —
+ * load on open, restore inline with optimistic toast, empty/loading/error
+ * states. Skills are single-file, so only whole-skill restore exists
+ * (any leftover merged files are purged by the nightly cron, not shown).
  */
 export function SkillsTrashModal({
   open,
@@ -53,7 +51,7 @@ export function SkillsTrashModal({
     fetchSkillsTrash(workspaceId)
       .then((data) => {
         if (cancelled) return;
-        setTrash(data);
+        setTrash({ skills: data.skills });
         setError(null);
       })
       .catch((err: unknown) => {
@@ -67,14 +65,9 @@ export function SkillsTrashModal({
 
   const isLoading = open && trash === null && error === null;
 
-  async function handleRestore(
-    type: "skill" | "file",
-    id: string,
-    label: string
-  ) {
+  async function handleRestore(id: string, label: string) {
     try {
-      if (type === "skill") await restoreSkill(id, workspaceId);
-      else await restoreSkillFile(id, workspaceId);
+      await restoreSkill(id, workspaceId);
       toast({ title: `Restored "${label}"` });
       setTick((t) => t + 1);
       onRestored?.();
@@ -89,8 +82,7 @@ export function SkillsTrashModal({
     }
   }
 
-  const isEmpty =
-    !!trash && trash.skills.length === 0 && trash.files.length === 0;
+  const isEmpty = !!trash && trash.skills.length === 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -98,7 +90,7 @@ export function SkillsTrashModal({
         <DialogHeader>
           <DialogTitle className="text-text-primary">Trash</DialogTitle>
           <DialogDescription className="text-text-tertiary">
-            Soft-deleted skills and skill files from this workspace.
+            Soft-deleted skills from this workspace.
           </DialogDescription>
         </DialogHeader>
 
@@ -121,20 +113,7 @@ export function SkillsTrashModal({
                   icon={<FileCode size={12} className="text-text-muted" />}
                   label={s.name}
                   meta={`Deleted ${formatRelative(s.deletedAt ?? s.updatedAt)}`}
-                  onRestore={() => handleRestore("skill", s.id, s.name)}
-                />
-              ))}
-            </Section>
-          )}
-          {trash && trash.files.length > 0 && (
-            <Section title="Files">
-              {trash.files.map((f) => (
-                <TrashRow
-                  key={f.id}
-                  icon={<FileText size={12} className="text-text-muted" />}
-                  label={f.name}
-                  meta={`Deleted ${formatRelative(f.deletedAt ?? f.updatedAt)}`}
-                  onRestore={() => handleRestore("file", f.id, f.name)}
+                  onRestore={() => handleRestore(s.id, s.name)}
                 />
               ))}
             </Section>

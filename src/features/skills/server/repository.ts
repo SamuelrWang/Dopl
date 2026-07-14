@@ -147,6 +147,8 @@ export interface InsertSkillArgs {
   /** Defaults to `'public'` (matches DB column default). App-level
    *  `createSkill` passes `'private'` for new items. */
   visibility?: "public" | "private";
+  /** Optional organizing label; null/omitted = unfiled. */
+  folder?: string | null;
   createdBy: string | null;
   source: SkillWriteSource;
 }
@@ -167,6 +169,7 @@ export async function insertSkill(args: InsertSkillArgs): Promise<Skill> {
       status: args.status ?? "active",
       agent_write_enabled: args.agentWriteEnabled ?? false,
       visibility: args.visibility ?? "public",
+      folder: args.folder ?? null,
       created_by: args.createdBy,
       last_edited_by: args.createdBy,
       last_edited_source: args.source,
@@ -189,6 +192,8 @@ export interface UpdateSkillPatch {
    *  enforces who may change it; this repo trusts whatever it gets. */
   visibility?: "public" | "private";
   accessMode?: "workspace" | "teams";
+  /** Organizing label; null clears it (unfiled). */
+  folder?: string | null;
   /** Display metadata (JSONB) — set by seed and duplicate, never by
    *  the REST/MCP update surface. */
   connectors?: unknown[];
@@ -222,6 +227,7 @@ export async function updateSkillRow(
     update.agent_write_enabled = patch.agentWriteEnabled;
   if (patch.visibility !== undefined) update.visibility = patch.visibility;
   if (patch.accessMode !== undefined) update.access_mode = patch.accessMode;
+  if (patch.folder !== undefined) update.folder = patch.folder;
   if (patch.connectors !== undefined) update.connectors = patch.connectors;
   if (patch.lastEditedBy !== undefined) update.last_edited_by = patch.lastEditedBy;
   if (patch.lastEditedSource !== undefined)

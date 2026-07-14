@@ -136,13 +136,6 @@ export declare class DoplClient {
     }>;
     updateSkill(slug: string, patch: SkillUpdatePatch): Promise<Skill>;
     deleteSkill(slug: string): Promise<void>;
-    listSkillFiles(slug: string): Promise<SkillFile[]>;
-    readSkillFile(slug: string, fileName: string): Promise<SkillFile>;
-    createSkillFile(slug: string, input: {
-        name: string;
-        body?: string;
-    }): Promise<SkillFile>;
-    writeSkillFile(slug: string, fileName: string, body: string, expectedVersion?: string | null): Promise<SkillWriteFileResult>;
-    renameSkillFile(slug: string, currentName: string, newName: string): Promise<SkillFile>;
-    deleteSkillFile(slug: string, fileName: string): Promise<void>;
+    readSkillBody(slug: string): Promise<SkillFile>;
+    writeSkillBody(slug: string, body: string, expectedVersion?: string | null): Promise<SkillWriteFileResult>;
 }

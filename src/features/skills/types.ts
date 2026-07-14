@@ -51,6 +51,9 @@ export interface Skill {
   agentWriteEnabled: boolean;
   visibility: Visibility;
   accessMode: SkillAccessMode;
+  /** Optional plain-text organizing label. Null = unfiled. Skills are
+   *  single-file and small; folders group the many. */
+  folder: string | null;
   /** Teams granted read access — populated only when accessMode is
    *  'teams', and only for the owner / workspace admins. */
   grantedTeamIds: string[];
@@ -63,9 +66,11 @@ export interface Skill {
 }
 
 /**
- * One file inside a skill. The canonical entry point is named
- * `SKILL.md` and holds the procedure body. Supplementary files
- * (e.g. `examples.md`) live in the same flat namespace.
+ * The single file backing a skill: its `SKILL.md` procedure body.
+ * Skills are single-file — the `skill_files` table stays as the
+ * storage layer but a partial unique index enforces exactly one active
+ * row per skill (see migration 20260711000000). Long reference material
+ * lives in knowledge bases, linked via `dopl://kb/<slug>` refs.
  */
 export interface SkillFile {
   id: string;
@@ -157,6 +162,7 @@ export interface SkillSummary {
   agentWriteEnabled: boolean;
   visibility: Visibility;
   accessMode: SkillAccessMode;
+  folder: string | null;
   updatedAt: string;
 }
 

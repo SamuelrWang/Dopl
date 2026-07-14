@@ -611,6 +611,30 @@ export async function countEntriesForBase(baseId: string): Promise<number> {
   return count ?? 0;
 }
 
+/**
+ * Batch id lookup for active entries — name resolution for ontology
+ * knowledge-attribute refs (`GET /api/knowledge/entries?ids=`). Meta
+ * only (bodies stripped) and workspace-filtered because callers pass
+ * untrusted ids; base-visibility gating happens in the service.
+ */
+export async function listEntriesByIds(
+  workspaceId: string,
+  ids: string[]
+): Promise<KnowledgeEntry[]> {
+  if (ids.length === 0) return [];
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("knowledge_entries")
+    .select(KNOWLEDGE_ENTRY_META_COLS)
+    .eq("workspace_id", workspaceId)
+    .in("id", ids)
+    .is("deleted_at", null);
+  if (error) throw error;
+  return ((data ?? []) as unknown as KnowledgeEntryMetaRow[]).map((row) =>
+    mapEntryRow({ ...row, body: "" })
+  );
+}
+
 export interface InsertEntryArgs {
   workspaceId: string;
   knowledgeBaseId: string;

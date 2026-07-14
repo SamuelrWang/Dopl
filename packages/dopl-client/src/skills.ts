@@ -2,9 +2,12 @@
  * Skills methods for `DoplClient`.
  *
  * Read paths (`listSkills`, `getSkill`) are surfaced to all callers.
- * Write paths (`createSkill`, `updateSkill`, `deleteSkill`, file CRUD)
+ * Write paths (`createSkill`, `updateSkill`, `deleteSkill`, body write)
  * are gated server-side by the per-skill `agent_write_enabled` toggle
  * for API-key (agent) callers; session callers bypass that check.
+ *
+ * Skills are single-file: the one SKILL.md body is read/written via
+ * `readSkillBody` / `writeSkillBody`.
  */
 
 import type { DoplTransport } from "./transport.js";
@@ -47,6 +50,8 @@ export interface CreateSkillInput {
   slug?: string;
   status?: SkillStatus;
   agentWriteEnabled?: boolean;
+  /** Optional organizing folder label. Empty/omitted = unfiled. */
+  folder?: string | null;
   body?: string;
 }
 
@@ -69,6 +74,8 @@ export interface UpdateSkillPatch {
   slug?: string;
   status?: SkillStatus;
   agentWriteEnabled?: boolean;
+  /** Organizing folder label. Empty → unfiled. */
+  folder?: string | null;
   /** Two-way sharing (owner or workspace admin only). Team-mode
    *  scoping (accessMode 'teams' + teamIds) is web-UI-managed. */
   visibility?: "public" | "private";
@@ -98,47 +105,22 @@ export async function deleteSkill(
   );
 }
 
-// ─── File CRUD ──────────────────────────────────────────────────────
+// ─── Body read / write (the single SKILL.md) ────────────────────────
 
-export async function listSkillFiles(
+export async function readSkillBody(
   t: DoplTransport,
   slug: string
-): Promise<SkillFile[]> {
-  const data = await t.request<{ files: SkillFile[] }>(
-    `/api/skills/${enc(slug)}/files`,
-    { toolName: "skill_list_files" }
-  );
-  return data.files;
-}
-
-export async function readSkillFile(
-  t: DoplTransport,
-  slug: string,
-  fileName: string
 ): Promise<SkillFile> {
   const data = await t.request<{ file: SkillFile }>(
-    `/api/skills/${enc(slug)}/files/${enc(fileName)}`,
-    { toolName: "skill_read_file" }
+    `/api/skills/${enc(slug)}/body`,
+    { toolName: "skill_read" }
   );
   return data.file;
 }
 
-export async function createSkillFile(
+export async function writeSkillBody(
   t: DoplTransport,
   slug: string,
-  input: { name: string; body?: string }
-): Promise<SkillFile> {
-  const data = await t.request<{ file: SkillFile }>(
-    `/api/skills/${enc(slug)}/files`,
-    { method: "POST", body: input, toolName: "skill_create_file" }
-  );
-  return data.file;
-}
-
-export async function writeSkillFile(
-  t: DoplTransport,
-  slug: string,
-  fileName: string,
   body: string,
   expectedVersion?: string | null
 ): Promise<SkillWriteFileResult> {
@@ -153,7 +135,7 @@ export async function writeSkillFile(
     version = undefined;
   } else if (expectedVersion === undefined) {
     try {
-      version = (await readSkillFile(t, slug, fileName)).updatedAt;
+      version = (await readSkillBody(t, slug)).updatedAt;
     } catch (e) {
       if (!(e instanceof DoplApiError) || e.status !== 404) throw e;
     }
@@ -161,38 +143,13 @@ export async function writeSkillFile(
     version = expectedVersion;
   }
   const data = await t.request<SkillWriteFileResult>(
-    `/api/skills/${enc(slug)}/files/${enc(fileName)}`,
+    `/api/skills/${enc(slug)}/body`,
     {
       method: "PUT",
       body: { body },
-      toolName: "skill_write_file",
+      toolName: "skill_write",
       customHeaders: version ? { "X-Updated-At": version } : undefined,
     }
   );
   return data;
-}
-
-export async function renameSkillFile(
-  t: DoplTransport,
-  slug: string,
-  currentName: string,
-  newName: string
-): Promise<SkillFile> {
-  const data = await t.request<{ file: SkillFile }>(
-    `/api/skills/${enc(slug)}/files/${enc(currentName)}`,
-    { method: "PATCH", body: { name: newName }, toolName: "skill_rename_file" }
-  );
-  return data.file;
-}
-
-export async function deleteSkillFile(
-  t: DoplTransport,
-  slug: string,
-  fileName: string
-): Promise<void> {
-  await t.requestNoContent(
-    `/api/skills/${enc(slug)}/files/${enc(fileName)}`,
-    "DELETE",
-    "skill_delete_file"
-  );
 }

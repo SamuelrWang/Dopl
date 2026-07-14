@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Copy, Download, History } from "lucide-react";
+import { AlertTriangle, Copy, Download, Folder, History } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/shared/lib/utils";
 import { EditableTitle } from "@/shared/layout/editable-title";
@@ -12,7 +12,6 @@ import { useCurrentProfile } from "@/shared/auth/use-current-profile";
 import { usePresence } from "@/shared/realtime/use-presence";
 import { AvatarStack } from "@/shared/ui/avatar-stack";
 import { toast } from "@/shared/ui/toast";
-import { AlertTriangle } from "lucide-react";
 // Cross-feature imports: DocEditor + SourceIcon live in features/knowledge
 // today. They're generic enough to belong in shared/ — moving is a future
 // refactor (per ENGINEERING.md §3 / §16). Keeping the imports as-is for
@@ -23,32 +22,22 @@ import {
   type SaveStatus,
 } from "@/shared/editor/doc-editor";
 import {
-  PRIMARY_SKILL_FILE_NAME,
   type ResolvedSkill,
   type Skill,
   type SkillFile,
 } from "@/features/skills/types";
 import {
   SkillApiError,
-  createSkillFile,
-  deleteSkillFile,
   duplicateSkill,
   fetchSkill,
-  readSkillFile,
-  renameSkillFile,
+  readSkillBody,
   updateSkill,
-  writeSkillFile,
+  writeSkillBody,
 } from "@/features/skills/client/api";
 import { useSkillsRealtime } from "../client/realtime";
-import { FileTabs } from "./skill-file-tabs";
 import { SkillHistoryPanel } from "./skill-history-panel";
 import { SkillShareControl } from "./skill-share-control";
-import {
-  errMessage,
-  primaryFileId,
-  renameErrDescription,
-  sortFiles,
-} from "./skill-view-utils";
+import { errMessage, primaryFile } from "./skill-view-utils";
 
 interface Props {
   resolved: ResolvedSkill;
@@ -67,14 +56,12 @@ const AUTOSAVE_DELAY_MS = 1500;
  * The skill editor pane — rendered inline in the skills browser's
  * detail pane (no separate route).
  *
- * Layout: title/share/save header, file tabs across the top, DocEditor
- * for the active file. Dropping a tab, renaming, or adding a file all
- * hit the API; body edits autosave per file.
- *
- * State model: `files` mirrors the server, updated optimistically on
- * each successful save / create / rename / delete. Per-file debounce
- * timers fire a PUT after 1.5s of inactivity. Parent must key this
- * component by skill id so switching skills remounts fresh state.
+ * Skills are single-file: this is a single-document editor for the one
+ * SKILL.md. Layout: title/share/save header, then the DocEditor for the
+ * body. Body edits autosave after 1.5s of inactivity, with the same
+ * optimistic-concurrency (412) conflict flow the KB editor uses. Parent
+ * must key this component by skill id so switching skills remounts fresh
+ * state.
  */
 export function SkillView({
   resolved,
@@ -89,24 +76,28 @@ export function SkillView({
   // user commits a change, then drive from local state so the bar
   // updates immediately without a route reload.
   const [displayedName, setDisplayedName] = useState(skill.name);
+  const [displayedFolder, setDisplayedFolder] = useState(skill.folder);
   const [displayedSharing, setDisplayedSharing] = useState({
     visibility: skill.visibility,
     accessMode: skill.accessMode,
     grantedTeamIds: skill.grantedTeamIds,
   });
   // Re-sync the mirrors when the server prop changes (sanctioned
-  // adjust-state-during-render pattern — no effect round-trip). The
-  // grant set is part of the comparison (joined — order is stable from
-  // the server) so a remote team-set change with an unchanged scope
-  // still refreshes the share popover.
+  // adjust-state-during-render pattern — no effect round-trip).
   const sharingKey = `${skill.visibility}:${skill.accessMode}:${skill.grantedTeamIds.join(",")}`;
   const [lastSkillProps, setLastSkillProps] = useState({
     name: skill.name,
+    folder: skill.folder,
     sharingKey,
   });
-  if (lastSkillProps.name !== skill.name || lastSkillProps.sharingKey !== sharingKey) {
-    setLastSkillProps({ name: skill.name, sharingKey });
+  if (
+    lastSkillProps.name !== skill.name ||
+    lastSkillProps.folder !== skill.folder ||
+    lastSkillProps.sharingKey !== sharingKey
+  ) {
+    setLastSkillProps({ name: skill.name, folder: skill.folder, sharingKey });
     setDisplayedName(skill.name);
+    setDisplayedFolder(skill.folder);
     setDisplayedSharing({
       visibility: skill.visibility,
       accessMode: skill.accessMode,
@@ -122,49 +113,27 @@ export function SkillView({
 
   const router = useRouter();
 
-  const [files, setFiles] = useState<SkillFile[]>(() =>
-    sortFiles(resolved.files)
-  );
-  const [activeFileId, setActiveFileId] = useState<string>(
-    () => primaryFileId(resolved.files) ?? resolved.files[0]?.id ?? ""
-  );
+  const initialFile = useMemo(() => primaryFile(resolved.files), [resolved.files]);
+  const [file, setFile] = useState<SkillFile>(initialFile);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [historyOpen, setHistoryOpen] = useState(false);
   // Bumped whenever a save lands so the open history panel refetches.
   const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
-  // 412 surfaced from the autosave path. While set, the conflicting
-  // file's editor shows a banner with explicit Save mine / Discard
-  // mine buttons; debounced autosave is paused for that file.
+  // 412 surfaced from the autosave path. While set, the editor shows a
+  // banner with explicit Save mine / Discard mine buttons; debounced
+  // autosave is paused.
   const [conflict, setConflict] = useState<{
-    fileId: string;
-    fileName: string;
     serverBody: string;
     serverUpdatedAt: string;
   } | null>(null);
 
-  const activeFile = useMemo(
-    () => files.find((f) => f.id === activeFileId) ?? files[0],
-    [files, activeFileId]
-  );
-
-  // Per-file debounce timers and pending-body cache. Pending bodies are
-  // held in a ref so the unmount cleanup can flush in-flight edits
-  // without going through stale React state.
-  const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(
-    new Map()
-  );
-  const pendingBodiesRef = useRef<Map<string, string>>(new Map());
-  // Filename + baseline updatedAt tracked per file so the unmount-flush
-  // can use the freshest precondition without going through React
-  // state. Updated on every successful save.
-  const fileMetaRef = useRef<
-    Map<string, { name: string; updatedAt: string }>
-  >(new Map());
-  useEffect(() => {
-    for (const f of files) {
-      fileMetaRef.current.set(f.id, { name: f.name, updatedAt: f.updatedAt });
-    }
-  }, [files]);
+  // Debounce timer + pending-body cache. Held in refs so the unmount
+  // cleanup can flush the in-flight edit without stale React state.
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingBodyRef = useRef<string | null>(null);
+  // Baseline `updatedAt` for the optimistic-concurrency precondition;
+  // updated on every successful save.
+  const baselineRef = useRef(initialFile.updatedAt);
   const slugRef = useRef(skill.slug);
   useEffect(() => {
     slugRef.current = skill.slug;
@@ -190,177 +159,43 @@ export function SkillView({
     (p) => p.userId !== selfProfile?.userId
   );
 
-  const flushSave = useCallback(
-    async (fileId: string, fileName: string, body: string) => {
-      // Don't fire while this exact file is in conflict — autosave
-      // would just 412 again.
-      if (conflictRef.current && conflictRef.current.fileId === fileId) {
-        return;
-      }
-      pendingBodiesRef.current.delete(fileId);
-      const baseline = fileMetaRef.current.get(fileId)?.updatedAt;
-      setSaveStatus("saving");
-      try {
-        const updated = await writeSkillFile(
-          slugRef.current,
-          fileName,
-          body,
-          undefined,
-          baseline
-        );
-        fileMetaRef.current.set(updated.id, {
-          name: updated.name,
-          updatedAt: updated.updatedAt,
-        });
-        setFiles((prev) =>
-          prev.map((f) => (f.id === fileId ? updated : f))
-        );
-        setHistoryRefreshKey((k) => k + 1);
-        setSaveStatus("saved");
-        setTimeout(() => {
-          setSaveStatus((prev) => (prev === "saved" ? "idle" : prev));
-        }, 1800);
-      } catch (err) {
-        if (err instanceof SkillApiError && err.status === 412) {
-          // Pull the server's current state so the user can decide
-          // (Save mine / Discard mine). Re-buffer their typing for
-          // the "Save mine" path.
-          pendingBodiesRef.current.set(fileId, body);
-          try {
-            const fresh = await readSkillFile(
-              slugRef.current,
-              fileName
-            );
-            fileMetaRef.current.set(fresh.id, {
-              name: fresh.name,
-              updatedAt: fresh.updatedAt,
-            });
-            setConflict({
-              fileId,
-              fileName,
-              serverBody: fresh.body,
-              serverUpdatedAt: fresh.updatedAt,
-            });
-          } catch {
-            toast({
-              title: "Edited elsewhere",
-              description:
-                "Couldn't load the latest server version — please refresh.",
-            });
-          }
-          setSaveStatus("error");
-          return;
-        }
-        setSaveStatus("error");
-        toast({ title: "Couldn't save", description: errMessage(err) });
-      }
-    },
-    []
-  );
-
-  const scheduleSave = useCallback(
-    (fileId: string, fileName: string, body: string) => {
-      pendingBodiesRef.current.set(fileId, body);
-      setSaveStatus("dirty");
-      const existing = timersRef.current.get(fileId);
-      if (existing) clearTimeout(existing);
-      const timer = setTimeout(() => {
-        timersRef.current.delete(fileId);
-        const latest = pendingBodiesRef.current.get(fileId);
-        if (latest === undefined) return;
-        void flushSave(fileId, fileName, latest);
-      }, AUTOSAVE_DELAY_MS);
-      timersRef.current.set(fileId, timer);
-    },
-    [flushSave]
-  );
-
-  // Cleanup any pending timers on unmount. Fire-and-forget the final
-  // PUTs so an entry-switch or page nav doesn't drop the last 1.5s of
-  // typing. Each PUT carries the file's baseline updatedAt so a
-  // racing concurrent writer 412s us instead of getting silently
-  // overwritten — same precondition the live autosave uses. The
-  // dropped 412s end up in the dev console only (the component is
-  // unmounting, no UI to surface a banner into).
-  useEffect(() => {
-    const timers = timersRef.current;
-    const pending = pendingBodiesRef.current;
-    const meta = fileMetaRef.current;
-    return () => {
-      const slug = slugRef.current;
-      const conflictedId = conflictRef.current?.fileId;
-      for (const [fileId, timer] of timers) {
-        clearTimeout(timer);
-        // Skip files that are mid-conflict — silent unmount-saves
-        // while the user was about to choose would overwrite their
-        // resolution intent.
-        if (fileId === conflictedId) continue;
-        const body = pending.get(fileId);
-        const m = meta.get(fileId);
-        if (body !== undefined && m) {
-          writeSkillFile(slug, m.name, body, undefined, m.updatedAt).catch(
-            (err: unknown) => {
-              if (err instanceof SkillApiError && err.status === 412) {
-                console.warn(
-                  "[skills] unmount autosave dropped (412 stale)",
-                  { slug, file: m.name }
-                );
-              }
-            }
-          );
-        }
-      }
-      timers.clear();
-      pending.clear();
-    };
-  }, []);
-
-  // Conflict resolution: keep the user's local edits, force-save over
-  // the server using the latest known precondition. If yet another
-  // writer slipped in between fetch and PATCH, we 412 again and refresh
-  // the conflict — never silently overwrite an unseen newer version.
-  const handleKeepMine = useCallback(async () => {
-    const c = conflictRef.current;
-    if (!c) return;
-    const body = pendingBodiesRef.current.get(c.fileId);
-    if (body === undefined) return;
+  const flushSave = useCallback(async (body: string) => {
+    // Don't fire while in conflict — autosave would just 412 again.
+    if (conflictRef.current) return;
+    pendingBodyRef.current = null;
     setSaveStatus("saving");
     try {
-      const saved = await writeSkillFile(
+      const updated = await writeSkillBody(
         slugRef.current,
-        c.fileName,
         body,
         undefined,
-        c.serverUpdatedAt
+        baselineRef.current
       );
-      fileMetaRef.current.set(saved.id, {
-        name: saved.name,
-        updatedAt: saved.updatedAt,
-      });
-      setFiles((prev) => prev.map((f) => (f.id === saved.id ? saved : f)));
-      pendingBodiesRef.current.delete(c.fileId);
-      setConflict(null);
+      baselineRef.current = updated.updatedAt;
+      setFile(updated);
+      setHistoryRefreshKey((k) => k + 1);
       setSaveStatus("saved");
       setTimeout(() => {
         setSaveStatus((prev) => (prev === "saved" ? "idle" : prev));
       }, 1800);
     } catch (err) {
       if (err instanceof SkillApiError && err.status === 412) {
+        // Pull the server's current state so the user can decide
+        // (Save mine / Discard mine). Re-buffer their typing.
+        pendingBodyRef.current = body;
         try {
-          const fresh = await readSkillFile(slugRef.current, c.fileName);
-          fileMetaRef.current.set(fresh.id, {
-            name: fresh.name,
-            updatedAt: fresh.updatedAt,
-          });
+          const fresh = await readSkillBody(slugRef.current);
+          baselineRef.current = fresh.updatedAt;
           setConflict({
-            fileId: c.fileId,
-            fileName: c.fileName,
             serverBody: fresh.body,
             serverUpdatedAt: fresh.updatedAt,
           });
         } catch {
-          // Network blip — leave the existing conflict snapshot in
-          // place; user can retry.
+          toast({
+            title: "Edited elsewhere",
+            description:
+              "Couldn't load the latest server version — please refresh.",
+          });
         }
         setSaveStatus("error");
         return;
@@ -370,198 +205,211 @@ export function SkillView({
     }
   }, []);
 
-  // Conflict resolution: discard the user's local typing, reload the
-  // server's content into the editor.
+  const scheduleSave = useCallback(
+    (body: string) => {
+      pendingBodyRef.current = body;
+      setSaveStatus("dirty");
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => {
+        timerRef.current = null;
+        const latest = pendingBodyRef.current;
+        if (latest === null) return;
+        void flushSave(latest);
+      }, AUTOSAVE_DELAY_MS);
+    },
+    [flushSave]
+  );
+
+  // Cleanup any pending timer on unmount. Fire-and-forget the final PUT
+  // so a skill-switch or page nav doesn't drop the last 1.5s of typing.
+  // The PUT carries the baseline updatedAt so a racing writer 412s us
+  // instead of getting silently overwritten. Skipped mid-conflict.
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      if (conflictRef.current) return;
+      const body = pendingBodyRef.current;
+      if (body === null) return;
+      writeSkillBody(slugRef.current, body, undefined, baselineRef.current).catch(
+        (err: unknown) => {
+          if (err instanceof SkillApiError && err.status === 412) {
+            console.warn("[skills] unmount autosave dropped (412 stale)", {
+              slug: slugRef.current,
+            });
+          }
+        }
+      );
+      pendingBodyRef.current = null;
+    };
+  }, []);
+
+  // Conflict resolution: keep the user's local edits, force-save over
+  // the server using the latest known precondition. Another racing
+  // writer re-triggers the conflict — never silently overwrite.
+  const handleKeepMine = useCallback(async () => {
+    const c = conflictRef.current;
+    if (!c) return;
+    const body = pendingBodyRef.current;
+    if (body === null) return;
+    setSaveStatus("saving");
+    try {
+      const saved = await writeSkillBody(
+        slugRef.current,
+        body,
+        undefined,
+        c.serverUpdatedAt
+      );
+      baselineRef.current = saved.updatedAt;
+      setFile(saved);
+      pendingBodyRef.current = null;
+      setConflict(null);
+      setSaveStatus("saved");
+      setTimeout(() => {
+        setSaveStatus((prev) => (prev === "saved" ? "idle" : prev));
+      }, 1800);
+    } catch (err) {
+      if (err instanceof SkillApiError && err.status === 412) {
+        try {
+          const fresh = await readSkillBody(slugRef.current);
+          baselineRef.current = fresh.updatedAt;
+          setConflict({
+            serverBody: fresh.body,
+            serverUpdatedAt: fresh.updatedAt,
+          });
+        } catch {
+          // Network blip — leave the existing conflict snapshot; retry.
+        }
+        setSaveStatus("error");
+        return;
+      }
+      setSaveStatus("error");
+      toast({ title: "Couldn't save", description: errMessage(err) });
+    }
+  }, []);
+
+  // Conflict resolution: discard local typing, reload the server body.
   const handleDiscardMine = useCallback(() => {
     const c = conflictRef.current;
     if (!c) return;
-    pendingBodiesRef.current.delete(c.fileId);
-    fileMetaRef.current.set(c.fileId, {
-      name: c.fileName,
+    pendingBodyRef.current = null;
+    baselineRef.current = c.serverUpdatedAt;
+    setFile((prev) => ({
+      ...prev,
+      body: c.serverBody,
       updatedAt: c.serverUpdatedAt,
-    });
-    setFiles((prev) =>
-      prev.map((f) =>
-        f.id === c.fileId
-          ? { ...f, body: c.serverBody, updatedAt: c.serverUpdatedAt }
-          : f
-      )
-    );
+    }));
     setConflict(null);
     setSaveStatus("idle");
   }, []);
 
-  // Pull the freshest skill + files from the server and replace local
-  // state. Callers MUST ensure the editor is at rest first (see the
-  // guards below) — a replace bumps the active file's `updatedAt`, which
-  // is part of the editor's resetKey, so calling this mid-edit would
-  // remount the editor under the user.
+  // Pull the freshest skill + body from the server and replace local
+  // state. Callers MUST ensure the editor is at rest first (a replace
+  // bumps updatedAt, part of the editor's resetKey, so a mid-edit pull
+  // would remount the editor under the user).
   const pullFreshSkill = useCallback(async () => {
     const fresh = await fetchSkill(slugRef.current).catch(() => null);
     if (!fresh) return;
-    setFiles(sortFiles(fresh.files));
-    // If the active tab still exists in the new payload, keep it;
-    // otherwise fall back to SKILL.md (or the first file).
-    setActiveFileId((prev) => {
-      if (fresh.files.some((f) => f.id === prev)) return prev;
-      return primaryFileId(fresh.files) ?? fresh.files[0]?.id ?? prev;
-    });
+    const next = primaryFile(fresh.files);
+    baselineRef.current = next.updatedAt;
+    setFile(next);
   }, []);
 
   const isEditorAtRest = useCallback(
     () =>
-      timersRef.current.size === 0 &&
-      pendingBodiesRef.current.size === 0 &&
+      timerRef.current === null &&
+      pendingBodyRef.current === null &&
       saveStatusRef.current !== "saving" &&
       conflictRef.current === null,
     []
   );
 
   // When the user switches back to this tab AND nothing is mid-save,
-  // pull the freshest version of the skill so changes another tab or
-  // an MCP agent saved while away show up automatically.
+  // pull the freshest version so changes another tab or an MCP agent
+  // saved while away show up automatically.
   useRefetchOnFocus(pullFreshSkill, {
-    skip: () =>
-      timersRef.current.size > 0 || pendingBodiesRef.current.size > 0,
+    skip: () => timerRef.current !== null || pendingBodyRef.current !== null,
   });
 
-  // Live updates (Tier 2): another user / MCP agent saving a file or skill
-  // metadata pushes here. Only pull when the editor is fully at rest so a
-  // remote change to ANY file never remounts the active editor under the
-  // user. While they're editing, the refetch is skipped and self-heals on
-  // the next event once they pause (their own save echoes a realtime event).
+  // Live updates (Tier 2): another user / MCP agent saving the body or
+  // skill metadata pushes here. Only pull when the editor is fully at
+  // rest so a remote change never remounts the active editor.
   const onRealtimeChange = useCallback(() => {
     if (!isEditorAtRest()) return;
     void pullFreshSkill();
   }, [isEditorAtRest, pullFreshSkill]);
   useSkillsRealtime(skill.workspaceId, onRealtimeChange);
 
-  const updateActiveBody = useCallback(
+  const updateBody = useCallback(
     (body: string) => {
-      if (!activeFile) return;
-      setFiles((prev) =>
-        prev.map((f) => (f.id === activeFile.id ? { ...f, body } : f))
-      );
-      // fileMetaRef (above) is the canonical filename + updatedAt
-      // source for the unmount-flush — no parallel pending-name
-      // tracking needed.
-      scheduleSave(activeFile.id, activeFile.name, body);
+      setFile((prev) => ({ ...prev, body }));
+      scheduleSave(body);
     },
-    [activeFile, scheduleSave]
-  );
-
-  const handleAddFile = useCallback(async () => {
-    const existing = new Set(files.map((f) => f.name));
-    let i = 1;
-    let name = `untitled-${i}.md`;
-    while (existing.has(name)) {
-      i += 1;
-      name = `untitled-${i}.md`;
-    }
-    try {
-      const file = await createSkillFile(skill.slug, { name });
-      setFiles((prev) => sortFiles([...prev, file]));
-      setActiveFileId(file.id);
-    } catch (err) {
-      toast({ title: "Couldn't create file", description: errMessage(err) });
-    }
-  }, [files, skill.slug]);
-
-  const handleRemoveFile = useCallback(
-    async (file: SkillFile) => {
-      if (file.name === PRIMARY_SKILL_FILE_NAME) {
-        toast({
-          title: "SKILL.md can't be deleted",
-          description: "Every skill needs a primary file.",
-        });
-        return;
-      }
-      try {
-        await deleteSkillFile(skill.slug, file.name);
-        setFiles((prev) => prev.filter((f) => f.id !== file.id));
-        if (activeFileId === file.id) {
-          const next =
-            files.find(
-              (f) => f.name === PRIMARY_SKILL_FILE_NAME && f.id !== file.id
-            ) ?? files.find((f) => f.id !== file.id);
-          if (next) setActiveFileId(next.id);
-        }
-      } catch (err) {
-        toast({ title: "Couldn't delete file", description: errMessage(err) });
-      }
-    },
-    [activeFileId, files, skill.slug]
-  );
-
-  const handleRenameFile = useCallback(
-    async (file: SkillFile, newName: string) => {
-      if (file.name === PRIMARY_SKILL_FILE_NAME) return;
-      const cleaned = newName.trim();
-      if (!cleaned || cleaned === file.name) return;
-      try {
-        const renamed = await renameSkillFile(skill.slug, file.name, cleaned);
-        setFiles((prev) =>
-          prev.map((f) => (f.id === file.id ? renamed : f))
-        );
-      } catch (err) {
-        // Echo to the dev console so the actual server message is
-        // recoverable from DevTools when the user reports a failure.
-        console.error("[skills] rename failed", { file: file.name, target: cleaned, err });
-        toast({
-          title: "Couldn't rename file",
-          description: renameErrDescription(err, file.name, cleaned),
-        });
-      }
-    },
-    [skill.slug]
+    [scheduleSave]
   );
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col antialiased">
       <div className="flex h-11 shrink-0 items-center gap-2 border-b border-border-subtle px-4">
         <div className="flex items-center gap-2 min-w-0 flex-1">
-            <EditableTitle
-              value={displayedName}
-              onSave={async (next) => {
-                const saved = await updateSkill(skill.slug, { name: next });
-                setDisplayedName(saved.name);
-                // The browser's list pane renders server-fetched names —
-                // refresh so the row matches the new title.
+          <EditableTitle
+            value={displayedName}
+            onSave={async (next) => {
+              const saved = await updateSkill(skill.slug, { name: next });
+              setDisplayedName(saved.name);
+              // The browser's list pane renders server-fetched names —
+              // refresh so the row matches the new title.
+              router.refresh();
+            }}
+            onError={(err) =>
+              toast({ title: "Couldn't rename", description: errMessage(err) })
+            }
+            placeholder="Untitled skill"
+          />
+          <FolderControl
+            folder={displayedFolder}
+            canEdit={canEdit}
+            onSave={async (next) => {
+              try {
+                const saved = await updateSkill(skill.slug, { folder: next });
+                setDisplayedFolder(saved.folder);
+                // Left list groups by folder — refresh so the row re-homes.
                 router.refresh();
-              }}
-              onError={(err) =>
-                toast({ title: "Couldn't rename", description: errMessage(err) })
+              } catch (err) {
+                toast({
+                  title: "Couldn't change folder",
+                  description: errMessage(err),
+                });
               }
-              placeholder="Untitled skill"
-            />
-            <SkillShareControl
-              skill={{ ...skill, ...displayedSharing }}
-              workspaceSlug={workspaceSlug}
-              currentUserId={currentUserId}
-              isAdmin={isAdmin}
-              onShareChange={async (scope, teamIds) => {
-                try {
-                  const saved = await updateSkill(
-                    skill.slug,
-                    scope === "private"
-                      ? { visibility: "private" }
-                      : scope === "team"
-                        ? { visibility: "public", accessMode: "teams", teamIds }
-                        : { visibility: "public", accessMode: "workspace" }
-                  );
-                  setDisplayedSharing({
-                    visibility: saved.visibility,
-                    accessMode: saved.accessMode,
-                    grantedTeamIds: saved.grantedTeamIds,
-                  });
-                } catch (err) {
-                  toast({
-                    title: "Couldn't change sharing",
-                    description: errMessage(err),
-                  });
-                }
-              }}
-            />
+            }}
+          />
+          <SkillShareControl
+            skill={{ ...skill, ...displayedSharing }}
+            workspaceSlug={workspaceSlug}
+            currentUserId={currentUserId}
+            isAdmin={isAdmin}
+            onShareChange={async (scope, teamIds) => {
+              try {
+                const saved = await updateSkill(
+                  skill.slug,
+                  scope === "private"
+                    ? { visibility: "private" }
+                    : scope === "team"
+                      ? { visibility: "public", accessMode: "teams", teamIds }
+                      : { visibility: "public", accessMode: "workspace" }
+                );
+                setDisplayedSharing({
+                  visibility: saved.visibility,
+                  accessMode: saved.accessMode,
+                  grantedTeamIds: saved.grantedTeamIds,
+                });
+              } catch (err) {
+                toast({
+                  title: "Couldn't change sharing",
+                  description: errMessage(err),
+                });
+              }
+            }}
+          />
         </div>
         <AvatarStack users={otherEditors} />
         <SaveStatusIndicator state={saveStatus} />
@@ -586,27 +434,16 @@ export function SkillView({
         <div className="h-full overflow-hidden flex">
           {/* Main column */}
           <div className="flex-1 min-w-0 flex flex-col">
-            <FileTabs
-              files={files}
-              activeId={activeFile?.id ?? ""}
-              canEdit={canEdit}
-              onSelect={setActiveFileId}
-              onAdd={handleAddFile}
-              onRemove={handleRemoveFile}
-              onRename={handleRenameFile}
-            />
             <div className="flex-1 min-h-0 overflow-y-auto">
-              {activeFile && conflict && conflict.fileId === activeFile.id && (
+              {conflict && (
                 <div
                   role="alert"
                   className="flex flex-wrap items-center gap-2 border-b border-warning/25 bg-warning/5 px-4 py-2 text-small leading-relaxed text-text-primary"
                 >
                   <AlertTriangle size={13} className="shrink-0 text-warning" />
                   <span className="min-w-0 flex-1">
-                    <strong className="font-semibold">
-                      Edited elsewhere.
-                    </strong>{" "}
-                    The server has a newer version of this file — your edits
+                    <strong className="font-semibold">Edited elsewhere.</strong>{" "}
+                    The server has a newer version of this skill — your edits
                     are preserved until you choose.
                   </span>
                   <button
@@ -623,26 +460,19 @@ export function SkillView({
                     disabled={saveStatus === "saving"}
                     className="rounded-md border border-warning/30 bg-warning/10 px-2.5 py-1 text-caption font-medium text-text-primary transition-colors hover:bg-warning/15 disabled:opacity-40"
                   >
-                    {saveStatus === "saving"
-                      ? "Saving…"
-                      : "Save mine, overwrite"}
+                    {saveStatus === "saving" ? "Saving…" : "Save mine, overwrite"}
                   </button>
                 </div>
               )}
-              {activeFile && (
-                <DocEditor
-                  key={activeFile.id}
-                  initialMarkdown={activeFile.body}
-                  // Including `updatedAt` in resetKey forces DocEditor
-                  // to re-seed Tiptap when the user picks "Discard mine,
-                  // reload" (which mutates the file's body+updatedAt
-                  // in-place). Editor still skips redundant setContent
-                  // calls thanks to the content-equality guard inside
-                  // DocEditor.
-                  resetKey={`${activeFile.id}:${activeFile.updatedAt}`}
-                  onChange={updateActiveBody}
-                />
-              )}
+              <DocEditor
+                // Including `updatedAt` in resetKey forces DocEditor to
+                // re-seed Tiptap when the user picks "Discard mine,
+                // reload" (which mutates body+updatedAt in-place). Editor
+                // skips redundant setContent thanks to its equality guard.
+                resetKey={`${file.id}:${file.updatedAt}`}
+                initialMarkdown={file.body}
+                onChange={updateBody}
+              />
             </div>
           </div>
 
@@ -661,6 +491,80 @@ export function SkillView({
         </div>
       </div>
     </div>
+  );
+}
+
+// ── Folder control (inline assign / rename) ─────────────────────────
+
+function FolderControl({
+  folder,
+  canEdit,
+  onSave,
+}: {
+  folder: string | null;
+  canEdit: boolean;
+  onSave: (next: string | null) => Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(folder ?? "");
+  // Re-sync the draft when the committed folder changes (sanctioned
+  // adjust-state-during-render pattern — no effect round-trip).
+  const [lastFolder, setLastFolder] = useState(folder);
+  if (lastFolder !== folder) {
+    setLastFolder(folder);
+    setDraft(folder ?? "");
+  }
+
+  const commit = () => {
+    setEditing(false);
+    const next = draft.trim() === "" ? null : draft.trim();
+    if (next !== (folder ?? null)) void onSave(next);
+  };
+
+  if (!canEdit) {
+    if (!folder) return null;
+    return (
+      <span className="flex shrink-0 items-center gap-1 text-caption text-text-muted">
+        <Folder size={11} />
+        {folder}
+      </span>
+    );
+  }
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        value={draft}
+        maxLength={80}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            commit();
+          } else if (e.key === "Escape") {
+            setDraft(folder ?? "");
+            setEditing(false);
+          }
+        }}
+        placeholder="Folder"
+        aria-label="Skill folder"
+        className="concave-field h-6 w-32 rounded-md px-2 text-caption text-text-primary"
+      />
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => setEditing(true)}
+      title={folder ? `Folder: ${folder}` : "Add to a folder"}
+      className="btn-light flex h-6 shrink-0 cursor-pointer items-center gap-1 rounded-md px-2 text-caption text-text-secondary"
+    >
+      <Folder size={11} />
+      {folder ?? "Add folder"}
+    </button>
   );
 }
 

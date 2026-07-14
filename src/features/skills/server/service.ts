@@ -26,17 +26,12 @@ import type {
 import { parseSkillBody, type SkillRef } from "../skill-body";
 import type {
   SkillCreateInput,
-  SkillFileCreateInput,
-  SkillFileRenameInput,
   SkillFileWriteInput,
   SkillUpdateInput,
 } from "../schema";
 import {
-  SkillAgentWriteDisabledError,
-  SkillFileConflictError,
   SkillFileNotFoundError,
   SkillNotFoundError,
-  SkillPrimaryFileImmutableError,
   SkillSlugConflictError,
   SkillStaleVersionError,
   WorkspaceKeyPrivateSkillError,
@@ -220,17 +215,6 @@ export async function listFiles(
   return repo.listFilesForSkill(skill.id, opts);
 }
 
-export async function readFile(
-  ctx: SkillContext,
-  slug: string,
-  fileName: string
-): Promise<SkillFile> {
-  const skill = await getSkillBySlug(ctx, slug);
-  const file = await repo.findFileByName(skill.id, fileName);
-  if (!file) throw new SkillFileNotFoundError(slug, fileName);
-  return file;
-}
-
 /**
  * Resolves a skill for the agent: returns the skill record, every file,
  * and a per-reference availability check. Pointer-with-hint resolution
@@ -314,6 +298,7 @@ export async function createSkill(
         // messaging in sync with reality.
         agentWriteEnabled: input.agentWriteEnabled ?? true,
         visibility: resolvedVisibility,
+        folder: normalizeFolder(input.folder),
         createdBy: ctx.userId,
         source: ctx.source,
       });
@@ -466,6 +451,8 @@ export async function updateSkill(
         slug: patch.slug,
         status: patch.status,
         agentWriteEnabled: nextAgentWriteEnabled,
+        folder:
+          patch.folder === undefined ? undefined : normalizeFolder(patch.folder),
         ...sharingPatch,
         lastEditedBy: ctx.userId,
         lastEditedSource: ctx.source,
@@ -550,74 +537,34 @@ export async function deleteSkill(
   await history.recordEvent({ ctx, skillId: skill.id, type: "skill.trashed" });
 }
 
-// ─── File writes ────────────────────────────────────────────────────
+// ─── Body read / write (the single SKILL.md) ────────────────────────
 
-export async function createFile(
+/** Fetch the skill's one SKILL.md row (its procedure body + version). */
+export async function readBody(
   ctx: SkillContext,
-  slug: string,
-  input: SkillFileCreateInput
+  slug: string
 ): Promise<SkillFile> {
   const skill = await getSkillBySlug(ctx, slug);
-  await assertAgentWriteAllowed(ctx, skill);
-  if (input.name === PRIMARY_SKILL_FILE_NAME) {
-    // The primary file is created by op=create and is immutable via the
-    // file ops — reject explicitly (rather than as a generic "already
-    // exists" conflict) so the reason is clear even if no SKILL.md row
-    // currently exists. Mirrors the rename/delete guards below.
-    throw new SkillPrimaryFileImmutableError(
-      "SKILL.md is the primary file (created with the skill) and can't be added via create_file."
-    );
-  }
-  const existing = await repo.findFileByName(skill.id, input.name);
-  if (existing) throw new SkillFileConflictError(input.name);
-  const siblings = await repo.listFilesForSkill(skill.id, { includeBody: false });
-  const nextPos =
-    siblings.length === 0 ? 1 : Math.max(...siblings.map((f) => f.position)) + 1;
-  let created: SkillFile;
-  try {
-    created = await repo.insertFile({
-      workspaceId: ctx.workspaceId,
-      skillId: skill.id,
-      name: input.name,
-      body: input.body ?? "",
-      position: nextPos,
-      createdBy: ctx.userId,
-      source: ctx.source,
-    });
-  } catch (err) {
-    if (repo.pgErrorCode(err) === "23505") {
-      throw new SkillFileConflictError(input.name);
-    }
-    throw err;
-  }
-  await history.recordVersion({
-    ctx,
-    skillId: skill.id,
-    fileId: created.id,
-    fileName: created.name,
-    body: created.body,
-  });
-  await history.recordEvent({
-    ctx,
-    skillId: skill.id,
-    type: "file.created",
-    fileId: created.id,
-    detail: { name: created.name },
-  });
-  return created;
+  const file = await repo.findFileByName(skill.id, PRIMARY_SKILL_FILE_NAME);
+  if (!file) throw new SkillFileNotFoundError(slug, PRIMARY_SKILL_FILE_NAME);
+  return file;
 }
 
-export async function writeFile(
+/**
+ * Overwrite the skill's SKILL.md body (PUT semantics). Preserves the
+ * optimistic-versioning CAS + history snapshotting the old per-file
+ * `writeFile` had — it now always targets the single primary file.
+ */
+export async function writeBody(
   ctx: SkillContext,
   slug: string,
-  fileName: string,
   input: SkillFileWriteInput,
   expectedUpdatedAt?: string
 ): Promise<{ file: SkillFile; skill: Skill }> {
   const skill = await getSkillBySlug(ctx, slug);
   await assertAgentWriteAllowed(ctx, skill);
-  const file = await repo.findFileByName(skill.id, fileName);
-  if (!file) throw new SkillFileNotFoundError(slug, fileName);
+  const file = await repo.findFileByName(skill.id, PRIMARY_SKILL_FILE_NAME);
+  if (!file) throw new SkillFileNotFoundError(slug, PRIMARY_SKILL_FILE_NAME);
   if (expectedUpdatedAt && file.updatedAt !== expectedUpdatedAt) {
     throw new SkillStaleVersionError(expectedUpdatedAt, file.updatedAt);
   }
@@ -637,7 +584,7 @@ export async function writeFile(
   );
   // null = atomic CAS lost the race; re-fetch for the actual version.
   if (saved === null) {
-    const fresh = await repo.findFileByName(skill.id, fileName);
+    const fresh = await repo.findFileByName(skill.id, PRIMARY_SKILL_FILE_NAME);
     throw new SkillStaleVersionError(
       expectedUpdatedAt!,
       fresh?.updatedAt ?? "concurrent"
@@ -651,69 +598,6 @@ export async function writeFile(
     body: saved.body,
   });
   return { file: saved, skill };
-}
-
-export async function renameFile(
-  ctx: SkillContext,
-  slug: string,
-  currentName: string,
-  input: SkillFileRenameInput
-): Promise<SkillFile> {
-  const skill = await getSkillBySlug(ctx, slug);
-  await assertAgentWriteAllowed(ctx, skill);
-  if (currentName === PRIMARY_SKILL_FILE_NAME) {
-    throw new SkillPrimaryFileImmutableError("SKILL.md cannot be renamed");
-  }
-  if (input.name === PRIMARY_SKILL_FILE_NAME) {
-    throw new SkillFileConflictError(input.name);
-  }
-  const file = await repo.findFileByName(skill.id, currentName);
-  if (!file) throw new SkillFileNotFoundError(slug, currentName);
-  if (input.name === currentName) return file;
-  const collision = await repo.findFileByName(skill.id, input.name);
-  if (collision) throw new SkillFileConflictError(input.name);
-  try {
-    const renamed = await repo.updateFileRow(file.id, {
-      name: input.name,
-      lastEditedBy: ctx.userId,
-      lastEditedSource: ctx.source,
-    });
-    await history.recordEvent({
-      ctx,
-      skillId: skill.id,
-      type: "file.renamed",
-      fileId: file.id,
-      detail: { from: currentName, to: input.name },
-    });
-    return renamed;
-  } catch (err) {
-    if (repo.pgErrorCode(err) === "23505") {
-      throw new SkillFileConflictError(input.name);
-    }
-    throw err;
-  }
-}
-
-export async function deleteFile(
-  ctx: SkillContext,
-  slug: string,
-  fileName: string
-): Promise<void> {
-  const skill = await getSkillBySlug(ctx, slug);
-  await assertAgentWriteAllowed(ctx, skill);
-  if (fileName === PRIMARY_SKILL_FILE_NAME) {
-    throw new SkillPrimaryFileImmutableError("SKILL.md cannot be deleted");
-  }
-  const file = await repo.findFileByName(skill.id, fileName);
-  if (!file) throw new SkillFileNotFoundError(slug, fileName);
-  await repo.markFileDeleted(file.id);
-  await history.recordEvent({
-    ctx,
-    skillId: skill.id,
-    type: "file.trashed",
-    fileId: file.id,
-    detail: { name: file.name },
-  });
 }
 
 // ─── Trash ──────────────────────────────────────────────────────────
@@ -773,30 +657,6 @@ export async function restoreSkill(
   await assertAgentWriteAllowed(ctx, skill);
   const restored = await repo.restoreSkillRow(id);
   await history.recordEvent({ ctx, skillId: skill.id, type: "skill.restored" });
-  return restored;
-}
-
-export async function restoreSkillFile(
-  ctx: SkillContext,
-  id: string
-): Promise<SkillFile> {
-  const file = await repo.findFileById(id, true);
-  if (!file) throw new SkillFileNotFoundError("(unknown)", id);
-  // Workspace scope — files don't carry workspace_id directly in code-
-  // path but the column exists; cross-check via the parent skill so a
-  // forged id from another workspace still 404s.
-  const skill = await repo.findSkillById(ctx.workspaceId, file.skillId, true);
-  if (!skill) throw new SkillNotFoundError(file.skillId);
-  await assertTrashedSkillVisible(ctx, skill);
-  await assertAgentWriteAllowed(ctx, skill);
-  const restored = await repo.restoreFileRow(id);
-  await history.recordEvent({
-    ctx,
-    skillId: skill.id,
-    type: "file.restored",
-    fileId: restored.id,
-    detail: { name: restored.name },
-  });
   return restored;
 }
 
@@ -872,8 +732,8 @@ export async function assertAgentWriteAllowed(
 // ─── Duplicate ──────────────────────────────────────────────────────
 
 /**
- * Fork a skill: copies metadata + every file into a new private draft
- * ("<name> (copy)"). Composed from createSkill/createFile so history
+ * Fork a skill: copies metadata + the single SKILL.md into a new
+ * private draft ("<name> (copy)"). Composed from createSkill so history
  * records the fork like any other authored skill.
  */
 export async function duplicateSkill(
@@ -881,8 +741,7 @@ export async function duplicateSkill(
   slug: string
 ): Promise<{ skill: Skill; primaryFile: SkillFile }> {
   const source = await getSkillBySlug(ctx, slug);
-  const files = await repo.listFilesForSkill(source.id);
-  const primary = files.find((f) => f.name === PRIMARY_SKILL_FILE_NAME);
+  const primary = await repo.findFileByName(source.id, PRIMARY_SKILL_FILE_NAME);
 
   const created = await createSkill(ctx, {
     name: `${source.name} (copy)`,
@@ -890,6 +749,7 @@ export async function duplicateSkill(
     whenToUse: source.whenToUse,
     whenNotToUse: source.whenNotToUse,
     status: "draft",
+    folder: source.folder,
     body: primary?.body ?? "",
   });
   // createSkill's input has no connectors field (they're display
@@ -899,13 +759,6 @@ export async function duplicateSkill(
   if (source.connectors.length > 0) {
     skill = await repo.updateSkillRow(skill.id, {
       connectors: source.connectors,
-    });
-  }
-  for (const file of files) {
-    if (file.name === PRIMARY_SKILL_FILE_NAME) continue;
-    await createFile(ctx, created.skill.slug, {
-      name: file.name,
-      body: file.body,
     });
   }
   return { skill, primaryFile: created.primaryFile };
@@ -1064,6 +917,13 @@ export async function seedWorkspace(
 
 function deriveSlug(input: string, taken: string[]): string {
   return slugify(input, "skill", taken);
+}
+
+/** Trim a folder label; empty (or whitespace-only) becomes unfiled (null). */
+function normalizeFolder(folder: string | null | undefined): string | null {
+  if (folder == null) return null;
+  const trimmed = folder.trim();
+  return trimmed === "" ? null : trimmed;
 }
 
 async function fetchWorkspaceCreatedAt(

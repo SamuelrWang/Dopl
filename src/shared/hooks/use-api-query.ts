@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { apiRequest, type ApiRequestOpts } from "@/shared/api/api-client";
 
 export interface UseApiQueryOpts<T, S = T>
@@ -14,6 +14,10 @@ export interface UseApiQueryOpts<T, S = T>
   staleTime?: number;
   /** Refetch interval in ms for polling endpoints. */
   refetchInterval?: number;
+  /** Keep the prior key's data visible while a new key's query loads
+   *  (TanStack `placeholderData: keepPreviousData`) — avoids a blank
+   *  flash when the query key changes for the same logical view. */
+  keepPreviousData?: boolean;
 }
 
 /**
@@ -45,6 +49,7 @@ export function useApiQuery<T, S = T>(
     select: opts.select,
     staleTime: opts.staleTime,
     refetchInterval: opts.refetchInterval,
+    placeholderData: opts.keepPreviousData ? keepPreviousData : undefined,
   });
 
   // TanStack v5 refetch() IGNORES `enabled` — on a null-path/disabled

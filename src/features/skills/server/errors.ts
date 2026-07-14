@@ -39,34 +39,6 @@ export class SkillFileNotFoundError extends Error {
   }
 }
 
-export class SkillFileConflictError extends Error {
-  readonly code = "SKILL_FILE_CONFLICT";
-  constructor(fileName: string) {
-    super(`A file named "${fileName}" already exists in this skill`);
-    this.name = "SkillFileConflictError";
-  }
-}
-
-export class SkillFileNameInvalidError extends Error {
-  readonly code = "SKILL_FILE_NAME_INVALID";
-  constructor(message: string) {
-    super(message);
-    this.name = "SkillFileNameInvalidError";
-  }
-}
-
-/**
- * Thrown when a delete or rename would remove the canonical SKILL.md.
- * Every skill must keep its SKILL.md.
- */
-export class SkillPrimaryFileImmutableError extends Error {
-  readonly code = "SKILL_PRIMARY_FILE_IMMUTABLE";
-  constructor(message = "SKILL.md cannot be deleted or renamed") {
-    super(message);
-    this.name = "SkillPrimaryFileImmutableError";
-  }
-}
-
 /**
  * Thrown when a PATCH/PUT carries an `expectedUpdatedAt` precondition
  * that doesn't match the row's current `updated_at`. Maps to 412 — the

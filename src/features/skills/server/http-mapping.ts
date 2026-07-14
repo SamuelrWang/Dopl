@@ -2,11 +2,8 @@ import "server-only";
 import { HttpError } from "@/shared/lib/http-error";
 import {
   SkillAgentWriteDisabledError,
-  SkillFileConflictError,
-  SkillFileNameInvalidError,
   SkillFileNotFoundError,
   SkillNotFoundError,
-  SkillPrimaryFileImmutableError,
   SkillSlugConflictError,
   SkillStaleVersionError,
   WorkspaceKeyPrivateSkillError,
@@ -28,15 +25,6 @@ export function mapSkillError(err: unknown): HttpError | null {
   }
   if (err instanceof SkillSlugConflictError) {
     return new HttpError(409, "SKILL_SLUG_CONFLICT", err.message);
-  }
-  if (err instanceof SkillFileConflictError) {
-    return new HttpError(409, "SKILL_FILE_CONFLICT", err.message);
-  }
-  if (err instanceof SkillFileNameInvalidError) {
-    return new HttpError(400, "SKILL_FILE_NAME_INVALID", err.message);
-  }
-  if (err instanceof SkillPrimaryFileImmutableError) {
-    return new HttpError(409, "SKILL_PRIMARY_FILE_IMMUTABLE", err.message);
   }
   if (err instanceof SkillStaleVersionError) {
     return new HttpError(412, "SKILL_STALE_VERSION", err.message, {

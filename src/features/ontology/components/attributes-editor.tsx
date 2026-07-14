@@ -7,6 +7,7 @@ import { useWorkspaceResources } from "../hooks/use-workspace-resources";
 import { SectionBox } from "@/shared/ui/section-box";
 import type { GraphAction, GraphState } from "../graph-state";
 import type { OntologyObject } from "../types";
+import { KnowledgePickMenu } from "./knowledge-pick-menu";
 import { ObjectPickMenu } from "./object-pick-menu";
 import { CHIP, FIELD_WELL } from "./ontology-bits";
 import { PickMenu } from "./pick-menu";
@@ -138,18 +139,19 @@ function AttrValueEditor({
   const workspaceResources = useWorkspaceResources();
 
   if (v.kind === "knowledge" || v.kind === "skill") {
-    const resources =
-      v.kind === "knowledge" ? workspaceResources.knowledge : workspaceResources.skills;
+    const vk = v;
+    const triggerClassName =
+      "btn-light flex h-6 w-40 items-center justify-between rounded-full px-3 text-caption font-medium text-text-primary";
     return (
       <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
-        {v.value.map((id) => (
+        {vk.value.map((id) => (
           <span key={id} className={`flex items-center gap-1.5 ${CHIP}`}>
             {workspaceResources.nameOf(id) ?? "Unavailable"}
             <button
               type="button"
               aria-label="Remove"
               onClick={() =>
-                onChange({ ...attr, value: { kind: v.kind, value: v.value.filter((x) => x !== id) } })
+                onChange({ ...attr, value: { kind: vk.kind, value: vk.value.filter((x) => x !== id) } })
               }
               className="text-text-muted hover:text-text-primary"
             >
@@ -157,18 +159,38 @@ function AttrValueEditor({
             </button>
           </span>
         ))}
-        <PickMenu
-          items={resources.map((r) => ({ id: r.id, name: r.name, group: r.scope }))}
-          excludeIds={v.value}
-          onPick={(id) => onChange({ ...attr, value: { kind: v.kind, value: [...v.value, id] } })}
-          trigger={
-            <>
-              <span>{v.kind === "knowledge" ? "Select knowledge" : "Select skill"}</span>
-              <ChevronDown size={11} className="text-text-muted" />
-            </>
-          }
-          triggerClassName="btn-light flex h-6 w-40 items-center justify-between rounded-full px-3 text-caption font-medium text-text-primary"
-        />
+        {vk.kind === "knowledge" ? (
+          <KnowledgePickMenu
+            workspaceId={workspaceResources.workspaceId}
+            bases={workspaceResources.knowledge.map((r) => ({ id: r.id, name: r.name }))}
+            excludeIds={vk.value}
+            onPick={(id) =>
+              onChange({ ...attr, value: { kind: "knowledge", value: [...vk.value, id] } })
+            }
+            trigger={
+              <>
+                <span>Select knowledge</span>
+                <ChevronDown size={11} className="text-text-muted" />
+              </>
+            }
+            triggerClassName={triggerClassName}
+          />
+        ) : (
+          <PickMenu
+            items={workspaceResources.skills.map((r) => ({ id: r.id, name: r.name, group: r.scope }))}
+            excludeIds={vk.value}
+            onPick={(id) =>
+              onChange({ ...attr, value: { kind: "skill", value: [...vk.value, id] } })
+            }
+            trigger={
+              <>
+                <span>Select skill</span>
+                <ChevronDown size={11} className="text-text-muted" />
+              </>
+            }
+            triggerClassName={triggerClassName}
+          />
+        )}
       </span>
     );
   }

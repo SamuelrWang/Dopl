@@ -3,9 +3,12 @@
  * Skills methods for `DoplClient`.
  *
  * Read paths (`listSkills`, `getSkill`) are surfaced to all callers.
- * Write paths (`createSkill`, `updateSkill`, `deleteSkill`, file CRUD)
+ * Write paths (`createSkill`, `updateSkill`, `deleteSkill`, body write)
  * are gated server-side by the per-skill `agent_write_enabled` toggle
  * for API-key (agent) callers; session callers bypass that check.
+ *
+ * Skills are single-file: the one SKILL.md body is read/written via
+ * `readSkillBody` / `writeSkillBody`.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.listSkills = listSkills;
@@ -13,12 +16,8 @@ exports.getSkill = getSkill;
 exports.createSkill = createSkill;
 exports.updateSkill = updateSkill;
 exports.deleteSkill = deleteSkill;
-exports.listSkillFiles = listSkillFiles;
-exports.readSkillFile = readSkillFile;
-exports.createSkillFile = createSkillFile;
-exports.writeSkillFile = writeSkillFile;
-exports.renameSkillFile = renameSkillFile;
-exports.deleteSkillFile = deleteSkillFile;
+exports.readSkillBody = readSkillBody;
+exports.writeSkillBody = writeSkillBody;
 const errors_js_1 = require("./errors.js");
 const enc = encodeURIComponent;
 // ─── Read ───────────────────────────────────────────────────────────
@@ -51,20 +50,12 @@ async function updateSkill(t, slug, patch) {
 async function deleteSkill(t, slug) {
     await t.requestNoContent(`/api/skills/${enc(slug)}`, "DELETE", "skill_delete");
 }
-// ─── File CRUD ──────────────────────────────────────────────────────
-async function listSkillFiles(t, slug) {
-    const data = await t.request(`/api/skills/${enc(slug)}/files`, { toolName: "skill_list_files" });
-    return data.files;
-}
-async function readSkillFile(t, slug, fileName) {
-    const data = await t.request(`/api/skills/${enc(slug)}/files/${enc(fileName)}`, { toolName: "skill_read_file" });
+// ─── Body read / write (the single SKILL.md) ────────────────────────
+async function readSkillBody(t, slug) {
+    const data = await t.request(`/api/skills/${enc(slug)}/body`, { toolName: "skill_read" });
     return data.file;
 }
-async function createSkillFile(t, slug, input) {
-    const data = await t.request(`/api/skills/${enc(slug)}/files`, { method: "POST", body: input, toolName: "skill_create_file" });
-    return data.file;
-}
-async function writeSkillFile(t, slug, fileName, body, expectedVersion) {
+async function writeSkillBody(t, slug, body, expectedVersion) {
     // Optimistic concurrency, tri-state on `expectedVersion`:
     //   - string    → atomic CAS against it (412 on mismatch).
     //   - undefined  → safe default: read the current version first so the
@@ -77,7 +68,7 @@ async function writeSkillFile(t, slug, fileName, body, expectedVersion) {
     }
     else if (expectedVersion === undefined) {
         try {
-            version = (await readSkillFile(t, slug, fileName)).updatedAt;
+            version = (await readSkillBody(t, slug)).updatedAt;
         }
         catch (e) {
             if (!(e instanceof errors_js_1.DoplApiError) || e.status !== 404)
@@ -87,18 +78,11 @@ async function writeSkillFile(t, slug, fileName, body, expectedVersion) {
     else {
         version = expectedVersion;
     }
-    const data = await t.request(`/api/skills/${enc(slug)}/files/${enc(fileName)}`, {
+    const data = await t.request(`/api/skills/${enc(slug)}/body`, {
         method: "PUT",
         body: { body },
-        toolName: "skill_write_file",
+        toolName: "skill_write",
         customHeaders: version ? { "X-Updated-At": version } : undefined,
     });
     return data;
-}
-async function renameSkillFile(t, slug, currentName, newName) {
-    const data = await t.request(`/api/skills/${enc(slug)}/files/${enc(currentName)}`, { method: "PATCH", body: { name: newName }, toolName: "skill_rename_file" });
-    return data.file;
-}
-async function deleteSkillFile(t, slug, fileName) {
-    await t.requestNoContent(`/api/skills/${enc(slug)}/files/${enc(fileName)}`, "DELETE", "skill_delete_file");
 }

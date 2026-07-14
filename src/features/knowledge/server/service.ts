@@ -798,6 +798,43 @@ export async function getEntry(
   return entry;
 }
 
+export interface KnowledgeEntryRef {
+  id: string;
+  title: string;
+  baseId: string;
+  baseName: string;
+}
+
+/**
+ * Names for a set of entry ids — display resolution for ontology
+ * knowledge-attribute refs (`GET /api/knowledge/entries?ids=`). Applies
+ * the SAME base-visibility gating as `listBases` (M-10 private/public +
+ * api-key scope via `canSeeBase`, teams scope via `filterTeamVisibleBases`):
+ * an entry whose base the caller can't read is silently dropped, never
+ * leaked. Unknown / cross-workspace / trashed ids simply don't resolve.
+ */
+export async function resolveEntryRefs(
+  ctx: KnowledgeContext,
+  ids: string[]
+): Promise<KnowledgeEntryRef[]> {
+  const unique = [...new Set(ids)];
+  if (unique.length === 0) return [];
+  const entries = await repo.listEntriesByIds(ctx.workspaceId, unique);
+  if (entries.length === 0) return [];
+  const baseIds = [...new Set(entries.map((e) => e.knowledgeBaseId))];
+  const bases = await repo.listBasesByIds(ctx.workspaceId, baseIds);
+  const readable = await filterTeamVisibleBases(
+    ctx,
+    bases.filter((b) => b.deletedAt === null && canSeeBase(ctx, b))
+  );
+  const nameByBaseId = new Map(readable.map((b) => [b.id, b.name]));
+  return entries.flatMap((e) => {
+    const baseName = nameByBaseId.get(e.knowledgeBaseId);
+    if (baseName === undefined) return [];
+    return [{ id: e.id, title: e.title, baseId: e.knowledgeBaseId, baseName }];
+  });
+}
+
 // ─── Entry writes ───────────────────────────────────────────────────
 
 export async function createEntry(

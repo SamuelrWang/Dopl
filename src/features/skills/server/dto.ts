@@ -15,7 +15,7 @@ import type {
  */
 
 export const SKILL_COLS =
-  "id, workspace_id, slug, public_id, name, description, when_to_use, when_not_to_use, connectors, status, agent_write_enabled, visibility, access_mode, created_by, last_edited_by, last_edited_source, created_at, updated_at, deleted_at";
+  "id, workspace_id, slug, public_id, name, description, when_to_use, when_not_to_use, connectors, status, agent_write_enabled, visibility, access_mode, folder, created_by, last_edited_by, last_edited_source, created_at, updated_at, deleted_at";
 
 /**
  * Lighter projection for `skill_list` and the index page row — drops
@@ -23,7 +23,7 @@ export const SKILL_COLS =
  * camelCase domain shape stays consistent.
  */
 export const SKILL_SUMMARY_COLS =
-  "id, workspace_id, slug, public_id, name, description, when_to_use, when_not_to_use, status, agent_write_enabled, visibility, access_mode, created_by, last_edited_by, last_edited_source, created_at, updated_at, deleted_at";
+  "id, workspace_id, slug, public_id, name, description, when_to_use, when_not_to_use, status, agent_write_enabled, visibility, access_mode, folder, created_by, last_edited_by, last_edited_source, created_at, updated_at, deleted_at";
 
 export const SKILL_FILE_COLS =
   "id, workspace_id, skill_id, name, body, position, created_by, last_edited_by, last_edited_source, created_at, updated_at, deleted_at";
@@ -45,6 +45,7 @@ export interface SkillRow {
   agent_write_enabled: boolean;
   visibility: "public" | "private";
   access_mode: "workspace" | "teams";
+  folder: string | null;
   created_by: string | null;
   last_edited_by: string | null;
   last_edited_source: string;
@@ -90,6 +91,7 @@ export function mapSkillRow(
     agentWriteEnabled: row.agent_write_enabled,
     visibility: row.visibility,
     accessMode: row.access_mode,
+    folder: row.folder,
     grantedTeamIds,
     createdBy: row.created_by,
     lastEditedBy: row.last_edited_by,

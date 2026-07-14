@@ -3,22 +3,39 @@
 import { createContext, useContext, useMemo } from "react";
 import type { ReactNode } from "react";
 import { useApiQuery } from "@/shared/hooks/use-api-query";
+import type { GraphState } from "../graph-state";
 import type { WorkspaceResource } from "../types";
 
 interface WorkspaceResources {
+  workspaceId: string;
   knowledge: WorkspaceResource[];
   skills: WorkspaceResource[];
   nameOf: (id: string) => string | null;
 }
 
-const EMPTY: WorkspaceResources = { knowledge: [], skills: [], nameOf: () => null };
+const EMPTY: WorkspaceResources = {
+  workspaceId: "",
+  knowledge: [],
+  skills: [],
+  nameOf: () => null,
+};
 
 const ResourcesContext = createContext<WorkspaceResources>(EMPTY);
+
+/** Endpoint cap on `?ids=` — mirror it so we never send an over-limit request. */
+const MAX_ENTRY_IDS = 100;
 
 interface ResourceRow {
   id: string;
   name: string;
   visibility: string;
+}
+
+interface EntryRef {
+  id: string;
+  title: string;
+  baseId: string;
+  baseName: string;
 }
 
 const toResources = (rows: ResourceRow[] | undefined): WorkspaceResource[] =>
@@ -31,20 +48,27 @@ const toResources = (rows: ResourceRow[] | undefined): WorkspaceResource[] =>
 
 const selectBases = (body: { bases: ResourceRow[] }) => toResources(body.bases);
 const selectSkills = (body: { skills: ResourceRow[] }) => toResources(body.skills);
+const selectEntries = (body: { entries: EntryRef[] }) => body.entries;
 
 /**
  * The knowledge bases and skills the caller can reference from
  * ontology attributes (ref pickers + name resolution on rendered ref
- * attributes). Both endpoints already enforce visibility server-side,
- * so whatever arrives here is what the caller may see — the pickers
- * never filter for security themselves. Query-cached: revisits render
- * names instantly without re-pulling both collections.
+ * attributes). Knowledge attributes may hold whole-base ids OR base
+ * ENTRY ids (the MCP `set_attribute kind="knowledge"` accepts both);
+ * base ids resolve from the bases list, entry ids are batch-resolved
+ * from the graph through `GET /api/knowledge/entries?ids=` (one query
+ * for every unresolved id — no per-row waterfall). All three endpoints
+ * enforce visibility server-side, so whatever arrives here is what the
+ * caller may see — the pickers never filter for security themselves.
+ * Query-cached: revisits render names instantly without re-pulling.
  */
 export function OntologyResourcesProvider({
   workspaceId,
+  graph,
   children,
 }: {
   workspaceId: string;
+  graph: GraphState;
   children: ReactNode;
 }) {
   const basesQuery = useApiQuery("/api/knowledge/bases", {
@@ -58,13 +82,56 @@ export function OntologyResourcesProvider({
   const knowledge = basesQuery.data;
   const skills = skillsQuery.data;
 
+  const baseNames = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const r of knowledge ?? []) m.set(r.id, r.name);
+    return m;
+  }, [knowledge]);
+
+  // Knowledge-attribute ids that aren't known bases are entry ids to
+  // name-resolve. Sorted for a stable query key; capped at the endpoint
+  // limit.
+  const entryIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const obj of Object.values(graph.objects)) {
+      for (const attr of obj.attributes) {
+        if (attr.value.kind !== "knowledge") continue;
+        for (const id of attr.value.value) {
+          if (!baseNames.has(id)) ids.add(id);
+        }
+      }
+    }
+    return [...ids].sort().slice(0, MAX_ENTRY_IDS);
+  }, [graph, baseNames]);
+
+  // The query key moves whenever a picked id-set changes;
+  // keepPreviousData holds the last resolved names in place so existing
+  // chips don't flash back to "Unavailable" while the refetch lands.
+  const entriesQuery = useApiQuery("/api/knowledge/entries", {
+    workspaceId,
+    query: entryIds.length > 0 ? { ids: entryIds.join(",") } : undefined,
+    enabled: entryIds.length > 0,
+    keepPreviousData: true,
+    select: selectEntries,
+  });
+  const resolvedEntries = entriesQuery.data;
+
   const value = useMemo<WorkspaceResources>(() => {
     const k = knowledge ?? [];
     const s = skills ?? [];
     const byId = new Map<string, string>();
     for (const r of [...k, ...s]) byId.set(r.id, r.name);
-    return { knowledge: k, skills: s, nameOf: (id) => byId.get(id) ?? null };
-  }, [knowledge, skills]);
+    const entryNames = new Map<string, string>();
+    for (const e of resolvedEntries ?? []) {
+      entryNames.set(e.id, `${e.baseName} / ${e.title}`);
+    }
+    return {
+      workspaceId,
+      knowledge: k,
+      skills: s,
+      nameOf: (id) => byId.get(id) ?? entryNames.get(id) ?? null,
+    };
+  }, [workspaceId, knowledge, skills, resolvedEntries]);
 
   return <ResourcesContext.Provider value={value}>{children}</ResourcesContext.Provider>;
 }

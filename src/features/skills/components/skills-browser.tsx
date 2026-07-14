@@ -83,6 +83,21 @@ export function SkillsBrowser({
     });
   }, [skills, query, filter]);
 
+  // Group the visible list by folder; unfiled last. The direction is
+  // many small skills, so folders are the primary organizing axis.
+  const groups = useMemo(() => {
+    const byFolder = new Map<string, Skill[]>();
+    for (const s of visible) {
+      const key = s.folder ?? "";
+      byFolder.set(key, [...(byFolder.get(key) ?? []), s]);
+    }
+    return [...byFolder.entries()].sort(([a], [b]) => {
+      if (a === "") return 1;
+      if (b === "") return -1;
+      return a.localeCompare(b);
+    });
+  }, [visible]);
+
   // Keep the selection when it survives the filter/search; otherwise
   // fall to the first visible row (chats' handleFilterChange pattern).
   const selected =
@@ -146,13 +161,20 @@ export function SkillsBrowser({
               {query.trim() ? "No skills match." : EMPTY_COPY[filter]}
             </p>
           ) : (
-            visible.map((skill) => (
-              <SkillRow
-                key={skill.id}
-                skill={skill}
-                selected={selected?.id === skill.id}
-                onSelect={() => setSelectedId(skill.id)}
-              />
+            groups.map(([folder, rows]) => (
+              <div key={folder || "__unfiled"}>
+                <p className="px-4 pb-1 pt-3 text-label font-medium uppercase tracking-wider text-text-muted">
+                  {folder === "" ? "Unfiled" : folder}
+                </p>
+                {rows.map((skill) => (
+                  <SkillRow
+                    key={skill.id}
+                    skill={skill}
+                    selected={selected?.id === skill.id}
+                    onSelect={() => setSelectedId(skill.id)}
+                  />
+                ))}
+              </div>
             ))
           )}
         </div>

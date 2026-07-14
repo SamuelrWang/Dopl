@@ -94,7 +94,7 @@ export function OntologyView({ workspaceId, workspaceSegment, initialClusterSlug
   if (!cluster) return <Frame />;
 
   return (
-    <OntologyResourcesProvider workspaceId={workspaceId}>
+    <OntologyResourcesProvider workspaceId={workspaceId} graph={graph}>
       <Frame>
         <div className="flex shrink-0 items-center gap-3 border-b border-border-subtle px-3 py-2">
           <div className="concave-track flex items-center gap-1">

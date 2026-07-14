@@ -1,27 +1,20 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { FileText, Plus, Save, Trash2, X } from "lucide-react";
+import { Save } from "lucide-react";
 import type { SkillPanelData } from "../../types";
 import { useCanvasScope } from "../../canvas-store";
 import { useSkillsRealtime } from "@/features/skills/client/realtime";
 import {
   SkillApiError,
-  createSkillFile,
-  deleteSkillFile,
   fetchSkill,
-  readSkillFile,
-  renameSkillFile,
+  readSkillBody,
   updateSkill,
-  writeSkillFile,
+  writeSkillBody,
 } from "@/features/skills/client/api";
 import type { ResolvedSkill, SkillFile } from "@/features/skills/types";
 import { PRIMARY_SKILL_FILE_NAME } from "@/features/skills/types";
 import { Skeleton } from "@/shared/ui/skeleton";
-import { InlineEditableRow } from "@/shared/ui/inline-editable-row";
-import { toast } from "@/shared/ui/toast";
-import { useMyAccessContext } from "@/features/members/hooks/use-my-access";
-import { meetsLevel } from "@/features/teams/access-levels";
 import { VisibilityPill } from "@/shared/ui/visibility-pill";
 
 interface Props {
@@ -31,15 +24,9 @@ interface Props {
 export function SkillPanelBody({ panel }: Props) {
   const scope = useCanvasScope();
   const [resolved, setResolved] = useState<ResolvedSkill | null>(null);
-  const [activeFileName, setActiveFileName] = useState<string>(
-    PRIMARY_SKILL_FILE_NAME
-  );
   const [loading, setLoading] = useState(true);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
-  /** Name of the file currently in inline-rename mode (set by the
-   *  add-then-rename flow). */
-  const [editingFileName, setEditingFileName] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -66,12 +53,6 @@ export function SkillPanelBody({ panel }: Props) {
 
   useSkillsRealtime(scope?.workspaceId, refetch);
 
-  // Audit A-005: this hook MUST be called unconditionally, before any
-  // early return, to satisfy the rules of hooks. The derived access
-  // level (a plain method call, not a hook) is computed below once the
-  // skill has resolved.
-  const access = useMyAccessContext();
-
   if (loading && !resolved) {
     return <SkillPanelSkeleton />;
   }
@@ -85,17 +66,9 @@ export function SkillPanelBody({ panel }: Props) {
   }
 
   const { skill, files } = resolved;
+  // Skills are single-file: the one SKILL.md.
   const activeFile =
-    files.find((f) => f.name === activeFileName) ??
-    files.find((f) => f.name === PRIMARY_SKILL_FILE_NAME) ??
-    files[0] ??
-    null;
-
-  // Audit A-005: gate "+ Add file" / "Delete file" / inline rename
-  // on the caller's effective access. Falls open to true while the
-  // access fetch is loading so admins/owners don't see a flash.
-  const accessLevel = access.resolve("skill", skill.id);
-  const canEdit = accessLevel == null ? true : meetsLevel(accessLevel, "edit");
+    files.find((f) => f.name === PRIMARY_SKILL_FILE_NAME) ?? files[0] ?? null;
 
   return (
     <div className="flex h-full w-full flex-col">
@@ -110,94 +83,6 @@ export function SkillPanelBody({ panel }: Props) {
           {errorText}
         </div>
       )}
-
-      <FileTabs
-        files={files}
-        active={activeFile?.name ?? null}
-        editingFileName={editingFileName}
-        canEdit={canEdit}
-        onSelect={(n) => setActiveFileName(n)}
-        onAdd={async () => {
-          // Pick a stub name that doesn't collide with an existing file —
-          // the create endpoint 409s on duplicates.
-          const stubName = nextUntitledFileName(files.map((f) => f.name));
-          try {
-            const file = await createSkillFile(skill.slug, {
-              name: stubName,
-              body: "",
-            });
-            setActiveFileName(file.name);
-            refetch();
-            setEditingFileName(file.name);
-          } catch (err) {
-            alert(err instanceof Error ? err.message : "Failed to create");
-          }
-        }}
-        onCommitRename={async (currentName, next) => {
-          // Server rejects names that don't end in .md.
-          const finalName = next.endsWith(".md") ? next : `${next}.md`;
-          try {
-            const renamed = await renameSkillFile(
-              skill.slug,
-              currentName,
-              finalName
-            );
-            if (activeFileName === currentName) {
-              setActiveFileName(renamed.name);
-            }
-            refetch();
-            setEditingFileName(null);
-          } catch (err) {
-            // Audit A-007: surface the failure (was a blocking
-            // window.alert, replaced with toast) and re-throw so
-            // InlineEditableRow reverts the draft + stays in edit
-            // mode for retry.
-            toast({
-              title: "Couldn't rename file",
-              description: err instanceof Error ? err.message : "Unknown error",
-            });
-            throw err;
-          }
-        }}
-        onCancelStub={async (currentName) => {
-          // Cancel = delete the just-created stub so the tab list isn't
-          // littered with "untitled.md".
-          try {
-            await deleteSkillFile(skill.slug, currentName);
-            if (activeFileName === currentName) {
-              setActiveFileName(PRIMARY_SKILL_FILE_NAME);
-            }
-            refetch();
-            setEditingFileName(null);
-          } catch (err) {
-            // Audit A-004: stub delete failure used to be silently
-            // swallowed. Surface to the user; clear editing state
-            // regardless (they pressed Escape, they're done editing).
-            toast({
-              title: "Couldn't remove the unsaved file",
-              description: err instanceof Error ? err.message : "Unknown error",
-            });
-            if (activeFileName === currentName) {
-              setActiveFileName(PRIMARY_SKILL_FILE_NAME);
-            }
-            setEditingFileName(null);
-            throw err;
-          }
-        }}
-        onDelete={async (file) => {
-          if (file.name === PRIMARY_SKILL_FILE_NAME) return;
-          if (!confirm(`Delete ${file.name}?`)) return;
-          try {
-            await deleteSkillFile(skill.slug, file.name);
-            if (activeFileName === file.name) {
-              setActiveFileName(PRIMARY_SKILL_FILE_NAME);
-            }
-            refetch();
-          } catch (err) {
-            alert(err instanceof Error ? err.message : "Failed to delete");
-          }
-        }}
-      />
 
       <div className="flex-1 min-h-0">
         {activeFile && (
@@ -522,119 +407,6 @@ function SkillHeader({
   );
 }
 
-// ── File tabs ────────────────────────────────────────────────────────
-
-function FileTabs({
-  files,
-  active,
-  editingFileName,
-  canEdit,
-  onSelect,
-  onAdd,
-  onCommitRename,
-  onCancelStub,
-  onDelete,
-}: {
-  files: SkillFile[];
-  active: string | null;
-  /** Name of the tab in inline-rename mode, or null. */
-  editingFileName: string | null;
-  /** Audit A-005: gate "+ Add file" / inline rename / delete on the
-   *  caller's effective access. Read-only members can still switch
-   *  tabs and read content. */
-  canEdit: boolean;
-  onSelect: (name: string) => void;
-  onAdd: () => void;
-  /** Commit an inline rename. Receives the current (stub) name and the
-   *  user-typed new name. */
-  onCommitRename: (currentName: string, next: string) => Promise<void>;
-  /** Cancel + delete the just-created stub. */
-  onCancelStub: (currentName: string) => Promise<void>;
-  onDelete: (file: SkillFile) => void;
-}) {
-  return (
-    <div className="flex shrink-0 items-center gap-1 overflow-x-auto border-b border-border-subtle px-3 pt-2">
-      {files.map((f) => {
-        const isActive = f.name === active;
-        const pinned = f.name === PRIMARY_SKILL_FILE_NAME;
-        const isEditing = editingFileName === f.name;
-        return (
-          <div
-            key={f.id}
-            className={`group inline-flex shrink-0 items-center gap-1 rounded-t-md border-b-2 px-2 py-1.5 font-mono text-[11px] transition-colors ${
-              isActive
-                ? "border-border-active bg-surface-selected text-text-primary"
-                : "border-transparent text-text-muted hover:text-text-secondary"
-            }`}
-          >
-            {isEditing ? (
-              <div className="inline-flex items-center gap-1.5">
-                <FileText size={10} />
-                <InlineEditableRow
-                  value={f.name}
-                  selectAllOnMount
-                  maxLength={120}
-                  ariaLabel="Skill file name"
-                  onCommit={(next) => onCommitRename(f.name, next)}
-                  onCancel={() => onCancelStub(f.name)}
-                  inputClassName="font-mono text-[11px] py-0"
-                />
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => onSelect(f.name)}
-                className="inline-flex items-center gap-1.5"
-              >
-                <FileText size={10} />
-                <span className="truncate">{f.name}</span>
-              </button>
-            )}
-            {!isEditing && !pinned && isActive && canEdit && (
-              <button
-                type="button"
-                aria-label={`Delete ${f.name}`}
-                onClick={() => onDelete(f)}
-                className="ml-0.5 flex h-4 w-4 items-center justify-center rounded text-text-muted hover:text-text-secondary"
-              >
-                <X size={9} />
-              </button>
-            )}
-            {!isEditing && pinned && (
-              <span className="text-[9px] text-text-muted">·pinned</span>
-            )}
-          </div>
-        );
-      })}
-      {canEdit && (
-        <button
-          type="button"
-          onClick={onAdd}
-          className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[10px] text-text-muted transition-colors hover:text-text-secondary"
-        >
-          <Plus size={9} />
-          Add file
-        </button>
-      )}
-    </div>
-  );
-}
-
-/**
- * Pick a unique "untitled-N.md" name that doesn't collide with an
- * existing file. The skill-file create endpoint 409s on duplicates,
- * so we precompute a free slot client-side instead of catch-and-retry.
- */
-function nextUntitledFileName(existing: string[]): string {
-  const taken = new Set(existing);
-  if (!taken.has("untitled.md")) return "untitled.md";
-  for (let i = 2; i < 100; i++) {
-    const candidate = `untitled-${i}.md`;
-    if (!taken.has(candidate)) return candidate;
-  }
-  return `untitled-${Date.now()}.md`;
-}
-
 // ── File editor ──────────────────────────────────────────────────────
 //
 // Same concurrency model as SkillHeader and EntryEditor:
@@ -677,8 +449,6 @@ function FileEditor({
   const conflictRef = useRef<FileEditorConflict | null>(null);
   conflictRef.current = conflict;
   const baselineUpdatedAtRef = useRef(file.updatedAt);
-  const fileNameRef = useRef(file.name);
-  fileNameRef.current = file.name;
   const slugRef = useRef(slug);
   slugRef.current = slug;
 
@@ -698,17 +468,16 @@ function FileEditor({
     return () => {
       if (!dirtyRef.current) return;
       if (conflictRef.current !== null) return;
-      writeSkillFile(
+      writeSkillBody(
         slugRef.current,
-        fileNameRef.current,
         latestRef.current,
         workspaceId,
         baselineUpdatedAtRef.current
       ).catch((err: unknown) => {
         if (err instanceof SkillApiError && err.status === 412) {
           console.warn(
-            "[skill-panel] file unmount autosave dropped (412 stale)",
-            { slug: slugRef.current, file: fileNameRef.current }
+            "[skill-panel] body unmount autosave dropped (412 stale)",
+            { slug: slugRef.current }
           );
           return;
         }
@@ -719,11 +488,7 @@ function FileEditor({
 
   async function enterConflict(): Promise<boolean> {
     try {
-      const fresh = await readSkillFile(
-        slugRef.current,
-        fileNameRef.current,
-        workspaceId
-      );
+      const fresh = await readSkillBody(slugRef.current, workspaceId);
       setConflict({
         serverBody: fresh.body,
         serverUpdatedAt: fresh.updatedAt,
@@ -744,9 +509,8 @@ function FileEditor({
     setSaving(true);
     setErrorText(null);
     try {
-      const saved = await writeSkillFile(
+      const saved = await writeSkillBody(
         slugRef.current,
-        fileNameRef.current,
         body,
         workspaceId,
         baselineUpdatedAtRef.current
@@ -770,9 +534,8 @@ function FileEditor({
     setSaving(true);
     setErrorText(null);
     try {
-      const saved = await writeSkillFile(
+      const saved = await writeSkillBody(
         slugRef.current,
-        fileNameRef.current,
         body,
         workspaceId,
         conflict.serverUpdatedAt

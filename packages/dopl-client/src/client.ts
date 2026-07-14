@@ -561,8 +561,7 @@ export class DoplClient {
   // ─── Skills ─────────────────────────────────────────────────────────
   // Read paths are unrestricted; write paths are gated server-side by
   // the per-skill `agent_write_enabled` toggle for API-key (agent)
-  // callers. Skills are folders of `.md` files; SKILL.md is the
-  // canonical procedure.
+  // callers. Skills are single-file: one SKILL.md procedure body.
 
   listSkills(): Promise<Skill[]> {
     return skills.listSkills(this.transport);
@@ -586,45 +585,15 @@ export class DoplClient {
     return skills.deleteSkill(this.transport, slug);
   }
 
-  listSkillFiles(slug: string): Promise<SkillFile[]> {
-    return skills.listSkillFiles(this.transport, slug);
+  readSkillBody(slug: string): Promise<SkillFile> {
+    return skills.readSkillBody(this.transport, slug);
   }
 
-  readSkillFile(slug: string, fileName: string): Promise<SkillFile> {
-    return skills.readSkillFile(this.transport, slug, fileName);
-  }
-
-  createSkillFile(
+  writeSkillBody(
     slug: string,
-    input: { name: string; body?: string }
-  ): Promise<SkillFile> {
-    return skills.createSkillFile(this.transport, slug, input);
-  }
-
-  writeSkillFile(
-    slug: string,
-    fileName: string,
     body: string,
     expectedVersion?: string | null
   ): Promise<SkillWriteFileResult> {
-    return skills.writeSkillFile(
-      this.transport,
-      slug,
-      fileName,
-      body,
-      expectedVersion
-    );
-  }
-
-  renameSkillFile(
-    slug: string,
-    currentName: string,
-    newName: string
-  ): Promise<SkillFile> {
-    return skills.renameSkillFile(this.transport, slug, currentName, newName);
-  }
-
-  deleteSkillFile(slug: string, fileName: string): Promise<void> {
-    return skills.deleteSkillFile(this.transport, slug, fileName);
+    return skills.writeSkillBody(this.transport, slug, body, expectedVersion);
   }
 }

@@ -48,6 +48,8 @@ export interface Skill {
   agentWriteEnabled: boolean;
   visibility: SkillVisibility;
   accessMode: SkillAccessMode;
+  /** Optional organizing folder label; null = unfiled. */
+  folder: string | null;
   /** Teams granted read access — populated only for owners/admins on
    *  teams-mode skills. */
   grantedTeamIds: string[];
@@ -60,9 +62,8 @@ export interface Skill {
 }
 
 /**
- * One file inside a skill. The canonical entry point is named
- * `SKILL.md` and holds the procedure body. Supplementary files
- * (e.g. `examples.md`) live in the same flat namespace.
+ * The single file backing a skill: its `SKILL.md` procedure body.
+ * Skills are single-file — each has exactly one active file.
  */
 export interface SkillFile {
   id: string;

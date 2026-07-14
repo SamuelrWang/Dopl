@@ -61,7 +61,7 @@ This MCP server can target any workspace the authenticated user is a member of. 
 
 ## Workspace skills
 
-Skills are procedural prompts the user authored. Call dopl_skill(op='list') at task boundaries to see if any apply, then dopl_skill(op='get') to load the bundle and follow SKILL.md. Skill bodies reference KBs via [label](dopl://kb/<slug>) markdown links — load referenced KB content with dopl_kb(op='read_file') when you need it. Authoring: call dopl_skill(op='authoring_guide') first, then dopl_skill(op='create') + dopl_skill(op='write_file'). Destructive ops live on dopl_skill_admin.
+Skills are single-file procedural prompts the user authored — each is one tight SKILL.md doing one thing. Call dopl_skill(op='list') at task boundaries to see if any apply (they're grouped by folder), then dopl_skill(op='get') to load and follow the SKILL.md. Skill bodies reference KBs via [label](dopl://kb/<slug>) markdown links — load referenced KB content with dopl_kb(op='read_file') when you need it. Authoring: call dopl_skill(op='authoring_guide') first, then dopl_skill(op='create') + dopl_skill(op='write'). Prefer many small skills over monoliths; reference material belongs in KBs, not the skill. Destructive ops live on dopl_skill_admin.
 
 ## Knowledge Packs — specialist verticals
 
@@ -244,9 +244,7 @@ export function createServer(
     dopl_skill: new Set([
       "create",
       "update",
-      "create_file",
-      "write_file",
-      "rename_file",
+      "write",
       "set_visibility",
     ]),
     dopl_workflow: new Set([

@@ -75,6 +75,7 @@ export interface CreateSkillInput {
   slug?: string;
   status?: "active" | "draft";
   agentWriteEnabled?: boolean;
+  folder?: string | null;
   body?: string;
 }
 
@@ -97,6 +98,8 @@ export interface UpdateSkillPatch {
   slug?: string;
   status?: "active" | "draft";
   agentWriteEnabled?: boolean;
+  /** Organizing folder label. Empty → unfiled (null). */
+  folder?: string | null;
   /** Full three-way sharing — owner or workspace admin only. */
   visibility?: "public" | "private";
   accessMode?: "workspace" | "teams";
@@ -119,68 +122,30 @@ export async function updateSkill(
   return data.skill;
 }
 
-// ─── Skill files ────────────────────────────────────────────────────
+// ─── Skill body (the single SKILL.md) ───────────────────────────────
 
-export async function readSkillFile(
+export async function readSkillBody(
   slug: string,
-  fileName: string,
   workspaceId?: string
 ): Promise<SkillFile> {
   const data = await request<{ file: SkillFile }>(
-    `/api/skills/${enc(slug)}/files/${enc(fileName)}`,
+    `/api/skills/${enc(slug)}/body`,
     { workspaceId }
   );
   return data.file;
 }
 
-export async function createSkillFile(
+export async function writeSkillBody(
   slug: string,
-  input: { name: string; body?: string },
-  workspaceId?: string
-): Promise<SkillFile> {
-  const data = await request<{ file: SkillFile }>(
-    `/api/skills/${enc(slug)}/files`,
-    { method: "POST", body: input, workspaceId }
-  );
-  return data.file;
-}
-
-export async function writeSkillFile(
-  slug: string,
-  fileName: string,
   body: string,
   workspaceId?: string,
   expectedUpdatedAt?: string
 ): Promise<SkillFile> {
   const data = await request<{ file: SkillFile }>(
-    `/api/skills/${enc(slug)}/files/${enc(fileName)}`,
+    `/api/skills/${enc(slug)}/body`,
     { method: "PUT", body: { body }, workspaceId, expectedUpdatedAt }
   );
   return data.file;
-}
-
-export async function renameSkillFile(
-  slug: string,
-  currentName: string,
-  newName: string,
-  workspaceId?: string
-): Promise<SkillFile> {
-  const data = await request<{ file: SkillFile }>(
-    `/api/skills/${enc(slug)}/files/${enc(currentName)}`,
-    { method: "PATCH", body: { name: newName }, workspaceId }
-  );
-  return data.file;
-}
-
-export async function deleteSkillFile(
-  slug: string,
-  fileName: string,
-  workspaceId?: string
-): Promise<void> {
-  await request<void>(
-    `/api/skills/${enc(slug)}/files/${enc(fileName)}`,
-    { method: "DELETE", workspaceId }
-  );
 }
 
 // ─── Trash ──────────────────────────────────────────────────────────
@@ -205,17 +170,6 @@ export async function restoreSkill(
     { method: "POST", workspaceId }
   );
   return data.skill;
-}
-
-export async function restoreSkillFile(
-  fileId: string,
-  workspaceId?: string
-): Promise<SkillFile> {
-  const data = await request<{ file: SkillFile }>(
-    `/api/skills/files/restore/${enc(fileId)}`,
-    { method: "POST", workspaceId }
-  );
-  return data.file;
 }
 
 // ─── History (versions + audit timeline) ────────────────────────────
