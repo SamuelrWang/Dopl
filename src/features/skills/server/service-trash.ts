@@ -16,37 +16,19 @@ import {
  */
 
 /**
- * Returns the soft-deleted skill and skill_file rows the CALLER MAY
- * SEE, sorted newest-deletion-first. Used by the trash modal. The
- * visibility rule is the same `canSeeSkill` the live list uses —
- * without it the trash would leak other members' private (or
- * non-granted team-scoped) skills' names.
+ * Returns the soft-deleted skills the CALLER MAY SEE, sorted
+ * newest-deletion-first. Used by the trash modal. The visibility rule
+ * is the same `canSeeSkill` the live list uses — without it the trash
+ * would leak other members' private (or non-granted team-scoped)
+ * skills' names.
  */
 export async function listTrash(
   ctx: SkillContext
 ): Promise<repo.DeletedSkillRows> {
   const deleted = await repo.listDeletedForWorkspace(ctx.workspaceId);
-  // Trashed files may belong to LIVE parents (file trashed alone), so
-  // resolve every parent skill before filtering.
-  const parents = new Map(deleted.skills.map((s) => [s.id, s]));
-  const missingIds = [
-    ...new Set(
-      deleted.files
-        .map((f) => f.skillId)
-        .filter((id) => !parents.has(id))
-    ),
-  ];
-  for (const s of await repo.listSkillsByIds(ctx.workspaceId, missingIds)) {
-    parents.set(s.id, s);
-  }
-  const grants = await grantsForSkills(ctx, [...parents.values()]);
-  const canSee = (skillId: string) => {
-    const s = parents.get(skillId);
-    return s !== undefined && canSeeSkill(ctx, s, grants);
-  };
+  const grants = await grantsForSkills(ctx, deleted.skills);
   return {
-    skills: deleted.skills.filter((s) => canSee(s.id)),
-    files: deleted.files.filter((f) => canSee(f.skillId)),
+    skills: deleted.skills.filter((s) => canSeeSkill(ctx, s, grants)),
   };
 }
 

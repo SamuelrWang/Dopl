@@ -12,7 +12,7 @@ import type {
   Skill,
   SkillEvent,
   SkillFile,
-  SkillFileVersion,
+  SkillVersion,
 } from "@/features/skills/types";
 
 export class SkillApiError extends Error {
@@ -152,7 +152,6 @@ export async function writeSkillBody(
 
 export interface SkillsTrash {
   skills: Skill[];
-  files: SkillFile[];
 }
 
 export async function fetchSkillsTrash(
@@ -175,7 +174,7 @@ export async function restoreSkill(
 // ─── History (versions + audit timeline) ────────────────────────────
 
 export interface SkillHistoryPayload {
-  versions: SkillFileVersion[];
+  versions: SkillVersion[];
   events: SkillEvent[];
 }
 
@@ -192,8 +191,8 @@ export async function fetchSkillHistory(
 export async function fetchSkillVersion(
   versionId: string,
   workspaceId?: string
-): Promise<SkillFileVersion & { body: string }> {
-  const data = await request<{ version: SkillFileVersion & { body: string } }>(
+): Promise<SkillVersion & { body: string }> {
+  const data = await request<{ version: SkillVersion & { body: string } }>(
     `/api/skills/versions/${enc(versionId)}`,
     { workspaceId }
   );

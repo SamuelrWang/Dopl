@@ -36,14 +36,12 @@ export async function GET(request: NextRequest) {
       folders: kb.folders,
       bases: kb.bases,
       skills: sk.skills,
-      skill_files: sk.files,
     };
     const total =
       counts.entries +
       counts.folders +
       counts.bases +
-      counts.skills +
-      counts.skill_files;
+      counts.skills;
 
     void logSystemEvent({
       // Always "info" — even a no-op run is a healthy heartbeat to log.

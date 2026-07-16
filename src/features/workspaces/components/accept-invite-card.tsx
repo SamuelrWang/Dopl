@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { InvitationStatus } from "../types";
 
@@ -112,12 +113,12 @@ export function AcceptInviteCard({ status, token, needsAuth }: Props) {
           <p className="text-caption text-text-tertiary">
             Sign in to accept. We&apos;ll bring you back here.
           </p>
-          <a
+          <Link
             href={`/login?redirectTo=${encodeURIComponent(`/invite/${token}`)}`}
             className="h-9 px-4 rounded-md bg-surface-cta text-text-on-cta text-small font-medium hover:bg-surface-cta/90 transition-colors inline-flex items-center justify-center"
           >
             Sign in to accept
-          </a>
+          </Link>
         </div>
       ) : (
         <div className="mt-6 flex flex-col gap-3">

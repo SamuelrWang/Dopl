@@ -8,15 +8,13 @@ import type {
   SkillWriteSource,
 } from "../types";
 import {
+  SKILL_BODY_COLS,
   SKILL_COLS,
-  SKILL_FILE_COLS,
-  SKILL_FILE_META_COLS,
   SKILL_SUMMARY_COLS,
-  mapSkillFileRow,
+  mapSkillBodyRow,
   mapSkillRow,
   mapSkillSummaryRow,
-  type SkillFileMetaRow,
-  type SkillFileRow,
+  type SkillBodyRow,
   type SkillRow,
   type SkillSummaryRow,
 } from "./dto";
@@ -87,23 +85,6 @@ export async function findSkillByPublicId(
   return data ? mapSkillRow(data as SkillRow) : null;
 }
 
-/** Batch id lookup — trash visibility filtering (parents of trashed
- *  files may be live or trashed, so deleted rows are included). */
-export async function listSkillsByIds(
-  workspaceId: string,
-  ids: string[]
-): Promise<Skill[]> {
-  if (ids.length === 0) return [];
-  const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("skills")
-    .select(SKILL_COLS)
-    .eq("workspace_id", workspaceId)
-    .in("id", ids);
-  if (error) throw error;
-  return ((data ?? []) as SkillRow[]).map((r) => mapSkillRow(r));
-}
-
 export async function findSkillById(
   workspaceId: string,
   id: string,
@@ -149,6 +130,8 @@ export interface InsertSkillArgs {
   visibility?: "public" | "private";
   /** Optional organizing label; null/omitted = unfiled. */
   folder?: string | null;
+  /** Initial SKILL.md body (F-029: body is a column on the skill row). */
+  body?: string;
   createdBy: string | null;
   source: SkillWriteSource;
 }
@@ -170,6 +153,9 @@ export async function insertSkill(args: InsertSkillArgs): Promise<Skill> {
       agent_write_enabled: args.agentWriteEnabled ?? false,
       visibility: args.visibility ?? "public",
       folder: args.folder ?? null,
+      body: args.body ?? "",
+      body_edited_by: args.createdBy,
+      body_edited_source: args.source,
       created_by: args.createdBy,
       last_edited_by: args.createdBy,
       last_edited_source: args.source,
@@ -201,6 +187,12 @@ export interface UpdateSkillPatch {
   lastEditedSource?: SkillWriteSource;
 }
 
+// CAS caveat: since F-029, body writes also UPDATE this row, so the
+// skills_touch_updated_at trigger bumps `updated_at` on every body save.
+// A client holding an `expectedUpdatedAt` metadata token across a body
+// autosave would falsely 412. No caller passes it today — if metadata
+// optimistic concurrency is ever adopted, key it on a dedicated clock
+// (as body writes do with body_updated_at), not `updated_at`.
 export async function updateSkillRow(
   id: string,
   patch: UpdateSkillPatch
@@ -258,40 +250,10 @@ export async function markSkillDeleted(
     .update({ deleted_at: deletedAt })
     .eq("id", id);
   if (error) throw error;
-  // Cascade-tombstone the skill's still-active files with the SAME
-  // timestamp so a later restore can bring back exactly this cascade
-  // (files trashed earlier on their own keep their own timestamp and
-  // stay in the trash). Without this the files keep deleted_at = NULL —
-  // orphaned, inconsistent rows under a deleted parent.
-  const { error: filesError } = await db
-    .from("skill_files")
-    .update({ deleted_at: deletedAt })
-    .eq("skill_id", id)
-    .is("deleted_at", null);
-  if (filesError) throw filesError;
 }
 
 export async function restoreSkillRow(id: string): Promise<Skill> {
   const db = supabaseAdmin();
-  // Read the deletion timestamp first so we restore only the files that
-  // went down with the skill — not ones the user trashed independently
-  // beforehand (those carry a different timestamp and stay trashed).
-  const { data: existing, error: readError } = await db
-    .from("skills")
-    .select("deleted_at")
-    .eq("id", id)
-    .single();
-  if (readError) throw readError;
-  const cascadeTs = (existing as { deleted_at: string | null } | null)
-    ?.deleted_at;
-  if (cascadeTs) {
-    const { error: filesError } = await db
-      .from("skill_files")
-      .update({ deleted_at: null })
-      .eq("skill_id", id)
-      .eq("deleted_at", cascadeTs);
-    if (filesError) throw filesError;
-  }
   const { data, error } = await db
     .from("skills")
     .update({ deleted_at: null })
@@ -302,167 +264,82 @@ export async function restoreSkillRow(id: string): Promise<Skill> {
   return mapSkillRow(data as SkillRow);
 }
 
-// ─── Skill files ────────────────────────────────────────────────────
+// ─── Skill body (the single SKILL.md, now columns on the skill row) ──
 
-export async function listFilesForSkill(
-  skillId: string,
-  opts: { includeBody?: boolean } = {}
-): Promise<SkillFile[]> {
-  const includeBody = opts.includeBody ?? true;
-  const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("skill_files")
-    .select(includeBody ? SKILL_FILE_COLS : SKILL_FILE_META_COLS)
-    .eq("skill_id", skillId)
-    .is("deleted_at", null)
-    .order("position", { ascending: true })
-    .order("created_at", { ascending: true });
-  if (error) throw error;
-  if (includeBody) {
-    return ((data ?? []) as unknown as SkillFileRow[]).map(mapSkillFileRow);
-  }
-  return ((data ?? []) as unknown as SkillFileMetaRow[]).map((row) =>
-    mapSkillFileRow({ ...row, body: "" })
-  );
-}
-
-export async function findFileByName(
-  skillId: string,
-  name: string
+/**
+ * Read a live skill's SKILL.md body, synthesized as a `SkillFile` from
+ * the body columns. `updatedAt` is `body_updated_at` — the CAS clock /
+ * version token. Null when the skill is missing or trashed.
+ */
+export async function readSkillBody(
+  workspaceId: string,
+  skillId: string
 ): Promise<SkillFile | null> {
   const db = supabaseAdmin();
   const { data, error } = await db
-    .from("skill_files")
-    .select(SKILL_FILE_COLS)
-    .eq("skill_id", skillId)
-    .eq("name", name)
+    .from("skills")
+    .select(SKILL_BODY_COLS)
+    .eq("workspace_id", workspaceId)
+    .eq("id", skillId)
     .is("deleted_at", null)
     .maybeSingle();
   if (error) throw error;
-  return data ? mapSkillFileRow(data as SkillFileRow) : null;
+  return data ? mapSkillBodyRow(data as unknown as SkillBodyRow) : null;
 }
 
-export interface InsertFileArgs {
-  workspaceId: string;
-  skillId: string;
-  name: string;
-  body?: string;
-  position?: number;
-  createdBy: string | null;
-  source: SkillWriteSource;
+export interface UpdateSkillBodyPatch {
+  body: string;
+  editedBy: string | null;
+  editedSource: SkillWriteSource;
 }
 
-export async function insertFile(args: InsertFileArgs): Promise<SkillFile> {
-  const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("skill_files")
-    .insert({
-      workspace_id: args.workspaceId,
-      skill_id: args.skillId,
-      name: args.name,
-      body: args.body ?? "",
-      position: args.position ?? 0,
-      created_by: args.createdBy,
-      last_edited_by: args.createdBy,
-      last_edited_source: args.source,
-    })
-    .select(SKILL_FILE_COLS)
-    .single();
-  if (error || !data) throw error || new Error("Failed to insert skill file");
-  return mapSkillFileRow(data as SkillFileRow);
-}
-
-export interface UpdateFilePatch {
-  name?: string;
-  body?: string;
-  position?: number;
-  lastEditedBy?: string | null;
-  lastEditedSource?: SkillWriteSource;
-}
-
-export async function updateFileRow(
-  id: string,
-  patch: UpdateFilePatch
+export async function updateSkillBody(
+  skillId: string,
+  patch: UpdateSkillBodyPatch
 ): Promise<SkillFile>;
-export async function updateFileRow(
-  id: string,
-  patch: UpdateFilePatch,
-  expectedUpdatedAt: string | undefined
+export async function updateSkillBody(
+  skillId: string,
+  patch: UpdateSkillBodyPatch,
+  expectedBodyUpdatedAt: string | undefined
 ): Promise<SkillFile | null>;
-export async function updateFileRow(
-  id: string,
-  patch: UpdateFilePatch,
-  expectedUpdatedAt?: string
+export async function updateSkillBody(
+  skillId: string,
+  patch: UpdateSkillBodyPatch,
+  expectedBodyUpdatedAt?: string
 ): Promise<SkillFile | null> {
   const db = supabaseAdmin();
-  const update: Record<string, unknown> = {};
-  if (patch.name !== undefined) update.name = patch.name;
-  if (patch.body !== undefined) update.body = patch.body;
-  if (patch.position !== undefined) update.position = patch.position;
-  if (patch.lastEditedBy !== undefined) update.last_edited_by = patch.lastEditedBy;
-  if (patch.lastEditedSource !== undefined)
-    update.last_edited_source = patch.lastEditedSource;
-  // Optimistic concurrency CAS (see updateSkillRow).
-  let query = db.from("skill_files").update(update).eq("id", id);
-  if (expectedUpdatedAt !== undefined) {
-    query = query.eq("updated_at", expectedUpdatedAt);
+  // body_updated_at is the CAS clock — set explicitly (no trigger drives
+  // it; skills_touch_updated_at only moves updated_at). Keeping the two
+  // clocks independent is what stops metadata edits from 412-ing a body
+  // write and vice versa.
+  const update = {
+    body: patch.body,
+    body_updated_at: new Date().toISOString(),
+    body_edited_by: patch.editedBy,
+    body_edited_source: patch.editedSource,
+  };
+  let query = db.from("skills").update(update).eq("id", skillId);
+  if (expectedBodyUpdatedAt !== undefined) {
+    query = query.eq("body_updated_at", expectedBodyUpdatedAt);
   }
-  const { data, error } = await query.select(SKILL_FILE_COLS).maybeSingle();
+  const { data, error } = await query.select(SKILL_BODY_COLS).maybeSingle();
   if (error) throw error;
   if (!data) {
-    if (expectedUpdatedAt !== undefined) return null;
-    throw new Error("Failed to update skill file");
+    if (expectedBodyUpdatedAt !== undefined) return null;
+    throw new Error("Failed to update skill body");
   }
-  return mapSkillFileRow(data as SkillFileRow);
-}
-
-export async function markFileDeleted(
-  id: string,
-  deletedAt: string = new Date().toISOString()
-): Promise<void> {
-  const db = supabaseAdmin();
-  const { error } = await db
-    .from("skill_files")
-    .update({ deleted_at: deletedAt })
-    .eq("id", id);
-  if (error) throw error;
-}
-
-export async function restoreFileRow(id: string): Promise<SkillFile> {
-  const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("skill_files")
-    .update({ deleted_at: null })
-    .eq("id", id)
-    .select(SKILL_FILE_COLS)
-    .single();
-  if (error || !data) throw error || new Error("Failed to restore skill file");
-  return mapSkillFileRow(data as SkillFileRow);
-}
-
-export async function findFileById(
-  id: string,
-  includeDeleted = false
-): Promise<SkillFile | null> {
-  const db = supabaseAdmin();
-  let query = db.from("skill_files").select(SKILL_FILE_COLS).eq("id", id);
-  if (!includeDeleted) query = query.is("deleted_at", null);
-  const { data, error } = await query.maybeSingle();
-  if (error) throw error;
-  return data ? mapSkillFileRow(data as SkillFileRow) : null;
+  return mapSkillBodyRow(data as unknown as SkillBodyRow);
 }
 
 // ─── Trash ──────────────────────────────────────────────────────────
 
 export interface DeletedSkillRows {
   skills: Skill[];
-  files: SkillFile[];
 }
 
 /**
- * Returns every soft-deleted skill and skill file in the workspace.
- * Service exposes this as the trash view. Files are returned with body
- * stripped — the modal renders names + timestamps only.
+ * Returns every soft-deleted skill in the workspace, newest-first.
+ * Service exposes this as the trash view.
  */
 export async function listDeletedForWorkspace(
   workspaceId: string
@@ -477,74 +354,23 @@ export async function listDeletedForWorkspace(
     .order("deleted_at", { ascending: false });
   if (skillsRes.error) throw skillsRes.error;
 
-  const filesRes = await db
-    .from("skill_files")
-    .select(SKILL_FILE_META_COLS)
-    .eq("workspace_id", workspaceId)
-    .not("deleted_at", "is", null)
-    .order("deleted_at", { ascending: false });
-  if (filesRes.error) throw filesRes.error;
-
   return {
     skills: ((skillsRes.data ?? []) as SkillRow[]).map((r) => mapSkillRow(r)),
-    files: ((filesRes.data ?? []) as unknown as SkillFileMetaRow[]).map(
-      (row) => mapSkillFileRow({ ...row, body: "" })
-    ),
   };
 }
 
 /**
- * Hard-delete skills + skill_files trashed before `iso` for ONE
- * workspace. Used by the in-app "Empty trash" admin action.
- */
-export async function hardDeleteForWorkspaceOlderThan(
-  workspaceId: string,
-  iso: string
-): Promise<{ skills: number; files: number }> {
-  const db = supabaseAdmin();
-
-  const filesRes = await db
-    .from("skill_files")
-    .delete({ count: "exact" })
-    .eq("workspace_id", workspaceId)
-    .not("deleted_at", "is", null)
-    .lt("deleted_at", iso);
-  if (filesRes.error) throw filesRes.error;
-
-  const skillsRes = await db
-    .from("skills")
-    .delete({ count: "exact" })
-    .eq("workspace_id", workspaceId)
-    .not("deleted_at", "is", null)
-    .lt("deleted_at", iso);
-  if (skillsRes.error) throw skillsRes.error;
-
-  return {
-    files: filesRes.count ?? 0,
-    skills: skillsRes.count ?? 0,
-  };
-}
-
-/**
- * Hard-delete skills + skill_files trashed before `iso` across all
- * workspaces. Used by the nightly cron. Service-role only — bypasses
- * RLS, must be called from a privileged context. Files are deleted
- * first because deleting their parent skill cascade-deletes them
- * anyway; counting files first gives accurate per-table totals.
+ * Hard-delete skills trashed before `iso` across all workspaces. Used
+ * by the nightly cron. Service-role only — bypasses RLS, must be called
+ * from a privileged context. The SKILL.md body + version history ride on
+ * the skill row / skill_versions FK, so one delete removes it all.
  *
- * Returns counts per table for system_events logging.
+ * Returns a count for system_events logging.
  */
 export async function hardDeleteOlderThanGlobal(
   iso: string
-): Promise<{ skills: number; files: number }> {
+): Promise<{ skills: number }> {
   const db = supabaseAdmin();
-
-  const filesRes = await db
-    .from("skill_files")
-    .delete({ count: "exact" })
-    .not("deleted_at", "is", null)
-    .lt("deleted_at", iso);
-  if (filesRes.error) throw filesRes.error;
 
   const skillsRes = await db
     .from("skills")
@@ -554,7 +380,6 @@ export async function hardDeleteOlderThanGlobal(
   if (skillsRes.error) throw skillsRes.error;
 
   return {
-    files: filesRes.count ?? 0,
     skills: skillsRes.count ?? 0,
   };
 }

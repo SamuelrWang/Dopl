@@ -1289,7 +1289,6 @@ export type Database = {
           author_id: string | null
           created_at: string
           detail: Json
-          file_id: string | null
           id: string
           skill_id: string
           source: string
@@ -1300,7 +1299,6 @@ export type Database = {
           author_id?: string | null
           created_at?: string
           detail?: Json
-          file_id?: string | null
           id?: string
           skill_id: string
           source: string
@@ -1311,7 +1309,6 @@ export type Database = {
           author_id?: string | null
           created_at?: string
           detail?: Json
-          file_id?: string | null
           id?: string
           skill_id?: string
           source?: string
@@ -1319,13 +1316,6 @@ export type Database = {
           workspace_id?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "skill_events_file_id_fkey"
-            columns: ["file_id"]
-            isOneToOne: false
-            referencedRelation: "skill_files"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "skill_events_skill_id_fkey"
             columns: ["skill_id"]
@@ -1342,13 +1332,11 @@ export type Database = {
           },
         ]
       }
-      skill_file_versions: {
+      skill_versions: {
         Row: {
           author_id: string | null
           body: string
           created_at: string
-          file_id: string
-          file_name: string
           id: string
           skill_id: string
           source: string
@@ -1358,8 +1346,6 @@ export type Database = {
           author_id?: string | null
           body: string
           created_at?: string
-          file_id: string
-          file_name: string
           id?: string
           skill_id: string
           source: string
@@ -1369,8 +1355,6 @@ export type Database = {
           author_id?: string | null
           body?: string
           created_at?: string
-          file_id?: string
-          file_name?: string
           id?: string
           skill_id?: string
           source?: string
@@ -1378,81 +1362,14 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "skill_file_versions_file_id_fkey"
-            columns: ["file_id"]
-            isOneToOne: false
-            referencedRelation: "skill_files"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "skill_file_versions_skill_id_fkey"
+            foreignKeyName: "skill_versions_skill_id_fkey"
             columns: ["skill_id"]
             isOneToOne: false
             referencedRelation: "skills"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "skill_file_versions_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      skill_files: {
-        Row: {
-          body: string
-          created_at: string
-          created_by: string | null
-          deleted_at: string | null
-          id: string
-          last_edited_by: string | null
-          last_edited_source: string
-          name: string
-          position: number
-          skill_id: string
-          updated_at: string
-          workspace_id: string
-        }
-        Insert: {
-          body?: string
-          created_at?: string
-          created_by?: string | null
-          deleted_at?: string | null
-          id?: string
-          last_edited_by?: string | null
-          last_edited_source?: string
-          name: string
-          position?: number
-          skill_id: string
-          updated_at?: string
-          workspace_id: string
-        }
-        Update: {
-          body?: string
-          created_at?: string
-          created_by?: string | null
-          deleted_at?: string | null
-          id?: string
-          last_edited_by?: string | null
-          last_edited_source?: string
-          name?: string
-          position?: number
-          skill_id?: string
-          updated_at?: string
-          workspace_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "skill_files_skill_id_fkey"
-            columns: ["skill_id"]
-            isOneToOne: false
-            referencedRelation: "skills"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "skill_files_workspace_id_fkey"
+            foreignKeyName: "skill_versions_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -1464,11 +1381,16 @@ export type Database = {
         Row: {
           access_mode: string
           agent_write_enabled: boolean
+          body: string
+          body_edited_by: string | null
+          body_edited_source: string
+          body_updated_at: string
           connectors: Json
           created_at: string
           created_by: string | null
           deleted_at: string | null
           description: string
+          folder: string | null
           id: string
           last_edited_by: string | null
           last_edited_source: string
@@ -1485,11 +1407,16 @@ export type Database = {
         Insert: {
           access_mode?: string
           agent_write_enabled?: boolean
+          body?: string
+          body_edited_by?: string | null
+          body_edited_source?: string
+          body_updated_at?: string
           connectors?: Json
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
           description: string
+          folder?: string | null
           id?: string
           last_edited_by?: string | null
           last_edited_source?: string
@@ -1506,11 +1433,16 @@ export type Database = {
         Update: {
           access_mode?: string
           agent_write_enabled?: boolean
+          body?: string
+          body_edited_by?: string | null
+          body_edited_source?: string
+          body_updated_at?: string
           connectors?: Json
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
           description?: string
+          folder?: string | null
           id?: string
           last_edited_by?: string | null
           last_edited_source?: string

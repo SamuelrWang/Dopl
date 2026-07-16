@@ -1,4 +1,5 @@
 import "server-only";
+import { PRIMARY_SKILL_FILE_NAME } from "../types";
 import type { SkillContext, SkillFile } from "../types";
 import { SkillFileNotFoundError, SkillNotFoundError } from "./errors";
 import * as repo from "./repository";
@@ -41,9 +42,11 @@ export async function getFileVersion(ctx: SkillContext, versionId: string) {
 }
 
 /**
- * Roll a file back to a snapshot. Restore never rewrites history: it
- * writes the old body as a NEW save (minting a fresh version) and logs
- * a `file.rolled_back` event. No-ops when the file already matches.
+ * Roll the SKILL.md body back to a snapshot. Restore never rewrites
+ * history: it writes the old body as a NEW save (minting a fresh
+ * version that shows up in the timeline). No-ops when the body already
+ * matches. No structural event is logged — the app stopped emitting
+ * `file.*` events at F-029, and the new version snapshot is the record.
  */
 export async function restoreFileVersion(
   ctx: SkillContext,
@@ -53,29 +56,20 @@ export async function restoreFileVersion(
   const skill = await repo.findSkillById(ctx.workspaceId, version.skillId);
   if (!skill) throw new SkillNotFoundError(version.skillId);
   await assertAgentWriteAllowed(ctx, skill);
-  // findFileById excludes trashed files — restoring into a trashed file
-  // 404s (restore the file from trash first).
-  const file = await repo.findFileById(version.fileId);
-  if (!file) throw new SkillFileNotFoundError(skill.slug, version.fileName);
+  // readSkillBody excludes trashed skills — rolling back a trashed skill
+  // 404s (restore it from trash first).
+  const file = await repo.readSkillBody(ctx.workspaceId, skill.id);
+  if (!file) throw new SkillFileNotFoundError(skill.slug, PRIMARY_SKILL_FILE_NAME);
   if (file.body === version.body) return file;
-  const saved = await repo.updateFileRow(file.id, {
+  const saved = await repo.updateSkillBody(skill.id, {
     body: version.body,
-    lastEditedBy: ctx.userId,
-    lastEditedSource: ctx.source,
+    editedBy: ctx.userId,
+    editedSource: ctx.source,
   });
   await history.recordVersion({
     ctx,
     skillId: skill.id,
-    fileId: saved.id,
-    fileName: saved.name,
     body: saved.body,
-  });
-  await history.recordEvent({
-    ctx,
-    skillId: skill.id,
-    type: "file.rolled_back",
-    fileId: saved.id,
-    detail: { versionId, fileName: version.fileName },
   });
   return saved;
 }

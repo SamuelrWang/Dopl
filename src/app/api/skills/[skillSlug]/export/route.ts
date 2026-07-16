@@ -14,7 +14,7 @@ export const GET = withWorkspaceAuth(async (_request, auth) => {
     const ctx = buildSkillContext(auth);
     const slug = requireSkillSlug(auth.params);
     const skill = await getSkillBySlug(ctx, slug);
-    const files = await listFiles(ctx, slug, { includeBody: true });
+    const files = await listFiles(ctx, slug);
 
     const entries: Record<string, Uint8Array> = {};
     for (const file of files) {

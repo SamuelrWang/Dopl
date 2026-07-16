@@ -9,26 +9,27 @@ import { assertAgentWriteAllowed } from "./service-shared";
 import { getSkillBySlug } from "./service-reads";
 
 /**
- * Body read / write for the single SKILL.md. `writeBody` preserves the
- * optimistic-versioning CAS + history snapshotting via the single
- * `./history` choke-point.
+ * Body read / write for the single SKILL.md — now columns on the skill
+ * row (F-029). `writeBody` preserves the optimistic-versioning CAS (on
+ * `body_updated_at`, surfaced as the version token) + history
+ * snapshotting via the single `./history` choke-point. The public
+ * contract is unchanged: it still returns the `SkillFile` shape.
  */
 
-/** Fetch the skill's one SKILL.md row (its procedure body + version). */
+/** Fetch the skill's SKILL.md body + version token. */
 export async function readBody(
   ctx: SkillContext,
   slug: string
 ): Promise<SkillFile> {
   const skill = await getSkillBySlug(ctx, slug);
-  const file = await repo.findFileByName(skill.id, PRIMARY_SKILL_FILE_NAME);
+  const file = await repo.readSkillBody(ctx.workspaceId, skill.id);
   if (!file) throw new SkillFileNotFoundError(slug, PRIMARY_SKILL_FILE_NAME);
   return file;
 }
 
 /**
  * Overwrite the skill's SKILL.md body (PUT semantics). Preserves the
- * optimistic-versioning CAS + history snapshotting the old per-file
- * `writeFile` had — it now always targets the single primary file.
+ * optimistic-versioning CAS + history snapshotting.
  */
 export async function writeBody(
   ctx: SkillContext,
@@ -38,7 +39,7 @@ export async function writeBody(
 ): Promise<{ file: SkillFile; skill: Skill }> {
   const skill = await getSkillBySlug(ctx, slug);
   await assertAgentWriteAllowed(ctx, skill);
-  const file = await repo.findFileByName(skill.id, PRIMARY_SKILL_FILE_NAME);
+  const file = await repo.readSkillBody(ctx.workspaceId, skill.id);
   if (!file) throw new SkillFileNotFoundError(slug, PRIMARY_SKILL_FILE_NAME);
   if (expectedUpdatedAt && file.updatedAt !== expectedUpdatedAt) {
     throw new SkillStaleVersionError(expectedUpdatedAt, file.updatedAt);
@@ -48,18 +49,18 @@ export async function writeBody(
   if (input.body === file.body) {
     return { file, skill };
   }
-  const saved = await repo.updateFileRow(
-    file.id,
+  const saved = await repo.updateSkillBody(
+    skill.id,
     {
       body: input.body,
-      lastEditedBy: ctx.userId,
-      lastEditedSource: ctx.source,
+      editedBy: ctx.userId,
+      editedSource: ctx.source,
     },
     expectedUpdatedAt
   );
   // null = atomic CAS lost the race; re-fetch for the actual version.
   if (saved === null) {
-    const fresh = await repo.findFileByName(skill.id, PRIMARY_SKILL_FILE_NAME);
+    const fresh = await repo.readSkillBody(ctx.workspaceId, skill.id);
     throw new SkillStaleVersionError(
       expectedUpdatedAt!,
       fresh?.updatedAt ?? "concurrent"
@@ -68,8 +69,6 @@ export async function writeBody(
   await history.recordVersion({
     ctx,
     skillId: skill.id,
-    fileId: saved.id,
-    fileName: saved.name,
     body: saved.body,
   });
   return { file: saved, skill };

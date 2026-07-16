@@ -80,11 +80,11 @@ export async function getSkillBySlug(
 
 export async function listFiles(
   ctx: SkillContext,
-  slug: string,
-  opts: { includeBody?: boolean } = {}
+  slug: string
 ): Promise<SkillFile[]> {
   const skill = await getSkillBySlug(ctx, slug);
-  return repo.listFilesForSkill(skill.id, opts);
+  const file = await repo.readSkillBody(ctx.workspaceId, skill.id);
+  return file ? [file] : [];
 }
 
 /**
@@ -98,7 +98,8 @@ export async function resolveSkillBody(
   slug: string
 ): Promise<ResolvedSkill> {
   const skill = await getSkillBySlug(ctx, slug);
-  const files = await repo.listFilesForSkill(skill.id);
+  const file = await repo.readSkillBody(ctx.workspaceId, skill.id);
+  const files = file ? [file] : [];
   const seen = new Set<string>();
   const refs: SkillRef[] = [];
   for (const file of files) {

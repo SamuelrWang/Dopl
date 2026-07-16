@@ -66,11 +66,13 @@ export interface Skill {
 }
 
 /**
- * The single file backing a skill: its `SKILL.md` procedure body.
- * Skills are single-file — the `skill_files` table stays as the
- * storage layer but a partial unique index enforces exactly one active
- * row per skill (see migration 20260711000000). Long reference material
- * lives in knowledge bases, linked via `dopl://kb/<slug>` refs.
+ * The single SKILL.md procedure backing a skill. Since F-029 the body
+ * lives in columns ON the skill row (no `skill_files` table); this shape
+ * is synthesized from those columns (`server/dto.ts mapSkillBodyRow`)
+ * and kept as the API's `file` object so the external contract is
+ * unchanged. `updatedAt` is the body's CAS clock (`body_updated_at`).
+ * Long reference material lives in knowledge bases, linked via
+ * `dopl://kb/<slug>` refs.
  */
 export interface SkillFile {
   id: string;
@@ -88,17 +90,14 @@ export interface SkillFile {
 }
 
 /**
- * One append-only snapshot of a file body, taken after every content
- * save (user or agent). Metadata shape — the body itself is fetched
- * separately by version id (it can be large; lists never carry it).
- * `fileName` is denormalized at snapshot time so history stays legible
- * across renames.
+ * One append-only snapshot of the SKILL.md body, taken after every
+ * content save (user or agent). Metadata shape — the body itself is
+ * fetched separately by version id (it can be large; lists never carry
+ * it). Keyed off the skill alone (F-029 dropped the file linkage).
  */
-export interface SkillFileVersion {
+export interface SkillVersion {
   id: string;
   skillId: string;
-  fileId: string;
-  fileName: string;
   authorId: string | null;
   source: SkillWriteSource;
   createdAt: string;
@@ -119,15 +118,16 @@ export type SkillEventType =
 
 /**
  * One structural change in a skill's audit timeline. Content edits are
- * NOT events — they're `SkillFileVersion` rows; the history UI merges
- * both streams by `createdAt`.
+ * NOT events — they're `SkillVersion` rows; the history UI merges both
+ * streams by `createdAt`. The `file.*` variants are historic-only (the
+ * app stopped emitting them at F-029) but stay in the union so old rows
+ * render.
  */
 export interface SkillEvent {
   id: string;
   skillId: string;
-  fileId: string | null;
   type: SkillEventType;
-  /** Event-specific payload, e.g. `{from, to}` for renames or `{fields}` for metadata updates. */
+  /** Event-specific payload, e.g. `{fields}` for metadata updates. */
   detail: Record<string, unknown>;
   authorId: string | null;
   source: SkillWriteSource;

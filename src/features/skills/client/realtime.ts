@@ -2,7 +2,9 @@
 
 import { useWorkspaceTablesRealtime } from "@/shared/realtime/use-workspace-tables-realtime";
 
-const SKILL_TABLES = ["skills", "skill_files"] as const;
+// The SKILL.md body lives on the `skills` row (F-029) — one table to
+// watch. Body edits bump body_updated_at, which is a `skills` UPDATE.
+const SKILL_TABLES = ["skills"] as const;
 
 /** Realtime refetch signal for the skills tables of a workspace. */
 export function useSkillsRealtime(

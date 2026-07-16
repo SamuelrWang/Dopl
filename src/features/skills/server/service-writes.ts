@@ -9,7 +9,6 @@ import {
   listGrantsForResources,
   listTeamIdsForUser,
 } from "@/features/teams/server/repository";
-import { PRIMARY_SKILL_FILE_NAME } from "../types";
 import type { Skill, SkillContext, SkillFile } from "../types";
 import type { SkillCreateInput, SkillUpdateInput } from "../schema";
 import {
@@ -34,11 +33,9 @@ export async function createSkill(
   ctx: SkillContext,
   input: SkillCreateInput
 ): Promise<{ skill: Skill; primaryFile: SkillFile }> {
-  // Two-phase insert: skill row first (with slug retry), then SKILL.md.
-  // If the file insert fails, soft-delete the just-created skill so we
-  // don't leave an orphan row pointing to nothing the UI can render.
-  // Supabase JS doesn't expose transactions outside RPCs; this rollback
-  // pattern is the next-best thing.
+  // Since F-029 the SKILL.md body is a column on the skill row, so the
+  // skill and its body are one atomic insert (no more two-phase insert +
+  // rollback). Slug collisions still retry.
 
   // Audit B6 + B15: visibility default depends on the caller. Same
   // rules as createBase — workspace-scoped keys default to public and
@@ -82,6 +79,7 @@ export async function createSkill(
         agentWriteEnabled: input.agentWriteEnabled ?? true,
         visibility: resolvedVisibility,
         folder: normalizeFolder(input.folder),
+        body: input.body ?? "",
         createdBy: ctx.userId,
         source: ctx.source,
       });
@@ -100,37 +98,11 @@ export async function createSkill(
     }
   }
 
-  try {
-    const primaryFile = await repo.insertFile({
-      workspaceId: ctx.workspaceId,
-      skillId: skill.id,
-      name: PRIMARY_SKILL_FILE_NAME,
-      body: input.body ?? "",
-      position: 0,
-      createdBy: ctx.userId,
-      source: ctx.source,
-    });
-    await history.recordVersion({
-      ctx,
-      skillId: skill.id,
-      fileId: primaryFile.id,
-      fileName: primaryFile.name,
-      body: primaryFile.body,
-    });
-    await history.recordEvent({ ctx, skillId: skill.id, type: "skill.created" });
-    return { skill, primaryFile };
-  } catch (fileErr) {
-    // Roll back the skill row so the failure doesn't leave a
-    // SKILL.md-less skill the UI can't render. Best-effort — if the
-    // rollback itself fails, the original error is still the one we
-    // surface.
-    try {
-      await repo.markSkillDeleted(skill.id);
-    } catch {
-      // Swallow: the original fileErr is more useful to the caller.
-    }
-    throw fileErr;
-  }
+  const primaryFile = await repo.readSkillBody(ctx.workspaceId, skill.id);
+  if (!primaryFile) throw new Error("Skill body missing right after insert");
+  await history.recordVersion({ ctx, skillId: skill.id, body: primaryFile.body });
+  await history.recordEvent({ ctx, skillId: skill.id, type: "skill.created" });
+  return { skill, primaryFile };
 }
 
 export async function updateSkill(
@@ -330,7 +302,7 @@ export async function duplicateSkill(
   slug: string
 ): Promise<{ skill: Skill; primaryFile: SkillFile }> {
   const source = await getSkillBySlug(ctx, slug);
-  const primary = await repo.findFileByName(source.id, PRIMARY_SKILL_FILE_NAME);
+  const primary = await repo.readSkillBody(ctx.workspaceId, source.id);
 
   const created = await createSkill(ctx, {
     name: `${source.name} (copy)`,

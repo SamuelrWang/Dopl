@@ -3,11 +3,11 @@
 /**
  * SkillHistoryPanel — the version-history rail for a skill.
  *
- * One merged timeline: file-body snapshots (SkillFileVersion) and
+ * One merged timeline: SKILL.md body snapshots (SkillVersion) and
  * structural events (SkillEvent), newest first. Clicking a snapshot
- * opens a side-by-side diff against the previous snapshot of the SAME
- * file; Restore rolls the file back (server mints a new version — the
- * timeline is append-only).
+ * opens a side-by-side diff against the previous snapshot; Restore rolls
+ * the body back (server mints a new version — the timeline is
+ * append-only).
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -15,7 +15,8 @@ import { Bot, History, RotateCcw, User, X } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { toast } from "@/shared/ui/toast";
 import { diffLines, type DiffRow } from "@/shared/lib/diff";
-import type { SkillEvent, SkillFileVersion } from "../types";
+import { PRIMARY_SKILL_FILE_NAME } from "../types";
+import type { SkillEvent, SkillVersion } from "../types";
 import {
   fetchSkillHistory,
   fetchSkillVersion,
@@ -34,7 +35,7 @@ interface Props {
 }
 
 type TimelineItem =
-  | { kind: "version"; at: string; version: SkillFileVersion }
+  | { kind: "version"; at: string; version: SkillVersion }
   | { kind: "event"; at: string; event: SkillEvent };
 
 const EVENT_LABEL: Record<SkillEvent["type"], string> = {
@@ -57,11 +58,11 @@ export function SkillHistoryPanel({
   onClose,
   onRestored,
 }: Props) {
-  const [versions, setVersions] = useState<SkillFileVersion[]>([]);
+  const [versions, setVersions] = useState<SkillVersion[]>([]);
   const [events, setEvents] = useState<SkillEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [diffFor, setDiffFor] = useState<SkillFileVersion | null>(null);
+  const [diffFor, setDiffFor] = useState<SkillVersion | null>(null);
 
   // Refetch trigger — flip `loading` during render (sanctioned
   // adjust-state pattern) instead of synchronously inside the effect.
@@ -100,14 +101,15 @@ export function SkillHistoryPanel({
     return items.sort((a, b) => (a.at < b.at ? 1 : -1));
   }, [versions, events]);
 
-  /** Previous snapshot of the same file, for the diff baseline. */
+  /** The immediately-older snapshot, for the diff baseline. All versions
+   *  belong to the one SKILL.md now, so it's just the next one down. */
   const previousOf = useCallback(
-    (v: SkillFileVersion): SkillFileVersion | null => {
-      const sameFile = versions
-        .filter((x) => x.fileId === v.fileId)
-        .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
-      const idx = sameFile.findIndex((x) => x.id === v.id);
-      return idx >= 0 ? (sameFile[idx + 1] ?? null) : null;
+    (v: SkillVersion): SkillVersion | null => {
+      const ordered = [...versions].sort((a, b) =>
+        a.createdAt < b.createdAt ? 1 : -1
+      );
+      const idx = ordered.findIndex((x) => x.id === v.id);
+      return idx >= 0 ? (ordered[idx + 1] ?? null) : null;
     },
     [versions]
   );
@@ -204,7 +206,7 @@ function VersionRow({
   version,
   onOpenDiff,
 }: {
-  version: SkillFileVersion;
+  version: SkillVersion;
   onOpenDiff: () => void;
 }) {
   return (
@@ -216,7 +218,7 @@ function VersionRow({
       >
         <span className="min-w-0 flex-1">
           <span className="block truncate text-small text-text-primary">
-            {version.fileName}
+            {PRIMARY_SKILL_FILE_NAME}
           </span>
           <span className="block text-micro text-text-muted">
             {timeLabel(version.createdAt)}
@@ -264,8 +266,8 @@ function DiffModal({
   onClose,
   onRestored,
 }: {
-  version: SkillFileVersion;
-  previous: SkillFileVersion | null;
+  version: SkillVersion;
+  previous: SkillVersion | null;
   canEdit: boolean;
   onClose: () => void;
   onRestored: () => void;
@@ -304,7 +306,7 @@ function DiffModal({
     setBusy(true);
     try {
       await restoreSkillVersion(version.id);
-      toast({ title: "Version restored", description: version.fileName });
+      toast({ title: "Version restored", description: PRIMARY_SKILL_FILE_NAME });
       onRestored();
     } catch (err) {
       toast({ title: "Couldn't restore", description: errMessage(err) });
@@ -318,7 +320,7 @@ function DiffModal({
       <div className="bento relative flex max-h-full w-full max-w-4xl flex-col overflow-hidden">
         <div className="flex shrink-0 items-center gap-2 border-b border-border-subtle px-4 py-2.5">
           <span className="min-w-0 flex-1 truncate text-body font-semibold text-text-primary">
-            {version.fileName}
+            {PRIMARY_SKILL_FILE_NAME}
             <span className="ml-2 font-normal text-text-muted">
               {timeLabel(version.createdAt)}
               {previous ? ` · vs ${timeLabel(previous.createdAt)}` : " · first version"}

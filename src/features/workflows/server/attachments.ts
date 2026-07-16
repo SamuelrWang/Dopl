@@ -388,6 +388,7 @@ export async function listAttachedSkillsById(
     status: "active" | "draft";
     when_to_use: string;
     deleted_at: string | null;
+    body: string;
   };
 
   const { data: linkRows, error: linkErr } = await db
@@ -402,7 +403,7 @@ export async function listAttachedSkillsById(
   if (skillIdList.length > 0) {
     const { data: skillRows, error: skillErr } = await db
       .from("skills")
-      .select("id, slug, name, description, status, when_to_use, deleted_at")
+      .select("id, slug, name, description, status, when_to_use, deleted_at, body")
       .in("id", skillIdList)
       .eq("workspace_id", scope.workspaceId);
     if (skillErr) throw skillErr;
@@ -421,17 +422,8 @@ export async function listAttachedSkillsById(
     );
   if (liveRows.length === 0) return [];
 
-  const liveSkillIds = liveRows.map((r) => r.skill_id);
-  const bodyBySkillId = new Map<string, string>();
-  const { data: fileRows, error: fileErr } = await db
-    .from("skill_files")
-    .select("skill_id, body")
-    .in("skill_id", liveSkillIds)
-    .eq("name", "SKILL.md")
-    .is("deleted_at", null);
-  if (fileErr) throw fileErr;
-  for (const f of fileRows ?? []) bodyBySkillId.set(f.skill_id, f.body ?? "");
-
+  // The SKILL.md body is a column on the skill row now (F-029), already
+  // fetched above — no separate skill_files read.
   return liveRows.map((r) => ({
     skill_id: r.skill_id,
     slug: r.skill.slug,
@@ -439,10 +431,7 @@ export async function listAttachedSkillsById(
     description: r.skill.description,
     status: r.skill.status,
     when_to_use: r.skill.when_to_use,
-    body: (bodyBySkillId.get(r.skill_id) ?? "").slice(
-      0,
-      CONTEXT_CHAR_BUDGET_PER_FIELD
-    ),
+    body: (r.skill.body ?? "").slice(0, CONTEXT_CHAR_BUDGET_PER_FIELD),
     added_at: r.added_at,
   }));
 }

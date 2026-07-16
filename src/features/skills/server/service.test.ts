@@ -24,8 +24,8 @@ vi.mock("./repository", () => ({
   listSkillsForWorkspace: vi.fn(),
   findSkillBySlug: vi.fn(),
   findSkillById: vi.fn(),
-  findFileByName: vi.fn(),
-  updateFileRow: vi.fn(),
+  readSkillBody: vi.fn(),
+  updateSkillBody: vi.fn(),
 }));
 
 vi.mock("./history", () => ({
@@ -178,54 +178,54 @@ describe("writeBody optimistic concurrency", () => {
   });
 
   it("version mismatch surfaces the conflict and writes no history", async () => {
-    mockRepo.findFileByName.mockResolvedValue(file({ updatedAt: "v1", body: "old body" }));
+    mockRepo.readSkillBody.mockResolvedValue(file({ updatedAt: "v1", body: "old body" }));
 
     await expect(
       writeBody(ctx(), "skill-x", { body: "new body" }, "v0"),
     ).rejects.toBeInstanceOf(SkillStaleVersionError);
 
-    expect(mockRepo.updateFileRow).not.toHaveBeenCalled();
+    expect(mockRepo.updateSkillBody).not.toHaveBeenCalled();
     expect(mockHistory.recordVersion).not.toHaveBeenCalled();
   });
 
   it("successful write records exactly one history version", async () => {
-    mockRepo.findFileByName.mockResolvedValue(file({ updatedAt: "v1", body: "old body" }));
-    mockRepo.updateFileRow.mockResolvedValue(file({ id: "file-x", updatedAt: "v2", body: "new body" }));
+    mockRepo.readSkillBody.mockResolvedValue(file({ updatedAt: "v1", body: "old body" }));
+    mockRepo.updateSkillBody.mockResolvedValue(file({ id: "file-x", updatedAt: "v2", body: "new body" }));
 
     const { file: saved } = await writeBody(ctx(), "skill-x", { body: "new body" }, "v1");
 
     expect(saved.updatedAt).toBe("v2");
-    expect(mockRepo.updateFileRow).toHaveBeenCalledTimes(1);
+    expect(mockRepo.updateSkillBody).toHaveBeenCalledTimes(1);
     expect(mockHistory.recordVersion).toHaveBeenCalledTimes(1);
   });
 
   it("force (no expected version) skips the precondition but still records history", async () => {
-    mockRepo.findFileByName.mockResolvedValue(file({ updatedAt: "v1", body: "old body" }));
-    mockRepo.updateFileRow.mockResolvedValue(file({ updatedAt: "v2", body: "new body" }));
+    mockRepo.readSkillBody.mockResolvedValue(file({ updatedAt: "v1", body: "old body" }));
+    mockRepo.updateSkillBody.mockResolvedValue(file({ updatedAt: "v2", body: "new body" }));
 
     await writeBody(ctx(), "skill-x", { body: "new body" }, undefined);
 
     // Third arg (expectedUpdatedAt) forwarded as undefined = no DB-level CAS.
-    expect(mockRepo.updateFileRow).toHaveBeenCalledTimes(1);
-    expect(mockRepo.updateFileRow.mock.calls[0][2]).toBeUndefined();
+    expect(mockRepo.updateSkillBody).toHaveBeenCalledTimes(1);
+    expect(mockRepo.updateSkillBody.mock.calls[0][2]).toBeUndefined();
     expect(mockHistory.recordVersion).toHaveBeenCalledTimes(1);
   });
 
   it("identical-body save is a no-op (no row update, no version)", async () => {
-    mockRepo.findFileByName.mockResolvedValue(file({ updatedAt: "v1", body: "same body" }));
+    mockRepo.readSkillBody.mockResolvedValue(file({ updatedAt: "v1", body: "same body" }));
 
     const { file: returned } = await writeBody(ctx(), "skill-x", { body: "same body" }, "v1");
 
     expect(returned.updatedAt).toBe("v1");
-    expect(mockRepo.updateFileRow).not.toHaveBeenCalled();
+    expect(mockRepo.updateSkillBody).not.toHaveBeenCalled();
     expect(mockHistory.recordVersion).not.toHaveBeenCalled();
   });
 
   it("lost CAS race (repo returns null) surfaces the conflict with no history", async () => {
-    mockRepo.findFileByName
+    mockRepo.readSkillBody
       .mockResolvedValueOnce(file({ updatedAt: "v1", body: "old body" }))
       .mockResolvedValueOnce(file({ updatedAt: "v9", body: "raced body" }));
-    mockRepo.updateFileRow.mockResolvedValue(null);
+    mockRepo.updateSkillBody.mockResolvedValue(null);
 
     await expect(
       writeBody(ctx(), "skill-x", { body: "new body" }, "v1"),

@@ -1,5 +1,4 @@
 import "server-only";
-import { PRIMARY_SKILL_FILE_NAME } from "../types";
 import type { SkillContext } from "../types";
 import * as repo from "./repository";
 import { buildSeedSkills } from "./seed";
@@ -12,7 +11,7 @@ export async function seedWorkspace(
 
   let skillsCreated = 0;
   for (const fixture of buildSeedSkills()) {
-    const skill = await repo.insertSkill({
+    await repo.insertSkill({
       workspaceId: ctx.workspaceId,
       slug: fixture.slug,
       name: fixture.name,
@@ -25,15 +24,7 @@ export async function seedWorkspace(
       // can see and run them. Owner-explicit `createSkill` defaults
       // to private; only the seed path overrides.
       visibility: "public",
-      createdBy: ctx.userId,
-      source: "user",
-    });
-    await repo.insertFile({
-      workspaceId: ctx.workspaceId,
-      skillId: skill.id,
-      name: PRIMARY_SKILL_FILE_NAME,
       body: fixture.body,
-      position: 0,
       createdBy: ctx.userId,
       source: "user",
     });

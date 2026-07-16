@@ -80,8 +80,10 @@ export function AppShell({
         <div className={styles.surface}>
           <AppSidebar
             workspaceSegment={workspaceSegment}
+            workspacePublicId={workspacePublicId}
             workspaceName={workspaceName}
             onOpenSettings={openSettings}
+            onCreateWorkspace={() => setCreateWsOpen(true)}
           />
           {children}
         </div>

@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   BookOpen,
-  ChevronsUpDown,
   Home,
   LayoutGrid,
   MessagesSquare,
@@ -18,6 +17,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import type { SettingsSection } from "@/shared/layout/settings-modal";
+import { WorkspaceSwitcher } from "./workspace-switcher";
 import styles from "./app-shell.module.css";
 
 type NavSection =
@@ -45,8 +45,10 @@ const NAV: ReadonlyArray<{ label: string; icon: LucideIcon; section: NavSection 
 
 interface Props {
   workspaceSegment: string;
+  workspacePublicId: string;
   workspaceName: string;
   onOpenSettings: (section: SettingsSection) => void;
+  onCreateWorkspace: () => void;
 }
 
 function sectionPath(segment: string, section: NavSection): string {
@@ -60,8 +62,10 @@ function sectionPath(segment: string, section: NavSection): string {
  */
 export function AppSidebar({
   workspaceSegment,
+  workspacePublicId,
   workspaceName,
   onOpenSettings,
+  onCreateWorkspace,
 }: Props) {
   const pathname = usePathname();
   // Path shape: /{wsSegment}/{section}/... — anything else (including
@@ -73,15 +77,13 @@ export function AppSidebar({
 
   return (
     <aside className={styles.sidebar}>
-      <div className={styles.brand}>
-        <div className={styles.brandPill}>
-          <span className={styles.brandAvatar}>
-            {(workspaceName.trim()[0] || "?").toUpperCase()}
-          </span>
-          <span className={styles.brandPillName}>{workspaceName}</span>
-          <ChevronsUpDown size={15} className={styles.brandChevron} />
-        </div>
-      </div>
+      <WorkspaceSwitcher
+        workspaceSegment={workspaceSegment}
+        workspacePublicId={workspacePublicId}
+        workspaceName={workspaceName}
+        onOpenSettings={onOpenSettings}
+        onCreateWorkspace={onCreateWorkspace}
+      />
 
       <nav className={styles.nav}>
         <span

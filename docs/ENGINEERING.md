@@ -16,7 +16,7 @@ Stack: Next.js 16 (App Router) · React 19 · TypeScript (strict) · Supabase ·
 
 ### Known debt
 
-See [docs/REFACTOR-FINDINGS.md](REFACTOR-FINDINGS.md) for the current list of open findings (`F-NNN` ids). At a glance: chrome-extension PascalCase filenames (F-007), files still over the 500-line cap (§2, remeasured 2026-07-11), the canvas store still syncs server data it should push out to a query library (§7), skill_files single-row collapse (F-029). Lint debt is ZERO as of 2026-07-11 (F-006 resolved) — keep `npx eslint` at 0 errors; the invariant test suites (root `npx vitest run` + `packages/mcp-server` `npx vitest run`) are part of definition-of-done for MCP/tool and service changes.
+See [docs/REFACTOR-FINDINGS.md](REFACTOR-FINDINGS.md) for the current list of open findings (`F-NNN` ids). At a glance: chrome-extension PascalCase filenames (F-007), files still over the 500-line cap (§2, remeasured 2026-07-11), the canvas store still syncs server data it should push out to a query library (§7). Lint debt is ZERO as of 2026-07-11 (F-006 resolved) — keep `npx eslint` at 0 errors; the invariant test suites (root `npx vitest run` + `packages/mcp-server` `npx vitest run`) are part of definition-of-done for MCP/tool and service changes.
 
 TanStack Query is now the server-state layer (§7) and every feature's client data hooks are on it — the legacy `useApiGet` / per-feature `useFetch` copies are gone. Don't reintroduce `useEffect + fetch + useState` for mount-time GETs; mutations in event handlers use `apiRequest` (plus a `queryClient.setQueryData`/`invalidateQueries` when a cached list must reflect the change).
 
@@ -108,12 +108,8 @@ Remeasured 2026-07-11 (after the knowledge-service / skills-service / KB-panel s
 
 | File | Lines | Reason |
 |------|-------|--------|
-| `src/features/knowledge/server/repository.ts` | ~890 | Scheduled: mirror the service-module split (F-030 follow-up). |
-| `src/features/workflows/server/authoring.ts` | ~830 | Scheduled: split graph authoring vs node/edge ops. |
 | `src/features/canvas/canvas.tsx` | ~720 | Scheduled: imperative pointer/wheel handlers await extraction into `use-viewport` + `use-interactions` hooks. |
 | `src/features/canvas/panels/skill/skill-panel.tsx` | ~645 | Scheduled: extract editor body vs panel shell. |
-| `src/features/skills/server/repository.ts` | ~635 | Scheduled: mirror the service-module split (F-030 follow-up). |
-| `src/features/chats/server/service.ts` | ~620 | Scheduled: split export/append vs read/folders. |
 | `src/features/skills/components/skill-view.tsx` | ~620 | Scheduled: extract detail-rail sections. |
 | `src/features/canvas/canvas-store/reducer.ts` | ~595 | Exception: cohesive state-machine reducer. |
 | `packages/dopl-client/src/client.ts` | ~600 | Scheduled: continue per-domain method-group extraction. |
