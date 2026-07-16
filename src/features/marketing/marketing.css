@@ -385,6 +385,38 @@
   color: #2a2118;
 }
 
+/* feature description under the panel title */
+.lp-panel-blurb {
+  max-width: clamp(170px, 18vw, 250px);
+  margin-top: 6px;
+  font-size: clamp(12px, 1vw, 14px);
+  line-height: 1.45;
+  color: rgba(60, 50, 38, 0.72);
+}
+
+/* ── In-panel product demo — a miniature of the real app page ──────────
+   Anchored to the panel's BOTTOM edge (open bottom, rounded top corners
+   via the replica's own .page-float chrome) with padding on the top and
+   right, so it reads as a window rising out of the folder card. */
+.lp-demo-slot {
+  position: absolute;
+  top: 58px; /* clears the progress strip + title row */
+  right: 28px;
+  bottom: 0; /* flush against the panel's bottom border */
+  left: 32%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  pointer-events: none; /* decorative — clicks fall through to the deck */
+  z-index: 3;
+}
+
+.lp-demo {
+  flex: none;
+  transform-origin: bottom right;
+  transition: opacity 0.3s ease;
+}
+
 /* ── Folder tab — a child of its card; same fill so it reads as one piece ─ */
 .lp-tab {
   position: absolute;
@@ -500,6 +532,10 @@
     --tabH: 78px;
     --rail-step: 26px; /* < tabW so the parked tabs still overlap */
     aspect-ratio: 3 / 4;
+  }
+  /* portrait cards are too narrow for the miniature — text only */
+  .lp-demo-slot {
+    display: none;
   }
 }
 

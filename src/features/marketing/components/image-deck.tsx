@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { DECK_DURATION_S, DECK_PANELS } from "../constants";
+import { OntologyDemo } from "./ontology-demo";
 
 const N = DECK_PANELS.length;
 
@@ -89,8 +90,10 @@ export function ImageDeck() {
               <span className="lp-panel-body">
                 <span className="lp-panel-eyebrow">{panel.eyebrow}</span>
                 <span className="lp-panel-title">{panel.label}</span>
+                {panel.blurb && <span className="lp-panel-blurb">{panel.blurb}</span>}
               </span>
             )}
+            {(isMain || isDone) && panel.id === "ontology" && <OntologyDemo />}
             {isMain && (
               <span className="lp-panel-progress" aria-hidden>
                 <span

@@ -24,14 +24,28 @@ export const HERO = {
 export const DOWNLOAD_URL =
   "https://github.com/SamuelrWang/Dopl/releases/latest/download/Dopl-arm64.dmg";
 
+export interface DeckPanel {
+  id: string;
+  eyebrow: string;
+  label: string;
+  /** Short feature description shown in the expanded panel (rolling out per tab). */
+  blurb?: string;
+}
+
 /** Stacked deck panels under the hero. Front = active; rest fan to the right. */
-export const DECK_PANELS = [
+export const DECK_PANELS: readonly DeckPanel[] = [
   { id: "human", eyebrow: "01", label: "Humans" },
   { id: "agent", eyebrow: "02", label: "Agents" },
-  { id: "ontology", eyebrow: "03", label: "Ontology" },
+  {
+    id: "ontology",
+    eyebrow: "03",
+    label: "Ontology",
+    blurb:
+      "Skills, knowledge, and chats compose into one live graph — the shared ontology your agents read, write, and act through.",
+  },
   { id: "tools", eyebrow: "04", label: "Tools" },
   { id: "action", eyebrow: "05", label: "Actions" },
-] as const;
+];
 
 /** Seconds the top slider takes to cross a panel before auto-advancing. */
 export const DECK_DURATION_S = 8;
