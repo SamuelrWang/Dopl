@@ -207,6 +207,17 @@ export async function markObjectDeleted(workspaceId: string, id: string): Promis
   if (error) throw error;
 }
 
+export async function markObjectsDeleted(workspaceId: string, ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const db = supabaseAdmin();
+  const { error } = await db
+    .from("ontology_objects")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("workspace_id", workspaceId)
+    .in("id", ids);
+  if (error) throw error;
+}
+
 export async function listMemberships(workspaceId: string): Promise<OntologyMembershipRow[]> {
   const db = supabaseAdmin();
   const { data, error } = await db

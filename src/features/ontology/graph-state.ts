@@ -26,6 +26,7 @@ export type GraphAction =
   | { type: "SNAPSHOT_SET"; snapshot: OntologySnapshot }
   | { type: "CLUSTER_ADD"; cluster: OntologyCluster }
   | { type: "CLUSTER_UPDATE"; id: string; patch: { name?: string; purpose?: string } }
+  | { type: "CLUSTER_DELETE"; id: string }
   | {
       type: "OBJECT_ADD";
       object: OntologyObject;
@@ -81,6 +82,31 @@ function patchObject(
   return { ...state, objects: { ...state.objects, [id]: fn(obj) } };
 }
 
+/**
+ * Every object a cluster owns: its columns plus all nested descendants
+ * reached through childIds. Visited-set guards against cycles from
+ * objects shared across parents.
+ */
+function collectClusterObjectIds(state: GraphState, cluster: OntologyCluster): Set<string> {
+  const removed = new Set<string>();
+  const stack = [...cluster.columnIds];
+  while (stack.length > 0) {
+    const id = stack.pop();
+    if (id === undefined || removed.has(id)) continue;
+    removed.add(id);
+    const obj = state.objects[id];
+    if (obj) stack.push(...obj.childIds);
+  }
+  return removed;
+}
+
+/** Ids of every object a `CLUSTER_DELETE` removes — columns and all descendants. */
+export function clusterObjectIds(state: GraphState, clusterId: string): string[] {
+  const cluster = state.clusters.find((c) => c.id === clusterId);
+  if (!cluster) return [];
+  return [...collectClusterObjectIds(state, cluster)];
+}
+
 export function graphReducer(state: GraphState, action: GraphAction): GraphState {
   switch (action.type) {
     case "SNAPSHOT_SET":
@@ -94,6 +120,29 @@ export function graphReducer(state: GraphState, action: GraphAction): GraphState
           c.id === action.id ? { ...c, ...action.patch } : c
         ),
       };
+    case "CLUSTER_DELETE": {
+      const cluster = state.clusters.find((c) => c.id === action.id);
+      if (!cluster) return state;
+      const removed = collectClusterObjectIds(state, cluster);
+      const objects = { ...state.objects };
+      for (const id of removed) delete objects[id];
+      for (const [oid, obj] of Object.entries(objects)) {
+        const isParent = obj.childIds.some((cid) => removed.has(cid));
+        const isSource = obj.relationships.some((r) => r.targetIds.some((t) => removed.has(t)));
+        if (!isParent && !isSource) continue;
+        objects[oid] = {
+          ...obj,
+          childIds: obj.childIds.filter((cid) => !removed.has(cid)),
+          relationships: obj.relationships
+            .map((r) => ({ ...r, targetIds: r.targetIds.filter((t) => !removed.has(t)) }))
+            .filter((r) => r.targetIds.length > 0),
+        };
+      }
+      return {
+        objects,
+        clusters: state.clusters.filter((c) => c.id !== action.id),
+      };
+    }
     case "OBJECT_ADD": {
       const objects = { ...state.objects, [action.object.id]: action.object };
       if (action.parentObjectId) {

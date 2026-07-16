@@ -12,7 +12,7 @@ import type {
   OntologyObjectCreateInput,
   OntologyObjectUpdateInput,
 } from "../schema";
-import { mapObjectRow, type OntologyClusterRow } from "./dto";
+import { mapObjectRow, type OntologyClusterRow, type OntologyMembershipRow } from "./dto";
 import * as repo from "./repository";
 
 export interface OntologyContext {
@@ -109,7 +109,45 @@ export async function updateCluster(
 export async function deleteCluster(ctx: OntologyContext, clusterId: string): Promise<void> {
   const row = await repo.findClusterById(ctx.workspaceId, clusterId);
   if (!row) throw HttpError.notFound("Cluster not found");
+  // Soft delete is an UPDATE, so the FK ON DELETE CASCADE never fires —
+  // cascade in code so the cluster's columns and their nested cards don't
+  // orphan as live objects. Memberships/relationships stay put; the
+  // snapshot drops them once their objects are gone (as with deleteObject).
+  const memberships = await repo.listMemberships(ctx.workspaceId);
+  const objectIds = clusterObjectIds(memberships, clusterId);
+  await repo.markObjectsDeleted(ctx.workspaceId, objectIds);
   await repo.markClusterDeleted(ctx.workspaceId, clusterId);
+}
+
+/**
+ * Every object a cluster owns: its columns (memberships with this
+ * cluster_id) plus all nested cards reached by walking parent_object_id
+ * memberships. Visited-set guards against cycles from shared objects.
+ */
+function clusterObjectIds(
+  memberships: OntologyMembershipRow[],
+  clusterId: string
+): string[] {
+  const childrenByParent = new Map<string, string[]>();
+  const columns: string[] = [];
+  for (const m of memberships) {
+    if (m.cluster_id === clusterId) columns.push(m.child_object_id);
+    if (m.parent_object_id) {
+      const kids = childrenByParent.get(m.parent_object_id) ?? [];
+      kids.push(m.child_object_id);
+      childrenByParent.set(m.parent_object_id, kids);
+    }
+  }
+  const collected = new Set<string>();
+  const stack = [...columns];
+  while (stack.length > 0) {
+    const id = stack.pop();
+    if (id === undefined || collected.has(id)) continue;
+    collected.add(id);
+    const kids = childrenByParent.get(id);
+    if (kids) stack.push(...kids);
+  }
+  return [...collected];
 }
 
 export async function createObject(

@@ -1,6 +1,6 @@
 "use client";
 
-import type { EdgeSide, MockEdge, MockEdgeKind } from "../mock-data";
+import type { EdgeSide, SceneEdge, SceneEdgeKind } from "./types";
 
 export interface NodeRect {
   x: number;
@@ -51,7 +51,7 @@ function inferSides(a: NodeRect, b: NodeRect): [EdgeSide, EdgeSide] {
  *  - same horizontal side     → loop out to `mid` y
  *  - mixed axes               → single L corner
  */
-function routePoints(a: NodeRect, b: NodeRect, edge: MockEdge): Point[] {
+function routePoints(a: NodeRect, b: NodeRect, edge: SceneEdge): Point[] {
   const [inferredFrom, inferredTo] = inferSides(a, b);
   const fromSide = edge.fromSide ?? inferredFrom;
   const toSide = edge.toSide ?? inferredTo;
@@ -135,16 +135,16 @@ function labelPoint(points: Point[]): Point {
 }
 
 const EDGE_STYLE: Record<
-  MockEdgeKind,
+  SceneEdgeKind,
   { stroke: string; dash?: string; width: number; marker?: string }
 > = {
   containment: { stroke: "var(--border-highlight)", dash: "3 5", width: 1.5 },
-  relationship: { stroke: "var(--text-secondary)", width: 1.5, marker: "url(#c2-arrow)" },
-  ref: { stroke: "var(--text-muted)", dash: "1.5 4", width: 1.5, marker: "url(#c2-arrow-muted)" },
+  relationship: { stroke: "var(--text-secondary)", width: 1.5, marker: "url(#og-arrow)" },
+  ref: { stroke: "var(--text-muted)", dash: "1.5 4", width: 1.5, marker: "url(#og-arrow-muted)" },
 };
 
 interface Props {
-  edges: MockEdge[];
+  edges: SceneEdge[];
   rects: Record<string, NodeRect>;
   /** Edges touching this node render emphasized. */
   focusId: string | null;
@@ -175,7 +175,7 @@ export function EdgeLayer({ edges, rects, focusId }: Props) {
       >
         <defs>
           <marker
-            id="c2-arrow"
+            id="og-arrow"
             viewBox="0 0 8 8"
             refX="7"
             refY="4"
@@ -186,7 +186,7 @@ export function EdgeLayer({ edges, rects, focusId }: Props) {
             <path d="M0.5 0.8 L7 4 L0.5 7.2" fill="none" stroke="var(--text-secondary)" strokeWidth="1.4" />
           </marker>
           <marker
-            id="c2-arrow-muted"
+            id="og-arrow-muted"
             viewBox="0 0 8 8"
             refX="7"
             refY="4"

@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { toast } from "@/shared/ui/toast";
 import * as api from "../client/api";
 import {
+  clusterObjectIds,
   EMPTY_GRAPH,
   graphReducer,
   objectIdToSync,
@@ -188,6 +189,8 @@ export function useOntology(workspaceId: string): {
 
   const dispatch = useCallback(
     (action: GraphAction) => {
+      const removedClusterObjectIds =
+        action.type === "CLUSTER_DELETE" ? clusterObjectIds(graphRef.current, action.id) : [];
       dirtyRef.current = true;
       rawDispatch(action);
       const objectId = objectIdToSync(action);
@@ -198,6 +201,17 @@ export function useOntology(workspaceId: string): {
         if (timer) clearTimeout(timer);
         timersRef.current.delete(action.id);
         api.deleteObject(workspaceId, action.id).catch((err) => reportSaveError("delete", err));
+      }
+      if (action.type === "CLUSTER_DELETE") {
+        const timers = timersRef.current;
+        for (const key of [`cluster:${action.id}`, ...removedClusterObjectIds]) {
+          const timer = timers.get(key);
+          if (timer) clearTimeout(timer);
+          timers.delete(key);
+        }
+        api
+          .deleteCluster(workspaceId, action.id)
+          .catch((err) => reportSaveError("delete cluster", err));
       }
     },
     [workspaceId, scheduleObjectSync, scheduleClusterSync]
