@@ -329,7 +329,8 @@
    left edge, so ONE rail-step of offset clears them — cap it there (min(done,1))
    so Humans sits at base and every later panel sits at the Agents position
    instead of marching further right each time. */
-.lp-panel[data-state="main"] .lp-panel-body {
+.lp-panel[data-state="main"] .lp-panel-body,
+.lp-panel[data-state="main"] .lp-demo-caption {
   left: calc(clamp(22px, 2.4vw, 40px) + var(--rail-step) * min(var(--done), 1));
 }
 
@@ -348,7 +349,8 @@
    rail-step left of the main offset so it lines up exactly with where it sat as
    the active panel (--done has already incremented), then glides off with the
    card. older parked cards have this body too, but it's clipped off-screen. */
-.lp-panel[data-state="done"] .lp-panel-body {
+.lp-panel[data-state="done"] .lp-panel-body,
+.lp-panel[data-state="done"] .lp-demo-caption {
   left: calc(clamp(22px, 2.4vw, 40px) + var(--rail-step) * min(var(--done) - 1, 1));
 }
 
@@ -415,6 +417,102 @@
   flex: none;
   transform-origin: bottom right;
   transition: opacity 0.3s ease;
+}
+
+/* live narration line — sits at the bottom of the panel's text column and
+   fades in on every scenario step (the element is re-keyed per caption) */
+.lp-demo-caption {
+  position: absolute;
+  bottom: 26px;
+  left: clamp(22px, 2.4vw, 40px);
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  max-width: clamp(170px, 18vw, 250px);
+  font-size: clamp(11.5px, 0.95vw, 13px);
+  line-height: 1.4;
+  color: rgba(48, 39, 28, 0.85);
+  animation: lp-caption-in 0.45s ease both;
+  z-index: 4;
+}
+
+.lp-demo-caption-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #2f8a4f;
+  align-self: center;
+  animation: lp-dot-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes lp-caption-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes lp-dot-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(47, 138, 79, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(47, 138, 79, 0);
+  }
+}
+
+/* scenario transitions inside the miniatures */
+.lp-demo-pop {
+  animation: lp-pop 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+
+@keyframes lp-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.lp-demo-row-in {
+  animation: lp-row-in 0.35s ease both;
+}
+
+@keyframes lp-row-in {
+  from {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* typing caret used by the knowledge/skills miniatures */
+.lp-demo-caret {
+  display: inline-block;
+  width: 1px;
+  height: 1em;
+  margin-left: 1px;
+  background: currentColor;
+  vertical-align: text-bottom;
+  animation: lp-caret 1s steps(2, start) infinite;
+}
+
+@keyframes lp-caret {
+  50% {
+    opacity: 0;
+  }
 }
 
 /* ── Folder tab — a child of its card; same fill so it reads as one piece ─ */
@@ -534,7 +632,8 @@
     aspect-ratio: 3 / 4;
   }
   /* portrait cards are too narrow for the miniature — text only */
-  .lp-demo-slot {
+  .lp-demo-slot,
+  .lp-demo-caption {
     display: none;
   }
 }

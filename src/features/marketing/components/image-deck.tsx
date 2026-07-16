@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 import { DECK_DURATION_S, DECK_PANELS } from "../constants";
-import { OntologyDemo } from "./ontology-demo";
+import { FEATURE_DEMOS } from "./feature-demos";
 
 const N = DECK_PANELS.length;
 
@@ -19,6 +19,8 @@ const N = DECK_PANELS.length;
 export function ImageDeck() {
   const [slots, setSlots] = useState<number[]>(() => DECK_PANELS.map((_, i) => i));
   const [step, setStep] = useState(0); // restarts the slider on every move
+  // mirrors the CSS :hover pause on the progress bar, for the demo timelines
+  const [hovered, setHovered] = useState(false);
 
   const advance = () => {
     setStep((s) => s + 1);
@@ -42,12 +44,15 @@ export function ImageDeck() {
   return (
     <div
       className="lp-deck"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{ "--panels": N, "--dur": `${DECK_DURATION_S}s` } as React.CSSProperties}
     >
       {DECK_PANELS.map((panel, i) => {
         const slot = slots[i];
         const isMain = slot === 0;
         const isDone = slot < 0;
+        const Demo = FEATURE_DEMOS[panel.id];
 
         // the active card sits just right of the done-tab rail; pending cascade
         // to its right; a done card's body glides off-left, leaving a tab parked
@@ -93,7 +98,7 @@ export function ImageDeck() {
                 {panel.blurb && <span className="lp-panel-blurb">{panel.blurb}</span>}
               </span>
             )}
-            {(isMain || isDone) && panel.id === "ontology" && <OntologyDemo />}
+            {(isMain || isDone) && Demo && <Demo active={isMain} paused={hovered} />}
             {isMain && (
               <span className="lp-panel-progress" aria-hidden>
                 <span

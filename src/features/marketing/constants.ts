@@ -34,17 +34,41 @@ export interface DeckPanel {
 
 /** Stacked deck panels under the hero. Front = active; rest fan to the right. */
 export const DECK_PANELS: readonly DeckPanel[] = [
-  { id: "human", eyebrow: "01", label: "Humans" },
-  { id: "agent", eyebrow: "02", label: "Agents" },
   {
     id: "ontology",
-    eyebrow: "03",
+    eyebrow: "01",
     label: "Ontology",
     blurb:
-      "Skills, knowledge, and chats compose into one live graph — the shared ontology your agents read, write, and act through.",
+      "Your team's intelligence, structured. Objects, attributes, and edges — one live graph your agents read, write, and act through.",
   },
-  { id: "tools", eyebrow: "04", label: "Tools" },
-  { id: "action", eyebrow: "05", label: "Actions" },
+  {
+    id: "knowledge",
+    eyebrow: "02",
+    label: "Knowledge",
+    blurb:
+      "What your team knows, as objects in the graph. Agents pull the right doc into context instead of guessing.",
+  },
+  {
+    id: "skills",
+    eyebrow: "03",
+    label: "Skills",
+    blurb:
+      "How your team does things — procedures agents load and follow. Written once, versioned, linked into the ontology.",
+  },
+  {
+    id: "chats",
+    eyebrow: "04",
+    label: "Chats",
+    blurb:
+      "What your agents have said and decided. Every conversation archived, searchable, and feeding back into the graph.",
+  },
+  {
+    id: "workflows",
+    eyebrow: "05",
+    label: "Workflows",
+    blurb:
+      "Multi-step runs your agents execute end-to-end — grounded in the same ontology, so every step knows the context.",
+  },
 ];
 
 /** Seconds the top slider takes to cross a panel before auto-advancing. */
