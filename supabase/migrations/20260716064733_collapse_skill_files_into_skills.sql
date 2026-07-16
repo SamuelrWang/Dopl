@@ -1,6 +1,6 @@
 -- Collapse the single-row-per-skill `skill_files` table into `skills` (F-029).
 --
--- Skills went single-file in 20260711000000: every skill carries exactly
+-- Skills went single-file in 20260716064655: every skill carries exactly
 -- ONE active file (its SKILL.md), enforced by the `skill_files_single_active`
 -- partial unique index. Keeping a whole table + a join for one text blob per
 -- skill is dead weight, so the body now lives on the `skills` row directly.
@@ -53,7 +53,7 @@ BEGIN
 END $$;
 
 -- ── b. Backfill from the single active SKILL.md row ───────────────────────
--- Skills with no active file (shouldn't exist post-20260711000000) keep the
+-- Skills with no active file (shouldn't exist post-20260716064655) keep the
 -- column defaults. Guarded so a re-run after the table drop is a no-op.
 
 DO $$

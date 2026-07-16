@@ -1095,8 +1095,8 @@ export type Database = {
           id: string
           methods: Json
           name: string
-          object_type: string
           subtitle: string
+          template: Json
           updated_at: string
           user_id: string | null
           workspace_id: string
@@ -1109,8 +1109,8 @@ export type Database = {
           id?: string
           methods?: Json
           name: string
-          object_type?: string
           subtitle?: string
+          template?: Json
           updated_at?: string
           user_id?: string | null
           workspace_id: string
@@ -1123,8 +1123,8 @@ export type Database = {
           id?: string
           methods?: Json
           name?: string
-          object_type?: string
           subtitle?: string
+          template?: Json
           updated_at?: string
           user_id?: string | null
           workspace_id?: string
