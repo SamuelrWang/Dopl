@@ -12,6 +12,8 @@ interface Props {
   node: SceneNode;
   position: NodeLayout;
   graph: GraphState;
+  /** Viewers (member-below) see no add-card affordance on column nodes. */
+  canEdit?: boolean;
   selected: boolean;
   dimmed: boolean;
   onSelect: (id: string) => void;
@@ -36,6 +38,7 @@ export function GraphNode({
   node,
   position,
   graph,
+  canEdit = true,
   selected,
   dimmed,
   onSelect,
@@ -69,7 +72,11 @@ export function GraphNode({
       }}
     >
       {isColumn ? (
-        <ColumnBody object={node.object} onAddCard={() => onAddCard(node.id)} />
+        <ColumnBody
+          object={node.object}
+          canEdit={canEdit}
+          onAddCard={() => onAddCard(node.id)}
+        />
       ) : (
         <ObjectBody object={node.object} graph={graph} />
       )}
@@ -77,7 +84,15 @@ export function GraphNode({
   );
 }
 
-function ColumnBody({ object, onAddCard }: { object: OntologyObject; onAddCard: () => void }) {
+function ColumnBody({
+  object,
+  canEdit,
+  onAddCard,
+}: {
+  object: OntologyObject;
+  canEdit: boolean;
+  onAddCard: () => void;
+}) {
   return (
     <>
       <div className="flex items-center gap-2 border-b border-border-default bg-card-surface-subtle px-3 py-1.5">
@@ -87,18 +102,20 @@ function ColumnBody({ object, onAddCard }: { object: OntologyObject; onAddCard: 
         </span>
         <span className="flex-1" />
         <span className="text-micro text-text-muted">{object.childIds.length}</span>
-        <button
-          type="button"
-          aria-label={`Add object to ${object.name || "column"}`}
-          title="Add object"
-          onClick={(e) => {
-            e.stopPropagation();
-            onAddCard();
-          }}
-          className="btn-light flex h-5 w-5 items-center justify-center rounded-md text-text-primary"
-        >
-          <Plus size={10} />
-        </button>
+        {canEdit && (
+          <button
+            type="button"
+            aria-label={`Add object to ${object.name || "column"}`}
+            title="Add object"
+            onClick={(e) => {
+              e.stopPropagation();
+              onAddCard();
+            }}
+            className="btn-light flex h-5 w-5 items-center justify-center rounded-md text-text-primary"
+          >
+            <Plus size={10} />
+          </button>
+        )}
       </div>
       <div className="flex flex-col gap-2 px-3 py-2.5">
         {object.subtitle && (

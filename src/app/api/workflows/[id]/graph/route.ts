@@ -3,7 +3,6 @@ import { z } from "zod";
 import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
 import type { Role } from "@/features/workspaces/types";
 import { HttpError } from "@/shared/lib/http-error";
-import { denyIfNoCanvasWrite } from "@/features/canvas/server/access";
 import { DESCRIPTION_MAX } from "@/config";
 import {
   requireWorkflowEdit,
@@ -31,9 +30,14 @@ const NodeSpec = z.object({
   agentOutput: z.string().max(DESCRIPTION_MAX * 8).optional(),
   nextInstructions: z.string().max(DESCRIPTION_MAX * 8).optional(),
 });
+const EdgeSpec = z.object({
+  from: z.string().min(1),
+  to: z.string().min(1),
+  condition: z.string().max(500).optional(),
+});
 const GraphSchema = z.object({
   nodes: z.array(NodeSpec).max(100),
-  edges: z.array(z.object({ from: z.string().min(1), to: z.string().min(1) })).max(300),
+  edges: z.array(EdgeSpec).max(300),
 });
 
 function toError(err: unknown): NextResponse {
@@ -48,13 +52,6 @@ function toError(err: unknown): NextResponse {
 
 async function handlePost(request: NextRequest, ctx: Ctx) {
   try {
-    const denied = await denyIfNoCanvasWrite({
-      agentTokenId: ctx.agentTokenId,
-      userId: ctx.userId,
-      workspaceId: ctx.workspaceId,
-    });
-    if (denied) return denied;
-
     const id = ctx.params?.id;
     if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
     const parsed = GraphSchema.safeParse(await request.json());

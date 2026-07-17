@@ -3,14 +3,13 @@ import { createServerSupabaseClient } from "@/shared/supabase/admin";
 import { cookies } from "next/headers";
 import { logConversionEvent, hasFiredEvent } from "@/features/analytics/server/conversion-events";
 import { ensureDefaultWorkspace } from "@/features/workspaces/server/service";
-import { ensureDefaultCanvas } from "@/features/workspaces/server/canvases";
 import { isOnboarded } from "@/features/onboarding/server/service";
 import { safeRedirect } from "@/shared/lib/url/safe-redirect";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
-  // Workspace + canvas are provisioned below before redirect, so a
+  // A default workspace is provisioned below before redirect, so a
   // first-time user lands directly in their workspace. Deep links
   // override via ?redirectTo= but only if same-origin path (open
   // redirect guard — see safeRedirect doc).
@@ -45,13 +44,11 @@ export async function GET(request: NextRequest) {
             });
           }
 
-          // Provision a default workspace + canvas for every signed-in
-          // user. Both helpers are idempotent — a returning user just
-          // pays two cheap SELECTs. New users land here on first sign-in
-          // and get the workspace + canvas they'll use as soon as they
-          // hit /canvas.
-          const workspace = await ensureDefaultWorkspace(user.id);
-          await ensureDefaultCanvas(workspace.id);
+          // Provision a default workspace for every signed-in user.
+          // Idempotent — a returning user just pays one cheap SELECT.
+          // New users land here on first sign-in and get the workspace
+          // they'll use as soon as they hit /canvas.
+          await ensureDefaultWorkspace(user.id);
 
           // First-run users detour to /onboarding (survey + MCP connect).
           // Only an EXPLICIT deep link is threaded — the /canvas default

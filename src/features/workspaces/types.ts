@@ -58,22 +58,6 @@ export interface WorkspaceWithRole extends Workspace {
   role: Role;
 }
 
-/**
- * A canvas is a page/view inside a workspace. Today every workspace has
- * exactly one (slug='main'); the table is in place so multi-canvas can
- * land later without a schema migration. Distinct from the infinite-
- * canvas UI feature in `src/features/canvas/` — this is the persistent
- * entity, that is the renderer.
- */
-export interface WorkspaceCanvas {
-  id: string;
-  workspaceId: string;
-  name: string;
-  slug: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
 export interface WorkspaceMembership {
   workspaceId: string;
   userId: string;

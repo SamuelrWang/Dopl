@@ -1,7 +1,7 @@
 "use strict";
 /**
  * `dopl_cluster` + `dopl_cluster_admin` — clusters are non-spatial
- * CONTAINERS that group workflows. KB/skill attachments + the node graph
+ * CONTAINERS that group workflows. KB/skill attachments + the step graph
  * live on the workflows themselves (see dopl_workflow); a cluster only
  * carries a name/description and the list of workflows assigned to it.
  */
@@ -12,7 +12,7 @@ const respond_1 = require("./respond");
 const CLUSTER_DESCRIPTION = `Read and non-destructively modify Dopl clusters (containers that group related workflows). Set \`op\` to one of:
 - "list" — discover all clusters and how many workflows each holds. Cheap metadata call; run it proactively to show the user their workspace.
 - "get" — retrieve a cluster's metadata plus the workflows assigned to it. Inspect a workflow's steps + knowledge/skills with dopl_workflow(op="get", slug).
-- "create" — create a new, empty cluster by name. Assign workflows to it from the canvas.
+- "create" — create a new, empty cluster by name. Assign workflows to it with dopl_workflow(op="set_cluster").
 - "update" — rename a cluster (\`name\`) and/or set its \`description\`.`;
 const CLUSTER_ADMIN_DESCRIPTION = `DESTRUCTIVE cluster operations — permanent and irreversible. Confirm intent if the user's phrasing is at all ambiguous. Set \`op\` to one of:
 - "delete_cluster" — permanently delete a cluster container. Its workflows survive (they just lose their cluster grouping).`;

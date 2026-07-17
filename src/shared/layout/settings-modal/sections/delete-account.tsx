@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { getSupabaseBrowser } from "@/shared/supabase/browser";
 import { SECTION_BOX_INSET } from "@/shared/ui/section-box";
 import { cn } from "@/shared/lib/utils";
-import { CANVAS_STORAGE_KEY_PREFIX, CANVAS_ACTIVE_USER_KEY } from "@/config";
 
 export function DeleteAccount() {
   const router = useRouter();
@@ -32,11 +31,9 @@ export function DeleteAccount() {
         for (let i = 0; i < localStorage.length; i++) {
           const key = localStorage.key(i);
           if (key && (
-            key.startsWith(CANVAS_STORAGE_KEY_PREFIX) ||
             key.startsWith("dopl:onboarding:") ||
             key === "dopl:bookmarks" ||
-            key === "dopl-sidebar-open" ||
-            key === CANVAS_ACTIVE_USER_KEY
+            key === "dopl-sidebar-open"
           )) {
             keysToRemove.push(key);
           }
@@ -82,7 +79,7 @@ export function DeleteAccount() {
           <div className="space-y-3 rounded-lg border border-border-default bg-bg-elevated p-4">
             <p className="text-caption text-text-secondary">
               Are you sure? This will permanently delete your profile, API keys,
-              canvas, and clusters. This cannot be undone.
+              and clusters. This cannot be undone.
             </p>
             <div className="flex gap-2">
               <button

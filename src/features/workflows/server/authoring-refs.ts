@@ -2,6 +2,7 @@ import "server-only";
 
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { HttpError } from "@/shared/lib/http-error";
+import type { WorkflowStepRead, WorkflowStepAction } from "../types";
 import type { WorkflowScope } from "./service";
 
 /**
@@ -34,24 +35,22 @@ export interface NodeInput {
   nextInstructions?: string;
 }
 export interface EdgeInput {
-  /** Node `ref` or the literal "header". */
+  /** Source step `ref`. */
   from: string;
+  /** Target step `ref`. */
   to: string;
+  /** Optional branch guard (agent-readable free text); '' = unconditional. */
+  condition?: string;
 }
 export interface GraphSpec {
   nodes: NodeInput[];
   edges: EdgeInput[];
 }
 
-export type NodeRef =
-  | { kind: "kb"; kbId: string; name: string }
-  | { kind: "file"; kbId: string; entryId: string; name: string }
-  | { kind: "skill"; skillId: string; name: string };
-
 export interface ResolvedNodeData {
   description: string;
-  reads: NodeRef[];
-  actions: NodeRef[];
+  reads: WorkflowStepRead[];
+  actions: WorkflowStepAction[];
   userInput: string;
   agentOutput: string;
   nextInstructions: string;
@@ -132,7 +131,7 @@ async function resolveRefs(
   reads: ReadRefInput[],
   actions: ActionRefInput[],
   scope: WorkflowScope
-): Promise<{ reads: NodeRef[]; actions: NodeRef[] }> {
+): Promise<{ reads: WorkflowStepRead[]; actions: WorkflowStepAction[] }> {
   const db = supabaseAdmin();
   const kbCanon = await resolveResources(
     "knowledge_bases",
@@ -165,13 +164,13 @@ async function resolveRefs(
       if (!entryById.has(id)) throw new HttpError(404, "ENTRY_NOT_FOUND", `Entry not found: ${id}`);
   }
 
-  const resolvedReads: NodeRef[] = reads.map((r) => {
+  const resolvedReads: WorkflowStepRead[] = reads.map((r) => {
     const kb = kbCanon.get(r.kbId)!;
     return r.entryId
       ? { kind: "file", kbId: kb.id, entryId: r.entryId, name: entryById.get(r.entryId)!.title }
       : { kind: "kb", kbId: kb.id, name: kb.name };
   });
-  const resolvedActions: NodeRef[] = actions.map((a) => {
+  const resolvedActions: WorkflowStepAction[] = actions.map((a) => {
     const sk = skillCanon.get(a.skillId)!;
     return { kind: "skill", skillId: sk.id, name: sk.name };
   });

@@ -108,18 +108,15 @@ Remeasured 2026-07-11 (after the knowledge-service / skills-service / KB-panel s
 
 | File | Lines | Reason |
 |------|-------|--------|
-| `src/features/canvas/canvas.tsx` | ~720 | Scheduled: imperative pointer/wheel handlers await extraction into `use-viewport` + `use-interactions` hooks. |
-| `src/features/canvas/panels/skill/skill-panel.tsx` | ~645 | Scheduled: extract editor body vs panel shell. |
 | `src/features/skills/components/skill-view.tsx` | ~620 | Scheduled: extract detail-rail sections. |
-| `src/features/canvas/canvas-store/reducer.ts` | ~595 | Exception: cohesive state-machine reducer. |
 | `packages/dopl-client/src/client.ts` | ~600 | Scheduled: continue per-domain method-group extraction. |
 | `packages/mcp-server/src/tools/knowledge.ts` | ~600 | Borderline: single-tool module; split ops-vs-render if it grows. |
 | `packages/mcp-server/src/server.ts` | ~595 | Borderline: registration + gating core; watch it. |
 | `packages/mcp-server/src/tools/ontology.ts` | ~590 | Borderline: single-tool module (render half already in ontology-render.ts). |
-| `src/features/canvas/use-canvas-db-sync.ts` | ~540 | Scheduled: split seed vs write-through effects. |
-| `src/features/canvas/types.ts` | ~530 | Exception: type-only domain model. |
-| `packages/mcp-server/src/tools/workflow.ts` | ~515 | Borderline: single-tool module. |
+| `packages/mcp-server/src/tools/workflow.ts` | ~560 | Borderline: single-tool module (grew with the `step` op — split ops-vs-render if it grows again). |
 | `src/features/teams/server/repository.ts` | ~510 | Borderline: watch it. |
+
+(2026-07-16: all `src/features/canvas/**` rows removed — the legacy canvas feature was deleted wholesale; see §7/§8 workflow notes.)
 
 ---
 
@@ -280,20 +277,17 @@ This repo has three layers of state. Keep them separate.
 | Layer | Tool | What lives here |
 |-------|------|-----------------|
 | **Server state** | TanStack Query (adopted 2026-07; provider in `src/shared/api/query-provider.tsx`) | Anything that comes from Supabase or an API |
-| **Canvas client state** | `canvas-store` (context + reducer) | Viewport, panel positions, in-flight chat streams |
-| **Local UI state** | `useState` / `useReducer` | Form values, open/closed, hover |
+| **Local UI state** | `useState` / `useReducer` | Form values, open/closed, hover, graph selection |
 
 New client data code uses `useApiQuery` (`src/shared/hooks/use-api-query.ts`) over `apiRequest` (`src/shared/api/api-client.ts` — the single typed fetch wrapper: workspace header, error envelope, 204s). The legacy per-feature `useFetch`/`request<T>` copies are migration targets, feature by feature — do not add new call sites to them. Realtime refetch signals go through `useWorkspaceTablesRealtime` (`src/shared/realtime/`). List endpoints paginate with `Paginated<T>` (`src/shared/types/paginated.ts`) + `parsePageParams` (`src/shared/api/pagination.ts`).
 
-**Known debt — do not add to it:** the canvas store currently syncs server entities (entries, clusters, panels) via `useCanvasDbSync` and the realtime hooks. That's duplication the future query-library adoption is meant to eliminate. Until then, don't add more server data to the canvas store — if you need to read an entity, add a new hook that reads directly, don't shove it through the reducer.
+### Canvas & Workflows (post-teardown, 2026-07-16)
 
-### Canvas store file layout
+The legacy free-form panel canvas (`features/canvas/`, its `/api/canvas/**` routes, the `[canvasSlug]` page, and the `canvas_panels`/`canvas_edges`/`canvas_state`/`canvases` tables) is **deleted**. The "Canvas" tab is now the ontology graph view at `/[ws]/canvas` (`features/ontology/graph/`); `/canvas` survives only as the global redirect (Stripe `?billing=` return URLs depend on it — it forwards query params to `/{ws}/canvas`).
 
-`src/features/canvas/canvas-store.tsx` is a barrel over four sub-modules under `src/features/canvas/canvas-store/`:
-- `reducer.ts` — pure, no async, no Supabase. Input state + action → output state.
-- `context.tsx` — React contexts + hooks (`useCanvas`, `usePanelsContext`, `useCanvasStateRef`, `useCapabilities`).
-- `layout.ts` — pure geometry helpers (`computeNewPanelPosition`, `findNonOverlappingPosition`, `nextPanelIdString`).
-- `provider.tsx` — `CanvasProvider` + sync bridges (DB / conversations / realtime / auto-focus / shared-panel-move).
+- **Shared graph substrate:** `src/shared/graph/` — generic `SceneNode<T>` + geometry types + the `EdgeLayer` SVG renderer (orthogonal edges, arrowheads, HTML label pills; edge styles injected per domain). Ontology passes `ONTOLOGY_EDGE_STYLES`; workflows pass their sequence/branch styles. Domain layouts stay per-feature (ontology: column-tree `layout.ts`; workflows: layered DAG `features/workflows/graph/layout.ts` — longest-path ranks from indegree-0 entries, barycenter ordering).
+- **Workflows are first-class step graphs:** `workflow_steps` + `workflow_step_edges` (edge `condition` = agent-readable branch guard; entry steps = indegree-0; no header concept). Server split: repository / graph.ts `composeWorkflow` (topo-ordered) / authoring-{graph,nodes,edges,refs,shared}. `dopl_workflow` keeps its op surface plus a stateless `op='step'` walk read (paced context disclosure — agent fetches one step's skills/knowledge/branches at a time; no run state in v1). `dopl_canvas` is retired.
+- Workflow steps are **not** ontology objects — the free-plan object cap does not count them.
 
 ---
 

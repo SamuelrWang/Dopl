@@ -14,196 +14,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      canvas_edges: {
-        Row: {
-          created_at: string
-          created_by: string | null
-          from_panel_id: string
-          id: string
-          to_panel_id: string
-          workspace_id: string
-        }
-        Insert: {
-          created_at?: string
-          created_by?: string | null
-          from_panel_id: string
-          id?: string
-          to_panel_id: string
-          workspace_id: string
-        }
-        Update: {
-          created_at?: string
-          created_by?: string | null
-          from_panel_id?: string
-          id?: string
-          to_panel_id?: string
-          workspace_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "canvas_edges_from_panel_fkey"
-            columns: ["workspace_id", "from_panel_id"]
-            isOneToOne: false
-            referencedRelation: "canvas_panels"
-            referencedColumns: ["workspace_id", "panel_id"]
-          },
-          {
-            foreignKeyName: "canvas_edges_to_panel_fkey"
-            columns: ["workspace_id", "to_panel_id"]
-            isOneToOne: false
-            referencedRelation: "canvas_panels"
-            referencedColumns: ["workspace_id", "panel_id"]
-          },
-          {
-            foreignKeyName: "canvas_edges_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      canvas_panels: {
-        Row: {
-          added_at: string | null
-          height: number | null
-          id: string
-          panel_data: Json
-          panel_id: string
-          panel_type: string
-          source_url: string | null
-          summary: string | null
-          title: string | null
-          user_id: string
-          width: number | null
-          workspace_id: string
-          x: number | null
-          y: number | null
-        }
-        Insert: {
-          added_at?: string | null
-          height?: number | null
-          id?: string
-          panel_data?: Json
-          panel_id: string
-          panel_type?: string
-          source_url?: string | null
-          summary?: string | null
-          title?: string | null
-          user_id: string
-          width?: number | null
-          workspace_id: string
-          x?: number | null
-          y?: number | null
-        }
-        Update: {
-          added_at?: string | null
-          height?: number | null
-          id?: string
-          panel_data?: Json
-          panel_id?: string
-          panel_type?: string
-          source_url?: string | null
-          summary?: string | null
-          title?: string | null
-          user_id?: string
-          width?: number | null
-          workspace_id?: string
-          x?: number | null
-          y?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "canvas_panels_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      canvas_state: {
-        Row: {
-          camera_x: number
-          camera_y: number
-          camera_zoom: number
-          id: string
-          next_panel_id: number
-          sidebar_open: boolean
-          updated_at: string | null
-          user_id: string
-          version: number
-          workspace_id: string
-        }
-        Insert: {
-          camera_x?: number
-          camera_y?: number
-          camera_zoom?: number
-          id?: string
-          next_panel_id?: number
-          sidebar_open?: boolean
-          updated_at?: string | null
-          user_id: string
-          version?: number
-          workspace_id: string
-        }
-        Update: {
-          camera_x?: number
-          camera_y?: number
-          camera_zoom?: number
-          id?: string
-          next_panel_id?: number
-          sidebar_open?: boolean
-          updated_at?: string | null
-          user_id?: string
-          version?: number
-          workspace_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "canvas_state_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: true
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      canvases: {
-        Row: {
-          created_at: string
-          id: string
-          name: string
-          slug: string
-          updated_at: string
-          workspace_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          name: string
-          slug: string
-          updated_at?: string
-          workspace_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          name?: string
-          slug?: string
-          updated_at?: string
-          workspace_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "canvases_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       chat_folders: {
         Row: {
           access_mode: string
@@ -903,6 +713,44 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "oauth_clients"
             referencedColumns: ["client_id"]
+          },
+        ]
+      }
+      mcp_tool_calls: {
+        Row: {
+          created_at: string
+          id: string
+          is_write: boolean
+          op: string
+          tool: string
+          user_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_write?: boolean
+          op?: string
+          tool: string
+          user_id?: string | null
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_write?: boolean
+          op?: string
+          tool?: string
+          user_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mcp_tool_calls_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -1770,6 +1618,131 @@ export type Database = {
           },
         ]
       }
+      workflow_step_edges: {
+        Row: {
+          condition: string
+          created_at: string
+          from_step_id: string
+          id: string
+          to_step_id: string
+          workflow_id: string
+          workspace_id: string
+        }
+        Insert: {
+          condition?: string
+          created_at?: string
+          from_step_id: string
+          id?: string
+          to_step_id: string
+          workflow_id: string
+          workspace_id: string
+        }
+        Update: {
+          condition?: string
+          created_at?: string
+          from_step_id?: string
+          id?: string
+          to_step_id?: string
+          workflow_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workflow_step_edges_from_step_id_fkey"
+            columns: ["from_step_id"]
+            isOneToOne: false
+            referencedRelation: "workflow_steps"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workflow_step_edges_to_step_id_fkey"
+            columns: ["to_step_id"]
+            isOneToOne: false
+            referencedRelation: "workflow_steps"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workflow_step_edges_workflow_id_fkey"
+            columns: ["workflow_id"]
+            isOneToOne: false
+            referencedRelation: "workflows"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workflow_step_edges_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workflow_steps: {
+        Row: {
+          actions: Json
+          agent_output: string
+          created_at: string
+          description: string
+          id: string
+          next_instructions: string
+          position: number
+          reads: Json
+          ref: string
+          title: string
+          updated_at: string
+          user_input: string
+          workflow_id: string
+          workspace_id: string
+        }
+        Insert: {
+          actions?: Json
+          agent_output?: string
+          created_at?: string
+          description?: string
+          id?: string
+          next_instructions?: string
+          position?: number
+          reads?: Json
+          ref: string
+          title?: string
+          updated_at?: string
+          user_input?: string
+          workflow_id: string
+          workspace_id: string
+        }
+        Update: {
+          actions?: Json
+          agent_output?: string
+          created_at?: string
+          description?: string
+          id?: string
+          next_instructions?: string
+          position?: number
+          reads?: Json
+          ref?: string
+          title?: string
+          updated_at?: string
+          user_input?: string
+          workflow_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workflow_steps_workflow_id_fkey"
+            columns: ["workflow_id"]
+            isOneToOne: false
+            referencedRelation: "workflows"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workflow_steps_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workflows: {
         Row: {
           access_mode: string
@@ -1819,6 +1792,56 @@ export type Database = {
             foreignKeyName: "workflows_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workspace_billing: {
+        Row: {
+          created_at: string
+          current_period_end: string | null
+          last_stripe_event_created: number | null
+          plan: string
+          seat_count: number | null
+          status: string
+          stripe_customer_id: string | null
+          stripe_price_id: string | null
+          stripe_subscription_id: string | null
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          current_period_end?: string | null
+          last_stripe_event_created?: number | null
+          plan?: string
+          seat_count?: number | null
+          status?: string
+          stripe_customer_id?: string | null
+          stripe_price_id?: string | null
+          stripe_subscription_id?: string | null
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          current_period_end?: string | null
+          last_stripe_event_created?: number | null
+          plan?: string
+          seat_count?: number | null
+          status?: string
+          stripe_customer_id?: string | null
+          stripe_price_id?: string | null
+          stripe_subscription_id?: string | null
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_billing_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: true
             referencedRelation: "workspaces"
             referencedColumns: ["id"]
           },

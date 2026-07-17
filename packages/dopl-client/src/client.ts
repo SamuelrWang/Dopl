@@ -1,5 +1,4 @@
 import type {
-  CanvasPanel,
   WorkspaceListItem,
   ClusterDetail,
   ClusterRow,
@@ -99,14 +98,6 @@ export class DoplClient {
 
   getWorkspaceId(): string | null {
     return this.transport.getWorkspaceId();
-  }
-
-  async listCanvasPanels(): Promise<CanvasPanel[]> {
-    const res = await this.transport.request<{ panels: CanvasPanel[] }>(
-      "/api/canvas/panels",
-      { toolName: "canvas_list_panels" }
-    );
-    return res.panels;
   }
 
   async createCluster(name: string): Promise<ClusterRow> {
@@ -223,13 +214,14 @@ export class DoplClient {
   async connectWorkflow(
     idOrSlug: string,
     from: string,
-    to: string
+    to: string,
+    condition?: string
   ): Promise<void> {
     await this.transport.requestNoContent(
       `/api/workflows/${encodeURIComponent(idOrSlug)}/edges`,
       "POST",
       "connect_workflow",
-      { from, to }
+      { from, to, condition }
     );
   }
 

@@ -1,25 +1,21 @@
 import "server-only";
 
 /**
- * Server-side workflow GRAPH authoring (used by the MCP agent path) — the
- * public surface. Writes the header + node `canvas_panels` rows and
- * `canvas_edges` that the canvas renders, then reconciles
- * `workflow_knowledge_bases` / `workflow_skills` from the nodes' docked
- * refs. The canvas realtime subscription reflects these onto an open
- * canvas live.
+ * Server-side workflow GRAPH authoring (used by the MCP agent path + the
+ * web UI) — the public surface. Writes the `workflow_steps` +
+ * `workflow_step_edges` rows the workflow is composed from, then
+ * reconciles `workflow_knowledge_bases` / `workflow_skills` from the
+ * steps' docked refs.
  *
  * This module is a barrel: the implementation lives in per-seam siblings
  * so each file has one clear purpose. Every existing importer keeps
  * working unchanged.
- *   - `authoring-header.ts` — header panel spawn/sync/resolve (the shared entry point)
  *   - `authoring-refs.ts`   — wire types + kb/skill/entry ref resolution + validation
- *   - `authoring-shared.ts` — ownership, node/edge primitives, cycle detection, attachment reconcile
- *   - `authoring-graph.ts`  — declarative `setGraph` (whole-graph diff)
+ *   - `authoring-shared.ts` — header-sentinel guard, cycle detection, attachment reconcile
+ *   - `authoring-graph.ts`  — declarative `setGraph` (whole-graph diff by ref)
  *   - `authoring-nodes.ts`  — `addNode` / `updateNode` / `removeNode`
  *   - `authoring-edges.ts`  — `connect` / `disconnect`
  */
-
-export { spawnHeaderPanel, syncHeaderPanel } from "./authoring-header";
 
 export type {
   ReadRefInput,

@@ -1,13 +1,12 @@
 /**
  * Persistent shell for every workspace sub-page — the (app) route group:
- * the named sections (overview, chat, knowledge, skills, members,
- * settings) plus the canvas editor ([canvasSlug]; static segments win
- * over the dynamic match).
+ * the named sections (overview, canvas, workflows, knowledge, skills,
+ * chats, ontology, configuration, members).
  *
  * Mounting the AppShell here — instead of per-page — means the rail,
  * sidebar, workspaces fetch, and settings-modal state all
- * survive navigation between every page, canvas included. Only the white
- * content panel re-renders, covered by each route's loading skeleton.
+ * survive navigation between every page. Only the white content panel
+ * re-renders, covered by each route's loading skeleton.
  * MyAccessProvider lives here too so the access fetch is shared instead
  * of re-firing per navigation.
  *

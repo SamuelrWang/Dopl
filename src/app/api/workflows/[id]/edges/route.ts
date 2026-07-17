@@ -3,7 +3,6 @@ import { z } from "zod";
 import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
 import type { Role } from "@/features/workspaces/types";
 import { HttpError } from "@/shared/lib/http-error";
-import { denyIfNoCanvasWrite } from "@/features/canvas/server/access";
 import {
   requireWorkflowEdit,
   resolveWorkflowId,
@@ -18,7 +17,12 @@ interface Ctx {
   params?: Record<string, string>;
 }
 
-const PairBody = z.object({ from: z.string().min(1), to: z.string().min(1) });
+// `condition` (a branch guard) applies to POST/connect only; DELETE ignores it.
+const PairBody = z.object({
+  from: z.string().min(1),
+  to: z.string().min(1),
+  condition: z.string().max(500).optional(),
+});
 
 function scopeOf(ctx: Ctx) {
   return {
@@ -39,22 +43,12 @@ function toError(err: unknown): NextResponse {
   );
 }
 
-async function gate(ctx: Ctx): Promise<NextResponse | null> {
-  return denyIfNoCanvasWrite({
-    agentTokenId: ctx.agentTokenId,
-    userId: ctx.userId,
-    workspaceId: ctx.workspaceId,
-  });
-}
-
 async function run(
   request: NextRequest,
   ctx: Ctx,
   op: "connect" | "disconnect"
 ): Promise<NextResponse> {
   try {
-    const denied = await gate(ctx);
-    if (denied) return denied;
     const id = ctx.params?.id;
     if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
     const parsed = PairBody.safeParse(await request.json());
@@ -67,8 +61,12 @@ async function run(
     const scope = scopeOf(ctx);
     const workflowId = await resolveWorkflowId(id, scope);
     await requireWorkflowEdit(workflowId, scope);
-    const fn = op === "connect" ? connect : disconnect;
-    await fn(workflowId, parsed.data.from, parsed.data.to, scope);
+    const { from, to, condition } = parsed.data;
+    if (op === "connect") {
+      await connect(workflowId, from, to, condition ?? "", scope);
+    } else {
+      await disconnect(workflowId, from, to, scope);
+    }
     return new NextResponse(null, { status: 204 });
   } catch (err) {
     return toError(err);

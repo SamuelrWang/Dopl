@@ -14,8 +14,9 @@ export interface FeatureDemoProps {
 }
 
 /**
- * Panel id -> animated miniature. Panels without an entry (workflows,
- * pending its page rework) render text only.
+ * Panel id -> animated miniature. Panels without an entry (workflows —
+ * its page has shipped, but the demo miniature is still TODO) render text
+ * only.
  */
 export const FEATURE_DEMOS: Record<string, ComponentType<FeatureDemoProps>> = {
   ontology: OntologyDemo,

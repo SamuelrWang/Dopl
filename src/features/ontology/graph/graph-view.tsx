@@ -2,17 +2,26 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
+import { UpgradeModal } from "@/features/billing/components/upgrade-modal";
+import { useWorkspaceEntitlements } from "@/features/billing/components/use-workspace-entitlements";
+import { EdgeLayer, type NodeRect } from "@/shared/graph";
 import { cn } from "@/shared/lib/utils";
+import { CapNotice } from "../components/cap-notice";
 import { ObjectPanel } from "../components/object-panel";
 import { useOntology } from "../hooks/use-ontology";
 import { OntologyResourcesProvider } from "../hooks/use-workspace-resources";
 import { deriveScene } from "./derive";
-import { EdgeLayer, type NodeRect } from "./edge-layer";
+import { ONTOLOGY_EDGE_STYLES, OntologyEdgeMarkers } from "./edge-styles";
 import { GraphNode } from "./graph-node";
 import { DEFAULT_HEIGHT, layoutScene, routeEdges } from "./layout";
 
 interface Props {
   workspaceId: string;
+  /** Admin/owner — controls whether the upgrade prompt offers checkout. */
+  canManageBilling?: boolean;
+  /** Member+ — viewers read the graph but see no create/delete/add
+   *  affordances, and the cluster name/purpose inputs are read-only. */
+  canEdit?: boolean;
 }
 
 /**
@@ -22,8 +31,13 @@ interface Props {
  * them. Selecting a node opens the real ObjectPanel editor; node
  * heights are measured live so edits re-route edges immediately.
  */
-export function GraphView({ workspaceId }: Props) {
-  const { graph, status, dispatch, createCluster, createObject } = useOntology(workspaceId);
+export function GraphView({ workspaceId, canManageBilling = false, canEdit = true }: Props) {
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const { graph, status, dispatch, createCluster, createObject } = useOntology(
+    workspaceId,
+    () => setUpgradeOpen(true)
+  );
+  const ent = useWorkspaceEntitlements(workspaceId);
   const [clusterId, setClusterId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [confirmDeleteCluster, setConfirmDeleteCluster] = useState(false);
@@ -105,9 +119,21 @@ export function GraphView({ workspaceId }: Props) {
     setConfirmDeleteCluster(false);
   };
 
+  // A new cluster creates two objects (a column + its first card), so it
+  // needs headroom of 2 — pre-check that, not just the exact cap, so the
+  // create can't pass at 999/1000 then trip the server cap mid-sequence.
+  // Over the cap (or without room for both), open the upgrade prompt.
   const handleCreateCluster = async () => {
+    if (
+      ent.overCap ||
+      (ent.isCapped && ent.objectCap !== null && ent.objectsUsed + 2 > ent.objectCap)
+    ) {
+      setUpgradeOpen(true);
+      return;
+    }
     const created = await createCluster();
     if (created) selectCluster(created.id);
+    if (ent.isCapped) ent.refresh();
   };
 
   const handleDeleteCluster = () => {
@@ -122,8 +148,13 @@ export function GraphView({ workspaceId }: Props) {
   const handleCreateObject = async (
     target: { clusterId: string } | { parentObjectId: string }
   ) => {
+    if (ent.overCap) {
+      setUpgradeOpen(true);
+      return;
+    }
     const object = await createObject(target);
     if (object) setSelectedId(object.id);
+    if (ent.isCapped) ent.refresh();
   };
 
   if (status === "loading") {
@@ -147,15 +178,19 @@ export function GraphView({ workspaceId }: Props) {
       <Frame>
         <div className="m-auto flex flex-col items-center gap-3">
           <p className="text-lead text-text-secondary">
-            No ontology yet — start with your first cluster.
+            {canEdit
+              ? "No ontology yet — start with your first cluster."
+              : "No ontology yet — a workspace member can create the first cluster."}
           </p>
-          <button
-            type="button"
-            onClick={handleCreateCluster}
-            className="auth-btn-3d rounded-lg px-4 py-2 text-lead font-semibold text-white"
-          >
-            New cluster
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={handleCreateCluster}
+              className="auth-btn-3d rounded-lg px-4 py-2 text-lead font-semibold text-white"
+            >
+              New cluster
+            </button>
+          )}
         </div>
       </Frame>
     );
@@ -182,19 +217,22 @@ export function GraphView({ workspaceId }: Props) {
                 <span className="text-micro text-text-muted">{c.columnIds.length}</span>
               </button>
             ))}
-            <button
-              type="button"
-              onClick={handleCreateCluster}
-              aria-label="New cluster"
-              className="flex h-6 w-6 items-center justify-center rounded-[6px] text-text-muted transition hover:text-text-primary"
-            >
-              <Plus size={12} />
-            </button>
+            {canEdit && (
+              <button
+                type="button"
+                onClick={handleCreateCluster}
+                aria-label="New cluster"
+                className="flex h-6 w-6 items-center justify-center rounded-[6px] text-text-muted transition hover:text-text-primary"
+              >
+                <Plus size={12} />
+              </button>
+            )}
           </div>
           <div className="flex min-w-0 flex-1 items-baseline gap-2">
             <input
               type="text"
               value={cluster.name}
+              readOnly={!canEdit}
               onChange={(e) =>
                 dispatch({ type: "CLUSTER_UPDATE", id: cluster.id, patch: { name: e.target.value } })
               }
@@ -205,6 +243,7 @@ export function GraphView({ workspaceId }: Props) {
             <input
               type="text"
               value={cluster.purpose}
+              readOnly={!canEdit}
               onChange={(e) =>
                 dispatch({
                   type: "CLUSTER_UPDATE",
@@ -217,43 +256,55 @@ export function GraphView({ workspaceId }: Props) {
               placeholder="What this ontology anchors (agents read this to route)…"
             />
           </div>
-          {confirmDeleteCluster ? (
-            <span className="flex shrink-0 items-center gap-1">
+          {canEdit &&
+            (confirmDeleteCluster ? (
+              <span className="flex shrink-0 items-center gap-1">
+                <button
+                  type="button"
+                  onClick={handleDeleteCluster}
+                  className="rounded-md bg-danger/10 px-2 py-1 text-caption font-semibold text-danger"
+                >
+                  Delete
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmDeleteCluster(false)}
+                  className="btn-light rounded-md px-2 py-1 text-caption font-medium text-text-primary"
+                >
+                  Keep
+                </button>
+              </span>
+            ) : (
               <button
                 type="button"
-                onClick={handleDeleteCluster}
-                className="rounded-md bg-danger/10 px-2 py-1 text-caption font-semibold text-danger"
+                aria-label={`Delete ${cluster.name || "cluster"}`}
+                title="Delete cluster"
+                onClick={() => setConfirmDeleteCluster(true)}
+                className="btn-light flex h-7 w-8 shrink-0 items-center justify-center rounded-md text-text-primary"
               >
-                Delete
+                <Trash2 size={11} />
               </button>
-              <button
-                type="button"
-                onClick={() => setConfirmDeleteCluster(false)}
-                className="btn-light rounded-md px-2 py-1 text-caption font-medium text-text-primary"
-              >
-                Keep
-              </button>
-            </span>
-          ) : (
+            ))}
+          {canEdit && (
             <button
               type="button"
-              aria-label={`Delete ${cluster.name || "cluster"}`}
-              title="Delete cluster"
-              onClick={() => setConfirmDeleteCluster(true)}
-              className="btn-light flex h-7 w-8 shrink-0 items-center justify-center rounded-md text-text-primary"
+              onClick={() => handleCreateObject({ clusterId: cluster.id })}
+              className="btn-light flex h-7 shrink-0 items-center gap-1 rounded-md px-2.5 text-small font-medium text-text-primary"
             >
-              <Trash2 size={11} />
+              <Plus size={12} /> Column
             </button>
           )}
-          <button
-            type="button"
-            onClick={() => handleCreateObject({ clusterId: cluster.id })}
-            className="btn-light flex h-7 shrink-0 items-center gap-1 rounded-md px-2.5 text-small font-medium text-text-primary"
-          >
-            <Plus size={12} /> Column
-          </button>
           <Legend />
         </div>
+
+        {!ent.loading && ent.isCapped && ent.objectCap !== null && (
+          <CapNotice
+            used={ent.objectsUsed}
+            cap={ent.objectCap}
+            over={ent.overCap}
+            onUpgrade={() => setUpgradeOpen(true)}
+          />
+        )}
 
         <div className="relative flex min-h-0 flex-1 overflow-hidden">
           <div
@@ -274,13 +325,20 @@ export function GraphView({ workspaceId }: Props) {
                 if (e.target === e.currentTarget) setSelectedId(null);
               }}
             >
-              <EdgeLayer edges={edges} rects={rects} focusId={activeSelectedId} />
+              <EdgeLayer
+                edges={edges}
+                rects={rects}
+                focusId={activeSelectedId}
+                styles={ONTOLOGY_EDGE_STYLES}
+                markers={<OntologyEdgeMarkers />}
+              />
               {scene.nodes.map((node) => (
                 <GraphNode
                   key={node.id}
                   node={node}
                   position={layout.positions[node.id] ?? { x: 0, y: 0, width: 0 }}
                   graph={graph}
+                  canEdit={canEdit}
                   selected={node.id === activeSelectedId}
                   dimmed={
                     activeSelectedId !== null &&
@@ -307,6 +365,7 @@ export function GraphView({ workspaceId }: Props) {
                 objectId={activeSelectedId}
                 graph={graph}
                 dispatch={dispatch}
+                canEdit={canEdit}
                 onSelectObject={setSelectedId}
                 onDeleteObject={(id) => dispatch({ type: "OBJECT_DELETE", id })}
                 onClose={() => setSelectedId(null)}
@@ -315,6 +374,18 @@ export function GraphView({ workspaceId }: Props) {
           )}
         </div>
       </Frame>
+
+      <UpgradeModal
+        open={upgradeOpen}
+        onOpenChange={setUpgradeOpen}
+        workspaceId={workspaceId}
+        canManageBilling={canManageBilling}
+        reason={
+          ent.objectCap !== null
+            ? `This workspace hit the Free limit of ${ent.objectCap.toLocaleString()} ontology objects. Nothing was deleted — upgrade to keep adding.`
+            : undefined
+        }
+      />
     </OntologyResourcesProvider>
   );
 }

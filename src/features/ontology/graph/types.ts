@@ -1,9 +1,16 @@
+import type { EdgeSide, NodeLayout, SceneEdge, SceneLayout } from "@/shared/graph";
 import type { OntologyObject } from "../types";
 
-export type EdgeSide = "top" | "right" | "bottom" | "left";
+/** Generic graph geometry now lives in `@/shared/graph`; re-exported here
+ *  so the ontology graph's local modules keep their short `./types`
+ *  imports. */
+export type { EdgeSide, NodeLayout, SceneEdge, SceneLayout };
 
 export type SceneEdgeKind = "containment" | "relationship" | "ref";
 
+/** The ontology's node payload: a column header or an object card, each
+ *  backed by a live `OntologyObject` and tagged with the lane (column) it
+ *  belongs to. */
 export interface SceneNode {
   id: string;
   kind: "column" | "object";
@@ -11,32 +18,7 @@ export interface SceneNode {
   columnId: string;
 }
 
-export interface SceneEdge {
-  id: string;
-  kind: SceneEdgeKind;
-  from: string;
-  to: string;
-  label?: string;
-  fromSide?: EdgeSide;
-  toSide?: EdgeSide;
-  fromT?: number;
-  toT?: number;
-  mid?: number;
-}
-
 export interface Scene {
   nodes: SceneNode[];
   edges: SceneEdge[];
-}
-
-export interface NodeLayout {
-  x: number;
-  y: number;
-  width: number;
-}
-
-export interface SceneLayout {
-  positions: Record<string, NodeLayout>;
-  worldWidth: number;
-  worldHeight: number;
 }

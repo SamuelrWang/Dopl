@@ -19,11 +19,13 @@ export function RelationshipsEditor({
   graph,
   dispatch,
   onSelectObject,
+  canEdit = true,
 }: {
   object: OntologyObject;
   graph: GraphState;
   dispatch: Dispatch<GraphAction>;
   onSelectObject: (id: string) => void;
+  canEdit?: boolean;
 }) {
   const [newLabel, setNewLabel] = useState("");
 
@@ -42,6 +44,7 @@ export function RelationshipsEditor({
             <input
               type="text"
               value={rel.label}
+              readOnly={!canEdit}
               onChange={(e) =>
                 dispatch({
                   type: "RELATIONSHIP_RENAME",
@@ -67,56 +70,63 @@ export function RelationshipsEditor({
                     >
                       {target.name}
                     </button>
-                    <button
-                      type="button"
-                      aria-label={`Unlink ${target.name}`}
-                      onClick={() =>
-                        dispatch({
-                          type: "RELATIONSHIP_SET",
-                          id: object.id,
-                          label: rel.label,
-                          targetIds: rel.targetIds.filter((t) => t !== id),
-                        })
-                      }
-                      className="text-text-muted hover:text-text-primary"
-                    >
-                      <X size={10} />
-                    </button>
+                    {canEdit && (
+                      <button
+                        type="button"
+                        aria-label={`Unlink ${target.name}`}
+                        onClick={() =>
+                          dispatch({
+                            type: "RELATIONSHIP_SET",
+                            id: object.id,
+                            label: rel.label,
+                            targetIds: rel.targetIds.filter((t) => t !== id),
+                          })
+                        }
+                        className="text-text-muted hover:text-text-primary"
+                      >
+                        <X size={10} />
+                      </button>
+                    )}
                   </span>
                 );
               })}
-              <ObjectPickMenu
-                graph={graph}
-                excludeIds={[object.id, ...rel.targetIds]}
-                onPick={(id) =>
-                  dispatch({
-                    type: "RELATIONSHIP_SET",
-                    id: object.id,
-                    label: rel.label,
-                    targetIds: [...rel.targetIds, id],
-                  })
-                }
-                trigger={
-                  <span className="flex items-center gap-1">
-                    <Plus size={10} /> Link
-                  </span>
-                }
-                triggerClassName="btn-light flex h-6 items-center rounded-full px-2 text-caption font-medium text-text-primary"
-              />
+              {canEdit && (
+                <ObjectPickMenu
+                  graph={graph}
+                  excludeIds={[object.id, ...rel.targetIds]}
+                  onPick={(id) =>
+                    dispatch({
+                      type: "RELATIONSHIP_SET",
+                      id: object.id,
+                      label: rel.label,
+                      targetIds: [...rel.targetIds, id],
+                    })
+                  }
+                  trigger={
+                    <span className="flex items-center gap-1">
+                      <Plus size={10} /> Link
+                    </span>
+                  }
+                  triggerClassName="btn-light flex h-6 items-center rounded-full px-2 text-caption font-medium text-text-primary"
+                />
+              )}
             </span>
-            <button
-              type="button"
-              aria-label={`Remove ${rel.label}`}
-              onClick={() => dispatch({ type: "RELATIONSHIP_DELETE", id: object.id, label: rel.label })}
-              className="rounded-md p-1 text-text-muted opacity-0 transition hover:bg-surface-raised-3 hover:text-text-primary group-hover:opacity-100"
-            >
-              <X size={12} />
-            </button>
+            {canEdit && (
+              <button
+                type="button"
+                aria-label={`Remove ${rel.label}`}
+                onClick={() => dispatch({ type: "RELATIONSHIP_DELETE", id: object.id, label: rel.label })}
+                className="rounded-md p-1 text-text-muted opacity-0 transition hover:bg-surface-raised-3 hover:text-text-primary group-hover:opacity-100"
+              >
+                <X size={12} />
+              </button>
+            )}
           </div>
           ))}
         </div>
       )}
-      <div className="flex items-center gap-1.5 border-t border-border-subtle bg-card-surface-subtle px-4 py-2">
+      {canEdit && (
+        <div className="flex items-center gap-1.5 border-t border-border-subtle bg-card-surface-subtle px-4 py-2">
           <input
             type="text"
             value={newLabel}
@@ -135,7 +145,8 @@ export function RelationshipsEditor({
             }
             triggerClassName="btn-light flex h-7 items-center rounded-md px-2.5 text-small font-medium text-text-primary"
           />
-      </div>
+        </div>
+      )}
     </SectionBox>
   );
 }

@@ -26,10 +26,12 @@ export function AttributesEditor({
   object,
   graph,
   dispatch,
+  canEdit = true,
 }: {
   object: OntologyObject;
   graph: GraphState;
   dispatch: Dispatch<GraphAction>;
+  canEdit?: boolean;
 }) {
   const [newLabel, setNewLabel] = useState("");
   const [newKind, setNewKind] = useState<AttrKind>("text");
@@ -59,6 +61,7 @@ export function AttributesEditor({
             <input
               type="text"
               value={attr.label}
+              readOnly={!canEdit}
               onChange={(e) =>
                 dispatch({
                   type: "ATTRIBUTE_UPSERT",
@@ -75,23 +78,27 @@ export function AttributesEditor({
               attr={attr}
               object={object}
               graph={graph}
+              canEdit={canEdit}
               onChange={(attribute) =>
                 dispatch({ type: "ATTRIBUTE_UPSERT", id: object.id, index: i, attribute })
               }
             />
-            <button
-              type="button"
-              aria-label={`Remove ${attr.label}`}
-              onClick={() => dispatch({ type: "ATTRIBUTE_DELETE", id: object.id, index: i })}
-              className="rounded-md p-1 text-text-muted opacity-0 transition hover:bg-surface-raised-3 hover:text-text-primary group-hover:opacity-100"
-            >
-              <X size={12} />
-            </button>
+            {canEdit && (
+              <button
+                type="button"
+                aria-label={`Remove ${attr.label}`}
+                onClick={() => dispatch({ type: "ATTRIBUTE_DELETE", id: object.id, index: i })}
+                className="rounded-md p-1 text-text-muted opacity-0 transition hover:bg-surface-raised-3 hover:text-text-primary group-hover:opacity-100"
+              >
+                <X size={12} />
+              </button>
+            )}
           </div>
           ))}
         </div>
       )}
-      <div className="flex items-center gap-1.5 border-t border-border-subtle bg-card-surface-subtle px-4 py-2">
+      {canEdit && (
+        <div className="flex items-center gap-1.5 border-t border-border-subtle bg-card-surface-subtle px-4 py-2">
           <input
             type="text"
             value={newLabel}
@@ -112,14 +119,15 @@ export function AttributesEditor({
             <option value="knowledge">Knowledge</option>
             <option value="skill">Skill</option>
           </select>
-        <button
-          type="button"
-          onClick={addAttribute}
-          className="btn-light flex h-7 items-center gap-1 rounded-md px-2.5 text-small font-medium text-text-primary"
-        >
-          <Plus size={11} /> Add
-        </button>
-      </div>
+          <button
+            type="button"
+            onClick={addAttribute}
+            className="btn-light flex h-7 items-center gap-1 rounded-md px-2.5 text-small font-medium text-text-primary"
+          >
+            <Plus size={11} /> Add
+          </button>
+        </div>
+      )}
     </SectionBox>
   );
 }
@@ -128,11 +136,13 @@ function AttrValueEditor({
   attr,
   object,
   graph,
+  canEdit,
   onChange,
 }: {
   attr: Attribute;
   object: OntologyObject;
   graph: GraphState;
+  canEdit: boolean;
   onChange: (attr: Attribute) => void;
 }) {
   const v = attr.value;
@@ -147,50 +157,53 @@ function AttrValueEditor({
         {vk.value.map((id) => (
           <span key={id} className={`flex items-center gap-1.5 ${CHIP}`}>
             {workspaceResources.nameOf(id) ?? "Unavailable"}
-            <button
-              type="button"
-              aria-label="Remove"
-              onClick={() =>
-                onChange({ ...attr, value: { kind: vk.kind, value: vk.value.filter((x) => x !== id) } })
-              }
-              className="text-text-muted hover:text-text-primary"
-            >
-              <X size={10} />
-            </button>
+            {canEdit && (
+              <button
+                type="button"
+                aria-label="Remove"
+                onClick={() =>
+                  onChange({ ...attr, value: { kind: vk.kind, value: vk.value.filter((x) => x !== id) } })
+                }
+                className="text-text-muted hover:text-text-primary"
+              >
+                <X size={10} />
+              </button>
+            )}
           </span>
         ))}
-        {vk.kind === "knowledge" ? (
-          <KnowledgePickMenu
-            workspaceId={workspaceResources.workspaceId}
-            bases={workspaceResources.knowledge.map((r) => ({ id: r.id, name: r.name }))}
-            excludeIds={vk.value}
-            onPick={(id) =>
-              onChange({ ...attr, value: { kind: "knowledge", value: [...vk.value, id] } })
-            }
-            trigger={
-              <>
-                <span>Select knowledge</span>
-                <ChevronDown size={11} className="text-text-muted" />
-              </>
-            }
-            triggerClassName={triggerClassName}
-          />
-        ) : (
-          <PickMenu
-            items={workspaceResources.skills.map((r) => ({ id: r.id, name: r.name, group: r.scope }))}
-            excludeIds={vk.value}
-            onPick={(id) =>
-              onChange({ ...attr, value: { kind: "skill", value: [...vk.value, id] } })
-            }
-            trigger={
-              <>
-                <span>Select skill</span>
-                <ChevronDown size={11} className="text-text-muted" />
-              </>
-            }
-            triggerClassName={triggerClassName}
-          />
-        )}
+        {canEdit &&
+          (vk.kind === "knowledge" ? (
+            <KnowledgePickMenu
+              workspaceId={workspaceResources.workspaceId}
+              bases={workspaceResources.knowledge.map((r) => ({ id: r.id, name: r.name }))}
+              excludeIds={vk.value}
+              onPick={(id) =>
+                onChange({ ...attr, value: { kind: "knowledge", value: [...vk.value, id] } })
+              }
+              trigger={
+                <>
+                  <span>Select knowledge</span>
+                  <ChevronDown size={11} className="text-text-muted" />
+                </>
+              }
+              triggerClassName={triggerClassName}
+            />
+          ) : (
+            <PickMenu
+              items={workspaceResources.skills.map((r) => ({ id: r.id, name: r.name, group: r.scope }))}
+              excludeIds={vk.value}
+              onPick={(id) =>
+                onChange({ ...attr, value: { kind: "skill", value: [...vk.value, id] } })
+              }
+              trigger={
+                <>
+                  <span>Select skill</span>
+                  <ChevronDown size={11} className="text-text-muted" />
+                </>
+              }
+              triggerClassName={triggerClassName}
+            />
+          ))}
       </span>
     );
   }
@@ -204,30 +217,34 @@ function AttrValueEditor({
           return (
             <span key={id} className={`flex items-center gap-1.5 ${CHIP}`}>
               {target.name}
-              <button
-                type="button"
-                aria-label={`Remove ${target.name}`}
-                onClick={() =>
-                  onChange({ ...attr, value: { kind: "ref", value: v.value.filter((x) => x !== id) } })
-                }
-                className="text-text-muted hover:text-text-primary"
-              >
-                <X size={10} />
-              </button>
+              {canEdit && (
+                <button
+                  type="button"
+                  aria-label={`Remove ${target.name}`}
+                  onClick={() =>
+                    onChange({ ...attr, value: { kind: "ref", value: v.value.filter((x) => x !== id) } })
+                  }
+                  className="text-text-muted hover:text-text-primary"
+                >
+                  <X size={10} />
+                </button>
+              )}
             </span>
           );
         })}
-        <ObjectPickMenu
-          graph={graph}
-          excludeIds={[object.id, ...v.value]}
-          onPick={(id) => onChange({ ...attr, value: { kind: "ref", value: [...v.value, id] } })}
-          trigger={
-            <span className="flex items-center gap-1">
-              <Plus size={10} /> Link
-            </span>
-          }
-          triggerClassName="btn-light flex h-6 items-center rounded-full px-2 text-caption font-medium text-text-primary"
-        />
+        {canEdit && (
+          <ObjectPickMenu
+            graph={graph}
+            excludeIds={[object.id, ...v.value]}
+            onPick={(id) => onChange({ ...attr, value: { kind: "ref", value: [...v.value, id] } })}
+            trigger={
+              <span className="flex items-center gap-1">
+                <Plus size={10} /> Link
+              </span>
+            }
+            triggerClassName="btn-light flex h-6 items-center rounded-full px-2 text-caption font-medium text-text-primary"
+          />
+        )}
       </span>
     );
   }
@@ -237,6 +254,7 @@ function AttrValueEditor({
       <input
         type="text"
         value={v.value}
+        readOnly={!canEdit}
         onChange={(e) => onChange({ ...attr, value: { kind: "pill", value: e.target.value } })}
         placeholder="tag…"
         className={`w-fit min-w-24 ${CHIP} placeholder:text-text-muted focus:border-border-highlight focus:outline-none`}
@@ -248,6 +266,7 @@ function AttrValueEditor({
     <input
       type="text"
       value={v.value}
+      readOnly={!canEdit}
       onChange={(e) => onChange({ ...attr, value: { kind: "text", value: e.target.value } })}
       placeholder="value…"
       className="min-w-0 flex-1 bg-transparent text-lead text-text-primary placeholder:text-text-muted focus:outline-none"

@@ -352,3 +352,17 @@ See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture and [plan 
 - Description: the 90-day free window is enforced in the service layer (list/detail/MCP) and the append echo is stripped, but a chat OWNER can still read their own >90-day rows via direct PostgREST/realtime with their JWT. Deliberately accepted: the window is a monetization gate on the product surface, not a confidentiality boundary (the owner owns the data; export must stay possible per no-data-hostage). Cross-user leakage IS enforced in RLS (team-aware policies, 20260716150000).
 - Proposed resolution: only revisit if the retention gate ever becomes contractual — would need a security-definer read path plus removing direct-table SELECT for owners.
 - Status: open (accepted)
+
+### F-036: Workflows rebuilt on first-class step tables; legacy canvas deleted (2026-07-16)
+- Location: `features/workflows/**`, `src/shared/graph/`, migrations `20260716210000_workflow_steps.sql` + `20260716220000_drop_canvas_tables.sql`
+- Found during: workflows pivot (step-graph rebuild + canvas teardown)
+- Severity: n/a (record of a structural change + its follow-ups)
+- Description: step graphs moved out of `canvas_panels`/`canvas_edges` into `workflow_steps`/`workflow_step_edges`; `features/canvas` (~9.4k lines, 57 files) deleted; graph drawing layer extracted to `src/shared/graph/`. Follow-ups: (1) regen `src/shared/supabase/types.ts` after the drop migration is applied (11 dead canvas type entries + hand-added stanzas); (2) `read-pick-menu`/`pick-menu`/`workflow-bits` were copied from ontology components into workflows per the §3 no-sideways-imports rule — promote to `src/shared/ui` when a third consumer appears; (3) workflow list endpoint lacks step counts (inactive workflow tabs show name only); (4) baseline lint warning count is now 1 (`proxy.ts`), was 11.
+- Status: open (follow-ups only)
+
+### F-037: Low-priority residue from the 2026-07-17 verification sweep
+- Location: various (see below)
+- Found during: post-rebuild verification fleet (fix-wave re-review + integration sweep)
+- Severity: smell
+- Description: items verified real but deliberately deferred: (a) immediate connect vs disconnect of the same workflow edge isn't serialized client-side — final state depends on network ordering under rapid clicks (use-workflows.ts); (b) listWorkflows step counts fetch one row per step workspace-wide — fine at current scale, grouped-count RPC if step volumes grow (workflows/server/service.ts); (c) `join` and `onboarding` missing from RESERVED_WORKSPACE_SLUGS / NON_WORKSPACE_ROOTS — pre-existing, only bites legacy slug-only workspace URLs; (d) RESEND_API_KEY documented in .env.example but unused since the trial-reactivation cron was deleted.
+- Status: open

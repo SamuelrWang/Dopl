@@ -3,31 +3,33 @@
  * `dopl_workflow` + `dopl_workflow_admin` — read/non-destructive writes and
  * the separately permission-gated destructive workflow operations.
  *
- * A workflow is a header panel plus the node graph wired to it by connectors
- * on the canvas. It owns the knowledge bases + skills its nodes reference and
- * is the unit agents follow step-by-step. Clusters group workflows.
+ * A workflow is a graph of steps (workflow_steps) connected by branch-
+ * conditioned edges (workflow_step_edges). It owns the knowledge bases +
+ * skills its steps reference and is the unit agents follow step-by-step.
+ * Entry steps are those with no incoming edge. Clusters group workflows.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerWorkflowTools = registerWorkflowTools;
 const zod_1 = require("zod");
 const respond_1 = require("./respond");
-const WORKFLOW_DESCRIPTION = `Read and AUTHOR Dopl workflows (a header + its connected node graph; the agent-followable unit). Changes appear live on an open canvas. Set \`op\` to one of:
+const WORKFLOW_DESCRIPTION = `Read and AUTHOR Dopl workflows (a graph of steps connected by branch-conditioned edges; the agent-followable unit). Set \`op\` to one of:
 - "list" — discover all workflows. Cheap metadata call; run it proactively to resolve a slug another op needs.
-- "get" — retrieve a workflow's metadata, its topologically-ordered steps (each node's id, READ knowledge, ACTION skills, user input, agent output, next), and attached knowledge bases + skills. Node ids returned here are what update_node/remove_node/connect take.
-- "create" — create a new workflow by name; spawns its header panel on the canvas and returns header_panel_id.
+- "get" — retrieve a workflow's metadata, its topologically-ordered steps (each step's id, READ knowledge, ACTION skills, user input, agent output, next), the branch conditions on its edges, and attached knowledge bases + skills. Step ids returned here are what update_node/remove_node/connect take.
+- "step" — read ONE step's full detail as you walk the workflow (\`step\` = a step id or ref): its reads/actions/user-input/agent-output/next + its outgoing edges (with branch conditions) and incoming-edge count. The paced-disclosure surface — fetch a step when you reach it.
+- "create" — create a new workflow by name.
 - "update" — rename (\`name\`) and/or set \`description\`.
-- "set_graph" — DECLARATIVE authoring (preferred): pass \`graph\` = { nodes, edges } and the server makes the workflow match exactly (create/update/delete to fit). Each node has a stable \`ref\`; edges connect node \`ref\`s (or the literal "header"). Re-send to edit. Knowledge/skill ids in reads/actions auto-attach.
-- "add_node" — add one node (\`node\`, incl. \`ref\`); \`connect_from\` ("header" or a node id, default "header") wires it in. Returns the new node id.
-- "update_node" — patch a node's fields (\`node_id\` + \`node\`).
-- "remove_node" — delete a node (\`node_id\`); its edges go with it.
-- "connect" / "disconnect" — add/remove an edge (\`from\`,\`to\` = node id or "header").
+- "set_graph" — DECLARATIVE authoring (preferred): pass \`graph\` = { nodes, edges } and the server makes the workflow match exactly (create/update/delete to fit). Each node has a stable \`ref\`; edges connect node \`ref\`s and may carry a branch \`condition\`. Re-send to edit. Knowledge/skill ids in reads/actions auto-attach. Every edge endpoint must be a declared node ref, self-edges are rejected, and a step pair may appear once — a repeated pair with a DIFFERENT condition is a 400 (an identical repeat is deduped).
+- "add_node" — add one step (\`node\`, incl. \`ref\`); optional \`connect_from\` (a step id or ref) wires an edge into it. Omit \`connect_from\` to add an entry step. Returns the new step id.
+- "update_node" — patch a step's fields (\`node_id\` = step id or ref, plus \`node\`).
+- "remove_node" — delete a step (\`node_id\` = step id or ref); its edges go with it.
+- "connect" / "disconnect" — add/remove an edge (\`from\`,\`to\` = step id or ref). connect takes an optional branch \`condition\`.
 - "set_cluster" — group this workflow under a cluster (\`cluster\` = slug or id from dopl_cluster(op='list')); omit \`cluster\` to ungroup.
 
-Typical authoring flow: create → set_graph (or add_node + connect) → get to verify. Node reads = [{kbId} | {kbId,entryId}]; actions = [{skillId}]. kbId/skillId accept the SLUG or the id straight from dopl_kb(op='list_bases') / dopl_skill(op='list'); entryId is an entry uuid. KBs/skills must be public.`;
+Typical authoring flow: create → set_graph (or add_node + connect) → get to verify. Step reads = [{kbId} | {kbId,entryId}]; actions = [{skillId}]. kbId/skillId accept the SLUG or the id straight from dopl_kb(op='list_bases') / dopl_skill(op='list'); entryId is an entry uuid. KBs/skills must be public. There is no "header" — entry steps are simply the ones with no incoming edge.`;
 const WORKFLOW_ADMIN_DESCRIPTION = `DESTRUCTIVE workflow operations — permanent and irreversible. Confirm intent if the user's phrasing is at all ambiguous. Set \`op\` to one of:
-- "delete_workflow" — permanently delete a workflow. Its nodes stay on the canvas; attached knowledge bases + skills are detached (not deleted).`;
+- "delete_workflow" — permanently delete a workflow. Its steps and edges delete with it; attached knowledge bases + skills are detached (not deleted).`;
 const zNode = zod_1.z.object({
-    ref: zod_1.z.string().optional().describe("stable handle for this node (required for set_graph + add_node)"),
+    ref: zod_1.z.string().optional().describe("stable handle for this step (required for set_graph + add_node)"),
     title: zod_1.z.string().optional(),
     description: zod_1.z.string().optional(),
     reads: zod_1.z
@@ -44,7 +46,11 @@ const zNode = zod_1.z.object({
 });
 const zGraph = zod_1.z.object({
     nodes: zod_1.z.array(zNode),
-    edges: zod_1.z.array(zod_1.z.object({ from: zod_1.z.string(), to: zod_1.z.string() })),
+    edges: zod_1.z.array(zod_1.z.object({
+        from: zod_1.z.string(),
+        to: zod_1.z.string(),
+        condition: zod_1.z.string().optional().describe("branch guard (free text); omit for an unconditional edge"),
+    })),
 });
 function registerWorkflowTools(register, client) {
     register("dopl_workflow", WORKFLOW_DESCRIPTION, {
@@ -52,6 +58,7 @@ function registerWorkflowTools(register, client) {
             .enum([
             "list",
             "get",
+            "step",
             "create",
             "update",
             "set_graph",
@@ -67,6 +74,10 @@ function registerWorkflowTools(register, client) {
             .string()
             .optional()
             .describe("Workflow slug OR stable id (the uuid from op=list — survives renames, prefer it for held references). Required for every op except list/create."),
+        step: zod_1.z
+            .string()
+            .optional()
+            .describe("op=step: the step id or ref to read (from op=get)."),
         name: zod_1.z
             .string()
             .optional()
@@ -77,14 +88,18 @@ function registerWorkflowTools(register, client) {
             .optional()
             .describe("op=update: workflow description (max 300 chars)."),
         graph: zGraph.optional().describe("op=set_graph: the full { nodes, edges } the workflow should match."),
-        node: zNode.optional().describe("op=add_node/update_node: the node's fields."),
+        node: zNode.optional().describe("op=add_node/update_node: the step's fields."),
         connect_from: zod_1.z
             .string()
             .optional()
-            .describe("op=add_node: 'header' or a node id to connect the new node from (default 'header')."),
-        node_id: zod_1.z.string().optional().describe("op=update_node/remove_node: target node id (from op=get)."),
-        from: zod_1.z.string().optional().describe("op=connect/disconnect: source node id or 'header'."),
-        to: zod_1.z.string().optional().describe("op=connect/disconnect: target node id or 'header'."),
+            .describe("op=add_node: a step id or ref to wire an edge into the new step from. Omit to add an entry step (no incoming edge)."),
+        node_id: zod_1.z.string().optional().describe("op=update_node/remove_node: target step id or ref (from op=get)."),
+        from: zod_1.z.string().optional().describe("op=connect/disconnect: source step id or ref."),
+        to: zod_1.z.string().optional().describe("op=connect/disconnect: target step id or ref."),
+        condition: zod_1.z
+            .string()
+            .optional()
+            .describe("op=connect: optional branch guard on the edge (free text; e.g. 'user approved')."),
         cluster: zod_1.z
             .string()
             .optional()
@@ -92,7 +107,7 @@ function registerWorkflowTools(register, client) {
         detail: zod_1.z
             .enum(["summary", "full"])
             .optional()
-            .describe("op=get: 'summary' returns the header + step titles + attachment names WITHOUT entry indexes or skill bodies (cheap orientation); 'full' (default) includes everything."),
+            .describe("op=get: 'summary' returns the workflow's title/description + step titles + attachment names WITHOUT entry indexes or skill bodies (cheap orientation); 'full' (default) includes everything."),
     }, async (args) => {
         switch (args.op) {
             case "list":
@@ -102,6 +117,12 @@ function registerWorkflowTools(register, client) {
                 if (miss)
                     return miss;
                 return opGet(client, args.slug, args.detail);
+            }
+            case "step": {
+                const miss = (0, respond_1.missingParams)("step", args, ["slug", "step"]);
+                if (miss)
+                    return miss;
+                return opStep(client, args.slug, args.step);
             }
             case "create": {
                 const miss = (0, respond_1.missingParams)("create", args, ["name"]);
@@ -149,7 +170,7 @@ function registerWorkflowTools(register, client) {
                 const miss = (0, respond_1.missingParams)("connect", args, ["slug", "from", "to"]);
                 if (miss)
                     return miss;
-                return opConnect(client, args.slug, args.from, args.to);
+                return opConnect(client, args.slug, args.from, args.to, args.condition);
             }
             case "disconnect": {
                 const miss = (0, respond_1.missingParams)("disconnect", args, ["slug", "from", "to"]);
@@ -175,30 +196,40 @@ function registerWorkflowTools(register, client) {
                 if (miss)
                     return miss;
                 await client.deleteWorkflow(args.slug);
-                return (0, respond_1.ok)(`Deleted workflow \`${args.slug}\`. Nodes stay on the canvas; attached knowledge bases + skills remain.`);
+                return (0, respond_1.ok)(`Deleted workflow \`${args.slug}\`. Its steps and edges were deleted with it; attached knowledge bases + skills remain.`);
             }
         }
     });
 }
-// ── ops ──────────────────────────────────────────────────────────────
+// ── render helpers ───────────────────────────────────────────────────
 function plural(n, noun) {
     return `${n} ${noun}${n === 1 ? "" : "s"}`;
 }
+function renderReads(reads) {
+    return reads
+        .map((r) => r.kind === "file"
+        ? `${r.name} (file, kb_id: ${r.kbId}, entry_id: ${r.entryId})`
+        : `${r.name} (knowledge base, kb_id: ${r.kbId})`)
+        .join("; ");
+}
+function renderActions(actions) {
+    return actions.map((a) => `${a.name} (skill, skill_id: ${a.skillId})`).join("; ");
+}
+// ── ops ──────────────────────────────────────────────────────────────
 async function opList(client) {
     const { workflows } = await client.listWorkflows();
     if (workflows.length === 0)
         return (0, respond_1.ok)("No workflows found.");
     const lines = workflows.map((w) => {
+        const steps = w.step_count ?? 0;
         const kbs = w.knowledge_base_count ?? 0;
         const skills = w.skill_count ?? 0;
-        const summary = kbs === 0 && skills === 0
-            ? "empty"
-            : [
-                kbs > 0 ? plural(kbs, "knowledge base") : null,
-                skills > 0 ? plural(skills, "skill") : null,
-            ]
-                .filter(Boolean)
-                .join(" · ");
+        const parts = [
+            steps > 0 ? plural(steps, "step") : null,
+            kbs > 0 ? plural(kbs, "knowledge base") : null,
+            skills > 0 ? plural(skills, "skill") : null,
+        ].filter(Boolean);
+        const summary = parts.length === 0 ? "empty" : parts.join(" · ");
         return `- **${w.name}** (slug: \`${w.slug}\`) — ${summary}`;
     });
     return (0, respond_1.ok)(lines.join("\n"));
@@ -216,7 +247,7 @@ async function opGet(client, slug, detail) {
     if (steps.length > 0) {
         const graphEdges = wf.graph?.edges ?? [];
         // ── Hierarchy: stages + per-step dependencies ────────────────────
-        // Stage = longest-path depth from the entry steps (nodes arrive
+        // Stage = longest-path depth from the entry steps (steps arrive
         // topologically sorted, so one forward relaxation pass suffices;
         // a cycle degrades gracefully to flat stages). Steps sharing a
         // stage have no dependency between them → parallel branches.
@@ -231,7 +262,7 @@ async function opGet(client, slug, detail) {
         const stepNo = new Map(steps.map((n, i) => [n.id, i + 1]));
         const label = (id) => `Step ${stepNo.get(id)} (\`${id}\`)`;
         const prevOf = (id) => graphEdges.filter((e) => e.to === id).map((e) => e.from);
-        const nextOf = (id) => graphEdges.filter((e) => e.from === id).map((e) => e.to);
+        const nextEdgesOf = (id) => graphEdges.filter((e) => e.from === id);
         const stageCount = Math.max(...[...stage.values()]) + 1;
         if (summaryOnly) {
             lines.push(`## Steps (${steps.length}) — ${plural(stageCount, "stage")}`);
@@ -243,33 +274,25 @@ async function opGet(client, slug, detail) {
         }
         else {
             lines.push(`## Steps (${steps.length}) — execution order`);
-            lines.push(`Topologically ordered into ${plural(stageCount, "stage")}. Stages run IN SEQUENCE; steps in the SAME stage have no dependency between them and are parallel branches — do them in any order (or concurrently) before moving to the next stage. Each step's "Depends on" / "Leads to" lines give the exact edges. Per step: READ (knowledge), ACTIONS (skills), expected user input, the output to produce, and when to advance.`);
+            lines.push(`Topologically ordered into ${plural(stageCount, "stage")}. Stages run IN SEQUENCE; steps in the SAME stage have no dependency between them and are parallel branches — do them in any order (or concurrently) before moving to the next stage. Each step's "Depends on" / "Leads to" lines give the exact edges (with branch conditions). Per step: READ (knowledge), ACTIONS (skills), expected user input, the output to produce, and when to advance.`);
             lines.push("");
             for (let i = 0; i < steps.length; i++) {
                 const n = steps[i];
-                lines.push(`### Step ${i + 1}: ${n.title || "(untitled)"} \`${n.id}\` — stage ${(stage.get(n.id) ?? 0) + 1} of ${stageCount}`);
+                lines.push(`### Step ${i + 1}: ${n.title || "(untitled)"} \`${n.id}\` (ref: \`${n.ref}\`) — stage ${(stage.get(n.id) ?? 0) + 1} of ${stageCount}`);
                 if (n.description)
                     lines.push(n.description);
                 const prev = prevOf(n.id);
-                const next = nextOf(n.id);
+                const next = nextEdgesOf(n.id);
                 lines.push(prev.length === 0
                     ? `- Depends on: nothing — entry step`
                     : `- Depends on: ${prev.map(label).join(", ")}${prev.length > 1 ? " (all must be done first)" : ""}`);
                 lines.push(next.length === 0
                     ? `- Leads to: nothing — terminal step`
-                    : `- Leads to: ${next.map(label).join(", ")}${next.length > 1 ? " (fans out into parallel branches)" : ""}`);
-                if (n.reads.length > 0) {
-                    lines.push(`- Read: ${n.reads
-                        .map((r) => r.kind === "file"
-                        ? `${r.name} (file, kb_id: ${r.kbId}, entry_id: ${r.entryId})`
-                        : `${r.name} (knowledge base, kb_id: ${r.kbId})`)
-                        .join("; ")}`);
-                }
-                if (n.actions.length > 0) {
-                    lines.push(`- Action: ${n.actions
-                        .map((a) => `${a.name} (skill, skill_id: ${a.skillId})`)
-                        .join("; ")}`);
-                }
+                    : `- Leads to: ${next.map((e) => `${label(e.to)}${e.condition ? ` when ${e.condition}` : ""}`).join(", ")}${next.length > 1 ? " (branches)" : ""}`);
+                if (n.reads.length > 0)
+                    lines.push(`- Read: ${renderReads(n.reads)}`);
+                if (n.actions.length > 0)
+                    lines.push(`- Action: ${renderActions(n.actions)}`);
                 if (n.userInput)
                     lines.push(`- User input: ${n.userInput}`);
                 if (n.agentOutput)
@@ -278,15 +301,14 @@ async function opGet(client, slug, detail) {
                     lines.push(`- Next: ${n.nextInstructions}`);
                 lines.push("");
             }
-            const edges = wf.graph?.edges ?? [];
-            if (edges.length > 0) {
-                lines.push(`Connections: ${edges.map((e) => `\`${e.from}\` → \`${e.to}\``).join(", ")}`);
+            if (graphEdges.length > 0) {
+                lines.push(`Connections: ${graphEdges.map((e) => `\`${e.from}\` → \`${e.to}\`${e.condition ? ` [${e.condition}]` : ""}`).join(", ")}`);
                 lines.push("");
             }
         }
     }
     else {
-        lines.push("_No nodes wired into this workflow yet._");
+        lines.push("_No steps authored into this workflow yet._");
         lines.push("");
     }
     if (wf.knowledge_bases.length > 0) {
@@ -341,9 +363,55 @@ async function opGet(client, slug, detail) {
     }
     return (0, respond_1.ok)(lines.join("\n"));
 }
+async function opStep(client, slug, stepRef) {
+    const wf = await client.getWorkflow(slug);
+    const steps = wf.graph?.nodes ?? [];
+    const edges = wf.graph?.edges ?? [];
+    const step = steps.find((s) => s.id === stepRef || s.ref === stepRef);
+    if (!step) {
+        return (0, respond_1.err)(`Step \`${stepRef}\` not found in workflow \`${slug}\`. Run op="get" to list step ids/refs.`);
+    }
+    const byId = new Map(steps.map((s) => [s.id, s]));
+    const nameOf = (id) => {
+        const s = byId.get(id);
+        return s ? `\`${s.ref}\`${s.title ? ` (${s.title})` : ""}` : `\`${id}\``;
+    };
+    const outgoing = edges.filter((e) => e.from === step.id);
+    const incoming = edges.filter((e) => e.to === step.id).length;
+    const lines = [];
+    lines.push(`# Step: ${step.title || "(untitled)"}`);
+    lines.push(`Workflow: \`${wf.slug}\` · step id: \`${step.id}\` · ref: \`${step.ref}\``);
+    if (step.description)
+        lines.push("", step.description);
+    lines.push("");
+    lines.push(incoming === 0
+        ? `- Entry step — no incoming edges.`
+        : `- Incoming edges: ${incoming}.`);
+    if (step.reads.length > 0)
+        lines.push(`- Read: ${renderReads(step.reads)}`);
+    if (step.actions.length > 0)
+        lines.push(`- Action: ${renderActions(step.actions)}`);
+    if (step.userInput)
+        lines.push(`- User input: ${step.userInput}`);
+    if (step.agentOutput)
+        lines.push(`- Agent output: ${step.agentOutput}`);
+    if (step.nextInstructions)
+        lines.push(`- Next: ${step.nextInstructions}`);
+    lines.push("");
+    if (outgoing.length === 0) {
+        lines.push(`- Leads to: nothing — terminal step.`);
+    }
+    else {
+        lines.push(`- Leads to:`);
+        for (const e of outgoing) {
+            lines.push(`  → ${nameOf(e.to)}${e.condition ? ` when ${e.condition}` : ""}`);
+        }
+    }
+    return (0, respond_1.ok)(lines.join("\n"));
+}
 async function opCreate(client, name) {
     const wf = await client.createWorkflow(name);
-    return (0, respond_1.ok)(`Created workflow **${wf.name}** (slug: \`${wf.slug}\`)${wf.header_panel_id ? `, header panel \`${wf.header_panel_id}\`` : ""}. Now author its graph with op="set_graph" (or add_node + connect), then op="get" to verify.`);
+    return (0, respond_1.ok)(`Created workflow **${wf.name}** (slug: \`${wf.slug}\`). Now author its graph with op="set_graph" (or add_node + connect), then op="get" to verify.`);
 }
 async function opUpdate(client, slug, name, description) {
     const wf = await client.updateWorkflow(slug, { name, description });
@@ -356,24 +424,24 @@ async function opSetGraph(client, slug, graph) {
             return (0, respond_1.err)("Every node in `graph.nodes` needs a `ref`.");
     }
     await client.setWorkflowGraph(slug, graph);
-    return (0, respond_1.ok)(`Set workflow \`${slug}\` graph: ${graph.nodes.length} node(s), ${graph.edges.length} edge(s). Run op="get" to see the ordered steps.`);
+    return (0, respond_1.ok)(`Set workflow \`${slug}\` graph: ${graph.nodes.length} step(s), ${graph.edges.length} edge(s). Run op="get" to see the ordered steps.`);
 }
 async function opAddNode(client, slug, node, connectFrom) {
     const payload = { ...node, connect_from: connectFrom };
     const { node_id } = await client.addWorkflowNode(slug, payload);
-    return (0, respond_1.ok)(`Added node \`${node_id}\` to workflow \`${slug}\` (connected from ${connectFrom ?? "header"}).`);
+    return (0, respond_1.ok)(`Added step \`${node_id}\` to workflow \`${slug}\`${connectFrom ? ` (connected from ${connectFrom})` : " (entry step)"}.`);
 }
 async function opUpdateNode(client, slug, nodeId, node) {
     await client.updateWorkflowNode(slug, nodeId, node);
-    return (0, respond_1.ok)(`Updated node \`${nodeId}\` in workflow \`${slug}\`.`);
+    return (0, respond_1.ok)(`Updated step \`${nodeId}\` in workflow \`${slug}\`.`);
 }
 async function opRemoveNode(client, slug, nodeId) {
     await client.removeWorkflowNode(slug, nodeId);
-    return (0, respond_1.ok)(`Removed node \`${nodeId}\` from workflow \`${slug}\`.`);
+    return (0, respond_1.ok)(`Removed step \`${nodeId}\` from workflow \`${slug}\`.`);
 }
-async function opConnect(client, slug, from, to) {
-    await client.connectWorkflow(slug, from, to);
-    return (0, respond_1.ok)(`Connected \`${from}\` → \`${to}\` in workflow \`${slug}\`.`);
+async function opConnect(client, slug, from, to, condition) {
+    await client.connectWorkflow(slug, from, to, condition);
+    return (0, respond_1.ok)(`Connected \`${from}\` → \`${to}\` in workflow \`${slug}\`${condition ? ` when ${condition}` : ""}.`);
 }
 async function opDisconnect(client, slug, from, to) {
     try {

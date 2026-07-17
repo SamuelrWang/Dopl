@@ -130,8 +130,10 @@ export interface ClusterAttachedSkill {
     added_at: string;
 }
 export interface ClusterWorkflowNode {
-    /** Canvas panel id — referenced by workflow edges. */
+    /** Step uuid — referenced by workflow edges. */
     id: string;
+    /** Stable authoring handle (unique per workflow). */
+    ref: string;
     title: string;
     description: string;
     reads: Array<{
@@ -152,9 +154,11 @@ export interface ClusterWorkflowNode {
 export interface ClusterWorkflow {
     /** Topologically ordered when the edge graph is acyclic. */
     nodes: ClusterWorkflowNode[];
+    /** Edge endpoints are step ids; `condition` is a branch guard ('' = none). */
     edges: Array<{
         from: string;
         to: string;
+        condition: string;
     }>;
 }
 /** Summary of a workflow assigned to a cluster (drill in via dopl_workflow). */
@@ -177,13 +181,12 @@ export interface WorkflowRow {
     cluster_id?: string | null;
     created_at: string;
     updated_at: string;
+    /** Number of authored steps; present on the list endpoint. */
+    step_count?: number;
     knowledge_base_count?: number;
     skill_count?: number;
     knowledge_base_names?: string[];
     skill_names?: string[];
-    /** Set on agent-path create: the canvas header panel id (use as "header"
-     *  endpoint when connecting nodes). */
-    header_panel_id?: string;
 }
 export interface WorkflowReadRef {
     kbId: string;
@@ -206,16 +209,18 @@ export interface WorkflowNodeInput {
 }
 export interface WorkflowGraphSpec {
     nodes: WorkflowNodeInput[];
-    /** Each endpoint is a node `ref` or the literal "header". */
+    /** Each endpoint is a step `ref`; `condition` is an optional branch guard. */
     edges: Array<{
         from: string;
         to: string;
+        condition?: string;
     }>;
 }
 export interface WorkflowDetail extends WorkflowRow {
     knowledge_bases: ClusterAttachedKnowledgeBase[];
     skills: ClusterAttachedSkill[];
-    /** Node graph composed from the canvas. Null when no nodes are wired. */
+    /** Step graph composed from workflow_steps + workflow_step_edges. Empty
+     *  when no steps are authored yet. */
     graph?: ClusterWorkflow | null;
 }
 export interface ClusterKnowledgeEntry {
@@ -236,24 +241,6 @@ export interface ClusterSkillFull {
         name: string;
         body: string;
     }>;
-}
-export type CanvasPanelType = "connection" | "knowledge" | "skills" | "knowledge-base" | "skill" | "artifact";
-export interface CanvasPanel {
-    id: string;
-    /**
-     * Client-facing panel handle (e.g. "panel-3"), unique within a workspace.
-     * Distinct from `id` (the row UUID). This is what panel-addressed ops
-     * take.
-     */
-    panel_id: string;
-    panel_type: CanvasPanelType;
-    slug: string | null;
-    title: string | null;
-    summary: string | null;
-    source_url: string | null;
-    x: number;
-    y: number;
-    added_at: string;
 }
 export interface ClusterQueryResult {
     cluster_slug: string;

@@ -145,7 +145,7 @@ export const DELETE = withUserAuth(async (_request, { userId, agentTokenId }) =>
     }
 
     // Delete the auth user — all per-user data cascades automatically:
-    // profiles, canvas_panels, user-scoped clusters, user_preferences
+    // profiles, user-scoped clusters, user_preferences
     // mcp_events.user_id / system_events.user_id are SET NULL (analytics retained)
     const { error } = await admin.auth.admin.deleteUser(user.id);
 

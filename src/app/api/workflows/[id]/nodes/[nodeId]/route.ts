@@ -3,7 +3,6 @@ import { z } from "zod";
 import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
 import type { Role } from "@/features/workspaces/types";
 import { HttpError } from "@/shared/lib/http-error";
-import { denyIfNoCanvasWrite } from "@/features/canvas/server/access";
 import { DESCRIPTION_MAX } from "@/config";
 import {
   requireWorkflowEdit,
@@ -48,18 +47,8 @@ function toError(err: unknown): NextResponse {
   );
 }
 
-async function gate(ctx: Ctx): Promise<NextResponse | null> {
-  return denyIfNoCanvasWrite({
-    agentTokenId: ctx.agentTokenId,
-    userId: ctx.userId,
-    workspaceId: ctx.workspaceId,
-  });
-}
-
 async function handlePatch(request: NextRequest, ctx: Ctx) {
   try {
-    const denied = await gate(ctx);
-    if (denied) return denied;
     const { id, nodeId } = ctx.params ?? {};
     if (!id || !nodeId) return NextResponse.json({ error: "id + nodeId required" }, { status: 400 });
     const parsed = PatchBody.safeParse(await request.json());
@@ -81,8 +70,6 @@ async function handlePatch(request: NextRequest, ctx: Ctx) {
 
 async function handleDelete(_request: NextRequest, ctx: Ctx) {
   try {
-    const denied = await gate(ctx);
-    if (denied) return denied;
     const { id, nodeId } = ctx.params ?? {};
     if (!id || !nodeId) return NextResponse.json({ error: "id + nodeId required" }, { status: 400 });
     const scope = scopeOf(ctx);

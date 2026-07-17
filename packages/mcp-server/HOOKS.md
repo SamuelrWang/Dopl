@@ -60,7 +60,7 @@ the model tends to skip it.)
         "hooks": [
           {
             "type": "command",
-            "command": "echo '{\"additionalContext\": \"If this is the first turn of the session, call dopl_cluster(op=list) and dopl_canvas(op=list) in parallel before your substantive reply so questions about the workspace are grounded in current state. Once per session is enough.\"}'"
+            "command": "echo '{\"additionalContext\": \"If this is the first turn of the session, call dopl_cluster(op=list) and dopl_map in parallel before your substantive reply so questions about the workspace are grounded in current state. Once per session is enough.\"}'"
           }
         ]
       }

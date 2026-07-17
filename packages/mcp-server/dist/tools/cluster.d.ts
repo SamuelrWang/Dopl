@@ -1,6 +1,6 @@
 /**
  * `dopl_cluster` + `dopl_cluster_admin` — clusters are non-spatial
- * CONTAINERS that group workflows. KB/skill attachments + the node graph
+ * CONTAINERS that group workflows. KB/skill attachments + the step graph
  * live on the workflows themselves (see dopl_workflow); a cluster only
  * carries a name/description and the list of workflows assigned to it.
  */

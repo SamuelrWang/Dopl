@@ -12,7 +12,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   Users,
-  Waypoints,
+  Workflow,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
@@ -23,7 +23,7 @@ import styles from "./app-shell.module.css";
 type NavSection =
   | "overview"
   | "canvas"
-  | "canvas2"
+  | "workflows"
   | "knowledge"
   | "skills"
   | "chats"
@@ -34,7 +34,7 @@ type NavSection =
 const NAV: ReadonlyArray<{ label: string; icon: LucideIcon; section: NavSection }> = [
   { label: "Overview", icon: Home, section: "overview" },
   { label: "Canvas", icon: LayoutGrid, section: "canvas" },
-  { label: "Canvas 2", icon: Waypoints, section: "canvas2" },
+  { label: "Workflows", icon: Workflow, section: "workflows" },
   { label: "Knowledge", icon: BookOpen, section: "knowledge" },
   { label: "Skills", icon: Sparkles, section: "skills" },
   { label: "Chats", icon: MessagesSquare, section: "chats" },
@@ -52,7 +52,7 @@ interface Props {
 }
 
 function sectionPath(segment: string, section: NavSection): string {
-  return section === "canvas" ? `/${segment}` : `/${segment}/${section}`;
+  return `/${segment}/${section}`;
 }
 
 /**
@@ -68,8 +68,8 @@ export function AppSidebar({
   onCreateWorkspace,
 }: Props) {
   const pathname = usePathname();
-  // Path shape: /{wsSegment}/{section}/... — anything else (including
-  // /{wsSegment}/{canvasSlug}) highlights Canvas.
+  // Path shape: /{wsSegment}/{section}/... — the bare workspace root
+  // (which redirects to /canvas) highlights Canvas.
   const segments = pathname.split("/").filter(Boolean);
   const activeSection: NavSection = (
     NAV.some((n) => n.section === segments[1]) ? segments[1] : "canvas"

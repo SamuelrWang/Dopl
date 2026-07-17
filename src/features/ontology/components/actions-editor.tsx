@@ -18,9 +18,11 @@ import { FIELD_WELL } from "./ontology-bits";
 export function ActionsEditor({
   object,
   dispatch,
+  canEdit = true,
 }: {
   object: OntologyObject;
   dispatch: Dispatch<GraphAction>;
+  canEdit?: boolean;
 }) {
   const [newName, setNewName] = useState("");
 
@@ -44,6 +46,7 @@ export function ActionsEditor({
             <ActionRow
               key={`${m.name}-${i}`}
               method={m}
+              canEdit={canEdit}
               onChange={(method) =>
                 dispatch({ type: "METHOD_UPSERT", id: object.id, index: i, method })
               }
@@ -52,33 +55,37 @@ export function ActionsEditor({
           ))}
         </div>
       )}
-      <div className="flex items-center gap-1.5 border-t border-border-subtle bg-card-surface-subtle px-4 py-2">
-        <input
-          type="text"
-          value={newName}
-          onChange={(e) => setNewName(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && addAction()}
-          placeholder="action name (e.g. Send email)…"
-          className={`${FIELD_WELL} h-7 w-64 px-2.5 text-body text-text-primary placeholder:text-text-muted`}
-        />
-        <button
-          type="button"
-          onClick={addAction}
-          className="btn-light flex h-7 items-center gap-1 rounded-md px-2.5 text-small font-medium text-text-primary"
-        >
-          <Plus size={11} /> Add
-        </button>
-      </div>
+      {canEdit && (
+        <div className="flex items-center gap-1.5 border-t border-border-subtle bg-card-surface-subtle px-4 py-2">
+          <input
+            type="text"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && addAction()}
+            placeholder="action name (e.g. Send email)…"
+            className={`${FIELD_WELL} h-7 w-64 px-2.5 text-body text-text-primary placeholder:text-text-muted`}
+          />
+          <button
+            type="button"
+            onClick={addAction}
+            className="btn-light flex h-7 items-center gap-1 rounded-md px-2.5 text-small font-medium text-text-primary"
+          >
+            <Plus size={11} /> Add
+          </button>
+        </div>
+      )}
     </SectionBox>
   );
 }
 
 function ActionRow({
   method,
+  canEdit,
   onChange,
   onDelete,
 }: {
   method: ObjectMethod;
+  canEdit: boolean;
   onChange: (m: ObjectMethod) => void;
   onDelete: () => void;
 }) {
@@ -88,24 +95,28 @@ function ActionRow({
         <input
           type="text"
           value={method.name}
+          readOnly={!canEdit}
           onChange={(e) => onChange({ ...method, name: e.target.value })}
           placeholder="e.g. Send email…"
           className="min-w-0 flex-1 bg-transparent text-body font-semibold tracking-tight text-text-primary placeholder:text-text-muted focus:outline-none"
           aria-label="Action name"
         />
-        <button
-          type="button"
-          aria-label={`Remove ${method.name}`}
-          onClick={onDelete}
-          className="rounded-md p-1 text-text-muted opacity-0 transition hover:bg-surface-raised-3 hover:text-text-primary group-hover:opacity-100"
-        >
-          <X size={12} />
-        </button>
+        {canEdit && (
+          <button
+            type="button"
+            aria-label={`Remove ${method.name}`}
+            onClick={onDelete}
+            className="rounded-md p-1 text-text-muted opacity-0 transition hover:bg-surface-raised-3 hover:text-text-primary group-hover:opacity-100"
+          >
+            <X size={12} />
+          </button>
+        )}
       </div>
       <div className="mt-2 flex flex-col gap-1.5">
         <input
           type="text"
           value={method.description}
+          readOnly={!canEdit}
           onChange={(e) => onChange({ ...method, description: e.target.value })}
           placeholder="Description"
           className={`${FIELD_WELL} h-7 w-full px-2.5 text-body text-text-primary placeholder:text-text-muted`}
@@ -114,6 +125,7 @@ function ActionRow({
         <input
           type="text"
           value={method.outcome}
+          readOnly={!canEdit}
           onChange={(e) => onChange({ ...method, outcome: e.target.value })}
           placeholder="Outcome"
           className={`${FIELD_WELL} h-7 w-full px-2.5 text-body text-text-primary placeholder:text-text-muted`}
@@ -122,6 +134,7 @@ function ActionRow({
         <input
           type="text"
           value={method.tools ?? ""}
+          readOnly={!canEdit}
           onChange={(e) => onChange({ ...method, tools: e.target.value })}
           placeholder="Tools"
           className={`${FIELD_WELL} h-7 w-full px-2.5 text-body text-text-primary placeholder:text-text-muted`}

@@ -61,10 +61,6 @@ class DoplClient {
     getWorkspaceId() {
         return this.transport.getWorkspaceId();
     }
-    async listCanvasPanels() {
-        const res = await this.transport.request("/api/canvas/panels", { toolName: "canvas_list_panels" });
-        return res.panels;
-    }
     async createCluster(name) {
         return this.transport.request("/api/clusters", {
             method: "POST",
@@ -113,8 +109,8 @@ class DoplClient {
     async removeWorkflowNode(idOrSlug, nodeId) {
         await this.transport.requestNoContent(`/api/workflows/${encodeURIComponent(idOrSlug)}/nodes/${encodeURIComponent(nodeId)}`, "DELETE", "remove_workflow_node");
     }
-    async connectWorkflow(idOrSlug, from, to) {
-        await this.transport.requestNoContent(`/api/workflows/${encodeURIComponent(idOrSlug)}/edges`, "POST", "connect_workflow", { from, to });
+    async connectWorkflow(idOrSlug, from, to, condition) {
+        await this.transport.requestNoContent(`/api/workflows/${encodeURIComponent(idOrSlug)}/edges`, "POST", "connect_workflow", { from, to, condition });
     }
     async disconnectWorkflow(idOrSlug, from, to) {
         await this.transport.requestNoContent(`/api/workflows/${encodeURIComponent(idOrSlug)}/edges`, "DELETE", "disconnect_workflow", { from, to });

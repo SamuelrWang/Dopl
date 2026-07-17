@@ -8,10 +8,6 @@
 // ── Context budgets ─────────────────────────────────────────────────
 export const CONTEXT_CHAR_BUDGET_PER_FIELD = 2000;
 
-// ── Canvas storage keys ─────────────────────────────────────────────
-export const CANVAS_STORAGE_KEY_PREFIX = "dopl:canvas:state";
-export const CANVAS_ACTIVE_USER_KEY = "dopl:canvas:active-user";
-
 // ── Reserved workspace slugs ────────────────────────────────────────
 // Workspace slugs share the URL root with every top-level static route.
 // `slugifyWorkspaceName` consults this list and refuses any base slug

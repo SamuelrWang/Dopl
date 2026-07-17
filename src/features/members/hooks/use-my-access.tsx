@@ -20,9 +20,9 @@ import { useApiQuery } from "@/shared/hooks/use-api-query";
 import type { AccessLevel } from "@/features/teams/access-levels";
 
 /** Resource kinds the badge UI may ask about. Teams-mode resolution only
- *  produces knowledge_base/workflow entries; skill/canvas fall through to
+ *  produces knowledge_base/workflow entries; skill falls through to
  *  the role default. */
-type ResourceType = "knowledge_base" | "skill" | "canvas" | "workflow";
+type ResourceType = "knowledge_base" | "skill" | "workflow";
 
 interface MyAccessPayload {
   defaultLevel: AccessLevel;

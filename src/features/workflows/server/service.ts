@@ -11,8 +11,8 @@ import {
   resolveLevel,
 } from "@/features/teams/server/access";
 import { slugifyWorkflowName } from "../slug";
-import { spawnHeaderPanel, syncHeaderPanel } from "./authoring";
 import { composeWorkflow, type WorkflowGraph } from "./graph";
+import { countSteps } from "./repository";
 import {
   listAttachedKnowledgeBasesById,
   listAttachedSkillsById,
@@ -35,23 +35,22 @@ export interface WorkflowRow {
   user_id: string | null;
   created_at: string;
   updated_at: string;
+  step_count: number;
   knowledge_base_count: number;
   skill_count: number;
   knowledge_base_names: string[];
   skill_names: string[];
-  /** Set on agent-path create: the canvas header panel spawned with the row. */
-  header_panel_id?: string;
 }
 
 export interface WorkflowDetail extends WorkflowRow {
   knowledge_bases: WorkflowAttachedKnowledgeBase[];
   skills: WorkflowAttachedSkill[];
-  /** Node graph composed from the canvas (header + edge-connected nodes). */
+  /** Step graph composed from workflow_steps + workflow_step_edges. */
   graph: WorkflowGraph | null;
 }
 
 export interface WorkflowCreateRequest {
-  /** Client-generated id so the canvas header panel and the row agree. */
+  /** Client-generated id so a UI can create the row + author it in one flow. */
   id?: string;
   name: string;
   description?: string | null;
@@ -145,7 +144,6 @@ export async function listWorkflows(
       | "skill_count"
       | "knowledge_base_names"
       | "skill_names"
-      | "header_panel_id"
     >
   >;
   if (allRows.length === 0) return [];
@@ -163,7 +161,7 @@ export async function listWorkflows(
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.id);
 
-  const [kbLinkRes, skillLinkRes] = await Promise.all([
+  const [kbLinkRes, skillLinkRes, stepRes] = await Promise.all([
     db
       .from("workflow_knowledge_bases")
       .select("workflow_id, knowledge_base_id")
@@ -174,9 +172,21 @@ export async function listWorkflows(
       .select("workflow_id, skill_id")
       .in("workflow_id", ids)
       .eq("workspace_id", scope.workspaceId),
+    db
+      .from("workflow_steps")
+      .select("workflow_id")
+      .in("workflow_id", ids)
+      .eq("workspace_id", scope.workspaceId),
   ]);
   if (kbLinkRes.error) throw kbLinkRes.error;
   if (skillLinkRes.error) throw skillLinkRes.error;
+  if (stepRes.error) throw stepRes.error;
+
+  // Grouped step count per workflow (cheap: one indexed id column, tallied
+  // client-side) so every tab shows a step count, not just the active one.
+  const stepCountByWf = new Map<string, number>();
+  for (const s of stepRes.data || [])
+    stepCountByWf.set(s.workflow_id, (stepCountByWf.get(s.workflow_id) ?? 0) + 1);
 
   const kbIds = [
     ...new Set((kbLinkRes.data || []).map((r) => r.knowledge_base_id)),
@@ -240,6 +250,7 @@ export async function listWorkflows(
     const skill_names = skillNamesByWf.get(r.id) || [];
     return {
       ...r,
+      step_count: stepCountByWf.get(r.id) ?? 0,
       knowledge_base_count: knowledge_base_names.length,
       skill_count: skill_names.length,
       knowledge_base_names,
@@ -281,6 +292,7 @@ export async function getWorkflow(
 
   return {
     ...wf,
+    step_count: graph?.nodes.length ?? 0,
     knowledge_base_count: knowledge_bases.length,
     skill_count: skills.length,
     knowledge_base_names: knowledge_bases.map((k) => k.name),
@@ -337,16 +349,9 @@ export async function createWorkflow(
     }
     if (!wf) throw new Error("Failed to create workflow");
 
-    // Agent-created workflows need a header panel on the canvas to be
-    // visible + composable (the client create path makes its own header).
-    const header_panel_id =
-      scope.source === "agent"
-        ? await spawnHeaderPanel(wf.id, wf.name, wf.description, scope)
-        : undefined;
-
     return {
       ...wf,
-      header_panel_id,
+      step_count: 0,
       knowledge_base_count: 0,
       skill_count: 0,
       knowledge_base_names: [],
@@ -418,16 +423,13 @@ export async function updateWorkflow(
     .single();
   if (refetchError || !updated) throw refetchError || new Error("Refetch failed");
 
-  // Keep the canvas header panel's label in step with the row, so a rename
-  // / description edit shows on the canvas instead of the stale create-time
-  // label (the row and the header panel are two writes that used to drift).
-  if (update.name !== undefined || update.description !== undefined) {
-    await syncHeaderPanel(wf.id, updated.name, updated.description ?? null, scope);
-  }
-
-  // Real attachment summary — zeroed fields here would make a rename
-  // response look like the workflow lost all its KBs/skills.
-  return { ...updated, ...(await attachmentSummary(wf.id, scope)) };
+  // Real attachment + step summary — zeroed fields here would make a rename
+  // response look like the workflow lost all its KBs/skills/steps.
+  const [summary, step_count] = await Promise.all([
+    attachmentSummary(wf.id, scope),
+    countSteps(db, scope.workspaceId, wf.id),
+  ]);
+  return { ...updated, step_count, ...summary };
 }
 
 export async function deleteWorkflow(
@@ -437,10 +439,8 @@ export async function deleteWorkflow(
   const db = supabaseAdmin();
   const byId = isUuid(idOrSlug);
 
-  // Resolve the row first so we can also remove its header panel — without
-  // this an MCP delete leaves an orphan workflow card on the canvas pointing
-  // at a deleted row (the canvas trash button removes the header too; nodes
-  // stay on the canvas in both paths).
+  // Resolve the row first so the access gate always sees it before the
+  // DELETE runs.
   const { data: wf, error: lookupError } = await db
     .from("workflows")
     .select("id")
@@ -448,8 +448,7 @@ export async function deleteWorkflow(
     .eq("workspace_id", scope.workspaceId)
     .maybeSingle();
   if (lookupError) throw lookupError;
-  // No row -> nothing to delete (idempotent), and crucially we never run
-  // the DELETE below without the access gate having seen the row first.
+  // No row -> nothing to delete (idempotent).
   if (!wf?.id) return;
 
   await requireEffectiveAccess(
@@ -461,26 +460,9 @@ export async function deleteWorkflow(
     { role: scope.role }
   );
 
-  const { data: headers } = await db
-    .from("canvas_panels")
-    .select("panel_id, panel_data")
-    .eq("workspace_id", scope.workspaceId)
-    .eq("panel_type", "workflow");
-  const headerIds = (headers ?? [])
-    .filter(
-      (p) =>
-        (p.panel_data as { workflowId?: string } | null)?.workflowId === wf.id
-    )
-    .map((p) => p.panel_id);
-  if (headerIds.length > 0) {
-    await db
-      .from("canvas_panels")
-      .delete()
-      .eq("workspace_id", scope.workspaceId)
-      .in("panel_id", headerIds);
-  }
-
-  // Idempotent: junction rows + (if any) the row vanish via FK cascade.
+  // Idempotent: steps, step edges, and junction rows all vanish via FK
+  // cascade (workflow_steps / workflow_step_edges / workflow_knowledge_bases
+  // / workflow_skills reference workflows ON DELETE CASCADE).
   const { error } = await db
     .from("workflows")
     .delete()

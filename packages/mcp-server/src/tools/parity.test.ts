@@ -27,7 +27,6 @@ import type { DoplClient } from "@dopl/client";
 import type { RegisterTool } from "./respond.js";
 import { registerClusterTools } from "./cluster.js";
 import { registerWorkflowTools } from "./workflow.js";
-import { registerCanvasTools } from "./canvas.js";
 import { registerPacksTools } from "./packs.js";
 import { registerKnowledgeTools } from "./knowledge.js";
 import { registerSkillTools } from "./skills.js";
@@ -53,7 +52,6 @@ const REGISTRARS: Array<{
 }> = [
   { file: "cluster.ts", register: registerClusterTools },
   { file: "workflow.ts", register: registerWorkflowTools },
-  { file: "canvas.ts", register: registerCanvasTools },
   { file: "packs.ts", register: registerPacksTools },
   { file: "knowledge.ts", register: registerKnowledgeTools },
   { file: "skills.ts", register: registerSkillTools },
@@ -136,8 +134,7 @@ const READ_ONLY_BLOCKED_TOOLS = parseReadOnlyBlockedTools(SERVER_SOURCE);
 // for the new op. Human-audit this list against the sources.
 const READ_OPS: Record<string, string[]> = {
   dopl_cluster: ["list", "get"],
-  dopl_workflow: ["list", "get"],
-  dopl_canvas: ["list"],
+  dopl_workflow: ["list", "get", "step"],
   dopl_packs: ["list", "list_files", "get_file"],
   dopl_kb: ["list_bases", "get_tree", "list_dir", "read_file", "list_trash", "search"],
   dopl_skill: ["list", "get", "read", "authoring_guide"],
@@ -165,7 +162,6 @@ describe("tool capture", () => {
     const names = TOOLS.map((t) => t.name).sort();
     expect(names).toEqual(
       [
-        "dopl_canvas",
         "dopl_chats",
         "dopl_chats_admin",
         "dopl_cluster",

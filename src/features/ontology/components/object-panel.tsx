@@ -16,6 +16,9 @@ interface Props {
   onSelectObject: (id: string) => void;
   onDeleteObject: (id: string) => void;
   onClose: () => void;
+  /** Member+ — viewers read the panel but see no edit/delete affordances:
+   *  inputs go read-only, Delete hides, child editors drop add/remove. */
+  canEdit?: boolean;
 }
 
 /**
@@ -30,6 +33,7 @@ export function ObjectPanel({
   onSelectObject,
   onDeleteObject,
   onClose,
+  canEdit = true,
 }: Props) {
   const object = graph.objects[objectId];
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -57,37 +61,38 @@ export function ObjectPanel({
         <span className="min-w-0 flex-1 truncate font-mono text-micro text-text-muted">
           {objectId}
         </span>
-        {confirmDelete ? (
-          <span className="flex shrink-0 items-center gap-1">
+        {canEdit &&
+          (confirmDelete ? (
+            <span className="flex shrink-0 items-center gap-1">
+              <button
+                type="button"
+                onClick={() => {
+                  onDeleteObject(objectId);
+                  onClose();
+                }}
+                className="rounded-md bg-danger/10 px-2 py-1 text-caption font-semibold text-danger"
+              >
+                Delete
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(false)}
+                className="btn-light rounded-md px-2 py-1 text-caption font-medium text-text-primary"
+              >
+                Keep
+              </button>
+            </span>
+          ) : (
             <button
               type="button"
-              onClick={() => {
-                onDeleteObject(objectId);
-                onClose();
-              }}
-              className="rounded-md bg-danger/10 px-2 py-1 text-caption font-semibold text-danger"
+              aria-label={`Delete ${object.name}`}
+              title="Delete object"
+              onClick={() => setConfirmDelete(true)}
+              className="btn-light flex h-6 w-7 shrink-0 items-center justify-center rounded-md text-text-primary"
             >
-              Delete
+              <Trash2 size={11} />
             </button>
-            <button
-              type="button"
-              onClick={() => setConfirmDelete(false)}
-              className="btn-light rounded-md px-2 py-1 text-caption font-medium text-text-primary"
-            >
-              Keep
-            </button>
-          </span>
-        ) : (
-          <button
-            type="button"
-            aria-label={`Delete ${object.name}`}
-            title="Delete object"
-            onClick={() => setConfirmDelete(true)}
-            className="btn-light flex h-6 w-7 shrink-0 items-center justify-center rounded-md text-text-primary"
-          >
-            <Trash2 size={11} />
-          </button>
-        )}
+          ))}
         <button
           type="button"
           aria-label="Close"
@@ -104,6 +109,7 @@ export function ObjectPanel({
             <input
               type="text"
               value={object.name}
+              readOnly={!canEdit}
               onChange={(e) =>
                 dispatch({ type: "OBJECT_UPDATE", id: objectId, patch: { name: e.target.value } })
               }
@@ -114,6 +120,7 @@ export function ObjectPanel({
             <input
               type="text"
               value={object.subtitle}
+              readOnly={!canEdit}
               onChange={(e) =>
                 dispatch({ type: "OBJECT_UPDATE", id: objectId, patch: { subtitle: e.target.value } })
               }
@@ -123,21 +130,22 @@ export function ObjectPanel({
             />
           </div>
 
-          {isColumn && <TemplateEditor column={object} dispatch={dispatch} />}
+          {isColumn && <TemplateEditor column={object} dispatch={dispatch} canEdit={canEdit} />}
           {isColumn && (
             <p className="px-1 text-caption text-text-muted">
               New objects also start with a copy of this column&apos;s relationships and
               actions below.
             </p>
           )}
-          <AttributesEditor object={object} graph={graph} dispatch={dispatch} />
+          <AttributesEditor object={object} graph={graph} dispatch={dispatch} canEdit={canEdit} />
           <RelationshipsEditor
             object={object}
             graph={graph}
             dispatch={dispatch}
             onSelectObject={onSelectObject}
+            canEdit={canEdit}
           />
-          <ActionsEditor object={object} dispatch={dispatch} />
+          <ActionsEditor object={object} dispatch={dispatch} canEdit={canEdit} />
         </div>
       </div>
     </div>

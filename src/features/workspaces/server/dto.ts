@@ -1,7 +1,6 @@
 import "server-only";
 import type {
   Workspace,
-  WorkspaceCanvas,
   WorkspaceMembership,
   Invitation,
   InvitedRole,
@@ -86,25 +85,5 @@ export function mapInvitationRow(row: InvitationRow): Invitation {
     acceptedBy: row.accepted_by,
     revokedAt: row.revoked_at,
     createdAt: row.created_at,
-  };
-}
-
-export interface WorkspaceCanvasRow {
-  id: string;
-  workspace_id: string;
-  name: string;
-  slug: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export function mapWorkspaceCanvasRow(row: WorkspaceCanvasRow): WorkspaceCanvas {
-  return {
-    id: row.id,
-    workspaceId: row.workspace_id,
-    name: row.name,
-    slug: row.slug,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
   };
 }

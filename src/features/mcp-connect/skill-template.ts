@@ -24,24 +24,25 @@ read and write over MCP (server: ${mcpUrl}):
 
 - **Knowledge bases** — durable notes/docs the user curates for you.
 - **Skills** — procedural prompt playbooks the user authored.
-- **Workflows** — agent-followable step graphs (a header + connected
-  node steps), grouped into clusters.
+- **Workflows** — agent-followable step graphs (steps connected by
+  branch-conditioned edges), grouped into clusters.
 
 If the \`dopl_*\` tools are missing, tell the user to connect the Dopl
 MCP server first (Dopl → Overview → Connect your agent).
 
 ## Session start
 
-Before your first substantive reply, call \`dopl_workflow(op:'list')\`
-and \`dopl_canvas(op:'list')\` in parallel to ground yourself in the
-real workspace state. Re-query when the user asks about their workspace
-("what's on my canvas?") — they may have changed things in the web UI.
+Before your first substantive reply, call \`dopl_map\` (one cheap call:
+every knowledge base, skill, workflow, and cluster) to ground yourself
+in the real workspace state. Re-query when the user asks about their
+workspace — they may have changed things in the web UI.
 The workspace beats local files as source of truth; flag drift.
 
 ## Which tool when
 
 - List workflows → \`dopl_workflow(op:'list')\`; read one (ordered
-  steps + its knowledge/skills) → \`dopl_workflow(op:'get', slug)\`.
+  steps + its knowledge/skills) → \`dopl_workflow(op:'get', slug)\`;
+  read ONE step as you reach it → \`dopl_workflow(op:'step', slug, step)\`.
 - Author workflows → \`dopl_workflow(op:'create'|'update'|'set_graph'|
   'add_node'|'update_node'|'remove_node'|'connect'|'disconnect')\`;
   delete → \`dopl_workflow_admin(op:'delete_workflow')\`.
@@ -49,7 +50,7 @@ The workspace beats local files as source of truth; flag drift.
 - Browse/read/write knowledge → \`dopl_kb\` (read entries with
   \`op:'read_file'\`); destructive ops → \`dopl_kb_admin\`.
 - List/read/author the user's skills → \`dopl_skill\` (+ \`dopl_skill_admin\`).
-- See the canvas → \`dopl_canvas(op:'list')\`.
+- See everything at a glance → \`dopl_map\`.
 - Archive this conversation → \`dopl_chats(op:'export')\` (read
   \`op:'guide'\` first); recall past sessions → \`dopl_chats(op:'list'|'get')\`.
 - Workspace targeting → \`list_workspaces\`, \`set_workspace\`, or a
@@ -64,7 +65,7 @@ The workspace beats local files as source of truth; flag drift.
 - Steps in the SAME stage are parallel branches — no dependency between
   them; do them in any order (or concurrently) before the next stage.
 - Each step lists \`Depends on:\` (all must be complete first) and
-  \`Leads to:\` (what it unlocks; "fans out" = parallel branches).
+  \`Leads to:\` (what it unlocks, with any branch condition — "when X").
 - Per step, honor: **Read** (load that knowledge first), **Action**
   (apply that skill), **User input** (ask/expect this), **Agent
   output** (produce this), **Next** (the author's advance condition).

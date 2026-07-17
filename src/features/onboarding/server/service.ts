@@ -5,7 +5,6 @@ import {
   hasFiredEvent,
 } from "@/features/analytics/server/conversion-events";
 import { renameDefaultWorkspaceIfUntitled } from "@/features/workspaces/server/service";
-import { ensureDefaultCanvas } from "@/features/workspaces/server/canvases";
 import { workspaceSegment } from "@/features/workspaces/url";
 import type { OnboardingStatus, SurveySubmission } from "../types";
 import {
@@ -48,10 +47,9 @@ export async function isMcpConnected(userId: string): Promise<boolean> {
 }
 
 /**
- * Finish onboarding: name the default workspace after the user, make
- * sure their canvas exists, stamp onboarded_at, and hand back the
- * workspace URL to land on. Every step is idempotent so a retry after
- * partial failure converges.
+ * Finish onboarding: name the default workspace after the user, stamp
+ * onboarded_at, and hand back the workspace URL to land on. Every step
+ * is idempotent so a retry after partial failure converges.
  */
 export async function completeOnboarding(
   userId: string,
@@ -63,10 +61,7 @@ export async function completeOnboarding(
     userId,
     workspaceName
   );
-  // Provision the default canvas so the workspace is usable, but land the
-  // user on the overview page — not the canvas (the canvas portal would
-  // occlude the welcome popup, and overview is the proper workspace home).
-  await ensureDefaultCanvas(workspace.id);
+  // Land the user on the overview page — the proper workspace home.
 
   const won = await markOnboarded(userId);
   if (won) {

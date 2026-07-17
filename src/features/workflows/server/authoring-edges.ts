@@ -2,65 +2,65 @@ import "server-only";
 
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { HttpError } from "@/shared/lib/http-error";
-import { insertEdge } from "@/features/canvas/server/edges";
-import { resolveHeaderPanelId } from "./authoring-header";
 import {
+  assertNotHeaderSentinel,
   buildAdjacency,
-  deleteEdgeByPair,
-  nodeOwnership,
   reaches,
   reconcileAttachments,
 } from "./authoring-shared";
+import { findStep, getStep, listEdges, insertEdge, deleteEdge } from "./repository";
 import type { WorkflowScope } from "./service";
 
 /**
- * Per-edge authoring ops: connect two panels (with cross-workflow +
- * cycle guards) and disconnect an edge. Node ops are in `authoring-nodes`;
- * graph-level reconciliation is in `authoring-graph`.
+ * Per-edge authoring ops: connect two steps (with a self-edge + cycle
+ * guard, and an optional branch `condition`) and disconnect an edge. Step
+ * ops are in `authoring-nodes`; graph-level reconciliation is in
+ * `authoring-graph`. Because a step belongs to exactly one workflow
+ * (`workflow_steps.workflow_id`) and endpoints are resolved scoped to THIS
+ * workflow, a step from another workflow simply won't resolve — the old
+ * cross-workflow "dual-homing" guard is now structural.
  */
 
 export async function connect(
   workflowId: string,
   from: string,
   to: string,
+  condition: string,
   scope: WorkflowScope
 ): Promise<void> {
-  const headerId = await resolveHeaderPanelId(workflowId, scope);
-  const fromId = from === "header" ? headerId : from;
-  const toId = to === "header" ? headerId : to;
-  if (fromId === toId) throw new HttpError(400, "SELF_EDGE", "Cannot connect a panel to itself.");
+  assertNotHeaderSentinel([from, to]);
+  const db = supabaseAdmin();
 
-  // Don't let an agent wire in a node that already belongs to a DIFFERENT
-  // workflow (it would become dual-homed). Isolated nodes + this workflow's
-  // own nodes are fine.
-  const own = await nodeOwnership(scope);
-  for (const endpoint of [fromId, toId]) {
-    if (endpoint === headerId) continue;
-    const owners = own.get(endpoint);
-    if (owners && [...owners].some((w) => w !== workflowId)) {
-      throw new HttpError(400, "NODE_IN_OTHER_WORKFLOW", `Panel ${endpoint} belongs to a different workflow; connect within one workflow.`);
-    }
-  }
+  const fromStep = await findStep(db, scope.workspaceId, workflowId, from);
+  if (!fromStep) throw new HttpError(404, "STEP_NOT_FOUND", `Step not found in this workflow: ${from}`);
+  const toStep = await findStep(db, scope.workspaceId, workflowId, to);
+  if (!toStep) throw new HttpError(404, "STEP_NOT_FOUND", `Step not found in this workflow: ${to}`);
+  if (fromStep.id === toStep.id) throw new HttpError(400, "SELF_EDGE", "Cannot connect a step to itself.");
 
   // Reject a back-edge: adding from→to closes a cycle iff `to` already
   // reaches `from`. Keeps the workflow a DAG (op='get' assumes it).
-  const db = supabaseAdmin();
-  const { data: curEdges } = await db
-    .from("canvas_edges")
-    .select("from_panel_id, to_panel_id")
-    .eq("workspace_id", scope.workspaceId);
-  const adj = buildAdjacency(
-    (curEdges ?? []).map((e) => ({ from: e.from_panel_id, to: e.to_panel_id })),
-  );
-  if (reaches(adj, toId, fromId)) {
+  const edges = await listEdges(db, scope.workspaceId, workflowId);
+  const adj = buildAdjacency(edges.map((e) => ({ from: e.fromStepId, to: e.toStepId })));
+  if (reaches(adj, toStep.id, fromStep.id)) {
+    // Name the steps by their human titles (fall back to ref, then the raw
+    // token) so the error reads to a person, not "<uuid> → <uuid>".
+    const [fromFull, toFull] = await Promise.all([
+      getStep(db, scope.workspaceId, workflowId, fromStep.id),
+      getStep(db, scope.workspaceId, workflowId, toStep.id),
+    ]);
+    const label = (
+      full: { title: string; ref: string } | null,
+      fallbackRef: string,
+      token: string,
+    ) => full?.title?.trim() || full?.ref || fallbackRef || token;
     throw new HttpError(
       400,
       "WORKFLOW_CYCLE",
-      `Connecting ${from} → ${to} would form a cycle. A workflow must stay acyclic.`,
+      `Connecting "${label(fromFull, fromStep.ref, from)}" → "${label(toFull, toStep.ref, to)}" would form a cycle. A workflow must stay acyclic.`,
     );
   }
 
-  await insertEdge(scope.workspaceId, scope.userId, { id: crypto.randomUUID(), fromPanelId: fromId, toPanelId: toId });
+  await insertEdge(db, scope.workspaceId, workflowId, fromStep.id, toStep.id, condition ?? "");
   await reconcileAttachments(workflowId, scope);
 }
 
@@ -70,10 +70,15 @@ export async function disconnect(
   to: string,
   scope: WorkflowScope
 ): Promise<void> {
-  const headerId = await resolveHeaderPanelId(workflowId, scope);
-  const fromId = from === "header" ? headerId : from;
-  const toId = to === "header" ? headerId : to;
-  const deleted = await deleteEdgeByPair(scope.workspaceId, fromId, toId);
+  assertNotHeaderSentinel([from, to]);
+  const db = supabaseAdmin();
+
+  const fromStep = await findStep(db, scope.workspaceId, workflowId, from);
+  const toStep = await findStep(db, scope.workspaceId, workflowId, to);
+  const deleted =
+    fromStep && toStep
+      ? await deleteEdge(db, scope.workspaceId, workflowId, fromStep.id, toStep.id)
+      : 0;
   if (deleted === 0) {
     throw new HttpError(
       404,

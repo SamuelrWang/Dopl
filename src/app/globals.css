@@ -378,8 +378,9 @@ html {
   }
 
   /* Block the browser's two-finger swipe-to-navigate gesture. Without this,
-     horizontal trackpad pans on the canvas trigger Back/Forward navigation
-     whenever the pan reaches what the browser considers "overscroll." */
+     horizontal trackpad pans on pannable surfaces (the graph view) trigger
+     Back/Forward navigation whenever the pan reaches what the browser
+     considers "overscroll." */
   html,
   body {
     overscroll-behavior: none;
@@ -417,8 +418,7 @@ html {
    ───────────────────────────────────────────────────────────────────── */
 
 /* Flat app-frame background, themed via --body-bg. There is intentionally
-   NO frame grid or texture — the grid lives only on the canvas, which paints
-   its own (panning with the camera) inside its panel. */
+   NO frame grid or texture — the app frame stays flat. */
 .mosaic-bg {
   background-color: var(--body-bg);
 }
@@ -426,9 +426,7 @@ html {
 /* ─────────────────────────────────────────────────────────────────────
    AppShell geometry — single source of truth for the new-design chrome.
    Consumed by shared/layout/app-shell/app-shell.module.css (titlebar,
-   rail, sidebar, surface margins, panel radius) AND by the canvas portal
-   (canvas-client-shell.tsx), whose fixed container must align exactly
-   with the shell's white panel area. Change values here only.
+   rail, sidebar, surface margins, panel radius). Change values here only.
    ───────────────────────────────────────────────────────────────────── */
 :root {
   /* Titlebar removed (was 32px) — kept at 0 so derived panel insets stay valid. */
@@ -450,40 +448,6 @@ html {
   --app-panel-bottom: var(--shell-gap-bottom);
 }
 
-/* Canvas surface — the organic "lava-lamp" mosaic gradient, scoped to the
-   canvas panel ONLY (the rest of the app frame stays flat). */
-.canvas-surface {
-  background-color: #0b0b0b;
-  background-image:
-    radial-gradient(ellipse 50% 38% at 18% 22%, #101010 0%, transparent 55%),
-    radial-gradient(ellipse 42% 55% at 82% 35%, #0c0c0c 0%, transparent 60%),
-    radial-gradient(ellipse 60% 34% at 50% 88%, #0e0e0e 0%, transparent 55%),
-    radial-gradient(ellipse 30% 48% at 12% 75%, #0b0b0b 0%, transparent 60%),
-    radial-gradient(ellipse 38% 30% at 72% 70%, #0d0d0d 0%, transparent 65%),
-    radial-gradient(ellipse 26% 34% at 40% 15%, #0a0a0a 0%, transparent 70%),
-    radial-gradient(ellipse 32% 28% at 90% 82%, #0c0c0c 0%, transparent 60%),
-    radial-gradient(ellipse 28% 40% at 5% 48%, #0b0b0b 0%, transparent 65%),
-    radial-gradient(ellipse 34% 26% at 58% 52%, #0f0f0f 0%, transparent 70%),
-    radial-gradient(ellipse 36% 30% at 28% 55%, #030303 0%, transparent 60%),
-    radial-gradient(ellipse 30% 42% at 65% 18%, #050505 0%, transparent 65%),
-    radial-gradient(ellipse 42% 28% at 92% 55%, #040404 0%, transparent 60%),
-    radial-gradient(ellipse 28% 38% at 22% 92%, #060606 0%, transparent 65%),
-    radial-gradient(ellipse 34% 26% at 48% 40%, #040404 0%, transparent 62%),
-    radial-gradient(ellipse 28% 34% at 8% 10%, #050505 0%, transparent 65%),
-    radial-gradient(ellipse 32% 26% at 78% 92%, #030303 0%, transparent 60%),
-    radial-gradient(ellipse 26% 38% at 95% 20%, #050505 0%, transparent 65%),
-    radial-gradient(ellipse 30% 28% at 38% 78%, #040404 0%, transparent 68%),
-    linear-gradient(135deg, #070707 0%, #0c0c0c 50%, #080808 100%);
-}
-/* Canvas: flat light surface inside the AppShell panel area, applied on
-   the canvas portal container. Slightly gray so the white floating panels
-   read against it. */
-.canvas-surface.canvas-surface-light {
-  background-color: #eef1f5;
-  background-image: none;
-}
-
-
 /* ─────────────────────────────────────────────────────────────────────
    Hairline borders (openclaw-cloud convention)
    ───────────────────────────────────────────────────────────────────── */
@@ -494,109 +458,6 @@ html {
 
 .hairline-strong {
   border-color: rgba(255, 255, 255, 0.15);
-}
-
-/* ─────────────────────────────────────────────────────────────────────
-   Canvas panel drag UX
-   ─────────────────────────────────────────────────────────────────────
-   Panels on the canvas are draggable from any non-interactive surface.
-   The JS handler in canvas-panel.tsx reads `getComputedStyle(target).cursor`
-   to decide whether to initiate a drag — so these rules do double duty:
-
-     1. Visual  — the cursor correctly reflects what the user can do
-                  (grab on empty space, text on prose, pointer on buttons).
-     2. Functional — any element whose computed cursor is not `grab` or
-                  `grabbing` is automatically excluded from drag.
-
-   Empty containers inherit `grab` from the panel root. Text elements
-   and interactive controls override with their own cursor, which both
-   shows the right icon AND blocks drag initiation.
-   ───────────────────────────────────────────────────────────────────── */
-
-[data-panel-id] {
-  cursor: grab;
-}
-
-[data-panel-id]:active {
-  cursor: grabbing;
-}
-
-
-/* Text content — selectable, not draggable. Covers prose, code blocks,
-   inline labels, tag chips, mono badges, list items, blockquotes. */
-[data-panel-id] h1,
-[data-panel-id] h2,
-[data-panel-id] h3,
-[data-panel-id] h4,
-[data-panel-id] h5,
-[data-panel-id] h6,
-[data-panel-id] p,
-[data-panel-id] pre,
-[data-panel-id] code,
-[data-panel-id] li,
-[data-panel-id] blockquote,
-[data-panel-id] time,
-[data-panel-id] label,
-[data-panel-id] span {
-  cursor: text;
-}
-
-/* Interactive controls — pointer cursor, click through. */
-[data-panel-id] button,
-[data-panel-id] a,
-[data-panel-id] [role="button"],
-[data-panel-id] [role="link"] {
-  cursor: pointer;
-}
-
-[data-panel-id] button:disabled {
-  cursor: not-allowed;
-}
-
-/* Form inputs — native text caret. */
-[data-panel-id] input,
-[data-panel-id] textarea,
-[data-panel-id] select,
-[data-panel-id] [contenteditable="true"] {
-  cursor: text;
-}
-
-/* Images and SVGs inherit from their parent so an <img> in an empty
-   container still drags, but an <svg> inside a button gets pointer. */
-[data-panel-id] img,
-[data-panel-id] svg {
-  cursor: inherit;
-}
-
-/* Explicit opt-out — any element marked `data-no-drag` (e.g. the chat
-   input wrapper) blocks drag even on its padding. `cursor: default`
-   communicates "nothing interactive here, but also can't drag". */
-[data-panel-id] [data-no-drag] {
-  cursor: default;
-}
-
-/* Inside an opt-out container, restore natural cursors for children. */
-[data-panel-id] [data-no-drag] button,
-[data-panel-id] [data-no-drag] a,
-[data-panel-id] [data-no-drag] [role="button"] {
-  cursor: pointer;
-}
-
-[data-panel-id] [data-no-drag] input,
-[data-panel-id] [data-no-drag] textarea {
-  cursor: text;
-}
-
-/* Global grabbing cursor during an active panel drag. The pointer may
-   move over text/buttons/off-panel while the pointer is captured —
-   forcing the cursor body-wide keeps the "closed hand" visual consistent
-   until the user releases. Toggled via body.panel-dragging from
-   canvas-panel.tsx's drag handlers. */
-body.panel-dragging,
-body.panel-dragging *,
-body.panel-dragging *::before,
-body.panel-dragging *::after {
-  cursor: grabbing !important;
 }
 
 /* ─────────────────────────────────────────────────────────────────────

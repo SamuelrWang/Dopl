@@ -9,7 +9,6 @@ const knowledge_js_1 = require("./tools/knowledge.js");
 const skills_js_1 = require("./tools/skills.js");
 const cluster_js_1 = require("./tools/cluster.js");
 const workflow_js_1 = require("./tools/workflow.js");
-const canvas_js_1 = require("./tools/canvas.js");
 const chats_js_1 = require("./tools/chats.js");
 const members_js_1 = require("./tools/members.js");
 const packs_js_1 = require("./tools/packs.js");
@@ -23,7 +22,7 @@ exports.SERVER_INSTRUCTIONS = `You are connected to **Dopl** — the user's work
 
 ## How to use this
 
-Use the Dopl tools to read and organize the user's workspace: their knowledge bases (notes/docs), skills (procedural prompt templates), and workflows (agent-followable node graphs, grouped into clusters). Ground your answers in the user's real workspace state, not in stale local files.
+Use the Dopl tools to read and organize the user's workspace: their knowledge bases (notes/docs), skills (procedural prompt templates), and workflows (agent-followable step graphs, grouped into clusters). Ground your answers in the user's real workspace state, not in stale local files.
 
 ## Session start — preload the user's workspace
 
@@ -46,15 +45,14 @@ This MCP server can target any workspace the authenticated user is a member of. 
 
 ## Decision tree — which tool
 
-- See what workflows exist -> dopl_workflow(op='list'); inspect one (ordered steps + node ids + the knowledge bases / skills it references) -> dopl_workflow(op='get'). A workflow is a header + its connected node graph — the agent-followable unit.
-- AUTHOR a workflow end-to-end over MCP (appears live on an open canvas): dopl_workflow(op='create') then op='set_graph' (declarative: send the whole {nodes, edges} and it's made to match) — or build incrementally with op='add_node'/'connect'/'update_node'/'remove_node'/'disconnect'. Node reads/actions reference dopl_kb / dopl_skill ids and auto-attach. Finish with op='get' to verify.
+- See what workflows exist -> dopl_workflow(op='list'); inspect one (topologically-ordered steps + step ids + the knowledge bases / skills it references) -> dopl_workflow(op='get'); read ONE step's full detail as you walk -> dopl_workflow(op='step'). A workflow is a graph of steps connected by branch-conditioned edges — the agent-followable unit. Entry steps are those with no incoming edge.
+- AUTHOR a workflow end-to-end over MCP: dopl_workflow(op='create') then op='set_graph' (declarative: send the whole {nodes, edges} and it's made to match) — or build incrementally with op='add_node'/'connect'/'update_node'/'remove_node'/'disconnect'. Step reads/actions reference dopl_kb / dopl_skill ids and auto-attach; edges can carry a branch condition. Finish with op='get' to verify.
 - Rename / describe a workflow -> dopl_workflow(op='update'); delete one -> dopl_workflow_admin(op='delete_workflow').
 - Clusters are non-spatial CONTAINERS that group workflows. See what clusters exist -> dopl_cluster(op='list'); inspect one (its workflows) -> dopl_cluster(op='get').
 - Read a knowledge-base entry -> dopl_kb(op='read_file'); read a skill's full body -> dopl_skill(op='get'). A workflow's attached KBs/skills are listed by dopl_workflow(op='get').
 - Create / rename a cluster -> dopl_cluster(op='create' | 'update'); delete one -> dopl_cluster_admin(op='delete_cluster').
 - Browse / read / write the user's knowledge bases -> dopl_kb (+ dopl_kb_admin for destructive ops).
 - List / read / author the user's skills -> dopl_skill (+ dopl_skill_admin).
-- See what's on the canvas -> dopl_canvas(op='list').
 - Who's in the workspace / who's on which team / who can access what / what can I touch -> dopl_members(op='whoami' | 'list' | 'get' | 'teams' | 'get_team' | 'access_matrix' | 'my_access'). READ-ONLY — role, team, and access changes happen in the web UI.
 - Archive this conversation for future sessions -> dopl_chats(op='export'); recall a past session -> dopl_chats(op='list' | 'get'). Read dopl_chats(op='guide') before your first export — summaries per message, verbatim only on request.
 
@@ -473,7 +471,6 @@ function createServer(client, options = {}) {
     // that dispatches on an `op` arg.
     (0, cluster_js_1.registerClusterTools)(registerTool, client); // dopl_cluster + dopl_cluster_admin
     (0, workflow_js_1.registerWorkflowTools)(registerTool, client); // dopl_workflow + dopl_workflow_admin
-    (0, canvas_js_1.registerCanvasTools)(registerTool, client);
     (0, packs_js_1.registerPacksTools)(registerTool, client); // curated read-only knowledge packs
     (0, knowledge_js_1.registerKnowledgeTools)(registerTool, client); // dopl_kb + dopl_kb_admin (user bases)
     (0, skills_js_1.registerSkillTools)(registerTool, client); // dopl_skill + dopl_skill_admin

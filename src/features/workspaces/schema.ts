@@ -27,8 +27,3 @@ export const InvitationCreateSchema = z.object({
   teamIds: z.array(z.string().uuid()).max(20).optional(),
 });
 export type InvitationCreateInput = z.infer<typeof InvitationCreateSchema>;
-
-export const CanvasCreateSchema = z.object({
-  name: z.string().min(1, "Name is required").max(120),
-});
-export type CanvasCreateInput = z.infer<typeof CanvasCreateSchema>;

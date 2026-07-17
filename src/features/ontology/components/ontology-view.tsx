@@ -7,6 +7,7 @@ import { useWorkspaceEntitlements } from "@/features/billing/components/use-work
 import { cn } from "@/shared/lib/utils";
 import { useOntology } from "../hooks/use-ontology";
 import { OntologyResourcesProvider } from "../hooks/use-workspace-resources";
+import { CapNotice } from "./cap-notice";
 import { KanbanBoard } from "./kanban-board";
 import { ObjectPanel } from "./object-panel";
 
@@ -228,6 +229,7 @@ export function OntologyView({
               objectId={selectedId}
               graph={graph}
               dispatch={dispatch}
+              canEdit={canEdit}
               onSelectObject={setSelectedId}
               onDeleteObject={(id) => dispatch({ type: "OBJECT_DELETE", id })}
               onClose={() => setSelectedId(null)}
@@ -248,60 +250,6 @@ export function OntologyView({
         }
       />
     </OntologyResourcesProvider>
-  );
-}
-
-/**
- * Slim inline cap strip for a capped Free workspace: a quiet near-cap
- * label at ≥90%, a warning-toned strip once creates are frozen. Both
- * offer the upgrade prompt; nothing is ever deleted.
- */
-function CapNotice({
-  used,
-  cap,
-  over,
-  onUpgrade,
-}: {
-  used: number;
-  cap: number;
-  over: boolean;
-  onUpgrade: () => void;
-}) {
-  const nearCap = used / cap >= 0.9;
-  if (!over && !nearCap) return null;
-
-  if (over) {
-    return (
-      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-warning/25 bg-warning/10 px-3 py-1.5 text-caption">
-        <span className="text-warning">
-          {used.toLocaleString()} / {cap.toLocaleString()} objects (cards and columns) —
-          new objects are paused on Free (nothing was deleted; reads and edits still
-          work).
-        </span>
-        <button
-          type="button"
-          onClick={onUpgrade}
-          className="shrink-0 cursor-pointer font-semibold text-warning underline"
-        >
-          Upgrade for unlimited
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border-subtle bg-card-surface-subtle px-3 py-1.5 text-caption">
-      <span className="text-text-secondary">
-        {used.toLocaleString()} / {cap.toLocaleString()} objects on Free
-      </span>
-      <button
-        type="button"
-        onClick={onUpgrade}
-        className="shrink-0 cursor-pointer font-semibold text-link"
-      >
-        Upgrade for unlimited
-      </button>
-    </div>
   );
 }
 

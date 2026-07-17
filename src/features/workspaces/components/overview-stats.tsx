@@ -24,9 +24,9 @@ export function OverviewStats({
     {
       label: "Workflows",
       count: workflows,
-      href: `/${segment}`,
+      href: `/${segment}/workflows`,
       icon: Workflow,
-      hint: "on the canvas",
+      hint: "agent-run steps",
     },
     {
       label: "Knowledge bases",

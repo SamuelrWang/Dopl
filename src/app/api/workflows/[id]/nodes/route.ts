@@ -3,7 +3,6 @@ import { z } from "zod";
 import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
 import type { Role } from "@/features/workspaces/types";
 import { HttpError } from "@/shared/lib/http-error";
-import { denyIfNoCanvasWrite } from "@/features/canvas/server/access";
 import { DESCRIPTION_MAX } from "@/config";
 import {
   requireWorkflowEdit,
@@ -43,13 +42,6 @@ function toError(err: unknown): NextResponse {
 
 async function handlePost(request: NextRequest, ctx: Ctx) {
   try {
-    const denied = await denyIfNoCanvasWrite({
-      agentTokenId: ctx.agentTokenId,
-      userId: ctx.userId,
-      workspaceId: ctx.workspaceId,
-    });
-    if (denied) return denied;
-
     const id = ctx.params?.id;
     if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
     const parsed = NodeBody.safeParse(await request.json());

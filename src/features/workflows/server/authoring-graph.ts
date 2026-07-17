@@ -2,28 +2,56 @@ import "server-only";
 
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { HttpError } from "@/shared/lib/http-error";
-import { NODE_PANEL_SIZE, WORKFLOW_PANEL_SIZE } from "@/features/canvas/types";
-import { insertEdge } from "@/features/canvas/server/edges";
 import { validateKbsForWorkflow } from "./attachments";
-import { resolveHeaderPanelId, shortId } from "./authoring-header";
-import { nodeDataFrom, kbIdsOf, type GraphSpec } from "./authoring-refs";
 import {
-  NODE_GAP,
+  nodeDataFrom,
+  kbIdsOf,
+  type GraphSpec,
+  type ResolvedNodeData,
+} from "./authoring-refs";
+import {
+  assertNotHeaderSentinel,
   buildAdjacency,
-  deleteEdgeByPair,
   graphHasCycle,
-  memberNodePanels,
   reconcileAttachments,
-  writeNodePanel,
 } from "./authoring-shared";
+import {
+  listSteps,
+  listEdges,
+  insertStep,
+  updateStep,
+  deleteStep,
+  insertEdge,
+  deleteEdge,
+  type StepWrite,
+} from "./repository";
 import type { WorkflowScope } from "./service";
 
 /**
  * Graph-level authoring: the declarative `setGraph` op that reconciles a
- * workflow's whole node/edge graph to match a spec exactly (diffing
- * existing panels by their stored ref). Per-node and per-edge ops live in
+ * workflow's whole step/edge graph to match a spec exactly, diffing
+ * existing steps by their stable `ref`. Per-step and per-edge ops live in
  * `authoring-nodes` / `authoring-edges`.
  */
+
+function stepWriteFrom(
+  ref: string,
+  title: string,
+  data: ResolvedNodeData,
+  position: number
+): StepWrite {
+  return {
+    ref,
+    title,
+    description: data.description,
+    reads: data.reads,
+    actions: data.actions,
+    userInput: data.userInput,
+    agentOutput: data.agentOutput,
+    nextInstructions: data.nextInstructions,
+    position,
+  };
+}
 
 /** Declarative: make the workflow's graph match `spec` exactly. */
 export async function setGraph(
@@ -32,97 +60,111 @@ export async function setGraph(
   scope: WorkflowScope
 ): Promise<void> {
   const db = supabaseAdmin();
-  const headerId = await resolveHeaderPanelId(workflowId, scope);
+
+  // The retired "header" endpoint is no longer a valid edge target.
+  assertNotHeaderSentinel(spec.edges.flatMap((e) => [e.from, e.to]));
 
   // Refs are the reconciliation key + edge endpoints — duplicates would
-  // strand an unconnected orphan node (the second wins the ref→id map).
-  const seenRefs = new Set<string>();
+  // strand an unconnected orphan step (the second wins the ref→id map).
+  const refSet = new Set<string>();
   for (const n of spec.nodes) {
-    if (seenRefs.has(n.ref)) {
-      throw new HttpError(400, "DUPLICATE_REF", `Duplicate node ref "${n.ref}" — each node needs a unique ref.`);
+    if (refSet.has(n.ref)) {
+      throw new HttpError(400, "DUPLICATE_REF", `Duplicate step ref "${n.ref}" — each step needs a unique ref.`);
     }
-    seenRefs.add(n.ref);
+    refSet.add(n.ref);
   }
 
-  // Resolve + validate every node's refs UPFRONT so an invalid ref aborts
+  // Validate edges UPFRONT (no partial graph). Rather than silently dropping
+  // malformed edges — which hides a real authoring mistake — reject them with
+  // a message naming the offender. A pair repeated with the SAME condition is
+  // a harmless duplicate (deduped below); repeated with a DIFFERENT condition
+  // is a genuine conflict the author must resolve.
+  const conditionByPair = new Map<string, string>();
+  for (const e of spec.edges) {
+    if (!refSet.has(e.from)) {
+      throw new HttpError(400, "INVALID_EDGE", `Edge references unknown step ref "${e.from}" — every edge endpoint must be a declared node ref.`);
+    }
+    if (!refSet.has(e.to)) {
+      throw new HttpError(400, "INVALID_EDGE", `Edge references unknown step ref "${e.to}" — every edge endpoint must be a declared node ref.`);
+    }
+    if (e.from === e.to) {
+      throw new HttpError(400, "INVALID_EDGE", `Edge connects step "${e.from}" to itself — self-edges aren't allowed.`);
+    }
+    const pair = `${e.from}->${e.to}`;
+    const cond = e.condition ?? "";
+    const prior = conditionByPair.get(pair);
+    if (prior !== undefined && prior !== cond) {
+      throw new HttpError(400, "DUPLICATE_EDGE", `Duplicate edge "${e.from}" → "${e.to}" with conflicting conditions — keep a single edge per step pair.`);
+    }
+    conditionByPair.set(pair, cond);
+  }
+
+  // Resolve + validate every step's refs UPFRONT so an invalid ref aborts
   // before any write (no partial graph).
   const resolved = await Promise.all(spec.nodes.map((n) => nodeDataFrom(n, scope)));
 
   // Team invariant: the workflow's audience must be able to read every
-  // referenced KB — abort before any panel write.
+  // referenced KB — abort before any write.
   await validateKbsForWorkflow(workflowId, kbIdsOf(resolved.map((r) => r.data)), scope);
 
   // Reject cycles BEFORE any write (keeps set_graph atomic). A workflow is
   // a DAG; a back-edge yields a self-contradictory plan when op='get'
-  // topologically orders the steps. Only consider edges whose endpoints are
-  // valid (header or a declared ref) — unknown refs are dropped anyway.
-  {
-    const refSet = new Set(spec.nodes.map((n) => n.ref));
-    const valid = (t: string) => t === "header" || refSet.has(t);
-    const intended = spec.edges.filter((e) => valid(e.from) && valid(e.to));
-    if (graphHasCycle(buildAdjacency(intended))) {
-      throw new HttpError(
-        400,
-        "WORKFLOW_CYCLE",
-        "These edges form a cycle. A workflow must be acyclic (steps run in topological order) — remove the back-edge.",
-      );
-    }
+  // topologically orders the steps. Endpoints are already validated above.
+  if (graphHasCycle(buildAdjacency(spec.edges))) {
+    throw new HttpError(
+      400,
+      "WORKFLOW_CYCLE",
+      "These edges form a cycle. A workflow must be acyclic (steps run in topological order) — remove the back-edge.",
+    );
   }
 
-  // Map existing member nodes by their stored ref.
-  const { panels: existing } = await memberNodePanels(workflowId, scope);
-  const idByRef = new Map<string, string>();
-  for (const p of existing) {
-    const ref = (p.panel_data as { ref?: string } | null)?.ref;
-    if (ref) idByRef.set(ref, p.panel_id as string);
-  }
+  // Map existing steps by their stored ref.
+  const existing = await listSteps(db, scope.workspaceId, workflowId);
+  const idByRef = new Map(existing.map((s) => [s.ref, s.id]));
 
-  // Header position anchors the column.
-  const { data: headerRow } = await db
-    .from("canvas_panels").select("x, y").eq("workspace_id", scope.workspaceId).eq("panel_id", headerId).single();
-  const baseX = (headerRow?.x as number) ?? 0;
-  const baseY = ((headerRow?.y as number) ?? 0) + WORKFLOW_PANEL_SIZE.height + 160;
-
-  // Upsert nodes in spec order; assign panel ids + a left→right column.
-  const refToPanelId = new Map<string, string>();
+  // Upsert steps in spec order; position = index (stable topo tie-break).
+  const refToId = new Map<string, string>();
   for (let i = 0; i < spec.nodes.length; i++) {
     const ref = spec.nodes[i].ref;
-    const panelId = idByRef.get(ref) ?? shortId("n");
-    refToPanelId.set(ref, panelId);
-    const x = baseX + i * (NODE_PANEL_SIZE.width + NODE_GAP);
-    await writeNodePanel(panelId, resolved[i].title, resolved[i].data, x, baseY, scope);
-  }
-
-  // Delete member nodes no longer in the spec.
-  const keepIds = new Set(refToPanelId.values());
-  for (const p of existing) {
-    if (!keepIds.has(p.panel_id as string)) {
-      await db.from("canvas_panels").delete().eq("workspace_id", scope.workspaceId).eq("panel_id", p.panel_id as string);
+    const write = stepWriteFrom(ref, resolved[i].title, resolved[i].data, i);
+    const existingId = idByRef.get(ref);
+    if (existingId) {
+      await updateStep(db, scope.workspaceId, workflowId, existingId, write);
+      refToId.set(ref, existingId);
+    } else {
+      const id = await insertStep(db, scope.workspaceId, workflowId, write);
+      refToId.set(ref, id);
     }
   }
 
-  const resolveEnd = (token: string): string | null => {
-    if (token === "header") return headerId;
-    return refToPanelId.get(token) ?? null;
-  };
-
-  // Set edges to exactly the spec (resolve header + node refs).
-  const { data: curEdges } = await db
-    .from("canvas_edges").select("id, from_panel_id, to_panel_id").eq("workspace_id", scope.workspaceId);
-  const memberPanelIds = new Set<string>([headerId, ...refToPanelId.values()]);
-  const wantPairs = new Set<string>();
-  for (const e of spec.edges) {
-    const from = resolveEnd(e.from);
-    const to = resolveEnd(e.to);
-    if (!from || !to || from === to) continue;
-    wantPairs.add(`${from}->${to}`);
-    await insertEdge(scope.workspaceId, scope.userId, { id: crypto.randomUUID(), fromPanelId: from, toPanelId: to });
+  // Delete steps no longer in the spec (their edges cascade via FK).
+  for (const s of existing) {
+    if (!refSet.has(s.ref)) {
+      await deleteStep(db, scope.workspaceId, workflowId, s.id);
+    }
   }
-  // Remove edges among this workflow's panels that aren't wanted.
-  for (const e of curEdges ?? []) {
-    if (!memberPanelIds.has(e.from_panel_id) && !memberPanelIds.has(e.to_panel_id)) continue;
-    if (!wantPairs.has(`${e.from_panel_id}->${e.to_panel_id}`)) {
-      await deleteEdgeByPair(scope.workspaceId, e.from_panel_id, e.to_panel_id);
+
+  // Reconcile edges to exactly the spec (resolve node refs → step ids).
+  const wantedEdges: Array<{ from: string; to: string; condition: string }> = [];
+  const wantedKeys = new Set<string>();
+  for (const e of spec.edges) {
+    const from = refToId.get(e.from);
+    const to = refToId.get(e.to);
+    if (!from || !to || from === to) continue;
+    const key = `${from}->${to}`;
+    if (wantedKeys.has(key)) continue;
+    wantedKeys.add(key);
+    wantedEdges.push({ from, to, condition: e.condition ?? "" });
+  }
+  const curEdges = await listEdges(db, scope.workspaceId, workflowId);
+  // Upsert wanted edges (also updates the condition on an existing pair).
+  for (const w of wantedEdges) {
+    await insertEdge(db, scope.workspaceId, workflowId, w.from, w.to, w.condition);
+  }
+  // Remove edges not in the spec.
+  for (const e of curEdges) {
+    if (!wantedKeys.has(`${e.fromStepId}->${e.toStepId}`)) {
+      await deleteEdge(db, scope.workspaceId, workflowId, e.fromStepId, e.toStepId);
     }
   }
 

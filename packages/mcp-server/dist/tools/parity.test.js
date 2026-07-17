@@ -28,7 +28,6 @@ const vitest_1 = require("vitest");
 const zod_1 = require("zod");
 const cluster_js_1 = require("./cluster.js");
 const workflow_js_1 = require("./workflow.js");
-const canvas_js_1 = require("./canvas.js");
 const packs_js_1 = require("./packs.js");
 const knowledge_js_1 = require("./knowledge.js");
 const skills_js_1 = require("./skills.js");
@@ -40,7 +39,6 @@ const ontology_js_1 = require("./ontology.js");
 const REGISTRARS = [
     { file: "cluster.ts", register: cluster_js_1.registerClusterTools },
     { file: "workflow.ts", register: workflow_js_1.registerWorkflowTools },
-    { file: "canvas.ts", register: canvas_js_1.registerCanvasTools },
     { file: "packs.ts", register: packs_js_1.registerPacksTools },
     { file: "knowledge.ts", register: knowledge_js_1.registerKnowledgeTools },
     { file: "skills.ts", register: skills_js_1.registerSkillTools },
@@ -115,8 +113,7 @@ const READ_ONLY_BLOCKED_TOOLS = parseReadOnlyBlockedTools(SERVER_SOURCE);
 // for the new op. Human-audit this list against the sources.
 const READ_OPS = {
     dopl_cluster: ["list", "get"],
-    dopl_workflow: ["list", "get"],
-    dopl_canvas: ["list"],
+    dopl_workflow: ["list", "get", "step"],
     dopl_packs: ["list", "list_files", "get_file"],
     dopl_kb: ["list_bases", "get_tree", "list_dir", "read_file", "list_trash", "search"],
     dopl_skill: ["list", "get", "read", "authoring_guide"],
@@ -137,7 +134,6 @@ const NON_ADMIN_OP_TOOLS = TOOLS.filter((t) => !isAdmin(t.name) && opEnum(t) !==
     (0, vitest_1.it)("registers the expected domain tools", () => {
         const names = TOOLS.map((t) => t.name).sort();
         (0, vitest_1.expect)(names).toEqual([
-            "dopl_canvas",
             "dopl_chats",
             "dopl_chats_admin",
             "dopl_cluster",

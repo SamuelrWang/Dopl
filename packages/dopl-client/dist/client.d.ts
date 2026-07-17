@@ -1,4 +1,4 @@
-import type { CanvasPanel, WorkspaceListItem, ClusterDetail, ClusterRow, WorkflowRow, WorkflowDetail, WorkflowGraphSpec, WorkflowNodeInput, Pack, PackFile, PackFileMeta, ResolvedWorkspace } from "./types.js";
+import type { WorkspaceListItem, ClusterDetail, ClusterRow, WorkflowRow, WorkflowDetail, WorkflowGraphSpec, WorkflowNodeInput, Pack, PackFile, PackFileMeta, ResolvedWorkspace } from "./types.js";
 import { DoplTransport } from "./transport.js";
 import type { KnowledgeBase, KnowledgeBaseCreateInput, KnowledgeBaseUpdateInput, KnowledgeDirListing, KnowledgeEntry, KnowledgeFolder, KnowledgePathOpResult, KnowledgeSearchHit, KnowledgeTrashSnapshot, KnowledgeTreeSnapshot, KnowledgeWriteFileInput, KnowledgeWriteFileResult } from "./knowledge-types.js";
 import type { CreateSkillInput, UpdateSkillPatch as SkillUpdatePatch } from "./skills.js";
@@ -19,7 +19,6 @@ export declare class DoplClient {
      */
     setWorkspaceId(workspaceId: string | null): void;
     getWorkspaceId(): string | null;
-    listCanvasPanels(): Promise<CanvasPanel[]>;
     createCluster(name: string): Promise<ClusterRow>;
     listClusters(): Promise<{
         clusters: ClusterRow[];
@@ -45,7 +44,7 @@ export declare class DoplClient {
     }>;
     updateWorkflowNode(idOrSlug: string, nodeId: string, patch: Partial<WorkflowNodeInput>): Promise<void>;
     removeWorkflowNode(idOrSlug: string, nodeId: string): Promise<void>;
-    connectWorkflow(idOrSlug: string, from: string, to: string): Promise<void>;
+    connectWorkflow(idOrSlug: string, from: string, to: string, condition?: string): Promise<void>;
     disconnectWorkflow(idOrSlug: string, from: string, to: string): Promise<void>;
     listWorkspaces(): Promise<{
         workspaces: WorkspaceListItem[];

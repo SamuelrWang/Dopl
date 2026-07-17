@@ -7,7 +7,7 @@ import { normalizeClusterName } from "@/shared/lib/cluster-name";
 // ── Types ────────────────────────────────────────────────────────────
 //
 // Clusters are non-spatial CONTAINERS that group workflows. KB/skill
-// attachments + the node graph live at the workflow level (see
+// attachments + the step graph live at the workflow level (see
 // features/workflows); a cluster only carries name/slug/description and
 // the list of workflows assigned to it.
 

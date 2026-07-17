@@ -25,9 +25,11 @@ const KIND_LABELS: Record<TemplateField["kind"], string> = {
 export function TemplateEditor({
   column,
   dispatch,
+  canEdit = true,
 }: {
   column: OntologyObject;
   dispatch: Dispatch<GraphAction>;
+  canEdit?: boolean;
 }) {
   const [newLabel, setNewLabel] = useState("");
   const [newKind, setNewKind] = useState<TemplateField["kind"]>("text");
@@ -64,6 +66,7 @@ export function TemplateEditor({
             <input
               type="text"
               value={field.label}
+              readOnly={!canEdit}
               onChange={(e) =>
                 setTemplate(
                   column.template.map((f, j) => (j === i ? { ...f, label: e.target.value } : f))
@@ -75,6 +78,7 @@ export function TemplateEditor({
             />
             <select
               value={field.kind}
+              disabled={!canEdit}
               onChange={(e) =>
                 setTemplate(
                   column.template.map((f, j) =>
@@ -91,45 +95,49 @@ export function TemplateEditor({
                 </option>
               ))}
             </select>
-            <button
-              type="button"
-              aria-label={`Remove ${field.label}`}
-              onClick={() => setTemplate(column.template.filter((_, j) => j !== i))}
-              className="rounded-md p-1 text-text-muted opacity-0 transition hover:bg-surface-raised-3 hover:text-text-primary group-hover:opacity-100"
-            >
-              <X size={12} />
-            </button>
+            {canEdit && (
+              <button
+                type="button"
+                aria-label={`Remove ${field.label}`}
+                onClick={() => setTemplate(column.template.filter((_, j) => j !== i))}
+                className="rounded-md p-1 text-text-muted opacity-0 transition hover:bg-surface-raised-3 hover:text-text-primary group-hover:opacity-100"
+              >
+                <X size={12} />
+              </button>
+            )}
           </div>
         ))}
-        <div className="flex items-center gap-1.5 border-t border-border-subtle bg-card-surface-subtle px-4 py-2">
-          <input
-            type="text"
-            value={newLabel}
-            onChange={(e) => setNewLabel(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && addField()}
-            placeholder="new default field…"
-            className={`${FIELD_WELL} h-7 w-36 px-2.5 text-body text-text-primary placeholder:text-text-muted`}
-          />
-          <select
-            value={newKind}
-            onChange={(e) => setNewKind(e.target.value as TemplateField["kind"])}
-            aria-label="Field kind"
-            className={`${FIELD_WELL} h-7 px-1.5 text-small text-text-secondary`}
-          >
-            {Object.entries(KIND_LABELS).map(([kind, label]) => (
-              <option key={kind} value={kind}>
-                {label}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            onClick={addField}
-            className="btn-light flex h-7 items-center gap-1 rounded-md px-2.5 text-small font-medium text-text-primary"
-          >
-            <Plus size={11} /> Add
-          </button>
-        </div>
+        {canEdit && (
+          <div className="flex items-center gap-1.5 border-t border-border-subtle bg-card-surface-subtle px-4 py-2">
+            <input
+              type="text"
+              value={newLabel}
+              onChange={(e) => setNewLabel(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && addField()}
+              placeholder="new default field…"
+              className={`${FIELD_WELL} h-7 w-36 px-2.5 text-body text-text-primary placeholder:text-text-muted`}
+            />
+            <select
+              value={newKind}
+              onChange={(e) => setNewKind(e.target.value as TemplateField["kind"])}
+              aria-label="Field kind"
+              className={`${FIELD_WELL} h-7 px-1.5 text-small text-text-secondary`}
+            >
+              {Object.entries(KIND_LABELS).map(([kind, label]) => (
+                <option key={kind} value={kind}>
+                  {label}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={addField}
+              className="btn-light flex h-7 items-center gap-1 rounded-md px-2.5 text-small font-medium text-text-primary"
+            >
+              <Plus size={11} /> Add
+            </button>
+          </div>
+        )}
       </div>
     </SectionBox>
   );

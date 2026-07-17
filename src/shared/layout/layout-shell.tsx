@@ -5,8 +5,9 @@ import { useEffect } from "react";
 import { FlushGrid } from "@/shared/design";
 
 // Top-level routes that are NOT a workspace slug. Anything else is a
-// workspace route, where the new-design AppShell layouts ((app) group +
-// canvas layout) own all chrome and this legacy shell renders nothing.
+// workspace route, where the new-design AppShell (app) group layout owns
+// all chrome and this legacy shell renders nothing. `canvas` here is the
+// top-level /canvas legacy redirect, not the workspace Canvas tab.
 const NON_WORKSPACE_ROOTS = new Set([
   "admin",
   "auth",
@@ -27,8 +28,8 @@ const NON_WORKSPACE_ROOTS = new Set([
  * non-workspace pages (login, pricing, /workspaces, /settings, admin,
  * invite, oauth, legal) with the dark centered-column look; the marketing
  * landing passes through with no chrome at all. Every workspace
- * route (named sub-pages AND the canvas) is dressed by its own AppShell
- * layout and bypasses this component entirely.
+ * route is dressed by the (app) group AppShell layout and bypasses this
+ * component entirely.
  */
 export function LayoutShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();

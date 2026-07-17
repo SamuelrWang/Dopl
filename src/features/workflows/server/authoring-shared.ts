@@ -2,149 +2,32 @@ import "server-only";
 
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { HttpError } from "@/shared/lib/http-error";
-import { NODE_PANEL_SIZE } from "@/features/canvas/types";
 import { composeWorkflow } from "./graph";
 import { validateKbsForWorkflow } from "./attachments";
-import { resolveHeaderPanelId } from "./authoring-header";
-import type { ResolvedNodeData } from "./authoring-refs";
 import type { WorkflowScope } from "./service";
 
 /**
- * Cross-cutting internals shared by the graph / node / edge authoring
- * ops: node ↔ workflow ownership resolution, node/edge panel primitives,
- * cycle detection, and attachment reconciliation. Ops-specific logic
- * lives in `authoring-graph`, `authoring-nodes`, and `authoring-edges`.
+ * Cross-cutting internals shared by the graph / node / edge authoring ops:
+ * the retired-"header"-sentinel guard, cycle detection, and attachment
+ * reconciliation. Op-specific logic lives in `authoring-graph`,
+ * `authoring-nodes`, and `authoring-edges`.
  */
 
-// ── Ownership ────────────────────────────────────────────────────────
+// ── Header sentinel guard ────────────────────────────────────────────
+// The old canvas model wired steps to a "header" panel; the literal
+// "header" was a valid edge endpoint. Steps are first-class now and
+// entry steps are simply those with no incoming edge (indegree 0), so
+// "header" is no longer meaningful. Reject it clearly instead of
+// silently creating a phantom step named "header".
 
-/**
- * Map every node panel_id → the set of workflow ids whose header reaches it
- * (undirected, stopping at other headers — mirrors graph.ts). Used to keep
- * authoring ops from touching a node that belongs to a DIFFERENT workflow.
- */
-export async function nodeOwnership(
-  scope: WorkflowScope
-): Promise<Map<string, Set<string>>> {
-  const db = supabaseAdmin();
-  const [{ data: panels }, { data: edges }] = await Promise.all([
-    db
-      .from("canvas_panels")
-      .select("panel_id, panel_type, panel_data")
-      .eq("workspace_id", scope.workspaceId)
-      .in("panel_type", ["workflow", "node"]),
-    db
-      .from("canvas_edges")
-      .select("from_panel_id, to_panel_id")
-      .eq("workspace_id", scope.workspaceId),
-  ]);
-
-  const adj = new Map<string, string[]>();
-  for (const e of edges ?? []) {
-    adj.set(e.from_panel_id, [...(adj.get(e.from_panel_id) ?? []), e.to_panel_id]);
-    adj.set(e.to_panel_id, [...(adj.get(e.to_panel_id) ?? []), e.from_panel_id]);
+export function assertNotHeaderSentinel(tokens: Array<string | undefined>): void {
+  if (tokens.some((t) => t === "header")) {
+    throw new HttpError(
+      400,
+      "HEADER_SENTINEL_REMOVED",
+      'The "header" endpoint no longer exists — workflows have no header. Entry steps are those with no incoming edge; connect steps to each other by their refs/ids.',
+    );
   }
-  const headers = (panels ?? []).filter((p) => p.panel_type === "workflow");
-  const headerIds = new Set(headers.map((h) => h.panel_id));
-  const nodeIds = new Set(
-    (panels ?? []).filter((p) => p.panel_type === "node").map((p) => p.panel_id)
-  );
-
-  const out = new Map<string, Set<string>>();
-  for (const h of headers) {
-    const wfId = (h.panel_data as { workflowId?: string } | null)?.workflowId;
-    if (!wfId) continue;
-    const visited = new Set<string>([h.panel_id]);
-    const queue = [h.panel_id];
-    while (queue.length) {
-      const cur = queue.shift()!;
-      for (const nb of adj.get(cur) ?? []) {
-        if (visited.has(nb)) continue;
-        visited.add(nb);
-        if (headerIds.has(nb) && nb !== h.panel_id) continue;
-        queue.push(nb);
-      }
-    }
-    for (const id of visited) {
-      if (!nodeIds.has(id)) continue;
-      const set = out.get(id) ?? new Set<string>();
-      set.add(wfId);
-      out.set(id, set);
-    }
-  }
-  return out;
-}
-
-/** Guard: the node must be edge-reachable from THIS workflow's header. */
-export async function assertNodeInWorkflow(
-  workflowId: string,
-  nodeId: string,
-  scope: WorkflowScope
-): Promise<void> {
-  const own = await nodeOwnership(scope);
-  if (!own.get(nodeId)?.has(workflowId)) {
-    throw new HttpError(404, "NODE_NOT_IN_WORKFLOW", `Node ${nodeId} is not part of this workflow.`);
-  }
-}
-
-// ── Node + edge primitives ───────────────────────────────────────────
-
-export const NODE_GAP = 80;
-
-export async function memberNodePanels(workflowId: string, scope: WorkflowScope) {
-  const db = supabaseAdmin();
-  const headerId = await resolveHeaderPanelId(workflowId, scope);
-  const graph = await composeWorkflow(scope.workspaceId, workflowId);
-  const ids = (graph?.nodes ?? []).map((n) => n.id);
-  const { data } = await db
-    .from("canvas_panels")
-    .select("panel_id, x, y, panel_data")
-    .eq("workspace_id", scope.workspaceId)
-    .in("panel_id", ids.length ? ids : ["__none__"]);
-  return { headerId, panels: data ?? [] };
-}
-
-export async function writeNodePanel(
-  panelId: string,
-  title: string,
-  data: ResolvedNodeData,
-  x: number,
-  y: number,
-  scope: WorkflowScope
-): Promise<void> {
-  const db = supabaseAdmin();
-  const { error } = await db.from("canvas_panels").upsert(
-    {
-      workspace_id: scope.workspaceId,
-      panel_id: panelId,
-      user_id: scope.userId,
-      panel_type: "node",
-      x,
-      y,
-      width: NODE_PANEL_SIZE.width,
-      height: NODE_PANEL_SIZE.height,
-      title,
-      panel_data: data as unknown as Record<string, unknown>,
-    },
-    { onConflict: "workspace_id,panel_id" }
-  );
-  if (error) throw error;
-}
-
-export async function deleteEdgeByPair(workspaceId: string, from: string, to: string): Promise<number> {
-  const db = supabaseAdmin();
-  // `.select()` returns the deleted rows so callers can distinguish a real
-  // removal from a no-op. Reconcile (setGraph) ignores the count; `disconnect`
-  // uses it to 404 instead of reporting a false success.
-  const { data, error } = await db
-    .from("canvas_edges")
-    .delete()
-    .eq("workspace_id", workspaceId)
-    .eq("from_panel_id", from)
-    .eq("to_panel_id", to)
-    .select("id");
-  if (error) throw error;
-  return data?.length ?? 0;
 }
 
 // ── Cycle detection ──────────────────────────────────────────────────
@@ -217,7 +100,7 @@ export function reaches(
 // ── Attachment reconciliation ────────────────────────────────────────
 
 /** Sync workflow_knowledge_bases / workflow_skills to the union of KB/skill
- *  ids referenced by the workflow's (edge-reachable) nodes. */
+ *  ids referenced by the workflow's steps' reads/actions. */
 export async function reconcileAttachments(
   workflowId: string,
   scope: WorkflowScope
@@ -226,7 +109,7 @@ export async function reconcileAttachments(
   const graph = await composeWorkflow(scope.workspaceId, workflowId);
   const wantKb = new Set<string>();
   const wantSkill = new Set<string>();
-  for (const n of graph?.nodes ?? []) {
+  for (const n of graph.nodes) {
     for (const r of n.reads) if (r.kind === "kb" || r.kind === "file") wantKb.add(r.kbId);
     for (const a of n.actions) if (a.kind === "skill") wantSkill.add(a.skillId);
   }
@@ -248,7 +131,7 @@ export async function reconcileAttachments(
   const skillDeletes = [...haveSkill].filter((id) => !wantSkill.has(id));
 
   // Backstop for paths that don't pre-validate (connect/disconnect wiring
-  // an existing node in, removeNode): newly attached KBs must be readable
+  // an existing step in, removeNode): newly attached KBs must be readable
   // by this workflow's whole audience — same 409 as the explicit attach.
   if (kbInserts.length) {
     await validateKbsForWorkflow(

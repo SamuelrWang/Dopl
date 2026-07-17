@@ -9,8 +9,6 @@ export {
 } from "./errors.js";
 export type {
   BuildResult,
-  CanvasPanel,
-  CanvasPanelType,
   WorkspaceRole,
   WorkspaceSummary,
   WorkspaceListItem,
