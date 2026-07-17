@@ -1,10 +1,10 @@
 import { TwoPaneListSkeleton } from "@/shared/ui/skeleton";
 
 /**
- * Route-level loading boundary for the knowledge area. Renders the shared
+ * Route-level loading boundary for the chats archive. Renders the shared
  * two-pane skeleton inside the elevated `.page-float` shell (list ghosts +
- * detail-document ghost), so arriving at /knowledge paints the loaded
- * page's shape immediately instead of flashing flat panels.
+ * detail-document ghost), matching the loaded ChatsView geometry so the
+ * swap to live data doesn't reflow or flash empty.
  */
 export default function Loading() {
   return <TwoPaneListSkeleton />;

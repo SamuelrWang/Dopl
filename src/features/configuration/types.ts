@@ -1,77 +1,106 @@
-export type ConfigMode = "manager" | "employee";
+export type ConfigMode = "build" | "member";
 
-export type ConnectionStatus = "auto" | "connected" | "action-needed";
+/** What the build pane's outline has selected. */
+export type GuideSelection =
+  | { type: "mission" }
+  | { type: "guardrails" }
+  | { type: "step"; id: string }
+  | { type: "rollout" };
 
-export type MemberSetupStatus = "complete" | "drifted" | "not-started";
+export type ArtifactKind = "file" | "knowledge-base" | "skill";
 
-export type GuardrailKind = "allow" | "ask" | "block";
+export type GuardrailPolicy = "always" | "ask" | "never";
 
-export interface ProfileSkill {
-  id: string;
-  name: string;
-  description: string;
-  enabled: boolean;
-  source: string;
-  tags: string[];
-  runsPerWeek: number;
-  lastUsed: string;
-}
+export type AdoptionStatus = "complete" | "drifted" | "not-started";
 
-export interface ProfileConnection {
+/** A tool/MCP server each member's agent must be connected to. */
+export interface ConnectStep {
+  kind: "connect";
   id: string;
   name: string;
   category: string;
   required: boolean;
-  status: ConnectionStatus;
-  /** One-liner shown on the collapsed card. */
-  tagline: string;
+  /** One-liner under the name — outline caption + member card subtitle. */
+  summary: string;
   /** Human explanation of how the team uses this tool. */
-  teamUsage: string;
-  /** The blurb the employee's agent reads — how this tool fits its workflows. */
+  whyText: string;
+  /** Where the member goes to connect ("" = no link). */
+  linkLabel: string;
+  linkHref: string;
+  /** Terminal command that sets the connection up ("" = none). */
+  setupCommand: string;
+  /** Plain-language setup guidance shown to the member. */
+  memberNote: string;
+  /** Blurb served to the member's agent over MCP once connected. */
   agentContext: string;
-  /** Terminal command that sets the connection up, when one exists. */
-  setupCommand: string | null;
-  /** Plain-language setup guidance (OAuth flow, where creds come from). */
-  setupNote: string;
   scopes: string[];
+  /** Mocked per-member state for the Member view preview. */
+  sampleDone: boolean;
 }
 
-export interface ProfileKnowledgeBase {
-  id: string;
+/** A field/section the created artifact should include. */
+export interface StructureField {
   name: string;
-  entryCount: number;
-  enabled: boolean;
-  tint: string;
-  updatedAt: string;
-  visibility: string;
-  summary: string;
+  hint: string;
 }
+
+/** Something each member's agent creates by following a prompt. */
+export interface TaskStep {
+  kind: "task";
+  id: string;
+  title: string;
+  artifact: ArtifactKind;
+  estMinutes: number;
+  /** One-liner under the title — outline caption + member card subtitle. */
+  summary: string;
+  /** Longer what-and-why shown to the member. */
+  detail: string;
+  /** The prompt the member pastes to their agent. */
+  agentPrompt: string;
+  /** Acceptance criteria — how the agent knows it's finished. */
+  doneWhen: string[];
+  /** Template fields the artifact should include (may be empty). */
+  structure: StructureField[];
+  /** Mocked per-member state for the Member view preview. */
+  sampleDone: boolean;
+}
+
+export type SetupStep = ConnectStep | TaskStep;
 
 export interface GuardrailRule {
   id: string;
-  kind: GuardrailKind;
+  policy: GuardrailPolicy;
   text: string;
 }
 
-export interface MemberStatus {
+export interface MemberAdoption {
   id: string;
   name: string;
   role: string;
-  initial: string;
-  status: MemberSetupStatus;
+  status: AdoptionStatus;
   lastSync: string;
-  agentActivity: string;
+  activity: string;
 }
 
-export interface AgentProfile {
+/** One template the mission editor can append. */
+export interface MissionStarter {
+  label: string;
+  text: string;
+}
+
+/** The whole team profile the configuration page edits. */
+export interface AgentGuide {
   teamName: string;
   version: number;
   updatedAt: string;
   publishedBy: string;
-  instructions: string;
-  skills: ProfileSkill[];
-  connections: ProfileConnection[];
-  knowledgeBases: ProfileKnowledgeBase[];
+  /** Edits since the published version (mocked). */
+  draftCount: number;
+  /** Base instructions prepended to every agent session. */
+  mission: string;
+  steps: SetupStep[];
   guardrails: GuardrailRule[];
-  members: MemberStatus[];
+  members: MemberAdoption[];
+  /** Served live over MCP — managed in their own tabs, listed here read-only. */
+  autoServed: { skills: string[]; knowledgeBases: string[] };
 }

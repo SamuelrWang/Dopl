@@ -9,6 +9,7 @@ import { WorkflowResourcesProvider } from "../hooks/use-workflow-resources";
 import { useWorkflows } from "../hooks/use-workflows";
 import { StepPanel } from "./step-panel";
 import { WorkflowGraphView } from "./workflow-graph";
+import { WorkflowBoardSkeleton, WorkflowsSkeleton } from "./workflows-skeleton";
 
 interface Props {
   workspaceId: string;
@@ -107,7 +108,7 @@ export function WorkflowsView({
   if (listStatus === "loading") {
     return (
       <Frame>
-        <p className="m-auto text-lead text-text-muted">Loading workflows…</p>
+        <WorkflowsSkeleton />
       </Frame>
     );
   }
@@ -252,7 +253,7 @@ export function WorkflowsView({
 
         <div className="relative flex min-h-0 flex-1 overflow-hidden">
           {detailStatus === "loading" ? (
-            <p className="m-auto text-lead text-text-muted">Loading workflow…</p>
+            <WorkflowBoardSkeleton />
           ) : (
             <>
               <WorkflowGraphView

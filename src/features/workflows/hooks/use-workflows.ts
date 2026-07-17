@@ -2,9 +2,14 @@
 
 import { useCallback, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  createRefetchCoordinator,
+  type RefetchCoordinator,
+} from "@/shared/realtime/refetch-coordinator";
 import { toast } from "@/shared/ui/toast";
 import type { WorkflowStep } from "../types";
 import * as api from "../client/api";
+import { useWorkflowsRealtime } from "../client/realtime";
 import type {
   NodeContentInput,
   WorkflowDetail,
@@ -112,6 +117,51 @@ export function useWorkflows(
     };
   }, [scheduler, workspaceId]);
 
+  // ── Live updates from MCP/CLI agents and other tabs ────────────────
+  // A remote change invalidates the list + the open workflow's detail so
+  // the graph re-lands the server-owned topo order / attachments. The
+  // guard: if the ACTIVE workflow has pending merge-scheduler entries the
+  // user is mid-edit — invalidating would refetch and revert their unsent
+  // title/description/condition (the clobber the scheduler was built to
+  // stop). The coordinator defers until those entries drain; each
+  // debounced save's completion (settleAfterSave) flushes the deferred
+  // invalidation. Other workflows' updates wait behind the active edit,
+  // then land together — an acceptable trade for never clobbering a typer.
+  const selectedIdRef = useRef(selectedWorkflowId);
+  useEffect(() => {
+    selectedIdRef.current = selectedWorkflowId;
+  });
+  const activeHasPending = useCallback(() => {
+    const wfId = selectedIdRef.current;
+    if (!wfId) return false;
+    return scheduler.pendingKeys().some((k) => belongsToWorkflow(k, wfId));
+  }, [scheduler]);
+  const coordinatorRef = useRef<RefetchCoordinator | null>(null);
+  const remoteInvalidate = useCallback(() => {
+    void qc.invalidateQueries({ queryKey: listQueryKey(workspaceId) });
+    const wfId = selectedIdRef.current;
+    if (wfId) {
+      void qc.invalidateQueries({ queryKey: detailQueryKey(workspaceId, wfId) });
+    }
+  }, [qc, workspaceId]);
+  const remoteInvalidateRef = useRef(remoteInvalidate);
+  useEffect(() => {
+    remoteInvalidateRef.current = remoteInvalidate;
+  });
+  useEffect(() => {
+    coordinatorRef.current = createRefetchCoordinator(() =>
+      remoteInvalidateRef.current()
+    );
+  }, []);
+  // Run after a debounced save completes: if a remote invalidation was
+  // deferred and the active workflow's edits have now drained, flush it.
+  const settleAfterSave = useCallback(() => {
+    coordinatorRef.current?.settle(activeHasPending());
+  }, [activeHasPending]);
+  useWorkflowsRealtime(workspaceId, () =>
+    coordinatorRef.current?.request(activeHasPending())
+  );
+
   const patchDetailNode = useCallback(
     (workflowId: string, nodeId: string, patch: Partial<WorkflowStep>) => {
       qc.setQueryData<WorkflowDetail>(detailQueryKey(workspaceId, workflowId), (prev) => {
@@ -177,9 +227,10 @@ export function useWorkflows(
             reportSaveError("workflow", err);
             invalidate(id);
           })
+          .finally(() => settleAfterSave())
       );
     },
-    [qc, workspaceId, scheduler, invalidate]
+    [qc, workspaceId, scheduler, invalidate, settleAfterSave]
   );
 
   const deleteWorkflow = useCallback(
@@ -229,10 +280,13 @@ export function useWorkflows(
       patchDetailNode(workflowId, nodeId, optimistic);
       if (opts?.debounce) {
         scheduler.schedule(stepKey(workflowId, nodeId), wire, (merged) =>
-          api.updateStep(workspaceId, workflowId, nodeId, merged).catch((err) => {
-            reportSaveError("step", err);
-            invalidate(workflowId);
-          })
+          api
+            .updateStep(workspaceId, workflowId, nodeId, merged)
+            .catch((err) => {
+              reportSaveError("step", err);
+              invalidate(workflowId);
+            })
+            .finally(() => settleAfterSave())
         );
         return;
       }
@@ -249,7 +303,7 @@ export function useWorkflows(
         }
       })();
     },
-    [workspaceId, patchDetailNode, scheduler, invalidate, flushWorkflow]
+    [workspaceId, patchDetailNode, scheduler, invalidate, flushWorkflow, settleAfterSave]
   );
 
   const removeStep = useCallback(
@@ -305,6 +359,7 @@ export function useWorkflows(
               reportSaveError("connection", err);
               invalidate(workflowId);
             })
+            .finally(() => settleAfterSave())
         );
         return;
       }
@@ -319,7 +374,7 @@ export function useWorkflows(
         }
       })();
     },
-    [qc, workspaceId, scheduler, invalidate, flushWorkflow]
+    [qc, workspaceId, scheduler, invalidate, flushWorkflow, settleAfterSave]
   );
 
   const disconnectSteps = useCallback(

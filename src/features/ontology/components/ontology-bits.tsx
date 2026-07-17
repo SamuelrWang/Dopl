@@ -1,8 +1,7 @@
-/** Shared atoms — study-notes design language, verbatim. */
+/**
+ * Shared atoms — study-notes design language. The class recipes were
+ * promoted to shared/ui/wells when configuration became the second
+ * consumer; re-exported here so ontology imports stay stable.
+ */
 
-/** Concave input well — the global .concave-field recipe for add-row fields. */
-export const FIELD_WELL = "concave-field rounded-lg focus:outline-none";
-
-/** Raised chip sitting on an inset body — verse-pill on a concave field. */
-export const CHIP =
-  "rounded-full border border-border-strong bg-bg-elevated px-2.5 py-0.5 text-small font-medium text-text-primary shadow-[0_1px_2px_rgba(0,0,0,0.05)]";
+export { FIELD_WELL, CHIP } from "@/shared/ui/wells";

@@ -13,6 +13,7 @@ import { OntologyResourcesProvider } from "../hooks/use-workspace-resources";
 import { deriveScene } from "./derive";
 import { ONTOLOGY_EDGE_STYLES, OntologyEdgeMarkers } from "./edge-styles";
 import { GraphNode } from "./graph-node";
+import { GraphSkeleton } from "./graph-skeleton";
 import { DEFAULT_HEIGHT, layoutScene, routeEdges } from "./layout";
 
 interface Props {
@@ -160,7 +161,7 @@ export function GraphView({ workspaceId, canManageBilling = false, canEdit = tru
   if (status === "loading") {
     return (
       <Frame>
-        <p className="m-auto text-lead text-text-muted">Loading ontology…</p>
+        <GraphSkeleton />
       </Frame>
     );
   }

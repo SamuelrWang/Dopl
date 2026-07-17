@@ -1,83 +1,196 @@
 "use client";
 
-import { useState } from "react";
-import { Eye, PencilLine } from "lucide-react";
-import { cn } from "@/shared/lib/utils";
-import { MOCK_PROFILE } from "../mock-data";
-import type { ConfigMode } from "../types";
-import { EmployeeView } from "./employee-view";
-import { ManagerView } from "./manager-view";
+import { useRef, useState } from "react";
+import { SegmentedControl } from "@/shared/ui/segmented-control";
+import { MOCK_GUIDE } from "../mock-data";
+import type {
+  AgentGuide,
+  ConfigMode,
+  ConnectStep,
+  GuideSelection,
+  SetupStep,
+  TaskStep,
+} from "../types";
+import { ConnectEditor } from "./connect-editor";
+import { GuideOutline } from "./guide-outline";
+import { MemberGuide } from "./member-guide";
+import { GuardrailsEditor, MissionEditor } from "./profile-editors";
+import { RolloutPanel } from "./rollout-panel";
+import { TaskEditor } from "./task-editor";
+
+const MODES = [
+  { key: "build", label: "Build" },
+  { key: "member", label: "Member view" },
+] as const;
 
 /**
- * Configuration page root — static UI preview. The mode toggle flips
- * between the manager's edit surface and what an employee on the team
- * would see. All data is mock (see ../mock-data.ts).
+ * Configuration page root — static UI preview, everything edits local
+ * state only (see ../mock-data.ts). Build mode is the manager's guide
+ * builder; Member view is the checklist a teammate walks through.
  */
 export function ConfigurationView() {
-  const [mode, setMode] = useState<ConfigMode>("manager");
+  const [mode, setMode] = useState<ConfigMode>("build");
+  const [guide, setGuide] = useState<AgentGuide>(MOCK_GUIDE);
+  const [selection, setSelection] = useState<GuideSelection>({
+    type: "step",
+    id: MOCK_GUIDE.steps[0]?.id ?? "",
+  });
+  const nextId = useRef(1);
+
+  const patchGuide = (patch: Partial<AgentGuide>) =>
+    setGuide((g) => ({ ...g, ...patch }));
+
+  const patchStep = (id: string, patch: Partial<ConnectStep> | Partial<TaskStep>) =>
+    setGuide((g) => ({
+      ...g,
+      steps: g.steps.map((s) => (s.id === id ? ({ ...s, ...patch } as SetupStep) : s)),
+    }));
+
+  const addStep = (kind: SetupStep["kind"]) => {
+    const id = `st-new-${nextId.current++}`;
+    const step: SetupStep =
+      kind === "connect"
+        ? {
+            kind,
+            id,
+            name: "New tool",
+            category: "",
+            required: false,
+            summary: "",
+            whyText: "",
+            linkLabel: "",
+            linkHref: "",
+            setupCommand: "",
+            memberNote: "",
+            agentContext: "",
+            scopes: [],
+            sampleDone: false,
+          }
+        : {
+            kind,
+            id,
+            title: "New agent task",
+            artifact: "file",
+            estMinutes: 10,
+            summary: "",
+            detail: "",
+            agentPrompt: "",
+            doneWhen: [],
+            structure: [],
+            sampleDone: false,
+          };
+    setGuide((g) => ({ ...g, steps: [...g.steps, step] }));
+    setSelection({ type: "step", id });
+  };
+
+  const deleteStep = (id: string) => {
+    setGuide((g) => ({ ...g, steps: g.steps.filter((s) => s.id !== id) }));
+    setSelection({ type: "mission" });
+  };
+
+  const addGuardrail = () => {
+    setGuide((g) => ({
+      ...g,
+      guardrails: [
+        ...g.guardrails,
+        { id: `gr-new-${nextId.current++}`, policy: "ask", text: "" },
+      ],
+    }));
+    setSelection({ type: "guardrails" });
+  };
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-8 py-7">
-      <div className="mb-6 flex flex-wrap items-start gap-4">
-        <div className="min-w-0 flex-1">
-          <h1 className="text-lg font-semibold leading-snug tracking-tight text-text-primary">
+    <div className="page-float flex flex-col antialiased">
+      <div className="flex shrink-0 items-center gap-3 border-b border-border-subtle px-3.5 py-2.5">
+        <div className="flex min-w-0 flex-1 items-baseline gap-2">
+          <h1 className="shrink-0 text-title font-semibold tracking-tight text-text-primary">
             Configuration
           </h1>
-          <p className="mt-0.5 text-sm leading-relaxed text-text-secondary">
-            One profile for your team&apos;s agents — skills, connections,
-            instructions, and guardrails, kept in sync for everyone.
-          </p>
+          <span className="truncate text-caption text-text-muted">
+            The setup guide for {guide.teamName}&apos;s agents
+          </span>
         </div>
-        <ModeToggle mode={mode} onChange={setMode} />
+        <button
+          type="button"
+          onClick={() => {
+            setMode("build");
+            setSelection({ type: "rollout" });
+          }}
+          className="shrink-0 text-caption text-text-muted transition-colors hover:text-text-primary"
+        >
+          v{guide.version} · {guide.draftCount} unpublished changes
+        </button>
+        <SegmentedControl
+          options={MODES}
+          value={mode}
+          onChange={setMode}
+          className="w-[230px] shrink-0"
+        />
       </div>
 
-      {mode === "manager" ? (
-        <ManagerView profile={MOCK_PROFILE} />
+      {mode === "build" ? (
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+          <GuideOutline
+            guide={guide}
+            selection={selection}
+            onSelect={setSelection}
+            onAddStep={addStep}
+            onAddGuardrail={addGuardrail}
+          />
+          <BuildDetail
+            guide={guide}
+            selection={selection}
+            onPatchGuide={patchGuide}
+            onPatchStep={patchStep}
+            onDeleteStep={deleteStep}
+          />
+        </div>
       ) : (
-        <EmployeeView profile={MOCK_PROFILE} />
+        <MemberGuide guide={guide} />
       )}
     </div>
   );
 }
 
-const MODES: ReadonlyArray<{
-  id: ConfigMode;
-  label: string;
-  icon: typeof PencilLine;
-}> = [
-  { id: "manager", label: "Manager edit", icon: PencilLine },
-  { id: "employee", label: "Employee view", icon: Eye },
-];
-
-function ModeToggle({
-  mode,
-  onChange,
+function BuildDetail({
+  guide,
+  selection,
+  onPatchGuide,
+  onPatchStep,
+  onDeleteStep,
 }: {
-  mode: ConfigMode;
-  onChange: (mode: ConfigMode) => void;
+  guide: AgentGuide;
+  selection: GuideSelection;
+  onPatchGuide: (patch: Partial<AgentGuide>) => void;
+  onPatchStep: (id: string, patch: Partial<ConnectStep> | Partial<TaskStep>) => void;
+  onDeleteStep: (id: string) => void;
 }) {
-  const activeIndex = MODES.findIndex((m) => m.id === mode);
-  return (
-    <div className="relative flex items-center gap-1 rounded-[10px] border border-black/[0.06] bg-[#e9eaec] p-1 shadow-[inset_0_2px_4px_rgba(0,0,0,0.12),inset_0_1px_2px_rgba(0,0,0,0.06),inset_0_-1px_0_rgba(255,255,255,0.85)]">
-      <span
-        className="pointer-events-none absolute top-1 left-1 h-7 w-[130px] rounded-[7px] bg-gradient-to-b from-white to-[#f3f3f3] shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_0_0_1px_rgba(0,0,0,0.05),0_1px_2px_rgba(0,0,0,0.12),0_3px_6px_rgba(0,0,0,0.08)] transition-transform duration-200"
-        style={{ transform: `translateX(${activeIndex * 134}px)` }}
-        aria-hidden
-      />
-      {MODES.map(({ id, label, icon: Icon }) => (
-        <button
-          key={id}
-          type="button"
-          onClick={() => onChange(id)}
-          className={cn(
-            "relative z-[1] flex h-7 w-[130px] items-center justify-center gap-1.5 rounded-[7px] text-xs font-medium transition-colors",
-            id === mode ? "text-text-primary" : "text-text-secondary hover:text-text-primary"
-          )}
-        >
-          <Icon size={13} />
-          {label}
-        </button>
-      ))}
-    </div>
-  );
+  if (selection.type === "guardrails") {
+    return <GuardrailsEditor guide={guide} onPatch={onPatchGuide} />;
+  }
+  if (selection.type === "rollout") {
+    return <RolloutPanel guide={guide} />;
+  }
+  if (selection.type === "step") {
+    const index = guide.steps.findIndex((s) => s.id === selection.id);
+    const step = guide.steps[index];
+    if (step) {
+      return step.kind === "connect" ? (
+        <ConnectEditor
+          step={step}
+          stepNumber={index + 1}
+          onPatch={(patch) => onPatchStep(step.id, patch)}
+          onDelete={() => onDeleteStep(step.id)}
+        />
+      ) : (
+        <TaskEditor
+          step={step}
+          stepNumber={index + 1}
+          onPatch={(patch) => onPatchStep(step.id, patch)}
+          onDelete={() => onDeleteStep(step.id)}
+        />
+      );
+    }
+  }
+  return <MissionEditor guide={guide} onPatch={onPatchGuide} />;
 }

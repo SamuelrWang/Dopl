@@ -181,7 +181,19 @@ export function useKnowledgeV2Controller({
     []
   );
 
-  const closeSelection = useCallback(() => setSelection(null), []);
+  // Reconcile the selected base against the latest `bases` prop (derived, not
+  // stored). The page re-pulls bases from SSR after a save (router.refresh()),
+  // so a base rename — the user's own or a concurrent agent edit pulled in by
+  // the same refresh — flows into the toolbar title and the overview's
+  // read-only fields without a state-sync effect.
+  const reconciledSelection = useMemo<Selection | null>(() => {
+    if (!selection) return null;
+    const fresh = bases.find((b) => b.id === selection.base.id);
+    if (!fresh || fresh === selection.base) return selection;
+    return selection.kind === "entry"
+      ? { kind: "entry", base: fresh, entry: selection.entry }
+      : { kind: "base", base: fresh };
+  }, [selection, bases]);
 
   // Tree CRUD/move/delete/download handlers + the access gate + dialog state,
   // extracted to keep this file under the size cap.
@@ -308,7 +320,7 @@ export function useKnowledgeV2Controller({
     visibleBases,
     expanded,
     trees,
-    selection,
+    selection: reconciledSelection,
     selectedBaseId,
     selectedEntryId,
     openEntry: openEntryQuery.data,
@@ -320,7 +332,6 @@ export function useKnowledgeV2Controller({
     handleSelectEntry,
     selectEntryById,
     selectCrumb,
-    closeSelection,
     ...mut,
   };
 }

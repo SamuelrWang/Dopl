@@ -35,6 +35,21 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
   }
 }
 
+export async function listChats(
+  workspaceId: string
+): Promise<{ chats: Chat[]; hiddenCount: number }> {
+  return request<{ chats: Chat[]; hiddenCount: number }>("/api/chats", {
+    workspaceId,
+  });
+}
+
+export async function listFolders(workspaceId: string): Promise<ChatFolder[]> {
+  const data = await request<{ folders: ChatFolder[] }>("/api/chats/folders", {
+    workspaceId,
+  });
+  return data.folders;
+}
+
 export async function fetchChat(
   chatId: string,
   workspaceId: string

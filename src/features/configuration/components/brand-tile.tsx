@@ -1,9 +1,12 @@
 "use client";
 
+import { cn } from "@/shared/lib/utils";
+
 /**
- * Logo tile for a connection card. Slack/GitHub marks are inlined SVG
+ * Logo tile for a connection step. Slack/GitHub marks are inlined SVG
  * paths (lucide dropped brand icons); the rest render as brand-colored
  * letter tiles so no external assets are fetched (CSP + offline safe).
+ * Hex values here are third-party brand colors — data, not theme.
  */
 
 const SLACK_PATH =
@@ -18,22 +21,38 @@ const TILES: Record<
 > = {
   dopl: { bg: "#1c2127", fg: "#ffffff", letter: "D" },
   slack: { bg: "#4a154b", fg: "#ffffff", path: SLACK_PATH },
+  hubspot: { bg: "#ff7a59", fg: "#ffffff", letter: "H" },
   notion: { bg: "#ffffff", fg: "#1a1a1a", letter: "N" },
   github: { bg: "#24292f", fg: "#ffffff", path: GITHUB_PATH },
 };
 
 const FALLBACK = { bg: "#63676d", fg: "#ffffff" };
 
-export function BrandTile({ id, name }: { id: string; name: string }) {
-  const tile = TILES[id] ?? FALLBACK;
+/** Matches step names ("HubSpot") to tile ids case-insensitively. */
+function tileFor(name: string) {
+  return TILES[name.trim().toLowerCase()] ?? FALLBACK;
+}
+
+export function BrandTile({
+  name,
+  size = "md",
+}: {
+  name: string;
+  size?: "sm" | "md";
+}) {
+  const tile = tileFor(name);
+  const glyph = size === "sm" ? 13 : 17;
   return (
     <span
-      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] border border-black/[0.1] text-[15px] font-bold shadow-[inset_0_1px_0_rgba(255,255,255,0.15),0_1px_2px_rgba(0,0,0,0.12)]"
+      className={cn(
+        "flex shrink-0 items-center justify-center border border-border-strong font-bold shadow-[inset_0_1px_0_rgba(255,255,255,0.15),0_1px_2px_rgba(0,0,0,0.12)]",
+        size === "sm" ? "h-7 w-7 rounded-[8px] text-small" : "h-9 w-9 rounded-[9px] text-title"
+      )}
       style={{ background: tile.bg, color: tile.fg }}
       aria-hidden
     >
       {"path" in tile && tile.path ? (
-        <svg viewBox="0 0 24 24" width={17} height={17} fill="currentColor">
+        <svg viewBox="0 0 24 24" width={glyph} height={glyph} fill="currentColor">
           <path d={tile.path} />
         </svg>
       ) : (

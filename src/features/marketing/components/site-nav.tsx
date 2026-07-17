@@ -1,10 +1,17 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
 import { LOGIN_LABEL, MENU_LABEL, NAV_LINKS } from "../constants";
 import { ArrowUpRight, MenuIcon, SearchIcon } from "./icons";
 import { Logo } from "./logo";
+import { PricingModal } from "./pricing-modal";
 
-/** Top bar: brand left · links + Login centered · search + Menu right. */
+/** Top bar: brand left · links + Login centered · search + Menu right.
+ * "Pricing" opens the popup (href stays /pricing for middle-click/no-JS). */
 export function SiteNav() {
+  const [pricingOpen, setPricingOpen] = useState(false);
+
   return (
     <header className="lp-nav">
       <div className="lp-nav-left">
@@ -13,11 +20,24 @@ export function SiteNav() {
 
       <div className="lp-nav-center">
         <nav className="lp-links">
-          {NAV_LINKS.map((label) => (
-            <a key={label} href="#">
-              {label}
-            </a>
-          ))}
+          {NAV_LINKS.map((label) =>
+            label === "Pricing" ? (
+              <Link
+                key={label}
+                href="/pricing"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setPricingOpen(true);
+                }}
+              >
+                {label}
+              </Link>
+            ) : (
+              <a key={label} href="#">
+                {label}
+              </a>
+            )
+          )}
         </nav>
         <span className="lp-divider" aria-hidden />
         <Link href="/login" className="lp-btn lp-btn--sm lp-btn--3d">
@@ -35,6 +55,8 @@ export function SiteNav() {
           <MenuIcon size={16} />
         </button>
       </div>
+
+      {pricingOpen && <PricingModal onClose={() => setPricingOpen(false)} />}
     </header>
   );
 }

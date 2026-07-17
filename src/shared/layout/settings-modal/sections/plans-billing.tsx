@@ -255,7 +255,7 @@ function BillingSummary({
           <button
             type="button"
             onClick={onUpgrade}
-            className="flex h-8 cursor-pointer items-center justify-center rounded-lg bg-surface-cta px-4 text-small font-semibold text-text-on-cta transition-opacity hover:opacity-90"
+            className="auth-btn-3d flex h-8 cursor-pointer items-center justify-center rounded-lg px-4 text-small font-semibold text-white"
           >
             Upgrade to Pro
           </button>
@@ -317,14 +317,24 @@ function PlanColumn({
   const highlight = plan.id === "pro";
 
   return (
-    <div className={cn("bento flex flex-col p-4", highlight && "border-border-highlight")}>
+    <div
+      className={cn(
+        "bento flex flex-col p-4",
+        highlight && "border-border-highlight",
+        isCurrent && "border-2 border-text-primary"
+      )}
+    >
       <div className="flex items-center justify-between">
         <div className="text-caption text-text-secondary">{plan.audience}</div>
-        {highlight && (
+        {isCurrent ? (
+          <span className="rounded-full border border-text-primary px-2 py-0.5 text-micro font-semibold text-text-primary">
+            Current plan
+          </span>
+        ) : highlight ? (
           <span className="rounded-full bg-surface-cta px-2 py-0.5 text-micro font-semibold text-text-on-cta">
             Popular
           </span>
-        )}
+        ) : null}
       </div>
       <div className="mt-2 text-display font-semibold tracking-tight text-text-primary">
         {plan.name}
@@ -382,7 +392,7 @@ function PlanCta({
   const ghost =
     "btn-light flex h-8 w-full cursor-pointer items-center justify-center rounded-lg text-small font-medium text-text-primary disabled:cursor-default disabled:opacity-50";
   const primary =
-    "flex h-8 w-full cursor-pointer items-center justify-center rounded-lg bg-surface-cta text-small font-semibold text-text-on-cta transition-opacity hover:opacity-90";
+    "auth-btn-3d flex h-8 w-full cursor-pointer items-center justify-center rounded-lg text-small font-semibold text-white";
   const current =
     "flex h-8 w-full items-center justify-center text-small font-semibold text-text-secondary";
 

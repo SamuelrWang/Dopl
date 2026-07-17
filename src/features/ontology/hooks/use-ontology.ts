@@ -2,8 +2,13 @@
 
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import {
+  createRefetchCoordinator,
+  type RefetchCoordinator,
+} from "@/shared/realtime/refetch-coordinator";
 import { toast } from "@/shared/ui/toast";
 import * as api from "../client/api";
+import { useOntologyRealtime } from "../client/realtime";
 import {
   clusterObjectIds,
   EMPTY_GRAPH,
@@ -52,6 +57,10 @@ export function useOntology(
     onOverCapRef.current = onOverCap;
   }, [onOverCap]);
   const timersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  // Debounced PATCHes that have fired and are awaiting their server round
+  // trip. Combined with `timersRef.size`, this is the "writes in flight"
+  // signal the realtime refetch defers on (see hasPendingWrites).
+  const inFlightRef = useRef(0);
 
   // Snapshot through the query cache: a revisit paints instantly from the
   // cached graph while a background refetch brings it current. Focus
@@ -103,6 +112,43 @@ export function useOntology(
       ? "error"
       : "loading";
 
+  // ── Live updates from MCP/CLI agents and other tabs ────────────────
+  // A remote change refetches the snapshot and re-seeds the reducer —
+  // bypassing the seed effect's permanent dirty-guard, which exists to
+  // stop a background refetch from clobbering local edits. The clobber
+  // risk is real, so we never apply a remote snapshot while a local write
+  // is in flight: the coordinator defers until debounced PATCHes have both
+  // fired AND returned (hasPendingWrites), then applies the coalesced
+  // refetch. Own edits echo back as events too — matching knowledge, the
+  // resulting self-refetch is harmless (idempotent re-seed).
+  const refetchSnapshot = snapshotQuery.refetch;
+  const hasPendingWrites = useCallback(
+    () => timersRef.current.size > 0 || inFlightRef.current > 0,
+    []
+  );
+  const coordinatorRef = useRef<RefetchCoordinator | null>(null);
+  const applyRemoteSnapshot = useCallback(async () => {
+    const { data } = await refetchSnapshot();
+    if (!data) return;
+    // A write may have started during the fetch — re-defer rather than
+    // overwrite the fresher local edit.
+    if (hasPendingWrites()) {
+      coordinatorRef.current?.request(true);
+      return;
+    }
+    rawDispatch({ type: "SNAPSHOT_SET", snapshot: data });
+  }, [refetchSnapshot, hasPendingWrites]);
+  const applyRef = useRef(applyRemoteSnapshot);
+  useEffect(() => {
+    applyRef.current = applyRemoteSnapshot;
+  });
+  useEffect(() => {
+    coordinatorRef.current = createRefetchCoordinator(() => void applyRef.current());
+  }, []);
+  useOntologyRealtime(workspaceId, () =>
+    coordinatorRef.current?.request(hasPendingWrites())
+  );
+
   useEffect(() => {
     const timers = timersRef.current;
     return () => {
@@ -146,6 +192,7 @@ export function useOntology(
     (objectId: string) => {
       const object = graphRef.current.objects[objectId];
       if (!object) return;
+      inFlightRef.current += 1;
       api
         .updateObject(workspaceId, objectId, {
           name: object.name || "Untitled",
@@ -155,9 +202,13 @@ export function useOntology(
           relationships: object.relationships,
           template: object.template,
         })
-        .catch((err) => reportSaveError("object", err));
+        .catch((err) => reportSaveError("object", err))
+        .finally(() => {
+          inFlightRef.current = Math.max(0, inFlightRef.current - 1);
+          coordinatorRef.current?.settle(hasPendingWrites());
+        });
     },
-    [workspaceId]
+    [workspaceId, hasPendingWrites]
   );
 
   const scheduleObjectSync = useCallback(
@@ -188,16 +239,21 @@ export function useOntology(
           timers.delete(key);
           const cluster = graphRef.current.clusters.find((c) => c.id === clusterId);
           if (!cluster) return;
+          inFlightRef.current += 1;
           api
             .updateCluster(workspaceId, clusterId, {
               name: cluster.name || "Untitled",
               purpose: cluster.purpose,
             })
-            .catch((err) => reportSaveError("cluster", err));
+            .catch((err) => reportSaveError("cluster", err))
+            .finally(() => {
+              inFlightRef.current = Math.max(0, inFlightRef.current - 1);
+              coordinatorRef.current?.settle(hasPendingWrites());
+            });
         }, OBJECT_SYNC_DELAY_MS)
       );
     },
-    [workspaceId]
+    [workspaceId, hasPendingWrites]
   );
 
   const dispatch = useCallback(

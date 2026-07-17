@@ -1,16 +1,8 @@
 "use client";
 
-import {
-  CalendarCheck,
-  CalendarDays,
-  Flag,
-  Maximize2,
-  MoreHorizontal,
-  Triangle,
-  UserPlus,
-  Users,
-  UsersRound,
-} from "lucide-react";
+import { CalendarCheck, CalendarDays, Flag, Users, UsersRound } from "lucide-react";
+import { DESCRIPTION_MAX } from "@/config";
+import { cn } from "@/shared/lib/utils";
 import { TeamChip } from "@/features/members/components/team-bits";
 import styles from "../knowledge-v2.module.css";
 
@@ -20,12 +12,16 @@ export interface MetaTeamRef {
 }
 
 export interface MetaCardProps {
-  tint: string;
-  /** Container label shown in the card header (the base name). */
-  containerName: string;
-  title: string;
-  ownerLabel: string;
-  ownerInitial: string;
+  /** Editable base name (live, persisted by the parent's save hook). */
+  name: string;
+  /** Editable agent-facing description. */
+  description: string;
+  /** Viewers get read-only fields; owners/editors can type. */
+  canEdit: boolean;
+  onNameChange: (value: string) => void;
+  onDescriptionChange: (value: string) => void;
+  /** Flush a pending debounced save (called on blur). */
+  onFlush: () => void;
   createdAt: string;
   updatedAt: string;
   scopeLabel: string;
@@ -36,17 +32,18 @@ export interface MetaCardProps {
 }
 
 /**
- * The nested card on the base overview: a bordered card with a gray header
- * (container icon + name + actions) over a white body holding the title,
- * owner line, and the access/visibility meta grid. Status is a static
- * placeholder; everything else (dates, visibility, access, teams) is real.
+ * The base overview card: a label strip over a body holding the two editable
+ * fields (name + description, in concave wells) and the read-only meta grid
+ * (dates, visibility, access, teams). All values are real — name/description
+ * persist via the base PATCH route; the rest is derived from the base row.
  */
 export function MetaCard({
-  tint,
-  containerName,
-  title,
-  ownerLabel,
-  ownerInitial,
+  name,
+  description,
+  canEdit,
+  onNameChange,
+  onDescriptionChange,
+  onFlush,
   createdAt,
   updatedAt,
   scopeLabel,
@@ -56,27 +53,42 @@ export function MetaCard({
   return (
     <div className={styles.metaCard}>
       <div className={styles.metaCardHead}>
-        <span className={styles.label}>{containerName}</span>
-        <button className={styles.iconBtn} type="button" aria-label="Add member">
-          <UserPlus size={16} />
-        </button>
-        <button className={styles.iconBtn} type="button" aria-label="More">
-          <MoreHorizontal size={16} />
-        </button>
-        <span className={styles.divider} />
-        <button className={styles.iconBtn} type="button" aria-label="Expand">
-          <Maximize2 size={15} />
-        </button>
+        <span className={styles.label}>Details</span>
       </div>
 
       <div className={styles.metaCardBody}>
-        <div className={styles.metaTitle}>{title}</div>
-        <div className={styles.metaAuthor}>
-          <span className={styles.avatar} style={avatarStyle(tint)}>
-            {ownerInitial}
+        <label className={styles.fieldGroup}>
+          <span className={styles.fieldLabel}>Name</span>
+          <input
+            type="text"
+            className={cn("concave-field", styles.fieldInput)}
+            value={name}
+            readOnly={!canEdit}
+            onChange={(e) => onNameChange(e.target.value)}
+            onBlur={onFlush}
+            placeholder="Untitled knowledge base"
+          />
+        </label>
+
+        <label className={styles.fieldGroup}>
+          <span className={styles.fieldLabelRow}>
+            <span className={styles.fieldLabel}>Description</span>
+            {canEdit ? (
+              <span className={styles.fieldCount}>
+                {description.length}/{DESCRIPTION_MAX}
+              </span>
+            ) : null}
           </span>
-          {ownerLabel}
-        </div>
+          <textarea
+            className={cn("concave-field", styles.fieldTextarea)}
+            value={description}
+            readOnly={!canEdit}
+            onChange={(e) => onDescriptionChange(e.target.value)}
+            onBlur={onFlush}
+            rows={3}
+            placeholder="What's in this knowledge base? Agents see this when listing bases."
+          />
+        </label>
 
         <div className={styles.metaFields}>
           <div className={styles.metaRow}>
@@ -84,15 +96,6 @@ export function MetaCard({
               <CalendarDays size={16} /> Date Created:
             </span>
             <span className={styles.metaVal}>{createdAt}</span>
-          </div>
-
-          <div className={styles.metaRow}>
-            <span className={styles.metaKey}>
-              <Triangle size={15} /> Status:
-            </span>
-            <span className={styles.metaVal}>
-              <span className={styles.pill}>Active</span>
-            </span>
           </div>
 
           <div className={styles.metaRow}>
@@ -134,17 +137,4 @@ export function MetaCard({
       </div>
     </div>
   );
-}
-
-/** Tinted initials chip used as the avatar fallback (no profile fetch yet). */
-function avatarStyle(tint: string): React.CSSProperties {
-  return {
-    background: tint,
-    color: "var(--text-on-invert)",
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: "var(--text-micro)",
-    fontWeight: 600,
-  };
 }

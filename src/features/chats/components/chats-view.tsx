@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/shared/ui/toast";
 import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import type { Chat, ChatFolder } from "../types";
@@ -8,10 +9,13 @@ import { chatScope, type ChatScope } from "../scope";
 import {
   createChatFolder,
   deleteChat as apiDeleteChat,
+  listChats,
+  listFolders,
   updateChat as apiUpdateChat,
   updateChatFolder as apiUpdateChatFolder,
   ChatApiError,
 } from "../client/api";
+import { useChatsRealtime } from "../client/realtime";
 import { ListPane } from "./list-pane";
 import { DetailPane } from "./detail-pane";
 
@@ -64,14 +68,39 @@ export function ChatsView({
   initialFolders,
   hiddenCount,
 }: Props) {
+  const qc = useQueryClient();
   const [chats, setChats] = useState(initialChats);
   const [folders, setFolders] = useState(initialFolders);
+  const [hidden, setHidden] = useState(hiddenCount);
   const [filter, setFilter] = useState<ChatFilter>("all");
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(
     initialChats[0]?.id ?? null
   );
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+
+  // Live updates from MCP/CLI agents and other tabs: an exported chat, a
+  // new message, a share/folder change, or a retention shift. Re-fetch the
+  // list + folders through the filtered service (retention stays
+  // server-authoritative) and refetch the open transcript. Chats have no
+  // debounced typing — edits are discrete awaited actions — so a refetch
+  // only re-affirms server truth; no pending-edit guard is needed.
+  useChatsRealtime(workspaceId, () => {
+    void (async () => {
+      try {
+        const [list, nextFolders] = await Promise.all([
+          listChats(workspaceId),
+          listFolders(workspaceId),
+        ]);
+        setChats(list.chats);
+        setHidden(list.hiddenCount);
+        setFolders(nextFolders);
+      } catch {
+        // Transient (reconnect / auth blip) — the next event refetches.
+      }
+    })();
+    void qc.invalidateQueries({ queryKey: ["chat-detail", workspaceId] });
+  });
 
   const counts = useMemo<Record<ChatFilter, number>>(() => {
     const c: Record<ChatFilter, number> = { all: 0, private: 0, team: 0, workspace: 0 };
@@ -296,7 +325,7 @@ export function ChatsView({
         onToggleFolder={toggleFolder}
         onCreateFolder={handleCreateFolder}
         onFolderShareChange={handleFolderShareChange}
-        hiddenCount={hiddenCount}
+        hiddenCount={hidden}
       />
       <DetailPane
         chat={selected}

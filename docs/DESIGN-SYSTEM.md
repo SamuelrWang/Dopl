@@ -9,11 +9,11 @@ Source of truth: `src/app/globals.css` (`@theme` block + `:root` palette +
 "UI kit" section). Design language: Samuel's study-notes app, verbatim —
 neutral grays, hairline borders, floating bento cards, concave (pressed-in)
 fields and raised 3D buttons. Currently wired: Knowledge (v2 + the shared
-dialogs/doc-pane), Ontology, Members, Chats, Skills, Settings, Workspaces
-(invite/join/create cards), Billing, MCP-connect. Exempt: marketing pages,
-auth + onboarding (their own crystal/3D kit), frozen canvas/configuration,
-and the F-022 legacy Button/Dialog primitives pending retirement. Every
-new page starts on this system.
+dialogs/doc-pane), Ontology, Members, Chats, Skills, Configuration,
+Settings, Workspaces (invite/join/create cards), Billing, MCP-connect.
+Exempt: marketing pages, auth + onboarding (their own crystal/3D kit),
+frozen canvas, and the F-022 legacy Button/Dialog primitives pending
+retirement. Every new page starts on this system.
 
 ## Type scale
 
@@ -89,14 +89,15 @@ Shared React primitives (`src/shared/ui` + `src/shared/hooks`):
 | `CopyButton` (`copy-button.tsx`) + `useCopyToClipboard` (hook) | Copy-to-clipboard. Icon-button case = `CopyButton`; custom chrome keeps its JSX and uses the hook. |
 | `ScopeSharePopover` / `ScopeShareMenu` (`scope-share-popover.tsx`) | The private/team/workspace sharing control (chats + skills wrap it). |
 | `ConfirmDialog` (`confirm-dialog.tsx`) | In-app confirmations. |
+| `FIELD_WELL` / `CHIP` / `RAISED_WELL` (`wells.ts`) | Class recipes for fields on section bodies: concave add-row well, raised pill chip, raised block field (inputs/code wells on inset). Promoted from ontology-bits (which now re-exports them). |
 | `useApiQuery` (`use-api-query.ts`) | Every client GET hook (TanStack Query over `apiRequest`). `useApiGet` is gone (members pass migrated the last consumers). |
 | `formatRelativeTime` / `formatDate` / `formatLastActive` (`shared/lib/format-time.ts`) | All timestamp display. No per-feature date formatters. |
 
 Reference implementations: `src/features/knowledge/components/knowledge-v2/`
-(CSS-module layout + kit recipes + `--kv-*` aliases onto global tokens) and
+(CSS-module layout + kit recipes + `--kv-*` aliases onto global tokens),
 `src/features/ontology/components/` (utility-class styling on the same
-tokens; shared atoms in `ontology-bits.tsx` — `SectionBox`, `FIELD_WELL`,
-`CHIP`).
+tokens), and `src/features/configuration/components/` (two-pane guide
+builder composing SectionBox + wells + SegmentedControl).
 
 ## Patterns
 

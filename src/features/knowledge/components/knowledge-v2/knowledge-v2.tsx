@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { cn } from "@/shared/lib/utils";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import type { Role } from "@/features/workspaces/types";
@@ -57,6 +58,7 @@ export function KnowledgeV2({
   });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsBase = c.selection?.base ?? null;
+  const router = useRouter();
 
   return (
     <div className={cn("page-float", styles.shell)}>
@@ -88,12 +90,13 @@ export function KnowledgeV2({
         openEntryStatus={c.openEntryStatus}
         refetchOpenEntry={c.refetchOpenEntry}
         kbTeams={kbTeams}
+        canEditBase={settingsBase ? c.canEdit(settingsBase.id) : false}
         onTreeRefresh={c.refreshTree}
+        onBaseSaved={() => router.refresh()}
         onSelectSearchEntry={c.selectEntryById}
         onCrumbSelect={c.selectCrumb}
         onExportBase={c.exportBase}
         onOpenSettings={() => setSettingsOpen(true)}
-        onClose={c.closeSelection}
       />
 
       <ConfirmDialog

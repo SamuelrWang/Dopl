@@ -10,6 +10,7 @@ import { OntologyResourcesProvider } from "../hooks/use-workspace-resources";
 import { CapNotice } from "./cap-notice";
 import { KanbanBoard } from "./kanban-board";
 import { ObjectPanel } from "./object-panel";
+import { OntologyBoardSkeleton } from "./ontology-skeleton";
 
 interface Props {
   workspaceId: string;
@@ -99,7 +100,7 @@ export function OntologyView({
   if (status === "loading") {
     return (
       <Frame>
-        <p className="m-auto text-lead text-text-muted">Loading ontology…</p>
+        <OntologyBoardSkeleton />
       </Frame>
     );
   }

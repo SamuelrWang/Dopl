@@ -2,17 +2,13 @@
 
 import { Fragment, useState } from "react";
 import {
-  Archive,
-  ChevronLeft,
   ChevronRight,
   Database,
   Download,
-  MoreHorizontal,
   Pin,
   Plus,
   Settings,
   Trash2,
-  X,
 } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { KnowledgeSearch } from "../../knowledge-search";
@@ -27,6 +23,10 @@ import styles from "../knowledge-v2.module.css";
 const TABS = ["Overview", "Messages", "Attachments"] as const;
 type Tab = (typeof TABS)[number];
 
+/** App-wide icon-button recipe (chats/skills list panes): 28px, hover-raised. */
+const ICON_BTN =
+  "flex h-7 w-7 items-center justify-center rounded-[7px] text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary";
+
 interface Props {
   selection: Selection | null;
   workspaceId: string;
@@ -38,8 +38,12 @@ interface Props {
   refetchOpenEntry: () => void;
   /** Admin-only: kbId → teams granted, surfaced in the base overview. */
   kbTeams?: Record<string, KbTeamRef[]>;
+  /** Whether the current user may edit the selected base's name/description. */
+  canEditBase: boolean;
   /** Refresh a base's tree after an entry save. */
   onTreeRefresh: (baseId: string) => void;
+  /** Re-pull the SSR base list after a base name/description save. */
+  onBaseSaved: () => void;
   /** Open a content-search hit (entry within a base). */
   onSelectSearchEntry: (entryId: string, baseId: string) => void;
   /** Breadcrumb navigation: jump to the first entry in a folder (null = base). */
@@ -48,7 +52,6 @@ interface Props {
   onExportBase: (baseId: string) => void;
   /** Open the base settings modal for the selected base. */
   onOpenSettings: () => void;
-  onClose: () => void;
 }
 
 /** Root → leaf folder chain for an entry, from the flat folder list. */
@@ -82,12 +85,13 @@ export function DetailPanel({
   openEntryStatus,
   refetchOpenEntry,
   kbTeams,
+  canEditBase,
   onTreeRefresh,
+  onBaseSaved,
   onSelectSearchEntry,
   onCrumbSelect,
   onExportBase,
   onOpenSettings,
-  onClose,
 }: Props) {
   const [tab, setTab] = useState<Tab>("Overview");
 
@@ -113,16 +117,6 @@ export function DetailPanel({
   return (
     <div className={styles.detailPane}>
       <div className={styles.detailTop}>
-        <button className={styles.iconBtn} type="button" aria-label="Close" onClick={onClose}>
-          <X size={18} />
-        </button>
-        <span className={styles.divider} />
-        <button className={styles.iconBtn} type="button" aria-label="Previous">
-          <ChevronLeft size={18} />
-        </button>
-        <button className={styles.iconBtn} type="button" aria-label="Next">
-          <ChevronRight size={18} />
-        </button>
         <span className={styles.detailTopTitle}>
           {selection.kind === "entry" ? (
             <nav className={styles.crumbs} aria-label="Breadcrumb">
@@ -161,35 +155,33 @@ export function DetailPanel({
           />
         </div>
         <button
-          className={styles.iconBtn}
+          className={ICON_BTN}
           type="button"
           aria-label="Download knowledge base"
           title="Download this knowledge base"
           onClick={() => onExportBase(selection.base.id)}
         >
-          <Download size={17} />
+          <Download size={16} />
         </button>
         <button
-          className={styles.iconBtn}
+          className={ICON_BTN}
           type="button"
           aria-label="Knowledge base settings"
           title="Settings"
           onClick={onOpenSettings}
         >
-          <Settings size={17} />
+          <Settings size={16} />
         </button>
         <span className={styles.divider} />
-        <button className={cn(styles.iconBtn, styles.iconBtnActive)} type="button" aria-label="Pin">
-          <Pin size={17} />
+        <button className={ICON_BTN} type="button" aria-label="Pin">
+          <Pin size={16} />
         </button>
-        <button className={styles.iconBtn} type="button" aria-label="Archive">
-          <Archive size={17} />
-        </button>
-        <button className={styles.iconBtn} type="button" aria-label="More">
-          <MoreHorizontal size={17} />
-        </button>
-        <button className={cn(styles.iconBtn, styles.iconBtnRed)} type="button" aria-label="Delete">
-          <Trash2 size={17} />
+        <button
+          className={cn(ICON_BTN, "hover:text-danger")}
+          type="button"
+          aria-label="Delete"
+        >
+          <Trash2 size={16} />
         </button>
       </div>
 
@@ -226,10 +218,15 @@ export function DetailPanel({
             }}
           />
         ) : (
-          <>
-            <div className={styles.docTitle}>{vm.title}</div>
-            <BaseOverview vm={vm} teams={kbTeams?.[selection.base.id]} />
-          </>
+          <BaseOverview
+            key={selection.base.id}
+            base={selection.base}
+            vm={vm}
+            workspaceId={workspaceId}
+            canEdit={canEditBase}
+            onSaved={onBaseSaved}
+            teams={kbTeams?.[selection.base.id]}
+          />
         )}
       </div>
     </div>

@@ -33,12 +33,12 @@ type NavSection =
 
 const NAV: ReadonlyArray<{ label: string; icon: LucideIcon; section: NavSection }> = [
   { label: "Overview", icon: Home, section: "overview" },
+  { label: "Ontology", icon: Network, section: "ontology" },
   { label: "Canvas", icon: LayoutGrid, section: "canvas" },
   { label: "Workflows", icon: Workflow, section: "workflows" },
   { label: "Knowledge", icon: BookOpen, section: "knowledge" },
   { label: "Skills", icon: Sparkles, section: "skills" },
   { label: "Chats", icon: MessagesSquare, section: "chats" },
-  { label: "Ontology", icon: Network, section: "ontology" },
   { label: "Configuration", icon: SlidersHorizontal, section: "configuration" },
   { label: "Members", icon: Users, section: "members" },
 ];

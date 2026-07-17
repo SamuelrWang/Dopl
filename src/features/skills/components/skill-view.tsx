@@ -331,9 +331,13 @@ export function SkillView({
   });
 
   // Live updates (Tier 2): another user / MCP agent saving the body or
-  // skill metadata pushes here. Only pull when the editor is fully at
-  // rest so a remote change never remounts the active editor.
+  // skill metadata, or writing a version, pushes here. Bump the history
+  // key first (independent of the editor — the open version rail refetches
+  // whether or not the editor is mid-edit), then pull the freshest body
+  // only when the editor is fully at rest so a remote change never
+  // remounts the active editor.
   const onRealtimeChange = useCallback(() => {
+    setHistoryRefreshKey((k) => k + 1);
     if (!isEditorAtRest()) return;
     void pullFreshSkill();
   }, [isEditorAtRest, pullFreshSkill]);

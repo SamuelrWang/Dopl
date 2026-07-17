@@ -1,72 +1,45 @@
 "use client";
 
-import { BookOpen } from "lucide-react";
 import { MetaCard, type MetaTeamRef } from "./meta-card";
+import { useBaseMetaEdit } from "./use-base-meta-edit";
 import { longWhen } from "../utils";
 import type { ViewModel } from "./view-model";
-import styles from "../knowledge-v2.module.css";
+import type { KnowledgeBase } from "../../../types";
 
 interface Props {
+  base: KnowledgeBase;
   vm: ViewModel;
+  workspaceId: string;
+  /** Owners/editors can edit name + description; viewers are read-only. */
+  canEdit: boolean;
+  /** Re-pull the SSR base list after a save so the list + toolbar stay in sync. */
+  onSaved?: () => void;
   /** Teams granted on this base (admin view); undefined for members. */
   teams?: MetaTeamRef[];
 }
 
 /**
- * Base overview — the meta card + description + subtasks shown when a whole
- * knowledge base (not a file) is selected. Status/subtasks are static
- * placeholders; dates, visibility, access, and teams are real.
+ * Base overview — the meta card shown when a whole knowledge base (not a
+ * file) is selected. Name + description are editable and persist live; the
+ * dates, visibility, access, and teams are read-only real values.
  */
-export function BaseOverview({ vm, teams }: Props) {
+export function BaseOverview({ base, vm, workspaceId, canEdit, onSaved, teams }: Props) {
+  const { name, description, onNameChange, onDescriptionChange, flush } =
+    useBaseMetaEdit(base, workspaceId, onSaved);
+
   return (
-    <>
-      <p className={styles.docSub}>{vm.subtitle}</p>
-
-      <div className={styles.hr} />
-
-      <MetaCard
-        tint={vm.tint}
-        containerName={vm.containerName}
-        title={vm.title}
-        ownerLabel="Owner"
-        ownerInitial={vm.ownerInitial}
-        createdAt={longWhen(vm.createdAt)}
-        updatedAt={longWhen(vm.updatedAt)}
-        scopeLabel={vm.scopeLabel}
-        accessLabel={vm.accessLabel}
-        teams={teams}
-      />
-
-      <div className={styles.hr} />
-
-      <section>
-        <h3 className={styles.descHead}>Description</h3>
-        <div className={styles.descBody}>
-          {vm.description ? <p>{vm.description}</p> : <p>No description yet.</p>}
-        </div>
-      </section>
-
-      <div className={styles.hr} />
-
-      <section>
-        <h3 className={styles.subHead}>Subtasks</h3>
-        <div className={styles.subDateRow}>
-          <BookOpen size={15} />
-          {new Date(vm.createdAt).toLocaleDateString(undefined, {
-            weekday: "short",
-            day: "numeric",
-            month: "short",
-          })}
-        </div>
-        <div className={styles.subItem}>
-          <span className={styles.subCheck} />
-          Kickoff: review brief &amp; goals
-        </div>
-        <div className={styles.subItem}>
-          <span className={styles.subCheck} />
-          Draft outline
-        </div>
-      </section>
-    </>
+    <MetaCard
+      name={name}
+      description={description}
+      canEdit={canEdit}
+      onNameChange={onNameChange}
+      onDescriptionChange={onDescriptionChange}
+      onFlush={flush}
+      createdAt={longWhen(vm.createdAt)}
+      updatedAt={longWhen(vm.updatedAt)}
+      scopeLabel={vm.scopeLabel}
+      accessLabel={vm.accessLabel}
+      teams={teams}
+    />
   );
 }

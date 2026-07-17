@@ -824,3 +824,62 @@
 @media (max-width: 900px) {
   .lp-plans { grid-template-columns: 1fr; }
 }
+
+/* ── Pricing popup (site-nav) ────────────────────────────────────────── */
+/* Overlay + card reuse the pricing-page markup via .lp-modal descendant
+   overrides — same content, popup-scaled chrome. Vars (--ink, --line,
+   --gutter, --grotesk) inherit from the .lp ancestor in the DOM. */
+.lp-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(13, 13, 13, 0.45);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: grid;
+  place-items: center;
+  padding: clamp(12px, 3vw, 40px);
+}
+
+.lp-modal {
+  position: relative;
+  width: min(1080px, 100%);
+  max-height: min(88vh, 960px);
+  overflow-y: auto;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.28);
+}
+
+/* Sticky so it survives the card's own scroll. Surface comes from the
+   shared .lp-btn--3d-light rule. */
+.lp-modal-close {
+  position: sticky;
+  top: 16px;
+  float: right;
+  margin: 16px 16px 0 0;
+  z-index: 2;
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+/* Popup-scaled pricing chrome — tighter head, smaller title. */
+.lp-modal .lp-pricing {
+  padding: 18px clamp(20px, 3vw, 44px) 44px;
+}
+.lp-modal .lp-pricing-head {
+  margin-bottom: 30px;
+}
+.lp-modal .lp-pricing-title {
+  font-size: clamp(30px, 4vw, 40px);
+}
+.lp-modal .lp-checkout {
+  padding: 18px var(--gutter) 48px;
+}

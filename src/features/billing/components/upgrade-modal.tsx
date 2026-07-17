@@ -120,7 +120,7 @@ export function UpgradeModal({
                 <button
                   type="button"
                   onClick={() => setCheckout(true)}
-                  className="flex h-9 flex-1 cursor-pointer items-center justify-center rounded-lg bg-surface-cta text-small font-semibold text-text-on-cta transition-opacity hover:opacity-90"
+                  className="auth-btn-3d flex h-9 flex-1 cursor-pointer items-center justify-center rounded-lg text-small font-semibold text-white"
                 >
                   Continue to checkout
                 </button>

@@ -11,7 +11,6 @@
 .shell {
   /* All values alias the global design tokens (docs/DESIGN-SYSTEM.md);
      the --kv-* names are kept so the rules below stay readable. */
-  --kv-bg: var(--card-surface-subtle);
   --kv-panel: var(--panel-surface);
   --kv-border: var(--border-default);
   --kv-border-strong: var(--border-strong);
@@ -21,7 +20,6 @@
   --kv-accent: var(--text-primary);
   --kv-row-hover: var(--surface-raised-1);
   --kv-row-active: var(--surface-raised-3);
-  --kv-pill-bg: var(--bg-inset);
 
   /* Surface geometry (margins/border/shadow/radius) comes from the global
      .page-float composed alongside this class in knowledge-v2.tsx. */
@@ -438,13 +436,6 @@
   background: var(--kv-border-strong);
   margin: 0 4px;
 }
-.iconBtnRed:hover {
-  background: color-mix(in oklab, var(--danger) 10%, transparent);
-  color: var(--danger);
-}
-.iconBtnActive {
-  color: var(--warning);
-}
 
 /* Tabs row */
 /* Tabs — pill style (active = gray pill), not an underline. */
@@ -500,39 +491,6 @@
   width: 0;
 }
 
-/* Header block — title sized to the study-notes note title (18px). */
-.docTitle {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  font-size: var(--text-display);
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  line-height: 1.375;
-  color: var(--kv-text);
-}
-.docTitle .titleIcon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 7px;
-  color: #fff;
-  flex: 0 0 26px;
-}
-.docSub {
-  margin-top: 8px;
-  font-size: var(--text-lead);
-  color: var(--kv-text-2);
-  line-height: 1.625;
-}
-.hr {
-  height: 1px;
-  background: var(--kv-border);
-  margin: 26px 0;
-}
-
 /* Nested meta card — framed like the study-notes intro panel: strong
    hairline, 14px radius, uppercase label strip over the body. */
 .metaCard {
@@ -558,23 +516,62 @@
 }
 .metaCardBody {
   padding: 20px 22px 22px;
-}
-.metaTitle {
-  font-size: var(--text-title);
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  color: var(--kv-text);
-}
-.metaAuthor {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 9px;
-  font-size: var(--text-small);
-  color: var(--kv-text-2);
+  flex-direction: column;
+  gap: 18px;
 }
+
+/* Editable fields — concave wells in the study-notes language. The global
+   .concave-field kit recipe (composed alongside these in meta-card.tsx)
+   supplies the pressed-in surface; these add layout + type only. */
+.fieldGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.fieldLabelRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.fieldLabel {
+  font-size: var(--text-label);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--kv-text-3);
+}
+.fieldCount {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: var(--text-micro);
+  color: var(--kv-text-3);
+}
+.fieldInput,
+.fieldTextarea {
+  width: 100%;
+  border-radius: 9px;
+  font-family: inherit;
+  font-size: var(--text-body);
+  color: var(--kv-text);
+  outline: none;
+}
+.fieldInput {
+  padding: 8px 11px;
+  font-weight: 500;
+}
+.fieldTextarea {
+  padding: 9px 11px;
+  line-height: 1.55;
+  resize: vertical;
+  min-height: 78px;
+}
+.fieldInput::placeholder,
+.fieldTextarea::placeholder {
+  color: var(--kv-text-3);
+}
+
 .metaFields {
-  margin-top: 20px;
   display: flex;
   flex-direction: column;
   gap: 15px;
@@ -617,26 +614,14 @@
   gap: 6px;
 }
 
-/* avatars + pills */
-.avatar {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  object-fit: cover;
-  background: var(--bg-inset);
-  flex: 0 0 auto;
-}
-.pill {
+/* Visibility pill — the real scope label (Private / Team / Workspace). */
+.pillBlue {
   display: inline-flex;
   align-items: center;
   padding: 3px 10px;
   border-radius: 7px;
   font-size: var(--text-caption);
   font-weight: 500;
-  background: var(--kv-pill-bg);
-  color: var(--kv-text);
-}
-.pillBlue {
   background: color-mix(in oklab, var(--link) 10%, white);
   color: var(--link);
 }
@@ -671,65 +656,6 @@
 .editorScope :global(.ProseMirror code),
 .editorScope :global(.ProseMirror pre) {
   font-size: var(--text-body);
-}
-
-/* Description — section label matches the study-notes panel headers
-   (11px uppercase muted). */
-.descHead {
-  font-size: var(--text-label);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--kv-text-2);
-  margin-bottom: 12px;
-}
-.descBody {
-  font-size: var(--text-lead);
-  line-height: 1.625;
-  color: var(--kv-text);
-}
-.descBody p + p {
-  margin-top: 14px;
-}
-
-/* Subtasks */
-.subHead {
-  font-size: var(--text-label);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--kv-text-2);
-  margin-bottom: 14px;
-}
-.subDateRow {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 11px 14px;
-  border-radius: 9px;
-  background: var(--kv-bg);
-  font-size: var(--text-body);
-  font-weight: 500;
-  color: var(--kv-text-2);
-}
-.subDateRow svg {
-  color: var(--kv-text-3);
-}
-.subItem {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  padding: 11px 14px;
-  font-size: var(--text-lead);
-  color: var(--kv-text);
-  border-bottom: 1px solid var(--kv-border);
-}
-.subCheck {
-  width: 17px;
-  height: 17px;
-  border-radius: 50%;
-  border: 1.6px solid var(--kv-border-strong);
-  flex: 0 0 17px;
 }
 
 /* Empty detail state */
