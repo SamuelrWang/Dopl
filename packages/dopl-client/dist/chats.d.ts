@@ -6,8 +6,8 @@
  * and read them back later as context (`listChats` / `getChat`).
  */
 import type { DoplTransport } from "./transport.js";
-import type { Chat, ChatDetail, ChatExportInput, ChatFolder, ChatFolderUpdateInput, ChatMessageInput, ChatUpdateInput } from "./chat-types.js";
-export declare function listChats(t: DoplTransport): Promise<Chat[]>;
+import type { Chat, ChatDetail, ChatExportInput, ChatFolder, ChatFolderUpdateInput, ChatList, ChatMessageInput, ChatUpdateInput } from "./chat-types.js";
+export declare function listChats(t: DoplTransport): Promise<ChatList>;
 export declare function getChat(t: DoplTransport, chatId: string): Promise<ChatDetail>;
 export declare function listChatFolders(t: DoplTransport): Promise<ChatFolder[]>;
 export declare function exportChat(t: DoplTransport, input: ChatExportInput): Promise<ChatDetail>;

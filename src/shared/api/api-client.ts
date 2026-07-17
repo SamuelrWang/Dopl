@@ -89,9 +89,19 @@ export async function apiRequest<T>(
   if (!res.ok) {
     const env = parsed as {
       error?: { code?: string; message?: string; details?: unknown } | string;
+      message?: string;
     };
     const err = env.error;
-    if (typeof err === "string") throw new ApiError(res.status, "INTERNAL_ERROR", err);
+    if (typeof err === "string") {
+      // Flat plan-gate envelope (ENGINEERING §8): `{ error: <code>,
+      // message, upgrade_url }` — the string is the machine code and the
+      // human text rides in a sibling `message`. A bare `{ error: "text" }`
+      // has no sibling message, so keep the legacy INTERNAL_ERROR shape.
+      if (typeof env.message === "string") {
+        throw new ApiError(res.status, err, env.message);
+      }
+      throw new ApiError(res.status, "INTERNAL_ERROR", err);
+    }
     throw new ApiError(
       res.status,
       err?.code ?? "INTERNAL_ERROR",

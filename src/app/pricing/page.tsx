@@ -13,9 +13,9 @@ import type { User } from "@supabase/supabase-js";
 
 /**
  * Public pricing — the landing-page (light Lattice) language: three plan
- * cards from the shared plan defs, Pro highlighted. Checkout only sells
- * the live monthly Pro price; Basic maps to the 24-hour free trial and
- * Team is a contact CTA.
+ * cards from the shared plan defs, Pro highlighted. Plans are
+ * workspace-level: Free is fully featured, Pro is $7.99 per seat / month
+ * (checkout sells the live per-seat price), and Team is a contact CTA.
  */
 
 export default function PricingPage() {
@@ -37,7 +37,12 @@ export default function PricingPage() {
   const statusQuery = useApiQuery<{ status?: string }>("/api/billing/status", {
     enabled: user !== null,
   });
-  const isPaid = statusQuery.data?.status === "active";
+  // past_due is still a paid subscription — showing "Upgrade to Pro" would
+  // start a duplicate checkout. Treat active + past_due as subscribed and
+  // route past_due users to manage their existing billing instead.
+  const status = statusQuery.data?.status;
+  const isPaid = status === "active" || status === "past_due";
+  const isPastDue = status === "past_due";
 
   function handleSubscribe() {
     if (!user) {
@@ -45,6 +50,13 @@ export default function PricingPage() {
       return;
     }
     setShowCheckout(true);
+  }
+
+  // Route into the in-app Plans & Billing pane (via the /canvas redirect
+  // the app shell reads) where the past_due warning + Stripe portal live —
+  // no duplicate portal logic on this public page.
+  function handleManageBilling() {
+    router.push(user ? "/canvas?billing=return" : "/login?redirect=/pricing");
   }
 
   function handleGetStarted() {
@@ -68,7 +80,9 @@ export default function PricingPage() {
             &larr; Back to pricing
           </button>
           <h1 className="lp-checkout-title">Subscribe to Dopl Pro</h1>
-          <p className="lp-checkout-sub">$7.99/month · cancel anytime</p>
+          <p className="lp-checkout-sub">
+            $7.99 per seat / month · seats sync automatically · cancel anytime
+          </p>
           <EmbeddedCheckoutForm />
         </section>
       </div>
@@ -82,7 +96,8 @@ export default function PricingPage() {
         <div className="lp-pricing-head">
           <h1 className="lp-pricing-title">Pricing</h1>
           <p className="lp-pricing-sub">
-            Try Dopl free for 24 hours. No credit card required.
+            Start free — every feature included. Upgrade to Pro at $7.99 per seat
+            when your team grows.
           </p>
         </div>
 
@@ -92,8 +107,10 @@ export default function PricingPage() {
               key={plan.id}
               plan={plan}
               isPaid={isPaid}
+              isPastDue={isPastDue}
               authChecked={authChecked}
               onSubscribe={handleSubscribe}
+              onManageBilling={handleManageBilling}
               onGetStarted={handleGetStarted}
             />
           ))}
@@ -106,14 +123,18 @@ export default function PricingPage() {
 function PlanCard({
   plan,
   isPaid,
+  isPastDue,
   authChecked,
   onSubscribe,
+  onManageBilling,
   onGetStarted,
 }: {
   plan: PlanDef;
   isPaid: boolean;
+  isPastDue: boolean;
   authChecked: boolean;
   onSubscribe: () => void;
+  onManageBilling: () => void;
   onGetStarted: () => void;
 }) {
   const popular = plan.id === "pro";
@@ -133,16 +154,18 @@ function PlanCard({
         )}
       </div>
       <p className="lp-plan-fine">
-        {plan.id === "basic" && "24-hour full-access trial on signup."}
-        {plan.id === "pro" && "Cancel anytime."}
+        {plan.id === "free" && "Free forever — no credit card required."}
+        {plan.id === "pro" && "Billed per member · cancel anytime."}
         {plan.id === "team" && "We'll tailor a plan to your team."}
       </p>
 
       <PlanCardCta
         plan={plan}
         isPaid={isPaid}
+        isPastDue={isPastDue}
         authChecked={authChecked}
         onSubscribe={onSubscribe}
+        onManageBilling={onManageBilling}
         onGetStarted={onGetStarted}
       />
 
@@ -159,8 +182,9 @@ function PlanCard({
 
       {popular && (
         <p className="lp-plan-guarantee">
-          <strong>Try before you pay</strong>
-          Every account starts with a 24-hour free trial — no card required.
+          <strong>Only pay for your team</strong>
+          $7.99 per member each month. Seats sync automatically as people join or
+          leave — cancel anytime.
         </p>
       )}
     </div>
@@ -170,17 +194,32 @@ function PlanCard({
 function PlanCardCta({
   plan,
   isPaid,
+  isPastDue,
   authChecked,
   onSubscribe,
+  onManageBilling,
   onGetStarted,
 }: {
   plan: PlanDef;
   isPaid: boolean;
+  isPastDue: boolean;
   authChecked: boolean;
   onSubscribe: () => void;
+  onManageBilling: () => void;
   onGetStarted: () => void;
 }) {
   if (plan.id === "pro") {
+    if (isPastDue) {
+      return (
+        <button
+          type="button"
+          className="lp-btn lp-btn--3d lp-plan-cta"
+          onClick={onManageBilling}
+        >
+          Payment issue — manage billing
+        </button>
+      );
+    }
     if (isPaid) {
       return (
         <button type="button" className="lp-btn lp-btn--3d-light lp-plan-cta" disabled>

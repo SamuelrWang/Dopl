@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronRight, Folder, FolderPlus, Star, X } from "lucide-react";
+import { ChevronRight, Clock, Folder, FolderPlus, Star, X } from "lucide-react";
+import { UpgradeModal } from "@/features/billing/components/upgrade-modal";
 import { cn } from "@/shared/lib/utils";
 import { Popover } from "@/shared/ui/popover-menu";
 import { SearchField } from "@/shared/ui/search-field";
@@ -42,6 +43,7 @@ interface Props {
   onFilterChange: (filter: ChatFilter) => void;
   counts: Record<ChatFilter, number>;
   showFolders: boolean;
+  workspaceId: string;
   workspaceSlug: string;
   isAdmin: boolean;
   currentUserId: string;
@@ -59,6 +61,8 @@ interface Props {
     scope: ChatScope,
     teamIds: string[]
   ) => Promise<void>;
+  /** Chats hidden by the free-plan retention window (0 on Pro). */
+  hiddenCount: number;
 }
 
 /**
@@ -75,6 +79,7 @@ export function ListPane({
   onFilterChange,
   counts,
   showFolders,
+  workspaceId,
   workspaceSlug,
   isAdmin,
   currentUserId,
@@ -86,6 +91,7 @@ export function ListPane({
   onToggleFolder,
   onCreateFolder,
   onFolderShareChange,
+  hiddenCount,
 }: Props) {
   const [folderDraft, setFolderDraft] = useState<string | null>(null);
 
@@ -242,7 +248,69 @@ export function ListPane({
           })
         )}
       </div>
+
+      {hiddenCount > 0 && (
+        <RetentionStrip
+          hiddenCount={hiddenCount}
+          workspaceId={workspaceId}
+          isAdmin={isAdmin}
+        />
+      )}
     </div>
+  );
+}
+
+/**
+ * Quiet upgrade affordance pinned at the bottom of the list: free
+ * workspaces hide chats older than the retention window (never deleted).
+ * Role-aware — admins/owners open the in-app upgrade checkout (the
+ * shared modal, scoped to this workspace); everyone else gets a quiet
+ * "ask an admin" note with no broken CTA (the /pricing checkout would
+ * 403 for them). Label-strip styling on design tokens — not a nag banner.
+ */
+function RetentionStrip({
+  hiddenCount,
+  workspaceId,
+  isAdmin,
+}: {
+  hiddenCount: number;
+  workspaceId: string;
+  isAdmin: boolean;
+}) {
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const label = `${hiddenCount} older chat${hiddenCount === 1 ? "" : "s"} hidden`;
+
+  if (!isAdmin) {
+    return (
+      <div className="flex items-center gap-2 border-t border-border-default bg-card-surface-subtle px-3.5 py-2 text-caption text-text-secondary">
+        <Clock size={12} className="shrink-0 text-text-muted" />
+        <span className="min-w-0 flex-1 truncate">
+          {label} — ask a workspace admin to upgrade for full history
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setUpgradeOpen(true)}
+        className="flex w-full items-center gap-2 border-t border-border-default bg-card-surface-subtle px-3.5 py-2 text-left text-caption text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary"
+      >
+        <Clock size={12} className="shrink-0 text-text-muted" />
+        <span className="min-w-0 flex-1 truncate">
+          {label} — upgrade to restore full history
+        </span>
+      </button>
+      <UpgradeModal
+        open={upgradeOpen}
+        onOpenChange={setUpgradeOpen}
+        workspaceId={workspaceId}
+        canManageBilling
+        reason="Free workspaces hide chats older than the retention window. Nothing is deleted — upgrade to Pro to restore full history."
+      />
+    </>
   );
 }
 

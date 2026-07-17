@@ -9,6 +9,7 @@ import type {
   Role,
 } from "../types";
 import { canGrantRole, memberManageDenial } from "../member-policy";
+import { syncSeatQuantity } from "@/features/billing/server/seats";
 import { requireWorkspaceRole } from "./authz";
 import {
   type InvitationRow,
@@ -339,6 +340,16 @@ export async function acceptInvitationByToken(
   // Membership is active now, so the team_members trigger accepts the rows.
   await joinInvitationTeams(status.invitation.id, status.invitation.workspaceId, userId);
 
+  // Seat count changed — reconcile the Pro subscription quantity (no-op on
+  // free workspaces / when Stripe is unconfigured). Best-effort: a billing
+  // hiccup must not fail the join.
+  await syncSeatQuantity(status.invitation.workspaceId).catch((err) => {
+    console.error(
+      `[invitations] syncSeatQuantity failed for workspace ${status.invitation.workspaceId}:`,
+      err instanceof Error ? err.message : err
+    );
+  });
+
   return {
     workspaceSlug: status.workspace.slug,
     workspacePublicId: status.workspace.publicId,
@@ -481,6 +492,15 @@ export async function removeMember(
     .eq("workspace_id", workspaceId)
     .eq("user_id", targetUserId);
   if (error) throw error;
+
+  // Seat count dropped — reconcile the Pro subscription quantity.
+  // Best-effort: a billing hiccup must not fail the removal.
+  await syncSeatQuantity(workspaceId).catch((err) => {
+    console.error(
+      `[invitations] syncSeatQuantity failed for workspace ${workspaceId}:`,
+      err instanceof Error ? err.message : err
+    );
+  });
 }
 
 async function countActiveOwners(workspaceId: string): Promise<number> {

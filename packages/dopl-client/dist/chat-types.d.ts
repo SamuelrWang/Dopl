@@ -64,6 +64,14 @@ export interface Chat {
 export type ChatDetail = Chat & {
     messages: ChatMessage[];
 };
+/**
+ * List read result: the visible chats plus how many the workspace's
+ * free-plan retention window excluded (0 on Pro / full-history plans).
+ */
+export interface ChatList {
+    chats: Chat[];
+    hiddenCount: number;
+}
 export interface ChatMessageInput {
     role: ChatMessageRole;
     summary: string;

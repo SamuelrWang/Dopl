@@ -5,6 +5,8 @@
 import { redirect } from "next/navigation";
 import { getUser } from "@/shared/supabase/server";
 import { resolvePageWorkspace } from "@/features/workspaces/server/segment";
+import { requireWorkspaceRole } from "@/features/workspaces/server/authz";
+import { meetsMinRole } from "@/features/workspaces/types";
 import { workspaceSegment } from "@/features/workspaces/url";
 import { OntologyView } from "@/features/ontology/components/ontology-view";
 
@@ -23,12 +25,15 @@ export default async function OntologyClusterPage({ params }: PageProps) {
     user.id,
     `ontology/${clusterSlug}`
   );
+  const role = await requireWorkspaceRole(workspace.id, user.id, "viewer");
 
   return (
     <OntologyView
       workspaceId={workspace.id}
       workspaceSegment={workspaceSegment(workspace)}
       initialClusterSlug={clusterSlug}
+      canManageBilling={meetsMinRole(role, "admin")}
+      canEdit={meetsMinRole(role, "member")}
     />
   );
 }

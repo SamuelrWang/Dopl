@@ -1,28 +1,29 @@
-import { NextRequest, NextResponse } from "next/server";
-import { withUserAuth } from "@/shared/auth/with-auth";
-import { getUserSubscription } from "@/features/billing/server/subscriptions";
-import { hasActiveAccess } from "@/features/billing/server/access";
+import { NextResponse } from "next/server";
+import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
+import { getWorkspaceEntitlements } from "@/features/billing/server/entitlements";
+import { getWorkspaceBilling } from "@/features/billing/server/workspace-billing";
 
-async function handleGet(
-  _request: NextRequest,
-  { userId }: { userId: string }
-) {
-  const sub = await getUserSubscription(userId);
-  const access = await hasActiveAccess(userId);
+/**
+ * Billing status for the active workspace — the entitlements summary the
+ * UI renders (consumed by `useWorkspaceEntitlements`). Any active member
+ * may read it.
+ */
+export const GET = withWorkspaceAuth(async (_request, { workspaceId }) => {
+  const [entitlements, billing] = await Promise.all([
+    getWorkspaceEntitlements(workspaceId),
+    getWorkspaceBilling(workspaceId),
+  ]);
 
   return NextResponse.json({
-    // Stable shape for legacy UI consumers.
-    tier: sub.tier,
-    status: sub.status,
-    subscription_period_end: sub.subscription_period_end,
-    has_stripe_customer: !!sub.stripe_customer_id,
-    // New access fields — drive the trial countdown + paywall UI.
-    access: {
-      allowed: access.allowed,
-      reason: access.reason,
-      trial_expires_at: access.trial_expires_at,
-    },
+    plan: entitlements.plan,
+    status: entitlements.status,
+    memberCount: entitlements.memberCount,
+    seatCount: entitlements.seatCount,
+    objectCap: entitlements.objectCap,
+    objectsUsed: entitlements.objectsUsed,
+    canCreateObjects: entitlements.canCreateObjects,
+    chatsWindowDays: entitlements.chatsWindowDays,
+    subscription_period_end: billing?.currentPeriodEnd ?? null,
+    has_stripe_customer: !!billing?.stripeCustomerId,
   });
-}
-
-export const GET = withUserAuth(handleGet);
+});

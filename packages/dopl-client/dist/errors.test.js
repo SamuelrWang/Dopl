@@ -15,6 +15,20 @@ const errors_js_1 = require("./errors.js");
             code: "RATE_LIMITED",
             apiMessage: "Too many requests",
             details: { retryAfter: 5 },
+            upgradeUrl: null,
+        });
+    });
+    (0, vitest_1.it)("extracts code + message + upgrade_url from flat entitlement shape", () => {
+        const parsed = (0, errors_js_1.parseApiErrorBody)(JSON.stringify({
+            error: "over_free_cap",
+            message: "This workspace has reached the free plan limit of 1,000 objects.",
+            upgrade_url: "https://www.usedopl.com/acme/settings/billing",
+        }));
+        (0, vitest_1.expect)(parsed).toEqual({
+            code: "over_free_cap",
+            apiMessage: "This workspace has reached the free plan limit of 1,000 objects.",
+            details: undefined,
+            upgradeUrl: "https://www.usedopl.com/acme/settings/billing",
         });
     });
     (0, vitest_1.it)("returns nulls for empty body", () => {
@@ -22,6 +36,7 @@ const errors_js_1 = require("./errors.js");
             code: null,
             apiMessage: null,
             details: undefined,
+            upgradeUrl: null,
         });
     });
     (0, vitest_1.it)("returns nulls for malformed JSON", () => {
@@ -29,6 +44,7 @@ const errors_js_1 = require("./errors.js");
             code: null,
             apiMessage: null,
             details: undefined,
+            upgradeUrl: null,
         });
     });
     (0, vitest_1.it)("returns nulls for HTML body", () => {
@@ -37,6 +53,7 @@ const errors_js_1 = require("./errors.js");
             code: null,
             apiMessage: null,
             details: undefined,
+            upgradeUrl: null,
         });
     });
     (0, vitest_1.it)("returns nulls when error field is missing", () => {
@@ -44,6 +61,7 @@ const errors_js_1 = require("./errors.js");
             code: null,
             apiMessage: null,
             details: undefined,
+            upgradeUrl: null,
         });
     });
     (0, vitest_1.it)("handles partial shape (message only)", () => {
@@ -82,6 +100,19 @@ const errors_js_1 = require("./errors.js");
     (0, vitest_1.it)("uses apiMessage alone when code absent", () => {
         const err = new errors_js_1.DoplApiError(500, JSON.stringify({ error: { message: "bare message" } }));
         (0, vitest_1.expect)(err.message).toBe("bare message");
+    });
+    (0, vitest_1.it)("surfaces the human message + upgrade link for an over_free_cap 403", () => {
+        const err = new errors_js_1.DoplApiError(403, JSON.stringify({
+            error: "over_free_cap",
+            message: "This workspace has reached the free plan limit of 1,000 objects.",
+            upgrade_url: "https://www.usedopl.com/acme/settings/billing",
+        }));
+        (0, vitest_1.expect)(err.code).toBe("over_free_cap");
+        (0, vitest_1.expect)(err.apiMessage).toBe("This workspace has reached the free plan limit of 1,000 objects.");
+        (0, vitest_1.expect)(err.upgradeUrl).toBe("https://www.usedopl.com/acme/settings/billing");
+        (0, vitest_1.expect)(err.message).toContain("free plan limit");
+        (0, vitest_1.expect)(err.message).toContain("https://www.usedopl.com/acme/settings/billing");
+        (0, vitest_1.expect)(err.message).not.toMatch(/^HTTP 403/);
     });
 });
 (0, vitest_1.describe)("DoplAuthError", () => {

@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { Plus } from "lucide-react";
+import { UpgradeModal } from "@/features/billing/components/upgrade-modal";
+import { useWorkspaceEntitlements } from "@/features/billing/components/use-workspace-entitlements";
 import { cn } from "@/shared/lib/utils";
 import { useOntology } from "../hooks/use-ontology";
 import { OntologyResourcesProvider } from "../hooks/use-workspace-resources";
@@ -13,6 +15,11 @@ interface Props {
   workspaceSegment: string;
   /** Deep-linked cluster (`/[ws]/ontology/[clusterSlug]`); first cluster when omitted. */
   initialClusterSlug?: string;
+  /** Admin/owner — controls whether the upgrade prompt offers checkout. */
+  canManageBilling?: boolean;
+  /** Member+ — viewers can read the ontology but can't create, so their
+   *  create affordances (New cluster / Column / Add new) are hidden. */
+  canEdit?: boolean;
 }
 
 /**
@@ -22,8 +29,19 @@ interface Props {
  * cluster is URL-addressed by slug (history.replaceState on switch, so
  * tab flips don't remount the page).
  */
-export function OntologyView({ workspaceId, workspaceSegment, initialClusterSlug }: Props) {
-  const { graph, status, dispatch, createCluster, createObject } = useOntology(workspaceId);
+export function OntologyView({
+  workspaceId,
+  workspaceSegment,
+  initialClusterSlug,
+  canManageBilling = false,
+  canEdit = true,
+}: Props) {
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const { graph, status, dispatch, createCluster, createObject } = useOntology(
+    workspaceId,
+    () => setUpgradeOpen(true)
+  );
+  const ent = useWorkspaceEntitlements(workspaceId);
   const [clusterId, setClusterId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -43,9 +61,24 @@ export function OntologyView({ workspaceId, workspaceSegment, initialClusterSlug
     }
   };
 
+  // A new cluster creates two objects (a column + its first card), so it
+  // needs headroom of 2. Pre-check that — not just the exact cap — so the
+  // create can't pass at 999/1000 then trip the server cap mid-sequence,
+  // leaving an orphaned partial cluster behind a raw error toast. Over the
+  // cap (or without room for both), open the upgrade prompt instead.
   const handleCreateCluster = async () => {
+    if (
+      ent.overCap ||
+      (ent.isCapped &&
+        ent.objectCap !== null &&
+        ent.objectsUsed + 2 > ent.objectCap)
+    ) {
+      setUpgradeOpen(true);
+      return;
+    }
     const created = await createCluster();
     if (created) selectCluster(created.id);
+    if (ent.isCapped) ent.refresh();
   };
 
   // Cards inherit the column's template fields, relationships, and
@@ -53,8 +86,13 @@ export function OntologyView({ workspaceId, workspaceSegment, initialClusterSlug
   const handleCreateObject = async (
     target: { clusterId: string } | { parentObjectId: string }
   ) => {
+    if (ent.overCap) {
+      setUpgradeOpen(true);
+      return;
+    }
     const object = await createObject(target);
     if (object) setSelectedId(object.id);
+    if (ent.isCapped) ent.refresh();
   };
 
   if (status === "loading") {
@@ -78,15 +116,19 @@ export function OntologyView({ workspaceId, workspaceSegment, initialClusterSlug
       <Frame>
         <div className="m-auto flex flex-col items-center gap-3">
           <p className="text-lead text-text-secondary">
-            No ontology yet — start with your first cluster.
+            {canEdit
+              ? "No ontology yet — start with your first cluster."
+              : "No ontology yet — a workspace member can create the first cluster."}
           </p>
-          <button
-            type="button"
-            onClick={handleCreateCluster}
-            className="auth-btn-3d rounded-lg px-4 py-2 text-lead font-semibold text-white"
-          >
-            New cluster
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={handleCreateCluster}
+              className="auth-btn-3d rounded-lg px-4 py-2 text-lead font-semibold text-white"
+            >
+              New cluster
+            </button>
+          )}
         </div>
       </Frame>
     );
@@ -114,14 +156,16 @@ export function OntologyView({ workspaceId, workspaceSegment, initialClusterSlug
                 <span className="text-micro text-text-muted">{c.columnIds.length}</span>
               </button>
             ))}
-            <button
-              type="button"
-              onClick={handleCreateCluster}
-              aria-label="New cluster"
-              className="flex h-6 w-6 items-center justify-center rounded-[6px] text-text-muted transition hover:text-text-primary"
-            >
-              <Plus size={12} />
-            </button>
+            {canEdit && (
+              <button
+                type="button"
+                onClick={handleCreateCluster}
+                aria-label="New cluster"
+                className="flex h-6 w-6 items-center justify-center rounded-[6px] text-text-muted transition hover:text-text-primary"
+              >
+                <Plus size={12} />
+              </button>
+            )}
           </div>
           <div className="flex min-w-0 flex-1 items-baseline gap-2">
             <input
@@ -149,14 +193,25 @@ export function OntologyView({ workspaceId, workspaceSegment, initialClusterSlug
               placeholder="What this ontology anchors (agents read this to route)…"
             />
           </div>
-          <button
-            type="button"
-            onClick={() => handleCreateObject({ clusterId: cluster.id })}
-            className="btn-light flex h-7 shrink-0 items-center gap-1 rounded-md px-2.5 text-small font-medium text-text-primary"
-          >
-            <Plus size={12} /> Column
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => handleCreateObject({ clusterId: cluster.id })}
+              className="btn-light flex h-7 shrink-0 items-center gap-1 rounded-md px-2.5 text-small font-medium text-text-primary"
+            >
+              <Plus size={12} /> Column
+            </button>
+          )}
         </div>
+
+        {!ent.loading && ent.isCapped && ent.objectCap !== null && (
+          <CapNotice
+            used={ent.objectsUsed}
+            cap={ent.objectCap}
+            over={ent.overCap}
+            onUpgrade={() => setUpgradeOpen(true)}
+          />
+        )}
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
           <KanbanBoard
@@ -164,6 +219,7 @@ export function OntologyView({ workspaceId, workspaceSegment, initialClusterSlug
             graph={graph}
             dispatch={dispatch}
             selectedId={selectedId}
+            canEdit={canEdit}
             onSelect={setSelectedId}
             onCreateObject={(columnId) => handleCreateObject({ parentObjectId: columnId })}
           />
@@ -179,7 +235,73 @@ export function OntologyView({ workspaceId, workspaceSegment, initialClusterSlug
           )}
         </div>
       </Frame>
+
+      <UpgradeModal
+        open={upgradeOpen}
+        onOpenChange={setUpgradeOpen}
+        workspaceId={workspaceId}
+        canManageBilling={canManageBilling}
+        reason={
+          ent.objectCap !== null
+            ? `This workspace hit the Free limit of ${ent.objectCap.toLocaleString()} ontology objects. Nothing was deleted — upgrade to keep adding.`
+            : undefined
+        }
+      />
     </OntologyResourcesProvider>
+  );
+}
+
+/**
+ * Slim inline cap strip for a capped Free workspace: a quiet near-cap
+ * label at ≥90%, a warning-toned strip once creates are frozen. Both
+ * offer the upgrade prompt; nothing is ever deleted.
+ */
+function CapNotice({
+  used,
+  cap,
+  over,
+  onUpgrade,
+}: {
+  used: number;
+  cap: number;
+  over: boolean;
+  onUpgrade: () => void;
+}) {
+  const nearCap = used / cap >= 0.9;
+  if (!over && !nearCap) return null;
+
+  if (over) {
+    return (
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-warning/25 bg-warning/10 px-3 py-1.5 text-caption">
+        <span className="text-warning">
+          {used.toLocaleString()} / {cap.toLocaleString()} objects (cards and columns) —
+          new objects are paused on Free (nothing was deleted; reads and edits still
+          work).
+        </span>
+        <button
+          type="button"
+          onClick={onUpgrade}
+          className="shrink-0 cursor-pointer font-semibold text-warning underline"
+        >
+          Upgrade for unlimited
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border-subtle bg-card-surface-subtle px-3 py-1.5 text-caption">
+      <span className="text-text-secondary">
+        {used.toLocaleString()} / {cap.toLocaleString()} objects on Free
+      </span>
+      <button
+        type="button"
+        onClick={onUpgrade}
+        className="shrink-0 cursor-pointer font-semibold text-link"
+      >
+        Upgrade for unlimited
+      </button>
+    </div>
   );
 }
 

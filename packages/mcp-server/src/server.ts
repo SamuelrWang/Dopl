@@ -17,6 +17,7 @@ import { registerPacksTools } from "./tools/packs.js";
 import { registerMapTool } from "./tools/map.js";
 import { registerSearchTool } from "./tools/search.js";
 import { registerOntologyTool } from "./tools/ontology.js";
+import { entitlementDenied } from "./tools/respond.js";
 import { SKILL_AUTHORING_GUIDE } from "./prompts/skill-authoring-guide.js";
 import { packageVersion } from "./version.js";
 
@@ -139,6 +140,24 @@ async function appendDoplStatus(
     content.push({ type: "text", text: footer.trimStart() });
   }
   return { ...response, content };
+}
+
+/**
+ * Run a tool handler, converting an over-free-cap entitlement denial
+ * (a 403 thrown by any write op through @dopl/client) into a friendly
+ * tool error instead of an opaque framework throw. Every other error
+ * rethrows unchanged, preserving existing behavior.
+ */
+async function runWithEntitlementGuard(
+  run: () => Promise<ToolResponse>,
+): Promise<ToolResponse> {
+  try {
+    return await run();
+  } catch (e) {
+    const denied = entitlementDenied(e);
+    if (denied) return denied;
+    throw e;
+  }
 }
 
 /**
@@ -420,10 +439,13 @@ export function createServer(
         // client.* call inside it transparently picks up the override
         // workspace id in its X-Workspace-Id header. Returns to the
         // session default (or no override) the moment this scope exits.
-        return workspaceContext.run(resolved.id, () => handler(innerArgs));
+        const workspaceId = resolved.id;
+        return runWithEntitlementGuard(() =>
+          workspaceContext.run(workspaceId, () => handler(innerArgs)),
+        );
       }
 
-      return handler(innerArgs);
+      return runWithEntitlementGuard(() => handler(innerArgs));
     };
 
     server.tool(

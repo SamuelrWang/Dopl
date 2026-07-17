@@ -266,8 +266,13 @@ async function opUpdate(client, chatId, args) {
         return (0, respond_1.err)(`Update failed: ${errorMessage(e)}`);
     }
 }
+function hiddenNote(hiddenCount) {
+    return (`_${hiddenCount} older chat${hiddenCount === 1 ? " is" : "s are"} hidden by ` +
+        `this workspace's free-plan history window — nothing is deleted. ` +
+        `Upgrade to Pro to see full history._`);
+}
 async function opList(client, scope, query) {
-    const all = await client.listChats();
+    const { chats: all, hiddenCount } = await client.listChats();
     const q = query?.trim().toLowerCase();
     const chats = all.filter((c) => {
         if (scope === "private" && c.visibility !== "private")
@@ -280,14 +285,18 @@ async function opList(client, scope, query) {
         return true;
     });
     if (chats.length === 0) {
-        return (0, respond_1.ok)(query || scope !== "all"
+        const empty = query || scope !== "all"
             ? "No chats match that filter."
-            : "The archive is empty — no chats exported yet. Use op=\"export\" to save this session.");
+            : "The archive is empty — no chats exported yet. Use op=\"export\" to save this session.";
+        return (0, respond_1.ok)(hiddenCount > 0 ? `${empty}\n\n${hiddenNote(hiddenCount)}` : empty);
     }
     const lines = [];
     lines.push(`## Chat archive — ${chats.length} chat${chats.length === 1 ? "" : "s"}\n`);
     for (const c of chats) {
         lines.push(formatChatLine(c));
+    }
+    if (hiddenCount > 0) {
+        lines.push(`\n${hiddenNote(hiddenCount)}`);
     }
     lines.push(`\nUse dopl_chats(op="get", chat_id=...) to read a transcript.`);
     return (0, respond_1.ok)(lines.join("\n"));

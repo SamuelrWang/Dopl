@@ -11,6 +11,8 @@ import {
   getChat,
   updateChatHeader,
 } from "@/features/chats/server/service";
+import { ChatOutsideRetentionError } from "@/features/chats/server/errors";
+import { chatRetentionDeniedBody } from "@/features/chats/server/retention";
 import { ChatUpdateSchema } from "@/features/chats/schema";
 
 async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
@@ -19,6 +21,14 @@ async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
     const chat = await getChat(ctx, requireChatId(auth.params));
     return NextResponse.json({ chat });
   } catch (err) {
+    // Hidden by the free-plan retention window — return the friendly
+    // upgrade envelope (flat shape, mirroring billing's denial body)
+    // rather than the generic chat error envelope.
+    if (err instanceof ChatOutsideRetentionError) {
+      return NextResponse.json(chatRetentionDeniedBody(), {
+        status: 403,
+      });
+    }
     return toChatErrorResponse(err);
   }
 }

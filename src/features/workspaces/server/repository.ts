@@ -112,6 +112,21 @@ export async function findDefaultWorkspaceForUser(
   return data ? mapWorkspaceRow(data as WorkspaceRow) : null;
 }
 
+/**
+ * Count workspaces OWNED by a user. Used by the Stripe webhook's
+ * grandfather path to detect ambiguous legacy-subscription mappings (a user
+ * who owns more than one workspace) — the default-workspace fallback then
+ * warrants a warning because the legacy sub could belong to any of them.
+ */
+export async function countWorkspacesOwnedBy(userId: string): Promise<number> {
+  const { count, error } = await supabaseAdmin()
+    .from("workspaces")
+    .select("id", { count: "exact", head: true })
+    .eq("owner_id", userId);
+  if (error) throw error;
+  return count ?? 0;
+}
+
 export async function listWorkspacesForUser(userId: string): Promise<Workspace[]> {
   const db = supabaseAdmin();
   const { data, error } = await db

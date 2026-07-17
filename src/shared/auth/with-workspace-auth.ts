@@ -3,6 +3,7 @@ import { HttpError } from "@/shared/lib/http-error";
 import { resolveActiveWorkspace } from "@/features/workspaces/server/service";
 import type { Role } from "@/features/workspaces/types";
 import { meetsMinRole } from "@/features/workspaces/types";
+import { logMcpToolCall } from "@/features/analytics/server/mcp-tool-calls";
 import { withUserAuth } from "./with-auth";
 
 export interface WorkspaceAuthContext {
@@ -112,6 +113,23 @@ export function withWorkspaceAuth(
           ).toResponseBody(),
           { status: 403 }
         );
+      }
+      // Per-op MCP usage instrumentation. Agent (OAuth-token) callers only —
+      // the loopback sends a granular `X-MCP-Tool` header ("kb_write_file",
+      // "ontology_create_object", ...). Split on the first "_" into tool +
+      // op; is_write is the reliable HTTP-method signal. Fire-and-forget.
+      if (ctx.agentTokenId) {
+        const mcpTool = request.headers.get("x-mcp-tool");
+        if (mcpTool) {
+          const sep = mcpTool.indexOf("_");
+          void logMcpToolCall({
+            workspaceId: workspace.id,
+            userId: ctx.userId,
+            tool: sep > 0 ? mcpTool.slice(0, sep) : mcpTool,
+            op: sep > 0 ? mcpTool.slice(sep + 1) : "",
+            isWrite: request.method !== "GET",
+          });
+        }
       }
       return handler(request, {
         userId: ctx.userId,

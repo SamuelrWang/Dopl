@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { withUserAuth } from "@/shared/auth/with-auth";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { getStripe } from "@/features/billing/server/stripe";
-import { getUserSubscription } from "@/features/billing/server/subscriptions";
+import { getProfileBillingRef } from "@/features/billing/server/subscriptions";
 
 export const DELETE = withUserAuth(async (_request, { userId, agentTokenId }) => {
   try {
@@ -91,11 +91,35 @@ export const DELETE = withUserAuth(async (_request, { userId, agentTokenId }) =>
     // Supabase row is gone. We abort the delete if cancellation fails
     // so the user can retry rather than silently losing the ability to
     // cancel their subscription from the UI.
-    const sub = await getUserSubscription(user.id).catch(() => null);
-    if (sub?.stripe_subscription_id) {
+    //
+    // Two sources: the legacy per-user subscription (profiles) and the
+    // per-workspace subscriptions on the user's owned workspaces. The
+    // shared-workspace guard above already ensured every owned workspace
+    // is solo, so cascading them away is safe once billing is stopped.
+    const subscriptionIds = new Set<string>();
+    const profileRef = await getProfileBillingRef(user.id).catch(() => null);
+    if (profileRef?.stripeSubscriptionId) {
+      subscriptionIds.add(profileRef.stripeSubscriptionId);
+    }
+    if (ownedIds.length > 0) {
+      const { data: ownedBilling } = await admin
+        .from("workspace_billing")
+        .select("stripe_subscription_id")
+        .in("workspace_id", ownedIds)
+        .not("stripe_subscription_id", "is", null);
+      for (const row of (ownedBilling ?? []) as Array<{
+        stripe_subscription_id: string | null;
+      }>) {
+        if (row.stripe_subscription_id)
+          subscriptionIds.add(row.stripe_subscription_id);
+      }
+    }
+    if (subscriptionIds.size > 0) {
       try {
         const stripe = getStripe();
-        await stripe.subscriptions.cancel(sub.stripe_subscription_id);
+        for (const subscriptionId of subscriptionIds) {
+          await stripe.subscriptions.cancel(subscriptionId);
+        }
       } catch (err) {
         console.error(
           `[delete-account] Stripe subscription cancel failed for user ${user.id}:`,

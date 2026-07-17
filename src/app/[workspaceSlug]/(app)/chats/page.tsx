@@ -33,7 +33,10 @@ export default async function ChatsPage({ params }: PageProps) {
     role: membership.role,
     agentTokenId: null,
   });
-  const [chats, folders] = await Promise.all([listChats(ctx), listFolders(ctx)]);
+  const [{ chats, hiddenCount }, folders] = await Promise.all([
+    listChats(ctx),
+    listFolders(ctx),
+  ]);
 
   return (
     <ChatsView
@@ -43,6 +46,7 @@ export default async function ChatsPage({ params }: PageProps) {
       role={membership.role}
       initialChats={chats}
       initialFolders={folders}
+      hiddenCount={hiddenCount}
     />
   );
 }

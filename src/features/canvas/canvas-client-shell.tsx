@@ -18,7 +18,6 @@ import { CanvasGridSync } from "@/features/canvas/canvas-grid-sync";
 import { useLayoutSnapshot } from "@/features/canvas/use-layout-snapshot";
 import { Canvas } from "@/features/canvas/canvas";
 import { FixedActionBar } from "@/features/canvas/fixed-action-bar";
-import { PaywallGate } from "@/features/billing/components/paywall-gate";
 import type { CanvasState } from "@/features/canvas/types";
 
 /**
@@ -99,7 +98,6 @@ export default function CanvasClientShell({
       <div className={shellStyles.lightScope}>
         <FixedActionBar />
       </div>
-      <PaywallGate />
     </CanvasProvider>
   );
 }

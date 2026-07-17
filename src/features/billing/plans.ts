@@ -1,10 +1,13 @@
 /**
  * Plan definitions — the single source for the settings-modal Plans &
- * Billing pane and the public /pricing page. Checkout itself only sells
- * the live monthly Pro price; Basic and Team are positioning columns.
+ * Billing pane and the public /pricing page. Plans are WORKSPACE-level:
+ * Free and Pro (billed $7.99 per seat per month, seats = workspace
+ * members). Team is a "Custom / contact us" positioning column.
+ * Checkout only sells the live per-seat Pro price; Free and Team are
+ * positioning columns.
  */
 
-export type PlanId = "basic" | "pro" | "team";
+export type PlanId = "free" | "pro" | "team";
 
 export interface PlanDef {
   id: PlanId;
@@ -17,32 +20,31 @@ export interface PlanDef {
 
 export const PLANS: ReadonlyArray<PlanDef> = [
   {
-    id: "basic",
-    audience: "For individuals",
-    name: "Basic",
+    id: "free",
+    audience: "For individuals & small teams",
+    name: "Free",
     priceMonthly: "Free",
     priceNote: "",
     features: [
-      "1 workspace",
-      "Up to 3 knowledge bases",
-      "Core skills library",
-      "Connect 1 MCP client",
+      "Unlimited usage on your own",
+      "Every feature included",
+      "Up to 1,000 ontology objects (cards and columns) once a workspace has 2+ members",
+      "90 days of chat history",
       "Community support",
     ],
   },
   {
     id: "pro",
-    audience: "For individuals and teams",
+    audience: "For growing teams",
     name: "Pro",
     priceMonthly: "$7.99",
-    priceNote: "per month",
+    priceNote: "/ seat / month",
     features: [
-      "Everything in Basic",
-      "Unlimited knowledge bases & skills",
-      "Unlimited MCP clients",
-      "Team collaboration",
+      "Everything in Free",
+      "Uncapped ontology objects",
+      "Full chat history",
       "Priority support",
-      "Early access to new features",
+      "Billed per member — seats sync automatically",
     ],
   },
   {
@@ -53,11 +55,10 @@ export const PLANS: ReadonlyArray<PlanDef> = [
     priceNote: "",
     features: [
       "Everything in Pro",
-      "Advanced roles & access control",
       "SSO / SAML",
+      "Advanced roles & access control",
       "Audit logs",
       "Dedicated support",
-      "Custom onboarding",
     ],
   },
 ];

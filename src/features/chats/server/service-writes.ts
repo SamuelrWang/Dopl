@@ -20,7 +20,8 @@ import {
 import { mapChatRow, mapOwner } from "./dto";
 import type { ChatFolderRow, ChatRow } from "./dto";
 import * as repo from "./repository";
-import { getChat } from "./service-reads";
+import { resolveChatsWindow } from "./retention";
+import { readChatDetail } from "./service-reads";
 import {
   UNIQUE_VIOLATION,
   deriveFormat,
@@ -35,8 +36,9 @@ import {
 /**
  * Write-side chats service: agent-facing export (create / idempotent
  * re-export) plus the owner-only mutations (append transcript, update
- * header + sharing/folder, delete). Reads back through `getChat` so the
- * caller gets the visibility-filtered detail.
+ * header + sharing/folder, delete). Reads back through `readChatDetail`
+ * (visibility-filtered, but WITHOUT the retention window) so echoing a
+ * just-written chat never 403s on a backfilled old session.
  */
 
 // ─── Export (create / idempotent re-export) ─────────────────────────
@@ -134,7 +136,9 @@ export async function exportChat(
     await syncChatGrantsToFolder(ctx, chat.id, folderRow);
   }
 
-  return getChat(ctx, chat.id);
+  // Echo back the owner's just-written chat without the retention window —
+  // a backfilled old session must not 403 on the response.
+  return readChatDetail(ctx, chat.id);
 }
 
 // ─── Mutations (owner-only) ─────────────────────────────────────────
@@ -154,7 +158,21 @@ export async function appendMessages(
   if (format !== chat.format) {
     await repo.updateChat(chat.id, { format });
   }
-  return getChat(ctx, chat.id);
+
+  const [{ since }, detail] = await Promise.all([
+    resolveChatsWindow(ctx.workspaceId),
+    readChatDetail(ctx, chat.id),
+  ]);
+  // The append itself is always allowed, but the echo must not become a
+  // retention-window bypass: appending one message to a >90-day chat on a
+  // free workspace can't be used to read the whole hidden transcript back.
+  // `messageCount` stays honest (set inside readChatDetail); only the
+  // transcript body is withheld. Consumers (MCP `op=append`) read the count,
+  // not the messages, so this stays compatible.
+  if (since !== null && detail.sessionDate < since) {
+    return { ...detail, messages: [] };
+  }
+  return detail;
 }
 
 export async function updateChatHeader(

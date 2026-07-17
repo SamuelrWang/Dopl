@@ -34,6 +34,18 @@ export declare function isNotFound(e: unknown): boolean;
  */
 export declare function isAlreadyExists(e: unknown): boolean;
 /**
+ * Turn a thrown Dopl API error into a friendly tool error when it's a
+ * plan-gate denial (HTTP 403, flat entitlement envelope), else null so
+ * the caller rethrows.
+ *
+ * Duck-typed on `.code` / `.apiMessage` / `.upgradeUrl` (populated by
+ * `@dopl/client`'s DoplApiError) so it works across the module boundary
+ * without importing the error class. Surfaces the server's human message
+ * and upgrade link VERBATIM so the agent sees an actionable "upgrade to
+ * add more" — not a generic "request failed".
+ */
+export declare function entitlementDenied(e: unknown): ToolResponse | null;
+/**
  * Returns an error response when any of `required` params is absent for the
  * given op, or null when they're all present. Treats undefined / null /
  * empty-string as absent — the same "no value" semantics the old per-tool

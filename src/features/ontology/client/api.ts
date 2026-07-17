@@ -4,6 +4,9 @@ import { ApiError, apiRequest } from "@/shared/api/api-client";
 import type { OntologyCluster, OntologyObject, OntologySnapshot } from "../types";
 import type { OntologyObjectUpdateInput } from "../schema";
 
+/** Plan-gate code the free object-cap denial carries (ENGINEERING §8). */
+export const OVER_FREE_CAP_CODE = "over_free_cap";
+
 export class OntologyApiError extends Error {
   readonly status: number;
   readonly code: string;
@@ -13,6 +16,16 @@ export class OntologyApiError extends Error {
     this.status = status;
     this.code = code;
   }
+}
+
+/**
+ * True when a create failed because the workspace is over its free object
+ * cap. The route returns the flat plan-gate envelope (`{ error:
+ * "over_free_cap", ... }`, 403) which `apiRequest` surfaces as the error
+ * code — the UI opens the upgrade modal instead of a generic save toast.
+ */
+export function isOverFreeCapError(err: unknown): boolean {
+  return err instanceof OntologyApiError && err.code === OVER_FREE_CAP_CODE;
 }
 
 async function request<T>(

@@ -15,8 +15,8 @@ import { ChatExportSchema } from "@/features/chats/schema";
 async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const ctx = buildChatContext(auth);
-    const chats = await listChats(ctx);
-    return NextResponse.json({ chats });
+    const { chats, hiddenCount } = await listChats(ctx);
+    return NextResponse.json({ chats, hiddenCount });
   } catch (err) {
     return toChatErrorResponse(err);
   }

@@ -78,6 +78,7 @@ export type {
   ChatFolder,
   ChatFolderAccessMode,
   ChatFolderUpdateInput,
+  ChatList,
   ChatMessage,
   ChatMessageInput,
   ChatMessageRole,

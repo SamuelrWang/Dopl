@@ -20,7 +20,7 @@ export async function findOnboardedAt(userId: string): Promise<string | null> {
  * Stamp onboarding completion. Conditional update (`onboarded_at IS
  * NULL`) so concurrent/repeat submits are no-ops; returns whether this
  * call won — callers use that to fire the completion event exactly
- * once. Mirrors startTrialIfNew in billing.
+ * once (a single-writer idempotent-stamp pattern).
  */
 export async function markOnboarded(userId: string): Promise<boolean> {
   const { data, error } = await supabaseAdmin()

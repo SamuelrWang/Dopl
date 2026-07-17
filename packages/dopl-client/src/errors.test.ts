@@ -23,6 +23,24 @@ describe("parseApiErrorBody", () => {
       code: "RATE_LIMITED",
       apiMessage: "Too many requests",
       details: { retryAfter: 5 },
+      upgradeUrl: null,
+    });
+  });
+
+  it("extracts code + message + upgrade_url from flat entitlement shape", () => {
+    const parsed = parseApiErrorBody(
+      JSON.stringify({
+        error: "over_free_cap",
+        message: "This workspace has reached the free plan limit of 1,000 objects.",
+        upgrade_url: "https://www.usedopl.com/acme/settings/billing",
+      })
+    );
+    expect(parsed).toEqual({
+      code: "over_free_cap",
+      apiMessage:
+        "This workspace has reached the free plan limit of 1,000 objects.",
+      details: undefined,
+      upgradeUrl: "https://www.usedopl.com/acme/settings/billing",
     });
   });
 
@@ -31,6 +49,7 @@ describe("parseApiErrorBody", () => {
       code: null,
       apiMessage: null,
       details: undefined,
+      upgradeUrl: null,
     });
   });
 
@@ -39,6 +58,7 @@ describe("parseApiErrorBody", () => {
       code: null,
       apiMessage: null,
       details: undefined,
+      upgradeUrl: null,
     });
   });
 
@@ -48,6 +68,7 @@ describe("parseApiErrorBody", () => {
       code: null,
       apiMessage: null,
       details: undefined,
+      upgradeUrl: null,
     });
   });
 
@@ -56,6 +77,7 @@ describe("parseApiErrorBody", () => {
       code: null,
       apiMessage: null,
       details: undefined,
+      upgradeUrl: null,
     });
   });
 
@@ -110,6 +132,29 @@ describe("DoplApiError", () => {
       JSON.stringify({ error: { message: "bare message" } })
     );
     expect(err.message).toBe("bare message");
+  });
+
+  it("surfaces the human message + upgrade link for an over_free_cap 403", () => {
+    const err = new DoplApiError(
+      403,
+      JSON.stringify({
+        error: "over_free_cap",
+        message: "This workspace has reached the free plan limit of 1,000 objects.",
+        upgrade_url: "https://www.usedopl.com/acme/settings/billing",
+      })
+    );
+    expect(err.code).toBe("over_free_cap");
+    expect(err.apiMessage).toBe(
+      "This workspace has reached the free plan limit of 1,000 objects."
+    );
+    expect(err.upgradeUrl).toBe(
+      "https://www.usedopl.com/acme/settings/billing"
+    );
+    expect(err.message).toContain("free plan limit");
+    expect(err.message).toContain(
+      "https://www.usedopl.com/acme/settings/billing"
+    );
+    expect(err.message).not.toMatch(/^HTTP 403/);
   });
 });
 

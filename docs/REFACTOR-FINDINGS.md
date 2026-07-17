@@ -320,3 +320,35 @@ See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture and [plan 
 - Description: `createCluster` runs three sequential POSTs (cluster → seed column → seed card) inside one try/catch. If the cluster POST succeeds but a later POST throws, the cluster was already dispatched into local state (`CLUSTER_ADD`) yet the function returns `null`, so callers (ontology kanban header, graph view header) don't select it — an unseeded tab appears and the server holds a cluster missing its seed column/card. Same behavior on both `/ontology` and `/canvas2`; pre-existing, surfaced by the graph-view review.
 - Proposed resolution: either make seed creation server-side (one POST creates cluster+column+card atomically in the service) or roll back locally on partial failure (dispatch `CLUSTER_DELETE` + `api.deleteCluster` for the orphan).
 - Status: open
+
+### F-032: Per-user trial vestiges left in analytics after the workspace-billing pivot
+- Location: `src/features/analytics/server/launch-metrics.ts` (queries `profiles.subscription_status` / `trial_expires_at`); `profiles.subscription_*` columns now dormant
+- Found during: workspace per-seat billing build (2026-07-16)
+- Severity: smell
+- Description: billing moved to `workspace_billing` and the 24h trial was retired (access.ts, PaywallGate/Modal, trial-reactivation cron all deleted; auth callback no longer stamps trials), but launch-metrics still reads the dormant per-user columns for historical dashboard tiles, and the webhook no longer emits `subscribed`/`churned`/`reactivated` conversion events those dashboards may expect.
+- Proposed resolution: either retire the trial tiles or repoint them at `workspace_billing` + `mcp_tool_calls`; decide whether conversion events should be re-emitted from the new webhook handler.
+- Status: open
+
+### F-033: `hiddenCount` retention counter is a deliberate approximation
+- Location: `src/features/chats/server/repository.ts` (`countHiddenChats`)
+- Found during: chats retention window build (2026-07-16)
+- Severity: smell
+- Description: the hidden-chats count applies the `owner_id = user OR visibility = public` predicate but not the in-memory `canSeeChat` refinements (team-grant membership, API-key private-hiding), so team-scoped-but-ungranted or API-key-scoped callers can see a slightly inflated count in the "N older chats hidden" strip. Chosen to keep it one cheap head-count query.
+- Proposed resolution: if it ever matters, push the grant predicate into the count query (join on team grants) rather than fetching rows.
+- Status: open
+
+### F-034: `src/shared/supabase/types.ts` hand-edited pending regen
+- Location: `src/shared/supabase/types.ts` (`chats_retention_cutoff` Functions stanza)
+- Found during: chats retention window build (2026-07-16)
+- Severity: smell
+- Description: the generated-types file was hand-extended with the new DB function (and the migration also later gained `SET search_path = ''` per the Supabase security lint). A `supabase gen types typescript` regen against the live DB (migrations applied 2026-07-16) should reproduce/replace the hand edit.
+- Proposed resolution: regen types on the next schema touch; confirm no drift.
+- Status: open
+
+### F-035: Free-plan chats retention window is app-layer only (owner RLS reads bypass it)
+- Location: `supabase/migrations/20260707170000_chats.sql` (`chats_owner_select`); window enforced in `chats/server/{service-reads,retention}.ts`
+- Found during: billing adversarial security review (2026-07-16)
+- Severity: smell (accepted for v1)
+- Description: the 90-day free window is enforced in the service layer (list/detail/MCP) and the append echo is stripped, but a chat OWNER can still read their own >90-day rows via direct PostgREST/realtime with their JWT. Deliberately accepted: the window is a monetization gate on the product surface, not a confidentiality boundary (the owner owns the data; export must stay possible per no-data-hostage). Cross-user leakage IS enforced in RLS (team-aware policies, 20260716150000).
+- Proposed resolution: only revisit if the retention gate ever becomes contractual — would need a security-definer read path plus removing direct-table SELECT for owners.
+- Status: open (accepted)

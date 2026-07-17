@@ -20,7 +20,14 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.SKILL_AUTHORING_GUIDE = void 0;
 exports.SKILL_AUTHORING_GUIDE = `# Skill authoring framework
 
-A skill is a procedural prompt the agent will discover by description alone, then load on-demand to perform a task. Author for *progressive disclosure*: cheap to discover, useful to load, deep when drilled into. Optimize for triggering accuracy and instruction-following under pressure — not literary completeness.
+A skill is a SINGLE-FILE procedural prompt: one tight SKILL.md the agent discovers by description alone, then loads on-demand to perform a task. Author for *progressive disclosure*: cheap to discover, useful to load, deep when drilled into. Optimize for triggering accuracy and instruction-following under pressure — not literary completeness.
+
+## Single-file doctrine (read this first)
+
+- **A skill is ONE file.** There are no supplementary files. Everything the agent needs to *act* lives in SKILL.md.
+- **Reference material goes in knowledge bases, not the skill.** Long specs, lookup tables, schemas, transcripts, big examples — put them in a KB and link from the body as \`[label](dopl://kb/<slug>)\`. The agent loads the KB with \`dopl_kb(op='read_file')\` only when it needs it. The skill stays short and procedural.
+- **Prefer MANY SMALL skills over monoliths.** One skill = one action (draft the email, triage the ticket, write the ADR). Small skills attach cleanly to ontology objects and workflow actions and trigger more reliably. If a skill is trying to do three things, split it into three.
+- **Organize with folders.** Set \`folder\` on create/update (a plain-text label) to group related small skills, e.g. "Outreach", "Research".
 
 ## Required SKILL.md structure
 
@@ -34,7 +41,7 @@ Every SKILL.md MUST contain, in order:
 6. **Inputs & outputs** — what the agent should ask for, what it should produce.
 7. **Examples** — at least one concrete worked example (input → output).
 8. **Common mistakes / anti-patterns** — what goes wrong and the fix.
-9. *(Optional)* **References** — links to supplementary files, KBs (\`dopl://kb/<slug>\`), connectors (\`dopl://connector/<provider>\`).
+9. *(Optional)* **References** — KB links (\`dopl://kb/<slug>\`) and connectors (\`dopl://connector/<provider>\`).
 
 ## Writing the \`description\` (most important field)
 
@@ -72,29 +79,23 @@ These fields are appended to the description for triggering and count toward the
 ## Output format    — exact template with placeholders, fenced as a code block
 ## Examples         — 1–3 worked input→output examples
 ## Common mistakes  — table or bullet list: "Mistake | Fix"
-## References       — links to supplementary files, KBs, connectors
+## References       — links to KBs (dopl://kb/<slug>) and connectors
 \`\`\`
 
-- Keep SKILL.md **under ~500 lines**. If approaching the limit, push detail to supplementary files and add clear pointers from SKILL.md.
+- Keep SKILL.md **short — ideally under ~200 lines, hard ceiling ~500**. If it's growing past that, the fix is almost never "add detail here": it's to move reference material into a KB, or to split the skill into smaller skills.
 - Prefer **imperative voice** ("Read the issue", "Run the script") over descriptive ("This skill reads...").
 - **Explain the *why*** behind each step. Heavy MUST/NEVER walls without explanation are a yellow flag — reframe and explain reasoning so the model understands why.
 - One excellent example beats five mediocre ones. Don't multi-language-dilute.
 
-## Supplementary files
+## Keeping the skill small (reference material → KBs)
 
-Split a single SKILL.md when any of these is true:
-- A reference document exceeds ~150 lines (API specs, schemas, long lookup tables).
-- The skill supports multiple variants (AWS/GCP/Azure, en/de/fr) — one reference file per variant, loaded only when relevant.
-- A reusable template the agent will copy.
+A skill has no supplementary files — it is one SKILL.md. When you have material that doesn't fit that, do NOT bloat the body:
 
-In Dopl, files live in a flat namespace per skill (no nested directories in v1). Conventional names:
-- \`examples.md\` — worked examples too long for inline.
-- \`references-<topic>.md\` — long reference docs the agent loads on demand.
-- \`templates-<name>.md\` — copy-paste templates.
+- **Long reference docs** (API specs, schemas, lookup tables, big example sets, transcripts) → put them in a **knowledge base** and link from the body: \`For the full field list, see [Product specs](dopl://kb/product-specs).\` The agent loads it with \`dopl_kb(op='read_file')\` only when needed.
+- **A second distinct procedure** → make it a **second skill** and cross-reference by name. Many small skills beat one big one.
+- **Copy-paste templates** short enough to inline → keep them in an Output-format code block. Large ones → a KB entry.
 
-Reference each file from SKILL.md with a one-line description telling the agent **when to load it**, e.g. \`For complete API details, see [reference](references-api.md). Only load when the user asks for advanced options.\` Keep references **one level deep** — avoid nested chains.
-
-For Dopl-specific resources, link via \`[label](dopl://kb/<slug>)\` and \`[label](dopl://connector/<provider>)\` from anywhere in SKILL.md or supplementary files.
+Link Dopl resources via \`[label](dopl://kb/<slug>)\` and \`[label](dopl://connector/<provider>)\` from anywhere in SKILL.md. Keep references one level deep.
 
 ## Common anti-patterns
 
@@ -118,8 +119,8 @@ For Dopl-specific resources, link via \`[label](dopl://kb/<slug>)\` and \`[label
 - [ ] Body has Overview, When-to-use, Steps, Inputs, Output, Examples, Common Mistakes.
 - [ ] Steps are imperative and each non-obvious step explains *why*.
 - [ ] At least one concrete worked example, ready to mimic.
-- [ ] SKILL.md is <500 lines; anything heavier moved to a supplementary file with a load-when pointer.
-- [ ] All supplementary files referenced from SKILL.md with relative links and a "when to load" hint.
+- [ ] SKILL.md is short (ideally <200 lines); reference material moved to a KB, not inlined.
+- [ ] The skill does ONE thing — if it does several, it's split into several skills.
 - [ ] No first-person voice, no narrative storytelling, no workflow-summary in \`description\`.
 - [ ] KB and connector references use \`dopl://kb/<slug>\` and \`dopl://connector/<provider>\` form.
 
@@ -128,10 +129,10 @@ For Dopl-specific resources, link via \`[label](dopl://kb/<slug>)\` and \`[label
 When the user says "build me a skill for X":
 
 1. **Clarify intent first.** Ask the user what trigger phrases they'd use, what success looks like, and what the skill should NOT do. The first 30 seconds of clarification saves 10x debugging.
-2. **Draft the description and when_to_use FIRST**, before any body. These are 80% of the discoverability win — get them right.
-3. **Call \`dopl_skill(op='create')\`** with the metadata + an empty body. The skill is now real and addressable.
-4. **Write SKILL.md procedurally** via \`dopl_skill(op='write_file')\`. Follow the canonical section order. Aim for the body to be 100-300 lines.
-5. **Add supplementary files** only when SKILL.md exceeds ~500 lines or you have a reference doc that loads-on-demand. Use \`dopl_skill(op='create_file')\`.
+2. **Scope to ONE action.** If the request spans several actions, plan several small skills (and a shared \`folder\`), not one big one.
+3. **Draft the description and when_to_use FIRST**, before any body. These are 80% of the discoverability win — get them right.
+4. **Call \`dopl_skill(op='create')\`** with the metadata (and optional \`folder\`) + an optional initial body. The skill is now real and addressable.
+5. **Write SKILL.md procedurally** via \`dopl_skill(op='write')\`. Follow the canonical section order. Keep it short — push reference material into a KB and link it.
 6. **Self-grade against the quality checklist above.** If anything is missing, fix it before declaring done.
 7. **Verify.** Read the description aloud — would *you* trigger this skill from that description? If not, rewrite.
 

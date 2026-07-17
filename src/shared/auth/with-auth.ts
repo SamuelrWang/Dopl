@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { touchMcpStatus } from "./mcp-session";
 import { validateAccessToken } from "./mcp-oauth";
-import { getUserSubscription, type SubscriptionTier } from "@/features/billing/server/subscriptions";
-import { hasActiveAccess, accessDeniedBody } from "@/features/billing/server/access";
 import { logMcpEvent } from "@/features/analytics/server/mcp-events";
 import { logSystemEvent } from "@/features/analytics/server/system-events";
 
@@ -177,17 +175,19 @@ export function withUserAuth(
 }
 
 /**
- * Replaces the old credit-based withMcpCredits. Gates every MCP-reachable
- * endpoint by the single hasActiveAccess() check:
+ * Wraps an MCP-reachable endpoint. The per-user 24h trial gate is RETIRED
+ * (billing is workspace-level now — see features/billing/entitlements.ts),
+ * so this no longer paywalls callers. It still:
  *
  *   1. Auth + rate limit (via withUserAuth).
- *   2. MCP (OAuth-token) requests only: check trial-active-or-paid. Session (UI) calls bypass.
- *   3. If denied, return 402 with a clean trial_expired body and log the event.
- *   4. Run the handler. Log the MCP event for analytics. No credit math.
+ *   2. For MCP (OAuth-token) callers: log the call to mcp_events for the
+ *      admin transcript/analytics view.
+ *   3. Session (UI) calls pass straight through — unmetered, unlogged.
  *
- * The `action` parameter is kept purely as a tool-name hint for
- * logMcpEvent (so the dashboards still group by tool). No deduction or
- * refund logic runs.
+ * The `action` parameter is a tool-name hint for logMcpEvent (dashboards
+ * group by tool). These endpoints are the read-only Dopl knowledge packs;
+ * workspace-scoped tool traffic runs through withWorkspaceAuth, which also
+ * records per-op usage to mcp_tool_calls.
  */
 export function withMcpAccess(
   action: string,
@@ -196,7 +196,6 @@ export function withMcpAccess(
     context: {
       userId: string;
       agentTokenId?: string;
-      tier: SubscriptionTier;
       params?: Record<string, string>;
     }
   ) => Promise<Response | NextResponse>
@@ -206,19 +205,9 @@ export function withMcpAccess(
     // loopback /api/* requests all carry the bearer. Session (UI) calls have none.
     const isMcpCaller = !!request.headers.get("authorization");
 
-    // Resolve tier for downstream content-depth logic (still used for
-    // free vs paid content gating inside some handlers). "free" here
-    // means non-paid — includes trialing users.
-    const sub = await getUserSubscription(ctx.userId);
-    const resolvedTier: SubscriptionTier =
-      sub.status === "active" && (sub.tier === "pro" || sub.tier === "power")
-        ? sub.tier
-        : "free";
-
-    // UI (session) calls are unmetered and unlogged. MCP calls get
-    // gated + logged.
+    // UI (session) calls are unmetered and unlogged.
     if (!isMcpCaller) {
-      return handler(request, { ...ctx, tier: resolvedTier });
+      return handler(request, ctx);
     }
 
     const endpoint = `${request.method} ${request.nextUrl.pathname}`;
@@ -243,31 +232,10 @@ export function withMcpAccess(
     }
     const startedAt = Date.now();
 
-    // ── Access gate: trialing or paid, or 402. ──
-    const access = await hasActiveAccess(ctx.userId);
-    if (!access.allowed) {
-      const body = accessDeniedBody(access);
-      const response = NextResponse.json(body, { status: 402 });
-      logMcpEvent({
-        userId: ctx.userId,
-        workspaceId: eventWorkspaceId,
-        agentTokenId: ctx.agentTokenId ?? null,
-        toolName,
-        endpoint,
-        arguments: argsPayload,
-        responseStatus: 402,
-        responseSummary: body,
-        latencyMs: Date.now() - startedAt,
-        source: "mcp",
-        error: "trial_expired",
-      }).catch(() => {});
-      return response;
-    }
-
     // Run handler.
     let response: Response | NextResponse;
     try {
-      response = await handler(request, { ...ctx, tier: resolvedTier });
+      response = await handler(request, ctx);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       logMcpEvent({

@@ -11,6 +11,7 @@ exports.err = err;
 exports.isConflict = isConflict;
 exports.isNotFound = isNotFound;
 exports.isAlreadyExists = isAlreadyExists;
+exports.entitlementDenied = entitlementDenied;
 exports.missingParams = missingParams;
 function ok(text) {
     return { content: [{ type: "text", text }] };
@@ -47,6 +48,40 @@ function isAlreadyExists(e) {
     return (typeof e === "object" &&
         e !== null &&
         e.status === 409);
+}
+/**
+ * Plan-gate denial codes the API returns as a flat `{ error: <code>,
+ * message, upgrade_url }` envelope: the free-plan object cap and the
+ * free-plan chat retention window. Both mean "the data is intact,
+ * upgrading lifts the gate".
+ */
+const ENTITLEMENT_CODES = new Set(["over_free_cap", "chat_outside_retention"]);
+/**
+ * Turn a thrown Dopl API error into a friendly tool error when it's a
+ * plan-gate denial (HTTP 403, flat entitlement envelope), else null so
+ * the caller rethrows.
+ *
+ * Duck-typed on `.code` / `.apiMessage` / `.upgradeUrl` (populated by
+ * `@dopl/client`'s DoplApiError) so it works across the module boundary
+ * without importing the error class. Surfaces the server's human message
+ * and upgrade link VERBATIM so the agent sees an actionable "upgrade to
+ * add more" — not a generic "request failed".
+ */
+function entitlementDenied(e) {
+    if (typeof e !== "object" || e === null)
+        return null;
+    const code = e.code;
+    if (typeof code !== "string" || !ENTITLEMENT_CODES.has(code)) {
+        return null;
+    }
+    const rec = e;
+    const message = typeof rec.apiMessage === "string" && rec.apiMessage
+        ? rec.apiMessage
+        : code === "chat_outside_retention"
+            ? "This chat is older than the free plan's history window. Nothing was deleted — upgrade to Pro to restore full chat history."
+            : "This workspace has reached its free plan object limit. Nothing was deleted — existing objects stay readable and editable.";
+    const url = typeof rec.upgradeUrl === "string" ? rec.upgradeUrl : "";
+    return err(url ? `${message}\n\nUpgrade to continue: ${url}` : message);
 }
 /**
  * Returns an error response when any of `required` params is absent for the

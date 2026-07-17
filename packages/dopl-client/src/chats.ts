@@ -13,6 +13,7 @@ import type {
   ChatExportInput,
   ChatFolder,
   ChatFolderUpdateInput,
+  ChatList,
   ChatMessageInput,
   ChatUpdateInput,
 } from "./chat-types.js";
@@ -21,11 +22,12 @@ const enc = encodeURIComponent;
 
 // ─── Read ───────────────────────────────────────────────────────────
 
-export async function listChats(t: DoplTransport): Promise<Chat[]> {
-  const data = await t.request<{ chats: Chat[] }>("/api/chats", {
-    toolName: "chat_list",
-  });
-  return data.chats;
+export async function listChats(t: DoplTransport): Promise<ChatList> {
+  const data = await t.request<{ chats: Chat[]; hiddenCount?: number }>(
+    "/api/chats",
+    { toolName: "chat_list" }
+  );
+  return { chats: data.chats, hiddenCount: data.hiddenCount ?? 0 };
 }
 
 export async function getChat(t: DoplTransport, chatId: string): Promise<ChatDetail> {

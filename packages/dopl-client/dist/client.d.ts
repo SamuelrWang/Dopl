@@ -4,7 +4,7 @@ import type { KnowledgeBase, KnowledgeBaseCreateInput, KnowledgeBaseUpdateInput,
 import type { CreateSkillInput, UpdateSkillPatch as SkillUpdatePatch } from "./skills.js";
 import type { ResolvedSkill, Skill, SkillFile, SkillWriteFileResult } from "./skill-types.js";
 import type { OntologyCluster, OntologyClusterCreateInput, OntologyClusterPatch, OntologyObject, OntologyObjectCreateInput, OntologyObjectPatch, OntologySnapshot } from "./ontology-types.js";
-import type { Chat, ChatDetail, ChatExportInput, ChatFolder, ChatFolderUpdateInput, ChatMessageInput, ChatUpdateInput } from "./chat-types.js";
+import type { Chat, ChatDetail, ChatExportInput, ChatFolder, ChatFolderUpdateInput, ChatList, ChatMessageInput, ChatUpdateInput } from "./chat-types.js";
 import type { AccessMatrix, EffectiveAccessRow, MyAccess, MyMembership, WorkspaceMember, WorkspaceTeam } from "./member-types.js";
 export type { DoplTransportOptions as DoplClientOptions } from "./transport.js";
 export { parseRetryAfter } from "./retry.js";
@@ -112,7 +112,7 @@ export declare class DoplClient {
     updateOntologyObject(objectId: string, patch: OntologyObjectPatch): Promise<OntologyObject>;
     deleteOntologyObject(objectId: string): Promise<void>;
     claimOntologyAnchor(objectId: string): Promise<OntologyObject>;
-    listChats(): Promise<Chat[]>;
+    listChats(): Promise<ChatList>;
     getChat(chatId: string): Promise<ChatDetail>;
     exportChat(input: ChatExportInput): Promise<ChatDetail>;
     appendChatMessages(chatId: string, messages: ChatMessageInput[]): Promise<ChatDetail>;

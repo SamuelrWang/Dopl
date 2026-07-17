@@ -12,10 +12,12 @@ const stripePromise = loadStripe(
 );
 
 /**
- * Single-tier launch checkout: $7.99/mo Pro. No tier or interval props —
- * the backend only serves STRIPE_PRO_PRICE_ID.
+ * Single-tier launch checkout: $7.99/seat Pro. No tier or interval props —
+ * the backend only serves the per-seat Pro price. `workspaceId` scopes the
+ * checkout to the workspace being upgraded (sent as `x-workspace-id`);
+ * omitting it lets the server fall back to the caller's default workspace.
  */
-export function EmbeddedCheckoutForm() {
+export function EmbeddedCheckoutForm({ workspaceId }: { workspaceId?: string }) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -24,6 +26,7 @@ export function EmbeddedCheckoutForm() {
     try {
       const res = await fetch("/api/billing/checkout", {
         method: "POST",
+        headers: workspaceId ? { "x-workspace-id": workspaceId } : undefined,
       });
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
@@ -45,7 +48,7 @@ export function EmbeddedCheckoutForm() {
       setLoading(false);
       throw err;
     }
-  }, []);
+  }, [workspaceId]);
 
   useEffect(() => {
     setError(null);

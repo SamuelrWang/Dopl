@@ -2121,6 +2121,10 @@ export type Database = {
         Args: { p_chat_id: string; p_messages: Json; p_workspace_id: string }
         Returns: number
       }
+      chats_retention_cutoff: {
+        Args: { p_window_days: number }
+        Returns: string
+      }
       check_and_record_rate_limit_subject: {
         Args: { p_endpoint: string; p_rpm: number; p_subject: string }
         Returns: boolean

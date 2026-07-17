@@ -23,8 +23,15 @@ export type OntologyStatus = "loading" | "ready" | "error";
  * applies actions optimistically, and mirrors them to the API —
  * object edits debounced per object (full-state PATCH, idempotent),
  * deletes immediately, creates server-first so ids are real.
+ *
+ * `onOverCap` fires when a create is denied by the free object cap
+ * (server returns `over_free_cap`): the caller opens the upgrade modal
+ * instead of surfacing a generic save-error toast.
  */
-export function useOntology(workspaceId: string): {
+export function useOntology(
+  workspaceId: string,
+  onOverCap?: () => void
+): {
   graph: GraphState;
   status: OntologyStatus;
   dispatch: (action: GraphAction) => void;
@@ -38,6 +45,12 @@ export function useOntology(workspaceId: string): {
   useEffect(() => {
     graphRef.current = graph;
   }, [graph]);
+  // Ref so create callbacks stay stable across renders even when the
+  // caller passes an inline handler.
+  const onOverCapRef = useRef(onOverCap);
+  useEffect(() => {
+    onOverCapRef.current = onOverCap;
+  }, [onOverCap]);
   const timersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
 
   // Snapshot through the query cache: a revisit paints instantly from the
@@ -234,7 +247,8 @@ export function useOntology(workspaceId: string): {
       rawDispatch({ type: "OBJECT_ADD", object: card, parentObjectId: column.id });
       return cluster;
     } catch (err) {
-      reportSaveError("create cluster", err);
+      if (api.isOverFreeCapError(err)) onOverCapRef.current?.();
+      else reportSaveError("create cluster", err);
       return null;
     }
   }, [workspaceId]);
@@ -253,7 +267,8 @@ export function useOntology(workspaceId: string): {
         rawDispatch({ type: "OBJECT_ADD", object, ...target });
         return object;
       } catch (err) {
-        reportSaveError("create object", err);
+        if (api.isOverFreeCapError(err)) onOverCapRef.current?.();
+        else reportSaveError("create object", err);
         return null;
       }
     },

@@ -1,10 +1,11 @@
 /**
  * MCP tools for the user's skills.
  *
- * Skills are folders of `.md` files; SKILL.md is the canonical procedure
- * entry point. Writes are gated server-side by the per-skill
- * `agent_write_enabled` toggle; calls without the toggle 403 with
- * `SKILL_AGENT_WRITE_DISABLED`.
+ * A skill is SINGLE-FILE: one tight markdown procedure (its SKILL.md)
+ * plus metadata. Long reference material belongs in knowledge bases
+ * (linked via `dopl://kb/<slug>`), not in the skill. Writes are gated
+ * server-side by the per-skill `agent_write_enabled` toggle; calls
+ * without it 403 with `SKILL_AGENT_WRITE_DISABLED`.
  *
  * Consolidated into two `op`-dispatched tools (the canonical pattern from
  * `setups.ts`):

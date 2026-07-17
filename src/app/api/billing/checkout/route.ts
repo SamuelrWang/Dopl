@@ -1,43 +1,61 @@
-import { NextRequest, NextResponse } from "next/server";
-import { withUserAuth } from "@/shared/auth/with-auth";
-import { getUserSubscription } from "@/features/billing/server/subscriptions";
-import { createCheckoutSession } from "@/features/billing/server/stripe";
+import { NextResponse } from "next/server";
+import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
 import { supabaseAdmin } from "@/shared/supabase/admin";
+import {
+  createPortalSession,
+  createWorkspaceCheckoutSession,
+} from "@/features/billing/server/stripe";
+import {
+  countActiveMembers,
+  getWorkspaceBilling,
+} from "@/features/billing/server/workspace-billing";
 
-async function handlePost(
-  _request: NextRequest,
-  { userId }: { userId: string }
-) {
-  const sub = await getUserSubscription(userId);
+/**
+ * Start a per-seat Pro checkout for the active workspace. Admin/owner
+ * only (withWorkspaceAuth minRole). Seat quantity = current active
+ * member count; the webhook keeps it in sync afterward.
+ */
+export const POST = withWorkspaceAuth(
+  async (_request, { userId, workspaceId }) => {
+    // Block a second checkout whenever a live subscription already exists —
+    // any non-canceled status (active AND past_due) means Stripe is still
+    // billing this workspace, so a new session would create a duplicate sub.
+    // Point the caller at the billing portal to manage the existing one.
+    const billing = await getWorkspaceBilling(workspaceId);
+    if (billing?.stripeSubscriptionId && billing.status !== "canceled") {
+      const portalUrl = billing.stripeCustomerId
+        ? await createPortalSession(billing.stripeCustomerId)
+        : null;
+      return NextResponse.json(
+        {
+          error: "Workspace already has an active subscription",
+          portalUrl,
+        },
+        { status: 409 }
+      );
+    }
 
-  if (sub.status === "active") {
-    return NextResponse.json(
-      { error: "Already subscribed" },
-      { status: 400 }
-    );
-  }
+    const { data: profile } = await supabaseAdmin()
+      .from("profiles")
+      .select("email")
+      .eq("id", userId)
+      .single();
+    if (!profile?.email) {
+      return NextResponse.json(
+        { error: "User email not found" },
+        { status: 400 }
+      );
+    }
 
-  // Get user email for Stripe.
-  const { data: profile } = await supabaseAdmin()
-    .from("profiles")
-    .select("email")
-    .eq("id", userId)
-    .single();
+    const quantity = await countActiveMembers(workspaceId);
+    const clientSecret = await createWorkspaceCheckoutSession({
+      workspaceId,
+      quantity,
+      email: profile.email,
+      stripeCustomerId: billing?.stripeCustomerId,
+    });
 
-  if (!profile?.email) {
-    return NextResponse.json(
-      { error: "User email not found" },
-      { status: 400 }
-    );
-  }
-
-  const clientSecret = await createCheckoutSession(
-    userId,
-    profile.email,
-    sub.stripe_customer_id
-  );
-
-  return NextResponse.json({ clientSecret });
-}
-
-export const POST = withUserAuth(handlePost);
+    return NextResponse.json({ clientSecret });
+  },
+  { minRole: "admin" }
+);

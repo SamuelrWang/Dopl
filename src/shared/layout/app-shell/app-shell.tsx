@@ -37,12 +37,17 @@ export function AppShell({
   const { workspaces, refresh: refreshWorkspaces } = useRailWorkspaces();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("billing");
-  const [billingReturn, setBillingReturn] = useState(false);
+  const [billingReturn, setBillingReturn] = useState<"success" | "return" | null>(
+    null
+  );
   const [createWsOpen, setCreateWsOpen] = useState(false);
 
   // Stripe checkout/portal return URLs land on the app with a `billing`
   // query param (via the /canvas legacy redirect). Open the settings
   // modal on Plans & Billing and strip the params from the URL.
+  // `success` = checkout return (celebrate + poll for the webhook);
+  // `return` = portal return, e.g. a cancel/downgrade (poll quietly so a
+  // stale Pro pane settles). Any other value just opens the pane.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const billing = params.get("billing");
@@ -50,7 +55,9 @@ export function AppShell({
     // setState inside rAF so the open runs on a separate paint (and the
     // set-state-in-effect rule is satisfied), matching ModalShell.
     const id = requestAnimationFrame(() => {
-      setBillingReturn(billing === "success");
+      setBillingReturn(
+        billing === "success" ? "success" : billing === "return" ? "return" : null
+      );
       setSettingsSection("billing");
       setSettingsOpen(true);
     });

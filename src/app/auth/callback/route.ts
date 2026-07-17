@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/shared/supabase/admin";
 import { cookies } from "next/headers";
-import { startTrialIfNew } from "@/features/billing/server/subscriptions";
 import { logConversionEvent, hasFiredEvent } from "@/features/analytics/server/conversion-events";
 import { ensureDefaultWorkspace } from "@/features/workspaces/server/service";
 import { ensureDefaultCanvas } from "@/features/workspaces/server/canvases";
@@ -31,9 +30,9 @@ export async function GET(request: NextRequest) {
       // Onboarding detour for new users; set inside the try below so a
       // failed status read falls back to redirectTo and never blocks sign-in.
       let destination = isDesktop ? "/auth/desktop-handoff" : redirectTo;
-      // Stamp a 24-hour trial on first sign-in. Idempotent — only runs
-      // if trial_started_at is null. Wrapped in try/catch so a trial
-      // failure can never block the redirect.
+      // Post-auth side effects. Wrapped in try/catch so any failure here
+      // can never block the redirect. (The per-user 24h trial is retired —
+      // billing is workspace-level now, so no trial is stamped on sign-in.)
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (user?.id) {
@@ -43,14 +42,6 @@ export async function GET(request: NextRequest) {
             await logConversionEvent({
               userId: user.id,
               eventType: "signup",
-            });
-          }
-
-          const startedNew = await startTrialIfNew(user.id);
-          if (startedNew) {
-            await logConversionEvent({
-              userId: user.id,
-              eventType: "trial_started",
             });
           }
 
@@ -72,7 +63,7 @@ export async function GET(request: NextRequest) {
           }
         }
       } catch (err) {
-        // Swallow — trial/event/install failures must not break sign-in.
+        // Swallow — event/provisioning failures must not break sign-in.
         console.error(
           `[auth.callback] post-auth side effects failed:`,
           err instanceof Error ? err.message : String(err)

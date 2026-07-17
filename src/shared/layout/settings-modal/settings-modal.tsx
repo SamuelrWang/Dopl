@@ -47,9 +47,11 @@ interface Props {
   currentUserId: string;
   role: Role;
   onWorkspaceChanged: () => void;
-  /** True when opened from a Stripe checkout return — Plans & Billing
-   *  polls the subscription status until the webhook lands. */
-  billingReturn?: boolean;
+  /** Set when opened from a Stripe redirect — Plans & Billing polls the
+   *  subscription status until the state settles. "success" (checkout)
+   *  celebrates + finalizes; "return" (portal cancel/downgrade) polls
+   *  quietly so a stale Pro doesn't linger. */
+  billingReturn?: "success" | "return" | null;
 }
 
 /**
@@ -68,7 +70,7 @@ export function SettingsModal({
   currentUserId,
   role,
   onWorkspaceChanged,
-  billingReturn = false,
+  billingReturn = null,
 }: Props) {
   return (
     <ModalShell open={open} onClose={() => onOpenChange(false)} label="Settings">
@@ -118,7 +120,13 @@ export function SettingsModal({
             role={role}
           />
         )}
-        {section === "billing" && <PlansBilling pollOnMount={billingReturn} />}
+        {section === "billing" && (
+          <PlansBilling
+            billingReturn={billingReturn}
+            role={role}
+            workspaceId={workspaceId}
+          />
+        )}
       </div>
     </ModalShell>
   );

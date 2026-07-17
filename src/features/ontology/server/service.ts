@@ -1,4 +1,5 @@
 import "server-only";
+import { assertCanCreateObject } from "@/features/billing/server/entitlements";
 import { HttpError } from "@/shared/lib/http-error";
 import { slugify } from "@/shared/lib/slug/slugify";
 import type {
@@ -154,6 +155,12 @@ export async function createObject(
   ctx: OntologyContext,
   input: OntologyObjectCreateInput
 ): Promise<OntologyObject> {
+  // Single create-time choke point for the free-plan object cap. Columns
+  // and nested cards both land here (createCluster inserts no object row,
+  // so it isn't gated). Freeze-don't-delete: only creation is blocked —
+  // updates / deletes / reads never call this.
+  await assertCanCreateObject(ctx.workspaceId);
+
   let attributes: OntologyObject["attributes"] | undefined;
   let methods: OntologyObject["methods"] | undefined;
   let inheritedEdges: OntologyObject["relationships"] | undefined;

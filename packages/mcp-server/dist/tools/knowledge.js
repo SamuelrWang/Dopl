@@ -55,6 +55,7 @@ const KB_DESCRIPTION = `Manage the caller's own editable knowledge bases — the
 - "restore_file" — restore a soft-deleted entry by id (from op=list_trash).
 - "restore_folder" — restore a soft-deleted folder by id (from op=list_trash).
 - "search" — full-text search across the workspace's bases. Returns ranked entries with snippet + path for op=read_file. Optional \`base\` narrows to one base.
+- "set_visibility" — publish a base you created (\`visibility="public"\`: workspace-visible + referenceable in workflows). One-way — un-publishing and team scope are human-only (Dopl web UI).
 
 Destructive deletes live in the separate \`dopl_kb_admin\` tool.`;
 const KB_ADMIN_DESCRIPTION = `DESTRUCTIVE knowledge-base operations on the caller's OWN editable bases. Every op here is a soft-delete — the resource becomes invisible in active listings but stays restorable from trash (\`dopl_kb\` op=list_trash + the matching restore op). Confirm with the user before calling. Set \`op\` to one of:

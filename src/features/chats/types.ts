@@ -77,3 +77,13 @@ export type Chat = {
 };
 
 export type ChatDetail = Chat & { messages: ChatMessage[] };
+
+/**
+ * List read result: the visible chats plus how many the free-plan
+ * retention window excluded (0 on Pro / full-history plans). `hiddenCount`
+ * lets UIs surface the "N older chats hidden — upgrade" affordance.
+ */
+export type ChatList = {
+  chats: Chat[];
+  hiddenCount: number;
+};

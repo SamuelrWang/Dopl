@@ -2,37 +2,56 @@
 
 import { useEffect, useState } from "react";
 import { Check, RefreshCw } from "lucide-react";
-import { useSubscription } from "@/features/billing/components/use-subscription";
+import {
+  formatMoney,
+  PRO_SEAT_PRICE,
+  useWorkspaceEntitlements,
+  type WorkspaceEntitlements,
+} from "@/features/billing/components/use-workspace-entitlements";
 import { EmbeddedCheckoutForm } from "@/features/billing/components/embedded-checkout";
 import { PLANS, type PlanDef } from "@/features/billing/plans";
+import { meetsMinRole, type Role } from "@/features/workspaces/types";
 import { cn } from "@/shared/lib/utils";
 import styles from "../settings-modal.module.css";
 
-type Interval = "monthly" | "annual";
-
 /**
- * Plans & Billing — usage/trial banner, Monthly/Annual toggle, and three
- * plan cards, all on the global tokens + kit classes. The Pro CTA opens
- * the live Stripe checkout; paid users get a Manage-subscription portal
- * link. Annual is a visual option for now — checkout runs the live
- * monthly price. With `pollOnMount` (a Stripe checkout return) the
- * subscription status is re-fetched until the webhook lands.
+ * Plans & Billing — the workspace per-seat model. Shows the current
+ * plan, seat math (members × $7.99), an object usage meter when the free
+ * workspace is capped, the chats-window note, and the right action:
+ * admins/owners upgrade (embedded checkout) or manage billing (portal);
+ * everyone else sees plan info with an "ask an admin" note. A past_due
+ * workspace keeps Pro but surfaces a warning banner. `billingReturn`
+ * marks a Stripe redirect back: "success" (checkout) polls + celebrates
+ * until the webhook lands; "return" (portal cancel/downgrade) polls
+ * quietly so the pane never lingers on stale Pro. `workspaceId` scopes
+ * every read/checkout/portal call to the workspace whose settings are
+ * open — without it the default workspace would leak in.
  */
-export function PlansBilling({ pollOnMount = false }: { pollOnMount?: boolean }) {
-  const sub = useSubscription();
-  const [interval, setInterval] = useState<Interval>("monthly");
+export function PlansBilling({
+  billingReturn = null,
+  role,
+  workspaceId,
+}: {
+  billingReturn?: "success" | "return" | null;
+  role: Role;
+  workspaceId?: string;
+}) {
+  const ent = useWorkspaceEntitlements(workspaceId);
+  const canManage = meetsMinRole(role, "admin");
   const [showCheckout, setShowCheckout] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
   const [portalError, setPortalError] = useState<string | null>(null);
-  const [finalizing, setFinalizing] = useState(pollOnMount);
+  const isSuccessReturn = billingReturn === "success";
+  const pollOnMount = billingReturn !== null;
+  const [finalizing, setFinalizing] = useState(isSuccessReturn);
 
   useEffect(() => {
     if (!pollOnMount) return;
     let attempts = 0;
     const timer = window.setInterval(() => {
       attempts += 1;
-      sub.refresh();
-      if (attempts >= 10) {
+      ent.refresh();
+      if (attempts >= 20) {
         window.clearInterval(timer);
         setFinalizing(false);
       }
@@ -42,14 +61,17 @@ export function PlansBilling({ pollOnMount = false }: { pollOnMount?: boolean })
   }, [pollOnMount]);
 
   useEffect(() => {
-    if (sub.isPaid) setFinalizing(false);
-  }, [sub.isPaid]);
+    if (ent.isPro) setFinalizing(false);
+  }, [ent.isPro]);
 
   async function handleManage() {
     setPortalLoading(true);
     setPortalError(null);
     try {
-      const res = await fetch("/api/billing/portal", { method: "POST" });
+      const res = await fetch("/api/billing/portal", {
+        method: "POST",
+        headers: workspaceId ? { "x-workspace-id": workspaceId } : undefined,
+      });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.url) throw new Error(data.error || "Couldn't open billing portal");
       window.location.href = data.url;
@@ -60,7 +82,7 @@ export function PlansBilling({ pollOnMount = false }: { pollOnMount?: boolean })
     }
   }
 
-  if (showCheckout && !sub.isPaid) {
+  if (showCheckout && !ent.isPro) {
     return (
       <div>
         <button
@@ -71,7 +93,11 @@ export function PlansBilling({ pollOnMount = false }: { pollOnMount?: boolean })
           ← Back to plans
         </button>
         <h2 className={styles.paneTitle}>Subscribe to Pro</h2>
-        <EmbeddedCheckoutForm />
+        <p className="mb-4 text-caption text-text-secondary">
+          {ent.billableSeats} {ent.billableSeats === 1 ? "seat" : "seats"} ·{" "}
+          {formatMoney(ent.monthlyTotal)} / month
+        </p>
+        <EmbeddedCheckoutForm workspaceId={workspaceId} />
       </div>
     );
   }
@@ -85,57 +111,65 @@ export function PlansBilling({ pollOnMount = false }: { pollOnMount?: boolean })
         <button
           type="button"
           className="cursor-pointer p-1 text-text-muted transition-colors hover:text-text-secondary"
-          onClick={() => sub.refresh()}
+          onClick={() => ent.refresh()}
           aria-label="Refresh billing status"
         >
           <RefreshCw size={14} />
         </button>
       </div>
 
-      {pollOnMount && sub.isPaid && (
+      {isSuccessReturn && ent.isPro && (
         <div className="mb-4 rounded-lg border border-success/25 bg-success/10 px-3 py-2 text-caption text-success">
-          Welcome to Pro! Your subscription is now active.
+          Welcome to Pro — {ent.billableSeats}{" "}
+          {ent.billableSeats === 1 ? "seat" : "seats"} active.
         </div>
       )}
-      {finalizing && !sub.isPaid && (
+      {finalizing && !ent.isPro && (
         <div className="mb-4 rounded-lg border border-border-default bg-card-surface-subtle px-3 py-2 text-caption text-text-secondary">
           Finalizing your subscription… this usually takes a few seconds.
         </div>
       )}
 
-      <UsageBanner sub={sub} onUpgrade={() => setShowCheckout(true)} />
-
-      <div className="mb-5 flex justify-center">
-        <div className="concave-track flex items-center gap-1">
-          {(["monthly", "annual"] as const).map((iv) => (
-            <button
-              key={iv}
-              type="button"
-              onClick={() => setInterval(iv)}
-              className={cn(
-                "flex h-6 cursor-pointer items-center rounded-[6px] px-3 text-caption font-medium transition-colors",
-                interval === iv
-                  ? "raised-tab text-text-primary"
-                  : "text-text-secondary hover:text-text-primary"
-              )}
-            >
-              {iv === "monthly" ? "Monthly" : "Annual"}
-            </button>
-          ))}
+      {ent.isPastDue && (
+        <div className="mb-4 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2.5 text-caption text-warning">
+          <div className="font-semibold">Payment past due</div>
+          <div className="mt-0.5 text-text-secondary">
+            Your Pro workspace stays active for now. Update your payment method to
+            avoid losing Pro features.
+            {canManage && (
+              <>
+                {" "}
+                <button
+                  type="button"
+                  onClick={handleManage}
+                  disabled={portalLoading}
+                  className="cursor-pointer font-semibold text-warning underline disabled:opacity-50"
+                >
+                  Update payment method
+                </button>
+              </>
+            )}
+          </div>
         </div>
-      </div>
-
-      {portalError && (
-        <p className="mb-3 text-caption text-danger">{portalError}</p>
       )}
+
+      <BillingSummary
+        ent={ent}
+        canManage={canManage}
+        portalLoading={portalLoading}
+        onUpgrade={() => setShowCheckout(true)}
+        onManage={handleManage}
+      />
+
+      {portalError && <p className="mb-3 text-caption text-danger">{portalError}</p>}
 
       <div className="grid grid-cols-3 gap-2 max-[900px]:grid-cols-1">
         {PLANS.map((plan) => (
           <PlanColumn
             key={plan.id}
             plan={plan}
-            interval={interval}
-            sub={sub}
+            ent={ent}
+            canManage={canManage}
             portalLoading={portalLoading}
             onUpgrade={() => setShowCheckout(true)}
             onManage={handleManage}
@@ -146,84 +180,144 @@ export function PlansBilling({ pollOnMount = false }: { pollOnMount?: boolean })
   );
 }
 
-type Sub = ReturnType<typeof useSubscription>;
-
-function UsageBanner({ sub, onUpgrade }: { sub: Sub; onUpgrade: () => void }) {
-  if (sub.loading) {
-    return <div className="bento mb-5 h-20 animate-pulse opacity-50" />;
-  }
-  let head: string;
-  let pct = 100;
-  let sub_: React.ReactNode;
-  const upgradeLink = (
-    <button
-      type="button"
-      onClick={onUpgrade}
-      className="cursor-pointer font-semibold text-link underline"
-    >
-      Upgrade to Pro
-    </button>
-  );
-  if (sub.isPaid) {
-    head = "Pro plan — unlimited";
-    sub_ = <>Thanks for supporting Dopl. Manage your subscription below.</>;
-  } else if (sub.isTrialing) {
-    head = "You're on the free trial";
-    pct = 60;
-    sub_ = (
-      <>
-        {sub.access.trial_expires_at
-          ? `Trial ends ${new Date(sub.access.trial_expires_at).toLocaleDateString()}. `
-          : ""}
-        {upgradeLink} for unlimited access.
-      </>
-    );
-  } else {
-    head = "Your trial has ended";
-    pct = 100;
-    sub_ = <>{upgradeLink} to keep using knowledge bases, skills, and MCP.</>;
+function BillingSummary({
+  ent,
+  canManage,
+  portalLoading,
+  onUpgrade,
+  onManage,
+}: {
+  ent: WorkspaceEntitlements;
+  canManage: boolean;
+  portalLoading: boolean;
+  onUpgrade: () => void;
+  onManage: () => void;
+}) {
+  if (ent.loading) {
+    return <div className="bento mb-5 h-24 animate-pulse opacity-50" />;
   }
   return (
     <div className="bento mb-5 p-4">
-      <div className="text-body font-semibold text-text-primary">{head}</div>
-      <div className="my-2.5 h-1.5 overflow-hidden rounded-full bg-bg-inset shadow-[inset_0_1px_2px_rgba(0,0,0,0.1)]">
+      <div className="flex items-center justify-between">
+        <span
+          className={cn(
+            "rounded-full border px-2.5 py-0.5 text-caption font-semibold",
+            ent.isPro
+              ? "border-border-strong bg-surface-cta text-text-on-cta"
+              : "border-border-strong bg-bg-inset text-text-secondary"
+          )}
+        >
+          {ent.isPro ? "Pro plan" : "Free plan"}
+        </span>
+        <span className="text-caption text-text-secondary">
+          {ent.memberCount} {ent.memberCount === 1 ? "member" : "members"}
+        </span>
+      </div>
+
+      {ent.isPro ? (
+        <div className="mt-3 text-body text-text-primary">
+          <span className="font-semibold">{ent.billableSeats}</span>{" "}
+          {ent.billableSeats === 1 ? "seat" : "seats"} ×{" "}
+          {formatMoney(PRO_SEAT_PRICE)} ={" "}
+          <span className="font-semibold">{formatMoney(ent.monthlyTotal)}</span>{" "}
+          <span className="text-caption text-text-muted">/ month</span>
+        </div>
+      ) : (
+        <>
+          {ent.isCapped && ent.objectCap !== null && (
+            <UsageMeter used={ent.objectsUsed} cap={ent.objectCap} over={ent.overCap} />
+          )}
+          <p className="mt-3 text-caption text-text-secondary">
+            {ent.chatsWindowDays
+              ? `Chats older than ${ent.chatsWindowDays} days are hidden on Free — they're never deleted, and full history is restored the moment you upgrade.`
+              : "Full chat history is available."}
+          </p>
+        </>
+      )}
+
+      <div className="mt-4">
+        {ent.isPro ? (
+          canManage ? (
+            <button
+              type="button"
+              disabled={portalLoading}
+              onClick={onManage}
+              className="btn-light flex h-8 cursor-pointer items-center justify-center rounded-lg px-4 text-small font-medium text-text-primary disabled:cursor-default disabled:opacity-50"
+            >
+              {portalLoading ? "Loading…" : "Manage billing"}
+            </button>
+          ) : (
+            <p className="text-caption text-text-muted">
+              Contact a workspace admin to manage billing.
+            </p>
+          )
+        ) : canManage ? (
+          <button
+            type="button"
+            onClick={onUpgrade}
+            className="flex h-8 cursor-pointer items-center justify-center rounded-lg bg-surface-cta px-4 text-small font-semibold text-text-on-cta transition-opacity hover:opacity-90"
+          >
+            Upgrade to Pro
+          </button>
+        ) : (
+          <p className="text-caption text-text-muted">
+            Ask a workspace admin or owner to upgrade to Pro.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function UsageMeter({ used, cap, over }: { used: number; cap: number; over: boolean }) {
+  const pct = Math.min(100, Math.round((used / cap) * 100));
+  return (
+    <div className="mt-3">
+      <div className="mb-1.5 flex items-baseline justify-between text-caption">
+        <span className="text-text-secondary">Ontology objects</span>
+        <span className={cn("font-medium", over ? "text-warning" : "text-text-primary")}>
+          {used.toLocaleString()} / {cap.toLocaleString()}
+        </span>
+      </div>
+      <div className="concave-track">
         <div
-          className="h-full rounded-full bg-surface-cta"
+          className={cn(
+            "h-1.5 rounded-full transition-[width]",
+            over ? "bg-warning" : "bg-surface-cta"
+          )}
           style={{ width: `${pct}%` }}
         />
       </div>
-      <div className="text-caption text-text-secondary">{sub_}</div>
+      {over && (
+        <p className="mt-1.5 text-micro text-text-secondary">
+          New objects are paused. Nothing was deleted — reads and edits still work.
+        </p>
+      )}
     </div>
   );
 }
 
 function PlanColumn({
   plan,
-  interval,
-  sub,
+  ent,
+  canManage,
   portalLoading,
   onUpgrade,
   onManage,
 }: {
   plan: PlanDef;
-  interval: Interval;
-  sub: Sub;
+  ent: WorkspaceEntitlements;
+  canManage: boolean;
   portalLoading: boolean;
   onUpgrade: () => void;
   onManage: () => void;
 }) {
   const isCurrent =
-    (plan.id === "pro" && sub.isPaid) ||
-    (plan.id === "basic" && !sub.isPaid);
+    (plan.id === "pro" && ent.isPro) || (plan.id === "free" && !ent.isPro);
   const highlight = plan.id === "pro";
 
   return (
-    <div
-      className={cn(
-        "bento flex flex-col p-4",
-        highlight && "border-border-highlight"
-      )}
-    >
+    <div className={cn("bento flex flex-col p-4", highlight && "border-border-highlight")}>
       <div className="flex items-center justify-between">
         <div className="text-caption text-text-secondary">{plan.audience}</div>
         {highlight && (
@@ -232,13 +326,8 @@ function PlanColumn({
           </span>
         )}
       </div>
-      <div className="mt-2 flex items-center gap-2 text-display font-semibold tracking-tight text-text-primary">
+      <div className="mt-2 text-display font-semibold tracking-tight text-text-primary">
         {plan.name}
-        {plan.id === "pro" && interval === "annual" && (
-          <span className="rounded-full border border-border-strong bg-bg-inset px-2 py-0.5 text-micro font-semibold text-text-secondary">
-            -20%
-          </span>
-        )}
       </div>
       <div className="mt-1 text-title font-semibold text-text-primary">
         {plan.priceMonthly}
@@ -265,7 +354,7 @@ function PlanColumn({
         <PlanCta
           plan={plan}
           isCurrent={isCurrent}
-          sub={sub}
+          canManage={canManage}
           portalLoading={portalLoading}
           onUpgrade={onUpgrade}
           onManage={onManage}
@@ -278,14 +367,14 @@ function PlanColumn({
 function PlanCta({
   plan,
   isCurrent,
-  sub,
+  canManage,
   portalLoading,
   onUpgrade,
   onManage,
 }: {
   plan: PlanDef;
   isCurrent: boolean;
-  sub: Sub;
+  canManage: boolean;
   portalLoading: boolean;
   onUpgrade: () => void;
   onManage: () => void;
@@ -298,20 +387,24 @@ function PlanCta({
     "flex h-8 w-full items-center justify-center text-small font-semibold text-text-secondary";
 
   if (isCurrent && plan.id === "pro") {
-    return (
+    return canManage ? (
       <button type="button" className={ghost} disabled={portalLoading} onClick={onManage}>
         {portalLoading ? "Loading…" : "Manage subscription"}
       </button>
+    ) : (
+      <div className={current}>Current plan</div>
     );
   }
   if (isCurrent) {
     return <div className={current}>Current plan</div>;
   }
   if (plan.id === "pro") {
-    return (
+    return canManage ? (
       <button type="button" className={primary} onClick={onUpgrade}>
-        {sub.isTrialing ? "Upgrade to Pro" : "Subscribe — $7.99/mo"}
+        Upgrade — $7.99/seat
       </button>
+    ) : (
+      <div className={cn(current, "text-text-muted")}>Ask an admin</div>
     );
   }
   if (plan.id === "team") {
@@ -324,5 +417,5 @@ function PlanCta({
       </a>
     );
   }
-  return <div className={current}>Free forever</div>;
+  return <div className={current}>Included</div>;
 }

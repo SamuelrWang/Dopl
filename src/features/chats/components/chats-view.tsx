@@ -42,6 +42,9 @@ interface Props {
   role: Role;
   initialChats: Chat[];
   initialFolders: ChatFolder[];
+  /** Chats hidden by the free-plan retention window (0 on Pro). Static
+   *  from the server render — drives the list's upgrade strip. */
+  hiddenCount: number;
 }
 
 /**
@@ -59,6 +62,7 @@ export function ChatsView({
   role,
   initialChats,
   initialFolders,
+  hiddenCount,
 }: Props) {
   const [chats, setChats] = useState(initialChats);
   const [folders, setFolders] = useState(initialFolders);
@@ -280,6 +284,7 @@ export function ChatsView({
         onFilterChange={handleFilterChange}
         counts={counts}
         showFolders={showFolders}
+        workspaceId={workspaceId}
         workspaceSlug={workspaceSlug}
         isAdmin={meetsMinRole(role, "admin")}
         currentUserId={currentUserId}
@@ -291,6 +296,7 @@ export function ChatsView({
         onToggleFolder={toggleFolder}
         onCreateFolder={handleCreateFolder}
         onFolderShareChange={handleFolderShareChange}
+        hiddenCount={hiddenCount}
       />
       <DetailPane
         chat={selected}

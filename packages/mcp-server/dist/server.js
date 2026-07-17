@@ -16,6 +16,7 @@ const packs_js_1 = require("./tools/packs.js");
 const map_js_1 = require("./tools/map.js");
 const search_js_1 = require("./tools/search.js");
 const ontology_js_1 = require("./tools/ontology.js");
+const respond_js_1 = require("./tools/respond.js");
 const skill_authoring_guide_js_1 = require("./prompts/skill-authoring-guide.js");
 const version_js_1 = require("./version.js");
 exports.SERVER_INSTRUCTIONS = `You are connected to **Dopl** — the user's workspace of knowledge bases, skills, and clusters for AI/automation work.
@@ -59,7 +60,7 @@ This MCP server can target any workspace the authenticated user is a member of. 
 
 ## Workspace skills
 
-Skills are procedural prompts the user authored. Call dopl_skill(op='list') at task boundaries to see if any apply, then dopl_skill(op='get') to load the bundle and follow SKILL.md. Skill bodies reference KBs via [label](dopl://kb/<slug>) markdown links — load referenced KB content with dopl_kb(op='read_file') when you need it. Authoring: call dopl_skill(op='authoring_guide') first, then dopl_skill(op='create') + dopl_skill(op='write_file'). Destructive ops live on dopl_skill_admin.
+Skills are single-file procedural prompts the user authored — each is one tight SKILL.md doing one thing. Call dopl_skill(op='list') at task boundaries to see if any apply (they're grouped by folder), then dopl_skill(op='get') to load and follow the SKILL.md. Skill bodies reference KBs via [label](dopl://kb/<slug>) markdown links — load referenced KB content with dopl_kb(op='read_file') when you need it. Authoring: call dopl_skill(op='authoring_guide') first, then dopl_skill(op='create') + dopl_skill(op='write'). Prefer many small skills over monoliths; reference material belongs in KBs, not the skill. Destructive ops live on dopl_skill_admin.
 
 ## Knowledge Packs — specialist verticals
 
@@ -107,6 +108,23 @@ async function appendDoplStatus(response, client, getActiveWorkspace) {
         content.push({ type: "text", text: footer.trimStart() });
     }
     return { ...response, content };
+}
+/**
+ * Run a tool handler, converting an over-free-cap entitlement denial
+ * (a 403 thrown by any write op through @dopl/client) into a friendly
+ * tool error instead of an opaque framework throw. Every other error
+ * rethrows unchanged, preserving existing behavior.
+ */
+async function runWithEntitlementGuard(run) {
+    try {
+        return await run();
+    }
+    catch (e) {
+        const denied = (0, respond_js_1.entitlementDenied)(e);
+        if (denied)
+            return denied;
+        throw e;
+    }
 }
 /**
  * Wrap a tool handler so every successful response ends with the
@@ -164,6 +182,8 @@ function createServer(client, options = {}) {
             "create_column",
             "create_object",
             "update_object",
+            "set_template_field",
+            "remove_template_field",
             "set_attribute",
             "remove_attribute",
             "set_relationship",
@@ -187,9 +207,7 @@ function createServer(client, options = {}) {
         dopl_skill: new Set([
             "create",
             "update",
-            "create_file",
-            "write_file",
-            "rename_file",
+            "write",
             "set_visibility",
         ]),
         dopl_workflow: new Set([
@@ -203,7 +221,7 @@ function createServer(client, options = {}) {
             "disconnect",
             "set_cluster",
         ]),
-        dopl_chats: new Set(["export", "append", "update", "create_folder"]),
+        dopl_chats: new Set(["export", "append", "update", "create_folder", "update_folder"]),
     };
     // Active workspace for this MCP session — seeded from the startup
     // handshake (index.ts) and mutated by `set_workspace` mid-session.
@@ -338,9 +356,10 @@ function createServer(client, options = {}) {
                 // client.* call inside it transparently picks up the override
                 // workspace id in its X-Workspace-Id header. Returns to the
                 // session default (or no override) the moment this scope exits.
-                return client_1.workspaceContext.run(resolved.id, () => handler(innerArgs));
+                const workspaceId = resolved.id;
+                return runWithEntitlementGuard(() => client_1.workspaceContext.run(workspaceId, () => handler(innerArgs)));
             }
-            return handler(innerArgs);
+            return runWithEntitlementGuard(() => handler(innerArgs));
         };
         server.tool(name, description, enhancedSchema, 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

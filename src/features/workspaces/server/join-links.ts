@@ -3,6 +3,7 @@ import { randomBytes } from "crypto";
 import { HttpError } from "@/shared/lib/http-error";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { canGrantRole } from "../member-policy";
+import { syncSeatQuantity } from "@/features/billing/server/seats";
 import { requireWorkspaceRole } from "./authz";
 import { findMembership, findWorkspaceById } from "./repository";
 
@@ -321,6 +322,15 @@ export async function resolveJoinRequest(
         { onConflict: "workspace_id,user_id" }
       );
       if (memberError) throw memberError;
+
+      // Seat count changed — reconcile the Pro subscription quantity.
+      // Best-effort: a billing hiccup must not fail the approval.
+      await syncSeatQuantity(workspaceId).catch((err) => {
+        console.error(
+          `[join-links] syncSeatQuantity failed for workspace ${workspaceId}:`,
+          err instanceof Error ? err.message : err
+        );
+      });
     }
   }
 

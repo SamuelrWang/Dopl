@@ -12,6 +12,8 @@ interface Props {
   graph: GraphState;
   dispatch: Dispatch<GraphAction>;
   selectedId: string | null;
+  /** Viewers can read the board but can't add cards — hide the affordance. */
+  canEdit: boolean;
   onSelect: (id: string) => void;
   onCreateObject: (columnId: string) => void;
 }
@@ -28,6 +30,7 @@ export function KanbanBoard({
   graph,
   dispatch,
   selectedId,
+  canEdit,
   onSelect,
   onCreateObject,
 }: Props) {
@@ -44,6 +47,7 @@ export function KanbanBoard({
           graph={graph}
           dispatch={dispatch}
           selectedId={selectedId}
+          canEdit={canEdit}
           onSelect={onSelect}
           onCreateObject={onCreateObject}
         />
@@ -57,6 +61,7 @@ function Column({
   graph,
   dispatch,
   selectedId,
+  canEdit,
   onSelect,
   onCreateObject,
 }: {
@@ -64,6 +69,7 @@ function Column({
   graph: GraphState;
   dispatch: Dispatch<GraphAction>;
   selectedId: string | null;
+  canEdit: boolean;
   onSelect: (id: string) => void;
   onCreateObject: (columnId: string) => void;
 }) {
@@ -117,13 +123,15 @@ function Column({
             onSelect={onSelect}
           />
         ))}
-        <button
-          type="button"
-          onClick={() => onCreateObject(col.id)}
-          className="btn-light flex shrink-0 items-center justify-center gap-1 rounded-md px-3 py-1.5 text-small font-medium text-text-primary"
-        >
-          <Plus size={12} /> Add new
-        </button>
+        {canEdit && (
+          <button
+            type="button"
+            onClick={() => onCreateObject(col.id)}
+            className="btn-light flex shrink-0 items-center justify-center gap-1 rounded-md px-3 py-1.5 text-small font-medium text-text-primary"
+          >
+            <Plus size={12} /> Add new
+          </button>
+        )}
       </div>
     </div>
   );

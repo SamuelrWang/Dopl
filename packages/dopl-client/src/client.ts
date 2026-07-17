@@ -56,6 +56,7 @@ import type {
   ChatExportInput,
   ChatFolder,
   ChatFolderUpdateInput,
+  ChatList,
   ChatMessageInput,
   ChatUpdateInput,
 } from "./chat-types.js";
@@ -484,7 +485,7 @@ export class DoplClient {
   // chats plus workspace-public ones; writes are owner-scoped
   // server-side.
 
-  listChats(): Promise<Chat[]> {
+  listChats(): Promise<ChatList> {
     return chats.listChats(this.transport);
   }
 

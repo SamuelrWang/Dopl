@@ -67,6 +67,42 @@ export function isAlreadyExists(e: unknown): boolean {
 }
 
 /**
+ * Plan-gate denial codes the API returns as a flat `{ error: <code>,
+ * message, upgrade_url }` envelope: the free-plan object cap and the
+ * free-plan chat retention window. Both mean "the data is intact,
+ * upgrading lifts the gate".
+ */
+const ENTITLEMENT_CODES = new Set(["over_free_cap", "chat_outside_retention"]);
+
+/**
+ * Turn a thrown Dopl API error into a friendly tool error when it's a
+ * plan-gate denial (HTTP 403, flat entitlement envelope), else null so
+ * the caller rethrows.
+ *
+ * Duck-typed on `.code` / `.apiMessage` / `.upgradeUrl` (populated by
+ * `@dopl/client`'s DoplApiError) so it works across the module boundary
+ * without importing the error class. Surfaces the server's human message
+ * and upgrade link VERBATIM so the agent sees an actionable "upgrade to
+ * add more" — not a generic "request failed".
+ */
+export function entitlementDenied(e: unknown): ToolResponse | null {
+  if (typeof e !== "object" || e === null) return null;
+  const code = (e as { code?: unknown }).code;
+  if (typeof code !== "string" || !ENTITLEMENT_CODES.has(code)) {
+    return null;
+  }
+  const rec = e as { apiMessage?: unknown; upgradeUrl?: unknown };
+  const message =
+    typeof rec.apiMessage === "string" && rec.apiMessage
+      ? rec.apiMessage
+      : code === "chat_outside_retention"
+        ? "This chat is older than the free plan's history window. Nothing was deleted — upgrade to Pro to restore full chat history."
+        : "This workspace has reached its free plan object limit. Nothing was deleted — existing objects stay readable and editable.";
+  const url = typeof rec.upgradeUrl === "string" ? rec.upgradeUrl : "";
+  return err(url ? `${message}\n\nUpgrade to continue: ${url}` : message);
+}
+
+/**
  * Returns an error response when any of `required` params is absent for the
  * given op, or null when they're all present. Treats undefined / null /
  * empty-string as absent — the same "no value" semantics the old per-tool

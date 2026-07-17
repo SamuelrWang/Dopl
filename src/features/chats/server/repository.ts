@@ -15,22 +15,68 @@ export function countOf(row: ChatRowWithCount): number {
   return row.chat_messages[0]?.count ?? 0;
 }
 
+// ─── Retention window ───────────────────────────────────────────────
+
+/**
+ * Free-plan retention cutoff as a `YYYY-MM-DD` DATE string, computed on
+ * the DB clock (`now() - interval`). Callers feed it to `.gte`/`.lt`
+ * `session_date` filters so the window boundary lives in Postgres, not in
+ * JS date math. See migration `chats_retention_cutoff`.
+ */
+export async function retentionCutoff(windowDays: number): Promise<string> {
+  const db = supabaseAdmin();
+  const { data, error } = await db.rpc("chats_retention_cutoff", {
+    p_window_days: windowDays,
+  });
+  if (error) throw error;
+  return data as string;
+}
+
 // ─── Chats ──────────────────────────────────────────────────────────
 
-/** Everything the caller may read: their own chats + workspace-public ones. */
+/**
+ * Everything the caller may read: their own chats + workspace-public
+ * ones. When `since` is set (free-plan retention window), rows whose
+ * `session_date` is older than the cutoff are excluded in the query —
+ * hidden, never deleted. `null` = full history.
+ */
 export async function listVisibleChats(
   workspaceId: string,
-  userId: string
+  userId: string,
+  since: string | null = null
 ): Promise<ChatRowWithCount[]> {
   const db = supabaseAdmin();
-  const { data, error } = await db
+  let query = db
     .from("chats")
     .select(CHAT_SELECT)
     .eq("workspace_id", workspaceId)
-    .or(`owner_id.eq.${userId},visibility.eq.public`)
-    .order("updated_at", { ascending: false });
+    .or(`owner_id.eq.${userId},visibility.eq.public`);
+  if (since) query = query.gte("session_date", since);
+  const { data, error } = await query.order("updated_at", { ascending: false });
   if (error) throw error;
   return (data ?? []) as ChatRowWithCount[];
+}
+
+/**
+ * Count of chats the caller could otherwise read (same owner-or-public
+ * predicate as `listVisibleChats`) that fall OUTSIDE the retention window
+ * (`session_date < since`). Head-count only — no rows fetched. Drives the
+ * "N older chats hidden" upgrade affordance.
+ */
+export async function countHiddenChats(
+  workspaceId: string,
+  userId: string,
+  since: string
+): Promise<number> {
+  const db = supabaseAdmin();
+  const { count, error } = await db
+    .from("chats")
+    .select("*", { count: "exact", head: true })
+    .eq("workspace_id", workspaceId)
+    .or(`owner_id.eq.${userId},visibility.eq.public`)
+    .lt("session_date", since);
+  if (error) throw error;
+  return count ?? 0;
 }
 
 export async function findChatById(

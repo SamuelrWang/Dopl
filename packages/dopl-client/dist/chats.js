@@ -20,10 +20,8 @@ exports.deleteChatFolder = deleteChatFolder;
 const enc = encodeURIComponent;
 // ─── Read ───────────────────────────────────────────────────────────
 async function listChats(t) {
-    const data = await t.request("/api/chats", {
-        toolName: "chat_list",
-    });
-    return data.chats;
+    const data = await t.request("/api/chats", { toolName: "chat_list" });
+    return { chats: data.chats, hiddenCount: data.hiddenCount ?? 0 };
 }
 async function getChat(t, chatId) {
     const data = await t.request(`/api/chats/${enc(chatId)}`, {
