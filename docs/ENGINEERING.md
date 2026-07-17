@@ -289,6 +289,12 @@ The legacy free-form panel canvas (`features/canvas/`, its `/api/canvas/**` rout
 - **Workflows are first-class step graphs:** `workflow_steps` + `workflow_step_edges` (edge `condition` = agent-readable branch guard; entry steps = indegree-0; no header concept). Server split: repository / graph.ts `composeWorkflow` (topo-ordered) / authoring-{graph,nodes,edges,refs,shared}. `dopl_workflow` keeps its op surface plus a stateless `op='step'` walk read (paced context disclosure — agent fetches one step's skills/knowledge/branches at a time; no run state in v1). `dopl_canvas` is retired.
 - Workflow steps are **not** ontology objects — the free-plan object cap does not count them.
 
+### Realtime & new-workspace seeding (2026-07-17)
+
+- **Realtime:** every content surface streams agent/MCP writes live. Publication covers knowledge_*, skills, skill_versions, workflow_*, ontology_*, chats/chat_messages/chat_folders. Per-feature subscribers live in `features/<name>/client/realtime.ts` on the shared `useWorkspaceTablesRealtime` refetch-signal pattern (events trigger a filtered service refetch — never payload merging, so RLS + service filters like the chats retention window stay authoritative). `src/shared/realtime/refetch-coordinator.ts` defers refetches while local debounced edits are pending — any new live surface MUST use it or it will clobber in-flight typing.
+- **Loading skeletons:** shared primitives in `src/shared/ui/skeleton.tsx` (`Skeleton`/`SkeletonBar`/`SkeletonLine`/`SkeletonText`/`SkeletonRow`/`TwoPaneListSkeleton`). Every page's loading state renders inside its real `.page-float` shell mirroring the loaded layout — server-fetched routes via `loading.tsx`, client-fetched views in their loading branch. Never ship a bare "Loading…" string or a flat panel.
+- **Seeding:** `features/workspaces/server/seed-workspace.ts#seedNewWorkspace` runs at BOTH workspace-creation paths (ensureDefaultWorkspace new-insert branch + createWorkspaceForUser), dependency-ordered (KB → skills → ontology → workflow → chat) so cross-refs use real inserted ids, idempotent on the `dopl-guide` KB slug, best-effort per feature (a failure logs and continues — seeding must never block signup). Content builders are pure (`features/<name>/server/seed.ts`) with insert wrappers (`service-seed.ts`). Seeded rows are ordinary deletable user data. `features/configuration/seed-content.ts` is authored but unwired pending the configuration rebuild.
+
 ---
 
 ## 8. Data Layer

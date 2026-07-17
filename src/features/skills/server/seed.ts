@@ -2,18 +2,27 @@ import "server-only";
 import type { SkillConnector, SkillStatus } from "../types";
 
 /**
- * Seed fixtures inserted by `seedWorkspace` when a brand-new workspace
- * lists skills for the first time within 24h of creation. Bodies use
- * the canonical `[label](dopl://kb/<slug>)` and
- * `[label](dopl://connector/<provider>[.<field>])` syntax that
- * `parseSkillBody` understands.
+ * Seed skills for a brand-new workspace: four skills that teach an agent
+ * to operate Dopl itself — archiving sessions, filing knowledge,
+ * authoring the ontology, and walking a workflow. They replace the
+ * earlier generic set (outbound-email-drafting etc.), which was never
+ * wired to anything live.
  *
- * Mirrors the legacy hardcoded data shape from the deleted `data.ts`.
- * The KB slugs referenced here (networking-emails, competitor-intel,
- * customer-feedback, product-specs) are populated by the knowledge
- * feature's own seed run; broken refs are fine — the chip resolver
- * surfaces them as `available: false` without blocking renders.
+ * Bodies use the canonical `[label](dopl://kb/<slug>)` syntax that
+ * `parseSkillBody` understands, linking back to the seeded Dopl Guide
+ * knowledge base. All four are filed in the "Dopl" folder.
  */
+
+/** Folder every seeded skill lands in. */
+export const DOPL_SKILL_FOLDER = "Dopl";
+
+/** Stable slugs — the ontology + workflow seeds cross-reference these. */
+export const SEED_SKILL_SLUGS = {
+  archiveSession: "archive-a-session-to-chats",
+  fileKnowledge: "file-knowledge-well",
+  authorOntology: "author-the-ontology",
+  walkWorkflow: "walk-a-workflow",
+} as const;
 
 export interface SkillSeed {
   slug: string;
@@ -21,6 +30,7 @@ export interface SkillSeed {
   description: string;
   whenToUse: string;
   whenNotToUse: string;
+  folder: string;
   body: string;
   connectors: SkillConnector[];
   status: SkillStatus;
@@ -29,209 +39,123 @@ export interface SkillSeed {
 export function buildSeedSkills(): SkillSeed[] {
   return [
     {
-      slug: "outbound-email-drafting",
-      name: "Outbound email drafting",
+      slug: SEED_SKILL_SLUGS.archiveSession,
+      name: "Archive a session to Chats",
       description:
-        "Drafts cold and follow-up outreach in your existing tone, using prior threads as context.",
+        "Exports the working session to Dopl Chats so the next session (yours or a teammate's) can pick up where it left off.",
       whenToUse:
-        'User asks to draft a cold email, write a follow-up, or describes outreach intent (e.g. "send Anya something about the report").',
+        "The user is wrapping up a substantive session, says 'save this' / 'log this', or you've produced deliverables worth recording.",
       whenNotToUse:
-        "Internal team comms, replies to existing inbound threads, or anything explicitly transactional (invoices, password resets).",
-      body: `Read the user's voice from [Networking emails](dopl://kb/networking-emails) before drafting. Three patterns matter: openers, asks, and sign-offs.
+        "Trivial exchanges with no decisions or outputs, or when the user explicitly asks not to record something.",
+      folder: DOPL_SKILL_FOLDER,
+      body: `Export with \`dopl_chats\` op=\`export\`. The transcript is **summary-per-message** — one concise line per turn — and you exfiltrate the decisions, deliverables, learnings, and next steps that a future agent needs. See [Dopl Guide](dopl://kb/dopl-guide) for the session ritual.
 
-## Step 1 — Establish context
+## Step 1 — Summarize each message
 
-If the user mentions a prior thread or relationship, search [Gmail threads](dopl://connector/gmail.threads) for the most recent message between them and quote one specific phrase from it verbatim in the new draft. If no thread exists, treat this as a cold open.
+Write one tight summary line per turn (\`role\` = user or agent). Capture what was decided and *why*, not blow-by-blow. Keep \`verbatim\` empty unless the user asked to preserve exact wording (a prompt, a legal line) — then include it on that message only.
 
-## Step 2 — Draft
+## Step 2 — Exfiltrate deliverables and learnings
 
-Match the tone in [Networking emails](dopl://kb/networking-emails). Aim for under four sentences. Lead with the specific reason this person matters, not a generic compliment. One concrete ask. Don't apologize for the cold contact.
+Fill \`deliverables\` as checklist items (\`{ label, done }\`): concrete outputs and whether each landed. Fill \`learnings\` with durable takeaways worth surfacing later ("staging DB resets nightly"). Put next steps in the overview or as unchecked deliverables.
 
-## Step 3 — Sign off
+## Step 3 — Set a stable session id
 
-Sign with the user's first name only. Add a CTA only if explicitly asked. Never use "I hope this finds you well", "I came across your profile", or "I know you're busy" — those are the openers in the [Networking emails](dopl://kb/networking-emails) avoid-list.
+Pass \`clientSessionId\` (a stable handle for this session) so a re-export updates the same chat instead of duplicating it. Give the chat a specific \`title\` and a one-paragraph \`overview\`.
 
-## Output
+## Step 4 — Promote what will matter
 
-Return the draft as a single message. If the user asked for a subject line, prepend it on its own line. Don't include placeholders like [Name] — fill them in or ask the user.`,
-      connectors: [
-        {
-          provider: "gmail",
-          name: "Gmail",
-          status: "connected",
-          meta: "sam@usedopl.com",
-          usedFor: "Search prior threads, reference past replies",
-        },
-        {
-          provider: "slack",
-          name: "Slack",
-          status: "available",
-          usedFor: "Optional: post completed drafts to #outbound for review",
-        },
-      ],
+If a learning will matter next week, don't leave it only in the export — file it as a Knowledge entry (use the "File knowledge well" skill). The export is the session record; the KB is the durable memory.`,
+      connectors: [],
       status: "active",
     },
     {
-      slug: "competitor-research-synthesis",
-      name: "Competitor research synthesis",
+      slug: SEED_SKILL_SLUGS.fileKnowledge,
+      name: "File knowledge well",
       description:
-        "Pulls competitor signal from Slack and Drive, writes a one-pager you can share.",
+        "Turns a durable learning into a well-placed, well-named knowledge base entry — without duplicating what's already filed.",
       whenToUse:
-        "User asks for a competitor recap, wants a positioning teardown, or pastes a competitor URL.",
+        "You've learned something reusable (a fact, a gotcha, a decision, a reference) that should outlive the current session.",
       whenNotToUse:
-        "User wants the raw research data — point them at the [Competitor intel](dopl://kb/competitor-intel) entries directly instead.",
-      body: `Treat [Competitor intel](dopl://kb/competitor-intel) as the source of truth for prior research. Don't restate; build on it.
+        "One-off session detail (belongs in the chat export), or long-lived procedure (author a Skill instead).",
+      folder: DOPL_SKILL_FOLDER,
+      body: `A learning becomes a KB entry when it's *true and reusable* — you'll want to reread it. Procedures become Skills; session records become Chat exports. See [Dopl Guide](dopl://kb/dopl-guide) for the full "Knowledge vs Skills vs Workflows" split.
 
-## Step 1 — Pull recent signal
+## Step 1 — Check it isn't already filed
 
-Search [Slack](dopl://connector/slack) (#compete channel) for messages tagged in the last 30 days. Pull file references from [Drive](dopl://connector/google-drive) (Competitor folder) modified in the same window. De-dup against entries already in [Competitor intel](dopl://kb/competitor-intel).
+Run \`dopl_kb\` op=\`search\` (or \`dopl_search\`) for the topic first. If an entry exists, **update it** rather than adding a near-duplicate — split knowledge only when the topics are genuinely distinct.
 
-## Step 2 — Synthesize
+## Step 2 — Pick the base and folder
 
-Group findings by: pricing changes, positioning shifts, feature ships, hiring signals. One paragraph per group, max. If a group has nothing new, omit it — don't pad.
+Choose the base whose subject matches, and a folder that groups the entry with its siblings. If no base fits, create one with \`op=create_base\` — a clear name beats a catch-all "Misc".
 
-## Step 3 — Write the one-pager
+## Step 3 — Write it tight
 
-Use the same structure as the existing recaps in [Competitor intel](dopl://kb/competitor-intel). Lead with the most disruptive finding. Close with two specific implications for our roadmap. Cite source links inline.`,
-      connectors: [
-        {
-          provider: "slack",
-          name: "Slack",
-          status: "connected",
-          meta: "#compete channel",
-          usedFor: "Pull recent signals + tagged messages",
-        },
-        {
-          provider: "google-drive",
-          name: "Google Drive",
-          status: "connected",
-          meta: "Competitor folder",
-          usedFor: "Pricing screenshots, positioning decks",
-        },
-      ],
+Title it as the thing it answers ("How staging resets", not "Notes"). Lead with the takeaway. Use headings, lists, and a table when structure helps. Write \`op=write_file\` with a short \`excerpt\` so it reads well in lists.
+
+## Step 4 — Link it back
+
+If an ontology object or a workflow step relates to this entry, point that object's \`knowledge\` attribute (or the step's \`reads\`) at the new entry so the graph stays navigable.`,
+      connectors: [],
       status: "active",
     },
     {
-      slug: "customer-feedback-rollup",
-      name: "Customer feedback rollup",
+      slug: SEED_SKILL_SLUGS.authorOntology,
+      name: "Author the ontology",
       description:
-        "Reads support tickets, Slack DMs, and call transcripts; writes a weekly themes digest.",
+        "Models things and their connections as objects — short attributes, template fields on columns, refs and edges over prose.",
       whenToUse:
-        "User asks for a feedback summary, a weekly digest, or 'what are people saying'.",
+        "You need to represent a thing (person, account, project, surface) and how it connects to others, or the graph has drifted from reality.",
       whenNotToUse:
-        "Single-customer questions — pull the specific ticket from [Customer feedback](dopl://kb/customer-feedback) instead of summarizing.",
-      body: `Anchor on [Customer feedback](dopl://kb/customer-feedback). The themes already extracted there are the categories; new feedback gets routed into them.
+        "The content is long-form prose (file it in Knowledge and reference it) or a procedure (author a Skill).",
+      folder: DOPL_SKILL_FOLDER,
+      body: `The ontology holds *structure*, not paragraphs. Objects are index cards; the connections between them are the value. See [Dopl Guide](dopl://kb/dopl-guide) → "Building the ontology" for the house style.
 
-## Step 1 — Gather
+## Step 1 — Object or entry?
 
-Pull the last 7 days from [Slack](dopl://connector/slack) (#customer-feedback) and [Gmail](dopl://connector/gmail) (support@ inbox). Include voice memos referenced in the [Customer feedback](dopl://kb/customer-feedback) pending intake.
+If you're about to write prose, stop — it belongs in a KB entry, and the object should *reference* it with a \`knowledge\` attribute. Make an object only for a discrete thing with attributes and links.
 
-## Step 2 — Bucket
+## Step 2 — Create in a column
 
-For each new piece of feedback, assign it to one of the existing themes in [Customer feedback](dopl://kb/customer-feedback). If it doesn't fit, create a candidate new theme and flag it.
+Objects live in columns inside a cluster (\`dopl_ontology\` op=\`create_cluster\` / \`create_column\` / \`create_object\`). Set the column's \`template\` fields with \`op=set_template_field\` so every new card inherits sensible empty attributes.
 
-## Step 3 — Output
+## Step 3 — Attributes short, refs explicit
 
-Write a digest with: top 3 themes by volume, one quote per theme, count, and trend vs prior week. Surface any new theme candidates at the bottom for review.`,
-      connectors: [
-        {
-          provider: "slack",
-          name: "Slack",
-          status: "connected",
-          meta: "#customer-feedback",
-          usedFor: "Power-user DMs and channel posts",
-        },
-        {
-          provider: "gmail",
-          name: "Gmail",
-          status: "connected",
-          meta: "support@ inbox",
-          usedFor: "Support ticket bodies",
-        },
-        {
-          provider: "notion",
-          name: "Notion",
-          status: "available",
-          usedFor: "Optional: cross-reference call transcripts in Customer DB",
-        },
-      ],
+Set attributes with \`op=set_attribute\`: \`text\`/\`pill\` for values, \`ref\` to link objects, \`knowledge\`/\`skill\` to point at KB entries and skills. Keep values to a phrase. Add labelled edges with \`op=set_relationship\` ("account" —owned by→ "rep") — the label carries the meaning a sentence would only describe.
+
+## Step 4 — Keep it current
+
+When a project ships or a person changes role, update the object in the same session. A wrong graph misleads; a thin-but-true one is fine.`,
+      connectors: [],
       status: "active",
     },
     {
-      slug: "spec-doc-writer",
-      name: "Spec doc writer",
+      slug: SEED_SKILL_SLUGS.walkWorkflow,
+      name: "Walk a workflow",
       description:
-        "Drafts PRDs and ADRs in our house style, with the rationale links the team expects.",
+        "Executes a Dopl workflow step by step — resolving refs, respecting branch conditions, and recording output as you go.",
       whenToUse:
-        "User asks to write a PRD, ADR, design doc, or any structured engineering doc.",
+        "The user asks to run a process that has a workflow, or you find a matching workflow in dopl_map / dopl_workflow op=list.",
       whenNotToUse:
-        "Quick technical questions or one-off RFCs — those don't need the full template overhead.",
-      body: `Use [Product specs](dopl://kb/product-specs) for the house template and tone. Match the existing doc structure exactly — don't invent new sections.
+        "A single repeatable task (run the Skill directly) or a one-off with no branches (just do it).",
+      folder: DOPL_SKILL_FOLDER,
+      body: `Workflows are step graphs with branch-conditioned edges. Walk them one step at a time so context is disclosed at the pace you execute. See [Dopl Guide](dopl://kb/dopl-guide) → "The MCP tools" for the op surface.
 
-## Step 1 — Identify the doc type
+## Step 1 — Find and open
 
-Ask the user once: PRD, ADR, or design note. If unclear, default to ADR for a single technical decision and PRD for anything broader. Each has a different template in [Product specs](dopl://kb/product-specs).
+\`dopl_workflow\` op=\`list\` to find it, then op=\`get\` for the whole graph, or go straight to op=\`step\` to start at the entry step. Prefer op=\`step\` for execution — it hands you exactly one step's detail at a time.
 
-## Step 2 — Pull priors
+## Step 2 — Do the step
 
-Search [Notion](dopl://connector/notion) (Engineering DB) and [GitHub](dopl://connector/github) (ADRs folder) for related prior docs. Link them at the top under "Related" — don't summarize them, just link.
+Each step carries \`reads\` (KB entries/bases to consult), \`actions\` (skills to run), \`description\`, and \`userInput\` it expects. Read what it says to read, run what it says to run, gather any input from the user before moving on.
 
-## Step 3 — Draft
+## Step 3 — Respect the branch
 
-Follow the section order from [Product specs](dopl://kb/product-specs). For ADRs: Context, Decision, Consequences, Alternatives considered. For PRDs: Problem, Users, Solution, Non-goals, Open questions. Don't add extras.
+A step's outgoing edges each carry a \`condition\` — an agent-readable branch guard. Evaluate the conditions against reality and follow the edge that matches. Don't take an unconditional-looking path when a condition applies.
 
-## Step 4 — Open questions
+## Step 4 — Record and advance
 
-End every doc with at least one explicit open question. The team expects them. If you can't think of one, the doc isn't ready.`,
-      connectors: [
-        {
-          provider: "notion",
-          name: "Notion",
-          status: "connected",
-          meta: "Engineering DB",
-          usedFor: "Reference prior PRDs, link related decisions",
-        },
-        {
-          provider: "github",
-          name: "GitHub",
-          status: "connected",
-          meta: "ADRs · 14 docs",
-          usedFor: "Pull existing ADR headers for the related-docs section",
-        },
-      ],
-      status: "draft",
-    },
-    {
-      slug: "voice-memo-to-note",
-      name: "Voice memo to note",
-      description:
-        "Transcribes voice memos and routes the content into the right knowledge base.",
-      whenToUse:
-        "User uploads a voice memo or audio file, or asks to 'capture this'.",
-      whenNotToUse:
-        "Real-time transcription — this is async, for memos you're filing.",
-      body: `Transcribe, then categorize, then file. Don't produce a verbatim transcript as the final artifact unless the user asks for it explicitly.
-
-## Step 1 — Transcribe
-
-Drop the audio into [Drive](dopl://connector/google-drive) (Voice memos folder) for the archive copy. Generate a clean transcript — light punctuation, no filler words.
-
-## Step 2 — Categorize
-
-Match the content to one of the workspace's KBs: [Networking emails](dopl://kb/networking-emails), [Competitor intel](dopl://kb/competitor-intel), [Product specs](dopl://kb/product-specs), or [Customer feedback](dopl://kb/customer-feedback). If multiple, pick the dominant one and flag the rest as cross-references.
-
-## Step 3 — File
-
-Write a 2–4 sentence summary of the memo. Surface any decisions, action items, or quotes worth capturing as their own entries. Add the result to the target KB's pending intake — don't auto-incorporate.`,
-      connectors: [
-        {
-          provider: "google-drive",
-          name: "Google Drive",
-          status: "connected",
-          meta: "Voice memos folder",
-          usedFor: "Archive raw audio + linked transcript",
-        },
-      ],
+Write what the step produced back to its \`agentOutput\` (op=\`update_node\`) so a later reader sees the trace, then follow \`nextInstructions\` to the next step. At the end, archive the session (use "Archive a session to Chats").`,
+      connectors: [],
       status: "active",
     },
   ];

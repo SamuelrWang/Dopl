@@ -1,18 +1,25 @@
 import "server-only";
-import { HARDCODED_KBS } from "./seed-fixtures-data";
 import type { KnowledgeEntryType } from "../types";
 
 /**
- * Server-side adapter that reshapes the canonical fixture data in
- * `./seed-fixtures-data.ts` into the domain-typed seed inputs the
- * service consumes when bootstrapping a new workspace.
+ * Seed-input shapes for workspace bootstrap. The canonical content lives
+ * in `./seed.ts` (`buildSeedKnowledgeBases`); `service-seed.ts` iterates
+ * these to insert a base + its root entries when a new workspace is
+ * created.
  *
- * Structure: each fixture is a flat KB (no folders). Entries land at
- * the base root (`folder_id IS NULL`). The shape supports nested
- * folders for future use; legacy fixtures just don't populate them.
+ * Each fixture is a flat KB (no folders). Entries land at the base root
+ * (`folder_id IS NULL`). The shape supports nested folders for future
+ * use; the current Dopl Guide fixture is flat.
  */
 
 export interface SeedEntryInput {
+  /**
+   * Stable cross-reference handle (NOT the DB id). The seed orchestrator
+   * maps this key → the inserted entry's uuid so ontology objects and
+   * workflow steps can point at specific entries by a name that's known
+   * at authoring time.
+   */
+  key?: string;
   title: string;
   excerpt: string;
   body: string;
@@ -35,18 +42,3 @@ export interface SeedFixture {
   rootFolders: SeedFolderInput[];
   rootEntries: SeedEntryInput[];
 }
-
-export const SEED_FIXTURES: SeedFixture[] = HARDCODED_KBS.map((kb) => ({
-  name: kb.name,
-  slug: kb.slug,
-  description: kb.description,
-  agentWriteEnabled: false,
-  rootFolders: [],
-  rootEntries: kb.entries.map((entry, entryIndex) => ({
-    title: entry.title,
-    excerpt: entry.excerpt,
-    body: entry.body,
-    entryType: entry.type as KnowledgeEntryType,
-    position: entryIndex,
-  })),
-}));

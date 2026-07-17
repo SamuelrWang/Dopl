@@ -1,23 +1,42 @@
 import "server-only";
 import type { KnowledgeContext } from "../types";
 import * as repo from "./repository";
-import { buildSeedKnowledgeBases } from "./seed";
+import { buildSeedKnowledgeBases, DOPL_GUIDE_SLUG } from "./seed";
 import { deriveSlug } from "./service-shared";
+
+/**
+ * A base inserted by the seed, with each entry's stable `key` mapped to
+ * its inserted uuid + title. The orchestrator threads `entryIdByKey`
+ * into the ontology + workflow seeds so their cross-references resolve.
+ */
+export interface SeededBase {
+  baseId: string;
+  slug: string;
+  entryIdByKey: Record<string, { id: string; title: string }>;
+}
+
+export interface SeedKnowledgeResult {
+  basesCreated: number;
+  /** The Dopl Guide base (the cross-reference anchor), or null if nothing seeded. */
+  guide: SeededBase | null;
+}
 
 /**
  * Idempotent — skips entirely if the workspace already has any active
  * base. Inserts each fixture as a base + its root entries (folders are
- * empty in the legacy fixtures).
+ * empty in the current fixtures) and returns the created ids so callers
+ * can cross-reference specific entries.
  */
 export async function seedWorkspace(
   ctx: KnowledgeContext
-): Promise<{ basesCreated: number }> {
+): Promise<SeedKnowledgeResult> {
   const existing = await repo.listBasesForWorkspace(ctx.workspaceId, false);
-  if (existing.length > 0) return { basesCreated: 0 };
+  if (existing.length > 0) return { basesCreated: 0, guide: null };
 
   const fixtures = buildSeedKnowledgeBases();
   const taken = await repo.listBaseSlugsForWorkspace(ctx.workspaceId);
   let basesCreated = 0;
+  let guide: SeededBase | null = null;
 
   for (const fixture of fixtures) {
     const slug = deriveSlug(fixture.slug, taken);
@@ -37,8 +56,9 @@ export async function seedWorkspace(
     });
     basesCreated += 1;
 
+    const entryIdByKey: Record<string, { id: string; title: string }> = {};
     for (const entryInput of fixture.rootEntries) {
-      await repo.insertEntry({
+      const entry = await repo.insertEntry({
         workspaceId: ctx.workspaceId,
         knowledgeBaseId: base.id,
         folderId: null,
@@ -53,10 +73,15 @@ export async function seedWorkspace(
         // themselves should record `last_edited_source = 'user'`.
         source: "user",
       });
+      if (entryInput.key) {
+        entryIdByKey[entryInput.key] = { id: entry.id, title: entry.title };
+      }
     }
-    // Folder seeding deferred — legacy fixtures are flat. When Item 3
-    // introduces nested seed data, recurse `fixture.rootFolders` here.
+
+    if (fixture.slug === DOPL_GUIDE_SLUG) {
+      guide = { baseId: base.id, slug, entryIdByKey };
+    }
   }
 
-  return { basesCreated };
+  return { basesCreated, guide };
 }

@@ -9,6 +9,7 @@ import type {
 import { meetsMinRole } from "../types";
 import { slugifyWorkspaceName } from "../slug";
 import { touchLastSeen } from "./last-seen";
+import { seedNewWorkspace } from "./seed-workspace";
 import { RESERVED_WORKSPACE_SLUGS } from "@/config";
 import {
   deleteWorkspace,
@@ -108,6 +109,9 @@ export async function ensureDefaultWorkspace(userId: string): Promise<Workspace>
       name,
       slug: slugifyWorkspaceName(name),
     });
+    // Seed the "how to use Dopl" starter corpus. Best-effort + idempotent
+    // (never throws), so a seed hiccup can't wedge workspace creation.
+    await seedNewWorkspace(workspace.id, userId);
     return workspace;
   } catch (err) {
     if (isUniqueViolation(err)) {
@@ -171,6 +175,8 @@ export async function createWorkspaceForUser(
     slug: slugifyWorkspaceName(input.name),
     description: input.description ?? null,
   });
+  // Seed the "how to use Dopl" starter corpus (best-effort, never throws).
+  await seedNewWorkspace(workspace.id, userId);
   return workspace;
 }
 

@@ -19,7 +19,9 @@
  *
  * Coordinate (`at={{ x, y }}`) — portals to <body> at fixed viewport
  * coords, clamped fully on-screen (context menus, cursor-anchored
- * pickers); closes on outside mousedown and Escape:
+ * pickers); closes on backdrop click and Escape. The backdrop swallows
+ * the dismiss-click so it can't fall through to whatever sits under
+ * the cursor (nav links, row selects):
  *
  *   <Popover open={!!anchor} at={anchor ?? undefined} onClose={close}>…</Popover>
  */
@@ -105,18 +107,21 @@ function CoordinatePanel({
 }) {
   const { ref, style } = useClampedFixedPosition<HTMLDivElement>(at.x, at.y);
 
-  useEffect(() => {
-    const onDown = (e: MouseEvent) => {
-      if (!ref.current?.contains(e.target as Node)) onClose();
-    };
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
-  }, [onClose, ref]);
-
   return (
-    <div role="menu" ref={ref} style={style} className={cn("z-[1000]", SURFACE, className)}>
-      {children}
-    </div>
+    <>
+      <div
+        className="fixed inset-0 z-[999]"
+        onClick={onClose}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          onClose();
+        }}
+        aria-hidden
+      />
+      <div role="menu" ref={ref} style={style} className={cn("z-[1000]", SURFACE, className)}>
+        {children}
+      </div>
+    </>
   );
 }
 

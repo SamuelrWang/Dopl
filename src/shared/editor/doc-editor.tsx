@@ -95,10 +95,10 @@ export function DocEditor({
       }),
       Underline,
       Link.configure({
-        // `true` opens links on plain click; users edit the URL via
-        // the Link toolbar button (or ⌘K). For an always-editable doc
-        // this beats the silent-no-op `false` default.
-        openOnClick: true,
+        // Plain click places the caret (no surprise navigation while
+        // editing); ⌘/Ctrl+click opens the link (handleDOMEvents
+        // below). Read-only docs follow links natively.
+        openOnClick: false,
         autolink: true,
         HTMLAttributes: {
           class: "text-violet-300 hover:underline",
@@ -117,6 +117,18 @@ export function DocEditor({
     editorProps: {
       attributes: {
         class: PROSE_CLASSES,
+      },
+      handleDOMEvents: {
+        // ⌘/Ctrl+click opens a link in a new tab; plain click just
+        // places the caret (openOnClick is false above).
+        click: (_view, event) => {
+          if (!(event.metaKey || event.ctrlKey)) return false;
+          const anchor = (event.target as HTMLElement).closest("a[href]");
+          if (!(anchor instanceof HTMLAnchorElement)) return false;
+          window.open(anchor.href, "_blank", "noopener,noreferrer");
+          event.preventDefault();
+          return true;
+        },
       },
     },
     onUpdate({ editor }) {
@@ -160,30 +172,30 @@ export function DocEditor({
   // line, or to the right of the constrained max-width column) are
   // ignored, which feels broken — users expect any click on the
   // visible page to position the caret. Wire an onClick on the
-  // wrapper that focuses the editor at end IF the click target is
-  // the wrapper itself (not an element inside the prose). Bumping
-  // the min-height ensures there's a generous click target even
-  // when content is short.
+  // wrappers that focuses the caret at the position NEAREST the
+  // click (never "end" — jumping the caret to the end scrolls a long
+  // doc to the bottom out from under the reader). scrollIntoView is
+  // suppressed for the same reason: the caret lands where the user
+  // clicked, so there is nothing to scroll to.
+  const focusNearestToClick = (e: React.MouseEvent) => {
+    if (readOnly) return;
+    if (e.target !== e.currentTarget) return;
+    const hit = editor.view.posAtCoords({ left: e.clientX, top: e.clientY });
+    const pos =
+      hit?.pos ??
+      // Outside the prose bounds entirely: snap to the nearest edge.
+      (e.clientY > editor.view.dom.getBoundingClientRect().bottom
+        ? "end"
+        : "start");
+    editor.chain().focus(pos, { scrollIntoView: false }).run();
+  };
+
   return (
-    <div
-      className="flex flex-col"
-      onClick={(e) => {
-        if (readOnly) return;
-        if (e.target !== e.currentTarget) return;
-        editor.commands.focus("end");
-      }}
-    >
+    <div className="flex flex-col" onClick={focusNearestToClick}>
       <Toolbar editor={editor} toolbarInset={toolbarInset} />
       <div
         className="mx-auto w-full max-w-3xl px-6 pb-28 min-h-[60vh] cursor-text"
-        onClick={(e) => {
-          if (readOnly) return;
-          // Only fire when the click landed on this wrapper (not on
-          // the prose itself, which Tiptap handles natively to
-          // position the caret at the click point).
-          if (e.target !== e.currentTarget) return;
-          editor.commands.focus("end");
-        }}
+        onClick={focusNearestToClick}
       >
         <EditorContent editor={editor} />
       </div>
