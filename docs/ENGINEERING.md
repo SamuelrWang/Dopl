@@ -16,7 +16,7 @@ Stack: Next.js 16 (App Router) · React 19 · TypeScript (strict) · Supabase ·
 
 ### Known debt
 
-See [docs/REFACTOR-FINDINGS.md](REFACTOR-FINDINGS.md) for the current list of open findings (`F-NNN` ids). At a glance: chrome-extension PascalCase filenames (F-007), files still over the 500-line cap (§2, remeasured 2026-07-11), the canvas store still syncs server data it should push out to a query library (§7). Lint debt is ZERO as of 2026-07-11 (F-006 resolved) — keep `npx eslint` at 0 errors; the invariant test suites (root `npx vitest run` + `packages/mcp-server` `npx vitest run`) are part of definition-of-done for MCP/tool and service changes.
+See [docs/REFACTOR-FINDINGS.md](REFACTOR-FINDINGS.md) for the current list of open findings (`F-NNN` ids) — pruned 2026-07-17 to open-only (resolved entries live in that file's git history). At a glance: files still over the 500-line cap (F-041, §2 table below), deliberate scale deferrals (ontology snapshot F-026, chat pagination F-027), and the CAS token design smell (F-038). Lint debt is ZERO — keep `npx eslint` at 0 errors; the invariant test suites (root `npx vitest run` + `packages/mcp-server` `npx vitest run`) are part of definition-of-done for MCP/tool and service changes.
 
 TanStack Query is now the server-state layer (§7) and every feature's client data hooks are on it — the legacy `useApiGet` / per-feature `useFetch` copies are gone. Don't reintroduce `useEffect + fetch + useState` for mount-time GETs; mutations in event handlers use `apiRequest` (plus a `queryClient.setQueryData`/`invalidateQueries` when a cached list must reflect the change).
 
@@ -104,17 +104,18 @@ setup-intelligence-engine/
 
 These are allowed under the exceptions above OR scheduled for a future split. If you touch one, either shrink it or split it in the same PR.
 
-Remeasured 2026-07-11 (after the knowledge-service / skills-service / KB-panel splits — see F-030). Generated `src/shared/supabase/types.ts` and `*seed-fixtures*` data tables are exempt (§2 carve-outs).
+Remeasured 2026-07-17 (findings-prune audit — tracked as F-041). Generated `src/shared/supabase/types.ts` and `*seed-fixtures*` data tables are exempt (§2 carve-outs).
 
 | File | Lines | Reason |
 |------|-------|--------|
-| `src/features/skills/components/skill-view.tsx` | ~620 | Scheduled: extract detail-rail sections. |
-| `packages/dopl-client/src/client.ts` | ~600 | Scheduled: continue per-domain method-group extraction. |
-| `packages/mcp-server/src/tools/knowledge.ts` | ~600 | Borderline: single-tool module; split ops-vs-render if it grows. |
-| `packages/mcp-server/src/server.ts` | ~595 | Borderline: registration + gating core; watch it. |
-| `packages/mcp-server/src/tools/ontology.ts` | ~590 | Borderline: single-tool module (render half already in ontology-render.ts). |
-| `packages/mcp-server/src/tools/workflow.ts` | ~560 | Borderline: single-tool module (grew with the `step` op — split ops-vs-render if it grows again). |
-| `src/features/teams/server/repository.ts` | ~510 | Borderline: watch it. |
+| `src/features/skills/components/skill-view.tsx` | 759 | First in queue: extract editor/save-chain hook + header controls (grew with concurrency hardening + metadata CAS). |
+| `packages/mcp-server/src/server.ts` | 612 | Borderline: registration + gating core; watch it. |
+| `packages/mcp-server/src/tools/knowledge.ts` | 597 | Borderline: single-tool module; split ops-vs-render if it grows. |
+| `packages/dopl-client/src/client.ts` | 592 | Scheduled: continue per-domain method-group extraction. |
+| `packages/mcp-server/src/tools/workflow.ts` | 588 | Borderline: single-tool module. |
+| `packages/mcp-server/src/tools/ontology.ts` | 586 | Borderline: single-tool module (render half already in ontology-render.ts). |
+| `src/features/workspaces/server/invitations.ts` | 517 | Borderline: watch it. |
+| `src/features/teams/server/repository.ts` | 508 | Borderline: watch it. |
 
 (2026-07-16: all `src/features/canvas/**` rows removed — the legacy canvas feature was deleted wholesale; see §7/§8 workflow notes.)
 

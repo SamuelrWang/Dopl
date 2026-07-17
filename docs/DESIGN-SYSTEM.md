@@ -11,9 +11,9 @@ neutral grays, hairline borders, floating bento cards, concave (pressed-in)
 fields and raised 3D buttons. Currently wired: Knowledge (v2 + the shared
 dialogs/doc-pane), Ontology, Members, Chats, Skills, Configuration,
 Settings, Workspaces (invite/join/create cards), Billing, MCP-connect.
-Exempt: marketing pages, auth + onboarding (their own crystal/3D kit),
-frozen canvas, and the F-022 legacy Button/Dialog primitives pending
-retirement. Every new page starts on this system.
+Exempt: marketing pages and auth + onboarding (their own crystal/3D
+kit). The F-022 legacy Button/Dialog primitives are retired (deleted
+2026-07-17). Every new page starts on this system.
 
 ## Type scale
 
