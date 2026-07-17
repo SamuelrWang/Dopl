@@ -1,3 +1,4 @@
+import type { GraphLayout } from "@/shared/graph";
 import type { WorkflowStep } from "../types";
 
 /**
@@ -36,6 +37,8 @@ export interface WorkflowDetail {
   name: string;
   description: string | null;
   graph: WorkflowGraph | null;
+  /** Persisted dragged step positions (id → {x,y}); `{}` = pure auto-layout. */
+  layout: GraphLayout;
 }
 
 /** Wire shape for a step read ref (POST/PATCH nodes). */

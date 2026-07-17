@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchEntry as apiFetchEntry, fetchTree } from "../../client/api";
-import { useKnowledgeEntry } from "../../client/hooks";
+import { useKnowledgeBases, useKnowledgeEntry } from "../../client/hooks";
 import { useKnowledgeRealtime } from "../../client/realtime";
 import { kbScope } from "../../scope";
 import type { KnowledgeBase, KnowledgeEntry } from "../../types";
@@ -15,7 +15,10 @@ interface ControllerArgs {
   workspaceId: string;
   /** Canonical workspace URL segment, for building /knowledge/{base} URLs. */
   workspaceSegment: string;
-  bases: KnowledgeBase[];
+  /** SSR-resolved bases — the SEED for the live client query, not the source
+   *  of truth. Agent/remote edits to base name/description flow in via the
+   *  knowledge realtime subscriber refetching the query (F-038(2)). */
+  initialBases: KnowledgeBase[];
   /** SSR-resolved initial selection (deep-link target), if any. */
   initialSelection?: Selection | null;
   /** SSR-resolved trees to seed (e.g. the deep-linked base), keyed by baseId. */
@@ -46,10 +49,17 @@ function targetUrl(
 export function useKnowledgeV2Controller({
   workspaceId,
   workspaceSegment,
-  bases,
+  initialBases,
   initialSelection = null,
   initialTrees,
 }: ControllerArgs) {
+  // Bases are a live client query seeded from SSR (no skeleton flash) so
+  // agent/remote base name/description edits appear without a reload —
+  // the realtime subscriber below refetches it. Everything downstream reads
+  // this `bases` exactly as before.
+  const basesQuery = useKnowledgeBases(workspaceId, { initialData: initialBases });
+  const bases = basesQuery.data ?? initialBases;
+
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<ListFilter>("all");
   const [expanded, setExpanded] = useState<Set<string>>(
@@ -257,6 +267,7 @@ export function useKnowledgeV2Controller({
   // active typer. onChange is captured in a ref by the hook — passing a fresh
   // inline closure each render is intentional (no re-subscribe churn).
   useKnowledgeRealtime(workspaceId, () => {
+    basesQuery.refetch();
     for (const baseId of Object.keys(trees)) void refreshTree(baseId);
     openEntryQuery.refetch();
   });
@@ -326,6 +337,9 @@ export function useKnowledgeV2Controller({
     openEntry: openEntryQuery.data,
     openEntryStatus: openEntryQuery.status,
     refetchOpenEntry: openEntryQuery.refetch,
+    /** Refetch the bases list — called after a local base edit so the user's
+     *  own rename/description change reflects without waiting on realtime. */
+    refetchBases: basesQuery.refetch,
     refreshTree,
     handleToggleExpand,
     handleSelectBase,

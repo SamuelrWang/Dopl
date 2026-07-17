@@ -26,10 +26,14 @@ vi.mock("./repository", () => ({
   findSkillById: vi.fn(),
   readSkillBody: vi.fn(),
   updateSkillBody: vi.fn(),
+  updateSkillRow: vi.fn(),
+  listSlugsForWorkspace: vi.fn(),
+  listSkillUsedBy: vi.fn(),
 }));
 
 vi.mock("./history", () => ({
   recordVersion: vi.fn(),
+  recordEvent: vi.fn(),
 }));
 
 vi.mock("@/features/teams/server/repository", () => ({
@@ -42,7 +46,7 @@ vi.mock("@/features/teams/server/repository", () => ({
 import * as repo from "./repository";
 import * as history from "./history";
 import * as teamsRepo from "@/features/teams/server/repository";
-import { listSkills, writeBody } from "./service";
+import { listSkills, updateSkill, writeBody } from "./service";
 import { SkillStaleVersionError } from "./errors";
 
 const mockRepo = vi.mocked(repo);
@@ -188,15 +192,36 @@ describe("writeBody optimistic concurrency", () => {
     expect(mockHistory.recordVersion).not.toHaveBeenCalled();
   });
 
-  it("successful write records exactly one history version", async () => {
+  it("successful write records one history version and returns the fresh metadata clock", async () => {
     mockRepo.readSkillBody.mockResolvedValue(file({ updatedAt: "v1", body: "old body" }));
     mockRepo.updateSkillBody.mockResolvedValue(file({ id: "file-x", updatedAt: "v2", body: "new body" }));
+    // The body write bumped the row's updated_at (touch trigger); writeBody
+    // re-reads it so the client can keep its metadata precondition current
+    // (F-038 D10). body clock (v2) and metadata clock (meta-v2) are distinct.
+    mockRepo.findSkillById.mockResolvedValue(skill({ updatedAt: "meta-v2" }));
 
-    const { file: saved } = await writeBody(ctx(), "skill-x", { body: "new body" }, "v1");
+    const { file: saved, skillUpdatedAt } = await writeBody(
+      ctx(),
+      "skill-x",
+      { body: "new body" },
+      "v1"
+    );
 
     expect(saved.updatedAt).toBe("v2");
+    expect(skillUpdatedAt).toBe("meta-v2");
     expect(mockRepo.updateSkillBody).toHaveBeenCalledTimes(1);
     expect(mockHistory.recordVersion).toHaveBeenCalledTimes(1);
+  });
+
+  it("no-op save returns the unchanged metadata clock without re-reading the row", async () => {
+    mockRepo.readSkillBody.mockResolvedValue(file({ updatedAt: "v1", body: "same body" }));
+
+    const { skillUpdatedAt } = await writeBody(ctx(), "skill-x", { body: "same body" }, "v1");
+
+    // No write happened, so updated_at is unchanged (the pre-read skill's) and
+    // no extra findSkillById round-trip is issued.
+    expect(skillUpdatedAt).toBe("2026-01-01T00:00:00Z");
+    expect(mockRepo.findSkillById).not.toHaveBeenCalled();
   });
 
   it("force (no expected version) skips the precondition but still records history", async () => {
@@ -232,5 +257,33 @@ describe("writeBody optimistic concurrency", () => {
     ).rejects.toBeInstanceOf(SkillStaleVersionError);
 
     expect(mockHistory.recordVersion).not.toHaveBeenCalled();
+  });
+});
+
+// ── (4) updateSkill metadata CAS (F-038 D9) ──────────────────────────
+
+describe("updateSkill metadata optimistic concurrency", () => {
+  it("rejects a stale metadata precondition with SkillStaleVersionError", async () => {
+    mockRepo.findSkillBySlug.mockResolvedValue(skill({ updatedAt: "v1" }));
+
+    await expect(
+      updateSkill(ctx(), "skill-x", { name: "Renamed" }, "v0"),
+    ).rejects.toBeInstanceOf(SkillStaleVersionError);
+
+    // A stale precondition must never reach the row write (last-write-wins was
+    // the D9 bug — the web client now threads this token).
+    expect(mockRepo.updateSkillRow).not.toHaveBeenCalled();
+  });
+
+  it("a matching (or absent) precondition writes the row", async () => {
+    mockRepo.findSkillBySlug.mockResolvedValue(skill({ updatedAt: "v1" }));
+    mockRepo.updateSkillRow.mockResolvedValue(skill({ name: "Renamed", updatedAt: "v2" }));
+
+    const saved = await updateSkill(ctx(), "skill-x", { name: "Renamed" }, "v1");
+
+    expect(saved.name).toBe("Renamed");
+    expect(mockRepo.updateSkillRow).toHaveBeenCalledTimes(1);
+    // The precondition is forwarded to the repo for the atomic CAS re-check.
+    expect(mockRepo.updateSkillRow.mock.calls[0][2]).toBe("v1");
   });
 });

@@ -26,6 +26,9 @@ import { errMessage } from "./skill-view-utils";
 
 interface Props {
   slug: string;
+  /** Workspace being viewed — forwarded to every history call so the
+   *  route targets THIS workspace, not the caller's default. */
+  workspaceId: string;
   canEdit: boolean;
   /** Bump to refetch (e.g. after a save lands). */
   refreshKey: number;
@@ -53,6 +56,7 @@ const EVENT_LABEL: Record<SkillEvent["type"], string> = {
 
 export function SkillHistoryPanel({
   slug,
+  workspaceId,
   canEdit,
   refreshKey,
   onClose,
@@ -75,7 +79,7 @@ export function SkillHistoryPanel({
 
   useEffect(() => {
     let cancelled = false;
-    fetchSkillHistory(slug)
+    fetchSkillHistory(slug, workspaceId)
       .then((payload) => {
         if (cancelled) return;
         setVersions(payload.versions);
@@ -91,7 +95,7 @@ export function SkillHistoryPanel({
     return () => {
       cancelled = true;
     };
-  }, [slug, refreshKey]);
+  }, [slug, workspaceId, refreshKey]);
 
   const timeline = useMemo<TimelineItem[]>(() => {
     const items: TimelineItem[] = [
@@ -160,6 +164,7 @@ export function SkillHistoryPanel({
         <DiffModal
           version={diffFor}
           previous={previousOf(diffFor)}
+          workspaceId={workspaceId}
           canEdit={canEdit}
           onClose={() => setDiffFor(null)}
           onRestored={() => {
@@ -262,12 +267,14 @@ function EventRow({ event }: { event: SkillEvent }) {
 function DiffModal({
   version,
   previous,
+  workspaceId,
   canEdit,
   onClose,
   onRestored,
 }: {
   version: SkillVersion;
   previous: SkillVersion | null;
+  workspaceId: string;
   canEdit: boolean;
   onClose: () => void;
   onRestored: () => void;
@@ -279,8 +286,8 @@ function DiffModal({
   useEffect(() => {
     let cancelled = false;
     Promise.all([
-      fetchSkillVersion(version.id),
-      previous ? fetchSkillVersion(previous.id) : Promise.resolve(null),
+      fetchSkillVersion(version.id, workspaceId),
+      previous ? fetchSkillVersion(previous.id, workspaceId) : Promise.resolve(null),
     ])
       .then(([current, prev]) => {
         if (cancelled) return;
@@ -292,7 +299,7 @@ function DiffModal({
     return () => {
       cancelled = true;
     };
-  }, [version.id, previous]);
+  }, [version.id, previous, workspaceId]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -305,7 +312,7 @@ function DiffModal({
   const handleRestore = async () => {
     setBusy(true);
     try {
-      await restoreSkillVersion(version.id);
+      await restoreSkillVersion(version.id, workspaceId);
       toast({ title: "Version restored", description: PRIMARY_SKILL_FILE_NAME });
       onRestored();
     } catch (err) {

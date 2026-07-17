@@ -1,3 +1,5 @@
+import type { GraphLayout } from "@/shared/graph";
+
 export type AttributeValue =
   | { kind: "text"; value: string }
   | { kind: "pill"; value: string }
@@ -64,6 +66,8 @@ export interface OntologyCluster {
   purpose: string;
   /** The cluster's columns — each a container object whose children are the cards. */
   columnIds: string[];
+  /** Persisted dragged node positions (id → {x,y}); `{}` = pure auto-layout. */
+  layout: GraphLayout;
 }
 
 /** Full workspace ontology as the API serves it — the UI store's shape. */

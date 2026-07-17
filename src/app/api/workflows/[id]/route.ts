@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { DESCRIPTION_MAX } from "@/config";
+import { graphLayoutSchema } from "@/shared/graph/layout-schema";
 import { HttpError } from "@/shared/lib/http-error";
 import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
 import type { Role } from "@/features/workspaces/types";
@@ -28,11 +29,14 @@ function scopeOf(ctx: Ctx) {
 }
 
 // Mirrors the collection route's PostSchema caps so PATCH can't sneak an
-// unbounded name (which becomes an unbounded slug) past validation.
+// unbounded name (which becomes an unbounded slug) past validation. `layout`
+// is the web-only draggable-node positions; the MCP update op never sends it
+// (an optional field that agents simply omit).
 const PatchSchema = z.object({
   name: z.string().min(1).max(120).optional(),
   description: z.string().max(DESCRIPTION_MAX).nullable().optional(),
   clusterId: z.string().uuid().nullable().optional(),
+  layout: graphLayoutSchema.optional(),
 });
 
 /**

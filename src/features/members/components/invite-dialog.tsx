@@ -3,13 +3,12 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronDown, Link2, RotateCcw } from "lucide-react";
-import { Dialog, DialogContent, DialogTitle } from "@/shared/ui/dialog";
+import { ModalShell } from "@/shared/layout/settings-modal";
 import { SearchField } from "@/shared/ui/search-field";
 import { cn } from "@/shared/lib/utils";
 import { apiRequest } from "@/shared/api/api-client";
 import { useApiQuery } from "@/shared/hooks/use-api-query";
 import { useCopyToClipboard } from "@/shared/hooks/use-copy-to-clipboard";
-import appShell from "@/shared/layout/app-shell/app-shell.module.css";
 import type { TeamView } from "@/features/teams/types";
 import type { AssignableRole } from "../types";
 
@@ -219,24 +218,18 @@ export function InviteDialog({
   }
 
   return (
-    <Dialog
+    <ModalShell
       open={open}
-      onOpenChange={(next) => {
-        onOpenChange(next);
-        if (!next) reset();
+      onClose={() => {
+        onOpenChange(false);
+        reset();
       }}
+      label="Add members"
+      size="narrow"
     >
-      {/* lightScope: dialog portals to <body>, escaping the page's light
-          token scope — re-apply it so the popup matches the page. */}
-      <DialogContent
-        showCloseButton={false}
-        className={cn(
-          appShell.lightScope,
-          "sm:max-w-md bg-modal-surface border-border-strong text-text-primary"
-        )}
-      >
-        <div className="flex flex-col items-center text-center gap-1.5 pt-2">
-          <DialogTitle className="text-text-primary">Add members</DialogTitle>
+      <div className="p-6">
+        <div className="flex flex-col items-center text-center gap-1.5">
+          <h2 className="text-title font-medium text-text-primary">Add members</h2>
           <p className="text-body text-text-tertiary">
             Type or paste in emails below, separated by commas
           </p>
@@ -370,7 +363,7 @@ export function InviteDialog({
             </div>
           </div>
         )}
-      </DialogContent>
-    </Dialog>
+      </div>
+    </ModalShell>
   );
 }

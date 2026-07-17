@@ -1,12 +1,8 @@
 "use client";
 
 import type { ReactNode } from "react";
-import type { EdgeSide, NodeRect, SceneEdge } from "./types";
-
-interface Point {
-  x: number;
-  y: number;
-}
+import { labelAnchor } from "./route-edges";
+import type { EdgeSide, NodeRect, Point, SceneEdge } from "./types";
 
 /** Visual style for one edge kind — resolved by the caller and keyed by
  *  `SceneEdge.kind`. `marker` is a `url(#id)` referencing a def the caller
@@ -122,22 +118,6 @@ function roundedPath(points: Point[]): string {
   return `${d} L ${last.x} ${last.y}`;
 }
 
-/** Label sits at the midpoint of the longest segment. */
-function labelPoint(points: Point[]): Point {
-  let best: Point = points[0];
-  let bestLen = -1;
-  for (let i = 1; i < points.length; i++) {
-    const a = points[i - 1];
-    const b = points[i];
-    const len = Math.hypot(b.x - a.x, b.y - a.y);
-    if (len > bestLen) {
-      bestLen = len;
-      best = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-    }
-  }
-  return best;
-}
-
 interface Props {
   edges: SceneEdge[];
   rects: Record<string, NodeRect>;
@@ -163,11 +143,18 @@ const FALLBACK_STYLE: EdgeStyle = { stroke: "var(--text-muted)", width: 1.5 };
 export function EdgeLayer({ edges, rects, focusId, styles, defaultStyle, markers }: Props) {
   const drawn = edges
     .map((edge) => {
-      const from = rects[edge.from];
-      const to = rects[edge.to];
-      if (!from || !to) return null;
-      const points = simplify(routePoints(from, to, edge));
-      return { edge, d: roundedPath(points), mid: labelPoint(points) };
+      // A router-supplied polyline wins; otherwise fall back to the
+      // hint-based single-mid geometry (needs both rects).
+      let points: Point[] | null = null;
+      if (edge.points && edge.points.length >= 2) {
+        points = simplify(edge.points);
+      } else {
+        const from = rects[edge.from];
+        const to = rects[edge.to];
+        if (from && to) points = simplify(routePoints(from, to, edge));
+      }
+      if (!points || points.length < 2) return null;
+      return { edge, d: roundedPath(points), mid: labelAnchor(points) };
     })
     .filter((d): d is NonNullable<typeof d> => d !== null);
 

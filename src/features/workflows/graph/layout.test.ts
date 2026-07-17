@@ -11,7 +11,7 @@ import {
   DEFAULT_HEIGHT,
   layoutWorkflow,
   rankWorkflow,
-  routeWorkflowEdges,
+  toWorkflowSceneEdges,
 } from "./layout";
 
 function step(id: string): WorkflowStep {
@@ -135,30 +135,22 @@ describe("layoutWorkflow", () => {
   });
 });
 
-describe("routeWorkflowEdges", () => {
-  it("routes left→right with right/left sides and a gap-centre mid", () => {
-    const nodes = [step("A"), step("B")];
-    const edges = [edge("A", "B")];
-    const layout = layoutWorkflow(nodes, edges, {});
-    const routed = routeWorkflowEdges(edges, layout);
-    expect(routed[0]).toMatchObject({ fromSide: "right", toSide: "left" });
-    expect(routed[0].mid).toBeGreaterThan(layout.positions.A.x + CARD_WIDTH);
-    expect(routed[0].mid).toBeLessThan(layout.positions.B.x);
+describe("toWorkflowSceneEdges", () => {
+  it("tags an unconditioned edge as a sequence with no label", () => {
+    const [scene] = toWorkflowSceneEdges([edge("A", "B")]);
+    expect(scene).toMatchObject({ kind: "sequence", from: "A", to: "B" });
+    expect(scene.label).toBeUndefined();
   });
 
-  it("tags conditioned edges as branch and carries the condition as label", () => {
-    const nodes = [step("A"), step("B")];
-    const edges = [edge("A", "B", "user approved")];
-    const routed = routeWorkflowEdges(edges, layoutWorkflow(nodes, edges, {}));
-    expect(routed[0].kind).toBe("branch");
-    expect(routed[0].label).toBe("user approved");
+  it("tags a conditioned edge as a branch carrying the condition as label", () => {
+    const [scene] = toWorkflowSceneEdges([edge("A", "B", "user approved")]);
+    expect(scene.kind).toBe("branch");
+    expect(scene.label).toBe("user approved");
   });
 
-  it("staggers parallel edges leaving the same rank so their mids differ", () => {
-    const nodes = [step("A"), step("B"), step("C")];
-    const edges = [edge("A", "B"), edge("A", "C")];
-    const layout = layoutWorkflow(nodes, edges, {});
-    const routed = routeWorkflowEdges(edges, layout);
-    expect(routed[0].mid).not.toBe(routed[1].mid);
+  it("is deterministic and 1:1 with input edges", () => {
+    const edges = [edge("A", "B"), edge("B", "C", "retry")];
+    expect(toWorkflowSceneEdges(edges)).toEqual(toWorkflowSceneEdges(edges));
+    expect(toWorkflowSceneEdges(edges)).toHaveLength(2);
   });
 });

@@ -1,7 +1,7 @@
 "use client";
 
 import { CalendarCheck, CalendarDays, Flag, Users, UsersRound } from "lucide-react";
-import { DESCRIPTION_MAX } from "@/config";
+import { KB_BASE_DESCRIPTION_MAX } from "@/config";
 import { cn } from "@/shared/lib/utils";
 import { TeamChip } from "@/features/members/components/team-bits";
 import styles from "../knowledge-v2.module.css";
@@ -75,7 +75,7 @@ export function MetaCard({
             <span className={styles.fieldLabel}>Description</span>
             {canEdit ? (
               <span className={styles.fieldCount}>
-                {description.length}/{DESCRIPTION_MAX}
+                {description.length}/{KB_BASE_DESCRIPTION_MAX}
               </span>
             ) : null}
           </span>

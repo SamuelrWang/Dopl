@@ -36,7 +36,7 @@ async function handlePut(request: NextRequest, auth: WorkspaceAuthContext) {
     // updated_at. Mismatch → 412 SKILL_STALE_VERSION; client surfaces
     // conflict resolution.
     const expectedUpdatedAt = request.headers.get("x-updated-at") ?? undefined;
-    const { file, skill } = await writeBody(
+    const { file, skill, skillUpdatedAt } = await writeBody(
       ctx,
       requireSkillSlug(auth.params),
       input,
@@ -47,7 +47,10 @@ async function handlePut(request: NextRequest, auth: WorkspaceAuthContext) {
       workspace: { slug: auth.workspaceSlug, publicId: auth.workspacePublicId },
       skill,
     });
-    return NextResponse.json({ file, webUrl });
+    // `skillUpdatedAt` is the row's metadata-CAS clock post-write — the web
+    // editor threads it as its metadata precondition (see F-038 D10). MCP
+    // clients ignore the extra field.
+    return NextResponse.json({ file, webUrl, skillUpdatedAt });
   } catch (err) {
     return toSkillErrorResponse(err);
   }

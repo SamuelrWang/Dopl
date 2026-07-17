@@ -131,18 +131,36 @@ export async function writeKbFileByPath(
 ): Promise<KnowledgeWriteFileResult> {
   // Optimistic concurrency, tri-state on `expectedVersion`:
   //   - string    → atomic compare-and-swap against it (412 on mismatch).
-  //   - undefined  → safe default: read the current version first so the
-  //                  write is STILL a CAS; a concurrent edit can't be
-  //                  silently lost. A missing entry (404) means create.
+  //   - undefined  → strict default: if the entry already exists, refuse
+  //                  (412) — the caller must read_file first and pass the
+  //                  Version it actually saw. The old read-at-write
+  //                  "auto-guard" only proved nothing changed in the
+  //                  microseconds before the PUT; it silently clobbered
+  //                  anything written after the caller's real read. A
+  //                  missing entry (404) means create — no precondition.
   //   - null       → force: blind overwrite, no precondition.
   let version: string | undefined;
   if (expectedVersion === null) {
     version = undefined;
   } else if (expectedVersion === undefined) {
+    let exists = false;
     try {
-      version = (await readKbFileByPath(t, baseId, path)).updatedAt;
+      await readKbFileByPath(t, baseId, path);
+      exists = true;
     } catch (e) {
       if (!(e instanceof DoplApiError) || e.status !== 404) throw e;
+    }
+    if (exists) {
+      throw new DoplApiError(
+        412,
+        JSON.stringify({
+          error: {
+            code: "EXPECTED_VERSION_REQUIRED",
+            message:
+              "This entry already exists. read_file it first and pass its Version as expected_version (or force to overwrite).",
+          },
+        })
+      );
     }
   } else {
     version = expectedVersion;

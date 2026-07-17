@@ -2,14 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/shared/ui/dialog";
+import { X } from "lucide-react";
+import { ModalShell } from "@/shared/layout/settings-modal";
+import modalStyles from "@/shared/layout/settings-modal/settings-modal.module.css";
 import type { Workspace } from "../types";
 import { workspaceSegment } from "../url";
 
@@ -23,10 +18,10 @@ interface Props {
 }
 
 /**
- * Create-workspace modal. Mirrors the PublishDialog idiom (charcoal panel,
- * uppercase-tracking labels, white-on-black submit button). Keeps the
- * field set minimal — name + description — and lets the server pick the
- * slug.
+ * Create-workspace dialog in the new design language: the shared
+ * ModalShell (scrim + fade/pop-in light card) in its narrow size — same
+ * chrome as `CreateBaseDialog`. Keeps the field set minimal — name +
+ * description — and lets the server pick the slug.
  */
 export function CreateWorkspaceDialog({
   open,
@@ -45,6 +40,11 @@ export function CreateWorkspaceDialog({
     setDescription("");
     setError(null);
     setSubmitting(false);
+  }
+
+  function close() {
+    onOpenChange(false);
+    reset();
   }
 
   async function handleCreate() {
@@ -81,24 +81,24 @@ export function CreateWorkspaceDialog({
   }
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        onOpenChange(next);
-        if (!next) reset();
-      }}
-    >
-      <DialogContent className="sm:max-w-md bg-modal-surface border-border-strong text-text-primary">
-        <DialogHeader>
-          <DialogTitle className="text-text-primary">New workspace</DialogTitle>
-          <DialogDescription className="text-text-tertiary">
-            Each workspace is separate — its own knowledge bases, skills,
-            workflows, and members. Switch between workspaces any time
-            from the rail on the left.
-          </DialogDescription>
-        </DialogHeader>
+    <ModalShell open={open} onClose={close} label="New workspace" size="narrow">
+      <button
+        type="button"
+        className={modalStyles.close}
+        onClick={close}
+        aria-label="Close"
+      >
+        <X size={18} />
+      </button>
+      <div className={modalStyles.narrowBody}>
+        <h2 className={modalStyles.narrowTitle}>New workspace</h2>
+        <p className="mb-6 text-lead leading-relaxed text-text-secondary">
+          Each workspace is separate — its own knowledge bases, skills,
+          workflows, and members. Switch between workspaces any time from the
+          rail on the left.
+        </p>
 
-        <div className="flex flex-col gap-4 py-2">
+        <div className="flex flex-col gap-5">
           <div className="flex flex-col gap-1.5">
             <label className="text-label font-medium text-text-tertiary uppercase tracking-wider">
               Name
@@ -132,24 +132,24 @@ export function CreateWorkspaceDialog({
           {error && <p className="text-small text-danger">{error}</p>}
         </div>
 
-        <DialogFooter className="bg-transparent border-border-default">
+        <div className={modalStyles.confirmActions}>
           <button
             type="button"
-            onClick={() => onOpenChange(false)}
-            className="h-8 px-4 rounded-md text-small font-medium text-text-tertiary hover:text-text-secondary transition-colors"
+            className={modalStyles.btnCancel}
+            onClick={close}
           >
             Cancel
           </button>
           <button
             type="button"
+            className={modalStyles.btnConfirm}
             onClick={handleCreate}
             disabled={submitting || !name.trim()}
-            className="h-8 px-4 rounded-md bg-surface-cta text-text-on-cta text-small font-medium hover:bg-surface-cta/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             {submitting ? "Creating..." : "Create workspace"}
           </button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </div>
+      </div>
+    </ModalShell>
   );
 }

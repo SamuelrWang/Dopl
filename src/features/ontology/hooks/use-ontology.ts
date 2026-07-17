@@ -8,6 +8,7 @@ import {
 } from "@/shared/realtime/refetch-coordinator";
 import { toast } from "@/shared/ui/toast";
 import * as api from "../client/api";
+import { planClusterCreateRollback } from "../create-cluster-rollback";
 import { useOntologyRealtime } from "../client/realtime";
 import {
   clusterObjectIds,
@@ -20,6 +21,11 @@ import {
 import type { OntologyCluster, OntologyObject } from "../types";
 
 const OBJECT_SYNC_DELAY_MS = 800;
+
+/** TanStack key for the workspace ontology snapshot — exported so a sibling
+ *  (the graph view's layout-persist error path) can invalidate it. */
+export const ontologySnapshotKey = (workspaceId: string) =>
+  ["ontology-snapshot", workspaceId] as const;
 
 export type OntologyStatus = "loading" | "ready" | "error";
 
@@ -67,7 +73,7 @@ export function useOntology(
   // refetch stays OFF — the reducer holds optimistic edits and a surprise
   // SNAPSHOT_SET mid-edit would clobber them.
   const snapshotQuery = useQuery({
-    queryKey: ["ontology-snapshot", workspaceId],
+    queryKey: ontologySnapshotKey(workspaceId),
     queryFn: () => api.fetchSnapshot(workspaceId),
     refetchOnWindowFocus: false,
     refetchOnMount: "always",
@@ -287,9 +293,13 @@ export function useOntology(
   );
 
   const createCluster = useCallback(async (): Promise<OntologyCluster | null> => {
+    // Tracks whether the cluster POST landed — the guard for rollback: a later
+    // seed POST that fails leaves an orphan cluster to undo (F-031).
+    let createdClusterId: string | null = null;
     try {
       dirtyRef.current = true;
       const cluster = await api.createCluster(workspaceId, { name: "New cluster" });
+      createdClusterId = cluster.id;
       rawDispatch({ type: "CLUSTER_ADD", cluster });
       const column = await api.createObject(workspaceId, {
         clusterId: cluster.id,
@@ -303,6 +313,14 @@ export function useOntology(
       rawDispatch({ type: "OBJECT_ADD", object: card, parentObjectId: column.id });
       return cluster;
     } catch (err) {
+      // Undo a half-created cluster before surfacing the error: drop the
+      // orphan from local state and best-effort delete it server-side so no
+      // ghost unseeded tab or orphan row survives the partial failure.
+      const plan = planClusterCreateRollback(createdClusterId);
+      if (plan.rollback) {
+        rawDispatch({ type: "CLUSTER_DELETE", id: plan.clusterId });
+        void api.deleteCluster(workspaceId, plan.clusterId).catch(() => undefined);
+      }
       if (api.isOverFreeCapError(err)) onOverCapRef.current?.();
       else reportSaveError("create cluster", err);
       return null;

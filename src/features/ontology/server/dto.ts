@@ -1,4 +1,5 @@
 import "server-only";
+import type { GraphLayout } from "@/shared/graph";
 import type { OntologyObject } from "../types";
 
 /**
@@ -9,7 +10,7 @@ import type { OntologyObject } from "../types";
  */
 
 export const ONTOLOGY_CLUSTER_COLS =
-  "id, workspace_id, slug, name, purpose, position, created_at, updated_at, deleted_at";
+  "id, workspace_id, slug, name, purpose, layout, position, created_at, updated_at, deleted_at";
 
 export const ONTOLOGY_OBJECT_COLS =
   "id, workspace_id, name, subtitle, attributes, methods, template, user_id, created_at, updated_at, deleted_at";
@@ -26,6 +27,7 @@ export interface OntologyClusterRow {
   slug: string;
   name: string;
   purpose: string;
+  layout: GraphLayout | null;
   position: number;
   created_at: string;
   updated_at: string;

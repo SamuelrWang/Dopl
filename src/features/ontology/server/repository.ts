@@ -1,4 +1,5 @@
 import "server-only";
+import { mergeStoredLayout, type GraphLayout } from "@/shared/graph";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import type { OntologyObject } from "../types";
 import {
@@ -89,15 +90,49 @@ export async function insertCluster(input: {
   return data as OntologyClusterRow;
 }
 
+/**
+ * Resolve the layout to write for a cluster via the shared merge-except-empty
+ * semantic (see `mergeStoredLayout`). Reads the current row first for the
+ * merge case — the layout column is a single blob, so a partial write must
+ * fold in the untouched nodes itself; the reset (`{}`) case skips the read.
+ */
+async function mergeClusterLayout(
+  db: ReturnType<typeof supabaseAdmin>,
+  workspaceId: string,
+  id: string,
+  patch: GraphLayout
+): Promise<GraphLayout> {
+  if (Object.keys(patch).length === 0) return {};
+  const { data } = await db
+    .from("ontology_clusters")
+    .select("layout")
+    .eq("workspace_id", workspaceId)
+    .eq("id", id)
+    .is("deleted_at", null)
+    .maybeSingle();
+  return mergeStoredLayout((data?.layout ?? null) as GraphLayout | null, patch);
+}
+
 export async function updateCluster(
   workspaceId: string,
   id: string,
-  patch: { name?: string; purpose?: string }
+  patch: { name?: string; purpose?: string; layout?: GraphLayout }
 ): Promise<OntologyClusterRow | null> {
   const db = supabaseAdmin();
+  const update: Record<string, unknown> = {};
+  if (patch.name !== undefined) update.name = patch.name;
+  if (patch.purpose !== undefined) update.purpose = patch.purpose;
+  // Layout merge semantics (shared with workflows service.updateWorkflow):
+  // a non-empty layout patch SHALLOW-MERGES per node id into the stored
+  // layout, so two tabs each dragging a different card don't clobber each
+  // other. An explicit empty `{}` is the reset signal — it REPLACES, wiping
+  // every stored position back to pure auto-layout.
+  if (patch.layout !== undefined) {
+    update.layout = await mergeClusterLayout(db, workspaceId, id, patch.layout);
+  }
   const { data, error } = await db
     .from("ontology_clusters")
-    .update({ ...(patch.name !== undefined && { name: patch.name }), ...(patch.purpose !== undefined && { purpose: patch.purpose }) })
+    .update(update)
     .eq("workspace_id", workspaceId)
     .eq("id", id)
     .is("deleted_at", null)

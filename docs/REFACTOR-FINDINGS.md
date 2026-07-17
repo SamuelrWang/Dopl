@@ -51,7 +51,7 @@ See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture and [plan 
 - Description: `extractors/` directory exists with 7 platform files (totaling ~1900 lines) AND `pipeline.ts` is still 1212 lines. Either the extractors were split out and pipeline still has orphaned copies of the logic, or the extractors are a separate code path and pipeline has its own inline platform handling. Needs investigation at the start of P3a.
 - Evidence: `wc -l src/lib/ingestion/pipeline.ts src/lib/ingestion/extractors/*.ts` → 1212 + 1905 = 3117 total lines.
 - Proposed resolution: defer-to-P3a — investigate at start of pipeline split phase; if duplicate, dedupe in that phase as in-scope fix-now.
-- Status: open
+- Status: obsolete (verified 2026-07-17 audit — `src/lib/ingestion/` and the entire ingestion pipeline/extractors were removed; no `pipeline.ts` or `extractors/` exists anywhere in `src`)
 
 ### F-002: Unused `depth` parameter across multiple extractors
 - Location: `src/lib/ingestion/extractors/{github,instagram,reddit,twitter}.ts` (lint warning in each)
@@ -59,7 +59,7 @@ See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture and [plan 
 - Severity: smell
 - Description: 4 of 7 extractors accept a `depth` parameter they never use. Suggests the extractor signature was generalized for link-following but most platforms don't recurse. Either remove the unused param (if truly unused) or implement depth handling (if it was intended and got dropped).
 - Proposed resolution: defer-to-P3a — fix during the pipeline split (the extractor signature should be normalized as part of that phase anyway).
-- Status: open
+- Status: obsolete (verified 2026-07-17 audit — the `extractors/` directory and all 7 platform files were deleted with the ingestion pipeline; no `depth` param survives)
 
 ### F-003: Lint error in `with-auth.ts` — `any` type and dead eslint-disable
 - Location: `src/lib/auth/with-auth.ts:56` (unused eslint-disable), `:58:45` (`any` type)
@@ -67,7 +67,7 @@ See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture and [plan 
 - Severity: smell
 - Description: The shared auth wrapper (which we're explicitly reusing instead of inventing `requireUser`) has a lint error we should clean up before migrating it to `src/shared/auth/` in P6. One `any` type on line 58.
 - Proposed resolution: defer-to-P6 — fix during the `src/lib/auth/with-auth.ts` → `src/shared/auth/with-auth.ts` migration.
-- Status: open
+- Status: fixed (verified 2026-07-17 audit — migrated to `src/shared/auth/with-auth.ts`; the remaining `any` types now carry USED `eslint-disable`/`eslint-disable-next-line` comments at L56-57/L61, and the whole-src eslint pass reports 0 errors per F-006)
 
 ### F-004: `connection-panel.tsx` has 5 lint errors at one location (L195)
 - Location: `src/components/canvas/panels/connection/connection-panel.tsx:195`
@@ -75,7 +75,7 @@ See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture and [plan 
 - Severity: smell
 - Description: Lint reports 5 errors all flagged at line 195 column 3. Suggests a dense block of offending code (likely `any` types or similar). Not blocking but worth cleaning when the file is touched.
 - Proposed resolution: defer-to-post-refactor — not on the primary refactor path.
-- Status: open
+- Status: obsolete (verified 2026-07-17 audit — `connection-panel.tsx` and the whole `src/components/canvas/` tree were deleted with the canvas feature, F-036)
 
 ### F-005: Built/minified output was being linted (pre-existing config bug)
 - Location: `eslint.config.mjs` (missing `packages/*/dist/**` ignore)
@@ -99,7 +99,7 @@ See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture and [plan 
 - Severity: smell
 - Description: Main app uses kebab-case (`entry-card.tsx`); chrome-extension uses PascalCase (`EntryCard.tsx`). Already scheduled for P6 cleanup per the refactor plan.
 - Proposed resolution: defer-to-P6.
-- Status: open
+- Status: obsolete (verified 2026-07-17 audit — the entire `packages/chrome-extension` package was deleted; `packages/` now holds only `dopl-client` and `mcp-server`)
 
 ### F-008: Landing `page.tsx` still imports `@/hooks/use-speech-recognition` but hooks/ is not scoped to shared yet
 - Location: `src/app/page.tsx`, `src/hooks/use-speech-recognition.ts`
@@ -136,7 +136,7 @@ See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture and [plan 
 - Description: `withErrorHandler` catches unhandled exceptions and logs a `system_events` row with `fingerprintKeys: ["unhandled_route_error", source, name]`, then returns a 500 response. `withUserAuth` in `src/lib/auth/with-auth.ts` wraps its handler in `runAndLog5xx`, which also logs `system_events` with `["5xx", endpoint, "500"]` when the handler returns status ≥ 500. When composed as `withUserAuth(withErrorHandler(...))`, a single unhandled exception produces **two** `system_events` rows (different fingerprints, same incident). Not a crash — fingerprints differ so grouping isn't broken — but it doubles volume and can mislead incident counts.
 - Evidence: `error-handler.ts:39-46` logs, then returns 500 → `with-auth.ts:runAndLog5xx` sees 5xx → logs again.
 - Proposed resolution: defer-to-P4 — decide the composition design when we actually wire `withErrorHandler` into the first route (api/chat/route.ts). Candidate fixes: (a) have withErrorHandler skip its log when a caller signals it's composed under withUserAuth, (b) drop the unhandled-error log from withErrorHandler and rely on runAndLog5xx, (c) keep both intentionally — two perspectives on one incident, with the docs explaining the duplication.
-- Status: open
+- Status: obsolete (verified 2026-07-17 audit — `error-handler.ts` / `withErrorHandler` was never wired into a route and no longer exists as an implementation; the only surviving reference is a doc-comment mention in `src/shared/lib/http-error.ts`, so the double-log composition cannot occur)
 
 ### F-015: Dead migration functions in canvas-store.tsx
 - Location: `src/components/canvas/canvas-store.tsx` (pre-P5a)
@@ -168,7 +168,7 @@ See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture and [plan 
 - Severity: smell
 - Description: PRs #1–#3 added `public_id` to workspaces, knowledge bases, and skills as the URL routing handle. Clusters were originally on the same list, but the plan was based on a wrong assumption that clusters had a user-facing standalone page route. They don't — clusters are canvas panels accessed via `/[workspaceSlug]/canvas`, and the only public surface is `/community/[slug]` which already uses a hybrid slug-with-random-suffix scheme via `generatePublishedSlug`. Internal `clusters` slugs are MCP-addressed and workspace-scoped-unique, which is already adequate.
 - Proposed resolution: defer — revisit only if a future product surface needs cluster URLs to be enumeration-resistant or rename-stable in a way the current scheme doesn't already provide. If we reach for it, the workspaces / KB / skills recipe applies.
-- Status: open
+- Status: open (verified still-real 2026-07-17 audit — clusters still have no user-facing standalone page route; deliberate defer holds)
 
 ### F-016: Legacy slug-only workspace URL fallback awaiting deletion
 - Location: `src/features/workspaces/server/segment.ts` (`resolveWorkspaceSegmentForUser` legacy branch)
@@ -176,7 +176,7 @@ See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture and [plan 
 - Severity: smell
 - Description: After workspaces moved to `{slug}-{publicId}` URLs, the resolver still falls back to slug-only lookup so pre-migration bookmarks (`/dopl-team-workspace/members`) keep working. Each fallback hit logs a `legacy_slug_redirect` system event.
 - Proposed resolution: defer — delete the legacy branch (and `findWorkspaceBySlug` / `findMemberWorkspaceBySlug` if still only used here) once the `legacy_slug_redirect` event drops to zero hits over 14 consecutive days.
-- Status: open
+- Status: open (verified still-real 2026-07-17 audit — `resolveWorkspaceSegmentForUser` legacy branch + `legacy_slug_redirect` event still present in `workspaces/server/segment.ts`; `findWorkspaceBySlug`/`findMemberWorkspaceBySlug` still in repository.ts)
 
 ### F-018: `is_workspace_member` 'editor' → 'member' fix bundled into M-10 migration
 - Location: `supabase/migrations/20260504030000_visibility_private_resources.sql` (the function rewrite at the top), originally introduced by `20260502130000_editor_to_member.sql` which forgot to update the function
@@ -193,7 +193,7 @@ See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture and [plan 
 - Severity: smell
 - Description: The new ENGINEERING.md §2 rule is **500 lines hard cap, no edit may add lines to a file already over 500**. P2 relocations added 1–3 lines to `skeleton.ts` and `clusters/service.ts` via `import "server-only"` + a boundary-note comment, technically violating the new rule. `page.tsx` dropped from 1114 → 823 in P2.5 but is still over. `pipeline.ts` is untouched and will be split in P3a.
 - Proposed resolution: defer — these files are already in the refactor queue for their respective phases (skeleton.ts → P3a, clusters/service.ts → P6 cleanup, pipeline.ts → P3a, page.tsx → P6). Grandfathered with explicit deadlines in ENGINEERING.md §2. Any *further* edits to these files that don't shrink them below 500 must include a split in the same PR.
-- Status: open (tracked)
+- Status: resolved (verified 2026-07-17 audit — all four tracked files are now handled: `skeleton.ts` and `pipeline.ts` deleted with the ingestion pipeline, `src/app/page.tsx` down to 13 lines, `clusters/server/service.ts` down to 244. NOTE: a fresh crop of over-cap files exists (`skills/components/skill-view.tsx` 687 — GREW from 621 during the F-038 concurrency pass, a §2 "no growth over 500" violation; `workspaces/server/invitations.ts` 517; `teams/server/repository.ts` 508) — tracked under F-030's remaining-over-cap list, not here)
 
 ### F-019: Canvas-native drawing primitives don't theme (light mode)
 - Location: `src/features/canvas/canvas-minimap.tsx`, `src/features/canvas/canvas.tsx` (marquee overlay ~L728), `src/features/canvas/clusters/cluster-outline.tsx` (SVG stroke/fill)
@@ -202,7 +202,7 @@ See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture and [plan 
 - Description: These draw with hardcoded `rgba(255,255,255,…)` in JS-computed inline styles / SVG attributes (minimap panel dots + viewport rect, marquee selection box, dashed cluster outline). They aren't CSS-class utilities, so the token sweep left them. In dark mode they're correct (unchanged); in `html.light` they render white-on-light → faint/invisible. The canvas's own grid in `canvas-parts/index.tsx` uses `rgba(0,0,0,…)` (black-on-light = visible, acceptable).
 - Evidence: `grep -rn "rgba(255" src/features/canvas` → minimap, canvas marquee, cluster-outline.
 - Proposed resolution: defer — a dedicated canvas-chrome pass. Either read these colors from CSS vars via `getComputedStyle`/a theme-aware constant, or branch on the active theme. Low risk (canvas chrome only), localized.
-- Status: deferred
+- Status: obsolete (verified 2026-07-17 audit — `canvas-minimap.tsx`, the canvas marquee, and `cluster-outline.tsx` were all deleted with the canvas feature, F-036; the replacement ontology/workflow graph uses the shared `.graph-substrate` class + token colors and has zero `rgba(255,…)` white-on-light primitives)
 
 ### F-020: Legacy `workspace_resource_access` table is inert — drop pending
 - Location: `supabase/migrations/20260503060326_member_resource_access.sql` (table), no remaining code consumers
@@ -210,7 +210,7 @@ See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture and [plan 
 - Severity: smell
 - Description: Per-member resource overrides were replaced wholesale by team-based grants (`teams` / `team_members` / `team_resource_access` + `access_mode` columns). All code paths that read or wrote `workspace_resource_access` were removed (`members/server/access.ts`, the member access route, the access matrix UI, `removeMember`'s manual cleanup). The table and its triggers (`cleanup_resource_access_on_*`) remain in the DB but nothing consults them. One pre-existing override row existed at cutover and silently reverted to the role default.
 - Proposed resolution: defer — once the teams model is stable in prod, ship a `DROP TABLE workspace_resource_access` migration (and its orphaned `cleanup_resource_access_on_*` trigger functions, which also trip the SECURITY DEFINER advisor).
-- Status: open
+- Status: resolved 2026-07-17 — drop migration authored (`supabase/migrations/20260717120000_drop_workspace_resource_access.sql`, NOT yet applied). Note the table was actually created by `20260502140000_member_resource_access.sql` (+ policies/triggers in the 20260503232327 / 20260504050000 / 20260505020000 follow-ups); the canvas cleanup trigger already died with the `canvases` drop, its function is dropped here. Regen `src/shared/supabase/types.ts` after applying (rides the F-036 regen).
 
 ### F-022: Legacy shadcn primitives (`ui/button.tsx`, `ui/dialog.tsx`) are off-token — retire, don't polish
 - Location: `src/shared/ui/button.tsx`, `src/shared/ui/dialog.tsx` (shadcn tokens `bg-popover`/`bg-muted`, raw `text-sm`/`text-xs`)
@@ -218,7 +218,7 @@ See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture and [plan 
 - Severity: smell
 - Description: The base-ui `Dialog` + cva `Button` predate the design system and violate it. They are one of THREE parallel modal systems (`Dialog`, settings-modal `ModalShell`, `ConfirmDialog`). Consumers: workspaces dialogs, knowledge move-to-dialog, members create-team/invite, skills trash-modal, billing paywall. Re-skinning them was deliberately skipped — the end state is consolidating onto `ModalShell`/`ConfirmDialog` during the per-feature cleanup passes, then deleting both files.
 - Proposed resolution: defer — retire during feature passes; do not add new consumers. NOTE: the `shadcn` npm dependency looks unused to a JS-import grep but `globals.css:3` imports `shadcn/tailwind.css` (the token theme these primitives style against) — removing the dep breaks the build until this finding is resolved; drop the dep and the `@import` together when Button/Dialog retire.
-- Status: open
+- Status: resolved 2026-07-17 — both primitives deleted (`shared/ui/button.tsx`, `shared/ui/dialog.tsx`) after migrating all 6 consumers onto the house shells: workspace-danger-zone → `ConfirmDialog`; create-workspace + move-to + skills-trash → `ModalShell` size="narrow" (kit-class buttons `modalStyles.btnCancel`/`btnConfirm`); create-team + invite → `ModalShell` narrow, keeping their centered Notion-style token layouts and dropping the now-redundant `appShell.lightScope` (the `:root` palette is already light-valued). `shadcn` + `class-variance-authority` (button.tsx was cva's only user) removed from package.json and `@import "shadcn/tailwind.css"` removed from globals.css:3 — the compat theme tokens (`--color-popover`/`-muted`/`-primary`/…) are self-defined in the globals `@theme` block, so removal is safe. Follow-ups flagged: `npm install` to regenerate package-lock.json (not run), and orphaned shadcn CLI config `components.json` left in place.
 
 ### F-023: Effective-access rules encoded twice (pure display fn vs server enforcement)
 - Location: `src/features/teams/effective-access.ts` (`computeEffectiveAccess`, server-invoked display) and `src/features/teams/server/access.ts` (`effectiveResourceAccess`/`listEffectiveAccess`, enforcement)
@@ -226,7 +226,7 @@ See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture and [plan 
 - Severity: conflict (latent drift risk)
 - Description: Same rule ladder (admin→edit; workspace-mode→role ceiling; creator→ceiling; else max team grant capped) in two shapes. A forced merge was evaluated and rejected: the server fns early-return specifically to skip team-grant queries (admin/workspace-mode paths), so a shared core would either change query patterns or shrink to a trivial helper. Both file headers now cross-reference each other; a rule change must touch both.
 - Proposed resolution: defer — revisit if the rules ever change (that's when drift becomes real). Never import `effective-access.ts` from client code.
-- Status: open (documented)
+- Status: open (documented; verified still-real 2026-07-17 audit — both `teams/effective-access.ts::computeEffectiveAccess` and `teams/server/access.ts::effectiveResourceAccess`/`listEffectiveAccess` still encode the ladder separately)
 
 ### F-024: Post-extraction aliases pending deletion in feature passes
 - Location: `src/features/chats/components/share-control.tsx` (`SCOPE_ICONS` alias), `src/features/skills/components/skill-share-control.tsx` (`SKILL_SCOPE_ICONS` alias), `src/features/members/components/member-row.tsx` (unused `canManage` in Props at extraction time — since removed)
@@ -234,7 +234,7 @@ See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture and [plan 
 - Severity: smell
 - Description: The ScopeSharePopover extraction left thin per-feature icon-map aliases so `list-pane.tsx` / `skills-browser.tsx` imports kept working. Deletion trigger: the chats and skills feature cleanup passes point those imports at `SHARE_SCOPE_ICONS` in `shared/ui/scope-share-popover.tsx` and drop the aliases.
 - Proposed resolution: defer-to-feature-passes.
-- Status: open
+- Status: fixed (verified 2026-07-17 audit — no `SCOPE_ICONS`/`SKILL_SCOPE_ICONS` aliases remain in `share-control.tsx`/`skill-share-control.tsx`; `list-pane.tsx` + `skills-browser.tsx` now import `SHARE_SCOPE_ICONS` directly from `shared/ui/scope-share-popover`; `canManage` removed from `member-row.tsx`)
 
 ### F-025: Likely-dead API routes
 - Location: `src/app/api/billing/checkout/status/route.ts`, `src/app/api/knowledge/trash/purge/route.ts`, `src/app/api/skills/trash/purge/route.ts` (all three DELETED 2026-07-10 with their handler-only service exports); `src/app/api/workspaces/[workspaceSlug]/canvases/` (2 routes, KEPT)
@@ -242,7 +242,7 @@ See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture and [plan 
 - Severity: smell
 - Description: Zero callers found across src/, packages/dopl-client, packages/mcp-server, dopl-desktop-app. checkout/status: the Stripe return flow strips `session_id` without calling it (webhook + `/api/billing/status` polling confirm payment instead). trash/purge ×2: the daily cron calls the repository fns directly, bypassing these admin routes. The two canvases routes remain because they ride the owner's pending canvas keep/remove decision — they die with the feature if it's cut.
 - Proposed resolution: first three deleted (owner delegated the call); canvases routes ride the canvas decision.
-- Status: open (canvases only)
+- Status: resolved 2026-07-17 — the canvases routes went down with the canvas feature deletion (F-036); `src/app/api/workspaces/[workspaceSlug]/canvases/` no longer exists.
 
 ### F-026: Ontology loads the whole workspace graph per visit — deliberate, revisit at scale
 - Location: `GET /api/ontology` (`ontology/server/service.ts::getSnapshot`), `use-ontology.ts`
@@ -250,7 +250,7 @@ See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture and [plan 
 - Severity: smell (scale)
 - Description: The snapshot pulls every cluster/object/membership/relationship. Per-cluster lazy loading was evaluated and deferred: the whole-graph client model is load-bearing — cluster tabs switch instantly client-side (history.replaceState, no remount), relationship/ref editors address objects across clusters, and the optimistic reducer assumes a complete graph. Splitting it means "objects may be missing" handling through the reducer + editors — break risk on a live feature for no perceptible gain at current graph sizes. Mitigations shipped instead: snapshot served through the query cache (instant repaint on revisit, background refresh with a dirty-guard so refetches never clobber optimistic edits) and the resources provider cached.
 - Proposed resolution: defer — revisit when a workspace graph is large enough that the snapshot payload is felt (likely shape then: light cluster index + per-cluster object pages + id→name directory for cross-cluster refs).
-- Status: open
+- Status: open (verified still-real 2026-07-17 audit — `ontology/server/service.ts::getSnapshot` still pulls the whole graph; deliberate scale defer holds)
 
 ### F-027: Chat transcripts + chat list are unbounded — deferred until transcripts have real size
 - Location: `GET /api/chats/[chatId]` (`chats/server/service.ts::getChat` → `repo.listMessages`, no limit), `GET /api/chats` (`listVisibleChats`, no limit)
@@ -258,7 +258,7 @@ See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture and [plan 
 - Severity: smell (scale)
 - Description: Opening a chat ships the entire transcript including `verbatim`. Measured live at decision time: 3 chats, 14 messages total, largest transcript < 1 KB — pagination now would be speculative. It also isn't free: the detail pane's copy-as-markdown builds from the full message array, and the MCP `dopl_chats` get op expects a complete transcript, so windowing needs a UI load-more + a full-fetch copy path + an explicit MCP contract decision. The repository `select("*")` sites were reviewed and left: the chats tables are consumed column-for-column by their DTO mappers (table ≈ DTO), so explicit lists would add typo fragility without shedding payload.
 - Proposed resolution: defer — trigger is transcripts reaching real size (large MCP session exports). Shape then: `GET /api/chats/[chatId]/messages?cursor=&limit=` (cursor = position) via `parsePageParams`/`Paginated<T>`, detail endpoint returns the first page + messageCount, UI loads more on scroll, copy/MCP fetch full explicitly.
-- Status: open
+- Status: open (verified still-real 2026-07-17 audit — `chats/server/repository.ts::listMessages` + `listVisibleChats` still issue no `.limit`/`.range`; deliberate scale defer holds)
 
 ### F-021: Canvas panels don't team-filter workflow headers/nodes
 - Location: `src/features/canvas/server/load-server-state.ts` (panel load), canvas realtime
@@ -266,7 +266,7 @@ See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture and [plan 
 - Severity: smell
 - Description: Teams-mode workflows are enforced at every workflow API read/write (list, get, graph/node/edge/attachment ops) and in KB reads, but the shared canvas still renders the workflow header/node panels themselves to all members — canvas_panels load is workspace-scoped, not team-scoped. A non-granted member sees the panel shell but every interaction (open, edit, node ops) 404s/403s.
 - Proposed resolution: defer — decide whether teams-mode workflows should disappear from the canvas for non-granted members (needs per-user canvas state filtering + realtime predicate) or render a locked placeholder.
-- Status: open
+- Status: obsolete (verified 2026-07-17 audit — `canvas/server/load-server-state.ts` and canvas_panels rendering were deleted with the canvas feature, F-036; workflows are now their own `/workflows` surface enforced at the API level, so there is no shared-canvas panel shell leaking teams-mode workflows to non-granted members)
 
 ### F-028: Web ontology UI can't name or pick entry-level knowledge refs
 - Location: `src/features/ontology/hooks/use-workspace-resources.tsx` (`nameOf`), `components/attributes-editor.tsx` (knowledge PickMenu), `kanban-card.tsx` / `object-hover-card.tsx` previews
@@ -319,7 +319,7 @@ See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture and [plan 
 - Severity: smell
 - Description: `createCluster` runs three sequential POSTs (cluster → seed column → seed card) inside one try/catch. If the cluster POST succeeds but a later POST throws, the cluster was already dispatched into local state (`CLUSTER_ADD`) yet the function returns `null`, so callers (ontology kanban header, graph view header) don't select it — an unseeded tab appears and the server holds a cluster missing its seed column/card. Same behavior on both `/ontology` and `/canvas2`; pre-existing, surfaced by the graph-view review.
 - Proposed resolution: either make seed creation server-side (one POST creates cluster+column+card atomically in the service) or roll back locally on partial failure (dispatch `CLUSTER_DELETE` + `api.deleteCluster` for the orphan).
-- Status: open
+- Status: fixed (2026-07-17 — `createCluster` catch now rolls back a half-created cluster: `CLUSTER_DELETE` dispatch + fire-and-forget `api.deleteCluster`, guarded on POST#1 success by the pure `planClusterCreateRollback` helper (`ontology/create-cluster-rollback.ts`, unit-tested); error toast unchanged)
 
 ### F-032: Per-user trial vestiges left in analytics after the workspace-billing pivot
 - Location: `src/features/analytics/server/launch-metrics.ts` (queries `profiles.subscription_status` / `trial_expires_at`); `profiles.subscription_*` columns now dormant
@@ -327,7 +327,7 @@ See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture and [plan 
 - Severity: smell
 - Description: billing moved to `workspace_billing` and the 24h trial was retired (access.ts, PaywallGate/Modal, trial-reactivation cron all deleted; auth callback no longer stamps trials), but launch-metrics still reads the dormant per-user columns for historical dashboard tiles, and the webhook no longer emits `subscribed`/`churned`/`reactivated` conversion events those dashboards may expect.
 - Proposed resolution: either retire the trial tiles or repoint them at `workspace_billing` + `mcp_tool_calls`; decide whether conversion events should be re-emitted from the new webhook handler.
-- Status: open
+- Status: fixed (2026-07-17 — subscription tile repointed to `workspace_billing` (count of `plan='pro'`, exposed as `pro_workspaces`); trial tiles/fields (`trials_active`/`trials_expired`/`conversion_trial_to_paid_pct`/`conversion_reactivation_pct`) removed from `launch-metrics.ts` and the admin analytics page markup; dormant `profiles.subscription_*` queries gone. Conversion-event re-emission decision left open — no longer blocks this tile)
 
 ### F-033: `hiddenCount` retention counter is a deliberate approximation
 - Location: `src/features/chats/server/repository.ts` (`countHiddenChats`)
@@ -335,7 +335,7 @@ See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture and [plan 
 - Severity: smell
 - Description: the hidden-chats count applies the `owner_id = user OR visibility = public` predicate but not the in-memory `canSeeChat` refinements (team-grant membership, API-key private-hiding), so team-scoped-but-ungranted or API-key-scoped callers can see a slightly inflated count in the "N older chats hidden" strip. Chosen to keep it one cheap head-count query.
 - Proposed resolution: if it ever matters, push the grant predicate into the count query (join on team grants) rather than fetching rows.
-- Status: open
+- Status: open (verified still-real 2026-07-17 audit — `chats/server/repository.ts::countHiddenChats` L66-76 still applies only the `owner_id OR visibility=public` predicate, no `canSeeChat` refinement; deliberate approximation holds)
 
 ### F-034: `src/shared/supabase/types.ts` hand-edited pending regen
 - Location: `src/shared/supabase/types.ts` (`chats_retention_cutoff` Functions stanza)
@@ -343,7 +343,7 @@ See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture and [plan 
 - Severity: smell
 - Description: the generated-types file was hand-extended with the new DB function (and the migration also later gained `SET search_path = ''` per the Supabase security lint). A `supabase gen types typescript` regen against the live DB (migrations applied 2026-07-16) should reproduce/replace the hand edit.
 - Proposed resolution: regen types on the next schema touch; confirm no drift.
-- Status: open
+- Status: resolved 2026-07-17 — regenerated from the live DB (all repo migrations applied through `graph_layout_columns`); diff vs the hand-edited file was exactly the new `layout: Json` columns (both graph tables) — every prior hand edit (incl. `chats_retention_cutoff`) reproduced by the generator. Also closes F-036 follow-up (1); the 11 dead canvas type entries were already gone. `tsc --noEmit` clean after swap.
 
 ### F-035: Free-plan chats retention window is app-layer only (owner RLS reads bypass it)
 - Location: `supabase/migrations/20260707170000_chats.sql` (`chats_owner_select`); window enforced in `chats/server/{service-reads,retention}.ts`
@@ -351,21 +351,21 @@ See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture and [plan 
 - Severity: smell (accepted for v1)
 - Description: the 90-day free window is enforced in the service layer (list/detail/MCP) and the append echo is stripped, but a chat OWNER can still read their own >90-day rows via direct PostgREST/realtime with their JWT. Deliberately accepted: the window is a monetization gate on the product surface, not a confidentiality boundary (the owner owns the data; export must stay possible per no-data-hostage). Cross-user leakage IS enforced in RLS (team-aware policies, 20260716150000).
 - Proposed resolution: only revisit if the retention gate ever becomes contractual — would need a security-definer read path plus removing direct-table SELECT for owners.
-- Status: open (accepted)
+- Status: open (accepted; verified still-real 2026-07-17 audit — `chats_owner_select` RLS policy unchanged, window enforced only in `chats/server/retention.ts`)
 
 ### F-036: Workflows rebuilt on first-class step tables; legacy canvas deleted (2026-07-16)
 - Location: `features/workflows/**`, `src/shared/graph/`, migrations `20260716210000_workflow_steps.sql` + `20260716220000_drop_canvas_tables.sql`
 - Found during: workflows pivot (step-graph rebuild + canvas teardown)
 - Severity: n/a (record of a structural change + its follow-ups)
 - Description: step graphs moved out of `canvas_panels`/`canvas_edges` into `workflow_steps`/`workflow_step_edges`; `features/canvas` (~9.4k lines, 57 files) deleted; graph drawing layer extracted to `src/shared/graph/`. Follow-ups: (1) regen `src/shared/supabase/types.ts` after the drop migration is applied (11 dead canvas type entries + hand-added stanzas); (2) `read-pick-menu`/`pick-menu`/`workflow-bits` were copied from ontology components into workflows per the §3 no-sideways-imports rule — promote to `src/shared/ui` when a third consumer appears; (3) workflow list endpoint lacks step counts (inactive workflow tabs show name only); (4) baseline lint warning count is now 1 (`proxy.ts`), was 11.
-- Status: open (follow-ups only)
+- Status: open (follow-ups only) — 2026-07-17 audit: (1) RESOLVED (types regenerated from live DB, see F-034); (3) RESOLVED (`workflows/server/service.ts::listWorkflows` L190-258 now computes a grouped `step_count` per workflow so every tab shows a count); (2) still open — the copied pick-menu pattern has only 2 consumer areas (ontology original + workflows copy), no third yet; (4) informational (lint baseline record).
 
 ### F-037: Low-priority residue from the 2026-07-17 verification sweep
 - Location: various (see below)
 - Found during: post-rebuild verification fleet (fix-wave re-review + integration sweep)
 - Severity: smell
 - Description: items verified real but deliberately deferred: (a) immediate connect vs disconnect of the same workflow edge isn't serialized client-side — final state depends on network ordering under rapid clicks (use-workflows.ts); (b) listWorkflows step counts fetch one row per step workspace-wide — fine at current scale, grouped-count RPC if step volumes grow (workflows/server/service.ts); (c) `join` and `onboarding` missing from RESERVED_WORKSPACE_SLUGS / NON_WORKSPACE_ROOTS — pre-existing, only bites legacy slug-only workspace URLs; (d) RESEND_API_KEY documented in .env.example but unused since the trial-reactivation cron was deleted.
-- Status: open
+- Status: (a) FIXED 2026-07-17; (b) open; (c) resolved 2026-07-17 (both slugs added to both lists); (d) resolved 2026-07-17 (.env.example line + comment removed; zero code references confirmed). 2026-07-17 audit re-verified (a) + (b) still-real: (a) `use-workflows.ts` `connectSteps`/`disconnectSteps` each `flushWorkflow` then fire their own API call — `disconnectSteps` only `scheduler.cancel`s a queued CONDITION edit, so an immediate connect POST vs a follow-on disconnect DELETE on the same edge still race on network ordering; (b) `listWorkflows` L180-194 fetches one `workflow_id` row per step workspace-wide and tallies client-side (the grouped-count RPC is the deferred fix). FIX (a): new per-edge FIFO serializer `src/shared/lib/keyed-serializer.ts` (unit-tested — op B's work begins only after op A settles even when both `run` calls are synchronous; distinct keys stay concurrent) wired into `use-workflows.ts`: immediate `connectSteps` and `disconnectSteps` for the same `edgeKey(workflowId,from,to)` now run through one keyed promise-chain, so a rapid connect→disconnect can't resolve by network ordering (the DELETE only issues after the in-flight POST settles). The debounced condition-edit upsert stays on the merge-scheduler and `disconnectSteps` still eagerly cancels a queued one, so it never re-enters the serializer — no `flushWorkflow` deadlock.
 
 ### F-038: Concurrent-edit protection false-positives and bypasses (KB docs + skills)
 - Location: src/features/skills/components/skill-view.tsx, src/features/knowledge/components/doc-pane.tsx, src/features/skills/server/service-body.ts, src/features/knowledge/server/service-entries.ts, packages/dopl-client/src/{skills,knowledge}.ts, packages/mcp-server/src/tools/{skills,knowledge}.ts
@@ -373,12 +373,19 @@ See [docs/ENGINEERING.md](ENGINEERING.md) for the target architecture and [plan 
 - Severity: bug
 - Description: the timestamp-CAS design has no writer identity and no client-side save serialization, so the 412 "edited elsewhere" banner fires on the same human (own MCP agent writes, second tab, overlapping autosaves — flushSave has no in-flight guard so a debounced save B can PUT the pre-A baseline; KB description-blur shares the same token as body autosave). Meanwhile real overwrites slip through: MCP omit-version "auto-guard" re-reads the token at write time (clobbers anything written since the agent's read, with a success response); MCP force=true skips CAS entirely; the 412 handler re-buffers the LOSING save's body over any newer pending keystrokes, so "Save mine" can write older text; unmount flush drops the last ≤1.5s on 412 with only a console.warn; skill metadata writes send no precondition (last-write-wins). Latent: metadata CAS keys on `updated_at`, which the touch trigger bumps on every body save (false-412 the moment any caller sends the header). Presence (avatar dot) is cosmetic and correctly de-dupes multi-tab; it is not the source of the banner.
 - Evidence: skill-view.tsx flushSave/scheduleSave (no in-flight guard; `pendingBodyRef.current = body` in the 412 branch stomps newer buffer), doc-pane.tsx handleDescriptionBlur vs scheduleSave sharing expectedUpdatedAtRef, dopl-client skills.ts:136-141 read-then-write auto-guard, service-body.ts:44 header-absent = CAS skipped, service.test.ts:202-212 enshrining the force path.
-- Proposed resolution: needs-user-decision — options: (a) harden CAS: single-flight client save chain, stop re-buffering stale bodies, unify KB body/description token handling, make MCP writes require the read token (drop write-time auto-guard), keep force but surface it in the web editor; (b) simplify to a presence-based soft lock ("someone else is editing — read-only"), which is weaker (presence has no unload cleanup, and the owner's own MCP agent would lock him out); (c) strike the feature to last-write-wins. Owner leaning (a)-lite or (c).
-- Status: open
+- Proposed resolution: option (a) — harden the CAS, keep the model.
+- Status: mostly fixed 2026-07-17 (uncommitted). Shipped: single-flight save chains in both editors (skill-view + doc-pane — body/description/keep-mine/unmount all serialize through one queue); 412 handler no longer stomps newer buffered keystrokes; skills editor reseed decoupled from save success (`resetKey` no longer contains `updatedAt` — save responses can't clobber in-flight typing); EntryView now gates DocPane on the full entry fetch (the body-stripped tree entry could autosave `body: ""` over the document and seeded a stale token); unmount-flush 412 surfaces a toast instead of a silent console.warn; MCP omit-version writes on existing files now fail 412 with read-first instructions instead of the write-time auto-guard (dopl-client + tool copy). Still open (lower priority): timestamp-equality token design smell (monotonic counter would be sturdier) — D9 + D10 now FIXED 2026-07-17 (see note at end). D4 (presence unload cleanup) resolved 2026-07-17 — `use-presence.ts` untracks on `pagehide` (tab close + bfcache) so a dead tab's editing dot no longer waits for the heartbeat reap. 2026-07-17 audit re-verified D9/D10 still-real: the PATCH `/api/skills/[skillSlug]` route now READS an optional `x-updated-at` header into `expectedUpdatedAt` and `service-writes.ts::updateSkill` L186-220 enforces it — but the client (`skills/client/api.ts::updateSkill`) never sends the header (grep: zero `x-updated-at` in `src/features/skills`), so metadata writes remain last-write-wins in practice (D9); the CAS keys on `updatedAt`/`updated_at` which the body touch-trigger bumps, so enabling it would cross-clock false-412 against `body_updated_at` (D10). FIXED 2026-07-17 (D9 + D10, client-freshness fix per option (a) — kept the two-clock model): the web client now threads the metadata clock end-to-end. `writeBody`/PUT `/api/skills/[skillSlug]/body` re-reads and returns the row's post-write `updated_at` as a sibling `skillUpdatedAt` (the touch-trigger-bumped metadata clock, distinct from `body_updated_at`; MCP/dopl-client ignore the extra field, unchanged). `skill-view.tsx` keeps a `metaBaselineRef` refreshed from every response that carries the metadata clock — initial prop, metadata PATCH result, full skill pulls (`pullFreshSkill`), AND body saves (`skillUpdatedAt`) — and sends it as `x-updated-at` on every name/folder/sharing PATCH through one `commitMeta` choke-point. Threading the body save's fresh `updated_at` is exactly what avoids the D10 cross-path false-412 (a separate metadata-clock column was unnecessary); the body CAS stays on `body_updated_at`, which metadata writes never move, so continuous body typing is never interrupted by a metadata edit. On a metadata 412, `commitMeta` does a metadata-only refresh (`refreshMeta` — no editor reseed, safe mid-body-edit) + an "Edited elsewhere" toast (the discrete-field analogue of the body banner). Tests: `service.test.ts` covers `updateSkill` rejecting a stale precondition + forwarding it to the atomic CAS, and `writeBody` returning the fresh `skillUpdatedAt` on a real write vs. the unchanged clock on a no-op.
 
 ### F-038: New-workspace seeding + realtime/skeleton/KB-overview follow-ups (2026-07-17)
 - Location: `features/workspaces/server/seed-workspace.ts` + per-feature `seed.ts`/`service-seed.ts`; `src/shared/realtime/refetch-coordinator.ts`; `src/shared/ui/skeleton.tsx`; knowledge-v2 detail
 - Found during: seeding build + same-day UI passes
 - Severity: n/a (record + follow-ups)
-- Description: new workspaces now seed a cross-referenced "how to use Dopl" corpus (Dopl Guide KB ×5 entries, 4 Dopl skills, Dopl Playbook ontology cluster w/ ref attrs, Workspace-upkeep workflow w/ branch, 1 sample chat) via an idempotent best-effort orchestrator hooked at both workspace-creation paths (idempotency key: `dopl-guide` KB slug). Follow-ups: (1) `src/features/configuration/seed-content.ts` is authored but UNWIRED — wire when the configuration page is rebuilt; (2) KB base name/description agent edits don't push live (bases list is SSR-prop, not a query); (3) web caps KB description at 300 chars vs server/MCP 2000 — reconcile editors; (4) knowledge-v2 Pin/Trash toolbar buttons remain visual-only; (5) dotted graph-substrate CSS literal duplicated across graph views + skeletons — extract a shared constant; (6) partial-seed retry can re-run non-idempotent later surfaces (best-effort contract, low risk).
-- Status: open (follow-ups only)
+- Description: new workspaces now seed a cross-referenced "how to use Dopl" corpus (Dopl Guide KB ×5 entries, 4 Dopl skills, Dopl Playbook ontology cluster w/ ref attrs, Workspace-upkeep workflow w/ branch, 1 sample chat) via an idempotent best-effort orchestrator hooked at both workspace-creation paths (idempotency key: `dopl-guide` KB slug). Follow-ups: (1) `src/features/configuration/seed-content.ts` is authored but UNWIRED — wire when the configuration page is rebuilt; (2) KB base name/description agent edits don't push live (bases list is SSR-prop, not a query); (3) RESOLVED 2026-07-17 — KB base description reconciled to 2000 everywhere via `KB_BASE_DESCRIPTION_MAX` in src/config (server zod already accepted 2000, MCP copy already said 2000; the four web editors were the lagging layer — entry excerpt + folder descriptions stay at `DESCRIPTION_MAX` 300 by design); (4) knowledge-v2 Pin/Trash toolbar buttons remain visual-only; (5) dotted graph-substrate CSS literal duplicated across graph views + skeletons — extract a shared constant; (6) partial-seed retry can re-run non-idempotent later surfaces (best-effort contract, low risk).
+- Status: open (follow-ups only) — 2026-07-17 audit: (5) RESOLVED (the substrate is now the single shared `.graph-substrate` CSS class in `globals.css:757-761`, consumed by graph-body, workflow-graph, and both skeletons — no duplicated literal); (3) confirmed resolved (`KB_BASE_DESCRIPTION_MAX=2000` threaded through schema + all 4 editors, `DESCRIPTION_MAX=300` for excerpt/folders). Still-real: (1) `configuration/seed-content.ts` has zero importers (still unwired); (2) RESOLVED 2026-07-17 — the KB bases list is now a live client query. `useKnowledgeBases` (knowledge/client/hooks.ts) gained an optional `initialData` seed (mirrors `useKnowledgeEntry`); `use-knowledge-v2-controller.ts` takes the SSR bases as `initialBases`, seeds the query with them (no skeleton flash), and refetches it in the EXISTING `useKnowledgeRealtime` subscriber (`knowledge_bases` was already a watched table), so agent/remote base name/description edits appear without a reload. The local user's own base edits also `refetchBases()` on save (knowledge-v2.tsx `onBaseSaved`) so they reflect immediately; `reconciledSelection` re-points the toolbar/overview off the fresh bases as before. Everything downstream reads `bases` unchanged; (4) fixed (2026-07-17 — `knowledge-v2/detail/detail-panel.tsx` toolbar: dead Pin button removed, Trash wired to the real `deleteBase` flow with a `ConfirmDialog` inline confirm and post-delete navigation to the knowledge root, mirroring `base-settings-form`); (6) unchanged.
+
+### F-039: Missing x-workspace-id header class of bug + interactive-graph residue (2026-07-17)
+- Location: various
+- Found during: seeded-skill detail-load fix + interactive graph build
+- Severity: smell / follow-ups
+- Description: (a) the seeded-skill "Couldn't load" bug was a MISSING `x-workspace-id` HEADER on the skills detail-pane fetches — `withWorkspaceAuth` silently falls back to the user's DEFAULT workspace, so any unscoped client call misbehaves for multi-workspace users. Skills is fixed; AUDIT other features for header-less apiRequest/fetch calls (this is a recurring class). (b) Export links (skills + knowledge) are plain `<a download>` and cannot carry the header — need a query-param workspace scope. (c) `useGraphPositions` adopt-when-idle can briefly revert a just-dragged card if a refetch lands between flush-fire and write-return (self-heals via realtime echo); consider treating in-flight persists as non-idle. (d) ResizeObserver height-measurement block duplicated between ontology graph-view and workflow-graph — extract `use-measured-heights`. (e) `layout` jsonb accumulates entries for deleted nodes (harmless orphans; prune opportunistically on write). (f) fresh-connect condition popover stays open after a cycle rejection (connectSteps is fire-and-forget).
+- Status: (a) CLOSED 2026-07-17 — full-surface audit (every client fetch/apiRequest across features + shared, mapped against withWorkspaceAuth vs path-scoped vs user-global routes) found ZERO additional header-less call sites: skills was the lone case (already fixed); ontology/workflows client wrappers make `workspaceId` a mandatory param, knowledge/chats/billing thread it end-to-end; `/pricing`'s default-workspace fallback is intentional (no workspace context pre-login). (b) CLOSED — knowledge exports fetch as header-carrying blobs, skills export uses `?workspaceId=` + `resolveExportWorkspace` (shared/auth/export-workspace.ts). (c)–(f) CLOSED 2026-07-17 (verified by audit against the graph fix-wave): (c) `shared/graph/use-graph-positions.ts` + `shared/lib/persist-gate.ts` — a refetch is adopted only while no local edit is pending AND `persistGate.busy()` is false, so a just-dragged card can't revert mid-PATCH; (d) `ResizeObserver` height measurement extracted to `shared/graph/use-measured-heights.ts`, consumed by both `workflow-graph.tsx` and ontology `graph-body.tsx`; (e) `shared/graph/positions.ts::pruneLayout` drops stored positions for nodes absent from the auto-layout and is called on both adopt and persist (`use-graph-positions.ts` L86, L102), so orphans no longer accumulate; (f) `connectSteps` now returns `Promise<boolean>` and `workflow-graph.tsx::onConnect` L147-153 opens the condition popover only when the connect resolves truthy — a cycle-rejected connect leaves no dangling popover.

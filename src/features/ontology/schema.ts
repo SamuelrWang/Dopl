@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { graphLayoutSchema } from "@/shared/graph/layout-schema";
 
 const attributeValueSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("text"), value: z.string().max(4000) }),
@@ -43,6 +44,7 @@ export type OntologyClusterCreateInput = z.infer<typeof OntologyClusterCreateSch
 export const OntologyClusterUpdateSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   purpose: z.string().max(1000).optional(),
+  layout: graphLayoutSchema.optional(),
 });
 export type OntologyClusterUpdateInput = z.infer<typeof OntologyClusterUpdateSchema>;
 

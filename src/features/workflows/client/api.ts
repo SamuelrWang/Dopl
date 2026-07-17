@@ -1,6 +1,7 @@
 "use client";
 
 import { apiRequest } from "@/shared/api/api-client";
+import type { GraphLayout } from "@/shared/graph";
 import type {
   NodeContentInput,
   WorkflowDetail,
@@ -26,6 +27,7 @@ interface WorkflowRowEnvelope {
 
 interface WorkflowDetailEnvelope extends WorkflowRowEnvelope {
   graph: WorkflowGraph | null;
+  layout?: GraphLayout | null;
 }
 
 function toSummary(r: WorkflowRowEnvelope): WorkflowSummary {
@@ -47,6 +49,7 @@ function toDetail(r: WorkflowDetailEnvelope): WorkflowDetail {
     name: r.name,
     description: r.description,
     graph: r.graph,
+    layout: r.layout ?? {},
   };
 }
 
@@ -83,7 +86,7 @@ export async function createWorkflow(
 export function updateWorkflow(
   workspaceId: string,
   id: string,
-  input: { name?: string; description?: string | null }
+  input: { name?: string; description?: string | null; layout?: GraphLayout }
 ): Promise<void> {
   return apiRequest(`/api/workflows/${id}`, {
     workspaceId,

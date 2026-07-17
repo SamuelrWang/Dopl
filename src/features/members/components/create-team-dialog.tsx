@@ -2,9 +2,8 @@
 
 import { useState } from "react";
 import { Check } from "lucide-react";
-import { Dialog, DialogContent, DialogTitle } from "@/shared/ui/dialog";
+import { ModalShell } from "@/shared/layout/settings-modal";
 import { cn } from "@/shared/lib/utils";
-import appShell from "@/shared/layout/app-shell/app-shell.module.css";
 import type { AccessMatrixResource } from "@/features/teams/types";
 import type { AccessLevel } from "@/features/teams/access-levels";
 import type { WorkspaceMemberView } from "../types";
@@ -119,24 +118,18 @@ export function CreateTeamDialog({
   }
 
   return (
-    <Dialog
+    <ModalShell
       open={open}
-      onOpenChange={(next) => {
-        onOpenChange(next);
-        if (!next) reset();
+      onClose={() => {
+        onOpenChange(false);
+        reset();
       }}
+      label="Create team"
+      size="narrow"
     >
-      {/* lightScope: dialog portals to <body>, escaping the page's light
-          token scope — re-apply it so the popup matches the page. */}
-      <DialogContent
-        showCloseButton={false}
-        className={cn(
-          appShell.lightScope,
-          "sm:max-w-lg bg-modal-surface border-border-strong text-text-primary"
-        )}
-      >
-        <div className="flex flex-col items-center text-center gap-1.5 pt-2">
-          <DialogTitle className="text-text-primary">Create team</DialogTitle>
+      <div className="p-6">
+        <div className="flex flex-col items-center text-center gap-1.5">
+          <h2 className="text-title font-medium text-text-primary">Create team</h2>
           <p className="text-body text-text-tertiary">
             Group members and control which resources they can reach
           </p>
@@ -240,7 +233,7 @@ export function CreateTeamDialog({
             Cancel
           </button>
         </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </ModalShell>
   );
 }

@@ -1,6 +1,5 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@import "shadcn/tailwind.css";
 
 @plugin "@tailwindcss/typography";
 
@@ -752,6 +751,93 @@ html {
     0 0 0 1px rgba(0, 0, 0, 0.05),
     0 1px 2px rgba(0, 0, 0, 0.12),
     0 3px 6px rgba(0, 0, 0, 0.08);
+}
+
+/* Dotted graph substrate — the recessed world surface the ontology and
+   workflow graphs lay their node cards on. One definition; both features
+   (and their skeletons) compose it over a `bg-bg-inset` recessed viewport. */
+.graph-substrate {
+  background-image: radial-gradient(rgba(35, 42, 49, 0.07) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Graph node card surfaces — the resting / selected / drop-target elevation
+   recipes shared by the ontology object cards and the workflow step cards.
+   The card shell (layout, radius, border WIDTH, bg-elevated) stays in the
+   component; these set the border COLOR + double-shadow per state. Defined
+   before `.graph-node-lift` so that class (same layer) wins while dragging. */
+.graph-node {
+  border-color: var(--border-default);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.05),
+    0 4px 12px rgba(0, 0, 0, 0.06);
+}
+.graph-node:hover {
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.08),
+    0 6px 16px rgba(0, 0, 0, 0.08);
+}
+.graph-node-selected {
+  border-color: var(--border-highlight);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.12),
+    0 4px 14px rgba(0, 0, 0, 0.12);
+}
+.graph-node-target {
+  border-color: var(--border-highlight);
+  box-shadow:
+    0 0 0 2px rgba(35, 42, 49, 0.18),
+    0 6px 16px rgba(0, 0, 0, 0.12);
+}
+
+/* While-dragging lift — a node card raised off the substrate as it moves.
+   Applied by the graph views' drag layer to the node under the pointer. */
+.graph-node-lift {
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.1),
+    0 12px 28px -6px rgba(0, 0, 0, 0.22);
+  cursor: grabbing;
+}
+
+/* Connection port — a small raised handle sitting on a graph node's edge
+   that a drag-to-connect gesture starts from (workflow graph). A white
+   raised dot with a hairline ring; it scales up on hover and while a
+   connect-drag is live (driven by `data-active`). One kit recipe; the
+   feature toggles visibility with opacity utilities. */
+.graph-port {
+  width: 11px;
+  height: 11px;
+  border-radius: 9999px;
+  background: linear-gradient(180deg, #ffffff 0%, #eef1f5 100%);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.14),
+    0 1px 2px rgba(0, 0, 0, 0.16);
+  transition:
+    transform 0.12s ease-out,
+    box-shadow 0.12s ease-out,
+    background 0.12s ease-out;
+}
+.graph-port:hover,
+.graph-port[data-active="true"] {
+  transform: scale(1.4);
+  box-shadow:
+    0 0 0 1px rgba(35, 42, 49, 0.35),
+    0 2px 5px rgba(0, 0, 0, 0.22);
+}
+/* Output handle — an inked centre dot marks the connector's drag-FROM side so
+   it never reads identical to the hollow input socket on the left edge. */
+.graph-port[data-variant="output"] {
+  background:
+    radial-gradient(circle at center, var(--text-secondary) 0 1.6px, transparent 2.1px),
+    linear-gradient(180deg, #ffffff 0%, #eef1f5 100%);
+}
+/* Live drop target during a connect-drag — filled ink dot. */
+.graph-port[data-target="true"] {
+  transform: scale(1.5);
+  background: linear-gradient(180deg, #3a434c 0%, #232a31 100%);
+  box-shadow:
+    0 0 0 1px rgba(35, 42, 49, 0.5),
+    0 2px 6px rgba(0, 0, 0, 0.28);
 }
 
 } /* @layer components */

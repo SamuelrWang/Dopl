@@ -1,17 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, Folder, FolderOpen } from "lucide-react";
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/shared/ui/dialog";
-import { Button } from "@/shared/ui/button";
+import { ChevronDown, ChevronRight, Folder, FolderOpen, X } from "lucide-react";
+import { ModalShell } from "@/shared/layout/settings-modal";
+import modalStyles from "@/shared/layout/settings-modal/settings-modal.module.css";
 import { cn } from "@/shared/lib/utils";
 import type { KnowledgeFolder } from "../types";
 
@@ -105,14 +97,25 @@ export function MoveToDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Move &ldquo;{itemLabel}&rdquo;</DialogTitle>
-          <DialogDescription>
-            Pick the folder to move this {itemType} into.
-          </DialogDescription>
-        </DialogHeader>
+    <ModalShell
+      open={open}
+      onClose={() => onOpenChange(false)}
+      label={`Move ${itemLabel}`}
+      size="narrow"
+    >
+      <button
+        type="button"
+        className={modalStyles.close}
+        onClick={() => onOpenChange(false)}
+        aria-label="Close"
+      >
+        <X size={18} />
+      </button>
+      <div className={modalStyles.narrowBody}>
+        <h2 className={modalStyles.narrowTitle}>Move &ldquo;{itemLabel}&rdquo;</h2>
+        <p className="mb-6 text-lead leading-relaxed text-text-secondary">
+          Pick the folder to move this {itemType} into.
+        </p>
         <div className="max-h-72 overflow-y-auto rounded-md border border-border-subtle bg-surface-raised-1">
           <button
             type="button"
@@ -138,14 +141,25 @@ export function MoveToDialog({
             onSelect={setSelected}
           />
         </div>
-        <DialogFooter>
-          <DialogClose render={<Button variant="ghost">Cancel</Button>} />
-          <Button onClick={handleConfirm} disabled={submitting}>
+        <div className={modalStyles.confirmActions}>
+          <button
+            type="button"
+            className={modalStyles.btnCancel}
+            onClick={() => onOpenChange(false)}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className={modalStyles.btnConfirm}
+            onClick={handleConfirm}
+            disabled={submitting}
+          >
             {submitting ? "Moving…" : "Move here"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          </button>
+        </div>
+      </div>
+    </ModalShell>
   );
 }
 

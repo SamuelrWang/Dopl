@@ -834,6 +834,7 @@ export type Database = {
           created_by: string | null
           deleted_at: string | null
           id: string
+          layout: Json
           name: string
           position: number
           purpose: string
@@ -846,6 +847,7 @@ export type Database = {
           created_by?: string | null
           deleted_at?: string | null
           id?: string
+          layout?: Json
           name: string
           position?: number
           purpose?: string
@@ -858,6 +860,7 @@ export type Database = {
           created_by?: string | null
           deleted_at?: string | null
           id?: string
+          layout?: Json
           name?: string
           position?: number
           purpose?: string
@@ -1750,6 +1753,7 @@ export type Database = {
           created_at: string
           description: string | null
           id: string
+          layout: Json
           name: string
           slug: string
           updated_at: string
@@ -1762,6 +1766,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          layout?: Json
           name: string
           slug: string
           updated_at?: string
@@ -1774,6 +1779,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          layout?: Json
           name?: string
           slug?: string
           updated_at?: string

@@ -32,14 +32,7 @@ export function GraphSkeleton() {
       </div>
 
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
-        <div
-          className="relative min-w-0 flex-1 overflow-hidden bg-bg-inset shadow-[inset_0_2px_6px_rgba(0,0,0,0.06)]"
-          style={{
-            backgroundImage:
-              "radial-gradient(rgba(35,42,49,0.07) 1px, transparent 1px)",
-            backgroundSize: "24px 24px",
-          }}
-        >
+        <div className="graph-substrate relative min-w-0 flex-1 overflow-hidden bg-bg-inset shadow-[inset_0_2px_6px_rgba(0,0,0,0.06)]">
           {NODES.map((node, i) => (
             <NodeCardSkeleton key={i} {...node} />
           ))}

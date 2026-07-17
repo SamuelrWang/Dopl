@@ -1,5 +1,6 @@
 "use client";
 
+import type { PointerEvent as ReactPointerEvent } from "react";
 import { Columns3, Plus, Zap } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { CHIP } from "../components/ontology-bits";
@@ -19,14 +20,18 @@ interface Props {
   onSelect: (id: string) => void;
   onAddCard: (columnId: string) => void;
   registerRef: (id: string, el: HTMLDivElement | null) => void;
+  /** Starts a drag (from the shared `useNodeDrag`). Absent → not draggable. */
+  onPointerDown?: (id: string, e: ReactPointerEvent) => void;
+  /** Live world-space offset while THIS card is the one being dragged. */
+  dragOffset?: { dx: number; dy: number } | null;
+  /** True while any card is dragging — swallows the post-drag click. */
+  isDragging?: boolean;
 }
 
+// Layout shell only — the resting / selected surface recipes are the shared
+// `.graph-node*` kit classes (globals.css), applied per state below.
 const CARD_SHELL =
   "absolute flex flex-col overflow-hidden rounded-xl border bg-bg-elevated text-left transition-shadow";
-const CARD_RESTING =
-  "border-border-default shadow-[0_1px_2px_rgba(0,0,0,0.05),0_4px_12px_rgba(0,0,0,0.06)] hover:shadow-[0_2px_6px_rgba(0,0,0,0.08),0_6px_16px_rgba(0,0,0,0.08)]";
-const CARD_SELECTED =
-  "border-border-highlight shadow-[0_0_0_1px_rgba(0,0,0,0.12),0_4px_14px_rgba(0,0,0,0.12)]";
 
 /**
  * One node card on the graph, rendered from the live OntologyObject.
@@ -44,15 +49,23 @@ export function GraphNode({
   onSelect,
   onAddCard,
   registerRef,
+  onPointerDown,
+  dragOffset,
+  isDragging = false,
 }: Props) {
   const isColumn = node.kind === "column";
+  const lifted = dragOffset != null;
 
   return (
     <div
       ref={(el) => registerRef(node.id, el)}
       role="button"
       tabIndex={0}
-      onClick={() => onSelect(node.id)}
+      onPointerDown={onPointerDown ? (e) => onPointerDown(node.id, e) : undefined}
+      onClick={() => {
+        if (isDragging) return;
+        onSelect(node.id);
+      }}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
@@ -61,14 +74,18 @@ export function GraphNode({
       }}
       className={cn(
         CARD_SHELL,
-        selected ? CARD_SELECTED : CARD_RESTING,
-        "cursor-pointer focus:outline-none"
+        selected ? "graph-node-selected" : "graph-node",
+        "focus:outline-none",
+        onPointerDown ? "cursor-grab" : "cursor-pointer",
+        lifted && "graph-node-lift"
       )}
       style={{
         left: position.x,
         top: position.y,
         width: position.width,
         opacity: dimmed ? 0.45 : 1,
+        transform: lifted ? `translate(${dragOffset.dx}px, ${dragOffset.dy}px)` : undefined,
+        zIndex: lifted ? 10 : undefined,
       }}
     >
       {isColumn ? (
@@ -107,6 +124,7 @@ function ColumnBody({
             type="button"
             aria-label={`Add object to ${object.name || "column"}`}
             title="Add object"
+            onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.stopPropagation();
               onAddCard();

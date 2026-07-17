@@ -30,9 +30,11 @@ export const RESERVED_WORKSPACE_SLUGS: ReadonlySet<string> = new Set([
   "docs",
   "e",
   "invite",
+  "join",
   "login",
   "mcp",
   "oauth",
+  "onboarding",
   "pricing",
   "privacy",
   "settings",
@@ -44,7 +46,14 @@ export const RESERVED_WORKSPACE_SLUGS: ReadonlySet<string> = new Set([
 ]);
 
 // ── Descriptor convention ───────────────────────────────────────────
-// Agent-facing descriptions (knowledge entries/folders/bases, workflow
+// Agent-facing descriptions (knowledge entries/folders, workflow
 // clusters) are capped at 300 chars: long enough for a useful preview,
 // short enough that the MCP listings they stream into stay lean.
 export const DESCRIPTION_MAX = 300;
+
+// Knowledge-base descriptions are the exception: one per base (they
+// never fan out across tree listings), so they get the same 2000-char
+// budget as workspace/skill descriptions. The server zod and the MCP
+// dopl_kb tool copy both advertise 2000 — keep every editor on this
+// constant so the layers can't drift again (F-038 follow-up 3).
+export const KB_BASE_DESCRIPTION_MAX = 2000;

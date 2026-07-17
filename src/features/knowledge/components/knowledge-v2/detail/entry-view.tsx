@@ -1,13 +1,14 @@
 "use client";
 
+import { FileWarning } from "lucide-react";
+import { EmptyState } from "@/shared/ui/empty-state";
 import { DocPane } from "../../doc-pane";
+import { DocBodySkeleton } from "../../doc-pane-chrome";
 import type { KnowledgeBase, KnowledgeEntry } from "../../../types";
 import styles from "../knowledge-v2.module.css";
 
 interface Props {
   base: KnowledgeBase;
-  /** Tree-metadata entry (title/timestamps; body stripped). */
-  metaEntry: KnowledgeEntry;
   /** Full entry with body, once the controller's per-entry fetch resolves. */
   fullEntry: KnowledgeEntry | null;
   status: "idle" | "loading" | "success" | "error";
@@ -25,32 +26,53 @@ const V2_TOOLBAR_INSET = "md:left-[650px] md:right-[14px]";
 
 /**
  * File view — the real rich-text editor with full v1 robustness (conflict-safe
- * autosave, focus-refetch, presence, agent-facing description). The per-entry
- * body fetch + realtime live in the controller; this renders DocPane with the
- * resolved body, showing a skeleton until it lands.
+ * autosave, focus-refetch, presence, agent-facing description).
+ *
+ * DocPane mounts ONLY once the full entry (body + fresh `updated_at`) is in
+ * hand — never the body-stripped tree entry. Mounting on tree metadata let a
+ * title edit during the load window autosave `body: ""` over the whole
+ * document, and seeded the concurrency token from possibly-stale tree data
+ * (phantom "edited elsewhere" conflicts).
  */
 export function EntryView({
   base,
-  metaEntry,
   fullEntry,
   status,
   workspaceId,
   onTreeRefresh,
   onFocusRefetch,
 }: Props) {
-  const displayEntry = fullEntry ?? metaEntry;
-  // Until the full body lands, show the body skeleton instead of a blank
-  // editor. False on error (don't hang the skeleton) and once the body for
-  // THIS entry is in hand.
-  const bodyLoading = fullEntry?.id !== metaEntry.id && status !== "error";
+  if (!fullEntry) {
+    if (status === "error") {
+      return (
+        <EmptyState
+          icon={FileWarning}
+          title="Couldn't load this file."
+          description="Check your connection, then try again."
+        >
+          <button
+            type="button"
+            onClick={onFocusRefetch}
+            className="btn-light rounded-md px-2.5 py-1 text-small font-medium text-text-primary"
+          >
+            Retry
+          </button>
+        </EmptyState>
+      );
+    }
+    return (
+      <div className={styles.editorScope}>
+        <DocBodySkeleton />
+      </div>
+    );
+  }
 
   return (
     <div className={styles.editorScope}>
       <DocPane
-        key={displayEntry.id}
-        entry={displayEntry}
+        key={fullEntry.id}
+        entry={fullEntry}
         workspaceId={workspaceId}
-        bodyLoading={bodyLoading}
         toolbarInset={V2_TOOLBAR_INSET}
         onSaved={() => onTreeRefresh(base.id)}
         onStaleVersion={() => onTreeRefresh(base.id)}

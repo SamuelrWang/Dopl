@@ -100,13 +100,22 @@ function useKnowledgeQuery<T>(
 
 // ─── Hooks ──────────────────────────────────────────────────────────
 
-export function useKnowledgeBases(workspaceId?: string): Result<KnowledgeBase[]> {
+export function useKnowledgeBases(
+  workspaceId?: string,
+  options?: { initialData?: KnowledgeBase[] }
+): Result<KnowledgeBase[]> {
   // Use the workspace id as the cache key so switching workspaces
   // re-fetches. Fall back to a sentinel so the hook still fires when
-  // no id is provided (uses the user's default workspace).
+  // no id is provided (uses the user's default workspace). An optional
+  // SSR seed avoids a skeleton flash when the page already loaded the
+  // list on the server (mirrors useKnowledgeEntry's initialData).
+  const key = `bases:${workspaceId ?? "default"}`;
   return useKnowledgeQuery<KnowledgeBase[]>(
-    `bases:${workspaceId ?? "default"}`,
-    () => fetchBases(workspaceId)
+    key,
+    () => fetchBases(workspaceId),
+    options?.initialData !== undefined
+      ? { initialData: options.initialData, initialKey: key }
+      : undefined
   );
 }
 

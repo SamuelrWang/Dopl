@@ -1,6 +1,7 @@
 "use client";
 
 import { ApiError, apiRequest } from "@/shared/api/api-client";
+import type { GraphLayout } from "@/shared/graph";
 import type { OntologyCluster, OntologyObject, OntologySnapshot } from "../types";
 import type { OntologyObjectUpdateInput } from "../schema";
 
@@ -66,7 +67,7 @@ export async function createCluster(
 export async function updateCluster(
   workspaceId: string,
   clusterId: string,
-  input: { name?: string; purpose?: string }
+  input: { name?: string; purpose?: string; layout?: GraphLayout }
 ): Promise<OntologyCluster> {
   const { cluster } = await request<{ cluster: OntologyCluster }>(
     workspaceId,

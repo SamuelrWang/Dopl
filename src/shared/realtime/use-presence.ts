@@ -97,7 +97,21 @@ export function usePresence(
         }
       });
 
+    // React unmount never runs on tab close / bfcache navigation, so
+    // without this a closed tab leaves a phantom presence until the
+    // socket heartbeat reaps it. `pagehide` (not `beforeunload`) covers
+    // both; the untrack is best-effort fire-and-forget.
+    function handlePageHide() {
+      try {
+        void channel.untrack();
+      } catch {
+        // Socket already gone — the server-side reap handles it.
+      }
+    }
+    window.addEventListener("pagehide", handlePageHide);
+
     return () => {
+      window.removeEventListener("pagehide", handlePageHide);
       channelRef.current = null;
       try {
         void channel.untrack();

@@ -30,13 +30,21 @@ export async function readBody(
 /**
  * Overwrite the skill's SKILL.md body (PUT semantics). Preserves the
  * optimistic-versioning CAS + history snapshotting.
+ *
+ * `skillUpdatedAt` is the skill row's `updated_at` AFTER the write — the
+ * separate metadata-CAS clock. A body write bumps it (the skills touch
+ * trigger fires on the same UPDATE), so returning the fresh value lets the
+ * web editor keep its metadata precondition current; otherwise the next
+ * name/folder/sharing PATCH would false-412 (F-038 D10). The body's own CAS
+ * clock stays `file.updatedAt` (= body_updated_at), which metadata writes
+ * never move.
  */
 export async function writeBody(
   ctx: SkillContext,
   slug: string,
   input: SkillFileWriteInput,
   expectedUpdatedAt?: string
-): Promise<{ file: SkillFile; skill: Skill }> {
+): Promise<{ file: SkillFile; skill: Skill; skillUpdatedAt: string }> {
   const skill = await getSkillBySlug(ctx, slug);
   await assertAgentWriteAllowed(ctx, skill);
   const file = await repo.readSkillBody(ctx.workspaceId, skill.id);
@@ -45,9 +53,9 @@ export async function writeBody(
     throw new SkillStaleVersionError(expectedUpdatedAt, file.updatedAt);
   }
   // No-op saves (autosave echoes, agent re-writes of identical content)
-  // neither touch the row nor mint a version.
+  // neither touch the row nor mint a version — so updated_at is unchanged.
   if (input.body === file.body) {
-    return { file, skill };
+    return { file, skill, skillUpdatedAt: skill.updatedAt };
   }
   const saved = await repo.updateSkillBody(
     skill.id,
@@ -71,5 +79,14 @@ export async function writeBody(
     skillId: skill.id,
     body: saved.body,
   });
-  return { file: saved, skill };
+  // Re-read the row's post-write updated_at (the metadata clock the touch
+  // trigger just bumped). Falls back to the pre-write value only if the row
+  // vanished mid-write (deleted concurrently) — a later metadata edit would
+  // then 412 and reconcile.
+  const fresh = await repo.findSkillById(ctx.workspaceId, skill.id);
+  return {
+    file: saved,
+    skill,
+    skillUpdatedAt: fresh?.updatedAt ?? skill.updatedAt,
+  };
 }

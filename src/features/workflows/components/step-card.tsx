@@ -1,10 +1,24 @@
 "use client";
 
+import type { PointerEvent as ReactPointerEvent } from "react";
 import { BookText, FileText, LogIn, Zap } from "lucide-react";
 import type { NodeLayout } from "@/shared/graph";
 import { cn } from "@/shared/lib/utils";
+import type { PortSide } from "../graph/ports";
 import type { WorkflowStep } from "../types";
 import { FLAT_CHIP } from "./workflow-bits";
+
+/** Connect-drag wiring for a card's ports (absent → no ports, viewers). */
+export interface CardConnect {
+  /** A connector drag is in progress somewhere on the graph. */
+  active: boolean;
+  /** This card is the drag source. */
+  isSource: boolean;
+  /** This card is the live drop target under the pointer. */
+  isTarget: boolean;
+  /** Start a connector drag from this card's port. */
+  onPortPointerDown: (id: string, side: PortSide, e: ReactPointerEvent) => void;
+}
 
 interface Props {
   step: WorkflowStep;
@@ -17,14 +31,20 @@ interface Props {
   dimmed: boolean;
   onSelect: (id: string) => void;
   registerRef: (id: string, el: HTMLDivElement | null) => void;
+  /** Starts a node drag (shared `useNodeDrag`). Absent → not draggable. */
+  onPointerDown?: (id: string, e: ReactPointerEvent) => void;
+  /** Live world-space offset while THIS card is the one being dragged. */
+  dragOffset?: { dx: number; dy: number } | null;
+  /** True while any card is dragging — swallows the post-drag click. */
+  isDragging?: boolean;
+  /** Drag-to-connect ports (absent → none rendered). */
+  connect?: CardConnect;
 }
 
+// Layout shell only — the resting / selected / drop-target surface recipes
+// are the shared `.graph-node*` kit classes (globals.css), applied per state.
 const CARD_SHELL =
-  "absolute flex flex-col overflow-hidden rounded-xl border bg-bg-elevated text-left transition-shadow";
-const CARD_RESTING =
-  "border-border-default shadow-[0_1px_2px_rgba(0,0,0,0.05),0_4px_12px_rgba(0,0,0,0.06)] hover:shadow-[0_2px_6px_rgba(0,0,0,0.08),0_6px_16px_rgba(0,0,0,0.08)]";
-const CARD_SELECTED =
-  "border-border-highlight shadow-[0_0_0_1px_rgba(0,0,0,0.12),0_4px_14px_rgba(0,0,0,0.12)]";
+  "group absolute flex flex-col overflow-hidden rounded-xl border bg-bg-elevated text-left transition-shadow";
 
 const MAX_CHIPS = 3;
 
@@ -32,7 +52,9 @@ const MAX_CHIPS = 3;
  * One workflow step, rendered as a bento-family card on the graph: title +
  * clamped description, READ chips (knowledge the step consults) and ACTION
  * chips (skills it runs), and a counts meta row. Entry steps (indegree 0)
- * wear an "entry" pill. Selecting opens the StepPanel.
+ * wear an "entry" pill. The card body starts a node drag (reposition);
+ * hovering reveals output/input ports that start a drag-to-connect. Clicking
+ * (without dragging) opens the StepPanel.
  */
 export function StepCard({
   step,
@@ -43,16 +65,53 @@ export function StepCard({
   dimmed,
   onSelect,
   registerRef,
+  onPointerDown,
+  dragOffset,
+  isDragging = false,
+  connect,
 }: Props) {
   const reads = step.reads.slice(0, MAX_CHIPS);
   const actions = step.actions.slice(0, MAX_CHIPS);
+  const lifted = dragOffset != null;
+  const showPorts = connect != null && !lifted;
+  const connecting = connect?.active ?? false;
+  const isSource = connect?.isSource ?? false;
+
+  const opacity = lifted
+    ? 1
+    : connecting
+      ? isSource
+        ? 0.9
+        : 1
+      : dimmed
+        ? 0.45
+        : 1;
+
+  // Idle: both ports reveal on hover. While a connect-drag is live, show only
+  // the output handle on the SOURCE card and only the input socket on every
+  // other card — so a drop target reads unambiguously.
+  const hoverReveal = "opacity-0 group-hover:opacity-100";
+  const inputVisibility = !connecting
+    ? hoverReveal
+    : isSource
+      ? "opacity-0 pointer-events-none"
+      : "opacity-100";
+  const outputVisibility = !connecting
+    ? hoverReveal
+    : isSource
+      ? "opacity-100"
+      : "opacity-0 pointer-events-none";
 
   return (
     <div
       ref={(el) => registerRef(step.id, el)}
       role="button"
       tabIndex={0}
-      onClick={() => onSelect(step.id)}
+      onPointerDown={onPointerDown ? (e) => onPointerDown(step.id, e) : undefined}
+      onClick={() => {
+        if (isDragging) return;
+        onSelect(step.id);
+      }}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
@@ -61,16 +120,53 @@ export function StepCard({
       }}
       className={cn(
         CARD_SHELL,
-        selected ? CARD_SELECTED : CARD_RESTING,
-        "cursor-pointer focus:outline-none"
+        connect?.isTarget ? "graph-node-target" : selected ? "graph-node-selected" : "graph-node",
+        "focus:outline-none",
+        onPointerDown ? "cursor-grab" : "cursor-pointer",
+        lifted && "graph-node-lift"
       )}
       style={{
         left: position.x,
         top: position.y,
         width: position.width,
-        opacity: dimmed ? 0.45 : 1,
+        opacity,
+        transform: lifted ? `translate(${dragOffset.dx}px, ${dragOffset.dy}px)` : undefined,
+        zIndex: lifted ? 10 : undefined,
       }}
     >
+      {showPorts && (
+        <>
+          {/* Input socket (left) — a live drop target while connecting from
+              another card. Purely visual; hit-testing is geometric. */}
+          <span
+            aria-hidden
+            data-variant="input"
+            data-target={connect!.isTarget ? "true" : undefined}
+            className={cn(
+              "graph-port pointer-events-none absolute left-0 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2",
+              inputVisibility
+            )}
+          />
+          {/* Output handle (right) — grab to start a connect. aria-hidden like
+              the input: the gesture is convenience-only, the StepPanel's
+              Connections section is the accessible path. */}
+          <span
+            aria-hidden
+            data-variant="output"
+            data-active={connect!.isSource ? "true" : undefined}
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              connect!.onPortPointerDown(step.id, "right", e);
+            }}
+            onClick={(e) => e.stopPropagation()}
+            className={cn(
+              "graph-port absolute right-0 top-1/2 z-20 translate-x-1/2 -translate-y-1/2 cursor-crosshair",
+              outputVisibility
+            )}
+          />
+        </>
+      )}
+
       <div className="px-3 pb-1.5 pt-2.5">
         <div className="flex items-start gap-2">
           <div className="min-w-0 flex-1 line-clamp-2 text-body font-semibold tracking-tight text-text-primary">

@@ -184,6 +184,7 @@ export function SkillsBrowser({
       <DetailPane
         skill={selected}
         workspaceSlug={workspaceSlug}
+        workspaceId={workspaceId}
         currentUserId={currentUserId}
         isAdmin={isAdmin}
         totalSkills={skills.length}
@@ -277,6 +278,7 @@ function StatusChip({ status }: { status: SkillStatus }) {
 function DetailPane({
   skill,
   workspaceSlug,
+  workspaceId,
   currentUserId,
   isAdmin,
   totalSkills,
@@ -284,6 +286,7 @@ function DetailPane({
 }: {
   skill: Skill | null;
   workspaceSlug: string;
+  workspaceId: string;
   currentUserId: string;
   isAdmin: boolean;
   totalSkills: number;
@@ -305,7 +308,11 @@ function DetailPane({
   useEffect(() => {
     if (!slug) return;
     let cancelled = false;
-    fetchSkill(slug)
+    // Scope the fetch to the workspace being viewed. Without the
+    // X-Workspace-Id header the route falls back to the caller's DEFAULT
+    // workspace (resolveActiveWorkspace) — so on any non-default
+    // workspace the slug 404s and the pane shows "Couldn't load".
+    fetchSkill(slug, workspaceId)
       .then((r) => {
         if (!cancelled) setResolved(r);
       })
@@ -315,7 +322,7 @@ function DetailPane({
     return () => {
       cancelled = true;
     };
-  }, [slug]);
+  }, [slug, workspaceId]);
 
   if (!skill) {
     return totalSkills === 0 ? (
@@ -358,6 +365,7 @@ function DetailPane({
       key={resolved.skill.id}
       resolved={resolved}
       workspaceSlug={workspaceSlug}
+      workspaceId={workspaceId}
       isAdmin={isAdmin}
       currentUserId={currentUserId}
       onDuplicated={onDuplicated}

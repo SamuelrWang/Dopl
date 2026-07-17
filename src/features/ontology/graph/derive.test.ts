@@ -18,7 +18,7 @@ function object(id: string, overrides: Partial<OntologyObject> = {}): OntologyOb
 }
 
 function cluster(id: string, columnIds: string[]): OntologyCluster {
-  return { id, slug: id, name: id, purpose: "", columnIds };
+  return { id, slug: id, name: id, purpose: "", columnIds, layout: {} };
 }
 
 function graph(clusters: OntologyCluster[], objects: OntologyObject[]): GraphState {

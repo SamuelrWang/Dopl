@@ -1,17 +1,20 @@
 "use client";
 
 import { Fragment, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import {
   ChevronRight,
   Database,
   Download,
-  Pin,
   Plus,
   Settings,
   Trash2,
 } from "lucide-react";
+import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
+import { toast } from "@/shared/ui/toast";
 import { cn } from "@/shared/lib/utils";
 import { KnowledgeSearch } from "../../knowledge-search";
+import { KnowledgeApiError, deleteBase } from "../../../client/api";
 import type { KnowledgeBase, KnowledgeEntry, KnowledgeFolder } from "../../../types";
 import type { BaseTree, KbTeamRef, Selection } from "../types";
 import { BaseOverview } from "./base-overview";
@@ -94,6 +97,36 @@ export function DetailPanel({
   onOpenSettings,
 }: Props) {
   const [tab, setTab] = useState<Tab>("Overview");
+  const router = useRouter();
+  const pathname = usePathname();
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  // Mirrors the settings form's danger-zone delete (base-settings-form.tsx):
+  // same `deleteBase` call, then navigate to the base-less knowledge root so
+  // the view remounts with an empty selection and refresh re-pulls the list.
+  async function handleDeleteBase() {
+    if (!selection) return;
+    const base = selection.base;
+    setDeleting(true);
+    try {
+      await deleteBase(base.id, workspaceId);
+      toast({ title: `"${base.name}" deleted` });
+      const workspaceSegment = pathname.split("/").filter(Boolean)[0] ?? "";
+      router.replace(`/${workspaceSegment}/knowledge`);
+      router.refresh();
+    } catch (err) {
+      const msg =
+        err instanceof KnowledgeApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Couldn't delete";
+      toast({ title: "Couldn't delete", description: msg });
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   if (!selection) {
     return (
@@ -173,13 +206,13 @@ export function DetailPanel({
           <Settings size={16} />
         </button>
         <span className={styles.divider} />
-        <button className={ICON_BTN} type="button" aria-label="Pin">
-          <Pin size={16} />
-        </button>
         <button
           className={cn(ICON_BTN, "hover:text-danger")}
           type="button"
-          aria-label="Delete"
+          aria-label="Delete knowledge base"
+          title="Delete this knowledge base"
+          disabled={deleting}
+          onClick={() => setConfirmDeleteOpen(true)}
         >
           <Trash2 size={16} />
         </button>
@@ -207,7 +240,6 @@ export function DetailPanel({
           <EntryView
             key={selection.entry.id}
             base={selection.base}
-            metaEntry={selection.entry}
             fullEntry={openEntry}
             status={openEntryStatus}
             workspaceId={workspaceId}
@@ -229,6 +261,16 @@ export function DetailPanel({
           />
         )}
       </div>
+
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        onOpenChange={setConfirmDeleteOpen}
+        title="Delete knowledge base?"
+        description={`“${selection.base.name}” and all its folders + entries will move to trash. You can restore it from the trash modal until it's purged.`}
+        confirmLabel="Delete"
+        destructive
+        onConfirm={handleDeleteBase}
+      />
     </div>
   );
 }

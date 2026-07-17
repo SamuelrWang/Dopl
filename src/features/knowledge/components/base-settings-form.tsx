@@ -10,7 +10,7 @@ import {
   updateBase,
   updateFolder,
 } from "../client/api";
-import { DESCRIPTION_MAX } from "@/config";
+import { DESCRIPTION_MAX, KB_BASE_DESCRIPTION_MAX } from "@/config";
 import type { Role } from "@/features/workspaces/types";
 import type { KnowledgeBase, KnowledgeFolder } from "../types";
 import { knowledgeBaseSegment } from "../url";
@@ -137,15 +137,15 @@ export function BaseSettingsForm({
           <textarea
             value={description}
             onChange={(e) =>
-              setDescription(e.target.value.slice(0, DESCRIPTION_MAX))
+              setDescription(e.target.value.slice(0, KB_BASE_DESCRIPTION_MAX))
             }
             rows={3}
-            maxLength={DESCRIPTION_MAX}
+            maxLength={KB_BASE_DESCRIPTION_MAX}
             placeholder="What's in this knowledge base? Agents see this when listing bases."
             className="px-3 py-2 rounded-md bg-surface-raised-3 border border-border-strong text-body text-text-primary placeholder:text-text-muted outline-none focus:border-border-highlight transition-colors resize-none"
           />
           <p className="text-right font-mono text-micro text-text-muted">
-            {description.length}/{DESCRIPTION_MAX}
+            {description.length}/{KB_BASE_DESCRIPTION_MAX}
           </p>
         </Field>
         <div className="flex justify-end">

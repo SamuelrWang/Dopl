@@ -13,7 +13,6 @@ import {
   VGAP,
   VGAP_FIRST,
   layoutScene,
-  routeEdges,
 } from "./layout";
 
 function object(id: string, overrides: Partial<OntologyObject> = {}): OntologyObject {
@@ -31,7 +30,7 @@ function object(id: string, overrides: Partial<OntologyObject> = {}): OntologyOb
 }
 
 function cluster(id: string, columnIds: string[]): OntologyCluster {
-  return { id, slug: id, name: id, purpose: "", columnIds };
+  return { id, slug: id, name: id, purpose: "", columnIds, layout: {} };
 }
 
 function graph(clusters: OntologyCluster[], objects: OntologyObject[]): GraphState {
@@ -108,75 +107,5 @@ describe("layoutScene positions", () => {
 
     expect(layout.worldWidth).toBe(MIN_WORLD_WIDTH);
     expect(layout.worldHeight).toBe(MIN_WORLD_HEIGHT);
-  });
-});
-
-describe("routeEdges hints", () => {
-  it("routes the first child vertically and later children through a left loop", () => {
-    const scene = deriveScene(sampleGraph(), "cl");
-    const layout = layoutScene(scene, {});
-    const edges = routeEdges(scene, layout);
-
-    const first = edges.find((e) => e.id === "c:colA:a1");
-    const second = edges.find((e) => e.id === "c:colA:a2");
-
-    expect(first).toMatchObject({ fromSide: "bottom", toSide: "top" });
-    expect(second).toMatchObject({ fromSide: "left", toSide: "left" });
-    expect(second?.mid).toBe(layout.positions.a2.x - 60);
-  });
-
-  it("routes same-lane relationships vertically by direction", () => {
-    const scene = deriveScene(sampleGraph(), "cl");
-    const layout = layoutScene(scene, {});
-    const edges = routeEdges(scene, layout);
-
-    const sib = edges.find((e) => e.id === "r:a1:sib:a2");
-    expect(sib).toMatchObject({ fromSide: "bottom", toSide: "top" });
-  });
-
-  it("routes cross-lane relationships out the side toward the target", () => {
-    const scene = deriveScene(sampleGraph(), "cl");
-    const layout = layoutScene(scene, {});
-    const edges = routeEdges(scene, layout);
-
-    const toA1 = edges.find((e) => e.id === "r:b1:rel:a1");
-    expect(toA1?.fromSide).toBe("left");
-    expect(toA1?.toSide).toBe("right");
-    expect(toA1?.mid).toBeGreaterThan(MARGIN + 240);
-    expect(toA1?.mid).toBeLessThan(MARGIN + LANE_PITCH);
-  });
-
-  it("staggers parallel cross-lane edges so their mids differ", () => {
-    const scene = deriveScene(sampleGraph(), "cl");
-    const layout = layoutScene(scene, {});
-    const edges = routeEdges(scene, layout);
-
-    const toA1 = edges.find((e) => e.id === "r:b1:rel:a1");
-    const toA2 = edges.find((e) => e.id === "r:b1:rel:a2");
-
-    expect(toA1?.mid).toBeDefined();
-    expect(toA2?.mid).toBeDefined();
-    expect(toA1?.mid).not.toBe(toA2?.mid);
-  });
-
-  it("routes ref edges through the clear lane below all content", () => {
-    const scene = deriveScene(sampleGraph(), "cl");
-    const layout = layoutScene(scene, {});
-    const edges = routeEdges(scene, layout);
-
-    const ref = edges.find((e) => e.kind === "ref");
-    expect(ref).toMatchObject({ fromSide: "bottom", toSide: "bottom" });
-    expect(ref?.mid).toBe(layout.worldHeight - 60);
-  });
-
-  it("assigns hints deterministically and without mutating the scene", () => {
-    const scene = deriveScene(sampleGraph(), "cl");
-    const layout = layoutScene(scene, {});
-
-    const first = routeEdges(scene, layout);
-    const second = routeEdges(scene, layout);
-
-    expect(first).toEqual(second);
-    expect(scene.edges.every((e) => e.fromSide === undefined)).toBe(true);
   });
 });

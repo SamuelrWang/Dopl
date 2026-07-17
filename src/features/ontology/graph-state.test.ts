@@ -27,7 +27,7 @@ function makeObject(id: string, over: Partial<OntologyObject> = {}): OntologyObj
 }
 
 function makeCluster(id: string, columnIds: string[]): OntologyCluster {
-  return { id, slug: id, name: id, purpose: "", columnIds };
+  return { id, slug: id, name: id, purpose: "", columnIds, layout: {} };
 }
 
 function makeState(): GraphState {

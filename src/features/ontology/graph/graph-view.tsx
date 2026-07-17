@@ -1,20 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2 } from "lucide-react";
 import { UpgradeModal } from "@/features/billing/components/upgrade-modal";
 import { useWorkspaceEntitlements } from "@/features/billing/components/use-workspace-entitlements";
-import { EdgeLayer, type NodeRect } from "@/shared/graph";
 import { cn } from "@/shared/lib/utils";
+import { toast } from "@/shared/ui/toast";
 import { CapNotice } from "../components/cap-notice";
 import { ObjectPanel } from "../components/object-panel";
-import { useOntology } from "../hooks/use-ontology";
+import { ontologySnapshotKey, useOntology } from "../hooks/use-ontology";
 import { OntologyResourcesProvider } from "../hooks/use-workspace-resources";
-import { deriveScene } from "./derive";
-import { ONTOLOGY_EDGE_STYLES, OntologyEdgeMarkers } from "./edge-styles";
-import { GraphNode } from "./graph-node";
+import { ONTOLOGY_EDGE_STYLES } from "./edge-styles";
+import { OntologyGraphBody } from "./graph-body";
 import { GraphSkeleton } from "./graph-skeleton";
-import { DEFAULT_HEIGHT, layoutScene, routeEdges } from "./layout";
+import type { SceneEdgeKind } from "./types";
 
 interface Props {
   workspaceId: string;
@@ -34,6 +34,7 @@ interface Props {
  */
 export function GraphView({ workspaceId, canManageBilling = false, canEdit = true }: Props) {
   const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const qc = useQueryClient();
   const { graph, status, dispatch, createCluster, createObject } = useOntology(
     workspaceId,
     () => setUpgradeOpen(true)
@@ -42,79 +43,52 @@ export function GraphView({ workspaceId, canManageBilling = false, canEdit = tru
   const [clusterId, setClusterId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [confirmDeleteCluster, setConfirmDeleteCluster] = useState(false);
-  const [heights, setHeights] = useState<Record<string, number>>({});
-
-  const idByEl = useRef(new Map<Element, string>());
-  const observerRef = useRef<ResizeObserver | null>(null);
-
-  const registerRef = useCallback((id: string, el: HTMLDivElement | null) => {
-    observerRef.current ??= new ResizeObserver((entries) => {
-      setHeights((prev) => {
-        let next: Record<string, number> | null = null;
-        for (const entry of entries) {
-          const nodeId = idByEl.current.get(entry.target);
-          if (!nodeId || !(entry.target instanceof HTMLElement)) continue;
-          const height = entry.target.offsetHeight;
-          if (prev[nodeId] !== height) {
-            next ??= { ...prev };
-            next[nodeId] = height;
-          }
-        }
-        return next ?? prev;
-      });
-    });
-    if (el) {
-      idByEl.current.set(el, id);
-      observerRef.current.observe(el);
-    } else {
-      for (const [element, nodeId] of idByEl.current) {
-        if (nodeId !== id) continue;
-        observerRef.current.unobserve(element);
-        idByEl.current.delete(element);
-      }
-    }
-  }, []);
-
-  useEffect(() => () => observerRef.current?.disconnect(), []);
+  // Surfaced up from the keyed graph body: the reset-to-auto-layout fn, or
+  // null when no node has been dragged. A thunk so setState doesn't invoke it.
+  const [resetLayout, setResetLayout] = useState<(() => void) | null>(null);
+  const handleLayoutResetChange = useCallback(
+    (reset: (() => void) | null) => setResetLayout(() => reset),
+    []
+  );
 
   const cluster =
     graph.clusters.find((c) => c.id === clusterId) ?? graph.clusters[0] ?? null;
+
+  // Anchor `clusterId` to a concrete cluster once loaded (never leave it null
+  // relying on the `?? clusters[0]` display fallback — that fallback shifts
+  // when a realtime snapshot reorders/deletes clusters, which is exactly how a
+  // drag could persist to the wrong cluster). Also re-point it if the selected
+  // cluster disappears remotely.
+  useEffect(() => {
+    if (graph.clusters.length === 0) return;
+    if (clusterId === null || !graph.clusters.some((c) => c.id === clusterId)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setClusterId(graph.clusters[0]?.id ?? null);
+    }
+  }, [clusterId, graph.clusters]);
+
   // Selection survives only while the object exists — a delete (panel,
   // cluster cascade, remote) hides the panel and undims without an effect.
   const activeSelectedId = selectedId && graph.objects[selectedId] ? selectedId : null;
 
-  const scene = useMemo(
-    () => (cluster ? deriveScene(graph, cluster.id) : { nodes: [], edges: [] }),
-    [graph, cluster]
+  // Layout-persist failures surface here (the body forwards the raised error):
+  // toast + invalidate the snapshot so stored positions re-sync — mirrors
+  // workflows' saveLayout instead of swallowing the rejection.
+  const handleLayoutError = useCallback(
+    (err: unknown) => {
+      toast({
+        title: "Couldn't save layout",
+        description: err instanceof Error ? err.message : "Unknown error",
+      });
+      void qc.invalidateQueries({ queryKey: ontologySnapshotKey(workspaceId) });
+    },
+    [qc, workspaceId]
   );
-  const layout = useMemo(() => layoutScene(scene, heights), [scene, heights]);
-  const edges = useMemo(() => routeEdges(scene, layout), [scene, layout]);
-  const rects = useMemo(() => {
-    const out: Record<string, NodeRect> = {};
-    for (const node of scene.nodes) {
-      const pos = layout.positions[node.id];
-      if (!pos) continue;
-      out[node.id] = {
-        x: pos.x,
-        y: pos.y,
-        width: pos.width,
-        height: heights[node.id] ?? DEFAULT_HEIGHT,
-      };
-    }
-    return out;
-  }, [scene, layout, heights]);
-
-  const neighborIds = useMemo(() => {
-    const ids = new Set<string>();
-    if (!activeSelectedId) return ids;
-    for (const edge of scene.edges) {
-      if (edge.from === activeSelectedId) ids.add(edge.to);
-      if (edge.to === activeSelectedId) ids.add(edge.from);
-    }
-    return ids;
-  }, [scene, activeSelectedId]);
 
   const selectCluster = (id: string) => {
+    // No explicit flush needed: the graph body is keyed by cluster.id, so this
+    // swap remounts it and its unmount flush lands any pending drag on the
+    // OUTGOING cluster (correct closed-over persist target).
     setClusterId(id);
     setSelectedId(null);
     setConfirmDeleteCluster(false);
@@ -139,6 +113,9 @@ export function GraphView({ workspaceId, canManageBilling = false, canEdit = tru
 
   const handleDeleteCluster = () => {
     if (!cluster) return;
+    // The keyed body unmounts on this clusterId change and its unmount flush
+    // lands any pending drag on the (about-to-be-deleted) cluster; a layout
+    // write racing the soft-delete no-ops server-side (deleted_at guard).
     const remaining = graph.clusters.filter((c) => c.id !== cluster.id);
     dispatch({ type: "CLUSTER_DELETE", id: cluster.id });
     setClusterId(remaining[0]?.id ?? null);
@@ -295,6 +272,16 @@ export function GraphView({ workspaceId, canManageBilling = false, canEdit = tru
               <Plus size={12} /> Column
             </button>
           )}
+          {canEdit && resetLayout && (
+            <button
+              type="button"
+              onClick={resetLayout}
+              title="Reset to auto layout"
+              className="btn-light flex h-7 shrink-0 items-center rounded-md px-2.5 text-small font-medium text-text-primary"
+            >
+              Reset layout
+            </button>
+          )}
           <Legend />
         </div>
 
@@ -308,58 +295,18 @@ export function GraphView({ workspaceId, canManageBilling = false, canEdit = tru
         )}
 
         <div className="relative flex min-h-0 flex-1 overflow-hidden">
-          <div
-            className="relative min-w-0 flex-1 overflow-auto bg-bg-inset shadow-[inset_0_2px_6px_rgba(0,0,0,0.06)]"
-            onClick={(e) => {
-              if (e.target === e.currentTarget) setSelectedId(null);
-            }}
-          >
-            <div
-              className="relative"
-              style={{
-                width: layout.worldWidth,
-                height: layout.worldHeight,
-                backgroundImage: "radial-gradient(rgba(35,42,49,0.07) 1px, transparent 1px)",
-                backgroundSize: "24px 24px",
-              }}
-              onClick={(e) => {
-                if (e.target === e.currentTarget) setSelectedId(null);
-              }}
-            >
-              <EdgeLayer
-                edges={edges}
-                rects={rects}
-                focusId={activeSelectedId}
-                styles={ONTOLOGY_EDGE_STYLES}
-                markers={<OntologyEdgeMarkers />}
-              />
-              {scene.nodes.map((node) => (
-                <GraphNode
-                  key={node.id}
-                  node={node}
-                  position={layout.positions[node.id] ?? { x: 0, y: 0, width: 0 }}
-                  graph={graph}
-                  canEdit={canEdit}
-                  selected={node.id === activeSelectedId}
-                  dimmed={
-                    activeSelectedId !== null &&
-                    node.id !== activeSelectedId &&
-                    !neighborIds.has(node.id)
-                  }
-                  onSelect={setSelectedId}
-                  onAddCard={(columnId) => handleCreateObject({ parentObjectId: columnId })}
-                  registerRef={registerRef}
-                />
-              ))}
-            </div>
-            {scene.nodes.length === 0 && (
-              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                <p className="text-lead text-text-muted">
-                  This cluster is empty — add a column to start the graph.
-                </p>
-              </div>
-            )}
-          </div>
+          <OntologyGraphBody
+            key={cluster.id}
+            workspaceId={workspaceId}
+            graph={graph}
+            cluster={cluster}
+            canEdit={canEdit}
+            selectedId={activeSelectedId}
+            onSelect={setSelectedId}
+            onAddObject={handleCreateObject}
+            onLayoutError={handleLayoutError}
+            onLayoutResetChange={handleLayoutResetChange}
+          />
           {activeSelectedId && (
             <div className="absolute inset-y-1 right-1 z-20 flex">
               <ObjectPanel
@@ -391,21 +338,36 @@ export function GraphView({ workspaceId, canManageBilling = false, canEdit = tru
   );
 }
 
-const LEGEND: Array<{ label: string; className: string }> = [
-  { label: "contains", className: "border-t border-dashed border-border-highlight" },
-  { label: "relationship", className: "border-t-[1.5px] border-text-secondary" },
-  { label: "ref", className: "border-t border-dotted border-text-muted" },
+// Labels only — every swatch's stroke width / dash / color is read from the
+// shared ONTOLOGY_EDGE_STYLES so the legend can never drift from the edges.
+const LEGEND: Array<{ kind: SceneEdgeKind; label: string }> = [
+  { kind: "containment", label: "contains" },
+  { kind: "relationship", label: "relationship" },
+  { kind: "ref", label: "ref" },
 ];
 
 function Legend() {
   return (
     <div className="flex shrink-0 items-center gap-3">
-      {LEGEND.map((item) => (
-        <span key={item.label} className="flex items-center gap-1.5">
-          <span className={cn("w-5", item.className)} aria-hidden />
-          <span className="text-micro text-text-muted">{item.label}</span>
-        </span>
-      ))}
+      {LEGEND.map(({ kind, label }) => {
+        const style = ONTOLOGY_EDGE_STYLES[kind];
+        return (
+          <span key={label} className="flex items-center gap-1.5">
+            <svg width={20} height={6} aria-hidden className="overflow-visible">
+              <line
+                x1={0}
+                y1={3}
+                x2={20}
+                y2={3}
+                stroke={style.stroke}
+                strokeWidth={style.width}
+                strokeDasharray={style.dash}
+              />
+            </svg>
+            <span className="text-micro text-text-muted">{label}</span>
+          </span>
+        );
+      })}
     </div>
   );
 }

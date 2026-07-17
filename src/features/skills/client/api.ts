@@ -135,17 +135,28 @@ export async function readSkillBody(
   return data.file;
 }
 
+export interface WriteSkillBodyResult {
+  file: SkillFile;
+  /**
+   * The skill row's `updated_at` after the write — the metadata-CAS clock,
+   * distinct from `file.updatedAt` (the body clock). A body save bumps it
+   * (touch trigger), so thread it as the precondition for the next metadata
+   * (name/folder/sharing) PATCH or that PATCH would false-412 (F-038 D10).
+   */
+  skillUpdatedAt: string;
+}
+
 export async function writeSkillBody(
   slug: string,
   body: string,
   workspaceId?: string,
   expectedUpdatedAt?: string
-): Promise<SkillFile> {
-  const data = await request<{ file: SkillFile }>(
+): Promise<WriteSkillBodyResult> {
+  const data = await request<{ file: SkillFile; skillUpdatedAt: string }>(
     `/api/skills/${enc(slug)}/body`,
     { method: "PUT", body: { body }, workspaceId, expectedUpdatedAt }
   );
-  return data.file;
+  return { file: data.file, skillUpdatedAt: data.skillUpdatedAt };
 }
 
 // ─── Trash ──────────────────────────────────────────────────────────

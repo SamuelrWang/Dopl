@@ -36,6 +36,7 @@ function mapClusterRow(row: OntologyClusterRow): OntologyCluster {
     slug: row.slug,
     name: row.name,
     purpose: row.purpose,
+    layout: row.layout ?? {},
     columnIds: [],
   };
 }

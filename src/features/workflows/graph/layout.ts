@@ -25,12 +25,9 @@ export const MARGIN_X = 120;
 export const TOP_Y = 80;
 export const VGAP = 56;
 export const DEFAULT_HEIGHT = 150;
-const WORLD_PADDING = 140;
+export const WORLD_PADDING = 140;
 export const MIN_WORLD_WIDTH = 1000;
 export const MIN_WORLD_HEIGHT = 640;
-
-const STAGGER = 22;
-const T_CYCLE = [0.32, 0.5, 0.68] as const;
 
 interface Edge {
   from: string;
@@ -47,13 +44,6 @@ export interface WorkflowRanking {
 
 function heightOf(id: string, heights: Record<string, number>): number {
   return heights[id] ?? DEFAULT_HEIGHT;
-}
-
-// 0, +22, -22, +44, -44, … — separates parallel edges crossing one gap.
-function staggerOffset(k: number): number {
-  if (k === 0) return 0;
-  const magnitude = Math.ceil(k / 2) * STAGGER;
-  return k % 2 === 1 ? magnitude : -magnitude;
 }
 
 /**
@@ -183,46 +173,17 @@ export function layoutWorkflow(
 }
 
 /**
- * Orthogonal routing hints for each edge. Every edge flows left→right
- * (source rank < target rank), so it exits the source's right side and
- * enters the target's left side; its vertical segment sits in the gap just
- * past the source rank. Parallel edges crossing the same gap are staggered
- * (offset `mid`, cycled `fromT`/`toT`) so they don't overlap. Branch
- * conditions become the edge `label`. Pure + deterministic.
+ * Scene edges for a workflow's connectors: a conditioned edge is a `branch`
+ * (its condition becomes the label pill), an unconditioned one a `sequence`.
+ * Geometry (sides, lanes, elbows) is left to the shared `routeEdges` router,
+ * which places these against the live node rects. Pure + deterministic.
  */
-export function routeWorkflowEdges(
-  edges: Edge[],
-  layout: SceneLayout & { ranking: WorkflowRanking }
-): SceneEdge[] {
-  const gapCounters = new Map<number, number>();
-  const out: SceneEdge[] = [];
-
-  for (const e of edges) {
-    const fromPos = layout.positions[e.from];
-    const toPos = layout.positions[e.to];
-    const id = `e:${e.from}:${e.to}`;
-    if (!fromPos || !toPos) {
-      out.push({ id, kind: "sequence", from: e.from, to: e.to, label: e.condition || undefined });
-      continue;
-    }
-    const fromRank = layout.ranking.rankOf.get(e.from) ?? 0;
-    const k = gapCounters.get(fromRank) ?? 0;
-    gapCounters.set(fromRank, k + 1);
-
-    const gapCenterX = fromPos.x + CARD_WIDTH + COL_GAP / 2;
-    out.push({
-      id,
-      kind: e.condition ? "branch" : "sequence",
-      from: e.from,
-      to: e.to,
-      label: e.condition || undefined,
-      fromSide: "right",
-      toSide: "left",
-      fromT: T_CYCLE[k % T_CYCLE.length],
-      toT: T_CYCLE[(k + 1) % T_CYCLE.length],
-      mid: gapCenterX + staggerOffset(k),
-    });
-  }
-
-  return out;
+export function toWorkflowSceneEdges(edges: Edge[]): SceneEdge[] {
+  return edges.map((e) => ({
+    id: `e:${e.from}:${e.to}`,
+    kind: e.condition ? "branch" : "sequence",
+    from: e.from,
+    to: e.to,
+    label: e.condition || undefined,
+  }));
 }

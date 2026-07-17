@@ -52,7 +52,7 @@ export function KnowledgeV2({
   const c = useKnowledgeV2Controller({
     workspaceId,
     workspaceSegment,
-    bases,
+    initialBases: bases,
     initialSelection,
     initialTrees,
   });
@@ -92,7 +92,13 @@ export function KnowledgeV2({
         kbTeams={kbTeams}
         canEditBase={settingsBase ? c.canEdit(settingsBase.id) : false}
         onTreeRefresh={c.refreshTree}
-        onBaseSaved={() => router.refresh()}
+        onBaseSaved={() => {
+          // The bases list is a live query now — refetch it so the local
+          // user's own base rename/description edit reflects immediately;
+          // router.refresh() still repulls the SSR-only owner/team pills.
+          c.refetchBases();
+          router.refresh();
+        }}
         onSelectSearchEntry={c.selectEntryById}
         onCrumbSelect={c.selectCrumb}
         onExportBase={c.exportBase}

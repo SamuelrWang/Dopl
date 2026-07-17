@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Plus, Trash2, Workflow } from "lucide-react";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { cn } from "@/shared/lib/utils";
@@ -9,6 +9,7 @@ import { WorkflowResourcesProvider } from "../hooks/use-workflow-resources";
 import { useWorkflows } from "../hooks/use-workflows";
 import { StepPanel } from "./step-panel";
 import { WorkflowGraphView } from "./workflow-graph";
+import { WORKFLOW_EDGE_STYLES } from "./workflow-edge-styles";
 import { WorkflowBoardSkeleton, WorkflowsSkeleton } from "./workflows-skeleton";
 
 interface Props {
@@ -39,6 +40,13 @@ export function WorkflowsView({
   const [tabId, setTabId] = useState<string | null>(null);
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // Surfaced up from the graph: the reset-to-auto-layout fn, or null when no
+  // step has been dragged. Stored as a thunk so setState doesn't invoke it.
+  const [resetLayout, setResetLayout] = useState<(() => void) | null>(null);
+  const handleLayoutResetChange = useCallback(
+    (reset: (() => void) | null) => setResetLayout(() => reset),
+    []
+  );
 
   const { workflows, listStatus, detail, detailStatus, ops } = useWorkflows(
     workspaceId,
@@ -248,6 +256,16 @@ export function WorkflowsView({
               </button>
             </>
           )}
+          {canEdit && resetLayout && (
+            <button
+              type="button"
+              onClick={resetLayout}
+              title="Reset to auto layout"
+              className="btn-light flex h-7 shrink-0 items-center rounded-md px-2.5 text-small font-medium text-text-primary"
+            >
+              Reset layout
+            </button>
+          )}
           <Legend />
         </div>
 
@@ -257,11 +275,16 @@ export function WorkflowsView({
           ) : (
             <>
               <WorkflowGraphView
+                key={active.id}
+                workflowId={active.id}
                 graph={graph}
+                storedLayout={detail?.layout ?? {}}
                 selectedId={activeStep?.id ?? null}
                 canEdit={canEdit}
+                ops={ops}
                 onSelect={setSelectedStepId}
                 onAddStep={handleAddStep}
+                onLayoutResetChange={handleLayoutResetChange}
               />
               {activeStep && (
                 <div className="absolute inset-y-1 right-1 z-20 flex">
@@ -284,6 +307,14 @@ export function WorkflowsView({
   );
 }
 
+// Edge swatches read their stroke width / dash / color from the shared
+// WORKFLOW_EDGE_STYLES so the legend can't drift from the drawn edges (the
+// branch edge is 1.75px, not the hand-rolled 1.5 it used to show).
+const EDGE_LEGEND: Array<{ kind: keyof typeof WORKFLOW_EDGE_STYLES; label: string }> = [
+  { kind: "sequence", label: "sequence" },
+  { kind: "branch", label: "branch" },
+];
+
 function Legend() {
   return (
     <div className="flex shrink-0 items-center gap-3">
@@ -295,14 +326,25 @@ function Legend() {
           entry
         </span>
       </span>
-      <span className="flex items-center gap-1.5">
-        <span className="w-5 border-t-[1.5px] border-text-muted" aria-hidden />
-        <span className="text-micro text-text-muted">sequence</span>
-      </span>
-      <span className="flex items-center gap-1.5">
-        <span className="w-5 border-t-[1.5px] border-text-secondary" aria-hidden />
-        <span className="text-micro text-text-muted">branch</span>
-      </span>
+      {EDGE_LEGEND.map(({ kind, label }) => {
+        const style = WORKFLOW_EDGE_STYLES[kind];
+        return (
+          <span key={label} className="flex items-center gap-1.5">
+            <svg width={20} height={6} aria-hidden className="overflow-visible">
+              <line
+                x1={0}
+                y1={3}
+                x2={20}
+                y2={3}
+                stroke={style.stroke}
+                strokeWidth={style.width}
+                strokeDasharray={style.dash}
+              />
+            </svg>
+            <span className="text-micro text-text-muted">{label}</span>
+          </span>
+        );
+      })}
     </div>
   );
 }

@@ -17,12 +17,7 @@ const STEP_WIDTH = 232;
 export function WorkflowBoardSkeleton() {
   return (
     <div
-      className="relative min-w-0 flex-1 overflow-hidden bg-bg-inset shadow-[inset_0_2px_6px_rgba(0,0,0,0.06)]"
-      style={{
-        backgroundImage:
-          "radial-gradient(rgba(35,42,49,0.07) 1px, transparent 1px)",
-        backgroundSize: "24px 24px",
-      }}
+      className="graph-substrate relative min-w-0 flex-1 overflow-hidden bg-bg-inset shadow-[inset_0_2px_6px_rgba(0,0,0,0.06)]"
       aria-busy="true"
       aria-live="polite"
     >

@@ -63,6 +63,10 @@ Utilities generated from `@theme` (values live in `:root`):
 | `.raised-tab`    | White-gradient raised face for the ACTIVE item inside a `.concave-track`. |
 | `.btn-light`     | Small raised light button (toolbar / compact chrome).                   |
 | `.auth-btn-3d`   | Raised black primary CTA. (`.auth-btn-3d-light` = white variant.)       |
+| `.graph-substrate` | Dotted recessed world surface behind graph views (Canvas, Workflows) and their skeletons. |
+| `.graph-node-lift` | Elevation applied to a graph card WHILE dragging (deeper shadow + grabbing cursor). |
+| `.graph-port`    | Raised connector dot on a workflow step card edge; `data-active` = drag source, `data-target` = live drop target, `data-variant="output"` = inked source dot. |
+| `.graph-node` / `.graph-node-selected` / `.graph-node-target` | Graph card resting / selected-ring / connect-drop-target surfaces (shared by Canvas + Workflows cards). |
 
 Composition pattern (CSS modules welcome for layout, recipes come from kit):
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { DESCRIPTION_MAX } from "@/config";
+import { KB_BASE_DESCRIPTION_MAX } from "@/config";
 import { toast } from "@/shared/ui/toast";
 import { KnowledgeApiError, updateBase } from "../../../client/api";
 import type { KnowledgeBase } from "../../../types";
@@ -108,7 +108,7 @@ export function useBaseMetaEdit(
 
   const onDescriptionChange = useCallback(
     (value: string) => {
-      const clipped = value.slice(0, DESCRIPTION_MAX);
+      const clipped = value.slice(0, KB_BASE_DESCRIPTION_MAX);
       setDescription(clipped);
       draftRef.current = { ...draftRef.current, description: clipped };
       schedule();

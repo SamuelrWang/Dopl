@@ -12,19 +12,18 @@ import {
 } from "../client/api";
 import { DESCRIPTION_MAX } from "@/config";
 import type { KnowledgeEntry } from "../types";
+import { toast } from "@/shared/ui/toast";
 import { DocEditor, SaveStatusIndicator, type SaveStatus } from "@/shared/editor/doc-editor";
-import { ConflictBanner, DocBodySkeleton, reportError } from "./doc-pane-chrome";
+import { ConflictBanner, reportError } from "./doc-pane-chrome";
 
 const AUTOSAVE_DELAY_MS = 1500;
 
 export interface DocPaneProps {
+  /** MUST be the full entry (body + fresh `updated_at`) — never the
+   *  body-stripped tree entry, or the first autosave writes `body: ""`
+   *  over the document. EntryView gates on the per-entry fetch. */
   entry: KnowledgeEntry;
   workspaceId: string;
-  /** True while the per-entry body fetch is in flight (the tree only
-   *  carries metadata, so the title shows immediately but the body
-   *  arrives a beat later). When set, the editor area renders a skeleton
-   *  instead of a blank document. */
-  bodyLoading?: boolean;
   /** Called after a successful save — the parent refetches the tree
    *  to pick up updated metadata (title, updated_at). */
   onSaved: () => void;
@@ -85,7 +84,6 @@ interface ConflictState {
 export function DocPane({
   entry,
   workspaceId,
-  bodyLoading = false,
   onSaved,
   onStaleVersion,
   onFocusRefetch,
@@ -191,28 +189,31 @@ export function DocPane({
       const { title: t, body: b } = latestRef.current;
       const last = lastSaved.current;
       if (t === last.title && b === last.body) return;
-      const expectedUpdatedAt = expectedUpdatedAtRef.current;
-      apiUpdateEntry(
-        entry.id,
-        { title: t, body: b },
-        workspaceId,
-        expectedUpdatedAt
-      ).catch((err: unknown) => {
-        if (err instanceof KnowledgeApiError && err.status === 412) {
-          // Concurrent writer beat us. We have no editor to push the
-          // resolution UI into — the component is unmounted — so log
-          // and drop. The user's local body is gone, but that's the
-          // documented behaviour for "navigate away with unsaved edits
-          // during a conflict window."
-          console.warn(
-            "[knowledge] unmount autosave dropped (412 stale)",
-            { entryId: entry.id }
+      // Through the save chain so this runs AFTER any in-flight save and
+      // reads the token that save produced — not a stale one.
+      void enqueueSave(async () => {
+        try {
+          await apiUpdateEntry(
+            entry.id,
+            { title: t, body: b },
+            workspaceId,
+            expectedUpdatedAtRef.current
           );
-          return;
+        } catch (err) {
+          if (err instanceof KnowledgeApiError && err.status === 412) {
+            // Concurrent writer beat us and the editor is unmounted —
+            // there's nowhere to run the resolution UI. Tell the user
+            // instead of dropping the edit silently.
+            toast({
+              title: "Last edit not saved",
+              description: `"${t || "Untitled"}" was edited elsewhere while you navigated away — reopen it to reconcile.`,
+            });
+          }
         }
       });
     };
-    // entry.id and workspaceId are stable (parent uses key=entry.id).
+    // entry.id and workspaceId are stable (parent uses key=entry.id);
+    // enqueueSave is a stable useCallback.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -238,6 +239,23 @@ export function DocPane({
     }
   }, [entry.id, workspaceId, onStaleVersion]);
 
+  // Serialize every PATCH through one chain so two saves can never be in
+  // flight together. Body autosave, description blur, and conflict
+  // resolution all share the one `updated_at` token — an overlapping
+  // pair would 412 against our own write (a phantom "edited elsewhere"
+  // with a single editor in the room).
+  const saveChainRef = useRef<Promise<unknown>>(Promise.resolve());
+  const enqueueSave = useCallback(<T,>(job: () => Promise<T>): Promise<T> => {
+    const next = saveChainRef.current.then(job, job);
+    // Park a swallowed tail so an unawaited failing job can't surface as
+    // an unhandled rejection; callers that await `next` still see it.
+    saveChainRef.current = next.then(
+      () => undefined,
+      () => undefined
+    );
+    return next;
+  }, []);
+
   const scheduleSave = useCallback(
     (nextTitle: string, nextBody: string) => {
       if (timerRef.current) clearTimeout(timerRef.current);
@@ -246,65 +264,73 @@ export function DocPane({
       // network round-trip that would 412 again.
       setStatus("dirty");
       if (conflictRef.current !== null) return;
-      timerRef.current = setTimeout(async () => {
-        if (
-          nextTitle === lastSaved.current.title &&
-          nextBody === lastSaved.current.body
-        ) {
-          setStatus("idle");
-          return;
-        }
-        setStatus("saving");
-        try {
-          const saved = await apiUpdateEntry(
-            entry.id,
-            { title: nextTitle, body: nextBody },
-            workspaceId,
-            expectedUpdatedAtRef.current
-          );
-          lastSaved.current = { title: nextTitle, body: nextBody };
-          expectedUpdatedAtRef.current = saved.updatedAt;
-          setStatus("saved");
-          onSaved();
-          if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
-          resetTimerRef.current = setTimeout(() => {
-            setStatus((prev) => (prev === "saved" ? "idle" : prev));
-          }, 2000);
-        } catch (err) {
-          if (err instanceof KnowledgeApiError && err.status === 412) {
-            await enterConflict();
+      timerRef.current = setTimeout(() => {
+        void enqueueSave(async () => {
+          // Re-check inside the chain — a queued-behind save may have
+          // entered conflict or already written this exact content.
+          if (conflictRef.current !== null) return;
+          if (
+            nextTitle === lastSaved.current.title &&
+            nextBody === lastSaved.current.body
+          ) {
+            setStatus("idle");
             return;
           }
-          setStatus("error");
-          reportError(err, "Couldn't save entry");
-        }
+          setStatus("saving");
+          try {
+            const saved = await apiUpdateEntry(
+              entry.id,
+              { title: nextTitle, body: nextBody },
+              workspaceId,
+              expectedUpdatedAtRef.current
+            );
+            lastSaved.current = { title: nextTitle, body: nextBody };
+            expectedUpdatedAtRef.current = saved.updatedAt;
+            setStatus("saved");
+            onSaved();
+            if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+            resetTimerRef.current = setTimeout(() => {
+              setStatus((prev) => (prev === "saved" ? "idle" : prev));
+            }, 2000);
+          } catch (err) {
+            if (err instanceof KnowledgeApiError && err.status === 412) {
+              await enterConflict();
+              return;
+            }
+            setStatus("error");
+            reportError(err, "Couldn't save entry");
+          }
+        });
       }, AUTOSAVE_DELAY_MS);
     },
-    [entry.id, workspaceId, onSaved, enterConflict]
+    [entry.id, workspaceId, onSaved, enterConflict, enqueueSave]
   );
 
   /** Save the agent-facing description on blur (no-op when unchanged). */
-  const handleDescriptionBlur = useCallback(async () => {
+  const handleDescriptionBlur = useCallback(() => {
     const next = description.trim();
     if (next === lastSavedDescription.current.trim()) return;
-    try {
-      const saved = await apiUpdateEntry(
-        entry.id,
-        { excerpt: next === "" ? null : next },
-        workspaceId,
-        expectedUpdatedAtRef.current
-      );
-      lastSavedDescription.current = next;
-      expectedUpdatedAtRef.current = saved.updatedAt;
-      onSaved();
-    } catch (err) {
-      if (err instanceof KnowledgeApiError && err.status === 412) {
-        await enterConflict();
-        return;
+    void enqueueSave(async () => {
+      if (conflictRef.current !== null) return;
+      try {
+        const saved = await apiUpdateEntry(
+          entry.id,
+          { excerpt: next === "" ? null : next },
+          workspaceId,
+          expectedUpdatedAtRef.current
+        );
+        lastSavedDescription.current = next;
+        expectedUpdatedAtRef.current = saved.updatedAt;
+        onSaved();
+      } catch (err) {
+        if (err instanceof KnowledgeApiError && err.status === 412) {
+          await enterConflict();
+          return;
+        }
+        reportError(err, "Couldn't save description");
       }
-      reportError(err, "Couldn't save description");
-    }
-  }, [description, entry.id, workspaceId, onSaved, enterConflict]);
+    });
+  }, [description, entry.id, workspaceId, onSaved, enterConflict, enqueueSave]);
 
   /**
    * Conflict resolution: keep the user's local edits, overwrite the
@@ -320,11 +346,13 @@ export function DocPane({
     setResolving(true);
     setStatus("saving");
     try {
-      const saved = await apiUpdateEntry(
-        entry.id,
-        { title, body },
-        workspaceId,
-        conflict.serverUpdatedAt
+      const saved = await enqueueSave(() =>
+        apiUpdateEntry(
+          entry.id,
+          { title, body },
+          workspaceId,
+          conflict.serverUpdatedAt
+        )
       );
       lastSaved.current = { title, body };
       expectedUpdatedAtRef.current = saved.updatedAt;
@@ -346,7 +374,7 @@ export function DocPane({
     } finally {
       setResolving(false);
     }
-  }, [conflict, title, body, entry.id, workspaceId, onSaved, enterConflict]);
+  }, [conflict, title, body, entry.id, workspaceId, onSaved, enterConflict, enqueueSave]);
 
   /**
    * Conflict resolution: discard the user's local edits, reload the
@@ -421,19 +449,15 @@ export function DocPane({
           </div>
         </div>
       </div>
-      {bodyLoading ? (
-        <DocBodySkeleton />
-      ) : (
-        <DocEditor
-          initialMarkdown={editorMd}
-          resetKey={`${entry.id}:${editorReloadKey}`}
-          toolbarInset={toolbarInset}
-          onChange={(md) => {
-            setBody(md);
-            scheduleSave(title, md);
-          }}
-        />
-      )}
+      <DocEditor
+        initialMarkdown={editorMd}
+        resetKey={`${entry.id}:${editorReloadKey}`}
+        toolbarInset={toolbarInset}
+        onChange={(md) => {
+          setBody(md);
+          scheduleSave(title, md);
+        }}
+      />
     </article>
   );
 }

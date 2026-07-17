@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import type { GraphLayout } from "@/shared/graph";
+import { createKeyedSerializer } from "@/shared/lib/keyed-serializer";
+import { createMergeScheduler } from "@/shared/lib/merge-scheduler";
 import {
   createRefetchCoordinator,
   type RefetchCoordinator,
@@ -15,7 +18,6 @@ import type {
   WorkflowDetail,
   WorkflowSummary,
 } from "../client/types";
-import { createMergeScheduler } from "./merge-scheduler";
 
 const TEXT_SAVE_DELAY_MS = 400;
 
@@ -48,6 +50,9 @@ export interface WorkflowOps {
     id: string,
     patch: { name?: string; description?: string | null }
   ) => void;
+  /** Persist dragged step positions (the `layout` column). Called by the
+   *  graph's debounced position hook — writes immediately, no extra debounce. */
+  saveLayout: (id: string, layout: GraphLayout) => Promise<void>;
   deleteWorkflow: (id: string) => Promise<void>;
   addStep: (workflowId: string, connectFrom?: string) => Promise<string | null>;
   patchStep: (
@@ -58,13 +63,16 @@ export interface WorkflowOps {
     opts?: { debounce?: boolean }
   ) => void;
   removeStep: (workflowId: string, nodeId: string) => Promise<void>;
+  /** Resolves `true` when the connection lands, `false` when it's rejected
+   *  (e.g. a cycle) — the caller opens the condition popover only on success.
+   *  The debounced (condition-edit) path resolves `true` optimistically. */
   connectSteps: (
     workflowId: string,
     from: string,
     to: string,
     condition: string,
     opts?: { debounce?: boolean }
-  ) => void;
+  ) => Promise<boolean>;
   disconnectSteps: (workflowId: string, from: string, to: string) => Promise<void>;
 }
 
@@ -108,6 +116,15 @@ export function useWorkflows(
   // and exposes flush/cancel so structural ops can order writes correctly.
   const schedulerRef = useRef<ReturnType<typeof createMergeScheduler> | null>(null);
   const scheduler = (schedulerRef.current ??= createMergeScheduler(TEXT_SAVE_DELAY_MS));
+
+  // Per-edge FIFO serializer for immediate topology writes. connect (POST)
+  // and disconnect (DELETE) on the SAME edge run through one keyed chain so a
+  // rapid connect→disconnect (or reverse) can't resolve by network ordering —
+  // the second op only issues after the first settles. Condition-edit upserts
+  // stay on the merge-scheduler (debounced, and disconnect cancels a queued
+  // one), so they never re-enter this serializer — no deadlock via flushWorkflow.
+  const edgeSerializerRef = useRef<ReturnType<typeof createKeyedSerializer> | null>(null);
+  const edgeSerializer = (edgeSerializerRef.current ??= createKeyedSerializer());
 
   // Flush any pending debounced save on unmount / workspace switch so an edit
   // inside the debounce window survives navigating away.
@@ -233,6 +250,26 @@ export function useWorkflows(
     [qc, workspaceId, scheduler, invalidate, settleAfterSave]
   );
 
+  // Persist dragged node positions. The graph's `useGraphPositions` already
+  // debounces + owns the authoritative overrides, so this writes immediately
+  // and only mirrors the result into the cached detail (so a later refetch
+  // doesn't briefly show stale positions). Not routed through the merge
+  // scheduler — layout is orthogonal to the text/edge edits it serializes.
+  const saveLayout = useCallback(
+    async (id: string, layout: GraphLayout) => {
+      qc.setQueryData<WorkflowDetail>(detailQueryKey(workspaceId, id), (prev) =>
+        prev ? { ...prev, layout } : prev
+      );
+      try {
+        await api.updateWorkflow(workspaceId, id, { layout });
+      } catch (err) {
+        reportSaveError("layout", err);
+        invalidate(id);
+      }
+    },
+    [qc, workspaceId, invalidate]
+  );
+
   const deleteWorkflow = useCallback(
     async (id: string) => {
       try {
@@ -331,10 +368,17 @@ export function useWorkflows(
       to: string,
       condition: string,
       opts?: { debounce?: boolean }
-    ) => {
+    ): Promise<boolean> => {
       // Condition-only edits (existing edge) upsert via the same connect
       // route; debounce those. New connections apply immediately.
       if (opts?.debounce) {
+        // Guard: a condition edit whose edge is no longer in the graph must
+        // not resurrect it. The connect route upserts, so firing here for a
+        // never-created (cycle-rejected) or just-disconnected edge would
+        // re-create it. Skip when the edge is absent from the cache.
+        const detail = qc.getQueryData<WorkflowDetail>(detailQueryKey(workspaceId, workflowId));
+        const edgeExists = detail?.graph?.edges.some((e) => e.from === from && e.to === to);
+        if (!edgeExists) return Promise.resolve(false);
         qc.setQueryData<WorkflowDetail>(detailQueryKey(workspaceId, workflowId), (prev) => {
           if (!prev?.graph) return prev;
           return {
@@ -361,37 +405,55 @@ export function useWorkflows(
             })
             .finally(() => settleAfterSave())
         );
-        return;
+        return Promise.resolve(true);
       }
-      void (async () => {
+      // Immediate connect — serialized against a disconnect of the same edge.
+      return edgeSerializer.run(edgeKey(workflowId, from, to), async () => {
         try {
           await flushWorkflow(workflowId);
           await api.connectSteps(workspaceId, workflowId, from, to, condition);
+          // Optimistically add the edge so a follow-on condition popover finds
+          // it in cache immediately (the invalidate refetch reconciles truth).
+          qc.setQueryData<WorkflowDetail>(detailQueryKey(workspaceId, workflowId), (prev) => {
+            if (!prev?.graph) return prev;
+            if (prev.graph.edges.some((e) => e.from === from && e.to === to)) return prev;
+            return {
+              ...prev,
+              graph: { ...prev.graph, edges: [...prev.graph.edges, { from, to, condition }] },
+            };
+          });
           invalidate(workflowId);
+          return true;
         } catch (err) {
           reportSaveError("connection", err);
           invalidate(workflowId);
+          return false;
         }
-      })();
+      });
     },
-    [qc, workspaceId, scheduler, invalidate, flushWorkflow, settleAfterSave]
+    [qc, workspaceId, scheduler, invalidate, flushWorkflow, settleAfterSave, edgeSerializer]
   );
 
   const disconnectSteps = useCallback(
     async (workflowId: string, from: string, to: string) => {
-      try {
-        // Cancel any queued condition edit for THIS edge first — otherwise its
-        // timer fires after the DELETE and resurrects the edge.
-        scheduler.cancel(edgeKey(workflowId, from, to));
-        await flushWorkflow(workflowId);
-        await api.disconnectSteps(workspaceId, workflowId, from, to);
-        invalidate(workflowId);
-      } catch (err) {
-        reportSaveError("disconnect", err);
-        invalidate(workflowId);
-      }
+      // Cancel any queued condition edit for THIS edge first — otherwise its
+      // timer fires after the DELETE and resurrects the edge. Done eagerly (not
+      // inside the serialized op) so a not-yet-fired timer is dropped on issue.
+      scheduler.cancel(edgeKey(workflowId, from, to));
+      // Serialized against an immediate connect of the same edge so the DELETE
+      // can't overtake a still-in-flight POST.
+      await edgeSerializer.run(edgeKey(workflowId, from, to), async () => {
+        try {
+          await flushWorkflow(workflowId);
+          await api.disconnectSteps(workspaceId, workflowId, from, to);
+          invalidate(workflowId);
+        } catch (err) {
+          reportSaveError("disconnect", err);
+          invalidate(workflowId);
+        }
+      });
     },
-    [workspaceId, invalidate, flushWorkflow, scheduler]
+    [workspaceId, invalidate, flushWorkflow, scheduler, edgeSerializer]
   );
 
   return {
@@ -405,6 +467,7 @@ export function useWorkflows(
     ops: {
       createWorkflow,
       updateWorkflow,
+      saveLayout,
       deleteWorkflow,
       addStep,
       patchStep,

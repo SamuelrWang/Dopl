@@ -1,5 +1,6 @@
 import "server-only";
 
+import { mergeStoredLayout, type GraphLayout } from "@/shared/graph";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { isUuid } from "@/shared/lib/id/uuid";
 import { normalizeClusterName } from "@/shared/lib/cluster-name";
@@ -33,6 +34,8 @@ export interface WorkflowRow {
   access_mode: "workspace" | "teams";
   /** Creator (retains edit on teams-mode workflows). */
   user_id: string | null;
+  /** Persisted dragged step positions (id → {x,y}); `{}` = pure auto-layout. */
+  layout: GraphLayout;
   created_at: string;
   updated_at: string;
   step_count: number;
@@ -61,6 +64,8 @@ export interface WorkflowUpdateRequest {
   name?: string;
   description?: string | null;
   clusterId?: string | null;
+  /** Web-only: dragged step positions. Agents (MCP) never send this. */
+  layout?: GraphLayout;
 }
 
 export interface WorkflowScope {
@@ -72,7 +77,7 @@ export interface WorkflowScope {
 }
 
 const SELECT_COLS =
-  "id, slug, name, description, cluster_id, access_mode, user_id, created_at, updated_at";
+  "id, slug, name, description, cluster_id, access_mode, user_id, layout, created_at, updated_at";
 
 /**
  * `cluster_id` is caller-supplied; the FK alone only proves the cluster
@@ -404,6 +409,14 @@ export async function updateWorkflow(
       await assertClusterInWorkspace(req.clusterId, scope.workspaceId);
     }
     update.cluster_id = req.clusterId;
+  }
+  // Layout merge-except-empty semantics (shared with ontology
+  // repository.updateCluster via `mergeStoredLayout`): a non-empty patch
+  // shallow-merges per node id over the stored layout so two tabs each
+  // dragging a different step don't clobber each other; an explicit `{}`
+  // resets, replacing every stored position back to pure auto-layout.
+  if (req.layout !== undefined) {
+    update.layout = mergeStoredLayout((wf.layout ?? null) as GraphLayout | null, req.layout);
   }
 
   if (Object.keys(update).length > 0) {

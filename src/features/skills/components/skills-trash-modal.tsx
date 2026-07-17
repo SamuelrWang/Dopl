@@ -1,14 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FileCode, RotateCcw } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/shared/ui/dialog";
+import { FileCode, RotateCcw, X } from "lucide-react";
+import { ModalShell } from "@/shared/layout/settings-modal";
+import modalStyles from "@/shared/layout/settings-modal/settings-modal.module.css";
 import { toast } from "@/shared/ui/toast";
 import {
   SkillApiError,
@@ -85,16 +80,27 @@ export function SkillsTrashModal({
   const isEmpty = !!trash && trash.skills.length === 0;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl bg-modal-surface border-border-strong text-text-primary">
-        <DialogHeader>
-          <DialogTitle className="text-text-primary">Trash</DialogTitle>
-          <DialogDescription className="text-text-tertiary">
-            Soft-deleted skills from this workspace.
-          </DialogDescription>
-        </DialogHeader>
+    <ModalShell
+      open={open}
+      onClose={() => onOpenChange(false)}
+      label="Trash"
+      size="narrow"
+    >
+      <button
+        type="button"
+        className={modalStyles.close}
+        onClick={() => onOpenChange(false)}
+        aria-label="Close"
+      >
+        <X size={18} />
+      </button>
+      <div className={modalStyles.narrowBody}>
+        <h2 className={modalStyles.narrowTitle}>Trash</h2>
+        <p className="mb-6 text-lead leading-relaxed text-text-secondary">
+          Soft-deleted skills from this workspace.
+        </p>
 
-        <div className="mt-2 max-h-[60vh] overflow-y-auto pr-1">
+        <div className="max-h-[60vh] overflow-y-auto pr-1">
           {isLoading && (
             <p className="text-small text-text-secondary">Loading…</p>
           )}
@@ -119,8 +125,8 @@ export function SkillsTrashModal({
             </Section>
           )}
         </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </ModalShell>
   );
 }
 

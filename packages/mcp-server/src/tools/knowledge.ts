@@ -52,7 +52,7 @@ const KB_DESCRIPTION = `Manage the caller's own editable knowledge bases — the
 - "create_folder" — create a folder at a path. mkdir -p semantics; idempotent on existing folders.
 - "move_folder" — move + rename a folder; leaf becomes the new name, missing parents created, cycles rejected.
 - "read_file" — read an entry's full markdown body by path (must resolve to an entry, not a folder). Returns a Version token — pass it to write_file as \`expected_version\`.
-- "write_file" — upsert an entry. \`path\` resolves an existing entry; for new entries the title becomes the addressable path (pass \`title\` for a clean one). Parents mkdir-p'd. To edit an existing entry safely, read_file first and pass its Version as \`expected_version\` so a concurrent edit can't be silently overwritten (you'll get a 412 to reconcile instead).
+- "write_file" — upsert an entry. \`path\` resolves an existing entry; for new entries the title becomes the addressable path (pass \`title\` for a clean one). Parents mkdir-p'd. Overwriting an existing entry REQUIRES \`expected_version\` from a prior read_file (412 without it) so a concurrent edit can't be silently overwritten; \`force=true\` skips the check. Creates need no version.
 - "move_file" — move + rename an entry; parents mkdir-p'd, leaf becomes the new title.
 - "list_trash" — list soft-deleted bases/folders/entries. Optional \`base\` scopes to one base; omit for workspace-wide.
 - "restore_file" — restore a soft-deleted entry by id (from op=list_trash).
@@ -90,7 +90,7 @@ export function registerKnowledgeTools(register: RegisterTool, client: DoplClien
       slug: z.string().optional().describe("update_base: optional new slug (1-80 chars)."),
       body: z.string().optional().describe("write_file: required markdown body."),
       title: z.string().optional().describe("write_file: optional title override (defaults to the leaf path segment)."),
-      expected_version: z.string().optional().describe("write_file: the entry's version from a prior read_file, to avoid overwriting a concurrent edit (412 on mismatch). Omit to auto-guard against the current version."),
+      expected_version: z.string().optional().describe("write_file: the entry's Version from a prior read_file. Required when overwriting an existing entry — omitting it fails with 412; only force=true skips the check. Creates need no version."),
       force: z.boolean().optional().describe("write_file: overwrite even if the entry changed since you read it. Discards the other edit — use only when intentional."),
       folder_id: z.string().optional().describe("restore_folder: required folder UUID (from list_trash)."),
       entry_id: z.string().optional().describe("restore_file: required entry UUID (from list_trash)."),

@@ -12,13 +12,9 @@ const MONTHLY_PRICE_USD = 7.99;
 
 export interface LaunchMetrics {
   signups_total: number;
-  trials_active: number;
-  trials_expired: number;
-  paying_users: number;
+  pro_workspaces: number;
   mrr_usd: number;
   conversion_signup_to_first_cluster_24h_pct: number | null;
-  conversion_trial_to_paid_pct: number | null;
-  conversion_reactivation_pct: number | null;
   paid_users_who_clustered_in_session1_pct: number | null;
   daily: Array<{
     day: string; // YYYY-MM-DD
@@ -30,42 +26,29 @@ export interface LaunchMetrics {
 export async function getLaunchMetrics(): Promise<LaunchMetrics> {
   const supabase = supabaseAdmin();
 
-  // ── Basic counts from profiles ───────────────────────────────────
-  const [
-    { count: signupsTotal },
-    { count: trialsActive },
-    { count: trialsExpired },
-    { count: payingUsers },
-  ] = await Promise.all([
+  // ── Basic counts ─────────────────────────────────────────────────
+  // Billing is workspace-level post-pivot: a Pro workspace holds `plan='pro'`
+  // (canceled subs revert to `plan='free'`), so the count of pro-plan rows is
+  // the paying-workspace tally that drives MRR.
+  const [{ count: signupsTotal }, { count: proWorkspaces }] = await Promise.all([
     supabase.from("profiles").select("id", { count: "exact", head: true }),
     supabase
-      .from("profiles")
-      .select("id", { count: "exact", head: true })
-      .eq("subscription_status", "trialing")
-      .gt("trial_expires_at", new Date().toISOString()),
-    supabase
-      .from("profiles")
-      .select("id", { count: "exact", head: true })
-      .eq("subscription_status", "expired"),
-    supabase
-      .from("profiles")
-      .select("id", { count: "exact", head: true })
-      .eq("subscription_status", "active"),
+      .from("workspace_billing")
+      .select("workspace_id", { count: "exact", head: true })
+      .eq("plan", "pro"),
   ]);
 
-  const paying = payingUsers ?? 0;
+  const paying = proWorkspaces ?? 0;
   const mrrUsd = Number((paying * MONTHLY_PRICE_USD).toFixed(2));
 
   // ── Funnel ratios from conversion_events ─────────────────────────
-  const [signupEvents, firstClusterEvents, trialStartedEvents, subscribedEvents, reactivationSentEvents, reactivatedEvents, firstIngestEvents] = await Promise.all([
-    fetchEvents("signup"),
-    fetchEvents("first_cluster_built"),
-    fetchEvents("trial_started"),
-    fetchEvents("subscribed"),
-    fetchEvents("reactivation_email_sent"),
-    fetchEvents("reactivated"),
-    fetchEvents("first_ingest_completed"),
-  ]);
+  const [signupEvents, firstClusterEvents, subscribedEvents, firstIngestEvents] =
+    await Promise.all([
+      fetchEvents("signup"),
+      fetchEvents("first_cluster_built"),
+      fetchEvents("subscribed"),
+      fetchEvents("first_ingest_completed"),
+    ]);
 
   // signup → first_cluster within 24h
   const signupByUser = new Map<string, string>();
@@ -83,23 +66,8 @@ export async function getLaunchMetrics(): Promise<LaunchMetrics> {
       ? pct(firstClusterWithin24h / signupEvents.length)
       : null;
 
-  // trial_started → subscribed
+  // Subscribed users — for the session-1 cluster metric and the daily series.
   const subscribedUserSet = new Set(subscribedEvents.map((e) => e.user_id));
-  const trialsStartedTotal = trialStartedEvents.length;
-  const trialsConverted = trialStartedEvents.filter((e) =>
-    subscribedUserSet.has(e.user_id)
-  ).length;
-  const convTrialToPaid =
-    trialsStartedTotal > 0 ? pct(trialsConverted / trialsStartedTotal) : null;
-
-  // reactivation_email_sent → reactivated
-  const reactivatedUserSet = new Set(reactivatedEvents.map((e) => e.user_id));
-  const emailedTotal = reactivationSentEvents.length;
-  const reactivatedAfterEmail = reactivationSentEvents.filter((e) =>
-    reactivatedUserSet.has(e.user_id)
-  ).length;
-  const convReactivation =
-    emailedTotal > 0 ? pct(reactivatedAfterEmail / emailedTotal) : null;
 
   // paid users who built a cluster within 1h of signup (≈ session 1)
   // (Proxy: first_cluster event within 1h of signup, then limited to
@@ -128,13 +96,9 @@ export async function getLaunchMetrics(): Promise<LaunchMetrics> {
 
   return {
     signups_total: signupsTotal ?? 0,
-    trials_active: trialsActive ?? 0,
-    trials_expired: trialsExpired ?? 0,
-    paying_users: paying,
+    pro_workspaces: paying,
     mrr_usd: mrrUsd,
     conversion_signup_to_first_cluster_24h_pct: convFirstCluster24h,
-    conversion_trial_to_paid_pct: convTrialToPaid,
-    conversion_reactivation_pct: convReactivation,
     paid_users_who_clustered_in_session1_pct: convPaidSession1Cluster,
     daily,
   };

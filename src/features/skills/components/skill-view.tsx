@@ -28,6 +28,7 @@ import {
 } from "@/features/skills/types";
 import {
   SkillApiError,
+  type UpdateSkillPatch,
   duplicateSkill,
   fetchSkill,
   readSkillBody,
@@ -42,6 +43,10 @@ import { errMessage, primaryFile } from "./skill-view-utils";
 interface Props {
   resolved: ResolvedSkill;
   workspaceSlug: string;
+  /** Workspace being viewed. Every client call must carry it (as the
+   *  X-Workspace-Id header) so the route targets THIS workspace and not
+   *  the caller's default — see DetailPane's fetch note. */
+  workspaceId: string;
   /** With `currentUserId`, gates the sharing control next to the title
    *  (owner or workspace admin). */
   isAdmin: boolean;
@@ -66,6 +71,7 @@ const AUTOSAVE_DELAY_MS = 1500;
 export function SkillView({
   resolved,
   workspaceSlug,
+  workspaceId,
   isAdmin,
   currentUserId,
   onDuplicated,
@@ -115,6 +121,12 @@ export function SkillView({
 
   const initialFile = useMemo(() => primaryFile(resolved.files), [resolved.files]);
   const [file, setFile] = useState<SkillFile>(initialFile);
+  // Markdown seed handed to DocEditor + explicit reload key. The editor
+  // owns its content while typing; we re-seed ONLY on user-driven reload
+  // ("Discard mine") or an at-rest server pull — never on save success,
+  // which would clobber keystrokes typed while the PUT was in flight.
+  const [editorMd, setEditorMd] = useState(initialFile.body);
+  const [editorReloadKey, setEditorReloadKey] = useState(0);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [historyOpen, setHistoryOpen] = useState(false);
   // Bumped whenever a save lands so the open history panel refetches.
@@ -134,6 +146,14 @@ export function SkillView({
   // Baseline `updatedAt` for the optimistic-concurrency precondition;
   // updated on every successful save.
   const baselineRef = useRef(initialFile.updatedAt);
+  // Metadata-CAS baseline — the skill row's `updated_at`, a SEPARATE clock
+  // from the body's `body_updated_at` (baselineRef). Both metadata PATCHes
+  // AND body saves move it (the touch trigger fires on any skills UPDATE), so
+  // it's refreshed from every response that carries it: metadata PATCHes, body
+  // saves (skillUpdatedAt), and full skill pulls. Keeping it current is what
+  // stops a name/folder/sharing edit from false-412-ing right after a body
+  // autosave (F-038 D9/D10).
+  const metaBaselineRef = useRef(skill.updatedAt);
   const slugRef = useRef(skill.slug);
   useEffect(() => {
     slugRef.current = skill.slug;
@@ -159,51 +179,79 @@ export function SkillView({
     (p) => p.userId !== selfProfile?.userId
   );
 
-  const flushSave = useCallback(async (body: string) => {
-    // Don't fire while in conflict — autosave would just 412 again.
-    if (conflictRef.current) return;
-    pendingBodyRef.current = null;
-    setSaveStatus("saving");
-    try {
-      const updated = await writeSkillBody(
-        slugRef.current,
-        body,
-        undefined,
-        baselineRef.current
-      );
-      baselineRef.current = updated.updatedAt;
-      setFile(updated);
-      setHistoryRefreshKey((k) => k + 1);
-      setSaveStatus("saved");
-      setTimeout(() => {
-        setSaveStatus((prev) => (prev === "saved" ? "idle" : prev));
-      }, 1800);
-    } catch (err) {
-      if (err instanceof SkillApiError && err.status === 412) {
-        // Pull the server's current state so the user can decide
-        // (Save mine / Discard mine). Re-buffer their typing.
-        pendingBodyRef.current = body;
-        try {
-          const fresh = await readSkillBody(slugRef.current);
-          baselineRef.current = fresh.updatedAt;
-          setConflict({
-            serverBody: fresh.body,
-            serverUpdatedAt: fresh.updatedAt,
-          });
-        } catch {
-          toast({
-            title: "Edited elsewhere",
-            description:
-              "Couldn't load the latest server version — please refresh.",
-          });
-        }
-        setSaveStatus("error");
-        return;
-      }
-      setSaveStatus("error");
-      toast({ title: "Couldn't save", description: errMessage(err) });
-    }
+  // Serialize every body PUT through one chain so two saves can never be
+  // in flight together. An overlapping save would carry a stale baseline
+  // and 412 against our own write — the "someone else is editing" banner
+  // with only one editor in the room.
+  const saveChainRef = useRef<Promise<unknown>>(Promise.resolve());
+  const enqueueSave = useCallback(<T,>(job: () => Promise<T>): Promise<T> => {
+    const next = saveChainRef.current.then(job, job);
+    // Park a swallowed tail so an unawaited failing job can't surface as
+    // an unhandled rejection; callers that await `next` still see it.
+    saveChainRef.current = next.then(
+      () => undefined,
+      () => undefined
+    );
+    return next;
   }, []);
+
+  const flushSave = useCallback(
+    () =>
+      enqueueSave(async () => {
+        // Don't fire while in conflict — autosave would just 412 again.
+        if (conflictRef.current) return;
+        const body = pendingBodyRef.current;
+        if (body === null) return;
+        pendingBodyRef.current = null;
+        setSaveStatus("saving");
+        try {
+          const { file: updated, skillUpdatedAt } = await writeSkillBody(
+            slugRef.current,
+            body,
+            workspaceId,
+            baselineRef.current
+          );
+          baselineRef.current = updated.updatedAt;
+          // The body write bumped the row's updated_at; keep the metadata
+          // precondition current so a following name/folder/sharing edit
+          // doesn't false-412 (F-038 D10).
+          metaBaselineRef.current = skillUpdatedAt;
+          setFile(updated);
+          setHistoryRefreshKey((k) => k + 1);
+          setSaveStatus("saved");
+          setTimeout(() => {
+            setSaveStatus((prev) => (prev === "saved" ? "idle" : prev));
+          }, 1800);
+        } catch (err) {
+          if (err instanceof SkillApiError && err.status === 412) {
+            // Pull the server's current state so the user can decide
+            // (Save mine / Discard mine). Re-buffer the losing body ONLY
+            // if nothing newer was typed while the PUT was in flight —
+            // never stomp fresher keystrokes with an older snapshot.
+            if (pendingBodyRef.current === null) pendingBodyRef.current = body;
+            try {
+              const fresh = await readSkillBody(slugRef.current, workspaceId);
+              baselineRef.current = fresh.updatedAt;
+              setConflict({
+                serverBody: fresh.body,
+                serverUpdatedAt: fresh.updatedAt,
+              });
+            } catch {
+              toast({
+                title: "Edited elsewhere",
+                description:
+                  "Couldn't load the latest server version — please refresh.",
+              });
+            }
+            setSaveStatus("error");
+            return;
+          }
+          setSaveStatus("error");
+          toast({ title: "Couldn't save", description: errMessage(err) });
+        }
+      }),
+    [enqueueSave, workspaceId]
+  );
 
   const scheduleSave = useCallback(
     (body: string) => {
@@ -212,54 +260,59 @@ export function SkillView({
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(() => {
         timerRef.current = null;
-        const latest = pendingBodyRef.current;
-        if (latest === null) return;
-        void flushSave(latest);
+        void flushSave();
       }, AUTOSAVE_DELAY_MS);
     },
     [flushSave]
   );
 
-  // Cleanup any pending timer on unmount. Fire-and-forget the final PUT
-  // so a skill-switch or page nav doesn't drop the last 1.5s of typing.
-  // The PUT carries the baseline updatedAt so a racing writer 412s us
-  // instead of getting silently overwritten. Skipped mid-conflict.
+  // Cleanup any pending timer on unmount, then flush the last edit
+  // through the save chain (so it runs AFTER any in-flight save and
+  // carries a fresh baseline). A 412 here has no editor left to show a
+  // banner in — surface a toast instead of dropping silently. Skipped
+  // mid-conflict.
   useEffect(() => {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
       if (conflictRef.current) return;
-      const body = pendingBodyRef.current;
-      if (body === null) return;
-      writeSkillBody(slugRef.current, body, undefined, baselineRef.current).catch(
-        (err: unknown) => {
+      if (pendingBodyRef.current === null) return;
+      void enqueueSave(async () => {
+        const body = pendingBodyRef.current;
+        if (body === null) return;
+        pendingBodyRef.current = null;
+        try {
+          await writeSkillBody(slugRef.current, body, workspaceId, baselineRef.current);
+        } catch (err) {
           if (err instanceof SkillApiError && err.status === 412) {
-            console.warn("[skills] unmount autosave dropped (412 stale)", {
-              slug: slugRef.current,
+            toast({
+              title: "Last edit not saved",
+              description:
+                "This skill was edited elsewhere while you navigated away — reopen it to reconcile.",
             });
           }
         }
-      );
-      pendingBodyRef.current = null;
+      });
     };
-  }, []);
+  }, [enqueueSave, workspaceId]);
 
   // Conflict resolution: keep the user's local edits, force-save over
   // the server using the latest known precondition. Another racing
   // writer re-triggers the conflict — never silently overwrite.
-  const handleKeepMine = useCallback(async () => {
+  const handleKeepMine = useCallback(() => enqueueSave(async () => {
     const c = conflictRef.current;
     if (!c) return;
     const body = pendingBodyRef.current;
     if (body === null) return;
     setSaveStatus("saving");
     try {
-      const saved = await writeSkillBody(
+      const { file: saved, skillUpdatedAt } = await writeSkillBody(
         slugRef.current,
         body,
-        undefined,
+        workspaceId,
         c.serverUpdatedAt
       );
       baselineRef.current = saved.updatedAt;
+      metaBaselineRef.current = skillUpdatedAt;
       setFile(saved);
       pendingBodyRef.current = null;
       setConflict(null);
@@ -270,7 +323,7 @@ export function SkillView({
     } catch (err) {
       if (err instanceof SkillApiError && err.status === 412) {
         try {
-          const fresh = await readSkillBody(slugRef.current);
+          const fresh = await readSkillBody(slugRef.current, workspaceId);
           baselineRef.current = fresh.updatedAt;
           setConflict({
             serverBody: fresh.body,
@@ -285,6 +338,14 @@ export function SkillView({
       setSaveStatus("error");
       toast({ title: "Couldn't save", description: errMessage(err) });
     }
+  }), [enqueueSave, workspaceId]);
+
+  // Push a server body into the editor: re-seed the Tiptap state via the
+  // explicit reload key. Callers own the safety check (user chose to
+  // discard, or the editor is at rest).
+  const reloadEditor = useCallback((body: string) => {
+    setEditorMd(body);
+    setEditorReloadKey((k) => k + 1);
   }, []);
 
   // Conflict resolution: discard local typing, reload the server body.
@@ -298,21 +359,80 @@ export function SkillView({
       body: c.serverBody,
       updatedAt: c.serverUpdatedAt,
     }));
+    reloadEditor(c.serverBody);
     setConflict(null);
     setSaveStatus("idle");
-  }, []);
+  }, [reloadEditor]);
 
   // Pull the freshest skill + body from the server and replace local
-  // state. Callers MUST ensure the editor is at rest first (a replace
-  // bumps updatedAt, part of the editor's resetKey, so a mid-edit pull
-  // would remount the editor under the user).
+  // state, including the editor seed. Callers MUST ensure the editor is
+  // at rest first — a reload replaces the Tiptap content, so a mid-edit
+  // pull would yank the document out from under the user.
   const pullFreshSkill = useCallback(async () => {
-    const fresh = await fetchSkill(slugRef.current).catch(() => null);
+    const fresh = await fetchSkill(slugRef.current, workspaceId).catch(() => null);
     if (!fresh) return;
     const next = primaryFile(fresh.files);
     baselineRef.current = next.updatedAt;
+    metaBaselineRef.current = fresh.skill.updatedAt;
     setFile(next);
-  }, []);
+    reloadEditor(next.body);
+    // Remote metadata edits (rename / refolder / reshare from another tab or
+    // an MCP agent) surface here too — sync the displayed bar and its baseline.
+    setDisplayedName(fresh.skill.name);
+    setDisplayedFolder(fresh.skill.folder);
+    setDisplayedSharing({
+      visibility: fresh.skill.visibility,
+      accessMode: fresh.skill.accessMode,
+      grantedTeamIds: fresh.skill.grantedTeamIds,
+    });
+  }, [reloadEditor, workspaceId]);
+
+  // Metadata-only refresh (no editor reseed) — safe to call while the body
+  // editor is mid-edit. Used on a metadata 412 to show the server's current
+  // name/folder/sharing and refresh the metadata precondition.
+  const refreshMeta = useCallback(async () => {
+    const fresh = await fetchSkill(slugRef.current, workspaceId).catch(() => null);
+    if (!fresh) return;
+    metaBaselineRef.current = fresh.skill.updatedAt;
+    setDisplayedName(fresh.skill.name);
+    setDisplayedFolder(fresh.skill.folder);
+    setDisplayedSharing({
+      visibility: fresh.skill.visibility,
+      accessMode: fresh.skill.accessMode,
+      grantedTeamIds: fresh.skill.grantedTeamIds,
+    });
+  }, [workspaceId]);
+
+  // Single choke-point for metadata (name / folder / sharing) PATCHes: sends
+  // the metadata precondition and, on a 412, refreshes the bar + baseline and
+  // surfaces the conflict as a toast (the discrete-field analogue of the body
+  // editor's "Edited elsewhere" banner) rather than silently overwriting.
+  const commitMeta = useCallback(
+    async (patch: UpdateSkillPatch): Promise<Skill | null> => {
+      try {
+        const saved = await updateSkill(
+          slugRef.current,
+          patch,
+          workspaceId,
+          metaBaselineRef.current
+        );
+        metaBaselineRef.current = saved.updatedAt;
+        return saved;
+      } catch (err) {
+        if (err instanceof SkillApiError && err.status === 412) {
+          await refreshMeta();
+          toast({
+            title: "Edited elsewhere",
+            description:
+              "This skill's details changed elsewhere — your edit wasn't applied. The latest is shown; reapply if you still want it.",
+          });
+          return null;
+        }
+        throw err;
+      }
+    },
+    [workspaceId, refreshMeta]
+  );
 
   const isEditorAtRest = useCallback(
     () =>
@@ -358,7 +478,8 @@ export function SkillView({
           <EditableTitle
             value={displayedName}
             onSave={async (next) => {
-              const saved = await updateSkill(skill.slug, { name: next });
+              const saved = await commitMeta({ name: next });
+              if (!saved) return; // 412 — commitMeta refreshed + toasted.
               setDisplayedName(saved.name);
               // The browser's list pane renders server-fetched names —
               // refresh so the row matches the new title.
@@ -374,7 +495,8 @@ export function SkillView({
             canEdit={canEdit}
             onSave={async (next) => {
               try {
-                const saved = await updateSkill(skill.slug, { folder: next });
+                const saved = await commitMeta({ folder: next });
+                if (!saved) return; // 412 — commitMeta refreshed + toasted.
                 setDisplayedFolder(saved.folder);
                 // Left list groups by folder — refresh so the row re-homes.
                 router.refresh();
@@ -393,14 +515,14 @@ export function SkillView({
             isAdmin={isAdmin}
             onShareChange={async (scope, teamIds) => {
               try {
-                const saved = await updateSkill(
-                  skill.slug,
+                const saved = await commitMeta(
                   scope === "private"
                     ? { visibility: "private" }
                     : scope === "team"
                       ? { visibility: "public", accessMode: "teams", teamIds }
                       : { visibility: "public", accessMode: "workspace" }
                 );
+                if (!saved) return; // 412 — commitMeta refreshed + toasted.
                 setDisplayedSharing({
                   visibility: saved.visibility,
                   accessMode: saved.accessMode,
@@ -417,7 +539,12 @@ export function SkillView({
         </div>
         <AvatarStack users={otherEditors} />
         <SaveStatusIndicator state={saveStatus} />
-        <HeaderActions slug={skill.slug} canEdit={canEdit} onDuplicated={onDuplicated} />
+        <HeaderActions
+          slug={skill.slug}
+          workspaceId={workspaceId}
+          canEdit={canEdit}
+          onDuplicated={onDuplicated}
+        />
         <button
           type="button"
           onClick={() => setHistoryOpen((v) => !v)}
@@ -469,12 +596,13 @@ export function SkillView({
                 </div>
               )}
               <DocEditor
-                // Including `updatedAt` in resetKey forces DocEditor to
-                // re-seed Tiptap when the user picks "Discard mine,
-                // reload" (which mutates body+updatedAt in-place). Editor
-                // skips redundant setContent thanks to its equality guard.
-                resetKey={`${file.id}:${file.updatedAt}`}
-                initialMarkdown={file.body}
+                // resetKey bumps ONLY on explicit reloads ("Discard
+                // mine", at-rest server pulls). Save success must never
+                // re-seed the editor — the server snapshot is older than
+                // whatever the user typed while the PUT was in flight,
+                // and reseeding would clobber those keystrokes.
+                resetKey={`${file.id}:${editorReloadKey}`}
+                initialMarkdown={editorMd}
                 onChange={updateBody}
               />
             </div>
@@ -483,6 +611,7 @@ export function SkillView({
           {historyOpen && (
             <SkillHistoryPanel
               slug={skill.slug}
+              workspaceId={workspaceId}
               canEdit={canEdit}
               refreshKey={historyRefreshKey}
               onClose={() => setHistoryOpen(false)}
@@ -576,10 +705,12 @@ function FolderControl({
 
 function HeaderActions({
   slug,
+  workspaceId,
   canEdit,
   onDuplicated,
 }: {
   slug: string;
+  workspaceId: string;
   canEdit: boolean;
   onDuplicated?: (skill: Skill) => void;
 }) {
@@ -588,7 +719,10 @@ function HeaderActions({
   return (
     <>
       <a
-        href={`/api/skills/${encodeURIComponent(slug)}/export`}
+        // A plain download link can't send X-Workspace-Id, so scope the export
+        // to the active workspace with the `?workspaceId=` query param the
+        // route accepts (membership-checked server-side).
+        href={`/api/skills/${encodeURIComponent(slug)}/export?workspaceId=${encodeURIComponent(workspaceId)}`}
         download
         title="Download as a Claude-Code-compatible skill zip"
         className="btn-light flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-small font-medium text-text-primary"
@@ -604,7 +738,7 @@ function HeaderActions({
           onClick={async () => {
             setBusy(true);
             try {
-              const created = await duplicateSkill(slug);
+              const created = await duplicateSkill(slug, workspaceId);
               toast({ title: "Skill duplicated", description: created.skill.name });
               onDuplicated?.(created.skill);
               router.refresh();

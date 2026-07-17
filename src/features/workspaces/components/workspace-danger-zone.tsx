@@ -2,14 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/shared/ui/dialog";
+import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { SECTION_BOX_INSET } from "@/shared/ui/section-box";
 import { cn } from "@/shared/lib/utils";
 import type { Workspace } from "../types";
@@ -23,13 +16,14 @@ import { workspaceSegment } from "../url";
 export function WorkspaceDangerZone({ workspace }: { workspace: Workspace }) {
   const router = useRouter();
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const segment = workspaceSegment(workspace);
 
+  // Errors surface inline in the section below (not a toast), and the
+  // dialog closes on failure — so we swallow here rather than rethrow,
+  // which lets ConfirmDialog run its close-on-resolve path.
   async function handleDelete() {
-    setDeleting(true);
     setError(null);
     try {
       const res = await fetch(`/api/workspaces/${segment}`, {
@@ -51,8 +45,6 @@ export function WorkspaceDangerZone({ workspace }: { workspace: Workspace }) {
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
-      setDeleting(false);
-      setConfirmDelete(false);
     }
   }
 
@@ -78,40 +70,15 @@ export function WorkspaceDangerZone({ workspace }: { workspace: Workspace }) {
         </button>
       </div>
 
-      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
-        <DialogContent
-          showCloseButton={false}
-          className="bg-modal-surface border-border-strong"
-        >
-          <DialogHeader>
-            <DialogTitle className="text-title font-semibold tracking-tight text-text-primary">
-              Delete this workspace?
-            </DialogTitle>
-            <DialogDescription className="text-caption text-text-secondary">
-              You&apos;re about to permanently delete <strong>{workspace.name}</strong>.
-              Every cluster, panel, and chat inside it will be
-              removed. This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <button
-              type="button"
-              onClick={() => setConfirmDelete(false)}
-              className="btn-light rounded-md px-2.5 py-1.5 text-small font-medium text-text-primary"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleDelete}
-              disabled={deleting}
-              className="rounded-md bg-danger px-2.5 py-1.5 text-small font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40"
-            >
-              {deleting ? "Deleting..." : "Delete workspace"}
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        title="Delete this workspace?"
+        description={`You're about to permanently delete ${workspace.name}. Every cluster, panel, and chat inside it will be removed. This action cannot be undone.`}
+        confirmLabel="Delete workspace"
+        destructive
+        onConfirm={handleDelete}
+      />
     </section>
   );
 }

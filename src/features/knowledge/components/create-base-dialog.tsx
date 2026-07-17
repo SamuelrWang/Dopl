@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
+import { KB_BASE_DESCRIPTION_MAX } from "@/config";
 import { ModalShell } from "@/shared/layout/settings-modal";
 import modalStyles from "@/shared/layout/settings-modal/settings-modal.module.css";
 import { meetsMinRole, type Role } from "@/features/workspaces/types";
@@ -146,9 +147,12 @@ export function CreateBaseDialog({
             </label>
             <textarea
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={(e) =>
+                setDescription(e.target.value.slice(0, KB_BASE_DESCRIPTION_MAX))
+              }
               placeholder="What lives in this knowledge base?"
               rows={3}
+              maxLength={KB_BASE_DESCRIPTION_MAX}
               className="px-3 py-2 rounded-md bg-surface-raised-3 border border-border-strong text-body text-text-primary placeholder:text-text-muted outline-none focus:border-border-highlight transition-colors resize-none"
             />
           </div>

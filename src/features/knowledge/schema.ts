@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DESCRIPTION_MAX } from "@/config";
+import { DESCRIPTION_MAX, KB_BASE_DESCRIPTION_MAX } from "@/config";
 
 /**
  * Zod input schemas for the knowledge feature. Used by REST handlers
@@ -114,7 +114,7 @@ export const KnowledgeBaseCreateSchema = z
     name: z.string().min(1, "Name is required").max(120),
     // `nullable().optional()` for parity with KnowledgeBaseUpdateSchema —
     // both `undefined` (omit) and `null` (explicit clear) are valid.
-    description: z.string().max(2000).nullable().optional(),
+    description: z.string().max(KB_BASE_DESCRIPTION_MAX).nullable().optional(),
     slug: z
       .string()
       .min(1)
@@ -138,7 +138,7 @@ export type KnowledgeBaseCreateInput = z.infer<typeof KnowledgeBaseCreateSchema>
 export const KnowledgeBaseUpdateSchema = z
   .object({
     name: z.string().min(1).max(120).optional(),
-    description: z.string().max(2000).nullable().optional(),
+    description: z.string().max(KB_BASE_DESCRIPTION_MAX).nullable().optional(),
     slug: z.string().min(1).max(80).regex(slugRegex).optional(),
     agentWriteEnabled: z.boolean().optional(),
     /**

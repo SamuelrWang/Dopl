@@ -42,11 +42,9 @@ export default async function AdminAnalyticsPage() {
       </header>
 
       {/* Top KPI row */}
-      <section className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-8">
+      <section className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-8">
         <Kpi label="Signups" value={m.signups_total} />
-        <Kpi label="Trials active" value={m.trials_active} accent="sky" />
-        <Kpi label="Trials expired" value={m.trials_expired} accent="amber" />
-        <Kpi label="Paying users" value={m.paying_users} accent="emerald" />
+        <Kpi label="Pro workspaces" value={m.pro_workspaces} accent="emerald" />
         <Kpi
           label="MRR"
           value={`$${m.mrr_usd.toLocaleString()}`}
@@ -64,16 +62,6 @@ export default async function AdminAnalyticsPage() {
             label="Signup → first cluster in 24h"
             description="% of new signups who built a cluster within their first day."
             pct={m.conversion_signup_to_first_cluster_24h_pct}
-          />
-          <Funnel
-            label="Trial → paid"
-            description="% of trial_started users who ever subscribed."
-            pct={m.conversion_trial_to_paid_pct}
-          />
-          <Funnel
-            label="Expired → reactivated via email"
-            description="% of users sent a reactivation email who then subscribed."
-            pct={m.conversion_reactivation_pct}
           />
           <Funnel
             label="Paid users who built a cluster in session 1"

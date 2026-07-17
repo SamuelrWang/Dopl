@@ -26,11 +26,12 @@ vi.mock("./repository", () => ({
   insertObject: vi.fn(),
   countMembershipSiblings: vi.fn(),
   insertMembership: vi.fn(),
+  updateCluster: vi.fn(),
 }));
 
 import * as billingRepo from "@/features/billing/server/workspace-billing";
 import * as repo from "./repository";
-import { createObject } from "./service";
+import { createObject, updateCluster } from "./service";
 import { EntitlementError } from "@/features/billing/server/entitlements";
 
 const mockBilling = vi.mocked(billingRepo);
@@ -46,6 +47,7 @@ const CLUSTER_ROW: OntologyClusterRow = {
   slug: "sales",
   name: "Sales",
   purpose: "",
+  layout: {},
   position: 0,
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-01T00:00:00Z",
@@ -152,5 +154,28 @@ describe("createObject — free-plan object cap", () => {
     const object = await createObject(CTX, { clusterId: CLUSTER_ID, name: "Sales Rep" });
     expect(object.id).toBe("obj-1");
     expect(mockRepo.insertObject).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("updateCluster — layout round-trip", () => {
+  it("forwards a layout patch to the repository and maps it back onto the domain cluster", async () => {
+    const layout = { "obj-1": { x: 40, y: 80 }, "obj-2": { x: 320, y: 0 } };
+    mockRepo.updateCluster.mockResolvedValue({ ...CLUSTER_ROW, layout });
+
+    const cluster = await updateCluster(CTX, CLUSTER_ID, { layout });
+
+    expect(mockRepo.updateCluster).toHaveBeenCalledWith(WS, CLUSTER_ID, { layout });
+    expect(cluster.layout).toEqual(layout);
+  });
+
+  it("defaults a null stored layout to an empty map", async () => {
+    mockRepo.updateCluster.mockResolvedValue({ ...CLUSTER_ROW, layout: null });
+    const cluster = await updateCluster(CTX, CLUSTER_ID, { name: "Renamed" });
+    expect(cluster.layout).toEqual({});
+  });
+
+  it("throws NotFound when the cluster is missing", async () => {
+    mockRepo.updateCluster.mockResolvedValue(null);
+    await expect(updateCluster(CTX, CLUSTER_ID, { name: "X" })).rejects.toThrow();
   });
 });
