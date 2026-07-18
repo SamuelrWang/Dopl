@@ -19,8 +19,22 @@ function registerSearchTool(register, client) {
         limit: zod_1.z.coerce.number().int().min(1).max(25).optional().describe("Max hits per group (default 8)."),
     }, async (args) => {
         const limit = args.limit ?? 8;
-        const needle = args.query.toLowerCase();
-        const matches = (...fields) => fields.some((f) => f?.toLowerCase().includes(needle));
+        // Tokenize + punctuation-fold both the query and the haystack so
+        // "duplicate name" matches "duplicate-name", word order doesn't
+        // matter, and every term must appear (AND). A whitespace-only or
+        // punctuation-only query yields zero terms → matches nothing,
+        // instead of the old whole-query .includes() that missed
+        // near-verbatim multi-word queries and dumped everything for a
+        // lone space (audit fix F-15). Knowledge entries still use the
+        // backend hybrid search; this only governs skills/workflows/objects.
+        const fold = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+        const terms = fold(args.query).split(" ").filter(Boolean);
+        const matches = (...fields) => {
+            if (terms.length === 0)
+                return false;
+            const hay = ` ${fields.map((f) => fold(f ?? "")).join(" ")} `;
+            return terms.every((t) => hay.includes(t));
+        };
         const [entryHits, skills, workflows, ontology] = await Promise.all([
             client.searchKb(args.query, { limit }).catch(() => []),
             client.listSkills().catch(() => []),
