@@ -4,24 +4,23 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useApiQuery } from "@/shared/hooks/use-api-query";
 import { getSupabaseBrowser } from "@/shared/supabase/browser";
-import { EmbeddedCheckoutForm } from "@/features/billing/components/embedded-checkout";
 import { PLANS, type PlanDef } from "@/features/billing/plans";
 import type { User } from "@supabase/supabase-js";
 
 /**
  * Public pricing body — the landing-page (light Lattice) language: three
- * plan cards from the shared plan defs, Pro highlighted, embedded checkout
- * revealed in place. Plans are workspace-level: Free is fully featured,
- * Pro is $7.99 per seat / month (checkout sells the live per-seat price),
- * and Team is a contact CTA. Rendered two ways: as the /pricing page body
- * and inside the site-nav pricing popup (`.lp-modal`), so it carries no
- * page chrome of its own.
+ * plan cards from the shared plan defs, Pro highlighted. Upgrading hands
+ * off to the in-app Plans & Billing pane so checkout always carries an
+ * explicit workspace id. Plans are workspace-level: Free is fully
+ * featured, Pro is $7.99 per seat / month (checkout sells the live
+ * per-seat price), and Team is a contact CTA. Rendered two ways: as the
+ * /pricing page body and inside the site-nav pricing popup (`.lp-modal`),
+ * so it carries no page chrome of its own.
  */
 export function PricingContent() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
-  const [showCheckout, setShowCheckout] = useState(false);
 
   useEffect(() => {
     const supabase = getSupabaseBrowser();
@@ -48,7 +47,12 @@ export function PricingContent() {
       router.push("/login?redirect=/pricing");
       return;
     }
-    setShowCheckout(true);
+    // Checkout is workspace-scoped, but this public page has no workspace
+    // context — an in-place checkout would silently bill the caller's
+    // default workspace. Hand off to the in-app Plans & Billing pane
+    // (app shell reads the `billing` param), where the target workspace
+    // is explicit and the checkout carries its id.
+    router.push("/canvas?billing=upgrade");
   }
 
   // Route into the in-app Plans & Billing pane (via the /canvas redirect
@@ -64,25 +68,6 @@ export function PricingContent() {
     } else {
       router.push("/login?redirect=/canvas");
     }
-  }
-
-  if (showCheckout) {
-    return (
-      <section className="lp-checkout">
-        <button
-          type="button"
-          className="lp-checkout-back"
-          onClick={() => setShowCheckout(false)}
-        >
-          &larr; Back to pricing
-        </button>
-        <h1 className="lp-checkout-title">Subscribe to Dopl Pro</h1>
-        <p className="lp-checkout-sub">
-          $7.99 per seat / month · seats sync automatically · cancel anytime
-        </p>
-        <EmbeddedCheckoutForm />
-      </section>
-    );
   }
 
   return (
