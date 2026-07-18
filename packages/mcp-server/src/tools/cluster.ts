@@ -13,7 +13,9 @@ const CLUSTER_DESCRIPTION = `Read and non-destructively modify Dopl clusters (co
 - "list" — discover all clusters and how many workflows each holds. Cheap metadata call; run it proactively to show the user their workspace.
 - "get" — retrieve a cluster's metadata plus the workflows assigned to it. Inspect a workflow's steps + knowledge/skills with dopl_workflow(op="get", slug).
 - "create" — create a new, empty cluster by name. Assign workflows to it with dopl_workflow(op="set_cluster").
-- "update" — rename a cluster (\`name\`) and/or set its \`description\`.`;
+- "update" — rename a cluster (\`name\`) and/or set its \`description\`.
+
+Note on names: a cluster's display name is canonicalized to UPPER_SNAKE_CASE (spaces become underscores, e.g. "my analysis" → "MY_ANALYSIS") so the stored name, the canvas tab, and this tool's output all agree. The URL slug stays lowercase-hyphen. Match clusters by slug or stable id (not by the name you passed).`;
 
 const CLUSTER_ADMIN_DESCRIPTION = `DESTRUCTIVE cluster operations — permanent and irreversible. Confirm intent if the user's phrasing is at all ambiguous. Set \`op\` to one of:
 - "delete_cluster" — permanently delete a cluster container. Its workflows survive (they just lose their cluster grouping).`;
@@ -119,7 +121,19 @@ async function opList(client: DoplClient): Promise<ToolResponse> {
 }
 
 async function opGet(client: DoplClient, slug: string): Promise<ToolResponse> {
-  const cluster = await client.getCluster(slug);
+  let cluster;
+  try {
+    cluster = await client.getCluster(slug);
+  } catch (e) {
+    // Turn a backend 404 into clear, recoverable guidance instead of
+    // leaking the raw "HTTP 404: {json}" transport error (audit F-18).
+    if (isNotFound(e)) {
+      return err(
+        `No cluster \`${slug}\` in this workspace. Run dopl_cluster(op="list") to see valid slugs/ids.`,
+      );
+    }
+    throw e;
+  }
   const lines: string[] = [];
   lines.push(`# Cluster: ${cluster.name}`);
   lines.push(`Slug: \`${cluster.slug}\` · id: \`${cluster.id}\` · updated ${cluster.updated_at}`);
@@ -165,7 +179,18 @@ async function opUpdate(
   if (name !== undefined && !name.trim()) {
     return err("`name` can't be blank.");
   }
-  const result = await client.updateCluster(slug, { name, description });
+  let result;
+  try {
+    result = await client.updateCluster(slug, { name, description });
+  } catch (e) {
+    // Friendly not-found instead of a raw "HTTP 404: {json}" (audit F-18).
+    if (isNotFound(e)) {
+      return err(
+        `No cluster \`${slug}\` in this workspace. Run dopl_cluster(op="list") to see valid slugs/ids.`,
+      );
+    }
+    throw e;
+  }
   return ok(`Updated cluster **${result.name}** (slug: \`${result.slug}\`).`);
 }
 

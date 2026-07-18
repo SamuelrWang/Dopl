@@ -16,6 +16,21 @@ import type {
  * the row shape is explicit and stays in sync with the migration.
  */
 
+/**
+ * Postgres `text`/`varchar` columns reject the NUL byte (U+0000). An
+ * unsanitized insert/update carrying one fails with an opaque 500
+ * ("unsupported Unicode escape sequence \\u0000"). Strip NULs from
+ * user-supplied text at the DB write boundary so a stray control byte in
+ * a body/title/name degrades to "content minus the NUL" instead of a 500
+ * (F-7). NUL is never meaningful in markdown/plain text, so stripping is
+ * lossless in practice; other C0 control chars are valid Postgres text
+ * and are left intact (titles/names reject them via NAME_RE at the schema
+ * layer, where a clear validation error is possible).
+ */
+export function stripNulls<T extends string | null | undefined>(value: T): T {
+  return (typeof value === "string" ? value.replace(/\u0000/g, "") : value) as T;
+}
+
 export const KNOWLEDGE_BASE_COLS =
   "id, workspace_id, name, slug, public_id, description, agent_write_enabled, visibility, access_mode, created_by, created_at, updated_at, deleted_at";
 

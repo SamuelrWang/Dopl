@@ -5,7 +5,7 @@ import type { SkillFileWriteInput } from "../schema";
 import { SkillFileNotFoundError, SkillStaleVersionError } from "./errors";
 import * as repo from "./repository";
 import * as history from "./history";
-import { assertAgentWriteAllowed } from "./service-shared";
+import { assertAgentWriteAllowed, stripNullBytes } from "./service-shared";
 import { getSkillBySlug } from "./service-reads";
 
 /**
@@ -52,15 +52,19 @@ export async function writeBody(
   if (expectedUpdatedAt && file.updatedAt !== expectedUpdatedAt) {
     throw new SkillStaleVersionError(expectedUpdatedAt, file.updatedAt);
   }
+  // Strip U+0000 (unstorable in Postgres text) before both the no-op compare
+  // and the write, so a NUL-bearing body reconciles cleanly against stored
+  // content instead of 500-ing at the DB boundary (F-7).
+  const body = stripNullBytes(input.body);
   // No-op saves (autosave echoes, agent re-writes of identical content)
   // neither touch the row nor mint a version — so updated_at is unchanged.
-  if (input.body === file.body) {
+  if (body === file.body) {
     return { file, skill, skillUpdatedAt: skill.updatedAt };
   }
   const saved = await repo.updateSkillBody(
     skill.id,
     {
-      body: input.body,
+      body,
       editedBy: ctx.userId,
       editedSource: ctx.source,
     },

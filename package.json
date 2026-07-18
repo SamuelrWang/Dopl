@@ -8,7 +8,8 @@
   "scripts": {
     "dev": "next dev --webpack",
     "dev:turbo": "next dev --turbopack",
-    "build": "next build",
+    "build:packages": "npm --prefix packages/dopl-client run build && npm --prefix packages/mcp-server run build",
+    "build": "npm run build:packages && next build",
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit"

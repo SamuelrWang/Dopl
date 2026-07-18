@@ -150,3 +150,16 @@ Build + `tsc --noEmit` green on every commit; `npx eslint` at 0 errors (baseline
   - `src/features/teams/server/repository.ts` — 508
 - Proposed resolution: §2 applies — any edit to these files must shrink or split them in the same PR. `skill-view.tsx` is first in the queue.
 - Status: open (tracked)
+
+### F-042: MCP surface swarm-audit fix batch (2026-07-18)
+- Found during: 14-agent consumer-side audit of the whole MCP surface (report + fixes in one session)
+- Severity: mixed (fixes shipped in-branch; open follow-ups below)
+- Shipped in this batch (see ENGINEERING "MCP surface hardening"): packs feature removed; `dist/` staleness fixed via `build:packages` (root cause of the shipped-but-not-live strict-CAS); `workspace=""` fail-closed + effective-workspace footer; `add_node` atomicity; workflow/chat soft-delete + restore + trash; ontology `expected_version` CAS + `delete_cluster` detach (was cascade); skill `agent_write_enabled` reject + DB-trigger CAS token; null-byte stripping across write boundaries; atomic chat export; re-export preserve-by-default; validation/error-envelope + empty-state polish; slug accent transliteration; KB search-by-id, empty-body, title-as-path, insertion-order position.
+- **Open follow-ups (NOT done this batch):**
+  1. **Migrations apply on deploy, not applied to prod by this branch** — `20260718000001/2/10/20`. They must land with (or just before) the code deploy; until then soft-delete reads/CAS trigger/dropped tables won't match the code.
+  2. **`src/shared/supabase/types.ts` needs regeneration** post-migration (removes `knowledge_packs`/`knowledge_pack_files`; adds `workflows.deleted_at`, `chats.deleted_at`, `chat_create_with_messages` RPC). The chats/workflow code uses localized casts until then — de-cast after regen.
+  3. **Frontend ontology `delete_cluster` reconcile (JUDGMENT NEEDED):** server now DETACHES a cluster's objects (survive, recoverable via MCP), but `features/ontology/hooks/use-ontology.ts` `CLUSTER_DELETE` optimistic reducer still removes them client-side (invariant-tested in `graph-state.test.ts`). Decide how the Canvas should surface detached objects (an "uncategorized" area vs. accept they're only reachable via search) before changing the reducer/contract.
+  4. **F-22 unknown-param rejection deferred:** the MCP SDK zod-parses and strips unknown args before the handler runs, so framework-level strict rejection isn't reachable via `server.tool`. Root cause fixed instead (the seeded `file-knowledge-well` skill no longer tells agents to pass a nonexistent `excerpt`; `archive-a-session` `clientSessionId`→`client_session_id`). Revisit if the SDK exposes strict schemas.
+  5. **F-24 cluster name casing (JUDGMENT):** the UPPER_SNAKE `normalizeClusterName` is intentional/load-bearing for the canvas tab, so it was KEPT and documented in the `dopl_cluster` description (agents match by slug/id). Workflows were decoupled to preserve casing (`normalizeWorkflowName`). Revisit if you want clusters to preserve casing too (would need canvas display via CSS).
+  6. New error code `SKILL_AGENT_WRITE_TOGGLE_FORBIDDEN` (HttpError 403) exists; no http-mapping change was needed.
+- Status: open (follow-ups tracked)

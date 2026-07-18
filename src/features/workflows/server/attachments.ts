@@ -48,7 +48,10 @@ export interface WorkflowAttachedSkill {
   added_at: string;
 }
 
-/** Resolve a workflow id OR slug to its uuid within the workspace. */
+/** Resolve a LIVE workflow id OR slug to its uuid within the workspace.
+ *  Soft-deleted workflows (F-11) resolve as not-found here, so every read
+ *  and authoring op that flows through this choke point ignores trash.
+ *  Restore has its own trashed-row lookup in the service. */
 export async function resolveWorkflowId(
   idOrSlug: string,
   scope: WorkflowScope
@@ -59,6 +62,7 @@ export async function resolveWorkflowId(
     .select("id")
     .eq(isUuid(idOrSlug) ? "id" : "slug", idOrSlug)
     .eq("workspace_id", scope.workspaceId)
+    .is("deleted_at", null)
     .maybeSingle();
   if (error) throw error;
   if (!data)

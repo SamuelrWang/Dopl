@@ -8,9 +8,8 @@
  * recovery, not deletion); `dopl_kb_admin` = the destructive soft-deletes,
  * broken out so the model can't reach them without the destructive surface.
  *
- * Distinct from the read-only knowledge-pack tools (`dopl_packs(op='list')`,
- * `dopl_packs(op='list_files')`, `dopl_packs(op='get_file')`) in server.ts: those expose Dopl's own curated
- * specialist verticals; these expose the user's own editable bases.
+ * These expose the user's OWN editable bases (create / edit / soft-delete),
+ * addressed like a filesystem.
  */
 
 import { z } from "zod";
@@ -42,7 +41,115 @@ function isErr(x: KnowledgeBase | ToolResponse): x is ToolResponse {
   return "isError" in x && x.isError === true;
 }
 
-const KB_DESCRIPTION = `Manage the caller's own editable knowledge bases — the user's bases, NOT the read-only Dopl knowledge packs (use \`dopl_packs(op='list')\`/\`dopl_packs(op='list_files')\`/\`dopl_packs(op='get_file')\` for those). Talk to these like a filesystem. Bases are addressed by slug or id; folders/entries by \`/\`-separated path. Set \`op\` to one of:
+/**
+ * True when a thrown @dopl/client error is a 400 schema-validation
+ * failure (`{ error: { code: "VALIDATION_FAILED", details } }`). Duck-typed
+ * on `.status` / `.code` so it works across the @dopl/client module
+ * boundary without importing the error class (same pattern as isConflict).
+ */
+function isValidationError(
+  e: unknown
+): e is { status: number; code: string; details: unknown } {
+  return (
+    typeof e === "object" &&
+    e !== null &&
+    (e as { status?: number }).status === 400 &&
+    (e as { code?: unknown }).code === "VALIDATION_FAILED"
+  );
+}
+
+/** Field names named by a validation error's zod-issue `details` array. */
+function validationFields(details: unknown): Set<string> {
+  const fields = new Set<string>();
+  if (Array.isArray(details)) {
+    for (const issue of details) {
+      const path = (issue as { path?: unknown }).path;
+      const first = Array.isArray(path) ? path[0] : undefined;
+      if (typeof first === "string") fields.add(first);
+    }
+  }
+  return fields;
+}
+
+/**
+ * Bidirectional / directional-formatting control chars the name schema
+ * rejects as an anti-spoofing measure: embeddings + overrides
+ * (U+202A–U+202E), isolates (U+2066–U+2069), the LTR/RTL marks
+ * (U+200E/U+200F), and the Arabic letter mark (U+061C). Named explicitly
+ * so the validation error can point at the exact offending code point.
+ */
+const BIDI_CONTROL_RE = /[\u202A-\u202E\u2066-\u2069\u200E\u200F\u061C]/;
+
+/** `U+XXXX` for the first bidi control char in `text`, else null. */
+function namedBidiChar(text: string): string | null {
+  const m = BIDI_CONTROL_RE.exec(text);
+  if (!m) return null;
+  const cp = m[0].codePointAt(0) ?? 0;
+  return `U+${cp.toString(16).toUpperCase().padStart(4, "0")}`;
+}
+
+/**
+ * Maps a `write_file` validation failure to a tool-shaped message naming
+ * the field + rule + recovery (F-18). Returns null when the error isn't a
+ * recognized validation failure so the caller rethrows.
+ */
+function writeFileValidationError(e: unknown, title?: string): ToolResponse | null {
+  if (!isValidationError(e)) return null;
+  const fields = validationFields(e.details);
+  // path is the only other write_file field and carries no schema rule
+  // (z.string()), so a validation failure is a title (or body-size) issue.
+  if (fields.has("title") || fields.size === 0) {
+    const t = title ?? "";
+    const bidi = namedBidiChar(t);
+    if (bidi) {
+      return err(
+        `write_file: title contains a disallowed bidirectional control character (${bidi}) — remove it and retry (this block prevents right-to-left path spoofing).`
+      );
+    }
+    if (t.includes("/")) {
+      return err(
+        `write_file: titles can't contain '/' (it's the path separator) — use a different title, or create the folder via the path and give the entry a clean title.`
+      );
+    }
+    if (fields.has("title")) {
+      return err(
+        `write_file: title is invalid — it can't contain control or zero-width characters or leading/trailing whitespace. Use a plain title.`
+      );
+    }
+  }
+  if (fields.has("body")) {
+    return err(`write_file: body is too large — the limit is 1 MB. Split it into multiple entries.`);
+  }
+  return err(
+    `write_file: request body failed validation${fields.size ? ` (field: ${[...fields].join(", ")})` : ""}. Titles can't contain '/', control, or zero-width characters.`
+  );
+}
+
+/**
+ * Maps an `update_base` validation failure to a tool-shaped message
+ * naming the field + rule + recovery (F-18). Returns null when the error
+ * isn't a recognized validation failure so the caller rethrows.
+ */
+function updateBaseValidationError(e: unknown): ToolResponse | null {
+  if (!isValidationError(e)) return null;
+  const fields = validationFields(e.details);
+  if (fields.has("slug")) {
+    return err(
+      `update_base: slug must match ^[a-z0-9-]+$ — lowercase letters, digits, and hyphens only (no leading/trailing hyphen, no spaces).`
+    );
+  }
+  if (fields.has("name")) {
+    return err(`update_base: name can't be blank — pass a non-empty name, or omit it to leave the name unchanged.`);
+  }
+  if (fields.has("description")) {
+    return err(`update_base: description is too long.`);
+  }
+  return err(
+    `update_base: request body failed validation${fields.size ? ` (field: ${[...fields].join(", ")})` : ""}.`
+  );
+}
+
+const KB_DESCRIPTION = `Manage the caller's own editable knowledge bases. Talk to these like a filesystem. Bases are addressed by slug or id; folders/entries by \`/\`-separated path. Set \`op\` to one of:
 - "list_bases" — list the bases the caller can access in the active workspace. Returns slugs to address with subsequent ops.
 - "get_tree" — full folder/entry tree for a base (metadata only, bodies stripped). First call when exploring a base; for a body follow up with op=read_file.
 - "list_dir" — immediate folders + entries at a path. Empty/omitted path = base root. Metadata only.
@@ -52,7 +159,7 @@ const KB_DESCRIPTION = `Manage the caller's own editable knowledge bases — the
 - "create_folder" — create a folder at a path. mkdir -p semantics; idempotent on existing folders.
 - "move_folder" — move + rename a folder; leaf becomes the new name, missing parents created, cycles rejected.
 - "read_file" — read an entry's full markdown body by path (must resolve to an entry, not a folder). Returns a Version token — pass it to write_file as \`expected_version\`.
-- "write_file" — upsert an entry. \`path\` resolves an existing entry; for new entries the title becomes the addressable path (pass \`title\` for a clean one). Parents mkdir-p'd. Overwriting an existing entry REQUIRES \`expected_version\` from a prior read_file (412 without it) so a concurrent edit can't be silently overwritten; \`force=true\` skips the check. Creates need no version.
+- "write_file" — upsert an entry. Pass \`path\` to target an existing entry (or a new one at that path); for a brand-new entry you may instead pass just \`title\` and it becomes the addressable path. Titles can't contain \`/\` — it's the path separator. Parents mkdir-p'd. Overwriting an existing entry REQUIRES \`expected_version\` from a prior read_file (412 without it) so a concurrent edit can't be silently overwritten; \`force=true\` skips the check. Creates need no version.
 - "move_file" — move + rename an entry; parents mkdir-p'd, leaf becomes the new title.
 - "list_trash" — list soft-deleted bases/folders/entries. Optional \`base\` scopes to one base; omit for workspace-wide.
 - "restore_file" — restore a soft-deleted entry by id (from op=list_trash).
@@ -82,14 +189,14 @@ export function registerKnowledgeTools(register: RegisterTool, client: DoplClien
         ])
         .describe("Operation to perform."),
       base: z.string().optional().describe("Base slug or id. Required for get_tree/list_dir/update_base/restore_base/create_folder/move_folder/read_file/write_file/move_file; optional scope for list_trash/search."),
-      path: z.string().optional().describe("Path within the base. list_dir: '/' or '' for root. create_folder: required, e.g. 'projects/foo'. read_file/write_file: required entry path. delete uses dopl_kb_admin."),
+      path: z.string().optional().describe("Path within the base. list_dir: '/' or '' for root. create_folder: required, e.g. 'projects/foo'. read_file: required entry path. write_file: entry path — required unless you pass `title` (then the title becomes the path). delete uses dopl_kb_admin."),
       from_path: z.string().optional().describe("move_folder/move_file: source path."),
       to_path: z.string().optional().describe("move_folder/move_file: destination path (leaf becomes the new name/title)."),
       name: z.string().optional().describe("create_base: required base name (1-120 chars). update_base: optional new name."),
       description: z.string().optional().describe("create_base/update_base: optional base description (max 2000)."),
       slug: z.string().optional().describe("update_base: optional new slug (1-80 chars)."),
-      body: z.string().optional().describe("write_file: required markdown body."),
-      title: z.string().optional().describe("write_file: optional title override (defaults to the leaf path segment)."),
+      body: z.string().optional().describe("write_file: required markdown body. Can't be empty — pass a single space for a deliberate stub."),
+      title: z.string().optional().describe("write_file: title for the entry — can't contain '/'. Doubles as the addressable path for a new entry when `path` is omitted; otherwise an optional override (defaults to the leaf path segment)."),
       expected_version: z.string().optional().describe("write_file: the entry's Version from a prior read_file. Required when overwriting an existing entry — omitting it fails with 412; only force=true skips the check. Creates need no version."),
       force: z.boolean().optional().describe("write_file: overwrite even if the entry changed since you read it. Discards the other edit — use only when intentional."),
       folder_id: z.string().optional().describe("restore_folder: required folder UUID (from list_trash)."),
@@ -98,7 +205,7 @@ export function registerKnowledgeTools(register: RegisterTool, client: DoplClien
       // coerce: MCP clients sometimes send numbers as strings; strict
       // z.number() rejects them with an opaque -32602.
       limit: z.coerce.number().optional().describe("search: max hits (default 20)."),
-      entry_limit: z.coerce.number().optional().describe("get_tree: max entries per page (default 400, max 1000). Folders always ship in full."),
+      entry_limit: z.coerce.number().int().min(1).max(1000).optional().describe("get_tree: max entries per page (default 400, 1-1000). Folders always ship in full."),
       entry_cursor: z.string().optional().describe("get_tree: opaque cursor from a prior page's 'more entries' notice — fetches the next page."),
       visibility: z.enum(["public", "private"]).optional().describe("op=set_visibility: 'public' to publish a base you created (makes it workspace-visible + referenceable in workflows). One-way — 'private' is rejected."),
     },
@@ -147,9 +254,32 @@ export function registerKnowledgeTools(register: RegisterTool, client: DoplClien
           return opReadFile(client, args.base as string, args.path as string);
         }
         case "write_file": {
-          const miss = missingParams("write_file", args, ["base", "path", "body"]);
+          const miss = missingParams("write_file", args, ["base"]);
           if (miss) return miss;
-          return opWriteFile(client, args.base as string, args.path as string, args.body as string, args.title, args.expected_version, args.force);
+          // F-21: title-only creation. The op doc says a new entry's title
+          // becomes its addressable path, so derive the path from title when
+          // path is omitted. Existing path-based calls are unaffected.
+          const path =
+            args.path !== undefined && args.path !== ""
+              ? args.path
+              : args.title;
+          if (path === undefined || path === "") {
+            return err(
+              `op="write_file" is missing required param: path (pass path, or a title to derive it).`
+            );
+          }
+          // F-17: an empty-string body is a real value the caller can fix,
+          // not a "missing param" — distinguish it from a genuinely omitted
+          // body so the message is actionable.
+          if (args.body === undefined) {
+            return err(`op="write_file" is missing required param: body.`);
+          }
+          if (args.body === "") {
+            return err(
+              `write_file: body cannot be empty — pass content (or a single space for a stub).`
+            );
+          }
+          return opWriteFile(client, args.base as string, path, args.body, args.title, args.expected_version, args.force);
         }
         case "move_file": {
           const miss = missingParams("move_file", args, ["base", "from_path", "to_path"]);
@@ -344,11 +474,20 @@ async function opCreateBase(client: DoplClient, name: string, description?: stri
 async function opUpdateBase(client: DoplClient, ref: string, name?: string, description?: string | null, slug?: string): Promise<ToolResponse> {
   const base = await resolveBaseOr(client, ref);
   if (isErr(base)) return base;
-  const updated = await client.updateKbBase(base.id, {
-    name,
-    description,
-    slug,
-  });
+  let updated;
+  try {
+    updated = await client.updateKbBase(base.id, {
+      name,
+      description,
+      slug,
+    });
+  } catch (e) {
+    // F-18: name the field + rule instead of surfacing a raw
+    // "VALIDATION_FAILED: Request body failed validation".
+    const mapped = updateBaseValidationError(e);
+    if (mapped) return mapped;
+    throw e;
+  }
   return ok(
     `Updated **${updated.name}** (slug: \`${updated.slug}\`).`
   );
@@ -453,6 +592,10 @@ async function opWriteFile(client: DoplClient, ref: string, path: string, body: 
         `An entry titled "${title ?? path.split("/").filter(Boolean).pop()}" already exists in that folder. Pick a different title/path, or read+overwrite the existing entry with dopl_kb(op="read_file" → "write_file").`
       );
     }
+    // F-18: name the failing field + rule instead of surfacing a raw
+    // "VALIDATION_FAILED: Request body failed validation".
+    const mapped = writeFileValidationError(e, title);
+    if (mapped) return mapped;
     throw e;
   }
   // The addressable path's leaf is the entry's title (not the input
@@ -546,7 +689,17 @@ async function opRestoreFile(client: DoplClient, entry_id: string): Promise<Tool
 }
 
 async function opSearch(client: DoplClient, query: string, base?: string, limit?: number): Promise<ToolResponse> {
-  const hits = await client.searchKb(query, { baseSlug: base, limit });
+  // F-16: `base` accepts a slug OR a UUID, like every other op. Resolve it
+  // the same way the other ops do (the search endpoint only narrows by
+  // slug, so pass the resolved base's slug through) instead of forwarding a
+  // UUID straight to `baseSlug`, which would 404 with KNOWLEDGE_BASE_NOT_FOUND.
+  let baseSlug: string | undefined;
+  if (base) {
+    const resolved = await resolveBaseOr(client, base);
+    if (isErr(resolved)) return resolved;
+    baseSlug = resolved.slug;
+  }
+  const hits = await client.searchKb(query, { baseSlug, limit });
   if (hits.length === 0) {
     return ok(`No matches for "${query}".`);
   }

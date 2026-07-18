@@ -19,6 +19,7 @@ import * as repo from "./repository";
 import {
   UNIQUE_VIOLATION,
   folderGrantIds,
+  stripNulDeep,
   type ChatContext,
 } from "./service-shared";
 
@@ -45,7 +46,8 @@ export async function listFolders(ctx: ChatContext): Promise<ChatFolder[]> {
   return rows.map((row) => mapFolderRow(row, byFolder.get(row.id) ?? []));
 }
 
-export async function createFolder(ctx: ChatContext, name: string): Promise<ChatFolder> {
+export async function createFolder(ctx: ChatContext, rawName: string): Promise<ChatFolder> {
+  const name = stripNulDeep(rawName); // F-7: no NUL into the folder name
   try {
     return mapFolderRow(await repo.insertFolder(ctx.workspaceId, ctx.userId, name));
   } catch (err) {
@@ -66,8 +68,9 @@ export async function createFolder(ctx: ChatContext, name: string): Promise<Chat
 export async function updateFolderForUser(
   ctx: ChatContext,
   folderId: string,
-  patch: ChatFolderUpdateInput
+  rawPatch: ChatFolderUpdateInput
 ): Promise<ChatFolder> {
+  const patch = stripNulDeep(rawPatch); // F-7: no NUL into the folder name
   const folder = await repo.findFolderById(ctx.workspaceId, ctx.userId, folderId);
   if (!folder) throw new ChatFolderNotFoundError(folderId);
 

@@ -1,7 +1,7 @@
 import "server-only";
-import type { ChatDetail, ChatList } from "../types";
+import type { ChatDetail, ChatList, TrashedChat } from "../types";
 import { ChatNotFoundError, ChatOutsideRetentionError } from "./errors";
-import { mapChatRow, mapMessageRow, mapOwner } from "./dto";
+import { mapChatRow, mapMessageRow, mapOwner, mapTrashedChatRow } from "./dto";
 import * as repo from "./repository";
 import { resolveChatsWindow } from "./retention";
 import {
@@ -49,6 +49,24 @@ export async function listChats(ctx: ChatContext): Promise<ChatList> {
     )
   );
   return { chats, hiddenCount };
+}
+
+/**
+ * Trash view (F-11): the caller's own soft-deleted chats, newest-trashed
+ * first, so they can find one to restore with `restoreChat`. Owner-scoped
+ * — deletion is owner-only, so restore is too. The retention window does
+ * not apply to trash.
+ */
+export async function listTrash(ctx: ChatContext): Promise<TrashedChat[]> {
+  const rows = await repo.listTrashedChats(ctx.workspaceId, ctx.userId);
+  const profiles = await profilesById(rows.map((r) => r.owner_id));
+  return rows.map((row) =>
+    mapTrashedChatRow(
+      row,
+      mapOwner(row.owner_id, profiles.get(row.owner_id)),
+      repo.countOf(row)
+    )
+  );
 }
 
 /**

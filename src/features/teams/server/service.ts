@@ -315,6 +315,7 @@ export async function getAccessMatrix(
       .from("workflows")
       .select("id, name, access_mode, user_id")
       .eq("workspace_id", workspaceId)
+      .is("deleted_at", null)
       .order("name"),
   ]);
   if (kbs.error) throw kbs.error;

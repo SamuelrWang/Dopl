@@ -23,6 +23,7 @@ export type {
   ClusterSummary,
   ClusterWorkflowSummary,
   WorkflowRow,
+  WorkflowTrashRow,
   WorkflowDetail,
   WorkflowGraphSpec,
   WorkflowNodeInput,
@@ -30,9 +31,6 @@ export type {
   WorkflowActionRef,
   DoplEntry,
   ListResult,
-  Pack,
-  PackFile,
-  PackFileMeta,
   PendingIngestItem,
   PendingStatus,
   PrepareIngestResult,
@@ -84,6 +82,7 @@ export type {
   ChatSource,
   ChatUpdateInput,
   ChatVisibility,
+  TrashedChat,
 } from "./chat-types.js";
 export type {
   AccessMatrix,

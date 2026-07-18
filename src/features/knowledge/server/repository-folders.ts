@@ -4,6 +4,7 @@ import type { KnowledgeFolder } from "../types";
 import {
   KNOWLEDGE_FOLDER_COLS,
   mapFolderRow,
+  stripNulls,
   type KnowledgeFolderRow,
 } from "./dto";
 
@@ -98,6 +99,32 @@ export async function listFolderAncestors(
   return chain;
 }
 
+/**
+ * Highest `position` among active folders in a (base, parent) bucket, or
+ * -1 when the bucket is empty. Sibling to `maxEntryPositionIn` — lets
+ * `insertFolder` append with `max + 1` so folders created in sequence keep
+ * their insertion order in position-sorted views instead of all landing at
+ * 0 (F-8).
+ */
+export async function maxFolderPositionIn(
+  baseId: string,
+  parentId: string | null
+): Promise<number> {
+  const db = supabaseAdmin();
+  let query = db
+    .from("knowledge_folders")
+    .select("position")
+    .eq("knowledge_base_id", baseId)
+    .is("deleted_at", null)
+    .order("position", { ascending: false })
+    .limit(1);
+  if (parentId === null) query = query.is("parent_id", null);
+  else query = query.eq("parent_id", parentId);
+  const { data, error } = await query.maybeSingle();
+  if (error) throw error;
+  return data ? ((data as { position: number }).position ?? -1) : -1;
+}
+
 export interface InsertFolderArgs {
   workspaceId: string;
   knowledgeBaseId: string;
@@ -112,15 +139,20 @@ export async function insertFolder(
   args: InsertFolderArgs
 ): Promise<KnowledgeFolder> {
   const db = supabaseAdmin();
+  // F-8: append after existing siblings when no explicit position was
+  // given (see maxEntryPositionIn for the concurrency note).
+  const position =
+    args.position ??
+    (await maxFolderPositionIn(args.knowledgeBaseId, args.parentId ?? null)) + 1;
   const { data, error } = await db
     .from("knowledge_folders")
     .insert({
       workspace_id: args.workspaceId,
       knowledge_base_id: args.knowledgeBaseId,
       parent_id: args.parentId ?? null,
-      name: args.name,
-      description: args.description ?? null,
-      position: args.position ?? 0,
+      name: stripNulls(args.name),
+      description: stripNulls(args.description ?? null),
+      position,
       created_by: args.createdBy,
     })
     .select(KNOWLEDGE_FOLDER_COLS)
@@ -152,8 +184,9 @@ export async function updateFolderRow(
 ): Promise<KnowledgeFolder | null> {
   const db = supabaseAdmin();
   const update: Record<string, unknown> = {};
-  if (patch.name !== undefined) update.name = patch.name;
-  if (patch.description !== undefined) update.description = patch.description;
+  if (patch.name !== undefined) update.name = stripNulls(patch.name);
+  if (patch.description !== undefined)
+    update.description = stripNulls(patch.description);
   if (patch.parentId !== undefined) update.parent_id = patch.parentId;
   if (patch.position !== undefined) update.position = patch.position;
   // Optimistic concurrency CAS (see updateBaseRow).

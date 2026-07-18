@@ -308,13 +308,16 @@ export async function updateSkillBody(
   expectedBodyUpdatedAt?: string
 ): Promise<SkillFile | null> {
   const db = supabaseAdmin();
-  // body_updated_at is the CAS clock — set explicitly (no trigger drives
-  // it; skills_touch_updated_at only moves updated_at). Keeping the two
-  // clocks independent is what stops metadata edits from 412-ing a body
-  // write and vice versa.
+  // body_updated_at is the CAS clock. A dedicated BEFORE-UPDATE trigger
+  // (skills_touch_body_updated_at) stamps it with Postgres `now()` —
+  // microsecond precision — whenever `body` changes, so two writes in the
+  // same JS millisecond can't mint colliding tokens and defeat the CAS
+  // (F-25). It fires ONLY on a body change, keeping this clock independent
+  // of skills.updated_at (moved by skills_touch_updated_at on metadata
+  // edits): metadata PATCHes never touch it, and a body write never
+  // false-412s a metadata precondition.
   const update = {
     body: patch.body,
-    body_updated_at: new Date().toISOString(),
     body_edited_by: patch.editedBy,
     body_edited_source: patch.editedSource,
   };

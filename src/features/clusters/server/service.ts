@@ -72,7 +72,8 @@ export async function listClusters(scope: ClusterScope): Promise<ClusterRow[]> {
     .from("workflows")
     .select("name, cluster_id")
     .in("cluster_id", ids)
-    .eq("workspace_id", scope.workspaceId);
+    .eq("workspace_id", scope.workspaceId)
+    .is("deleted_at", null);
   if (wfErr) throw wfErr;
 
   const namesByCluster = new Map<string, string[]>();
@@ -109,6 +110,7 @@ export async function getCluster(
     .select("id, name, slug, description")
     .eq("cluster_id", cluster.id)
     .eq("workspace_id", scope.workspaceId)
+    .is("deleted_at", null)
     .order("created_at", { ascending: true });
   if (wfErr) throw wfErr;
 

@@ -32,30 +32,37 @@ const SessionDateSchema = z
 
 /**
  * Agent export payload. `clientSessionId` is the idempotency key:
- * re-exporting the same session updates the existing chat (header and
- * transcript are replaced wholesale). `folder` is a folder NAME —
- * resolved case-insensitively against the caller's folders, created
- * when missing. The chat's `format` is derived server-side from the
- * messages' verbatim mix — it is not caller input.
+ * re-exporting the same session UPDATES the existing chat, preserving by
+ * default — a header field is only overwritten when the caller passes it,
+ * and the transcript is reconciled (upsert by position), never destroyed,
+ * so messages added via op="append" survive a re-export. `folder` is a
+ * folder NAME — resolved case-insensitively against the caller's folders,
+ * created when missing. The chat's `format` is derived server-side from
+ * the messages' verbatim mix — it is not caller input.
+ *
+ * The preserve-on-omit fields (overview/source/visibility/deliverables/
+ * learnings) are intentionally left `.optional()` WITHOUT a `.default()`:
+ * a default would erase the "caller didn't pass this" signal the re-export
+ * merge relies on. Defaults for a fresh create are applied in the service.
  */
 export const ChatExportSchema = z.object({
-  title: z.string().min(1).max(200),
-  overview: z.string().max(2000).default(""),
-  source: SourceSchema.default("other"),
+  title: z.string().trim().min(1).max(200),
+  overview: z.string().max(2000).optional(),
+  source: SourceSchema.optional(),
   project: z.string().min(1).max(120).nullish(),
   sessionDate: SessionDateSchema.optional(),
   clientSessionId: z.string().min(1).max(200).optional(),
   folder: z.string().min(1).max(80).optional(),
-  visibility: VisibilitySchema.default("private"),
-  deliverables: z.array(DeliverableSchema).max(50).default([]),
-  learnings: z.array(z.string().min(1).max(1000)).max(50).default([]),
+  visibility: VisibilitySchema.optional(),
+  deliverables: z.array(DeliverableSchema).max(50).optional(),
+  learnings: z.array(z.string().min(1).max(1000)).max(50).optional(),
   messages: z.array(ChatMessageSchema).min(1).max(500),
 });
 export type ChatExportInput = z.infer<typeof ChatExportSchema>;
 
 export const ChatUpdateSchema = z
   .object({
-    title: z.string().min(1).max(200).optional(),
+    title: z.string().trim().min(1).max(200).optional(),
     overview: z.string().max(2000).optional(),
     project: z.string().min(1).max(120).nullable().optional(),
     sessionDate: SessionDateSchema.optional(),

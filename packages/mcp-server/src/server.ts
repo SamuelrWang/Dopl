@@ -12,7 +12,6 @@ import { registerClusterTools } from "./tools/cluster.js";
 import { registerWorkflowTools } from "./tools/workflow.js";
 import { registerChatTools } from "./tools/chats.js";
 import { registerMembersTool } from "./tools/members.js";
-import { registerPacksTools } from "./tools/packs.js";
 import { registerMapTool } from "./tools/map.js";
 import { registerSearchTool } from "./tools/search.js";
 import { registerOntologyTool } from "./tools/ontology.js";
@@ -62,16 +61,6 @@ This MCP server can target any workspace the authenticated user is a member of. 
 
 Skills are single-file procedural prompts the user authored — each is one tight SKILL.md doing one thing. Call dopl_skill(op='list') at task boundaries to see if any apply (they're grouped by folder), then dopl_skill(op='get') to load and follow the SKILL.md. Skill bodies reference KBs via [label](dopl://kb/<slug>) markdown links — load referenced KB content with dopl_kb(op='read_file') when you need it. Authoring: call dopl_skill(op='authoring_guide') first, then dopl_skill(op='create') + dopl_skill(op='write'). Prefer many small skills over monoliths; reference material belongs in KBs, not the skill. Destructive ops live on dopl_skill_admin.
 
-## Knowledge Packs — specialist verticals
-
-Dopl ships knowledge packs: curated, version-pinned reference docs for specialist domains (e.g. Rokid AR glasses, Unity VR), backed by public GitHub repos synced on every push. Use them when the user is doing real implementation work in a domain that has a pack — your training data may be stale; the pack is canonical.
-
-- dopl_packs(op='list') — discover what packs exist.
-- dopl_packs(op='list_files', pack, category?) — browse a pack's file tree (metadata only).
-- dopl_packs(op='get_file', pack, path) — fetch one file's full markdown.
-
-Cite the file path (e.g. docs/sdk/camera.md) in code comments. For domains with no installed pack, say so plainly — don't fabricate.
-
 ---
 
 ${SKILL_AUTHORING_GUIDE}`;
@@ -101,27 +90,42 @@ interface ActiveWorkspaceState {
 
 /**
  * Append an active-workspace status footer to a tool response. Fires on
- * every tool response so the agent always sees its current workspace
- * context (M-4).
+ * every tool response so the agent always sees which workspace the
+ * response actually came from (M-4).
+ *
+ * The footer reports the EFFECTIVE workspace for THIS call: when a
+ * per-call `workspace=` override resolved (passed as `effective`), that
+ * is what's shown — plus an explicit note that it differs from the
+ * session default — so an agent can positively confirm where its write
+ * landed instead of always seeing the session default (audit fix F-3).
+ * With no override, `effective` is omitted and the session default is
+ * shown, exactly as before.
  *
  * Skips the footer when:
  *   - the handler returned isError: true (don't muddy error messages)
- *   - there's no active workspace (rare, only on a misconfigured session)
+ *   - there's no workspace to report (rare, only on a misconfigured session)
  */
 async function appendDoplStatus(
   response: ToolResponse,
   client: DoplClient,
   getActiveWorkspace: () => ActiveWorkspaceState | null,
+  effective?: ActiveWorkspaceState | null,
 ): Promise<ToolResponse> {
   if (response.isError) return response;
 
-  const active = getActiveWorkspace();
-  if (!active) return response;
+  const sessionDefault = getActiveWorkspace();
+  const shown = effective ?? sessionDefault;
+  if (!shown) return response;
 
   const lines: string[] = ["", "", "---", "_dopl_status:"];
   lines.push(
-    `  active_workspace: "${active.name}" (slug=${active.slug}, role=${active.role})`,
+    `  active_workspace: "${shown.name}" (slug=${shown.slug}, role=${shown.role})`,
   );
+  if (effective && sessionDefault && effective.id !== sessionDefault.id) {
+    lines.push(
+      `  workspace_source: per-call \`workspace=\` override — session default is "${sessionDefault.name}" (slug=${sessionDefault.slug})`,
+    );
+  }
   const footer = lines.join("\n");
 
   // Append to the final text block so the agent sees the footer at the
@@ -276,8 +280,9 @@ export function createServer(
       "connect",
       "disconnect",
       "set_cluster",
+      "restore_workflow",
     ]),
-    dopl_chats: new Set(["export", "append", "update", "create_folder", "update_folder"]),
+    dopl_chats: new Set(["export", "append", "update", "create_folder", "update_folder", "restore"]),
   };
   // Active workspace for this MCP session — seeded from the startup
   // handshake (index.ts) and mutated by `set_workspace` mid-session.
@@ -400,14 +405,32 @@ export function createServer(
         }
       }
 
-      if (workspaceRef) {
+      // A `workspace` arg was passed on the call. Distinguish "provided
+      // but blank" (fail closed) from "not provided" (use session
+      // default). Audit fix F-2: an empty/whitespace string used to be
+      // falsy and silently fell through to the session default — the
+      // user's REAL workspace — so a computed-but-empty ref could route
+      // a write to the wrong workspace with no error. Reject it.
+      if (workspaceRef !== undefined) {
+        const ref = typeof workspaceRef === "string" ? workspaceRef.trim() : "";
+        if (!ref) {
+          return {
+            isError: true,
+            content: [
+              {
+                type: "text" as const,
+                text: `The \`workspace\` argument was blank. Pass a slug or UUID from \`list_workspaces\`, or omit \`workspace=\` entirely to use the session's active workspace.`,
+              },
+            ],
+          };
+        }
         // Audit B8: resolveWorkspaceRef calls listWorkspaces, which
         // can throw on network / auth failures. Catch and surface a
         // friendly isError instead of letting the throw propagate
         // (which the MCP framework would expose as an opaque error).
         let resolved: WorkspaceListItem | null;
         try {
-          resolved = await resolveWorkspaceRef(workspaceRef);
+          resolved = await resolveWorkspaceRef(ref);
         } catch (err) {
           return {
             isError: true,
@@ -428,7 +451,7 @@ export function createServer(
             content: [
               {
                 type: "text" as const,
-                text: `Workspace not found: \`${workspaceRef}\`. Call \`list_workspaces\` to see workspaces you have access to, or pass a slug or UUID from there.`,
+                text: `Workspace not found: \`${ref}\`. Call \`list_workspaces\` to see workspaces you have access to, or pass a slug or UUID from there.`,
               },
             ],
           };
@@ -437,13 +460,22 @@ export function createServer(
         // client.* call inside it transparently picks up the override
         // workspace id in its X-Workspace-Id header. Returns to the
         // session default (or no override) the moment this scope exits.
-        const workspaceId = resolved.id;
-        return runWithEntitlementGuard(() =>
-          workspaceContext.run(workspaceId, () => handler(innerArgs)),
+        // Audit fix F-3: report the EFFECTIVE (resolved) workspace in
+        // the footer so the agent can confirm where the call landed.
+        const effective: ActiveWorkspaceState = {
+          id: resolved.id,
+          slug: resolved.slug,
+          name: resolved.name,
+          role: resolved.role,
+        };
+        const result = await runWithEntitlementGuard(() =>
+          workspaceContext.run(resolved.id, () => handler(innerArgs)),
         );
+        return appendDoplStatus(result, client, () => activeWorkspace, effective);
       }
 
-      return runWithEntitlementGuard(() => handler(innerArgs));
+      const result = await runWithEntitlementGuard(() => handler(innerArgs));
+      return appendDoplStatus(result, client, () => activeWorkspace);
     };
 
     server.tool(
@@ -451,7 +483,7 @@ export function createServer(
       description,
       enhancedSchema,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      withDoplStatus(wrapped as any, client, () => activeWorkspace) as any,
+      wrapped as any,
     );
   }
 
@@ -597,7 +629,6 @@ export function createServer(
   // that dispatches on an `op` arg.
   registerClusterTools(registerTool, client); // dopl_cluster + dopl_cluster_admin
   registerWorkflowTools(registerTool, client); // dopl_workflow + dopl_workflow_admin
-  registerPacksTools(registerTool, client); // curated read-only knowledge packs
   registerKnowledgeTools(registerTool, client); // dopl_kb + dopl_kb_admin (user bases)
   registerSkillTools(registerTool, client); // dopl_skill + dopl_skill_admin
   registerChatTools(registerTool, client); // dopl_chats + dopl_chats_admin (archive)

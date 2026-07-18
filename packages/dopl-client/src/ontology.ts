@@ -82,11 +82,22 @@ export async function createOntologyObject(
 export async function updateOntologyObject(
   t: DoplTransport,
   objectId: string,
-  patch: OntologyObjectPatch
+  patch: OntologyObjectPatch,
+  expectedVersion?: string
 ): Promise<OntologyObject> {
+  // Optional optimistic-concurrency precondition. When the caller passes a
+  // version (an object's `updatedAt` from a prior read), it rides as the
+  // `X-Updated-At` header — the same wire convention KB/skills writes use —
+  // and the server rejects the PATCH with 412 if the row moved since. Omit
+  // it to keep the legacy last-writer-wins behaviour.
   const data = await t.request<{ object: OntologyObject }>(
     `/api/ontology/objects/${enc(objectId)}`,
-    { toolName: "ontology_update_object", method: "PATCH", body: patch }
+    {
+      toolName: "ontology_update_object",
+      method: "PATCH",
+      body: patch,
+      customHeaders: expectedVersion ? { "X-Updated-At": expectedVersion } : undefined,
+    }
   );
   return data.object;
 }

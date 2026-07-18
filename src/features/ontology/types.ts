@@ -56,6 +56,13 @@ export interface OntologyObject {
    * `type` doubles as the default type of new children.
    */
   template: TemplateField[];
+  /**
+   * Optimistic-concurrency token — the row's `updated_at`. Read paths
+   * surface it so an edit can pass it back (as the `X-Updated-At`
+   * precondition) and be rejected with 412 if the object changed
+   * underneath. Optional so existing object literals stay valid.
+   */
+  updatedAt?: string;
 }
 
 export interface OntologyCluster {

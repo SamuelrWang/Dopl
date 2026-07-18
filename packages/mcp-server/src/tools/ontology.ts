@@ -8,7 +8,7 @@
 
 import { z } from "zod";
 import type { DoplClient, OntologyObject, OntologySnapshot } from "@dopl/client";
-import { err, missingParams, ok, type RegisterTool, type ToolResponse } from "./respond";
+import { err, isConflict, missingParams, ok, type RegisterTool, type ToolResponse } from "./respond";
 import {
   renderObject,
   resolveClusterRef,
@@ -22,7 +22,7 @@ READ — set \`op\` to:
 - "map" — clusters and their columns. Call first to route.
 - "anchor" — the object representing the CALLER. Start here for any "my/me" request.
 - "resolve" — find objects by name/description match (query). Returns ids.
-- "get" — one object in full: attributes (linked knowledge/skills resolved to openable handles), relationships, nested objects, action recipes. Requires: object.
+- "get" — one object in full: attributes (linked knowledge/skills resolved to openable handles), OUTBOUND relationships plus an inbound "Referenced by" backlink list, nested objects, action recipes. Also returns a Version token — pass it back as \`expected_version\` on a later write so a concurrent edit can't silently clobber yours. Requires: object.
 
 WRITE — set \`op\` to:
 - "create_cluster" — new ontology board. Requires: name. Optional: purpose (agents read it to route — write a good one).
@@ -34,13 +34,13 @@ WRITE — set \`op\` to:
 - "remove_template_field" — Requires: object, label.
 - "set_attribute" — upsert one attribute by label. Requires: object, label. kind="text"|"pill" need \`value\`; kind="ref" needs \`values\` (object ids/names); kind="knowledge"|"skill" need \`values\` — KB/skill slugs or ids, and for kind="knowledge" also specific ENTRIES as \`<base>/<entry path>\` (e.g. "ai-ops-leads/Track 1 leads") or an entry uuid. Default kind: text.
 - "remove_attribute" — Requires: object, label.
-- "set_relationship" — replace one labeled edge. Requires: object, label, targets (object ids/names).
+- "set_relationship" — replace one labeled edge. Requires: object, label, targets (object ids/names — at least one, and never the object itself). To clear an edge use "remove_relationship".
 - "remove_relationship" — Requires: object, label.
 - "set_action" — upsert an action by name: something the OBJECT can do day to day, performed by an agent on its behalf (e.g. "Send email", "Search LinkedIn"). Requires: object, name. Optional: description (how/when to do it), outcome (what the result should be, e.g. "Follow-up email sent and logged"), tools (what to use, e.g. "Gmail").
 - "remove_action" — Requires: object, name.
 - "claim_anchor" — link the CALLING user to an object as their identity anchor. Requires: object.
 
-Destructive deletes live in dopl_ontology_admin.`;
+Object-mutating ops (update_object, set/remove_attribute, set/remove_template_field, set/remove_action, set/remove_relationship) accept an optional \`expected_version\` (the Version from a prior op="get"). When supplied, the write is rejected if the object changed since — re-get, reconcile, and retry. Destructive deletes live in dopl_ontology_admin.`;
 
 const ONTOLOGY_ADMIN_DESCRIPTION = `DESTRUCTIVE ontology operations — soft-deletes (hidden, not restorable via MCP yet). Confirm with the user before calling. Set \`op\` to one of:
 - "delete_object" — soft-delete an object (a column's cards survive but are orphaned until re-parented). Requires: object.
@@ -106,6 +106,12 @@ export function registerOntologyTool(register: RegisterTool, client: DoplClient)
         .string()
         .optional()
         .describe("set_action: tools the agent should use to perform it."),
+      expected_version: z
+        .string()
+        .optional()
+        .describe(
+          "Optional optimistic-concurrency token for object-mutating ops: the object's Version from a prior op=\"get\". If the object changed since, the write is rejected so you can re-get, reconcile, and retry. Omit to overwrite blindly (last-writer-wins)."
+        ),
     },
     (args): Promise<ToolResponse> => dispatch(client, args)
   );
@@ -155,7 +161,15 @@ interface OntologyArgs {
   description?: string;
   outcome?: string;
   tools?: string;
+  expected_version?: string;
 }
+
+// Attribute-value size caps, mirrored from the server schema
+// (attributeValueSchema) so an oversized value fails with a clear,
+// field-named message at the tool boundary instead of an opaque
+// downstream VALIDATION_FAILED.
+const TEXT_VALUE_MAX = 4000;
+const PILL_VALUE_MAX = 400;
 
 const REQUIRED: Record<string, string[]> = {
   resolve: ["query"],
@@ -245,10 +259,11 @@ async function dispatch(client: DoplClient, args: OntologyArgs): Promise<ToolRes
     }
     case "update_object":
       return withObject(client, args.object as string, async (object) => {
-        await client.updateOntologyObject(object.id, {
-          name: args.name,
-          subtitle: args.subtitle,
-        });
+        await client.updateOntologyObject(
+          object.id,
+          { name: args.name, subtitle: args.subtitle },
+          args.expected_version
+        );
         return ok(`Updated **${args.name ?? object.name}** (\`${object.id}\`).`);
       });
     case "set_template_field":
@@ -267,7 +282,7 @@ async function dispatch(client: DoplClient, args: OntologyArgs): Promise<ToolRes
         const template = existing
           ? current.map((f) => (f === existing ? field : f))
           : [...current, field];
-        await client.updateOntologyObject(object.id, { template });
+        await client.updateOntologyObject(object.id, { template }, args.expected_version);
         return ok(
           `Set default field **${label}** (${kind}) on **${object.name}** — new objects created inside it are born with it, empty. Fields now: ${template.map((f) => f.label).join(", ")}.`
         );
@@ -280,7 +295,7 @@ async function dispatch(client: DoplClient, args: OntologyArgs): Promise<ToolRes
         if (template.length === current.length) {
           return err(`**${object.name}** has no default field "${args.label}".`);
         }
-        await client.updateOntologyObject(object.id, { template });
+        await client.updateOntologyObject(object.id, { template }, args.expected_version);
         return ok(`Removed default field "${args.label}" from **${object.name}**.`);
       });
     case "set_attribute":
@@ -294,7 +309,7 @@ async function dispatch(client: DoplClient, args: OntologyArgs): Promise<ToolRes
         if (attributes.length === object.attributes.length) {
           return err(`**${object.name}** has no attribute "${args.label}".`);
         }
-        await client.updateOntologyObject(object.id, { attributes });
+        await client.updateOntologyObject(object.id, { attributes }, args.expected_version);
         return ok(`Removed attribute "${args.label}" from **${object.name}**.`);
       });
     case "set_relationship":
@@ -314,7 +329,7 @@ async function dispatch(client: DoplClient, args: OntologyArgs): Promise<ToolRes
         const methods = existing
           ? object.methods.map((m) => (m === existing ? method : m))
           : [...object.methods, method];
-        await client.updateOntologyObject(object.id, { methods });
+        await client.updateOntologyObject(object.id, { methods }, args.expected_version);
         return ok(`Set action **${name}** on **${object.name}**.`);
       });
     case "remove_action":
@@ -324,7 +339,7 @@ async function dispatch(client: DoplClient, args: OntologyArgs): Promise<ToolRes
         if (methods.length === object.methods.length) {
           return err(`**${object.name}** has no action "${args.name}".`);
         }
-        await client.updateOntologyObject(object.id, { methods });
+        await client.updateOntologyObject(object.id, { methods }, args.expected_version);
         return ok(`Removed action "${args.name}" from **${object.name}**.`);
       });
     case "claim_anchor":
@@ -347,7 +362,19 @@ async function withObject(
   const snapshot = await client.getOntology();
   const resolved = resolveObjectRef(snapshot, ref);
   if ("fail" in resolved) return resolved.fail;
-  return fn(resolved.hit, snapshot);
+  try {
+    return await fn(resolved.hit, snapshot);
+  } catch (e) {
+    // Optimistic-concurrency miss (412): the object changed between the
+    // caller's op="get" and this write. Turn it into re-get/reconcile/retry
+    // guidance (mirrors dopl_kb write_file), not an opaque throw.
+    if (isConflict(e)) {
+      return err(
+        `**${resolved.hit.name}** (\`${resolved.hit.id}\`) changed since you last read it. Re-read it with op="get", reconcile your change, then retry with the fresh Version as \`expected_version\` (or omit expected_version to overwrite blindly).`
+      );
+    }
+    throw e;
+  }
 }
 
 async function opSetAttribute(client: DoplClient, args: OntologyArgs): Promise<ToolResponse> {
@@ -359,6 +386,12 @@ async function opSetAttribute(client: DoplClient, args: OntologyArgs): Promise<T
     if (kind === "text" || kind === "pill") {
       if (args.value === undefined) {
         return err(`set_attribute kind="${kind}" needs \`value\`.`);
+      }
+      const cap = kind === "pill" ? PILL_VALUE_MAX : TEXT_VALUE_MAX;
+      if (args.value.length > cap) {
+        return err(
+          `set_attribute kind="${kind}" value for "${label}" is ${args.value.length} characters; the max is ${cap}. Shorten it, use kind="text" for longer prose, or link a knowledge entry instead.`
+        );
       }
       value = { kind, value: args.value };
     } else {
@@ -386,7 +419,7 @@ async function opSetAttribute(client: DoplClient, args: OntologyArgs): Promise<T
       existing >= 0
         ? object.attributes.map((a, i) => (i === existing ? attribute : a))
         : [...object.attributes, attribute];
-    await client.updateOntologyObject(object.id, { attributes });
+    await client.updateOntologyObject(object.id, { attributes }, args.expected_version);
     return ok(`Set attribute "${label}" on **${object.name}**.`);
   });
 }
@@ -401,14 +434,33 @@ async function opSetRelationship(client: DoplClient, args: OntologyArgs): Promis
       if (kept.length === object.relationships.length) {
         return err(`**${object.name}** has no relationship "${label}".`);
       }
-      await client.updateOntologyObject(object.id, { relationships: kept });
+      await client.updateOntologyObject(
+        object.id,
+        { relationships: kept },
+        args.expected_version
+      );
       return ok(`Removed relationship "${label}" from **${object.name}**.`);
     }
 
-    const resolved = resolveObjectValues(snapshot, args.targets as string[]);
+    // F-19: an empty targets array slips past the required-param check (which
+    // only rejects undefined/null/empty-string) but persists nothing — the
+    // server drops zero-target edges. Reject it with the same shape as
+    // set_attribute kind="ref".
+    if (!args.targets?.length) {
+      return err(
+        `set_relationship needs \`targets\` (at least one object). To clear "${label}", use op="remove_relationship".`
+      );
+    }
+
+    const resolved = resolveObjectValues(snapshot, args.targets);
     if ("fail" in resolved) return resolved.fail;
+    // F-20: a self-edge is silently dropped server-side, so it would report a
+    // false success. Reject explicitly rather than persist nothing.
+    if (resolved.ids.includes(object.id)) {
+      return err("Cannot relate an object to itself.");
+    }
     const relationships = [...kept, { label, targetIds: resolved.ids }];
-    await client.updateOntologyObject(object.id, { relationships });
+    await client.updateOntologyObject(object.id, { relationships }, args.expected_version);
     const names = resolved.ids.map((id) => snapshot.objects[id]?.name ?? id);
     return ok(`Set **${object.name}** —${label}→ ${names.join(", ")}.`);
   });

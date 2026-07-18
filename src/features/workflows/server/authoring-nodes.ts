@@ -71,6 +71,20 @@ export async function addNode(
   const { title, data } = await nodeDataFrom(input, scope);
   await validateKbsForWorkflow(workflowId, kbIdsOf([data]), scope);
 
+  // F-5 — validate `connect_from` BEFORE inserting the step. Previously the
+  // step was inserted first and the edge source resolved AFTER; a bad
+  // `connect_from` threw STEP_NOT_FOUND but left the step committed as an
+  // orphan. Resolving it up front (like the reads/actions refs already are)
+  // makes a bad ref create NOTHING and return the clear error.
+  let fromStepId: string | null = null;
+  if (connectFrom) {
+    const from = await findStep(db, scope.workspaceId, workflowId, connectFrom);
+    if (!from) {
+      throw new HttpError(404, "STEP_NOT_FOUND", `connect_from step not found in this workflow: ${connectFrom}`);
+    }
+    fromStepId = from.id;
+  }
+
   const position = await countSteps(db, scope.workspaceId, workflowId);
   const stepId = await insertStep(
     db,
@@ -79,14 +93,10 @@ export async function addNode(
     stepWriteFrom(input.ref, title, data, position)
   );
 
-  if (connectFrom) {
-    const from = await findStep(db, scope.workspaceId, workflowId, connectFrom);
-    if (!from) {
-      throw new HttpError(404, "STEP_NOT_FOUND", `connect_from step not found in this workflow: ${connectFrom}`);
-    }
-    if (from.id !== stepId) {
-      await insertEdge(db, scope.workspaceId, workflowId, from.id, stepId, "");
-    }
+  // `fromStepId` is a pre-existing step, so it can never equal the just-
+  // inserted `stepId` (no self-edge possible here).
+  if (fromStepId) {
+    await insertEdge(db, scope.workspaceId, workflowId, fromStepId, stepId, "");
   }
 
   await reconcileAttachments(workflowId, scope);

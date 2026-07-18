@@ -5,6 +5,7 @@ import type { KnowledgeBase } from "../types";
 import {
   KNOWLEDGE_BASE_COLS,
   mapBaseRow,
+  stripNulls,
   type KnowledgeBaseRow,
 } from "./dto";
 
@@ -135,10 +136,10 @@ export async function insertBase(args: InsertBaseArgs): Promise<KnowledgeBase> {
     .from("knowledge_bases")
     .insert({
       workspace_id: args.workspaceId,
-      name: args.name,
+      name: stripNulls(args.name),
       slug: args.slug,
       public_id: generatePublicId(),
-      description: args.description ?? null,
+      description: stripNulls(args.description ?? null),
       agent_write_enabled: args.agentWriteEnabled ?? false,
       visibility: args.visibility ?? "public",
       access_mode: args.accessMode ?? "workspace",
@@ -178,9 +179,10 @@ export async function updateBaseRow(
 ): Promise<KnowledgeBase | null> {
   const db = supabaseAdmin();
   const update: Record<string, unknown> = {};
-  if (patch.name !== undefined) update.name = patch.name;
+  if (patch.name !== undefined) update.name = stripNulls(patch.name);
   if (patch.slug !== undefined) update.slug = patch.slug;
-  if (patch.description !== undefined) update.description = patch.description;
+  if (patch.description !== undefined)
+    update.description = stripNulls(patch.description);
   if (patch.agentWriteEnabled !== undefined)
     update.agent_write_enabled = patch.agentWriteEnabled;
   if (patch.visibility !== undefined) update.visibility = patch.visibility;

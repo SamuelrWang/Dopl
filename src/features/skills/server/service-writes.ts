@@ -18,7 +18,7 @@ import {
 } from "./errors";
 import * as repo from "./repository";
 import * as history from "./history";
-import { assertAgentWriteAllowed } from "./service-shared";
+import { assertAgentWriteAllowed, stripNullBytes } from "./service-shared";
 import { getSkillBySlug } from "./service-reads";
 
 /**
@@ -67,10 +67,10 @@ export async function createSkill(
       skill = await repo.insertSkill({
         workspaceId: ctx.workspaceId,
         slug: baseSlug,
-        name: input.name,
-        description: input.description,
-        whenToUse: input.whenToUse,
-        whenNotToUse: input.whenNotToUse ?? null,
+        name: stripNullBytes(input.name),
+        description: stripNullBytes(input.description),
+        whenToUse: stripNullBytes(input.whenToUse),
+        whenNotToUse: stripNullBytes(input.whenNotToUse ?? null),
         status: input.status ?? "active",
         // Default true to mirror knowledge_bases — creator's agent gets
         // write by default. Real enforcement is the access matrix in
@@ -79,7 +79,7 @@ export async function createSkill(
         agentWriteEnabled: input.agentWriteEnabled ?? true,
         visibility: resolvedVisibility,
         folder: normalizeFolder(input.folder),
-        body: input.body ?? "",
+        body: stripNullBytes(input.body ?? ""),
         createdBy: ctx.userId,
         source: ctx.source,
       });
@@ -112,14 +112,18 @@ export async function updateSkill(
   expectedUpdatedAt?: string
 ): Promise<Skill> {
   const skill = await getSkillBySlug(ctx, slug);
-  // Agents can't flip the agent-write toggle (it's a human-controlled,
-  // per-skill setting). Silently IGNORE the field for agent callers rather
-  // than failing the whole update — agents routinely echo it back alongside
-  // legitimate metadata edits, and rejecting on mere presence (with a
-  // "writes disabled" message that is wrong when the toggle is ON) was a
-  // confusing dead end. Human callers may still set it.
-  const nextAgentWriteEnabled =
-    ctx.source === "agent" ? undefined : patch.agentWriteEnabled;
+  // `agentWriteEnabled` is a human-controlled per-skill protection flag.
+  // Silently dropping it for agent callers (the old behavior) returned a
+  // success envelope while the DB value never moved — a false "Updated…"
+  // (F-14). Reject loudly instead. Human callers may still set it.
+  if (ctx.source === "agent" && patch.agentWriteEnabled !== undefined) {
+    throw new HttpError(
+      403,
+      "SKILL_AGENT_WRITE_TOGGLE_FORBIDDEN",
+      "agent_write_enabled can't be changed by an agent — set it from the Dopl web UI."
+    );
+  }
+  const nextAgentWriteEnabled = patch.agentWriteEnabled;
   // Sharing scope (full three-way model). Changing it is owner-or-
   // workspace-admin only; agents may re-scope skills THEY created
   // (needed so an agent can publish its own skill for workflow refs).
@@ -199,10 +203,10 @@ export async function updateSkill(
     const saved = await repo.updateSkillRow(
       skill.id,
       {
-        name: patch.name,
-        description: patch.description,
-        whenToUse: patch.whenToUse,
-        whenNotToUse: patch.whenNotToUse,
+        name: stripNullBytes(patch.name),
+        description: stripNullBytes(patch.description),
+        whenToUse: stripNullBytes(patch.whenToUse),
+        whenNotToUse: stripNullBytes(patch.whenNotToUse),
         slug: patch.slug,
         status: patch.status,
         agentWriteEnabled: nextAgentWriteEnabled,

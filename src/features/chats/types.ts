@@ -78,6 +78,12 @@ export type Chat = {
 
 export type ChatDetail = Chat & { messages: ChatMessage[] };
 
+/** A soft-deleted chat as it appears in the trash listing. */
+export type TrashedChat = Chat & {
+  /** ISO datetime the chat was soft-deleted. */
+  deletedAt: string;
+};
+
 /**
  * List read result: the visible chats plus how many the free-plan
  * retention window excluded (0 on Pro / full-history plans). `hiddenCount`

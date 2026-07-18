@@ -16,6 +16,7 @@ import {
   ChatFolderNotFoundError,
   ChatFolderScopeError,
   ChatForbiddenError,
+  ChatNotFoundError,
 } from "./errors";
 import { mapChatRow, mapOwner } from "./dto";
 import type { ChatFolderRow, ChatRow } from "./dto";
@@ -29,9 +30,11 @@ import {
   profilesById,
   requireOwnChat,
   resolveOrCreateFolderRow,
+  stripNulDeep,
   syncChatGrantsToFolder,
   type ChatContext,
 } from "./service-shared";
+import type { MessagePayload } from "./repository";
 
 /**
  * Write-side chats service: agent-facing export (create / idempotent
@@ -44,17 +47,25 @@ import {
 // ─── Export (create / idempotent re-export) ─────────────────────────
 
 /**
- * Agent-facing export. When `clientSessionId` matches one of the
- * caller's earlier exports, the chat's header and transcript are
- * replaced in place (visibility, pinned state, and folder are kept
- * unless the payload names a folder) — re-exporting a session never
- * duplicates it. `format` is derived from the messages, never taken
- * from the caller.
+ * Agent-facing export. When `clientSessionId` matches one of the caller's
+ * earlier exports, the chat is UPDATED in place, PRESERVING BY DEFAULT
+ * (F-8 / F-9): a header field is overwritten only when the caller passes
+ * it (an omitted field keeps its stored value instead of being cleared),
+ * and the transcript is reconciled — messages are upserted by position
+ * and any added via op="append" are kept — so a re-export never wipes
+ * history. A fresh export inserts header + transcript in ONE transaction
+ * (F-12), so a failed write can't leave a 0-message orphan. All incoming
+ * text is stripped of NUL first (F-7). `format` is derived from the
+ * messages, never taken from the caller.
  */
 export async function exportChat(
   ctx: ChatContext,
-  input: ChatExportInput
+  rawInput: ChatExportInput
 ): Promise<ChatDetail> {
+  // Drop any NUL (U+0000) before it reaches Postgres — a stray one used to
+  // 500 the whole export (and orphan a header pre-F-12).
+  const input = stripNulDeep(rawInput);
+
   // Filing into a folder means inheriting the folder's sharing — the
   // folder's scope is authoritative, so any caller-passed visibility is
   // superseded when a folder is named.
@@ -66,72 +77,54 @@ export async function exportChat(
     ? { visibility: folderRow.visibility, access_mode: folderRow.access_mode }
     : null;
 
+  const payload = messagePayload(input.messages);
+
   const existing = input.clientSessionId
     ? await repo.findChatByClientSession(ctx.workspaceId, ctx.userId, input.clientSessionId)
     : null;
-
-  const header = {
-    title: input.title,
-    overview: input.overview,
-    source: input.source,
-    project: input.project ?? null,
-    format: deriveFormat(input.messages),
-    ...(input.sessionDate ? { session_date: input.sessionDate } : {}),
-    deliverables: input.deliverables,
-    learnings: input.learnings,
-    exported_at: new Date().toISOString(),
-  };
-  const payload = messagePayload(input.messages);
-
-  let chat: ChatRow;
   if (existing) {
-    chat = await repo.updateChat(existing.id, {
-      ...header,
-      ...(folderId ? { folder_id: folderId, ...inherited } : {}),
-    });
-    await repo.replaceMessages(chat.id, ctx.workspaceId, payload);
-  } else {
-    try {
-      chat = await repo.insertChat({
+    return reexportChat(ctx, existing, input, folderRow, payload);
+  }
+
+  // Fresh export: header + transcript in one transaction (no orphan).
+  let chat: ChatRow;
+  try {
+    chat = await repo.createChatWithMessages(
+      {
         workspace_id: ctx.workspaceId,
         owner_id: ctx.userId,
         folder_id: folderId,
         client_session_id: input.clientSessionId ?? null,
-        visibility: input.visibility,
-        ...header,
-        ...(inherited ?? {}),
-      });
-    } catch (err) {
-      // Lost a first-export race on client_session_id — converge on the
-      // winner's row and treat this call as the re-export it now is.
-      const raced =
-        repo.pgErrorCode(err) === UNIQUE_VIOLATION && input.clientSessionId
-          ? await repo.findChatByClientSession(
-              ctx.workspaceId,
-              ctx.userId,
-              input.clientSessionId
-            )
-          : null;
-      if (!raced) throw err;
-      chat = await repo.updateChat(raced.id, {
-        ...header,
-        ...(folderId ? { folder_id: folderId, ...inherited } : {}),
-      });
+        visibility: inherited?.visibility ?? input.visibility ?? "private",
+        access_mode: inherited?.access_mode ?? "workspace",
+        title: input.title,
+        overview: input.overview ?? "",
+        source: input.source ?? "other",
+        project: input.project ?? null,
+        format: deriveFormat(input.messages),
+        ...(input.sessionDate ? { session_date: input.sessionDate } : {}),
+        deliverables: input.deliverables ?? [],
+        learnings: input.learnings ?? [],
+        exported_at: new Date().toISOString(),
+      },
+      payload
+    );
+  } catch (err) {
+    // Lost a first-export race on client_session_id — converge on the
+    // winner's row and treat this call as the re-export it now is.
+    if (repo.pgErrorCode(err) === UNIQUE_VIOLATION && input.clientSessionId) {
+      const raced = await repo.findChatByClientSession(
+        ctx.workspaceId,
+        ctx.userId,
+        input.clientSessionId
+      );
+      if (raced) return reexportChat(ctx, raced, input, folderRow, payload);
     }
-    try {
-      await repo.replaceMessages(chat.id, ctx.workspaceId, payload);
-    } catch (err) {
-      // Never leave a header-only chat behind: a create whose transcript
-      // write failed is rolled back so the caller's retry starts clean.
-      if (!existing && !input.clientSessionId) {
-        await repo.deleteChat(chat.id).catch(() => {});
-      }
-      throw err;
-    }
+    throw err;
   }
 
-  // Inheritance covers grants too: a chat filed into a team-scoped
-  // folder gets the folder's team grant set (replace-set).
+  // Inheritance covers grants too: a chat filed into a team-scoped folder
+  // gets the folder's team grant set (replace-set).
   if (folderRow) {
     await syncChatGrantsToFolder(ctx, chat.id, folderRow);
   }
@@ -141,13 +134,63 @@ export async function exportChat(
   return readChatDetail(ctx, chat.id);
 }
 
+/**
+ * Idempotent re-export of an existing chat: overwrite only the header
+ * fields the caller actually passed (preserve the rest), reconcile the
+ * transcript non-destructively (upsert by position, keep appended
+ * history), and revive the chat if it had been soft-deleted. `format` is
+ * recomputed from the reconciled transcript so a partial re-export can't
+ * leave it stale.
+ */
+async function reexportChat(
+  ctx: ChatContext,
+  existing: ChatRow,
+  input: ChatExportInput,
+  folderRow: ChatFolderRow | null,
+  payload: MessagePayload
+): Promise<ChatDetail> {
+  const folderId = folderRow?.id ?? null;
+  const inherited = folderRow
+    ? { visibility: folderRow.visibility, access_mode: folderRow.access_mode }
+    : null;
+
+  const chat = await repo.updateChat(existing.id, {
+    title: input.title,
+    exported_at: new Date().toISOString(),
+    // Re-exporting a session revives it if it had been trashed.
+    deleted_at: null,
+    ...(input.overview !== undefined ? { overview: input.overview } : {}),
+    ...(input.source !== undefined ? { source: input.source } : {}),
+    ...(input.project !== undefined ? { project: input.project ?? null } : {}),
+    ...(input.sessionDate ? { session_date: input.sessionDate } : {}),
+    ...(input.deliverables !== undefined ? { deliverables: input.deliverables } : {}),
+    ...(input.learnings !== undefined ? { learnings: input.learnings } : {}),
+    ...(folderId ? { folder_id: folderId, ...inherited } : {}),
+  });
+
+  await repo.mergeMessages(chat.id, ctx.workspaceId, payload);
+
+  // Keep format honest against the reconciled transcript (re-sent ∪ kept).
+  const all = await repo.listMessages(chat.id);
+  const format = deriveFormat(all.map((m) => ({ verbatim: m.verbatim ?? undefined })));
+  if (format !== chat.format) {
+    await repo.updateChat(chat.id, { format });
+  }
+
+  if (folderRow) {
+    await syncChatGrantsToFolder(ctx, chat.id, folderRow);
+  }
+  return readChatDetail(ctx, chat.id);
+}
+
 // ─── Mutations (owner-only) ─────────────────────────────────────────
 
 export async function appendMessages(
   ctx: ChatContext,
   chatId: string,
-  input: ChatAppendInput
+  rawInput: ChatAppendInput
 ): Promise<ChatDetail> {
+  const input = stripNulDeep(rawInput);
   const chat = await requireOwnChat(ctx, chatId, "append to it");
   await repo.appendMessagesTx(chat.id, ctx.workspaceId, messagePayload(input.messages));
   // The transcript's verbatim mix may have changed — keep format honest.
@@ -178,8 +221,9 @@ export async function appendMessages(
 export async function updateChatHeader(
   ctx: ChatContext,
   chatId: string,
-  patch: ChatUpdateInput
+  rawPatch: ChatUpdateInput
 ): Promise<Chat> {
+  const patch = stripNulDeep(rawPatch);
   const chat = await requireOwnChat(ctx, chatId, "update it");
 
   // Resolve the folder move first — inheritance and the filed-chat
@@ -292,7 +336,34 @@ export async function updateChatHeader(
   );
 }
 
+/**
+ * Soft-delete (F-11): hide the chat from active reads but keep it
+ * restorable from trash — no more irrecoverable physical delete.
+ */
 export async function deleteChat(ctx: ChatContext, chatId: string): Promise<void> {
   const chat = await requireOwnChat(ctx, chatId, "delete it");
-  await repo.deleteChat(chat.id);
+  await repo.softDeleteChat(chat.id);
+}
+
+/**
+ * Restore a soft-deleted chat (owner-only). Resolves the chat FROM TRASH
+ * (an active or unknown chat reads as not found), then clears its
+ * `deleted_at`.
+ */
+export async function restoreChat(ctx: ChatContext, chatId: string): Promise<Chat> {
+  const row = await repo.findDeletedChatById(ctx.workspaceId, chatId);
+  if (!row) throw new ChatNotFoundError(chatId);
+  if (row.owner_id !== ctx.userId || ctx.apiKeyWorkspaceId) {
+    throw new ChatForbiddenError("restore it");
+  }
+  const restored = await repo.restoreChatRow(row.id);
+  const [count, profiles] = await Promise.all([
+    repo.countMessages(restored.id),
+    profilesById([restored.owner_id]),
+  ]);
+  return mapChatRow(
+    restored,
+    mapOwner(restored.owner_id, profiles.get(restored.owner_id)),
+    count
+  );
 }

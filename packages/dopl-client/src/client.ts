@@ -3,12 +3,10 @@ import type {
   ClusterDetail,
   ClusterRow,
   WorkflowRow,
+  WorkflowTrashRow,
   WorkflowDetail,
   WorkflowGraphSpec,
   WorkflowNodeInput,
-  Pack,
-  PackFile,
-  PackFileMeta,
   ResolvedWorkspace,
 } from "./types.js";
 import { DoplTransport } from "./transport.js";
@@ -58,6 +56,7 @@ import type {
   ChatList,
   ChatMessageInput,
   ChatUpdateInput,
+  TrashedChat,
 } from "./chat-types.js";
 import * as members from "./members.js";
 import type {
@@ -164,6 +163,22 @@ export class DoplClient {
       `/api/workflows/${encodeURIComponent(idOrSlug)}`,
       "DELETE",
       "delete_workflow"
+    );
+  }
+
+  /** Workspace-scoped trash — every soft-deleted workflow the caller may see. */
+  async listWorkflowTrash(): Promise<{ workflows: WorkflowTrashRow[] }> {
+    return this.transport.request<{ workflows: WorkflowTrashRow[] }>(
+      "/api/workflows/trash",
+      { toolName: "list_workflow_trash" }
+    );
+  }
+
+  /** Restore a soft-deleted workflow (recovery, not deletion). */
+  async restoreWorkflow(idOrSlug: string): Promise<WorkflowRow> {
+    return this.transport.request<WorkflowRow>(
+      `/api/workflows/${encodeURIComponent(idOrSlug)}/restore`,
+      { method: "POST", toolName: "restore_workflow", body: {} }
     );
   }
 
@@ -304,37 +319,10 @@ export class DoplClient {
     );
   }
 
-  async listPacks(): Promise<{ packs: Pack[] }> {
-    return this.transport.request<{ packs: Pack[] }>("/api/knowledge/packs", {
-      toolName: "kb_list_packs",
-    });
-  }
-
-  async kbList(
-    pack: string,
-    opts: { category?: string; limit?: number } = {}
-  ): Promise<{ pack_id: string; files: PackFileMeta[] }> {
-    const qs = new URLSearchParams();
-    if (opts.category) qs.set("category", opts.category);
-    if (opts.limit) qs.set("limit", String(opts.limit));
-    const suffix = qs.toString() ? `?${qs.toString()}` : "";
-    return this.transport.request<{ pack_id: string; files: PackFileMeta[] }>(
-      `/api/knowledge/packs/${encodeURIComponent(pack)}/files${suffix}`,
-      { toolName: "kb_list" }
-    );
-  }
-
-  async kbGet(pack: string, path: string): Promise<{ file: PackFile }> {
-    return this.transport.request<{ file: PackFile }>(
-      `/api/knowledge/packs/${encodeURIComponent(pack)}/file?path=${encodeURIComponent(path)}`,
-      { toolName: "kb_get" }
-    );
-  }
-
   // ─── User knowledge bases (Item 4) ────────────────────────────────
-  // Distinct from Dopl knowledge packs above: these are user-authored,
-  // editable knowledge bases. Path-based methods accept a base id and
-  // a "/"-separated path; the server resolves to folder/entry rows.
+  // User-authored, editable knowledge bases. Path-based methods accept
+  // a base id and a "/"-separated path; the server resolves to
+  // folder/entry rows.
 
   listKbBases(): Promise<KnowledgeBase[]> {
     return kb.listKbBases(this.transport);
@@ -460,8 +448,12 @@ export class DoplClient {
     return ontology.createOntologyObject(this.transport, input);
   }
 
-  updateOntologyObject(objectId: string, patch: OntologyObjectPatch): Promise<OntologyObject> {
-    return ontology.updateOntologyObject(this.transport, objectId, patch);
+  updateOntologyObject(
+    objectId: string,
+    patch: OntologyObjectPatch,
+    expectedVersion?: string
+  ): Promise<OntologyObject> {
+    return ontology.updateOntologyObject(this.transport, objectId, patch, expectedVersion);
   }
 
   deleteOntologyObject(objectId: string): Promise<void> {
@@ -502,6 +494,14 @@ export class DoplClient {
 
   deleteChat(chatId: string): Promise<void> {
     return chats.deleteChat(this.transport, chatId);
+  }
+
+  restoreChat(chatId: string): Promise<Chat> {
+    return chats.restoreChat(this.transport, chatId);
+  }
+
+  listChatsTrash(): Promise<TrashedChat[]> {
+    return chats.listChatsTrash(this.transport);
   }
 
   listChatFolders(): Promise<ChatFolder[]> {

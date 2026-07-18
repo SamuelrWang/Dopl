@@ -15,7 +15,7 @@
 
 import { z } from "zod";
 import type { DoplClient } from "@dopl/client";
-import { ok, err, isConflict, missingParams, type RegisterTool, type ToolResponse } from "./respond";
+import { ok, err, isConflict, isNotFound, missingParams, type RegisterTool, type ToolResponse } from "./respond";
 import { SKILL_AUTHORING_GUIDE } from "../prompts/skill-authoring-guide.js";
 
 function errorMessage(e: unknown): string {
@@ -31,7 +31,7 @@ const SKILL_DESCRIPTION = `Read and author the user's skills. A skill is SINGLE-
 - "read" — read the skill's SKILL.md body plus its Version token (pass that as expected_version to write). Requires: slug.
 - "write" — overwrite the skill's SKILL.md body (PUT semantics — the whole body is replaced). read it first to get the Version token and pass it as \`expected_version\` — REQUIRED when a body already exists (412 without it), so a concurrent edit can't be silently overwritten. \`force=true\` skips the check. Requires: slug, body.
 - "create" — create a new skill (returns the row + a fresh SKILL.md). New skills default to private. Requires: name, description, when_to_use. Optional: when_not_to_use, slug (auto-derived), status (defaults active), folder, body (initial SKILL.md content). Before calling: use op="authoring_guide" so the description and when_to_use meet the framework's standards.
-- "update" — update skill metadata (name, description, when_to_use, when_not_to_use, new_slug, status, folder, agent_write_enabled). Agents cannot flip \`agent_write_enabled\` themselves — that's a session-only setting. Requires: slug.
+- "update" — update skill metadata (name, description, when_to_use, when_not_to_use, new_slug, status, folder). \`agent_write_enabled\` is a human-only protection toggle — an agent that passes it here is rejected; change it from the Dopl web UI. Requires: slug.
 - "set_visibility" — change a skill's sharing: "public" (workspace-visible) or "private" (owner-only). Owner or workspace-admin only. Team-scoped sharing is web-UI-managed; a team-scoped skill set here to "public" becomes workspace-wide. Requires: slug, visibility.
 - "authoring_guide" — fetch the canonical skill-authoring framework: what makes a high-quality single-file skill, how to write description + when_to_use, the body section order, anti-patterns, and a quality checklist. Call before authoring any new skill (every op="create").
 
@@ -70,7 +70,7 @@ export function registerSkillTools(
       when_not_to_use: z.string().max(2000).nullable().optional().describe("op=create / op=update: when_not_to_use trigger."),
       new_slug: z.string().min(1).max(80).optional().describe("op=update: rename the skill's slug."),
       status: z.enum(["active", "draft"]).optional().describe("op=create / op=update: skill status (create defaults to active)."),
-      agent_write_enabled: z.boolean().optional().describe("op=create / op=update: agent-write toggle (agents cannot flip this on update)."),
+      agent_write_enabled: z.boolean().optional().describe("op=create: initial agent-write toggle. On op=update an agent passing this is rejected — it's a human-only protection setting (change it from the Dopl web UI)."),
       folder: z.string().max(80).nullable().optional().describe("op=create / op=update: organizing folder label (empty or null = unfiled). op=list: filter to skills in this folder."),
       body: z.string().max(1_048_576).optional().describe("op=create: initial SKILL.md content. op=write (required): the new full SKILL.md body."),
       expected_version: z.string().optional().describe("op=write: the Version from a prior read. Required when overwriting an existing body — omitting it fails with 412; only force=true skips the check."),
@@ -260,7 +260,10 @@ async function opGet(
     }
     return ok(lines.join("\n"));
   } catch (e) {
-    return err(`Skill not found or failed to load: ${slug}. ${errorMessage(e)}`);
+    if (isNotFound(e)) {
+      return err(`No skill \`${slug}\`. List skills with dopl_skill(op="list").`);
+    }
+    return err(`Couldn't load skill \`${slug}\`: ${errorMessage(e)}`);
   }
 }
 
@@ -359,6 +362,14 @@ async function opUpdate(
   },
 ): Promise<ToolResponse> {
   const slug = params.slug as string;
+  // `agent_write_enabled` is a human-controlled per-skill protection flag.
+  // An agent flipping it via MCP used to be silently dropped while the tool
+  // still reported success (F-14) — reject loudly instead of swallowing it.
+  if (params.agent_write_enabled !== undefined) {
+    return err(
+      "agent_write_enabled can't be changed by an agent — set it from the Dopl web UI."
+    );
+  }
   try {
     const updated = await client.updateSkill(slug, {
       name: params.name,
@@ -367,7 +378,6 @@ async function opUpdate(
       whenNotToUse: params.when_not_to_use,
       slug: params.new_slug,
       status: params.status,
-      agentWriteEnabled: params.agent_write_enabled,
       folder: params.folder,
     });
     return ok(

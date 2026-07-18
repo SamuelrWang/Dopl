@@ -53,11 +53,9 @@ interface Options {
  *
  * MCP / paid-gating policy (audit decision #8) — withWorkspaceAuth
  * intentionally does NOT call `withMcpAccess`. The reasoning:
- *   - Unlike the read-only Dopl knowledge packs (`kb_list_packs` /
- *     `kb_list` / `kb_get` use `withMcpAccess` to gate by trial/paid
- *     status), the user's OWN workspace + knowledge bases are first-
- *     class data the user creates — gating them behind a paywall would
- *     hold their content hostage.
+ *   - The user's OWN workspace + knowledge bases are first-class data
+ *     the user creates — gating them behind a paywall would hold their
+ *     content hostage.
  *   - The agent-write toggle (`agent_write_enabled` per knowledge base)
  *     is the per-resource gate that protects against unwanted MCP
  *     mutations. Read access for an agent stays free; writes require

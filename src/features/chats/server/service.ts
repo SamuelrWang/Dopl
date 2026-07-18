@@ -19,13 +19,14 @@ import "server-only";
 export { buildChatContext } from "./service-shared";
 export type { ChatContext, AuthLike } from "./service-shared";
 
-export { listChats, getChat } from "./service-reads";
+export { listChats, getChat, listTrash } from "./service-reads";
 
 export {
   exportChat,
   appendMessages,
   updateChatHeader,
   deleteChat,
+  restoreChat,
 } from "./service-writes";
 
 export {

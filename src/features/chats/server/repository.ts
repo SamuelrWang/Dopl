@@ -3,7 +3,6 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
 import type { Database } from "@/shared/supabase/types";
 import type { ChatFolderRow, ChatMessageRow, ChatRow, ProfileRef } from "./dto";
 
-type ChatInsert = Database["public"]["Tables"]["chats"]["Insert"];
 type ChatUpdate = Database["public"]["Tables"]["chats"]["Update"];
 
 /** Chat row + PostgREST-embedded message count. */
@@ -50,6 +49,11 @@ export async function listVisibleChats(
     .from("chats")
     .select(CHAT_SELECT)
     .eq("workspace_id", workspaceId)
+    // Soft-deleted chats are hidden from every active read (F-11). Passed as
+    // a raw `.or()` string because `deleted_at` is not yet in the generated
+    // column types (added by migration 20260718000002); a separate top-level
+    // `.or(...)` AND-combines with the owner/public predicate above.
+    .or("deleted_at.is.null")
     .or(`owner_id.eq.${userId},visibility.eq.public`);
   if (since) query = query.gte("session_date", since);
   const { data, error } = await query.order("updated_at", { ascending: false });
@@ -73,6 +77,8 @@ export async function countHiddenChats(
     .from("chats")
     .select("*", { count: "exact", head: true })
     .eq("workspace_id", workspaceId)
+    // Trashed chats are neither shown nor counted as "hidden by retention".
+    .or("deleted_at.is.null")
     .or(`owner_id.eq.${userId},visibility.eq.public`)
     .lt("session_date", since);
   if (error) throw error;
@@ -89,11 +95,55 @@ export async function findChatById(
     .select(CHAT_SELECT)
     .eq("workspace_id", workspaceId)
     .eq("id", chatId)
+    // Active reads (get / append / update / delete ownership + the
+    // post-write echo) never resolve a trashed chat — it reads as missing.
+    .or("deleted_at.is.null")
     .maybeSingle();
   if (error) throw error;
   return data as ChatRowWithCount | null;
 }
 
+/**
+ * Trash lookup for restore: the one place that resolves a SOFT-DELETED
+ * chat by id (deleted_at IS NOT NULL). Active reads use `findChatById`.
+ */
+export async function findDeletedChatById(
+  workspaceId: string,
+  chatId: string
+): Promise<ChatRow | null> {
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("chats")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .eq("id", chatId)
+    .or("deleted_at.not.is.null")
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+/** The caller's own soft-deleted chats, newest-trashed first. */
+export async function listTrashedChats(
+  workspaceId: string,
+  ownerId: string
+): Promise<ChatRowWithCount[]> {
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("chats")
+    .select(CHAT_SELECT)
+    .eq("workspace_id", workspaceId)
+    .eq("owner_id", ownerId)
+    .or("deleted_at.not.is.null")
+    .order("deleted_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as ChatRowWithCount[];
+}
+
+// The idempotency lookup deliberately does NOT filter `deleted_at`: the
+// (workspace_id, owner_id, client_session_id) unique index spans trashed
+// rows, so a re-export must find a soft-deleted match and revive it
+// (exportChat clears `deleted_at`) rather than collide on the index.
 export async function findChatByClientSession(
   workspaceId: string,
   ownerId: string,
@@ -111,25 +161,20 @@ export async function findChatByClientSession(
   return data;
 }
 
-export async function insertChat(fields: ChatInsert): Promise<ChatRow> {
-  const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("chats")
-    .insert(fields)
-    .select("*")
-    .single();
-  if (error) throw error;
-  return data;
-}
+// `deleted_at` is added by migration 20260718000002 and not yet in the
+// generated `ChatUpdate` type (regenerated after the migration applies), so
+// the soft-delete/revive writes widen the patch here and cast on the way to
+// Supabase.
+type ChatUpdatePatch = ChatUpdate & { deleted_at?: string | null };
 
 export async function updateChat(
   chatId: string,
-  patch: ChatUpdate
+  patch: ChatUpdatePatch
 ): Promise<ChatRow> {
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("chats")
-    .update({ ...patch, updated_at: new Date().toISOString() })
+    .update({ ...patch, updated_at: new Date().toISOString() } as unknown as ChatUpdate)
     .eq("id", chatId)
     .select("*")
     .single();
@@ -137,10 +182,14 @@ export async function updateChat(
   return data;
 }
 
-export async function deleteChat(chatId: string): Promise<void> {
-  const db = supabaseAdmin();
-  const { error } = await db.from("chats").delete().eq("id", chatId);
-  if (error) throw error;
+/** Soft-delete: hide the chat from active reads, keep it restorable (F-11). */
+export async function softDeleteChat(chatId: string): Promise<ChatRow> {
+  return updateChat(chatId, { deleted_at: new Date().toISOString() });
+}
+
+/** Restore a soft-deleted chat by clearing its `deleted_at`. */
+export async function restoreChatRow(chatId: string): Promise<ChatRow> {
+  return updateChat(chatId, { deleted_at: null });
 }
 
 // ─── Messages ───────────────────────────────────────────────────────
@@ -166,30 +215,78 @@ export async function countMessages(chatId: string): Promise<number> {
   return count ?? 0;
 }
 
-type MessagePayload = Array<{
+export type MessagePayload = Array<{
   role: string;
   summary: string;
   verbatim: string | null;
 }>;
 
+type ChatCreateHeader = {
+  workspace_id: string;
+  owner_id: string;
+  folder_id: string | null;
+  client_session_id: string | null;
+  visibility?: string;
+  access_mode?: string;
+  title: string;
+  overview?: string;
+  source?: string;
+  project?: string | null;
+  format: string;
+  session_date?: string;
+  deliverables?: unknown;
+  learnings?: unknown;
+  exported_at?: string;
+};
+
 /**
- * Re-export semantics: the transcript is replaced wholesale. Runs as a
- * single transaction in Postgres (chat_replace_messages), serialized
- * per chat, so a failed re-export can never leave a half-written or
- * destroyed transcript.
+ * Atomic export create (F-12): header INSERT + messages INSERT in ONE
+ * Postgres transaction (chat_create_with_messages). A failed transcript
+ * write rolls the header back, so a broken export never leaves a
+ * 0-message orphan. Re-export (the row already exists) uses
+ * `mergeMessages` instead.
  */
-export async function replaceMessages(
+export async function createChatWithMessages(
+  header: ChatCreateHeader,
+  messages: MessagePayload
+): Promise<ChatRow> {
+  const db = supabaseAdmin();
+  // RPC added by migration 20260718000002; not yet in the generated
+  // Database types (regenerated after the migration applies).
+  const { data, error } = await db.rpc(
+    "chat_create_with_messages" as never,
+    { p_chat: header, p_messages: messages } as never
+  );
+  if (error) throw error;
+  return data as unknown as ChatRow;
+}
+
+/**
+ * Non-destructive re-export merge (F-8): upsert the re-sent messages by
+ * position and KEEP any existing rows beyond them, so a transcript
+ * extended via op="append" survives a re-export instead of being wiped.
+ * A single upsert statement is atomic; the returned length reflects the
+ * reconciled transcript (re-sent ∪ preserved).
+ */
+export async function mergeMessages(
   chatId: string,
   workspaceId: string,
   messages: MessagePayload
-): Promise<void> {
+): Promise<number> {
   const db = supabaseAdmin();
-  const { error } = await db.rpc("chat_replace_messages", {
-    p_chat_id: chatId,
-    p_workspace_id: workspaceId,
-    p_messages: messages,
-  });
+  const rows = messages.map((m, i) => ({
+    chat_id: chatId,
+    workspace_id: workspaceId,
+    position: i + 1,
+    role: m.role,
+    summary: m.summary,
+    verbatim: m.verbatim,
+  }));
+  const { error } = await db
+    .from("chat_messages")
+    .upsert(rows, { onConflict: "chat_id,position" });
   if (error) throw error;
+  return countMessages(chatId);
 }
 
 /**
@@ -304,18 +401,19 @@ export async function updateFolder(
   return data;
 }
 
-/** Ids of every chat filed in the folder — the propagation target set. */
+/** Ids of every ACTIVE chat filed in the folder — the propagation target set. */
 export async function listChatIdsInFolder(folderId: string): Promise<string[]> {
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("chats")
     .select("id")
-    .eq("folder_id", folderId);
+    .eq("folder_id", folderId)
+    .or("deleted_at.is.null");
   if (error) throw error;
   return (data ?? []).map((r) => r.id);
 }
 
-/** Folder-scope propagation: align every filed chat's sharing columns. */
+/** Folder-scope propagation: align every filed (active) chat's sharing columns. */
 export async function updateChatsScopeInFolder(
   folderId: string,
   visibility: string,
@@ -329,7 +427,8 @@ export async function updateChatsScopeInFolder(
       access_mode: accessMode,
       updated_at: new Date().toISOString(),
     })
-    .eq("folder_id", folderId);
+    .eq("folder_id", folderId)
+    .or("deleted_at.is.null");
   if (error) throw error;
 }
 

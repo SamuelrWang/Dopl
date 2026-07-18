@@ -54,6 +54,34 @@ export const UNIQUE_VIOLATION = "23505";
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
+const NUL = String.fromCharCode(0);
+
+/**
+ * Strip NUL (U+0000) from every string in a payload before it reaches
+ * Postgres (F-7). Postgres text/jsonb reject the NUL code point, so an
+ * agent that exports a transcript carrying a stray NUL used to blow up with
+ * an INTERNAL_ERROR 500 (and, pre-F-12, orphan a header row). NUL carries no
+ * meaning in a chat summary, so it is stripped rather than rejected — the
+ * export still lands. Applied at the chat write boundary (export / append /
+ * update / folder writes).
+ */
+export function stripNulDeep<T>(value: T): T {
+  if (typeof value === "string") {
+    return value.includes(NUL)
+      ? (value.split(NUL).join("") as unknown as T)
+      : value;
+  }
+  if (Array.isArray(value)) {
+    return value.map((v) => stripNulDeep(v)) as unknown as T;
+  }
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value)) out[k] = stripNulDeep(v);
+    return out as T;
+  }
+  return value;
+}
+
 /** Precomputed grant context for visibility checks over a set of rows. */
 interface GrantCtx {
   /** Teams the caller belongs to. Fetched only when needed. */

@@ -43,6 +43,13 @@ export interface OntologyObject {
   childIds: string[];
   /** Column-only: default fields new children are born with. */
   template: OntologyTemplateField[];
+  /**
+   * Optimistic-concurrency token — the row's `updated_at`. Read ops surface
+   * it so a write can pass it back as `expectedVersion` (X-Updated-At) and
+   * be rejected (412) if the object changed underneath. Optional: rows
+   * written before the field was serialized simply omit it.
+   */
+  updatedAt?: string;
 }
 
 export interface OntologyCluster {

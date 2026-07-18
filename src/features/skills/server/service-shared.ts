@@ -40,6 +40,16 @@ export function buildSkillContext(auth: AuthLike): SkillContext {
   };
 }
 
+/**
+ * Postgres `text` columns cannot store U+0000; a stray NUL (a paste artifact
+ * or raw agent output in a name, field, or body) otherwise surfaces as an
+ * opaque INTERNAL_ERROR at the DB boundary (F-7). Strip it from every string
+ * written so the save succeeds cleanly. Undefined/null pass through untouched.
+ */
+export function stripNullBytes<T extends string | null | undefined>(value: T): T {
+  return (typeof value === "string" ? value.replace(/\u0000/g, "") : value) as T;
+}
+
 /** Precomputed grant context for visibility checks over a set of rows.
  *  Mirrors `grantsForRows` in the chats service. */
 export interface SkillGrantCtx {
@@ -124,9 +134,9 @@ export function withGrantSet(
  * access level: role default on workspace-mode skills, grant level on
  * team-mode ones. Writes need 'edit'.
  *
- * `SkillAgentWriteDisabledError` is still thrown when an agent tries
- * to flip `agentWriteEnabled` itself in updateSkill — that path
- * doesn't call here.
+ * An agent that tries to flip `agentWriteEnabled` itself in updateSkill
+ * is rejected there with a 403 (SKILL_AGENT_WRITE_TOGGLE_FORBIDDEN) — that
+ * path doesn't call here.
  */
 export async function assertAgentWriteAllowed(
   ctx: SkillContext,

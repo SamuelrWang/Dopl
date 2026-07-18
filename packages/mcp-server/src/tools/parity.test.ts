@@ -27,7 +27,6 @@ import type { DoplClient } from "@dopl/client";
 import type { RegisterTool } from "./respond.js";
 import { registerClusterTools } from "./cluster.js";
 import { registerWorkflowTools } from "./workflow.js";
-import { registerPacksTools } from "./packs.js";
 import { registerKnowledgeTools } from "./knowledge.js";
 import { registerSkillTools } from "./skills.js";
 import { registerChatTools } from "./chats.js";
@@ -52,7 +51,6 @@ const REGISTRARS: Array<{
 }> = [
   { file: "cluster.ts", register: registerClusterTools },
   { file: "workflow.ts", register: registerWorkflowTools },
-  { file: "packs.ts", register: registerPacksTools },
   { file: "knowledge.ts", register: registerKnowledgeTools },
   { file: "skills.ts", register: registerSkillTools },
   { file: "chats.ts", register: registerChatTools },
@@ -134,11 +132,10 @@ const READ_ONLY_BLOCKED_TOOLS = parseReadOnlyBlockedTools(SERVER_SOURCE);
 // for the new op. Human-audit this list against the sources.
 const READ_OPS: Record<string, string[]> = {
   dopl_cluster: ["list", "get"],
-  dopl_workflow: ["list", "get", "step"],
-  dopl_packs: ["list", "list_files", "get_file"],
+  dopl_workflow: ["list", "get", "step", "list_trash"],
   dopl_kb: ["list_bases", "get_tree", "list_dir", "read_file", "list_trash", "search"],
   dopl_skill: ["list", "get", "read", "authoring_guide"],
-  dopl_chats: ["list", "get", "folders", "guide"],
+  dopl_chats: ["list", "get", "folders", "guide", "list_trash"],
   dopl_members: ["whoami", "list", "get", "teams", "get_team", "access_matrix", "my_access"],
   dopl_ontology: ["map", "anchor", "resolve", "get"],
 };
@@ -172,7 +169,6 @@ describe("tool capture", () => {
         "dopl_members",
         "dopl_ontology",
         "dopl_ontology_admin",
-        "dopl_packs",
         "dopl_search",
         "dopl_skill",
         "dopl_skill_admin",

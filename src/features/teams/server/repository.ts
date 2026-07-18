@@ -365,7 +365,8 @@ export async function listTeamsModeResources(
       .from("workflows")
       .select("id, user_id")
       .eq("workspace_id", workspaceId)
-      .eq("access_mode", "teams"),
+      .eq("access_mode", "teams")
+      .is("deleted_at", null),
     db
       .from("skills")
       .select("id, created_by")

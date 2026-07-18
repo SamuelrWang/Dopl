@@ -20,6 +20,29 @@ import {
  * is contained.
  */
 
+/**
+ * Strip NUL (U+0000) from every string in a value, recursing through
+ * arrays/objects. Postgres `text` and `jsonb` both reject a NUL byte, so an
+ * unsanitized name/subtitle or a null byte buried in an attribute/method
+ * value would 500 the write. NUL is never meaningful in ontology text, so
+ * dropping it at the DB write boundary is safe and covers every caller
+ * (MCP agent + web UI). (F-7 ontology portion.)
+ */
+function stripNullBytes<T>(value: T): T {
+  if (typeof value === "string") {
+    return value.replace(/\u0000/g, "") as T;
+  }
+  if (Array.isArray(value)) {
+    return value.map((v) => stripNullBytes(v)) as unknown as T;
+  }
+  if (value !== null && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value)) out[k] = stripNullBytes(v);
+    return out as T;
+  }
+  return value;
+}
+
 export async function listClusters(workspaceId: string): Promise<OntologyClusterRow[]> {
   const db = supabaseAdmin();
   const { data, error } = await db
@@ -76,14 +99,16 @@ export async function insertCluster(input: {
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("ontology_clusters")
-    .insert({
-      workspace_id: input.workspaceId,
-      slug: input.slug,
-      name: input.name,
-      purpose: input.purpose,
-      position: input.position,
-      created_by: input.createdBy,
-    })
+    .insert(
+      stripNullBytes({
+        workspace_id: input.workspaceId,
+        slug: input.slug,
+        name: input.name,
+        purpose: input.purpose,
+        position: input.position,
+        created_by: input.createdBy,
+      })
+    )
     .select(ONTOLOGY_CLUSTER_COLS)
     .single();
   if (error) throw error;
@@ -120,8 +145,8 @@ export async function updateCluster(
 ): Promise<OntologyClusterRow | null> {
   const db = supabaseAdmin();
   const update: Record<string, unknown> = {};
-  if (patch.name !== undefined) update.name = patch.name;
-  if (patch.purpose !== undefined) update.purpose = patch.purpose;
+  if (patch.name !== undefined) update.name = stripNullBytes(patch.name);
+  if (patch.purpose !== undefined) update.purpose = stripNullBytes(patch.purpose);
   // Layout merge semantics (shared with workflows service.updateWorkflow):
   // a non-empty layout patch SHALLOW-MERGES per node id into the stored
   // layout, so two tabs each dragging a different card don't clobber each
@@ -189,13 +214,15 @@ export async function insertObject(input: {
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("ontology_objects")
-    .insert({
-      workspace_id: input.workspaceId,
-      name: input.name,
-      created_by: input.createdBy,
-      ...(input.attributes?.length ? { attributes: input.attributes } : {}),
-      ...(input.methods?.length ? { methods: input.methods } : {}),
-    })
+    .insert(
+      stripNullBytes({
+        workspace_id: input.workspaceId,
+        name: input.name,
+        created_by: input.createdBy,
+        ...(input.attributes?.length ? { attributes: input.attributes } : {}),
+        ...(input.methods?.length ? { methods: input.methods } : {}),
+      })
+    )
     .select(ONTOLOGY_OBJECT_COLS)
     .single();
   if (error) throw error;
@@ -211,7 +238,8 @@ export async function updateObject(
     attributes?: OntologyObject["attributes"];
     methods?: OntologyObject["methods"];
     template?: OntologyObject["template"];
-  }
+  },
+  expectedUpdatedAt?: string
 ): Promise<OntologyObjectRow | null> {
   const db = supabaseAdmin();
   const update: Record<string, unknown> = {};
@@ -220,14 +248,20 @@ export async function updateObject(
   if (patch.attributes !== undefined) update.attributes = patch.attributes;
   if (patch.methods !== undefined) update.methods = patch.methods;
   if (patch.template !== undefined) update.template = patch.template;
-  const { data, error } = await db
+  let query = db
     .from("ontology_objects")
-    .update(update)
+    .update(stripNullBytes(update))
     .eq("workspace_id", workspaceId)
     .eq("id", id)
-    .is("deleted_at", null)
-    .select(ONTOLOGY_OBJECT_COLS)
-    .maybeSingle();
+    .is("deleted_at", null);
+  // Optimistic concurrency: when expectedUpdatedAt is supplied, the
+  // `updated_at` filter makes this an atomic compare-and-swap. 0 rows →
+  // the row changed (or was deleted) since the caller read it → null,
+  // which the service turns into a 412 (stale) or 404 (gone).
+  if (expectedUpdatedAt !== undefined) {
+    query = query.eq("updated_at", expectedUpdatedAt);
+  }
+  const { data, error } = await query.select(ONTOLOGY_OBJECT_COLS).maybeSingle();
   if (error) throw error;
   return data as OntologyObjectRow | null;
 }
@@ -239,17 +273,6 @@ export async function markObjectDeleted(workspaceId: string, id: string): Promis
     .update({ deleted_at: new Date().toISOString() })
     .eq("workspace_id", workspaceId)
     .eq("id", id);
-  if (error) throw error;
-}
-
-export async function markObjectsDeleted(workspaceId: string, ids: string[]): Promise<void> {
-  if (ids.length === 0) return;
-  const db = supabaseAdmin();
-  const { error } = await db
-    .from("ontology_objects")
-    .update({ deleted_at: new Date().toISOString() })
-    .eq("workspace_id", workspaceId)
-    .in("id", ids);
   if (error) throw error;
 }
 
@@ -286,6 +309,26 @@ export async function insertMembership(input: {
     .single();
   if (error) throw error;
   return data as OntologyMembershipRow;
+}
+
+/**
+ * Detach a cluster's columns by removing only the membership rows that
+ * link objects directly to the cluster (cluster_id = clusterId). The
+ * column objects and their nested cards (linked via parent_object_id
+ * memberships) are left intact — they survive as detached objects,
+ * readable via resolve/get though absent from the cluster map. (F-13.)
+ */
+export async function deleteMembershipsForCluster(
+  workspaceId: string,
+  clusterId: string
+): Promise<void> {
+  const db = supabaseAdmin();
+  const { error } = await db
+    .from("ontology_memberships")
+    .delete()
+    .eq("workspace_id", workspaceId)
+    .eq("cluster_id", clusterId);
+  if (error) throw error;
 }
 
 export async function countMembershipSiblings(

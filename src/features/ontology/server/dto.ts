@@ -79,5 +79,7 @@ export function mapObjectRow(row: OntologyObjectRow): OntologyObject {
     template: row.template ?? [],
     relationships: [],
     childIds: [],
+    // Optimistic-concurrency token surfaced to read paths (op="get"/anchor).
+    updatedAt: row.updated_at,
   };
 }

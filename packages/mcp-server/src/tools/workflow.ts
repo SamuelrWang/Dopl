@@ -27,11 +27,13 @@ const WORKFLOW_DESCRIPTION = `Read and AUTHOR Dopl workflows (a graph of steps c
 - "remove_node" — delete a step (\`node_id\` = step id or ref); its edges go with it.
 - "connect" / "disconnect" — add/remove an edge (\`from\`,\`to\` = step id or ref). connect takes an optional branch \`condition\`.
 - "set_cluster" — group this workflow under a cluster (\`cluster\` = slug or id from dopl_cluster(op='list')); omit \`cluster\` to ungroup.
+- "list_trash" — list soft-deleted workflows in this workspace (the recovery surface). Each shows name, slug, and when it was deleted. Run it before "restore_workflow" to find the slug/id.
+- "restore_workflow" — restore a soft-deleted workflow (recovery, not deletion; brings its steps + edges back). Use after op="list_trash"; \`slug\` accepts the trashed workflow's slug or id. If a live workflow already reused the slug, the restored one gets a fresh suffixed slug.
 
 Typical authoring flow: create → set_graph (or add_node + connect) → get to verify. Step reads = [{kbId} | {kbId,entryId}]; actions = [{skillId}]. kbId/skillId accept the SLUG or the id straight from dopl_kb(op='list_bases') / dopl_skill(op='list'); entryId is an entry uuid. KBs/skills must be public. There is no "header" — entry steps are simply the ones with no incoming edge.`;
 
-const WORKFLOW_ADMIN_DESCRIPTION = `DESTRUCTIVE workflow operations — permanent and irreversible. Confirm intent if the user's phrasing is at all ambiguous. Set \`op\` to one of:
-- "delete_workflow" — permanently delete a workflow. Its steps and edges delete with it; attached knowledge bases + skills are detached (not deleted).`;
+const WORKFLOW_ADMIN_DESCRIPTION = `DESTRUCTIVE workflow operations. The op here is a soft-delete — the workflow becomes invisible in active listings but stays restorable from trash (\`dopl_workflow\` op="list_trash" + op="restore_workflow"). Confirm intent if the user's phrasing is at all ambiguous. Set \`op\` to one of:
+- "delete_workflow" — soft-delete a workflow. Its steps + edges are trashed with it (they come back on restore); attached knowledge bases + skills are detached (not deleted). Recover with \`dopl_workflow(op='restore_workflow')\`.`;
 
 const zNode = z.object({
   ref: z.string().optional().describe("stable handle for this step (required for set_graph + add_node)"),
@@ -83,12 +85,14 @@ export function registerWorkflowTools(
           "connect",
           "disconnect",
           "set_cluster",
+          "list_trash",
+          "restore_workflow",
         ])
         .describe("Operation to perform."),
       slug: z
         .string()
         .optional()
-        .describe("Workflow slug OR stable id (the uuid from op=list — survives renames, prefer it for held references). Required for every op except list/create."),
+        .describe("Workflow slug OR stable id (the uuid from op=list — survives renames, prefer it for held references). Required for every op except list/create/list_trash. For restore_workflow it is the trashed workflow's slug or id (from op=list_trash)."),
       step: z
         .string()
         .optional()
@@ -195,6 +199,13 @@ export function registerWorkflowTools(
           if (miss) return miss;
           return opSetCluster(client, args.slug as string, args.cluster as string | undefined);
         }
+        case "list_trash":
+          return opListTrash(client);
+        case "restore_workflow": {
+          const miss = missingParams("restore_workflow", args, ["slug"]);
+          if (miss) return miss;
+          return opRestoreWorkflow(client, args.slug as string);
+        }
       }
     },
   );
@@ -213,7 +224,7 @@ export function registerWorkflowTools(
           if (miss) return miss;
           await client.deleteWorkflow(args.slug as string);
           return ok(
-            `Deleted workflow \`${args.slug}\`. Its steps and edges were deleted with it; attached knowledge bases + skills remain.`
+            `Soft-deleted workflow \`${args.slug}\`. Its steps + edges are trashed with it and attached knowledge bases + skills remain. Restore with \`dopl_workflow(op='restore_workflow')\` (find it via \`dopl_workflow(op='list_trash')\`).`
           );
         }
       }
@@ -584,5 +595,31 @@ async function opSetCluster(
   const wf = await client.updateWorkflow(slug, { clusterId: match.id });
   return ok(
     `Grouped workflow **${wf.name}** (slug: \`${wf.slug}\`) under cluster **${match.name}** (slug: \`${match.slug}\`).`,
+  );
+}
+
+async function opListTrash(client: DoplClient): Promise<ToolResponse> {
+  const { workflows } = await client.listWorkflowTrash();
+  if (workflows.length === 0) return ok("Workflow trash is empty.");
+  const lines: string[] = [
+    `## Workflow trash (${plural(workflows.length, "workflow")})\n`,
+  ];
+  for (const w of workflows) {
+    lines.push(`- **${w.name}** (slug: \`${w.slug}\`) — deleted ${w.deleted_at}`);
+  }
+  lines.push("");
+  lines.push(
+    `Restore one with \`dopl_workflow(op='restore_workflow', slug='<slug or id>')\`.`,
+  );
+  return ok(lines.join("\n"));
+}
+
+async function opRestoreWorkflow(
+  client: DoplClient,
+  slug: string,
+): Promise<ToolResponse> {
+  const wf = await client.restoreWorkflow(slug);
+  return ok(
+    `Restored workflow **${wf.name}** (slug: \`${wf.slug}\`). Its steps + edges are back — run op="get" to verify.`,
   );
 }

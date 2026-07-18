@@ -4,9 +4,12 @@ import { isUuid } from "@/shared/lib/id/uuid";
  * Generic slug generator.
  * Output matches ^[a-z0-9-]+$ so it's safe for URLs and MCP prompt names.
  *
- * - NFKC-normalizes input so visually-equivalent variants ("ｆｏｏ" full-
- *   width, "①" circled-1) produce the same slug as their ASCII analogs
- *   instead of all collapsing to the fallback (audit fix S-16).
+ * - NFKD-normalizes input then strips combining marks, so visually-
+ *   equivalent variants ("ｆｏｏ" full-width, "①" circled-1) produce the
+ *   same slug as their ASCII analogs (audit fix S-16) AND accented
+ *   letters transliterate to their base form ("café" → "cafe" instead
+ *   of "caf" — audit fix for the accent-drop). NFKD decomposes é into
+ *   e + U+0301; the combining-mark strip drops the U+0301.
  * - Lowercases, replaces any non-alphanumeric run with a single hyphen
  *   — implicitly strips control chars, zero-width characters, and
  *   emoji, all of which are non-alphanumeric.
@@ -27,7 +30,8 @@ export function slugify(
   existingSlugs: string[] = []
 ): string {
   let base = name
-    .normalize("NFKC")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");

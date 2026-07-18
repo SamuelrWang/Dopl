@@ -203,6 +203,16 @@ export interface WorkflowRow {
   skill_names?: string[];
 }
 
+/** A soft-deleted workflow, as surfaced by the trash listing. */
+export interface WorkflowTrashRow {
+  id: string;
+  slug: string;
+  name: string;
+  description?: string | null;
+  /** When the workflow was soft-deleted. */
+  deleted_at: string;
+}
+
 // ── Workflow graph authoring (MCP) ───────────────────────────────────
 export interface WorkflowReadRef {
   kbId: string;
@@ -377,29 +387,4 @@ export interface PendingIngestItem {
 export interface PendingStatus {
   pending_ingestions: number;
   recent: PendingIngestItem[];
-}
-
-export interface Pack {
-  id: string;
-  name: string;
-  description: string | null;
-  sdk_version: string | null;
-  repo_url: string;
-  last_synced_at: string | null;
-  last_commit_sha: string | null;
-}
-
-export interface PackFileMeta {
-  pack_id: string;
-  path: string;
-  title: string | null;
-  summary: string | null;
-  tags: string[];
-  category: string | null;
-  updated_at: string;
-}
-
-export interface PackFile extends PackFileMeta {
-  body: string;
-  frontmatter: Record<string, unknown>;
 }

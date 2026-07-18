@@ -60,7 +60,7 @@ Fill \`deliverables\` as checklist items (\`{ label, done }\`): concrete outputs
 
 ## Step 3 — Set a stable session id
 
-Pass \`clientSessionId\` (a stable handle for this session) so a re-export updates the same chat instead of duplicating it. Give the chat a specific \`title\` and a one-paragraph \`overview\`.
+Pass \`client_session_id\` (a stable handle for this session) so a re-export updates the same chat instead of duplicating it. Give the chat a specific \`title\` and a one-paragraph \`overview\`.
 
 ## Step 4 — Promote what will matter
 
@@ -90,7 +90,7 @@ Choose the base whose subject matches, and a folder that groups the entry with i
 
 ## Step 3 — Write it tight
 
-Title it as the thing it answers ("How staging resets", not "Notes"). Lead with the takeaway. Use headings, lists, and a table when structure helps. Write \`op=write_file\` with a short \`excerpt\` so it reads well in lists.
+Title it as the thing it answers ("How staging resets", not "Notes"). Use headings, lists, and a table when structure helps. Write it with \`op=write_file\` (\`base\`, \`path\`, \`body\`) — and lead with the takeaway in the first line, since the list summary is auto-derived from the body.
 
 ## Step 4 — Link it back
 

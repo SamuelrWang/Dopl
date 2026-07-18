@@ -13,7 +13,7 @@ import type {
   OntologyObjectCreateInput,
   OntologyObjectUpdateInput,
 } from "../schema";
-import { mapObjectRow, type OntologyClusterRow, type OntologyMembershipRow } from "./dto";
+import { mapObjectRow, type OntologyClusterRow } from "./dto";
 import * as repo from "./repository";
 
 export interface OntologyContext {
@@ -111,45 +111,14 @@ export async function updateCluster(
 export async function deleteCluster(ctx: OntologyContext, clusterId: string): Promise<void> {
   const row = await repo.findClusterById(ctx.workspaceId, clusterId);
   if (!row) throw HttpError.notFound("Cluster not found");
-  // Soft delete is an UPDATE, so the FK ON DELETE CASCADE never fires —
-  // cascade in code so the cluster's columns and their nested cards don't
-  // orphan as live objects. Memberships/relationships stay put; the
-  // snapshot drops them once their objects are gone (as with deleteObject).
-  const memberships = await repo.listMemberships(ctx.workspaceId);
-  const objectIds = clusterObjectIds(memberships, clusterId);
-  await repo.markObjectsDeleted(ctx.workspaceId, objectIds);
+  // Per the tool docs, a cluster's column objects SURVIVE, detached —
+  // only the cluster board is deleted. Remove the cluster-membership rows
+  // (the columns' link to this cluster) so the columns detach cleanly; the
+  // columns and their nested cards stay live and remain readable via
+  // resolve/get (they simply drop out of `map`). Their parent_object_id
+  // memberships are untouched, so children never orphan.
+  await repo.deleteMembershipsForCluster(ctx.workspaceId, clusterId);
   await repo.markClusterDeleted(ctx.workspaceId, clusterId);
-}
-
-/**
- * Every object a cluster owns: its columns (memberships with this
- * cluster_id) plus all nested cards reached by walking parent_object_id
- * memberships. Visited-set guards against cycles from shared objects.
- */
-function clusterObjectIds(
-  memberships: OntologyMembershipRow[],
-  clusterId: string
-): string[] {
-  const childrenByParent = new Map<string, string[]>();
-  const columns: string[] = [];
-  for (const m of memberships) {
-    if (m.cluster_id === clusterId) columns.push(m.child_object_id);
-    if (m.parent_object_id) {
-      const kids = childrenByParent.get(m.parent_object_id) ?? [];
-      kids.push(m.child_object_id);
-      childrenByParent.set(m.parent_object_id, kids);
-    }
-  }
-  const collected = new Set<string>();
-  const stack = [...columns];
-  while (stack.length > 0) {
-    const id = stack.pop();
-    if (id === undefined || collected.has(id)) continue;
-    collected.add(id);
-    const kids = childrenByParent.get(id);
-    if (kids) stack.push(...kids);
-  }
-  return [...collected];
 }
 
 export async function createObject(
@@ -214,19 +183,52 @@ export async function createObject(
   return object;
 }
 
+/**
+ * 412 for an optimistic-concurrency miss — mirrors the KB/skills
+ * `*_STALE_VERSION` contract so the MCP layer's conflict handling (re-get,
+ * reconcile, retry) fires uniformly across tools.
+ */
+function staleVersionError(expected: string, actual: string): HttpError {
+  return new HttpError(
+    412,
+    "ONTOLOGY_STALE_VERSION",
+    `Stale write rejected — the object was modified at ${actual} but the request expected ${expected}. Re-get it, reconcile your change, and retry.`,
+    { expected, actual }
+  );
+}
+
 export async function updateObject(
   ctx: OntologyContext,
   objectId: string,
-  input: OntologyObjectUpdateInput
+  input: OntologyObjectUpdateInput,
+  expectedUpdatedAt?: string
 ): Promise<OntologyObject> {
   const { relationships, ...rest } = input;
 
   const hasFieldPatch = Object.values(rest).some((v) => v !== undefined);
 
-  const row = hasFieldPatch
-    ? await repo.updateObject(ctx.workspaceId, objectId, rest)
-    : await repo.findObjectById(ctx.workspaceId, objectId);
-  if (!row) throw HttpError.notFound("Object not found");
+  let row;
+  if (hasFieldPatch) {
+    // Field patches touch the object row, so the CAS rides on the atomic
+    // `updated_at` filter (0 rows = stale-or-gone; disambiguate below).
+    row = await repo.updateObject(ctx.workspaceId, objectId, rest, expectedUpdatedAt);
+    if (!row) {
+      if (expectedUpdatedAt !== undefined) {
+        const current = await repo.findObjectById(ctx.workspaceId, objectId);
+        if (current) throw staleVersionError(expectedUpdatedAt, current.updated_at);
+      }
+      throw HttpError.notFound("Object not found");
+    }
+  } else {
+    // Relationship-only (or no-op) writes don't update the object row, so
+    // the `updated_at` clock wouldn't move — enforce the precondition by
+    // hand against the current row instead.
+    row = await repo.findObjectById(ctx.workspaceId, objectId);
+    if (!row) throw HttpError.notFound("Object not found");
+    if (expectedUpdatedAt !== undefined && row.updated_at !== expectedUpdatedAt) {
+      throw staleVersionError(expectedUpdatedAt, row.updated_at);
+    }
+  }
 
   let cleanEdges: OntologyObject["relationships"] | undefined;
   if (relationships) {

@@ -49,7 +49,6 @@ setup-intelligence-engine/
 │   │   ├── community/             # Publishing / forking / gallery
 │   │   ├── entries/               # Entry rows + search + retrieval + saved
 │   │   ├── ingestion/             # Pipeline + skeleton + extractors
-│   │   ├── knowledge-packs/       # Pack sync
 │   │   ├── marketing/             # Landing page components
 │   │   └── onboarding/            # First-run flow
 │   ├── shared/                    # Cross-feature primitives only
@@ -157,7 +156,7 @@ These are already 99% consistent in this repo. Codifying them so they stay that 
 | What | Convention | Example |
 |------|------------|---------|
 | Files | `kebab-case` | `chat-panel.tsx`, `use-panel-ingestion.ts` |
-| Directories | `kebab-case` | `knowledge-packs/`, `canvas/` |
+| Directories | `kebab-case` | `knowledge/`, `canvas/` |
 | React components (exported name) | `PascalCase` | `ChatPanel`, `CanvasStoreProvider` |
 | Functions | `camelCase` | `extractWebContent`, `normalizeTag` |
 | Hooks (file + fn) | `use-kebab-case.ts` exporting `useCamelCase` | `use-chat.ts` → `useChat()` |
@@ -166,9 +165,9 @@ These are already 99% consistent in this repo. Codifying them so they stay that 
 | Types/interfaces | `PascalCase`, **no** `I`-prefix, **no** `Type`/`Interface` suffix | `Entry`, `IngestRequest` |
 | Enums / union type names | `PascalCase` | `SourceType`, `PanelKind` |
 | Redux-style actions | `SCREAMING_SNAKE_CASE`, `DOMAIN_VERB` | `PANEL_MOVE`, `CLUSTER_CREATE` |
-| API route segments | `kebab-case` | `/api/knowledge-packs/[packId]/sync` |
-| Dynamic route params | `camelCase` in brackets | `[packId]`, `[panelId]` |
-| DB tables | `snake_case`, plural | `canvas_panels`, `knowledge_packs` |
+| API route segments | `kebab-case` | `/api/workflows/[id]/restore` |
+| Dynamic route params | `camelCase` in brackets | `[chatId]`, `[panelId]` |
+| DB tables | `snake_case`, plural | `canvas_panels`, `workflow_steps` |
 | DB columns | `snake_case` | `entry_id`, `created_at` |
 | Env vars | `SCREAMING_SNAKE_CASE`, `NEXT_PUBLIC_` prefix for client | `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_SUPABASE_URL` |
 | Booleans | `is*`, `has*`, `should*`, `can*` | `isPending`, `hasAccess` |
@@ -289,6 +288,16 @@ The legacy free-form panel canvas (`features/canvas/`, its `/api/canvas/**` rout
 - **Shared graph substrate:** `src/shared/graph/` — generic `SceneNode<T>` + geometry types + the `EdgeLayer` SVG renderer (orthogonal edges, arrowheads, HTML label pills; edge styles injected per domain). Ontology passes `ONTOLOGY_EDGE_STYLES`; workflows pass their sequence/branch styles. Domain layouts stay per-feature (ontology: column-tree `layout.ts`; workflows: layered DAG `features/workflows/graph/layout.ts` — longest-path ranks from indegree-0 entries, barycenter ordering).
 - **Workflows are first-class step graphs:** `workflow_steps` + `workflow_step_edges` (edge `condition` = agent-readable branch guard; entry steps = indegree-0; no header concept). Server split: repository / graph.ts `composeWorkflow` (topo-ordered) / authoring-{graph,nodes,edges,refs,shared}. `dopl_workflow` keeps its op surface plus a stateless `op='step'` walk read (paced context disclosure — agent fetches one step's skills/knowledge/branches at a time; no run state in v1). `dopl_canvas` is retired.
 - Workflow steps are **not** ontology objects — the free-plan object cap does not count them.
+
+### MCP surface hardening (2026-07-18 audit-fix batch)
+
+A swarm audit of the whole MCP surface drove a batch of fixes (tracked as F-042). Load-bearing outcomes future sessions must know:
+
+- **Packs feature fully removed.** The `dopl_packs` tool, `/api/knowledge/packs/**`, `features/knowledge-packs/`, the `knowledge_packs`/`knowledge_pack_files` tables (drop migration `20260718000010`), the `@dopl/client` pack methods/types, and the `proxy.ts` pack-sync auth bypass are all gone. Don't reintroduce a `dopl_packs` reference.
+- **Soft-delete parity.** `dopl_workflow` and `dopl_chats` deletes are now soft (mirroring `dopl_kb`): each has a `deleted_at` column (migrations `20260718000001`, `20260718000002`), a `list_trash` read op and a `restore`/`restore_workflow` write op, and **every** read filters `deleted_at IS NULL` — including the external workflow reads in `features/clusters/server/service.ts` and `features/teams/server/{repository,service}.ts`. `getResourceAccessMeta` intentionally still includes soft-deleted rows (access must resolve for a trash restore). Any NEW read of `workflows`/`chats` must add the `deleted_at` guard.
+- **Optimistic concurrency everywhere.** `dopl_ontology` object writes now take an optional `expected_version` (= object `updated_at`), sent as `X-Updated-At`, checked via `.eq('updated_at', …)` → 412 `ONTOLOGY_STALE_VERSION` (matches the KB/skills CAS contract). Skill body CAS token moved off a JS millisecond timestamp to a DB microsecond trigger (`20260718000020`).
+- **Workspace targeting is fail-closed + legible.** A blank/whitespace `workspace=` now errors instead of silently falling through to the session default (server.ts `wrapped`), and the `_dopl_status` footer reports the **effective** per-call workspace (with a note when it differs from the session default) — not just the session default.
+- **The compiled `dist/` can no longer go stale.** `@dopl/mcp-server` and `@dopl/client` ship committed `dist/` that the app loads at runtime (`serverExternalPackages`). Root `build` now runs `build:packages` (rebuilds both `dist/` from src) before `next build`, so a src change can never ship behind a stale `dist/`. **When you edit either package's `src/`, rebuild its `dist/` (or run `npm run build:packages`) before committing.**
 
 ### Realtime & new-workspace seeding (2026-07-17)
 

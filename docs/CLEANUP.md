@@ -63,7 +63,7 @@ All 0 refs (app renders via Base UI / other primitives directly).
 | `src/shared/lib/url/workspace-segment.ts` | unused segment util |
 | `src/shared/design/orb.tsx` | unused design element (not in marketing) |
 | `src/features/members/schema.ts` | unused schema |
-| `src/features/knowledge-packs/server/types.ts` | unused types |
+| ~~`src/features/knowledge-packs/server/types.ts`~~ | knowledge-packs feature removed 2026-07-18 (whole dir deleted) |
 
 ---
 
@@ -129,7 +129,7 @@ These live in files that are *kept*, so deletion is surgical, not whole-file. kn
 ## Tier 6 — Standalone scripts 🔴 (decision needed — `scripts/`)
 
 knip flags these as unimported, but they're **manually-run dev/seed/smoke tools**, not app code. Confirm none are still part of a runbook before deleting:
-`backfill-title-summary.ts` · `seed-knowledge-bases.ts` · `seed-rokid-pack.ts` · `verify-rokid-pack.ts` · `test-pack-sync.ts` · `test-pipeline.ts` · `test-rls.ts` · `upgrade-samuel-to-pro.ts` · `smoke-knowledge-*.ts` (4). Also `vitest.server-only-shim.ts` (likely loaded by vitest config — keep unless confirmed otherwise).
+`backfill-title-summary.ts` · `seed-knowledge-bases.ts` · `test-pipeline.ts` · `test-rls.ts` · `upgrade-samuel-to-pro.ts` · `smoke-knowledge-*.ts` (4). Also `vitest.server-only-shim.ts` (likely loaded by vitest config — keep unless confirmed otherwise). (`seed-rokid-pack.ts`, `verify-rokid-pack.ts`, `test-pack-sync.ts` deleted 2026-07-18 with the knowledge-packs feature.)
 
 ---
 

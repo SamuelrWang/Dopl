@@ -148,15 +148,10 @@ Dopl is a workspace product where a user can build a personal "knowledge base" o
 - **Database tables**: `knowledge_bases`, `knowledge_folders`, `knowledge_entries`
 - **Status**: ACTIVE
 
-### knowledge-packs
-- **What it does**: Read-only knowledge "packs" — content hosted in a GitHub repo (e.g. dopl/rokid-knowledge), synced into Supabase and exposed to MCP. Different from per-user knowledge bases — these are curated/shipped content.
-- **User-facing pages**: none (MCP-only surface)
-- **API endpoints**: `/api/knowledge/packs`, `/api/knowledge/packs/[packId]`, `/api/knowledge/packs/[packId]/file`, `/api/knowledge/packs/[packId]/files`, `/api/knowledge/packs/[packId]/sync` (HMAC-signed webhook)
-- **MCP tools**: `kb_list_packs` (the rest of kb_* tools resolve packs too via the path syntax)
-- **CLI commands**: `dopl packs list`, `dopl packs files`, `dopl packs get`
-- **Chrome extension**: n/a
-- **Database tables**: `knowledge_packs`, `knowledge_pack_files`
-- **Status**: ACTIVE
+### knowledge-packs — REMOVED (2026-07-18)
+- **What it did**: Read-only knowledge "packs" — content hosted in a GitHub repo (e.g. dopl/rokid-knowledge), synced into Supabase and exposed to MCP. Different from per-user knowledge bases — these were curated/shipped content.
+- **Removal note**: The whole feature was deleted — web-app API routes (`src/app/api/knowledge/packs`), sync engine (`src/features/knowledge-packs`), seed/verify scripts, `knowledge_packs` + `knowledge_pack_files` tables (dropped in `20260718000010_drop_knowledge_packs.sql`), and the MCP-server packs tool / CLI `packs` commands.
+- **Status**: REMOVED
 
 ### marketing
 - **What it does**: The mock UI shown on the public landing page — animated demos of the sidebar, MCP install, knowledge tree, skills, teams.
@@ -394,13 +389,13 @@ Sam-only. They're "discovered by URL knowledge". Keep.
 - `check-knowledge-type-drift.ts` — A dev-time linter. Could be part of CI; otherwise dead.
 - `scope-api-key.ts` — Documented as "until Item 5 ships a UI" — workaround script.
 - `seed-knowledge-bases.ts` — `--all` backfill script, still callable.
-- `seed-rokid-pack.ts` — Seeds a specific knowledge pack. Likely still relevant during pack onboarding.
+- `seed-rokid-pack.ts` — **DELETED** (2026-07-18) — knowledge-packs feature removed.
 - `smoke-knowledge-*.ts` (4 files) — smoke tests for the knowledge feature. Manual QA scripts.
-- `test-pack-sync.ts` — manual QA.
+- `test-pack-sync.ts` — **DELETED** (2026-07-18) — knowledge-packs feature removed.
 - `test-pipeline.ts` — **DEAD** — calls `${BASE_URL}/api/ingest` which is the 410-Gone endpoint. Use `prepare/submit` now.
 - `test-rls.ts` — RLS verifier script, still works.
 - `upgrade-samuel-to-pro.ts` — one-off documented as such. Already-run, dead.
-- `verify-rokid-pack.ts` — paired with seed-rokid-pack.
+- `verify-rokid-pack.ts` — **DELETED** (2026-07-18) — knowledge-packs feature removed.
 - **Recommendation**: Delete `test-pipeline.ts` (calls dead endpoint) and `upgrade-samuel-to-pro.ts` (one-off, already run). Keep the rest as ops tooling.
 
 ---
