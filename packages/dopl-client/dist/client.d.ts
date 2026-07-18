@@ -100,6 +100,7 @@ export declare class DoplClient {
     createOntologyCluster(input: OntologyClusterCreateInput): Promise<OntologyCluster>;
     updateOntologyCluster(clusterId: string, patch: OntologyClusterPatch): Promise<OntologyCluster>;
     deleteOntologyCluster(clusterId: string): Promise<void>;
+    restoreOntologyCluster(clusterRef: string): Promise<OntologyCluster>;
     createOntologyObject(input: OntologyObjectCreateInput): Promise<OntologyObject>;
     updateOntologyObject(objectId: string, patch: OntologyObjectPatch, expectedVersion?: string): Promise<OntologyObject>;
     deleteOntologyObject(objectId: string): Promise<void>;

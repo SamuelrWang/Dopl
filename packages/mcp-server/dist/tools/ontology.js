@@ -22,6 +22,7 @@ READ — set \`op\` to:
 WRITE — set \`op\` to:
 - "create_cluster" — new ontology board. Requires: name. Optional: purpose (agents read it to route — write a good one).
 - "update_cluster" — rename / repurpose. Requires: cluster. Optional: name, purpose.
+- "restore_cluster" — recover a cluster that dopl_ontology_admin(op="delete_cluster") cascade-soft-deleted, bringing its objects back too (only the ones that delete cascaded — anything trashed separately stays trashed). Requires: cluster (the trashed cluster's id — reads don't list trashed clusters, so use the id from the delete confirmation). If a live cluster reused the slug, the restored one gets a fresh slug.
 - "create_column" — new column (container object) in a cluster; its name says what its objects ARE (e.g. "Sales Rep"). Requires: cluster, name.
 - "create_object" — new object inside a column (or nested in any object). Inherits from the parent: its template as empty fields, and a copy of its relationships and actions. Requires: parent, name.
 - "update_object" — rename / redescribe. Requires: object. Optional: name, subtitle.
@@ -36,9 +37,9 @@ WRITE — set \`op\` to:
 - "claim_anchor" — link the CALLING user to an object as their identity anchor. Requires: object.
 
 Object-mutating ops (update_object, set/remove_attribute, set/remove_template_field, set/remove_action, set/remove_relationship) accept an optional \`expected_version\` (the Version from a prior op="get"). When supplied, the write is rejected if the object changed since — re-get, reconcile, and retry. Destructive deletes live in dopl_ontology_admin.`;
-const ONTOLOGY_ADMIN_DESCRIPTION = `DESTRUCTIVE ontology operations — soft-deletes (hidden, not restorable via MCP yet). Confirm with the user before calling. Set \`op\` to one of:
+const ONTOLOGY_ADMIN_DESCRIPTION = `DESTRUCTIVE ontology operations — soft-deletes (hidden from reads, but recoverable, not permanent). CONFIRM with the user before calling. Set \`op\` to one of:
 - "delete_object" — soft-delete an object (a column's cards survive but are orphaned until re-parented). Requires: object.
-- "delete_cluster" — soft-delete a cluster board. Its column objects survive, detached. Requires: cluster.`;
+- "delete_cluster" — CASCADE soft-delete: trashes the cluster AND every object it owns (its columns + all nested cards) under one timestamp, so the whole board disappears from map/resolve/get. Nothing is hard-deleted — it stays RECOVERABLE with \`dopl_ontology(op="restore_cluster")\`, which brings the cluster and exactly those cascaded objects back. Requires: cluster.`;
 function registerOntologyTool(register, client) {
     register("dopl_ontology", ONTOLOGY_DESCRIPTION, {
         op: zod_1.z
@@ -49,6 +50,7 @@ function registerOntologyTool(register, client) {
             "get",
             "create_cluster",
             "update_cluster",
+            "restore_cluster",
             "create_column",
             "create_object",
             "update_object",
@@ -123,9 +125,29 @@ function registerOntologyTool(register, client) {
         const resolved = (0, ontology_render_1.resolveClusterRef)(snapshot, args.cluster);
         if ("fail" in resolved)
             return resolved.fail;
+        const count = countClusterObjects(snapshot, resolved.hit);
         await client.deleteOntologyCluster(resolved.hit.id);
-        return (0, respond_1.ok)(`Deleted cluster **${resolved.hit.name}** (\`${resolved.hit.slug}\`).`);
+        return (0, respond_1.ok)(`Cascade soft-deleted cluster **${resolved.hit.name}** (\`${resolved.hit.slug}\`, id: \`${resolved.hit.id}\`) and its ${count} object${count === 1 ? "" : "s"}. Recoverable — restore with dopl_ontology(op="restore_cluster", cluster="${resolved.hit.id}").`);
     });
+}
+/**
+ * Size of a cluster's cascade set: its columns plus every nested descendant
+ * (the objects delete_cluster soft-deletes with it). Visited-set guards
+ * against cycles from objects shared across parents.
+ */
+function countClusterObjects(snapshot, cluster) {
+    const collected = new Set();
+    const stack = [...cluster.columnIds];
+    while (stack.length > 0) {
+        const id = stack.pop();
+        if (id === undefined || collected.has(id))
+            continue;
+        collected.add(id);
+        const obj = snapshot.objects[id];
+        if (obj)
+            stack.push(...obj.childIds);
+    }
+    return collected.size;
 }
 // Attribute-value size caps, mirrored from the server schema
 // (attributeValueSchema) so an oversized value fails with a clear,
@@ -138,6 +160,7 @@ const REQUIRED = {
     get: ["object"],
     create_cluster: ["name"],
     update_cluster: ["cluster"],
+    restore_cluster: ["cluster"],
     create_column: ["cluster", "name"],
     create_object: ["parent", "name"],
     update_object: ["object"],
@@ -184,6 +207,13 @@ async function dispatch(client, args) {
                 purpose: args.purpose,
             });
             return (0, respond_1.ok)(`Updated cluster **${cluster.name}** (slug: \`${cluster.slug}\`).`);
+        }
+        case "restore_cluster": {
+            // A trashed cluster is absent from the snapshot (reads exclude
+            // soft-deleted), so it can't be resolved here — pass the ref straight
+            // through and let the server find the tombstone by id/slug.
+            const cluster = await client.restoreOntologyCluster(args.cluster);
+            return (0, respond_1.ok)(`Restored cluster **${cluster.name}** (slug: \`${cluster.slug}\`) and the objects its delete cascaded. Run op="map" to verify.`);
         }
         case "create_column": {
             const snapshot = await client.getOntology();

@@ -233,6 +233,9 @@ class DoplClient {
     deleteOntologyCluster(clusterId) {
         return ontology.deleteOntologyCluster(this.transport, clusterId);
     }
+    restoreOntologyCluster(clusterRef) {
+        return ontology.restoreOntologyCluster(this.transport, clusterRef);
+    }
     createOntologyObject(input) {
         return ontology.createOntologyObject(this.transport, input);
     }

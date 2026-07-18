@@ -9,6 +9,7 @@ exports.getOntologyAnchor = getOntologyAnchor;
 exports.createOntologyCluster = createOntologyCluster;
 exports.updateOntologyCluster = updateOntologyCluster;
 exports.deleteOntologyCluster = deleteOntologyCluster;
+exports.restoreOntologyCluster = restoreOntologyCluster;
 exports.createOntologyObject = createOntologyObject;
 exports.updateOntologyObject = updateOntologyObject;
 exports.deleteOntologyObject = deleteOntologyObject;
@@ -35,6 +36,13 @@ async function deleteOntologyCluster(t, clusterId) {
     // The route replies 204 No Content — request<T>() would choke on the
     // empty body ("Unexpected end of JSON input") AFTER the delete applied.
     await t.requestNoContent(`/api/ontology/clusters/${enc(clusterId)}`, "DELETE", "ontology_delete_cluster");
+}
+async function restoreOntologyCluster(t, clusterRef) {
+    // Restores a soft-deleted cluster + the objects it cascade-deleted.
+    // `clusterRef` is a slug or id of a TRASHED cluster (not in the live
+    // snapshot), so it is passed straight through to the route.
+    const data = await t.request(`/api/ontology/clusters/${enc(clusterRef)}/restore`, { toolName: "ontology_restore_cluster", method: "POST", body: {} });
+    return data.cluster;
 }
 async function createOntologyObject(t, input) {
     const data = await t.request("/api/ontology/objects", { toolName: "ontology_create_object", method: "POST", body: input });

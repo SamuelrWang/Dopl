@@ -190,6 +190,7 @@ function createServer(client, options = {}) {
             "set_action",
             "remove_action",
             "claim_anchor",
+            "restore_cluster",
         ]),
         dopl_kb: new Set([
             "create_base",
