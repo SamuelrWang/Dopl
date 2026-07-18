@@ -27,11 +27,13 @@ vi.mock("./repository", () => ({
   countMembershipSiblings: vi.fn(),
   insertMembership: vi.fn(),
   updateCluster: vi.fn(),
+  cascadeSoftDeleteCluster: vi.fn(),
+  cascadeRestoreCluster: vi.fn(),
 }));
 
 import * as billingRepo from "@/features/billing/server/workspace-billing";
 import * as repo from "./repository";
-import { createObject, updateCluster } from "./service";
+import { createObject, deleteCluster, restoreCluster, updateCluster } from "./service";
 import { EntitlementError } from "@/features/billing/server/entitlements";
 
 const mockBilling = vi.mocked(billingRepo);
@@ -177,5 +179,81 @@ describe("updateCluster — layout round-trip", () => {
   it("throws NotFound when the cluster is missing", async () => {
     mockRepo.updateCluster.mockResolvedValue(null);
     await expect(updateCluster(CTX, CLUSTER_ID, { name: "X" })).rejects.toThrow();
+  });
+});
+
+// ── Cascade soft-delete + restore (reverses F-13's detach) ───────────
+//
+// deleteCluster and restoreCluster now delegate the cascade to a SINGLE
+// atomic RPC each (`cascadeSoftDeleteCluster` / `cascadeRestoreCluster`),
+// which stamps/clears the cluster AND every object it owns in one
+// transaction. The object collection + shared-timestamp + re-slug logic
+// lives in SQL (migration 20260718000040), so these service tests drive the
+// thin wiring: the 404 pre-check, the single RPC call (structurally proving
+// the old two-write desync is gone), the returned count, and row mapping.
+
+describe("deleteCluster — atomic cascade soft-delete", () => {
+  it("delegates to the single cascade RPC and returns its object count", async () => {
+    mockRepo.findClusterById.mockResolvedValue(CLUSTER_ROW);
+    mockRepo.cascadeSoftDeleteCluster.mockResolvedValue(3);
+
+    const count = await deleteCluster(CTX, CLUSTER_ID);
+
+    expect(count).toBe(3);
+    // ONE write path — there is no second write to desync against.
+    expect(mockRepo.cascadeSoftDeleteCluster).toHaveBeenCalledTimes(1);
+    expect(mockRepo.cascadeSoftDeleteCluster).toHaveBeenCalledWith(WS, CLUSTER_ID);
+  });
+
+  it("throws NotFound when the cluster does not exist (never cascades)", async () => {
+    mockRepo.findClusterById.mockResolvedValue(null);
+    await expect(deleteCluster(CTX, CLUSTER_ID)).rejects.toThrow();
+    expect(mockRepo.cascadeSoftDeleteCluster).not.toHaveBeenCalled();
+  });
+
+  // Failure-path — previously untested. The whole cascade is one atomic RPC,
+  // so a throw rolls the transaction back and leaves NOTHING half-written:
+  // objects can't be trashed while the cluster stays live (the old bug). The
+  // service surfaces the error and, structurally, there is no second write to
+  // leave the two out of sync.
+  it("surfaces an RPC failure with no half-write (atomic)", async () => {
+    mockRepo.findClusterById.mockResolvedValue(CLUSTER_ROW);
+    mockRepo.cascadeSoftDeleteCluster.mockRejectedValue(new Error("db down"));
+
+    await expect(deleteCluster(CTX, CLUSTER_ID)).rejects.toThrow("db down");
+    // The single RPC is the only write — one call, all-or-nothing.
+    expect(mockRepo.cascadeSoftDeleteCluster).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("restoreCluster — atomic cascade restore", () => {
+  const RESTORED: OntologyClusterRow = { ...CLUSTER_ROW, deleted_at: null };
+
+  it("delegates to the single cascade RPC and maps the restored row", async () => {
+    mockRepo.cascadeRestoreCluster.mockResolvedValue(RESTORED);
+
+    const cluster = await restoreCluster(CTX, CLUSTER_ID);
+
+    expect(mockRepo.cascadeRestoreCluster).toHaveBeenCalledTimes(1);
+    expect(mockRepo.cascadeRestoreCluster).toHaveBeenCalledWith(WS, CLUSTER_ID);
+    expect(cluster.id).toBe(CLUSTER_ID);
+    expect(cluster.slug).toBe("sales");
+  });
+
+  it("passes a slug ref straight through to the RPC (server resolves the tombstone)", async () => {
+    mockRepo.cascadeRestoreCluster.mockResolvedValue(RESTORED);
+    await restoreCluster(CTX, "sales");
+    expect(mockRepo.cascadeRestoreCluster).toHaveBeenCalledWith(WS, "sales");
+  });
+
+  it("throws NotFound when no trashed cluster matches", async () => {
+    mockRepo.cascadeRestoreCluster.mockResolvedValue(null);
+    await expect(restoreCluster(CTX, CLUSTER_ID)).rejects.toThrow();
+  });
+
+  it("surfaces an RPC failure with no half-write (atomic)", async () => {
+    mockRepo.cascadeRestoreCluster.mockRejectedValue(new Error("db down"));
+    await expect(restoreCluster(CTX, CLUSTER_ID)).rejects.toThrow("db down");
+    expect(mockRepo.cascadeRestoreCluster).toHaveBeenCalledTimes(1);
   });
 });

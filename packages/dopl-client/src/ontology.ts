@@ -68,6 +68,20 @@ export async function deleteOntologyCluster(
   );
 }
 
+export async function restoreOntologyCluster(
+  t: DoplTransport,
+  clusterRef: string
+): Promise<OntologyCluster> {
+  // Restores a soft-deleted cluster + the objects it cascade-deleted.
+  // `clusterRef` is a slug or id of a TRASHED cluster (not in the live
+  // snapshot), so it is passed straight through to the route.
+  const data = await t.request<{ cluster: OntologyCluster }>(
+    `/api/ontology/clusters/${enc(clusterRef)}/restore`,
+    { toolName: "ontology_restore_cluster", method: "POST", body: {} }
+  );
+  return data.cluster;
+}
+
 export async function createOntologyObject(
   t: DoplTransport,
   input: OntologyObjectCreateInput

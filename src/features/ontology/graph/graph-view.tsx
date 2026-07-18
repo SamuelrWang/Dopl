@@ -6,9 +6,11 @@ import { Plus, Trash2 } from "lucide-react";
 import { UpgradeModal } from "@/features/billing/components/upgrade-modal";
 import { useWorkspaceEntitlements } from "@/features/billing/components/use-workspace-entitlements";
 import { cn } from "@/shared/lib/utils";
+import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { toast } from "@/shared/ui/toast";
 import { CapNotice } from "../components/cap-notice";
 import { ObjectPanel } from "../components/object-panel";
+import { clusterObjectIds } from "../graph-state";
 import { ontologySnapshotKey, useOntology } from "../hooks/use-ontology";
 import { OntologyResourcesProvider } from "../hooks/use-workspace-resources";
 import { ONTOLOGY_EDGE_STYLES } from "./edge-styles";
@@ -234,35 +236,17 @@ export function GraphView({ workspaceId, canManageBilling = false, canEdit = tru
               placeholder="What this ontology anchors (agents read this to route)…"
             />
           </div>
-          {canEdit &&
-            (confirmDeleteCluster ? (
-              <span className="flex shrink-0 items-center gap-1">
-                <button
-                  type="button"
-                  onClick={handleDeleteCluster}
-                  className="rounded-md bg-danger/10 px-2 py-1 text-caption font-semibold text-danger"
-                >
-                  Delete
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setConfirmDeleteCluster(false)}
-                  className="btn-light rounded-md px-2 py-1 text-caption font-medium text-text-primary"
-                >
-                  Keep
-                </button>
-              </span>
-            ) : (
-              <button
-                type="button"
-                aria-label={`Delete ${cluster.name || "cluster"}`}
-                title="Delete cluster"
-                onClick={() => setConfirmDeleteCluster(true)}
-                className="btn-light flex h-7 w-8 shrink-0 items-center justify-center rounded-md text-text-primary"
-              >
-                <Trash2 size={11} />
-              </button>
-            ))}
+          {canEdit && (
+            <button
+              type="button"
+              aria-label={`Delete ${cluster.name || "cluster"}`}
+              title="Delete cluster"
+              onClick={() => setConfirmDeleteCluster(true)}
+              className="btn-light flex h-7 w-8 shrink-0 items-center justify-center rounded-md text-text-primary"
+            >
+              <Trash2 size={11} />
+            </button>
+          )}
           {canEdit && (
             <button
               type="button"
@@ -334,8 +318,31 @@ export function GraphView({ workspaceId, canManageBilling = false, canEdit = tru
             : undefined
         }
       />
+
+      <ConfirmDialog
+        open={confirmDeleteCluster}
+        onOpenChange={setConfirmDeleteCluster}
+        title="Delete cluster"
+        description={deleteClusterMessage(cluster.name, clusterObjectIds(graph, cluster.id).length)}
+        confirmLabel="Delete"
+        destructive
+        onConfirm={handleDeleteCluster}
+      />
     </OntologyResourcesProvider>
   );
+}
+
+/**
+ * Confirm copy for a cascade cluster delete — names the cluster and how many
+ * objects go with it (its columns + all nested cards), and that it's
+ * recoverable. `count` is the same cascade set the server soft-deletes.
+ */
+function deleteClusterMessage(name: string, count: number): string {
+  const label = name || "this cluster";
+  if (count === 0) {
+    return `Delete "${label}"? You can restore it from trash.`;
+  }
+  return `Delete "${label}" and its ${count} object${count === 1 ? "" : "s"}? You can restore it from trash.`;
 }
 
 // Labels only — every swatch's stroke width / dash / color is read from the

@@ -9,6 +9,7 @@ import {
 } from "@/features/teams/server/access";
 import type { KnowledgeBase, KnowledgeContext } from "../types";
 import {
+  AgentWriteDisabledError,
   KnowledgeBaseMismatchError,
   KnowledgeBaseNotFoundError,
   KnowledgeParentTrashedError,
@@ -130,6 +131,15 @@ export async function assertBaseWritable(
   ctx: KnowledgeContext,
   base: KnowledgeBase
 ): Promise<void> {
+  // `agent_write_enabled=false` makes a base read-only to AGENTS; human
+  // web-UI callers (source="user") are unaffected. Enforce it on the
+  // write path, not just deletes (F-10b) — the flag was advertised in the
+  // MCP surface + docstrings but only the team-access matrix was checked
+  // here, so an agent with team "edit" could still overwrite a base
+  // flagged read-only. Read-only wins over team access.
+  if (ctx.source === "agent" && !base.agentWriteEnabled) {
+    throw new AgentWriteDisabledError(base.id);
+  }
   await requireEffectiveAccess(
     ctx.userId,
     ctx.workspaceId,
@@ -138,6 +148,30 @@ export async function assertBaseWritable(
     "edit",
     { role: ctx.role }
   );
+}
+
+/**
+ * Delete gate for agent callers (F-10). A base flagged
+ * `agent_write_enabled = false` is READ-ONLY to agents, so the destructive
+ * soft-deletes (base / folder / entry) must honor the toggle the same way
+ * content writes do. The audit hole was that only the write path checked
+ * the flag — the admin deletes didn't, so an agent could trash a base
+ * flagged read-only (it deleted the seeded "Dopl Guide" KB this way).
+ *
+ * Only `ctx.source === "agent"` is gated; human (web-UI) deletes always
+ * pass. Reuses `AgentWriteDisabledError` → 403 AGENT_WRITE_DISABLED, the
+ * same shape/error the blocked agent writes already surface.
+ */
+export function assertAgentCanDelete(
+  ctx: KnowledgeContext,
+  base: KnowledgeBase
+): void {
+  if (ctx.source === "agent" && !base.agentWriteEnabled) {
+    throw new AgentWriteDisabledError(
+      base.id,
+      "This knowledge base is read-only to agents (agent_write_enabled=false) — delete it from the Dopl web UI."
+    );
+  }
 }
 
 // ─── Shared helpers ─────────────────────────────────────────────────

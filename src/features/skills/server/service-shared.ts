@@ -9,6 +9,7 @@ import {
   listTeamIdsForUser,
 } from "@/features/teams/server/repository";
 import type { Skill, SkillContext } from "../types";
+import { SkillAgentWriteDisabledError } from "./errors";
 
 /**
  * Shared internals for the skills service. Context construction, the
@@ -143,6 +144,12 @@ export async function assertAgentWriteAllowed(
   skill: Skill
 ): Promise<void> {
   if (ctx.source !== "agent") return;
+  // `agent_write_enabled=false` makes a skill read-only to agents (F-10b):
+  // enforce it before the team-access check so the read-only flag wins over
+  // an agent that otherwise has team "edit". Human callers returned above.
+  if (!skill.agentWriteEnabled) {
+    throw new SkillAgentWriteDisabledError(skill.slug);
+  }
   const membership = await findMembership(ctx.workspaceId, ctx.userId);
   if (!membership || membership.status !== "active") {
     throw new HttpError(404, "WORKSPACE_NOT_FOUND", "Workspace not found");

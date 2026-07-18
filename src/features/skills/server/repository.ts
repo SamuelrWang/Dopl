@@ -150,7 +150,11 @@ export async function insertSkill(args: InsertSkillArgs): Promise<Skill> {
       when_not_to_use: args.whenNotToUse ?? null,
       connectors: args.connectors ?? [],
       status: args.status ?? "active",
-      agent_write_enabled: args.agentWriteEnabled ?? false,
+      // Default writable-by-agents, matching knowledge_bases + createSkill's
+      // `?? true`. Callers that want a resource read-only to agents (the seed)
+      // pass `false` EXPLICITLY so the intent is legible and can't be flipped
+      // by a default change (audit F-10b consistency).
+      agent_write_enabled: args.agentWriteEnabled ?? true,
       visibility: args.visibility ?? "public",
       folder: args.folder ?? null,
       body: args.body ?? "",
@@ -241,6 +245,7 @@ export async function updateSkillRow(
 }
 
 export async function markSkillDeleted(
+  workspaceId: string,
   id: string,
   deletedAt: string = new Date().toISOString()
 ): Promise<void> {
@@ -248,16 +253,18 @@ export async function markSkillDeleted(
   const { error } = await db
     .from("skills")
     .update({ deleted_at: deletedAt })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("workspace_id", workspaceId);
   if (error) throw error;
 }
 
-export async function restoreSkillRow(id: string): Promise<Skill> {
+export async function restoreSkillRow(workspaceId: string, id: string): Promise<Skill> {
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("skills")
     .update({ deleted_at: null })
     .eq("id", id)
+    .eq("workspace_id", workspaceId)
     .select(SKILL_COLS)
     .single();
   if (error || !data) throw error || new Error("Failed to restore skill");
@@ -359,31 +366,6 @@ export async function listDeletedForWorkspace(
 
   return {
     skills: ((skillsRes.data ?? []) as SkillRow[]).map((r) => mapSkillRow(r)),
-  };
-}
-
-/**
- * Hard-delete skills trashed before `iso` across all workspaces. Used
- * by the nightly cron. Service-role only — bypasses RLS, must be called
- * from a privileged context. The SKILL.md body + version history ride on
- * the skill row / skill_versions FK, so one delete removes it all.
- *
- * Returns a count for system_events logging.
- */
-export async function hardDeleteOlderThanGlobal(
-  iso: string
-): Promise<{ skills: number }> {
-  const db = supabaseAdmin();
-
-  const skillsRes = await db
-    .from("skills")
-    .delete({ count: "exact" })
-    .not("deleted_at", "is", null)
-    .lt("deleted_at", iso);
-  if (skillsRes.error) throw skillsRes.error;
-
-  return {
-    skills: skillsRes.count ?? 0,
   };
 }
 

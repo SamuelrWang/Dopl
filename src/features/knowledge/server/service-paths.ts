@@ -20,7 +20,7 @@ import {
 } from "./path";
 import * as repo from "./repository";
 import { scheduleEntryEmbedding } from "./embeddings";
-import { assertBaseWritable, errorCode } from "./service-shared";
+import { assertAgentCanDelete, assertBaseWritable, errorCode } from "./service-shared";
 import { getBaseById } from "./service-bases";
 
 /**
@@ -236,7 +236,9 @@ export async function createFolderByPath(
 
 /**
  * Soft-delete the folder or entry at `path`. Throws when path is root,
- * doesn't exist, or `ctx.source === "agent"` with toggle off.
+ * doesn't exist, or `ctx.source === "agent"` with the base's
+ * `agent_write_enabled` toggle off (F-10). This is the path the MCP
+ * `dopl_kb_admin` delete_folder / delete_file ops flow through.
  */
 export async function deleteByPath(
   ctx: KnowledgeContext,
@@ -244,6 +246,8 @@ export async function deleteByPath(
   path: string
 ): Promise<{ kind: "folder" | "entry"; id: string }> {
   const base = await getBaseById(ctx, baseId);
+  // F-10: block agent deletes inside a base flagged read-only to agents.
+  assertAgentCanDelete(ctx, base);
   await assertBaseWritable(ctx, base);
   const resolved = await resolvePath(ctx, base.id, path);
   if (resolved.kind === "root") {

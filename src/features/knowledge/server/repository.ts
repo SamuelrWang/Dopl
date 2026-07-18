@@ -74,7 +74,6 @@ export type {
 
 export {
   listDeletedForWorkspace,
-  hardDeleteOlderThanGlobal,
   hardDeleteOlderThan,
 } from "./repository-trash";
 export type { DeletedRows } from "./repository-trash";

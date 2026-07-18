@@ -12,6 +12,7 @@ import {
 import type { Skill, SkillContext, SkillFile } from "../types";
 import type { SkillCreateInput, SkillUpdateInput } from "../schema";
 import {
+  SkillAgentWriteDisabledError,
   SkillSlugConflictError,
   SkillStaleVersionError,
   WorkspaceKeyPrivateSkillError,
@@ -292,7 +293,18 @@ export async function deleteSkill(
 ): Promise<void> {
   const skill = await getSkillBySlug(ctx, slug);
   await assertAgentWriteAllowed(ctx, skill);
-  await repo.markSkillDeleted(skill.id);
+  // F-10: the access-matrix check above can pass an agent with 'edit', but a
+  // skill flagged read-only to agents (agent_write_enabled=false) must not be
+  // deletable via MCP — the destructive path honors the per-skill protection
+  // toggle just like content writes. Human (web-UI) deletes are unaffected.
+  // 403 SKILL_AGENT_WRITE_DISABLED, mirroring SKILL_AGENT_WRITE_TOGGLE_FORBIDDEN.
+  if (ctx.source === "agent" && !skill.agentWriteEnabled) {
+    throw new SkillAgentWriteDisabledError(
+      skill.slug,
+      "This skill is read-only to agents (agent_write_enabled=false) — delete it from the Dopl web UI."
+    );
+  }
+  await repo.markSkillDeleted(ctx.workspaceId, skill.id);
   await history.recordEvent({ ctx, skillId: skill.id, type: "skill.trashed" });
 }
 

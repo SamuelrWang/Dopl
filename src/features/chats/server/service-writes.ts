@@ -342,7 +342,7 @@ export async function updateChatHeader(
  */
 export async function deleteChat(ctx: ChatContext, chatId: string): Promise<void> {
   const chat = await requireOwnChat(ctx, chatId, "delete it");
-  await repo.softDeleteChat(chat.id);
+  await repo.softDeleteChat(ctx.workspaceId, chat.id);
 }
 
 /**
@@ -356,7 +356,7 @@ export async function restoreChat(ctx: ChatContext, chatId: string): Promise<Cha
   if (row.owner_id !== ctx.userId || ctx.apiKeyWorkspaceId) {
     throw new ChatForbiddenError("restore it");
   }
-  const restored = await repo.restoreChatRow(row.id);
+  const restored = await repo.restoreChatRow(ctx.workspaceId, row.id);
   const [count, profiles] = await Promise.all([
     repo.countMessages(restored.id),
     profilesById([restored.owner_id]),

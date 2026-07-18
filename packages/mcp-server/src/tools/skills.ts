@@ -25,6 +25,31 @@ function errorMessage(e: unknown): string {
   return String(e);
 }
 
+/**
+ * Clean surface for the F-10 read-only-skill delete rejection. The API
+ * returns 403 `SKILL_AGENT_WRITE_DISABLED` when an agent tries to delete a
+ * skill flagged `agent_write_enabled=false`. Surface the server's
+ * actionable message verbatim instead of a raw `CODE: message` dump.
+ * Returns null otherwise so the caller falls through. Duck-typed on
+ * `.status` / `.code` to avoid importing the @dopl/client error class.
+ */
+function agentWriteDenied(e: unknown): ToolResponse | null {
+  if (
+    typeof e !== "object" ||
+    e === null ||
+    (e as { status?: number }).status !== 403 ||
+    (e as { code?: unknown }).code !== "SKILL_AGENT_WRITE_DISABLED"
+  ) {
+    return null;
+  }
+  const msg = (e as { apiMessage?: unknown }).apiMessage;
+  return err(
+    typeof msg === "string" && msg
+      ? msg
+      : "This skill is read-only to agents — delete it from the Dopl web UI."
+  );
+}
+
 const SKILL_DESCRIPTION = `Read and author the user's skills. A skill is SINGLE-FILE: one tight, self-contained procedure (its SKILL.md) plus metadata — NOT a folder of files. Long reference material (specs, tables, examples) belongs in a knowledge base, linked from the body as \`[label](dopl://kb/<slug>)\`; the skill stays short. Prefer MANY SMALL skills — one action each — over monoliths: small skills attach cleanly to ontology objects and workflow actions. Organize them with the \`folder\` label. Set \`op\` to one of:
 - "list" — list the user's active skills in the active workspace with trigger metadata (name, description, when_to_use, when_not_to_use, status), grouped by folder. Call at every new task boundary. Optional: folder (filter to one folder).
 - "get" — fetch a skill's resolved detail: the SKILL.md body, reference availability for KBs and connectors, and metadata. KB references appear as \`[label](dopl://kb/<slug>)\` — use \`dopl_kb(op='read_file')\` / \`dopl_kb(op='get_tree')\` to load that KB when you actually need it. Requires: slug. Optional: detail ("summary" = metadata + body length only; "full" (default) = includes the body).
@@ -303,6 +328,9 @@ async function opWrite(
         `SKILL.md in \`${slug}\` changed since you last read it. Call dopl_skill(op="read", slug) to get the current body + version, reconcile your changes, then retry write with that expected_version (or pass force=true to overwrite).`
       );
     }
+    // F-10b: skill flagged read-only to agents — clean message, not a raw code.
+    const denied = agentWriteDenied(e);
+    if (denied) return denied;
     return err(`Couldn't write SKILL.md in \`${slug}\`: ${errorMessage(e)}`);
   }
 }
@@ -385,6 +413,9 @@ async function opUpdate(
         (updated.folder ? ` Folder: ${updated.folder}.` : "")
     );
   } catch (e) {
+    // F-10b: skill flagged read-only to agents — clean message, not a raw code.
+    const denied = agentWriteDenied(e);
+    if (denied) return denied;
     return err(`Couldn't update skill \`${slug}\`: ${errorMessage(e)}`);
   }
 }
@@ -414,6 +445,9 @@ async function opDelete(client: DoplClient, slug: string): Promise<ToolResponse>
     await client.deleteSkill(slug);
     return ok(`Deleted skill \`${slug}\`.`);
   } catch (e) {
+    // F-10: a skill flagged read-only to agents rejects agent deletes.
+    const denied = agentWriteDenied(e);
+    if (denied) return denied;
     return err(`Couldn't delete skill \`${slug}\`: ${errorMessage(e)}`);
   }
 }

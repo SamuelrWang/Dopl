@@ -182,14 +182,38 @@ export async function updateChat(
   return data;
 }
 
-/** Soft-delete: hide the chat from active reads, keep it restorable (F-11). */
-export async function softDeleteChat(chatId: string): Promise<ChatRow> {
-  return updateChat(chatId, { deleted_at: new Date().toISOString() });
+/**
+ * Soft-delete: hide the chat from active reads, keep it restorable (F-11).
+ * Scoped by `workspace_id` as defense-in-depth on the destructive path — the
+ * caller already resolves the chat in-workspace, but the extra predicate makes
+ * a cross-workspace mutation structurally impossible (mirrors the workflow
+ * soft-delete updates).
+ */
+export async function softDeleteChat(workspaceId: string, chatId: string): Promise<ChatRow> {
+  return updateChatScoped(workspaceId, chatId, { deleted_at: new Date().toISOString() });
 }
 
-/** Restore a soft-deleted chat by clearing its `deleted_at`. */
-export async function restoreChatRow(chatId: string): Promise<ChatRow> {
-  return updateChat(chatId, { deleted_at: null });
+/** Restore a soft-deleted chat by clearing its `deleted_at` (workspace-scoped). */
+export async function restoreChatRow(workspaceId: string, chatId: string): Promise<ChatRow> {
+  return updateChatScoped(workspaceId, chatId, { deleted_at: null });
+}
+
+/** `updateChat` variant that also pins `workspace_id` in the WHERE. */
+async function updateChatScoped(
+  workspaceId: string,
+  chatId: string,
+  patch: ChatUpdatePatch
+): Promise<ChatRow> {
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("chats")
+    .update({ ...patch, updated_at: new Date().toISOString() } as unknown as ChatUpdate)
+    .eq("id", chatId)
+    .eq("workspace_id", workspaceId)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data;
 }
 
 // ─── Messages ───────────────────────────────────────────────────────

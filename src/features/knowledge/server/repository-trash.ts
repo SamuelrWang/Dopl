@@ -83,45 +83,6 @@ export async function listDeletedForWorkspace(
 }
 
 /**
- * Hard-delete trashed rows older than `iso` across ALL workspaces.
- * Used by the nightly cron in Item 5.C. Service-role only — bypasses
- * RLS, must be called from a privileged context.
- *
- * Returns counts per table for system_events logging.
- */
-export async function hardDeleteOlderThanGlobal(
-  iso: string
-): Promise<{ entries: number; folders: number; bases: number }> {
-  const db = supabaseAdmin();
-  const entries = await db
-    .from("knowledge_entries")
-    .delete({ count: "exact" })
-    .not("deleted_at", "is", null)
-    .lt("deleted_at", iso);
-  if (entries.error) throw entries.error;
-
-  const folders = await db
-    .from("knowledge_folders")
-    .delete({ count: "exact" })
-    .not("deleted_at", "is", null)
-    .lt("deleted_at", iso);
-  if (folders.error) throw folders.error;
-
-  const bases = await db
-    .from("knowledge_bases")
-    .delete({ count: "exact" })
-    .not("deleted_at", "is", null)
-    .lt("deleted_at", iso);
-  if (bases.error) throw bases.error;
-
-  return {
-    entries: entries.count ?? 0,
-    folders: folders.count ?? 0,
-    bases: bases.count ?? 0,
-  };
-}
-
-/**
  * Hard-delete trashed rows older than `iso` for a single workspace.
  * Service exposes this as `purgeTrashOlderThan` for the future cron.
  * Returns the number of rows deleted across all three tables.

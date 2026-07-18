@@ -23,9 +23,10 @@ export class SkillSlugConflictError extends Error {
 
 export class SkillAgentWriteDisabledError extends Error {
   readonly code = "SKILL_AGENT_WRITE_DISABLED";
-  constructor(slug: string) {
+  constructor(slug: string, message?: string) {
     super(
-      `Agent writes are disabled for skill "${slug}". Toggle the per-skill setting to enable.`
+      message ??
+        `Agent writes are disabled for skill "${slug}". Toggle the per-skill setting to enable.`
     );
     this.name = "SkillAgentWriteDisabledError";
   }

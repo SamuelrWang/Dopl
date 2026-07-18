@@ -444,6 +444,10 @@ export class DoplClient {
     return ontology.deleteOntologyCluster(this.transport, clusterId);
   }
 
+  restoreOntologyCluster(clusterRef: string): Promise<OntologyCluster> {
+    return ontology.restoreOntologyCluster(this.transport, clusterRef);
+  }
+
   createOntologyObject(input: OntologyObjectCreateInput): Promise<OntologyObject> {
     return ontology.createOntologyObject(this.transport, input);
   }

@@ -50,7 +50,7 @@ export async function restoreSkill(
   if (!skill) throw new SkillNotFoundError(id);
   await assertTrashedSkillVisible(ctx, skill);
   await assertAgentWriteAllowed(ctx, skill);
-  const restored = await repo.restoreSkillRow(id);
+  const restored = await repo.restoreSkillRow(ctx.workspaceId, id);
   await history.recordEvent({ ctx, skillId: skill.id, type: "skill.restored" });
   return restored;
 }

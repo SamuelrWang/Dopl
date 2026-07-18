@@ -27,6 +27,7 @@ import {
 } from "./errors";
 import * as repo from "./repository";
 import {
+  assertAgentCanDelete,
   assertBaseVisible,
   assertBaseWritable,
   assertSameWorkspace,
@@ -352,6 +353,10 @@ export async function softDeleteBase(
   id: string
 ): Promise<void> {
   const base = await getBaseById(ctx, id);
+  // F-10: a base flagged read-only to agents must not be deletable by an
+  // agent, even though it's the base's own creator — the destructive path
+  // honors `agent_write_enabled` the same way content writes do.
+  assertAgentCanDelete(ctx, base);
   await assertBaseWritable(ctx, base);
   await repo.markBaseDeleted(id);
 }

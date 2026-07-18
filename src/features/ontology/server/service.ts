@@ -108,17 +108,42 @@ export async function updateCluster(
   return mapClusterRow(row);
 }
 
-export async function deleteCluster(ctx: OntologyContext, clusterId: string): Promise<void> {
+/**
+ * Cascade SOFT-delete a cluster (product decision, reversing F-13's detach):
+ * the cluster AND every object it owns — its columns plus all nested cards — are
+ * stamped with ONE shared `deleted_at` inside a single atomic RPC. Reads already
+ * exclude soft-deleted rows, so the whole board disappears from map/resolve/get;
+ * nothing is hard-deleted, memberships and relationships stay put. The shared
+ * timestamp is the restore key, and the RPC's `deleted_at IS NULL` guard leaves
+ * objects already independently trashed untouched (so they stay in the trash on
+ * restore). Because both writes ride one transaction, they can't desync — the
+ * old two-write sequence could trash the objects while leaving the cluster live.
+ * Mirrors the knowledge-base cascade delete. Returns the count of objects the
+ * delete cascaded.
+ */
+export async function deleteCluster(ctx: OntologyContext, clusterId: string): Promise<number> {
   const row = await repo.findClusterById(ctx.workspaceId, clusterId);
   if (!row) throw HttpError.notFound("Cluster not found");
-  // Per the tool docs, a cluster's column objects SURVIVE, detached —
-  // only the cluster board is deleted. Remove the cluster-membership rows
-  // (the columns' link to this cluster) so the columns detach cleanly; the
-  // columns and their nested cards stay live and remain readable via
-  // resolve/get (they simply drop out of `map`). Their parent_object_id
-  // memberships are untouched, so children never orphan.
-  await repo.deleteMembershipsForCluster(ctx.workspaceId, clusterId);
-  await repo.markClusterDeleted(ctx.workspaceId, clusterId);
+  return repo.cascadeSoftDeleteCluster(ctx.workspaceId, clusterId);
+}
+
+/**
+ * Restore a cascade-soft-deleted cluster (recovery, not deletion): one atomic
+ * RPC clears `deleted_at` on the cluster and on exactly the objects its delete
+ * cascaded — those whose `deleted_at` still matches the cluster's trash
+ * timestamp. Objects trashed independently keep their own stamp and stay in the
+ * trash (mirrors restoreBase). If a live cluster reused the slug while this one
+ * sat in the trash, the RPC re-slugs so the slug stays unique (mirrors
+ * restoreWorkflow). Accepts a cluster id or slug; the caller (route) enforces
+ * the edit gate, exactly like the other cluster writes.
+ */
+export async function restoreCluster(
+  ctx: OntologyContext,
+  clusterRef: string
+): Promise<OntologyCluster> {
+  const restored = await repo.cascadeRestoreCluster(ctx.workspaceId, clusterRef);
+  if (!restored) throw HttpError.notFound("No soft-deleted cluster matches");
+  return mapClusterRow(restored);
 }
 
 export async function createObject(

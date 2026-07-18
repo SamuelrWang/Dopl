@@ -19,6 +19,7 @@ import {
 } from "./errors";
 import * as repo from "./repository";
 import {
+  assertAgentCanDelete,
   assertAncestorsActive,
   assertBaseVisible,
   assertBaseWritable,
@@ -174,6 +175,9 @@ export async function softDeleteFolder(
   const folder = await getFolderInternal(ctx, id, false);
   const base = await repo.findBaseById(folder.knowledgeBaseId, true);
   if (!base) throw new KnowledgeBaseNotFoundError(folder.knowledgeBaseId);
+  // F-10: honor the parent base's agent-read-only flag on the by-id delete
+  // route too (an agent API key can hit this directly, not just via MCP).
+  assertAgentCanDelete(ctx, base);
   await assertBaseWritable(ctx, base);
   await repo.markFolderDeleted(id);
 }

@@ -42,6 +42,32 @@ function isErr(x: KnowledgeBase | ToolResponse): x is ToolResponse {
 }
 
 /**
+ * Clean surface for the F-10 read-only-base delete rejection. The API
+ * returns 403 `AGENT_WRITE_DISABLED` when an agent tries to delete a base
+ * (or anything inside it) that's flagged `agent_write_enabled=false`.
+ * Surface the server's actionable message verbatim instead of a raw throw
+ * or a `CODE: message` dump. Returns null otherwise so the caller rethrows.
+ * Duck-typed on `.status` / `.code` to avoid importing the @dopl/client
+ * error class across the module boundary (same pattern as isConflict).
+ */
+function agentWriteDenied(e: unknown): ToolResponse | null {
+  if (
+    typeof e !== "object" ||
+    e === null ||
+    (e as { status?: number }).status !== 403 ||
+    (e as { code?: unknown }).code !== "AGENT_WRITE_DISABLED"
+  ) {
+    return null;
+  }
+  const msg = (e as { apiMessage?: unknown }).apiMessage;
+  return err(
+    typeof msg === "string" && msg
+      ? msg
+      : "This knowledge base is read-only to agents — delete it from the Dopl web UI."
+  );
+}
+
+/**
  * True when a thrown @dopl/client error is a 400 schema-validation
  * failure (`{ error: { code: "VALIDATION_FAILED", details } }`). Duck-typed
  * on `.status` / `.code` so it works across the @dopl/client module
@@ -482,6 +508,10 @@ async function opUpdateBase(client: DoplClient, ref: string, name?: string, desc
       slug,
     });
   } catch (e) {
+    // F-10b: read-only-to-agents base — surface the clean message the
+    // delete ops use, not a raw AGENT_WRITE_DISABLED dump.
+    const denied = agentWriteDenied(e);
+    if (denied) return denied;
     // F-18: name the field + rule instead of surfacing a raw
     // "VALIDATION_FAILED: Request body failed validation".
     const mapped = updateBaseValidationError(e);
@@ -592,6 +622,9 @@ async function opWriteFile(client: DoplClient, ref: string, path: string, body: 
         `An entry titled "${title ?? path.split("/").filter(Boolean).pop()}" already exists in that folder. Pick a different title/path, or read+overwrite the existing entry with dopl_kb(op="read_file" → "write_file").`
       );
     }
+    // F-10b: read-only-to-agents base — clean message, not a raw dump.
+    const denied = agentWriteDenied(e);
+    if (denied) return denied;
     // F-18: name the failing field + rule instead of surfacing a raw
     // "VALIDATION_FAILED: Request body failed validation".
     const mapped = writeFileValidationError(e, title);
@@ -717,7 +750,14 @@ async function opSearch(client: DoplClient, query: string, base?: string, limit?
 async function opDeleteBase(client: DoplClient, ref: string): Promise<ToolResponse> {
   const base = await resolveBaseOr(client, ref);
   if (isErr(base)) return base;
-  await client.deleteKbBase(base.id);
+  try {
+    await client.deleteKbBase(base.id);
+  } catch (e) {
+    // F-10: a base flagged read-only to agents rejects agent deletes.
+    const denied = agentWriteDenied(e);
+    if (denied) return denied;
+    throw e;
+  }
   return ok(
     `Deleted **${base.name}** (slug: \`${base.slug}\`). Restore with \`dopl_kb(op='restore_base')\`.`
   );
@@ -726,7 +766,14 @@ async function opDeleteBase(client: DoplClient, ref: string): Promise<ToolRespon
 async function opDeleteFolder(client: DoplClient, ref: string, path: string): Promise<ToolResponse> {
   const base = await resolveBaseOr(client, ref);
   if (isErr(base)) return base;
-  const result = await client.deleteKbByPath(base.id, path);
+  let result;
+  try {
+    result = await client.deleteKbByPath(base.id, path);
+  } catch (e) {
+    const denied = agentWriteDenied(e);
+    if (denied) return denied;
+    throw e;
+  }
   if (result.kind !== "folder") {
     return err(
       `Path "${path}" resolved to a ${result.kind}, not a folder. ` +
@@ -739,7 +786,14 @@ async function opDeleteFolder(client: DoplClient, ref: string, path: string): Pr
 async function opDeleteFile(client: DoplClient, ref: string, path: string): Promise<ToolResponse> {
   const base = await resolveBaseOr(client, ref);
   if (isErr(base)) return base;
-  const result = await client.deleteKbByPath(base.id, path);
+  let result;
+  try {
+    result = await client.deleteKbByPath(base.id, path);
+  } catch (e) {
+    const denied = agentWriteDenied(e);
+    if (denied) return denied;
+    throw e;
+  }
   if (result.kind !== "entry") {
     return err(
       `Path "${path}" resolved to a ${result.kind}, not an entry. ` +

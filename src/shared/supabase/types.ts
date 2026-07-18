@@ -105,6 +105,7 @@ export type Database = {
           access_mode: string
           client_session_id: string | null
           created_at: string
+          deleted_at: string | null
           deliverables: Json
           exported_at: string
           folder_id: string | null
@@ -126,6 +127,7 @@ export type Database = {
           access_mode?: string
           client_session_id?: string | null
           created_at?: string
+          deleted_at?: string | null
           deliverables?: Json
           exported_at?: string
           folder_id?: string | null
@@ -147,6 +149,7 @@ export type Database = {
           access_mode?: string
           client_session_id?: string | null
           created_at?: string
+          deleted_at?: string | null
           deliverables?: Json
           exported_at?: string
           folder_id?: string | null
@@ -508,98 +511,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      knowledge_pack_files: {
-        Row: {
-          body: string
-          category: string | null
-          frontmatter: Json
-          pack_id: string
-          path: string
-          summary: string | null
-          tags: string[]
-          title: string | null
-          updated_at: string
-        }
-        Insert: {
-          body: string
-          category?: string | null
-          frontmatter?: Json
-          pack_id: string
-          path: string
-          summary?: string | null
-          tags?: string[]
-          title?: string | null
-          updated_at?: string
-        }
-        Update: {
-          body?: string
-          category?: string | null
-          frontmatter?: Json
-          pack_id?: string
-          path?: string
-          summary?: string | null
-          tags?: string[]
-          title?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "knowledge_pack_files_pack_id_fkey"
-            columns: ["pack_id"]
-            isOneToOne: false
-            referencedRelation: "knowledge_packs"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      knowledge_packs: {
-        Row: {
-          created_at: string
-          default_branch: string
-          description: string | null
-          id: string
-          last_commit_sha: string | null
-          last_synced_at: string | null
-          manifest: Json | null
-          name: string
-          repo_name: string
-          repo_owner: string
-          repo_url: string
-          sdk_version: string | null
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          default_branch?: string
-          description?: string | null
-          id: string
-          last_commit_sha?: string | null
-          last_synced_at?: string | null
-          manifest?: Json | null
-          name: string
-          repo_name: string
-          repo_owner: string
-          repo_url: string
-          sdk_version?: string | null
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          default_branch?: string
-          description?: string | null
-          id?: string
-          last_commit_sha?: string | null
-          last_synced_at?: string | null
-          manifest?: Json | null
-          name?: string
-          repo_name?: string
-          repo_owner?: string
-          repo_url?: string
-          sdk_version?: string | null
-          updated_at?: string
-        }
-        Relationships: []
       }
       mcp_events: {
         Row: {
@@ -1751,6 +1662,7 @@ export type Database = {
           access_mode: string
           cluster_id: string | null
           created_at: string
+          deleted_at: string | null
           description: string | null
           id: string
           layout: Json
@@ -1764,6 +1676,7 @@ export type Database = {
           access_mode?: string
           cluster_id?: string | null
           created_at?: string
+          deleted_at?: string | null
           description?: string | null
           id?: string
           layout?: Json
@@ -1777,6 +1690,7 @@ export type Database = {
           access_mode?: string
           cluster_id?: string | null
           created_at?: string
+          deleted_at?: string | null
           description?: string | null
           id?: string
           layout?: Json
@@ -2130,6 +2044,28 @@ export type Database = {
     }
     Functions: {
       cascade_restore_base: { Args: { p_base_id: string }; Returns: undefined }
+      cascade_restore_cluster: {
+        Args: { p_cluster_ref: string; p_workspace_id: string }
+        Returns: {
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          id: string
+          layout: Json
+          name: string
+          position: number
+          purpose: string
+          slug: string
+          updated_at: string
+          workspace_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "ontology_clusters"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       cascade_restore_folder: {
         Args: { p_folder_id: string }
         Returns: undefined
@@ -2138,6 +2074,10 @@ export type Database = {
         Args: { p_base_id: string; p_deleted_at: string }
         Returns: undefined
       }
+      cascade_soft_delete_cluster: {
+        Args: { p_cluster_id: string; p_workspace_id: string }
+        Returns: number
+      }
       cascade_soft_delete_folder: {
         Args: { p_deleted_at: string; p_folder_id: string }
         Returns: undefined
@@ -2145,6 +2085,37 @@ export type Database = {
       chat_append_messages: {
         Args: { p_chat_id: string; p_messages: Json; p_workspace_id: string }
         Returns: number
+      }
+      chat_create_with_messages: {
+        Args: { p_chat: Json; p_messages: Json }
+        Returns: {
+          access_mode: string
+          client_session_id: string | null
+          created_at: string
+          deleted_at: string | null
+          deliverables: Json
+          exported_at: string
+          folder_id: string | null
+          format: string
+          id: string
+          learnings: Json
+          overview: string
+          owner_id: string
+          pinned: boolean
+          project: string | null
+          session_date: string
+          source: string
+          title: string
+          updated_at: string
+          visibility: string
+          workspace_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "chats"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       chat_replace_messages: {
         Args: { p_chat_id: string; p_messages: Json; p_workspace_id: string }

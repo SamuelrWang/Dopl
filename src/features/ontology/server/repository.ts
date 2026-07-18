@@ -167,14 +167,46 @@ export async function updateCluster(
   return data as OntologyClusterRow | null;
 }
 
-export async function markClusterDeleted(workspaceId: string, id: string): Promise<void> {
+/**
+ * Cascade soft-delete a cluster and every object it owns (its columns plus all
+ * nested descendants) in ONE atomic RPC — the cluster and its objects are
+ * stamped with a single shared `now()` (the restore key) in one transaction, so
+ * a partial failure can't trash the objects while leaving the cluster live.
+ * Mirrors the knowledge-base `cascade_soft_delete_base` RPC. Returns the number
+ * of objects newly soft-deleted (the set `cascadeRestoreCluster` will revive).
+ */
+export async function cascadeSoftDeleteCluster(
+  workspaceId: string,
+  clusterId: string
+): Promise<number> {
   const db = supabaseAdmin();
-  const { error } = await db
-    .from("ontology_clusters")
-    .update({ deleted_at: new Date().toISOString() })
-    .eq("workspace_id", workspaceId)
-    .eq("id", id);
+  const { data, error } = await db.rpc("cascade_soft_delete_cluster", {
+    p_workspace_id: workspaceId,
+    p_cluster_id: clusterId,
+  });
   if (error) throw error;
+  return (data as number | null) ?? 0;
+}
+
+/**
+ * Cascade restore a trashed cluster (by id or slug) and exactly the objects its
+ * delete cascaded — those whose `deleted_at` still matches the cluster's stamp —
+ * in ONE atomic RPC. Re-slugs the cluster when a live cluster reused its slug.
+ * Mirrors `cascade_restore_base`. Returns the restored cluster row, or null when
+ * no trashed cluster matched the ref (the service turns that into a 404).
+ */
+export async function cascadeRestoreCluster(
+  workspaceId: string,
+  clusterRef: string
+): Promise<OntologyClusterRow | null> {
+  const db = supabaseAdmin();
+  const { data, error } = await db.rpc("cascade_restore_cluster", {
+    p_workspace_id: workspaceId,
+    p_cluster_ref: clusterRef,
+  });
+  if (error) throw error;
+  const rows = (data ?? []) as OntologyClusterRow[];
+  return rows[0] ?? null;
 }
 
 export async function listObjects(workspaceId: string): Promise<OntologyObjectRow[]> {
@@ -309,26 +341,6 @@ export async function insertMembership(input: {
     .single();
   if (error) throw error;
   return data as OntologyMembershipRow;
-}
-
-/**
- * Detach a cluster's columns by removing only the membership rows that
- * link objects directly to the cluster (cluster_id = clusterId). The
- * column objects and their nested cards (linked via parent_object_id
- * memberships) are left intact — they survive as detached objects,
- * readable via resolve/get though absent from the cluster map. (F-13.)
- */
-export async function deleteMembershipsForCluster(
-  workspaceId: string,
-  clusterId: string
-): Promise<void> {
-  const db = supabaseAdmin();
-  const { error } = await db
-    .from("ontology_memberships")
-    .delete()
-    .eq("workspace_id", workspaceId)
-    .eq("cluster_id", clusterId);
-  if (error) throw error;
 }
 
 export async function countMembershipSiblings(

@@ -15,6 +15,7 @@ import {
 import * as repo from "./repository";
 import { scheduleEntryEmbedding } from "./embeddings";
 import {
+  assertAgentCanDelete,
   assertAncestorsActive,
   assertBaseVisible,
   assertBaseWritable,
@@ -204,6 +205,9 @@ export async function softDeleteEntry(
   const entry = await getEntry(ctx, id);
   const base = await repo.findBaseById(entry.knowledgeBaseId, true);
   if (!base) throw new KnowledgeBaseNotFoundError(entry.knowledgeBaseId);
+  // F-10: honor the parent base's agent-read-only flag on the by-id delete
+  // route too (an agent API key can hit this directly, not just via MCP).
+  assertAgentCanDelete(ctx, base);
   await assertBaseWritable(ctx, base);
   await repo.markEntryDeleted(id);
 }

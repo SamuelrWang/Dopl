@@ -33,6 +33,11 @@ export async function seedWorkspace(
       // can see and run them. Owner-explicit `createSkill` defaults
       // to private; only the seed path overrides.
       visibility: "public",
+      // Starter skills are onboarding scaffold: read-only to AGENTS (the
+      // human owner can still edit them in the web UI), mirroring the seeded
+      // "Dopl Guide" knowledge base. Set explicitly so it doesn't depend on
+      // the insertSkill default (audit F-10b).
+      agentWriteEnabled: false,
       body: fixture.body,
       createdBy: ctx.userId,
       source: "user",
