@@ -262,6 +262,30 @@ export async function deleteStep(
   if (error) throw error;
 }
 
+/**
+ * PERMANENT hard-delete of ONE workflow row, guarded to TRASHED rows only
+ * (`deleted_at IS NOT NULL`) and pinned to its workspace as defense-in-depth —
+ * a live row or a cross-workspace id removes nothing. FK `ON DELETE CASCADE`
+ * sweeps its steps, step-edges, and KB/skill junctions; the
+ * `workflow_deleted_grant_cleanup` trigger drops its team grants. Returns rows
+ * removed so a caller can tell a real purge from a no-op (already live/restored).
+ */
+export async function hardDeleteWorkflow(
+  db: SupabaseClient,
+  workspaceId: string,
+  workflowId: string
+): Promise<number> {
+  const { data, error } = await db
+    .from("workflows")
+    .delete()
+    .eq("id", workflowId)
+    .eq("workspace_id", workspaceId)
+    .not("deleted_at", "is", null)
+    .select("id");
+  if (error) throw error;
+  return data?.length ?? 0;
+}
+
 /** Insert an edge (idempotent on the (workflow, from, to) unique key). */
 export async function insertEdge(
   db: SupabaseClient,

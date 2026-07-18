@@ -19,6 +19,67 @@ import {
  * base names.
  */
 
+/**
+ * One trashed knowledge row, normalized for the cross-feature workspace
+ * Trash aggregator (Phase 2). Bases/folders/entries collapse to a common
+ * shape; `parentName` is the containing knowledge base (undefined for a
+ * base itself). `deletedAt` is always set — these rows are soft-deleted.
+ */
+export interface TrashedKnowledgeItem {
+  kind: "knowledge_base" | "knowledge_folder" | "knowledge_entry";
+  id: string;
+  name: string;
+  deletedAt: string;
+  parentName?: string;
+}
+
+/**
+ * Flattened, visibility-filtered trash for the whole workspace — the
+ * shape the workspace-trash aggregator consumes. Reuses `listTrash` for
+ * the visibility gating, then resolves each folder/entry's containing
+ * base name (the parent base may be LIVE, so it isn't always in the
+ * trashed-bases set). Sorted newest-deletion-first across all kinds.
+ */
+export async function listTrashedForWorkspace(
+  ctx: KnowledgeContext
+): Promise<TrashedKnowledgeItem[]> {
+  const deleted = await listTrash(ctx);
+  const baseNames = new Map(deleted.bases.map((b) => [b.id, b.name]));
+  const missing = [
+    ...new Set(
+      [...deleted.folders, ...deleted.entries]
+        .map((r) => r.knowledgeBaseId)
+        .filter((id) => !baseNames.has(id))
+    ),
+  ];
+  for (const b of await repo.listBasesByIds(ctx.workspaceId, missing)) {
+    baseNames.set(b.id, b.name);
+  }
+  const items: TrashedKnowledgeItem[] = [
+    ...deleted.bases.map((b) => ({
+      kind: "knowledge_base" as const,
+      id: b.id,
+      name: b.name,
+      deletedAt: b.deletedAt as string,
+    })),
+    ...deleted.folders.map((f) => ({
+      kind: "knowledge_folder" as const,
+      id: f.id,
+      name: f.name,
+      deletedAt: f.deletedAt as string,
+      parentName: baseNames.get(f.knowledgeBaseId),
+    })),
+    ...deleted.entries.map((e) => ({
+      kind: "knowledge_entry" as const,
+      id: e.id,
+      name: e.title,
+      deletedAt: e.deletedAt as string,
+      parentName: baseNames.get(e.knowledgeBaseId),
+    })),
+  ];
+  return items.sort((a, b) => b.deletedAt.localeCompare(a.deletedAt));
+}
+
 export async function listTrash(
   ctx: KnowledgeContext,
   baseId?: string

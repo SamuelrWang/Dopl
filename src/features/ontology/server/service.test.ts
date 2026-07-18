@@ -29,11 +29,20 @@ vi.mock("./repository", () => ({
   updateCluster: vi.fn(),
   cascadeSoftDeleteCluster: vi.fn(),
   cascadeRestoreCluster: vi.fn(),
+  listTrashedClusters: vi.fn(),
+  cascadePurgeCluster: vi.fn(),
 }));
 
 import * as billingRepo from "@/features/billing/server/workspace-billing";
 import * as repo from "./repository";
-import { createObject, deleteCluster, restoreCluster, updateCluster } from "./service";
+import {
+  createObject,
+  deleteCluster,
+  listTrashedClusters,
+  purgeCluster,
+  restoreCluster,
+  updateCluster,
+} from "./service";
 import { EntitlementError } from "@/features/billing/server/entitlements";
 
 const mockBilling = vi.mocked(billingRepo);
@@ -255,5 +264,81 @@ describe("restoreCluster — atomic cascade restore", () => {
     mockRepo.cascadeRestoreCluster.mockRejectedValue(new Error("db down"));
     await expect(restoreCluster(CTX, CLUSTER_ID)).rejects.toThrow("db down");
     expect(mockRepo.cascadeRestoreCluster).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── Trash view: list trashed clusters ────────────────────────────────
+//
+// The repository does the `deleted_at IS NOT NULL` filter, ordering, and
+// cheap cascade-object count (in SQL); the service maps each trashed row to
+// the shared trash-entry shape. These tests drive that mapping and the
+// empty-trash case.
+
+describe("listTrashedClusters — trash view mapping", () => {
+  const TRASHED: OntologyClusterRow = {
+    ...CLUSTER_ROW,
+    deleted_at: "2026-02-01T00:00:00Z",
+  };
+
+  it("maps only the repo's trashed rows to the summary shape", async () => {
+    mockRepo.listTrashedClusters.mockResolvedValue([
+      { cluster: TRASHED, objectCount: 4 },
+    ]);
+
+    const trash = await listTrashedClusters(CTX);
+
+    expect(mockRepo.listTrashedClusters).toHaveBeenCalledWith(WS);
+    expect(trash).toEqual([
+      {
+        kind: "ontology_cluster",
+        id: CLUSTER_ID,
+        name: "Sales",
+        deletedAt: "2026-02-01T00:00:00Z",
+        objectCount: 4,
+      },
+    ]);
+  });
+
+  it("returns an empty list when the trash is empty", async () => {
+    mockRepo.listTrashedClusters.mockResolvedValue([]);
+    await expect(listTrashedClusters(CTX)).resolves.toEqual([]);
+  });
+});
+
+// ── Trash view: permanent purge ──────────────────────────────────────
+//
+// purgeCluster delegates the whole hard-delete to a SINGLE atomic RPC
+// (`cascadePurgeCluster`) that deletes the cluster AND its cascade-trashed
+// objects in one transaction. These tests drive the thin wiring: the single
+// RPC call, the returned object count, and the null→404 mapping (mirrors
+// restore) when the ref matches no trashed cluster.
+
+describe("purgeCluster — atomic permanent purge", () => {
+  it("delegates to the single purge RPC and returns its object count", async () => {
+    mockRepo.cascadePurgeCluster.mockResolvedValue(3);
+
+    const count = await purgeCluster(CTX, CLUSTER_ID);
+
+    expect(count).toBe(3);
+    // ONE write path — the hard delete is all-or-nothing in the RPC.
+    expect(mockRepo.cascadePurgeCluster).toHaveBeenCalledTimes(1);
+    expect(mockRepo.cascadePurgeCluster).toHaveBeenCalledWith(WS, CLUSTER_ID);
+  });
+
+  it("passes a slug ref straight through to the RPC (server resolves the tombstone)", async () => {
+    mockRepo.cascadePurgeCluster.mockResolvedValue(0);
+    await purgeCluster(CTX, "sales");
+    expect(mockRepo.cascadePurgeCluster).toHaveBeenCalledWith(WS, "sales");
+  });
+
+  it("throws NotFound when no trashed cluster matches the ref", async () => {
+    mockRepo.cascadePurgeCluster.mockResolvedValue(null);
+    await expect(purgeCluster(CTX, CLUSTER_ID)).rejects.toThrow();
+  });
+
+  it("surfaces an RPC failure with no half-write (atomic)", async () => {
+    mockRepo.cascadePurgeCluster.mockRejectedValue(new Error("db down"));
+    await expect(purgeCluster(CTX, CLUSTER_ID)).rejects.toThrow("db down");
+    expect(mockRepo.cascadePurgeCluster).toHaveBeenCalledTimes(1);
   });
 });

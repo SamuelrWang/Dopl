@@ -2043,6 +2043,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      cascade_purge_cluster: {
+        Args: { p_cluster_ref: string; p_workspace_id: string }
+        Returns: number
+      }
       cascade_restore_base: { Args: { p_base_id: string }; Returns: undefined }
       cascade_restore_cluster: {
         Args: { p_cluster_ref: string; p_workspace_id: string }

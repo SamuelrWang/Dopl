@@ -24,6 +24,7 @@ import "server-only";
  *   - `service-entries.ts`  — entry reads + writes + `resolveEntryRefs`
  *   - `service-paths.ts`    — path-addressed reads + writes
  *   - `service-trash.ts`    — visibility-filtered trash listing
+ *   - `service-purge.ts`    — permanent-delete of a single trashed row
  *   - `service-seed.ts`     — workspace fixture seeding
  */
 
@@ -76,6 +77,9 @@ export {
 } from "./service-paths";
 export type { WriteFileByPathInput } from "./service-paths";
 
-export { listTrash } from "./service-trash";
+export { listTrash, listTrashedForWorkspace } from "./service-trash";
+export type { TrashedKnowledgeItem } from "./service-trash";
+
+export { purgeBase, purgeFolder, purgeEntry } from "./service-purge";
 
 export { seedWorkspace } from "./service-seed";

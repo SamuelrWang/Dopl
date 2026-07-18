@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireCronSecret } from "@/shared/auth/require-cron-secret";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { logSystemEvent } from "@/features/analytics/server/system-events";
+import { RETENTION_DAYS } from "@/features/trash/retention";
 
 /**
  * GET /api/cron/purge-trash
@@ -25,8 +26,6 @@ import { logSystemEvent } from "@/features/analytics/server/system-events";
  * Auth: CRON_SECRET bearer via requireCronSecret (fail-closed 503 when unset,
  * 401 without the secret), same as the other /api/cron/* routes.
  */
-
-const RETENTION_DAYS = 30;
 
 // Children-before-parents. Each parent cascades its remaining descendants, so a
 // purged base/cluster/workflow/chat also clears rows a child pass didn't touch.

@@ -367,3 +367,21 @@ export async function restoreChat(ctx: ChatContext, chatId: string): Promise<Cha
     count
   );
 }
+
+/**
+ * PERMANENTLY delete a soft-deleted chat (owner-only, no recovery) — the
+ * trash "delete forever" action. Mirrors `restoreChat`'s gate: it resolves
+ * the chat FROM TRASH (`deleted_at IS NOT NULL`, workspace-scoped) so a LIVE,
+ * unknown, or cross-workspace chat reads as not found and is refused, and a
+ * workspace-scoped API-key caller is blocked exactly like restore. The
+ * physical delete cascades `chat_messages` via FK and drops team grants via
+ * trigger (see `hardDeleteChat`).
+ */
+export async function purgeChat(ctx: ChatContext, chatId: string): Promise<void> {
+  const row = await repo.findDeletedChatById(ctx.workspaceId, chatId);
+  if (!row) throw new ChatNotFoundError(chatId);
+  if (row.owner_id !== ctx.userId || ctx.apiKeyWorkspaceId) {
+    throw new ChatForbiddenError("permanently delete it");
+  }
+  await repo.hardDeleteChat(ctx.workspaceId, row.id);
+}

@@ -11,6 +11,7 @@ import { resolvePageWorkspace } from "@/features/workspaces/server/segment";
 import { WorkspaceSettingsForm } from "@/features/workspaces/components/workspace-settings-form";
 import { WorkspaceDangerZone } from "@/features/workspaces/components/workspace-danger-zone";
 import { RemoteConnect, ConnectedAppsSection } from "@/features/mcp-connect";
+import { WorkspaceTrashSection } from "@/features/trash/components/workspace-trash-section";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +44,7 @@ export default async function WorkspaceSettingsPage({ params }: PageProps) {
           <WorkspaceSettingsForm workspace={workspace} role={membership.role} />
           <RemoteConnect />
           <ConnectedAppsSection />
+          <WorkspaceTrashSection workspaceSlug={workspace.slug} />
           {membership.role === "owner" && <WorkspaceDangerZone workspace={workspace} />}
         </div>
       </div>

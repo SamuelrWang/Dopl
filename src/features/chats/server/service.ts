@@ -19,7 +19,8 @@ import "server-only";
 export { buildChatContext } from "./service-shared";
 export type { ChatContext, AuthLike } from "./service-shared";
 
-export { listChats, getChat, listTrash } from "./service-reads";
+export { listChats, getChat, listTrash, listTrashedChats } from "./service-reads";
+export type { ChatTrashItem } from "./service-reads";
 
 export {
   exportChat,
@@ -27,6 +28,7 @@ export {
   updateChatHeader,
   deleteChat,
   restoreChat,
+  purgeChat,
 } from "./service-writes";
 
 export {

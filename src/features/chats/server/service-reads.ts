@@ -69,6 +69,30 @@ export async function listTrash(ctx: ChatContext): Promise<TrashedChat[]> {
   );
 }
 
+/** Trash-list projection shared by the unified workspace Trash page. */
+export interface ChatTrashItem {
+  kind: "chat";
+  id: string;
+  name: string;
+  deletedAt: string;
+}
+
+/**
+ * Trash-list projection for the unified workspace Trash page: the caller's
+ * own soft-deleted chats in the shared `{ kind, id, name, deletedAt }` shape
+ * (`name` = the chat title). Owner-scoped like `listTrash`, which it
+ * delegates to.
+ */
+export async function listTrashedChats(ctx: ChatContext): Promise<ChatTrashItem[]> {
+  const trashed = await listTrash(ctx);
+  return trashed.map((c): ChatTrashItem => ({
+    kind: "chat",
+    id: c.id,
+    name: c.title,
+    deletedAt: c.deletedAt,
+  }));
+}
+
 /**
  * Base detail read — visibility gate only, NO retention window. Used
  * internally by writes (`service-writes`) to echo back a just-written

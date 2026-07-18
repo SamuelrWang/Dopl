@@ -198,6 +198,20 @@ export async function restoreChatRow(workspaceId: string, chatId: string): Promi
   return updateChatScoped(workspaceId, chatId, { deleted_at: null });
 }
 
+/** PERMANENT hard-delete of ONE trashed chat (`deleted_at IS NOT NULL`),
+ *  workspace-scoped. `chat_messages` cascade via FK; the `chat_grants_cleanup`
+ *  trigger drops team grants. */
+export async function hardDeleteChat(workspaceId: string, chatId: string): Promise<void> {
+  const db = supabaseAdmin();
+  const { error } = await db
+    .from("chats")
+    .delete()
+    .eq("workspace_id", workspaceId)
+    .eq("id", chatId)
+    .or("deleted_at.not.is.null");
+  if (error) throw error;
+}
+
 /** `updateChat` variant that also pins `workspace_id` in the WHERE. */
 async function updateChatScoped(
   workspaceId: string,

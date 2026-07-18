@@ -18,7 +18,7 @@ import "server-only";
  *   - `service-reads.ts`    — reads (`getSkillBySlug` is the shared gate)
  *   - `service-writes.ts`   — create/update/delete/duplicate
  *   - `service-body.ts`     — SKILL.md read + CAS write
- *   - `service-trash.ts`    — visibility-filtered trash + restore
+ *   - `service-trash.ts`    — visibility-filtered trash + restore + purge
  *   - `service-history.ts`  — version timeline + version restore
  *   - `service-insights.ts` — usage + used-by
  *   - `service-seed.ts`     — workspace fixture seeding
@@ -47,7 +47,13 @@ export {
 
 export { readBody, writeBody } from "./service-body";
 
-export { listTrash, restoreSkill } from "./service-trash";
+export {
+  listTrash,
+  listTrashedSkills,
+  restoreSkill,
+  purgeSkill,
+} from "./service-trash";
+export type { TrashedSkillItem } from "./service-trash";
 
 export {
   getSkillHistory,

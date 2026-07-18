@@ -146,6 +146,53 @@ export async function restoreCluster(
   return mapClusterRow(restored);
 }
 
+/** One trashed cluster as the unified Trash page lists it. */
+export interface TrashedClusterSummary {
+  kind: "ontology_cluster";
+  id: string;
+  name: string;
+  deletedAt: string;
+  objectCount: number;
+}
+
+/**
+ * The workspace's trashed clusters for the Trash view — every cluster with
+ * `deleted_at IS NOT NULL` (which live reads already exclude), newest first,
+ * each carrying the count of objects its cascade soft-delete trashed. The
+ * cheap-count and ordering live in the repository; this maps rows to the shared
+ * trash-entry shape.
+ */
+export async function listTrashedClusters(
+  ctx: OntologyContext
+): Promise<TrashedClusterSummary[]> {
+  const rows = await repo.listTrashedClusters(ctx.workspaceId);
+  return rows.map(({ cluster, objectCount }) => ({
+    kind: "ontology_cluster",
+    id: cluster.id,
+    name: cluster.name,
+    // Non-null by construction: the repo only returns `deleted_at IS NOT NULL`.
+    deletedAt: cluster.deleted_at as string,
+    objectCount,
+  }));
+}
+
+/**
+ * PERMANENTLY purge a trashed cluster (recovery is no longer possible): one
+ * atomic RPC hard-DELETEs the cluster AND exactly the objects its cascade
+ * soft-delete trashed — those whose `deleted_at` still matches the cluster's
+ * stamp — in a single transaction (memberships/relationships cascade via FK).
+ * Only a TRASHED cluster is purgeable: the RPC's `deleted_at IS NOT NULL`
+ * resolve enforces this and returns null when nothing matched, which we surface
+ * as a 404 (mirrors restoreCluster). Accepts a cluster id or slug; the caller
+ * (route) enforces the edit gate, exactly like the other cluster writes.
+ * Returns the count of objects the purge deleted.
+ */
+export async function purgeCluster(ctx: OntologyContext, ref: string): Promise<number> {
+  const count = await repo.cascadePurgeCluster(ctx.workspaceId, ref);
+  if (count === null) throw HttpError.notFound("No soft-deleted cluster matches");
+  return count;
+}
+
 export async function createObject(
   ctx: OntologyContext,
   input: OntologyObjectCreateInput

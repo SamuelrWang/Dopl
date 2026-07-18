@@ -258,6 +258,26 @@ export async function markSkillDeleted(
   if (error) throw error;
 }
 
+/**
+ * Permanently hard-delete a single trashed skill. Workspace-scoped and
+ * gated on `deleted_at IS NOT NULL` so a live skill can never be purged.
+ * The SKILL.md body lives in columns on this row (F-029); skill_versions,
+ * skill_events, and workflow_skills cascade via `ON DELETE CASCADE`.
+ */
+export async function purgeSkillRow(
+  workspaceId: string,
+  id: string
+): Promise<void> {
+  const db = supabaseAdmin();
+  const { error } = await db
+    .from("skills")
+    .delete()
+    .eq("id", id)
+    .eq("workspace_id", workspaceId)
+    .not("deleted_at", "is", null);
+  if (error) throw error;
+}
+
 export async function restoreSkillRow(workspaceId: string, id: string): Promise<Skill> {
   const db = supabaseAdmin();
   const { data, error } = await db

@@ -209,6 +209,77 @@ export async function cascadeRestoreCluster(
   return rows[0] ?? null;
 }
 
+/** A trashed cluster row paired with a count of the objects its cascade trashed. */
+export interface TrashedClusterRow {
+  cluster: OntologyClusterRow;
+  objectCount: number;
+}
+
+/**
+ * List the workspace's trashed clusters (`deleted_at IS NOT NULL`), newest
+ * first, each paired with the count of objects its cascade soft-delete trashed.
+ * These are exactly the rows the live map excludes — the trash view.
+ *
+ * Cheap count: a cascade soft-delete stamps the cluster and every object it
+ * owns with ONE shared `now()` (one per delete), so tallying trashed objects by
+ * `deleted_at` maps each back to its cluster without walking memberships.
+ * Objects trashed independently carry their own stamp and fall in no cluster
+ * bucket. Two queries total — no per-cluster N+1.
+ */
+export async function listTrashedClusters(
+  workspaceId: string
+): Promise<TrashedClusterRow[]> {
+  const db = supabaseAdmin();
+  const { data: clusters, error } = await db
+    .from("ontology_clusters")
+    .select(ONTOLOGY_CLUSTER_COLS)
+    .eq("workspace_id", workspaceId)
+    .not("deleted_at", "is", null)
+    .order("deleted_at", { ascending: false });
+  if (error) throw error;
+  const clusterRows = (clusters ?? []) as OntologyClusterRow[];
+  if (clusterRows.length === 0) return [];
+
+  const { data: objects, error: objectError } = await db
+    .from("ontology_objects")
+    .select("deleted_at")
+    .eq("workspace_id", workspaceId)
+    .not("deleted_at", "is", null);
+  if (objectError) throw objectError;
+
+  const countByStamp = new Map<string, number>();
+  for (const row of (objects ?? []) as Array<{ deleted_at: string | null }>) {
+    if (!row.deleted_at) continue;
+    countByStamp.set(row.deleted_at, (countByStamp.get(row.deleted_at) ?? 0) + 1);
+  }
+
+  return clusterRows.map((cluster) => ({
+    cluster,
+    objectCount: cluster.deleted_at ? countByStamp.get(cluster.deleted_at) ?? 0 : 0,
+  }));
+}
+
+/**
+ * Permanently purge a TRASHED cluster (by id or slug) and exactly the objects
+ * its cascade soft-delete trashed — those whose `deleted_at` still matches the
+ * cluster's stamp — in ONE atomic RPC (hard DELETE; memberships/relationships
+ * cascade via FK). Mirrors `cascadeSoftDeleteCluster`. Returns the number of
+ * objects deleted, or null when no trashed cluster matched the ref (the service
+ * turns that into a 404).
+ */
+export async function cascadePurgeCluster(
+  workspaceId: string,
+  clusterRef: string
+): Promise<number | null> {
+  const db = supabaseAdmin();
+  const { data, error } = await db.rpc("cascade_purge_cluster", {
+    p_workspace_id: workspaceId,
+    p_cluster_ref: clusterRef,
+  });
+  if (error) throw error;
+  return (data as number | null) ?? null;
+}
+
 export async function listObjects(workspaceId: string): Promise<OntologyObjectRow[]> {
   const db = supabaseAdmin();
   const { data, error } = await db

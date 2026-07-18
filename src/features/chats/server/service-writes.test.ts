@@ -16,7 +16,8 @@ vi.mock("./retention", () => ({ resolveChatsWindow: vi.fn() }));
 import * as repo from "./repository";
 import type { ChatRowWithCount } from "./repository";
 import { resolveChatsWindow } from "./retention";
-import { appendMessages } from "./service-writes";
+import { appendMessages, purgeChat } from "./service-writes";
+import { ChatForbiddenError, ChatNotFoundError } from "./errors";
 import type { ChatContext } from "./service-shared";
 
 const WS = "ws-1";
@@ -117,5 +118,55 @@ describe("appendMessages — retention echo", () => {
     const detail = await appendMessages(ctx, "chat-1", APPEND);
 
     expect(detail.messages).toHaveLength(5);
+  });
+});
+
+describe("purgeChat — invariants", () => {
+  beforeEach(() => {
+    vi.mocked(repo.hardDeleteChat).mockResolvedValue(undefined);
+  });
+
+  it("refuses when the chat is not in trash (live/absent → not found, no delete)", async () => {
+    // findDeletedChatById resolves ONLY `deleted_at IS NOT NULL` rows and is
+    // workspace-scoped, so a live row, an unknown id, or a cross-workspace id
+    // all come back null — this one lookup covers the live-row + cross-ws
+    // refusals at once.
+    vi.mocked(repo.findDeletedChatById).mockResolvedValue(null);
+
+    await expect(purgeChat(ctx, "chat-1")).rejects.toBeInstanceOf(
+      ChatNotFoundError
+    );
+    expect(repo.hardDeleteChat).not.toHaveBeenCalled();
+  });
+
+  it("refuses a non-owner", async () => {
+    // The row is in trash (findDeletedChatById returns it) but owned by
+    // someone else — owner-only, like restore.
+    vi.mocked(repo.findDeletedChatById).mockResolvedValue(
+      chatRow({ owner_id: "someone-else" })
+    );
+
+    await expect(purgeChat(ctx, "chat-1")).rejects.toBeInstanceOf(
+      ChatForbiddenError
+    );
+    expect(repo.hardDeleteChat).not.toHaveBeenCalled();
+  });
+
+  it("refuses a workspace-scoped API-key caller even when they own it", async () => {
+    const apiKeyCtx: ChatContext = { ...ctx, apiKeyWorkspaceId: WS };
+    vi.mocked(repo.findDeletedChatById).mockResolvedValue(chatRow());
+
+    await expect(purgeChat(apiKeyCtx, "chat-1")).rejects.toBeInstanceOf(
+      ChatForbiddenError
+    );
+    expect(repo.hardDeleteChat).not.toHaveBeenCalled();
+  });
+
+  it("hard-deletes a trashed chat owned by the caller", async () => {
+    vi.mocked(repo.findDeletedChatById).mockResolvedValue(chatRow());
+
+    await purgeChat(ctx, "chat-1");
+
+    expect(repo.hardDeleteChat).toHaveBeenCalledWith(WS, "chat-1");
   });
 });
