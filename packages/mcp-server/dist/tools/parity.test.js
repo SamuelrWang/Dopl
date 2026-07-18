@@ -28,7 +28,6 @@ const vitest_1 = require("vitest");
 const zod_1 = require("zod");
 const cluster_js_1 = require("./cluster.js");
 const workflow_js_1 = require("./workflow.js");
-const packs_js_1 = require("./packs.js");
 const knowledge_js_1 = require("./knowledge.js");
 const skills_js_1 = require("./skills.js");
 const chats_js_1 = require("./chats.js");
@@ -39,7 +38,6 @@ const ontology_js_1 = require("./ontology.js");
 const REGISTRARS = [
     { file: "cluster.ts", register: cluster_js_1.registerClusterTools },
     { file: "workflow.ts", register: workflow_js_1.registerWorkflowTools },
-    { file: "packs.ts", register: packs_js_1.registerPacksTools },
     { file: "knowledge.ts", register: knowledge_js_1.registerKnowledgeTools },
     { file: "skills.ts", register: skills_js_1.registerSkillTools },
     { file: "chats.ts", register: chats_js_1.registerChatTools },
@@ -113,11 +111,10 @@ const READ_ONLY_BLOCKED_TOOLS = parseReadOnlyBlockedTools(SERVER_SOURCE);
 // for the new op. Human-audit this list against the sources.
 const READ_OPS = {
     dopl_cluster: ["list", "get"],
-    dopl_workflow: ["list", "get", "step"],
-    dopl_packs: ["list", "list_files", "get_file"],
+    dopl_workflow: ["list", "get", "step", "list_trash"],
     dopl_kb: ["list_bases", "get_tree", "list_dir", "read_file", "list_trash", "search"],
     dopl_skill: ["list", "get", "read", "authoring_guide"],
-    dopl_chats: ["list", "get", "folders", "guide"],
+    dopl_chats: ["list", "get", "folders", "guide", "list_trash"],
     dopl_members: ["whoami", "list", "get", "teams", "get_team", "access_matrix", "my_access"],
     dopl_ontology: ["map", "anchor", "resolve", "get"],
 };
@@ -144,7 +141,6 @@ const NON_ADMIN_OP_TOOLS = TOOLS.filter((t) => !isAdmin(t.name) && opEnum(t) !==
             "dopl_members",
             "dopl_ontology",
             "dopl_ontology_admin",
-            "dopl_packs",
             "dopl_search",
             "dopl_skill",
             "dopl_skill_admin",

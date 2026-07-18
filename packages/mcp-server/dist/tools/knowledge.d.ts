@@ -8,9 +8,8 @@
  * recovery, not deletion); `dopl_kb_admin` = the destructive soft-deletes,
  * broken out so the model can't reach them without the destructive surface.
  *
- * Distinct from the read-only knowledge-pack tools (`dopl_packs(op='list')`,
- * `dopl_packs(op='list_files')`, `dopl_packs(op='get_file')`) in server.ts: those expose Dopl's own curated
- * specialist verticals; these expose the user's own editable bases.
+ * These expose the user's OWN editable bases (create / edit / soft-delete),
+ * addressed like a filesystem.
  */
 import type { DoplClient } from "@dopl/client";
 import { type RegisterTool } from "./respond";

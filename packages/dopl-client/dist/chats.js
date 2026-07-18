@@ -10,10 +10,12 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.listChats = listChats;
 exports.getChat = getChat;
 exports.listChatFolders = listChatFolders;
+exports.listChatsTrash = listChatsTrash;
 exports.exportChat = exportChat;
 exports.appendChatMessages = appendChatMessages;
 exports.updateChat = updateChat;
 exports.deleteChat = deleteChat;
+exports.restoreChat = restoreChat;
 exports.createChatFolder = createChatFolder;
 exports.updateChatFolder = updateChatFolder;
 exports.deleteChatFolder = deleteChatFolder;
@@ -34,6 +36,12 @@ async function listChatFolders(t) {
         toolName: "chat_folders",
     });
     return data.folders;
+}
+async function listChatsTrash(t) {
+    const data = await t.request("/api/chats/trash", {
+        toolName: "chat_list_trash",
+    });
+    return data.chats;
 }
 // ─── Write ──────────────────────────────────────────────────────────
 async function exportChat(t, input) {
@@ -62,6 +70,10 @@ async function updateChat(t, chatId, patch) {
 }
 async function deleteChat(t, chatId) {
     await t.requestNoContent(`/api/chats/${enc(chatId)}`, "DELETE", "chat_delete");
+}
+async function restoreChat(t, chatId) {
+    const data = await t.request(`/api/chats/${enc(chatId)}/restore`, { method: "POST", toolName: "chat_restore" });
+    return data.chat;
 }
 async function createChatFolder(t, name) {
     const data = await t.request("/api/chats/folders", {

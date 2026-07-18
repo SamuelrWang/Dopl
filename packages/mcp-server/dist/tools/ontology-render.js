@@ -91,6 +91,9 @@ function renderObject(object, snapshot, headline, handles = new Map()) {
     lines.push(`# ${object.name} (${kindLabel} · id: \`${object.id}\`)`);
     if (object.subtitle)
         lines.push(object.subtitle);
+    if (object.updatedAt) {
+        lines.push(`Version: \`${object.updatedAt}\` (pass as expected_version to a later write so a concurrent edit can't clobber yours)`);
+    }
     if (object.attributes.length > 0) {
         lines.push("", "## Attributes");
         for (const attr of object.attributes) {
@@ -102,6 +105,22 @@ function renderObject(object, snapshot, headline, handles = new Map()) {
         for (const rel of object.relationships) {
             lines.push(`- ${rel.label}: ${rel.targetIds.map(nameOf).join(", ")}`);
         }
+    }
+    // Inbound edges ("Referenced by"): other objects whose relationships point
+    // AT this one. `get` otherwise shows only outbound edges, hiding who
+    // depends on this object.
+    const backlinks = [];
+    for (const other of Object.values(snapshot.objects)) {
+        if (other.id === object.id)
+            continue;
+        for (const rel of other.relationships) {
+            if (rel.targetIds.includes(object.id)) {
+                backlinks.push(`- **${other.name}** —${rel.label}→ (id: \`${other.id}\`)`);
+            }
+        }
+    }
+    if (backlinks.length > 0) {
+        lines.push("", "## Referenced by", ...backlinks);
     }
     if ((object.template ?? []).length > 0) {
         lines.push("", "## Default fields (template)", "_New objects created inside this one are born with these fields, empty:_");

@@ -1,10 +1,10 @@
-import type { WorkspaceListItem, ClusterDetail, ClusterRow, WorkflowRow, WorkflowDetail, WorkflowGraphSpec, WorkflowNodeInput, Pack, PackFile, PackFileMeta, ResolvedWorkspace } from "./types.js";
+import type { WorkspaceListItem, ClusterDetail, ClusterRow, WorkflowRow, WorkflowTrashRow, WorkflowDetail, WorkflowGraphSpec, WorkflowNodeInput, ResolvedWorkspace } from "./types.js";
 import { DoplTransport } from "./transport.js";
 import type { KnowledgeBase, KnowledgeBaseCreateInput, KnowledgeBaseUpdateInput, KnowledgeDirListing, KnowledgeEntry, KnowledgeFolder, KnowledgePathOpResult, KnowledgeSearchHit, KnowledgeTrashSnapshot, KnowledgeTreeSnapshot, KnowledgeWriteFileInput, KnowledgeWriteFileResult } from "./knowledge-types.js";
 import type { CreateSkillInput, UpdateSkillPatch as SkillUpdatePatch } from "./skills.js";
 import type { ResolvedSkill, Skill, SkillFile, SkillWriteFileResult } from "./skill-types.js";
 import type { OntologyCluster, OntologyClusterCreateInput, OntologyClusterPatch, OntologyObject, OntologyObjectCreateInput, OntologyObjectPatch, OntologySnapshot } from "./ontology-types.js";
-import type { Chat, ChatDetail, ChatExportInput, ChatFolder, ChatFolderUpdateInput, ChatList, ChatMessageInput, ChatUpdateInput } from "./chat-types.js";
+import type { Chat, ChatDetail, ChatExportInput, ChatFolder, ChatFolderUpdateInput, ChatList, ChatMessageInput, ChatUpdateInput, TrashedChat } from "./chat-types.js";
 import type { AccessMatrix, EffectiveAccessRow, MyAccess, MyMembership, WorkspaceMember, WorkspaceTeam } from "./member-types.js";
 export type { DoplTransportOptions as DoplClientOptions } from "./transport.js";
 export { parseRetryAfter } from "./retry.js";
@@ -36,6 +36,12 @@ export declare class DoplClient {
         clusterId?: string | null;
     }): Promise<WorkflowRow>;
     deleteWorkflow(idOrSlug: string): Promise<void>;
+    /** Workspace-scoped trash — every soft-deleted workflow the caller may see. */
+    listWorkflowTrash(): Promise<{
+        workflows: WorkflowTrashRow[];
+    }>;
+    /** Restore a soft-deleted workflow (recovery, not deletion). */
+    restoreWorkflow(idOrSlug: string): Promise<WorkflowRow>;
     setWorkflowGraph(idOrSlug: string, spec: WorkflowGraphSpec): Promise<void>;
     addWorkflowNode(idOrSlug: string, node: WorkflowNodeInput & {
         connect_from?: string;
@@ -66,19 +72,6 @@ export declare class DoplClient {
         description?: string | null;
     }): Promise<ClusterRow>;
     deleteCluster(slug: string): Promise<void>;
-    listPacks(): Promise<{
-        packs: Pack[];
-    }>;
-    kbList(pack: string, opts?: {
-        category?: string;
-        limit?: number;
-    }): Promise<{
-        pack_id: string;
-        files: PackFileMeta[];
-    }>;
-    kbGet(pack: string, path: string): Promise<{
-        file: PackFile;
-    }>;
     listKbBases(): Promise<KnowledgeBase[]>;
     getKbBase(baseId: string): Promise<KnowledgeBase>;
     getKbTree(baseId: string, opts?: {
@@ -108,7 +101,7 @@ export declare class DoplClient {
     updateOntologyCluster(clusterId: string, patch: OntologyClusterPatch): Promise<OntologyCluster>;
     deleteOntologyCluster(clusterId: string): Promise<void>;
     createOntologyObject(input: OntologyObjectCreateInput): Promise<OntologyObject>;
-    updateOntologyObject(objectId: string, patch: OntologyObjectPatch): Promise<OntologyObject>;
+    updateOntologyObject(objectId: string, patch: OntologyObjectPatch, expectedVersion?: string): Promise<OntologyObject>;
     deleteOntologyObject(objectId: string): Promise<void>;
     claimOntologyAnchor(objectId: string): Promise<OntologyObject>;
     listChats(): Promise<ChatList>;
@@ -117,6 +110,8 @@ export declare class DoplClient {
     appendChatMessages(chatId: string, messages: ChatMessageInput[]): Promise<ChatDetail>;
     updateChat(chatId: string, patch: ChatUpdateInput): Promise<Chat>;
     deleteChat(chatId: string): Promise<void>;
+    restoreChat(chatId: string): Promise<Chat>;
+    listChatsTrash(): Promise<TrashedChat[]>;
     listChatFolders(): Promise<ChatFolder[]>;
     createChatFolder(name: string): Promise<ChatFolder>;
     updateChatFolder(folderId: string, patch: ChatFolderUpdateInput): Promise<ChatFolder>;

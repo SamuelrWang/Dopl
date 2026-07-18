@@ -10,6 +10,6 @@ export declare function createOntologyCluster(t: DoplTransport, input: OntologyC
 export declare function updateOntologyCluster(t: DoplTransport, clusterId: string, patch: OntologyClusterPatch): Promise<OntologyCluster>;
 export declare function deleteOntologyCluster(t: DoplTransport, clusterId: string): Promise<void>;
 export declare function createOntologyObject(t: DoplTransport, input: OntologyObjectCreateInput): Promise<OntologyObject>;
-export declare function updateOntologyObject(t: DoplTransport, objectId: string, patch: OntologyObjectPatch): Promise<OntologyObject>;
+export declare function updateOntologyObject(t: DoplTransport, objectId: string, patch: OntologyObjectPatch, expectedVersion?: string): Promise<OntologyObject>;
 export declare function deleteOntologyObject(t: DoplTransport, objectId: string): Promise<void>;
 export declare function claimOntologyAnchor(t: DoplTransport, objectId: string): Promise<OntologyObject>;

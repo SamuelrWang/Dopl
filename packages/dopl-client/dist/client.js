@@ -96,6 +96,14 @@ class DoplClient {
     async deleteWorkflow(idOrSlug) {
         await this.transport.requestNoContent(`/api/workflows/${encodeURIComponent(idOrSlug)}`, "DELETE", "delete_workflow");
     }
+    /** Workspace-scoped trash — every soft-deleted workflow the caller may see. */
+    async listWorkflowTrash() {
+        return this.transport.request("/api/workflows/trash", { toolName: "list_workflow_trash" });
+    }
+    /** Restore a soft-deleted workflow (recovery, not deletion). */
+    async restoreWorkflow(idOrSlug) {
+        return this.transport.request(`/api/workflows/${encodeURIComponent(idOrSlug)}/restore`, { method: "POST", toolName: "restore_workflow", body: {} });
+    }
     // ── Workflow graph authoring ──────────────────────────────────────
     async setWorkflowGraph(idOrSlug, spec) {
         await this.transport.requestNoContent(`/api/workflows/${encodeURIComponent(idOrSlug)}/graph`, "POST", "set_workflow_graph", spec);
@@ -154,27 +162,10 @@ class DoplClient {
     async deleteCluster(slug) {
         await this.transport.requestNoContent(`/api/clusters/${encodeURIComponent(slug)}`, "DELETE", "delete_cluster");
     }
-    async listPacks() {
-        return this.transport.request("/api/knowledge/packs", {
-            toolName: "kb_list_packs",
-        });
-    }
-    async kbList(pack, opts = {}) {
-        const qs = new URLSearchParams();
-        if (opts.category)
-            qs.set("category", opts.category);
-        if (opts.limit)
-            qs.set("limit", String(opts.limit));
-        const suffix = qs.toString() ? `?${qs.toString()}` : "";
-        return this.transport.request(`/api/knowledge/packs/${encodeURIComponent(pack)}/files${suffix}`, { toolName: "kb_list" });
-    }
-    async kbGet(pack, path) {
-        return this.transport.request(`/api/knowledge/packs/${encodeURIComponent(pack)}/file?path=${encodeURIComponent(path)}`, { toolName: "kb_get" });
-    }
     // ─── User knowledge bases (Item 4) ────────────────────────────────
-    // Distinct from Dopl knowledge packs above: these are user-authored,
-    // editable knowledge bases. Path-based methods accept a base id and
-    // a "/"-separated path; the server resolves to folder/entry rows.
+    // User-authored, editable knowledge bases. Path-based methods accept
+    // a base id and a "/"-separated path; the server resolves to
+    // folder/entry rows.
     listKbBases() {
         return kb.listKbBases(this.transport);
     }
@@ -245,8 +236,8 @@ class DoplClient {
     createOntologyObject(input) {
         return ontology.createOntologyObject(this.transport, input);
     }
-    updateOntologyObject(objectId, patch) {
-        return ontology.updateOntologyObject(this.transport, objectId, patch);
+    updateOntologyObject(objectId, patch, expectedVersion) {
+        return ontology.updateOntologyObject(this.transport, objectId, patch, expectedVersion);
     }
     deleteOntologyObject(objectId) {
         return ontology.deleteOntologyObject(this.transport, objectId);
@@ -275,6 +266,12 @@ class DoplClient {
     }
     deleteChat(chatId) {
         return chats.deleteChat(this.transport, chatId);
+    }
+    restoreChat(chatId) {
+        return chats.restoreChat(this.transport, chatId);
+    }
+    listChatsTrash() {
+        return chats.listChatsTrash(this.transport);
     }
     listChatFolders() {
         return chats.listChatFolders(this.transport);
