@@ -79,6 +79,14 @@ export interface WorkspaceCheckoutArgs {
  * seats. Stamps `{ workspace_id, plan }` into both the session and
  * subscription metadata so the webhook can route the resulting
  * subscription back to its workspace and derive the plan.
+ *
+ * Uses `ui_mode: "elements"` (Stripe's custom-checkout mode): the session is
+ * rendered natively by our own design-system PaymentElement form
+ * (components/embedded-checkout.tsx) rather than a Stripe-hosted iframe. The
+ * `client_secret` is returned the same way, and `return_url` still receives
+ * the post-payment redirect. None of the params below are elements-mode
+ * disallowed: we set no `custom_text` / `branding_settings` (disallowed) and
+ * no `redirect_on_completion` (embedded-only).
  */
 export async function createWorkspaceCheckoutSession(
   args: WorkspaceCheckoutArgs
@@ -98,7 +106,7 @@ export async function createWorkspaceCheckoutSession(
   const quantity = args.plan === "solo" ? 1 : Math.max(1, args.quantity);
   const metadata = { workspace_id: args.workspaceId, plan: args.plan };
   const sessionParams: Stripe.Checkout.SessionCreateParams = {
-    ui_mode: "embedded_page",
+    ui_mode: "elements",
     mode: "subscription",
     line_items: [{ price: priceId, quantity }],
     return_url: `${appUrl}/canvas?billing=success&session_id={CHECKOUT_SESSION_ID}`,
