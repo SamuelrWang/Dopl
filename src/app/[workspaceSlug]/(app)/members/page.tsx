@@ -21,6 +21,7 @@ export default async function MembersPage({ params }: PageProps) {
   return (
     <MembersView
       workspaceSlug={workspaceSegment(workspace)}
+      workspaceId={workspace.id}
       currentUserId={user.id}
       myRole={membership.role}
     />

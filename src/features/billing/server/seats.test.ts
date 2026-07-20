@@ -2,10 +2,10 @@
  * INVARIANT SUITE — seat sync isolation.
  *
  * `syncSeatQuantity` is the single Stripe-touching seat reconciler. This
- * locks its guards (never hit Stripe without a key, without a live Pro
- * sub, or when the count already matches) and the happy path (retrieve
- * sub -> update item quantity -> persist seat_count). Stripe + the billing
- * repository are fully mocked — no network.
+ * locks its guards (never hit Stripe without a key, without a live Team
+ * sub, when the count already matches, or for a flat Solo plan) and the
+ * happy path (retrieve sub -> update item quantity -> persist seat_count).
+ * Stripe + the billing repository are fully mocked — no network.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -45,7 +45,7 @@ const WS = "ws-1";
 function billing(overrides: Partial<WorkspaceBillingRow>): WorkspaceBillingRow {
   return {
     workspaceId: WS,
-    plan: "pro",
+    plan: "team",
     status: "active",
     stripeCustomerId: "cus_1",
     stripeSubscriptionId: "sub_1",
@@ -93,6 +93,30 @@ describe("syncSeatQuantity — guards", () => {
     expect(retrieve).not.toHaveBeenCalled();
     expect(updateItem).not.toHaveBeenCalled();
     expect(mockRepo.upsertWorkspaceBilling).not.toHaveBeenCalled();
+  });
+
+  it("never resizes a flat Solo subscription (single member)", async () => {
+    mockRepo.getWorkspaceBilling.mockResolvedValue(
+      billing({ plan: "solo", seatCount: 1 })
+    );
+    mockRepo.countActiveMembers.mockResolvedValue(1);
+    await syncSeatQuantity(WS);
+    expect(retrieve).not.toHaveBeenCalled();
+    expect(updateItem).not.toHaveBeenCalled();
+    expect(mockRepo.upsertWorkspaceBilling).not.toHaveBeenCalled();
+  });
+
+  it("warns but does not resize a Solo workspace with 2+ members", async () => {
+    mockRepo.getWorkspaceBilling.mockResolvedValue(
+      billing({ plan: "solo", seatCount: 1 })
+    );
+    mockRepo.countActiveMembers.mockResolvedValue(2);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await syncSeatQuantity(WS);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("Solo"));
+    expect(updateItem).not.toHaveBeenCalled();
+    expect(mockRepo.upsertWorkspaceBilling).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 });
 

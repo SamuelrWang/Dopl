@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { HttpError } from "@/shared/lib/http-error";
-import { resolveActiveWorkspace } from "@/features/workspaces/server/service";
+import {
+  resolveActiveWorkspace,
+  WorkspaceResolutionError,
+} from "@/features/workspaces/server/service";
 import type { Role } from "@/features/workspaces/types";
 import { meetsMinRole } from "@/features/workspaces/types";
 import { logMcpToolCall } from "@/features/analytics/server/mcp-tool-calls";
@@ -33,6 +36,15 @@ interface Options {
    * "admin" for invitations / settings, "owner" for delete.
    */
   minRole?: Role;
+  /**
+   * Opt-in for GET download routes (`<a download>` can't send headers): let
+   * the `?workspaceId=` query param participate in workspace resolution at
+   * the SAME priority as the `X-Workspace-Id` header. The key lock still
+   * wins over both; the header wins over the query param when both are
+   * present. Used by the export routes so a fail-closed resolution doesn't
+   * 400 a header-less download before the param is read.
+   */
+  workspaceIdFromQuery?: boolean;
 }
 
 /**
@@ -40,12 +52,15 @@ interface Options {
  * and verify the caller's membership + role. Injects `{ workspaceId,
  * workspaceSlug, role }` alongside the standard `{ userId, agentTokenId }`.
  *
- * Workspace resolution priority (Item 4 update):
+ * Workspace resolution priority (MCP-2 — fail-closed, no default fallback):
  *   1. If the API key has a `workspace_id` (workspace-scoped key), use it.
- *      The header MUST agree with it or we 403 — prevents a single key
- *      from being used cross-workspace by accident or design.
- *   2. Else `X-Workspace-Id` header.
- *   3. Else fall back to the user's default workspace.
+ *      The requested target MUST agree with it or we 403 — prevents a
+ *      single key from being used cross-workspace by accident or design.
+ *   2. Else `X-Workspace-Id` header (UUID only; blank/non-UUID → 400
+ *      WORKSPACE_INVALID). With `workspaceIdFromQuery`, a `?workspaceId=`
+ *      param slots in at the same priority (header wins if both present).
+ *   3. Else the caller's active memberships decide: exactly one auto-targets;
+ *      zero or 2+ → 400 WORKSPACE_REQUIRED (see `resolveActiveWorkspace`).
  *
  * Routes that scope per-workspace should use this in place of
  * `withUserAuth`. Routes that operate user-globally (settings, billing,
@@ -78,13 +93,23 @@ export function withWorkspaceAuth(
   const minRole: Role = options.minRole ?? "viewer";
   return withUserAuth(async (request, ctx) => {
     const headerWorkspaceId = request.headers.get("x-workspace-id");
+    const queryWorkspaceId = options.workspaceIdFromQuery
+      ? request.nextUrl.searchParams.get("workspaceId")
+      : null;
+    // The header wins over the query param when both are present; the key
+    // lock (below) wins over both. `??` keeps a present-but-blank header
+    // authoritative so it still fails closed as WORKSPACE_INVALID.
+    const requestedWorkspaceId = headerWorkspaceId ?? queryWorkspaceId;
     const keyWorkspaceId = ctx.apiKeyWorkspaceId ?? null;
 
-    // Workspace-scoped API key: enforce the lock. Reject if the header
-    // contradicts. Use the key's workspace as the active one.
-    let effectiveWorkspaceId = headerWorkspaceId;
+    // Workspace-scoped API key: enforce the lock. Reject if the requested
+    // target contradicts. Use the key's workspace as the active one.
+    let effectiveWorkspaceId = requestedWorkspaceId;
     if (keyWorkspaceId) {
-      if (headerWorkspaceId && headerWorkspaceId !== keyWorkspaceId) {
+      // Trim before the lock compare so a header/query value padded with
+      // whitespace doesn't read as a spurious cross-workspace mismatch.
+      const requestedTrimmed = requestedWorkspaceId?.trim();
+      if (requestedTrimmed && requestedTrimmed !== keyWorkspaceId) {
         return NextResponse.json(
           new HttpError(
             403,
@@ -140,6 +165,9 @@ export function withWorkspaceAuth(
         params: ctx.params,
       });
     } catch (err) {
+      if (err instanceof WorkspaceResolutionError) {
+        return NextResponse.json(err.toResponseBody(), { status: err.status });
+      }
       if (err instanceof HttpError) {
         return NextResponse.json(err.toResponseBody(), { status: err.status });
       }

@@ -8,10 +8,10 @@
  * `index.ts`; everything transport-agnostic lives here.
  */
 
-import type { DoplClient } from "@dopl/client";
+import type { DoplClient, WorkspaceListItem } from "@dopl/client";
 import { createServer } from "./server.js";
 
-export { createServer, SERVER_INSTRUCTIONS } from "./server.js";
+export { createServer, buildInstructions } from "./server.js";
 export { clientIdentifier, packageVersion } from "./version.js";
 
 /** The concrete MCP server type, without importing the SDK type directly. */
@@ -47,20 +47,32 @@ export interface BootResult {
   /** Authenticated user id from the status ping (null if the ping failed). */
   userId: string | null;
   isAdmin: boolean;
-  /** Resolved active canvas, for the caller to log/report. Null if unresolved. */
+  /**
+   * The session default workspace resolved at boot from the caller's
+   * membership directory — a request X-Workspace-Id pin, else the sole
+   * membership. Null when the caller has 0 or 2+ memberships and sent no
+   * pin (each tool call must then pass `workspace=`).
+   */
   activeWorkspace: {
     id: string;
     name: string;
     slug: string;
     role: string;
   } | null;
+  /**
+   * True when the boot `listWorkspaces()` call FAILED (transient backend /
+   * network error), as distinct from a genuine 0-membership directory. Lets
+   * the refusal copy say "couldn't load your workspaces (retry)" instead of
+   * "you have no workspaces".
+   */
+  directoryLoadFailed: boolean;
 }
 
 /**
  * Build a fully-registered MCP server for `client`: run the status-ping
- * handshake (admin flag + liveness), resolve the active workspace, and
- * register all tools. Transport-agnostic — the caller attaches stdio or
- * HTTP afterward.
+ * handshake (admin flag + liveness), resolve the session default workspace
+ * from the caller's membership directory, and register all tools.
+ * Transport-agnostic — the caller attaches stdio or HTTP afterward.
  */
 export async function bootServer(
   client: DoplClient,
@@ -80,38 +92,74 @@ export async function bootServer(
     diag(`[dopl-mcp] status ping failed (continuing as non-admin): ${errText(err)}`);
   }
 
-  // Workspace handshake — confirm the active canvas + the caller's role.
-  // Non-fatal: workspace-targeting tools return clear errors and the caller
-  // decides how to surface "no active canvas".
-  let handshake: Awaited<ReturnType<DoplClient["getActiveWorkspace"]>> | null =
-    null;
+  // Workspace directory (M-1): the caller's ACTIVE memberships in one call.
+  // Replaces the old getActiveWorkspace handshake, so boot never hits the
+  // header-less `resolveActiveWorkspace` path. The result seeds the server's
+  // workspace cache (createServer), so no re-fetch is needed — HTTP boots
+  // once per request; do NOT add loopbacks, the net count must not increase.
+  let directory: WorkspaceListItem[] = [];
+  let directoryLoadFailed = false;
   try {
-    handshake = await client.getActiveWorkspace();
+    const result = await client.listWorkspaces();
+    directory = result.workspaces;
   } catch (err) {
-    diag(`[dopl-mcp] canvas handshake failed: ${errText(err)}`);
-    handshake = null;
+    diag(`[dopl-mcp] workspace directory load failed: ${errText(err)}`);
+    directory = [];
+    directoryLoadFailed = true;
   }
-  if (handshake?.workspace) {
-    client.setWorkspaceId(handshake.workspace.id);
+
+  // Resolve the session default from the directory:
+  //   - a request-level X-Workspace-Id pin (the client's constructor
+  //     workspaceId) that names a membership wins → treat like single;
+  //   - else exactly one membership auto-targets;
+  //   - else (0 or 2+ with no pin) NO transport default — the wrapper
+  //     demands `workspace=` per call, so no header-less loopback can fire.
+  const pin = client.getWorkspaceId();
+  let active: WorkspaceListItem | null = null;
+  let source: "header pin" | "sole membership" | null = null;
+  if (pin) {
+    active = directory.find((w) => w.id === pin || w.slug === pin) ?? null;
+    if (active) {
+      source = "header pin";
+    } else {
+      // Keep the fallback (the stale pin is cleared below), but make the
+      // silent drop observable: a request X-Workspace-Id that names no
+      // active membership is otherwise invisible in logs.
+      diag(
+        `[dopl-mcp] X-Workspace-Id pin "${pin}" matched no active membership${
+          directoryLoadFailed ? " (directory load had failed)" : ""
+        }; ignoring it and resolving from memberships`,
+      );
+    }
   }
+  if (!active && directory.length === 1) {
+    active = directory[0];
+    source = "sole membership";
+  }
+  // Clear a stale/garbage constructor pin that didn't resolve so loopback
+  // calls never carry a bogus X-Workspace-Id.
+  client.setWorkspaceId(active ? active.id : null);
 
   const server = createServer(client, {
     isAdmin,
-    workspace: handshake?.workspace ?? null,
-    role: handshake?.role ?? null,
+    directory,
+    directoryLoadFailed,
+    workspace: active,
+    role: active?.role ?? null,
+    workspaceSource: source,
     scopes: opts.scopes,
   });
 
-  const activeWorkspace = handshake?.workspace
+  const activeWorkspace = active
     ? {
-        id: handshake.workspace.id,
-        name: handshake.workspace.name,
-        slug: handshake.workspace.slug,
-        role: handshake.role ?? "viewer",
+        id: active.id,
+        name: active.name,
+        slug: active.slug,
+        role: active.role,
       }
     : null;
 
-  return { server, userId, isAdmin, activeWorkspace };
+  return { server, userId, isAdmin, activeWorkspace, directoryLoadFailed };
 }
 
 async function pingWithRetry(

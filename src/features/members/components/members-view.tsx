@@ -18,6 +18,8 @@ import { ResourceDetail } from "./resource-detail";
 import { CreateTeamDialog } from "./create-team-dialog";
 import { InviteDialog } from "./invite-dialog";
 import { ConflictDialog, type ConflictState } from "./conflict-dialog";
+import { ApiError } from "@/shared/api/api-client";
+import { UpgradeModal } from "@/features/billing/components/upgrade-modal";
 
 export type MembersTabKey = "members" | "teams" | "access";
 
@@ -35,6 +37,9 @@ const TAB_KIND: Record<MembersTabKey, NonNullable<Selection>["kind"]> = {
 
 interface Props {
   workspaceSlug: string;
+  /** Needed to scope the Solo member-limit upgrade modal; the join-approve
+   *  402 falls back to a toast when absent. */
+  workspaceId?: string;
   currentUserId: string;
   myRole: MemberRole;
 }
@@ -45,7 +50,12 @@ interface Props {
  * roster/teams/resources list on the left behind a segmented switcher,
  * the selection's document on the right. No slide-out drawers.
  */
-export function MembersView({ workspaceSlug, currentUserId, myRole }: Props) {
+export function MembersView({
+  workspaceSlug,
+  workspaceId,
+  currentUserId,
+  myRole,
+}: Props) {
   const canManage = meetsMinRole(myRole, "admin");
   const [tab, setTab] = useState<MembersTabKey>("members");
   const [query, setQuery] = useState("");
@@ -53,6 +63,7 @@ export function MembersView({ workspaceSlug, currentUserId, myRole }: Props) {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [createTeamOpen, setCreateTeamOpen] = useState(false);
   const [conflict, setConflict] = useState<ConflictState | null>(null);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
 
   const { members, loading, refresh: refreshMembers } = useMembers(workspaceSlug);
   const { invitations, refresh: refreshInvitations } = useInvitations(
@@ -150,6 +161,16 @@ export function MembersView({ workspaceSlug, currentUserId, myRole }: Props) {
         if (action === "approve") refreshMembers();
       })
       .catch((err: unknown) => {
+        // Solo plan is single-member — approving is blocked server-side.
+        // Offer the in-place Team upgrade instead of a dead-end toast.
+        if (
+          err instanceof ApiError &&
+          err.code === "SOLO_MEMBER_LIMIT" &&
+          workspaceId
+        ) {
+          setUpgradeOpen(true);
+          return;
+        }
         toast({
           title: err instanceof Error ? err.message : "Couldn't resolve request",
         });
@@ -243,6 +264,7 @@ export function MembersView({ workspaceSlug, currentUserId, myRole }: Props) {
 
       <InviteDialog
         workspaceSlug={workspaceSlug}
+        workspaceId={workspaceId}
         open={inviteOpen}
         onOpenChange={setInviteOpen}
         teams={teamList}
@@ -251,6 +273,14 @@ export function MembersView({ workspaceSlug, currentUserId, myRole }: Props) {
           refreshMembers();
           refreshTeams();
         }}
+      />
+
+      <UpgradeModal
+        open={upgradeOpen}
+        onOpenChange={setUpgradeOpen}
+        workspaceId={workspaceId}
+        canManageBilling={canManage}
+        variant="add-member"
       />
 
       <ConflictDialog

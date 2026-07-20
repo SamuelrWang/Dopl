@@ -1,13 +1,16 @@
 /**
  * Plan definitions — the single source for the settings-modal Plans &
- * Billing pane and the public /pricing page. Plans are WORKSPACE-level:
- * Free and Pro (billed $7.99 per seat per month, seats = workspace
- * members). Team is a "Custom / contact us" positioning column.
- * Checkout only sells the live per-seat Pro price; Free and Team are
- * positioning columns.
+ * Billing pane and the public /pricing page. Plans are WORKSPACE-level and
+ * all three are real, purchasable plans now:
+ *   - Free: full features; solo work is uncapped, teams of 2+ get a
+ *     1,000-object cap and a 90-day chat window.
+ *   - Solo Pro: $5.99/month flat, single-member workspaces only.
+ *   - Team: $7.99 per seat / month, seats sync to member count.
+ * Checkout sells both paid plans — Solo (flat, quantity 1) and Team
+ * (per-seat) — via their live Stripe prices.
  */
 
-export type PlanId = "free" | "pro" | "team";
+export type PlanId = "free" | "solo" | "team";
 
 export interface PlanDef {
   id: PlanId;
@@ -21,44 +24,42 @@ export interface PlanDef {
 export const PLANS: ReadonlyArray<PlanDef> = [
   {
     id: "free",
-    audience: "For individuals & small teams",
+    audience: "For individuals & teams getting started",
     name: "Free",
     priceMonthly: "Free",
     priceNote: "",
     features: [
-      "Unlimited usage on your own",
-      "Every feature included",
-      "Up to 1,000 ontology objects (cards and columns) once a workspace has 2+ members",
+      "Every feature included — no gates",
+      "Unlimited ontology objects while you work solo",
+      "Teams of 2+: up to 1,000 ontology objects",
       "90 days of chat history",
       "Community support",
     ],
   },
   {
-    id: "pro",
-    audience: "For growing teams",
-    name: "Pro",
-    priceMonthly: "$7.99",
-    priceNote: "/ seat / month",
+    id: "solo",
+    audience: "For individuals",
+    name: "Solo Pro",
+    priceMonthly: "$5.99",
+    priceNote: "/ month",
     features: [
-      "Everything in Free",
-      "Uncapped ontology objects",
+      "Unlimited ontology objects",
       "Full chat history",
       "Priority support",
-      "Billed per member — seats sync automatically",
+      "Single-member workspace — upgrade to Team anytime",
     ],
   },
   {
     id: "team",
-    audience: "For teams with advanced needs",
+    audience: "For teams",
     name: "Team",
-    priceMonthly: "Custom",
-    priceNote: "",
+    priceMonthly: "$7.99",
+    priceNote: "/ seat / month",
     features: [
-      "Everything in Pro",
-      "SSO / SAML",
-      "Advanced roles & access control",
-      "Audit logs",
-      "Dedicated support",
+      "Unlimited ontology objects for the whole workspace",
+      "Full chat history for everyone",
+      "Priority support",
+      "Seats sync automatically as members join or leave",
     ],
   },
 ];

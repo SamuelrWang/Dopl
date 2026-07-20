@@ -30,7 +30,8 @@ export interface McpAuthContext {
   userId: string;
   /**
    * Workspace this session is locked to, else null. Always null for OAuth
-   * callers (they target any workspace via `x-workspace-id` / `set_workspace`).
+   * callers (they target any workspace via `x-workspace-id` or the per-call
+   * `workspace=` arg).
    */
   apiKeyWorkspaceId: string | null;
   /**

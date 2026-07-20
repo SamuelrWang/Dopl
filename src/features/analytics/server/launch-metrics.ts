@@ -4,11 +4,12 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
  * Launch-metrics aggregations for the admin analytics dashboard.
  * All read-only; admin auth is enforced at the route layer.
  *
- * Price hardcoded here so the MRR number matches what Stripe actually
- * charges. If that ever diverges, read it from env instead.
+ * Prices hardcoded here so the MRR number matches what Stripe actually
+ * charges. If that ever diverges, read them from env instead.
  */
 
-const MONTHLY_PRICE_USD = 7.99;
+const SOLO_MONTHLY_USD = 5.99;
+const TEAM_SEAT_MONTHLY_USD = 7.99;
 
 export interface LaunchMetrics {
   signups_total: number;
@@ -27,19 +28,36 @@ export async function getLaunchMetrics(): Promise<LaunchMetrics> {
   const supabase = supabaseAdmin();
 
   // ── Basic counts ─────────────────────────────────────────────────
-  // Billing is workspace-level post-pivot: a Pro workspace holds `plan='pro'`
-  // (canceled subs revert to `plan='free'`), so the count of pro-plan rows is
-  // the paying-workspace tally that drives MRR.
-  const [{ count: signupsTotal }, { count: proWorkspaces }] = await Promise.all([
+  // Billing is workspace-level: paid plans are 'solo' ($5.99 flat) and
+  // 'team' ($7.99 × seat_count). Canceled subs revert to plan='free', and
+  // past_due keeps entitlements (grace), so active + past_due are the
+  // still-billing rows that drive MRR.
+  const [{ count: signupsTotal }, { data: paidRows }] = await Promise.all([
     supabase.from("profiles").select("id", { count: "exact", head: true }),
     supabase
       .from("workspace_billing")
-      .select("workspace_id", { count: "exact", head: true })
-      .eq("plan", "pro"),
+      .select("plan, seat_count")
+      .in("plan", ["solo", "team"])
+      .in("status", ["active", "past_due"]),
   ]);
 
-  const paying = proWorkspaces ?? 0;
-  const mrrUsd = Number((paying * MONTHLY_PRICE_USD).toFixed(2));
+  const rows = (paidRows ?? []) as Array<{
+    plan: "solo" | "team";
+    seat_count: number | null;
+  }>;
+  const paying = rows.length;
+  const mrrUsd = Number(
+    rows
+      .reduce(
+        (sum, row) =>
+          sum +
+          (row.plan === "solo"
+            ? SOLO_MONTHLY_USD
+            : Math.max(1, row.seat_count ?? 1) * TEAM_SEAT_MONTHLY_USD),
+        0
+      )
+      .toFixed(2)
+  );
 
   // ── Funnel ratios from conversion_events ─────────────────────────
   const [signupEvents, firstClusterEvents, subscribedEvents, firstIngestEvents] =

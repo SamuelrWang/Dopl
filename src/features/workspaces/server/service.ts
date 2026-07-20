@@ -29,6 +29,60 @@ export interface ResolvedMembership {
   membership: WorkspaceMembership;
 }
 
+/** One entry in a `WORKSPACE_REQUIRED` body so the caller can pick a target. */
+export interface WorkspaceChoice {
+  name: string;
+  slug: string;
+  role: Role;
+}
+
+/**
+ * Workspace-resolution failure surfaced by `resolveActiveWorkspace` when a
+ * request can't be pinned to a single workspace. Uses the FLAT billing-style
+ * envelope (`{ error, message, workspaces? }`, mirroring
+ * `entitlementDeniedBody`) — NOT the nested `HttpError` shape — so the MCP
+ * client / web `apiRequest` surface the code + message verbatim.
+ *
+ *   - WORKSPACE_REQUIRED (400): no header and the caller has 0 or 2+ active
+ *     memberships. `workspaces` lists every membership ({name, slug, role});
+ *     when empty the message points at `POST /api/workspaces` to create one.
+ *   - WORKSPACE_INVALID (400): the `X-Workspace-Id` header (or the export
+ *     `?workspaceId=` param) is present-but-blank or not a UUID. Never
+ *     coerced to "no header", never a 500.
+ */
+export class WorkspaceResolutionError extends Error {
+  readonly status = 400 as const;
+  readonly code: "WORKSPACE_REQUIRED" | "WORKSPACE_INVALID";
+  readonly workspaces?: WorkspaceChoice[];
+
+  constructor(
+    code: "WORKSPACE_REQUIRED" | "WORKSPACE_INVALID",
+    message: string,
+    workspaces?: WorkspaceChoice[]
+  ) {
+    super(message);
+    this.name = "WorkspaceResolutionError";
+    this.code = code;
+    this.workspaces = workspaces;
+  }
+
+  toResponseBody(): {
+    error: string;
+    message: string;
+    workspaces?: WorkspaceChoice[];
+  } {
+    const body: { error: string; message: string; workspaces?: WorkspaceChoice[] } = {
+      error: this.code,
+      message: this.message,
+    };
+    if (this.workspaces) body.workspaces = this.workspaces;
+    return body;
+  }
+}
+
+const WORKSPACE_ID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * Authoritative auth lookup used by `withWorkspaceAuth`. Returns the workspace
  * + the caller's active membership, or throws an HttpError. Never returns
@@ -51,35 +105,56 @@ export async function resolveMembershipOrThrow(
 
 /**
  * Resolve the active workspace for an authenticated request. Used by
- * `withWorkspaceAuth` — header takes priority, default workspace is the
- * fallback for during-rollout compatibility (Phase 1) and any UI that
- * hasn't been wired to send the header yet.
+ * `withWorkspaceAuth` and `GET /api/workspaces/me`. Fail-CLOSED and
+ * explicit — there is NO silent default-workspace fallback (MCP-2):
+ *
+ *   1. `X-Workspace-Id` header (or export `?workspaceId=` param, threaded
+ *      here as `headerWorkspaceId`) — UUID only. Present-but-blank or a
+ *      non-UUID value → 400 `WORKSPACE_INVALID` (never coerced to "no
+ *      header"; a slug in the header used to 500 — now a clean 400).
+ *   2. No header → the caller's ACTIVE memberships
+ *      (`listWorkspacesWithRoleForUser`). This ONE query powers the count,
+ *      the auto-target, and the 400 body:
+ *        - exactly 1 → auto-target it (role from the same lookup);
+ *        - 0 → 400 `WORKSPACE_REQUIRED`, `workspaces: []`, message points
+ *          at `POST /api/workspaces`;
+ *        - 2+ → 400 `WORKSPACE_REQUIRED` listing {name, slug, role}.
+ *
+ * NEVER use `findDefaultWorkspaceForUser` here — that is oldest-OWNED only
+ * (billing-webhook legacy) and diverges from membership (owns 0 / member of
+ * 1, owns 1 / member of 3). The API-key workspace lock is applied by the
+ * caller (`withWorkspaceAuth`) before this runs, not here.
  */
 export async function resolveActiveWorkspace(
   userId: string,
   headerWorkspaceId: string | null
 ): Promise<ResolvedMembership> {
-  if (headerWorkspaceId) {
-    return resolveMembershipOrThrow(headerWorkspaceId, userId);
-  }
-  const defaultWorkspace = await findDefaultWorkspaceForUser(userId);
-  if (!defaultWorkspace) {
-    // The P0 backfill creates one for every existing auth.users row;
-    // a missing default workspace means a user signed up after the
-    // backfill and the signup hook hasn't yet been added (Phase 2 work).
-    // Auto-create one inline so the request can proceed.
-    const created = await ensureDefaultWorkspace(userId);
-    const membership = await findMembership(created.id, userId);
-    if (!membership) {
-      throw new HttpError(
-        500,
-        "WORKSPACE_BOOTSTRAP_FAILED",
-        "Default workspace missing membership row"
+  if (headerWorkspaceId !== null) {
+    const trimmed = headerWorkspaceId.trim();
+    if (!WORKSPACE_ID_RE.test(trimmed)) {
+      throw new WorkspaceResolutionError(
+        "WORKSPACE_INVALID",
+        "X-Workspace-Id must be a workspace UUID. Omit it to auto-target your workspace when you belong to exactly one, or pass a UUID from GET /api/workspaces."
       );
     }
-    return { workspace: created, membership };
+    return resolveMembershipOrThrow(trimmed, userId);
   }
-  return resolveMembershipOrThrow(defaultWorkspace.id, userId);
+
+  const memberships = await listWorkspacesWithRoleForUser(userId);
+  if (memberships.length === 1) {
+    return resolveMembershipOrThrow(memberships[0].id, userId);
+  }
+
+  const workspaces: WorkspaceChoice[] = memberships.map((w) => ({
+    name: w.name,
+    slug: w.slug,
+    role: w.role,
+  }));
+  const message =
+    memberships.length === 0
+      ? "You are not an active member of any workspace. Create one with POST /api/workspaces, then retry."
+      : `You belong to ${memberships.length} workspaces, so this request needs an explicit target. Set the X-Workspace-Id header (or pass workspace= on MCP tool calls) to one of the workspaces listed below.`;
+  throw new WorkspaceResolutionError("WORKSPACE_REQUIRED", message, workspaces);
 }
 
 /**

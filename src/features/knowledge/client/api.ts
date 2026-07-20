@@ -269,8 +269,8 @@ export type KnowledgeExportKind = "base" | "folder" | "entry";
  * Downloads a base/folder as a zip or a single entry as a `.md` file.
  * The export routes return a blob with a `Content-Disposition`
  * filename; we honor it, falling back to a sensible default. The
- * workspace header is sent so the right workspace is targeted (the
- * route otherwise falls back to the user's default workspace).
+ * workspace header is sent so the right workspace is targeted (without
+ * it a multi-workspace caller fails closed as WORKSPACE_REQUIRED).
  *
  * Done with `fetch` + an object-URL anchor rather than a plain link so
  * the `X-Workspace-Id` header rides along and HTTP errors surface as

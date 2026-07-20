@@ -11,7 +11,9 @@ import { AsyncLocalStorage } from "node:async_hooks";
  *   2. AsyncLocalStorage value (per-tool-call, set by the MCP
  *      `registerTool` wrapper — invisible to client.method() callers).
  *   3. Transport's stored `workspaceId` (session default).
- *   4. None — server falls back to user's default workspace.
+ *   4. None — no header is sent; the server resolves fail-closed from the
+ *      caller's memberships (a sole workspace auto-targets; 0 or 2+ →
+ *      WORKSPACE_REQUIRED). No user-default fallback.
  *
  * Exported so callers in `@dopl/mcp-server` can wrap a handler in
  * `workspaceContext.run(id, fn)`.
@@ -23,8 +25,9 @@ export interface DoplTransportOptions {
     /**
      * Active canvas (workspace) for this transport. When set, every
      * request emits an `X-Workspace-Id` header so the server scopes data to
-     * that canvas. When unset, the server falls back to the user's
-     * default canvas.
+     * that canvas. When unset, no header is sent and the server resolves
+     * fail-closed from the caller's memberships (a sole workspace
+     * auto-targets; 0 or 2+ → WORKSPACE_REQUIRED).
      */
     workspaceId?: string;
 }

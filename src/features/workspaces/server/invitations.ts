@@ -9,6 +9,7 @@ import type {
   Role,
 } from "../types";
 import { canGrantRole, memberManageDenial } from "../member-policy";
+import { assertCanAddMember } from "@/features/billing/server/entitlements";
 import { syncSeatQuantity } from "@/features/billing/server/seats";
 import { requireWorkspaceRole } from "./authz";
 import {
@@ -63,6 +64,11 @@ export async function createInvitation(
   input: CreateInvitationInput
 ): Promise<Invitation> {
   await requireWorkspaceRole(input.workspaceId, input.invitedBy, "admin");
+
+  // Solo plan is single-member — every member-add path must gate. Fail
+  // fast here so the owner gets the 402 on click, before we mint or reuse
+  // a token that could never be accepted.
+  await assertCanAddMember(input.workspaceId);
 
   const normalizedEmail = input.email.trim().toLowerCase();
   if (!normalizedEmail) {
@@ -310,6 +316,13 @@ export async function acceptInvitationByToken(
       workspacePublicId: status.workspace.publicId,
     };
   }
+
+  // Solo plan is single-member — every member-add path must gate. Re-check
+  // at accept time (not just at invite time): an invite sent while the
+  // workspace was free/team survives a later downgrade to Solo, so this
+  // closes the stale-invite hole. The already-active-member no-op above is
+  // intentionally NOT gated — re-accepting an existing membership adds no seat.
+  await assertCanAddMember(status.invitation.workspaceId);
 
   // Insert (or revive) the membership row. Use upsert keyed on
   // (workspace_id, user_id) so a previously-revoked member rejoining

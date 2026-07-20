@@ -25,6 +25,7 @@ interface Props {
  */
 export function MembersSection({
   workspaceSegment,
+  workspaceId,
   currentUserId,
   role,
 }: Props) {
@@ -57,6 +58,7 @@ export function MembersSection({
 
       <MembersTab
         workspaceSlug={workspaceSegment}
+        workspaceId={workspaceId}
         currentUserId={currentUserId}
         myRole={role}
         members={memberList}
@@ -72,6 +74,7 @@ export function MembersSection({
 
       <InviteDialog
         workspaceSlug={workspaceSegment}
+        workspaceId={workspaceId}
         open={inviteOpen}
         onOpenChange={setInviteOpen}
         teams={teamList}

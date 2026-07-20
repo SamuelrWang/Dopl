@@ -149,9 +149,9 @@ describe("mapStatus (via subscription.updated)", () => {
     ["incomplete", "free", "canceled"],
     ["incomplete_expired", "free", "canceled"],
     ["unpaid", "free", "canceled"],
-    ["past_due", "pro", "past_due"],
-    ["active", "pro", "active"],
-    ["trialing", "pro", "active"],
+    ["past_due", "team", "past_due"],
+    ["active", "team", "active"],
+    ["trialing", "team", "active"],
   ] as const)(
     "maps stripe %s -> plan %s / status %s",
     async (stripeStatus, plan, status) => {
@@ -172,6 +172,25 @@ describe("mapStatus (via subscription.updated)", () => {
     expect(mockRepo.upsertWorkspaceBilling).toHaveBeenCalledWith(
       WS,
       expect.objectContaining({ plan: "free", seatCount: null })
+    );
+  });
+
+  it("a canceled write via updated NULLS the sub pointers, like deleted", async () => {
+    // Retaining sub_1 here would let a later invoice.payment_succeeded
+    // match it and restore status=active without the plan — stranding a
+    // paying workspace at free/active and 409-blocking re-checkout.
+    await processStripeEvent(
+      event("customer.subscription.updated", sub({ status: "unpaid" }))
+    );
+    expect(mockRepo.upsertWorkspaceBilling).toHaveBeenCalledWith(
+      WS,
+      expect.objectContaining({
+        plan: "free",
+        status: "canceled",
+        stripeSubscriptionId: null,
+        stripePriceId: null,
+        seatCount: null,
+      })
     );
   });
 });
@@ -254,15 +273,79 @@ describe("multi-item subscriptions + period end", () => {
   });
 });
 
+describe("price -> plan derivation", () => {
+  it("maps the Solo price to plan 'solo'", async () => {
+    vi.stubEnv("STRIPE_SOLO_PRICE_ID", "price_solo");
+    const solo = sub({
+      status: "active",
+      items: {
+        data: [{ id: "si_solo", quantity: 1, price: { id: "price_solo" } }],
+      },
+    } as unknown as Partial<Stripe.Subscription>);
+    await processStripeEvent(event("customer.subscription.updated", solo));
+    expect(mockRepo.upsertWorkspaceBilling).toHaveBeenCalledWith(
+      WS,
+      expect.objectContaining({ plan: "solo" })
+    );
+  });
+
+  it("maps the per-seat Team price to plan 'team'", async () => {
+    vi.stubEnv("STRIPE_PRO_SEAT_PRICE_ID", "price_seat");
+    await processStripeEvent(
+      event("customer.subscription.updated", sub({ status: "active" }))
+    );
+    expect(mockRepo.upsertWorkspaceBilling).toHaveBeenCalledWith(
+      WS,
+      expect.objectContaining({ plan: "team" })
+    );
+  });
+
+  it("falls back to subscription metadata.plan for an unknown price", async () => {
+    vi.stubEnv("STRIPE_SOLO_PRICE_ID", "price_solo");
+    vi.stubEnv("STRIPE_PRO_SEAT_PRICE_ID", "price_seat");
+    const legacy = sub({
+      status: "active",
+      metadata: { workspace_id: WS, plan: "solo" },
+      items: {
+        data: [{ id: "si_legacy", quantity: 1, price: { id: "price_legacy" } }],
+      },
+    } as unknown as Partial<Stripe.Subscription>);
+    await processStripeEvent(event("customer.subscription.updated", legacy));
+    expect(mockRepo.upsertWorkspaceBilling).toHaveBeenCalledWith(
+      WS,
+      expect.objectContaining({ plan: "solo" })
+    );
+  });
+
+  it("defaults an unknown/legacy price with no plan metadata to 'team'", async () => {
+    vi.stubEnv("STRIPE_SOLO_PRICE_ID", "price_solo");
+    vi.stubEnv("STRIPE_PRO_SEAT_PRICE_ID", "price_seat");
+    const legacy = sub({
+      status: "active",
+      metadata: { workspace_id: WS },
+      items: {
+        data: [{ id: "si_20", quantity: 1, price: { id: "price_20_legacy" } }],
+      },
+    } as unknown as Partial<Stripe.Subscription>);
+    await processStripeEvent(event("customer.subscription.updated", legacy));
+    expect(mockRepo.upsertWorkspaceBilling).toHaveBeenCalledWith(
+      WS,
+      expect.objectContaining({ plan: "team" })
+    );
+  });
+});
+
 describe("invoice.payment_succeeded", () => {
   it("recovers to active when the invoice's subscription matches the stored one", async () => {
     mockRepo.getWorkspaceBilling.mockResolvedValue({
       stripeSubscriptionId: "sub_1",
     } as never);
     await processStripeEvent(event("invoice.payment_succeeded", invoice()));
+    // Recovery flips status back to active and leaves the derived plan
+    // (solo/team) untouched.
     expect(mockRepo.upsertWorkspaceBilling).toHaveBeenCalledWith(
       WS,
-      expect.objectContaining({ plan: "pro", status: "active" })
+      expect.objectContaining({ status: "active" })
     );
   });
 
@@ -284,9 +367,21 @@ describe("invoice.payment_succeeded", () => {
 });
 
 describe("invoice.payment_failed", () => {
-  it("sets past_due on a matching Pro row", async () => {
+  it("sets past_due on a matching paid (team) row", async () => {
     mockRepo.getWorkspaceBilling.mockResolvedValue({
-      plan: "pro",
+      plan: "team",
+      stripeSubscriptionId: "sub_1",
+    } as never);
+    await processStripeEvent(event("invoice.payment_failed", invoice()));
+    expect(mockRepo.upsertWorkspaceBilling).toHaveBeenCalledWith(
+      WS,
+      expect.objectContaining({ status: "past_due" })
+    );
+  });
+
+  it("sets past_due on a matching Solo row too", async () => {
+    mockRepo.getWorkspaceBilling.mockResolvedValue({
+      plan: "solo",
       stripeSubscriptionId: "sub_1",
     } as never);
     await processStripeEvent(event("invoice.payment_failed", invoice()));
@@ -305,12 +400,23 @@ describe("invoice.payment_failed", () => {
     expect(mockRepo.upsertWorkspaceBilling).not.toHaveBeenCalled();
   });
 
-  it("ignores a Pro row when the invoice names a different subscription", async () => {
+  it("ignores a paid row when the invoice names a different subscription", async () => {
     mockRepo.getWorkspaceBilling.mockResolvedValue({
-      plan: "pro",
+      plan: "team",
       stripeSubscriptionId: "sub_other",
     } as never);
     await processStripeEvent(event("invoice.payment_failed", invoice()));
+    expect(mockRepo.upsertWorkspaceBilling).not.toHaveBeenCalled();
+  });
+
+  it("ignores an invoice that names NO subscription (one-off invoice on the same customer)", async () => {
+    mockRepo.getWorkspaceBilling.mockResolvedValue({
+      plan: "team",
+      stripeSubscriptionId: "sub_1",
+    } as never);
+    await processStripeEvent(
+      event("invoice.payment_failed", invoice({ parent: null }))
+    );
     expect(mockRepo.upsertWorkspaceBilling).not.toHaveBeenCalled();
   });
 });
@@ -325,7 +431,7 @@ describe("checkout.session.completed", () => {
     await processStripeEvent(event("checkout.session.completed", session));
     expect(mockRepo.upsertWorkspaceBilling).toHaveBeenCalledWith(
       WS,
-      expect.objectContaining({ plan: "pro", status: "active" })
+      expect.objectContaining({ plan: "team", status: "active" })
     );
     expect(syncSeatQuantity).toHaveBeenCalledWith(WS);
   });
@@ -341,6 +447,21 @@ describe("checkout.session.completed", () => {
       event("checkout.session.completed", session)
     );
     expect(result.received).toBe(true);
+  });
+
+  it("a retried checkout older than the watermark is dropped (no resurrection after a cancel)", async () => {
+    // First delivery failed and was released; the sub was then canceled
+    // (deleted stamped watermark=300). Stripe's retry of the original
+    // checkout event (created=200) must not re-write billing state.
+    mockRepo.getStripeEventWatermark.mockResolvedValue(300);
+    const session = {
+      metadata: { workspace_id: WS },
+      customer: "cus_1",
+      subscription: "sub_1",
+    };
+    await processStripeEvent(event("checkout.session.completed", session, 200));
+    expect(mockRepo.upsertWorkspaceBilling).not.toHaveBeenCalled();
+    expect(syncSeatQuantity).not.toHaveBeenCalled();
   });
 });
 

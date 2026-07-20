@@ -9,7 +9,7 @@
  */
 import type { DoplClient } from "@dopl/client";
 import { createServer } from "./server.js";
-export { createServer, SERVER_INSTRUCTIONS } from "./server.js";
+export { createServer, buildInstructions } from "./server.js";
 export { clientIdentifier, packageVersion } from "./version.js";
 /** The concrete MCP server type, without importing the SDK type directly. */
 export type DoplMcpServer = ReturnType<typeof createServer>;
@@ -38,18 +38,30 @@ export interface BootResult {
     /** Authenticated user id from the status ping (null if the ping failed). */
     userId: string | null;
     isAdmin: boolean;
-    /** Resolved active canvas, for the caller to log/report. Null if unresolved. */
+    /**
+     * The session default workspace resolved at boot from the caller's
+     * membership directory — a request X-Workspace-Id pin, else the sole
+     * membership. Null when the caller has 0 or 2+ memberships and sent no
+     * pin (each tool call must then pass `workspace=`).
+     */
     activeWorkspace: {
         id: string;
         name: string;
         slug: string;
         role: string;
     } | null;
+    /**
+     * True when the boot `listWorkspaces()` call FAILED (transient backend /
+     * network error), as distinct from a genuine 0-membership directory. Lets
+     * the refusal copy say "couldn't load your workspaces (retry)" instead of
+     * "you have no workspaces".
+     */
+    directoryLoadFailed: boolean;
 }
 /**
  * Build a fully-registered MCP server for `client`: run the status-ping
- * handshake (admin flag + liveness), resolve the active workspace, and
- * register all tools. Transport-agnostic — the caller attaches stdio or
- * HTTP afterward.
+ * handshake (admin flag + liveness), resolve the session default workspace
+ * from the caller's membership directory, and register all tools.
+ * Transport-agnostic — the caller attaches stdio or HTTP afterward.
  */
 export declare function bootServer(client: DoplClient, opts?: BootOptions): Promise<BootResult>;

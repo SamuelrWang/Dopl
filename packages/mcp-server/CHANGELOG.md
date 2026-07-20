@@ -4,6 +4,41 @@ All notable changes to `@dopl/mcp-server` are documented here. Format follows [K
 
 ## [Unreleased]
 
+### Changed — BREAKING: fail-closed workspace targeting (MCP-2)
+
+The server no longer picks a "default" workspace when the caller belongs to
+2+ workspaces. Workspace targeting is now explicit and fail-closed.
+
+- **Boot resolves off the membership directory.** Boot calls
+  `client.listWorkspaces()` (replacing the `getActiveWorkspace` handshake).
+  Exactly one membership auto-targets it; a request-level `X-Workspace-Id`
+  pin that names a membership is honored; **2+ memberships and no pin leave
+  NO session default**.
+- **No-default calls are refused, not guessed.** With no session default, a
+  tool call that omits `workspace=` returns an `isError` response listing the
+  caller's workspaces and demanding `workspace=<slug_or_id>`. Single-workspace
+  (and pinned) sessions are unaffected — `workspace=` stays optional there.
+- **`buildInstructions(directory)`** bakes the caller's workspace table
+  (name/slug/role/description) and the targeting rule into the server
+  instructions, so the agent knows before its first call whether it must pass
+  `workspace=`.
+- **`_dopl_status` footer is mandatory-effective.** Every successful response
+  names the workspace it actually hit plus a source label: `per-call arg`,
+  `sole membership`, or `header pin`.
+- **Removed `set_workspace`.** A stateless HTTP connection can't persist a
+  switch, so the tool was misleading. Use the per-call `workspace=` arg.
+  `current_workspace` now reports which workspace a no-arg call resolves to
+  (or, for 2+ memberships, lists the choices). `list_workspaces` is unchanged
+  except its copy (★ = the auto-target, or "pass `workspace=`" when 2+).
+- Backend `resolveActiveWorkspace` is fail-closed to match: header UUID only
+  (blank/non-UUID → 400 `WORKSPACE_INVALID`), no-header → active memberships
+  (0/2+ → 400 `WORKSPACE_REQUIRED`). No default-workspace fallback.
+- **A pinned 2+-membership connection is told the pin IS its default** — instructions and `current_workspace` say a no-arg call targets the pinned workspace instead of demanding `workspace=` on every call.
+- **Transient directory-load failures now read differently from zero memberships** — when boot's `listWorkspaces()` fails, the instructions and no-workspace refusal say "couldn't load your workspaces — retry" rather than "you're not a member of any workspace".
+
+Requires the co-versioned app backend (this repo) — the loopback `/api/*`
+routes now fail closed on ambiguous targeting.
+
 ## [1.1.0] — 2026-06-04
 
 ### Removed — cluster "brain" feature

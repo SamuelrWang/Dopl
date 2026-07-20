@@ -98,7 +98,7 @@ export function withExternalAuth(
  *
  * - OAuth-token auth (remote MCP): uses the token's user_id. `apiKeyWorkspaceId`
  *   is always undefined — OAuth callers target any workspace via the
- *   `x-workspace-id` header / `set_workspace`.
+ *   `x-workspace-id` header (request pin) or the per-call `workspace=` arg.
  * - Session auth: uses user.id from the Supabase session.
  */
 export function withUserAuth(

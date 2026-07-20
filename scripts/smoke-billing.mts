@@ -153,7 +153,7 @@ async function main() {
 
     await processStripeEvent(evt(`evt_smoke_${stamp}_1`, "customer.subscription.updated", subObj));
     ent = await getWorkspaceEntitlements(wsId);
-    check("after sub.updated(active): plan=pro", ent.plan === "pro", JSON.stringify(ent));
+    check("after sub.updated(active): plan=team", ent.plan === "team", JSON.stringify(ent));
     check("pro: uncapped", ent.objectCap === null);
     check("pro: full chat history", ent.chatsWindowDays === null);
     check("pro: seatCount=2", ent.seatCount === 2);
@@ -167,7 +167,7 @@ async function main() {
     );
     ent = await getWorkspaceEntitlements(wsId);
     check("after payment_failed: status=past_due", ent.status === "past_due", ent.status);
-    check("past_due keeps pro entitlements", ent.plan === "pro" && ent.canCreateObjects === true);
+    check("past_due keeps team entitlements", ent.plan === "team" && ent.canCreateObjects === true);
 
     await processStripeEvent(
       evt(`evt_smoke_${stamp}_3`, "customer.subscription.deleted", { ...subObj, status: "canceled" })
@@ -234,7 +234,7 @@ async function main() {
     // flip to pro → everything visible again (hide, never delete)
     await admin
       .from("workspace_billing")
-      .update({ plan: "pro", status: "active" })
+      .update({ plan: "team", status: "active" })
       .eq("workspace_id", wsId);
     list = await listChats(ctx as never);
     check("pro: all 3 visible", list.chats.length === 3, String(list.chats.length));

@@ -58,9 +58,11 @@ export declare class DoplClient {
     getWorkspace(slug: string): Promise<ResolvedWorkspace>;
     /**
      * Resolve the active workspace — the one currently set on the transport
-     * via `setWorkspaceId(...)` or `X-Workspace-Id`. Used by the MCP server's
-     * startup handshake to confirm the requested workspace exists and the
-     * caller is a member.
+     * via `setWorkspaceId(...)` or `X-Workspace-Id` — via `GET
+     * /api/workspaces/me`. Header-less resolution now depends on the caller's
+     * membership count (exactly one auto-targets; 0 or 2+ → 400
+     * WORKSPACE_REQUIRED). The MCP server boots off `listWorkspaces()` instead,
+     * so this is no longer on the boot path.
      */
     getActiveWorkspace(): Promise<ResolvedWorkspace>;
     pingMcpStatus(): Promise<{

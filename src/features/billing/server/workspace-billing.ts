@@ -10,7 +10,7 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
  * `entitlements.ts` is unit-testable by mocking this module.
  */
 
-export type WorkspaceBillingPlan = "free" | "pro";
+export type WorkspaceBillingPlan = "free" | "solo" | "team";
 export type WorkspaceBillingStatus =
   | "free"
   | "active"

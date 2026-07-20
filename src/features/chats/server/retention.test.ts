@@ -27,7 +27,7 @@ const mockCutoff = vi.mocked(repo.retentionCutoff);
 
 function ent(chatsWindowDays: number | null): WorkspaceEntitlements {
   return {
-    plan: chatsWindowDays === null ? "pro" : "free",
+    plan: chatsWindowDays === null ? "team" : "free",
     status: chatsWindowDays === null ? "active" : "free",
     memberCount: 1,
     seatCount: null,

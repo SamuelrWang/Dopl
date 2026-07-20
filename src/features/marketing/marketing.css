@@ -701,6 +701,12 @@
   border-radius: 999px;
   padding: 4px 11px;
 }
+/* Softer badge for the Solo Pro card — a label, not the "Popular" accent. */
+.lp-plan-badge--soft {
+  color: var(--ink);
+  background: #f0f0f0;
+  border: 1px solid var(--line);
+}
 
 .lp-plan-name {
   font-family: var(--grotesk);
@@ -726,11 +732,14 @@
   font-size: 14px;
   color: var(--muted);
 }
-.lp-plan-fine {
-  font-size: 12.5px;
-  color: var(--muted);
-  margin: 0 0 20px;
-  min-height: 18px;
+/* One-sentence plain-English summary of who the tier is for — the key
+   legibility win. min-height keeps the CTAs roughly aligned across cards. */
+.lp-plan-summary {
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: #3a3a3a;
+  margin: 6px 0 20px;
+  min-height: 40px;
 }
 
 .lp-plan-cta {
@@ -794,6 +803,85 @@
   .lp-plans { grid-template-columns: 1fr; }
 }
 
+/* ── Comparison strip ─────────────────────────────────────────────────
+   Makes the tier deltas unmistakable under the cards. The table has a
+   min-width and lives in an overflow-x scroller so it survives the narrow
+   .lp-modal popup and mobile (scrolls sideways rather than crushing). */
+.lp-compare {
+  margin-top: 40px;
+}
+.lp-compare-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+}
+.lp-compare-table {
+  width: 100%;
+  min-width: 560px;
+  border-collapse: collapse;
+  font-family: var(--grotesk);
+  background: #ffffff;
+}
+.lp-compare-table th,
+.lp-compare-table td {
+  padding: 15px 18px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--line);
+}
+.lp-compare-table tbody tr:last-child th,
+.lp-compare-table tbody tr:last-child td {
+  border-bottom: none;
+}
+/* Column headers = plan names. */
+.lp-compare-table thead th {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  background: #fafafa;
+}
+.lp-compare-caption {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+/* Row headers = the feature being compared. */
+.lp-compare-table tbody th {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.lp-compare-table td {
+  font-size: 14.5px;
+  font-weight: 500;
+  color: #2e2e2e;
+}
+.lp-compare-sub {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+}
+/* Tint the Team column so the highlighted card carries through the strip. */
+.lp-compare-col--popular {
+  background: rgba(13, 13, 13, 0.03);
+}
+.lp-compare-table thead th.lp-compare-col--popular {
+  background: #f1f1f1;
+}
+
+@media (max-width: 900px) {
+  .lp-compare-table th,
+  .lp-compare-table td {
+    padding: 13px 14px;
+  }
+}
+
 /* ── Pricing popup (site-nav) ────────────────────────────────────────── */
 /* Overlay + card reuse the pricing-page markup via .lp-modal descendant
    overrides — same content, popup-scaled chrome. Vars (--ink, --line,
@@ -848,4 +936,13 @@
 }
 .lp-modal .lp-pricing-title {
   font-size: clamp(30px, 4vw, 40px);
+}
+/* Popup-scaled comparison strip — tighter cells; the scroller already keeps
+   the min-width table from overflowing the narrow popup. */
+.lp-modal .lp-compare {
+  margin-top: 30px;
+}
+.lp-modal .lp-compare-table th,
+.lp-modal .lp-compare-table td {
+  padding: 12px 14px;
 }

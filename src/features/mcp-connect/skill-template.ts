@@ -7,9 +7,9 @@
  * MCP server from session boot — before it has called a single tool.
  *
  * Keep this aligned with the server-sent guidance in
- * packages/mcp-server/src/server.ts (SERVER_INSTRUCTIONS): the skill is
- * the local, always-loaded summary; SERVER_INSTRUCTIONS is the canonical
- * over-the-wire version.
+ * packages/mcp-server/src/server.ts (buildInstructions): the skill is
+ * the local, always-loaded summary; the server instructions are the
+ * canonical over-the-wire version.
  */
 export function buildDoplSkillMd(mcpUrl: string): string {
   return `---
@@ -53,8 +53,9 @@ The workspace beats local files as source of truth; flag drift.
 - See everything at a glance → \`dopl_map\`.
 - Archive this conversation → \`dopl_chats(op:'export')\` (read
   \`op:'guide'\` first); recall past sessions → \`dopl_chats(op:'list'|'get')\`.
-- Workspace targeting → \`list_workspaces\`, \`set_workspace\`, or a
-  \`workspace\` arg on any call.
+- Workspace targeting → \`list_workspaces\` (or \`current_workspace\`) to
+  discover slugs, then a \`workspace=<slug>\` arg on each call. With 2+
+  workspaces there's no default — pass \`workspace=\` every time.
 
 ## Following a workflow (the important part)
 

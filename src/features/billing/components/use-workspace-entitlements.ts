@@ -10,9 +10,12 @@ import { useApiQuery } from "@/shared/hooks/use-api-query";
  * workspace), no polling loops. Pass a `workspaceId` to scope the read;
  * omit it to let the endpoint fall back to the caller's default
  * workspace.
+ *
+ * Plans: "free" | "solo" | "team". Solo Pro is a flat $5.99/month for
+ * single-member workspaces; Team is $7.99 per seat per month.
  */
 
-export type WorkspacePlan = "free" | "pro";
+export type WorkspacePlan = "free" | "solo" | "team";
 export type BillingStatus = "free" | "active" | "past_due" | "canceled";
 
 export interface WorkspaceEntitlementsStatus {
@@ -31,7 +34,10 @@ export interface WorkspaceEntitlementsStatus {
   has_stripe_customer: boolean;
 }
 
-export const PRO_SEAT_PRICE = 7.99;
+/** Solo Pro — flat monthly price, single-member workspaces only. */
+export const SOLO_PRICE = 5.99;
+/** Team — per seat per month, seats sync with membership. */
+export const TEAM_SEAT_PRICE = 7.99;
 
 const DEFAULT_STATUS: WorkspaceEntitlementsStatus = {
   plan: "free",
@@ -46,7 +52,7 @@ const DEFAULT_STATUS: WorkspaceEntitlementsStatus = {
   has_stripe_customer: false,
 };
 
-/** `$23.97` — a per-seat monthly total, no trailing `.00` stripping. */
+/** `$23.97` — a monthly total, no trailing `.00` stripping. */
 export function formatMoney(amount: number): string {
   return `$${amount.toFixed(2)}`;
 }
@@ -59,7 +65,12 @@ export function useWorkspaceEntitlements(workspaceId?: string) {
   // Billing UI degrades to Free rather than erroring.
   const data = query.data ?? DEFAULT_STATUS;
 
-  const isPro = data.plan === "pro";
+  const isSolo = data.plan === "solo";
+  const isTeam = data.plan === "team";
+  // Entitled = on a paid plan with a live (or grace-period) subscription.
+  const isPaid =
+    (isSolo || isTeam) &&
+    (data.status === "active" || data.status === "past_due");
   const isPastDue = data.status === "past_due";
   const isCapped = data.objectCap !== null;
   const overCap = isCapped && !data.canCreateObjects;
@@ -67,11 +78,15 @@ export function useWorkspaceEntitlements(workspaceId?: string) {
   // Seats we'd bill / project: the live Stripe quantity when present,
   // otherwise the current member count (what an upgrade would start at).
   const billableSeats = data.seatCount ?? data.memberCount;
-  const monthlyTotal = billableSeats * PRO_SEAT_PRICE;
+  // Solo is flat; Team is per-seat; Free projects what a Team upgrade
+  // would cost (the figure every upgrade surface quotes).
+  const monthlyTotal = isSolo ? SOLO_PRICE : billableSeats * TEAM_SEAT_PRICE;
 
   return {
     ...data,
-    isPro,
+    isPaid,
+    isSolo,
+    isTeam,
     isPastDue,
     isCapped,
     overCap,

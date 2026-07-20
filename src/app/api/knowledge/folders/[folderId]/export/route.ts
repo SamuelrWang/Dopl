@@ -1,5 +1,4 @@
 import { NextRequest } from "next/server";
-import { resolveExportWorkspace } from "@/shared/auth/export-workspace";
 import { withWorkspaceAuth, type WorkspaceAuthContext } from "@/shared/auth/with-workspace-auth";
 import { HttpError } from "@/shared/lib/http-error";
 import {
@@ -9,14 +8,14 @@ import {
 import { buildKnowledgeContext } from "@/features/knowledge/server/service";
 import { buildFolderArchive } from "@/features/knowledge/server/export";
 
-// A plain download link can't send X-Workspace-Id, so `?workspaceId=` scopes
-// the export to a non-default workspace (membership-checked in the helper).
-async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
+// A plain download link can't send X-Workspace-Id, so `workspaceIdFromQuery`
+// lets the wrapper resolve `?workspaceId=` at the header's priority
+// (membership-checked) — `auth` already names the effective export workspace.
+async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
   try {
     const id = auth.params?.folderId;
     if (!id) throw HttpError.badRequest("folderId is required");
-    const { workspaceId, role } = await resolveExportWorkspace(request, auth);
-    const ctx = buildKnowledgeContext({ ...auth, workspaceId, role });
+    const ctx = buildKnowledgeContext(auth);
     const { filename, data } = await buildFolderArchive(ctx, id);
     return knowledgeDownloadResponse(filename, data, "application/zip");
   } catch (err) {
@@ -24,4 +23,4 @@ async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-export const GET = withWorkspaceAuth(handleGet);
+export const GET = withWorkspaceAuth(handleGet, { workspaceIdFromQuery: true });

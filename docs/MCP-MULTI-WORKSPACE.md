@@ -2,6 +2,22 @@
 
 Captured 2026-05-03 from analysis of `packages/mcp-server`.
 
+> **Status update (2026-07-18 — MCP-2).** M-1/M-2/M-4 shipped, then were
+> hardened to **fail-closed**: there is no longer a silent default workspace.
+> Boot resolves off `client.listWorkspaces()` (the membership directory); a
+> single membership (or a request `X-Workspace-Id` pin) auto-targets, but with
+> 2+ memberships there is **no default** and a no-`workspace=` tool call is
+> refused with the list of choices. `buildInstructions(directory)` bakes the
+> workspace table into the server instructions; the `_dopl_status` footer is
+> mandatory and names the effective workspace + source (`per-call arg` |
+> `sole membership` | `header pin`). **`set_workspace` was REMOVED** (a
+> stateless connection can't persist a switch) — targeting is the per-call
+> `workspace=` arg only; `current_workspace` reports what a no-arg call
+> resolves to. Backend `resolveActiveWorkspace` matches: header UUID only
+> (blank/non-UUID → 400 `WORKSPACE_INVALID`), no-header → active memberships
+> (0/2+ → 400 `WORKSPACE_REQUIRED`). M-3 (user-scoped keys) remains the open
+> item below; the sections below are the ORIGINAL plan, kept for context.
+
 **Problem:** Each Dopl user gets one API key per workspace. A user with 3 workspaces today must register 3 separate MCP server instances in their client config — one process per workspace. That works (the backend already enforces per-key workspace locking via `api_keys.workspace_id` + `X-Workspace-Id`) but produces ~180 tool entries in the agent's tool list, 3× node processes, and no way to do a single tool call that targets a different workspace.
 
 Goal: one MCP server instance can serve all workspaces the user has access to, without the tool-list explosion.

@@ -68,10 +68,21 @@ function purgesLabel(purgesAt: string): string {
   return days <= 0 ? "purges soon" : `purges in ${days} day${days === 1 ? "" : "s"}`;
 }
 
-export function WorkspaceTrashSection({ workspaceSlug }: { workspaceSlug: string }) {
+export function WorkspaceTrashSection({
+  workspaceSlug,
+  workspaceId,
+}: {
+  workspaceSlug: string;
+  workspaceId: string;
+}) {
   const trashPath = `/api/workspaces/${workspaceSlug}/trash`;
   const queryClient = useQueryClient();
+  // These routes use `withWorkspaceAuth` (the `[workspaceSlug]` segment is
+  // cosmetic), so the X-Workspace-Id header — forwarded via `workspaceId` —
+  // is what actually scopes the trash. Without it, resolution now fails
+  // closed instead of silently returning the caller's default workspace.
   const query = useApiQuery<{ items?: TrashItem[] }, TrashItem[]>(trashPath, {
+    workspaceId,
     select: selectItems,
   });
   // `null` = still loading. A fetch error is handled separately below so it
@@ -86,7 +97,7 @@ export function WorkspaceTrashSection({ workspaceSlug }: { workspaceSlug: string
   // so optimistic edits must write that raw shape at the query's key.
   function removeFromCache(kind: TrashKind, id: string) {
     queryClient.setQueryData(
-      [trashPath, undefined, undefined],
+      [trashPath, workspaceId, undefined],
       (prev: { items?: TrashItem[] } | undefined) =>
         prev
           ? { items: (prev.items ?? []).filter((i) => !(i.kind === kind && i.id === id)) }
@@ -100,6 +111,7 @@ export function WorkspaceTrashSection({ workspaceSlug }: { workspaceSlug: string
       await apiRequest(`${trashPath}/restore`, {
         method: "POST",
         body: { kind: item.kind, id: item.id },
+        workspaceId,
       });
       removeFromCache(item.kind, item.id);
       toast({ title: "Restored" });
@@ -116,6 +128,7 @@ export function WorkspaceTrashSection({ workspaceSlug }: { workspaceSlug: string
       await apiRequest(`${trashPath}/purge`, {
         method: "POST",
         body: { kind: item.kind, id: item.id },
+        workspaceId,
       });
     } catch (err) {
       toast({ title: "Couldn't delete" });

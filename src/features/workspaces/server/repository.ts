@@ -83,16 +83,18 @@ export async function findMemberWorkspaceBySlug(
 }
 
 /**
- * Default workspace resolver — used when no X-Workspace-Id header is
- * provided. Tries (in order):
+ * Oldest-OWNED workspace resolver (owner_id match). Tries (in order):
  *   1. The literal slug "default" (legacy path — pre-S-15 backfill).
  *   2. The user's oldest owned workspace, by created_at ASC.
  *
- * Audit fix S-15 unblocks the eventual `slugifyWorkspaceName`-based
- * default slug (e.g. "my-workspace" instead of the literal "default")
- * by not requiring the slug be the string "default" anymore. Existing
- * users with `slug='default'` still resolve via step 1; new users
- * created after S-15 lands will resolve via step 2.
+ * SCOPE (MCP-2): this is OWNERSHIP-based, which diverges from active
+ * membership (owns 0 / member of 1, owns 1 / member of 3). It is used ONLY
+ * by the signup bootstrap (`ensureDefaultWorkspace` — "does a default
+ * already exist?") and the Stripe webhook grandfather path
+ * (`webhook-handler.ts`, one legacy customer). It MUST NOT be used for
+ * request auth resolution — `resolveActiveWorkspace` resolves off active
+ * memberships (`listWorkspacesWithRoleForUser`) instead, so a user's oldest
+ * owned workspace can never silently swallow a request meant for another.
  */
 export async function findDefaultWorkspaceForUser(
   userId: string

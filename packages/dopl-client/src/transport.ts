@@ -32,7 +32,9 @@ const DEFAULT_TIMEOUT_MS = 30_000;
  *   2. AsyncLocalStorage value (per-tool-call, set by the MCP
  *      `registerTool` wrapper — invisible to client.method() callers).
  *   3. Transport's stored `workspaceId` (session default).
- *   4. None — server falls back to user's default workspace.
+ *   4. None — no header is sent; the server resolves fail-closed from the
+ *      caller's memberships (a sole workspace auto-targets; 0 or 2+ →
+ *      WORKSPACE_REQUIRED). No user-default fallback.
  *
  * Exported so callers in `@dopl/mcp-server` can wrap a handler in
  * `workspaceContext.run(id, fn)`.
@@ -45,8 +47,9 @@ export interface DoplTransportOptions {
   /**
    * Active canvas (workspace) for this transport. When set, every
    * request emits an `X-Workspace-Id` header so the server scopes data to
-   * that canvas. When unset, the server falls back to the user's
-   * default canvas.
+   * that canvas. When unset, no header is sent and the server resolves
+   * fail-closed from the caller's memberships (a sole workspace
+   * auto-targets; 0 or 2+ → WORKSPACE_REQUIRED).
    */
   workspaceId?: string;
 }
@@ -296,7 +299,8 @@ export class DoplTransport {
     // Resolution order: explicit per-call override > AsyncLocalStorage
     // (set by the MCP `registerTool` wrapper for one tool call) > the
     // transport's stored workspaceId (session default). Falling through
-    // omits the header so the server picks the user's default workspace.
+    // omits the header; the server then resolves fail-closed from the
+    // caller's memberships (0 or 2+ → WORKSPACE_REQUIRED, no default).
     const effectiveWorkspaceId =
       workspaceIdOverride ?? workspaceContext.getStore() ?? this.workspaceId;
     if (effectiveWorkspaceId) headers["X-Workspace-Id"] = effectiveWorkspaceId;

@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { zipSync, strToU8 } from "fflate";
-import { resolveExportWorkspace } from "@/shared/auth/export-workspace";
 import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
 import { requireSkillSlug, toSkillErrorResponse } from "@/shared/api/skill-route";
 import { buildSkillContext, getSkillBySlug, listFiles } from "@/features/skills/server/service";
@@ -10,13 +9,13 @@ import { buildSkillContext, getSkillBySlug, listFiles } from "@/features/skills/
  * the standard agent-skills layout: `<slug>/SKILL.md` + supplementary
  * files alongside. Compatible with Claude Code's skills directory.
  *
- * A plain download link can't send X-Workspace-Id, so `?workspaceId=` scopes
- * the export to a non-default workspace (membership-checked in the helper).
+ * A plain download link can't send X-Workspace-Id, so `workspaceIdFromQuery`
+ * lets the wrapper resolve `?workspaceId=` at the header's priority
+ * (membership-checked) — `auth` already names the effective export workspace.
  */
-export const GET = withWorkspaceAuth(async (request, auth) => {
+export const GET = withWorkspaceAuth(async (_request, auth) => {
   try {
-    const { workspaceId, role } = await resolveExportWorkspace(request, auth);
-    const ctx = buildSkillContext({ ...auth, workspaceId, role });
+    const ctx = buildSkillContext(auth);
     const slug = requireSkillSlug(auth.params);
     const skill = await getSkillBySlug(ctx, slug);
     const files = await listFiles(ctx, slug);
@@ -36,4 +35,4 @@ export const GET = withWorkspaceAuth(async (request, auth) => {
   } catch (err) {
     return toSkillErrorResponse(err);
   }
-});
+}, { workspaceIdFromQuery: true });

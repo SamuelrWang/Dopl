@@ -41,12 +41,15 @@ async function handle(request: Request): Promise<Response> {
   const { credential, apiKeyWorkspaceId, scopes } = authed.auth;
 
   // 2. A DoplClient pointed at our own origin, carrying the caller's
-  //    credential. Stateless HTTP can't persist `set_workspace` across
+  //    credential. Stateless HTTP can't persist a session default across
   //    requests, so workspace targeting comes from the X-Workspace-Id header
-  //    (custom connectors) or the key's locked workspace, with per-call
-  //    `workspace=` still available on every tool.
-  const workspaceId =
-    request.headers.get("x-workspace-id") || apiKeyWorkspaceId || undefined;
+  //    (custom connectors — a per-request pin) or the key's locked
+  //    workspace, with per-call `workspace=` still available on every tool.
+  //    A blank/whitespace header is NOT a pin: normalize it to undefined so
+  //    boot resolves via the membership directory instead of forwarding an
+  //    empty X-Workspace-Id downstream (which would 400 every loopback call).
+  const headerPin = request.headers.get("x-workspace-id")?.trim() || undefined;
+  const workspaceId = headerPin ?? apiKeyWorkspaceId ?? undefined;
   const client = new DoplClient(appBaseUrl(request), credential, {
     clientIdentifier,
     workspaceId,
@@ -54,9 +57,16 @@ async function handle(request: Request): Promise<Response> {
 
   // 3. Build the MCP server: status ping (admin flag) + workspace handshake +
   //    tool registration. pingRetries: 0 — a single fast attempt per request.
+  //    onDiag → console.error so a failed status ping / directory load / a
+  //    dropped X-Workspace-Id pin surfaces in the server logs instead of
+  //    vanishing silently.
   //    (Optimization for later: cache this handshake by credential hash to
   //    avoid two loopback calls on every request.)
-  const { server } = await bootServer(client, { pingRetries: 0, scopes });
+  const { server } = await bootServer(client, {
+    pingRetries: 0,
+    scopes,
+    onDiag: (message) => console.error(message),
+  });
 
   // 4. Stateless, JSON-response transport: each POST is a self-contained
   //    JSON-RPC exchange and our tools return single results (no SSE needed).

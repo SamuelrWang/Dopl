@@ -44,7 +44,7 @@ export default async function WorkspaceSettingsPage({ params }: PageProps) {
           <WorkspaceSettingsForm workspace={workspace} role={membership.role} />
           <RemoteConnect />
           <ConnectedAppsSection />
-          <WorkspaceTrashSection workspaceSlug={workspace.slug} />
+          <WorkspaceTrashSection workspaceSlug={workspace.slug} workspaceId={workspace.id} />
           {membership.role === "owner" && <WorkspaceDangerZone workspace={workspace} />}
         </div>
       </div>

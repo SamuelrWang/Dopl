@@ -23,6 +23,9 @@ type RoleFilter = MemberRole | "all";
 
 interface Props {
   workspaceSlug: string;
+  /** Scopes the Solo member-limit upgrade modal in the join-request
+   *  queue; the 402 degrades to inline text when absent. */
+  workspaceId?: string;
   currentUserId: string;
   myRole: MemberRole;
   members: WorkspaceMemberView[];
@@ -43,6 +46,7 @@ interface Props {
  */
 export function MembersTab({
   workspaceSlug,
+  workspaceId,
   currentUserId,
   myRole,
   members,
@@ -147,6 +151,7 @@ export function MembersTab({
 
       <JoinRequestsBanner
         workspaceSlug={workspaceSlug}
+        workspaceId={workspaceId}
         enabled={canManage}
         onResolved={onChanged}
       />

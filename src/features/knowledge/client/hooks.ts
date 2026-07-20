@@ -106,7 +106,8 @@ export function useKnowledgeBases(
 ): Result<KnowledgeBase[]> {
   // Use the workspace id as the cache key so switching workspaces
   // re-fetches. Fall back to a sentinel so the hook still fires when
-  // no id is provided (uses the user's default workspace). An optional
+  // no id is provided (a sole-workspace caller auto-targets; a
+  // multi-workspace one fails closed as WORKSPACE_REQUIRED). An optional
   // SSR seed avoids a skeleton flash when the page already loaded the
   // list on the server (mirrors useKnowledgeEntry's initialData).
   const key = `bases:${workspaceId ?? "default"}`;

@@ -19,7 +19,71 @@ import { entitlementDenied } from "./tools/respond.js";
 import { SKILL_AUTHORING_GUIDE } from "./prompts/skill-authoring-guide.js";
 import { packageVersion } from "./version.js";
 
-export const SERVER_INSTRUCTIONS = `You are connected to **Dopl** — the user's workspace of knowledge bases, skills, and clusters for AI/automation work.
+/** A resolved header pin (`X-Workspace-Id`) that becomes the no-arg default. */
+interface WorkspacePin {
+  name: string;
+  slug: string;
+}
+
+/**
+ * Bake the caller's workspace directory into the "targeting" section of the
+ * instructions (M-2), so the agent knows — before its first tool call —
+ * whether it must pass `workspace=` and which workspaces exist. The table
+ * carries name/slug/role/description; the rule flips on membership count.
+ *
+ * `pin` is the boot-resolved header pin (only meaningful for 2+ memberships —
+ * a sole membership is already covered by the length===1 branch). When present
+ * the connection HAS a default, so the copy says so rather than demanding
+ * `workspace=` on every call. `directoryLoadFailed` distinguishes a transient
+ * directory-load failure from a genuine 0-membership caller.
+ */
+function renderWorkspaceGuidance(
+  directory: WorkspaceListItem[],
+  pin: WorkspacePin | null,
+  directoryLoadFailed: boolean,
+): string {
+  if (directory.length === 0) {
+    if (directoryLoadFailed) {
+      return `We couldn't load your workspace memberships just now — this is usually a transient backend issue, not a sign you have none. Retry in a moment, and reconnect if it persists. Tool calls that need a workspace will fail until the directory loads.`;
+    }
+    return `You are not an active member of any workspace yet. Create one in the Dopl web app, then reconnect — tool calls fail until you belong to a workspace.`;
+  }
+  const table = directory
+    .map((w) => {
+      const desc = w.description ? ` — ${w.description}` : "";
+      return `- **${w.name}** (slug: \`${w.slug}\`, role: ${w.role})${desc}`;
+    })
+    .join("\n");
+  if (directory.length === 1) {
+    return `You have exactly one workspace, so every tool call targets it automatically — you may omit \`workspace=\`. The \`_dopl_status\` footer on each response confirms which workspace was hit.
+
+${table}`;
+  }
+  if (pin) {
+    return `You are a member of ${directory.length} workspaces, and this connection is pinned to **${pin.name}** (slug: \`${pin.slug}\`) by default — a no-arg tool call targets it. Pass \`workspace=<slug_or_id>\` to target a DIFFERENT workspace for that one call. The \`_dopl_status\` footer names the workspace each response actually hit.
+
+${table}
+
+Controls:
+- \`list_workspaces\` — re-list these with role (cached ~60s).
+- \`current_workspace\` — shows which workspace a no-arg call resolves to (here: **${pin.name}**).
+- \`workspace=<slug_or_id>\` on any tool — target that workspace for that ONE call, overriding the pin. Each call is independent (stateless connection).`;
+  }
+  return `You are a member of ${directory.length} workspaces and this connection has NO default: you MUST pass \`workspace=<slug_or_id>\` on EVERY tool call, or the call fails asking which workspace to use. The \`_dopl_status\` footer names the workspace each response actually hit.
+
+${table}
+
+Controls:
+- \`list_workspaces\` — re-list these with role (cached ~60s).
+- \`current_workspace\` — shows which workspace a no-arg call resolves to (here: none — you must pass \`workspace=\`).
+- \`workspace=<slug_or_id>\` on any tool — target that workspace for that ONE call. Each call is independent (stateless connection), so this per-call arg is the only way to choose a workspace.`;
+}
+
+export function buildInstructions(
+  directory: WorkspaceListItem[],
+  guidance: { pin?: WorkspacePin | null; directoryLoadFailed?: boolean } = {},
+): string {
+  return `You are connected to **Dopl** — the user's workspace of knowledge bases, skills, and clusters for AI/automation work.
 
 ## How to use this
 
@@ -38,11 +102,7 @@ Workspace beats local files as source of truth. If a user's CLAUDE.md or a skill
 
 ## Workspaces — targeting a specific workspace
 
-This MCP server can target any workspace the authenticated user is a member of. The active (default) workspace appears in the _dopl_status footer of every response. Controls:
-
-1. list_workspaces — see every workspace the user is in, with role. Cached ~60s.
-2. workspace=<slug_or_id> arg on any tool — target that workspace for that ONE call. This connection is stateless (each call is independent), so this per-call arg is the reliable way to act in a non-default workspace.
-3. set_workspace(workspace=<slug_or_id>) — validates a workspace ref but does NOT persist across calls on this connection. Prefer the per-call workspace= arg; don't rely on set_workspace to change which workspace later calls hit.
+${renderWorkspaceGuidance(directory, guidance.pin ?? null, guidance.directoryLoadFailed ?? false)}
 
 ## Decision tree — which tool
 
@@ -64,6 +124,7 @@ Skills are single-file procedural prompts the user authored — each is one tigh
 ---
 
 ${SKILL_AUTHORING_GUIDE}`;
+}
 
 /**
  * Tool-response shape the MCP SDK accepts. We re-declare it locally to
@@ -75,11 +136,12 @@ type ToolResponse = {
 };
 
 /**
- * Snapshot of the session's active workspace, surfaced in the
- * `_dopl_status` footer (M-4) so the agent always sees which
- * workspace a tool response came from. Mutated by `set_workspace`,
- * read by `appendDoplStatus`. Null until the startup handshake
- * resolves (or if the session boots with no workspace).
+ * Snapshot of the session's default workspace, resolved once at boot from
+ * the caller's membership directory (a request X-Workspace-Id pin, else the
+ * sole membership). Read by `appendDoplStatus`. Null when the caller has 0
+ * or 2+ memberships and sent no pin — in that state a no-arg tool call is
+ * refused (the wrapper demands `workspace=`), so nothing is silently
+ * routed to a guessed workspace.
  */
 interface ActiveWorkspaceState {
   id: string;
@@ -89,44 +151,43 @@ interface ActiveWorkspaceState {
 }
 
 /**
- * Append an active-workspace status footer to a tool response. Fires on
- * every tool response so the agent always sees which workspace the
- * response actually came from (M-4).
- *
- * The footer reports the EFFECTIVE workspace for THIS call: when a
- * per-call `workspace=` override resolved (passed as `effective`), that
- * is what's shown — plus an explicit note that it differs from the
- * session default — so an agent can positively confirm where its write
- * landed instead of always seeing the session default (audit fix F-3).
- * With no override, `effective` is omitted and the session default is
- * shown, exactly as before.
+ * How the workspace a call actually hit was chosen — surfaced verbatim in
+ * the `_dopl_status` footer so the agent can positively confirm targeting.
+ */
+type WorkspaceSource = "per-call arg" | "sole membership" | "header pin";
+
+interface EffectiveWorkspace extends ActiveWorkspaceState {
+  source: WorkspaceSource;
+}
+
+/**
+ * Append the mandatory `_dopl_status` footer to a tool response (M-4). It
+ * always reports the EFFECTIVE workspace this call actually hit plus a
+ * source label — `per-call arg` (a `workspace=` override), `sole membership`
+ * (auto-targeted single workspace), or `header pin` (a request-level
+ * X-Workspace-Id). There is no session-default duality: the footer names
+ * exactly where the response came from.
  *
  * Skips the footer when:
- *   - the handler returned isError: true (don't muddy error messages)
- *   - there's no workspace to report (rare, only on a misconfigured session)
+ *   - the handler returned isError: true (don't muddy error messages), or
+ *   - there is no effective workspace to report (only reachable via the
+ *     meta-tools when the caller has no session default).
  */
 async function appendDoplStatus(
   response: ToolResponse,
-  client: DoplClient,
-  getActiveWorkspace: () => ActiveWorkspaceState | null,
-  effective?: ActiveWorkspaceState | null,
+  effective: EffectiveWorkspace | null,
 ): Promise<ToolResponse> {
   if (response.isError) return response;
+  if (!effective) return response;
 
-  const sessionDefault = getActiveWorkspace();
-  const shown = effective ?? sessionDefault;
-  if (!shown) return response;
-
-  const lines: string[] = ["", "", "---", "_dopl_status:"];
-  lines.push(
-    `  active_workspace: "${shown.name}" (slug=${shown.slug}, role=${shown.role})`,
-  );
-  if (effective && sessionDefault && effective.id !== sessionDefault.id) {
-    lines.push(
-      `  workspace_source: per-call \`workspace=\` override — session default is "${sessionDefault.name}" (slug=${sessionDefault.slug})`,
-    );
-  }
-  const footer = lines.join("\n");
+  const footer = [
+    "",
+    "",
+    "---",
+    "_dopl_status:",
+    `  active_workspace: "${effective.name}" (slug=${effective.slug}, role=${effective.role})`,
+    `  workspace_source: ${effective.source}`,
+  ].join("\n");
 
   // Append to the final text block so the agent sees the footer at the
   // end of a rendered response. If the response has no text content
@@ -163,17 +224,17 @@ async function runWithEntitlementGuard(
 }
 
 /**
- * Wrap a tool handler so every successful response ends with the
- * `_dopl_status` footer. Handlers stay unaware of the mechanism.
+ * Wrap a meta-tool handler so every successful response ends with the
+ * `_dopl_status` footer reporting the session default (if any). Handlers
+ * stay unaware of the mechanism.
  */
 function withDoplStatus<A extends object>(
   handler: (args: A) => Promise<ToolResponse>,
-  client: DoplClient,
-  getActiveWorkspace: () => ActiveWorkspaceState | null,
+  getEffective: () => EffectiveWorkspace | null,
 ): (args: A) => Promise<ToolResponse> {
   return async (args: A) => {
     const result = await handler(args);
-    return appendDoplStatus(result, client, getActiveWorkspace);
+    return appendDoplStatus(result, getEffective());
   };
 }
 
@@ -191,7 +252,7 @@ const WORKSPACE_ARG_SHAPE = {
     .string()
     .optional()
     .describe(
-      "Optional workspace slug or UUID to target for this single call. Defaults to the session's active workspace (see `current_workspace`). Use this when the user mentions a workspace by name; for sticky switching across multiple calls, use `set_workspace` instead.",
+      "Workspace slug or UUID to target for this single call. Omit to use the session's workspace (see `current_workspace`). REQUIRED on every call when the user belongs to 2+ workspaces — there is no default then, so a no-arg call is refused with the list of choices. Use `list_workspaces` to discover slugs.",
     ),
 };
 type WorkspaceArgShape = typeof WORKSPACE_ARG_SHAPE;
@@ -200,8 +261,30 @@ export function createServer(
   client: DoplClient,
   options: {
     isAdmin?: boolean;
+    /** Session default workspace resolved at boot, or null (0/2+ memberships). */
     workspace?: WorkspaceSummary | null;
     role?: WorkspaceRole | null;
+    /**
+     * The caller's full active-membership directory, from the boot
+     * `listWorkspaces()` call. Bakes the workspace table into the
+     * instructions (M-2) and seeds `workspaceListCache` so per-call
+     * `workspace=` resolution needs no extra loopback.
+     */
+    directory?: WorkspaceListItem[];
+    /**
+     * True when the boot `listWorkspaces()` call FAILED (transient), as
+     * opposed to a genuine empty directory. Steers the refusal / instructions
+     * copy toward "couldn't load — retry" instead of "you have none", and
+     * suppresses seeding the cache with a bogus empty directory so a later
+     * `workspace=` resolution retries the load.
+     */
+    directoryLoadFailed?: boolean;
+    /**
+     * How `workspace` was chosen at boot — `header pin` (request
+     * X-Workspace-Id) or `sole membership` (auto-targeted single workspace).
+     * Null when there is no session default. Drives the footer source label.
+     */
+    workspaceSource?: "header pin" | "sole membership" | null;
     /**
      * OAuth scopes granted for this session. Reserved for Stage 3 (OAuth):
      * when present and lacking `dopl.write`, write/admin tool ops are gated.
@@ -285,14 +368,11 @@ export function createServer(
     ]),
     dopl_chats: new Set(["export", "append", "update", "create_folder", "update_folder", "restore"]),
   };
-  // Active workspace for this MCP session — seeded from the startup
-  // handshake (index.ts) and mutated by `set_workspace` mid-session.
-  // The slug threads into skill-writer calls so on-disk SKILL.md paths
-  // get scoped per workspace. Default slug preserves the legacy
-  // single-workspace paths so existing users don't see every skill
-  // rename on first upgrade.
-  const canvasContext = { slug: options.workspace?.slug ?? "default" };
-  let activeWorkspace: ActiveWorkspaceState | null = options.workspace
+  // Session default workspace — resolved once at boot (factory.ts), never
+  // mutated (there is no `set_workspace`; per-call `workspace=` scopes a
+  // single call via AsyncLocalStorage without touching this). Null when the
+  // caller has 0 or 2+ memberships and sent no pin.
+  const activeWorkspace: ActiveWorkspaceState | null = options.workspace
     ? {
         id: options.workspace.id,
         slug: options.workspace.slug,
@@ -300,15 +380,30 @@ export function createServer(
         role: options.role ?? "viewer",
       }
     : null;
+  const sessionSource = options.workspaceSource ?? null;
+
+  // The session default rendered as a footer-ready effective workspace, or
+  // null when there is no default. Used by the meta-tools and the no-arg
+  // tool path so the footer always names where the response came from (M-4).
+  function sessionEffective(): EffectiveWorkspace | null {
+    if (!activeWorkspace || !sessionSource) return null;
+    return { ...activeWorkspace, source: sessionSource };
+  }
 
   /**
    * Cache of the user's workspace memberships for slug→id resolution.
-   * Refreshed on demand and after a brief TTL. `set_workspace` does
-   * not invalidate it (memberships don't change just because the user
-   * switched the active default).
+   * Seeded from the boot `listWorkspaces()` call (options.directory) so the
+   * first per-call `workspace=` needs no extra loopback; refreshed on demand
+   * after a brief TTL.
    */
   const WORKSPACE_CACHE_TTL_MS = 60_000;
-  let workspaceListCache: { workspaces: WorkspaceListItem[]; loadedAt: number } | null = null;
+  // Seed from the boot directory — but NOT when the boot load failed, or we'd
+  // cache a bogus empty list for the full TTL and mask the failure. Leaving it
+  // null lets the first `workspace=` / no-default path retry the load.
+  let workspaceListCache: { workspaces: WorkspaceListItem[]; loadedAt: number } | null =
+    options.directory && !options.directoryLoadFailed
+      ? { workspaces: options.directory, loadedAt: Date.now() }
+      : null;
 
   async function getWorkspaceList(): Promise<WorkspaceListItem[]> {
     if (
@@ -343,6 +438,51 @@ export function createServer(
     return match ?? null;
   }
 
+  /**
+   * The isError response for a no-`workspace=` call that has no session
+   * default (M-3). Lists the caller's workspaces so the agent can retry
+   * with an explicit `workspace=`; mirrors the backend WORKSPACE_REQUIRED
+   * envelope in intent. Reads the boot-seeded directory (cached — no extra
+   * loopback on the happy path).
+   */
+  async function noWorkspaceError(): Promise<ToolResponse> {
+    let list: WorkspaceListItem[];
+    // Start from the boot-time load state; a fresh successful load below
+    // supersedes it (the cache is left unseeded when boot failed, so this
+    // actually retries rather than returning a stale empty list).
+    let loadFailed = options.directoryLoadFailed ?? false;
+    try {
+      list = await getWorkspaceList();
+      loadFailed = false;
+    } catch {
+      list = options.directory ?? [];
+    }
+    if (list.length === 0) {
+      return {
+        isError: true,
+        content: [
+          {
+            type: "text" as const,
+            text: loadFailed
+              ? "We couldn't load your workspace memberships just now — this looks like a transient backend issue, not that you have none. Retry in a moment, and reconnect if it persists."
+              : "You're not an active member of any workspace, so there's nothing to act on. Create one in the Dopl web app, then reconnect.",
+          },
+        ],
+      };
+    }
+    const lines = [
+      `This connection has no default workspace because you belong to ${list.length} workspaces. Pass \`workspace=<slug_or_id>\` on this call — pick one:`,
+      "",
+    ];
+    for (const w of list) {
+      lines.push(`- **${w.name}** (slug: \`${w.slug}\`, role: ${w.role})`);
+    }
+    return {
+      isError: true,
+      content: [{ type: "text" as const, text: lines.join("\n") }],
+    };
+  }
+
   const server = new McpServer(
     {
       name: "dopl",
@@ -352,7 +492,17 @@ export function createServer(
       version: packageVersion,
     },
     {
-      instructions: SERVER_INSTRUCTIONS,
+      // Thread the boot-resolved header pin so a 2+-membership connection
+      // with a pin is told the pin IS its default (not "pass workspace= on
+      // every call"). A sole membership needs no pin — the length===1 branch
+      // already says "omit workspace=".
+      instructions: buildInstructions(options.directory ?? [], {
+        pin:
+          options.workspaceSource === "header pin" && options.workspace
+            ? { name: options.workspace.name, slug: options.workspace.slug }
+            : null,
+        directoryLoadFailed: options.directoryLoadFailed ?? false,
+      }),
     },
   );
 
@@ -361,10 +511,11 @@ export function createServer(
   //   1. An optional `workspace` arg is auto-injected on every tool
   //      (M-1). When provided, the call runs inside a transport-level
   //      AsyncLocalStorage override so client.* requests carry the
-  //      right `X-Workspace-Id` header — without changing the session
-  //      default.
-  //   2. The response gets the `_dopl_status` footer (active workspace
-  //      + pending ingestions, M-4) uniformly.
+  //      right `X-Workspace-Id` header. When omitted AND the session has
+  //      no default (0/2+ memberships, no pin) the call is refused (M-3)
+  //      rather than guessing a workspace.
+  //   2. The response gets the mandatory `_dopl_status` footer naming the
+  //      effective workspace + how it was chosen (M-4) uniformly.
   // Matches the MCP SDK's own zod-inference signature so handler arg
   // types come through correctly.
   function registerTool<S extends ZodRawShape>(
@@ -461,22 +612,30 @@ export function createServer(
         // client.* call inside it transparently picks up the override
         // workspace id in its X-Workspace-Id header. Returns to the
         // session default (or no override) the moment this scope exits.
-        // Audit fix F-3: report the EFFECTIVE (resolved) workspace in
-        // the footer so the agent can confirm where the call landed.
-        const effective: ActiveWorkspaceState = {
+        // The footer reports the EFFECTIVE (resolved) workspace with a
+        // `per-call arg` source so the agent can confirm where it landed.
+        const effective: EffectiveWorkspace = {
           id: resolved.id,
           slug: resolved.slug,
           name: resolved.name,
           role: resolved.role,
+          source: "per-call arg",
         };
         const result = await runWithEntitlementGuard(() =>
           workspaceContext.run(resolved.id, () => handler(innerArgs)),
         );
-        return appendDoplStatus(result, client, () => activeWorkspace, effective);
+        return appendDoplStatus(result, effective);
       }
 
+      // No `workspace=` arg. Auto-target the session default when there is
+      // one (single membership or a header pin); otherwise refuse (M-3) —
+      // a 0/2+-membership caller must pass `workspace=` rather than have a
+      // workspace guessed for them.
+      if (!activeWorkspace) {
+        return noWorkspaceError();
+      }
       const result = await runWithEntitlementGuard(() => handler(innerArgs));
-      return appendDoplStatus(result, client, () => activeWorkspace);
+      return appendDoplStatus(result, sessionEffective());
     };
 
     server.tool(
@@ -488,11 +647,10 @@ export function createServer(
     );
   }
 
-  // Meta-tools (workspace switcher) skip the auto-injected `workspace`
-  // arg — passing a workspace into "set my workspace" doesn't make
-  // sense, and routing list_workspaces / current_workspace through
-  // ALS adds noise to the description without changing behavior
-  // (membership lookup is user-scoped, not workspace-scoped).
+  // Meta-tools skip the auto-injected `workspace` arg — a membership
+  // lookup is user-scoped, not workspace-scoped, so routing it through
+  // ALS adds noise without changing behavior. Their footer reports the
+  // session default (if any).
   function registerMetaTool<S extends ZodRawShape>(
     name: string,
     description: string,
@@ -504,20 +662,20 @@ export function createServer(
       description,
       schema,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      withDoplStatus(handler as any, client, () => activeWorkspace) as any,
+      withDoplStatus(handler as any, sessionEffective) as any,
     );
   }
 
-  // ── Workspace switcher tools (M-2) ────────────────────────────────
-  // Three small tools that let the agent discover and switch
-  // workspaces at runtime, eliminating the old "one MCP process per
-  // workspace" workaround. Combined with the per-call `workspace` arg
-  // injected by `registerTool` (M-1), the agent has both a sticky
-  // switch (`set_workspace`) and a single-call override (`workspace=...`).
+  // ── Workspace directory tools (M-2) ───────────────────────────────
+  // Two read-only tools that let the agent discover its workspaces and
+  // see what a no-arg call resolves to. Targeting is per-call only: pass
+  // the `workspace=` arg injected by `registerTool` (M-1). There is no
+  // sticky `set_workspace` — the connection is stateless, so a "switch"
+  // couldn't persist anyway.
 
   registerMetaTool(
     "list_workspaces",
-    "List every workspace the authenticated user is an active member of, with the user's role on each (owner/admin/member/viewer). Use before `set_workspace` when the user mentions a workspace by name and you don't know its slug, or when reporting available workspaces. Result is cached per-session for ~60s.",
+    "List every workspace the authenticated user is an active member of, with the user's role on each (owner/admin/member/viewer). Use when the user mentions a workspace by name and you don't know its slug, or when reporting available workspaces. Pass a chosen workspace as the `workspace=` arg on subsequent tool calls. Result is cached per-session for ~60s.",
     {},
     async () => {
       const list = await getWorkspaceList();
@@ -539,10 +697,13 @@ export function createServer(
         );
       }
       lines.push("");
-      if (activeWorkspace) lines.push("★ = currently active");
-      lines.push(
-        "Use `set_workspace(workspace=<slug_or_id>)` to switch the session default, or pass `workspace=<slug>` on a single tool call.",
-      );
+      if (activeWorkspace) {
+        lines.push("★ = the workspace a no-arg call auto-targets.");
+      } else {
+        lines.push(
+          "You belong to 2+ workspaces, so there is no auto-target — pass `workspace=<slug_or_id>` on every tool call.",
+        );
+      }
       return {
         content: [{ type: "text" as const, text: lines.join("\n") }],
       };
@@ -550,74 +711,40 @@ export function createServer(
   );
 
   registerMetaTool(
-    "set_workspace",
-    "Resolve/validate a workspace by slug or UUID (from `list_workspaces`). IMPORTANT: this connection is STATELESS — the switch does NOT persist to your next call, so it does not change which workspace later tool calls target. To act in another workspace, pass `workspace=<slug_or_id>` on each tool call (the reliable mechanism). This op just confirms the ref is valid and echoes the resolved workspace.",
-    {
-      workspace: z
-        .string()
-        .min(1)
-        .describe(
-          "Workspace slug or UUID, from `list_workspaces`. The currently-active workspace's slug is shown in the `_dopl_status` footer.",
-        ),
-    },
-    async ({ workspace: ref }) => {
-      const resolved = await resolveWorkspaceRef(ref);
-      if (!resolved) {
-        return {
-          isError: true,
-          content: [
-            {
-              type: "text" as const,
-              text: `Workspace not found: \`${ref}\`. Call \`list_workspaces\` to see what's available.`,
-            },
-          ],
-        };
-      }
-      // Two writes: the transport stores the workspace id (so every
-      // future client.* call carries it as the session default), and
-      // the local activeWorkspace state powers the status footer.
-      // canvasContext.slug also follows along for any skill-writer
-      // path scoping that reads it later.
-      client.setWorkspaceId(resolved.id);
-      activeWorkspace = {
-        id: resolved.id,
-        slug: resolved.slug,
-        name: resolved.name,
-        role: resolved.role,
-      };
-      canvasContext.slug = resolved.slug;
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: `Resolved workspace **${resolved.name}** (slug: \`${resolved.slug}\`, role: ${resolved.role}). ⚠️ This connection is stateless, so this does NOT persist to your next call — pass \`workspace="${resolved.slug}"\` on each tool call to act there. (Applied to the current request only.)`,
-          },
-        ],
-      };
-    },
-  );
-
-  registerMetaTool(
     "current_workspace",
-    "Return the session's default workspace (id, slug, name, role) — the one tool calls hit when no `workspace=` arg is passed. Use when the user asks 'which workspace am I in?'. Note: a per-call `workspace=` override is NOT reflected here, and `set_workspace` does not change this on a stateless connection. Cheap — no DB hit if the session already knows.",
+    "Report which workspace a no-`workspace=` tool call resolves to on this connection. Returns that workspace (id, slug, name, role) when the caller has exactly one membership (or a request pin); when the caller belongs to 2+ workspaces there is NO auto-target, and this lists them so you can pick one to pass as `workspace=`. Use when the user asks 'which workspace am I in?'.",
     {},
     async () => {
-      if (!activeWorkspace) {
+      if (activeWorkspace) {
+        const lines = [
+          `A no-\`workspace=\` call targets **${activeWorkspace.name}**:`,
+          `- slug: \`${activeWorkspace.slug}\``,
+          `- id: \`${activeWorkspace.id}\``,
+          `- your role: ${activeWorkspace.role}`,
+        ];
+        return {
+          content: [{ type: "text" as const, text: lines.join("\n") }],
+        };
+      }
+      // No session default → surface the directory so the agent can pick.
+      const list = await getWorkspaceList();
+      if (list.length === 0) {
         return {
           content: [
             {
               type: "text" as const,
-              text: "No active workspace yet. Call `list_workspaces` to see what's available, then `set_workspace(workspace=<slug_or_id>)`.",
+              text: "You're not an active member of any workspace yet, so no tool call can resolve a target.",
             },
           ],
         };
       }
       const lines = [
-        `**${activeWorkspace.name}**`,
-        `- slug: \`${activeWorkspace.slug}\``,
-        `- id: \`${activeWorkspace.id}\``,
-        `- your role: ${activeWorkspace.role}`,
+        `You belong to ${list.length} workspaces and there is no auto-target — pass \`workspace=<slug_or_id>\` on every tool call. Choices:`,
+        "",
       ];
+      for (const w of list) {
+        lines.push(`- **${w.name}** (slug: \`${w.slug}\`, role: ${w.role})`);
+      }
       return {
         content: [{ type: "text" as const, text: lines.join("\n") }],
       };

@@ -3,6 +3,7 @@ import { randomBytes } from "crypto";
 import { HttpError } from "@/shared/lib/http-error";
 import { supabaseAdmin } from "@/shared/supabase/admin";
 import { canGrantRole } from "../member-policy";
+import { assertCanAddMember } from "@/features/billing/server/entitlements";
 import { syncSeatQuantity } from "@/features/billing/server/seats";
 import { requireWorkspaceRole } from "./authz";
 import { findMembership, findWorkspaceById } from "./repository";
@@ -182,6 +183,12 @@ export async function requestJoin(
     };
   }
 
+  // Solo plan is single-member — every member-add path must gate. Tell the
+  // joiner up front (402) instead of parking a pending request that an admin
+  // could never approve on a Solo workspace. Already-active members returned
+  // above, so this only fires for a genuine add.
+  await assertCanAddMember(info.workspaceId);
+
   const { data: existing, error } = await db
     .from("workspace_join_requests")
     .select(REQUEST_COLS)
@@ -309,6 +316,12 @@ export async function resolveJoinRequest(
     // membership — approving then just acknowledges the request.
     const existing = await findMembership(workspaceId, row.user_id);
     if (!existing || existing.status !== "active") {
+      // Solo plan is single-member — every member-add path must gate. A stale
+      // pending request (raised while free/team) survives a downgrade to Solo,
+      // so re-check before the upsert. The already-active short-circuit above
+      // skips this — acknowledging an existing member adds no seat.
+      await assertCanAddMember(workspaceId);
+
       const { error: memberError } = await db.from("workspace_members").upsert(
         {
           workspace_id: workspaceId,

@@ -9,6 +9,7 @@ import { cn } from "@/shared/lib/utils";
 import { apiRequest } from "@/shared/api/api-client";
 import { useApiQuery } from "@/shared/hooks/use-api-query";
 import { useCopyToClipboard } from "@/shared/hooks/use-copy-to-clipboard";
+import { UpgradeModal } from "@/features/billing/components/upgrade-modal";
 import type { TeamView } from "@/features/teams/types";
 import type { AssignableRole } from "../types";
 
@@ -16,6 +17,8 @@ interface Props {
   workspaceSlug: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Workspace id — scopes the Solo-limit upgrade flow's billing calls. */
+  workspaceId?: string;
   /** Teams the inviter can pre-assign — invitees auto-join on accept. */
   teams?: TeamView[];
   /** Called after a successful invite so the parent can refresh lists. */
@@ -133,6 +136,23 @@ function parseEmails(raw: string): string[] {
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
+ * True when a failed invite response is the Solo plan's member-limit
+ * gate. Parses both error envelopes defensively: nested
+ * `{ error: { code, message, details } }` (HttpError.toResponseBody)
+ * and flat `{ error: "SOLO_MEMBER_LIMIT", message }`.
+ */
+function isSoloMemberLimit(status: number, body: unknown): boolean {
+  if (status !== 402) return false;
+  if (typeof body !== "object" || body === null) return false;
+  const err = (body as { error?: unknown }).error;
+  if (typeof err === "string") return err === "SOLO_MEMBER_LIMIT";
+  if (typeof err === "object" && err !== null) {
+    return (err as { code?: unknown }).code === "SOLO_MEMBER_LIMIT";
+  }
+  return false;
+}
+
+/**
  * Add members to a workspace by email. Accepts one or more emails
  * (comma/space separated) and a role; each becomes a token-based
  * invitation the invitee picks up from their sidebar on next login —
@@ -142,6 +162,7 @@ export function InviteDialog({
   workspaceSlug,
   open,
   onOpenChange,
+  workspaceId,
   teams = [],
   onInvited,
 }: Props) {
@@ -152,6 +173,7 @@ export function InviteDialog({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sentCount, setSentCount] = useState<number | null>(null);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
 
   const selectedRole = ROLES.find((r) => r.value === role) ?? ROLES[0];
 
@@ -163,6 +185,7 @@ export function InviteDialog({
     setError(null);
     setSentCount(null);
     setSubmitting(false);
+    setUpgradeOpen(false);
   }
 
   function toggleTeam(id: string) {
@@ -200,16 +223,36 @@ export function InviteDialog({
               }),
             },
           );
-          return { email, ok: res.ok };
+          if (res.ok) return { email, ok: true, soloBlocked: false };
+          const body: unknown = await res.json().catch(() => null);
+          return {
+            email,
+            ok: false,
+            soloBlocked: isSoloMemberLimit(res.status, body),
+          };
         }),
       );
       const failed = results.filter((r) => !r.ok).map((r) => r.email);
+      const succeeded = results.filter((r) => r.ok).map((r) => r.email);
+      // Partial success: the successful invitations exist server-side, so
+      // refresh the pending list before surfacing failures or the upgrade.
+      if (succeeded.length > 0) onInvited?.(succeeded[0]);
+      // Solo plan member gate → open the Team upgrade flow instead of a
+      // raw error. The dialog keeps its state so the user can retry the
+      // same invites after upgrading.
+      if (results.some((r) => r.soloBlocked)) {
+        setUpgradeOpen(true);
+        return;
+      }
       if (failed.length > 0) {
-        setError(`Couldn't invite: ${failed.join(", ")}`);
+        setError(
+          succeeded.length > 0
+            ? `Invited ${succeeded.length}, but couldn't invite: ${failed.join(", ")}`
+            : `Couldn't invite: ${failed.join(", ")}`
+        );
         return;
       }
       setSentCount(emails.length);
-      onInvited?.(emails[0]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -218,6 +261,7 @@ export function InviteDialog({
   }
 
   return (
+    <>
     <ModalShell
       open={open}
       onClose={() => {
@@ -365,5 +409,15 @@ export function InviteDialog({
         )}
       </div>
     </ModalShell>
+
+    {/* Solo member-limit gate — offers the in-place Team upgrade; the
+        invite dialog stays behind with its emails intact for a retry. */}
+    <UpgradeModal
+      open={upgradeOpen}
+      onOpenChange={setUpgradeOpen}
+      workspaceId={workspaceId}
+      variant="add-member"
+    />
+    </>
   );
 }

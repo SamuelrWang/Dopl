@@ -8,15 +8,63 @@ import { PLANS, type PlanDef } from "@/features/billing/plans";
 import type { User } from "@supabase/supabase-js";
 
 /**
- * Public pricing body — the landing-page (light Lattice) language: three
- * plan cards from the shared plan defs, Pro highlighted. Upgrading hands
- * off to the in-app Plans & Billing pane so checkout always carries an
- * explicit workspace id. Plans are workspace-level: Free is fully
- * featured, Pro is $7.99 per seat / month (checkout sells the live
- * per-seat price), and Team is a contact CTA. Rendered two ways: as the
- * /pricing page body and inside the site-nav pricing popup (`.lp-modal`),
- * so it carries no page chrome of its own.
+ * Public pricing body — the landing-page (light Lattice) language. Three
+ * real, purchasable plans from the shared plan defs: Free, Solo Pro
+ * ($5.99/mo flat, individuals) and Team ($7.99 per seat / month, the
+ * highlighted growth path). Each card carries a one-line plain-English
+ * summary; a comparison strip underneath spells out the deltas (object
+ * caps, chat history, members, price) so it's obvious what each tier gets
+ * and when caps apply. Subscribing hands off to the in-app Plans & Billing
+ * pane so checkout always carries an explicit workspace id. Rendered two
+ * ways — the /pricing page body and the site-nav pricing popup
+ * (`.lp-modal`) — so it carries no page chrome of its own.
  */
+
+const PLAN_SUMMARY: Record<string, string> = {
+  free: "Everything, free forever — caps only start when a second member joins.",
+  solo: "You, uncapped: unlimited objects and full history in your own workspace.",
+  team: "Your whole team, uncapped — pay only per seat, synced automatically.",
+};
+
+const SUBSCRIBE_LABEL: Record<string, string> = {
+  solo: "Go Solo Pro",
+  team: "Bring your team",
+};
+
+type CompareCell = { main: string; sub?: string };
+
+const COMPARE_ROWS: {
+  label: string;
+  free: CompareCell;
+  solo: CompareCell;
+  team: CompareCell;
+}[] = [
+  {
+    label: "Ontology objects",
+    free: { main: "Unlimited", sub: "1,000 with 2+ members" },
+    solo: { main: "Unlimited" },
+    team: { main: "Unlimited" },
+  },
+  {
+    label: "Chat history",
+    free: { main: "90 days" },
+    solo: { main: "Full" },
+    team: { main: "Full" },
+  },
+  {
+    label: "Members",
+    free: { main: "Unlimited" },
+    solo: { main: "1" },
+    team: { main: "Unlimited", sub: "per seat" },
+  },
+  {
+    label: "Price",
+    free: { main: "Free" },
+    solo: { main: "$5.99", sub: "/ month" },
+    team: { main: "$7.99", sub: "/ seat / month" },
+  },
+];
+
 export function PricingContent() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
@@ -30,15 +78,35 @@ export function PricingContent() {
     });
   }, []);
 
-  // Fires once the auth check finds a session (the old version read a
-  // stale `user` closure and only worked via a dep-triggered second run).
-  const statusQuery = useApiQuery<{ status?: string }>("/api/billing/status", {
-    enabled: user !== null,
-  });
-  // past_due is still a paid subscription — showing "Upgrade to Pro" would
-  // start a duplicate checkout. Treat active + past_due as subscribed and
-  // route past_due users to manage their existing billing instead.
+  // Billing is per-workspace and `/api/billing/status` fails closed with no
+  // workspace context. Fetch the membership list first (withUserAuth — never
+  // 400s on resolution). Exactly one workspace → read its status; 2+ → skip
+  // the status read (can't pick one from a public page) and hand off to the
+  // in-app billing pane, which has the workspace context.
+  const workspacesQuery = useApiQuery<{ workspaces: { id: string }[] }>(
+    "/api/workspaces",
+    { enabled: user !== null }
+  );
+  const workspaces = workspacesQuery.data?.workspaces;
+  const soleWorkspaceId =
+    workspaces && workspaces.length === 1 ? workspaces[0].id : undefined;
+  const multiWorkspace = (workspaces?.length ?? 0) >= 2;
+
+  // Fires once we've resolved a single workspace to scope the read to. `plan`
+  // ("free" | "solo" | "team") tells us which card is the live subscription so
+  // the matching paid card reflects it (Current plan / manage billing).
+  const statusQuery = useApiQuery<{ status?: string; plan?: string }>(
+    "/api/billing/status",
+    {
+      enabled: soleWorkspaceId !== undefined,
+      workspaceId: soleWorkspaceId,
+    }
+  );
+  // past_due is still a paid subscription — showing a subscribe CTA would start
+  // a duplicate checkout. Treat active + past_due as subscribed and route
+  // past_due users to manage their existing billing instead.
   const status = statusQuery.data?.status;
+  const currentPlan = statusQuery.data?.plan;
   const isPaid = status === "active" || status === "past_due";
   const isPastDue = status === "past_due";
 
@@ -47,12 +115,14 @@ export function PricingContent() {
       router.push("/login?redirect=/pricing");
       return;
     }
-    // Checkout is workspace-scoped, but this public page has no workspace
-    // context — an in-place checkout would silently bill the caller's
-    // default workspace. Hand off to the in-app Plans & Billing pane
-    // (app shell reads the `billing` param), where the target workspace
-    // is explicit and the checkout carries its id.
-    router.push("/canvas?billing=upgrade");
+    // Checkout is workspace-scoped, but this public page can't pick a
+    // workspace for multi-workspace users — an in-place checkout would
+    // silently bill the wrong one. Hand off to the in-app Plans & Billing
+    // pane (app shell reads the `billing` param), where the target workspace
+    // is explicit and the checkout carries its id. Multi-workspace users land
+    // on the billing pane to choose; single-workspace users go straight to
+    // upgrade.
+    router.push(multiWorkspace ? "/canvas?billing=return" : "/canvas?billing=upgrade");
   }
 
   // Route into the in-app Plans & Billing pane (via the /canvas redirect
@@ -75,8 +145,7 @@ export function PricingContent() {
       <div className="lp-pricing-head">
         <h1 className="lp-pricing-title">Pricing</h1>
         <p className="lp-pricing-sub">
-          Start free — every feature included. Upgrade to Pro at $7.99 per seat
-          when your team grows.
+          Start free. Go Solo Pro for $5.99, or bring your team at $7.99 a seat.
         </p>
       </div>
 
@@ -85,6 +154,7 @@ export function PricingContent() {
           <PlanCard
             key={plan.id}
             plan={plan}
+            currentPlan={currentPlan}
             isPaid={isPaid}
             isPastDue={isPastDue}
             authChecked={authChecked}
@@ -94,12 +164,15 @@ export function PricingContent() {
           />
         ))}
       </div>
+
+      <ComparisonTable />
     </section>
   );
 }
 
 function PlanCard({
   plan,
+  currentPlan,
   isPaid,
   isPastDue,
   authChecked,
@@ -108,6 +181,7 @@ function PlanCard({
   onGetStarted,
 }: {
   plan: PlanDef;
+  currentPlan: string | undefined;
   isPaid: boolean;
   isPastDue: boolean;
   authChecked: boolean;
@@ -115,13 +189,18 @@ function PlanCard({
   onManageBilling: () => void;
   onGetStarted: () => void;
 }) {
-  const popular = plan.id === "pro";
+  const isFree = plan.id === "free";
+  const popular = plan.id === "team";
+  const solo = !isFree && !popular;
 
   return (
     <div className={`lp-plan${popular ? " lp-plan--popular" : ""}`}>
       <div className="lp-plan-top">
         <span className="lp-plan-audience">{plan.audience}</span>
         {popular && <span className="lp-plan-badge">Popular</span>}
+        {solo && (
+          <span className="lp-plan-badge lp-plan-badge--soft">Just you</span>
+        )}
       </div>
 
       <h2 className="lp-plan-name">{plan.name}</h2>
@@ -131,14 +210,11 @@ function PlanCard({
           <span className="lp-plan-price-note">{plan.priceNote}</span>
         )}
       </div>
-      <p className="lp-plan-fine">
-        {plan.id === "free" && "Free forever — no credit card required."}
-        {plan.id === "pro" && "Billed per member · cancel anytime."}
-        {plan.id === "team" && "We'll tailor a plan to your team."}
-      </p>
+      <p className="lp-plan-summary">{PLAN_SUMMARY[plan.id]}</p>
 
       <PlanCardCta
         plan={plan}
+        currentPlan={currentPlan}
         isPaid={isPaid}
         isPastDue={isPastDue}
         authChecked={authChecked}
@@ -171,6 +247,7 @@ function PlanCard({
 
 function PlanCardCta({
   plan,
+  currentPlan,
   isPaid,
   isPastDue,
   authChecked,
@@ -179,6 +256,7 @@ function PlanCardCta({
   onGetStarted,
 }: {
   plan: PlanDef;
+  currentPlan: string | undefined;
   isPaid: boolean;
   isPastDue: boolean;
   authChecked: boolean;
@@ -186,54 +264,94 @@ function PlanCardCta({
   onManageBilling: () => void;
   onGetStarted: () => void;
 }) {
-  if (plan.id === "pro") {
-    if (isPastDue) {
-      return (
-        <button
-          type="button"
-          className="lp-btn lp-btn--3d lp-plan-cta"
-          onClick={onManageBilling}
-        >
-          Payment issue — manage billing
-        </button>
-      );
-    }
-    if (isPaid) {
-      return (
-        <button type="button" className="lp-btn lp-btn--3d-light lp-plan-cta" disabled>
-          Current plan
-        </button>
-      );
-    }
+  if (plan.id === "free") {
+    return (
+      <button
+        type="button"
+        className="lp-btn lp-btn--3d-light lp-plan-cta"
+        onClick={onGetStarted}
+      >
+        Try today
+      </button>
+    );
+  }
+
+  // Solo Pro + Team are both real, purchasable tiers. When the sole workspace's
+  // live plan matches this card, reflect the subscription instead of offering a
+  // duplicate checkout; past_due routes to manage billing.
+  const isCurrentPlan = isPaid && currentPlan === plan.id;
+
+  if (isCurrentPlan && isPastDue) {
     return (
       <button
         type="button"
         className="lp-btn lp-btn--3d lp-plan-cta"
-        onClick={onSubscribe}
-        disabled={!authChecked}
+        onClick={onManageBilling}
       >
-        Upgrade to Pro
+        Payment issue — manage billing
       </button>
     );
   }
-  if (plan.id === "team") {
+  if (isCurrentPlan) {
     return (
-      <a
-        href="mailto:support@usedopl.com?subject=Dopl%20Team%20plan"
-        className="lp-btn lp-btn--3d-light lp-plan-cta"
-      >
-        Talk to us
-      </a>
+      <button type="button" className="lp-btn lp-btn--3d-light lp-plan-cta" disabled>
+        Current plan
+      </button>
     );
   }
+  // Team is the highlighted growth path → dark primary; Solo Pro → light.
+  const primary = plan.id === "team";
   return (
     <button
       type="button"
-      className="lp-btn lp-btn--3d-light lp-plan-cta"
-      onClick={onGetStarted}
+      className={`lp-btn ${primary ? "lp-btn--3d" : "lp-btn--3d-light"} lp-plan-cta`}
+      onClick={onSubscribe}
+      disabled={!authChecked}
     >
-      Try today
+      {SUBSCRIBE_LABEL[plan.id] ?? "Upgrade"}
     </button>
+  );
+}
+
+function ComparisonTable() {
+  return (
+    <div className="lp-compare">
+      <div className="lp-compare-scroll">
+        <table className="lp-compare-table">
+          <thead>
+            <tr>
+              <th scope="col">
+                <span className="lp-compare-caption">Compare plans</span>
+              </th>
+              <th scope="col">Free</th>
+              <th scope="col">Solo Pro</th>
+              <th scope="col" className="lp-compare-col--popular">
+                Team
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {COMPARE_ROWS.map((row) => (
+              <tr key={row.label}>
+                <th scope="row">{row.label}</th>
+                <CompareValue cell={row.free} />
+                <CompareValue cell={row.solo} />
+                <CompareValue cell={row.team} popular />
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function CompareValue({ cell, popular }: { cell: CompareCell; popular?: boolean }) {
+  return (
+    <td className={popular ? "lp-compare-col--popular" : undefined}>
+      {cell.main}
+      {cell.sub && <span className="lp-compare-sub">{cell.sub}</span>}
+    </td>
   );
 }
 

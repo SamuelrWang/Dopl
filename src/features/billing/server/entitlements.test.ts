@@ -3,15 +3,20 @@
  *
  * Locks the plan/cap/window matrix other agents build against, with the
  * billing repository mocked (no Supabase, no network). Rules under test:
- *   - solo free  -> uncapped (Notion-style), 90-day chats window
- *   - 2+ free    -> object cap 1000, freeze-don't-delete create gate
- *   - pro active -> uncapped, full history, seatCount surfaced
- *   - past_due   -> pro-with-warning: entitlements stay pro, status shows
- *   - canceled   -> reverts to free rules, status surfaces "canceled"
+ *   - 1-member free -> uncapped (Notion-style), 90-day chats window
+ *   - 2+ free       -> object cap 1000, freeze-don't-delete create gate
+ *   - solo active/1 -> entitled: uncapped, full history, no seatCount
+ *   - solo + 2 mbrs -> DEGRADED to free multi-member rules (backstop)
+ *   - solo canceled -> free rules
+ *   - team active   -> uncapped, full history, seatCount surfaced
+ *   - past_due      -> paid-with-warning: entitlements stay, status shows
+ *   - canceled      -> reverts to free rules, status surfaces "canceled"
+ *   - assertCanAddMember -> 402 only on a live solo workspace
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { WorkspaceBillingRow } from "./workspace-billing";
+import { HttpError } from "@/shared/lib/http-error";
 
 vi.mock("./workspace-billing", () => ({
   getWorkspaceBilling: vi.fn(),
@@ -23,6 +28,7 @@ import * as repo from "./workspace-billing";
 import {
   getWorkspaceEntitlements,
   assertCanCreateObject,
+  assertCanAddMember,
   entitlementDeniedBody,
   EntitlementError,
   FREE_MULTI_MEMBER_OBJECT_CAP,
@@ -35,7 +41,7 @@ const WS = "ws-1";
 function billing(overrides: Partial<WorkspaceBillingRow>): WorkspaceBillingRow {
   return {
     workspaceId: WS,
-    plan: "pro",
+    plan: "team",
     status: "active",
     stripeCustomerId: "cus_1",
     stripeSubscriptionId: "sub_1",
@@ -62,7 +68,7 @@ beforeEach(() => {
 });
 
 describe("getWorkspaceEntitlements — free plans", () => {
-  it("solo free is uncapped (no billing row, 1 member)", async () => {
+  it("1-member free is uncapped (no billing row, 1 member)", async () => {
     setup({ billing: null, members: 1, objects: 5000 });
     const e = await getWorkspaceEntitlements(WS);
     expect(e.plan).toBe("free");
@@ -96,15 +102,75 @@ describe("getWorkspaceEntitlements — free plans", () => {
   });
 });
 
-describe("getWorkspaceEntitlements — pro", () => {
-  it("pro active is uncapped with full history and surfaces seatCount", async () => {
+describe("getWorkspaceEntitlements — solo", () => {
+  it("solo active with a single member is entitled (uncapped, full history, no seatCount)", async () => {
     setup({
-      billing: billing({ plan: "pro", status: "active", seatCount: 3 }),
+      billing: billing({ plan: "solo", status: "active", seatCount: 1 }),
+      members: 1,
+      objects: 5000,
+    });
+    const e = await getWorkspaceEntitlements(WS);
+    expect(e.plan).toBe("solo");
+    expect(e.status).toBe("active");
+    expect(e.objectCap).toBeNull();
+    expect(e.canCreateObjects).toBe(true);
+    expect(e.chatsWindowDays).toBeNull();
+    // Solo is flat — no per-seat concept.
+    expect(e.seatCount).toBeNull();
+  });
+
+  it("solo past_due with a single member keeps the entitlement (grace)", async () => {
+    setup({
+      billing: billing({ plan: "solo", status: "past_due", seatCount: 1 }),
+      members: 1,
+      objects: 5000,
+    });
+    const e = await getWorkspaceEntitlements(WS);
+    expect(e.plan).toBe("solo");
+    expect(e.status).toBe("past_due");
+    expect(e.objectCap).toBeNull();
+    expect(e.canCreateObjects).toBe(true);
+    expect(e.chatsWindowDays).toBeNull();
+  });
+
+  it("solo DEGRADES at 2 members: free multi-member rules apply (backstop)", async () => {
+    setup({
+      billing: billing({ plan: "solo", status: "active", seatCount: 1 }),
+      members: 2,
+      objects: 1200,
+    });
+    const e = await getWorkspaceEntitlements(WS);
+    expect(e.plan).toBe("free");
+    expect(e.status).toBe("active");
+    expect(e.objectCap).toBe(FREE_MULTI_MEMBER_OBJECT_CAP);
+    expect(e.canCreateObjects).toBe(false);
+    expect(e.chatsWindowDays).toBe(FREE_CHATS_WINDOW_DAYS);
+    expect(e.seatCount).toBeNull();
+  });
+
+  it("solo canceled reverts to free (single-member => uncapped)", async () => {
+    setup({
+      billing: billing({ plan: "solo", status: "canceled", seatCount: null }),
+      members: 1,
+      objects: 5000,
+    });
+    const e = await getWorkspaceEntitlements(WS);
+    expect(e.plan).toBe("free");
+    expect(e.status).toBe("canceled");
+    expect(e.objectCap).toBeNull();
+    expect(e.canCreateObjects).toBe(true);
+  });
+});
+
+describe("getWorkspaceEntitlements — team", () => {
+  it("team active is uncapped with full history and surfaces seatCount", async () => {
+    setup({
+      billing: billing({ plan: "team", status: "active", seatCount: 3 }),
       members: 5,
       objects: 5000,
     });
     const e = await getWorkspaceEntitlements(WS);
-    expect(e.plan).toBe("pro");
+    expect(e.plan).toBe("team");
     expect(e.status).toBe("active");
     expect(e.objectCap).toBeNull();
     expect(e.canCreateObjects).toBe(true);
@@ -112,14 +178,14 @@ describe("getWorkspaceEntitlements — pro", () => {
     expect(e.seatCount).toBe(3);
   });
 
-  it("past_due keeps pro entitlements while surfacing the status", async () => {
+  it("team past_due keeps entitlements while surfacing the status", async () => {
     setup({
-      billing: billing({ plan: "pro", status: "past_due", seatCount: 4 }),
+      billing: billing({ plan: "team", status: "past_due", seatCount: 4 }),
       members: 4,
       objects: 9000,
     });
     const e = await getWorkspaceEntitlements(WS);
-    expect(e.plan).toBe("pro");
+    expect(e.plan).toBe("team");
     expect(e.status).toBe("past_due");
     expect(e.objectCap).toBeNull();
     expect(e.canCreateObjects).toBe(true);
@@ -128,10 +194,10 @@ describe("getWorkspaceEntitlements — pro", () => {
   });
 });
 
-describe("getWorkspaceEntitlements — canceled reverts to free", () => {
+describe("getWorkspaceEntitlements — canceled team reverts to free", () => {
   it("canceled multi-member falls back to the free cap + window", async () => {
     setup({
-      billing: billing({ plan: "pro", status: "canceled", seatCount: 3 }),
+      billing: billing({ plan: "team", status: "canceled", seatCount: 3 }),
       members: 3,
       objects: 1200,
     });
@@ -144,9 +210,9 @@ describe("getWorkspaceEntitlements — canceled reverts to free", () => {
     expect(e.seatCount).toBeNull();
   });
 
-  it("canceled solo is uncapped again (free solo rules)", async () => {
+  it("canceled single-member is uncapped again (free 1-member rules)", async () => {
     setup({
-      billing: billing({ plan: "pro", status: "canceled" }),
+      billing: billing({ plan: "team", status: "canceled" }),
       members: 1,
       objects: 1200,
     });
@@ -176,13 +242,72 @@ describe("assertCanCreateObject", () => {
     }
   });
 
-  it("never blocks a pro workspace", async () => {
+  it("never blocks a team workspace", async () => {
     setup({
-      billing: billing({ plan: "pro", status: "active" }),
+      billing: billing({ plan: "team", status: "active" }),
       members: 9,
       objects: 999999,
     });
     await expect(assertCanCreateObject(WS)).resolves.toBeUndefined();
+  });
+
+  it("never blocks an entitled solo workspace", async () => {
+    setup({
+      billing: billing({ plan: "solo", status: "active" }),
+      members: 1,
+      objects: 999999,
+    });
+    await expect(assertCanCreateObject(WS)).resolves.toBeUndefined();
+  });
+});
+
+describe("assertCanAddMember", () => {
+  it("throws 402 SOLO_MEMBER_LIMIT for a live solo workspace (active)", async () => {
+    mockRepo.getWorkspaceBilling.mockResolvedValue(
+      billing({ plan: "solo", status: "active" })
+    );
+    mockRepo.countActiveMembers.mockResolvedValue(1);
+    await expect(assertCanAddMember(WS)).rejects.toBeInstanceOf(HttpError);
+    try {
+      await assertCanAddMember(WS);
+    } catch (err) {
+      const e = err as HttpError;
+      expect(e.status).toBe(402);
+      expect(e.code).toBe("SOLO_MEMBER_LIMIT");
+      expect((e.details as { upgrade_url: string }).upgrade_url).toMatch(
+        /\/pricing$/
+      );
+    }
+  });
+
+  it("throws for a solo workspace in past_due grace too", async () => {
+    mockRepo.getWorkspaceBilling.mockResolvedValue(
+      billing({ plan: "solo", status: "past_due" })
+    );
+    mockRepo.countActiveMembers.mockResolvedValue(1);
+    await expect(assertCanAddMember(WS)).rejects.toBeInstanceOf(HttpError);
+  });
+
+  it("no-ops for a canceled solo workspace (not a live sub)", async () => {
+    mockRepo.getWorkspaceBilling.mockResolvedValue(
+      billing({ plan: "solo", status: "canceled" })
+    );
+    mockRepo.countActiveMembers.mockResolvedValue(1);
+    await expect(assertCanAddMember(WS)).resolves.toBeUndefined();
+  });
+
+  it("no-ops for a team workspace", async () => {
+    mockRepo.getWorkspaceBilling.mockResolvedValue(
+      billing({ plan: "team", status: "active" })
+    );
+    mockRepo.countActiveMembers.mockResolvedValue(3);
+    await expect(assertCanAddMember(WS)).resolves.toBeUndefined();
+  });
+
+  it("no-ops for a free workspace (no billing row)", async () => {
+    mockRepo.getWorkspaceBilling.mockResolvedValue(null);
+    mockRepo.countActiveMembers.mockResolvedValue(1);
+    await expect(assertCanAddMember(WS)).resolves.toBeUndefined();
   });
 });
 

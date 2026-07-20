@@ -4,11 +4,16 @@ import { useState } from "react";
 import { UserPlus } from "lucide-react";
 import type { AssignableRole } from "../types";
 import { formatRelativeTime } from "@/shared/lib/format-time";
+import { ApiError } from "@/shared/api/api-client";
+import { UpgradeModal } from "@/features/billing/components/upgrade-modal";
 import { useJoinRequests, type JoinRequestView } from "../hooks/use-join-requests";
 import { Avatar, RoleSelect } from "./member-bits";
 
 interface Props {
   workspaceSlug: string;
+  /** Scopes the Solo member-limit upgrade modal; the 402 degrades to
+   *  inline text when absent. */
+  workspaceId?: string;
   /** Only admins can read the queue — gate the fetch. */
   enabled: boolean;
   /** Fired after an approval/decline so the parent can refresh members. */
@@ -21,11 +26,17 @@ interface Props {
  * Approve / Decline. Renders nothing while empty. Data flows through
  * useJoinRequests — the same query cache entry as the members view.
  */
-export function JoinRequestsBanner({ workspaceSlug, enabled, onResolved }: Props) {
+export function JoinRequestsBanner({
+  workspaceSlug,
+  workspaceId,
+  enabled,
+  onResolved,
+}: Props) {
   const { requests, resolve: resolveRequest } = useJoinRequests(workspaceSlug, enabled);
   const [roles, setRoles] = useState<Record<string, AssignableRole>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
 
   async function resolve(
     request: JoinRequestView,
@@ -37,7 +48,17 @@ export function JoinRequestsBanner({ workspaceSlug, enabled, onResolved }: Props
       await resolveRequest(request.id, action, roles[request.id] ?? "member");
       onResolved();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      // Solo plan is single-member — approving is blocked server-side.
+      // Offer the in-place Team upgrade instead of a dead-end error line.
+      if (
+        err instanceof ApiError &&
+        err.code === "SOLO_MEMBER_LIMIT" &&
+        workspaceId
+      ) {
+        setUpgradeOpen(true);
+      } else {
+        setError(err instanceof Error ? err.message : "Something went wrong");
+      }
     } finally {
       setBusyId(null);
     }
@@ -97,6 +118,13 @@ export function JoinRequestsBanner({ workspaceSlug, enabled, onResolved }: Props
           </li>
         ))}
       </ul>
+
+      <UpgradeModal
+        open={upgradeOpen}
+        onOpenChange={setUpgradeOpen}
+        workspaceId={workspaceId}
+        variant="add-member"
+      />
     </section>
   );
 }

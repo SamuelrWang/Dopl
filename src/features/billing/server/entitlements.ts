@@ -1,4 +1,5 @@
 import "server-only";
+import { HttpError } from "@/shared/lib/http-error";
 import {
   countActiveMembers,
   countOntologyObjects,
@@ -12,21 +13,31 @@ import {
  * usage, and the chats visibility window.
  *
  * Model (decided):
- *   - Plans are WORKSPACE-level: "free" | "pro". Pro is per-seat.
+ *   - Plans are WORKSPACE-level: "free" | "solo" | "team".
+ *   - Team is per-seat ($7.99/seat); entitled while status is
+ *     active/past_due. Seats sync to the active member count.
+ *   - Solo is flat ($5.99, single-member only); entitled ONLY while
+ *     status is active/past_due AND memberCount === 1. If a second member
+ *     ever appears (race/bug), solo loses its entitlement and the
+ *     workspace degrades to free multi-member rules until fixed — this
+ *     backstop lives here so no abuse path bypasses the object cap.
  *   - Free workspaces get full features. Two capacity rules apply, and
- *     ONLY to multi-member free workspaces (solo free = uncapped,
+ *     ONLY to multi-member free workspaces (1-member free = uncapped,
  *     Notion-style):
  *       * ontology object cap of FREE_MULTI_MEMBER_OBJECT_CAP,
  *       * chats visible window of FREE_CHATS_WINDOW_DAYS.
  *   - Freeze-don't-delete: over the cap, creates are blocked but reads /
  *     edits / exports always work. `canCreateObjects` encodes only the
  *     create gate.
- *   - past_due is treated as pro-with-warning: the workspace keeps pro
- *     entitlements (uncapped, canCreateObjects stays true) while `status`
- *     surfaces "past_due" for the UI. canceled reverts to free rules.
+ *   - past_due is treated as paid-with-warning: an entitled workspace
+ *     keeps its entitlements (uncapped, canCreateObjects stays true) while
+ *     `status` surfaces "past_due" for the UI. canceled reverts to free.
  */
 
-export type WorkspacePlan = "free" | "pro";
+export type WorkspacePlan = "free" | "solo" | "team";
+
+/** Solo is a single-member plan; adding a member is blocked at this count. */
+const SOLO_MAX_MEMBERS = 1;
 
 export interface WorkspaceEntitlements {
   plan: WorkspacePlan;
@@ -45,16 +56,24 @@ export const FREE_MULTI_MEMBER_OBJECT_CAP = 1000;
 export const FREE_CHATS_WINDOW_DAYS = 90;
 
 /**
- * A plan is "pro" for entitlement purposes only while the subscription is
- * live (active) or in the grace window (past_due). A canceled pro sub
- * falls back to free rules — the row keeps plan='pro' historically but
- * loses pro entitlements.
+ * Resolve the EFFECTIVE paid plan for entitlement purposes, or null when
+ * the workspace falls back to free rules. A plan grants entitlements only
+ * while the subscription is live (active) or in the grace window
+ * (past_due); a canceled sub reverts to free (the row may keep its
+ * historical plan but loses entitlements). Solo additionally requires a
+ * single-member workspace — a solo row with a second member (race/bug)
+ * degrades to free so the multi-member object cap still applies.
  */
-function isProEntitled(
+function paidEntitlement(
   plan: WorkspacePlan,
-  status: WorkspaceEntitlements["status"]
-): boolean {
-  return plan === "pro" && (status === "active" || status === "past_due");
+  status: WorkspaceEntitlements["status"],
+  memberCount: number
+): "solo" | "team" | null {
+  const live = status === "active" || status === "past_due";
+  if (!live) return null;
+  if (plan === "team") return "team";
+  if (plan === "solo" && memberCount <= SOLO_MAX_MEMBERS) return "solo";
+  return null;
 }
 
 export async function getWorkspaceEntitlements(
@@ -68,20 +87,24 @@ export async function getWorkspaceEntitlements(
 
   const rawPlan: WorkspacePlan = billing?.plan ?? "free";
   const status: WorkspaceEntitlements["status"] = billing?.status ?? "free";
-  const pro = isProEntitled(rawPlan, status);
-  const plan: WorkspacePlan = pro ? "pro" : "free";
+  const paid = paidEntitlement(rawPlan, status, memberCount);
+  const entitled = paid !== null;
+  const plan: WorkspacePlan = paid ?? "free";
 
-  // Free multi-member workspaces are capped; solo free + pro are uncapped.
+  // Free multi-member workspaces are capped; 1-member free + any entitled
+  // paid plan are uncapped. A degraded solo (2+ members) counts as free
+  // here, so the multi-member cap applies to it too.
   const objectCap =
-    pro || memberCount < 2 ? null : FREE_MULTI_MEMBER_OBJECT_CAP;
+    entitled || memberCount < 2 ? null : FREE_MULTI_MEMBER_OBJECT_CAP;
   const canCreateObjects = objectCap === null || objectsUsed < objectCap;
-  const chatsWindowDays = pro ? null : FREE_CHATS_WINDOW_DAYS;
+  const chatsWindowDays = entitled ? null : FREE_CHATS_WINDOW_DAYS;
 
   return {
     plan,
     status,
     memberCount,
-    seatCount: pro ? billing?.seatCount ?? null : null,
+    // Seats are a per-seat (team) concept; solo is flat, so it has none.
+    seatCount: paid === "team" ? billing?.seatCount ?? null : null,
     objectCap,
     objectsUsed,
     canCreateObjects,
@@ -121,6 +144,34 @@ export async function assertCanCreateObject(
 }
 
 /**
+ * Create-time gate for adding a member (invitation accept, join-link).
+ * A live Solo workspace is single-member by contract, so adding a member
+ * is refused with a 402 pointing at the upgrade path. Free and Team
+ * workspaces are unaffected (no-op). Resolves billing + the active member
+ * count; the throw is gated on a live Solo subscription that is already at
+ * (or above) the single-member limit.
+ */
+export async function assertCanAddMember(workspaceId: string): Promise<void> {
+  const [billing, memberCount] = await Promise.all([
+    getWorkspaceBilling(workspaceId),
+    countActiveMembers(workspaceId),
+  ]);
+  const soloLive =
+    billing?.plan === "solo" &&
+    (billing.status === "active" || billing.status === "past_due");
+  if (soloLive && memberCount >= SOLO_MAX_MEMBERS) {
+    const appUrl =
+      process.env.NEXT_PUBLIC_APP_URL || "https://www.usedopl.com";
+    throw new HttpError(
+      402,
+      "SOLO_MEMBER_LIMIT",
+      "This workspace is on the Solo plan, which is limited to one member. Upgrade to Team to add members.",
+      { upgrade_url: `${appUrl}/pricing` }
+    );
+  }
+}
+
+/**
  * Structured JSON body returned by a route when `assertCanCreateObject`
  * denies a create. Mirrors the old `accessDeniedBody` shape/pattern so
  * clients get a single, predictable "upgrade to continue" envelope.
@@ -137,7 +188,7 @@ export function entitlementDeniedBody() {
     message:
       `This workspace has reached the free plan limit of ` +
       `${FREE_MULTI_MEMBER_OBJECT_CAP.toLocaleString()} objects. Nothing has been ` +
-      `deleted — everything stays readable and editable. Upgrade to Pro to add more.`,
+      `deleted — everything stays readable and editable. Upgrade to Team to add more.`,
     upgrade_url: `${appUrl}/pricing`,
   };
 }

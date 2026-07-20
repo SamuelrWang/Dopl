@@ -82,7 +82,7 @@ const OBJECT_ROW: OntologyObjectRow = {
 function billing(overrides: Partial<WorkspaceBillingRow>): WorkspaceBillingRow {
   return {
     workspaceId: WS,
-    plan: "pro",
+    plan: "team",
     status: "active",
     stripeCustomerId: "cus_1",
     stripeSubscriptionId: "sub_1",
@@ -158,7 +158,7 @@ describe("createObject — free-plan object cap", () => {
 
   it("pro workspace at 5000 objects is uncapped — create OK", async () => {
     setEntitlements({
-      billing: billing({ plan: "pro", status: "active" }),
+      billing: billing({ plan: "team", status: "active" }),
       members: 8,
       objects: 5000,
     });
