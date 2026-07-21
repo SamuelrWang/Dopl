@@ -133,11 +133,13 @@ export async function claimWorkspaceCheckout(
 }
 
 /**
- * Release the checkout claim (best-effort). Called on session-create failure
- * and on `checkout.session.completed` so a re-checkout isn't blocked for the
- * full 2-minute self-expiry window. Clearing an already-expired or
- * already-cleared claim is a harmless no-op; once a subscription id is
- * persisted the normal 409 guard takes over regardless.
+ * Release the checkout claim (best-effort). Called ONLY by the checkout route,
+ * in its `finally`, once the create-session critical section ends — on every
+ * path (success or failure) so an abandoned or plan-switching checkout isn't
+ * blocked for the full 2-minute self-expiry window. The webhook no longer
+ * touches the claim. Clearing an already-expired or already-cleared claim is a
+ * harmless no-op; once a subscription id is persisted the normal 409 guard
+ * takes over regardless.
  */
 export async function releaseWorkspaceCheckout(
   workspaceId: string

@@ -435,6 +435,11 @@ describe("checkout.session.completed", () => {
       expect.objectContaining({ plan: "team", status: "active" })
     );
     expect(syncSeatQuantity).toHaveBeenCalledWith(WS);
+    // The webhook must NOT touch the checkout claim — the route already
+    // released it in its `finally` when the create-session section ended.
+    // (A prior version released it here, redundantly and before persisting
+    // the sub id.)
+    expect(mockRepo.releaseWorkspaceCheckout).not.toHaveBeenCalled();
   });
 
   it("a seat-sync failure does not fail the webhook", async () => {

@@ -51,14 +51,21 @@ export const POST = withWorkspaceAuth(
       return checkoutConflict(portalUrl);
     }
 
-    // Cross-instance claim (M-3 full fix) — atomically stake this workspace
-    // before minting a Stripe subscription. A concurrent checkout that lost
-    // the claim (this instance OR any other Vercel lambda) is turned away
-    // here instead of racing to create a duplicate untracked sub during the
-    // window before the webhook persists `stripeSubscriptionId`. The claim is
-    // a single-statement compare-and-set in Postgres (upsert-claim, self-
-    // expires after 2 min), immune to the PgBouncer/advisory-lock leak the
-    // prior attempt hit. See claimWorkspaceCheckout / migration
+    // Cross-instance claim (M-3) — atomically stake this workspace for the
+    // duration of the create-session critical section only. A truly CONCURRENT
+    // checkout that lost the claim (this instance OR any other Vercel lambda)
+    // is turned away here instead of racing to mint a duplicate untracked sub.
+    // The claim is a single-statement compare-and-set in Postgres (upsert-
+    // claim, self-expires after 2 min), immune to the PgBouncer/advisory-lock
+    // leak the prior attempt hit. It is RELEASED the instant the section ends
+    // (the `finally` below), so it does NOT fence a user who abandons checkout
+    // or switches plan (Solo<->Team) — they can retry immediately.
+    //
+    // Residual: this fences only concurrent session-creation, not the whole
+    // checkout lifetime. A SEQUENTIAL re-checkout that lands during the webhook
+    // lag (claim already released, `stripeSubscriptionId` not yet persisted)
+    // can still mint a duplicate sub; fully closing that needs webhook-side
+    // subscription dedup. See claimWorkspaceCheckout / migration
     // 20260720210814_workspace_billing_checkout_claim.sql.
     if (!(await claimWorkspaceCheckout(workspaceId))) {
       const portalUrl = billing?.stripeCustomerId
@@ -67,12 +74,9 @@ export const POST = withWorkspaceAuth(
       return checkoutConflict(portalUrl);
     }
 
-    // Hold the claim only on the success path (a live checkout session was
-    // minted): it blocks a racing second checkout until the webhook clears it
-    // on `checkout.session.completed` or it self-expires (2 min). Every
-    // terminal non-success path below releases it so the caller can retry at
-    // once (e.g. solo/team mismatch) rather than waiting out the expiry.
-    let holdClaim = false;
+    // The claim now spans only claim -> session-create -> release (~ms). It is
+    // released UNCONDITIONALLY in the `finally` below on every path, success
+    // included, so an abandoned or plan-switching checkout is never locked out.
     try {
       const plan = await readPlan(request);
 
@@ -120,22 +124,23 @@ export const POST = withWorkspaceAuth(
         stripeCustomerId: fresh?.stripeCustomerId ?? billing?.stripeCustomerId,
       });
 
-      // Session minted: keep the claim in force until the webhook clears it.
-      holdClaim = true;
       return NextResponse.json({ clientSecret });
     } finally {
-      // Release on every path except a successfully-minted session (which
-      // must keep the claim to fence a concurrent checkout). Best-effort —
-      // the 2-minute self-expiry is the backstop if this write fails.
-      if (!holdClaim) {
-        try {
-          await releaseWorkspaceCheckout(workspaceId);
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          console.error(
-            `[checkout] Failed to release checkout claim for workspace ${workspaceId}: ${message}`
-          );
-        }
+      // Release the claim on EVERY path — the create-session critical section
+      // is over whether we minted a session, hit a validation 409, or threw.
+      // Holding it past this point would falsely 409 the same user's retry (an
+      // abandon/plan-switch lockout) for up to the 2-minute self-expiry, a
+      // conversion regression. Two truly-concurrent requests are still
+      // serialized by the claim above (the loser 409s before minting), which
+      // is the cross-instance protection this preserves. Best-effort — the
+      // 2-minute self-expiry is the backstop if this write fails.
+      try {
+        await releaseWorkspaceCheckout(workspaceId);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(
+          `[checkout] Failed to release checkout claim for workspace ${workspaceId}: ${message}`
+        );
       }
     }
   },

@@ -13,7 +13,6 @@ import {
   findWorkspaceIdByStripeSubscription,
   getStripeEventWatermark,
   getWorkspaceBilling,
-  releaseWorkspaceCheckout,
   upsertWorkspaceBilling,
   type WorkspaceBillingStatus,
   type WorkspaceBillingUpsert,
@@ -256,20 +255,12 @@ async function handleCheckoutCompleted(
     workspaceId ?? (await resolveWorkspaceIdForCustomer(customerId));
   if (!targetWorkspaceId || !subscriptionId) return;
 
-  // Release the checkout claim now that this session completed — the row's
-  // subscription id (persisted below) is the durable 409 guard from here on,
-  // so a racing re-checkout no longer needs to be fenced by the claim. Best-
-  // effort and watermark-independent (runs even on a stale replay); the
-  // 2-minute self-expiry is the backstop if this write fails.
-  try {
-    await releaseWorkspaceCheckout(targetWorkspaceId);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error(
-      `[webhook] Failed to release checkout claim for workspace ${targetWorkspaceId}: ${message}`
-    );
-  }
-
+  // NB: the webhook does NOT touch the checkout claim. The route already
+  // released it when its create-session critical section ended (see
+  // checkout/route.ts `finally`), so the claim is gone long before this event
+  // lands. A prior version released it here too — redundant, and it released
+  // BEFORE persisting the subscription id below. From here the persisted
+  // `stripeSubscriptionId` is the durable 409 guard for re-checkout.
   const subscription = await getStripe().subscriptions.retrieve(subscriptionId);
   const status = mapStatus(subscription.status);
   const fields = subscriptionFields(subscription);

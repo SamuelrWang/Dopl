@@ -1,5 +1,5 @@
--- Cross-instance checkout claim: close the concurrent-checkout duplicate-
--- subscription race (M-3, full fix).
+-- Cross-instance checkout claim: fence the CONCURRENT-checkout duplicate-
+-- subscription race (M-3).
 --
 -- The 409 guard in /api/billing/checkout only trips once
 -- `stripe_subscription_id` is persisted — i.e. AFTER the Stripe webhook lands.
@@ -19,12 +19,21 @@
 --   * `claim_workspace_checkout(uuid)` — atomically stamps it and returns
 --     whether THIS caller won the claim (see below).
 --
--- The claim SELF-EXPIRES after 2 minutes: a request that crashes between
--- claiming and creating the Stripe session briefly (<= 2 min) blocks a
--- re-checkout, then the stale claim ages out and the next attempt succeeds.
--- The happy path clears it explicitly on `checkout.session.completed` (the
--- webhook) and on session-create failure (the route), so the window is
--- normally milliseconds.
+-- SCOPE / RESIDUAL: the claim serializes ONLY the create-session critical
+-- section, not the whole checkout lifetime. The route takes it, mints the
+-- session, and RELEASES it in its `finally` (~ms later) on every path — so it
+-- fences two truly-concurrent session-creations (cross-instance) but does NOT
+-- lock out a user who abandons or switches plan. It therefore does NOT close
+-- the SEQUENTIAL-retry-within-webhook-lag window: a re-checkout that lands
+-- after the release but before `stripe_subscription_id` is persisted can still
+-- mint a duplicate. Fully closing that needs webhook-side subscription dedup;
+-- this migration is the concurrent-race half only.
+--
+-- The claim SELF-EXPIRES after 2 minutes as a backstop: a request that crashes
+-- between claiming and releasing briefly (<= 2 min) blocks a re-checkout, then
+-- the stale claim ages out. The route clears it explicitly in its `finally`
+-- (success or failure), so the normal window is milliseconds. (The webhook
+-- does NOT touch the claim.)
 
 -- ════════════════════════════════════════════════════════════════════
 -- 1. Claim column — nullable; NULL means "no checkout in flight".
