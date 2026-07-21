@@ -105,14 +105,13 @@ These are allowed under the exceptions above OR scheduled for a future split. If
 
 Remeasured 2026-07-17 (findings-prune audit — tracked as F-041). Generated `src/shared/supabase/types.ts` and `*seed-fixtures*` data tables are exempt (§2 carve-outs).
 
+2026-07-20: the three consolidated MCP tool files (`tools/knowledge.ts`, `tools/workflow.ts`, `tools/ontology.ts`) were split under the cap and removed from this table. Pattern for these `op`-dispatched tools: the original file stays the thin **registrar** (tool schemas + `op` routing) and delegates each op to a sibling module — `<tool>-ops-read.ts` / `<tool>-ops-write.ts` (+ `<tool>-ops-admin.ts` for destructive soft-deletes), with cross-cutting resolvers/renderers/error-mappers in `<tool>-shared.ts` / `<tool>-render.ts`. Tool names, op enums, schemas, and error mapping are unchanged. Keep the registrar thin when adding ops — new op handlers go in the sibling module, not the registrar.
+
 | File | Lines | Reason |
 |------|-------|--------|
 | `src/features/skills/components/skill-view.tsx` | 759 | First in queue: extract editor/save-chain hook + header controls (grew with concurrency hardening + metadata CAS). |
 | `packages/mcp-server/src/server.ts` | 612 | Borderline: registration + gating core; watch it. |
-| `packages/mcp-server/src/tools/knowledge.ts` | 597 | Borderline: single-tool module; split ops-vs-render if it grows. |
 | `packages/dopl-client/src/client.ts` | 592 | Scheduled: continue per-domain method-group extraction. |
-| `packages/mcp-server/src/tools/workflow.ts` | 588 | Borderline: single-tool module. |
-| `packages/mcp-server/src/tools/ontology.ts` | 586 | Borderline: single-tool module (render half already in ontology-render.ts). |
 | `src/features/workspaces/server/invitations.ts` | 534 | Over cap: grew with the member-add gate (2026-07-20); split scheduled (F-041). |
 | `src/features/teams/server/repository.ts` | 508 | Borderline: watch it. |
 

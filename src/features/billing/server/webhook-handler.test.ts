@@ -56,6 +56,7 @@ vi.mock("./workspace-billing", () => ({
   getWorkspaceBilling: vi.fn(),
   getStripeEventWatermark: vi.fn(),
   upsertWorkspaceBilling: vi.fn(),
+  releaseWorkspaceCheckout: vi.fn(),
   findWorkspaceIdByStripeCustomer: vi.fn(),
   findWorkspaceIdByStripeSubscription: vi.fn(),
 }));

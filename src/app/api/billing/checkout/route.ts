@@ -6,8 +6,10 @@ import {
   createWorkspaceCheckoutSession,
 } from "@/features/billing/server/stripe";
 import {
+  claimWorkspaceCheckout,
   countActiveMembers,
   getWorkspaceBilling,
+  releaseWorkspaceCheckout,
 } from "@/features/billing/server/workspace-billing";
 
 /** Read the requested plan from an optional JSON body. Absent or invalid
@@ -21,25 +23,6 @@ async function readPlan(request: NextRequest): Promise<"solo" | "team"> {
   }
   return "team";
 }
-
-/**
- * PARTIAL mitigation for concurrent-checkout duplicate-subscription (M-3),
- * NOT a full fix. The 409 guard below only trips once `stripeSubscriptionId`
- * is persisted — between "start checkout" and the webhook writing that id,
- * two racing requests can each mint a Stripe subscription. Adding a real
- * cross-instance claim needs schema we're not touching here.
- *
- * This in-process set collapses the common case: a double-click / retry /
- * React double-invoke landing on the SAME warm serverless instance can't
- * both create a session. It does NOTHING across instances (Vercel may route
- * concurrent requests to different lambdas), so a residual race remains —
- * narrowed further by the Stripe idempotencyKey in createWorkspaceCheckout-
- * Session (same workspace+plan+quantity+hour → one session) and the billing
- * re-read immediately before session creation. Residual risk is documented,
- * accepted, and left for the main thread to fully close (advisory lock or a
- * `checkout_pending` column) if it wants a hard guarantee.
- */
-const inflightCheckouts = new Set<string>();
 
 function checkoutConflict(portalUrl: string | null) {
   return NextResponse.json(
@@ -68,15 +51,28 @@ export const POST = withWorkspaceAuth(
       return checkoutConflict(portalUrl);
     }
 
-    // In-process claim (M-3 partial mitigation) — reject a concurrent checkout
-    // for the same workspace on this instance instead of minting a 2nd sub.
-    if (inflightCheckouts.has(workspaceId)) {
-      return NextResponse.json(
-        { error: "A checkout is already in progress for this workspace" },
-        { status: 409 }
-      );
+    // Cross-instance claim (M-3 full fix) — atomically stake this workspace
+    // before minting a Stripe subscription. A concurrent checkout that lost
+    // the claim (this instance OR any other Vercel lambda) is turned away
+    // here instead of racing to create a duplicate untracked sub during the
+    // window before the webhook persists `stripeSubscriptionId`. The claim is
+    // a single-statement compare-and-set in Postgres (upsert-claim, self-
+    // expires after 2 min), immune to the PgBouncer/advisory-lock leak the
+    // prior attempt hit. See claimWorkspaceCheckout / migration
+    // 20260720210814_workspace_billing_checkout_claim.sql.
+    if (!(await claimWorkspaceCheckout(workspaceId))) {
+      const portalUrl = billing?.stripeCustomerId
+        ? await createPortalSession(billing.stripeCustomerId)
+        : null;
+      return checkoutConflict(portalUrl);
     }
-    inflightCheckouts.add(workspaceId);
+
+    // Hold the claim only on the success path (a live checkout session was
+    // minted): it blocks a racing second checkout until the webhook clears it
+    // on `checkout.session.completed` or it self-expires (2 min). Every
+    // terminal non-success path below releases it so the caller can retry at
+    // once (e.g. solo/team mismatch) rather than waiting out the expiry.
+    let holdClaim = false;
     try {
       const plan = await readPlan(request);
 
@@ -105,9 +101,9 @@ export const POST = withWorkspaceAuth(
       }
 
       // Re-read billing right before minting the session: a webhook may have
-      // landed (persisting a subscription id) since the first read, in which
-      // case creating another session would duplicate the sub. Cheap defense
-      // that shrinks — but does not eliminate — the cross-instance race.
+      // landed (persisting a subscription id) since the first read — e.g. a
+      // grandfathered sub, or a prior checkout that completed after this
+      // request's claim expired. Defense-in-depth behind the claim above.
       const fresh = await getWorkspaceBilling(workspaceId);
       if (fresh?.stripeSubscriptionId && fresh.status !== "canceled") {
         const portalUrl = fresh.stripeCustomerId
@@ -124,9 +120,23 @@ export const POST = withWorkspaceAuth(
         stripeCustomerId: fresh?.stripeCustomerId ?? billing?.stripeCustomerId,
       });
 
+      // Session minted: keep the claim in force until the webhook clears it.
+      holdClaim = true;
       return NextResponse.json({ clientSecret });
     } finally {
-      inflightCheckouts.delete(workspaceId);
+      // Release on every path except a successfully-minted session (which
+      // must keep the claim to fence a concurrent checkout). Best-effort —
+      // the 2-minute self-expiry is the backstop if this write fails.
+      if (!holdClaim) {
+        try {
+          await releaseWorkspaceCheckout(workspaceId);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          console.error(
+            `[checkout] Failed to release checkout claim for workspace ${workspaceId}: ${message}`
+          );
+        }
+      }
     }
   },
   // sessionOnly: billing mutations must come from an interactive session, never

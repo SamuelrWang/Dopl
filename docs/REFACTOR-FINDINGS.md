@@ -143,12 +143,10 @@ Build + `tsc --noEmit` green on every commit; `npx eslint` at 0 errors (baseline
 - Description: files over the ENGINEERING §2 hard cap. Consolidates the lists formerly tracked in F-012/F-030:
   - `src/features/skills/components/skill-view.tsx` — 759 (grew with the concurrency hardening + metadata CAS; split scheduled: extract editor/save-chain hook + header controls)
   - `packages/mcp-server/src/server.ts` — 612 (registration + gating core; borderline)
-  - `packages/mcp-server/src/tools/knowledge.ts` — 597 (single-tool module; split ops-vs-render if it grows)
   - `packages/dopl-client/src/client.ts` — 592 (continue per-domain method-group extraction)
-  - `packages/mcp-server/src/tools/workflow.ts` — 588 (single-tool module)
-  - `packages/mcp-server/src/tools/ontology.ts` — 586 (single-tool module; render half already split)
   - `src/features/workspaces/server/invitations.ts` — 534 (grew past cap with the member-add gate; split scheduled — extract the accept/join sub-flows)
   - `src/features/teams/server/repository.ts` — 508
+- 2026-07-20 (Bucket 3): the three MCP tool modules formerly on this list — `packages/mcp-server/src/tools/knowledge.ts` (597), `workflow.ts` (588), `ontology.ts` (586) — were SPLIT into `<tool>-ops-{read,write,admin}` / `<tool>-shared` / `<tool>-render` modules behind thin registrars (all now < 500 lines); `dist/` rebuilt. Removed from the list; pattern recorded in ENGINEERING §2.
 - Proposed resolution: §2 applies — any edit to these files must shrink or split them in the same PR. `skill-view.tsx` is first in the queue.
 - Status: open (tracked)
 
@@ -215,6 +213,7 @@ Build + `tsc --noEmit` green on every commit; `npx eslint` at 0 errors (baseline
   - **M-12** 8 covering FK indexes.
   - Applied the previously-unapplied **F-020** `drop_workspace_resource_access` migration; dropped orphan `bump_canvas_state_version()`.
 - Minor open follow-up: wire `useInvalidateBillingStatus` into the members-feature mutations so member add/remove refreshes the seat-count/entitlements cache.
+- Carve-out follow-up status (2026-07-20 Bucket 3): F-046 (M-9) and F-047 (M-3 full) are now RESOLVED + applied to prod, and F-049's `auth_rls_initplan` half is RESOLVED. F-048 (M-5) and F-049's `multiple_permissive_policies` remainder stay open.
 - Proposed resolution: fix-now — DONE for the above. Deferred work carved out to F-046 (M-9), F-047 (M-3 full), F-048 (M-5), F-049 (RLS-perf backlog); `invitations.ts` over-cap split tracked in F-041.
 - Status: resolved (in-branch + prod migrations; retained one cycle then prune)
 
@@ -224,7 +223,8 @@ Build + `tsc --noEmit` green on every commit; `npx eslint` at 0 errors (baseline
 - Severity: bug (info-disclosure — a signed-in user can probe membership of workspaces they aren't in)
 - Description: the helper is executable by any authenticated role, so it can be called to test arbitrary workspace membership. The correct fix is an RLS-wide rewrite to a 2-arg, `auth.uid()`-pinned predicate across every calling policy, then `REVOKE EXECUTE` on the oracle — too broad for this batch.
 - Proposed resolution: defer — dedicated migration that rewrites all calling policies to the pinned predicate then revokes the function. Not a row-crossing leak today (policies still scope rows); close it before wider multi-tenant exposure. Coordinate with F-049 (same policy surface).
-- Status: open (deferred)
+- Resolution: APPLIED TO PROD 2026-07-20 (Bucket 3). Migration `20260720211005_rls_pin_workspace_member_and_initplan` — created SECURITY DEFINER `is_current_workspace_member(uuid,text)` pinning `(SELECT auth.uid())`; rewrote all 62 policies calling the 3-arg `is_workspace_member` to the 2-arg wrapper; `REVOKE EXECUTE` on `is_workspace_member(uuid,uuid,text)` from `authenticated` (oracle closed). Follow-up migration `20260720214500` revoked the inert `anon` grant on the wrapper. Verified: oracle-closure gate returns 0 rows; `is_workspace_member` acl = `{postgres,service_role}`. Done in the same migration as the F-049 `auth_rls_initplan` fix (shared policy surface).
+- Status: resolved (prod migration; retained one cycle then prune)
 
 ### F-047: M-3 (full) — cross-instance duplicate-subscription race
 - Location: `src/app/api/billing/checkout/route.ts` (in-process guard + pre-mint re-read shipped in F-045)
@@ -232,7 +232,8 @@ Build + `tsc --noEmit` green on every commit; `npx eslint` at 0 errors (baseline
 - Severity: bug (duplicate Stripe subscription / double-charge under concurrency)
 - Description: the shipped in-process guard + pre-mint billing re-read close the same-instance race, but two serverless instances can each still mint a checkout session for one workspace before either writes back. A durable fix needs an atomic claim (a `checkout-claim` column on `workspace_billing`) — i.e. a schema change.
 - Proposed resolution: defer — add the claim column + atomic claim-before-mint. Until then the webhook event-ordering watermark and the "checkout blocks when a non-canceled sub exists" guard limit the blast radius.
-- Status: open (deferred)
+- Resolution: APPLIED TO PROD 2026-07-20 (Bucket 3). Migration `20260720210814_workspace_billing_checkout_claim` — added `workspace_billing.checkout_claim_at` + the `claim_workspace_checkout(uuid)` RPC (atomic `INSERT .. ON CONFLICT DO UPDATE` cross-instance compare-and-set, service_role-only). Wired into the checkout route (claim before session create; release in `finally` / on webhook); the in-process `Set` was removed. Verified: `claim_workspace_checkout` returns `true` then `false` on a second concurrent call.
+- Status: resolved (in-branch + prod migration; retained one cycle then prune)
 
 ### F-048: M-5 — invite-accept doesn't bind the accepting identity to the invited email
 - Location: `src/features/workspaces/server/invitations.ts` (`acceptInvitationByToken`)
@@ -243,9 +244,11 @@ Build + `tsc --noEmit` green on every commit; `npx eslint` at 0 errors (baseline
 - Status: open (question)
 
 ### F-049: RLS performance advisor backlog
-- Location: Supabase advisor lints — 73 `auth_rls_initplan` + 42 `multiple_permissive_policies`
+- Location: Supabase advisor lints — `multiple_permissive_policies` (36 remaining; the `auth_rls_initplan` half is resolved, see below)
 - Found during: audit-fix session (2026-07-20, advisor sweep)
 - Severity: smell (scale / perf)
-- Description: `auth_rls_initplan` = policies calling `auth.*()` per-row instead of wrapping in a scalar subselect (`(select auth.uid())`); `multiple_permissive_policies` = several permissive policies on one role/action that all evaluate. Both degrade query planning at scale; neither is a correctness bug.
-- Proposed resolution: defer — a dedicated RLS-perf migration pass (wrap `auth.*()` calls, consolidate permissive policies). Do it together with F-046 — the `is_workspace_member` rewrite touches the same policy surface.
-- Status: open (deferred)
+- Description: two advisor families. `auth_rls_initplan` = policies calling `auth.*()` per-row instead of wrapping in a scalar subselect (`(select auth.uid())`); `multiple_permissive_policies` = several permissive policies on one role/action that all evaluate. Both degrade query planning at scale; neither is a correctness bug.
+- `auth_rls_initplan` — RESOLVED 2026-07-20 (Bucket 3), APPLIED TO PROD. The same migration as F-046, `20260720211005_rls_pin_workspace_member_and_initplan`, wrapped every `auth.uid()`/`auth.jwt()` call in `(SELECT ...)` across all 73 public policies; the advisor dropped 70 → 0.
+- `multiple_permissive_policies` (36 lints) — STILL OPEN, deferred on purpose (correctness > perf). Consolidating permissive policies risks a row-scoping regression, so it is held for a dedicated, test-gated pass.
+- Proposed resolution: defer — the safe recipe is documented in the header of migration `20260720211005`: split each `*_admin_write` / `*_editor_write` `FOR ALL` policy into explicit `FOR INSERT` / `FOR UPDATE` / `FOR DELETE`, leaving the member `FOR SELECT` as the sole SELECT policy (optionally fold `chats_owner_select` into `chats_member_select`); ship behind a no-regression isolation test.
+- Status: open (deferred — `auth_rls_initplan` half resolved 2026-07-20; `multiple_permissive_policies` remainder open)

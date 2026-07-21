@@ -114,6 +114,41 @@ export async function upsertWorkspaceBilling(
   if (error) throw error;
 }
 
+/**
+ * Take the short-lived cross-instance checkout claim for a workspace.
+ * Returns true iff THIS caller won the claim; false means another checkout is
+ * already in flight (the route turns that into a 409). Atomic compare-and-set
+ * in Postgres (`claim_workspace_checkout` — upsert-claim, self-expires after
+ * 2 min), so it holds across Vercel lambda instances where an in-process guard
+ * cannot. See migration 20260720210814_workspace_billing_checkout_claim.sql.
+ */
+export async function claimWorkspaceCheckout(
+  workspaceId: string
+): Promise<boolean> {
+  const { data, error } = await supabaseAdmin().rpc("claim_workspace_checkout", {
+    p_workspace_id: workspaceId,
+  });
+  if (error) throw error;
+  return data === true;
+}
+
+/**
+ * Release the checkout claim (best-effort). Called on session-create failure
+ * and on `checkout.session.completed` so a re-checkout isn't blocked for the
+ * full 2-minute self-expiry window. Clearing an already-expired or
+ * already-cleared claim is a harmless no-op; once a subscription id is
+ * persisted the normal 409 guard takes over regardless.
+ */
+export async function releaseWorkspaceCheckout(
+  workspaceId: string
+): Promise<void> {
+  const { error } = await supabaseAdmin()
+    .from("workspace_billing")
+    .update({ checkout_claim_at: null } as Record<string, unknown>)
+    .eq("workspace_id", workspaceId);
+  if (error) throw error;
+}
+
 export async function findWorkspaceIdByStripeCustomer(
   stripeCustomerId: string
 ): Promise<string | null> {

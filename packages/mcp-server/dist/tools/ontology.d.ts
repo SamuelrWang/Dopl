@@ -4,6 +4,13 @@
  * Read funnel: anchor → map → resolve → get. Write ops edit one thing
  * at a time (attribute / relationship / action upserts) so agents never
  * have to round-trip whole objects.
+ *
+ * This file is the thin registrar: it owns the two tool schemas + wires
+ * them to the handlers in sibling modules —
+ *   - `ontology-render.ts`     — shared ref resolvers + object renderer
+ *   - `ontology-ops-read.ts`   — map/anchor/resolve/get
+ *   - `ontology-ops-write.ts`  — the op dispatch switch + every mutating handler
+ * The admin tool (cascade soft-deletes) stays inline here.
  */
 import type { DoplClient } from "@dopl/client";
 import { type RegisterTool } from "./respond";

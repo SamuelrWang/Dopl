@@ -13,6 +13,7 @@ import {
   findWorkspaceIdByStripeSubscription,
   getStripeEventWatermark,
   getWorkspaceBilling,
+  releaseWorkspaceCheckout,
   upsertWorkspaceBilling,
   type WorkspaceBillingStatus,
   type WorkspaceBillingUpsert,
@@ -254,6 +255,20 @@ async function handleCheckoutCompleted(
   const targetWorkspaceId =
     workspaceId ?? (await resolveWorkspaceIdForCustomer(customerId));
   if (!targetWorkspaceId || !subscriptionId) return;
+
+  // Release the checkout claim now that this session completed — the row's
+  // subscription id (persisted below) is the durable 409 guard from here on,
+  // so a racing re-checkout no longer needs to be fenced by the claim. Best-
+  // effort and watermark-independent (runs even on a stale replay); the
+  // 2-minute self-expiry is the backstop if this write fails.
+  try {
+    await releaseWorkspaceCheckout(targetWorkspaceId);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(
+      `[webhook] Failed to release checkout claim for workspace ${targetWorkspaceId}: ${message}`
+    );
+  }
 
   const subscription = await getStripe().subscriptions.retrieve(subscriptionId);
   const status = mapStatus(subscription.status);
