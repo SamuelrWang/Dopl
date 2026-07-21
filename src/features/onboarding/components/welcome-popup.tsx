@@ -49,6 +49,17 @@ export function WelcomePopup() {
     setTimeout(() => setOpen(false), 220);
   }
 
+  function walkMeThrough() {
+    // Decoupled trigger — the TourProvider (in the app shell) listens for this
+    // window event, so onboarding starts the tour without importing it.
+    try {
+      window.dispatchEvent(new Event("dopl:start-tour"));
+    } catch {
+      // event dispatch unavailable — fall through to dismiss
+    }
+    dismiss();
+  }
+
   if (!open) return null;
 
   const prompt = buildBootstrapPrompt(
@@ -110,6 +121,12 @@ export function WelcomePopup() {
         </p>
 
         <p className="mt-4 text-[14.5px] leading-relaxed text-[#3a414a]">
+          Your agent is connected to this workspace over MCP. That means it can
+          do everything you can do here: create objects, write knowledge, save
+          skills, and run workflows, right from chat.
+        </p>
+
+        <p className="mt-4 text-[14.5px] leading-relaxed text-[#3a414a]">
           To help jumpstart your workspace, here&rsquo;s a prompt I wrote for
           your agent:
         </p>
@@ -134,6 +151,23 @@ export function WelcomePopup() {
             ) : (
               <Copy className="h-4 w-4" />
             )}
+          </button>
+        </div>
+
+        <div className="mt-5 flex items-center gap-3">
+          <button
+            type="button"
+            onClick={walkMeThrough}
+            className="auth-btn-3d cursor-pointer rounded-lg px-4 py-2 text-lead font-semibold text-white"
+          >
+            Walk me through
+          </button>
+          <button
+            type="button"
+            onClick={dismiss}
+            className="cursor-pointer text-[14px] font-medium text-[#646d78] transition-colors hover:text-[#232a31]"
+          >
+            {"I'll explore on my own"}
           </button>
         </div>
 

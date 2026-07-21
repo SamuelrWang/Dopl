@@ -59,59 +59,46 @@ CONNECT
 - It uses OAuth — a browser window opens once for me to sign in; no API key.
 - Silently confirm the connection and my active workspace, and inspect your Dopl write tools (the dopl_kb / dopl_skill admin ops) so you know their operations. Don't write anything yet.
 
-Then run this loop:
+PHASE 0 — INSTANT SEED (do immediately, before anything else):
+- From what you ALREADY know (your memory, this conversation, my open project/files), write ONE small, high-confidence KB entry right now. Ask nothing first.
+- Render its card + the "View in Dopl" link (PHASE 3), then tell me in one line: "Here's a first entry so you can see how this works; correct anything that's wrong."
+- Then go to PHASE 1.
 
-PHASE 1 — PROPOSE (once, first):
-- Review what you ALREADY know about me: this conversation, your memory, my open project/files, my connected tools, recent tasks you've done for me.
-- Surface 3–5 HIGH-VALUE topics worth recording. Bias hard toward things that are RECURRING (I do them repeatedly) and NON-OBVIOUS (you'd otherwise re-derive them every time). Skip anything trivial or easily looked up.
-- Show them as a short ranked menu, one line each on WHY it's worth it.
-- End with: "Pick one, or name your own." Then STOP and wait for me.
+PHASE 1 — PROPOSE (once):
+- Review what you already know about me: this conversation, your memory, my open project/files, connected tools, recent tasks.
+- Surface exactly 3 high-value topics worth recording. Bias hard toward RECURRING and NON-OBVIOUS things; skip anything trivial or easily looked up. One line each on WHY it's worth it.
+- End with "Pick one, or name your own." Then STOP and wait.
 
-PHASE 2 — CLASSIFY:
-When I pick a topic, classify it and tell me which it is:
-- KB     = durable facts ("what is true": my stack, my customers, my rules)
-- SKILL  = a procedure ("how I do X": how I run outreach)
-- WORKFLOW = a multi-step pipeline (lead → email → follow-up)
-State the type and which rubric you'll fill.
+PHASE 2 — INTERVIEW:
+- Open with one line naming the type: "This is a KB / SKILL / WORKFLOW; filling that rubric." (KB = durable facts; SKILL = how I do X; WORKFLOW = a multi-step pipeline.)
+- Take the matching rubric below and FILL every slot you can from what you know or can look up. Never ask what you could answer yourself or find by opening a file/tool.
+- Then ask ONLY the genuinely empty slots, ≤3 focused questions at a time, highest-value first.
 
-PHASE 3 — INTERVIEW (the core):
-- Take the matching rubric below.
-- FILL every slot you can from what you already know or can look up. Do NOT ask me anything you could answer yourself or find by opening a file/tool — go look instead of asking.
-- Then ask me ONLY the genuinely empty/uncertain slots. 1–3 focused questions at a time, highest-value first. Every question must obviously feed the artifact.
-
-PHASE 4 — WRITE + SHOW (do this every time you write):
-- Write or update the artifact in Dopl with the admin tool, in the schema below. Keep each entry atomic (one topic).
-- The write tool returns a line "View in Dopl: <url>". Use that URL.
-- Then RENDER a visual card of what you wrote, INLINE, using your environment's HTML/artifact capability. Do NOT paste the raw text. Fill this template (replace every {{SLOT}}; convert the body to HTML yourself; self-contained, no external libraries):
+PHASE 3 — WRITE + SHOW (every time you write):
+- Write or update the artifact with the admin tool, in the schema below, one atomic topic per entry.
+- The write tool returns "View in Dopl: <url>". RENDER a visual card of what you wrote, inline, using your environment's HTML/artifact capability — fill this template (replace every {{SLOT}}, convert the body to HTML, self-contained, no external libraries):
 
 ${DOPL_CARD_TEMPLATE}
 
-- Also surface the same URL as a plain clickable link, so I can open it even if the card can't render.
-- If your environment can't render inline HTML, fall back to clean formatted markdown — never a raw text dump.
-- Continue with more gap questions, or say: "This one looks solid — go deeper, or move to the next topic?"
+- Also surface the same URL as a plain clickable link. If you can't render inline HTML, fall back to clean markdown — never a raw text dump.
+- Then continue with more gap questions, or ask: "Go deeper, or move to the next topic?"
 
-PHASE 5 — NEXT:
-When I say move on, return to the menu (refresh it if you've learned something new). Loop until I stop.
+PHASE 4 — NEXT:
+- When I move on, return to the menu (refresh it if you've learned something new). Loop until I stop.
 
 RULES:
-- Fill-from-memory-first, ask-only-gaps. Never ask what you can infer or look up.
-- Batch ≤3 questions. Always let me say "good enough, move on."
+- Fill from memory first; ask only real gaps. Batch ≤3 questions and always let me say "good enough, move on."
 - Capture the NEGATIVES: what I removed, what I DON'T do, disqualifiers, gotchas. Half the value is anti-knowledge.
-- Never write secrets, credentials, financial, or private personal data into the workspace.
-- Don't finalize silently — every write gets a rendered card + the link.
+- Never write secrets, credentials, or private personal data.
+- Every write gets a rendered card + the link. Keep entries atomic.
 
 RUBRICS:
 
-KB (facts):
-  Title · Purpose (1 line) · Facts (durable truths, bulleted) · Why (what breaks if ignored) · Related entries to link.
-  Cover: scope, key facts, current state, rationale, gotchas/negatives.
+KB (facts): Title · Purpose (1 line) · Facts (durable truths, bulleted) · Why (what breaks if ignored) · Related entries to link.
 
-SKILL (procedure):
-  Name (verb phrase) · When-to-use (trigger) · Inputs · Steps (ordered) · Constraints/voice · Output · Gotchas.
-  Cover: trigger, target, the steps, tone/constraints, success criteria, disqualifiers, one real example.
+SKILL (procedure): Name (verb phrase) · When-to-use (trigger) · Inputs · Steps (ordered) · Constraints/voice · Output · Gotchas.
 
-WORKFLOW (pipeline):
-  Name · Trigger · Ordered stages (each → the skill/KB it uses) · Decision points/branches · End state.
+WORKFLOW (pipeline): Name · Trigger · Ordered stages (each → the skill/KB it uses) · Decision points/branches · End state.
 
-Start PHASE 1 now.`;
+Start PHASE 0 now.`;
 }

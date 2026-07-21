@@ -1,0 +1,57 @@
+/* Layout-only geometry for the tour popover. Colors, type, borders, and
+   shadows come from kit classes (.bento, .concave-field) + design tokens on
+   the elements — this file holds only position, size, spacing, and motion,
+   per the design system's "CSS modules welcome for layout" rule. */
+
+.popover {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 35;
+  width: 340px;
+  max-width: calc(100vw - 32px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  animation: tourIn 200ms ease both;
+}
+
+@keyframes tourIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.footerSpacer {
+  flex: 1;
+}
+
+.promptWell {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  border-radius: 10px;
+  padding: 10px 12px;
+  max-height: 128px;
+  overflow-y: auto;
+}
+
+.promptText {
+  flex: 1;
+  min-width: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

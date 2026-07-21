@@ -1,5 +1,6 @@
 export { AppShell } from "./app-shell";
 export { AppPanel } from "./app-panel";
 export { AppRail } from "./app-rail";
-export { AppSidebar } from "./app-sidebar";
+export { AppSidebar, sectionPath } from "./app-sidebar";
+export type { NavSection } from "./app-sidebar";
 export type { WorkspaceLike } from "./workspace-types";

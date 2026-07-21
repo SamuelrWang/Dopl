@@ -20,7 +20,7 @@ import type { SettingsSection } from "@/shared/layout/settings-modal";
 import { WorkspaceSwitcher } from "./workspace-switcher";
 import styles from "./app-shell.module.css";
 
-type NavSection =
+export type NavSection =
   | "overview"
   | "canvas"
   | "workflows"
@@ -51,7 +51,7 @@ interface Props {
   onCreateWorkspace: () => void;
 }
 
-function sectionPath(segment: string, section: NavSection): string {
+export function sectionPath(segment: string, section: NavSection): string {
   return `/${segment}/${section}`;
 }
 
