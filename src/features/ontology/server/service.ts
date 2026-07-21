@@ -306,6 +306,12 @@ export async function updateObject(
   if (relationships) {
     cleanEdges = await sanitizeEdges(ctx, objectId, relationships);
     await repo.replaceRelationshipsForSource(ctx.workspaceId, objectId, cleanEdges);
+    // Writing edges bumps the source object's `updated_at` via the
+    // ontology_relationships trigger (H-4), so re-read the row to return the
+    // post-bump version token; otherwise the caller's next CAS write with the
+    // stale token would spuriously 412.
+    const refreshed = await repo.findObjectById(ctx.workspaceId, objectId);
+    if (refreshed) row = refreshed;
   }
 
   const object = mapObjectRow(row);

@@ -48,5 +48,7 @@ export const PATCH = withUserAuth(
       const message = err instanceof Error ? err.message : "Unknown error";
       return NextResponse.json({ error: message }, { status: 500 });
     }
-  }
+  },
+  // sessionOnly: approving/declining a join request is an admin action.
+  { sessionOnly: true }
 );

@@ -1,5 +1,6 @@
 import "server-only";
 import { HttpError } from "@/shared/lib/http-error";
+import type { PlanId, BillingStatus } from "../plans";
 import {
   countActiveMembers,
   countOntologyObjects,
@@ -34,14 +35,16 @@ import {
  *     `status` surfaces "past_due" for the UI. canceled reverts to free.
  */
 
-export type WorkspacePlan = "free" | "solo" | "team";
+/** Alias of the canonical `PlanId` (plans.ts) — kept as the entitlements
+ *  contract's public name for the plan union. */
+export type WorkspacePlan = PlanId;
 
 /** Solo is a single-member plan; adding a member is blocked at this count. */
 const SOLO_MAX_MEMBERS = 1;
 
 export interface WorkspaceEntitlements {
   plan: WorkspacePlan;
-  status: "free" | "active" | "past_due" | "canceled";
+  status: BillingStatus;
   memberCount: number;
   seatCount: number | null;
   /** null = uncapped. */
@@ -144,12 +147,52 @@ export async function assertCanCreateObject(
 }
 
 /**
+ * Solo member-limit denial. Subclasses `HttpError` so the workspace route
+ * catch blocks (`err instanceof HttpError → err.toResponseBody()`) keep
+ * routing it as a 402, but overrides `toResponseBody` to emit the FLAT
+ * plan-gate envelope — `{ error: <code>, message, upgrade_url }` — the same
+ * shape `entitlementDeniedBody()` / the object-cap gate uses, instead of
+ * the nested `{ error: { code, message, details } }` default. The web
+ * consumers (invite-dialog, members-view, join-requests-banner) and
+ * `apiRequest` already parse this flat shape (string `error` code + a
+ * top-level `upgrade_url`). `details` is kept on the instance so callers
+ * that inspect the thrown error still see `upgrade_url`.
+ */
+class SoloMemberLimitError extends HttpError {
+  readonly upgradeUrl: string;
+
+  constructor(upgradeUrl: string) {
+    super(
+      402,
+      "SOLO_MEMBER_LIMIT",
+      "This workspace is on the Solo plan, which is limited to one member. Upgrade to Team to add members.",
+      { upgrade_url: upgradeUrl }
+    );
+    this.name = "SoloMemberLimitError";
+    this.upgradeUrl = upgradeUrl;
+  }
+
+  // Flat plan-gate envelope. The base signature types `error` as an object;
+  // this gate deliberately uses a string code with a sibling `upgrade_url`,
+  // so cast to the base return type — callers pass the value straight to
+  // `NextResponse.json` and never read it back through the typed shape.
+  toResponseBody() {
+    return {
+      error: this.code,
+      message: this.message,
+      upgrade_url: this.upgradeUrl,
+    } as unknown as ReturnType<HttpError["toResponseBody"]>;
+  }
+}
+
+/**
  * Create-time gate for adding a member (invitation accept, join-link).
  * A live Solo workspace is single-member by contract, so adding a member
- * is refused with a 402 pointing at the upgrade path. Free and Team
- * workspaces are unaffected (no-op). Resolves billing + the active member
- * count; the throw is gated on a live Solo subscription that is already at
- * (or above) the single-member limit.
+ * is refused with a 402 (flat plan-gate envelope, see `SoloMemberLimitError`)
+ * pointing at the upgrade path. Free and Team workspaces are unaffected
+ * (no-op). Resolves billing + the active member count; the throw is gated
+ * on a live Solo subscription that is already at (or above) the
+ * single-member limit.
  */
 export async function assertCanAddMember(workspaceId: string): Promise<void> {
   const [billing, memberCount] = await Promise.all([
@@ -162,12 +205,7 @@ export async function assertCanAddMember(workspaceId: string): Promise<void> {
   if (soloLive && memberCount >= SOLO_MAX_MEMBERS) {
     const appUrl =
       process.env.NEXT_PUBLIC_APP_URL || "https://www.usedopl.com";
-    throw new HttpError(
-      402,
-      "SOLO_MEMBER_LIMIT",
-      "This workspace is on the Solo plan, which is limited to one member. Upgrade to Team to add members.",
-      { upgrade_url: `${appUrl}/pricing` }
-    );
+    throw new SoloMemberLimitError(`${appUrl}/pricing`);
   }
 }
 

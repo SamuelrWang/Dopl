@@ -9,11 +9,17 @@ export const dynamic = "force-dynamic";
  * owner (revokeGrant filters by user_id), so a user can only revoke their
  * own grants. The client's next /api/mcp call then 401s and it re-auths.
  */
-export const DELETE = withUserAuth(async (_request, { userId, params }) => {
-  const id = params?.id;
-  if (!id) {
-    return NextResponse.json({ error: "id required" }, { status: 400 });
-  }
-  await revokeGrant(id, userId);
-  return NextResponse.json({ ok: true });
-});
+export const DELETE = withUserAuth(
+  async (_request, { userId, params }) => {
+    const id = params?.id;
+    if (!id) {
+      return NextResponse.json({ error: "id required" }, { status: 400 });
+    }
+    await revokeGrant(id, userId);
+    return NextResponse.json({ ok: true });
+  },
+  // sessionOnly: revoking an OAuth grant is a connected-app access-control
+  // mutation — an agent token must never be able to revoke grants (including
+  // its own or a sibling's). Session (cookie) callers only.
+  { sessionOnly: true }
+);

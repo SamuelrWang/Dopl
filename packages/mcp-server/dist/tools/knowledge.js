@@ -11,144 +11,21 @@
  *
  * These expose the user's OWN editable bases (create / edit / soft-delete),
  * addressed like a filesystem.
+ *
+ * This file is the thin registrar: it owns the two tool schemas + op
+ * routing and delegates each op to a handler in a sibling module —
+ *   - `knowledge-shared.ts`    — base resolution + error/validation mappers
+ *   - `knowledge-ops-read.ts`  — list_bases/get_tree/list_dir/read_file/list_trash/search
+ *   - `knowledge-ops-write.ts` — create/update/move/write + restore (recovery) ops
+ *   - `knowledge-ops-admin.ts` — the destructive soft-deletes
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerKnowledgeTools = registerKnowledgeTools;
 const zod_1 = require("zod");
 const respond_1 = require("./respond");
-/**
- * Resolves a base reference (slug or UUID) to a `KnowledgeBase` row.
- * Returns null when nothing matches. Calls `listKbBases` once per
- * invocation — fine for agent throughput, not great for tight loops.
- */
-async function resolveBase(client, ref) {
-    const bases = await client.listKbBases();
-    return bases.find((b) => b.slug === ref || b.id === ref) ?? null;
-}
-/**
- * resolveBase + the standard not-found error. Returns the base, or a
- * ToolResponse error (caller short-circuits on the `isError` branch).
- */
-async function resolveBaseOr(client, ref) {
-    const base = await resolveBase(client, ref);
-    if (!base)
-        return (0, respond_1.err)(`Knowledge base not found: ${ref}. If you may have deleted it, check \`dopl_kb(op='list_trash')\` and restore with \`dopl_kb(op='restore_base')\`.`);
-    return base;
-}
-function isErr(x) {
-    return "isError" in x && x.isError === true;
-}
-/**
- * Clean surface for the F-10 read-only-base delete rejection. The API
- * returns 403 `AGENT_WRITE_DISABLED` when an agent tries to delete a base
- * (or anything inside it) that's flagged `agent_write_enabled=false`.
- * Surface the server's actionable message verbatim instead of a raw throw
- * or a `CODE: message` dump. Returns null otherwise so the caller rethrows.
- * Duck-typed on `.status` / `.code` to avoid importing the @dopl/client
- * error class across the module boundary (same pattern as isConflict).
- */
-function agentWriteDenied(e) {
-    if (typeof e !== "object" ||
-        e === null ||
-        e.status !== 403 ||
-        e.code !== "AGENT_WRITE_DISABLED") {
-        return null;
-    }
-    const msg = e.apiMessage;
-    return (0, respond_1.err)(typeof msg === "string" && msg
-        ? msg
-        : "This knowledge base is read-only to agents — delete it from the Dopl web UI.");
-}
-/**
- * True when a thrown @dopl/client error is a 400 schema-validation
- * failure (`{ error: { code: "VALIDATION_FAILED", details } }`). Duck-typed
- * on `.status` / `.code` so it works across the @dopl/client module
- * boundary without importing the error class (same pattern as isConflict).
- */
-function isValidationError(e) {
-    return (typeof e === "object" &&
-        e !== null &&
-        e.status === 400 &&
-        e.code === "VALIDATION_FAILED");
-}
-/** Field names named by a validation error's zod-issue `details` array. */
-function validationFields(details) {
-    const fields = new Set();
-    if (Array.isArray(details)) {
-        for (const issue of details) {
-            const path = issue.path;
-            const first = Array.isArray(path) ? path[0] : undefined;
-            if (typeof first === "string")
-                fields.add(first);
-        }
-    }
-    return fields;
-}
-/**
- * Bidirectional / directional-formatting control chars the name schema
- * rejects as an anti-spoofing measure: embeddings + overrides
- * (U+202A–U+202E), isolates (U+2066–U+2069), the LTR/RTL marks
- * (U+200E/U+200F), and the Arabic letter mark (U+061C). Named explicitly
- * so the validation error can point at the exact offending code point.
- */
-const BIDI_CONTROL_RE = /[\u202A-\u202E\u2066-\u2069\u200E\u200F\u061C]/;
-/** `U+XXXX` for the first bidi control char in `text`, else null. */
-function namedBidiChar(text) {
-    const m = BIDI_CONTROL_RE.exec(text);
-    if (!m)
-        return null;
-    const cp = m[0].codePointAt(0) ?? 0;
-    return `U+${cp.toString(16).toUpperCase().padStart(4, "0")}`;
-}
-/**
- * Maps a `write_file` validation failure to a tool-shaped message naming
- * the field + rule + recovery (F-18). Returns null when the error isn't a
- * recognized validation failure so the caller rethrows.
- */
-function writeFileValidationError(e, title) {
-    if (!isValidationError(e))
-        return null;
-    const fields = validationFields(e.details);
-    // path is the only other write_file field and carries no schema rule
-    // (z.string()), so a validation failure is a title (or body-size) issue.
-    if (fields.has("title") || fields.size === 0) {
-        const t = title ?? "";
-        const bidi = namedBidiChar(t);
-        if (bidi) {
-            return (0, respond_1.err)(`write_file: title contains a disallowed bidirectional control character (${bidi}) — remove it and retry (this block prevents right-to-left path spoofing).`);
-        }
-        if (t.includes("/")) {
-            return (0, respond_1.err)(`write_file: titles can't contain '/' (it's the path separator) — use a different title, or create the folder via the path and give the entry a clean title.`);
-        }
-        if (fields.has("title")) {
-            return (0, respond_1.err)(`write_file: title is invalid — it can't contain control or zero-width characters or leading/trailing whitespace. Use a plain title.`);
-        }
-    }
-    if (fields.has("body")) {
-        return (0, respond_1.err)(`write_file: body is too large — the limit is 1 MB. Split it into multiple entries.`);
-    }
-    return (0, respond_1.err)(`write_file: request body failed validation${fields.size ? ` (field: ${[...fields].join(", ")})` : ""}. Titles can't contain '/', control, or zero-width characters.`);
-}
-/**
- * Maps an `update_base` validation failure to a tool-shaped message
- * naming the field + rule + recovery (F-18). Returns null when the error
- * isn't a recognized validation failure so the caller rethrows.
- */
-function updateBaseValidationError(e) {
-    if (!isValidationError(e))
-        return null;
-    const fields = validationFields(e.details);
-    if (fields.has("slug")) {
-        return (0, respond_1.err)(`update_base: slug must match ^[a-z0-9-]+$ — lowercase letters, digits, and hyphens only (no leading/trailing hyphen, no spaces).`);
-    }
-    if (fields.has("name")) {
-        return (0, respond_1.err)(`update_base: name can't be blank — pass a non-empty name, or omit it to leave the name unchanged.`);
-    }
-    if (fields.has("description")) {
-        return (0, respond_1.err)(`update_base: description is too long.`);
-    }
-    return (0, respond_1.err)(`update_base: request body failed validation${fields.size ? ` (field: ${[...fields].join(", ")})` : ""}.`);
-}
+const knowledge_ops_read_1 = require("./knowledge-ops-read");
+const knowledge_ops_write_1 = require("./knowledge-ops-write");
+const knowledge_ops_admin_1 = require("./knowledge-ops-admin");
 const KB_DESCRIPTION = `Manage the caller's own editable knowledge bases. Talk to these like a filesystem. Bases are addressed by slug or id; folders/entries by \`/\`-separated path. Set \`op\` to one of:
 - "list_bases" — list the bases the caller can access in the active workspace. Returns slugs to address with subsequent ops.
 - "get_tree" — full folder/entry tree for a base (metadata only, bodies stripped). First call when exploring a base; for a body follow up with op=read_file.
@@ -190,7 +67,7 @@ function registerKnowledgeTools(register, client) {
         name: zod_1.z.string().optional().describe("create_base: required base name (1-120 chars). update_base: optional new name."),
         description: zod_1.z.string().optional().describe("create_base/update_base: optional base description (max 2000)."),
         slug: zod_1.z.string().optional().describe("update_base: optional new slug (1-80 chars)."),
-        body: zod_1.z.string().optional().describe("write_file: required markdown body. Can't be empty — pass a single space for a deliberate stub."),
+        body: zod_1.z.string().max(1_048_576).optional().describe("write_file: required markdown body. Can't be empty — pass a single space for a deliberate stub."),
         title: zod_1.z.string().optional().describe("write_file: title for the entry — can't contain '/'. Doubles as the addressable path for a new entry when `path` is omitted; otherwise an optional override (defaults to the leaf path segment)."),
         expected_version: zod_1.z.string().optional().describe("write_file: the entry's Version from a prior read_file. Required when overwriting an existing entry — omitting it fails with 412; only force=true skips the check. Creates need no version."),
         force: zod_1.z.boolean().optional().describe("write_file: overwrite even if the entry changed since you read it. Discards the other edit — use only when intentional."),
@@ -199,61 +76,61 @@ function registerKnowledgeTools(register, client) {
         query: zod_1.z.string().optional().describe("search: required free-text query."),
         // coerce: MCP clients sometimes send numbers as strings; strict
         // z.number() rejects them with an opaque -32602.
-        limit: zod_1.z.coerce.number().optional().describe("search: max hits (default 20)."),
+        limit: zod_1.z.coerce.number().int().min(1).max(100).optional().describe("search: max hits (default 20, 1-100)."),
         entry_limit: zod_1.z.coerce.number().int().min(1).max(1000).optional().describe("get_tree: max entries per page (default 400, 1-1000). Folders always ship in full."),
         entry_cursor: zod_1.z.string().optional().describe("get_tree: opaque cursor from a prior page's 'more entries' notice — fetches the next page."),
         visibility: zod_1.z.enum(["public", "private"]).optional().describe("op=set_visibility: 'public' to publish a base you created (makes it workspace-visible + referenceable in workflows). One-way — 'private' is rejected."),
     }, async (args) => {
         switch (args.op) {
             case "list_bases":
-                return opListBases(client);
+                return (0, knowledge_ops_read_1.opListBases)(client);
             case "get_tree": {
                 const miss = (0, respond_1.missingParams)("get_tree", args, ["base"]);
                 if (miss)
                     return miss;
-                return opGetTree(client, args.base, args.entry_limit, args.entry_cursor);
+                return (0, knowledge_ops_read_1.opGetTree)(client, args.base, args.entry_limit, args.entry_cursor);
             }
             case "list_dir": {
                 const miss = (0, respond_1.missingParams)("list_dir", args, ["base"]);
                 if (miss)
                     return miss;
-                return opListDir(client, args.base, args.path);
+                return (0, knowledge_ops_read_1.opListDir)(client, args.base, args.path);
             }
             case "create_base": {
                 const miss = (0, respond_1.missingParams)("create_base", args, ["name"]);
                 if (miss)
                     return miss;
-                return opCreateBase(client, args.name, args.description);
+                return (0, knowledge_ops_write_1.opCreateBase)(client, args.name, args.description);
             }
             case "update_base": {
                 const miss = (0, respond_1.missingParams)("update_base", args, ["base"]);
                 if (miss)
                     return miss;
-                return opUpdateBase(client, args.base, args.name, args.description, args.slug);
+                return (0, knowledge_ops_write_1.opUpdateBase)(client, args.base, args.name, args.description, args.slug);
             }
             case "restore_base": {
                 const miss = (0, respond_1.missingParams)("restore_base", args, ["base"]);
                 if (miss)
                     return miss;
-                return opRestoreBase(client, args.base);
+                return (0, knowledge_ops_write_1.opRestoreBase)(client, args.base);
             }
             case "create_folder": {
                 const miss = (0, respond_1.missingParams)("create_folder", args, ["base", "path"]);
                 if (miss)
                     return miss;
-                return opCreateFolder(client, args.base, args.path);
+                return (0, knowledge_ops_write_1.opCreateFolder)(client, args.base, args.path);
             }
             case "move_folder": {
                 const miss = (0, respond_1.missingParams)("move_folder", args, ["base", "from_path", "to_path"]);
                 if (miss)
                     return miss;
-                return opMoveFolder(client, args.base, args.from_path, args.to_path);
+                return (0, knowledge_ops_write_1.opMoveFolder)(client, args.base, args.from_path, args.to_path);
             }
             case "read_file": {
                 const miss = (0, respond_1.missingParams)("read_file", args, ["base", "path"]);
                 if (miss)
                     return miss;
-                return opReadFile(client, args.base, args.path);
+                return (0, knowledge_ops_read_1.opReadFile)(client, args.base, args.path);
             }
             case "write_file": {
                 const miss = (0, respond_1.missingParams)("write_file", args, ["base"]);
@@ -277,39 +154,39 @@ function registerKnowledgeTools(register, client) {
                 if (args.body === "") {
                     return (0, respond_1.err)(`write_file: body cannot be empty — pass content (or a single space for a stub).`);
                 }
-                return opWriteFile(client, args.base, path, args.body, args.title, args.expected_version, args.force);
+                return (0, knowledge_ops_write_1.opWriteFile)(client, args.base, path, args.body, args.title, args.expected_version, args.force);
             }
             case "move_file": {
                 const miss = (0, respond_1.missingParams)("move_file", args, ["base", "from_path", "to_path"]);
                 if (miss)
                     return miss;
-                return opMoveFile(client, args.base, args.from_path, args.to_path);
+                return (0, knowledge_ops_write_1.opMoveFile)(client, args.base, args.from_path, args.to_path);
             }
             case "list_trash":
-                return opListTrash(client, args.base);
+                return (0, knowledge_ops_read_1.opListTrash)(client, args.base);
             case "restore_file": {
                 const miss = (0, respond_1.missingParams)("restore_file", args, ["entry_id"]);
                 if (miss)
                     return miss;
-                return opRestoreFile(client, args.entry_id);
+                return (0, knowledge_ops_write_1.opRestoreFile)(client, args.entry_id);
             }
             case "restore_folder": {
                 const miss = (0, respond_1.missingParams)("restore_folder", args, ["folder_id"]);
                 if (miss)
                     return miss;
-                return opRestoreFolder(client, args.folder_id);
+                return (0, knowledge_ops_write_1.opRestoreFolder)(client, args.folder_id);
             }
             case "search": {
                 const miss = (0, respond_1.missingParams)("search", args, ["query"]);
                 if (miss)
                     return miss;
-                return opSearch(client, args.query, args.base, args.limit);
+                return (0, knowledge_ops_read_1.opSearch)(client, args.query, args.base, args.limit);
             }
             case "set_visibility": {
                 const miss = (0, respond_1.missingParams)("set_visibility", args, ["base", "visibility"]);
                 if (miss)
                     return miss;
-                return opSetVisibility(client, args.base, args.visibility);
+                return (0, knowledge_ops_write_1.opSetVisibility)(client, args.base, args.visibility);
             }
         }
     });
@@ -329,406 +206,20 @@ function registerKnowledgeTools(register, client) {
                 const miss = (0, respond_1.missingParams)("delete_base", args, ["base"]);
                 if (miss)
                     return miss;
-                return opDeleteBase(client, args.base);
+                return (0, knowledge_ops_admin_1.opDeleteBase)(client, args.base);
             }
             case "delete_folder": {
                 const miss = (0, respond_1.missingParams)("delete_folder", args, ["base", "path"]);
                 if (miss)
                     return miss;
-                return opDeleteFolder(client, args.base, args.path);
+                return (0, knowledge_ops_admin_1.opDeleteFolder)(client, args.base, args.path);
             }
             case "delete_file": {
                 const miss = (0, respond_1.missingParams)("delete_file", args, ["base", "path"]);
                 if (miss)
                     return miss;
-                return opDeleteFile(client, args.base, args.path);
+                return (0, knowledge_ops_admin_1.opDeleteFile)(client, args.base, args.path);
             }
         }
     });
-}
-async function opListBases(client) {
-    const bases = await client.listKbBases();
-    if (bases.length === 0)
-        return (0, respond_1.ok)("No knowledge bases yet. Create one with `dopl_kb(op='create_base')`.");
-    const lines = ["## Knowledge bases\n"];
-    for (const b of bases) {
-        // Surface the immutable id alongside the slug (the slug changes on
-        // rename; the id is a stable handle) plus the access signal.
-        const vis = b.visibility === "private" ? "private" : "public";
-        const desc = b.description ? `\n  ${b.description}` : "";
-        lines.push(`- **${b.name}** (slug: \`${b.slug}\` · id: \`${b.id}\` · ${vis})${desc}`);
-    }
-    return (0, respond_1.ok)(lines.join("\n"));
-}
-const TREE_ENTRY_CAP = 400;
-const TREE_ENTRY_MAX = 1000;
-async function opGetTree(client, ref, entryLimit, entryCursor) {
-    const base = await resolveBaseOr(client, ref);
-    if (isErr(base))
-        return base;
-    // Entries are paged at the API (folders always ship in full), so the
-    // wire payload matches what gets rendered instead of always shipping
-    // the whole base.
-    const limit = Math.min(Math.max(1, Math.floor(entryLimit ?? TREE_ENTRY_CAP)), TREE_ENTRY_MAX);
-    const tree = await client.getKbTree(base.id, {
-        entryLimit: limit,
-        entryCursor,
-    });
-    const entryTotal = tree.entryTotal ?? tree.entries.length;
-    const vis = tree.base.visibility === "private" ? "private" : "public";
-    const lines = [
-        `## ${tree.base.name} \`${tree.base.slug}\``,
-        `id: \`${tree.base.id}\` · ${vis} · agent-write ${tree.base.agentWriteEnabled ? "on" : "off"}`,
-        ...(tree.base.description ? [tree.base.description] : []),
-        `Folders: ${tree.folders.length} · Entries: ${entryTotal}${tree.entries.length < entryTotal ? ` (showing ${tree.entries.length})` : ""}`,
-        "",
-    ];
-    // Build a tree view by walking parent_id / folder_id.
-    const childFolders = new Map();
-    for (const f of tree.folders) {
-        const arr = childFolders.get(f.parentId) ?? [];
-        arr.push(f);
-        childFolders.set(f.parentId, arr);
-    }
-    for (const arr of childFolders.values())
-        arr.sort((a, b) => a.position - b.position || a.name.localeCompare(b.name));
-    const childEntries = new Map();
-    for (const e of tree.entries) {
-        const arr = childEntries.get(e.folderId) ?? [];
-        arr.push(e);
-        childEntries.set(e.folderId, arr);
-    }
-    for (const arr of childEntries.values())
-        arr.sort((a, b) => a.position - b.position || a.title.localeCompare(b.title));
-    function dump(parentId, prefix) {
-        for (const f of childFolders.get(parentId) ?? []) {
-            lines.push(`${prefix}📁 ${f.name}/${descSuffix(f.description)}`);
-            dump(f.id, prefix + "  ");
-        }
-        for (const e of childEntries.get(parentId) ?? []) {
-            lines.push(`${prefix}📄 ${e.title}${descSuffix(e.excerpt)}`);
-        }
-    }
-    dump(null, "");
-    if (tree.nextEntryCursor) {
-        lines.push("", `_Showing ${tree.entries.length} of ${entryTotal} entries. Pass entry_cursor="${tree.nextEntryCursor}" for the next page, or narrow with op="list_dir" / op="search"._`);
-    }
-    return (0, respond_1.ok)(lines.join("\n"));
-}
-/**
- * ` — description` suffix for tree / directory rows. Folder
- * `description` and entry `excerpt` are the user-curated, agent-facing
- * summaries (≤300 chars) — surfacing them here lets agents pick the
- * right file from a listing instead of read_file-ing everything.
- * Newlines are flattened so one row stays one line.
- */
-function descSuffix(text) {
-    if (!text)
-        return "";
-    return ` — ${text.replace(/\s*\n+\s*/g, " ")}`;
-}
-async function opListDir(client, ref, path) {
-    const base = await resolveBaseOr(client, ref);
-    if (isErr(base))
-        return base;
-    const listing = await client.listKbDirByPath(base.id, path ?? "");
-    const lines = [];
-    const where = listing.folder ? listing.folder.name : "(root)";
-    lines.push(`## ${base.name} → ${where}`);
-    if (listing.folder?.description)
-        lines.push(listing.folder.description);
-    if (listing.folders.length === 0 && listing.entries.length === 0) {
-        lines.push("Empty.");
-    }
-    else {
-        for (const f of listing.folders)
-            lines.push(`📁 ${f.name}/${descSuffix(f.description)}`);
-        for (const e of listing.entries)
-            lines.push(`📄 ${e.title}${descSuffix(e.excerpt)}`);
-    }
-    return (0, respond_1.ok)(lines.join("\n"));
-}
-async function opCreateBase(client, name, description) {
-    const base = await client.createKbBase({ name, description });
-    const visNote = base.visibility === "private"
-        ? "Private to you — only you and your agent can see it."
-        : "Visible to the whole workspace.";
-    return (0, respond_1.ok)(`Created knowledge base **${base.name}** (slug: \`${base.slug}\`). ${visNote}`);
-}
-async function opUpdateBase(client, ref, name, description, slug) {
-    const base = await resolveBaseOr(client, ref);
-    if (isErr(base))
-        return base;
-    let updated;
-    try {
-        updated = await client.updateKbBase(base.id, {
-            name,
-            description,
-            slug,
-        });
-    }
-    catch (e) {
-        // F-10b: read-only-to-agents base — surface the clean message the
-        // delete ops use, not a raw AGENT_WRITE_DISABLED dump.
-        const denied = agentWriteDenied(e);
-        if (denied)
-            return denied;
-        // F-18: name the field + rule instead of surfacing a raw
-        // "VALIDATION_FAILED: Request body failed validation".
-        const mapped = updateBaseValidationError(e);
-        if (mapped)
-            return mapped;
-        throw e;
-    }
-    return (0, respond_1.ok)(`Updated **${updated.name}** (slug: \`${updated.slug}\`).`);
-}
-async function opSetVisibility(client, ref, visibility) {
-    if (visibility !== "public") {
-        return (0, respond_1.err)(`set_visibility only publishes (visibility="public") a base you created. Un-publishing and team scope are human-only — use the Dopl web UI.`);
-    }
-    const base = await resolveBaseOr(client, ref);
-    if (isErr(base))
-        return base;
-    const updated = await client.updateKbBase(base.id, { visibility: "public" });
-    return (0, respond_1.ok)(`Published knowledge base **${updated.name}** (slug: \`${updated.slug}\`) — now visible workspace-wide and referenceable in workflows.`);
-}
-async function opRestoreBase(client, ref) {
-    // Audit fix #30: was 3 round-trips (listKbBases → listKbTrash →
-    // restoreKbBase). Drop the listKbBases call — if the user
-    // mistakenly tries to restore an already-active base it'll just
-    // fall into the "not in trash" error below, which is clearer
-    // anyway ("No deleted base matches" vs "Base is already active"
-    // both correctly tell them not to retry).
-    //
-    // The restore endpoint takes a UUID, not a slug. Look up the
-    // trashed base by slug or id via workspace-wide trash listing.
-    const trash = await client.listKbTrash();
-    const trashed = trash.bases.find((b) => b.slug === ref || b.id === ref);
-    if (!trashed) {
-        return (0, respond_1.err)(`No deleted base matches "${ref}". Use \`dopl_kb(op='list_trash')\` to see available restores; or the base may already be active.`);
-    }
-    const restored = await client.restoreKbBase(trashed.id);
-    return (0, respond_1.ok)(`Restored **${restored.name}** (slug: \`${restored.slug}\`).`);
-}
-async function opCreateFolder(client, ref, path) {
-    const base = await resolveBaseOr(client, ref);
-    if (isErr(base))
-        return base;
-    const folder = await client.createKbFolderByPath(base.id, path);
-    return (0, respond_1.ok)(`Folder ready at \`${path}\` (id: \`${folder.id}\`).`);
-}
-async function opMoveFolder(client, ref, from_path, to_path) {
-    const base = await resolveBaseOr(client, ref);
-    if (isErr(base))
-        return base;
-    const result = await client.moveKbByPath(base.id, from_path, to_path);
-    if (result.kind !== "folder") {
-        return (0, respond_1.err)(`Path "${from_path}" resolved to a ${result.kind}, not a folder.`);
-    }
-    return (0, respond_1.ok)(`Folder moved: \`${from_path}\` → \`${to_path}\`.`);
-}
-async function opReadFile(client, ref, path) {
-    const base = await resolveBaseOr(client, ref);
-    if (isErr(base))
-        return base;
-    const entry = await client.readKbFileByPath(base.id, path);
-    const lines = [
-        `# ${entry.title}`,
-        `Path: \`${path}\` · entry id: \`${entry.id}\` · type: ${entry.entryType}`,
-        `Version: \`${entry.updatedAt}\` (pass as expected_version to write_file) · last edited by ${entry.lastEditedSource} · created ${entry.createdAt}`,
-        "",
-        "---",
-        "",
-        entry.body,
-    ];
-    return (0, respond_1.ok)(lines.join("\n"));
-}
-async function opWriteFile(client, ref, path, body, title, expected_version, force) {
-    const base = await resolveBaseOr(client, ref);
-    if (isErr(base))
-        return base;
-    let entry;
-    let webUrl;
-    try {
-        const res = await client.writeKbFileByPath(base.id, path, { body, title }, force ? null : expected_version);
-        entry = res.entry;
-        webUrl = res.webUrl;
-    }
-    catch (e) {
-        if ((0, respond_1.isConflict)(e)) {
-            return (0, respond_1.err)(`\`${path}\` changed since you last read it. Call dopl_kb(op="read_file", base, path) to get the current content + version, reconcile your changes, then retry write_file with that expected_version (or pass force=true to overwrite).`);
-        }
-        if ((0, respond_1.isAlreadyExists)(e)) {
-            return (0, respond_1.err)(`An entry titled "${title ?? path.split("/").filter(Boolean).pop()}" already exists in that folder. Pick a different title/path, or read+overwrite the existing entry with dopl_kb(op="read_file" → "write_file").`);
-        }
-        // F-10b: read-only-to-agents base — clean message, not a raw dump.
-        const denied = agentWriteDenied(e);
-        if (denied)
-            return denied;
-        // F-18: name the failing field + rule instead of surfacing a raw
-        // "VALIDATION_FAILED: Request body failed validation".
-        const mapped = writeFileValidationError(e, title);
-        if (mapped)
-            return mapped;
-        throw e;
-    }
-    // The addressable path's leaf is the entry's title (not the input
-    // path's leaf segment). Print it so callers can read the entry
-    // back without guessing. When `title` was passed and the slug-of-
-    // title differs from the input path's leaf, surface the canonical
-    // form explicitly.
-    const parentSegments = path.split("/").slice(0, -1).filter(Boolean);
-    const canonicalPath = [...parentSegments, entry.title].join("/");
-    const note = canonicalPath !== path
-        ? ` Address future reads/moves with path \`${canonicalPath}\`.`
-        : "";
-    return (0, respond_1.ok)(`Wrote \`${canonicalPath}\` (entry id: \`${entry.id}\`, ${entry.body.length} chars). New version: \`${entry.updatedAt}\`.${note}\nView in Dopl: ${webUrl}`);
-}
-async function opMoveFile(client, ref, from_path, to_path) {
-    const base = await resolveBaseOr(client, ref);
-    if (isErr(base))
-        return base;
-    const result = await client.moveKbByPath(base.id, from_path, to_path);
-    if (result.kind !== "entry") {
-        return (0, respond_1.err)(`Path "${from_path}" resolved to a ${result.kind}, not an entry.`);
-    }
-    return (0, respond_1.ok)(`Entry moved: \`${from_path}\` → \`${to_path}\`.`);
-}
-async function opListTrash(client, ref) {
-    let baseId;
-    if (ref) {
-        const base = await resolveBaseOr(client, ref);
-        if (isErr(base))
-            return base;
-        baseId = base.id;
-    }
-    const trash = await client.listKbTrash(baseId);
-    const total = trash.bases.length + trash.folders.length + trash.entries.length;
-    if (total === 0)
-        return (0, respond_1.ok)("Trash is empty.");
-    const lines = [`## Trash (${total} item${total === 1 ? "" : "s"})\n`];
-    if (trash.bases.length > 0) {
-        lines.push("### Bases");
-        for (const b of trash.bases)
-            lines.push(`- **${b.name}** (slug: \`${b.slug}\`) — deleted ${b.deletedAt}`);
-        lines.push("");
-    }
-    if (trash.folders.length > 0) {
-        lines.push("### Folders");
-        for (const f of trash.folders)
-            lines.push(`- ${f.name} (id: \`${f.id}\`) — deleted ${f.deletedAt}`);
-        lines.push("");
-    }
-    if (trash.entries.length > 0) {
-        lines.push("### Entries");
-        for (const e of trash.entries)
-            lines.push(`- ${e.title} (id: \`${e.id}\`) — deleted ${e.deletedAt}`);
-    }
-    return (0, respond_1.ok)(lines.join("\n"));
-}
-async function opRestoreFolder(client, folder_id) {
-    let folder;
-    try {
-        folder = await client.restoreKbFolder(folder_id);
-    }
-    catch (e) {
-        if ((0, respond_1.isAlreadyExists)(e)) {
-            return (0, respond_1.err)(`Can't restore this folder — an ancestor folder is still in the trash. Restore the ancestor first (dopl_kb(op="list_trash") to find it); restoring a folder brings its contents back.`);
-        }
-        throw e;
-    }
-    return (0, respond_1.ok)(`Restored folder **${folder.name}** (id: \`${folder.id}\`).`);
-}
-async function opRestoreFile(client, entry_id) {
-    let entry;
-    try {
-        entry = await client.restoreKbEntry(entry_id);
-    }
-    catch (e) {
-        if ((0, respond_1.isAlreadyExists)(e)) {
-            return (0, respond_1.err)(`Can't restore this entry — its parent folder is still in the trash. Restore the folder first (dopl_kb(op="list_trash") to find it); restoring a folder brings its contents back.`);
-        }
-        throw e;
-    }
-    return (0, respond_1.ok)(`Restored entry **${entry.title}** (id: \`${entry.id}\`).`);
-}
-async function opSearch(client, query, base, limit) {
-    // F-16: `base` accepts a slug OR a UUID, like every other op. Resolve it
-    // the same way the other ops do (the search endpoint only narrows by
-    // slug, so pass the resolved base's slug through) instead of forwarding a
-    // UUID straight to `baseSlug`, which would 404 with KNOWLEDGE_BASE_NOT_FOUND.
-    let baseSlug;
-    if (base) {
-        const resolved = await resolveBaseOr(client, base);
-        if (isErr(resolved))
-            return resolved;
-        baseSlug = resolved.slug;
-    }
-    const hits = await client.searchKb(query, { baseSlug, limit });
-    if (hits.length === 0) {
-        return (0, respond_1.ok)(`No matches for "${query}".`);
-    }
-    const lines = [`## ${hits.length} match${hits.length === 1 ? "" : "es"} for "${query}"\n`];
-    for (const h of hits) {
-        // Strip the highlight tags for plain-text agent consumption.
-        const cleanSnippet = h.snippet.replace(/<\/?b>/g, "**");
-        lines.push(`- **${h.title}** _(rank ${h.rank.toFixed(2)})_ — entry id: \`${h.entryId}\`\n  ${cleanSnippet}`);
-    }
-    return (0, respond_1.ok)(lines.join("\n"));
-}
-async function opDeleteBase(client, ref) {
-    const base = await resolveBaseOr(client, ref);
-    if (isErr(base))
-        return base;
-    try {
-        await client.deleteKbBase(base.id);
-    }
-    catch (e) {
-        // F-10: a base flagged read-only to agents rejects agent deletes.
-        const denied = agentWriteDenied(e);
-        if (denied)
-            return denied;
-        throw e;
-    }
-    return (0, respond_1.ok)(`Deleted **${base.name}** (slug: \`${base.slug}\`). Restore with \`dopl_kb(op='restore_base')\`.`);
-}
-async function opDeleteFolder(client, ref, path) {
-    const base = await resolveBaseOr(client, ref);
-    if (isErr(base))
-        return base;
-    let result;
-    try {
-        result = await client.deleteKbByPath(base.id, path);
-    }
-    catch (e) {
-        const denied = agentWriteDenied(e);
-        if (denied)
-            return denied;
-        throw e;
-    }
-    if (result.kind !== "folder") {
-        return (0, respond_1.err)(`Path "${path}" resolved to a ${result.kind}, not a folder. ` +
-            `Use \`dopl_kb_admin(op='delete_file')\` for entries.`);
-    }
-    return (0, respond_1.ok)(`Folder deleted at \`${path}\`.`);
-}
-async function opDeleteFile(client, ref, path) {
-    const base = await resolveBaseOr(client, ref);
-    if (isErr(base))
-        return base;
-    let result;
-    try {
-        result = await client.deleteKbByPath(base.id, path);
-    }
-    catch (e) {
-        const denied = agentWriteDenied(e);
-        if (denied)
-            return denied;
-        throw e;
-    }
-    if (result.kind !== "entry") {
-        return (0, respond_1.err)(`Path "${path}" resolved to a ${result.kind}, not an entry. ` +
-            `Use \`dopl_kb_admin(op='delete_folder')\` for folders.`);
-    }
-    return (0, respond_1.ok)(`Entry deleted at \`${path}\`. Restore via \`dopl_kb(op='list_trash')\` + \`dopl_kb(op='restore_file')\`.`);
 }

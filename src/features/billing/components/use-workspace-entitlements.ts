@@ -1,6 +1,9 @@
 "use client";
 
+import { useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useApiQuery } from "@/shared/hooks/use-api-query";
+import type { PlanId, BillingStatus } from "../plans";
 
 /**
  * Client mirror of the workspace entitlements the `/api/billing/status`
@@ -15,8 +18,10 @@ import { useApiQuery } from "@/shared/hooks/use-api-query";
  * single-member workspaces; Team is $7.99 per seat per month.
  */
 
-export type WorkspacePlan = "free" | "solo" | "team";
-export type BillingStatus = "free" | "active" | "past_due" | "canceled";
+/** Aliases of the canonical taxonomy (plans.ts) — kept as this mirror's
+ *  public names so importers don't couple to plans.ts directly. */
+export type WorkspacePlan = PlanId;
+export type { BillingStatus };
 
 export interface WorkspaceEntitlementsStatus {
   plan: WorkspacePlan;
@@ -57,11 +62,21 @@ export function formatMoney(amount: number): string {
   return `$${amount.toFixed(2)}`;
 }
 
+/** Query path for the workspace billing/entitlements read. Exported so the
+ *  billing-status cache key can be targeted for invalidation (see
+ *  `useInvalidateBillingStatus`). */
+export const BILLING_STATUS_PATH = "/api/billing/status";
+
 export function useWorkspaceEntitlements(workspaceId?: string) {
-  const query = useApiQuery<WorkspaceEntitlementsStatus>(
-    "/api/billing/status",
-    { workspaceId }
-  );
+  const query = useApiQuery<WorkspaceEntitlementsStatus>(BILLING_STATUS_PATH, {
+    workspaceId,
+    // seatCount / memberCount change when members are added or removed, but
+    // those mutations live in the members feature and don't yet invalidate
+    // this key (`useInvalidateBillingStatus` exists for that follow-up). A
+    // short staleTime bounds how long the entitlements read can lag a member
+    // change, versus the 30s provider default.
+    staleTime: 5_000,
+  });
   // Billing UI degrades to Free rather than erroring.
   const data = query.data ?? DEFAULT_STATUS;
 
@@ -98,3 +113,21 @@ export function useWorkspaceEntitlements(workspaceId?: string) {
 }
 
 export type WorkspaceEntitlements = ReturnType<typeof useWorkspaceEntitlements>;
+
+/**
+ * Returns a callback that invalidates every cached workspace billing-status
+ * read (all workspace scopes share the `BILLING_STATUS_PATH` key prefix).
+ * Call it after a member add / remove so seat and member counts refresh
+ * immediately rather than waiting out the staleTime.
+ *
+ * FOLLOW-UP: the member mutations live in `src/features/members/**` (invite
+ * dialog, members view, join-requests banner) and don't call this yet —
+ * wiring those call sites is out of the billing group's scope.
+ */
+export function useInvalidateBillingStatus() {
+  const queryClient = useQueryClient();
+  return useCallback(
+    () => queryClient.invalidateQueries({ queryKey: [BILLING_STATUS_PATH] }),
+    [queryClient]
+  );
+}

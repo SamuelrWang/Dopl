@@ -114,6 +114,43 @@ export async function upsertWorkspaceBilling(
   if (error) throw error;
 }
 
+/**
+ * Take the short-lived cross-instance checkout claim for a workspace.
+ * Returns true iff THIS caller won the claim; false means another checkout is
+ * already in flight (the route turns that into a 409). Atomic compare-and-set
+ * in Postgres (`claim_workspace_checkout` — upsert-claim, self-expires after
+ * 2 min), so it holds across Vercel lambda instances where an in-process guard
+ * cannot. See migration 20260720210814_workspace_billing_checkout_claim.sql.
+ */
+export async function claimWorkspaceCheckout(
+  workspaceId: string
+): Promise<boolean> {
+  const { data, error } = await supabaseAdmin().rpc("claim_workspace_checkout", {
+    p_workspace_id: workspaceId,
+  });
+  if (error) throw error;
+  return data === true;
+}
+
+/**
+ * Release the checkout claim (best-effort). Called ONLY by the checkout route,
+ * in its `finally`, once the create-session critical section ends — on every
+ * path (success or failure) so an abandoned or plan-switching checkout isn't
+ * blocked for the full 2-minute self-expiry window. The webhook no longer
+ * touches the claim. Clearing an already-expired or already-cleared claim is a
+ * harmless no-op; once a subscription id is persisted the normal 409 guard
+ * takes over regardless.
+ */
+export async function releaseWorkspaceCheckout(
+  workspaceId: string
+): Promise<void> {
+  const { error } = await supabaseAdmin()
+    .from("workspace_billing")
+    .update({ checkout_claim_at: null } as Record<string, unknown>)
+    .eq("workspace_id", workspaceId);
+  if (error) throw error;
+}
+
 export async function findWorkspaceIdByStripeCustomer(
   stripeCustomerId: string
 ): Promise<string | null> {
@@ -136,6 +173,24 @@ export async function findWorkspaceIdByStripeSubscription(
     .maybeSingle();
   if (error) throw error;
   return (data as { workspace_id: string } | null)?.workspace_id ?? null;
+}
+
+/**
+ * Every Team-plan workspace whose Stripe subscription is still live (status
+ * `active` or `past_due`) and has a subscription id — i.e. the exact set
+ * whose seat quantity `syncSeatQuantity` can true-up. Solo is flat (never
+ * resized) and canceled/free rows have no live sub, so both are excluded.
+ * Used by the daily seat-reconciliation cron.
+ */
+export async function listReconcilableTeamWorkspaceIds(): Promise<string[]> {
+  const { data, error } = await supabaseAdmin()
+    .from("workspace_billing")
+    .select("workspace_id")
+    .eq("plan", "team")
+    .in("status", ["active", "past_due"])
+    .not("stripe_subscription_id", "is", null);
+  if (error) throw error;
+  return (data as { workspace_id: string }[] | null)?.map((r) => r.workspace_id) ?? [];
 }
 
 /**

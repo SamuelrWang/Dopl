@@ -58,7 +58,10 @@ export const PUT = withUserAuth(
     } catch (err) {
       return toErrorResponse(err);
     }
-  }
+  },
+  // sessionOnly: flipping resource access scope is an admin access-control
+  // mutation, not an agent one — same class as changing a member's role.
+  { sessionOnly: true }
 );
 
 function toErrorResponse(err: unknown): NextResponse {

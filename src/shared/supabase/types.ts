@@ -1719,6 +1719,7 @@ export type Database = {
       }
       workspace_billing: {
         Row: {
+          checkout_claim_at: string | null
           created_at: string
           current_period_end: string | null
           last_stripe_event_created: number | null
@@ -1732,6 +1733,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          checkout_claim_at?: string | null
           created_at?: string
           current_period_end?: string | null
           last_stripe_event_created?: number | null
@@ -1745,6 +1747,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          checkout_claim_at?: string | null
           created_at?: string
           current_period_end?: string | null
           last_stripe_event_created?: number | null
@@ -1967,41 +1970,6 @@ export type Database = {
           },
         ]
       }
-      workspace_resource_access: {
-        Row: {
-          level: string
-          resource_id: string
-          resource_type: string
-          updated_at: string
-          user_id: string
-          workspace_id: string
-        }
-        Insert: {
-          level: string
-          resource_id: string
-          resource_type: string
-          updated_at?: string
-          user_id: string
-          workspace_id: string
-        }
-        Update: {
-          level?: string
-          resource_id?: string
-          resource_type?: string
-          updated_at?: string
-          user_id?: string
-          workspace_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "workspace_resource_access_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       workspaces: {
         Row: {
           created_at: string
@@ -2133,11 +2101,19 @@ export type Database = {
         Args: { p_endpoint: string; p_rpm: number; p_subject: string }
         Returns: boolean
       }
+      claim_workspace_checkout: {
+        Args: { p_workspace_id: string }
+        Returns: boolean
+      }
       cleanup_system_events: { Args: never; Returns: number }
       increment_fork_count: { Args: { pc_id: string }; Returns: undefined }
       increment_ingestion_count: {
         Args: { user_id_input: string }
         Returns: undefined
+      }
+      is_current_workspace_member: {
+        Args: { p_min_role?: string; p_workspace_id: string }
+        Returns: boolean
       }
       is_workspace_member: {
         Args: { p_min_role?: string; p_user_id: string; p_workspace_id: string }

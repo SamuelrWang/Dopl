@@ -127,6 +127,9 @@ export function UpgradeModal({
             ent={ent}
             reason={reason}
             canManageBilling={canManageBilling}
+            switching={switching}
+            switchError={switchError}
+            onSwitchToTeam={() => void switchToTeam()}
             onChoose={setCheckoutPlan}
             onClose={close}
           />
@@ -178,16 +181,28 @@ function GenericUpsell({
   ent,
   reason,
   canManageBilling,
+  switching,
+  switchError,
+  onSwitchToTeam,
   onChoose,
   onClose,
 }: {
   ent: Ent;
   reason?: string;
   canManageBilling: boolean;
+  switching: boolean;
+  switchError: string | null;
+  onSwitchToTeam: () => void;
   onChoose: (plan: CheckoutPlan) => void;
   onClose: () => void;
 }) {
   const soloEligible = ent.memberCount === 1;
+  // A live (or grace-period) subscription behind a free-reporting plan is a
+  // degraded Solo sub — checkout would 409 on the existing subscription, so
+  // Team must swap in place via /api/billing/upgrade-to-team, exactly like
+  // the add-member variant. (An entitled paid workspace shows AlreadyPaidNote
+  // instead of these options, so this only fires for the degraded case.)
+  const hasLiveSub = ent.status === "active" || ent.status === "past_due";
 
   return (
     <div>
@@ -220,6 +235,9 @@ function GenericUpsell({
         <AlreadyPaidNote ent={ent} onClose={onClose} />
       ) : (
         <>
+          {switchError && (
+            <p className="mt-4 text-caption text-danger">{switchError}</p>
+          )}
           <div className="mt-5 flex flex-col gap-2.5">
             {soloEligible && (
               <PlanOption
@@ -257,10 +275,20 @@ function GenericUpsell({
                       ent.billableSeats * TEAM_SEAT_PRICE
                     )} / month. Seats sync automatically as your team changes.`
               }
-              cta={soloEligible ? "Choose Team" : "Continue to checkout"}
+              cta={
+                hasLiveSub
+                  ? switching
+                    ? "Switching to Team…"
+                    : "Switch to Team"
+                  : soloEligible
+                    ? "Choose Team"
+                    : "Continue to checkout"
+              }
               highlight={!soloEligible}
               canManageBilling={canManageBilling}
-              onSelect={() => onChoose("team")}
+              disabled={hasLiveSub && switching}
+              // Degraded Solo (live sub): swap in place. Otherwise checkout.
+              onSelect={hasLiveSub ? onSwitchToTeam : () => onChoose("team")}
             />
           </div>
 
@@ -402,6 +430,7 @@ function PlanOption({
   cta,
   highlight = false,
   canManageBilling,
+  disabled = false,
   onSelect,
 }: {
   title: string;
@@ -410,6 +439,7 @@ function PlanOption({
   cta: string;
   highlight?: boolean;
   canManageBilling: boolean;
+  disabled?: boolean;
   onSelect: () => void;
 }) {
   return (
@@ -425,7 +455,8 @@ function PlanOption({
         <button
           type="button"
           onClick={onSelect}
-          className="auth-btn-3d mt-3 flex h-8 w-full cursor-pointer items-center justify-center rounded-lg text-small font-semibold text-white"
+          disabled={disabled}
+          className="auth-btn-3d mt-3 flex h-8 w-full cursor-pointer items-center justify-center rounded-lg text-small font-semibold text-white disabled:cursor-default disabled:opacity-60"
         >
           {cta}
         </button>

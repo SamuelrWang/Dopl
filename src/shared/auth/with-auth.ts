@@ -4,6 +4,39 @@ import { touchMcpStatus } from "./mcp-session";
 import { validateAccessToken } from "./mcp-oauth";
 import { logMcpEvent } from "@/features/analytics/server/mcp-events";
 import { logSystemEvent } from "@/features/analytics/server/system-events";
+import { HttpError } from "@/shared/lib/http-error";
+
+/**
+ * Per-route options for `withUserAuth` (forwarded through `withWorkspaceAuth`).
+ * Both flags ONLY affect OAuth-bearer (remote-MCP agent) callers; session
+ * (Supabase-cookie) callers never reach the token branch and so are never
+ * gated by either.
+ */
+export interface UserAuthOptions {
+  /**
+   * Exempt this route from the OAuth write-scope method gate. Set ONLY on a
+   * non-GET route that is not a content write and must stay reachable by a
+   * read-only (`dopl.read`-only) connection. The single legitimate case is
+   * the MCP liveness ping (`POST /api/user/mcp-status`), which every
+   * connection — including read-only ones — fires to light the "MCP
+   * connected" indicator. Never set on a route that mutates user/workspace
+   * content.
+   */
+  writeScopeExempt?: boolean;
+  /**
+   * Interactive-session only: reject EVERY OAuth agent token (any scope,
+   * including `dopl.write`) with `403 SESSION_REQUIRED`. Applied to the
+   * destructive admin surface a background agent must never drive — account
+   * / workspace deletion, membership + invitation + join-request mutations,
+   * and billing mutations. This is independent of (and stricter than) the
+   * write-scope gate: a full-write token is still refused. Session (cookie)
+   * callers pass through untouched.
+   */
+  sessionOnly?: boolean;
+}
+
+/** HTTP methods that are reads for the purposes of the write-scope gate. */
+const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
 /**
  * Wrap a handler call so any thrown error or 5xx response emits a
@@ -45,56 +78,8 @@ async function runAndLog5xx(
 }
 
 /**
- * Wraps an API route handler with authentication.
- *
- * - If an Authorization header is present → validate it as a remote-MCP OAuth
- *   access token, proceed if valid
- * - If no header → check Supabase session cookies → allow if authenticated
- * - Otherwise → 401
- */
-export function withExternalAuth(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  handler: (request: NextRequest, context?: any) => Promise<Response | NextResponse>
-) {
-  return async (
-    request: NextRequest,
-    context?: any // eslint-disable-line @typescript-eslint/no-explicit-any
-  ): Promise<Response | NextResponse> => {
-    const authHeader = request.headers.get("authorization");
-
-    if (authHeader) {
-      // Remote-MCP OAuth access token — the in-app MCP server forwards the
-      // caller's token to these /api/* endpoints over loopback (and
-      // bootServer's status ping uses this wrapper).
-      const token = authHeader.replace(/^Bearer\s+/i, "").trim();
-      const tok = await validateAccessToken(token);
-      if (tok) {
-        touchMcpStatus(tok.userId);
-        return handler(request, context);
-      }
-      return NextResponse.json(
-        { error: "Invalid or expired credentials" },
-        { status: 401 }
-      );
-    }
-
-    // No auth header — check Supabase session
-    const user = await getSessionUser(request);
-    if (user) {
-      return handler(request, context);
-    }
-
-    // No valid auth
-    return NextResponse.json(
-      { error: "Authentication required", message: "Sign in to continue." },
-      { status: 401 }
-    );
-  };
-}
-
-/**
- * Like withExternalAuth, but injects the authenticated user's ID into the handler.
- * Required for per-user resources (canvas panels, user-scoped clusters).
+ * Injects the authenticated user's ID into the handler. Required for per-user
+ * resources (canvas panels, user-scoped clusters).
  *
  * - OAuth-token auth (remote MCP): uses the token's user_id. `apiKeyWorkspaceId`
  *   is always undefined — OAuth callers target any workspace via the
@@ -115,7 +100,8 @@ export function withUserAuth(
       apiKeyWorkspaceId?: string | null;
       params?: Record<string, string>;
     }
-  ) => Promise<Response | NextResponse>
+  ) => Promise<Response | NextResponse>,
+  options: UserAuthOptions = {}
 ) {
   return async (
     request: NextRequest,
@@ -133,6 +119,50 @@ export function withUserAuth(
         // Every authenticated MCP call acts as a heartbeat for the settings
         // MCP-connection detector (polls /api/user/mcp-status). Debounced ~30s.
         touchMcpStatus(tok.userId);
+
+        // SESSION-ONLY GATE (H-3). Destructive admin routes refuse ALL OAuth
+        // agent tokens regardless of scope — deleting the account/workspace,
+        // changing membership, mutating billing must come from an interactive
+        // session, never a background agent. Session (cookie) callers never
+        // reach this branch, so they're unaffected.
+        if (options.sessionOnly) {
+          return NextResponse.json(
+            new HttpError(
+              403,
+              "SESSION_REQUIRED",
+              "This action requires an interactive Dopl session and can't be performed over an MCP connection. Sign in to the Dopl app to continue."
+            ).toResponseBody(),
+            { status: 403 }
+          );
+        }
+
+        // WRITE-SCOPE GATE (H-3). An OAuth bearer authorized read-only (its
+        // `scopes` lack `dopl.write`) may not use a write HTTP method against
+        // the REST resource server. Fail-closed — write is permitted ONLY when
+        // `scopes` explicitly includes `dopl.write` (mirrors the MCP tool gate
+        // in packages/mcp-server/src/server.ts). The `/api/mcp` JSON-RPC
+        // transport is a SEPARATE wrapper (authenticateMcpRequest) and never
+        // hits this branch, so a read op arriving as a POST envelope there is
+        // untouched; its writes are scope-gated per-op by WRITE_OPS instead.
+        const isWrite = !READ_METHODS.has(request.method);
+        const canWrite =
+          Array.isArray(tok.scopes) && tok.scopes.includes("dopl.write");
+        if (isWrite && !canWrite && !options.writeScopeExempt) {
+          return NextResponse.json(
+            new HttpError(
+              403,
+              "WRITE_SCOPE_REQUIRED",
+              "This connection was authorized read-only (missing the dopl.write scope). Re-approve the Dopl connection with write access to perform writes."
+            ).toResponseBody(),
+            {
+              status: 403,
+              headers: {
+                "WWW-Authenticate": 'Bearer error="insufficient_scope", scope="dopl.write"',
+              },
+            }
+          );
+        }
+
         return runAndLog5xx(
           () =>
             handler(request, {

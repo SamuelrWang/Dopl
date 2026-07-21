@@ -29,5 +29,8 @@ export const POST = withUserAuth(
       const message = err instanceof Error ? err.message : "Unknown error";
       return NextResponse.json({ error: message }, { status: 500 });
     }
-  }
+  },
+  // sessionOnly: adding team members is an admin access-control action, not an
+  // agent one — same class as changing a member's role.
+  { sessionOnly: true }
 );

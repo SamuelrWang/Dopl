@@ -6,8 +6,10 @@ import {
   createWorkspaceCheckoutSession,
 } from "@/features/billing/server/stripe";
 import {
+  claimWorkspaceCheckout,
   countActiveMembers,
   getWorkspaceBilling,
+  releaseWorkspaceCheckout,
 } from "@/features/billing/server/workspace-billing";
 
 /** Read the requested plan from an optional JSON body. Absent or invalid
@@ -20,6 +22,13 @@ async function readPlan(request: NextRequest): Promise<"solo" | "team"> {
     // No body / invalid JSON — fall through to the default.
   }
   return "team";
+}
+
+function checkoutConflict(portalUrl: string | null) {
+  return NextResponse.json(
+    { error: "Workspace already has an active subscription", portalUrl },
+    { status: 409 }
+  );
 }
 
 /**
@@ -39,50 +48,103 @@ export const POST = withWorkspaceAuth(
       const portalUrl = billing.stripeCustomerId
         ? await createPortalSession(billing.stripeCustomerId)
         : null;
-      return NextResponse.json(
-        {
-          error: "Workspace already has an active subscription",
-          portalUrl,
-        },
-        { status: 409 }
-      );
+      return checkoutConflict(portalUrl);
     }
 
-    const plan = await readPlan(request);
-
-    const { data: profile } = await supabaseAdmin()
-      .from("profiles")
-      .select("email")
-      .eq("id", userId)
-      .single();
-    if (!profile?.email) {
-      return NextResponse.json(
-        { error: "User email not found" },
-        { status: 400 }
-      );
+    // Cross-instance claim (M-3) — atomically stake this workspace for the
+    // duration of the create-session critical section only. A truly CONCURRENT
+    // checkout that lost the claim (this instance OR any other Vercel lambda)
+    // is turned away here instead of racing to mint a duplicate untracked sub.
+    // The claim is a single-statement compare-and-set in Postgres (upsert-
+    // claim, self-expires after 2 min), immune to the PgBouncer/advisory-lock
+    // leak the prior attempt hit. It is RELEASED the instant the section ends
+    // (the `finally` below), so it does NOT fence a user who abandons checkout
+    // or switches plan (Solo<->Team) — they can retry immediately.
+    //
+    // Residual: this fences only concurrent session-creation, not the whole
+    // checkout lifetime. A SEQUENTIAL re-checkout that lands during the webhook
+    // lag (claim already released, `stripeSubscriptionId` not yet persisted)
+    // can still mint a duplicate sub; fully closing that needs webhook-side
+    // subscription dedup. See claimWorkspaceCheckout / migration
+    // 20260720210814_workspace_billing_checkout_claim.sql.
+    if (!(await claimWorkspaceCheckout(workspaceId))) {
+      const portalUrl = billing?.stripeCustomerId
+        ? await createPortalSession(billing.stripeCustomerId)
+        : null;
+      return checkoutConflict(portalUrl);
     }
 
-    const quantity = await countActiveMembers(workspaceId);
-    if (plan === "solo" && quantity !== 1) {
-      return NextResponse.json(
-        {
-          error: "SOLO_REQUIRES_SINGLE_MEMBER",
-          message:
-            "Solo Pro is for single-member workspaces. Choose Team to bring others.",
-        },
-        { status: 409 }
-      );
+    // The claim now spans only claim -> session-create -> release (~ms). It is
+    // released UNCONDITIONALLY in the `finally` below on every path, success
+    // included, so an abandoned or plan-switching checkout is never locked out.
+    try {
+      const plan = await readPlan(request);
+
+      const { data: profile } = await supabaseAdmin()
+        .from("profiles")
+        .select("email")
+        .eq("id", userId)
+        .single();
+      if (!profile?.email) {
+        return NextResponse.json(
+          { error: "User email not found" },
+          { status: 400 }
+        );
+      }
+
+      const quantity = await countActiveMembers(workspaceId);
+      if (plan === "solo" && quantity !== 1) {
+        return NextResponse.json(
+          {
+            error: "SOLO_REQUIRES_SINGLE_MEMBER",
+            message:
+              "Solo Pro is for single-member workspaces. Choose Team to bring others.",
+          },
+          { status: 409 }
+        );
+      }
+
+      // Re-read billing right before minting the session: a webhook may have
+      // landed (persisting a subscription id) since the first read — e.g. a
+      // grandfathered sub, or a prior checkout that completed after this
+      // request's claim expired. Defense-in-depth behind the claim above.
+      const fresh = await getWorkspaceBilling(workspaceId);
+      if (fresh?.stripeSubscriptionId && fresh.status !== "canceled") {
+        const portalUrl = fresh.stripeCustomerId
+          ? await createPortalSession(fresh.stripeCustomerId)
+          : null;
+        return checkoutConflict(portalUrl);
+      }
+
+      const clientSecret = await createWorkspaceCheckoutSession({
+        workspaceId,
+        plan,
+        quantity,
+        email: profile.email,
+        stripeCustomerId: fresh?.stripeCustomerId ?? billing?.stripeCustomerId,
+      });
+
+      return NextResponse.json({ clientSecret });
+    } finally {
+      // Release the claim on EVERY path — the create-session critical section
+      // is over whether we minted a session, hit a validation 409, or threw.
+      // Holding it past this point would falsely 409 the same user's retry (an
+      // abandon/plan-switch lockout) for up to the 2-minute self-expiry, a
+      // conversion regression. Two truly-concurrent requests are still
+      // serialized by the claim above (the loser 409s before minting), which
+      // is the cross-instance protection this preserves. Best-effort — the
+      // 2-minute self-expiry is the backstop if this write fails.
+      try {
+        await releaseWorkspaceCheckout(workspaceId);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(
+          `[checkout] Failed to release checkout claim for workspace ${workspaceId}: ${message}`
+        );
+      }
     }
-
-    const clientSecret = await createWorkspaceCheckoutSession({
-      workspaceId,
-      plan,
-      quantity,
-      email: profile.email,
-      stripeCustomerId: billing?.stripeCustomerId,
-    });
-
-    return NextResponse.json({ clientSecret });
   },
-  { minRole: "admin" }
+  // sessionOnly: billing mutations must come from an interactive session, never
+  // a background MCP agent — even one holding a dopl.write token.
+  { minRole: "admin", sessionOnly: true }
 );

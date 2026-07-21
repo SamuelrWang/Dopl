@@ -10,6 +10,13 @@
  *
  * These expose the user's OWN editable bases (create / edit / soft-delete),
  * addressed like a filesystem.
+ *
+ * This file is the thin registrar: it owns the two tool schemas + op
+ * routing and delegates each op to a handler in a sibling module —
+ *   - `knowledge-shared.ts`    — base resolution + error/validation mappers
+ *   - `knowledge-ops-read.ts`  — list_bases/get_tree/list_dir/read_file/list_trash/search
+ *   - `knowledge-ops-write.ts` — create/update/move/write + restore (recovery) ops
+ *   - `knowledge-ops-admin.ts` — the destructive soft-deletes
  */
 import type { DoplClient } from "@dopl/client";
 import { type RegisterTool } from "./respond";

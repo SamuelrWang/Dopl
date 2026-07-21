@@ -60,8 +60,9 @@ Build + `tsc --noEmit` green on every commit; `npx eslint` at 0 errors (baseline
 - Found during: Teams feature build (2026-06-11)
 - Severity: smell
 - Description: per-member resource overrides were replaced by team-based grants; nothing reads or writes `workspace_resource_access` anymore, but the table + orphaned `cleanup_resource_access_on_*` trigger functions still exist in the live DB (they also trip the SECURITY DEFINER advisor). The drop migration is written (triggers → functions → policies → indexes → table, all IF EXISTS).
-- Proposed resolution: apply the migration once the teams model is confirmed stable in prod, then regen `src/shared/supabase/types.ts` (the generated types still contain the table until then).
-- Status: open (pending apply)
+- Proposed resolution: apply the migration once the teams model is confirmed stable in prod, then regen `src/shared/supabase/types.ts`.
+- Resolution: APPLIED 2026-07-20 (part of the F-045 batch) — the drop migration ran on the live DB, the orphan `bump_canvas_state_version()` trigger function was dropped alongside it, and `src/shared/supabase/types.ts` was regenerated (the table is gone from the generated types).
+- Status: resolved (retained one cycle then prune)
 
 ### F-023: Effective-access rules encoded twice (pure display fn vs server enforcement)
 - Location: `src/features/teams/effective-access.ts:34` (`computeEffectiveAccess`, server-invoked display) and `src/features/teams/server/access.ts:33,108` (`effectiveResourceAccess`/`listEffectiveAccess`, enforcement)
@@ -142,12 +143,10 @@ Build + `tsc --noEmit` green on every commit; `npx eslint` at 0 errors (baseline
 - Description: files over the ENGINEERING §2 hard cap. Consolidates the lists formerly tracked in F-012/F-030:
   - `src/features/skills/components/skill-view.tsx` — 759 (grew with the concurrency hardening + metadata CAS; split scheduled: extract editor/save-chain hook + header controls)
   - `packages/mcp-server/src/server.ts` — 612 (registration + gating core; borderline)
-  - `packages/mcp-server/src/tools/knowledge.ts` — 597 (single-tool module; split ops-vs-render if it grows)
   - `packages/dopl-client/src/client.ts` — 592 (continue per-domain method-group extraction)
-  - `packages/mcp-server/src/tools/workflow.ts` — 588 (single-tool module)
-  - `packages/mcp-server/src/tools/ontology.ts` — 586 (single-tool module; render half already split)
-  - `src/features/workspaces/server/invitations.ts` — 517
+  - `src/features/workspaces/server/invitations.ts` — 534 (grew past cap with the member-add gate; split scheduled — extract the accept/join sub-flows)
   - `src/features/teams/server/repository.ts` — 508
+- 2026-07-20 (Bucket 3): the three MCP tool modules formerly on this list — `packages/mcp-server/src/tools/knowledge.ts` (597), `workflow.ts` (588), `ontology.ts` (586) — were SPLIT into `<tool>-ops-{read,write,admin}` / `<tool>-shared` / `<tool>-render` modules behind thin registrars (all now < 500 lines); `dist/` rebuilt. Removed from the list; pattern recorded in ENGINEERING §2.
 - Proposed resolution: §2 applies — any edit to these files must shrink or split them in the same PR. `skill-view.tsx` is first in the queue.
 - Status: open (tracked)
 
@@ -189,3 +188,67 @@ Build + `tsc --noEmit` green on every commit; `npx eslint` at 0 errors (baseline
   4. DONE — live smoke `scripts/smoke-billing.mts`: 29/29 pass post-migration (incl. team lifecycle + stale-replay watermark).
 - Post-build adversarial review (2 lenses) applied same-session: canceled-via-`updated` now NULLS sub pointers like `deleted` (billed-but-free-entitled + checkout-lockout chain closed); `checkout.session.completed` is watermark-guarded (`applyStripeEvent`); `payment_failed` requires a positive sub-id match; checkout idempotency key includes quantity; `upgrade-to-team` restamps `metadata.plan`; add-member modal got a loading guard + live-sub (degraded-solo) routing; checkout 409 surfaces `portalUrl`; invite dialog reports partial multi-email success. Watermark stays `<=` deliberately (same-second `deleted`/`updated` resurrection risk beats the self-healing missed-update cost).
 - Status: open (deploy checklist only; code paths test-green: 342 root + 37 mcp-server + repo tsc/eslint)
+
+### F-045: Audit-fix batch (2026-07-20) — highs + meds shipped
+- Location: app-wide; key surfaces: `src/shared/auth/{with-auth,with-workspace-auth,write-gate-coverage.test}.ts`, `features/billing/**`, `app/api/{billing,cron/reconcile-seats}/**`, `features/teams/server/*` (`getAccessMatrix`), `features/members/**`, `packages/mcp-server/src/tools/*`, `packages/dopl-client`, `src/shared/api/*`, plus applied migrations (see below)
+- Found during: large consumer-side audit of billing / RBAC / MCP / RLS (report + fixes, one session; artifact 1e3a7d35)
+- Severity: mixed (app-code shipped in-branch + migrations applied to prod; open follow-ups → F-046–F-049)
+- Shipped app-code (working tree, uncommitted; tsc + 444 root/mcp tests green):
+  - **H-1** billing checkout/portal/upgrade-to-team confirmed `minRole:"admin"` (now also `sessionOnly`, see H-3 / ENGINEERING §9 "OAuth write-scope & session-only gating").
+  - **H-2** skills `versions/[id]/restore` + `[slug]/duplicate` gained `minRole:"member"` (were defaulting to viewer).
+  - **H-3** NEW auth-wrapper options `writeScopeExempt` + `sessionOnly` on `withUserAuth`/`withWorkspaceAuth`. OAuth-bearer write-method (non-GET) calls lacking `dopl.write` scope → 403 `WRITE_SCOPE_REQUIRED` (+`WWW-Authenticate: insufficient_scope`); session/cookie callers never gated; `/api/mcp` (op-level `WRITE_OPS` still applies) + `user/mcp-status` are `writeScopeExempt`. `sessionOnly:true` rejects ALL OAuth tokens (403 `SESSION_REQUIRED`) on 15 destructive/permission routes. Tripwire `write-gate-coverage.test.ts` pins both sets. Documented in ENGINEERING §9 (key doc addition).
+  - **M-8** `assertCanAddMember` SOLO_MEMBER_LIMIT now emits the FLAT `{error,message,upgrade_url}` envelope (matches `entitlementDeniedBody`; was nested).
+  - **M-3 (partial)** in-process checkout guard + pre-mint billing re-read in `checkout/route.ts` (full cross-instance fix deferred → F-047).
+  - **M-4** new `src/app/api/cron/reconcile-seats/route.ts` (`CRON_SECRET`-gated, daily in `vercel.json`) trues up Team seat quantity (ENGINEERING §8).
+  - Plan taxonomy `PlanId`/`BillingStatus` single-sourced from `features/billing/plans.ts` (was 3 duplicate unions).
+  - Teams `getAccessMatrix` now includes team-gated skills (Access tab + effective-access drawer were omitting them).
+  - FE: app-shell seeds role from server (no viewer-flash); billing `?billing=` rAF/StrictMode strand fixed; generic `UpgradeModal` branches to in-place upgrade-to-team for degraded-Solo; billing-status query `staleTime` lowered + `useInvalidateBillingStatus` exposed.
+  - MCP tools: 5 `dopl_kb` write ops + `dopl_workflow` write/admin ops map backend errors to clean guidance; zod caps added to workflow/ontology/knowledge tool inputs; orphaned `dist/tools/packs.js` removed + `dist` rebuilt.
+  - `src/shared/api`: 4 `to*ErrorResponse` helpers deduped; workflow graph/nodes/edges routes use `parseJson` (clean 400, not 500).
+  - Dead code removed: prod deps `react-markdown`/`@octokit/rest`/`@base-ui/react` + `markdown-message.tsx`; skills `url.ts`/`segment.ts`/`hooks.ts` + `visibility-pill.tsx`; `.env.example` fixed (added `STRIPE_SOLO_PRICE_ID`, dropped knowledge-pack secrets).
+- Shipped migrations (APPLIED to prod this session; `src/shared/supabase/types.ts` regenerated):
+  - **H-4** trigger `bump_ontology_object_on_relationship_change` on `ontology_relationships` bumps the source object's `updated_at`, so the relationship-write `expected_version` CAS actually works (+ paired `service.ts` re-read).
+  - **H-5** trigger `enforce_last_active_owner` on `workspace_members` blocks dropping a workspace to 0 active owners (`FOR UPDATE` on the `workspaces` row closes the TOCTOU).
+  - **M-1** `community-thumbnails` storage policies rescoped to the owner path (were open to all authenticated).
+  - **M-12** 8 covering FK indexes.
+  - Applied the previously-unapplied **F-020** `drop_workspace_resource_access` migration; dropped orphan `bump_canvas_state_version()`.
+- Minor open follow-up: wire `useInvalidateBillingStatus` into the members-feature mutations so member add/remove refreshes the seat-count/entitlements cache.
+- Carve-out follow-up status (2026-07-20 Bucket 3): F-046 (M-9) and F-047 (M-3 full) are now RESOLVED + applied to prod, and F-049's `auth_rls_initplan` half is RESOLVED. F-048 (M-5) and F-049's `multiple_permissive_policies` remainder stay open.
+- Proposed resolution: fix-now — DONE for the above. Deferred work carved out to F-046 (M-9), F-047 (M-3 full), F-048 (M-5), F-049 (RLS-perf backlog); `invitations.ts` over-cap split tracked in F-041.
+- Status: resolved (in-branch + prod migrations; retained one cycle then prune)
+
+### F-046: M-9 — `is_workspace_member` is an authenticated membership oracle
+- Location: `is_workspace_member(...)` SQL function (`EXECUTE` granted to `authenticated`); ~60 RLS policies call it
+- Found during: audit-fix session (2026-07-20, RLS review)
+- Severity: bug (info-disclosure — a signed-in user can probe membership of workspaces they aren't in)
+- Description: the helper is executable by any authenticated role, so it can be called to test arbitrary workspace membership. The correct fix is an RLS-wide rewrite to a 2-arg, `auth.uid()`-pinned predicate across every calling policy, then `REVOKE EXECUTE` on the oracle — too broad for this batch.
+- Proposed resolution: defer — dedicated migration that rewrites all calling policies to the pinned predicate then revokes the function. Not a row-crossing leak today (policies still scope rows); close it before wider multi-tenant exposure. Coordinate with F-049 (same policy surface).
+- Resolution: APPLIED TO PROD 2026-07-20 (Bucket 3). Migration `20260720211005_rls_pin_workspace_member_and_initplan` — created SECURITY DEFINER `is_current_workspace_member(uuid,text)` pinning `(SELECT auth.uid())`; rewrote all 62 policies calling the 3-arg `is_workspace_member` to the 2-arg wrapper; `REVOKE EXECUTE` on `is_workspace_member(uuid,uuid,text)` from `authenticated` (oracle closed). Follow-up migration `20260720214500` revoked the inert `anon` grant on the wrapper. Verified: oracle-closure gate returns 0 rows; `is_workspace_member` acl = `{postgres,service_role}`. Done in the same migration as the F-049 `auth_rls_initplan` fix (shared policy surface).
+- Status: resolved (prod migration; retained one cycle then prune)
+
+### F-047: M-3 (full) — cross-instance duplicate-subscription race
+- Location: `src/app/api/billing/checkout/route.ts` (in-process guard + pre-mint re-read shipped in F-045)
+- Found during: audit-fix session (2026-07-20, billing review)
+- Severity: bug (duplicate Stripe subscription / double-charge under concurrency)
+- Description: the shipped in-process guard + pre-mint billing re-read close the same-instance race, but two serverless instances can each still mint a checkout session for one workspace before either writes back. A durable fix needs an atomic claim (a `checkout-claim` column on `workspace_billing`) — i.e. a schema change.
+- Proposed resolution: defer — add the claim column + atomic claim-before-mint. Until then the webhook event-ordering watermark and the "checkout blocks when a non-canceled sub exists" guard limit the blast radius.
+- Resolution: APPLIED TO PROD 2026-07-20 (Bucket 3). Migration `20260720210814_workspace_billing_checkout_claim` — added `workspace_billing.checkout_claim_at` + the `claim_workspace_checkout(uuid)` RPC (atomic `INSERT .. ON CONFLICT DO UPDATE` cross-instance compare-and-set, service_role-only). Wired into the checkout route (claim before session create; release in `finally` / on webhook); the in-process `Set` was removed. Verified: `claim_workspace_checkout` returns `true` then `false` on a second concurrent call.
+- Status: resolved (in-branch + prod migration; retained one cycle then prune)
+
+### F-048: M-5 — invite-accept doesn't bind the accepting identity to the invited email
+- Location: `src/features/workspaces/server/invitations.ts` (`acceptInvitationByToken`)
+- Found during: audit-fix session (2026-07-20)
+- Severity: question (product decision)
+- Description: accepting an invitation only requires possession of the token — the accepting user's email is never compared to the invited email, so a forwarded invite link is redeemable by whoever holds it.
+- Proposed resolution: needs-user-decision — HELD by owner. If bound: compare the authenticated user's email to the invitation's `email` at accept time and reject a mismatch (breaks the "invite one address, accept from another" flow, hence a product call).
+- Status: open (question)
+
+### F-049: RLS performance advisor backlog
+- Location: Supabase advisor lints — `multiple_permissive_policies` (36 remaining; the `auth_rls_initplan` half is resolved, see below)
+- Found during: audit-fix session (2026-07-20, advisor sweep)
+- Severity: smell (scale / perf)
+- Description: two advisor families. `auth_rls_initplan` = policies calling `auth.*()` per-row instead of wrapping in a scalar subselect (`(select auth.uid())`); `multiple_permissive_policies` = several permissive policies on one role/action that all evaluate. Both degrade query planning at scale; neither is a correctness bug.
+- `auth_rls_initplan` — RESOLVED 2026-07-20 (Bucket 3), APPLIED TO PROD. The same migration as F-046, `20260720211005_rls_pin_workspace_member_and_initplan`, wrapped every `auth.uid()`/`auth.jwt()` call in `(SELECT ...)` across all 73 public policies; the advisor dropped 70 → 0.
+- `multiple_permissive_policies` (36 lints) — STILL OPEN, deferred on purpose (correctness > perf). Consolidating permissive policies risks a row-scoping regression, so it is held for a dedicated, test-gated pass.
+- Proposed resolution: defer — the safe recipe is documented in the header of migration `20260720211005`: split each `*_admin_write` / `*_editor_write` `FOR ALL` policy into explicit `FOR INSERT` / `FOR UPDATE` / `FOR DELETE`, leaving the member `FOR SELECT` as the sole SELECT policy (optionally fold `chats_owner_select` into `chats_member_select`); ship behind a no-regression isolation test.
+- Status: open (deferred — `auth_rls_initplan` half resolved 2026-07-20; `multiple_permissive_policies` remainder open)

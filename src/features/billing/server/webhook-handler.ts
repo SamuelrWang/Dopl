@@ -255,6 +255,12 @@ async function handleCheckoutCompleted(
     workspaceId ?? (await resolveWorkspaceIdForCustomer(customerId));
   if (!targetWorkspaceId || !subscriptionId) return;
 
+  // NB: the webhook does NOT touch the checkout claim. The route already
+  // released it when its create-session critical section ended (see
+  // checkout/route.ts `finally`), so the claim is gone long before this event
+  // lands. A prior version released it here too — redundant, and it released
+  // BEFORE persisting the subscription id below. From here the persisted
+  // `stripeSubscriptionId` is the durable 409 guard for re-checkout.
   const subscription = await getStripe().subscriptions.retrieve(subscriptionId);
   const status = mapStatus(subscription.status);
   const fields = subscriptionFields(subscription);

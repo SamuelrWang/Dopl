@@ -74,5 +74,7 @@ export const POST = withUserAuth(
       const message = err instanceof Error ? err.message : "Unknown error";
       return NextResponse.json({ error: message }, { status: 500 });
     }
-  }
+  },
+  // sessionOnly: inviting a member into the workspace is an admin action.
+  { sessionOnly: true }
 );

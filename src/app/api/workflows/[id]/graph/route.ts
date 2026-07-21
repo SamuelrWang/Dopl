@@ -3,6 +3,7 @@ import { z } from "zod";
 import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
 import type { Role } from "@/features/workspaces/types";
 import { HttpError } from "@/shared/lib/http-error";
+import { parseJson } from "@/shared/api/parse-json";
 import { DESCRIPTION_MAX } from "@/config";
 import {
   requireWorkflowEdit,
@@ -54,13 +55,7 @@ async function handlePost(request: NextRequest, ctx: Ctx) {
   try {
     const id = ctx.params?.id;
     if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
-    const parsed = GraphSchema.safeParse(await request.json());
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: { code: "VALIDATION_FAILED", issues: parsed.error.issues } },
-        { status: 400 }
-      );
-    }
+    const data = await parseJson(request, GraphSchema);
     const scope = {
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
@@ -69,7 +64,7 @@ async function handlePost(request: NextRequest, ctx: Ctx) {
     };
     const workflowId = await resolveWorkflowId(id, scope);
     await requireWorkflowEdit(workflowId, scope);
-    await setGraph(workflowId, parsed.data, scope);
+    await setGraph(workflowId, data, scope);
     return new NextResponse(null, { status: 204 });
   } catch (err) {
     return toError(err);

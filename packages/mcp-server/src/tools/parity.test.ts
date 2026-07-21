@@ -18,7 +18,7 @@
  * copy that could itself drift.
  */
 
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { describe, it, expect } from "vitest";
 import { z, type ZodRawShape } from "zod";
@@ -80,9 +80,33 @@ const TOOL_BY_NAME = new Map(TOOLS.map((t) => [t.name, t]));
 // `import.meta` (disallowed in the package's CommonJS tsc target) and
 // `__dirname` (not guaranteed under the ESM-transformed test).
 const SRC_DIR = path.resolve(process.cwd(), "src");
+const TOOLS_DIR = path.join(SRC_DIR, "tools");
 
 function sourceOf(file: string): string {
-  return readFileSync(path.join(SRC_DIR, "tools", file), "utf8");
+  return readFileSync(path.join(TOOLS_DIR, file), "utf8");
+}
+
+// A tool's handlers were split out of its registrar into sibling modules
+// (e.g. ontology.ts -> ontology-ops-read.ts / ontology-ops-write.ts /
+// ontology-render.ts; workflow.ts and knowledge.ts likewise). The param-drift
+// scans below MUST read the tool's WHOLE file set, not just the registrar, or
+// a handler that reads an undeclared arg (the get_tree `entry_limit` bug
+// class) inside a split-out module slips past the guard. Map each registrar to
+// itself PLUS every `<stem>-*.ts` sibling (e.g. ontology.ts + ontology-*.ts).
+// Auto-discovered from disk so a future split is covered without editing here.
+function toolGroupFiles(registrarFile: string): string[] {
+  const stem = registrarFile.replace(/\.ts$/, "");
+  return readdirSync(TOOLS_DIR).filter(
+    (f) =>
+      f.endsWith(".ts") &&
+      !f.endsWith(".test.ts") &&
+      (f === registrarFile || f.startsWith(`${stem}-`)),
+  );
+}
+
+/** Concatenated source of a registrar plus its split-out sibling modules. */
+function toolGroupSource(registrarFile: string): string {
+  return toolGroupFiles(registrarFile).map(sourceOf).join("\n");
 }
 
 function opEnum(t: CapturedTool): string[] | null {
@@ -297,13 +321,15 @@ describe("schema / description parity", () => {
 
   it("every declared schema param is referenced in the tool's source", () => {
     for (const tool of TOOLS) {
-      const src = sourceOf(tool.sourceFile);
+      // Scan the registrar AND its split-out ops/render/shared modules — a
+      // param consumed only in a sibling handler must still count as used.
+      const src = toolGroupSource(tool.sourceFile);
       for (const key of Object.keys(tool.schema)) {
         if (key === "op") continue;
         const referenced = new RegExp(`\\b${key}\\b`).test(src);
         expect(
           referenced,
-          `${tool.name} declares schema param "${key}" that is never referenced in ${tool.sourceFile} (described-but-dead param)`,
+          `${tool.name} declares schema param "${key}" that is never referenced in ${tool.sourceFile} or its split-out modules (described-but-dead param)`,
         ).toBe(true);
       }
     }
@@ -313,6 +339,10 @@ describe("schema / description parity", () => {
     // The `dopl_kb get_tree` bug class: a handler validated `entry_limit`
     // that was absent from the published schema, so agents couldn't pass
     // it. Here: no handler may read an arg the schema doesn't publish.
+    // `keysByFile` is keyed by the REGISTRAR file (every tool's sourceFile),
+    // and the union of its tools' schema keys is the allowed set for the whole
+    // group — including handlers now living in split-out ops/render/shared
+    // modules, which we scan via toolGroupSource so their args.X are covered.
     const keysByFile = new Map<string, Set<string>>();
     for (const tool of TOOLS) {
       const set = keysByFile.get(tool.sourceFile) ?? new Set<string>();
@@ -321,14 +351,14 @@ describe("schema / description parity", () => {
       keysByFile.set(tool.sourceFile, set);
     }
     for (const [file, allowed] of keysByFile) {
-      const src = sourceOf(file);
+      const src = toolGroupSource(file);
       const accessed = [...src.matchAll(/\bargs\.([a-zA-Z_][a-zA-Z0-9_]*)/g)].map(
         (m) => m[1],
       );
       for (const id of accessed) {
         expect(
           allowed.has(id),
-          `${file} handler reads args.${id} but no tool in that file declares "${id}" as a schema param (get_tree entry_limit bug class)`,
+          `${file} (or a split-out sibling module) reads args.${id} but no tool in that group declares "${id}" as a schema param (get_tree entry_limit bug class)`,
         ).toBe(true);
       }
     }
