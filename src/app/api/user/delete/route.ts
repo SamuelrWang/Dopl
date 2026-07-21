@@ -4,16 +4,12 @@ import { supabaseAdmin } from "@/shared/supabase/admin";
 import { getStripe } from "@/features/billing/server/stripe";
 import { getProfileBillingRef } from "@/features/billing/server/subscriptions";
 
-export const DELETE = withUserAuth(async (_request, { userId, agentTokenId }) => {
+export const DELETE = withUserAuth(async (_request, { userId }) => {
   try {
-    // Session-only: an MCP agent token must not be able to delete the
-    // account it authenticates for.
-    if (agentTokenId) {
-      return NextResponse.json(
-        { error: "Account deletion requires an interactive session" },
-        { status: 403 }
-      );
-    }
+    // Session-only enforcement lives in the wrapper (`{ sessionOnly: true }`
+    // below): an MCP agent token — of any scope — is refused before reaching
+    // this handler, so account deletion can only come from an interactive
+    // session.
     const user = { id: userId };
 
     const admin = supabaseAdmin();
@@ -165,4 +161,4 @@ export const DELETE = withUserAuth(async (_request, { userId, agentTokenId }) =>
       { status: 500 }
     );
   }
-});
+}, { sessionOnly: true });

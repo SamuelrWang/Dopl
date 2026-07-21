@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { HttpError } from "@/shared/lib/http-error";
+import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 import {
   ChatFolderConflictError,
   ChatFolderNotFoundError,
@@ -28,20 +29,7 @@ function mapChatError(err: unknown): HttpError | null {
 }
 
 export function toChatErrorResponse(err: unknown): NextResponse {
-  const mapped = mapChatError(err);
-  if (mapped) {
-    return NextResponse.json(mapped.toResponseBody(), { status: mapped.status });
-  }
-  if (err instanceof HttpError) {
-    return NextResponse.json(err.toResponseBody(), { status: err.status });
-  }
-  if (err instanceof Error) {
-    console.error("[chat-route] unmapped error:", err);
-  }
-  return NextResponse.json(
-    { error: { code: "INTERNAL_ERROR", message: "Internal server error" } },
-    { status: 500 }
-  );
+  return toHttpErrorResponse("chat-route", err, mapChatError);
 }
 
 export function requireChatId(params: Record<string, string> | undefined): string {

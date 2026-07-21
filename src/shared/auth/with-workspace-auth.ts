@@ -45,6 +45,16 @@ interface Options {
    * 400 a header-less download before the param is read.
    */
   workspaceIdFromQuery?: boolean;
+  /**
+   * H-3 — forwarded verbatim into the inner `withUserAuth`. `writeScopeExempt`
+   * exempts a non-content-write, non-GET route from the OAuth write-scope gate
+   * (only the MCP liveness ping). `sessionOnly` refuses ALL OAuth agent tokens
+   * (any scope) on the destructive admin surface — billing mutations set this.
+   * Both affect OAuth-bearer callers only; session (cookie) callers are never
+   * gated. See `UserAuthOptions`.
+   */
+  writeScopeExempt?: boolean;
+  sessionOnly?: boolean;
 }
 
 /**
@@ -173,5 +183,8 @@ export function withWorkspaceAuth(
       }
       throw err;
     }
+  }, {
+    writeScopeExempt: options.writeScopeExempt,
+    sessionOnly: options.sessionOnly,
   });
 }

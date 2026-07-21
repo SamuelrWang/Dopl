@@ -30,5 +30,7 @@ export const POST = withWorkspaceAuth(
       );
     }
   },
-  { minRole: "admin" }
+  // sessionOnly: billing mutations must come from an interactive session, never
+  // a background MCP agent — even one holding a dopl.write token.
+  { minRole: "admin", sessionOnly: true }
 );

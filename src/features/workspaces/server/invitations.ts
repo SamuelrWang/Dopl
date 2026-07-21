@@ -516,6 +516,10 @@ export async function removeMember(
   });
 }
 
+// Fast-fail UX only. The last-owner invariant is enforced authoritatively by
+// the DB trigger on workspace_members (H-5) — this app-side check just returns
+// a friendly 409 before the write; it is NOT the real backstop and its
+// read-then-write is racy on purpose (the trigger closes that race).
 async function countActiveOwners(workspaceId: string): Promise<number> {
   const db = supabaseAdmin();
   const { count, error } = await db

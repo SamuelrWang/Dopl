@@ -36,31 +36,35 @@ const WORKFLOW_ADMIN_DESCRIPTION = `DESTRUCTIVE workflow operations. The op here
 - "delete_workflow" — soft-delete a workflow. Its steps + edges are trashed with it (they come back on restore); attached knowledge bases + skills are detached (not deleted). Recover with \`dopl_workflow(op='restore_workflow')\`.`;
 
 const zNode = z.object({
-  ref: z.string().optional().describe("stable handle for this step (required for set_graph + add_node)"),
-  title: z.string().optional(),
-  description: z.string().optional(),
+  ref: z.string().max(200).optional().describe("stable handle for this step (required for set_graph + add_node)"),
+  title: z.string().max(200).optional(),
+  description: z.string().max(4000).optional(),
   reads: z
     .array(z.object({ kbId: z.string(), entryId: z.string().optional() }))
+    .max(100)
     .optional()
     .describe("knowledge to READ: [{kbId} | {kbId, entryId}]"),
   actions: z
     .array(z.object({ skillId: z.string() }))
+    .max(100)
     .optional()
     .describe("skills to APPLY: [{skillId}]"),
-  userInput: z.string().optional(),
-  agentOutput: z.string().optional(),
-  nextInstructions: z.string().optional(),
+  userInput: z.string().max(4000).optional(),
+  agentOutput: z.string().max(4000).optional(),
+  nextInstructions: z.string().max(4000).optional(),
 });
 
 const zGraph = z.object({
-  nodes: z.array(zNode),
-  edges: z.array(
-    z.object({
-      from: z.string(),
-      to: z.string(),
-      condition: z.string().optional().describe("branch guard (free text); omit for an unconditional edge"),
-    }),
-  ),
+  nodes: z.array(zNode).max(500),
+  edges: z
+    .array(
+      z.object({
+        from: z.string(),
+        to: z.string(),
+        condition: z.string().max(2000).optional().describe("branch guard (free text); omit for an unconditional edge"),
+      }),
+    )
+    .max(2000),
 });
 
 export function registerWorkflowTools(
@@ -222,7 +226,18 @@ export function registerWorkflowTools(
         case "delete_workflow": {
           const miss = missingParams("delete_workflow", args, ["slug"]);
           if (miss) return miss;
-          await client.deleteWorkflow(args.slug as string);
+          try {
+            await client.deleteWorkflow(args.slug as string);
+          } catch (e) {
+            // Backend 404s when the slug matched no workflow; report
+            // "nothing deleted" instead of a raw throw / false success.
+            if (isNotFound(e)) {
+              return err(
+                `No workflow \`${args.slug}\` in this workspace — nothing deleted. Run dopl_workflow(op="list") to see valid slugs/ids.`,
+              );
+            }
+            throw e;
+          }
           return ok(
             `Soft-deleted workflow \`${args.slug}\`. Its steps + edges are trashed with it and attached knowledge bases + skills remain. Restore with \`dopl_workflow(op='restore_workflow')\` (find it via \`dopl_workflow(op='list_trash')\`).`
           );
@@ -250,6 +265,17 @@ function renderReads(reads: StepNode["reads"]): string {
 
 function renderActions(actions: StepNode["actions"]): string {
   return actions.map((a) => `${a.name} (skill, skill_id: ${a.skillId})`).join("; ");
+}
+
+/**
+ * Clean "no such workflow" guidance for a backend 404 on a slug-addressed
+ * op — mirrors the isNotFound mapping opDisconnect / dopl_cluster_admin use,
+ * so authors get a recoverable message instead of a raw "HTTP 404: {json}".
+ */
+function workflowNotFound(slug: string): ToolResponse {
+  return err(
+    `No workflow \`${slug}\` in this workspace. Run dopl_workflow(op="list") to see valid slugs/ids.`,
+  );
 }
 
 // ── ops ──────────────────────────────────────────────────────────────
@@ -482,7 +508,13 @@ async function opUpdate(
   name: string | undefined,
   description: string | undefined,
 ): Promise<ToolResponse> {
-  const wf = await client.updateWorkflow(slug, { name, description });
+  let wf;
+  try {
+    wf = await client.updateWorkflow(slug, { name, description });
+  } catch (e) {
+    if (isNotFound(e)) return workflowNotFound(slug);
+    throw e;
+  }
   return ok(`Updated workflow **${wf.name}** (slug: \`${wf.slug}\`).`);
 }
 
@@ -495,7 +527,12 @@ async function opSetGraph(
   for (const n of graph.nodes) {
     if (!n.ref) return err("Every node in `graph.nodes` needs a `ref`.");
   }
-  await client.setWorkflowGraph(slug, graph as Parameters<DoplClient["setWorkflowGraph"]>[1]);
+  try {
+    await client.setWorkflowGraph(slug, graph as Parameters<DoplClient["setWorkflowGraph"]>[1]);
+  } catch (e) {
+    if (isNotFound(e)) return workflowNotFound(slug);
+    throw e;
+  }
   return ok(
     `Set workflow \`${slug}\` graph: ${graph.nodes.length} step(s), ${graph.edges.length} edge(s). Run op="get" to see the ordered steps.`
   );
@@ -522,11 +559,20 @@ async function opUpdateNode(
   nodeId: string,
   node: Record<string, unknown>,
 ): Promise<ToolResponse> {
-  await client.updateWorkflowNode(
-    slug,
-    nodeId,
-    node as unknown as Parameters<DoplClient["updateWorkflowNode"]>[2]
-  );
+  try {
+    await client.updateWorkflowNode(
+      slug,
+      nodeId,
+      node as unknown as Parameters<DoplClient["updateWorkflowNode"]>[2]
+    );
+  } catch (e) {
+    if (isNotFound(e)) {
+      return err(
+        `Couldn't update step \`${nodeId}\` — workflow \`${slug}\` or that step doesn't exist. Run dopl_workflow(op="get", slug="${slug}") to see step ids, or op="list" for workflows.`,
+      );
+    }
+    throw e;
+  }
   return ok(`Updated step \`${nodeId}\` in workflow \`${slug}\`.`);
 }
 
@@ -535,7 +581,16 @@ async function opRemoveNode(
   slug: string,
   nodeId: string,
 ): Promise<ToolResponse> {
-  await client.removeWorkflowNode(slug, nodeId);
+  try {
+    await client.removeWorkflowNode(slug, nodeId);
+  } catch (e) {
+    if (isNotFound(e)) {
+      return err(
+        `Couldn't remove step \`${nodeId}\` — workflow \`${slug}\` or that step doesn't exist. Run dopl_workflow(op="get", slug="${slug}") to see step ids, or op="list" for workflows.`,
+      );
+    }
+    throw e;
+  }
   return ok(`Removed step \`${nodeId}\` from workflow \`${slug}\`.`);
 }
 
@@ -546,7 +601,16 @@ async function opConnect(
   to: string,
   condition: string | undefined,
 ): Promise<ToolResponse> {
-  await client.connectWorkflow(slug, from, to, condition);
+  try {
+    await client.connectWorkflow(slug, from, to, condition);
+  } catch (e) {
+    if (isNotFound(e)) {
+      return err(
+        `Couldn't connect \`${from}\` → \`${to}\` — workflow \`${slug}\` or one of those steps doesn't exist. Run dopl_workflow(op="get", slug="${slug}") to see step ids, or op="list" for workflows.`,
+      );
+    }
+    throw e;
+  }
   return ok(
     `Connected \`${from}\` → \`${to}\` in workflow \`${slug}\`${condition ? ` when ${condition}` : ""}.`
   );
@@ -580,7 +644,13 @@ async function opSetCluster(
 ): Promise<ToolResponse> {
   // Empty / omitted → ungroup the workflow.
   if (!cluster || !cluster.trim()) {
-    const wf = await client.updateWorkflow(slug, { clusterId: null });
+    let wf;
+    try {
+      wf = await client.updateWorkflow(slug, { clusterId: null });
+    } catch (e) {
+      if (isNotFound(e)) return workflowNotFound(slug);
+      throw e;
+    }
     return ok(`Workflow **${wf.name}** (slug: \`${wf.slug}\`) is now ungrouped (no cluster).`);
   }
   // The API takes a cluster UUID; agents hold slugs, so resolve slug-or-id
@@ -592,7 +662,13 @@ async function opSetCluster(
       `Cluster not found: \`${cluster}\`. Run dopl_cluster(op="list") to see valid clusters.`,
     );
   }
-  const wf = await client.updateWorkflow(slug, { clusterId: match.id });
+  let wf;
+  try {
+    wf = await client.updateWorkflow(slug, { clusterId: match.id });
+  } catch (e) {
+    if (isNotFound(e)) return workflowNotFound(slug);
+    throw e;
+  }
   return ok(
     `Grouped workflow **${wf.name}** (slug: \`${wf.slug}\`) under cluster **${match.name}** (slug: \`${match.slug}\`).`,
   );
@@ -618,7 +694,19 @@ async function opRestoreWorkflow(
   client: DoplClient,
   slug: string,
 ): Promise<ToolResponse> {
-  const wf = await client.restoreWorkflow(slug);
+  let wf;
+  try {
+    wf = await client.restoreWorkflow(slug);
+  } catch (e) {
+    // 404 = nothing in trash matched. Point at the trash listing, not
+    // op="list" (which only shows live workflows).
+    if (isNotFound(e)) {
+      return err(
+        `No deleted workflow matches \`${slug}\`. Run dopl_workflow(op="list_trash") to see restorable workflows; it may already be active.`,
+      );
+    }
+    throw e;
+  }
   return ok(
     `Restored workflow **${wf.name}** (slug: \`${wf.slug}\`). Its steps + edges are back — run op="get" to verify.`,
   );

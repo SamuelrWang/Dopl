@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuthUser } from "@/shared/auth/use-auth-user";
 import { useApiQuery } from "@/shared/hooks/use-api-query";
+import type { Role } from "@/features/workspaces/types";
 import type { WorkspaceLike } from "./workspace-types";
 import { SettingsModal, type SettingsSection } from "@/shared/layout/settings-modal";
 import { CreateWorkspaceDialog } from "@/features/workspaces/components/create-workspace-dialog";
@@ -15,6 +16,13 @@ interface Props {
   workspaceId: string;
   workspacePublicId: string;
   workspaceName: string;
+  /**
+   * The signed-in user's role in this workspace, resolved on the server so
+   * the settings modal's Members / Plans & Billing gating renders at the
+   * correct privilege on first paint instead of flashing `viewer` until the
+   * `/api/workspaces` fetch resolves (worst on the Stripe-success redirect).
+   */
+  role: Role;
   children: React.ReactNode;
 }
 
@@ -31,6 +39,7 @@ export function AppShell({
   workspaceId,
   workspacePublicId,
   workspaceName,
+  role,
   children,
 }: Props) {
   const { user } = useAuthUser();
@@ -52,24 +61,31 @@ export function AppShell({
     const params = new URLSearchParams(window.location.search);
     const billing = params.get("billing");
     if (!billing) return;
-    // setState inside rAF so the open runs on a separate paint (and the
-    // set-state-in-effect rule is satisfied), matching ModalShell.
+    // Defer the open to a separate paint (setState inside rAF satisfies the
+    // set-state-in-effect rule, matching ModalShell) AND strip the params in
+    // that same frame. Stripping synchronously here would let a StrictMode
+    // remount — which cancels this rAF via cleanup — re-run the effect against
+    // an already-clean URL and bail, so the pane would never open. Deferring
+    // the strip keeps the trigger in the URL until the open actually commits.
     const id = requestAnimationFrame(() => {
       setBillingReturn(
         billing === "success" ? "success" : billing === "return" ? "return" : null
       );
       setSettingsSection("billing");
       setSettingsOpen(true);
+      params.delete("billing");
+      params.delete("session_id");
+      const query = params.size > 0 ? `?${params.toString()}` : "";
+      window.history.replaceState(null, "", `${window.location.pathname}${query}`);
     });
-    params.delete("billing");
-    params.delete("session_id");
-    const query = params.size > 0 ? `?${params.toString()}` : "";
-    window.history.replaceState(null, "", `${window.location.pathname}${query}`);
     return () => cancelAnimationFrame(id);
   }, []);
 
+  // Seed from the server-resolved `role` so gating is correct on first
+  // paint; let the fetched membership take over once `/api/workspaces`
+  // resolves (it may be fresher if the role changed mid-session).
   const activeRole =
-    workspaces.find((w) => w.publicId === workspacePublicId)?.role ?? "viewer";
+    workspaces.find((w) => w.publicId === workspacePublicId)?.role ?? role;
 
   function openSettings(section: SettingsSection) {
     setSettingsSection(section);

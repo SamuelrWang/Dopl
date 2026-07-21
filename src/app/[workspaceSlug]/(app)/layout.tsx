@@ -18,6 +18,7 @@
 import { notFound, redirect } from "next/navigation";
 import { getUser } from "@/shared/supabase/server";
 import { resolveWorkspaceSegmentForUser } from "@/features/workspaces/server/segment";
+import { resolveMembershipOrThrow } from "@/features/workspaces/server/service";
 import { workspaceSegment } from "@/features/workspaces/url";
 import { MyAccessProvider } from "@/features/members/hooks/use-my-access";
 import { JoinRequestNotices } from "@/features/workspaces/components/join-request-notices";
@@ -40,6 +41,10 @@ export default async function WorkspaceAppLayout({ children, params }: LayoutPro
   if (!resolved) notFound();
   const ws = resolved.workspace;
   const segment = workspaceSegment(ws);
+  // Resolve the membership here (mirrors members/chats pages) so the shell
+  // can seed the settings-modal role gating without waiting on the client
+  // `/api/workspaces` fetch.
+  const { membership } = await resolveMembershipOrThrow(ws.id, user.id);
 
   return (
     <AppShell
@@ -47,6 +52,7 @@ export default async function WorkspaceAppLayout({ children, params }: LayoutPro
       workspaceId={ws.id}
       workspacePublicId={ws.publicId}
       workspaceName={ws.name}
+      role={membership.role}
     >
       <MyAccessProvider workspaceSegment={segment}>
         {children}

@@ -27,5 +27,8 @@ export const DELETE = withUserAuth(
       const message = err instanceof Error ? err.message : "Unknown error";
       return NextResponse.json({ error: message }, { status: 500 });
     }
-  }
+  },
+  // sessionOnly: removing a team member is an admin access-control action, not
+  // an agent one — same class as changing a member's role.
+  { sessionOnly: true }
 );

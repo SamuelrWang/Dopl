@@ -87,30 +87,34 @@ export function registerOntologyTool(register: RegisterTool, client: DoplClient)
         .string()
         .optional()
         .describe("create_object: the column/object to nest under (id or exact name)."),
-      name: z.string().optional().describe("A name (cluster/column/object/action)."),
-      purpose: z.string().optional().describe("create_cluster/update_cluster: routing one-liner."),
+      name: z.string().max(200).optional().describe("A name (cluster/column/object/action)."),
+      purpose: z.string().max(2000).optional().describe("create_cluster/update_cluster: routing one-liner."),
       subtitle: z.string().optional().describe("update_object: short description agents browse."),
-      label: z.string().optional().describe("Attribute, relationship, or template-field label."),
+      label: z.string().max(200).optional().describe("Attribute, relationship, or template-field label."),
       kind: z
         .enum(["text", "pill", "ref", "knowledge", "skill"])
         .optional()
         .describe("set_attribute / set_template_field: value kind (default text)."),
-      value: z.string().optional().describe("set_attribute (text/pill): the value."),
+      value: z.string().max(4000).optional().describe("set_attribute (text/pill): the value."),
       values: z
         .array(z.string())
+        .max(100)
         .optional()
         .describe("set_attribute (ref/knowledge/skill): ids, slugs, or exact names. kind=knowledge also accepts entry refs: `<base>/<entry path>` or an entry uuid."),
       targets: z
         .array(z.string())
+        .max(100)
         .optional()
         .describe("set_relationship: target objects (ids or exact names)."),
-      description: z.string().optional().describe("set_action: what the action does."),
+      description: z.string().max(4000).optional().describe("set_action: what the action does."),
       outcome: z
         .string()
+        .max(4000)
         .optional()
         .describe("set_action: what the outcome of the action should be."),
       tools: z
         .string()
+        .max(2000)
         .optional()
         .describe("set_action: tools the agent should use to perform it."),
       expected_version: z

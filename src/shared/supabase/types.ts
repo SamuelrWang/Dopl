@@ -1967,41 +1967,6 @@ export type Database = {
           },
         ]
       }
-      workspace_resource_access: {
-        Row: {
-          level: string
-          resource_id: string
-          resource_type: string
-          updated_at: string
-          user_id: string
-          workspace_id: string
-        }
-        Insert: {
-          level: string
-          resource_id: string
-          resource_type: string
-          updated_at?: string
-          user_id: string
-          workspace_id: string
-        }
-        Update: {
-          level?: string
-          resource_id?: string
-          resource_type?: string
-          updated_at?: string
-          user_id?: string
-          workspace_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "workspace_resource_access_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       workspaces: {
         Row: {
           created_at: string

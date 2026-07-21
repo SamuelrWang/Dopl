@@ -68,7 +68,10 @@ export const PUT = withUserAuth(
     } catch (err) {
       return toErrorResponse(err);
     }
-  }
+  },
+  // sessionOnly: setting/removing a team's resource grant is an admin
+  // access-control mutation, not an agent one — same class as a role change.
+  { sessionOnly: true }
 );
 
 function toErrorResponse(err: unknown): NextResponse {

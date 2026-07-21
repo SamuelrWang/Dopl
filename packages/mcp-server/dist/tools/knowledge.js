@@ -190,7 +190,7 @@ function registerKnowledgeTools(register, client) {
         name: zod_1.z.string().optional().describe("create_base: required base name (1-120 chars). update_base: optional new name."),
         description: zod_1.z.string().optional().describe("create_base/update_base: optional base description (max 2000)."),
         slug: zod_1.z.string().optional().describe("update_base: optional new slug (1-80 chars)."),
-        body: zod_1.z.string().optional().describe("write_file: required markdown body. Can't be empty — pass a single space for a deliberate stub."),
+        body: zod_1.z.string().max(1_048_576).optional().describe("write_file: required markdown body. Can't be empty — pass a single space for a deliberate stub."),
         title: zod_1.z.string().optional().describe("write_file: title for the entry — can't contain '/'. Doubles as the addressable path for a new entry when `path` is omitted; otherwise an optional override (defaults to the leaf path segment)."),
         expected_version: zod_1.z.string().optional().describe("write_file: the entry's Version from a prior read_file. Required when overwriting an existing entry — omitting it fails with 412; only force=true skips the check. Creates need no version."),
         force: zod_1.z.boolean().optional().describe("write_file: overwrite even if the entry changed since you read it. Discards the other edit — use only when intentional."),
@@ -199,7 +199,7 @@ function registerKnowledgeTools(register, client) {
         query: zod_1.z.string().optional().describe("search: required free-text query."),
         // coerce: MCP clients sometimes send numbers as strings; strict
         // z.number() rejects them with an opaque -32602.
-        limit: zod_1.z.coerce.number().optional().describe("search: max hits (default 20)."),
+        limit: zod_1.z.coerce.number().int().min(1).max(100).optional().describe("search: max hits (default 20, 1-100)."),
         entry_limit: zod_1.z.coerce.number().int().min(1).max(1000).optional().describe("get_tree: max entries per page (default 400, 1-1000). Folders always ship in full."),
         entry_cursor: zod_1.z.string().optional().describe("get_tree: opaque cursor from a prior page's 'more entries' notice — fetches the next page."),
         visibility: zod_1.z.enum(["public", "private"]).optional().describe("op=set_visibility: 'public' to publish a base you created (makes it workspace-visible + referenceable in workflows). One-way — 'private' is rejected."),
@@ -489,7 +489,18 @@ async function opSetVisibility(client, ref, visibility) {
     const base = await resolveBaseOr(client, ref);
     if (isErr(base))
         return base;
-    const updated = await client.updateKbBase(base.id, { visibility: "public" });
+    let updated;
+    try {
+        updated = await client.updateKbBase(base.id, { visibility: "public" });
+    }
+    catch (e) {
+        // F-10b: read-only-to-agents base — surface the clean message the other
+        // write ops use, not a raw AGENT_WRITE_DISABLED dump.
+        const denied = agentWriteDenied(e);
+        if (denied)
+            return denied;
+        throw e;
+    }
     return (0, respond_1.ok)(`Published knowledge base **${updated.name}** (slug: \`${updated.slug}\`) — now visible workspace-wide and referenceable in workflows.`);
 }
 async function opRestoreBase(client, ref) {
@@ -507,21 +518,54 @@ async function opRestoreBase(client, ref) {
     if (!trashed) {
         return (0, respond_1.err)(`No deleted base matches "${ref}". Use \`dopl_kb(op='list_trash')\` to see available restores; or the base may already be active.`);
     }
-    const restored = await client.restoreKbBase(trashed.id);
+    let restored;
+    try {
+        restored = await client.restoreKbBase(trashed.id);
+    }
+    catch (e) {
+        // F-10b: read-only-to-agents base — clean message, not a raw
+        // AGENT_WRITE_DISABLED dump.
+        const denied = agentWriteDenied(e);
+        if (denied)
+            return denied;
+        throw e;
+    }
     return (0, respond_1.ok)(`Restored **${restored.name}** (slug: \`${restored.slug}\`).`);
 }
 async function opCreateFolder(client, ref, path) {
     const base = await resolveBaseOr(client, ref);
     if (isErr(base))
         return base;
-    const folder = await client.createKbFolderByPath(base.id, path);
+    let folder;
+    try {
+        folder = await client.createKbFolderByPath(base.id, path);
+    }
+    catch (e) {
+        // F-10b: read-only-to-agents base — clean message, not a raw
+        // AGENT_WRITE_DISABLED dump.
+        const denied = agentWriteDenied(e);
+        if (denied)
+            return denied;
+        throw e;
+    }
     return (0, respond_1.ok)(`Folder ready at \`${path}\` (id: \`${folder.id}\`).`);
 }
 async function opMoveFolder(client, ref, from_path, to_path) {
     const base = await resolveBaseOr(client, ref);
     if (isErr(base))
         return base;
-    const result = await client.moveKbByPath(base.id, from_path, to_path);
+    let result;
+    try {
+        result = await client.moveKbByPath(base.id, from_path, to_path);
+    }
+    catch (e) {
+        // F-10b: read-only-to-agents base — clean message, not a raw
+        // AGENT_WRITE_DISABLED dump.
+        const denied = agentWriteDenied(e);
+        if (denied)
+            return denied;
+        throw e;
+    }
     if (result.kind !== "folder") {
         return (0, respond_1.err)(`Path "${from_path}" resolved to a ${result.kind}, not a folder.`);
     }
@@ -588,7 +632,18 @@ async function opMoveFile(client, ref, from_path, to_path) {
     const base = await resolveBaseOr(client, ref);
     if (isErr(base))
         return base;
-    const result = await client.moveKbByPath(base.id, from_path, to_path);
+    let result;
+    try {
+        result = await client.moveKbByPath(base.id, from_path, to_path);
+    }
+    catch (e) {
+        // F-10b: read-only-to-agents base — clean message, not a raw
+        // AGENT_WRITE_DISABLED dump.
+        const denied = agentWriteDenied(e);
+        if (denied)
+            return denied;
+        throw e;
+    }
     if (result.kind !== "entry") {
         return (0, respond_1.err)(`Path "${from_path}" resolved to a ${result.kind}, not an entry.`);
     }

@@ -21,17 +21,65 @@ import type {
   WorkspaceWithRole,
 } from "@/features/workspaces/types";
 
-const state = vi.hoisted(() => ({ apiKeyWorkspaceId: null as string | null }));
+const state = vi.hoisted(() => ({
+  apiKeyWorkspaceId: null as string | null,
+  // H-3 forwarding harness. When `token` is set the mock takes the OAuth-bearer
+  // branch (and re-enacts the sessionOnly + write-scope gates from the `options`
+  // withWorkspaceAuth forwards); otherwise it takes the session (cookie) branch.
+  token: null as { userId: string; scopes: string[]; tokenId: string } | null,
+  sessionUser: { id: "user-1" } as { id: string } | null,
+}));
 
 vi.mock("./with-auth", () => ({
+  // Faithful-enough stand-in for the REAL withUserAuth: it reproduces the two
+  // H-3 gates *from the `options` it is handed*, so a 403 here proves
+  // withWorkspaceAuth forwarded the flag. The gates themselves are exercised
+  // against the real implementation in with-auth.test.ts; session (cookie)
+  // callers are never gated, matching production.
   withUserAuth:
-    (handler: (req: NextRequest, ctx: unknown) => unknown) =>
-    (req: NextRequest, rc?: { params?: Promise<Record<string, string>> }) =>
-      handler(req, {
-        userId: "user-1",
+    (
+      handler: (req: NextRequest, ctx: unknown) => unknown,
+      options: { writeScopeExempt?: boolean; sessionOnly?: boolean } = {}
+    ) =>
+    (req: NextRequest, rc?: { params?: Promise<Record<string, string>> }) => {
+      const READ = ["GET", "HEAD", "OPTIONS"];
+      if (state.token) {
+        if (options.sessionOnly) {
+          return new Response(
+            JSON.stringify({
+              error: { code: "SESSION_REQUIRED", message: "session required" },
+            }),
+            { status: 403, headers: { "content-type": "application/json" } }
+          );
+        }
+        const isWrite = !READ.includes(req.method);
+        const canWrite =
+          Array.isArray(state.token.scopes) &&
+          state.token.scopes.includes("dopl.write");
+        if (isWrite && !canWrite && !options.writeScopeExempt) {
+          return new Response(
+            JSON.stringify({
+              error: {
+                code: "WRITE_SCOPE_REQUIRED",
+                message: "write scope required",
+              },
+            }),
+            { status: 403, headers: { "content-type": "application/json" } }
+          );
+        }
+        return handler(req, {
+          userId: state.token.userId,
+          agentTokenId: state.token.tokenId,
+          apiKeyWorkspaceId: state.apiKeyWorkspaceId,
+          params: rc?.params,
+        });
+      }
+      return handler(req, {
+        userId: state.sessionUser?.id ?? "user-1",
         apiKeyWorkspaceId: state.apiKeyWorkspaceId,
         params: rc?.params,
-      }),
+      });
+    },
 }));
 vi.mock("@/features/workspaces/server/repository", () => ({
   listWorkspacesWithRoleForUser: vi.fn(),
@@ -48,7 +96,7 @@ vi.mock("@/features/analytics/server/mcp-tool-calls", () => ({
 }));
 
 import * as repo from "@/features/workspaces/server/repository";
-import { withWorkspaceAuth } from "./with-workspace-auth";
+import { withWorkspaceAuth, type WorkspaceAuthContext } from "./with-workspace-auth";
 
 const mockRepo = vi.mocked(repo);
 
@@ -123,9 +171,18 @@ function req(url: string, headers: Record<string, string> = {}): NextRequest {
   return new NextRequest(`http://localhost${url}`, { headers });
 }
 
+function writeReq(
+  method: string,
+  headers: Record<string, string> = {}
+): NextRequest {
+  return new NextRequest("http://localhost/api/x", { method, headers });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   state.apiKeyWorkspaceId = null;
+  state.token = null;
+  state.sessionUser = { id: "user-1" };
 });
 
 describe("workspaceIdFromQuery — export download regression (A1)", () => {
@@ -241,5 +298,51 @@ describe("resolution outcomes surfaced by the wrapper", () => {
     const res = await echo(req("/api/x", { "x-workspace-id": "not-a-uuid" }));
     expect(res.status).toBe(400);
     expect((await res.json()).error).toBe("WORKSPACE_INVALID");
+  });
+});
+
+describe("H-3 gate options are forwarded into withUserAuth", () => {
+  // withWorkspaceAuth composes withUserAuth and must hand it BOTH new option
+  // flags (see the `{ writeScopeExempt, sessionOnly }` forwarding at the tail
+  // of withWorkspaceAuth). These assert the flags survive the composition —
+  // drop the forwarding and (a) regresses to 200; the gate logic itself is
+  // pinned in with-auth.test.ts.
+  const writeHandler = vi.fn(
+    async (_req: NextRequest, ctx: WorkspaceAuthContext) =>
+      NextResponse.json({ workspaceId: ctx.workspaceId })
+  );
+  const sessionOnlyRoute = withWorkspaceAuth(writeHandler, { sessionOnly: true });
+  const plainRoute = withWorkspaceAuth(writeHandler);
+
+  it("(a) OAuth token on a sessionOnly route → 403 SESSION_REQUIRED (even with dopl.write)", async () => {
+    state.sessionUser = null;
+    state.token = { userId: "user-1", scopes: ["dopl.read", "dopl.write"], tokenId: "t1" };
+    const res = await sessionOnlyRoute(
+      writeReq("DELETE", { "x-workspace-id": UUID_A })
+    );
+    expect(res.status).toBe(403);
+    expect((await res.json()).error.code).toBe("SESSION_REQUIRED");
+    expect(writeHandler).not.toHaveBeenCalled();
+  });
+
+  it("(b) read-only OAuth token on a write method → 403 WRITE_SCOPE_REQUIRED", async () => {
+    state.sessionUser = null;
+    state.token = { userId: "user-1", scopes: ["dopl.read"], tokenId: "t1" };
+    const res = await plainRoute(writeReq("PUT", { "x-workspace-id": UUID_A }));
+    expect(res.status).toBe(403);
+    expect((await res.json()).error.code).toBe("WRITE_SCOPE_REQUIRED");
+    expect(writeHandler).not.toHaveBeenCalled();
+  });
+
+  it("(c) session (cookie) caller on the same sessionOnly write route → allowed", async () => {
+    // No token ⇒ cookie branch ⇒ neither gate applies; the real workspace
+    // resolution runs and the write handler executes.
+    grantMemberships([{ id: UUID_A, slug: "acme", role: "member" }]);
+    const res = await sessionOnlyRoute(
+      writeReq("DELETE", { "x-workspace-id": UUID_A })
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ workspaceId: UUID_A });
+    expect(writeHandler).toHaveBeenCalledOnce();
   });
 });

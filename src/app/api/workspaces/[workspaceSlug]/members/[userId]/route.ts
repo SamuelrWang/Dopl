@@ -44,7 +44,9 @@ export const PATCH = withUserAuth(
       const message = err instanceof Error ? err.message : "Unknown error";
       return NextResponse.json({ error: message }, { status: 500 });
     }
-  }
+  },
+  // sessionOnly: changing a member's role is an admin action, not an agent one.
+  { sessionOnly: true }
 );
 
 /**
@@ -72,5 +74,7 @@ export const DELETE = withUserAuth(
       const message = err instanceof Error ? err.message : "Unknown error";
       return NextResponse.json({ error: message }, { status: 500 });
     }
-  }
+  },
+  // sessionOnly: removing a member is an admin action, not an agent one.
+  { sessionOnly: true }
 );

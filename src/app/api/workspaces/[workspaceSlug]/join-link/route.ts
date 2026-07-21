@@ -41,7 +41,10 @@ export const POST = withUserAuth(
     } catch (err) {
       return toErrorResponse(err);
     }
-  }
+  },
+  // sessionOnly: rotating the shareable join link is an admin access-control
+  // action (mints/invalidates workspace-entry credentials), not an agent one.
+  { sessionOnly: true }
 );
 
 function toErrorResponse(err: unknown): NextResponse {

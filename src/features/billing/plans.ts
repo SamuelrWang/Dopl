@@ -12,6 +12,14 @@
 
 export type PlanId = "free" | "solo" | "team";
 
+/**
+ * Canonical billing/subscription status for a workspace. "free" = no live
+ * subscription; the paid states mirror Stripe (active / past_due / canceled).
+ * Single source for the entitlements contract (server + client mirror) so
+ * the union isn't hand-redeclared per module.
+ */
+export type BillingStatus = "free" | "active" | "past_due" | "canceled";
+
 export interface PlanDef {
   id: PlanId;
   audience: string;

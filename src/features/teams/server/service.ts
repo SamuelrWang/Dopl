@@ -303,7 +303,7 @@ export async function getAccessMatrix(
 ): Promise<AccessMatrix> {
   const callerRole = await requireWorkspaceRole(workspaceId, callerId, "viewer");
   const db = supabaseAdmin();
-  const [teams, kbs, wfs] = await Promise.all([
+  const [teams, kbs, wfs, skills] = await Promise.all([
     listTeams(workspaceId, callerId),
     db
       .from("knowledge_bases")
@@ -317,9 +317,16 @@ export async function getAccessMatrix(
       .eq("workspace_id", workspaceId)
       .is("deleted_at", null)
       .order("name"),
+    db
+      .from("skills")
+      .select("id, name, access_mode, created_by")
+      .eq("workspace_id", workspaceId)
+      .is("deleted_at", null)
+      .order("name"),
   ]);
   if (kbs.error) throw kbs.error;
   if (wfs.error) throw wfs.error;
+  if (skills.error) throw skills.error;
 
   const resources: AccessMatrixResource[] = [
     ...((kbs.data ?? []) as Array<{
@@ -345,6 +352,18 @@ export async function getAccessMatrix(
       name: r.name,
       accessMode: r.access_mode,
       createdBy: r.user_id,
+    })),
+    ...((skills.data ?? []) as Array<{
+      id: string;
+      name: string;
+      access_mode: AccessMode;
+      created_by: string | null;
+    }>).map((r) => ({
+      resourceType: "skill" as const,
+      resourceId: r.id,
+      name: r.name,
+      accessMode: r.access_mode,
+      createdBy: r.created_by,
     })),
   ];
 

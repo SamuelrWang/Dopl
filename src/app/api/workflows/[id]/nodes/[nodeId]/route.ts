@@ -3,6 +3,7 @@ import { z } from "zod";
 import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
 import type { Role } from "@/features/workspaces/types";
 import { HttpError } from "@/shared/lib/http-error";
+import { parseJson } from "@/shared/api/parse-json";
 import { DESCRIPTION_MAX } from "@/config";
 import {
   requireWorkflowEdit,
@@ -51,17 +52,11 @@ async function handlePatch(request: NextRequest, ctx: Ctx) {
   try {
     const { id, nodeId } = ctx.params ?? {};
     if (!id || !nodeId) return NextResponse.json({ error: "id + nodeId required" }, { status: 400 });
-    const parsed = PatchBody.safeParse(await request.json());
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: { code: "VALIDATION_FAILED", issues: parsed.error.issues } },
-        { status: 400 }
-      );
-    }
+    const data = await parseJson(request, PatchBody);
     const scope = scopeOf(ctx);
     const workflowId = await resolveWorkflowId(id, scope);
     await requireWorkflowEdit(workflowId, scope);
-    await updateNode(workflowId, nodeId, parsed.data, scope);
+    await updateNode(workflowId, nodeId, data, scope);
     return new NextResponse(null, { status: 204 });
   } catch (err) {
     return toError(err);

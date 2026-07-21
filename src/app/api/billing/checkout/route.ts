@@ -23,6 +23,32 @@ async function readPlan(request: NextRequest): Promise<"solo" | "team"> {
 }
 
 /**
+ * PARTIAL mitigation for concurrent-checkout duplicate-subscription (M-3),
+ * NOT a full fix. The 409 guard below only trips once `stripeSubscriptionId`
+ * is persisted — between "start checkout" and the webhook writing that id,
+ * two racing requests can each mint a Stripe subscription. Adding a real
+ * cross-instance claim needs schema we're not touching here.
+ *
+ * This in-process set collapses the common case: a double-click / retry /
+ * React double-invoke landing on the SAME warm serverless instance can't
+ * both create a session. It does NOTHING across instances (Vercel may route
+ * concurrent requests to different lambdas), so a residual race remains —
+ * narrowed further by the Stripe idempotencyKey in createWorkspaceCheckout-
+ * Session (same workspace+plan+quantity+hour → one session) and the billing
+ * re-read immediately before session creation. Residual risk is documented,
+ * accepted, and left for the main thread to fully close (advisory lock or a
+ * `checkout_pending` column) if it wants a hard guarantee.
+ */
+const inflightCheckouts = new Set<string>();
+
+function checkoutConflict(portalUrl: string | null) {
+  return NextResponse.json(
+    { error: "Workspace already has an active subscription", portalUrl },
+    { status: 409 }
+  );
+}
+
+/**
  * Start a subscription checkout for the active workspace. Admin/owner only
  * (withWorkspaceAuth minRole). Team is per-seat (quantity = current active
  * member count, kept in sync by the webhook); Solo is flat and requires a
@@ -39,50 +65,71 @@ export const POST = withWorkspaceAuth(
       const portalUrl = billing.stripeCustomerId
         ? await createPortalSession(billing.stripeCustomerId)
         : null;
+      return checkoutConflict(portalUrl);
+    }
+
+    // In-process claim (M-3 partial mitigation) — reject a concurrent checkout
+    // for the same workspace on this instance instead of minting a 2nd sub.
+    if (inflightCheckouts.has(workspaceId)) {
       return NextResponse.json(
-        {
-          error: "Workspace already has an active subscription",
-          portalUrl,
-        },
+        { error: "A checkout is already in progress for this workspace" },
         { status: 409 }
       );
     }
+    inflightCheckouts.add(workspaceId);
+    try {
+      const plan = await readPlan(request);
 
-    const plan = await readPlan(request);
+      const { data: profile } = await supabaseAdmin()
+        .from("profiles")
+        .select("email")
+        .eq("id", userId)
+        .single();
+      if (!profile?.email) {
+        return NextResponse.json(
+          { error: "User email not found" },
+          { status: 400 }
+        );
+      }
 
-    const { data: profile } = await supabaseAdmin()
-      .from("profiles")
-      .select("email")
-      .eq("id", userId)
-      .single();
-    if (!profile?.email) {
-      return NextResponse.json(
-        { error: "User email not found" },
-        { status: 400 }
-      );
+      const quantity = await countActiveMembers(workspaceId);
+      if (plan === "solo" && quantity !== 1) {
+        return NextResponse.json(
+          {
+            error: "SOLO_REQUIRES_SINGLE_MEMBER",
+            message:
+              "Solo Pro is for single-member workspaces. Choose Team to bring others.",
+          },
+          { status: 409 }
+        );
+      }
+
+      // Re-read billing right before minting the session: a webhook may have
+      // landed (persisting a subscription id) since the first read, in which
+      // case creating another session would duplicate the sub. Cheap defense
+      // that shrinks — but does not eliminate — the cross-instance race.
+      const fresh = await getWorkspaceBilling(workspaceId);
+      if (fresh?.stripeSubscriptionId && fresh.status !== "canceled") {
+        const portalUrl = fresh.stripeCustomerId
+          ? await createPortalSession(fresh.stripeCustomerId)
+          : null;
+        return checkoutConflict(portalUrl);
+      }
+
+      const clientSecret = await createWorkspaceCheckoutSession({
+        workspaceId,
+        plan,
+        quantity,
+        email: profile.email,
+        stripeCustomerId: fresh?.stripeCustomerId ?? billing?.stripeCustomerId,
+      });
+
+      return NextResponse.json({ clientSecret });
+    } finally {
+      inflightCheckouts.delete(workspaceId);
     }
-
-    const quantity = await countActiveMembers(workspaceId);
-    if (plan === "solo" && quantity !== 1) {
-      return NextResponse.json(
-        {
-          error: "SOLO_REQUIRES_SINGLE_MEMBER",
-          message:
-            "Solo Pro is for single-member workspaces. Choose Team to bring others.",
-        },
-        { status: 409 }
-      );
-    }
-
-    const clientSecret = await createWorkspaceCheckoutSession({
-      workspaceId,
-      plan,
-      quantity,
-      email: profile.email,
-      stripeCustomerId: billing?.stripeCustomerId,
-    });
-
-    return NextResponse.json({ clientSecret });
   },
-  { minRole: "admin" }
+  // sessionOnly: billing mutations must come from an interactive session, never
+  // a background MCP agent — even one holding a dopl.write token.
+  { minRole: "admin", sessionOnly: true }
 );

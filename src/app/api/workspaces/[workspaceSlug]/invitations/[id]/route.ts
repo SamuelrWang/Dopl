@@ -29,5 +29,7 @@ export const DELETE = withUserAuth(
       const message = err instanceof Error ? err.message : "Unknown error";
       return NextResponse.json({ error: message }, { status: 500 });
     }
-  }
+  },
+  // sessionOnly: revoking an invitation is an admin action, not an agent one.
+  { sessionOnly: true }
 );

@@ -81,5 +81,7 @@ export const POST = withWorkspaceAuth(
 
     return NextResponse.json({ ok: true, seatCount: qty });
   },
-  { minRole: "admin" }
+  // sessionOnly: billing mutations must come from an interactive session, never
+  // a background MCP agent — even one holding a dopl.write token.
+  { minRole: "admin", sessionOnly: true }
 );

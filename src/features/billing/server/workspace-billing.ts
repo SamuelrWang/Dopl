@@ -139,6 +139,24 @@ export async function findWorkspaceIdByStripeSubscription(
 }
 
 /**
+ * Every Team-plan workspace whose Stripe subscription is still live (status
+ * `active` or `past_due`) and has a subscription id — i.e. the exact set
+ * whose seat quantity `syncSeatQuantity` can true-up. Solo is flat (never
+ * resized) and canceled/free rows have no live sub, so both are excluded.
+ * Used by the daily seat-reconciliation cron.
+ */
+export async function listReconcilableTeamWorkspaceIds(): Promise<string[]> {
+  const { data, error } = await supabaseAdmin()
+    .from("workspace_billing")
+    .select("workspace_id")
+    .eq("plan", "team")
+    .in("status", ["active", "past_due"])
+    .not("stripe_subscription_id", "is", null);
+  if (error) throw error;
+  return (data as { workspace_id: string }[] | null)?.map((r) => r.workspace_id) ?? [];
+}
+
+/**
  * The freshness watermark for a workspace: the Stripe `event.created`
  * (epoch seconds) of the last applied billing event, or null when the row
  * has never been stamped (or doesn't exist). The webhook handler compares

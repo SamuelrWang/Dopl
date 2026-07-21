@@ -32,7 +32,10 @@ export const POST = withUserAuth(async (_request, { userId }) => {
   // local skill-dir cleanup to dirs it owns — see Audit B7 in
   // packages/mcp-server/src/orphan-skill-cleanup.ts.
   return NextResponse.json({ ok: true, connected_at: now, is_admin, user_id: userId });
-});
+// writeScopeExempt: this liveness ping is a non-GET request that every MCP
+// connection (including read-only ones) fires — it must bypass the write-scope
+// gate so a read-only connection still lights the "MCP connected" indicator.
+}, { writeScopeExempt: true });
 
 /**
  * GET /api/user/mcp-status — Polled by the frontend to detect MCP connection.

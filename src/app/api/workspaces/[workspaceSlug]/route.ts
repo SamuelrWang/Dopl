@@ -95,4 +95,6 @@ export const DELETE = withUserAuth(async (_request: NextRequest, { userId, param
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
   }
-});
+// sessionOnly: destroying a workspace (cascades KBs/skills/clusters/members)
+// must never be driven by a background MCP agent — interactive session only.
+}, { sessionOnly: true });

@@ -16,4 +16,4 @@ export const POST = withWorkspaceAuth(async (_request, auth) => {
   } catch (err) {
     return toSkillErrorResponse(err);
   }
-});
+}, { minRole: "member" });

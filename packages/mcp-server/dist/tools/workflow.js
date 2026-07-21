@@ -31,28 +31,32 @@ Typical authoring flow: create → set_graph (or add_node + connect) → get to 
 const WORKFLOW_ADMIN_DESCRIPTION = `DESTRUCTIVE workflow operations. The op here is a soft-delete — the workflow becomes invisible in active listings but stays restorable from trash (\`dopl_workflow\` op="list_trash" + op="restore_workflow"). Confirm intent if the user's phrasing is at all ambiguous. Set \`op\` to one of:
 - "delete_workflow" — soft-delete a workflow. Its steps + edges are trashed with it (they come back on restore); attached knowledge bases + skills are detached (not deleted). Recover with \`dopl_workflow(op='restore_workflow')\`.`;
 const zNode = zod_1.z.object({
-    ref: zod_1.z.string().optional().describe("stable handle for this step (required for set_graph + add_node)"),
-    title: zod_1.z.string().optional(),
-    description: zod_1.z.string().optional(),
+    ref: zod_1.z.string().max(200).optional().describe("stable handle for this step (required for set_graph + add_node)"),
+    title: zod_1.z.string().max(200).optional(),
+    description: zod_1.z.string().max(4000).optional(),
     reads: zod_1.z
         .array(zod_1.z.object({ kbId: zod_1.z.string(), entryId: zod_1.z.string().optional() }))
+        .max(100)
         .optional()
         .describe("knowledge to READ: [{kbId} | {kbId, entryId}]"),
     actions: zod_1.z
         .array(zod_1.z.object({ skillId: zod_1.z.string() }))
+        .max(100)
         .optional()
         .describe("skills to APPLY: [{skillId}]"),
-    userInput: zod_1.z.string().optional(),
-    agentOutput: zod_1.z.string().optional(),
-    nextInstructions: zod_1.z.string().optional(),
+    userInput: zod_1.z.string().max(4000).optional(),
+    agentOutput: zod_1.z.string().max(4000).optional(),
+    nextInstructions: zod_1.z.string().max(4000).optional(),
 });
 const zGraph = zod_1.z.object({
-    nodes: zod_1.z.array(zNode),
-    edges: zod_1.z.array(zod_1.z.object({
+    nodes: zod_1.z.array(zNode).max(500),
+    edges: zod_1.z
+        .array(zod_1.z.object({
         from: zod_1.z.string(),
         to: zod_1.z.string(),
-        condition: zod_1.z.string().optional().describe("branch guard (free text); omit for an unconditional edge"),
-    })),
+        condition: zod_1.z.string().max(2000).optional().describe("branch guard (free text); omit for an unconditional edge"),
+    }))
+        .max(2000),
 });
 function registerWorkflowTools(register, client) {
     register("dopl_workflow", WORKFLOW_DESCRIPTION, {
@@ -207,7 +211,17 @@ function registerWorkflowTools(register, client) {
                 const miss = (0, respond_1.missingParams)("delete_workflow", args, ["slug"]);
                 if (miss)
                     return miss;
-                await client.deleteWorkflow(args.slug);
+                try {
+                    await client.deleteWorkflow(args.slug);
+                }
+                catch (e) {
+                    // Backend 404s when the slug matched no workflow; report
+                    // "nothing deleted" instead of a raw throw / false success.
+                    if ((0, respond_1.isNotFound)(e)) {
+                        return (0, respond_1.err)(`No workflow \`${args.slug}\` in this workspace — nothing deleted. Run dopl_workflow(op="list") to see valid slugs/ids.`);
+                    }
+                    throw e;
+                }
                 return (0, respond_1.ok)(`Soft-deleted workflow \`${args.slug}\`. Its steps + edges are trashed with it and attached knowledge bases + skills remain. Restore with \`dopl_workflow(op='restore_workflow')\` (find it via \`dopl_workflow(op='list_trash')\`).`);
             }
         }
@@ -226,6 +240,14 @@ function renderReads(reads) {
 }
 function renderActions(actions) {
     return actions.map((a) => `${a.name} (skill, skill_id: ${a.skillId})`).join("; ");
+}
+/**
+ * Clean "no such workflow" guidance for a backend 404 on a slug-addressed
+ * op — mirrors the isNotFound mapping opDisconnect / dopl_cluster_admin use,
+ * so authors get a recoverable message instead of a raw "HTTP 404: {json}".
+ */
+function workflowNotFound(slug) {
+    return (0, respond_1.err)(`No workflow \`${slug}\` in this workspace. Run dopl_workflow(op="list") to see valid slugs/ids.`);
 }
 // ── ops ──────────────────────────────────────────────────────────────
 async function opList(client) {
@@ -426,7 +448,15 @@ async function opCreate(client, name) {
     return (0, respond_1.ok)(`Created workflow **${wf.name}** (slug: \`${wf.slug}\`). Now author its graph with op="set_graph" (or add_node + connect), then op="get" to verify.`);
 }
 async function opUpdate(client, slug, name, description) {
-    const wf = await client.updateWorkflow(slug, { name, description });
+    let wf;
+    try {
+        wf = await client.updateWorkflow(slug, { name, description });
+    }
+    catch (e) {
+        if ((0, respond_1.isNotFound)(e))
+            return workflowNotFound(slug);
+        throw e;
+    }
     return (0, respond_1.ok)(`Updated workflow **${wf.name}** (slug: \`${wf.slug}\`).`);
 }
 async function opSetGraph(client, slug, graph) {
@@ -435,7 +465,14 @@ async function opSetGraph(client, slug, graph) {
         if (!n.ref)
             return (0, respond_1.err)("Every node in `graph.nodes` needs a `ref`.");
     }
-    await client.setWorkflowGraph(slug, graph);
+    try {
+        await client.setWorkflowGraph(slug, graph);
+    }
+    catch (e) {
+        if ((0, respond_1.isNotFound)(e))
+            return workflowNotFound(slug);
+        throw e;
+    }
     return (0, respond_1.ok)(`Set workflow \`${slug}\` graph: ${graph.nodes.length} step(s), ${graph.edges.length} edge(s). Run op="get" to see the ordered steps.`);
 }
 async function opAddNode(client, slug, node, connectFrom) {
@@ -444,15 +481,39 @@ async function opAddNode(client, slug, node, connectFrom) {
     return (0, respond_1.ok)(`Added step \`${node_id}\` to workflow \`${slug}\`${connectFrom ? ` (connected from ${connectFrom})` : " (entry step)"}.`);
 }
 async function opUpdateNode(client, slug, nodeId, node) {
-    await client.updateWorkflowNode(slug, nodeId, node);
+    try {
+        await client.updateWorkflowNode(slug, nodeId, node);
+    }
+    catch (e) {
+        if ((0, respond_1.isNotFound)(e)) {
+            return (0, respond_1.err)(`Couldn't update step \`${nodeId}\` — workflow \`${slug}\` or that step doesn't exist. Run dopl_workflow(op="get", slug="${slug}") to see step ids, or op="list" for workflows.`);
+        }
+        throw e;
+    }
     return (0, respond_1.ok)(`Updated step \`${nodeId}\` in workflow \`${slug}\`.`);
 }
 async function opRemoveNode(client, slug, nodeId) {
-    await client.removeWorkflowNode(slug, nodeId);
+    try {
+        await client.removeWorkflowNode(slug, nodeId);
+    }
+    catch (e) {
+        if ((0, respond_1.isNotFound)(e)) {
+            return (0, respond_1.err)(`Couldn't remove step \`${nodeId}\` — workflow \`${slug}\` or that step doesn't exist. Run dopl_workflow(op="get", slug="${slug}") to see step ids, or op="list" for workflows.`);
+        }
+        throw e;
+    }
     return (0, respond_1.ok)(`Removed step \`${nodeId}\` from workflow \`${slug}\`.`);
 }
 async function opConnect(client, slug, from, to, condition) {
-    await client.connectWorkflow(slug, from, to, condition);
+    try {
+        await client.connectWorkflow(slug, from, to, condition);
+    }
+    catch (e) {
+        if ((0, respond_1.isNotFound)(e)) {
+            return (0, respond_1.err)(`Couldn't connect \`${from}\` → \`${to}\` — workflow \`${slug}\` or one of those steps doesn't exist. Run dopl_workflow(op="get", slug="${slug}") to see step ids, or op="list" for workflows.`);
+        }
+        throw e;
+    }
     return (0, respond_1.ok)(`Connected \`${from}\` → \`${to}\` in workflow \`${slug}\`${condition ? ` when ${condition}` : ""}.`);
 }
 async function opDisconnect(client, slug, from, to) {
@@ -472,7 +533,15 @@ async function opDisconnect(client, slug, from, to) {
 async function opSetCluster(client, slug, cluster) {
     // Empty / omitted → ungroup the workflow.
     if (!cluster || !cluster.trim()) {
-        const wf = await client.updateWorkflow(slug, { clusterId: null });
+        let wf;
+        try {
+            wf = await client.updateWorkflow(slug, { clusterId: null });
+        }
+        catch (e) {
+            if ((0, respond_1.isNotFound)(e))
+                return workflowNotFound(slug);
+            throw e;
+        }
         return (0, respond_1.ok)(`Workflow **${wf.name}** (slug: \`${wf.slug}\`) is now ungrouped (no cluster).`);
     }
     // The API takes a cluster UUID; agents hold slugs, so resolve slug-or-id
@@ -482,7 +551,15 @@ async function opSetCluster(client, slug, cluster) {
     if (!match) {
         return (0, respond_1.err)(`Cluster not found: \`${cluster}\`. Run dopl_cluster(op="list") to see valid clusters.`);
     }
-    const wf = await client.updateWorkflow(slug, { clusterId: match.id });
+    let wf;
+    try {
+        wf = await client.updateWorkflow(slug, { clusterId: match.id });
+    }
+    catch (e) {
+        if ((0, respond_1.isNotFound)(e))
+            return workflowNotFound(slug);
+        throw e;
+    }
     return (0, respond_1.ok)(`Grouped workflow **${wf.name}** (slug: \`${wf.slug}\`) under cluster **${match.name}** (slug: \`${match.slug}\`).`);
 }
 async function opListTrash(client) {
@@ -500,6 +577,17 @@ async function opListTrash(client) {
     return (0, respond_1.ok)(lines.join("\n"));
 }
 async function opRestoreWorkflow(client, slug) {
-    const wf = await client.restoreWorkflow(slug);
+    let wf;
+    try {
+        wf = await client.restoreWorkflow(slug);
+    }
+    catch (e) {
+        // 404 = nothing in trash matched. Point at the trash listing, not
+        // op="list" (which only shows live workflows).
+        if ((0, respond_1.isNotFound)(e)) {
+            return (0, respond_1.err)(`No deleted workflow matches \`${slug}\`. Run dopl_workflow(op="list_trash") to see restorable workflows; it may already be active.`);
+        }
+        throw e;
+    }
     return (0, respond_1.ok)(`Restored workflow **${wf.name}** (slug: \`${wf.slug}\`). Its steps + edges are back — run op="get" to verify.`);
 }

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { withWorkspaceAuth } from "@/shared/auth/with-workspace-auth";
 import type { Role } from "@/features/workspaces/types";
 import { HttpError } from "@/shared/lib/http-error";
+import { parseJson } from "@/shared/api/parse-json";
 import {
   requireWorkflowEdit,
   resolveWorkflowId,
@@ -51,17 +52,11 @@ async function run(
   try {
     const id = ctx.params?.id;
     if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
-    const parsed = PairBody.safeParse(await request.json());
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: { code: "VALIDATION_FAILED", issues: parsed.error.issues } },
-        { status: 400 }
-      );
-    }
+    const data = await parseJson(request, PairBody);
     const scope = scopeOf(ctx);
     const workflowId = await resolveWorkflowId(id, scope);
     await requireWorkflowEdit(workflowId, scope);
-    const { from, to, condition } = parsed.data;
+    const { from, to, condition } = data;
     if (op === "connect") {
       await connect(workflowId, from, to, condition ?? "", scope);
     } else {
