@@ -1,6 +1,6 @@
 "use client";
 
-import { useEditor, EditorContent } from "@tiptap/react";
+import { useEditor, EditorContent, type Editor } from "@tiptap/react";
 import { StarterKit } from "@tiptap/starter-kit";
 import { Underline } from "@tiptap/extension-underline";
 import { Link } from "@tiptap/extension-link";
@@ -13,6 +13,7 @@ import {
 import { marked } from "marked";
 import TurndownService from "turndown";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { cn } from "@/shared/lib/utils";
 import { Toolbar } from "./doc-editor-toolbar";
 import { makeLinkRule, makeTableRule } from "./doc-editor-turndown";
 
@@ -30,6 +31,12 @@ interface Props {
   /** Horizontal inset (Tailwind classes) for the fixed toolbar pill, so it
    *  centers over the host panel. Defaults to the v1 KB-detail layout. */
   toolbarInset?: string;
+  /** Suppress the built-in floating toolbar — the host renders its own
+   *  (e.g. in a panel header band, via `onEditor`). */
+  hideToolbar?: boolean;
+  /** Receives the live editor instance (and null on teardown) so a host can
+   *  render the toolbar outside this component. */
+  onEditor?: (editor: Editor | null) => void;
 }
 
 /**
@@ -51,6 +58,8 @@ export function DocEditor({
   onChange,
   readOnly,
   toolbarInset,
+  hideToolbar,
+  onEditor,
 }: Props) {
   const initialHtml = useMemo(() => {
     const result = marked.parse(initialMarkdown, { async: false, gfm: true });
@@ -165,6 +174,13 @@ export function DocEditor({
     editor.setEditable(!readOnly);
   }, [editor, readOnly]);
 
+  // Publish the live editor instance to the host (for a host-rendered
+  // toolbar), and clear it on teardown so a stale editor is never held.
+  useEffect(() => {
+    onEditor?.(editor ?? null);
+    return () => onEditor?.(null);
+  }, [editor, onEditor]);
+
   if (!editor) return null;
 
   // Tiptap's contenteditable only handles clicks landing inside the
@@ -192,9 +208,14 @@ export function DocEditor({
 
   return (
     <div className="flex flex-col" onClick={focusNearestToClick}>
-      <Toolbar editor={editor} toolbarInset={toolbarInset} />
+      {!hideToolbar && <Toolbar editor={editor} toolbarInset={toolbarInset} />}
       <div
-        className="mx-auto w-full max-w-3xl px-6 pb-28 min-h-[60vh] cursor-text"
+        className={cn(
+          "mx-auto w-full max-w-3xl px-6 min-h-[60vh] cursor-text",
+          // The floating pill needs clearance at the bottom; a host-rendered
+          // header toolbar does not.
+          hideToolbar ? "pb-16" : "pb-28"
+        )}
         onClick={focusNearestToClick}
       >
         <EditorContent editor={editor} />

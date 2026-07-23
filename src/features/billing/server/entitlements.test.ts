@@ -4,7 +4,7 @@
  * Locks the plan/cap/window matrix other agents build against, with the
  * billing repository mocked (no Supabase, no network). Rules under test:
  *   - 1-member free -> uncapped (Notion-style), 90-day chats window
- *   - 2+ free       -> object cap 1000, freeze-don't-delete create gate
+ *   - 2+ free       -> object cap 100, freeze-don't-delete create gate
  *   - solo active/1 -> entitled: uncapped, full history, no seatCount
  *   - solo + 2 mbrs -> DEGRADED to free multi-member rules (backstop)
  *   - solo canceled -> free rules
@@ -81,8 +81,8 @@ describe("getWorkspaceEntitlements — free plans", () => {
     expect(e.chatsWindowDays).toBe(FREE_CHATS_WINDOW_DAYS);
   });
 
-  it("2-member free is capped at 1000, create allowed below the cap", async () => {
-    setup({ billing: null, members: 2, objects: 999 });
+  it("2-member free is capped at 100, create allowed below the cap", async () => {
+    setup({ billing: null, members: 2, objects: 50 });
     const e = await getWorkspaceEntitlements(WS);
     expect(e.objectCap).toBe(FREE_MULTI_MEMBER_OBJECT_CAP);
     expect(e.canCreateObjects).toBe(true);
@@ -91,7 +91,7 @@ describe("getWorkspaceEntitlements — free plans", () => {
   it("2-member free AT the cap blocks creates (freeze-don't-delete)", async () => {
     setup({ billing: null, members: 2, objects: FREE_MULTI_MEMBER_OBJECT_CAP });
     const e = await getWorkspaceEntitlements(WS);
-    expect(e.objectCap).toBe(1000);
+    expect(e.objectCap).toBe(100);
     expect(e.canCreateObjects).toBe(false);
   });
 
@@ -204,7 +204,7 @@ describe("getWorkspaceEntitlements — canceled team reverts to free", () => {
     const e = await getWorkspaceEntitlements(WS);
     expect(e.plan).toBe("free");
     expect(e.status).toBe("canceled");
-    expect(e.objectCap).toBe(1000);
+    expect(e.objectCap).toBe(100);
     expect(e.canCreateObjects).toBe(false);
     expect(e.chatsWindowDays).toBe(FREE_CHATS_WINDOW_DAYS);
     expect(e.seatCount).toBeNull();
@@ -230,7 +230,7 @@ describe("assertCanCreateObject", () => {
   });
 
   it("throws EntitlementError(over_free_cap) at the cap", async () => {
-    setup({ billing: null, members: 2, objects: 1000 });
+    setup({ billing: null, members: 2, objects: FREE_MULTI_MEMBER_OBJECT_CAP });
     await expect(assertCanCreateObject(WS)).rejects.toBeInstanceOf(
       EntitlementError
     );

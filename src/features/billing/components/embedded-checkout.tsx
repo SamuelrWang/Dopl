@@ -193,7 +193,7 @@ function describeOrder(checkout: StripeCheckoutValue, plan: "solo" | "team") {
   const interval = item?.recurring?.interval ?? "month";
   // `amount` is Stripe's pre-formatted currency string (e.g. "$5.99").
   const totalLabel = `${checkout.total.total.amount} / ${interval}`;
-  const planName = plan === "solo" ? "Solo Pro" : "Team";
+  const planName = plan === "solo" ? "Pro" : "Team";
 
   const seats = item?.quantity ?? 1;
   const unitAmount = item?.unitAmount.amount;

@@ -59,53 +59,127 @@
 .cardNarrow::-webkit-scrollbar { width: 8px; }
 .cardNarrow::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.12); border-radius: 8px; }
 
-/* Compact variant — small confirm dialog. */
+/* Compact variant — small confirm dialog. Settings-popup card language:
+   14px radius, border-border-strong hairline, elevated surface. */
 .cardCompact {
   display: block;
-  width: min(92vw, 430px);
+  width: min(92vw, 420px);
   height: auto;
   max-height: 80vh;
   overflow-y: auto;
   background: var(--bg-elevated);
+  border-radius: 14px;
+  border-color: var(--border-strong);
 }
-.confirmBody { padding: 26px 28px 24px; }
+.confirmBody { padding: 18px 20px 16px; }
 .confirmTitle {
   font-family: var(--font-app), system-ui, sans-serif;
-  font-size: 22px;
-  font-weight: 500;
-  letter-spacing: -0.01em;
-  color: #1e242b;
-  margin-bottom: 10px;
-  padding-right: 24px;
+  font-size: var(--text-title);
+  line-height: 1.35;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+  padding-right: 20px;
 }
-.confirmDesc { font-size: 14.5px; line-height: 1.5; color: #646d78; white-space: pre-line; }
+.confirmDesc {
+  font-size: var(--text-caption);
+  line-height: 1.5;
+  color: var(--text-secondary);
+  white-space: pre-line;
+}
 .confirmActions {
-  margin-top: 24px;
+  margin-top: 18px;
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 8px;
 }
+
+/* Shared confirm/cancel/danger buttons — kit button recipes so every
+   ModalShell consumer stays on-system. btnCancel = .btn-light,
+   btnConfirm = .auth-btn-3d raised primary, btnDanger = bg-danger token
+   fill (matches the settings delete-account / danger-zone treatment). */
 .btnCancel,
 .btnConfirm,
 .btnDanger {
-  border: none;
+  height: 32px;
+  padding: 0 14px;
   border-radius: 8px;
-  padding: 10px 18px;
   font: inherit;
-  font-size: 14.5px;
-  font-weight: 600;
+  font-size: var(--text-small);
   cursor: pointer;
-  transition: filter 0.12s ease, background 0.12s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
 }
-.btnCancel { background: #e7ecf1; color: #3a414a; }
-.btnCancel:hover { background: #dde4ea; }
-.btnConfirm { background: #1c2127; color: #fff; }
-.btnConfirm:hover { background: #2c333c; }
-.btnDanger { background: #c2402a; color: #fff; }
-.btnDanger:hover { filter: brightness(1.06); }
+
+/* Cancel — .btn-light recipe */
+.btnCancel {
+  font-weight: 500;
+  color: var(--text-primary);
+  background: linear-gradient(180deg, #ffffff 0%, #f2f2f2 100%);
+  border: 1px solid #d6d8db;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 1px 2px rgba(0, 0, 0, 0.06);
+  transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
+}
+.btnCancel:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 3px 7px rgba(0, 0, 0, 0.08);
+}
+.btnCancel:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.12);
+}
+
+/* Confirm (default) — .auth-btn-3d raised black primary */
+.btnConfirm {
+  font-weight: 600;
+  color: #fff;
+  border: 1px solid #000;
+  background: linear-gradient(180deg, #313131 0%, #1c1c1c 52%, #111 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.45),
+    0 2px 3px rgba(0, 0, 0, 0.22),
+    0 6px 16px rgba(0, 0, 0, 0.2);
+  transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
+}
+.btnConfirm:hover:not(:disabled) {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.45),
+    0 4px 7px rgba(0, 0, 0, 0.24),
+    0 10px 24px rgba(0, 0, 0, 0.24);
+}
+.btnConfirm:active:not(:disabled) {
+  transform: translateY(1px);
+  filter: brightness(0.96);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+/* Confirm (destructive) — danger token fill */
+.btnDanger {
+  font-weight: 500;
+  color: #fff;
+  border: 1px solid transparent;
+  background: var(--danger);
+  transition: opacity 120ms ease, filter 120ms ease;
+}
+.btnDanger:hover:not(:disabled) { opacity: 0.9; }
+
 .btnCancel:disabled,
 .btnConfirm:disabled,
-.btnDanger:disabled { opacity: 0.5; cursor: default; }
+.btnDanger:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .narrowBody { padding: 30px 34px 34px; }
 .narrowTitle {

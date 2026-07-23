@@ -71,9 +71,6 @@ export function WorkspaceSwitcher({
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
       >
-        <span className={styles.brandAvatar}>
-          {(workspaceName.trim()[0] || "?").toUpperCase()}
-        </span>
         <span className={styles.brandPillName}>{workspaceName}</span>
         <ChevronsUpDown size={15} className={styles.brandChevron} />
       </button>

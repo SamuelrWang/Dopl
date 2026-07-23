@@ -14,7 +14,7 @@ import type { PlanId, BillingStatus } from "../plans";
  * omit it to let the endpoint fall back to the caller's default
  * workspace.
  *
- * Plans: "free" | "solo" | "team". Solo Pro is a flat $5.99/month for
+ * Plans: "free" | "solo" | "team". Pro is a flat $5.99/month for
  * single-member workspaces; Team is $7.99 per seat per month.
  */
 
@@ -39,7 +39,7 @@ export interface WorkspaceEntitlementsStatus {
   has_stripe_customer: boolean;
 }
 
-/** Solo Pro — flat monthly price, single-member workspaces only. */
+/** Pro — flat monthly price, single-member workspaces only. */
 export const SOLO_PRICE = 5.99;
 /** Team — per seat per month, seats sync with membership. */
 export const TEAM_SEAT_PRICE = 7.99;

@@ -51,10 +51,10 @@ const KB_DESCRIPTION = `Manage the caller's own editable knowledge bases. Talk t
 - "create_base" — create a new base. New bases are private to the creator by default.
 - "update_base" — update base metadata (name, description, slug). Access control is the workspace member matrix, not edited here.
 - "restore_base" — restore a soft-deleted base (recovery, not deletion). Use after op=list_trash. Accepts the trashed base's slug or a UUID.
-- "create_folder" — create a folder at a path. mkdir -p semantics; idempotent on existing folders.
+- "create_folder" — create a folder at a path. mkdir -p semantics; idempotent on existing folders. Pass \`description\` to set the folder's short agent-facing summary (shown in get_tree/list_dir); re-calling with a \`description\` on an existing folder UPDATES it (the way to edit a folder summary without touching its contents).
 - "move_folder" — move + rename a folder; leaf becomes the new name, missing parents created, cycles rejected.
 - "read_file" — read an entry's full markdown body by path (must resolve to an entry, not a folder). Returns a Version token — pass it to write_file as \`expected_version\`.
-- "write_file" — upsert an entry. Pass \`path\` to target an existing entry (or a new one at that path); for a brand-new entry you may instead pass just \`title\` and it becomes the addressable path. Titles can't contain \`/\` — it's the path separator. Parents mkdir-p'd. Overwriting an existing entry REQUIRES \`expected_version\` from a prior read_file (412 without it) so a concurrent edit can't be silently overwritten; \`force=true\` skips the check. Creates need no version.
+- "write_file" — upsert an entry. Pass \`path\` to target an existing entry (or a new one at that path); for a brand-new entry you may instead pass just \`title\` and it becomes the addressable path. Titles can't contain \`/\` — it's the path separator. Pass \`excerpt\` to set the entry's short agent-facing summary (shown in get_tree/list_dir); on an update, \`excerpt\` is only changed when provided. Parents mkdir-p'd. Overwriting an existing entry REQUIRES \`expected_version\` from a prior read_file (412 without it) so a concurrent edit can't be silently overwritten; \`force=true\` skips the check. Creates need no version.
 - "move_file" — move + rename an entry; parents mkdir-p'd, leaf becomes the new title.
 - "list_trash" — list soft-deleted bases/folders/entries. Optional \`base\` scopes to one base; omit for workspace-wide.
 - "restore_file" — restore a soft-deleted entry by id (from op=list_trash).
@@ -88,10 +88,11 @@ export function registerKnowledgeTools(register: RegisterTool, client: DoplClien
       from_path: z.string().optional().describe("move_folder/move_file: source path."),
       to_path: z.string().optional().describe("move_folder/move_file: destination path (leaf becomes the new name/title)."),
       name: z.string().optional().describe("create_base: required base name (1-120 chars). update_base: optional new name."),
-      description: z.string().optional().describe("create_base/update_base: optional base description (max 2000)."),
+      description: z.string().optional().describe("create_base/update_base: optional base description (max 2000). create_folder: optional short agent-facing folder summary shown in get_tree/list_dir (max 300) — re-calling create_folder with a description updates an existing folder's summary."),
       slug: z.string().optional().describe("update_base: optional new slug (1-80 chars)."),
       body: z.string().max(1_048_576).optional().describe("write_file: required markdown body. Can't be empty — pass a single space for a deliberate stub."),
       title: z.string().optional().describe("write_file: title for the entry — can't contain '/'. Doubles as the addressable path for a new entry when `path` is omitted; otherwise an optional override (defaults to the leaf path segment)."),
+      excerpt: z.string().optional().describe("write_file: optional short agent-facing summary shown in get_tree/list_dir (max 300) — keep it under 300 chars. On an update, only changed when provided."),
       expected_version: z.string().optional().describe("write_file: the entry's Version from a prior read_file. Required when overwriting an existing entry — omitting it fails with 412; only force=true skips the check. Creates need no version."),
       force: z.boolean().optional().describe("write_file: overwrite even if the entry changed since you read it. Discards the other edit — use only when intentional."),
       folder_id: z.string().optional().describe("restore_folder: required folder UUID (from list_trash)."),
@@ -136,7 +137,7 @@ export function registerKnowledgeTools(register: RegisterTool, client: DoplClien
         case "create_folder": {
           const miss = missingParams("create_folder", args, ["base", "path"]);
           if (miss) return miss;
-          return opCreateFolder(client, args.base as string, args.path as string);
+          return opCreateFolder(client, args.base as string, args.path as string, args.description);
         }
         case "move_folder": {
           const miss = missingParams("move_folder", args, ["base", "from_path", "to_path"]);
@@ -174,7 +175,7 @@ export function registerKnowledgeTools(register: RegisterTool, client: DoplClien
               `write_file: body cannot be empty — pass content (or a single space for a stub).`
             );
           }
-          return opWriteFile(client, args.base as string, path, args.body, args.title, args.expected_version, args.force);
+          return opWriteFile(client, args.base as string, path, args.body, args.title, args.expected_version, args.force, args.excerpt);
         }
         case "move_file": {
           const miss = missingParams("move_file", args, ["base", "from_path", "to_path"]);

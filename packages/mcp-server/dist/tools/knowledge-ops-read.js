@@ -84,16 +84,31 @@ async function opGetTree(client, ref, entryLimit, entryCursor) {
     return (0, respond_1.ok)(lines.join("\n"));
 }
 /**
+ * Rendered-description cap for tree / dir rows. Folder descriptions and
+ * entry excerpts are stored up to 300 chars, but a tree row only needs a
+ * glance — truncate to keep the whole listing cheap. Agents read_file /
+ * get the full text when they open the entry.
+ */
+const DESC_RENDER_CAP = 120;
+/**
  * ` — description` suffix for tree / directory rows. Folder
  * `description` and entry `excerpt` are the user-curated, agent-facing
  * summaries (≤300 chars) — surfacing them here lets agents pick the
  * right file from a listing instead of read_file-ing everything.
- * Newlines are flattened so one row stays one line.
+ * Newlines are flattened so one row stays one line, and the rendered
+ * text is truncated (~120 chars, ellipsis) so trees stay compact. Only
+ * renders the separator when a description is present.
  */
 function descSuffix(text) {
     if (!text)
         return "";
-    return ` — ${text.replace(/\s*\n+\s*/g, " ")}`;
+    const flat = text.replace(/\s*\n+\s*/g, " ").trim();
+    if (!flat)
+        return "";
+    const rendered = flat.length > DESC_RENDER_CAP
+        ? `${flat.slice(0, DESC_RENDER_CAP - 1).trimEnd()}…`
+        : flat;
+    return ` — ${rendered}`;
 }
 async function opListDir(client, ref, path) {
     const base = await (0, knowledge_shared_1.resolveBaseOr)(client, ref);

@@ -437,47 +437,16 @@
   margin: 0 4px;
 }
 
-/* Tabs row */
-/* Tabs — pill style (active = gray pill), not an underline. */
-.detailTabs {
+/* Toolbar band — the slim header strip below the breadcrumb that hosts the
+   rich-text formatting toolbar for an open entry (replaces the old dead
+   Overview/Messages/Attachments tab row). Sits above the scroll body so
+   formatting controls stay reachable while a long document scrolls. */
+.detailToolbarBand {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 11px 24px;
+  min-height: 40px;
+  padding: 5px 16px;
   border-bottom: 1px solid var(--kv-border);
-}
-.detailTab {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  border: none;
-  padding: 6px 13px;
-  border-radius: 8px;
-  font-size: var(--text-small);
-  font-weight: 500;
-  color: var(--kv-text-2);
-  cursor: pointer;
-  transition: background 0.12s ease, color 0.12s ease;
-}
-/* Reset + hover backgrounds only when the tab is NOT the active
-   .concave-sel — module CSS loads after globals and would win the tie. */
-.detailTab:not(:global(.concave-sel)) {
-  background: none;
-}
-.detailTab:not(:global(.concave-sel)):hover {
-  color: var(--kv-text);
-  background: var(--kv-row-hover);
-}
-.detailTab:hover {
-  color: var(--kv-text);
-}
-/* Concave (pressed-in) active tab — same selection language as the
-   study-notes sidebar. Ring via box-shadow so layout never shifts. */
-.detailTabActive {
-  /* Pressed recipe comes from the global .concave-sel composed alongside
-     this class in detail-panel.tsx. */
-  color: var(--kv-text);
-  font-weight: 600;
 }
 
 /* Scroll body — generous padding so content sits well off the edges. */

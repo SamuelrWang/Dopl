@@ -31,7 +31,7 @@ interface Props {
   reason?: string;
   /**
    * "generic" (default): the free-workspace upsell — single-member
-   * workspaces choose Solo Pro or Team; 2+ members get Team only.
+   * workspaces choose Pro or Team; 2+ members get Team only.
    * "add-member": the invite/join blocked path — Team is the only
    * offer, and a live Solo subscription is swapped in place via
    * `/api/billing/upgrade-to-team` (no checkout).
@@ -85,7 +85,7 @@ export function UpgradeModal({
       ) {
         // Billing state moved under us — resync and let the user retry.
         setSwitchError(
-          "This workspace is no longer on Solo Pro. Refreshing billing state…"
+          "This workspace is no longer on Pro. Refreshing billing state…"
         );
         void ent.refresh();
       } else {
@@ -163,7 +163,7 @@ function CheckoutView({
         ← Back
       </button>
       <h2 className="mb-1 text-display font-semibold tracking-tight text-text-primary">
-        {plan === "solo" ? "Subscribe to Solo Pro" : "Subscribe to Team"}
+        {plan === "solo" ? "Subscribe to Pro" : "Subscribe to Team"}
       </h2>
       <p className="mb-4 text-caption text-text-secondary">
         {plan === "solo"
@@ -241,7 +241,7 @@ function GenericUpsell({
           <div className="mt-5 flex flex-col gap-2.5">
             {soloEligible && (
               <PlanOption
-                title="Solo Pro"
+                title="Pro"
                 priceLine={
                   <>
                     {formatMoney(SOLO_PRICE)}{" "}
@@ -251,7 +251,7 @@ function GenericUpsell({
                   </>
                 }
                 pitch="For individuals. Everything unlocked, just for you — limited to one member."
-                cta="Choose Solo Pro"
+                cta="Choose Pro"
                 canManageBilling={canManageBilling}
                 onSelect={() => onChoose("solo")}
               />
@@ -344,7 +344,7 @@ function AddMemberBlocked({
         <p className="mt-1 text-caption text-text-secondary">{reason}</p>
       )}
       <p className="mt-2 text-small leading-snug text-text-secondary">
-        Solo Pro is limited to one member. Upgrade to Team —{" "}
+        Pro is limited to one member. Upgrade to Team —{" "}
         {formatMoney(TEAM_SEAT_PRICE)} per seat — to invite your team.
       </p>
 
@@ -469,7 +469,7 @@ function AlreadyPaidNote({ ent, onClose }: { ent: Ent; onClose: () => void }) {
   return (
     <div className="mt-5">
       <p className="rounded-lg border border-border-default bg-card-surface-subtle px-3 py-2 text-caption text-text-secondary">
-        This workspace is already on {ent.isSolo ? "Solo Pro" : "Team"}.
+        This workspace is already on {ent.isSolo ? "Pro" : "Team"}.
       </p>
       <CloseButton onClose={onClose} />
     </div>

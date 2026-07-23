@@ -87,7 +87,7 @@ export declare class DoplClient {
     readKbFileByPath(baseId: string, path: string): Promise<KnowledgeEntry>;
     writeKbFileByPath(baseId: string, path: string, input?: KnowledgeWriteFileInput, expectedVersion?: string | null): Promise<KnowledgeWriteFileResult>;
     listKbDirByPath(baseId: string, path?: string): Promise<KnowledgeDirListing>;
-    createKbFolderByPath(baseId: string, path: string): Promise<KnowledgeFolder>;
+    createKbFolderByPath(baseId: string, path: string, description?: string | null): Promise<KnowledgeFolder>;
     deleteKbByPath(baseId: string, path: string): Promise<KnowledgePathOpResult>;
     moveKbByPath(baseId: string, fromPath: string, toPath: string): Promise<KnowledgePathOpResult>;
     listKbTrash(baseId?: string): Promise<KnowledgeTrashSnapshot>;

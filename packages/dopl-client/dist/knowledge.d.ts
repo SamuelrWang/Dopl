@@ -23,7 +23,7 @@ export declare function restoreKbBase(t: DoplTransport, baseId: string): Promise
 export declare function readKbFileByPath(t: DoplTransport, baseId: string, path: string): Promise<KnowledgeEntry>;
 export declare function writeKbFileByPath(t: DoplTransport, baseId: string, path: string, input?: KnowledgeWriteFileInput, expectedVersion?: string | null): Promise<KnowledgeWriteFileResult>;
 export declare function listKbDirByPath(t: DoplTransport, baseId: string, path?: string): Promise<KnowledgeDirListing>;
-export declare function createKbFolderByPath(t: DoplTransport, baseId: string, path: string): Promise<import("./knowledge-types.js").KnowledgeFolder>;
+export declare function createKbFolderByPath(t: DoplTransport, baseId: string, path: string, description?: string | null): Promise<import("./knowledge-types.js").KnowledgeFolder>;
 export declare function deleteKbByPath(t: DoplTransport, baseId: string, path: string): Promise<KnowledgePathOpResult>;
 export declare function moveKbByPath(t: DoplTransport, baseId: string, fromPath: string, toPath: string): Promise<KnowledgePathOpResult>;
 export declare function listKbTrash(t: DoplTransport, baseId?: string): Promise<KnowledgeTrashSnapshot>;

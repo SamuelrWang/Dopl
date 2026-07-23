@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { withWorkspaceAuth, type WorkspaceAuthContext } from "@/shared/auth/with-workspace-auth";
 import { parseJson } from "@/shared/api/parse-json";
+import { DESCRIPTION_MAX } from "@/config";
 import { HttpError } from "@/shared/lib/http-error";
 import { knowledgeEntryUrl } from "@/shared/lib/url/resource-url";
 import { toKnowledgeErrorResponse } from "@/shared/api/knowledge-route";
@@ -43,6 +44,9 @@ const WriteFileSchema = z.object({
   path: z.string(),
   body: z.string().max(MAX_BODY_BYTES, "Body must be 1 MB or less").optional(),
   title: z.string().min(1).max(300).regex(NAME_RE, NAME_INVALID_MESSAGE).optional(),
+  // Optional agent-facing short summary (≤300 chars), surfaced in
+  // get_tree / list_dir. `null` clears it; omitting leaves it as-is.
+  excerpt: z.string().max(DESCRIPTION_MAX).nullable().optional(),
 });
 
 async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
@@ -69,6 +73,7 @@ async function handlePut(request: NextRequest, auth: WorkspaceAuthContext) {
     const { entry, base } = await writeFileByPath(ctx, baseId, input.path, {
       body: input.body,
       title: input.title,
+      excerpt: input.excerpt,
       expectedUpdatedAt,
     });
     const webUrl = knowledgeEntryUrl({

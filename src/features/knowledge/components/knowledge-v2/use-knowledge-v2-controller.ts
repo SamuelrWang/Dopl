@@ -9,6 +9,7 @@ import type { KnowledgeBase, KnowledgeEntry } from "../../types";
 import { knowledgeBaseSegment } from "../../url";
 import type { BaseTree, ListFilter, Selection } from "./types";
 import { reportError } from "./utils";
+import { readLastBaseId, writeLastBaseId } from "./last-base";
 import { useKnowledgeV2Trees } from "./use-knowledge-v2-trees";
 
 interface ControllerArgs {
@@ -60,15 +61,32 @@ export function useKnowledgeV2Controller({
   const basesQuery = useKnowledgeBases(workspaceId, { initialData: initialBases });
   const bases = basesQuery.data ?? initialBases;
 
+  // Auto-select (Feature A): kill the empty right pane whenever ≥1 base
+  // exists. A deep link (initialSelection) wins; otherwise seed the FIRST
+  // SSR base deterministically so SSR + first client render agree (no
+  // hydration mismatch, no landing-preview flash). A mount effect below
+  // upgrades this to the per-workspace persisted base when one is stored.
+  const initialResolvedSelection: Selection | null =
+    initialSelection ??
+    (initialBases.length > 0 ? { kind: "base", base: initialBases[0] } : null);
+  // Read-once snapshot of the persisted preference (client-only; SSR → null,
+  // never rendered so no hydration mismatch). Captured before any write so
+  // the persist effect can't clobber it first.
+  const [persistedBaseId] = useState<string | null>(() =>
+    typeof window !== "undefined" ? readLastBaseId(workspaceId) : null
+  );
+
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<ListFilter>("all");
   const [expanded, setExpanded] = useState<Set<string>>(
-    () => new Set(initialSelection ? [initialSelection.base.id] : [])
+    () => new Set(initialResolvedSelection ? [initialResolvedSelection.base.id] : [])
   );
   const [trees, setTrees] = useState<Record<string, BaseTree>>(
     () => initialTrees ?? {}
   );
-  const [selection, setSelection] = useState<Selection | null>(initialSelection);
+  const [selection, setSelection] = useState<Selection | null>(
+    initialResolvedSelection
+  );
 
   // Body of the currently-open entry. Owned here (not in EntryView) so realtime
   // can refetch it. The tree strips bodies, so a metadata-only selection
@@ -276,7 +294,9 @@ export function useKnowledgeV2Controller({
   // Write the address bar to match the selection without navigating (no
   // server round-trip, no shell remount). New base → pushState (Back returns
   // to the prior base); entry-within-base or close → replaceState.
-  const prevBaseIdRef = useRef<string | null>(initialSelection?.base.id ?? null);
+  const prevBaseIdRef = useRef<string | null>(
+    initialResolvedSelection?.base.id ?? null
+  );
   useEffect(() => {
     const target = targetUrl(workspaceSegment, selection);
     const current = window.location.pathname + window.location.search;
@@ -318,6 +338,49 @@ export function useKnowledgeV2Controller({
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
   }, [bases, trees, loadTree]);
+
+  // ── Auto-select resolution (Feature A) ─────────────────────────────
+  // Runs once the base list is available. A deep link is already applied
+  // (initialSelection) and its tree seeded, so skip. Otherwise upgrade the
+  // deterministic first-base seed to the per-workspace persisted base when
+  // one is stored + still present, and make sure the selected base's tree
+  // loads. Guarded so it resolves exactly once (fires when the list arrives
+  // for a workspace that started with an empty SSR seed).
+  const didResolveRef = useRef(false);
+  useEffect(() => {
+    if (didResolveRef.current) return;
+    if (initialSelection) {
+      didResolveRef.current = true;
+      return;
+    }
+    // Zero bases: keep the empty/create state — nothing to select.
+    if (bases.length === 0) return;
+    didResolveRef.current = true;
+    const preferred =
+      (persistedBaseId
+        ? bases.find((b) => b.id === persistedBaseId)
+        : undefined) ?? bases[0];
+    if (!preferred) return;
+    if (selection?.base.id !== preferred.id) {
+      // Auto-select replaces history rather than pushing (it's not a user
+      // navigation): pre-seed the URL-sync ref so the effect uses replaceState.
+      prevBaseIdRef.current = preferred.id;
+      // One-shot resolution once the base list arrives — sanctioned mount-sync
+      // pattern (same as use-ontology's first-snapshot seed), guarded by
+      // didResolveRef so it runs at most once.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSelection({ kind: "base", base: preferred });
+      setExpanded((prev) => new Set(prev).add(preferred.id));
+    }
+    if (!trees[preferred.id]) void loadTree(preferred.id);
+  }, [bases, initialSelection, persistedBaseId, selection, trees, loadTree]);
+
+  // Persist the selected base per workspace (any path: click, deep link,
+  // auto-select) so the next visit reopens it.
+  useEffect(() => {
+    const baseId = selection?.base.id;
+    if (baseId) writeLastBaseId(workspaceId, baseId);
+  }, [selection?.base.id, workspaceId]);
 
   const selectedBaseId = selection?.base.id ?? null;
   const selectedEntryId =

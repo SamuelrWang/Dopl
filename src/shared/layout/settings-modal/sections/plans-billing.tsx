@@ -19,7 +19,7 @@ import styles from "../settings-modal.module.css";
 type CheckoutPlan = "solo" | "team";
 
 /**
- * Plans & Billing — Free / Solo Pro ($5.99 flat, single member) / Team
+ * Plans & Billing — Starter / Pro ($5.99 flat, single member) / Team
  * ($7.99 per seat). Shows the current plan, the per-plan price line, an
  * object usage meter when the free workspace is capped, the
  * chats-window note, and the right action: admins/owners upgrade
@@ -120,7 +120,7 @@ export function PlansBilling({
         err instanceof ApiError &&
         (err.code === "NOT_ON_SOLO" || err.message === "NOT_ON_SOLO")
       ) {
-        setSwitchError("This workspace isn't on Solo Pro anymore — refreshing.");
+        setSwitchError("This workspace isn't on Pro anymore — refreshing.");
         void ent.refresh();
       } else {
         setSwitchError(
@@ -143,7 +143,7 @@ export function PlansBilling({
           ← Back to plans
         </button>
         <h2 className={styles.paneTitle}>
-          {checkoutPlan === "solo" ? "Subscribe to Solo Pro" : "Subscribe to Team"}
+          {checkoutPlan === "solo" ? "Subscribe to Pro" : "Subscribe to Team"}
         </h2>
         <p className="mb-4 text-caption text-text-secondary">
           {checkoutPlan === "solo"
@@ -176,7 +176,7 @@ export function PlansBilling({
       {isSuccessReturn && ent.isPaid && (
         <div className="mb-4 rounded-lg border border-success/25 bg-success/10 px-3 py-2 text-caption text-success">
           {ent.isSolo
-            ? "Welcome to Solo Pro — your workspace is unlocked."
+            ? "Welcome to Pro — your workspace is unlocked."
             : `Welcome to Team — ${ent.billableSeats} ${
                 ent.billableSeats === 1 ? "seat" : "seats"
               } active.`}
@@ -192,7 +192,7 @@ export function PlansBilling({
         <div className="mb-4 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2.5 text-caption text-warning">
           <div className="font-semibold">Payment past due</div>
           <div className="mt-0.5 text-text-secondary">
-            Your {ent.isSolo ? "Solo Pro" : "Team"} workspace stays active for
+            Your {ent.isSolo ? "Pro" : "Team"} workspace stays active for
             now. Update your payment method to avoid losing paid features.
             {canManage && (
               <>
@@ -254,9 +254,9 @@ interface PlanActions {
 }
 
 function planLabel(ent: WorkspaceEntitlements): string {
-  if (ent.isSolo) return "Solo Pro plan";
+  if (ent.isSolo) return "Pro plan";
   if (ent.isTeam) return "Team plan";
-  return "Free plan";
+  return "Starter plan";
 }
 
 function BillingSummary({
@@ -311,11 +311,11 @@ function BillingSummary({
           {ent.isCapped && ent.objectCap !== null && (
             <UsageMeter used={ent.objectsUsed} cap={ent.objectCap} over={ent.overCap} />
           )}
-          <p className="mt-3 text-caption text-text-secondary">
-            {ent.chatsWindowDays
-              ? `Chats older than ${ent.chatsWindowDays} days are hidden on Free — they're never deleted, and full history is restored the moment you upgrade.`
-              : "Full chat history is available."}
-          </p>
+          {!ent.chatsWindowDays && (
+            <p className="mt-3 text-caption text-text-secondary">
+              Full chat history is available.
+            </p>
+          )}
         </>
       )}
 
@@ -355,7 +355,7 @@ function BillingSummary({
                 onClick={() => onUpgrade("solo")}
                 className="auth-btn-3d flex h-8 cursor-pointer items-center justify-center rounded-lg px-4 text-small font-semibold text-white"
               >
-                Get Solo Pro — $5.99/mo
+                Get Pro — $5.99/mo
               </button>
             )}
             <button
@@ -436,8 +436,7 @@ function PlanColumn({
         isCurrent && "border-2 border-text-primary"
       )}
     >
-      <div className="flex items-center justify-between">
-        <div className="text-caption text-text-secondary">{plan.audience}</div>
+      <div className="flex items-center justify-end">
         {isCurrent ? (
           <span className="rounded-full border border-text-primary px-2 py-0.5 text-micro font-semibold text-text-primary">
             Current plan

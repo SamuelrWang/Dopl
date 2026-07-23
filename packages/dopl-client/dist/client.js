@@ -198,8 +198,8 @@ class DoplClient {
     listKbDirByPath(baseId, path = "") {
         return kb.listKbDirByPath(this.transport, baseId, path);
     }
-    createKbFolderByPath(baseId, path) {
-        return kb.createKbFolderByPath(this.transport, baseId, path);
+    createKbFolderByPath(baseId, path, description) {
+        return kb.createKbFolderByPath(this.transport, baseId, path, description);
     }
     deleteKbByPath(baseId, path) {
         return kb.deleteKbByPath(this.transport, baseId, path);

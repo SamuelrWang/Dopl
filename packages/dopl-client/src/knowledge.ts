@@ -192,13 +192,17 @@ export async function listKbDirByPath(
 export async function createKbFolderByPath(
   t: DoplTransport,
   baseId: string,
-  path: string
+  path: string,
+  description?: string | null
 ): Promise<import("./knowledge-types.js").KnowledgeFolder> {
   const data = await t.request<{
     folder: import("./knowledge-types.js").KnowledgeFolder;
   }>(`/api/knowledge/bases/${enc(baseId)}/folders-by-path`, {
     method: "POST",
-    body: { path },
+    // Omit `description` entirely when not provided so a plain mkdir -p
+    // never clears an existing folder's summary (the route treats
+    // `undefined` as "leave as-is", `null` as "clear").
+    body: description === undefined ? { path } : { path, description },
     toolName: "kb_create_folder",
   });
   return data.folder;

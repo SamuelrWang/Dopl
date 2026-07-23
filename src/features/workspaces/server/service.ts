@@ -210,22 +210,26 @@ function isUniqueViolation(err: unknown): boolean {
 
 /**
  * Onboarding helper: give the user's default workspace its real name
- * ("{FirstName}'s Workspace") once we know who they are. Only fires
- * while the workspace still carries the provisioning placeholder name
- * ("Untitled") — if the user already renamed it (settings, MCP), their
- * name wins and this is a no-op. Idempotent, so onboarding completion
- * can safely retry.
+ * (either what the user typed on the final onboarding step, or the
+ * auto-name "{FirstName}'s Workspace") once we know who they are. An
+ * optional description is set in the same write. Only fires while the
+ * workspace still carries the provisioning placeholder name ("Untitled")
+ * — if the user already renamed it (settings, MCP), their name wins and
+ * this is a no-op. Idempotent, so onboarding completion can safely retry.
  */
 export async function renameDefaultWorkspaceIfUntitled(
   userId: string,
-  name: string
+  name: string,
+  description?: string | null
 ): Promise<Workspace> {
   const workspace = await ensureDefaultWorkspace(userId);
   if (workspace.name !== "Untitled") return workspace;
-  return updateWorkspace(workspace.id, {
+  const patch: { name: string; slug: string; description?: string | null } = {
     name,
     slug: slugifyWorkspaceName(name),
-  });
+  };
+  if (description !== undefined) patch.description = description;
+  return updateWorkspace(workspace.id, patch);
 }
 
 /**

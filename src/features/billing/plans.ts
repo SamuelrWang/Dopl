@@ -2,9 +2,9 @@
  * Plan definitions — the single source for the settings-modal Plans &
  * Billing pane and the public /pricing page. Plans are WORKSPACE-level and
  * all three are real, purchasable plans now:
- *   - Free: full features; solo work is uncapped, teams of 2+ get a
- *     1,000-object cap and a 90-day chat window.
- *   - Solo Pro: $5.99/month flat, single-member workspaces only.
+ *   - Starter: full features; solo work is uncapped, teams of 2+ get a
+ *     100-object cap and a 90-day chat window.
+ *   - Pro: $5.99/month flat, single-member workspaces only.
  *   - Team: $7.99 per seat / month, seats sync to member count.
  * Checkout sells both paid plans — Solo (flat, quantity 1) and Team
  * (per-seat) — via their live Stripe prices.
@@ -22,7 +22,6 @@ export type BillingStatus = "free" | "active" | "past_due" | "canceled";
 
 export interface PlanDef {
   id: PlanId;
-  audience: string;
   name: string;
   priceMonthly: string;
   priceNote: string;
@@ -32,22 +31,20 @@ export interface PlanDef {
 export const PLANS: ReadonlyArray<PlanDef> = [
   {
     id: "free",
-    audience: "For individuals & teams getting started",
-    name: "Free",
+    name: "Starter",
     priceMonthly: "Free",
     priceNote: "",
     features: [
       "Every feature included — no gates",
       "Unlimited ontology objects while you work solo",
-      "Teams of 2+: up to 1,000 ontology objects",
+      "Teams of 2+: up to 100 ontology objects",
       "90 days of chat history",
       "Community support",
     ],
   },
   {
     id: "solo",
-    audience: "For individuals",
-    name: "Solo Pro",
+    name: "Pro",
     priceMonthly: "$5.99",
     priceNote: "/ month",
     features: [
@@ -59,7 +56,6 @@ export const PLANS: ReadonlyArray<PlanDef> = [
   },
   {
     id: "team",
-    audience: "For teams",
     name: "Team",
     priceMonthly: "$7.99",
     priceNote: "/ seat / month",

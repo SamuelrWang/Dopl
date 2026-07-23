@@ -97,6 +97,9 @@ export interface KnowledgeBaseUpdateInput {
 export interface KnowledgeWriteFileInput {
     body?: string;
     title?: string;
+    /** Short agent-facing summary (≤300 chars) shown in get_tree /
+     *  list_dir. `null` clears it; omitting leaves the existing excerpt. */
+    excerpt?: string | null;
 }
 export interface KnowledgeWriteFileResult {
     entry: KnowledgeEntry;

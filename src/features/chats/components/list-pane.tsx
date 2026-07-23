@@ -308,7 +308,7 @@ function RetentionStrip({
         onOpenChange={setUpgradeOpen}
         workspaceId={workspaceId}
         canManageBilling
-        reason="Free workspaces hide chats older than the retention window. Nothing is deleted — upgrade to Pro to restore full history."
+        reason="Starter workspaces hide chats older than the retention window. Nothing is deleted — upgrade to Pro to restore full history."
       />
     </>
   );

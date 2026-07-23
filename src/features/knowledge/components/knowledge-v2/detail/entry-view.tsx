@@ -1,6 +1,7 @@
 "use client";
 
 import { FileWarning } from "lucide-react";
+import type { Editor } from "@tiptap/react";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { DocPane } from "../../doc-pane";
 import { DocBodySkeleton } from "../../doc-pane-chrome";
@@ -17,12 +18,10 @@ interface Props {
   onTreeRefresh: (baseId: string) => void;
   /** Pull the latest body when the tab refocuses and the editor is clean. */
   onFocusRefetch: () => void;
+  /** Surfaces the live editor so the detail-panel header band can host the
+   *  formatting toolbar (the built-in floating pill is suppressed here). */
+  onEditor?: (editor: Editor | null) => void;
 }
-
-/** Toolbar pill inset for the v2 layout: rail + sidebar + list pane on the
- *  left, the floating panel's right margin on the right, so the bar centers
- *  over the detail pane rather than the viewport. */
-const V2_TOOLBAR_INSET = "md:left-[650px] md:right-[14px]";
 
 /**
  * File view — the real rich-text editor with full v1 robustness (conflict-safe
@@ -41,6 +40,7 @@ export function EntryView({
   workspaceId,
   onTreeRefresh,
   onFocusRefetch,
+  onEditor,
 }: Props) {
   if (!fullEntry) {
     if (status === "error") {
@@ -73,7 +73,7 @@ export function EntryView({
         key={fullEntry.id}
         entry={fullEntry}
         workspaceId={workspaceId}
-        toolbarInset={V2_TOOLBAR_INSET}
+        onEditor={onEditor}
         onSaved={() => onTreeRefresh(base.id)}
         onStaleVersion={() => onTreeRefresh(base.id)}
         onFocusRefetch={onFocusRefetch}

@@ -5,8 +5,8 @@
  * These tests drive the real gate (createObject → assertCanCreateObject →
  * getWorkspaceEntitlements) with the billing counts + ontology repository
  * mocked, so the plan/member/object matrix decides the outcome:
- *   - free 2-member at 999 objects  -> create OK
- *   - free 2-member at 1000 objects -> EntitlementError(over_free_cap)
+ *   - free 2-member at 50 objects   -> create OK
+ *   - free 2-member at 100 objects  -> EntitlementError(over_free_cap)
  *   - solo free at 5000 objects     -> create OK (uncapped)
  *   - pro at 5000 objects           -> create OK (uncapped)
  */
@@ -124,15 +124,15 @@ beforeEach(() => {
 });
 
 describe("createObject — free-plan object cap", () => {
-  it("free 2-member workspace at 999 objects allows the create", async () => {
-    setEntitlements({ billing: null, members: 2, objects: 999 });
+  it("free 2-member workspace at 50 objects allows the create", async () => {
+    setEntitlements({ billing: null, members: 2, objects: 50 });
     const object = await createObject(CTX, { clusterId: CLUSTER_ID, name: "Sales Rep" });
     expect(object.id).toBe("obj-1");
     expect(mockRepo.insertObject).toHaveBeenCalledTimes(1);
   });
 
-  it("free 2-member workspace AT the cap (1000) throws EntitlementError and never writes", async () => {
-    setEntitlements({ billing: null, members: 2, objects: 1000 });
+  it("free 2-member workspace AT the cap (100) throws EntitlementError and never writes", async () => {
+    setEntitlements({ billing: null, members: 2, objects: 100 });
     await expect(
       createObject(CTX, { clusterId: CLUSTER_ID, name: "Sales Rep" })
     ).rejects.toBeInstanceOf(EntitlementError);
@@ -140,7 +140,7 @@ describe("createObject — free-plan object cap", () => {
   });
 
   it("carries over_free_cap + workspaceId on the thrown error", async () => {
-    setEntitlements({ billing: null, members: 2, objects: 1000 });
+    setEntitlements({ billing: null, members: 2, objects: 100 });
     await createObject(CTX, { clusterId: CLUSTER_ID, name: "Sales Rep" }).catch(
       (err) => {
         expect((err as EntitlementError).code).toBe("over_free_cap");

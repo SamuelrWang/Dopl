@@ -6,11 +6,12 @@ import {
   ChevronRight,
   Database,
   Download,
-  Plus,
   Settings,
   Trash2,
 } from "lucide-react";
+import type { Editor } from "@tiptap/react";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
+import { Toolbar } from "@/shared/editor/doc-editor-toolbar";
 import { toast } from "@/shared/ui/toast";
 import { cn } from "@/shared/lib/utils";
 import { KnowledgeSearch } from "../../knowledge-search";
@@ -22,9 +23,6 @@ import { EntryView } from "./entry-view";
 import { viewModel } from "./view-model";
 import appShell from "@/shared/layout/app-shell/app-shell.module.css";
 import styles from "../knowledge-v2.module.css";
-
-const TABS = ["Overview", "Messages", "Attachments"] as const;
-type Tab = (typeof TABS)[number];
 
 /** App-wide icon-button recipe (chats/skills list panes): 28px, hover-raised. */
 const ICON_BTN =
@@ -76,9 +74,12 @@ function folderChainOf(
 }
 
 /**
- * Right detail pane. Shared chrome (top bar, tabs, title); the body is the
- * file's real editor when an entry is selected (DocPane owns its own title),
- * or the base overview when a whole knowledge base is selected.
+ * Right detail pane. Shared chrome (breadcrumb top bar, title); when an entry
+ * is selected a slim header band hosts the rich-text formatting toolbar (the
+ * DocEditor publishes its live instance up via `onEditor`, and its own
+ * floating pill is suppressed). The body is the file's real editor for an
+ * entry (DocPane owns its own title), or the base overview when a whole
+ * knowledge base is selected.
  */
 export function DetailPanel({
   selection,
@@ -96,11 +97,14 @@ export function DetailPanel({
   onExportBase,
   onOpenSettings,
 }: Props) {
-  const [tab, setTab] = useState<Tab>("Overview");
   const router = useRouter();
   const pathname = usePathname();
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  // Live editor instance for the currently open entry, published by
+  // EntryView's DocEditor. Drives the header-band formatting toolbar;
+  // null while a base is selected or a file body is still loading.
+  const [entryEditor, setEntryEditor] = useState<Editor | null>(null);
 
   // Mirrors the settings form's danger-zone delete (base-settings-form.tsx):
   // same `deleteBase` call, then navigate to the base-less knowledge root so
@@ -218,21 +222,15 @@ export function DetailPanel({
         </button>
       </div>
 
-      <div className={styles.detailTabs}>
-        {TABS.map((t) => (
-          <button
-            key={t}
-            type="button"
-            className={cn(styles.detailTab, tab === t && cn("concave-sel", styles.detailTabActive))}
-            onClick={() => setTab(t)}
-          >
-            {t}
-          </button>
-        ))}
-        <button className={styles.detailTab} type="button">
-          <Plus size={14} /> New
-        </button>
-      </div>
+      {selection.kind === "entry" && (
+        // Slim header band where the dead tabs used to be — hosts the
+        // rich-text toolbar (entries only). Always visible above the scroll
+        // body, so formatting stays reachable in long documents. Empty until
+        // the editor mounts, keeping its height stable.
+        <div className={styles.detailToolbarBand}>
+          {entryEditor && <Toolbar editor={entryEditor} variant="header" />}
+        </div>
+      )}
 
       <div className={styles.detailBody}>
         {selection.kind === "entry" ? (
@@ -243,6 +241,7 @@ export function DetailPanel({
             fullEntry={openEntry}
             status={openEntryStatus}
             workspaceId={workspaceId}
+            onEditor={setEntryEditor}
             onTreeRefresh={onTreeRefresh}
             onFocusRefetch={() => {
               refetchOpenEntry();
@@ -258,6 +257,8 @@ export function DetailPanel({
             canEdit={canEditBase}
             onSaved={onBaseSaved}
             teams={kbTeams?.[selection.base.id]}
+            tree={selectedTree}
+            onTreeRefresh={onTreeRefresh}
           />
         )}
       </div>

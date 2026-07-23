@@ -55,7 +55,7 @@ export interface WorkspaceEntitlements {
   chatsWindowDays: number | null;
 }
 
-export const FREE_MULTI_MEMBER_OBJECT_CAP = 1000;
+export const FREE_MULTI_MEMBER_OBJECT_CAP = 100;
 export const FREE_CHATS_WINDOW_DAYS = 90;
 
 /**

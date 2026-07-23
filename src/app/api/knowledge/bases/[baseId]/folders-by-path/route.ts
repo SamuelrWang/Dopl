@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { withWorkspaceAuth, type WorkspaceAuthContext } from "@/shared/auth/with-workspace-auth";
 import { parseJson } from "@/shared/api/parse-json";
+import { DESCRIPTION_MAX } from "@/config";
 import { HttpError } from "@/shared/lib/http-error";
 import { toKnowledgeErrorResponse } from "@/shared/api/knowledge-route";
 import {
@@ -26,6 +27,9 @@ function requireBaseId(auth: WorkspaceAuthContext): string {
 
 const CreateFolderSchema = z.object({
   path: z.string().min(1),
+  // Optional agent-facing folder summary. mkdir -p is idempotent, so a
+  // re-call with a description updates the leaf folder's summary.
+  description: z.string().max(DESCRIPTION_MAX).nullable().optional(),
 });
 
 async function handleGet(request: NextRequest, auth: WorkspaceAuthContext) {
@@ -45,7 +49,7 @@ async function handlePost(request: NextRequest, auth: WorkspaceAuthContext) {
     const baseId = requireBaseId(auth);
     const input = await parseJson(request, CreateFolderSchema);
     const ctx = buildKnowledgeContext(auth);
-    const folder = await createFolderByPath(ctx, baseId, input.path);
+    const folder = await createFolderByPath(ctx, baseId, input.path, input.description);
     return NextResponse.json({ folder }, { status: 201 });
   } catch (err) {
     return toKnowledgeErrorResponse(err);

@@ -98,7 +98,7 @@ export const POST = withWorkspaceAuth(
           {
             error: "SOLO_REQUIRES_SINGLE_MEMBER",
             message:
-              "Solo Pro is for single-member workspaces. Choose Team to bring others.",
+              "Pro is for single-member workspaces. Choose Team to bring others.",
           },
           { status: 409 }
         );

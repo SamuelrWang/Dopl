@@ -103,13 +103,13 @@ async function opRestoreBase(client, ref) {
     }
     return (0, respond_1.ok)(`Restored **${restored.name}** (slug: \`${restored.slug}\`).`);
 }
-async function opCreateFolder(client, ref, path) {
+async function opCreateFolder(client, ref, path, description) {
     const base = await (0, knowledge_shared_1.resolveBaseOr)(client, ref);
     if ((0, knowledge_shared_1.isErr)(base))
         return base;
     let folder;
     try {
-        folder = await client.createKbFolderByPath(base.id, path);
+        folder = await client.createKbFolderByPath(base.id, path, description);
     }
     catch (e) {
         // F-10b: read-only-to-agents base — clean message, not a raw
@@ -119,7 +119,8 @@ async function opCreateFolder(client, ref, path) {
             return denied;
         throw e;
     }
-    return (0, respond_1.ok)(`Folder ready at \`${path}\` (id: \`${folder.id}\`).`);
+    const descNote = description !== undefined ? " Description set." : "";
+    return (0, respond_1.ok)(`Folder ready at \`${path}\` (id: \`${folder.id}\`).${descNote}`);
 }
 async function opMoveFolder(client, ref, from_path, to_path) {
     const base = await (0, knowledge_shared_1.resolveBaseOr)(client, ref);
@@ -142,14 +143,14 @@ async function opMoveFolder(client, ref, from_path, to_path) {
     }
     return (0, respond_1.ok)(`Folder moved: \`${from_path}\` → \`${to_path}\`.`);
 }
-async function opWriteFile(client, ref, path, body, title, expected_version, force) {
+async function opWriteFile(client, ref, path, body, title, expected_version, force, excerpt) {
     const base = await (0, knowledge_shared_1.resolveBaseOr)(client, ref);
     if ((0, knowledge_shared_1.isErr)(base))
         return base;
     let entry;
     let webUrl;
     try {
-        const res = await client.writeKbFileByPath(base.id, path, { body, title }, force ? null : expected_version);
+        const res = await client.writeKbFileByPath(base.id, path, { body, title, excerpt }, force ? null : expected_version);
         entry = res.entry;
         webUrl = res.webUrl;
     }

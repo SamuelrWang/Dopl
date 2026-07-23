@@ -17,6 +17,8 @@ export const POST = withUserAuth(async (request: NextRequest, { userId }) => {
     const input = await parseJson(request, CompleteOnboardingSchema);
     const result = await completeOnboarding(userId, {
       mcpConnected: input.mcpConnected,
+      name: input.name,
+      description: input.description,
     });
     const redirectTo = safeRedirect(input.redirectTo, result.redirectPath);
     return NextResponse.json({ redirectTo });

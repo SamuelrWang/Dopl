@@ -32,6 +32,11 @@ import { getBaseById } from "./service-bases";
 export interface WriteFileByPathInput {
   body?: string;
   title?: string;
+  /** Optional agent-facing short summary (≤300 chars). Surfaced in
+   *  get_tree / list_dir so agents can navigate without opening the
+   *  entry. `undefined` leaves the existing excerpt untouched on an
+   *  update; `null` clears it. */
+  excerpt?: string | null;
   /** Optional optimistic-concurrency precondition (the entry's
    *  `updated_at` the caller last read). Only applies when the path
    *  resolves to an existing entry; a stale value → 412. */
@@ -142,6 +147,8 @@ export async function writeFileByPath(
         {
           title: input.title,
           body: input.body,
+          // Pass through as-is: undefined skips the column, null clears it.
+          excerpt: input.excerpt,
           lastEditedBy: ctx.userId,
           lastEditedSource: ctx.source,
         },
@@ -186,6 +193,7 @@ export async function writeFileByPath(
       knowledgeBaseId: base.id,
       folderId: parentFolder?.id ?? null,
       title: input.title ?? leafName,
+      excerpt: input.excerpt ?? null,
       body: input.body ?? "",
       createdBy: ctx.userId,
       source: ctx.source,
@@ -209,11 +217,20 @@ export async function writeFileByPath(
  * Create a folder at `path`, mkdir -p style. If every segment is
  * already a folder, no-op + return the existing leaf. If the path's
  * leaf segment is currently an entry, throws `KnowledgePathConflictError`.
+ *
+ * `description` is the folder's agent-facing summary (≤300 chars,
+ * surfaced in get_tree / list_dir). It applies to the LEAF folder only
+ * (intermediate parents mkdir-p'd along the way stay description-less).
+ * Because create-folder is mkdir-p idempotent, passing `description` on
+ * a re-call against an already-existing folder UPDATES that folder's
+ * description — the sanctioned "set/update a folder summary without
+ * touching its contents" path. `undefined` leaves the description as-is.
  */
 export async function createFolderByPath(
   ctx: KnowledgeContext,
   baseId: string,
-  path: string
+  path: string,
+  description?: string | null
 ): Promise<KnowledgeFolder> {
   const base = await getBaseById(ctx, baseId);
   await assertBaseWritable(ctx, base);
@@ -231,6 +248,11 @@ export async function createFolderByPath(
 
   const folder = await ensureFolderPath(ctx, base.id, segments);
   if (!folder) throw new KnowledgePathConflictError(path);
+  // Set/refresh the leaf's description only when the caller supplied one,
+  // so a plain mkdir-p re-call never clobbers an existing description.
+  if (description !== undefined) {
+    return repo.updateFolderRow(folder.id, { description });
+  }
   return folder;
 }
 

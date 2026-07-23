@@ -4,6 +4,26 @@ All notable changes to `@dopl/mcp-server` are documented here. Format follows [K
 
 ## [Unreleased]
 
+### Added — folder descriptions + entry excerpts in `dopl_kb`
+
+- **`get_tree` / `list_dir` render summaries inline.** Folder `description`
+  and entry `excerpt` now trail each row as `📁 name — description` /
+  `📄 title — excerpt` (rendered text flattened to one line and truncated to
+  ~120 chars with an ellipsis; the separator only appears when a summary
+  exists). Agents can pick the right file from a listing without
+  `read_file`-ing everything.
+- **`create_folder` gains an optional `description`.** Sets the leaf folder's
+  agent-facing summary (≤300 chars). Because `create_folder` is mkdir-p
+  idempotent, re-calling it with a `description` on an existing folder UPDATES
+  that folder's summary — the sanctioned way to edit a folder description
+  without touching its contents. Omitting `description` never clears it.
+- **`write_file` gains an optional `excerpt`.** Sets the entry's agent-facing
+  summary (≤300 chars). On an update the excerpt only changes when provided.
+- No new ops, no parity classification change. `@dopl/client`
+  (`createKbFolderByPath` description arg, `KnowledgeWriteFileInput.excerpt`)
+  and the path-based REST routes (`folders-by-path` POST, `files` PUT) thread
+  the fields through to the shared knowledge service.
+
 ### Changed — BREAKING: fail-closed workspace targeting (MCP-2)
 
 The server no longer picks a "default" workspace when the caller belongs to

@@ -7,6 +7,13 @@ import { useMcpConnectionPoll } from "../hooks/use-mcp-connection-poll";
 import type { OnboardingStep, SurveySubmission } from "../types";
 import { McpConnectStep } from "./mcp-connect-step";
 import { SurveyStep } from "./survey-step";
+import { WorkspaceNameStep } from "./workspace-name-step";
+
+interface FinishArgs {
+  mcpConnected: boolean;
+  name?: string;
+  description?: string;
+}
 
 interface OnboardingFlowProps {
   initialStep: OnboardingStep;
@@ -28,6 +35,9 @@ export function OnboardingFlow({ initialStep, redirectTo }: OnboardingFlowProps)
   const [error, setError] = useState<string | null>(null);
   const [leaving, setLeaving] = useState(false);
   const finishRef = useRef(false);
+  // Remembers the last finish payload so the error-banner Retry re-submits
+  // the same workspace name/description instead of losing them.
+  const finishArgsRef = useRef<FinishArgs>({ mcpConnected: true });
 
   const connected = useMcpConnectionPoll(step === "connect" && !finishing);
 
@@ -57,16 +67,22 @@ export function OnboardingFlow({ initialStep, redirectTo }: OnboardingFlowProps)
     }
   }
 
-  async function finish(mcpConnected: boolean) {
+  async function finish(args: FinishArgs) {
     if (finishRef.current) return;
     finishRef.current = true;
+    finishArgsRef.current = args;
     setFinishing(true);
     setError(null);
     try {
       const res = await fetch("/api/onboarding/complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mcpConnected, redirectTo }),
+        body: JSON.stringify({
+          mcpConnected: args.mcpConnected,
+          name: args.name,
+          description: args.description,
+          redirectTo,
+        }),
       });
       if (!res.ok) throw new Error("Complete failed");
       const body = (await res.json()) as { redirectTo: string };
@@ -99,17 +115,17 @@ export function OnboardingFlow({ initialStep, redirectTo }: OnboardingFlowProps)
             Dopl
           </span>
           <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.12em] text-[#9a9a9a]">
-            Step {step === "survey" ? "1" : "2"} of 2
+            Step {step === "survey" ? "1" : step === "connect" ? "2" : "3"} of 3
           </p>
         </div>
 
         {error && (
           <div className="mb-5 rounded-[10px] border border-red-300 bg-red-50 px-4 py-3 text-[14px] text-red-700">
             {error}
-            {!finishRef.current && step !== "survey" && (
+            {!finishRef.current && step === "workspace" && (
               <button
                 type="button"
-                onClick={() => void finish(connected)}
+                onClick={() => void finish(finishArgsRef.current)}
                 className="ml-2 cursor-pointer font-semibold underline underline-offset-2"
               >
                 Retry
@@ -132,11 +148,22 @@ export function OnboardingFlow({ initialStep, redirectTo }: OnboardingFlowProps)
             </div>
           ) : step === "survey" ? (
             <SurveyStep submitting={submitting} onSubmit={handleSurveySubmit} />
-          ) : (
+          ) : step === "connect" ? (
             <McpConnectStep
               connected={connected}
               finishing={finishing}
-              onContinue={() => void finish(true)}
+              onContinue={() => changeStep("workspace")}
+            />
+          ) : (
+            <WorkspaceNameStep
+              submitting={finishing}
+              onSubmit={(name, description) =>
+                void finish({
+                  mcpConnected: true,
+                  name: name || undefined,
+                  description: description || undefined,
+                })
+              }
             />
           )}
         </div>

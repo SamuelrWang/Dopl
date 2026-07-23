@@ -9,7 +9,7 @@ import type { User } from "@supabase/supabase-js";
 
 /**
  * Public pricing body — the landing-page (light Lattice) language. Three
- * real, purchasable plans from the shared plan defs: Free, Solo Pro
+ * real, purchasable plans from the shared plan defs: Starter, Pro
  * ($5.99/mo flat, individuals) and Team ($7.99 per seat / month, the
  * highlighted growth path). Each card carries a one-line plain-English
  * summary; a comparison strip underneath spells out the deltas (object
@@ -27,7 +27,7 @@ const PLAN_SUMMARY: Record<string, string> = {
 };
 
 const SUBSCRIBE_LABEL: Record<string, string> = {
-  solo: "Go Solo Pro",
+  solo: "Go Pro",
   team: "Bring your team",
 };
 
@@ -41,7 +41,7 @@ const COMPARE_ROWS: {
 }[] = [
   {
     label: "Ontology objects",
-    free: { main: "Unlimited", sub: "1,000 with 2+ members" },
+    free: { main: "Unlimited", sub: "100 with 2+ members" },
     solo: { main: "Unlimited" },
     team: { main: "Unlimited" },
   },
@@ -145,7 +145,7 @@ export function PricingContent() {
       <div className="lp-pricing-head">
         <h1 className="lp-pricing-title">Pricing</h1>
         <p className="lp-pricing-sub">
-          Start free. Go Solo Pro for $5.99, or bring your team at $7.99 a seat.
+          Start free. Go Pro for $5.99, or bring your team at $7.99 a seat.
         </p>
       </div>
 
@@ -196,7 +196,6 @@ function PlanCard({
   return (
     <div className={`lp-plan${popular ? " lp-plan--popular" : ""}`}>
       <div className="lp-plan-top">
-        <span className="lp-plan-audience">{plan.audience}</span>
         {popular && <span className="lp-plan-badge">Popular</span>}
         {solo && (
           <span className="lp-plan-badge lp-plan-badge--soft">Just you</span>
@@ -276,7 +275,7 @@ function PlanCardCta({
     );
   }
 
-  // Solo Pro + Team are both real, purchasable tiers. When the sole workspace's
+  // Pro + Team are both real, purchasable tiers. When the sole workspace's
   // live plan matches this card, reflect the subscription instead of offering a
   // duplicate checkout; past_due routes to manage billing.
   const isCurrentPlan = isPaid && currentPlan === plan.id;
@@ -299,7 +298,7 @@ function PlanCardCta({
       </button>
     );
   }
-  // Team is the highlighted growth path → dark primary; Solo Pro → light.
+  // Team is the highlighted growth path → dark primary; Pro → light.
   const primary = plan.id === "team";
   return (
     <button
@@ -323,8 +322,8 @@ function ComparisonTable() {
               <th scope="col">
                 <span className="lp-compare-caption">Compare plans</span>
               </th>
-              <th scope="col">Free</th>
-              <th scope="col">Solo Pro</th>
+              <th scope="col">Starter</th>
+              <th scope="col">Pro</th>
               <th scope="col" className="lp-compare-col--popular">
                 Team
               </th>

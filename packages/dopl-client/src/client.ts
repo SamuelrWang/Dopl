@@ -386,8 +386,12 @@ export class DoplClient {
     return kb.listKbDirByPath(this.transport, baseId, path);
   }
 
-  createKbFolderByPath(baseId: string, path: string): Promise<KnowledgeFolder> {
-    return kb.createKbFolderByPath(this.transport, baseId, path);
+  createKbFolderByPath(
+    baseId: string,
+    path: string,
+    description?: string | null
+  ): Promise<KnowledgeFolder> {
+    return kb.createKbFolderByPath(this.transport, baseId, path, description);
   }
 
   deleteKbByPath(

@@ -116,10 +116,13 @@ async function listKbDirByPath(t, baseId, path = "") {
     const qs = path ? `?path=${enc(path)}` : "";
     return t.request(`/api/knowledge/bases/${enc(baseId)}/folders-by-path${qs}`, { toolName: "kb_list_dir" });
 }
-async function createKbFolderByPath(t, baseId, path) {
+async function createKbFolderByPath(t, baseId, path, description) {
     const data = await t.request(`/api/knowledge/bases/${enc(baseId)}/folders-by-path`, {
         method: "POST",
-        body: { path },
+        // Omit `description` entirely when not provided so a plain mkdir -p
+        // never clears an existing folder's summary (the route treats
+        // `undefined` as "leave as-is", `null` as "clear").
+        body: description === undefined ? { path } : { path, description },
         toolName: "kb_create_folder",
     });
     return data.folder;

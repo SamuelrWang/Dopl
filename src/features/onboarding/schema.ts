@@ -14,6 +14,12 @@ export const SurveySubmissionSchema = z.object({
 
 export const CompleteOnboardingSchema = z.object({
   mcpConnected: z.boolean(),
+  // Workspace naming from the final onboarding step. Both optional: a blank
+  // name falls back to the auto-name ("{FirstName}'s Workspace") server-side.
+  // Caps mirror CreateWorkspaceSchema (name 120, description 2000). Trimmed
+  // here so the service sees the same value the user would after trimming.
+  name: z.string().trim().max(120).optional(),
+  description: z.string().trim().max(2000).optional(),
   // Deep-link passthrough (e.g. invite URLs). Re-validated server-side
   // with safeRedirect before it's echoed back.
   redirectTo: z.string().max(2000).optional(),

@@ -110,12 +110,12 @@ export async function opRestoreBase(client: DoplClient, ref: string): Promise<To
   );
 }
 
-export async function opCreateFolder(client: DoplClient, ref: string, path: string): Promise<ToolResponse> {
+export async function opCreateFolder(client: DoplClient, ref: string, path: string, description?: string): Promise<ToolResponse> {
   const base = await resolveBaseOr(client, ref);
   if (isErr(base)) return base;
   let folder;
   try {
-    folder = await client.createKbFolderByPath(base.id, path);
+    folder = await client.createKbFolderByPath(base.id, path, description);
   } catch (e) {
     // F-10b: read-only-to-agents base — clean message, not a raw
     // AGENT_WRITE_DISABLED dump.
@@ -123,7 +123,8 @@ export async function opCreateFolder(client: DoplClient, ref: string, path: stri
     if (denied) return denied;
     throw e;
   }
-  return ok(`Folder ready at \`${path}\` (id: \`${folder.id}\`).`);
+  const descNote = description !== undefined ? " Description set." : "";
+  return ok(`Folder ready at \`${path}\` (id: \`${folder.id}\`).${descNote}`);
 }
 
 export async function opMoveFolder(client: DoplClient, ref: string, from_path: string, to_path: string): Promise<ToolResponse> {
@@ -147,7 +148,7 @@ export async function opMoveFolder(client: DoplClient, ref: string, from_path: s
   return ok(`Folder moved: \`${from_path}\` → \`${to_path}\`.`);
 }
 
-export async function opWriteFile(client: DoplClient, ref: string, path: string, body: string, title?: string, expected_version?: string, force?: boolean): Promise<ToolResponse> {
+export async function opWriteFile(client: DoplClient, ref: string, path: string, body: string, title?: string, expected_version?: string, force?: boolean, excerpt?: string): Promise<ToolResponse> {
   const base = await resolveBaseOr(client, ref);
   if (isErr(base)) return base;
   let entry;
@@ -156,7 +157,7 @@ export async function opWriteFile(client: DoplClient, ref: string, path: string,
     const res = await client.writeKbFileByPath(
       base.id,
       path,
-      { body, title },
+      { body, title, excerpt },
       force ? null : expected_version
     );
     entry = res.entry;

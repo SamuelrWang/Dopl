@@ -686,12 +686,9 @@
 .lp-plan-top {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
+  min-height: 26px;
   margin-bottom: 14px;
-}
-.lp-plan-audience {
-  font-size: 13px;
-  color: var(--muted);
 }
 .lp-plan-badge {
   font-size: 12px;
@@ -701,7 +698,7 @@
   border-radius: 999px;
   padding: 4px 11px;
 }
-/* Softer badge for the Solo Pro card — a label, not the "Popular" accent. */
+/* Softer badge for the Pro card — a label, not the "Popular" accent. */
 .lp-plan-badge--soft {
   color: var(--ink);
   background: #f0f0f0;

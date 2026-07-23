@@ -246,7 +246,7 @@ export function OntologyView({
         canManageBilling={canManageBilling}
         reason={
           ent.objectCap !== null
-            ? `This workspace hit the Free limit of ${ent.objectCap.toLocaleString()} ontology objects. Nothing was deleted — upgrade to keep adding.`
+            ? `This workspace hit the Starter limit of ${ent.objectCap.toLocaleString()} ontology objects. Nothing was deleted — upgrade to keep adding.`
             : undefined
         }
       />

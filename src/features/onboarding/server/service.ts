@@ -47,19 +47,32 @@ export async function isMcpConnected(userId: string): Promise<boolean> {
 }
 
 /**
- * Finish onboarding: name the default workspace after the user, stamp
- * onboarded_at, and hand back the workspace URL to land on. Every step
- * is idempotent so a retry after partial failure converges.
+ * Finish onboarding: name the default workspace, stamp onboarded_at, and
+ * hand back the workspace URL to land on. The name comes from the final
+ * onboarding step when the user typed one; a blank name falls back to the
+ * auto-name ("{FirstName}'s Workspace"). An optional description is set in
+ * the same write. Every step is idempotent so a retry after partial
+ * failure converges.
  */
 export async function completeOnboarding(
   userId: string,
-  opts: { mcpConnected: boolean }
+  opts: { mcpConnected: boolean; name?: string; description?: string }
 ): Promise<{ redirectPath: string }> {
-  const firstName = await resolveFirstName(userId);
-  const workspaceName = firstName ? `${firstName}'s Workspace` : "My Workspace";
+  const typedName = opts.name?.trim();
+  const description = opts.description?.trim() || undefined;
+
+  let workspaceName: string;
+  if (typedName) {
+    workspaceName = typedName;
+  } else {
+    const firstName = await resolveFirstName(userId);
+    workspaceName = firstName ? `${firstName}'s Workspace` : "My Workspace";
+  }
+
   const workspace = await renameDefaultWorkspaceIfUntitled(
     userId,
-    workspaceName
+    workspaceName,
+    description
   );
   // Land the user on the overview page — the proper workspace home.
 
