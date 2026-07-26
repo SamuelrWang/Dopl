@@ -98,6 +98,20 @@ export type {
   WorkspaceTeam,
 } from "./member-types.js";
 export type {
+  AwaitMessagesOptions,
+  AwaitResult,
+  Channel,
+  ChannelAuthorKind,
+  ChannelCreateInput,
+  ChannelMember,
+  ChannelMemberRole,
+  ChannelMessage,
+  ChannelMessageInput,
+  ChannelMessageKind,
+  ChannelVisibility,
+  ReadMessagesOptions,
+} from "./channel-types.js";
+export type {
   OntologyAttribute,
   OntologyAttributeValue,
   OntologyCluster,

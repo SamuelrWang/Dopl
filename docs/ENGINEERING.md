@@ -44,6 +44,7 @@ setup-intelligence-engine/
 │   │   ├── billing/               # Stripe, subscriptions, access gates
 │   │   ├── builder/               # Composite-solution builder UI
 │   │   ├── canvas/                # The infinite canvas + panels + store
+│   │   ├── channels/              # Cross-user agent-collab rooms (service-role writes)
 │   │   ├── chat/                  # Chat panel + tool handlers
 │   │   ├── clusters/              # Per-user cluster CRUD
 │   │   ├── community/             # Publishing / forking / gallery
@@ -305,7 +306,7 @@ A swarm audit of the whole MCP surface drove a batch of fixes (tracked as F-042)
 
 ### Realtime & new-workspace seeding (2026-07-17)
 
-- **Realtime:** every content surface streams agent/MCP writes live. Publication covers knowledge_*, skills, skill_versions, workflow_*, ontology_*, chats/chat_messages/chat_folders. Per-feature subscribers live in `features/<name>/client/realtime.ts` on the shared `useWorkspaceTablesRealtime` refetch-signal pattern (events trigger a filtered service refetch — never payload merging, so RLS + service filters like the chats retention window stay authoritative). `src/shared/realtime/refetch-coordinator.ts` defers refetches while local debounced edits are pending — any new live surface MUST use it or it will clobber in-flight typing.
+- **Realtime:** every content surface streams agent/MCP writes live. Publication covers knowledge_*, skills, skill_versions, workflow_*, ontology_*, chats/chat_messages/chat_folders, channels/channel_members/channel_messages. Per-feature subscribers live in `features/<name>/client/realtime.ts` on the shared `useWorkspaceTablesRealtime` refetch-signal pattern (events trigger a filtered service refetch — never payload merging, so RLS + service filters like the chats retention window stay authoritative). `src/shared/realtime/refetch-coordinator.ts` defers refetches while local debounced edits are pending — any new live surface MUST use it or it will clobber in-flight typing.
 - **Loading skeletons:** shared primitives in `src/shared/ui/skeleton.tsx` (`Skeleton`/`SkeletonBar`/`SkeletonLine`/`SkeletonText`/`SkeletonRow`/`TwoPaneListSkeleton`). Every page's loading state renders inside its real `.page-float` shell mirroring the loaded layout — server-fetched routes via `loading.tsx`, client-fetched views in their loading branch. Never ship a bare "Loading…" string or a flat panel.
 - **Interactive graph substrate (2026-07-17):** `src/shared/graph/` is the shared layer for both graph pages — `routeEdges` (router v2: geometry-picked sides w/ hysteresis, per-corridor lane fan-out, ≥24px stubs, `SceneEdge.points[]` multi-elbow override, labels anchored off corners), `useNodeDrag` (4px threshold, grid snap, pointer capture, edge auto-scroll), `useGraphPositions` (hybrid layout: stored `layout` jsonb wins per node, auto-layout fills the rest; debounced persist via the lifted `src/shared/lib/merge-scheduler.ts`; `resetLayout()` → `{}`). Positions persist to `ontology_clusters.layout` / `workflows.layout` (web-only concern — never exposed through MCP tool schemas). Drag-to-connect ports + edge condition popover are workflow-feature code (`use-connect-drag.ts`, `graph/ports.ts`) — Canvas deliberately has NO connect affordances (ontology edges derive from data). New graph-y visuals go through the `.graph-*` kit classes in globals.css, never inline.
 - **Seeding:** `features/workspaces/server/seed-workspace.ts#seedNewWorkspace` runs at BOTH workspace-creation paths (ensureDefaultWorkspace new-insert branch + createWorkspaceForUser), dependency-ordered (KB → skills → ontology → workflow → chat) so cross-refs use real inserted ids, idempotent on the `dopl-guide` KB slug, best-effort per feature (a failure logs and continues — seeding must never block signup). Content builders are pure (`features/<name>/server/seed.ts`) with insert wrappers (`service-seed.ts`). Seeded rows are ordinary deletable user data. `features/configuration/seed-content.ts` is authored but unwired pending the configuration rebuild.
@@ -397,6 +398,16 @@ Billing is **workspace-level**, not per-user. The per-user 24h trial, `DEMO_PAYW
 - **Retention specifics:** the chats append endpoint returns `messages: []` when the chat is outside a free workspace's window (append allowed, transcript not echoed). Team-scoped chat reads are enforced in RLS too (`20260716150000_chats_team_aware_rls.sql`), mirroring `canSeeChat`. Known accepted gap: an OWNER can still read their own >90-day chats via direct PostgREST — the window is a product gate, not a security boundary (F-035).
 - **Client read:** `useWorkspaceEntitlements` (features/billing/components) is the single client-side billing read (TanStack-cached `GET /api/billing/status`); do not add parallel fetch hooks.
 - **Instrumentation:** `withWorkspaceAuth` logs every MCP-authenticated op to `mcp_tool_calls` (insert-only, service role; admin SELECT). This feeds future usage analytics — keep the write fire-and-forget.
+
+### Channels (cross-user agent collaboration — 2026-07-25)
+
+Channels are shared workspace rooms where multiple members' agents (and humans) post to each other. Writes are **exclusively service-role** — the channels tables go a step beyond the older content tables by also *revoking* the base `authenticated`/`anon` DML grants. Three tables (`channels`, `channel_members`, `channel_messages`); each message carries a monotonic per-channel `seq` (`GENERATED ALWAYS AS IDENTITY`) so readers ask for "everything after seq N". Feature module `src/features/channels/**` — chats-style server split (`service.ts` + `service-reads`/`service-writes`/`service-shared` + `repository`/`dto`/`errors`/`http-mapping`), members-style two-pane UI.
+
+- **RLS write model — stricter than every older table.** `20260725130000_channels_rls_hardening.sql` **REVOKEs INSERT/UPDATE/DELETE on all three tables from `authenticated`+`anon`** and **drops the write policies**; every write is service-role-only through the feature service. Deliberately stricter than the older tables (chats, ontology, knowledge, skills, workflows), which keep their `authenticated`/`anon` DML grants and lean on default-deny RLS alone (bring-to-parity → F-051). Member `SELECT` policies remain for reads (they also feed the realtime publication, §7).
+- **Serialized append RPC.** All inserts go through `channel_message_insert` (service-role `EXECUTE` only), which takes a per-channel `pg_advisory_xact_lock` **before** the insert (before `nextval`), so `seq` commits in strict monotonic order under concurrent posters — no gaps or reorderings.
+- **Routes** `src/app/api/channels/**` — thin handlers (`/`, `/[channelId]`, `/[channelId]/members`, `/[channelId]/messages`) PLUS a long-poll `/[channelId]/await`: it blocks up to ~50s (`MAX_AWAIT_TIMEOUT_MS`) for a message with `seq >` the caller's cursor, then returns the new messages (or empty on timeout). It is the one route that raises the platform function-timeout default — `export const maxDuration = 60` — and self-bounds its poll under that ceiling so the function never races the platform limit.
+- **MCP tool `dopl_channel`** (`packages/mcp-server/src/tools/channel*.ts`) — ops `list` / `open` (create) / `invite` / `post` / `read` / `await`; `read`+`await` are the listener loop (learn the latest seq, then re-issue `await` from the last seq processed). `@dopl/client` has the matching methods and the parity test is wired. `read`/`await` pass the ref straight to the route (no `listChannels` on the poll loop); `invite`/`post` still pre-resolve the channel via `listChannels` (F-055).
+- **Desktop listener.** `dopl-desktop-app` (Electron 43) runs a channel listener that spawns a local Claude Code session on channel activity via a `dopl://` deep link (§18, F-054).
 
 ---
 
@@ -617,7 +628,10 @@ When doing a large restructure (feature relocation, service split, directory reo
 The macOS desktop app lives in `dopl-desktop-app/`. It's a thin Electron wrapper
 around the production web app (`https://www.usedopl.com/`) — single `BrowserWindow`,
 external links open in the system browser, OAuth popups allowed, offline fallback,
-standard macOS menu. It is **inert for the Vercel/Next build** (`node_modules/` and
+standard macOS menu. As of 2026-07-25 (modernized to Electron 43) it also registers a
+`dopl://` deep-link handler and a Channels listener that spawns a local Claude Code
+session on channel activity (deep-link auth hardening + auto-updater follow-ups: F-054).
+It is **inert for the Vercel/Next build** (`node_modules/` and
 `dist/` are gitignored; nothing imports it).
 
 ### Layout

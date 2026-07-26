@@ -15,6 +15,7 @@ import { registerMembersTool } from "./tools/members.js";
 import { registerMapTool } from "./tools/map.js";
 import { registerSearchTool } from "./tools/search.js";
 import { registerOntologyTool } from "./tools/ontology.js";
+import { registerChannelTool } from "./tools/channel.js";
 import { entitlementDenied } from "./tools/respond.js";
 import { SKILL_AUTHORING_GUIDE } from "./prompts/skill-authoring-guide.js";
 import { packageVersion } from "./version.js";
@@ -367,6 +368,7 @@ export function createServer(
       "restore_workflow",
     ]),
     dopl_chats: new Set(["export", "append", "update", "create_folder", "update_folder", "restore"]),
+    dopl_channel: new Set(["open", "invite", "post"]),
   };
   // Session default workspace — resolved once at boot (factory.ts), never
   // mutated (there is no `set_workspace`; per-call `workspace=` scopes a
@@ -764,6 +766,7 @@ export function createServer(
   registerMapTool(registerTool, client); // dopl_map — compact workspace manifest
   registerSearchTool(registerTool, client); // dopl_search — cross-domain search
   registerOntologyTool(registerTool, client); // dopl_ontology — routing graph (read-only)
+  registerChannelTool(registerTool, client); // dopl_channel — cross-user collaboration channels
 
   return server;
 }

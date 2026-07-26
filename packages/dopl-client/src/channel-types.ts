@@ -1,0 +1,111 @@
+/**
+ * Channel types — cross-user, agent-to-agent collaboration threads.
+ *
+ * A channel is a shared in-workspace thread that agents (and users) post
+ * to. Every message carries a monotonic `seq` cursor, so a listener can
+ * long-poll for "everything after seq N" via `awaitMessages`. These mirror
+ * the API DTO shapes (camelCase) in the app's `src/features/channels`.
+ */
+
+export type ChannelVisibility = "public" | "private";
+
+export type ChannelMemberRole = "owner" | "member";
+
+export type ChannelAuthorKind = "user" | "agent" | "system";
+
+/**
+ * Full message-kind set as stored in the DB. `message` = chat; the
+ * `task_*` kinds are structured activity events (machine payload in
+ * `metadata`, human-readable render in `body`); `system` = server-emitted
+ * joins / topic changes (agents don't post these).
+ */
+export type ChannelMessageKind =
+  | "message"
+  | "task_started"
+  | "task_progress"
+  | "task_finished"
+  | "task_failed"
+  | "system";
+
+export interface Channel {
+  id: string;
+  workspaceId: string;
+  slug: string;
+  name: string;
+  topic: string;
+  visibility: ChannelVisibility;
+  createdBy: string;
+  /** ISO datetime the channel was archived, or null when active. */
+  archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  /** Present on list/get — number of channel members. */
+  memberCount?: number;
+  /** Present on list/get — ISO datetime of the latest message, or null. */
+  lastMessageAt?: string | null;
+}
+
+export interface ChannelMessage {
+  id: string;
+  /** Monotonic cursor — `read`/`await` return messages with a higher seq. */
+  seq: number;
+  channelId: string;
+  authorUserId: string | null;
+  authorKind: ChannelAuthorKind;
+  kind: ChannelMessageKind;
+  body: string;
+  metadata: Record<string, unknown>;
+  clientMsgId: string | null;
+  createdAt: string;
+}
+
+export interface ChannelMember {
+  channelId: string;
+  userId: string;
+  role: ChannelMemberRole;
+  lastReadAt: string | null;
+  addedBy: string | null;
+  joinedAt: string;
+  displayName?: string | null;
+  email?: string | null;
+  avatarUrl?: string | null;
+}
+
+export interface ChannelCreateInput {
+  name: string;
+  topic?: string;
+  visibility?: ChannelVisibility;
+}
+
+export interface ChannelMessageInput {
+  body: string;
+  kind?: ChannelMessageKind;
+  metadata?: Record<string, unknown>;
+  authorKind?: ChannelAuthorKind;
+  clientMsgId?: string;
+}
+
+export interface ReadMessagesOptions {
+  /** Return only messages with seq greater than this. */
+  since?: number;
+  /** Max messages to return (server caps at 200). */
+  limit?: number;
+}
+
+export interface AwaitMessagesOptions {
+  /** The last seq the caller has processed — poll for seq greater than it. */
+  since: number;
+  /** How long the server long-polls before returning `timedOut` (ms). */
+  timeoutMs?: number;
+}
+
+/**
+ * Result of a long-poll `awaitMessages` call: any messages that arrived
+ * with seq > since, and whether the poll timed out with nothing new (in
+ * which case `messages` is empty and the caller should re-poll with the
+ * same `since`).
+ */
+export interface AwaitResult {
+  messages: ChannelMessage[];
+  timedOut: boolean;
+}

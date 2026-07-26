@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   BookOpen,
+  Hash,
   Home,
   LayoutGrid,
   MessagesSquare,
@@ -27,6 +28,7 @@ export type NavSection =
   | "knowledge"
   | "skills"
   | "chats"
+  | "channels"
   | "ontology"
   | "configuration"
   | "members";
@@ -39,6 +41,7 @@ const NAV: ReadonlyArray<{ label: string; icon: LucideIcon; section: NavSection 
   { label: "Knowledge", icon: BookOpen, section: "knowledge" },
   { label: "Skills", icon: Sparkles, section: "skills" },
   { label: "Chats", icon: MessagesSquare, section: "chats" },
+  { label: "Channels", icon: Hash, section: "channels" },
   { label: "Configuration", icon: SlidersHorizontal, section: "configuration" },
   { label: "Members", icon: Users, section: "members" },
 ];

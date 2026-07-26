@@ -14,6 +14,7 @@ const members_js_1 = require("./tools/members.js");
 const map_js_1 = require("./tools/map.js");
 const search_js_1 = require("./tools/search.js");
 const ontology_js_1 = require("./tools/ontology.js");
+const channel_js_1 = require("./tools/channel.js");
 const respond_js_1 = require("./tools/respond.js");
 const skill_authoring_guide_js_1 = require("./prompts/skill-authoring-guide.js");
 const version_js_1 = require("./version.js");
@@ -267,6 +268,7 @@ function createServer(client, options = {}) {
             "restore_workflow",
         ]),
         dopl_chats: new Set(["export", "append", "update", "create_folder", "update_folder", "restore"]),
+        dopl_channel: new Set(["open", "invite", "post"]),
     };
     // Session default workspace — resolved once at boot (factory.ts), never
     // mutated (there is no `set_workspace`; per-call `workspace=` scopes a
@@ -602,5 +604,6 @@ function createServer(client, options = {}) {
     (0, map_js_1.registerMapTool)(registerTool, client); // dopl_map — compact workspace manifest
     (0, search_js_1.registerSearchTool)(registerTool, client); // dopl_search — cross-domain search
     (0, ontology_js_1.registerOntologyTool)(registerTool, client); // dopl_ontology — routing graph (read-only)
+    (0, channel_js_1.registerChannelTool)(registerTool, client); // dopl_channel — cross-user collaboration channels
     return server;
 }

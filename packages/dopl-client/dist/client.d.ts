@@ -6,6 +6,7 @@ import type { ResolvedSkill, Skill, SkillFile, SkillWriteFileResult } from "./sk
 import type { OntologyCluster, OntologyClusterCreateInput, OntologyClusterPatch, OntologyObject, OntologyObjectCreateInput, OntologyObjectPatch, OntologySnapshot } from "./ontology-types.js";
 import type { Chat, ChatDetail, ChatExportInput, ChatFolder, ChatFolderUpdateInput, ChatList, ChatMessageInput, ChatUpdateInput, TrashedChat } from "./chat-types.js";
 import type { AccessMatrix, EffectiveAccessRow, MyAccess, MyMembership, WorkspaceMember, WorkspaceTeam } from "./member-types.js";
+import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelCreateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ReadMessagesOptions } from "./channel-types.js";
 export type { DoplTransportOptions as DoplClientOptions } from "./transport.js";
 export { parseRetryAfter } from "./retry.js";
 export declare class DoplClient {
@@ -125,6 +126,16 @@ export declare class DoplClient {
     getAccessMatrix(): Promise<AccessMatrix>;
     getMyAccess(): Promise<MyAccess>;
     getMemberAccess(targetUserId: string): Promise<EffectiveAccessRow[]>;
+    listChannels(opts?: {
+        includeArchived?: boolean;
+    }): Promise<Channel[]>;
+    getChannel(channelId: string): Promise<Channel>;
+    createChannel(input: ChannelCreateInput): Promise<Channel>;
+    listChannelMembers(channelId: string): Promise<ChannelMember[]>;
+    inviteToChannel(channelId: string, userId: string): Promise<ChannelMember>;
+    readChannelMessages(channelId: string, opts?: ReadMessagesOptions): Promise<ChannelMessage[]>;
+    postChannelMessage(channelId: string, input: ChannelMessageInput): Promise<ChannelMessage>;
+    awaitChannelMessages(channelId: string, opts: AwaitMessagesOptions): Promise<AwaitResult>;
     listSkills(): Promise<Skill[]>;
     getSkill(slug: string): Promise<ResolvedSkill>;
     createSkill(input: CreateSkillInput): Promise<{

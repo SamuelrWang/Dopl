@@ -35,6 +35,7 @@ const members_js_1 = require("./members.js");
 const map_js_1 = require("./map.js");
 const search_js_1 = require("./search.js");
 const ontology_js_1 = require("./ontology.js");
+const channel_js_1 = require("./channel.js");
 const REGISTRARS = [
     { file: "cluster.ts", register: cluster_js_1.registerClusterTools },
     { file: "workflow.ts", register: workflow_js_1.registerWorkflowTools },
@@ -45,6 +46,7 @@ const REGISTRARS = [
     { file: "map.ts", register: map_js_1.registerMapTool },
     { file: "search.ts", register: search_js_1.registerSearchTool },
     { file: "ontology.ts", register: ontology_js_1.registerOntologyTool },
+    { file: "channel.ts", register: channel_js_1.registerChannelTool },
 ];
 function captureTools() {
     const tools = [];
@@ -136,6 +138,7 @@ const READ_OPS = {
     dopl_chats: ["list", "get", "folders", "guide", "list_trash"],
     dopl_members: ["whoami", "list", "get", "teams", "get_team", "access_matrix", "my_access"],
     dopl_ontology: ["map", "anchor", "resolve", "get"],
+    dopl_channel: ["list", "read", "await"],
 };
 // ── KNOWN DRIFT ledger ────────────────────────────────────────────────
 // Write ops absent from server.ts WRITE_OPS (read-only-token write holes)
@@ -150,6 +153,7 @@ const NON_ADMIN_OP_TOOLS = TOOLS.filter((t) => !isAdmin(t.name) && opEnum(t) !==
     (0, vitest_1.it)("registers the expected domain tools", () => {
         const names = TOOLS.map((t) => t.name).sort();
         (0, vitest_1.expect)(names).toEqual([
+            "dopl_channel",
             "dopl_chats",
             "dopl_chats_admin",
             "dopl_cluster",

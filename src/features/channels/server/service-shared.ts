@@ -1,0 +1,115 @@
+import "server-only";
+import { meetsMinRole, type Role } from "@/features/workspaces/types";
+import { isUuid } from "@/shared/lib/id/uuid";
+import { ChannelNotFoundError } from "./errors";
+import type { ChannelMemberRow, ChannelRow, ProfileRef } from "./dto";
+import * as repo from "./repository";
+
+/**
+ * Shared internals for the channels service: the `ChannelContext`
+ * construction plus the cross-cutting resolvers + visibility / management
+ * gates used by more than one of the per-domain service modules
+ * (`service-reads`, `service-writes`).
+ */
+
+export interface ChannelContext {
+  workspaceId: string;
+  userId: string;
+  source: "user" | "agent";
+  /** Caller's workspace role; null when the auth layer didn't resolve one. */
+  role: Role | null;
+}
+
+export interface AuthLike {
+  userId: string;
+  workspaceId: string;
+  role?: Role | null;
+  agentTokenId?: string | null;
+}
+
+export function buildChannelContext(auth: AuthLike): ChannelContext {
+  return {
+    workspaceId: auth.workspaceId,
+    userId: auth.userId,
+    source: auth.agentTokenId ? "agent" : "user",
+    role: auth.role ?? null,
+  };
+}
+
+export const UNIQUE_VIOLATION = "23505";
+
+const NUL = String.fromCharCode(0);
+
+/**
+ * Strip NUL (U+0000) from every string in a payload before it reaches
+ * Postgres (mirrors the chats write boundary): Postgres text/jsonb reject
+ * the NUL code point, so an agent posting a stray one would otherwise 500
+ * the whole write. NUL carries no meaning in a channel message, so it is
+ * stripped rather than rejected.
+ */
+export function stripNulDeep<T>(value: T): T {
+  if (typeof value === "string") {
+    return value.includes(NUL)
+      ? (value.split(NUL).join("") as unknown as T)
+      : value;
+  }
+  if (Array.isArray(value)) {
+    return value.map((v) => stripNulDeep(v)) as unknown as T;
+  }
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value)) out[k] = stripNulDeep(v);
+    return out as T;
+  }
+  return value;
+}
+
+export function isWorkspaceAdmin(ctx: ChannelContext): boolean {
+  return ctx.role !== null && meetsMinRole(ctx.role, "admin");
+}
+
+/** Resolve a `channel` ref (UUID id or slug) to its row, or throw not-found. */
+export async function resolveChannelRef(
+  ctx: ChannelContext,
+  ref: string
+): Promise<ChannelRow> {
+  const channel = isUuid(ref)
+    ? await repo.findChannelById(ctx.workspaceId, ref)
+    : await repo.findChannelBySlug(ctx.workspaceId, ref);
+  if (!channel) throw new ChannelNotFoundError(ref);
+  return channel;
+}
+
+/**
+ * Resolve a channel the caller may READ: public channels are visible to
+ * any workspace member; a private channel reads as not-found unless the
+ * caller is a member (so its existence never leaks). Returns the row plus
+ * the caller's membership (null for a non-member viewing a public channel).
+ */
+export async function loadVisibleChannel(
+  ctx: ChannelContext,
+  ref: string
+): Promise<{ channel: ChannelRow; membership: ChannelMemberRow | null }> {
+  const channel = await resolveChannelRef(ctx, ref);
+  const membership = await repo.findMembership(channel.id, ctx.userId);
+  if (channel.visibility !== "public" && membership === null) {
+    throw new ChannelNotFoundError(ref);
+  }
+  return { channel, membership };
+}
+
+/** Owner of the channel, or a workspace admin — the management gate. */
+export function canManageChannel(
+  ctx: ChannelContext,
+  membership: ChannelMemberRow | null
+): boolean {
+  return membership?.role === "owner" || isWorkspaceAdmin(ctx);
+}
+
+export async function profilesById(
+  userIds: string[]
+): Promise<Map<string, ProfileRef>> {
+  const unique = [...new Set(userIds)];
+  const profiles = await repo.fetchProfiles(unique);
+  return new Map(profiles.map((p) => [p.id, p]));
+}

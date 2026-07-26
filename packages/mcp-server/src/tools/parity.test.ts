@@ -34,6 +34,7 @@ import { registerMembersTool } from "./members.js";
 import { registerMapTool } from "./map.js";
 import { registerSearchTool } from "./search.js";
 import { registerOntologyTool } from "./ontology.js";
+import { registerChannelTool } from "./channel.js";
 
 // ── Capture every registered domain tool ─────────────────────────────
 
@@ -58,6 +59,7 @@ const REGISTRARS: Array<{
   { file: "map.ts", register: registerMapTool },
   { file: "search.ts", register: registerSearchTool },
   { file: "ontology.ts", register: registerOntologyTool },
+  { file: "channel.ts", register: registerChannelTool },
 ];
 
 function captureTools(): CapturedTool[] {
@@ -162,6 +164,7 @@ const READ_OPS: Record<string, string[]> = {
   dopl_chats: ["list", "get", "folders", "guide", "list_trash"],
   dopl_members: ["whoami", "list", "get", "teams", "get_team", "access_matrix", "my_access"],
   dopl_ontology: ["map", "anchor", "resolve", "get"],
+  dopl_channel: ["list", "read", "await"],
 };
 
 // ── KNOWN DRIFT ledger ────────────────────────────────────────────────
@@ -183,6 +186,7 @@ describe("tool capture", () => {
     const names = TOOLS.map((t) => t.name).sort();
     expect(names).toEqual(
       [
+        "dopl_channel",
         "dopl_chats",
         "dopl_chats_admin",
         "dopl_cluster",

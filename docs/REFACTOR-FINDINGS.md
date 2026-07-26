@@ -252,3 +252,51 @@ Build + `tsc --noEmit` green on every commit; `npx eslint` at 0 errors (baseline
 - `multiple_permissive_policies` (36 lints) — STILL OPEN, deferred on purpose (correctness > perf). Consolidating permissive policies risks a row-scoping regression, so it is held for a dedicated, test-gated pass.
 - Proposed resolution: defer — the safe recipe is documented in the header of migration `20260720211005`: split each `*_admin_write` / `*_editor_write` `FOR ALL` policy into explicit `FOR INSERT` / `FOR UPDATE` / `FOR DELETE`, leaving the member `FOR SELECT` as the sole SELECT policy (optionally fold `chats_owner_select` into `chats_member_select`); ship behind a no-regression isolation test.
 - Status: open (deferred — `auth_rls_initplan` half resolved 2026-07-20; `multiple_permissive_policies` remainder open)
+
+### F-050: Channels soft-delete not wired into the unified Trash aggregator / purge cron
+- Location: `src/features/channels/**` (channels carry `deleted_at`, the service layer hides trashed rows); NOT registered in `src/features/trash/server/service.ts` (aggregator) nor `src/app/api/cron/purge-trash/route.ts` (its `TABLE_ORDER` has no channel table)
+- Found during: Channels feature build (2026-07-25)
+- Severity: smell
+- Description: channels have a `deleted_at` soft-delete, but — unlike knowledge/skills/workflows/chats/ontology — they aren't a `TrashKind` in the unified Workspace Trash aggregator, so a deleted channel is NOT restorable from the Settings Trash UI, and the daily `/api/cron/purge-trash` sweep never hard-deletes aged channel rows (30-day retention skips them entirely).
+- Proposed resolution: defer — add `listTrashed*`/`restore*`/`purge*` channel service fns + a `TrashItem` kind (each re-entering the channels auth gate) per ENGINEERING §7 "Unified Workspace Trash", and add `channels`/`channel_messages` to the purge cron `TABLE_ORDER`.
+- Status: open
+
+### F-051: Older content tables keep `authenticated`+`anon` DML grants (channels-parity revoke pending)
+- Location: `chats` / `chat_messages` / `chat_folders` (and the other pre-channels content tables) — base grants intact, default-deny RLS only; contrast `channels`/`channel_members`/`channel_messages` (grants REVOKED in `20260725130000_channels_rls_hardening.sql`)
+- Found during: Channels feature build (2026-07-25)
+- Severity: smell (defense-in-depth)
+- Description: the channels tables revoke `INSERT/UPDATE/DELETE` from `authenticated`+`anon` and drop all write policies (service-role-only writes). The older content tables still carry the base `authenticated`/`anon` DML grants and rely on default-deny RLS policies alone. Not a live leak (RLS still scopes rows), but the grant surface is broader than needed; bringing at least chats to channels-level revoke parity would harden defense-in-depth.
+- Proposed resolution: defer — after confirming no client-direct writes remain (writes already flow through the service), a migration that REVOKEs `authenticated`/`anon` DML on the chats tables + drops their client write policies. Sequence table-by-table; chats first.
+- Status: open
+
+### F-052: `supabase/types.ts` not regenerated for the channel tables (repository/dto casts stand in)
+- Location: `src/shared/supabase/types.ts` (no `channels`/`channel_members`/`channel_messages` rows, no `channel_message_insert` RPC); casts in `src/features/channels/server/{repository,dto}.ts`
+- Found during: Channels feature build (2026-07-25)
+- Severity: smell
+- Description: the generated `Database` types weren't regenerated after `20260725120000_channels.sql`, so the three tables + the `channel_message_insert` RPC are absent from `types.ts`. The channels repository/dto compile via localized casts at the Supabase boundary (the same pattern the chats feature uses for its newer columns; `supabaseAdmin()` is untyped). Mirrors the residual-cast note in F-042.
+- Proposed resolution: defer — regenerate `src/shared/supabase/types.ts` (`mcp__supabase__generate_typescript_types`) and drop the casts the next time types are regenerated for another change.
+- Status: open
+
+### F-053: Channel web thread has no backward pagination past the latest page
+- Location: `src/features/channels/**` (message read caps at `MAX_MESSAGE_LIMIT = 200`, `constants.ts`; web thread `channel-thread.tsx` / `use-channel-messages.ts`)
+- Found during: Channels feature build (2026-07-25)
+- Severity: smell (scale)
+- Description: the thread reads only the most recent messages (`limit <= 200`) with no load-older / backward page, so once a channel exceeds ~200 messages the older history is unreachable from the web UI. The `seq` cursor already drives incremental FORWARD reads (`read`/`await` with `since=`); backward paging needs a `before=<seq>` read path + a "load older" control. Same shape as the deferred chat pagination (F-027).
+- Proposed resolution: defer — add a `GET …/messages?before=<seq>&limit=` descending page + load-older UI when channel history reaches real size.
+- Status: open
+
+### F-054: Desktop app — no auto-updater; deep-link `state` echo pending for full CSRF protection
+- Location: `dopl-desktop-app/**` (Electron 43; `dopl://` deep-link handler + channel listener / Claude-session spawner)
+- Found during: Channels feature build (2026-07-25)
+- Severity: smell
+- Description: two follow-ups on the modernized desktop app. (1) No auto-updater (e.g. electron-updater + a release feed) is wired — each release still requires a manual DMG re-download (§18). (2) The `dopl://` deep-link auth flow ships a pending-flag + TTL gate against replay, but full CSRF protection also needs the WEB side to echo the `state` parameter back in the `dopl://` fragment so the desktop handler can verify it round-trips — not yet implemented web-side.
+- Proposed resolution: defer — (1) wire an auto-updater + signed release feed; (2) add the web-side `state` echo in the deep-link fragment and verify it in the desktop handler.
+- Status: open
+
+### F-055: `dopl_channel` invite/post pre-resolve via `listChannels`; `getChannel` client method unused
+- Location: `packages/mcp-server/src/tools/channel-shared.ts` (`resolveChannelOr` → `client.listChannels({ includeArchived: true })`, used by `channel-ops-write.ts` invite/post); `packages/dopl-client/src/{channel,client}.ts` (`getChannel`, no callers)
+- Found during: Channels feature build (2026-07-25)
+- Severity: smell
+- Description: `read`/`await` are hot pass-throughs — they hand the channel ref straight to the route (which resolves slug-or-id + enforces visibility), so the poll loop takes no extra round-trip. `invite`/`post` still pre-resolve the target channel by scanning `listChannels()` (`resolveChannelOr`), an O(n) list per write, instead of addressing it by id. `@dopl/client` also carries an unused `getChannel(channelId)` method, reserved for a future `dopl_channel(op="get")`.
+- Proposed resolution: defer — give the write ops an id-addressed resolve (or land the `get` op backed by `getChannel`) so they don't scan `listChannels`.
+- Status: open

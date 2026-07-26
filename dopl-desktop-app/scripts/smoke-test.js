@@ -32,9 +32,11 @@ app.whenReady().then(() => {
 
   const timer = setTimeout(() => done(false, { reason: 'timeout', errors }), TIMEOUT_MS);
 
-  wc.on('console-message', (_e, level, message) => {
-    // level 3 = error
-    if (level === 3) errors.push(message);
+  // Electron 35+: 'console-message' emits a single event object
+  // ({ level, message, lineNumber, sourceId, frame }); level is now a
+  // string ('info' | 'warning' | 'error' | 'debug'), not the old integer.
+  wc.on('console-message', ({ level, message }) => {
+    if (level === 'error') errors.push(message);
   });
 
   wc.on('did-fail-load', (_e, code, desc, url, isMainFrame) => {

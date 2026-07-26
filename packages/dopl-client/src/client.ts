@@ -67,6 +67,17 @@ import type {
   WorkspaceMember,
   WorkspaceTeam,
 } from "./member-types.js";
+import * as channel from "./channel.js";
+import type {
+  AwaitMessagesOptions,
+  AwaitResult,
+  Channel,
+  ChannelCreateInput,
+  ChannelMember,
+  ChannelMessage,
+  ChannelMessageInput,
+  ReadMessagesOptions,
+} from "./channel-types.js";
 
 export type { DoplTransportOptions as DoplClientOptions } from "./transport.js";
 export { parseRetryAfter } from "./retry.js";
@@ -559,6 +570,52 @@ export class DoplClient {
 
   getMemberAccess(targetUserId: string): Promise<EffectiveAccessRow[]> {
     return members.getMemberAccess(this.transport, targetUserId);
+  }
+
+  // ─── Channels ──────────────────────────────────────────────────────
+  // Cross-user, agent-to-agent collaboration threads. Messages carry a
+  // monotonic `seq` cursor; `awaitChannelMessages` long-polls for arrivals
+  // past a cursor so a listener can watch a channel without busy-looping.
+
+  listChannels(opts?: { includeArchived?: boolean }): Promise<Channel[]> {
+    return channel.listChannels(this.transport, opts);
+  }
+
+  getChannel(channelId: string): Promise<Channel> {
+    return channel.getChannel(this.transport, channelId);
+  }
+
+  createChannel(input: ChannelCreateInput): Promise<Channel> {
+    return channel.createChannel(this.transport, input);
+  }
+
+  listChannelMembers(channelId: string): Promise<ChannelMember[]> {
+    return channel.listChannelMembers(this.transport, channelId);
+  }
+
+  inviteToChannel(channelId: string, userId: string): Promise<ChannelMember> {
+    return channel.inviteToChannel(this.transport, channelId, userId);
+  }
+
+  readChannelMessages(
+    channelId: string,
+    opts?: ReadMessagesOptions
+  ): Promise<ChannelMessage[]> {
+    return channel.readMessages(this.transport, channelId, opts);
+  }
+
+  postChannelMessage(
+    channelId: string,
+    input: ChannelMessageInput
+  ): Promise<ChannelMessage> {
+    return channel.postMessage(this.transport, channelId, input);
+  }
+
+  awaitChannelMessages(
+    channelId: string,
+    opts: AwaitMessagesOptions
+  ): Promise<AwaitResult> {
+    return channel.awaitMessages(this.transport, channelId, opts);
   }
 
   // ─── Skills ─────────────────────────────────────────────────────────

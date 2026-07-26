@@ -7,14 +7,15 @@
     "start": "electron .",
     "smoke": "electron scripts/smoke-test.js",
     "build": "electron-builder --mac",
+    "dist": "electron-builder --mac",
     "notarize": "bash scripts/finish-notarize.sh"
   },
   "dependencies": {
     "electron-store": "^8.1.0"
   },
   "devDependencies": {
-    "electron": "^32.2.0",
-    "electron-builder": "^25.1.8"
+    "electron": "^43.2.0",
+    "electron-builder": "^26.15.3"
   },
   "build": {
     "appId": "com.dopl.connect",

@@ -40,6 +40,7 @@ const skills = __importStar(require("./skills.js"));
 const ontology = __importStar(require("./ontology.js"));
 const chats = __importStar(require("./chats.js"));
 const members = __importStar(require("./members.js"));
+const channel = __importStar(require("./channel.js"));
 var retry_js_1 = require("./retry.js");
 Object.defineProperty(exports, "parseRetryAfter", { enumerable: true, get: function () { return retry_js_1.parseRetryAfter; } });
 class DoplClient {
@@ -310,6 +311,34 @@ class DoplClient {
     }
     getMemberAccess(targetUserId) {
         return members.getMemberAccess(this.transport, targetUserId);
+    }
+    // ─── Channels ──────────────────────────────────────────────────────
+    // Cross-user, agent-to-agent collaboration threads. Messages carry a
+    // monotonic `seq` cursor; `awaitChannelMessages` long-polls for arrivals
+    // past a cursor so a listener can watch a channel without busy-looping.
+    listChannels(opts) {
+        return channel.listChannels(this.transport, opts);
+    }
+    getChannel(channelId) {
+        return channel.getChannel(this.transport, channelId);
+    }
+    createChannel(input) {
+        return channel.createChannel(this.transport, input);
+    }
+    listChannelMembers(channelId) {
+        return channel.listChannelMembers(this.transport, channelId);
+    }
+    inviteToChannel(channelId, userId) {
+        return channel.inviteToChannel(this.transport, channelId, userId);
+    }
+    readChannelMessages(channelId, opts) {
+        return channel.readMessages(this.transport, channelId, opts);
+    }
+    postChannelMessage(channelId, input) {
+        return channel.postMessage(this.transport, channelId, input);
+    }
+    awaitChannelMessages(channelId, opts) {
+        return channel.awaitMessages(this.transport, channelId, opts);
     }
     // ─── Skills ─────────────────────────────────────────────────────────
     // Read paths are unrestricted; write paths are gated server-side by
