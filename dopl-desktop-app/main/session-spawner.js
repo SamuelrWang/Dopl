@@ -14,12 +14,20 @@ const os = require('os');
 const crypto = require('crypto');
 const { app } = require('electron');
 const Store = require('electron-store');
+const { getStoredOAuthToken } = require('./claude-token');
 
 const store = new Store();
 const SESSION_KEY = 'claudeSessions'; // { [channelId]: claudeSessionId }
 const CLAUDE_BIN_KEY = 'claudeBinPath'; // electron-store override for the CLI path
 const MAX_RUNTIME_MS = 5 * 60 * 1000;
 const MAX_OUTPUT_BYTES = 1_000_000;
+
+// Feature E: mcp-config writes this file (mode 600) with a Dopl device token; we
+// pass it via --mcp-config on every spawn so a responding agent always has Dopl
+// regardless of the CLI's global config. Path only — no import (avoids a cycle).
+function spawnMcpConfigPath() {
+  return path.join(app.getPath('userData'), 'mcp-spawn.json');
+}
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -150,6 +158,17 @@ function augmentedEnv(binPath) {
   return { ...process.env, PATH: merged };
 }
 
+// Env for a channel-answering spawn: PATH-augmented, plus a Feature-D
+// CLAUDE_CODE_OAUTH_TOKEN when `claude setup-token` printed one for us to hold
+// (when claude stored the credential itself, none is set and it uses its own
+// store). The token is injected via env, never argv, and never logged.
+function spawnEnv(bin) {
+  const env = augmentedEnv(bin);
+  const token = getStoredOAuthToken();
+  if (token) env.CLAUDE_CODE_OAUTH_TOKEN = token;
+  return env;
+}
+
 // Per-channel scratch dir so each session has an isolated working directory.
 // L7: channelId is interpolated into a filesystem path, so validate it is a UUID
 // before use; anything else falls back to the userData root.
@@ -232,12 +251,16 @@ function execOnce(bin, { channelId, message, context, isRetry }, resolve) {
     ? ['--resume', existing, '-p', prompt, '--output-format', 'json']
     : ['-p', prompt, '--output-format', 'json'];
 
+  // Feature E: merge Dopl MCP in (non-strict — keeps the CLI's global servers).
+  const mcpConfigFile = spawnMcpConfigPath();
+  if (fs.existsSync(mcpConfigFile)) args.push('--mcp-config', mcpConfigFile);
+
   execFile(
     bin,
     args,
     {
       cwd: channelCwd(channelId),
-      env: augmentedEnv(bin), // no tokens injected; claude uses its own config
+      env: spawnEnv(bin), // PATH-augmented; CLAUDE_CODE_OAUTH_TOKEN only if held
       timeout: MAX_RUNTIME_MS,
       maxBuffer: MAX_OUTPUT_BYTES,
       windowsHide: true,
@@ -292,6 +315,9 @@ function execOnce(bin, { channelId, message, context, isRetry }, resolve) {
           : stderr || (err && err.message) || 'agent error';
         resolve({
           text: `The agent could not complete this request (${String(reason).slice(0, 300)}).`,
+          // Untruncated reason for LOCAL auth-shape detection only (Feature D).
+          // Never posted into a channel; never logged verbatim.
+          errorDetail: String(reason),
           sessionId,
           isError: true,
         });
@@ -310,4 +336,24 @@ function claudeAvailable() {
   return resolveClaude().then((bin) => !!bin);
 }
 
-module.exports = { runForChannel, isBusy, getSessionId, claudeAvailable };
+// The resolved absolute claude path (or null). Shared with mcp-config (for
+// `claude mcp …`) and claude-auth (for `claude setup-token`) so they never
+// re-probe the CLI location.
+function getClaudeBinPath() {
+  return resolveClaude();
+}
+
+// PATH-augmented env for a non-spawn CLI call (`claude mcp …`, setup-token). No
+// OAuth token injected — those operations don't need it.
+function cliEnv(bin) {
+  return augmentedEnv(bin);
+}
+
+module.exports = {
+  runForChannel,
+  isBusy,
+  getSessionId,
+  claudeAvailable,
+  getClaudeBinPath,
+  cliEnv,
+};

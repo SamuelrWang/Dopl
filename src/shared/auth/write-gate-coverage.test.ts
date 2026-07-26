@@ -98,13 +98,17 @@ describe("H-3 write-gate coverage", () => {
     expect(exemptRoutes).toEqual(["user/mcp-status/route.ts"]);
   });
 
-  it("the `sessionOnly` set is exactly the destructive admin routes gated by H-3", () => {
+  it("the `sessionOnly` set is exactly the destructive admin + credential-minting routes gated by H-3", () => {
     const sessionOnlyRoutes = files
       .filter((f) => /sessionOnly:\s*true/.test(readFileSync(f, "utf8")))
       .map(apiRel)
       .sort();
     expect(sessionOnlyRoutes).toEqual(
       [
+        // Mints a long-lived device token — a background agent must never be
+        // able to bootstrap a fresh 90-day credential for itself, so it is
+        // cookie-session only (Channels v1.1 section E).
+        "auth/mcp-device-token/route.ts",
         "billing/checkout/route.ts",
         "billing/portal/route.ts",
         "billing/upgrade-to-team/route.ts",

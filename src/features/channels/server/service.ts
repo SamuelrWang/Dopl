@@ -30,4 +30,5 @@ export {
   postMessage,
   addMember,
   removeMember,
+  updateMyNotifyScope,
 } from "./service-writes";

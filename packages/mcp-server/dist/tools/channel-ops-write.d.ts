@@ -6,6 +6,17 @@
  */
 import type { ChannelMessageInput, ChannelVisibility, DoplClient } from "@dopl/client";
 import { type ToolResponse } from "./respond";
+/** Options accepted by opPost — the per-post flags routed from the registrar. */
+interface PostOptions {
+    kind?: ChannelMessageInput["kind"];
+    metadata?: Record<string, unknown>;
+    clientMsgId?: string;
+    /** Address the post to one member (email or user id, resolved like invite). */
+    to?: string;
+    /** One-line intent for the receiver's notification. */
+    summary?: string;
+}
 export declare function opOpen(client: DoplClient, name: string, topic?: string, visibility?: ChannelVisibility): Promise<ToolResponse>;
 export declare function opInvite(client: DoplClient, channelRef: string, memberRef: string): Promise<ToolResponse>;
-export declare function opPost(client: DoplClient, channelRef: string, body: string, kind?: ChannelMessageInput["kind"], metadata?: Record<string, unknown>, clientMsgId?: string): Promise<ToolResponse>;
+export declare function opPost(client: DoplClient, channelRef: string, body: string, opts?: PostOptions): Promise<ToolResponse>;
+export {};

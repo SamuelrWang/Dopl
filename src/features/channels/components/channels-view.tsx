@@ -13,7 +13,9 @@ import {
   postMessage,
   removeChannelMember,
   updateChannel as apiUpdateChannel,
+  updateMyNotifyScope,
 } from "../client/api";
+import type { NotifyScope } from "../types";
 import { useChannels } from "../hooks/use-channels";
 import { useChannelMessages } from "../hooks/use-channel-messages";
 import { useChannelsRealtime } from "../client/realtime";
@@ -48,6 +50,11 @@ export function ChannelsView({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
+  // Optimistic per-channel notify-scope overrides, applied over the server
+  // value until the follow-up refetch (success) or a revert (failure).
+  const [scopeOverride, setScopeOverride] = useState<Record<string, NotifyScope>>(
+    {}
+  );
 
   const canCreate = meetsMinRole(role, "member");
 
@@ -160,6 +167,35 @@ export function ChannelsView({
       await refetchMessages();
     }, "Couldn't join the channel");
 
+  async function handleSetNotifyScope(scope: NotifyScope) {
+    if (!selected) return;
+    const id = selected.id;
+    setScopeOverride((m) => ({ ...m, [id]: scope }));
+    try {
+      await updateMyNotifyScope(id, scope, workspaceId);
+      await refetchChannels();
+    } catch (err) {
+      toast({
+        title:
+          err instanceof ChannelApiError
+            ? err.message
+            : "Couldn't update notifications",
+      });
+    } finally {
+      // Success: the refetch already carries the new value, so dropping the
+      // override is seamless. Failure: dropping it reverts to the server value.
+      setScopeOverride((m) => {
+        const next = { ...m };
+        delete next[id];
+        return next;
+      });
+    }
+  }
+
+  const effectiveNotifyScope: NotifyScope = selected
+    ? scopeOverride[selected.id] ?? selected.myNotifyScope ?? "all"
+    : "all";
+
   const handleLeave = () =>
     selected &&
     void withChannelError(async () => {
@@ -194,8 +230,10 @@ export function ChannelsView({
           channel={selected}
           messages={messages}
           loading={messagesLoading}
+          notifyScope={effectiveNotifyScope}
           onSend={handleSend}
           onInvite={() => setInviteOpen(true)}
+          onSetNotifyScope={handleSetNotifyScope}
           onToggleArchive={handleToggleArchive}
           onToggleVisibility={handleToggleVisibility}
           onDelete={handleDelete}

@@ -11,6 +11,10 @@ exports.opInvite = opInvite;
 exports.opPost = opPost;
 const respond_1 = require("./respond");
 const channel_shared_1 = require("./channel-shared");
+/** Duck-typed HTTP 400 from the Dopl API (across the @dopl/client boundary). */
+function isBadRequest(e) {
+    return (typeof e === "object" && e !== null && e.status === 400);
+}
 async function opOpen(client, name, topic, visibility) {
     let channel;
     try {
@@ -53,16 +57,40 @@ async function opInvite(client, channelRef, memberRef) {
     }
     return (0, respond_1.ok)(`Added ${member.label} to **${ch.name}** as ${added.role}.`);
 }
-async function opPost(client, channelRef, body, kind, metadata, clientMsgId) {
+async function opPost(client, channelRef, body, opts = {}) {
     const ch = await (0, channel_shared_1.resolveChannelOr)(client, channelRef);
     if ((0, channel_shared_1.isErr)(ch))
         return ch;
-    const message = await client.postChannelMessage(ch.id, {
-        body,
-        kind,
-        metadata,
-        clientMsgId,
-    });
+    // Resolve the addressee reference (email or user id) like invite does —
+    // to a workspace member. The route then enforces channel membership.
+    let toUserId;
+    let toLabel;
+    if (opts.to) {
+        const member = await (0, channel_shared_1.resolveMemberOr)(client, opts.to);
+        if ((0, channel_shared_1.isErr)(member))
+            return member;
+        toUserId = member.userId;
+        toLabel = member.label;
+    }
+    let message;
+    try {
+        message = await client.postChannelMessage(ch.id, {
+            body,
+            kind: opts.kind,
+            metadata: opts.metadata,
+            clientMsgId: opts.clientMsgId,
+            toUserId,
+            summary: opts.summary,
+        });
+    }
+    catch (e) {
+        // The route rejects an addressee who isn't a channel member (400).
+        if (toUserId && isBadRequest(e)) {
+            return (0, respond_1.err)(`Couldn't address the message to ${toLabel} — they aren't a member of **${ch.name}**. Invite them first (op="invite"), or post without \`to\`.`);
+        }
+        throw e;
+    }
     const kindNote = message.kind !== "message" ? `, kind ${message.kind}` : "";
-    return (0, respond_1.ok)(`Posted to **${ch.name}** (message \`${message.id}\`, seq ${message.seq}${kindNote}). Readers watching with op="await" will pick it up.`);
+    const toNote = toLabel ? `, addressed to ${toLabel}` : "";
+    return (0, respond_1.ok)(`Posted to **${ch.name}** (message \`${message.id}\`, seq ${message.seq}${kindNote}${toNote}). Readers watching with op="await" will pick it up.`);
 }

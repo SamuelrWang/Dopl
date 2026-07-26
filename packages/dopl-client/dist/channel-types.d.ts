@@ -8,6 +8,12 @@
  */
 export type ChannelVisibility = "public" | "private";
 export type ChannelMemberRole = "owner" | "member";
+/**
+ * Per-member notification scope for a channel (how loudly it notifies the
+ * member's listener): `all` = addressed prompts + silent FYIs; `addressed` =
+ * only addressed-to-me prompts; `none` = fully muted.
+ */
+export type NotifyScope = "all" | "addressed" | "none";
 export type ChannelAuthorKind = "user" | "agent" | "system";
 /**
  * Full message-kind set as stored in the DB. `message` = chat; the
@@ -32,6 +38,8 @@ export interface Channel {
     memberCount?: number;
     /** Present on list/get — ISO datetime of the latest message, or null. */
     lastMessageAt?: string | null;
+    /** The caller's own notification scope, null when they are not a member. */
+    myNotifyScope?: NotifyScope | null;
 }
 export interface ChannelMessage {
     id: string;
@@ -51,6 +59,8 @@ export interface ChannelMember {
     userId: string;
     role: ChannelMemberRole;
     lastReadAt: string | null;
+    /** This member's own per-channel notification scope. */
+    notifyScope?: NotifyScope;
     addedBy: string | null;
     joinedAt: string;
     displayName?: string | null;
@@ -68,6 +78,15 @@ export interface ChannelMessageInput {
     metadata?: Record<string, unknown>;
     authorKind?: ChannelAuthorKind;
     clientMsgId?: string;
+    /**
+     * Addressing (v1.1): the user id of the channel member this message
+     * targets. The route validates it is an active member and stores it in
+     * `metadata.to_user_id`; a listener triggers only on messages addressed
+     * to it (or, in a 2-member channel, the implicit other member).
+     */
+    toUserId?: string;
+    /** One-line intent (<=200 chars) surfaced in the receiver's notification. */
+    summary?: string;
 }
 export interface ReadMessagesOptions {
     /** Return only messages with seq greater than this. */

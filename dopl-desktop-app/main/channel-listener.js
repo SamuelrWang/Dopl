@@ -14,7 +14,16 @@ const { dialog, Notification } = require('electron');
 const Store = require('electron-store');
 const auth = require('./auth');
 const spawner = require('./session-spawner');
+const claudeAuth = require('./claude-auth');
 const { API_BASE, LISTENER } = require('./config');
+
+// ── Diagnostic file log ─────────────────────────────────────────────────────
+// Console output is invisible for a GUI-launched app, and the trigger path has
+// several deliberate silent skips (fail-closed identity, missing CLI, targeting
+// verdicts, FYI muted, sign-in flow states). The shared diag() appends one-line
+// diagnostics to userData/listener.log so those decisions are observable in the
+// field. Never log tokens.
+const { diag } = require('./diag');
 
 const store = new Store();
 
@@ -26,8 +35,10 @@ let staleNotified = false;
 let cliWarned = false;
 let myUserId = null; // resolved operator identity (H2); null until known
 let reconciling = null; // in-flight reconcile promise (M1 re-entrancy guard)
+let handlers = {}; // window-control callbacks from index.js (openChannel)
 const loops = new Map(); // channelId -> loop entry
 const replayed = new Set(); // channels whose crash-pending record was replayed
+const nameCache = new Map(); // userId -> displayName, refreshed once per reconcile
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -125,7 +136,11 @@ async function listChannels(workspaceId) {
 // (3) the /api/workspaces/me whoami endpoint as a last resort.
 async function resolveIdentity(preferWorkspaceId) {
   let id = auth.getUserId();
-  if (!id) id = await auth.getUserIdFromCookies();
+  diag('identity tier1 (stored blob):', id ? 'hit' : 'miss');
+  if (!id) {
+    id = await auth.getUserIdFromCookies();
+    diag('identity tier2 (cookie jwt):', id ? 'hit' : 'miss');
+  }
   if (!id) {
     try {
       const res = await apiFetch('/api/workspaces/me', {
@@ -136,24 +151,12 @@ async function resolveIdentity(preferWorkspaceId) {
         const d = await res.json();
         if (d && d.userId) id = d.userId;
       }
-    } catch (_) {
-      /* best-effort — fall through to null */
+      diag('identity tier3 (whoami):', res.ok ? `hit ${res.status}` : `miss ${res.status}`);
+    } catch (err) {
+      diag('identity tier3 (whoami): error', err && err.message);
     }
   }
   return id || null;
-}
-
-// H2: FAIL CLOSED. If we don't know our own id, treat nothing as a trigger —
-// a null id would otherwise make the operator's OWN messages self-trigger.
-function isTrigger(m, myId) {
-  if (!myId) return false;
-  return (
-    m &&
-    m.kind === 'message' &&
-    m.authorKind === 'user' &&
-    m.authorUserId &&
-    m.authorUserId !== myId
-  );
 }
 
 function truncate(s, n = 240) {
@@ -161,30 +164,176 @@ function truncate(s, n = 240) {
   return str.length > n ? str.slice(0, n) + '…' : str;
 }
 
-// Native consent BEFORE any spawn. Allow-once / Deny (no persistence, no
-// auto-spawn). Returns true only on explicit approval.
-async function requestConsent(channel, m) {
+// A trimmed non-empty string from message metadata, else ''.
+function metaStr(m, key) {
+  const v = m && m.metadata ? m.metadata[key] : undefined;
+  return typeof v === 'string' && v.trim() ? v.trim() : '';
+}
+
+// ── Display-name cache (Feature B/C) ─────────────────────────────────────────
+// Requester + target names for notification copy. Filled once per workspace per
+// reconcile from the workspace members listing. Falls back to 'A teammate'.
+function displayNameFor(userId) {
+  return (userId && nameCache.get(userId)) || 'A teammate';
+}
+
+async function refreshNameCache(ws) {
+  // Canonical `{slug}-{publicId}` segment resolves by publicId (no legacy-slug
+  // redirect event). Cookie-authed (withUserAuth); X-Workspace-Id is harmless.
+  const segment = `${ws.slug}-${ws.publicId}`;
+  try {
+    const res = await apiFetch(`/api/workspaces/${encodeURIComponent(segment)}/members`, {
+      workspaceId: ws.id,
+      timeoutMs: 15000,
+    });
+    if (!res.ok) {
+      diag('namecache miss', res.status, 'ws', ws.slug);
+      return;
+    }
+    const members = normalizeList(await res.json(), 'members');
+    for (const mem of members) {
+      if (mem && mem.userId) {
+        const dn = mem.displayName || mem.email || null;
+        if (dn) nameCache.set(mem.userId, dn);
+      }
+    }
+    diag('namecache loaded', members.length, 'ws', ws.slug);
+  } catch (err) {
+    diag('namecache error', err && err.message);
+  }
+}
+
+// ── Targeting classification (Feature A) ─────────────────────────────────────
+// Returns 'trigger' (prompt for consent + maybe spawn), 'fyi' (silent notify
+// only), or 'ignore'. FAIL CLOSED: unknown identity or my own message → ignore.
+//   1. metadata.to_user_id present → trigger only if it equals me; else FYI
+//      (multi-member) / ignore.
+//   2. absent + exactly 2 members → implicit target (trigger if author != me).
+//   3. absent + 3+ members → FYI only (documentation / chat), never a trigger.
+// memberCount comes from the Channel DTO (refreshed on reconcile). The implicit
+// 2-member trigger FAILS CLOSED: it fires only on a known-exact count of 2 and
+// explicit channel membership — an absent/invalid count or unknown membership is
+// treated as multi-member (FYI, no prompt). Rationale: a stale DTO must never
+// mass-prompt a group channel (the exact bug addressing exists to prevent);
+// addressed-to-me requests are unaffected and always trigger.
+function classify(m, entry, myId) {
+  if (!m || m.kind !== 'message' || m.authorKind !== 'user' || !m.authorUserId) return 'ignore';
+  if (!myId) return 'ignore';
+  if (m.authorUserId === myId) return 'ignore';
+
+  const rawCount = Number(entry.channel && entry.channel.memberCount);
+  const knownTwo = Number.isFinite(rawCount) && rawCount === 2;
+  // Only an explicit `isMember: false` blocks (public channel the operator can
+  // see but is not in — never prompt/FYI for those); a missing field degrades
+  // to member so a DTO field drift can't silently stop 1:1 answering.
+  const isMember = !(entry.channel && entry.channel.isMember === false);
+
+  const toUserId = metaStr(m, 'to_user_id');
+  if (toUserId) {
+    if (toUserId === myId) return 'trigger';
+    return isMember ? 'fyi' : 'ignore';
+  }
+  if (knownTwo && isMember) return 'trigger';
+  return isMember ? 'fyi' : 'ignore';
+}
+
+// Open the app window and navigate the webview to the channel's page. Wired from
+// index.js; no-op until handlers are registered.
+function openChannelForEntry(entry) {
+  try {
+    if (handlers.openChannel && entry.workspaceSegment) handlers.openChannel(entry.workspaceSegment);
+  } catch (_) { /* window may be gone */ }
+}
+
+// Native consent BEFORE any spawn (Feature B). Two surfaces resolve one promise
+// — the in-app dialog (source of truth) and an alert notification with an Allow
+// action button + Deny close button. First answer wins; the other is dismissed
+// best-effort. Returns true only on explicit approval.
+async function requestConsent(entry, m) {
+  const channel = entry.channel;
+  const requester = displayNameFor(m.authorUserId);
+  const summary = metaStr(m, 'summary');
+  const notifBody = summary
+    ? `${requester}'s agent asks: ${summary}`
+    : `${requester}'s agent: ${truncate(m.body, 120)}`;
+
+  return new Promise((resolve) => {
+    let settled = false;
+    let notif = null;
+    const finish = (val, via) => {
+      if (settled) return;
+      settled = true;
+      diag('consent via', via, '->', val ? 'ALLOWED' : 'denied');
+      try { if (notif) notif.close(); } catch (_) {}
+      resolve(val);
+    };
+
+    // Surface 1: alert notification with Allow / Deny (best-effort).
+    try {
+      if (Notification.isSupported()) {
+        notif = new Notification({
+          title: channel.name,
+          body: notifBody,
+          silent: false,
+          actions: [{ type: 'button', text: 'Allow' }],
+          closeButtonText: 'Dismiss',
+        });
+        notif.on('action', () => finish(true, 'notif-allow'));
+        // 'close' must NOT settle consent: it fires on system auto-dismiss too
+        // (banner style, Focus modes), which is indistinguishable from an
+        // explicit dismiss — settling here would swallow a later Allow on the
+        // still-open dialog. All Deny decisions route through the dialog.
+        notif.on('click', () => openChannelForEntry(entry));
+        notif.show();
+      }
+    } catch (_) { /* notifications are best-effort */ }
+
+    // Surface 2: in-app dialog — the source of truth.
+    dialog
+      .showMessageBox({
+        type: 'question',
+        buttons: ['Deny', 'Allow once'],
+        defaultId: 0,
+        cancelId: 0,
+        noLink: true,
+        title: 'Dopl Channels',
+        message: `Run a Claude session to answer this message in "${channel.name}"?`,
+        detail: summary
+          ? `${requester}: ${summary}\n\n${truncate(m.body, 500)}`
+          : truncate(m.body, 600),
+      })
+      .then(({ response }) => finish(response === 1, 'dialog'))
+      .catch(() => finish(false, 'dialog-error'));
+  });
+}
+
+// Silent FYI notification (Feature C). Fires for a foreign message that is NOT a
+// trigger for me (non-addressed, or addressed to someone else) in a multi-member
+// channel — but only when my notify scope is 'all'. Never spawns, never prompts.
+// myNotifyScope comes from the Channel DTO (the parallel track adds it); absent →
+// degrade to 'all'.
+function sendFyi(entry, m) {
+  const scope = (entry.channel && entry.channel.myNotifyScope) || 'all';
+  if (scope !== 'all') {
+    diag('fyi muted', entry.channel.id.slice(0, 8), 'seq', m.seq, 'scope', scope);
+    return;
+  }
+  const requester = displayNameFor(m.authorUserId);
+  const toUserId = metaStr(m, 'to_user_id');
+  const targetName = toUserId ? displayNameFor(toUserId) : null;
+  const detail = metaStr(m, 'summary') || truncate(m.body, 120);
   try {
     if (Notification.isSupported()) {
-      new Notification({
-        title: `Dopl: request in "${channel.name}"`,
-        body: truncate(m.body, 120),
-        silent: false,
-      }).show();
+      const n = new Notification({
+        title: entry.channel.name,
+        body: `${requester}'s agent asked ${targetName || 'the channel'}: ${detail}`,
+        silent: true,
+      });
+      n.on('click', () => openChannelForEntry(entry));
+      n.show();
     }
-  } catch (_) { /* notifications are best-effort */ }
-
-  const { response } = await dialog.showMessageBox({
-    type: 'question',
-    buttons: ['Deny', 'Allow once'],
-    defaultId: 0,
-    cancelId: 0,
-    noLink: true,
-    title: 'Dopl Channels',
-    message: `Run a Claude session to answer this message in "${channel.name}"?`,
-    detail: truncate(m.body, 600),
-  });
-  return response === 1;
+  } catch (_) { /* best-effort */ }
+  diag('fyi sent', entry.channel.id.slice(0, 8), 'seq', m.seq, 'target', targetName ? 'named' : 'channel');
 }
 
 // M5a: bounded retry with backoff. `clientMsgId` is deterministic per (channel,
@@ -222,7 +371,10 @@ async function postResult(entry, m, text) {
 async function handleTrigger(entry, m) {
   // H1: gate on CLI resolution. If claude can't be found, don't prompt and don't
   // post — the one-time "CLI not found" notice already fired at startup.
-  if (!(await spawner.claudeAvailable())) return;
+  if (!(await spawner.claudeAvailable())) {
+    diag('trigger skipped: claude CLI unresolved');
+    return;
+  }
 
   // M5b: persist the pending request BEFORE the dialog so a crash between consent
   // and post can be recovered on next launch.
@@ -232,7 +384,9 @@ async function handleTrigger(entry, m) {
     workspaceId: entry.workspaceId,
   });
 
-  const approved = await requestConsent(entry.channel, m);
+  diag('consent prompt:', entry.channel.id.slice(0, 8), 'seq', m.seq);
+  const approved = await requestConsent(entry, m);
+  diag('consent result:', approved ? 'ALLOWED' : 'denied');
   if (!approved) {
     clearPending(entry.channel.id); // Deny = no replay
     console.log('[listener] consent denied for', entry.channel.id, 'seq', m.seq);
@@ -243,7 +397,7 @@ async function handleTrigger(entry, m) {
     message: m.body,
     context: {
       channelName: entry.channel.name,
-      authorName: `user ${String(m.authorUserId).slice(0, 8)}`,
+      authorName: displayNameFor(m.authorUserId),
     },
   });
   // L3: a busy skip (another session already running for this channel) is not a
@@ -262,7 +416,42 @@ async function handleTrigger(entry, m) {
     clearPending(entry.channel.id);
     return;
   }
-  if (result.text) await postResult(entry, m, result.text);
+  diag('spawn result:', result.skipped ? `skipped=${result.skipped}` : `text ${String(result.text || '').length} chars${result.isError ? ' (error)' : ''}`);
+
+  // An errored run (expired CLI login, timeout, crash) must NOT reply into the
+  // shared channel — that leaks local machine state to teammates and spams the
+  // thread. Surface it locally instead; the requester can resend after the
+  // operator fixes the cause.
+  if (result.isError) {
+    clearPending(entry.channel.id);
+    // Feature D: an auth-shaped failure (expired CLI login) gets the in-app
+    // "Sign in to Claude" flow instead of the generic failure notice. The
+    // untruncated errorDetail (local-only, never posted) is matched first.
+    const authText = result.errorDetail || result.text || '';
+    if (claudeAuth.isAuthShapedError(authText)) {
+      diag('spawn auth-shaped error -> sign-in flow');
+      claudeAuth.startSignInFlow({
+        getClaudeBin: () => spawner.getClaudeBinPath(),
+        channelName: entry.channel.name,
+      });
+      return; // do NOT post, do NOT generic-notify
+    }
+    diag('error reply suppressed (local notify only)');
+    try {
+      if (Notification.isSupported()) {
+        new Notification({
+          title: `Dopl: channel request failed in "${entry.channel.name}"`,
+          body: truncate(result.text || 'The agent could not complete this request.', 160),
+        }).show();
+      }
+    } catch (_) { /* best-effort */ }
+    return;
+  }
+
+  if (result.text) {
+    const posted = await postResult(entry, m, result.text);
+    diag('post reply:', posted ? 'ok' : 'FAILED');
+  }
   clearPending(entry.channel.id);
   try {
     if (Notification.isSupported()) {
@@ -374,7 +563,17 @@ async function channelLoop(entry) {
     } else {
       for (const m of msgs) {
         if ((m.seq || 0) > getCursor(entry.channel.id)) setCursor(entry.channel.id, m.seq);
-        if (isTrigger(m, myUserId)) await handleTrigger(entry, m);
+        const verdict = classify(m, entry, myUserId);
+        diag(
+          'msg', entry.channel.id.slice(0, 8), 'seq', m.seq, 'kind', m.kind,
+          'authorKind', m.authorKind, 'author', String(m.authorUserId || '').slice(0, 8),
+          'me', myUserId ? String(myUserId).slice(0, 8) : 'NULL',
+          'members', Number(entry.channel && entry.channel.memberCount) || '?',
+          'to', metaStr(m, 'to_user_id') ? String(metaStr(m, 'to_user_id')).slice(0, 8) : '-',
+          'verdict', verdict
+        );
+        if (verdict === 'trigger') await handleTrigger(entry, m);
+        else if (verdict === 'fyi') sendFyi(entry, m);
       }
       if (msgs.length === 0 && maxSeq > since) setCursor(entry.channel.id, maxSeq);
     }
@@ -439,6 +638,11 @@ async function reconcileInner() {
   const desired = new Map();
   for (const ws of workspaces) {
     if (!ws || !ws.id) continue;
+    // Feature B/C: refresh the userId->displayName cache once per workspace per
+    // reconcile so notification copy has requester + target names.
+    await refreshNameCache(ws);
+    // Canonical URL segment for the notification deep-link (Feature B).
+    const workspaceSegment = ws.slug && ws.publicId ? `${ws.slug}-${ws.publicId}` : null;
     let chans = [];
     try {
       chans = await listChannels(ws.id);
@@ -448,11 +652,11 @@ async function reconcileInner() {
     for (const c of chans) {
       if (!c || !c.id) continue;
       if (c.archivedAt) continue;
-      desired.set(c.id, { workspaceId: ws.id, channel: c });
+      desired.set(c.id, { workspaceId: ws.id, workspaceSegment, channel: c });
     }
   }
 
-  // H2: resolve the operator identity before any loop can evaluate isTrigger.
+  // H2: resolve the operator identity before any loop can evaluate classify().
   if (!myUserId) {
     const firstWs = desired.size ? desired.values().next().value.workspaceId : undefined;
     myUserId = await resolveIdentity(firstWs);
@@ -474,6 +678,7 @@ async function reconcileInner() {
       const entry = {
         channel: d.channel,
         workspaceId: d.workspaceId,
+        workspaceSegment: d.workspaceSegment,
         stop: false,
         attempts: 0,
         seedMode: !isSeeded(id),
@@ -484,6 +689,7 @@ async function reconcileInner() {
     } else {
       existing.channel = d.channel;
       existing.workspaceId = d.workspaceId;
+      existing.workspaceSegment = d.workspaceSegment;
     }
   }
   setStatus();
@@ -509,11 +715,19 @@ function setStatus() {
   }
 }
 
-function start(statusCb) {
+// Register window-control callbacks (from index.js) used when a notification is
+// clicked: openChannel(workspaceSegment) shows the window + navigates the webview.
+function setHandlers(h) {
+  handlers = h || {};
+}
+
+function start(statusCb, h) {
   onStatus = statusCb || onStatus;
+  if (h) handlers = h;
   if (running) { reconcile(); return; }
   running = true;
   spawner.claudeAvailable().then((ok) => {
+    diag('claudeAvailable at start:', ok);
     if (!ok && !cliWarned) {
       cliWarned = true;
       try {
@@ -544,4 +758,4 @@ function stop() {
   setStatus();
 }
 
-module.exports = { start, stop, restart, status };
+module.exports = { start, stop, restart, status, setHandlers };

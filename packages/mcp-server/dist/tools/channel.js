@@ -26,7 +26,7 @@ const CHANNEL_DESCRIPTION = `Cross-user collaboration channels — shared in-wor
 - "list" — list the channels you can see in the active workspace (name, slug, id, visibility, member count, last activity). Start here to find a channel's slug or id.
 - "open" — create a channel. Requires: name. Optional: topic, visibility ("private" default = invite-only, or "public" = visible to the whole workspace). You become its owner.
 - "invite" — add a workspace member to a channel. Requires: channel (slug or id) + member (an email or user id — must be an ACTIVE member of this workspace; invites are in-workspace only). You must already belong to the channel.
-- "post" — post to a channel. Requires: channel + body. Optional: kind (default "message" = chat; "task_started" / "task_progress" / "task_finished" / "task_failed" = structured activity events — put the machine-readable payload in \`metadata\` and a human-readable one-liner in \`body\` so the thread stays readable), metadata (a JSON object, e.g. {taskId, status, durationMs, refs}), client_msg_id (idempotency key — re-posting with the same id won't duplicate).
+- "post" — post to a channel. Requires: channel + body. ALWAYS pass \`summary\`: a short one-line intent (<=200 chars) that becomes the notification the other member sees. Pass \`to\` (an email or user id of a channel member) when your message is a request aimed at one specific person's agent — that member's listener is then the only one triggered; leave it off for general chat or broadcasts. Optional: kind (default "message" = chat; "task_started" / "task_progress" / "task_finished" / "task_failed" = structured activity events — put the machine-readable payload in \`metadata\` and a human-readable one-liner in \`body\` so the thread stays readable), metadata (a JSON object, e.g. {taskId, status, durationMs, refs}), client_msg_id (idempotency key — re-posting with the same id won't duplicate).
 - "read" — read a channel's recent messages, ascending by seq. Requires: channel. Optional: since (return only messages after this seq), limit (max 200). Note the highest seq to use as your next \`since\`.
 - "await" — LONG-POLL for new messages: blocks up to ~50s waiting for a message with seq > since, then returns the new messages (or nothing, on timeout). Requires: channel + since (the last seq you've processed). Optional: timeout_ms (<=50000, default 50000).
 
@@ -60,6 +60,14 @@ function registerChannelTool(register, client) {
             .string()
             .optional()
             .describe('op="post" (required): the message text. For a task_* kind, put a human-readable one-liner here and the structured payload in metadata.'),
+        to: zod_1.z
+            .string()
+            .optional()
+            .describe('op="post": address this message to one channel member — an email or user id (resolved like invite\'s member). Use it when the post is a request for that specific person\'s agent; their listener is the only one triggered. Omit for general chat / broadcasts.'),
+        summary: zod_1.z
+            .string()
+            .optional()
+            .describe('op="post": a short one-line intent (<=200 chars). ALWAYS set it — it becomes the notification the receiving member sees.'),
         kind: zod_1.z
             .enum([
             "message",
@@ -120,7 +128,13 @@ function registerChannelTool(register, client) {
                 const miss = (0, respond_1.missingParams)("post", args, ["channel", "body"]);
                 if (miss)
                     return miss;
-                return (0, channel_ops_write_1.opPost)(client, args.channel, args.body, args.kind, args.metadata, args.client_msg_id);
+                return (0, channel_ops_write_1.opPost)(client, args.channel, args.body, {
+                    kind: args.kind,
+                    metadata: args.metadata,
+                    clientMsgId: args.client_msg_id,
+                    to: args.to,
+                    summary: args.summary,
+                });
             }
             case "read": {
                 const miss = (0, respond_1.missingParams)("read", args, ["channel"]);

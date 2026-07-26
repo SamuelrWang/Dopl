@@ -7,12 +7,14 @@ import type {
   ChannelUpdateInput,
 } from "../schema";
 import {
+  ChannelAddresseeNotMemberError,
   ChannelForbiddenError,
   ChannelInviteeNotMemberError,
   ChannelLastOwnerError,
   ChannelMemberExistsError,
   ChannelSlugConflictError,
 } from "./errors";
+import type { NotifyScope } from "../types";
 import { mapMemberRow, mapMessageRow } from "./dto";
 import * as repo from "./repository";
 import { getChannel } from "./service-reads";
@@ -120,11 +122,28 @@ export async function postMessage(
     throw new ChannelForbiddenError("post to this channel");
   }
 
+  // Addressing (v1.1): a `toUserId` must name an actual channel member —
+  // otherwise the message would target a listener that will never see it.
+  if (input.toUserId && !(await repo.findMembership(channel.id, input.toUserId))) {
+    throw new ChannelAddresseeNotMemberError(input.toUserId);
+  }
+
   // Idempotency: a re-sent client_msg_id returns the stored message.
   if (input.clientMsgId) {
     const existing = await repo.findMessageByClientId(channel.id, input.clientMsgId);
     if (existing) return hydrateOne(existing);
   }
+
+  // Fold addressing into metadata as `{to_user_id, summary}` (jsonb — no
+  // schema change), preserving any caller-supplied structured payload.
+  const metadata: Record<string, unknown> = { ...(input.metadata ?? {}) };
+  // Reserved keys are settable ONLY via the validated top-level fields: raw
+  // metadata copies would bypass the addressee-membership check above and the
+  // schema's summary length cap (consent-prompt spoofing on non-members).
+  delete metadata.to_user_id;
+  delete metadata.summary;
+  if (input.toUserId) metadata.to_user_id = input.toUserId;
+  if (input.summary) metadata.summary = input.summary;
 
   // `system` is server-reserved and rejected by the route schema, so a posted
   // message always ties to the acting user (agent posts included — the agent
@@ -141,7 +160,7 @@ export async function postMessage(
       author_kind: authorKind,
       kind: input.kind ?? "message",
       body: input.body,
-      metadata: input.metadata ?? {},
+      metadata,
       client_msg_id: input.clientMsgId ?? null,
     });
   } catch (err) {
@@ -237,4 +256,24 @@ export async function removeMember(
   }
 
   await repo.deleteMember(channel.id, targetUserId);
+}
+
+/**
+ * Update the CALLER's own notification scope for a channel. Any channel
+ * member may set their own scope (it's a personal preference, not a
+ * management action); a non-member is refused. Returns the updated
+ * membership DTO.
+ */
+export async function updateMyNotifyScope(
+  ctx: ChannelContext,
+  ref: string,
+  notifyScope: NotifyScope
+): Promise<ChannelMember> {
+  const { channel, membership } = await loadVisibleChannel(ctx, ref);
+  if (!membership) {
+    throw new ChannelForbiddenError("set notifications for this channel");
+  }
+  const row = await repo.updateNotifyScope(channel.id, ctx.userId, notifyScope);
+  const profiles = await profilesById([ctx.userId]);
+  return mapMemberRow(row, profiles.get(ctx.userId));
 }

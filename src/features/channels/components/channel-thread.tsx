@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import {
   Archive,
   ArchiveRestore,
+  Bell,
+  BellOff,
   Hash,
   LogOut,
   MoreHorizontal,
@@ -13,16 +15,41 @@ import {
 import { cn } from "@/shared/lib/utils";
 import { MenuItem, Popover } from "@/shared/ui/popover-menu";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
-import type { Channel, ChannelMessage } from "../types";
+import type { Channel, ChannelMessage, NotifyScope } from "../types";
 import { MessageThread } from "./message-thread";
 import { MessageComposer } from "./message-composer";
+
+/** The three per-channel notification choices, shown in the bell popover. */
+const NOTIFY_OPTIONS: Array<{
+  scope: NotifyScope;
+  label: string;
+  description: string;
+}> = [
+  {
+    scope: "all",
+    label: "All activity",
+    description: "Requests to you prompt; other activity notifies quietly.",
+  },
+  {
+    scope: "addressed",
+    label: "Addressed to me only",
+    description: "Notify only when a request names you.",
+  },
+  {
+    scope: "none",
+    label: "Muted",
+    description: "No notifications from this channel.",
+  },
+];
 
 interface Props {
   channel: Channel;
   messages: ChannelMessage[];
   loading: boolean;
+  notifyScope: NotifyScope;
   onSend: (body: string) => Promise<void>;
   onInvite: () => void;
+  onSetNotifyScope: (scope: NotifyScope) => void;
   onToggleArchive: () => void;
   onToggleVisibility: () => void;
   onDelete: () => void;
@@ -40,8 +67,10 @@ export function ChannelThread({
   channel,
   messages,
   loading,
+  notifyScope,
   onSend,
   onInvite,
+  onSetNotifyScope,
   onToggleArchive,
   onToggleVisibility,
   onDelete,
@@ -49,6 +78,7 @@ export function ChannelThread({
   onLeave,
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [notifyOpen, setNotifyOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const canManage = channel.role === "owner";
@@ -78,6 +108,44 @@ export function ChannelThread({
         <span className="shrink-0 text-caption text-text-muted">
           {channel.memberCount} {channel.memberCount === 1 ? "member" : "members"}
         </span>
+        {channel.isMember && (
+          <div className="relative shrink-0">
+            <button
+              type="button"
+              onClick={() => setNotifyOpen((v) => !v)}
+              aria-label="Notification settings"
+              title="Notification settings"
+              className="flex h-7 w-7 items-center justify-center rounded-[7px] text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary"
+            >
+              {notifyScope === "none" ? (
+                <BellOff size={16} />
+              ) : (
+                <Bell size={16} />
+              )}
+            </button>
+            <Popover
+              open={notifyOpen}
+              onClose={() => setNotifyOpen(false)}
+              align="right"
+              className="min-w-[248px]"
+            >
+              {NOTIFY_OPTIONS.map((option) => (
+                <MenuItem
+                  key={option.scope}
+                  showCheck
+                  active={notifyScope === option.scope}
+                  description={option.description}
+                  onSelect={() => {
+                    setNotifyOpen(false);
+                    if (option.scope !== notifyScope) onSetNotifyScope(option.scope);
+                  }}
+                >
+                  {option.label}
+                </MenuItem>
+              ))}
+            </Popover>
+          </div>
+        )}
         {channel.isMember && (
           <button
             type="button"

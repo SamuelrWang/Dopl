@@ -14,6 +14,15 @@ export type ChannelVisibility = "private" | "public";
 /** Channel-scoped role: the creator is `owner`, everyone added is `member`. */
 export type ChannelRole = "owner" | "member";
 
+/**
+ * Per-member notification scope for a channel (how loudly it notifies the
+ * member's desktop listener). `all` = addressed consent prompts + silent FYI
+ * notifications; `addressed` = only addressed-to-me prompts; `none` = fully
+ * muted (still listed and readable). An addressed consent prompt always
+ * shows regardless — `none` only silences FYI + non-addressed noise.
+ */
+export type NotifyScope = "all" | "addressed" | "none";
+
 /** Who wrote a message: a human, an agent (MCP/CLI), or the system. */
 export type MessageAuthorKind = "user" | "agent" | "system";
 
@@ -54,6 +63,8 @@ export type Channel = {
   lastReadAt: string | null;
   /** True when there is a message newer than the caller's `lastReadAt`. */
   unread: boolean;
+  /** The caller's own notification scope, null when they are not a member. */
+  myNotifyScope: NotifyScope | null;
 };
 
 export type ChannelMessage = {
@@ -78,6 +89,9 @@ export type ChannelMember = {
   userId: string;
   role: ChannelRole;
   lastReadAt: string | null;
+  /** Per-channel notification scope. Private preference: present only on the
+   *  caller's own row; null for other members. */
+  notifyScope: NotifyScope | null;
   addedBy: string | null;
   joinedAt: string;
   /** Hydrated profile fields for the roster. */

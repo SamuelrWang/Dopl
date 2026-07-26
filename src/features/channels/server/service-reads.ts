@@ -42,6 +42,7 @@ function toChannelDto(
     lastMessageAt: extras.lasts.get(row.id) ?? null,
     role: (membership?.role as Channel["role"]) ?? null,
     lastReadAt: membership?.last_read_at ?? null,
+    notifyScope: (membership?.notify_scope as Channel["myNotifyScope"]) ?? null,
   });
 }
 
@@ -90,7 +91,13 @@ export async function listChannelMembers(
   const { channel } = await loadVisibleChannel(ctx, ref);
   const rows = await repo.listMembers(channel.id);
   const profiles = await profilesById(rows.map((r) => r.user_id));
-  return rows.map((row) => mapMemberRow(row, profiles.get(row.user_id)));
+  // notify_scope is a private preference: expose it only on the caller's own
+  // row (Channel.myNotifyScope covers the self case) — other members shouldn't
+  // see who muted the channel.
+  return rows.map((row) => {
+    const member = mapMemberRow(row, profiles.get(row.user_id));
+    return row.user_id === ctx.userId ? member : { ...member, notifyScope: null };
+  });
 }
 
 async function hydrateMessages(

@@ -296,6 +296,24 @@ export async function updateLastRead(
   if (error) throw error;
 }
 
+/** Set a member's own notify scope; returns the updated membership row. */
+export async function updateNotifyScope(
+  channelId: string,
+  userId: string,
+  notifyScope: string
+): Promise<ChannelMemberRow> {
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("channel_members")
+    .update({ notify_scope: notifyScope })
+    .eq("channel_id", channelId)
+    .eq("user_id", userId)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data as ChannelMemberRow;
+}
+
 // ─── Messages ───────────────────────────────────────────────────────
 
 interface MessageReadOpts {

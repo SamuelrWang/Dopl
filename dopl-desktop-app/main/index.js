@@ -8,6 +8,8 @@ const { APP_ORIGIN, HOME_URL, PROTOCOL } = require('./config');
 const auth = require('./auth');
 const tray = require('./tray');
 const listener = require('./channel-listener');
+const mcpConfig = require('./mcp-config');
+const { diag } = require('./diag');
 
 const store = new Store();
 let mainWindow = null;
@@ -103,6 +105,18 @@ function showMainWindow() {
   if (mainWindow.isMinimized()) mainWindow.restore();
   mainWindow.show();
   mainWindow.focus();
+}
+
+// Feature B: clicking a channel notification opens the app and navigates the
+// webview to that workspace's Channels page. `segment` is the canonical
+// `{slug}-{publicId}` URL segment supplied by the listener.
+function navigateToChannels(segment) {
+  showMainWindow();
+  if (!segment || !mainWindow || mainWindow.isDestroyed()) return;
+  const url = `${APP_ORIGIN}/${segment}/channels`;
+  mainWindow.loadURL(url).catch((err) =>
+    console.error('[nav] channels load failed:', err && err.message)
+  );
 }
 
 function loadApp() {
@@ -276,8 +290,11 @@ function openDeepLink(url) {
   }
 
   // Give the completion page a moment to establish cookies, then (re)start the
-  // listener against the fresh session.
-  setTimeout(() => listener.restart(), 3000);
+  // listener against the fresh session and ensure the CLI's Dopl MCP config.
+  setTimeout(() => {
+    listener.restart();
+    mcpConfig.ensureMcpConfig().catch((err) => diag('mcp-config post-signin error', err && err.message));
+  }, 3000);
 }
 
 function handleDeepLink(url) {
@@ -345,8 +362,13 @@ if (!gotLock) {
     createMainWindow();
     flushPendingDeepLink();
 
-    // Start the Channels listener; it drives the tray status label.
-    listener.start((status) => tray.update(status));
+    // Start the Channels listener; it drives the tray status label. The
+    // openChannel handler lets a clicked notification open + navigate the window.
+    listener.start((status) => tray.update(status), { openChannel: navigateToChannels });
+
+    // Feature E: ensure the Claude CLI has the Dopl MCP configured (best-effort;
+    // no-ops when signed out or the CLI/endpoint isn't available).
+    mcpConfig.ensureMcpConfig().catch((err) => diag('mcp-config startup error', err && err.message));
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { HttpError } from "@/shared/lib/http-error";
 import { toHttpErrorResponse } from "@/shared/api/http-error-response";
 import {
+  ChannelAddresseeNotMemberError,
   ChannelForbiddenError,
   ChannelInviteeNotMemberError,
   ChannelLastOwnerError,
@@ -33,6 +34,9 @@ export function mapChannelError(err: unknown): HttpError | null {
   }
   if (err instanceof ChannelInviteeNotMemberError) {
     return new HttpError(422, "CHANNEL_INVITEE_NOT_MEMBER", err.message);
+  }
+  if (err instanceof ChannelAddresseeNotMemberError) {
+    return new HttpError(400, "CHANNEL_ADDRESSEE_NOT_MEMBER", err.message);
   }
   return null;
 }

@@ -40,6 +40,16 @@ export class ChannelMemberExistsError extends ChannelError {
 }
 
 /**
+ * A posted message was addressed (`toUserId`) to someone who is not a
+ * member of the channel. Mapped to a 400 so the caller fixes the address.
+ */
+export class ChannelAddresseeNotMemberError extends ChannelError {
+  constructor(public readonly userId: string) {
+    super(`Addressed user is not a member of this channel: ${userId}`);
+  }
+}
+
+/**
  * Removing this member would leave the channel with no owner. Blocks a last
  * owner leaving / being removed — transfer ownership first.
  */

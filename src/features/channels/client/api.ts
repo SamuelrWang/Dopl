@@ -4,6 +4,7 @@ import type {
   ChannelMember,
   ChannelMessage,
   ChannelVisibility,
+  NotifyScope,
 } from "../types";
 
 /** Domain error wrapper so components can branch on `code`. */
@@ -130,4 +131,17 @@ export async function removeChannelMember(
     body: { userId },
     workspaceId,
   });
+}
+
+/** Set the caller's own notification scope for a channel. */
+export async function updateMyNotifyScope(
+  channelId: string,
+  notifyScope: NotifyScope,
+  workspaceId: string
+): Promise<ChannelMember> {
+  const data = await request<{ member: ChannelMember }>(
+    channelPath(channelId, "/members"),
+    { method: "PATCH", body: { notifyScope }, workspaceId }
+  );
+  return data.member;
 }

@@ -6,6 +6,7 @@ import type {
   ChannelRole,
   ChannelVisibility,
   MessageAuthorKind,
+  NotifyScope,
 } from "../types";
 
 /**
@@ -35,6 +36,7 @@ export type ChannelMemberRow = {
   workspace_id: string;
   role: string;
   last_read_at: string | null;
+  notify_scope: string;
   added_by: string | null;
   joined_at: string;
 };
@@ -66,6 +68,8 @@ export interface ChannelViewerState {
   lastMessageAt: string | null;
   role: ChannelRole | null;
   lastReadAt: string | null;
+  /** The caller's own notify scope, null when they are not a member. */
+  notifyScope: NotifyScope | null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -103,6 +107,7 @@ export function mapChannelRow(
     isMember,
     lastReadAt: state.lastReadAt,
     unread,
+    myNotifyScope: state.notifyScope,
   };
 }
 
@@ -135,6 +140,7 @@ export function mapMemberRow(
     userId: row.user_id,
     role: row.role as ChannelRole,
     lastReadAt: row.last_read_at,
+    notifyScope: (row.notify_scope as NotifyScope) ?? "all",
     addedBy: row.added_by,
     joinedAt: row.joined_at,
     displayName: profile?.display_name ?? null,

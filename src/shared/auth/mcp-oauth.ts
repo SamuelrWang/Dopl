@@ -29,6 +29,20 @@ const CLIENT_PREFIX = "dopl_client_";
 export const ACCESS_TTL_S = 60 * 60; // 1 hour
 const REFRESH_TTL_S = 60 * 60 * 24 * 30; // 30 days
 const CODE_TTL_S = 5 * 60; // 5 minutes
+/** Device (CLI) access token TTL — long-lived so a desktop listener stays
+ *  connected without a refresh round-trip. */
+export const DEVICE_TOKEN_TTL_S = 60 * 60 * 24 * 90; // 90 days
+
+/**
+ * The reserved first-party client every CLI device token is issued under.
+ * The device flow mints a token directly from an authenticated Dopl session
+ * (no redirect / auth-code round-trip), so — unlike DCR clients (one per MCP
+ * app registration) — a single fixed client row backs them all.
+ * `mcp_tokens.client_id` is a NOT NULL FK to `oauth_clients`, so this row
+ * must exist before a device token can reference it (see `ensureDeviceClient`).
+ */
+const DEVICE_CLIENT_ID = "dopl_client_device_cli";
+const DEVICE_CLIENT_NAME = "Dopl Desktop (device tokens)";
 
 // Per-instance debounce so a hot token doesn't write last_used_at on every
 // request (mirrors touchMcpStatus). Serverless instances each keep their own
@@ -205,6 +219,69 @@ export async function issueTokens(input: {
     expires_in: ACCESS_TTL_S,
     scopes: input.scopes,
   };
+}
+
+/** Ensure the reserved device client row exists (idempotent, no-op on repeat). */
+async function ensureDeviceClient(): Promise<void> {
+  const db = supabaseAdmin();
+  const { error } = await db.from("oauth_clients").upsert(
+    {
+      client_id: DEVICE_CLIENT_ID,
+      client_name: DEVICE_CLIENT_NAME,
+      // Device flow has no redirect; grant_types / auth_method take DB defaults.
+      redirect_uris: [],
+    },
+    { onConflict: "client_id", ignoreDuplicates: true },
+  );
+  if (error) throw error;
+}
+
+/**
+ * Mint a long-lived (90-day) device access token for a CLI / desktop
+ * listener, minted directly from an authenticated Dopl session (the
+ * `/api/auth/mcp-device-token` endpoint gates it to cookie callers). Reuses
+ * the exact `mcp_tokens` storage + `validateAccessToken` path the OAuth flow
+ * uses — the only differences from `issueTokens` are the far-longer TTL, the
+ * reserved device client, no refresh token (a device re-mints rather than
+ * rotating), and the human `deviceLabel` (stored as `client_name` so the
+ * token is listable + revocable from the settings "Connected apps" list).
+ * Scopes default to the full read+write MCP set.
+ */
+export async function issueDeviceToken(input: {
+  userId: string;
+  deviceLabel: string;
+  scopes?: string[];
+}): Promise<{ token: string; expiresAt: string }> {
+  await ensureDeviceClient();
+  const db = supabaseAdmin();
+  // One active device token per (user, label): revoke prior mints for the same
+  // label so a looping client can't grow unbounded 90-day credentials. Clients
+  // include a per-device label (e.g. hostname) so two machines don't churn
+  // each other's tokens.
+  await db
+    .from("mcp_tokens")
+    .update({ revoked_at: new Date().toISOString() })
+    .eq("user_id", input.userId)
+    .eq("client_id", DEVICE_CLIENT_ID)
+    .eq("client_name", input.deviceLabel)
+    .is("revoked_at", null);
+  const accessToken = randToken(ACCESS_PREFIX);
+  const expiresAt = new Date(
+    Date.now() + DEVICE_TOKEN_TTL_S * 1000,
+  ).toISOString();
+  const { error } = await db.from("mcp_tokens").insert({
+    user_id: input.userId,
+    client_id: DEVICE_CLIENT_ID,
+    access_token_hash: sha256(accessToken),
+    // No refresh token: re-mint via the endpoint rather than rotate.
+    refresh_token_hash: null,
+    scopes: input.scopes ?? [...MCP_SCOPES],
+    access_expires_at: expiresAt,
+    refresh_expires_at: null,
+    client_name: input.deviceLabel,
+  });
+  if (error) throw error;
+  return { token: accessToken, expiresAt };
 }
 
 /**

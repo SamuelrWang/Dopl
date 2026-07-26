@@ -12,13 +12,15 @@ const VisibilitySchema = z.enum(["private", "public"]);
 // posts task results with authorKind `agent` over a cookie session, and the
 // service derives `agent` vs `user` from the token when authorKind is omitted.
 const PostableAuthorKindSchema = z.enum(["user", "agent"]);
-const MessageKindSchema = z.enum([
+// `system` is server-emitted only — callers can never post it (matches the MCP
+// tool's post enum, which also excludes it). The full kind union (incl.
+// `system`) lives in types.ts; the schema only ever validates caller input.
+const PostableMessageKindSchema = z.enum([
   "message",
   "task_started",
   "task_progress",
   "task_finished",
   "task_failed",
-  "system",
 ]);
 
 /**
@@ -52,16 +54,34 @@ export type ChannelUpdateInput = z.infer<typeof ChannelUpdateSchema>;
  * Post a message or activity event. `body` carries the human-readable
  * render (so the thread needs no special-casing per kind); structured
  * payload rides in `metadata`. `clientMsgId` is the idempotency key.
+ *
+ * Addressing (v1.1): `toUserId` targets a specific channel member (the
+ * service validates it is an active member, else 400) and `summary` is a
+ * one-line intent used in the receiver's notification. Both are persisted
+ * into `metadata` as `{to_user_id, summary}`.
  */
 export const ChannelMessageCreateSchema = z.object({
   body: z.string().min(1).max(16000),
-  kind: MessageKindSchema.optional(),
+  kind: PostableMessageKindSchema.optional(),
   authorKind: PostableAuthorKindSchema.optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
   clientMsgId: z.string().min(1).max(200).optional(),
+  toUserId: z.string().uuid().optional(),
+  summary: z.string().trim().min(1).max(200).optional(),
 });
 export type ChannelMessageCreateInput = z.infer<
   typeof ChannelMessageCreateSchema
+>;
+
+/** Per-member notification scope for a channel (self-service preference). */
+const NotifyScopeSchema = z.enum(["all", "addressed", "none"]);
+
+/** PATCH /members body: a member updating their OWN notify scope. */
+export const ChannelNotifyScopeUpdateSchema = z.object({
+  notifyScope: NotifyScopeSchema,
+});
+export type ChannelNotifyScopeUpdateInput = z.infer<
+  typeof ChannelNotifyScopeUpdateSchema
 >;
 
 export const ChannelMemberAddSchema = z.object({

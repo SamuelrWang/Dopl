@@ -16,6 +16,13 @@ const PROTOCOL = 'dopl';
 // The Next.js `/api/*` routes live on the same origin as the app.
 const API_BASE = APP_ORIGIN;
 
+// Dopl MCP endpoint the responding agents (spawned Claude sessions) connect to,
+// and the cookie-authed endpoint that mints a device token for it. Derived from
+// the app origin so an env override stays consistent (prod resolves to
+// https://www.usedopl.com/api/mcp).
+const MCP_URL = `${API_BASE}/api/mcp`;
+const MCP_DEVICE_TOKEN_PATH = '/api/auth/mcp-device-token';
+
 // Supabase project the web app exposes (NEXT_PUBLIC_* — already shipped to every
 // browser, so embedding the publishable anon key here leaks nothing new). Used
 // only for the token-refresh endpoint. Overridable via env for other envs.
@@ -52,6 +59,8 @@ module.exports = {
   HOME_URL,
   PROTOCOL,
   API_BASE,
+  MCP_URL,
+  MCP_DEVICE_TOKEN_PATH,
   SUPABASE_URL,
   SUPABASE_ANON_KEY,
   SUPABASE_REF,
