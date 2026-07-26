@@ -7,6 +7,7 @@ const Store = require('electron-store');
 const { APP_ORIGIN, HOME_URL, PROTOCOL } = require('./config');
 const auth = require('./auth');
 const tray = require('./tray');
+const updater = require('./updater');
 const listener = require('./channel-listener');
 const mcpConfig = require('./mcp-config');
 const { diag } = require('./diag');
@@ -357,7 +358,12 @@ if (!gotLock) {
     tray.create({
       onOpen: () => showMainWindow(),
       onQuit: () => { app.isQuitting = true; app.quit(); },
+      onUpdate: () => updater.quitAndInstall(),
     });
+
+    // Auto-update (electron-updater ↔ GitHub Releases). Silent download; the
+    // tray gains a "Restart to install" item when one is ready.
+    updater.init({ onReady: (version) => tray.setUpdateReady(version) });
 
     createMainWindow();
     flushPendingDeepLink();

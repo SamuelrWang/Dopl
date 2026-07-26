@@ -8,10 +8,12 @@
     "smoke": "electron scripts/smoke-test.js",
     "build": "electron-builder --mac",
     "dist": "electron-builder --mac",
+    "release": "electron-builder --mac --publish always",
     "notarize": "bash scripts/finish-notarize.sh"
   },
   "dependencies": {
-    "electron-store": "^8.1.0"
+    "electron-store": "^8.1.0",
+    "electron-updater": "^6.8.9"
   },
   "devDependencies": {
     "electron": "^43.2.0",
@@ -22,7 +24,7 @@
     "productName": "Dopl",
     "mac": {
       "icon": "build/icon.icns",
-      "target": "dmg",
+      "target": ["zip", "dmg"],
       "category": "public.app-category.productivity",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
@@ -34,12 +36,21 @@
         "CFBundleURLTypes": [
           {
             "CFBundleURLName": "com.dopl.connect",
-            "CFBundleURLSchemes": ["dopl"]
+            "CFBundleURLSchemes": [
+              "dopl"
+            ]
           }
         ]
       }
     },
     "afterSign": "./scripts/notarize.js",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "SamuelrWang",
+        "repo": "Dopl"
+      }
+    ],
     "dmg": {
       "title": "Dopl",
       "contents": [

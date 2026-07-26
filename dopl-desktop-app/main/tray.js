@@ -7,6 +7,7 @@ const path = require('path');
 let tray = null;
 let currentStatus = 'Listener: starting…';
 let handlers = {};
+let updateReadyVersion = null;
 
 function iconPath() {
   // Base 16px + a trayTemplate@2x.png sibling for retina (nativeImage picks up
@@ -15,13 +16,22 @@ function iconPath() {
 }
 
 function buildMenu() {
-  const menu = Menu.buildFromTemplate([
+  const template = [
     { label: 'Open Dopl', click: () => handlers.onOpen && handlers.onOpen() },
     { type: 'separator' },
     { label: currentStatus, enabled: false },
+  ];
+  if (updateReadyVersion) {
+    template.push({
+      label: `Restart to install v${updateReadyVersion}`,
+      click: () => handlers.onUpdate && handlers.onUpdate(),
+    });
+  }
+  template.push(
     { type: 'separator' },
-    { label: 'Quit Dopl', click: () => handlers.onQuit && handlers.onQuit() },
-  ]);
+    { label: 'Quit Dopl', click: () => handlers.onQuit && handlers.onQuit() }
+  );
+  const menu = Menu.buildFromTemplate(template);
   tray.setContextMenu(menu);
   tray.setToolTip(currentStatus);
 }
@@ -41,8 +51,13 @@ function update(status) {
   if (tray) buildMenu();
 }
 
+function setUpdateReady(version) {
+  updateReadyVersion = version || null;
+  if (tray) buildMenu();
+}
+
 function destroy() {
   if (tray) { tray.destroy(); tray = null; }
 }
 
-module.exports = { create, update, destroy };
+module.exports = { create, update, setUpdateReady, destroy };
