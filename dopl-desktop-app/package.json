@@ -1,13 +1,13 @@
 {
   "name": "dopl-desktop",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "Dopl — desktop app",
   "main": "main/index.js",
   "scripts": {
     "start": "electron .",
     "smoke": "electron scripts/smoke-test.js",
     "lint": "eslint .",
-    "test": "node --test test/classify.test.mjs test/task-notify.test.mjs test/tool-profiles.test.mjs test/seed-decision.test.mjs test/consent-watcher.test.mjs test/channel-dirs.test.mjs",
+    "test": "node --test test/classify.test.mjs test/task-notify.test.mjs test/tool-profiles.test.mjs test/seed-decision.test.mjs test/consent-watcher.test.mjs test/channel-dirs.test.mjs test/load-guard.test.mjs",
     "build": "electron-builder --mac",
     "dist": "electron-builder --mac",
     "release": "electron-builder --mac --publish always",

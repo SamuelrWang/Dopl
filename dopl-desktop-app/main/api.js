@@ -33,4 +33,46 @@ async function apiFetch(pathname, opts = {}) {
   }
 }
 
-module.exports = { apiFetch };
+// The main process uses the global `fetch` — which in Electron main is Node's
+// undici, a SEPARATE network stack from Chromium's (the renderer's). After a
+// network transition (sleep/wake, wifi change) undici's keepalive pool can hold
+// dead sockets, so every request hangs until its AbortController timeout (the
+// recurring "presence: beat error This operation was aborted" storm for minutes
+// after unlock). `session.closeAllConnections()` clears ONLY Chromium's pool, not
+// undici's, so the main process needs its own reset.
+//
+// Node's built-in fetch reads its dispatcher from a well-known global symbol on
+// every call, so swapping that symbol for a fresh dispatcher gives all subsequent
+// fetches a clean pool — this is exactly what `undici.setGlobalDispatcher(new
+// Agent())` does. We do NOT require the `undici` package: it is only a dev-time
+// transitive dependency (electron -> @electron/get) and is NOT bundled into the
+// packaged app, where `require('undici')` throws. Instead we rebuild a fresh
+// dispatcher from the runtime's OWN dispatcher class (version-matched, no
+// dependency), falling back to the package in dev and to a safe no-op if neither
+// path is available (the per-request AbortController above still bounds any dead
+// socket, so the worst case is today's behavior).
+const UNDICI_GLOBAL_DISPATCHER = Symbol.for('undici.globalDispatcher.1');
+
+function resetPool() {
+  try {
+    const current = globalThis[UNDICI_GLOBAL_DISPATCHER];
+    let fresh = null;
+    if (current && typeof current.constructor === 'function') {
+      try { fresh = new current.constructor(); } catch (_) { fresh = null; }
+    }
+    if (!fresh) {
+      try { fresh = new (require('undici').Agent)(); } catch (_) { /* not bundled */ }
+    }
+    if (!fresh) return false;
+    globalThis[UNDICI_GLOBAL_DISPATCHER] = fresh;
+    // Tear down the old pool's (now dead) sockets; harmless if already draining.
+    if (current && current !== fresh && typeof current.destroy === 'function') {
+      Promise.resolve(current.destroy()).catch(() => {});
+    }
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+module.exports = { apiFetch, resetPool };

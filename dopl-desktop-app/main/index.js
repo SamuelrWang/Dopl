@@ -13,10 +13,13 @@ const spawner = require('./session-spawner');
 const channelDirs = require('./channel-dirs');
 const channelDirIpc = require('./channel-dir-ipc');
 const mcpConfig = require('./mcp-config');
+const api = require('./api');
+const { createLoadGuard } = require('./load-guard');
 const { diag } = require('./diag');
 
 const store = new Store();
 let mainWindow = null;
+let loadGuard = null; // owns the main window's load lifecycle (load-guard.js)
 let pendingDeepLink = null; // deep link received before the window is ready
 let latestPendingSegment = null; // most-recent pending channel (tray "Pending: N" target)
 
@@ -54,7 +57,6 @@ function createMainWindow(opts = {}) {
     minHeight: 600,
     title: 'Dopl',
     backgroundColor: '#0b0b0f',
-    titleBarStyle: 'hiddenInset',
     show: false,
     webPreferences: {
       preload: path.join(__dirname, '../renderer/preload.js'),
@@ -68,6 +70,18 @@ function createMainWindow(opts = {}) {
   if (saved && typeof saved.x === 'number') {
     mainWindow.setPosition(saved.x, saved.y);
   }
+
+  // The guard owns every remote load: it shows a local loading screen before the
+  // first paint (so the window is never a black backgroundColor), runs a watchdog
+  // that recovers a hung load in seconds, and auto-retries did-fail-load.
+  loadGuard = createLoadGuard({
+    window: mainWindow,
+    homeUrl: HOME_URL,
+    loadingFile: path.join(__dirname, '../renderer/loading.html'),
+    offlineFile: path.join(__dirname, '../renderer/offline.html'),
+    resetMainPool: api.resetPool,
+    diag,
+  });
 
   loadApp();
 
@@ -94,7 +108,10 @@ function createMainWindow(opts = {}) {
       mainWindow.hide();
     }
   });
-  mainWindow.on('closed', () => { mainWindow = null; });
+  mainWindow.on('closed', () => {
+    if (loadGuard) { loadGuard.dispose(); loadGuard = null; }
+    mainWindow = null;
+  });
 
   wireNavigation(mainWindow.webContents);
 }
@@ -114,6 +131,9 @@ function showMainWindow() {
     return;
   }
   if (mainWindow.isMinimized()) mainWindow.restore();
+  // Never reveal a window that has never painted remote content (a hung load
+  // would show the bare dark backgroundColor) — put the loading screen up first.
+  if (loadGuard) loadGuard.ensureNotBlank();
   mainWindow.show();
   mainWindow.focus();
 }
@@ -123,22 +143,12 @@ function showMainWindow() {
 // `{slug}-{publicId}` URL segment supplied by the listener.
 function navigateToChannels(segment) {
   showMainWindow();
-  if (!segment || !mainWindow || mainWindow.isDestroyed()) return;
-  const url = `${APP_ORIGIN}/${segment}/channels`;
-  mainWindow.loadURL(url).catch((err) =>
-    console.error('[nav] channels load failed:', err && err.message)
-  );
+  if (!segment || !mainWindow || mainWindow.isDestroyed() || !loadGuard) return;
+  loadGuard.load(`${APP_ORIGIN}/${segment}/channels`);
 }
 
 function loadApp() {
-  mainWindow.loadURL(HOME_URL).catch((err) => {
-    console.error('[load] failed:', err && err.message);
-  });
-}
-
-function showOffline() {
-  if (!mainWindow || mainWindow.isDestroyed()) return;
-  mainWindow.loadFile(path.join(__dirname, '../renderer/offline.html')).catch(() => {});
+  if (loadGuard) loadGuard.load(HOME_URL);
 }
 
 // M4: when we hand an app-origin sign-in URL to the system browser, arm the
@@ -176,13 +186,9 @@ function wireNavigation(contents) {
     }
   });
 
-  // Offline / load failure → fallback screen (ignore sub-frame + user-aborted).
-  contents.on('did-fail-load', (event, errorCode, errorDesc, validatedURL, isMainFrame) => {
-    if (!isMainFrame) return;
-    if (errorCode === -3) return; // ERR_ABORTED (normal during redirects)
-    console.error('[did-fail-load]', errorCode, errorDesc, validatedURL);
-    showOffline();
-  });
+  // Offline / load failure / hung-load recovery is owned by the load guard
+  // (main/load-guard.js): it shows the offline screen AND auto-retries on a
+  // backoff, replacing the old did-fail-load dead end.
 }
 
 // ── Menu ────────────────────────────────────────────────────────────────────
@@ -294,7 +300,8 @@ function openDeepLink(url) {
 
   const target = `${APP_ORIGIN}/auth/desktop-complete#${fragment}`;
   if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.loadURL(target).catch((err) => console.error('[deeplink] load failed:', err && err.message));
+    if (loadGuard) loadGuard.load(target);
+    else mainWindow.loadURL(target).catch((err) => console.error('[deeplink] load failed:', err && err.message));
     if (mainWindow.isMinimized()) mainWindow.restore();
     mainWindow.show();
     mainWindow.focus();
@@ -438,8 +445,12 @@ if (!gotLock) {
       const now = Date.now();
       if (now - lastWakeAt < 3000) return; // coalesce resume+unlock / rapid unlocks
       lastWakeAt = now;
-      diag('powerMonitor:', reason, '— waking listener');
+      diag('powerMonitor:', reason, '— waking listener + resetting pools');
+      // Listener long-polls self-recover on their own; the shared pool resets are
+      // what fix the multi-minute hang after a network transition.
       try { listener.wake(); } catch (err) { diag('wake error', err && err.message); }
+      try { api.resetPool(); } catch (err) { diag('wake pool-reset error', err && err.message); } // (2b) main-process undici pool
+      try { if (loadGuard) loadGuard.onWake(); } catch (err) { diag('wake guard error', err && err.message); } // (2a) renderer pool + (2c) retry a hung load
     };
     try {
       powerMonitor.on('resume', () => onWake('resume'));
