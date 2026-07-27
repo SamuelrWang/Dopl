@@ -14,7 +14,7 @@ vi.mock("./repository-collab");
 
 import * as repo from "./repository";
 import * as collab from "./repository-collab";
-import { listChannelMembers } from "./service-reads";
+import { listChannelMembers, listChannels } from "./service-reads";
 import type { ChannelContext } from "./service-shared";
 import type { ChannelMemberRow, ChannelRow } from "./dto";
 
@@ -38,6 +38,8 @@ function channelRow(): ChannelRow {
     name: "General",
     topic: "",
     visibility: "private",
+    is_direct: false,
+    direct_key: null,
     archived_at: null,
     deleted_at: null,
     created_at: "2026-07-20T00:00:00Z",
@@ -105,5 +107,42 @@ describe("listChannelMembers — notify_scope privacy", () => {
     expect(theirs?.agentOnline).toBe(true);
     expect(theirs?.lastSeenAt).toBe("2026-07-26T00:00:00Z");
     expect(mine?.agentOnline).toBe(false);
+  });
+});
+
+describe("listChannels — direct peer resolution", () => {
+  it("resolves the peer (other member) for a direct channel; null for a normal one", async () => {
+    const directKey = [USER, OTHER].sort().join(":");
+    vi.mocked(repo.listMyMemberships).mockResolvedValue([
+      memberRow(USER, "all"),
+      { ...memberRow(USER, "all"), channel_id: "dm-1" },
+    ]);
+    vi.mocked(repo.listChannels).mockResolvedValue([
+      channelRow(),
+      { ...channelRow(), id: "dm-1", is_direct: true, direct_key: directKey },
+    ]);
+    vi.mocked(repo.memberCounts).mockResolvedValue(new Map());
+    vi.mocked(repo.lastMessages).mockResolvedValue(new Map());
+    vi.mocked(collab.channelMemberUserIds).mockResolvedValue(
+      new Map([
+        ["chan-1", [USER]],
+        ["dm-1", [USER, OTHER]],
+      ])
+    );
+    vi.mocked(repo.fetchProfiles).mockResolvedValue([
+      { id: OTHER, email: "o@x.com", display_name: "Otto", avatar_url: "http://x/o.png" },
+    ]);
+
+    const channels = await listChannels(ctx, false);
+    const normal = channels.find((c) => c.id === "chan-1");
+    const dm = channels.find((c) => c.id === "dm-1");
+    expect(normal?.isDirect).toBe(false);
+    expect(normal?.directPeer).toBeNull();
+    expect(dm?.isDirect).toBe(true);
+    expect(dm?.directPeer).toMatchObject({
+      userId: OTHER,
+      displayName: "Otto",
+      avatarUrl: "http://x/o.png",
+    });
   });
 });

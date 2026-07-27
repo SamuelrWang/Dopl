@@ -1,79 +1,90 @@
 "use client";
 
 import { cn } from "@/shared/lib/utils";
-import { formatRelativeTime } from "@/shared/lib/format-time";
-import { AvatarWithPresence } from "@/shared/ui/avatar-with-presence";
+import { formatChannelTimestamp } from "@/shared/lib/format-time";
+import { Avatar } from "@/shared/ui/avatar";
 import {
   isCalmTerminalStatus,
   type SessionGroup,
   type SessionStatus,
 } from "../lib/group-thread";
+import type { TaskMode } from "../types";
 
 /**
- * One spawned-agent session as a single bordered card. The header carries the
- * status chip (Active / Done / Failed), the responding agent's identity +
- * relative time, and a one-line summary; the body holds the agent reply
- * message(s) and any `task_progress` lines in seq order. The flat
- * task_started/finished rows are replaced by the chip, not shown separately.
+ * One task as a single bordered card. The header carries the task title (the
+ * first-class overlay title, falling back to the derived summary), the opener's
+ * identity + absolute time, and — for a first-class task — a mode badge. The
+ * body nests EVERY message of the exchange attributed (the requester's request
+ * and each agent reply, author + avatar + time per entry); `task_progress`
+ * lines stay as subtle progress rows. The `task_started/finished/failed`
+ * lifecycle markers never appear in the body — they become the status chip in
+ * the footer (Task active / Task complete / Task failed, or a calm terminal
+ * label for an operator-chosen ending).
  *
  * Card geometry follows the message-bubble family (`rounded-[10px]` border,
- * `px-3.5` padding); the header strip reuses the `bg-card-surface-subtle`
- * section-header recipe.
+ * `px-3.5` padding); the header + footer strips reuse the
+ * `bg-card-surface-subtle` section-strip recipe.
  */
-export function SessionCard({
-  session,
-  online,
-}: {
-  session: SessionGroup;
-  /** True when the responding agent's operator is currently listening. */
-  online: boolean;
-}) {
-  const name = session.head.authorName || "Agent";
-  const replies = session.entries.filter((e) => e.kind === "message");
-  const showWorking = session.status === "active" && replies.length === 0;
+export function SessionCard({ session }: { session: SessionGroup }) {
+  const openerName = session.head.authorName || "Agent";
+  const title = session.title ?? session.summary ?? "Task";
+  const messageEntries = session.entries.filter((e) => e.kind === "message");
+  const agentReplies = messageEntries.filter((e) => e.authorKind === "agent");
+  const showWorking = session.status === "active" && agentReplies.length === 0;
   // An operator-chosen calm terminal (declined/dropped/interrupted) never
-  // spawned a reply, so show a calm one-line note rather than an empty body.
+  // delivered a reply, so show a calm one-line note rather than an empty body.
   const terminalNote =
-    replies.length === 0 ? CALM_TERMINAL_NOTE[session.status] : undefined;
+    messageEntries.length === 0 ? CALM_TERMINAL_NOTE[session.status] : undefined;
 
   return (
     <article className="overflow-hidden rounded-[10px] border border-border-default bg-bg-elevated">
       <header className="flex items-start gap-2 border-b border-border-subtle bg-card-surface-subtle px-3.5 py-2">
-        <AvatarWithPresence
+        <Avatar
           person={{
-            userId: session.head.authorUserId ?? name,
+            userId: session.head.authorUserId ?? openerName,
             email: null,
             displayName: session.head.authorName,
             avatarUrl: session.head.authorAvatarUrl,
           }}
-          online={online}
           size="xs"
-          title={online ? "Agent listening" : "Agent offline"}
         />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <span className="min-w-0 truncate text-micro font-medium uppercase tracking-wide text-text-muted">
-              {name} · {formatRelativeTime(session.createdAt)}
+            <span className="min-w-0 truncate text-body font-medium text-text-primary">
+              {title}
             </span>
-            <StatusChip status={session.status} />
+            {session.mode && <ModeBadge mode={session.mode} />}
           </div>
-          {session.summary && (
-            <p className="mt-0.5 truncate text-caption text-text-secondary">
-              {session.summary}
-            </p>
-          )}
+          <span className="mt-0.5 block truncate text-micro font-medium uppercase tracking-wide text-text-muted">
+            {openerName} · {formatChannelTimestamp(session.createdAt)}
+          </span>
         </div>
       </header>
 
-      <div className="flex flex-col gap-2 px-3.5 py-2.5">
+      <div className="flex flex-col gap-2.5 px-3.5 py-2.5">
         {session.entries.map((entry) =>
           entry.kind === "message" ? (
-            <p
-              key={entry.id}
-              className="whitespace-pre-wrap break-words text-body leading-relaxed text-text-primary"
-            >
-              {entry.body}
-            </p>
+            <div key={entry.id} className="flex flex-col gap-1">
+              <div className="flex items-center gap-1.5">
+                <Avatar
+                  person={{
+                    userId: entry.authorUserId ?? entry.authorName ?? "member",
+                    email: null,
+                    displayName: entry.authorName,
+                    avatarUrl: entry.authorAvatarUrl,
+                  }}
+                  size="xs"
+                />
+                <span className="min-w-0 truncate text-micro font-medium uppercase tracking-wide text-text-muted">
+                  {entry.authorName ||
+                    (entry.authorKind === "user" ? "Member" : "Agent")}{" "}
+                  · {formatChannelTimestamp(entry.createdAt)}
+                </span>
+              </div>
+              <p className="whitespace-pre-wrap break-words text-body leading-relaxed text-text-primary">
+                {entry.body}
+              </p>
+            </div>
           ) : (
             <div key={entry.id} className="flex items-center gap-2">
               <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-warning" />
@@ -90,14 +101,18 @@ export function SessionCard({
           <p className="text-caption text-text-secondary">{terminalNote}</p>
         )}
       </div>
+
+      <footer className="flex items-center justify-end border-t border-border-subtle bg-card-surface-subtle px-3.5 py-1.5">
+        <StatusChip status={session.status} />
+      </footer>
     </article>
   );
 }
 
 const STATUS_LABEL: Record<SessionStatus, string> = {
-  active: "Active",
-  done: "Done",
-  failed: "Failed",
+  active: "Task active",
+  done: "Task complete",
+  failed: "Task failed",
   declined: "Declined",
   dropped: "Reply not sent",
   interrupted: "Interrupted",
@@ -110,13 +125,22 @@ const CALM_TERMINAL_NOTE: Partial<Record<SessionStatus, string>> = {
   interrupted: "The session was interrupted.",
 };
 
+/** The task's execution mode, shown as a quiet pill on a first-class task. */
+function ModeBadge({ mode }: { mode: TaskMode }) {
+  return (
+    <span className="shrink-0 rounded-full border border-border-strong bg-bg-inset px-1.5 py-px text-micro font-medium uppercase tracking-wide text-text-secondary">
+      {mode === "interactive" ? "Interactive" : "Autonomous"}
+    </span>
+  );
+}
+
 /**
- * The session status chip. `Active` carries a pulsing success ring (the live
- * affordance); `Done` a solid success dot; `Failed` a danger dot + danger ink.
- * The calm terminal states (`Declined` / `Reply not sent` / `Interrupted`) are
- * operator-chosen endings — deliberately calm (muted ink + a neutral dot), NOT
- * the alarm-red of a real failure, since each is a normal outcome the requester
- * chose, not an error.
+ * The task status chip. `Task active` carries a pulsing success ring (the live
+ * affordance); `Task complete` a solid success dot; `Task failed` a danger dot +
+ * danger ink. The calm terminal states (`Declined` / `Reply not sent` /
+ * `Interrupted`) are operator-chosen endings — deliberately calm (muted ink + a
+ * neutral dot), NOT the alarm-red of a real failure, since each is a normal
+ * outcome the requester chose, not an error.
  */
 function StatusChip({ status }: { status: SessionStatus }) {
   return (

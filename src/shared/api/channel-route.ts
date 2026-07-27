@@ -49,3 +49,23 @@ export function requireConsentId(
   }
   return id;
 }
+
+/**
+ * Extract + validate the `[taskId]` dynamic param (task PATCH route). Same
+ * rationale as `requireConsentId`: a non-UUID would reach Postgres as a 22P02
+ * cast failure (a 500 + a `system_events` row on every such call), so a
+ * malformed id collapses to the same 404 the service returns for a missing /
+ * foreign id — the id still can't be probed.
+ */
+export function requireTaskId(
+  params: Record<string, string> | undefined
+): string {
+  const taskId = params?.taskId;
+  if (!taskId) {
+    throw new HttpError(400, "MISSING_TASK_ID", "Route param taskId is required");
+  }
+  if (!isUuid(taskId)) {
+    throw new HttpError(404, "TASK_NOT_FOUND", `Task not found: ${taskId}`);
+  }
+  return taskId;
+}

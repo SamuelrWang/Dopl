@@ -11,6 +11,47 @@
 /** Private = members only. Public = any workspace member can read/join. */
 export type ChannelVisibility = "private" | "public";
 
+/**
+ * The rendered peer of a direct (1:1) channel — the OTHER member, resolved
+ * live from the roster (never stored as truth, since a name/avatar can
+ * change). Null on a non-direct channel.
+ */
+export type ChannelDirectPeer = {
+  userId: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+};
+
+/** How a task is executed: interactive (multi-turn) or autonomous. */
+export type TaskMode = "interactive" | "autonomous";
+
+/** Task lifecycle status: open until an explicit close. */
+export type TaskStatus = "open" | "closed";
+
+/** How a closed task ended. Null while the task is still open. */
+export type TaskOutcome = "completed" | "failed";
+
+/**
+ * A first-class task inside a channel: a titled, mode-tagged, queryable unit
+ * of work whose transcript rides on `channel_messages`
+ * (`metadata.taskId = ChannelTask.id`). This table is the authoritative
+ * status / mode / title store.
+ */
+export type ChannelTask = {
+  id: string;
+  channelId: string;
+  workspaceId: string;
+  title: string;
+  status: TaskStatus;
+  outcome: TaskOutcome | null;
+  mode: TaskMode;
+  createdBy: string;
+  targetUserId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  closedAt: string | null;
+};
+
 /** Channel-scoped role: the creator is `owner`, everyone added is `member`. */
 export type ChannelRole = "owner" | "member";
 
@@ -90,6 +131,11 @@ export type Channel = {
   name: string;
   topic: string;
   visibility: ChannelVisibility;
+  /** True for a direct (1:1) channel between exactly two members. */
+  isDirect: boolean;
+  /** The rendered peer for a direct channel (resolved from the roster); null
+   *  for a normal channel, which keeps its own name + hash glyph. */
+  directPeer: ChannelDirectPeer | null;
   createdBy: string;
   archivedAt: string | null;
   createdAt: string;

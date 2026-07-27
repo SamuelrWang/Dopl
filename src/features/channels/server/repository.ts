@@ -108,7 +108,69 @@ type ChannelInsert = {
   name: string;
   topic: string;
   visibility: string;
+  is_direct?: boolean;
+  direct_key?: string | null;
 };
+
+/**
+ * The direct channel for a member-pair (`direct_key`) in a workspace, or null.
+ * Backs the DM dedup: a repeat "open direct message" returns the existing
+ * channel idempotently instead of inserting a second one. Excludes
+ * soft-deleted rows (the normal read model); the partial unique index still
+ * fences a concurrent insert race.
+ */
+export async function findDirectChannel(
+  workspaceId: string,
+  directKey: string
+): Promise<ChannelRow | null> {
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("channels")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .eq("is_direct", true)
+    .eq("direct_key", directKey)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as ChannelRow | null) ?? null;
+}
+
+/**
+ * The direct channel for a member-pair (`direct_key`) INCLUDING a soft-deleted
+ * one. Backs DM revive: the partial unique index counts the soft-deleted row,
+ * so a repeat open must find and revive it rather than insert a second (which
+ * would 23505). {@link findDirectChannel} is the normal read (live rows only).
+ */
+export async function findDirectChannelAnyStatus(
+  workspaceId: string,
+  directKey: string
+): Promise<ChannelRow | null> {
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("channels")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .eq("is_direct", true)
+    .eq("direct_key", directKey)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as ChannelRow | null) ?? null;
+}
+
+/** Clear `deleted_at` — un-hide a soft-deleted channel (DM reopen / revive). */
+export async function reviveChannel(
+  workspaceId: string,
+  channelId: string
+): Promise<void> {
+  const db = supabaseAdmin();
+  const { error } = await db
+    .from("channels")
+    .update({ deleted_at: null, updated_at: new Date().toISOString() })
+    .eq("workspace_id", workspaceId)
+    .eq("id", channelId);
+  if (error) throw error;
+}
 
 export async function insertChannel(row: ChannelInsert): Promise<ChannelRow> {
   const db = supabaseAdmin();

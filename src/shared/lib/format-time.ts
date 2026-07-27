@@ -52,6 +52,37 @@ export function formatRelativeTime(iso: string | null | undefined): string {
 }
 
 /**
+ * Absolute channel timestamp: the wall-clock time ("2:34 PM") for something
+ * that happened today, else the calendar date plus time ("Jul 26, 2:34 PM"; the
+ * year is appended when it is not the current year). Unlike
+ * {@link formatRelativeTime}, it never drifts as the clock advances, so a
+ * transcript entry keeps a stable, scannable time. Locale-safe via
+ * `toLocaleTimeString` / `toLocaleDateString`; null / invalid input renders the
+ * em-dash placeholder.
+ */
+export function formatChannelTimestamp(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const date = parseDate(iso);
+  if (Number.isNaN(date.getTime())) return "—";
+  const time = date.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  const now = new Date();
+  const sameDay =
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate();
+  if (sameDay) return time;
+  const datePart = date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    ...(date.getFullYear() === now.getFullYear() ? {} : { year: "numeric" }),
+  });
+  return `${datePart}, ${time}`;
+}
+
+/**
  * Last-active label + status dot from a throttled `lastSeenAt`
  * timestamp. Pending members show their invite age instead.
  */

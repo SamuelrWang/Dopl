@@ -18,7 +18,11 @@ import type {
   ChannelMember,
   ChannelMessage,
   ChannelMessageInput,
+  ChannelTask,
+  ChannelTaskCreateInput,
   ReadMessagesOptions,
+  TaskMode,
+  TaskOutcome,
 } from "./channel-types.js";
 
 const enc = encodeURIComponent;
@@ -154,4 +158,56 @@ export async function postMessage(
     }
   );
   return data.message;
+}
+
+// ─── Tasks ──────────────────────────────────────────────────────────
+
+export async function createChannelTask(
+  t: DoplTransport,
+  channelId: string,
+  input: ChannelTaskCreateInput
+): Promise<ChannelTask> {
+  const data = await t.request<{ task: ChannelTask }>(
+    `/api/channels/${enc(channelId)}/tasks`,
+    {
+      method: "POST",
+      body: input,
+      toolName: "channel_create_task",
+    }
+  );
+  return data.task;
+}
+
+export async function closeChannelTask(
+  t: DoplTransport,
+  channelId: string,
+  taskId: string,
+  input: { outcome: TaskOutcome }
+): Promise<ChannelTask> {
+  const data = await t.request<{ task: ChannelTask }>(
+    `/api/channels/${enc(channelId)}/tasks/${enc(taskId)}`,
+    {
+      method: "PATCH",
+      body: { op: "close", outcome: input.outcome },
+      toolName: "channel_close_task",
+    }
+  );
+  return data.task;
+}
+
+export async function setChannelTaskMode(
+  t: DoplTransport,
+  channelId: string,
+  taskId: string,
+  input: { mode: TaskMode }
+): Promise<ChannelTask> {
+  const data = await t.request<{ task: ChannelTask }>(
+    `/api/channels/${enc(channelId)}/tasks/${enc(taskId)}`,
+    {
+      method: "PATCH",
+      body: { op: "set_mode", mode: input.mode },
+      toolName: "channel_set_task_mode",
+    }
+  );
+  return data.task;
 }

@@ -26,6 +26,8 @@ function channelRow(overrides: Partial<ChannelRow> = {}): ChannelRow {
     name: "General",
     topic: "chatter",
     visibility: "public",
+    is_direct: false,
+    direct_key: null,
     archived_at: null,
     deleted_at: null,
     created_at: "2026-07-20T00:00:00Z",
@@ -43,6 +45,7 @@ function viewerState(overrides: Partial<ChannelViewerState> = {}): ChannelViewer
     notifyScope: null,
     agentToolProfile: null,
     onlineMemberCount: 0,
+    directPeer: null,
     ...overrides,
   };
 }

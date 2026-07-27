@@ -3,7 +3,7 @@
 import { Check, ShieldQuestion, Sparkles, TerminalSquare, X } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { Avatar } from "@/shared/ui/avatar";
-import { formatRelativeTime } from "@/shared/lib/format-time";
+import { formatChannelTimestamp } from "@/shared/lib/format-time";
 import { AGENT_TOOL_PROFILE_LABELS } from "../constants";
 import type { AgentToolProfile, ChannelConsentRequest } from "../types";
 
@@ -120,7 +120,7 @@ export function ConsentCard({
         </button>
         <span className="flex-1" />
         <span className="shrink-0 text-micro text-text-muted">
-          {formatRelativeTime(request.createdAt)}
+          {formatChannelTimestamp(request.createdAt)}
         </span>
       </div>
     </div>

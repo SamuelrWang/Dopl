@@ -6,8 +6,11 @@ import type {
   ChannelConsentRequest,
   ChannelMember,
   ChannelMessage,
+  ChannelTask,
   ChannelVisibility,
   NotifyScope,
+  TaskMode,
+  TaskOutcome,
 } from "../types";
 
 /** Domain error wrapper so components can branch on `code`. */
@@ -44,12 +47,20 @@ function channelPath(channelId: string, tail = ""): string {
   return `/api/channels/${encodeURIComponent(channelId)}${tail}`;
 }
 
-export interface ChannelCreateBody {
-  name: string;
-  slug?: string;
-  topic?: string;
-  visibility?: ChannelVisibility;
-}
+/**
+ * Create-channel body: a normal channel (`name`, ...) OR a direct channel
+ * (`direct: true` + `memberUserId`). The server dedups a repeat DM to the same
+ * peer and returns the existing channel.
+ */
+export type ChannelCreateBody =
+  | {
+      name: string;
+      slug?: string;
+      topic?: string;
+      visibility?: ChannelVisibility;
+      direct?: false;
+    }
+  | { direct: true; memberUserId: string };
 
 export async function createChannel(
   body: ChannelCreateBody,
@@ -165,6 +176,61 @@ export async function updateMyToolProfile(
     { method: "PATCH", body: { agentToolProfile }, workspaceId }
   );
   return data.member;
+}
+
+// ─── Tasks ──────────────────────────────────────────────────────────
+
+/** Every task in a channel (feeds the thread's status overlay). */
+export async function listChannelTasks(
+  channelId: string,
+  workspaceId: string
+): Promise<ChannelTask[]> {
+  const data = await request<{ tasks: ChannelTask[] }>(
+    channelPath(channelId, "/tasks"),
+    { workspaceId }
+  );
+  return data.tasks ?? [];
+}
+
+/** Create a task addressed to a channel member. */
+export async function createChannelTask(
+  channelId: string,
+  body: { title: string; mode?: TaskMode; body: string; toUserId: string },
+  workspaceId: string
+): Promise<ChannelTask> {
+  const data = await request<{ task: ChannelTask }>(
+    channelPath(channelId, "/tasks"),
+    { method: "POST", body, workspaceId }
+  );
+  return data.task;
+}
+
+/** Close a task (creator or target) with an outcome. */
+export async function closeChannelTask(
+  channelId: string,
+  taskId: string,
+  body: { outcome: TaskOutcome },
+  workspaceId: string
+): Promise<ChannelTask> {
+  const data = await request<{ task: ChannelTask }>(
+    channelPath(channelId, `/tasks/${encodeURIComponent(taskId)}`),
+    { method: "PATCH", body: { op: "close", ...body }, workspaceId }
+  );
+  return data.task;
+}
+
+/** Set a task's mode (creator only). */
+export async function setChannelTaskMode(
+  channelId: string,
+  taskId: string,
+  body: { mode: TaskMode },
+  workspaceId: string
+): Promise<ChannelTask> {
+  const data = await request<{ task: ChannelTask }>(
+    channelPath(channelId, `/tasks/${encodeURIComponent(taskId)}`),
+    { method: "PATCH", body: { op: "set_mode", ...body }, workspaceId }
+  );
+  return data.task;
 }
 
 // ─── Consent ────────────────────────────────────────────────────────

@@ -368,7 +368,14 @@ export function createServer(
       "restore_workflow",
     ]),
     dopl_chats: new Set(["export", "append", "update", "create_folder", "update_folder", "restore"]),
-    dopl_channel: new Set(["open", "invite", "post"]),
+    dopl_channel: new Set([
+      "open",
+      "invite",
+      "post",
+      "create_task",
+      "close_task",
+      "set_task_mode",
+    ]),
   };
   // Session default workspace — resolved once at boot (factory.ts), never
   // mutated (there is no `set_workspace`; per-call `workspace=` scopes a

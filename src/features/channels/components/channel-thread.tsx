@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { MenuItem, Popover } from "@/shared/ui/popover-menu";
+import { Avatar } from "@/shared/ui/avatar";
 import { AvatarStack } from "@/shared/ui/avatar-stack";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import type {
@@ -22,8 +23,13 @@ import type {
   ChannelConsentRequest,
   ChannelMember,
   ChannelMessage,
+  ChannelTask,
   NotifyScope,
 } from "../types";
+import {
+  channelDisplayAvatarPerson,
+  channelDisplayName,
+} from "../lib/channel-display";
 import { MessageThread } from "./message-thread";
 import { MessageComposer, type SendOptions } from "./message-composer";
 import { PendingRequestsPanel } from "./pending-requests-panel";
@@ -53,6 +59,11 @@ const NOTIFY_OPTIONS: Array<{
 interface Props {
   channel: Channel;
   messages: ChannelMessage[];
+  /** The channel's first-class tasks — the thread's status / title overlay. */
+  tasks: ChannelTask[];
+  /** True while the task overlay is still loading — suppresses the status
+   *  flicker (a UUID task without its overlay yet holds at neutral "active"). */
+  tasksLoading: boolean;
   loading: boolean;
   notifyScope: NotifyScope;
   members: ChannelMember[];
@@ -89,6 +100,8 @@ interface Props {
 export function ChannelThread({
   channel,
   messages,
+  tasks,
+  tasksLoading,
   loading,
   notifyScope,
   members,
@@ -114,6 +127,11 @@ export function ChannelThread({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const canManage = channel.role === "owner";
+  // Direct-channel rendering: the header + composer speak to the resolved peer
+  // (name / avatar live from the roster), never the stored channel name/slug.
+  const displayName = channelDisplayName(channel);
+  const peer = channelDisplayAvatarPerson(channel);
+  const peerName = channel.directPeer?.displayName ?? "your teammate";
 
   const memberNames = useMemo(
     () =>
@@ -128,9 +146,17 @@ export function ChannelThread({
     () => members.filter((m) => m.agentOnline),
     [members]
   );
-  const onlineUserIds = useMemo(
-    () => new Set(onlineMembers.map((m) => m.userId)),
-    [onlineMembers]
+  // The presence strip shows EVERY member in a STABLE order (join time, then
+  // userId) — never reordered by who is online, so avatars don't jump as agents
+  // come and go. The online flag drives the success ring per avatar.
+  const orderedMembers = useMemo(
+    () =>
+      [...members].sort((a, b) => {
+        if (a.joinedAt !== b.joinedAt) return a.joinedAt < b.joinedAt ? -1 : 1;
+        if (a.userId !== b.userId) return a.userId < b.userId ? -1 : 1;
+        return 0;
+      }),
+    [members]
   );
 
   // Stick to the bottom when the transcript grows or the channel changes.
@@ -142,37 +168,58 @@ export function ChannelThread({
   return (
     <div className="flex min-w-0 flex-1 flex-col">
       <div className="flex h-[52px] shrink-0 items-center gap-2 border-b border-border-default px-3.5">
-        <Hash size={15} className="shrink-0 text-text-muted" />
-        <span className="shrink-0 truncate text-lead font-semibold text-text-primary">
-          {channel.name}
-        </span>
-        <span className="shrink-0 rounded-full border border-border-strong bg-bg-inset px-1.5 py-px text-micro font-medium uppercase tracking-wide text-text-secondary">
-          {channel.visibility}
-        </span>
-        {channel.topic && (
-          <span className="min-w-0 truncate text-caption text-text-muted">
-            {channel.topic}
-          </span>
+        {channel.isDirect ? (
+          <>
+            {peer && (
+              <Avatar
+                person={{
+                  userId: peer.userId,
+                  email: null,
+                  displayName: peer.displayName,
+                  avatarUrl: peer.avatarUrl,
+                }}
+                size="xs"
+              />
+            )}
+            <span className="shrink-0 truncate text-lead font-semibold text-text-primary">
+              {displayName}
+            </span>
+          </>
+        ) : (
+          <>
+            <Hash size={15} className="shrink-0 text-text-muted" />
+            <span className="shrink-0 truncate text-lead font-semibold text-text-primary">
+              {channel.name}
+            </span>
+            <span className="shrink-0 rounded-full border border-border-strong bg-bg-inset px-1.5 py-px text-micro font-medium uppercase tracking-wide text-text-secondary">
+              {channel.visibility}
+            </span>
+            {channel.topic && (
+              <span className="min-w-0 truncate text-caption text-text-muted">
+                {channel.topic}
+              </span>
+            )}
+          </>
         )}
         <span className="flex-1" />
 
-        {/* Presence: who's listening right now. */}
+        {/* Presence: every member, stable order, ringed when their agent is online. */}
         <span className="flex shrink-0 items-center gap-1.5">
           <PresenceDot online={onlineMembers.length > 0} />
           <span className="text-caption text-text-muted">
             {onlineMembers.length > 0
-              ? `${onlineMembers.length} listening`
-              : "No agents listening"}
+              ? `${onlineMembers.length} online`
+              : "No agents online"}
           </span>
-          {onlineMembers.length > 0 && (
+          {orderedMembers.length > 0 && (
             <AvatarStack
-              users={onlineMembers.map((m) => ({
+              users={orderedMembers.map((m) => ({
                 userId: m.userId,
                 displayName: m.displayName || m.email || "teammate",
                 avatarUrl: m.avatarUrl,
-                online: true,
+                online: m.agentOnline,
               }))}
-              max={3}
+              max={5}
             />
           )}
         </span>
@@ -227,7 +274,8 @@ export function ChannelThread({
             nothing in a plain browser (feature-detected on window.dopl). */}
         {channel.isMember && <ChannelFolderControl channelId={channel.id} />}
 
-        {channel.isMember && (
+        {/* A DM is a fixed 1:1 pair — no invite affordance (server also rejects). */}
+        {channel.isMember && !channel.isDirect && (
           <button
             type="button"
             onClick={onInvite}
@@ -250,15 +298,18 @@ export function ChannelThread({
           <Popover open={menuOpen} onClose={() => setMenuOpen(false)} align="right">
             {canManage && (
               <>
-                <MenuItem
-                  icon={<Hash size={14} />}
-                  onSelect={() => {
-                    setMenuOpen(false);
-                    onToggleVisibility();
-                  }}
-                >
-                  Make {channel.visibility === "public" ? "private" : "public"}
-                </MenuItem>
+                {/* A DM is always private (immutable) — no visibility toggle. */}
+                {!channel.isDirect && (
+                  <MenuItem
+                    icon={<Hash size={14} />}
+                    onSelect={() => {
+                      setMenuOpen(false);
+                      onToggleVisibility();
+                    }}
+                  >
+                    Make {channel.visibility === "public" ? "private" : "public"}
+                  </MenuItem>
+                )}
                 <MenuItem
                   icon={
                     channel.archivedAt ? (
@@ -282,7 +333,7 @@ export function ChannelThread({
                     setConfirmDelete(true);
                   }}
                 >
-                  Delete channel
+                  Delete {channel.isDirect ? "conversation" : "channel"}
                 </MenuItem>
               </>
             )}
@@ -318,7 +369,8 @@ export function ChannelThread({
             <MessageThread
               messages={messages}
               memberNames={memberNames}
-              onlineUserIds={onlineUserIds}
+              tasks={tasks}
+              tasksLoading={tasksLoading}
             />
           )}
         </div>
@@ -331,7 +383,11 @@ export function ChannelThread({
           currentUserId={currentUserId}
           disabled={channel.archivedAt !== null}
           placeholder={
-            channel.archivedAt ? "This channel is archived" : `Message #${channel.slug}`
+            channel.archivedAt
+              ? "This channel is archived"
+              : channel.isDirect
+                ? `Message ${peerName}`
+                : `Message #${channel.slug}`
           }
         />
       ) : (
@@ -356,8 +412,12 @@ export function ChannelThread({
       <ConfirmDialog
         open={confirmDelete}
         onOpenChange={setConfirmDelete}
-        title="Delete channel?"
-        description={`"${channel.name}" and its messages will be removed. This can't be undone from here.`}
+        title={channel.isDirect ? "Delete conversation?" : "Delete channel?"}
+        description={
+          channel.isDirect
+            ? `Your direct message with ${peerName} will be hidden. Opening it again later brings the history back.`
+            : `"${displayName}" and its messages will be removed. This can't be undone from here.`
+        }
         confirmLabel="Delete"
         destructive
         onConfirm={onDelete}

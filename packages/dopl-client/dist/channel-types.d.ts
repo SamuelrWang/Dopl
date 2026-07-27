@@ -8,6 +8,12 @@
  */
 export type ChannelVisibility = "public" | "private";
 export type ChannelMemberRole = "owner" | "member";
+/** How a task runs. */
+export type TaskMode = "interactive" | "autonomous";
+/** Task lifecycle status. */
+export type TaskStatus = "open" | "closed";
+/** How a closed task ended. */
+export type TaskOutcome = "completed" | "failed";
 /**
  * Per-member notification scope for a channel (how loudly it notifies the
  * member's listener): `all` = addressed prompts + silent FYIs; `addressed` =
@@ -29,6 +35,14 @@ export interface Channel {
     name: string;
     topic: string;
     visibility: ChannelVisibility;
+    /** True for a direct (1:1) channel between two members. */
+    isDirect?: boolean;
+    /** The resolved peer for a direct channel; null / absent for a normal one. */
+    directPeer?: {
+        userId: string;
+        displayName: string | null;
+        avatarUrl: string | null;
+    } | null;
     createdBy: string;
     /** ISO datetime the channel was archived, or null when active. */
     archivedAt: string | null;
@@ -68,9 +82,37 @@ export interface ChannelMember {
     avatarUrl?: string | null;
 }
 export interface ChannelCreateInput {
-    name: string;
+    name?: string;
     topic?: string;
     visibility?: ChannelVisibility;
+    /** Open a direct (1:1) channel with `memberUserId` instead of a named one. */
+    direct?: boolean;
+    /** The peer's user id — required (and only used) when `direct` is true. */
+    memberUserId?: string;
+}
+/**
+ * A first-class channel task: a titled, mode-tagged unit of work whose
+ * transcript rides on `channel_messages` (metadata.taskId = ChannelTask.id).
+ */
+export interface ChannelTask {
+    id: string;
+    channelId: string;
+    workspaceId: string;
+    title: string;
+    status: TaskStatus;
+    outcome: TaskOutcome | null;
+    mode: TaskMode;
+    createdBy: string;
+    targetUserId: string | null;
+    createdAt: string;
+    updatedAt: string;
+    closedAt: string | null;
+}
+export interface ChannelTaskCreateInput {
+    title: string;
+    mode?: TaskMode;
+    body: string;
+    toUserId: string;
 }
 export interface ChannelMessageInput {
     body: string;

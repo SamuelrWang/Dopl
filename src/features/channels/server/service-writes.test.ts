@@ -13,8 +13,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("./repository");
+vi.mock("./repository-tasks");
 
 import * as repo from "./repository";
+import * as repoTasks from "./repository-tasks";
 import { postMessage } from "./service-writes";
 import {
   ChannelAddresseeNotMemberError,
@@ -49,6 +51,8 @@ function channelRow(overrides: Partial<ChannelRow> = {}): ChannelRow {
     name: "General",
     topic: "",
     visibility: "private",
+    is_direct: false,
+    direct_key: null,
     archived_at: null,
     deleted_at: null,
     created_at: "2026-07-20T00:00:00Z",
@@ -175,6 +179,108 @@ describe("postMessage — reserved metadata keys", () => {
     expect(meta.keep).toBe(1);
     // No global prototype pollution leaked out of the strip/spread.
     expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+  });
+});
+
+describe("postMessage — task metadata stamping (v15, Q4)", () => {
+  const TASK_ID = "660e8400-e29b-41d4-a716-446655440111";
+
+  function taskRowFor(overrides: Record<string, unknown> = {}) {
+    return {
+      id: TASK_ID,
+      channel_id: "chan-1",
+      workspace_id: WS,
+      title: "Real title",
+      status: "open",
+      outcome: null,
+      mode: "autonomous",
+      created_by: "creator-x",
+      target_user_id: null,
+      created_at: "2026-07-20T00:00:00Z",
+      updated_at: "2026-07-20T00:00:00Z",
+      closed_at: null,
+      ...overrides,
+    } as Awaited<ReturnType<typeof repoTasks.findTaskByChannelAndId>>;
+  }
+
+  it("strips caller taskMode/taskCreatedBy/taskTitle and stamps from the resolved task", async () => {
+    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(taskRowFor());
+
+    await postMessage(ctx, "general", {
+      body: "reply",
+      metadata: {
+        taskId: TASK_ID,
+        taskMode: "interactive",
+        taskCreatedBy: "evil",
+        taskTitle: "spoofed",
+      },
+    });
+
+    const meta = capturedMetadata();
+    // taskId itself stays caller-settable (a responder replies within a task).
+    expect(meta.taskId).toBe(TASK_ID);
+    // Server stamp wins over the caller's spoofed reserved keys.
+    expect(meta.taskMode).toBe("autonomous");
+    expect(meta.taskCreatedBy).toBe("creator-x");
+    expect(meta.taskTitle).toBe("Real title");
+    expect(repoTasks.findTaskByChannelAndId).toHaveBeenCalledWith("chan-1", TASK_ID);
+  });
+
+  it("an unknown taskId (no matching task) stamps nothing but keeps the caller taskId", async () => {
+    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(null);
+
+    await postMessage(ctx, "general", {
+      body: "reply",
+      metadata: { taskId: TASK_ID, taskMode: "interactive" },
+    });
+
+    const meta = capturedMetadata();
+    expect(meta.taskId).toBe(TASK_ID);
+    expect(Object.prototype.hasOwnProperty.call(meta, "taskMode")).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(meta, "taskCreatedBy")).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(meta, "taskTitle")).toBe(false);
+  });
+
+  it("a non-UUID taskId never hits the DB and stamps nothing (old task-<uuid>-<seq> ids)", async () => {
+    await postMessage(ctx, "general", {
+      body: "reply",
+      metadata: { taskId: "task-chan-1-7", taskMode: "interactive" },
+    });
+
+    expect(repoTasks.findTaskByChannelAndId).not.toHaveBeenCalled();
+    const meta = capturedMetadata();
+    expect(meta.taskId).toBe("task-chan-1-7");
+    expect(Object.prototype.hasOwnProperty.call(meta, "taskMode")).toBe(false);
+  });
+
+  it("stamps taskTarget from the task's target_user_id, stripping the caller copy", async () => {
+    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
+      taskRowFor({ target_user_id: "responder-y" })
+    );
+
+    await postMessage(ctx, "general", {
+      body: "here is the answer",
+      metadata: { taskId: TASK_ID, taskTarget: "evil" },
+    });
+
+    const meta = capturedMetadata();
+    // The server stamp (the real responder) wins over the caller's spoof — this
+    // is what binds the desktop's task-reply suppression to the true responder.
+    expect(meta.taskTarget).toBe("responder-y");
+  });
+
+  it("a null-target task stamps no taskTarget and strips the caller copy", async () => {
+    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
+      taskRowFor({ target_user_id: null })
+    );
+
+    await postMessage(ctx, "general", {
+      body: "reply",
+      metadata: { taskId: TASK_ID, taskTarget: "evil" },
+    });
+
+    const meta = capturedMetadata();
+    expect(Object.prototype.hasOwnProperty.call(meta, "taskTarget")).toBe(false);
   });
 });
 

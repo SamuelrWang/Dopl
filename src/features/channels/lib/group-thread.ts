@@ -16,7 +16,7 @@
  * transcript in `seq` order (the repository returns messages ascending).
  */
 
-import type { ChannelMessage, ChannelMessageKind } from "../types";
+import type { ChannelMessage, ChannelMessageKind, TaskMode } from "../types";
 
 /**
  * A session's lifecycle state, derived from its task lifecycle events.
@@ -53,11 +53,33 @@ export function isCalmTerminalStatus(status: SessionStatus): boolean {
   return CALM_TERMINAL_STATUSES.has(status);
 }
 
+/**
+ * The authoritative overlay for a first-class task (from `channel_tasks`),
+ * keyed by task id. When a group's `taskId` resolves to one of these, its
+ * `status` and `title` win over the message-derived values — a mid-flight task
+ * with delivered replies still reads "active" until the task row is closed,
+ * which the lifecycle-only heuristic could never know. Old
+ * `task-{channel}-{seq}` sessions have no row and keep the derived render.
+ */
+export interface TaskOverlay {
+  status: SessionStatus;
+  title: string | null;
+  mode: TaskMode | null;
+}
+
 /** One grouped agent session, ready to render as a card. */
 export interface SessionGroup {
   /** The shared `metadata.taskId` that binds the session together. */
   taskId: string;
   status: SessionStatus;
+  /**
+   * The first-class task title (overlay), authoritative when present; null for
+   * a legacy session with no `channel_tasks` row (the card falls back to
+   * {@link SessionGroup.summary}).
+   */
+  title: string | null;
+  /** The first-class task mode (overlay), or null for a legacy session. */
+  mode: TaskMode | null;
   /**
    * Identity + time source for the header: the agent-authored message that
    * opened the session (the `task_started`, or the first event we saw).
@@ -178,8 +200,17 @@ function computeSummary(draft: Draft): string | null {
  * and session cards. A session card is emitted at the position of its first
  * event, so chronological order is preserved (sessions never interleave — one
  * runs per channel at a time).
+ *
+ * `taskOverlays` (optional) carries the authoritative `channel_tasks` state
+ * keyed by task id. When a group's `taskId` is present, its `status`/`title`
+ * are taken from the overlay; every other group falls back to the
+ * message-derived status/summary. Calling `groupThread(messages)` with no map
+ * is byte-for-byte the legacy behavior.
  */
-export function groupThread(messages: ChannelMessage[]): ThreadItem[] {
+export function groupThread(
+  messages: ChannelMessage[],
+  taskOverlays?: Map<string, TaskOverlay>
+): ThreadItem[] {
   const items: ThreadItem[] = [];
   const drafts = new Map<string, Draft>();
   // The single open fallback window: the session whose `task_started` has fired
@@ -208,11 +239,17 @@ export function groupThread(messages: ChannelMessage[]): ThreadItem[] {
       openTaskId = null;
     }
 
-    // Resolve the session this message belongs to (if any). Human + system
-    // rows, and agent chat with no session context, own themselves.
+    // Resolve the session this message belongs to (if any).
+    //  - An EXPLICIT `metadata.taskId` binds ANY row (a human request, an agent
+    //    reply, or a lifecycle marker) to that group. A first-class task's
+    //    request + replies + markers all share one id, so the requester's own
+    //    message folds into the card alongside the answers.
+    //  - With NO explicit id, only task events and agent replies fall back to
+    //    the open window (legacy terminal-mode sessions that self-post without
+    //    an id). Human / system rows with no id always own themselves.
     let taskId: string | null = null;
-    if (isTaskEvent) taskId = ownTaskId ?? openTaskId;
-    else if (isAgentReply) taskId = ownTaskId ?? openTaskId;
+    if (ownTaskId !== null) taskId = ownTaskId;
+    else if (isTaskEvent || isAgentReply) taskId = openTaskId;
 
     if (taskId === null) {
       items.push({ type: "message", key: message.id, message });
@@ -265,7 +302,8 @@ export function groupThread(messages: ChannelMessage[]): ThreadItem[] {
         draft.entries.push(message);
         break;
       default:
-        // An agent reply message — the substantive body of the session.
+        // A substantive body message — an agent reply, or (for a first-class
+        // task) the requester's own explicit-taskId request.
         draft.entries.push(message);
         // A fallback (no-taskId) reply spends the open window: terminal mode
         // posts its single result and goes quiet, so nothing after it folds in.
@@ -274,11 +312,16 @@ export function groupThread(messages: ChannelMessage[]): ThreadItem[] {
     }
   }
 
-  // Finalize each draft in place (the items array holds live references).
+  // Finalize each draft in place (the items array holds live references). The
+  // overlay (a first-class `channel_tasks` row) is authoritative for
+  // status/title; without one, the message-derived render is used unchanged.
   for (const draft of drafts.values()) {
     const session = draft as unknown as SessionGroup;
-    session.status = computeStatus(draft);
+    const overlay = taskOverlays?.get(draft.taskId);
+    session.status = overlay ? overlay.status : computeStatus(draft);
     session.summary = computeSummary(draft);
+    session.title = overlay?.title ?? null;
+    session.mode = overlay?.mode ?? null;
   }
 
   return items;

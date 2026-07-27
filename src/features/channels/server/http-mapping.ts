@@ -11,6 +11,10 @@ import {
   ChannelSlugConflictError,
   ConsentAlreadyDecidedError,
   ConsentNotFoundError,
+  DirectChannelImmutableError,
+  DirectSelfTargetError,
+  TaskForbiddenError,
+  TaskNotFoundError,
   TrustedNotMemberError,
   TrustSelfError,
 } from "./errors";
@@ -47,6 +51,18 @@ export function mapChannelError(err: unknown): HttpError | null {
   }
   if (err instanceof ConsentAlreadyDecidedError) {
     return new HttpError(409, "CONSENT_ALREADY_DECIDED", err.message);
+  }
+  if (err instanceof TaskNotFoundError) {
+    return new HttpError(404, "TASK_NOT_FOUND", err.message);
+  }
+  if (err instanceof TaskForbiddenError) {
+    return new HttpError(403, "TASK_FORBIDDEN", err.message);
+  }
+  if (err instanceof DirectSelfTargetError) {
+    return new HttpError(400, "DIRECT_SELF_TARGET", err.message);
+  }
+  if (err instanceof DirectChannelImmutableError) {
+    return new HttpError(400, "DIRECT_CHANNEL_IMMUTABLE", err.message);
   }
   if (err instanceof TrustSelfError) {
     return new HttpError(400, "TRUST_SELF", err.message);

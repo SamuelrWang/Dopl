@@ -302,3 +302,90 @@ test("(g) agent + non-message kind -> ignore (kind guard still applies)", () => 
     "ignore"
   );
 });
+
+// ── Task-reply verdict (Feature 4, requester side) ───────────────────────────
+// A responder-agent reply that belongs to an INTERACTIVE task the operator
+// CREATED, addressed back to the operator, is passive news — NOT a fresh spawn.
+// The task* keys (taskId / taskMode / taskCreatedBy / taskTarget) are stamped
+// SERVER-SIDE (Q4); taskCreatedBy === me separates the REQUESTER (new
+// 'task-reply' verdict) from the RESPONDER (unchanged 'trigger'), and taskTarget
+// === the author binds the suppression to the RESPONDER specifically — a THIRD
+// member posting into my task (author !== taskTarget) still 'trigger's. Autonomous
+// mode and old messages that carry no taskMode fall through to today's verdict,
+// and the kind guard still wins over everything (a task_* marker stays 'ignore').
+//
+// These messages carry metadata the full-sweep oracle above never builds, so
+// they exercise the new branch without disturbing the exhaustive sweep. The
+// task's target (responder) is U2 — the same id that authors the reply.
+const taskReply = (over = {}) => ({
+  authorUserId: U2, // responder's agent
+  authorKind: "agent",
+  kind: "message",
+  id: "t",
+  seq: 3,
+  body: "here is the answer",
+  metadata: { to_user_id: ME, taskId: "task-123", taskMode: "interactive", taskCreatedBy: ME, taskTarget: U2, ...over },
+});
+
+test("(task-a) interactive task I created, reply addressed to me -> task-reply", () => {
+  assert.equal(classify(taskReply(), makeEntry({ memberCount: 2, isMember: true }), ME), "task-reply");
+  // Explicitly addressed, so member count / membership do not matter.
+  assert.equal(classify(taskReply(), makeEntry({ memberCount: 3, isMember: true }), ME), "task-reply");
+  assert.equal(classify(taskReply(), makeEntry({ memberCount: 5, isMember: false }), ME), "task-reply");
+});
+
+test("(task-b) same task but created by someone else -> trigger (responder side, unchanged)", () => {
+  assert.equal(
+    classify(taskReply({ taskCreatedBy: U3 }), makeEntry({ memberCount: 2, isMember: true }), ME),
+    "trigger"
+  );
+});
+
+test("(task-c) interactive but autonomous mode -> trigger (never task-reply)", () => {
+  assert.equal(
+    classify(taskReply({ taskMode: "autonomous" }), makeEntry({ memberCount: 2, isMember: true }), ME),
+    "trigger"
+  );
+});
+
+test("(task-d) old message with no taskMode -> trigger (falls through unchanged)", () => {
+  const m = {
+    authorUserId: U2,
+    authorKind: "agent",
+    kind: "message",
+    id: "t",
+    seq: 3,
+    body: "x",
+    metadata: { to_user_id: ME, taskId: "task-123", taskCreatedBy: ME },
+  };
+  assert.equal(classify(m, makeEntry({ memberCount: 2, isMember: true }), ME), "trigger");
+});
+
+test("(task-e) interactive task metadata but kind task_finished -> ignore (kind guard wins)", () => {
+  const finished = { ...taskReply(), kind: "task_finished" };
+  assert.equal(classify(finished, makeEntry({ memberCount: 2, isMember: true }), ME), "ignore");
+});
+
+test("(task-f) interactive + mine but NOT addressed to me -> not task-reply", () => {
+  // to_user_id addresses a third party: the reply is not for this operator, so
+  // the task-reply branch (which requires to === me) must not fire. Falls through
+  // to the addressed-to-third-party rule -> fyi (member).
+  assert.equal(
+    classify(taskReply({ to_user_id: U3 }), makeEntry({ memberCount: 3, isMember: true }), ME),
+    "fyi"
+  );
+});
+
+test("(task-g) interactive + mine + to-me but author !== taskTarget -> trigger", () => {
+  // A THIRD member posts into my task: the message resolves to the task (so the
+  // server stamps taskTarget = the real responder U2), but the AUTHOR is U3, not
+  // the target. The suppression must NOT fire — it would silently swallow a
+  // stranger's post. Falls through to the addressed-to-me rule -> trigger.
+  const fromThird = { ...taskReply(), authorUserId: U3 };
+  assert.equal(classify(fromThird, makeEntry({ memberCount: 3, isMember: true }), ME), "trigger");
+  // The same author with a matching taskTarget (U3) IS the responder -> task-reply.
+  assert.equal(
+    classify({ ...taskReply({ taskTarget: U3 }), authorUserId: U3 }, makeEntry({ memberCount: 3, isMember: true }), ME),
+    "task-reply"
+  );
+});

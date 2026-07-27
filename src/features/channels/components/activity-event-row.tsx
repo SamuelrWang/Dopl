@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/shared/lib/utils";
-import { formatRelativeTime } from "@/shared/lib/format-time";
+import { formatChannelTimestamp } from "@/shared/lib/format-time";
 import { calmTerminalStatus } from "../lib/group-thread";
 import type { ChannelMessage, ChannelMessageKind } from "../types";
 
@@ -50,7 +50,7 @@ export function ActivityEventRow({ message }: { message: ChannelMessage }) {
         </span>
       )}
       <span className="shrink-0 text-micro text-text-muted">
-        {formatRelativeTime(message.createdAt)}
+        {formatChannelTimestamp(message.createdAt)}
       </span>
     </div>
   );

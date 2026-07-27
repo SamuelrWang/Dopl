@@ -22,6 +22,7 @@ const presence = require('./presence');
 const io = require('./listener-io');
 const targeting = require('./targeting');
 const trigger = require('./trigger');
+const taskNotify = require('./task-notify');
 const watcher = require('./consent-watcher');
 const { LISTENER } = require('./config');
 
@@ -142,6 +143,9 @@ async function channelLoop(entry) {
         );
         if (verdict === 'trigger') await trigger.handleTrigger(entry, m);
         else if (verdict === 'fyi') trigger.sendFyi(entry, m);
+        // Feature 4 (requester side): a reply in one of MY interactive tasks —
+        // passive notify only. No consent row, no watcher record, no spawn.
+        else if (verdict === 'task-reply') taskNotify.notifyTaskReply(entry, m);
       }
       if (msgs.length === 0 && maxSeq > since) io.setCursor(entry.channel.id, maxSeq);
     }

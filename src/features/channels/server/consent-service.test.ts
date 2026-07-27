@@ -52,6 +52,8 @@ function channelRow(): ChannelRow {
     name: "General",
     topic: "",
     visibility: "private",
+    is_direct: false,
+    direct_key: null,
     archived_at: null,
     deleted_at: null,
     created_at: "2026-07-20T00:00:00Z",

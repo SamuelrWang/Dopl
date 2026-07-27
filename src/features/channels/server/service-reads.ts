@@ -1,8 +1,10 @@
 import "server-only";
 import type {
   Channel,
+  ChannelDirectPeer,
   ChannelMember,
   ChannelMessage,
+  ChannelTask,
 } from "../types";
 import type { MessageReadQuery } from "../schema";
 import { ChannelNotFoundError } from "./errors";
@@ -10,10 +12,12 @@ import {
   mapChannelRow,
   mapMemberRow,
   mapMessageRow,
+  mapTaskRow,
   type ChannelMemberRow,
   type ChannelRow,
 } from "./dto";
 import * as repo from "./repository";
+import * as repoTasks from "./repository-tasks";
 import * as collab from "./repository-collab";
 import type { DerivedPresence } from "./repository-collab";
 import {
@@ -34,6 +38,8 @@ interface ChannelExtras {
   lasts: Map<string, string>;
   /** channelId -> count of members whose agent is currently online. */
   online: Map<string, number>;
+  /** channelId -> resolved peer, for direct channels only. */
+  directPeers: Map<string, ChannelDirectPeer>;
 }
 
 function toChannelDto(
@@ -50,7 +56,40 @@ function toChannelDto(
     agentToolProfile:
       (membership?.agent_tool_profile as Channel["myAgentToolProfile"]) ?? null,
     onlineMemberCount: extras.online.get(row.id) ?? 0,
+    directPeer: extras.directPeers.get(row.id) ?? null,
   });
+}
+
+/**
+ * Resolve the rendered peer for every direct channel in `rows` — the OTHER
+ * member (not the caller), hydrated with display name + avatar from the roster.
+ * The peer is resolved LIVE (never stored as truth): a display name / avatar
+ * can change. One profile fetch for the whole page.
+ */
+async function buildDirectPeers(
+  rows: ChannelRow[],
+  memberIds: Map<string, string[]>,
+  selfId: string
+): Promise<Map<string, ChannelDirectPeer>> {
+  const peerByChannel = new Map<string, string>();
+  for (const row of rows) {
+    if (!row.is_direct) continue;
+    const ids = memberIds.get(row.id) ?? [];
+    const peerId = ids.find((id) => id !== selfId) ?? ids[0];
+    if (peerId) peerByChannel.set(row.id, peerId);
+  }
+  if (peerByChannel.size === 0) return new Map();
+  const profiles = await profilesById([...new Set(peerByChannel.values())]);
+  const out = new Map<string, ChannelDirectPeer>();
+  for (const [channelId, peerId] of peerByChannel) {
+    const p = profiles.get(peerId);
+    out.set(channelId, {
+      userId: peerId,
+      displayName: p?.display_name ?? null,
+      avatarUrl: p?.avatar_url ?? null,
+    });
+  }
+  return out;
 }
 
 /** Per-channel online-member counts from the workspace presence map. */
@@ -93,6 +132,7 @@ export async function listChannels(
     counts,
     lasts,
     online: onlineCounts(memberIds, presence),
+    directPeers: await buildDirectPeers(rows, memberIds, ctx.userId),
   };
   return rows.map((row) =>
     toChannelDto(row, membershipByChannel.get(row.id) ?? null, extras)
@@ -115,6 +155,7 @@ export async function getChannel(
     counts,
     lasts,
     online: onlineCounts(memberIds, presence),
+    directPeers: await buildDirectPeers([channel], memberIds, ctx.userId),
   });
 }
 
@@ -229,4 +270,19 @@ export async function pollChannelMessages(
 ): Promise<ChannelMessage[]> {
   const rows = await repo.listMessages(channelId, { since, limit: 200 });
   return hydrateMessages(rows);
+}
+
+/**
+ * Every task in a channel the caller may read, newest first. Feeds the web's
+ * `Map<taskId, overlay>` that layers authoritative status / title / mode onto
+ * the message thread. Read access is gated by the same visibility rule as the
+ * transcript (public channel, or the caller is a member).
+ */
+export async function listChannelTasks(
+  ctx: ChannelContext,
+  ref: string
+): Promise<ChannelTask[]> {
+  const { channel } = await loadVisibleChannel(ctx, ref);
+  const rows = await repoTasks.listTasksByChannel(channel.id);
+  return rows.map(mapTaskRow);
 }

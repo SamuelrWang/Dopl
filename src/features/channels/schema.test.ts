@@ -24,6 +24,8 @@ import {
   ConsentCreateSchema,
   ConsentDecisionSchema,
   ConsentListQuerySchema,
+  TaskCreateSchema,
+  TaskUpdateSchema,
   TrustMutateSchema,
   PresenceHeartbeatSchema,
 } from "./schema";
@@ -57,6 +59,24 @@ describe("ChannelCreateSchema", () => {
     expect(ChannelCreateSchema.safeParse({ name: "x", visibility: "private" }).success).toBe(true);
     expect(ChannelCreateSchema.safeParse({ name: "x", visibility: "public" }).success).toBe(true);
     expect(ChannelCreateSchema.safeParse({ name: "x", visibility: "secret" }).success).toBe(false);
+  });
+
+  it("direct branch: accepts { direct:true, memberUserId:<uuid> }", () => {
+    expect(
+      ChannelCreateSchema.safeParse({ direct: true, memberUserId: UUID }).success
+    ).toBe(true);
+    // direct requires a UUID member and no name.
+    expect(ChannelCreateSchema.safeParse({ direct: true }).success).toBe(false);
+    expect(
+      ChannelCreateSchema.safeParse({ direct: true, memberUserId: "nope" }).success
+    ).toBe(false);
+  });
+
+  it("a normal { name } payload still parses (direct optional/false)", () => {
+    expect(ChannelCreateSchema.safeParse({ name: "General" }).success).toBe(true);
+    expect(
+      ChannelCreateSchema.safeParse({ name: "General", direct: false }).success
+    ).toBe(true);
   });
 });
 
@@ -315,6 +335,53 @@ describe("ConsentListQuerySchema", () => {
     expect(ConsentListQuerySchema.parse({ status: "decided" }).status).toBe("decided");
     expect(ConsentListQuerySchema.parse({ status: "all" }).status).toBe("all");
     expect(ConsentListQuerySchema.safeParse({ status: "allowed" }).success).toBe(false);
+  });
+});
+
+describe("TaskCreateSchema", () => {
+  const base = { title: "Ship it", body: "please do X", toUserId: UUID };
+
+  it("accepts a minimal valid create (title + body + toUserId)", () => {
+    expect(TaskCreateSchema.safeParse(base).success).toBe(true);
+  });
+
+  it("title: trimmed, 1..200 chars", () => {
+    expect(TaskCreateSchema.safeParse({ ...base, title: "" }).success).toBe(false);
+    expect(TaskCreateSchema.safeParse({ ...base, title: "   " }).success).toBe(false);
+    expect(TaskCreateSchema.safeParse({ ...base, title: "a".repeat(200) }).success).toBe(true);
+    expect(TaskCreateSchema.safeParse({ ...base, title: "a".repeat(201) }).success).toBe(false);
+  });
+
+  it("body: 1..16000 chars; toUserId must be a UUID", () => {
+    expect(TaskCreateSchema.safeParse({ ...base, body: "" }).success).toBe(false);
+    expect(TaskCreateSchema.safeParse({ ...base, toUserId: "x" }).success).toBe(false);
+  });
+
+  it("mode: optional interactive|autonomous only", () => {
+    expect(TaskCreateSchema.safeParse({ ...base, mode: "interactive" }).success).toBe(true);
+    expect(TaskCreateSchema.safeParse({ ...base, mode: "autonomous" }).success).toBe(true);
+    expect(TaskCreateSchema.safeParse({ ...base, mode: "turbo" }).success).toBe(false);
+  });
+});
+
+describe("TaskUpdateSchema", () => {
+  it("close: requires outcome completed|failed", () => {
+    expect(TaskUpdateSchema.safeParse({ op: "close", outcome: "completed" }).success).toBe(true);
+    expect(TaskUpdateSchema.safeParse({ op: "close", outcome: "failed" }).success).toBe(true);
+    expect(TaskUpdateSchema.safeParse({ op: "close" }).success).toBe(false);
+    expect(TaskUpdateSchema.safeParse({ op: "close", outcome: "meh" }).success).toBe(false);
+  });
+
+  it("set_mode: requires mode interactive|autonomous", () => {
+    expect(TaskUpdateSchema.safeParse({ op: "set_mode", mode: "interactive" }).success).toBe(true);
+    expect(TaskUpdateSchema.safeParse({ op: "set_mode" }).success).toBe(false);
+  });
+
+  it("discriminated union: fields can't bleed across ops", () => {
+    // A close carrying a `mode` (wrong op's field) still parses (extra keys
+    // stripped) but a set_mode without `mode` fails, and vice versa.
+    expect(TaskUpdateSchema.safeParse({ op: "set_mode", outcome: "completed" }).success).toBe(false);
+    expect(TaskUpdateSchema.safeParse({ op: "bogus", mode: "interactive" }).success).toBe(false);
   });
 });
 

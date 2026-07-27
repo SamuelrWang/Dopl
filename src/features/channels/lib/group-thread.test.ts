@@ -3,6 +3,7 @@ import {
   groupThread,
   isCalmTerminalStatus,
   truncateSummary,
+  type TaskOverlay,
   type ThreadItem,
 } from "./group-thread";
 import type { ChannelMessage, ChannelMessageKind, MessageAuthorKind } from "../types";
@@ -371,6 +372,57 @@ describe("groupThread", () => {
     if (s.type !== "session") throw new Error("expected session");
     expect(s.session.status).toBe("done");
     expect(s.session.entries.map((e) => e.body)).toEqual(["The answer."]);
+  });
+
+  it("groups a human request and its agent replies sharing an explicit UUID taskId into one card", () => {
+    // A first-class task: the requester's own message carries the task id, and
+    // both replies share it. Everything folds into one card, including the
+    // human request (old lifecycle grouping never absorbed a human row).
+    const t = "3f1c8e42-9b7a-4c2e-8d6f-2a1b0c9d8e7f";
+    const items = groupThread([
+      msg({ kind: "message", authorKind: "user", body: "please do X", metadata: { taskId: t } }),
+      msg({ kind: "message", authorKind: "agent", body: "On it.", metadata: { taskId: t } }),
+      msg({ kind: "message", authorKind: "agent", body: "Done.", metadata: { taskId: t } }),
+    ]);
+    // A single session card, no standalone bubbles.
+    expect(items).toHaveLength(1);
+    const s = sessions(items);
+    expect(s).toHaveLength(1);
+    if (s[0].type !== "session") throw new Error("expected session");
+    expect(s[0].session.taskId).toBe(t);
+    // The requester's own message folds into the body alongside the replies.
+    expect(s[0].session.entries.map((e) => e.body)).toEqual([
+      "please do X",
+      "On it.",
+      "Done.",
+    ]);
+    // No overlay -> derived: delivered replies imply Done, and no first-class
+    // title/mode.
+    expect(s[0].session.status).toBe("done");
+    expect(s[0].session.title).toBeNull();
+    expect(s[0].session.mode).toBeNull();
+  });
+
+  it("lets the task overlay status win over the message-derived status", () => {
+    // The task row is still open (mid-flight), so it must read 'active' even
+    // though a delivered reply would derive 'done' on its own.
+    const t = "8c2d1e90-4a5b-4f3c-9e1d-7b6a5c4d3e2f";
+    const overlays = new Map<string, TaskOverlay>([
+      [t, { status: "active", title: "Ship the report", mode: "interactive" }],
+    ]);
+    const items = groupThread(
+      [
+        msg({ kind: "message", authorKind: "user", body: "please do X", metadata: { taskId: t } }),
+        msg({ kind: "message", authorKind: "agent", body: "Answer.", metadata: { taskId: t } }),
+      ],
+      overlays
+    );
+    const s = sessions(items)[0];
+    if (s.type !== "session") throw new Error("expected session");
+    expect(s.session.status).toBe("active");
+    // Overlay title + mode win for the header.
+    expect(s.session.title).toBe("Ship the report");
+    expect(s.session.mode).toBe("interactive");
   });
 
   it("terminal session groups its one reply and is Done; a later agent post is not absorbed", () => {

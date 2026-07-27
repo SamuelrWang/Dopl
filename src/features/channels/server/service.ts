@@ -6,8 +6,8 @@ import "server-only";
  * each file has one clear purpose; cross-cutting context + gates live in
  * `service-shared.ts`.
  *   - `service-shared.ts`  — context, visibility gate, management gate, resolvers
- *   - `service-reads.ts`   — list + header + roster + cursor message reads + await poll
- *   - `service-writes.ts`  — create / update / delete, post message, add / remove member
+ *   - `service-reads.ts`   — list + header + roster + tasks + cursor reads + await poll
+ *   - `service-writes.ts`  — create (incl. direct) / update / delete, post message, members, tasks
  *   - `consent-service.ts` — inbound consent + outbound review requests (v1.2)
  *   - `trust-service.ts`   — per-teammate standing consent rules (v1.2)
  *   - `presence-service.ts`— desktop heartbeat upsert (v1.2)
@@ -20,6 +20,7 @@ export {
   listChannels,
   getChannel,
   listChannelMembers,
+  listChannelTasks,
   readMessages,
   resolveReadableChannelId,
   revalidateAwaitAccess,
@@ -34,6 +35,9 @@ export {
   addMember,
   removeMember,
   updateMyMemberSettings,
+  createTask,
+  closeTask,
+  setTaskMode,
 } from "./service-writes";
 
 export {

@@ -340,6 +340,15 @@ class DoplClient {
     awaitChannelMessages(channelId, opts) {
         return channel.awaitMessages(this.transport, channelId, opts);
     }
+    createChannelTask(channelId, input) {
+        return channel.createChannelTask(this.transport, channelId, input);
+    }
+    closeChannelTask(channelId, taskId, input) {
+        return channel.closeChannelTask(this.transport, channelId, taskId, input);
+    }
+    setChannelTaskMode(channelId, taskId, input) {
+        return channel.setChannelTaskMode(this.transport, channelId, taskId, input);
+    }
     // ─── Skills ─────────────────────────────────────────────────────────
     // Read paths are unrestricted; write paths are gated server-side by
     // the per-skill `agent_write_enabled` toggle for API-key (agent)

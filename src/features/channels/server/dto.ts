@@ -1,13 +1,18 @@
 import type {
   AgentToolProfile,
   Channel,
+  ChannelDirectPeer,
   ChannelMember,
   ChannelMessage,
   ChannelMessageKind,
   ChannelRole,
+  ChannelTask,
   ChannelVisibility,
   MessageAuthorKind,
   NotifyScope,
+  TaskMode,
+  TaskOutcome,
+  TaskStatus,
 } from "../types";
 
 /**
@@ -25,10 +30,27 @@ export type ChannelRow = {
   name: string;
   topic: string;
   visibility: string;
+  is_direct: boolean;
+  direct_key: string | null;
   archived_at: string | null;
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type ChannelTaskRow = {
+  id: string;
+  channel_id: string;
+  workspace_id: string;
+  title: string;
+  status: string;
+  outcome: string | null;
+  mode: string;
+  created_by: string;
+  target_user_id: string | null;
+  created_at: string;
+  updated_at: string;
+  closed_at: string | null;
 };
 
 export type ChannelMemberRow = {
@@ -76,6 +98,8 @@ export interface ChannelViewerState {
   agentToolProfile: AgentToolProfile | null;
   /** Members whose agent is currently online. */
   onlineMemberCount: number;
+  /** The resolved peer for a direct channel; null for a normal channel. */
+  directPeer: ChannelDirectPeer | null;
 }
 
 /** Presence layered onto a member row (derived from agent_presence). */
@@ -120,6 +144,8 @@ export function mapChannelRow(
     name: row.name,
     topic: row.topic,
     visibility: row.visibility as ChannelVisibility,
+    isDirect: row.is_direct,
+    directPeer: row.is_direct ? state.directPeer : null,
     createdBy: row.created_by,
     archivedAt: row.archived_at,
     createdAt: row.created_at,
@@ -189,5 +215,23 @@ export function mapMemberRow(
     displayName: profile?.display_name ?? null,
     email: profile?.email ?? null,
     avatarUrl: profile?.avatar_url ?? null,
+  };
+}
+
+/** Task row -> DTO. Pure — the task is the authoritative status/mode store. */
+export function mapTaskRow(row: ChannelTaskRow): ChannelTask {
+  return {
+    id: row.id,
+    channelId: row.channel_id,
+    workspaceId: row.workspace_id,
+    title: row.title,
+    status: row.status as TaskStatus,
+    outcome: (row.outcome as TaskOutcome | null) ?? null,
+    mode: row.mode as TaskMode,
+    createdBy: row.created_by,
+    targetUserId: row.target_user_id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    closedAt: row.closed_at,
   };
 }

@@ -10,7 +10,7 @@
  * routing and delegates each op to a handler in a sibling module —
  *   - `channel-shared.ts`    — channel + member reference resolution
  *   - `channel-ops-read.ts`  — list / read / await
- *   - `channel-ops-write.ts` — open / invite / post
+ *   - `channel-ops-write.ts` — open / invite / post / create_task / close_task / set_task_mode
  *
  * No `dopl_channel_admin` twin: there are no destructive ops over MCP v1
  * (archive/delete are human decisions in the web UI).

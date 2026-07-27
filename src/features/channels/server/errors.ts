@@ -90,3 +90,41 @@ export class TrustedNotMemberError extends ChannelError {
     super(`User is not an active workspace member: ${userId}`);
   }
 }
+
+/**
+ * A task the caller can't act on — either it doesn't exist in this channel or
+ * it isn't scoped to the caller's workspace. Collapsed to one not-found so an
+ * id can't be probed.
+ */
+export class TaskNotFoundError extends ChannelError {
+  constructor(public readonly ref: string) {
+    super(`Task not found: ${ref}`);
+  }
+}
+
+/** Caller lacks the task-scoped permission (set-mode: creator; close: creator
+ *  or target). */
+export class TaskForbiddenError extends ChannelError {
+  constructor(action: string) {
+    super(`Not allowed to ${action}`);
+  }
+}
+
+/** A direct channel would target the caller themselves — a self-DM is refused. */
+export class DirectSelfTargetError extends ChannelError {
+  constructor() {
+    super("Cannot open a direct channel with yourself");
+  }
+}
+
+/**
+ * A direct (1:1) channel's shape is immutable: its two-member roster and its
+ * (always private) visibility can't change. Blocks a third member being added
+ * and a visibility toggle, so neither surfaces the raw CHECK-constraint 500.
+ * `aspect` names what was attempted (e.g. "membership", "visibility"). 400.
+ */
+export class DirectChannelImmutableError extends ChannelError {
+  constructor(aspect: string) {
+    super(`Direct message ${aspect} can't be changed`);
+  }
+}

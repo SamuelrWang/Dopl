@@ -63,6 +63,27 @@ function classify(m, entry, myId) {
   const isMember = !(entry.channel && entry.channel.isMember === false);
 
   const toUserId = metaStr(m, 'to_user_id');
+  // TASK-REPLY (Feature 4, requester side): an inbound reply that belongs to an
+  // INTERACTIVE task *I created* and is addressed back to me is passive news — a
+  // reply landed — NOT a fresh request. It must not raise consent or spawn; the
+  // dispatcher fires a silent notification instead. The task* keys are stamped
+  // SERVER-SIDE (Q4), so they cannot be spoofed by the caller. taskCreatedBy ===
+  // me separates the REQUESTER (this branch) from the RESPONDER (taskCreatedBy
+  // !== me → falls through to today's 'trigger'); taskTarget === the author
+  // binds the suppression to the RESPONDER specifically, so a THIRD member
+  // posting into my task (author !== the task's target) still triggers instead
+  // of being silently swallowed. This sits BEFORE the addressed rules so it wins
+  // over the plain 'trigger'. Anything that is not interactive + mine +
+  // addressed-to-me + authored-by-the-target (autonomous mode, an old message
+  // with no taskMode, a non-message kind rejected by the guards above) falls
+  // through UNCHANGED.
+  if (
+    metaStr(m, 'taskId') &&
+    metaStr(m, 'taskMode') === 'interactive' &&
+    toUserId === myId &&
+    metaStr(m, 'taskCreatedBy') === myId &&
+    metaStr(m, 'taskTarget') === m.authorUserId
+  ) return 'task-reply';
   if (toUserId) {
     // Explicit address always prompts — for USER *and* AGENT authors. This is
     // the fix: an agent addressed to me triggers a consented answering turn.

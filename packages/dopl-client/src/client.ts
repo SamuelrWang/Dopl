@@ -76,7 +76,11 @@ import type {
   ChannelMember,
   ChannelMessage,
   ChannelMessageInput,
+  ChannelTask,
+  ChannelTaskCreateInput,
   ReadMessagesOptions,
+  TaskMode,
+  TaskOutcome,
 } from "./channel-types.js";
 
 export type { DoplTransportOptions as DoplClientOptions } from "./transport.js";
@@ -616,6 +620,29 @@ export class DoplClient {
     opts: AwaitMessagesOptions
   ): Promise<AwaitResult> {
     return channel.awaitMessages(this.transport, channelId, opts);
+  }
+
+  createChannelTask(
+    channelId: string,
+    input: ChannelTaskCreateInput
+  ): Promise<ChannelTask> {
+    return channel.createChannelTask(this.transport, channelId, input);
+  }
+
+  closeChannelTask(
+    channelId: string,
+    taskId: string,
+    input: { outcome: TaskOutcome }
+  ): Promise<ChannelTask> {
+    return channel.closeChannelTask(this.transport, channelId, taskId, input);
+  }
+
+  setChannelTaskMode(
+    channelId: string,
+    taskId: string,
+    input: { mode: TaskMode }
+  ): Promise<ChannelTask> {
+    return channel.setChannelTaskMode(this.transport, channelId, taskId, input);
   }
 
   // ─── Skills ─────────────────────────────────────────────────────────

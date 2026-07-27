@@ -9,7 +9,7 @@
  * would open a second poll and could double-count arrivals.
  */
 import type { DoplTransport } from "./transport.js";
-import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelCreateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ReadMessagesOptions } from "./channel-types.js";
+import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelCreateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ChannelTask, ChannelTaskCreateInput, ReadMessagesOptions, TaskMode, TaskOutcome } from "./channel-types.js";
 export declare function listChannels(t: DoplTransport, opts?: {
     includeArchived?: boolean;
 }): Promise<Channel[]>;
@@ -20,3 +20,10 @@ export declare function awaitMessages(t: DoplTransport, channelId: string, opts:
 export declare function createChannel(t: DoplTransport, input: ChannelCreateInput): Promise<Channel>;
 export declare function inviteToChannel(t: DoplTransport, channelId: string, userId: string): Promise<ChannelMember>;
 export declare function postMessage(t: DoplTransport, channelId: string, input: ChannelMessageInput): Promise<ChannelMessage>;
+export declare function createChannelTask(t: DoplTransport, channelId: string, input: ChannelTaskCreateInput): Promise<ChannelTask>;
+export declare function closeChannelTask(t: DoplTransport, channelId: string, taskId: string, input: {
+    outcome: TaskOutcome;
+}): Promise<ChannelTask>;
+export declare function setChannelTaskMode(t: DoplTransport, channelId: string, taskId: string, input: {
+    mode: TaskMode;
+}): Promise<ChannelTask>;

@@ -18,6 +18,9 @@ exports.awaitMessages = awaitMessages;
 exports.createChannel = createChannel;
 exports.inviteToChannel = inviteToChannel;
 exports.postMessage = postMessage;
+exports.createChannelTask = createChannelTask;
+exports.closeChannelTask = closeChannelTask;
+exports.setChannelTaskMode = setChannelTaskMode;
 const enc = encodeURIComponent;
 /** Network read-timeout for the long-poll — safely above the server cap. */
 const AWAIT_TIMEOUT_MS = 55_000;
@@ -90,4 +93,29 @@ async function postMessage(t, channelId, input) {
         toolName: "channel_post",
     });
     return data.message;
+}
+// ─── Tasks ──────────────────────────────────────────────────────────
+async function createChannelTask(t, channelId, input) {
+    const data = await t.request(`/api/channels/${enc(channelId)}/tasks`, {
+        method: "POST",
+        body: input,
+        toolName: "channel_create_task",
+    });
+    return data.task;
+}
+async function closeChannelTask(t, channelId, taskId, input) {
+    const data = await t.request(`/api/channels/${enc(channelId)}/tasks/${enc(taskId)}`, {
+        method: "PATCH",
+        body: { op: "close", outcome: input.outcome },
+        toolName: "channel_close_task",
+    });
+    return data.task;
+}
+async function setChannelTaskMode(t, channelId, taskId, input) {
+    const data = await t.request(`/api/channels/${enc(channelId)}/tasks/${enc(taskId)}`, {
+        method: "PATCH",
+        body: { op: "set_mode", mode: input.mode },
+        toolName: "channel_set_task_mode",
+    });
+    return data.task;
 }

@@ -24,16 +24,31 @@ const PostableMessageKindSchema = z.enum([
 ]);
 
 /**
- * Create a channel. `slug` is optional — the service derives one from the
- * name when omitted and resolves collisions. `visibility` defaults to
- * private (members only) in the service.
+ * Create a channel. Two shapes on one endpoint (union):
+ *   - normal: `{ name, slug?, topic?, visibility? }` — `slug` is optional (the
+ *     service derives one and resolves collisions); `visibility` defaults to
+ *     private in the service.
+ *   - direct (v15): `{ direct: true, memberUserId }` — a 1:1 channel with the
+ *     named member. No name/slug/topic/visibility (the service stores a
+ *     placeholder name + private visibility); dedup + membership-of-2 are
+ *     enforced server-side, and a self-target is rejected.
+ *
+ * A union (not a discriminated union) so today's `{ name }` callers keep
+ * parsing unchanged: the normal branch has no discriminator to add.
  */
-export const ChannelCreateSchema = z.object({
-  name: z.string().trim().min(1).max(120),
-  slug: z.string().trim().min(1).max(80).optional(),
-  topic: z.string().max(2000).optional(),
-  visibility: VisibilitySchema.optional(),
-});
+export const ChannelCreateSchema = z.union([
+  z.object({
+    direct: z.literal(true),
+    memberUserId: z.string().uuid(),
+  }),
+  z.object({
+    direct: z.literal(false).optional(),
+    name: z.string().trim().min(1).max(120),
+    slug: z.string().trim().min(1).max(80).optional(),
+    topic: z.string().max(2000).optional(),
+    visibility: VisibilitySchema.optional(),
+  }),
+]);
 export type ChannelCreateInput = z.infer<typeof ChannelCreateSchema>;
 
 /**
@@ -72,6 +87,39 @@ export const ChannelMessageCreateSchema = z.object({
 export type ChannelMessageCreateInput = z.infer<
   typeof ChannelMessageCreateSchema
 >;
+
+// ─── Tasks (first-class channel tasks, v15) ─────────────────────────────────
+
+/** Task execution mode. `set_task_mode` governs the creator's own machine. */
+const TaskModeSchema = z.enum(["interactive", "autonomous"]);
+
+/** How a closed task ended. */
+const TaskOutcomeSchema = z.enum(["completed", "failed"]);
+
+/**
+ * Create a task in a channel. `title` is the queryable header; `body` is the
+ * requester's initial request (posted as the task's first message, addressed
+ * to `toUserId`); `mode` defaults to interactive. `toUserId` must be an active
+ * member of the channel (validated in the service).
+ */
+export const TaskCreateSchema = z.object({
+  title: z.string().trim().min(1).max(200),
+  mode: TaskModeSchema.optional(),
+  body: z.string().min(1).max(16000),
+  toUserId: z.string().uuid(),
+});
+export type TaskCreateInput = z.infer<typeof TaskCreateSchema>;
+
+/**
+ * Update a task: close it (`op:"close"` — creator or target) OR change its
+ * mode (`op:"set_mode"` — creator only). A discriminated union so the two
+ * ops can't bleed fields into each other.
+ */
+export const TaskUpdateSchema = z.discriminatedUnion("op", [
+  z.object({ op: z.literal("close"), outcome: TaskOutcomeSchema }),
+  z.object({ op: z.literal("set_mode"), mode: TaskModeSchema }),
+]);
+export type TaskUpdateInput = z.infer<typeof TaskUpdateSchema>;
 
 /** Per-member notification scope for a channel (self-service preference). */
 const NotifyScopeSchema = z.enum(["all", "addressed", "none"]);

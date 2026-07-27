@@ -22,6 +22,7 @@ import type { AgentToolProfile, NotifyScope } from "../types";
 import { useChannels } from "../hooks/use-channels";
 import { useChannelMessages } from "../hooks/use-channel-messages";
 import { useChannelMembers } from "../hooks/use-channel-members";
+import { useChannelTasks } from "../hooks/use-channel-tasks";
 import { useConsentInbox } from "../hooks/use-consent-inbox";
 import { useTrustRules } from "../hooks/use-trust-rules";
 import { useChannelsRealtime, usePresenceRealtime } from "../client/realtime";
@@ -30,6 +31,7 @@ import { ChannelThread } from "./channel-thread";
 import { ChannelsSkeleton } from "./channels-skeleton";
 import { ChannelsOnboarding } from "./channels-onboarding";
 import { CreateChannelDialog } from "./create-channel-dialog";
+import { DirectMessageDialog } from "./direct-message-dialog";
 import { InviteDialog } from "./invite-dialog";
 import type { SendOptions } from "./message-composer";
 
@@ -72,6 +74,7 @@ export function ChannelsView({
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [directOpen, setDirectOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   // Optimistic per-channel preference overrides, applied over the server value
   // until the follow-up refetch (success) or a revert (failure).
@@ -118,6 +121,11 @@ export function ChannelsView({
     selected?.id ?? null,
     workspaceId
   );
+  const {
+    tasks,
+    loading: tasksLoading,
+    refetch: refetchTasks,
+  } = useChannelTasks(selected?.id ?? null, workspaceId);
   // Poll fallback scoped to THIS page (not the sidebar badge) so a pending
   // request appears within a few seconds even when Realtime drops the consent
   // INSERT; pauses automatically while the tab is hidden (TanStack default).
@@ -152,6 +160,10 @@ export function ChannelsView({
     void refetchChannels();
     void refetchMessages();
     void refetchMembers();
+    // A `create_task` / `close_task` posts a message, so the same realtime
+    // signal that refreshes messages also refreshes the authoritative task
+    // status/title overlay (`set_task_mode` posts none — eventually consistent).
+    void refetchTasks();
   };
   const coordinatorRef = useRef(createRefetchCoordinator(() => refetchRef.current()));
   useChannelsRealtime(workspaceId, () =>
@@ -162,7 +174,7 @@ export function ChannelsView({
   // ROSTER, on a trailing debounce. The channel list is deliberately NOT
   // refetched here: that read does a workspace-wide presence scan plus a
   // per-channel member fan-out, and the only thing it adds is `onlineMemberCount`,
-  // which nothing renders (the header derives "N listening" from the roster).
+  // which nothing renders (the header derives "N online" from the roster).
   const membersRefetchRef = useRef<() => void>(() => {});
   membersRefetchRef.current = () => void refetchMembers();
   const presenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -386,6 +398,7 @@ export function ChannelsView({
         onSelect={setSelectedId}
         canCreate={canCreate}
         onCreate={() => setCreateOpen(true)}
+        onCreateDirect={() => setDirectOpen(true)}
         consentChannelIds={consentChannelIds}
       />
 
@@ -394,6 +407,8 @@ export function ChannelsView({
           key={channelForThread.id}
           channel={channelForThread}
           messages={messages}
+          tasks={tasks}
+          tasksLoading={tasksLoading}
           loading={messagesLoading}
           notifyScope={effectiveNotifyScope}
           members={members}
@@ -428,10 +443,23 @@ export function ChannelsView({
 
       <CreateChannelDialog
         workspaceId={workspaceId}
+        workspaceSlug={workspaceSlug}
         open={createOpen}
         onOpenChange={setCreateOpen}
         onCreated={(channel) => {
           setTab("active");
+          setSelectedId(channel.id);
+          void refetchChannels();
+        }}
+      />
+
+      <DirectMessageDialog
+        workspaceId={workspaceId}
+        workspaceSlug={workspaceSlug}
+        currentUserId={currentUserId}
+        open={directOpen}
+        onOpenChange={setDirectOpen}
+        onCreated={(channel) => {
           setSelectedId(channel.id);
           void refetchChannels();
         }}
