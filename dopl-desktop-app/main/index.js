@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, shell } = require('electron');
+const { app, BrowserWindow, Menu, shell, powerMonitor } = require('electron');
 const path = require('path');
 const Store = require('electron-store');
 
@@ -33,7 +33,13 @@ function isAppUrl(urlStr) {
 }
 
 // ── Window ────────────────────────────────────────────────────────────────────
-function createMainWindow() {
+// `opts.show === true` forces the window visible once painted even on a hidden
+// login launch — an explicit open (tray, notification click, deep link) must
+// always surface the window, whereas the initial background launch respects
+// openAsHidden. Without this, recreating the window while wasOpenedHidden() is
+// still true would silently leave it hidden.
+function createMainWindow(opts = {}) {
+  const forceShow = opts.show === true;
   const saved = store.get('windowBounds');
   const bounds = saved && typeof saved.width === 'number'
     ? saved
@@ -65,7 +71,7 @@ function createMainWindow() {
   // When launched at login as a hidden background listener, stay in the tray —
   // don't pop the window. Otherwise show once the content is painted.
   mainWindow.once('ready-to-show', () => {
-    if (!wasOpenedHidden()) mainWindow.show();
+    if (forceShow || !wasOpenedHidden()) mainWindow.show();
   });
 
   // Persist window bounds.
@@ -101,7 +107,7 @@ function wasOpenedHidden() {
 
 function showMainWindow() {
   if (!mainWindow || mainWindow.isDestroyed()) {
-    createMainWindow();
+    createMainWindow({ show: true }); // force visible even on a hidden login launch
     return;
   }
   if (mainWindow.isMinimized()) mainWindow.restore();
@@ -384,9 +390,31 @@ if (!gotLock) {
     // no-ops when signed out or the CLI/endpoint isn't available).
     mcpConfig.ensureMcpConfig().catch((err) => diag('mcp-config startup error', err && err.message));
 
+    // Wake-from-sleep fast catch-up. On resume (and screen unlock) kick the
+    // listener: abort in-flight long-polls so they re-await from their cursors
+    // immediately, beat presence, and reconcile. reconcile is single-flight and
+    // wake() is debounced here, so a resume+unlock pair (they fire together) does
+    // one pass — not two. powerMonitor is only valid after the app is ready.
+    let lastWakeAt = 0;
+    const onWake = (reason) => {
+      const now = Date.now();
+      if (now - lastWakeAt < 3000) return; // coalesce resume+unlock / rapid unlocks
+      lastWakeAt = now;
+      diag('powerMonitor:', reason, '— waking listener');
+      try { listener.wake(); } catch (err) { diag('wake error', err && err.message); }
+    };
+    try {
+      powerMonitor.on('resume', () => onWake('resume'));
+      powerMonitor.on('unlock-screen', () => onWake('unlock-screen'));
+    } catch (err) {
+      console.warn('[powerMonitor] wiring failed:', err && err.message);
+    }
+
     app.on('activate', () => {
+      // Clicking the dock icon is an explicit request to see the app, so force
+      // the window visible even if this process was launched hidden at login.
       if (BrowserWindow.getAllWindows().length === 0) {
-        createMainWindow();
+        createMainWindow({ show: true });
       } else {
         showMainWindow();
       }

@@ -84,6 +84,20 @@ function start() {
   diag('presence: started (30s heartbeat)');
 }
 
+// Wake handler (powerMonitor resume / unlock, via the listener). Sleep can
+// suspend the interval and a wake usually means the network changed, so: fire a
+// beat immediately to re-assert presence within seconds, and re-arm the interval
+// if it was lost. The `beating` guard means an overlapping in-flight beat is a
+// no-op, so this is safe to call on every wake. Only meaningful while started.
+function wake() {
+  if (!timer) {
+    timer = setInterval(() => beat().catch(() => {}), HEARTBEAT_MS);
+    if (timer.unref) timer.unref();
+    diag('presence: re-armed after wake');
+  }
+  beat().catch(() => {});
+}
+
 function stop() {
   if (timer) {
     clearInterval(timer);
@@ -92,4 +106,4 @@ function stop() {
   diag('presence: stopped');
 }
 
-module.exports = { start, stop, setWorkspaces };
+module.exports = { start, stop, wake, setWorkspaces };

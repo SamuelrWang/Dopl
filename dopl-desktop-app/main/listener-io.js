@@ -45,6 +45,38 @@ function markSeeded(channelId) {
   store.set('seeded', s);
 }
 
+// ─── BEGIN SEED-DECISION (pure; unit-tested via source extraction) ───────────
+// THE seed-vs-missed decision, isolated as a pure function so
+// test/seed-decision.test.mjs can lock it without electron-store.
+//
+// Returns true → the channel loop starts in SEED mode (drain history quietly,
+// no prompts); false → LIVE mode (every foreign message classified →
+// trigger/fyi).
+//
+// Rule: seed mode is reserved for the VERY FIRST watch of a channel — the
+// persisted `seeded` flag is false. Once the first backlog drain reaches the tip
+// (markSeeded), the channel is NEVER re-seeded, so on a later run — a full
+// quit+relaunch, or a wake after sleep — it starts LIVE and messages that
+// arrived while the app was gone surface as real triggers instead of being
+// swallowed as backlog. This is what makes offline catch-up correct.
+//
+// The persisted cursor deliberately does NOT flip a channel to live on its own:
+// a channel interrupted MID-seed (seeded flag never set, cursor partially
+// advanced through a large first-watch history) must keep seeding so the
+// untouched remainder is not replayed as a burst of consent prompts. Only the
+// seeded flag — set once the drain catches up to the tip — flips it to live.
+// (Second arg is the cursor, accepted and intentionally ignored, so the test can
+// assert cursor-independence.)
+function seedModeFor(seeded /* , cursor */) {
+  return !seeded;
+}
+// ─── END SEED-DECISION ───────────────────────────────────────────────────────
+
+// Whether a channel loop should start in seed mode, from persisted state.
+function shouldSeed(channelId) {
+  return seedModeFor(isSeeded(channelId), getCursor(channelId));
+}
+
 // ── Pending-consent records (M5b) ────────────────────────────────────────────
 // A per-channel {seq, messageId, workspaceId} written BEFORE the consent dialog
 // and cleared after the reply is posted (or the request is denied). If the app
@@ -89,15 +121,23 @@ function isFeatureAvailable() {
 
 // ── HTTP ────────────────────────────────────────────────────────────────────
 async function apiFetch(pathname, opts = {}) {
-  const { method = 'GET', workspaceId, body, timeoutMs } = opts;
+  const { method = 'GET', workspaceId, body, timeoutMs, signal } = opts;
   const cookie = await auth.getAuthCookie();
   const headers = { Accept: 'application/json' };
   if (cookie) headers.Cookie = cookie;
   if (workspaceId) headers['X-Workspace-Id'] = workspaceId;
   if (body !== undefined) headers['Content-Type'] = 'application/json';
 
+  // One controller aborts the request. It fires on our own timeout AND on an
+  // optional caller signal (the wake kick uses this to cut a healthy long-poll
+  // short so it re-awaits from the persisted cursor immediately). Either way the
+  // fetch rejects with AbortError, which the caller treats as a turnover.
   const ctrl = new AbortController();
   const timer = timeoutMs ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
+  if (signal) {
+    if (signal.aborted) ctrl.abort();
+    else signal.addEventListener('abort', () => ctrl.abort(), { once: true });
+  }
   try {
     return await fetch(`${API_BASE}${pathname}`, {
       method,
@@ -202,6 +242,8 @@ module.exports = {
   setCursor,
   isSeeded,
   markSeeded,
+  seedModeFor,
+  shouldSeed,
   getPending,
   setPending,
   clearPending,

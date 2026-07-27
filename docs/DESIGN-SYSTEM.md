@@ -84,6 +84,7 @@ Shared React primitives (`src/shared/ui` + `src/shared/hooks`):
 | --------- | --- |
 | `Popover` / `MenuItem` (`popover-menu.tsx`) | ALL dropdowns/kebabs/filter/context menus. Trigger-anchored by default; pass `at={{x,y}}` for portal/cursor-positioned menus (viewport-clamped). `MenuItem` takes `icon` + `destructive`. Never hand-roll the backdrop/Escape/clamp pattern. |
 | `Avatar` (`avatar.tsx`) | Profile pictures with neutral initials fallback. No gradients — identity color belongs to teams. |
+| `AvatarWithPresence` (`avatar-with-presence.tsx`) | `Avatar` wrapped in a presence ring — `ring-success` online / `ring-text-disabled` offline, floated off the avatar by a transparent `p-0.5` gap so it reads on any surface. Prefer over a standalone presence dot wherever an avatar is shown. |
 | `SegmentedControl` (`segmented-control.tsx`) | ALL scope/filter tab rows. Concave track + a raised thumb that slides between slots (0.28s ease-out-quint). Never compose `.concave-track`/`.raised-tab` tabs by hand. |
 | `SectionBox` (`section-box.tsx`) | Labelled section card (see Patterns below). |
 | `EmptyState` (`empty-state.tsx`) | Centered icon + title + description placeholder for empty panes. |

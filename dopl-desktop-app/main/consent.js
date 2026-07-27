@@ -29,9 +29,23 @@
 // Every decision point is diag()-logged; the message body is truncated, never a
 // token.
 
-const { dialog, Notification } = require('electron');
+const { app, BrowserWindow, dialog, Notification } = require('electron');
 const { apiFetch } = require('./api');
 const { diag } = require('./diag');
+
+// A consent banner is easy to miss when the operator runs Dopl hidden in the
+// tray. When NO window is visible, bounce the dock so the request still draws
+// attention; when a window is up, the banner + in-app dialog are enough. macOS
+// only, best-effort — never let this throw into the consent race.
+function requestAttention() {
+  try {
+    if (process.platform !== 'darwin' || !app.dock) return;
+    const anyVisible = BrowserWindow.getAllWindows().some((w) => {
+      try { return w.isVisible(); } catch (_) { return false; }
+    });
+    if (!anyVisible) app.dock.bounce('critical');
+  } catch (_) { /* best-effort */ }
+}
 
 const CONSENT_PATH = '/api/channels/consent';
 // L: 2s against a 30-minute ceiling is up to 900 requests per pending decision,
@@ -303,6 +317,7 @@ function raceDecision({ workspaceId, rowId, surfaces, onOpenChannel }) {
           }
         });
         notif.show();
+        requestAttention(); // bounce the dock when running hidden in the tray
       }
     } catch (_) {
       /* notifications are best-effort */

@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { AtSign, X } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
-import { Avatar } from "@/shared/ui/avatar";
+import { AvatarWithPresence } from "@/shared/ui/avatar-with-presence";
 import { Popover } from "@/shared/ui/popover-menu";
 import type { ChannelMember } from "../types";
 
@@ -116,20 +116,21 @@ export function AddressPicker({ members, currentUserId, value, onChange }: Props
               }}
               className="flex w-full items-center gap-2 px-3 py-1.5 text-left transition-colors hover:bg-surface-raised-2"
             >
-              <Avatar
+              <AvatarWithPresence
                 person={{
                   userId: m.userId,
                   email: m.email,
                   displayName: m.displayName,
                   avatarUrl: m.avatarUrl,
                 }}
+                online={m.agentOnline}
                 size="xs"
+                title={m.agentOnline ? "Agent listening" : "Agent offline"}
               />
               <span className="min-w-0 flex-1 truncate text-small text-text-primary">
                 {memberLabel(m)}
               </span>
-              <span className="flex shrink-0 items-center gap-1 text-micro text-text-muted">
-                <PresenceDot online={m.agentOnline} />
+              <span className="shrink-0 text-micro text-text-muted">
                 {m.agentOnline ? "listening" : "offline"}
               </span>
             </button>

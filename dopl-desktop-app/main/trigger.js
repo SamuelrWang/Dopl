@@ -99,11 +99,19 @@ function notifyLocal(title, body) {
 // seq) so the server dedupes — retries can never double-post. Returns true on a
 // confirmed post. M-7: the body is clamped to the server's 16000-char cap, since
 // a longer one 400s on the first attempt and, being a 4xx, is never retried.
-async function postResult(entry, m, text) {
+//
+// `metadata` (optional) rides through to `channel_messages.metadata` (jsonb).
+// The agent's ACTUAL reply carries `{ taskId }` so the web thread can group it
+// into the same session card as its task_started/finished events; incidental
+// posts (e.g. the busy "please resend" notice) pass no metadata and render as
+// plain agent bubbles, outside any session. Reserved keys (to_user_id/summary)
+// are stripped server-side, so taskId is the only key we set here.
+async function postResult(entry, m, text, metadata) {
   const body = {
     body: consent.clampBody(text),
     authorKind: 'agent',
     clientMsgId: `agent-${entry.channel.id}-${m.seq}`,
+    ...(metadata ? { metadata } : {}),
   };
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
@@ -163,7 +171,7 @@ async function reviewAndPostReply(entry, m, { taskId, startedAt, text }) {
     );
     return;
   }
-  const posted = await postResult(entry, m, reply);
+  const posted = await postResult(entry, m, reply, { taskId });
   diag('post reply:', posted ? 'ok' : 'FAILED');
   if (posted) {
     await postTaskEvent(entry, m, 'task_finished', taskId, { durationMs: Date.now() - startedAt });

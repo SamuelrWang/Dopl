@@ -6,6 +6,7 @@ import { Check, UserMinus } from "lucide-react";
 import { ModalShell } from "@/shared/layout/settings-modal";
 import { SearchField } from "@/shared/ui/search-field";
 import { Avatar } from "@/shared/ui/avatar";
+import { AvatarWithPresence } from "@/shared/ui/avatar-with-presence";
 import { toast } from "@/shared/ui/toast";
 import { useApiQuery } from "@/shared/hooks/use-api-query";
 import type { WorkspaceMemberView } from "@/features/members/types";
@@ -15,7 +16,6 @@ import {
   ChannelApiError,
   removeChannelMember,
 } from "../client/api";
-import { PresenceDot } from "./address-picker";
 
 interface Props {
   workspaceId: string;
@@ -182,23 +182,21 @@ export function InviteDialog({
                 m.userId === currentUserId || (canManage && m.role !== "owner");
               return (
                 <li key={m.userId} className="flex items-center gap-2.5 px-3 py-2">
-                  <Avatar
+                  <AvatarWithPresence
                     person={{
                       userId: m.userId,
                       email: m.email,
                       displayName: m.displayName,
                       avatarUrl: m.avatarUrl,
                     }}
+                    online={m.agentOnline}
                     size="xs"
+                    title={m.agentOnline ? "Agent listening" : "Agent offline"}
                   />
                   <span className="min-w-0 flex-1 truncate text-body text-text-primary">
                     {m.displayName || m.email || m.userId}
                   </span>
-                  <span
-                    className="flex shrink-0 items-center gap-1 text-micro text-text-muted"
-                    title={m.agentOnline ? "Agent listening" : "Agent offline"}
-                  >
-                    <PresenceDot online={m.agentOnline} />
+                  <span className="shrink-0 text-micro text-text-muted">
                     {m.agentOnline ? "listening" : "offline"}
                   </span>
                   <span className="shrink-0 text-micro font-medium uppercase tracking-wide text-text-muted">

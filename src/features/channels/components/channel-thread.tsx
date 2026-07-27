@@ -126,6 +126,10 @@ export function ChannelThread({
     () => members.filter((m) => m.agentOnline),
     [members]
   );
+  const onlineUserIds = useMemo(
+    () => new Set(onlineMembers.map((m) => m.userId)),
+    [onlineMembers]
+  );
 
   // Stick to the bottom when the transcript grows or the channel changes.
   useEffect(() => {
@@ -164,6 +168,7 @@ export function ChannelThread({
                 userId: m.userId,
                 displayName: m.displayName || m.email || "teammate",
                 avatarUrl: m.avatarUrl,
+                online: true,
               }))}
               max={3}
             />
@@ -316,7 +321,11 @@ export function ChannelThread({
               {loading ? "Loading messages…" : "No messages yet."}
             </p>
           ) : (
-            <MessageThread messages={messages} memberNames={memberNames} />
+            <MessageThread
+              messages={messages}
+              memberNames={memberNames}
+              onlineUserIds={onlineUserIds}
+            />
           )}
         </div>
       </div>

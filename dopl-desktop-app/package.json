@@ -1,13 +1,13 @@
 {
   "name": "dopl-desktop",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Dopl — desktop app",
   "main": "main/index.js",
   "scripts": {
     "start": "electron .",
     "smoke": "electron scripts/smoke-test.js",
     "lint": "eslint .",
-    "test": "node --test test/classify.test.mjs test/tool-profiles.test.mjs",
+    "test": "node --test test/classify.test.mjs test/tool-profiles.test.mjs test/seed-decision.test.mjs",
     "build": "electron-builder --mac",
     "dist": "electron-builder --mac",
     "release": "electron-builder --mac --publish always",

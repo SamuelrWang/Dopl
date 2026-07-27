@@ -1,40 +1,63 @@
 "use client";
 
+import { useMemo } from "react";
 import { ArrowRight } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { Avatar } from "@/shared/ui/avatar";
 import { formatRelativeTime } from "@/shared/lib/format-time";
 import type { ChannelMessage } from "../types";
+import { groupThread } from "../lib/group-thread";
 import { ActivityEventRow } from "./activity-event-row";
+import { SessionCard } from "./session-card";
 
 /**
- * The channel transcript. Chat messages render as bordered bubbles (agent
- * = elevated surface, human = subtle card surface); task_* / system rows
- * render as flat centered activity lines via `ActivityEventRow`. A message
- * carrying addressing metadata shows who it was directed at + why, so a human
- * can tell why only one agent answered.
+ * The channel transcript. One spawned-agent SESSION (the messages/events
+ * sharing a `metadata.taskId`) collapses into a single {@link SessionCard};
+ * standalone human messages and plain agent chat render as bordered bubbles
+ * (agent = elevated surface, human = subtle card surface), and `system` rows
+ * as flat centered activity lines via `ActivityEventRow`. A message carrying
+ * addressing metadata shows who it was directed at + why, so a human can tell
+ * why only one agent answered.
  */
 export function MessageThread({
   messages,
   memberNames,
+  onlineUserIds,
 }: {
   messages: ChannelMessage[];
   /** userId -> display name, for rendering addressing targets. */
   memberNames: Map<string, string>;
+  /** Members whose agent is currently listening (for session presence rings). */
+  onlineUserIds: ReadonlySet<string>;
 }) {
+  const items = useMemo(() => groupThread(messages), [messages]);
   return (
     <div className="flex flex-col gap-2.5">
-      {messages.map((message) =>
-        message.kind === "message" ? (
+      {items.map((item) => {
+        if (item.type === "session") {
+          return (
+            <SessionCard
+              key={item.key}
+              session={item.session}
+              online={
+                item.session.head.authorUserId
+                  ? onlineUserIds.has(item.session.head.authorUserId)
+                  : false
+              }
+            />
+          );
+        }
+        const { message } = item;
+        return message.kind === "message" ? (
           <MessageBubble
-            key={message.id}
+            key={item.key}
             message={message}
             memberNames={memberNames}
           />
         ) : (
-          <ActivityEventRow key={message.id} message={message} />
-        )
-      )}
+          <ActivityEventRow key={item.key} message={message} />
+        );
+      })}
     </div>
   );
 }

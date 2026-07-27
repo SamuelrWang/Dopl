@@ -43,18 +43,30 @@ const loops = new Map(); // channelId -> loop entry
 async function channelLoop(entry) {
   while (running && !entry.stop) {
     const since = io.getCursor(entry.channel.id);
+    // Per-iteration controller so wake() can abort a healthy in-flight long-poll
+    // and force an immediate re-await from the persisted cursor (fast catch-up
+    // after sleep / network change). Cleared as soon as the fetch settles.
+    const awaitCtrl = new AbortController();
+    entry.awaitCtrl = awaitCtrl;
     let res;
     try {
       res = await io.apiFetch(
         `/api/channels/${entry.channel.id}/await?since=${since}&timeoutMs=${LISTENER.AWAIT_TIMEOUT_MS}`,
-        { workspaceId: entry.workspaceId, timeoutMs: LISTENER.AWAIT_FETCH_TIMEOUT_MS }
+        {
+          workspaceId: entry.workspaceId,
+          timeoutMs: LISTENER.AWAIT_FETCH_TIMEOUT_MS,
+          signal: awaitCtrl.signal,
+        }
       );
     } catch (err) {
-      // AbortError from our own fetch timeout is a normal long-poll turnover.
+      entry.awaitCtrl = null;
+      // AbortError is either our own fetch timeout (normal long-poll turnover) or
+      // a wake() kick — both just re-await immediately with the current cursor.
       if (err && err.name === 'AbortError') continue;
       await backoff(entry);
       continue;
     }
+    entry.awaitCtrl = null;
 
     if (res.status === 404) {
       // L2: a single channel's await 404 means THIS channel is gone (deleted /
@@ -62,12 +74,22 @@ async function channelLoop(entry) {
       // do NOT flip the global featureAvailable flag. reconcile() re-adds it if
       // the channel reappears. (Whole-feature 404 is caught in listChannels.)
       entry.stop = true;
-      loops.delete(entry.channel.id);
+      // Compare-and-delete: a stale loop's 404 must not evict a healthy
+      // replacement entry for the same channel. If a drop→reappear reconcile has
+      // already replaced this entry, loops.get() points at the new one — leave it.
+      if (loops.get(entry.channel.id) === entry) loops.delete(entry.channel.id);
       return;
     }
     if (res.status === 401) {
       io.notifyStale();
-      await auth.ensureFresh().then((s) => s && auth.writeSessionCookies(s));
+      // ensureFresh/writeSessionCookies swallow their own errors, but never let a
+      // surprise rejection escape and kill this loop permanently.
+      try {
+        const s = await auth.ensureFresh();
+        if (s) await auth.writeSessionCookies(s);
+      } catch (err) {
+        diag('channelLoop 401 refresh error', err && err.message);
+      }
       await backoff(entry);
       continue;
     }
@@ -220,12 +242,32 @@ async function reconcileInner() {
         workspaceSegment: d.workspaceSegment,
         stop: false,
         attempts: 0,
-        seedMode: !io.isSeeded(id),
+        // Seed (suppress backlog) ONLY on a channel's first-ever watch. An
+        // already-seeded channel — proven by its persisted seeded flag — starts
+        // LIVE so messages that landed while the app was quit/asleep surface as
+        // real triggers instead of being swallowed. See io.seedModeFor.
+        seedMode: io.shouldSeed(id),
       };
       loops.set(id, entry);
-      channelLoop(entry);
+      // Fire-and-forget: a thrown loop must not become an unhandledRejection that
+      // silently kills that channel. Log + drop it so the next reconcile (5-min
+      // timer, or a wake) re-creates a fresh loop.
+      channelLoop(entry).catch((err) => {
+        diag('channelLoop crashed', id.slice(0, 8), err && err.message);
+        entry.stop = true;
+        // Compare-and-delete: a stale crash must not evict a healthy replacement.
+        // Race: reconcile drops C (transient listChannels hiccup) → stops+deletes
+        // E1; C reappears → reconcile creates E2, loops.set(C, E2); E1's in-flight
+        // await then resolves and its final pass throws → this .catch runs. Without
+        // the guard it would loops.delete(C) and evict the healthy E2, so the next
+        // reconcile starts E3 while E2 still polls = two loops / double consent.
+        if (loops.get(id) === entry) loops.delete(id);
+      });
       // M-6 then M5b: clear dead outbound cards before recovering a pending one.
-      trigger.sweepStaleOutbound(entry).then(() => trigger.replayPendingFor(entry));
+      trigger
+        .sweepStaleOutbound(entry)
+        .then(() => trigger.replayPendingFor(entry))
+        .catch((err) => diag('sweep/replay error', id.slice(0, 8), err && err.message));
     } else {
       existing.channel = d.channel;
       existing.workspaceId = d.workspaceId;
@@ -293,6 +335,27 @@ function restart() {
   reconcile();
 }
 
+// Fast catch-up after the Mac wakes / the screen unlocks (wired from index.js
+// via powerMonitor). Three cheap steps:
+//   1. Abort every in-flight long-poll so each loop re-awaits from its persisted
+//      cursor immediately — a message that arrived while asleep surfaces within
+//      seconds instead of waiting for the current ~50s await to time out.
+//   2. Kick the presence heartbeat (wake also means the network may have
+//      changed; beat now so the web shows the agent back online promptly).
+//   3. reconcile() to pick up channels joined while asleep — single-flight, so a
+//      resume+unlock double-fire coalesces onto one pass.
+// A wake left a loop mid-backoff is untouched (no awaitCtrl); it recovers on its
+// own capped-backoff schedule. Debounced by the caller (index.js) so rapid
+// resume/unlock pairs collapse.
+function wake() {
+  if (!running) { start(onStatus); return; }
+  for (const entry of loops.values()) {
+    try { if (entry.awaitCtrl) entry.awaitCtrl.abort(); } catch (_) { /* already gone */ }
+  }
+  presence.wake();
+  reconcile();
+}
+
 function stop() {
   running = false;
   if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
@@ -301,4 +364,4 @@ function stop() {
   setStatus();
 }
 
-module.exports = { start, stop, restart, status, setHandlers };
+module.exports = { start, stop, restart, wake, status, setHandlers };

@@ -8,6 +8,8 @@ export interface AvatarStackUser {
   avatarUrl: string | null;
   /** Show a live "editing" dot on this avatar. */
   editing?: boolean;
+  /** Ring the avatar with the success token — the agent is online / listening. */
+  online?: boolean;
 }
 
 function initials(name: string): string {
@@ -24,7 +26,10 @@ function Avatar({ user }: { user: AvatarStackUser }) {
     <div className="relative" title={title}>
       <div
         className={cn(
-          "flex h-6 w-6 items-center justify-center rounded-full ring-2 ring-bg-elevated overflow-hidden",
+          "flex h-6 w-6 items-center justify-center rounded-full ring-2 overflow-hidden",
+          // Online members get a success presence ring; the ring otherwise
+          // doubles as the overlap separator against the surface behind.
+          user.online ? "ring-success" : "ring-bg-elevated",
           "bg-surface-raised-4 text-micro font-semibold uppercase tracking-wide text-text-secondary"
         )}
       >
