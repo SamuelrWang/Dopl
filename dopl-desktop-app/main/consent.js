@@ -47,6 +47,34 @@ function requestAttention() {
   } catch (_) { /* best-effort */ }
 }
 
+// ── Quit guard: a windowless app-modal dialog can quit the app on dismissal ────
+// The consent dialog below is an app-modal `dialog.showMessageBox` with NO parent
+// window (kept so it works the same visible or hidden-in-tray). On macOS, when the
+// app has no VISIBLE window (running hidden as a login item / closed-to-tray),
+// dismissing it — Cancel/Deny especially — makes AppKit send the process a native
+// terminate:, firing `before-quit` and taking the WHOLE app down. Nothing on the
+// consent path calls app.quit(), and the empty window-all-closed handler never
+// catches it (the hidden window was never closed — the terminate comes straight
+// from the modal path, tens of ms after the dialog resolves).
+//
+// Fix: while a consent dialog is on screen — plus a short grace after it closes,
+// since the terminate lands LATER than the resolve — arm this guard. index.js's
+// before-quit calls isConsentModalGuardActive() and vetoes any quit that did NOT
+// set app.isQuitting (tray Quit / updater do; the spurious modal terminate does
+// not), so sanctioned quits are untouched.
+let openConsentModals = 0;
+let lastConsentModalClosedAt = 0;
+const QUIT_GUARD_GRACE_MS = 3000;
+function beginConsentModal() { openConsentModals += 1; }
+function endConsentModal() {
+  if (openConsentModals > 0) openConsentModals -= 1;
+  lastConsentModalClosedAt = Date.now();
+}
+function isConsentModalGuardActive() {
+  if (openConsentModals > 0) return true;
+  return Date.now() - lastConsentModalClosedAt < QUIT_GUARD_GRACE_MS;
+}
+
 const CONSENT_PATH = '/api/channels/consent';
 // L: 2s against a 30-minute ceiling is up to 900 requests per pending decision,
 // and each GET makes the server run its expire-stale sweep. Start at 5s and step
@@ -323,7 +351,11 @@ function raceDecision({ workspaceId, rowId, surfaces, onOpenChannel }) {
       /* notifications are best-effort */
     }
 
-    // Surface 2: in-app dialog — the source of truth.
+    // Surface 2: in-app dialog — the source of truth. App-modal, NO parent window
+    // (works the same visible or hidden-in-tray). beginConsentModal/endConsentModal
+    // arm the quit guard so its dismissal can't take the whole app down when Dopl
+    // is windowless — see isConsentModalGuardActive() and index.js's before-quit.
+    beginConsentModal();
     dialog
       .showMessageBox({
         type: surfaces.dialogType || 'question',
@@ -336,7 +368,8 @@ function raceDecision({ workspaceId, rowId, surfaces, onOpenChannel }) {
         detail: surfaces.dialogDetail,
       })
       .then(({ response }) => finish(response === surfaces.dialogAllowIndex, 'dialog'))
-      .catch(() => finish(false, 'dialog-error'));
+      .catch(() => finish(false, 'dialog-error'))
+      .finally(endConsentModal);
 
     // Surface 3: poll the web row (skipped when there is no row). The cadence
     // backs off the longer the request sits unanswered — every GET also runs the
@@ -462,4 +495,6 @@ async function decideOutbound({ entry, m, proposedReply, workspaceId, onOpenChan
   });
 }
 
-module.exports = { decideInbound, decideOutbound, cancelStaleOutbound, clampBody };
+module.exports = {
+  decideInbound, decideOutbound, cancelStaleOutbound, clampBody, isConsentModalGuardActive,
+};

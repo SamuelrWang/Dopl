@@ -11,6 +11,7 @@ const updater = require('./updater');
 const listener = require('./channel-listener');
 const spawner = require('./session-spawner');
 const mcpConfig = require('./mcp-config');
+const consent = require('./consent');
 const { diag } = require('./diag');
 
 const store = new Store();
@@ -422,7 +423,23 @@ if (!gotLock) {
   });
 
   // Tear the listener down cleanly on real quit (tray Quit sets isQuitting).
-  app.on('before-quit', () => {
+  //
+  // BUT: the Channels consent dialog is an app-modal showMessageBox with no parent
+  // window (consent.js). While Dopl runs hidden in the tray — no VISIBLE window —
+  // dismissing it (Cancel/Deny) makes macOS send this app a native terminate:,
+  // firing before-quit and quitting the WHOLE app for what should only close a
+  // dialog. That terminate is NOT one of ours: tray Quit and updater.quitAndInstall
+  // set app.isQuitting BEFORE quitting; the modal-dismissal terminate does not. So
+  // veto any quit that didn't set isQuitting while a consent dialog is showing (or
+  // just closed — the terminate lands tens of ms after the dialog resolves).
+  // Sanctioned quits pass straight through; the app can always be quit from the
+  // tray. Works in every window state because it never depends on window visibility.
+  app.on('before-quit', (event) => {
+    if (!app.isQuitting && consent.isConsentModalGuardActive()) {
+      event.preventDefault();
+      diag('before-quit vetoed: consent dialog dismissal must not quit the app');
+      return;
+    }
     app.isQuitting = true;
     try { listener.stop(); } catch (_) {}
   });
