@@ -381,6 +381,7 @@ export function ChannelThread({
           onSend={onSend}
           members={members}
           currentUserId={currentUserId}
+          isDirect={channel.isDirect}
           disabled={channel.archivedAt !== null}
           placeholder={
             channel.archivedAt

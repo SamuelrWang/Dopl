@@ -447,6 +447,128 @@ describe("groupThread", () => {
     if (last.type !== "message") throw new Error("expected standalone message");
     expect(last.message.body).toBe("unrelated later");
   });
+
+  it("backfills the legacy seq-N request into its task-{channel}-N card as the opening entry", () => {
+    // Legacy flow: the requester's proposal (seq 50, addressed to the responder,
+    // no task id) spawned `task-c1-50`. It should be pulled into that card as the
+    // opening entry, ahead of the agent reply, and removed from the loose stream.
+    const t = "task-c1-50";
+    const items = groupThread([
+      msg({ seq: 50, kind: "message", authorKind: "user", authorUserId: "u_req", body: "the proposal", metadata: { to_user_id: "u_resp" } }),
+      msg({ seq: 51, kind: "task_started", authorKind: "agent", authorUserId: "u_resp", metadata: { taskId: t } }),
+      msg({ seq: 52, kind: "message", authorKind: "agent", authorUserId: "u_resp", body: "done reply", metadata: { taskId: t } }),
+      msg({ seq: 53, kind: "task_finished", authorKind: "agent", authorUserId: "u_resp", metadata: { taskId: t } }),
+    ]);
+    // Just the one card — the standalone proposal was absorbed.
+    expect(items).toHaveLength(1);
+    const s = sessions(items);
+    expect(s).toHaveLength(1);
+    if (s[0].type !== "session") throw new Error("expected session");
+    expect(s[0].session.taskId).toBe(t);
+    expect(s[0].session.entries.map((e) => e.body)).toEqual(["the proposal", "done reply"]);
+    expect(s[0].session.status).toBe("done");
+  });
+
+  it("joins an addressed requester follow-up into the open pair session", () => {
+    // While the session is open, a follow-up from the requester addressed to the
+    // responder (no task id of its own) still belongs to the exchange.
+    const t = "task-c1-100";
+    const items = groupThread([
+      msg({ seq: 100, kind: "message", authorKind: "user", authorUserId: "u_req", body: "please do X", metadata: { to_user_id: "u_resp" } }),
+      msg({ seq: 101, kind: "task_started", authorKind: "agent", authorUserId: "u_resp", metadata: { taskId: t } }),
+      msg({ seq: 102, kind: "message", authorKind: "agent", authorUserId: "u_resp", body: "On it.", metadata: { taskId: t } }),
+      msg({ seq: 103, kind: "message", authorKind: "user", authorUserId: "u_req", body: "and also Y", metadata: { to_user_id: "u_resp" } }),
+    ]);
+    expect(items).toHaveLength(1);
+    const s = sessions(items);
+    if (s[0].type !== "session") throw new Error("expected session");
+    // Backfilled opener + agent reply + requester follow-up, in order.
+    expect(s[0].session.entries.map((e) => e.body)).toEqual(["please do X", "On it.", "and also Y"]);
+  });
+
+  it("keeps a third party's addressed message OUT of a two-party session (3-member channel)", () => {
+    // In a channel with a third member, a message to/from that third party is
+    // not in {requester, responder} — it must not fold into the session, and it
+    // stops the pair-join window.
+    const t = "task-c1-60";
+    const items = groupThread([
+      msg({ seq: 60, kind: "message", authorKind: "user", authorUserId: "u_req", body: "start", metadata: { to_user_id: "u_resp" } }),
+      msg({ seq: 61, kind: "task_started", authorKind: "agent", authorUserId: "u_resp", metadata: { taskId: t } }),
+      msg({ seq: 62, kind: "message", authorKind: "user", authorUserId: "u_third", body: "hello", metadata: { to_user_id: "u_resp" } }),
+    ]);
+    const s = sessions(items);
+    expect(s).toHaveLength(1);
+    if (s[0].type !== "session") throw new Error("expected session");
+    // Only the backfilled opener — the third party's message is not an entry.
+    expect(s[0].session.entries.map((e) => e.body)).toEqual(["start"]);
+    const last = items[items.length - 1];
+    if (last.type !== "message") throw new Error("expected standalone message");
+    expect(last.message.body).toBe("hello");
+  });
+
+  it("leaves a lone decision-echo card untouched by the seq-N backfill", () => {
+    // A denied request never started: a lone task_failed decision echo carrying
+    // the deterministic id, with no task_started. The seq-N opener must NOT be
+    // pulled in (nothing to open into).
+    const t = "task-c1-70";
+    const items = groupThread([
+      msg({ seq: 70, kind: "message", authorKind: "user", authorUserId: "u_req", body: "the proposal", metadata: { to_user_id: "u_resp" } }),
+      msg({ seq: 71, kind: "task_failed", authorKind: "agent", authorUserId: "u_resp", body: "Request declined", metadata: { taskId: t, declined: true } }),
+    ]);
+    expect(items).toHaveLength(2);
+    const s = sessions(items);
+    expect(s).toHaveLength(1);
+    if (s[0].type !== "session") throw new Error("expected session");
+    expect(s[0].session.status).toBe("declined");
+    expect(s[0].session.entries).toHaveLength(0);
+    const standalone = items.find((i) => i.type === "message");
+    if (!standalone || standalone.type !== "message") throw new Error("expected standalone message");
+    expect(standalone.message.body).toBe("the proposal");
+  });
+
+  it("stops accepting addressed follow-ups once the session has finished", () => {
+    // A follow-up that arrives after task_finished is outside the window and
+    // stays standalone; only the backfilled opener remains in the card.
+    const t = "task-c1-80";
+    const items = groupThread([
+      msg({ seq: 80, kind: "message", authorKind: "user", authorUserId: "u_req", body: "start", metadata: { to_user_id: "u_resp" } }),
+      msg({ seq: 81, kind: "task_started", authorKind: "agent", authorUserId: "u_resp", metadata: { taskId: t } }),
+      msg({ seq: 82, kind: "task_finished", authorKind: "agent", authorUserId: "u_resp", metadata: { taskId: t } }),
+      msg({ seq: 83, kind: "message", authorKind: "user", authorUserId: "u_req", body: "more?", metadata: { to_user_id: "u_resp" } }),
+    ]);
+    const s = sessions(items);
+    expect(s).toHaveLength(1);
+    if (s[0].type !== "session") throw new Error("expected session");
+    expect(s[0].session.entries.map((e) => e.body)).toEqual(["start"]);
+    expect(s[0].session.status).toBe("done");
+    const last = items[items.length - 1];
+    if (last.type !== "message") throw new Error("expected standalone message");
+    expect(last.message.body).toBe("more?");
+  });
+
+  it("a responder's pair-joined reply spends the window so the next task's opener is not absorbed", () => {
+    // The first session's task_finished never arrives (dropped). The responder's
+    // addressed no-taskId reply joins the card AND closes the window, so the
+    // next exchange's seq-N opener stays standalone and backfills into its own
+    // card instead of being swallowed by the stale one.
+    const t1 = "task-c1-70";
+    const t2 = "task-c1-73";
+    const items = groupThread([
+      msg({ seq: 70, kind: "message", authorKind: "user", authorUserId: "u_req", body: "first ask", metadata: { to_user_id: "u_resp" } }),
+      msg({ seq: 71, kind: "task_started", authorKind: "agent", authorUserId: "u_resp", metadata: { taskId: t1 } }),
+      msg({ seq: 72, kind: "message", authorKind: "agent", authorUserId: "u_resp", body: "here you go", metadata: { to_user_id: "u_req" } }),
+      msg({ seq: 73, kind: "message", authorKind: "user", authorUserId: "u_req", body: "second ask", metadata: { to_user_id: "u_resp" } }),
+      msg({ seq: 74, kind: "task_started", authorKind: "agent", authorUserId: "u_resp", metadata: { taskId: t2 } }),
+      msg({ seq: 75, kind: "message", authorKind: "agent", authorUserId: "u_resp", body: "second answer", metadata: { taskId: t2 } }),
+    ]);
+    const s = sessions(items);
+    expect(s).toHaveLength(2);
+    if (s[0].type !== "session" || s[1].type !== "session") throw new Error("expected sessions");
+    expect(s[0].session.taskId).toBe(t1);
+    expect(s[0].session.entries.map((e) => e.body)).toEqual(["first ask", "here you go"]);
+    expect(s[1].session.taskId).toBe(t2);
+    expect(s[1].session.entries.map((e) => e.body)).toEqual(["second ask", "second answer"]);
+  });
 });
 
 describe("truncateSummary", () => {

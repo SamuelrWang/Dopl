@@ -20,6 +20,12 @@ interface Props {
   /** Channel roster (with presence) for the addressing picker. */
   members: ChannelMember[];
   currentUserId: string;
+  /**
+   * True in a direct (1:1) channel. A DM has exactly one peer, so there is no
+   * one to pick — the addressing row is hidden and any previously selected
+   * addressee is ignored so a stale target can't leak into the send.
+   */
+  isDirect?: boolean;
 }
 
 /**
@@ -39,6 +45,7 @@ export function MessageComposer({
   placeholder,
   members,
   currentUserId,
+  isDirect,
 }: Props) {
   const [value, setValue] = useState("");
   const [sending, setSending] = useState(false);
@@ -46,19 +53,29 @@ export function MessageComposer({
   const [summary, setSummary] = useState("");
 
   const canSend = value.trim().length > 0 && !sending && !disabled;
+  // In a DM the peer is implicit — ignore any selected addressee entirely so a
+  // target left over from another channel never colors a direct send.
+  const effectiveToUserId = isDirect ? null : toUserId;
   const target = useMemo(
-    () => (toUserId ? members.find((m) => m.userId === toUserId) ?? null : null),
-    [toUserId, members]
+    () =>
+      effectiveToUserId
+        ? members.find((m) => m.userId === effectiveToUserId) ?? null
+        : null,
+    [effectiveToUserId, members]
   );
   // Two members = the other one is the implicit target, so an unaddressed
-  // message still reaches an agent. Three or more and it reaches none.
-  const showUnaddressedHint = !toUserId && members.length >= 3;
+  // message still reaches an agent. Three or more and it reaches none. A DM
+  // never shows this (it always has an implicit peer).
+  const showUnaddressedHint = !isDirect && !toUserId && members.length >= 3;
 
   async function send() {
     if (!canSend) return;
     const body = value.trim();
-    const opts: SendOptions | undefined = toUserId
-      ? { toUserId, summary: summary.trim() || body.split("\n")[0].slice(0, 200) }
+    const opts: SendOptions | undefined = effectiveToUserId
+      ? {
+          toUserId: effectiveToUserId,
+          summary: summary.trim() || body.split("\n")[0].slice(0, 200),
+        }
       : undefined;
     setSending(true);
     try {
@@ -76,29 +93,31 @@ export function MessageComposer({
   return (
     <div className="shrink-0 px-14 pb-5 pt-2">
       <div className="mx-auto max-w-[760px]">
-        <div className="mb-2 flex flex-wrap items-center gap-2">
-          <AddressPicker
-            members={members}
-            currentUserId={currentUserId}
-            value={toUserId}
-            onChange={(next) => {
-              setToUserId(next);
-              if (!next) setSummary("");
-            }}
-          />
-          {toUserId && (
-            <input
-              value={summary}
-              onChange={(e) => setSummary(e.target.value)}
-              maxLength={200}
-              placeholder="One-line intent (optional)"
-              className={cn(
-                FIELD_WELL,
-                "min-w-0 flex-1 rounded-full px-3 py-1 text-caption text-text-primary placeholder:text-text-muted"
-              )}
+        {!isDirect && (
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <AddressPicker
+              members={members}
+              currentUserId={currentUserId}
+              value={toUserId}
+              onChange={(next) => {
+                setToUserId(next);
+                if (!next) setSummary("");
+              }}
             />
-          )}
-        </div>
+            {toUserId && (
+              <input
+                value={summary}
+                onChange={(e) => setSummary(e.target.value)}
+                maxLength={200}
+                placeholder="One-line intent (optional)"
+                className={cn(
+                  FIELD_WELL,
+                  "min-w-0 flex-1 rounded-full px-3 py-1 text-caption text-text-primary placeholder:text-text-muted"
+                )}
+              />
+            )}
+          </div>
+        )}
 
         {target && !target.agentOnline && (
           <div className="mb-2 flex items-center gap-1.5 text-caption text-text-muted">

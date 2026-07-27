@@ -119,6 +119,28 @@ function readSummary(metadata: Record<string, unknown>): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
+/** The addressed recipient of a message (`metadata.to_user_id`), or null. */
+function readToUserId(metadata: Record<string, unknown>): string | null {
+  const value = metadata.to_user_id;
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+/**
+ * Parse the trailing seq `N` from a legacy deterministic task id of the shape
+ * `task-{channelId}-{N}` (the desktop spawner's id). The channelId is a UUID
+ * that itself contains hyphens, so we anchor on the KNOWN channel id rather
+ * than splitting on '-'. Returns null for any other id shape (a first-class
+ * UUID task id, etc.), which is how the legacy-only backfill/pair-join stay
+ * scoped to legacy exchanges.
+ */
+function parseLegacyTaskSeq(taskId: string, channelId: string): number | null {
+  const prefix = `task-${channelId}-`;
+  if (!taskId.startsWith(prefix)) return null;
+  const rest = taskId.slice(prefix.length);
+  if (!/^\d+$/.test(rest)) return null;
+  return Number(rest);
+}
+
 /**
  * Map a terminal marker to the calm terminal status it announces, or null when
  * it is a genuine failure. The desktop encodes an operator-chosen ending as a
@@ -153,6 +175,19 @@ interface Draft {
   startedEvent: ChannelMessage | null;
   endEvent: ChannelMessage | null;
   createdAt: string;
+  /**
+   * The responder — the `task_started` author (the operator whose agent runs
+   * the task). Anchors the {requester, responder} pair for the pair-join.
+   */
+  responder: string | null;
+  /**
+   * The requester — the human who opened the exchange: the author of the legacy
+   * seq-N message addressed to the responder. Set when the `task_started` fires
+   * (from the seq-N opener), or during the seq-N backfill. Drives the pair-join.
+   */
+  requester: string | null;
+  /** The `N` in a legacy `task-{channelId}-{N}` id, for the seq-N backfill. */
+  legacySeq: number | null;
 }
 
 function computeStatus(draft: Draft): SessionStatus {
@@ -166,11 +201,15 @@ function computeStatus(draft: Draft): SessionStatus {
     }
     return "done";
   }
-  // 2. A delivered agent reply implies the work completed, even with no
+  // 2. A delivered AGENT reply implies the work completed, even with no
   //    `task_finished` — a terminal-mode session self-posts its reply and then
   //    falls silent, and a dropped finish still leaves a real answer on screen.
-  //    Either way the session is Done, not a perpetual "Active" pulse.
-  if (draft.entries.some((e) => e.kind === "message")) return "done";
+  //    Either way the session is Done, not a perpetual "Active" pulse. Only an
+  //    agent reply counts: a session can now also carry the requester's own
+  //    (human) messages (seq-N backfill / pair-join), which must not, on their
+  //    own, mark an unanswered started task as Done.
+  if (draft.entries.some((e) => e.kind === "message" && e.authorKind === "agent"))
+    return "done";
   // 3. Started, but nothing delivered yet — genuinely in flight.
   if (draft.startedEvent) return "active";
   // 4. No markers and no reply (only stray progress lines): nothing is live.
@@ -213,6 +252,10 @@ export function groupThread(
 ): ThreadItem[] {
   const items: ThreadItem[] = [];
   const drafts = new Map<string, Draft>();
+  // Index by seq for the legacy seq-N backfill: a legacy `task-{channelId}-{N}`
+  // id points back at the seq of the opening request that spawned it.
+  const bySeq = new Map<number, ChannelMessage>();
+  for (const m of messages) bySeq.set(m.seq, m);
   // The single open fallback window: the session whose `task_started` has fired
   // and not yet been closed. It exists ONLY to catch a terminal-mode agent
   // reply that arrives without its own taskId (the reply is self-posted via MCP
@@ -232,6 +275,55 @@ export function groupThread(
     const isAgentReply =
       message.kind === "message" && message.authorKind === "agent";
     const ownTaskId = readTaskId(message.metadata);
+    const toUserId = readToUserId(message.metadata);
+
+    // B2 OPEN-SESSION PAIR-JOIN — an ADDRESSED message with no task id of its
+    // own that fits the open session's {requester, responder} pair joins that
+    // session, even across the human/system boundary that would otherwise close
+    // the window. This keeps a requester's follow-up (and the responder's
+    // addressed reply) inside a legacy `task-{channel}-{seq}` exchange whose
+    // follow-ups never carry the task id. A message to/from a THIRD party is not
+    // in the pair: it does not join, and it terminates the window. Gated
+    // strictly on `to_user_id`, so a transcript with no addressing metadata is
+    // byte-for-byte unchanged.
+    if (
+      toUserId !== null &&
+      ownTaskId === null &&
+      message.kind === "message" &&
+      openTaskId !== null
+    ) {
+      const openDraft = drafts.get(openTaskId);
+      if (
+        openDraft &&
+        openDraft.startedEvent &&
+        openDraft.requester !== null &&
+        openDraft.responder !== null
+      ) {
+        const pair = new Set([openDraft.requester, openDraft.responder]);
+        const author = message.authorUserId;
+        const inPair =
+          author !== null &&
+          author !== toUserId &&
+          pair.has(author) &&
+          pair.has(toUserId);
+        if (inPair) {
+          openDraft.entries.push(message);
+          if (Date.parse(message.createdAt) < Date.parse(openDraft.createdAt)) {
+            openDraft.createdAt = message.createdAt;
+          }
+          // A responder-authored reply answers the exchange: spend the window
+          // so that, if this session's task_finished never arrives, the NEXT
+          // task's seq-N opener can't be absorbed into this stale card.
+          if (author === openDraft.responder) {
+            openTaskId = null;
+          }
+          continue;
+        }
+        // Addressed, but a third party is involved: the exchange moved on —
+        // stop accepting into this session (the message itself stands alone).
+        openTaskId = null;
+      }
+    }
 
     // Hard boundary: a human or system row ends any open fallback window, so a
     // later no-taskId agent post cannot fold into the session that preceded it.
@@ -270,6 +362,9 @@ export function groupThread(
         startedEvent: null,
         endEvent: null,
         createdAt: message.createdAt,
+        responder: null,
+        requester: null,
+        legacySeq: null,
       };
       drafts.set(taskId, draft);
       // Placeholder session object; finalized in place after the full pass.
@@ -289,6 +384,21 @@ export function groupThread(
         draft.startedEvent = message;
         // Prefer the lifecycle-opening event as the identity/time head.
         draft.head = message;
+        // Establish the pair for the pair-join: the responder is this event's
+        // author; the requester is the legacy seq-N opener's author IF that
+        // opener addressed this responder (the same test the backfill applies).
+        draft.responder = message.authorUserId;
+        draft.legacySeq = parseLegacyTaskSeq(taskId, message.channelId);
+        if (draft.requester === null && draft.legacySeq !== null) {
+          const opener = bySeq.get(draft.legacySeq);
+          if (
+            opener &&
+            draft.responder !== null &&
+            readToUserId(opener.metadata) === draft.responder
+          ) {
+            draft.requester = opener.authorUserId;
+          }
+        }
         // A new start opens (and, if one was already open, supersedes/closes)
         // the fallback window.
         openTaskId = taskId;
@@ -316,6 +426,36 @@ export function groupThread(
   // overlay (a first-class `channel_tasks` row) is authoritative for
   // status/title; without one, the message-derived render is used unchanged.
   for (const draft of drafts.values()) {
+    // B1 LEGACY TRIGGER BACKFILL — a legacy `task-{channelId}-{N}` session whose
+    // opening request (the standalone seq-N message, addressed to the responder)
+    // is still loose in the stream: pull it into the session as the OPENING
+    // entry so the card leads with the request that started the work, and remove
+    // it from the standalone stream. Only when the session actually started (has
+    // a `task_started`); a lone decision-echo card (declined/dropped/interrupted
+    // with no start and no entries) is deliberately left untouched.
+    if (
+      draft.startedEvent &&
+      draft.legacySeq !== null &&
+      draft.responder !== null
+    ) {
+      const idx = items.findIndex(
+        (it) => it.type === "message" && it.message.seq === draft.legacySeq
+      );
+      if (idx !== -1) {
+        const found = items[idx];
+        if (
+          found.type === "message" &&
+          readToUserId(found.message.metadata) === draft.responder
+        ) {
+          draft.entries.unshift(found.message);
+          if (draft.requester === null) {
+            draft.requester = found.message.authorUserId;
+          }
+          items.splice(idx, 1);
+        }
+      }
+    }
+
     const session = draft as unknown as SessionGroup;
     const overlay = taskOverlays?.get(draft.taskId);
     session.status = overlay ? overlay.status : computeStatus(draft);

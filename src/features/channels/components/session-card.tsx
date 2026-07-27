@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
 import { Avatar } from "@/shared/ui/avatar";
@@ -26,6 +28,19 @@ import type { TaskMode } from "../types";
  * `bg-card-surface-subtle` section-strip recipe.
  */
 export function SessionCard({ session }: { session: SessionGroup }) {
+  // Per-entry collapse: nested messages start expanded; clicking the chevron
+  // hides just that entry's body while keeping its avatar + author + time.
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(
+    () => new Set()
+  );
+  const toggleEntry = (id: string) =>
+    setCollapsedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
   const openerName = session.head.authorName || "Agent";
   const title = session.title ?? session.summary ?? "Task";
   const messageEntries = session.entries.filter((e) => e.kind === "message");
@@ -64,27 +79,47 @@ export function SessionCard({ session }: { session: SessionGroup }) {
       <div className="flex flex-col gap-2.5 px-3.5 py-2.5">
         {session.entries.map((entry) =>
           entry.kind === "message" ? (
-            <div key={entry.id} className="flex flex-col gap-1">
-              <div className="flex items-center gap-1.5">
-                <Avatar
-                  person={{
-                    userId: entry.authorUserId ?? entry.authorName ?? "member",
-                    email: null,
-                    displayName: entry.authorName,
-                    avatarUrl: entry.authorAvatarUrl,
-                  }}
-                  size="xs"
-                />
-                <span className="min-w-0 truncate text-micro font-medium uppercase tracking-wide text-text-muted">
-                  {entry.authorName ||
-                    (entry.authorKind === "user" ? "Member" : "Agent")}{" "}
-                  · {formatChannelTimestamp(entry.createdAt)}
-                </span>
-              </div>
-              <p className="whitespace-pre-wrap break-words text-body leading-relaxed text-text-primary">
-                {entry.body}
-              </p>
-            </div>
+            (() => {
+              const collapsed = collapsedIds.has(entry.id);
+              return (
+                <div key={entry.id} className="flex flex-col gap-1">
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => toggleEntry(entry.id)}
+                      aria-expanded={!collapsed}
+                      aria-label={collapsed ? "Expand message" : "Collapse message"}
+                      className="shrink-0 rounded-md p-0.5 text-text-muted transition-colors hover:bg-surface-raised-1 hover:text-text-primary"
+                    >
+                      {collapsed ? (
+                        <ChevronRight size={13} />
+                      ) : (
+                        <ChevronDown size={13} />
+                      )}
+                    </button>
+                    <Avatar
+                      person={{
+                        userId: entry.authorUserId ?? entry.authorName ?? "member",
+                        email: null,
+                        displayName: entry.authorName,
+                        avatarUrl: entry.authorAvatarUrl,
+                      }}
+                      size="xs"
+                    />
+                    <span className="min-w-0 truncate text-micro font-medium uppercase tracking-wide text-text-muted">
+                      {entry.authorName ||
+                        (entry.authorKind === "user" ? "Member" : "Agent")}{" "}
+                      · {formatChannelTimestamp(entry.createdAt)}
+                    </span>
+                  </div>
+                  {!collapsed && (
+                    <p className="whitespace-pre-wrap break-words text-body leading-relaxed text-text-primary">
+                      {entry.body}
+                    </p>
+                  )}
+                </div>
+              );
+            })()
           ) : (
             <div key={entry.id} className="flex items-center gap-2">
               <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-warning" />
