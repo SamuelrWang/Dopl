@@ -17,10 +17,19 @@ const NO_REQUESTS: ChannelConsentRequest[] = [];
  * the service returns only `pending` rows (a decision on another surface
  * removes it here on the next refetch). Pass a `channelId` to scope the server
  * query, or omit it (sidebar badge) for the whole workspace.
+ *
+ * `refetchIntervalMs` adds a polling fallback for the known gap where
+ * `channel_consent_requests` INSERTs are not delivered by Supabase Realtime, so
+ * a pending request appears within a few seconds without a reload. Pass it ONLY
+ * from the channels page (where the panel lives); leaving it undefined keeps the
+ * always-mounted sidebar badge realtime-only so it never polls the workspace in
+ * the background. When set, TanStack's default `refetchIntervalInBackground:
+ * false` also pauses the poll while the browser tab is hidden.
  */
 export function useConsentInbox(
   workspaceId: string | null | undefined,
-  channelId?: string
+  channelId?: string,
+  refetchIntervalMs?: number
 ) {
   const query = useApiQuery<
     { requests: ChannelConsentRequest[] },
@@ -30,6 +39,7 @@ export function useConsentInbox(
     query: channelId ? { channelId } : undefined,
     select: selectRequests,
     staleTime: 0,
+    refetchInterval: refetchIntervalMs,
   });
 
   useConsentRealtime(workspaceId, () => void query.refetch());

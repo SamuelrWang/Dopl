@@ -11,6 +11,7 @@ const updater = require('./updater');
 const listener = require('./channel-listener');
 const spawner = require('./session-spawner');
 const channelDirs = require('./channel-dirs');
+const channelDirIpc = require('./channel-dir-ipc');
 const mcpConfig = require('./mcp-config');
 const { diag } = require('./diag');
 
@@ -397,6 +398,12 @@ if (!gotLock) {
         tray.refresh();
       },
     });
+
+    // In-app "Change folder" control. The channel UI (which runs in the remote
+    // webview) reaches the native folder picker through these three narrow,
+    // label-only IPC handlers. onChanged refreshes the tray so its "Channel
+    // folders" submenu stays in sync with a change made from the web control.
+    channelDirIpc.register({ onChanged: () => tray.refresh() });
 
     // Auto-update (electron-updater ↔ GitHub Releases). Silent download; the
     // tray gains a "Restart to install" item when one is ready.

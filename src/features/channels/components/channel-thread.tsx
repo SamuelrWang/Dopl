@@ -28,6 +28,7 @@ import { MessageThread } from "./message-thread";
 import { MessageComposer, type SendOptions } from "./message-composer";
 import { PendingRequestsPanel } from "./pending-requests-panel";
 import { ChannelSettingsPopover } from "./channel-settings-popover";
+import { ChannelFolderControl } from "./channel-folder-control";
 import { PresenceDot } from "./address-picker";
 
 /** The three per-channel notification choices, shown in the bell popover. */
@@ -221,6 +222,10 @@ export function ChannelThread({
             onToggleTrust={onToggleTrust}
           />
         )}
+
+        {/* Desktop-only: sets the responding agent's working folder. Renders
+            nothing in a plain browser (feature-detected on window.dopl). */}
+        {channel.isMember && <ChannelFolderControl channelId={channel.id} />}
 
         {channel.isMember && (
           <button

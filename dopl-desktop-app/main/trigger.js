@@ -33,7 +33,7 @@ const consent = require('./consent');
 const watcher = require('./consent-watcher');
 const spawner = require('./session-spawner');
 const channelDirs = require('./channel-dirs');
-const { profileLabel } = require('./tool-profiles');
+const { profileLabel, profileHint } = require('./tool-profiles');
 const claudeAuth = require('./claude-auth');
 const { postTaskEvent, postResult, notifyLocal } = require('./channel-post');
 const { diag } = require('./diag');
@@ -153,6 +153,9 @@ async function handleTrigger(entry, m) {
       // to the server — so this line exists only on the native notification.
       runsIn: channelDirs.liveChannelDirLabel(entry.channel.id),
       toolLabel: profileLabel(toolProfile),
+      // Per-profile capability hint: the REAL headless reach (safe read scope for
+      // read_only/dopl_only; "limited headless, use Run-in-Terminal" for full).
+      capabilityHint: profileHint(toolProfile),
       onAllow: () => {
         consent.patchDecision(entry.workspaceId, created.rowId, 'allow');
         watcher.poke(key);

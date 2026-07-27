@@ -204,13 +204,19 @@ function buildActionNotification({ title, body, actionText, onAffirm, onOpen }) 
 // already-abbreviated local path (~/…) or null → "the sandbox folder" (the path is
 // never sent to the server; the web card can only show the tool profile). The
 // location is context; the tool label is the actual containment.
-function notifyInbound({ channelName, requesterName, summary, bodyPreview, runsIn, toolLabel, onAllow, onOpen }) {
+function notifyInbound({ channelName, requesterName, summary, bodyPreview, runsIn, toolLabel, capabilityHint, onAllow, onOpen }) {
   const ask = summary
     ? `${requesterName}'s agent asks: ${clampSummary(summary)}`
     : `${requesterName}'s agent: ${truncate(bodyPreview, 120)}`;
   const where = runsIn || 'the sandbox folder';
   const tools = toolLabel || 'Full-access';
-  const body = `${ask}\nRuns in ${where} with ${tools} tools`;
+  // Blast-radius line (where + which tool profile) plus a per-profile capability hint
+  // composed by the caller from the snapshotted profile (tool-profiles.profileHint):
+  // it tells the operator the REAL headless reach — what a restricted profile can
+  // safely read, and that `full` is limited headless and needs Run-in-Terminal for
+  // shell — BEFORE they approve.
+  const hint = capabilityHint ? `\n${capabilityHint}` : '';
+  const body = `${ask}\nRuns in ${where} with ${tools} tools${hint}`;
   return buildActionNotification({
     title: channelName, body, actionText: 'Allow', onAffirm: onAllow, onOpen,
   });

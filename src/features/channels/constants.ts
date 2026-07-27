@@ -20,6 +20,23 @@ export const CONSENT_TABLES = ["channel_consent_requests"] as const;
 export const PRESENCE_TABLES = ["agent_presence"] as const;
 
 /**
+ * Liveness fallback for the consent inbox. `channel_consent_requests` INSERTs
+ * are not reliably delivered by Supabase Realtime (its RLS-on-the-WAL-record
+ * evaluation of the per-operator `operator_user_id = auth.uid()` policy is a
+ * known gotcha — a row is SELECT-able on reload yet its INSERT never reaches the
+ * postgres_changes stream), so a pending request could sit invisible until the
+ * operator reloaded. This poll guarantees it surfaces within a few seconds.
+ *
+ * Scoped deliberately: only the CHANNELS PAGE inbox (`channels-view`) passes it,
+ * so the fast poll lives with the panel that renders the requests. The
+ * always-mounted sidebar badge stays realtime-only (no interval) so we don't add
+ * a workspace-wide background poll on every page. TanStack's default
+ * `refetchIntervalInBackground: false` also pauses this poll while the tab is
+ * hidden, so a backgrounded channels tab stops polling on its own.
+ */
+export const CONSENT_INBOX_POLL_MS = 4_000;
+
+/**
  * A member's agent is "online / listening" when its last heartbeat is newer
  * than this window. Kept in sync with the desktop heartbeat cadence (~30s) —
  * three missed beats mark it offline.

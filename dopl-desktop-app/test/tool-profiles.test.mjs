@@ -39,21 +39,27 @@ const {
   buildRestrictionArgs,
   DOPL_ADMIN_TOOLS,
   DOPL_SAFE_TOOLS,
+  WEB_TOOLS,
 } = new Function(
   `${BLOCK}
    return { buildAllowedTools, buildDeniedTools, buildBuiltinTools,
-            buildRestrictionArgs, DOPL_ADMIN_TOOLS, DOPL_SAFE_TOOLS };`
+            buildRestrictionArgs, DOPL_ADMIN_TOOLS, DOPL_SAFE_TOOLS, WEB_TOOLS };`
 )();
 
 const RESTRICTED = ["read_only", "dopl_only"];
 const WRITE_TOOLS = ["Write", "Edit", "MultiEdit", "NotebookEdit", "Bash", "Task"];
-// Every tool that can move data off the machine without passing the approve-out
-// gate, spawn an unbounded child session, or persist past the spawn.
+// Web reads are governed PER-PROFILE now (denied for read_only, ALLOWED for
+// dopl_only so it is functional headless), so they are NOT in the shared
+// ESCAPE_TOOLS list below — they get their own per-profile assertions.
 const ESCAPE_TOOLS = [
-  "WebFetch", "WebSearch", "Artifact", "SendMessage", "PushNotification",
+  "Artifact", "SendMessage", "PushNotification",
   "RemoteTrigger", "Agent", "TaskCreate", "CronCreate", "ScheduleWakeup",
   "Skill", "ToolSearch", "EnterWorktree",
 ];
+
+test("WEB_TOOLS is exactly WebFetch + WebSearch", () => {
+  assert.deepEqual([...WEB_TOOLS].sort(), ["WebFetch", "WebSearch"]);
+});
 
 // ── full: unchanged v1.1 behavior ────────────────────────────────────────────
 
@@ -90,11 +96,16 @@ test("read_only -> local read tools only, no web, no MCP", () => {
   );
 });
 
-test("read_only denies the whole dopl MCP server, admins included", () => {
+test("read_only denies the whole dopl MCP server, admins, and web", () => {
   const denied = buildDeniedTools("read_only");
   assert.ok(denied.includes("mcp__dopl"), "read_only must deny the bare dopl server prefix");
   for (const t of DOPL_ADMIN_TOOLS) {
     assert.ok(denied.includes(t), `read_only must also deny ${t} by name`);
+  }
+  // read_only is the zero-outbound profile: web is an exfil channel and must be
+  // explicitly denied (and it is not in the allow list — asserted above).
+  for (const t of WEB_TOOLS) {
+    assert.ok(denied.includes(t), `read_only must deny ${t} (zero-outbound profile)`);
   }
 });
 
@@ -160,8 +171,29 @@ test("dopl_only -> read tools + explicitly named non-admin dopl tools", () => {
     assert.ok(set.includes(t), `dopl_only should include ${t}`);
   }
   for (const t of WRITE_TOOLS) assert.ok(!set.includes(t), `dopl_only must NOT allow ${t}`);
-  for (const t of ["WebFetch", "WebSearch"]) {
-    assert.ok(!set.includes(t), `dopl_only must NOT allow ${t}`);
+  // dopl_only IS granted web reads — this is the "read your files + Dopl + web"
+  // profile — pre-approved via --allowedTools so they work headless with no prompt.
+  for (const t of WEB_TOOLS) {
+    assert.ok(set.includes(t), `dopl_only should include ${t} (web reads)`);
+  }
+});
+
+// dopl_only must be FUNCTIONAL headless for web reads: allowed, offered by --tools,
+// pre-approved in the emitted --allowedTools flag, and NOT denied anywhere.
+test("dopl_only grants web reads across every layer and denies them nowhere", () => {
+  const allowed = buildAllowedTools("dopl_only");
+  const denied = buildDeniedTools("dopl_only");
+  const builtins = buildBuiltinTools("dopl_only");
+  for (const t of WEB_TOOLS) {
+    assert.ok(allowed.includes(t), `dopl_only must allow ${t}`);
+    assert.ok(builtins.includes(t), `dopl_only --tools must offer ${t}`);
+    assert.ok(!denied.includes(t), `dopl_only must NOT deny ${t}`);
+  }
+  const args = buildRestrictionArgs("dopl_only", "/tmp/s.json").join(" ");
+  const allowFlag = args.split("--allowedTools ")[1] || "";
+  const allowList = (allowFlag.split(" ")[0] || "").split(",");
+  for (const t of WEB_TOOLS) {
+    assert.ok(allowList.includes(t), `dopl_only --allowedTools must name ${t}`);
   }
 });
 
@@ -205,6 +237,12 @@ test("both restricted profiles deny write, exec, delegation, and escape tools", 
     for (const t of [...WRITE_TOOLS, ...ESCAPE_TOOLS]) {
       assert.ok(denied.includes(t), `${profile} must deny ${t}`);
     }
+  }
+  // Web is the ONE outbound tool that diverges by profile: read_only denies it
+  // (zero-outbound), dopl_only allows it (read files + Dopl + web).
+  for (const t of WEB_TOOLS) {
+    assert.ok(buildDeniedTools("read_only").includes(t), `read_only must deny ${t}`);
+    assert.ok(!buildDeniedTools("dopl_only").includes(t), `dopl_only must NOT deny ${t}`);
   }
 });
 
@@ -262,7 +300,7 @@ test("every flag value is a single comma-joined argv element", () => {
   }
 });
 
-test("--tools bounds built-ins to the read set only", () => {
+test("--tools bounds built-ins to the read set (+ web for dopl_only) only", () => {
   for (const profile of RESTRICTED) {
     const builtins = buildBuiltinTools(profile);
     assert.ok(builtins.includes("Read") && builtins.includes("Grep") && builtins.includes("Glob"));
@@ -273,6 +311,12 @@ test("--tools bounds built-ins to the read set only", () => {
       !builtins.some((t) => t.startsWith("mcp__")),
       "--tools only names built-ins; MCP tools are governed separately"
     );
+  }
+  // read_only --tools must NOT offer web; dopl_only --tools MUST (so it is offered
+  // to the model at all — L0 is a positive bound).
+  for (const t of WEB_TOOLS) {
+    assert.ok(!buildBuiltinTools("read_only").includes(t), `read_only --tools must not offer ${t}`);
+    assert.ok(buildBuiltinTools("dopl_only").includes(t), `dopl_only --tools must offer ${t}`);
   }
 });
 

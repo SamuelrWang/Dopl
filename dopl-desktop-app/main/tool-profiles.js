@@ -40,22 +40,48 @@
 // which is an exfiltration, delegation, or persistence channel. L1/L2 still
 // enumerate them so a CLI that ignores --tools is still contained.
 //
-// Profiles:
-//   read_only  — pure research: local READ built-ins only. NO web (WebFetch /
-//                WebSearch are an outbound channel that bypasses the approve-out
-//                gate entirely), NO Dopl MCP at all, no write/exec/delegation.
-//                Headless answers from stdout, so no tool is needed to reply.
-//   dopl_only  — local READ built-ins + the NON-ADMIN Dopl MCP tools, named one
-//                by one. Never the bare `mcp__dopl` prefix: that matches the six
-//                destructive *_admin tools too (dopl_kb_admin alone carries
+// HEADLESS FUNCTIONALITY (the point of this profile set). `claude -p` has no TTY,
+// so it cannot show a permission prompt: any tool NOT pre-approved via
+// --allowedTools is AUTO-DENIED mid-run. Each profile therefore pre-approves exactly
+// the tools it is meant to use, so all three are actually usable headless:
+//   read_only  — pure LOCAL research: local READ built-ins only (Read/Grep/Glob/LS/
+//                TodoWrite). Those never prompt, so they already work headless with
+//                no --allowedTools entry needed; the flag is emitted anyway as the
+//                positive allow bound. NO web (WebFetch / WebSearch are an outbound
+//                channel that bypasses the approve-out gate entirely), NO Dopl MCP at
+//                all, no write/exec/delegation. This is the AIRTIGHT, zero-outbound
+//                profile. Headless answers come back on stdout, so no tool is needed
+//                to reply.
+//   dopl_only  — the definitive SAFE headless READ profile: local READ built-ins +
+//                WEB reads (WebFetch / WebSearch) + the NON-ADMIN Dopl MCP tools,
+//                each named explicitly in --allowedTools so it is pre-approved and
+//                works headless with NO prompt (this is what fixes the "Dopl tools
+//                return permission-denied" headless failure). Net capability: "read
+//                your files + the Dopl chat archive / KB / search + the web, nothing
+//                destructive." Never the bare `mcp__dopl` prefix: that matches the
+//                six destructive *_admin tools too (dopl_kb_admin alone carries
 //                delete_base / delete_folder / delete_file), which made v1.1's
-//                dopl_only MORE dangerous than full. `dopl_channel` is
-//                deliberately EXCLUDED and explicitly DENIED (see below): a
-//                dopl_only agent could otherwise post/exfiltrate directly and
-//                bypass the approve-out review, so its reply instead routes
-//                through stdout + the approve-out gate exactly like read_only.
-//   full       — unchanged v1.1 behavior: no flags, no scoped settings, the
-//                CLI's own permission gating applies.
+//                dopl_only MORE dangerous than full. `dopl_channel` is deliberately
+//                EXCLUDED and explicitly DENIED (see below): a dopl_only agent could
+//                otherwise post/exfiltrate directly and bypass the approve-out
+//                review, so its reply instead routes through stdout + the approve-out
+//                gate exactly like read_only. Web is granted here (unlike read_only)
+//                by product design — dopl_only is the "assistant that can look things
+//                up" profile. The residual exfil surface (a GET can carry data in its
+//                query string) is BOUNDED: the agent has no Bash/Write/admin, so
+//                injected web content cannot ACT, only inform the drafted reply the
+//                operator still reviews at the approve-out gate. Choose read_only when
+//                zero outbound is required.
+//   full       — unchanged flag behavior: no restriction flags, no scoped settings,
+//                the CLI's own permission gating applies. HEADLESS REALITY: with no
+//                --allowedTools a headless `full` spawn CANNOT use Bash/Write/MCP —
+//                the CLI auto-denies any non-pre-approved tool when there is no TTY.
+//                This is DELIBERATE, not a gap: pre-approving Bash/Write for an
+//                untrusted teammate message would let side effects land DURING the
+//                run, before the approve-out gate — the real RCE surface. For genuine
+//                shell/full capability the operator turns on Run-in-Terminal, where a
+//                live TTY lets them approve each tool as it is requested. The consent
+//                notification's capability hint says exactly this (see profileHint).
 //
 // Unrecognized names in --allowedTools / --disallowedTools / --tools are
 // harmless no-ops (verified), so these lists can name tools that only exist in
@@ -105,8 +131,17 @@ const DOPL_ADMIN_TOOLS = [
 // on the server, admins included) — never in an allow list.
 const DOPL_SERVER_PREFIX = 'mcp__dopl';
 
-// Built-ins a restricted spawn may use. Also the --tools positive bound.
+// Local READ built-ins every restricted spawn may use. Also the base of the --tools
+// positive bound. None of these ever trigger a permission prompt, so they work
+// unchanged in headless `claude -p` (this is why read_only is functional headless
+// without pre-approving anything special).
 const READ_BUILTINS = ['Read', 'Grep', 'Glob', 'LS', 'TodoWrite'];
+
+// Web-READ built-ins. Granted ONLY to dopl_only — added to its --tools positive
+// bound AND its --allowedTools so they are pre-approved and work headless. read_only
+// DENIES these: web is an outbound channel that bypasses the approve-out gate, and
+// read_only is the zero-outbound profile (keep them OUT of read_only).
+const WEB_TOOLS = ['WebFetch', 'WebSearch'];
 
 // Built-ins a restricted spawn must never reach, grouped by what they'd buy an
 // attacker who has injected the untrusted message body.
@@ -118,8 +153,10 @@ const DENIED_BUILTINS = [
   'Task', 'Agent', 'TaskCreate', 'TaskUpdate', 'TaskStop',
   'TaskGet', 'TaskList', 'TaskOutput',
   // Outbound channels — every one of these gets data off the machine WITHOUT
-  // passing the approve-out gate, which is the whole point of that gate.
-  'WebFetch', 'WebSearch', 'Artifact', 'SendMessage', 'SendUserMessage',
+  // passing the approve-out gate, which is the whole point of that gate. (WebFetch/
+  // WebSearch are NOT in this shared list: they are governed PER-PROFILE via
+  // WEB_TOOLS — denied for read_only, allowed for dopl_only — see buildDeniedTools.)
+  'Artifact', 'SendMessage', 'SendUserMessage',
   'PushNotification', 'RemoteTrigger', 'ReportFindings', 'DesignSync',
   // Persistence / scheduling: survives the spawn and re-runs unattended.
   'CronCreate', 'CronDelete', 'CronList', 'ScheduleWakeup', 'Monitor',
@@ -129,7 +166,7 @@ const DENIED_BUILTINS = [
 
 const TOOL_PROFILES = {
   read_only: [...READ_BUILTINS],
-  dopl_only: [...READ_BUILTINS, ...DOPL_SAFE_TOOLS],
+  dopl_only: [...READ_BUILTINS, ...WEB_TOOLS, ...DOPL_SAFE_TOOLS],
   full: [], // empty => no restriction flags at all (v1.1 behavior)
 };
 
@@ -148,22 +185,29 @@ function buildDeniedTools(profile) {
   const p = normalizeProfile(profile);
   if (p === 'full') return [];
   const denied = [...DENIED_BUILTINS, ...DOPL_ADMIN_TOOLS];
-  // read_only gets no Dopl MCP whatsoever: deny the whole server, then the six
-  // admins again by name so containment survives a CLI that stops honoring the
-  // bare-prefix form.
+  // read_only gets no Dopl MCP whatsoever AND no web: deny the whole server, the six
+  // admins again by name (so containment survives a CLI that stops honoring the
+  // bare-prefix form), and the web-read tools (read_only is zero-outbound).
   if (p === 'read_only') {
     denied.unshift(DOPL_SERVER_PREFIX);
+    denied.push(...WEB_TOOLS);
   } else if (p === 'dopl_only') {
-    // dopl_only keeps the read Dopl tools but must not post/exfiltrate directly:
-    // deny dopl_channel by name so the reply routes through stdout + approve-out.
+    // dopl_only keeps the read Dopl tools + web reads but must not post/exfiltrate
+    // via the channel tool: deny dopl_channel by name so the reply routes through
+    // stdout + approve-out. WEB_TOOLS are deliberately NOT denied here (dopl_only is
+    // "read files + Dopl + web").
     denied.push(DOPL_CHANNEL_TOOL);
   }
   return denied;
 }
 
-// The --tools positive bound on BUILT-IN tools (empty => omit the flag).
+// The --tools positive bound on BUILT-IN tools (empty => omit the flag). dopl_only
+// additionally offers the web-read built-ins; read_only stays local-only. A tool not
+// named here is not offered to the model at all (L0).
 function buildBuiltinTools(profile) {
-  return normalizeProfile(profile) === 'full' ? [] : [...READ_BUILTINS];
+  const p = normalizeProfile(profile);
+  if (p === 'full') return [];
+  return p === 'dopl_only' ? [...READ_BUILTINS, ...WEB_TOOLS] : [...READ_BUILTINS];
 }
 
 // The full set of restriction flags for a spawn, shared verbatim by headless and
@@ -195,12 +239,28 @@ function profileLabel(profile) {
   return PROFILE_LABELS[normalizeProfile(profile)] || 'Full-access';
 }
 
+// One-line, per-profile capability hint appended to the consent notification body so
+// the operator sees the REAL HEADLESS reach before approving. For the two restricted
+// profiles it states the safe read scope; for `full` it states the headless
+// limitation and points at Run-in-Terminal (a live TTY where each tool is approved as
+// requested) for genuine shell/full access. Kept OUTSIDE the extracted table block so
+// it never perturbs the source-extraction test; electron-free like profileLabel.
+const PROFILE_HINTS = {
+  read_only: 'Reads your local files only — no web, Dopl, shell, or file writes.',
+  dopl_only: 'Reads your files, the Dopl archive/KB, and the web — no shell or writes.',
+  full: 'Limited headless (no shell/writes); use Run responses in Terminal for full access.',
+};
+function profileHint(profile) {
+  return PROFILE_HINTS[normalizeProfile(profile)] || PROFILE_HINTS.full;
+}
+
 module.exports = {
   DOPL_CHANNEL_TOOL,
   DOPL_SAFE_TOOLS,
   DOPL_ADMIN_TOOLS,
   DOPL_SERVER_PREFIX,
   READ_BUILTINS,
+  WEB_TOOLS,
   DENIED_BUILTINS,
   TOOL_PROFILES,
   normalizeProfile,
@@ -209,4 +269,5 @@ module.exports = {
   buildBuiltinTools,
   buildRestrictionArgs,
   profileLabel,
+  profileHint,
 };

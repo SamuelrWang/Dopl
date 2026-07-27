@@ -17,7 +17,7 @@ import {
   updateMyNotifyScope,
   updateMyToolProfile,
 } from "../client/api";
-import { PRESENCE_REFETCH_DEBOUNCE_MS } from "../constants";
+import { CONSENT_INBOX_POLL_MS, PRESENCE_REFETCH_DEBOUNCE_MS } from "../constants";
 import type { AgentToolProfile, NotifyScope } from "../types";
 import { useChannels } from "../hooks/use-channels";
 import { useChannelMessages } from "../hooks/use-channel-messages";
@@ -118,7 +118,14 @@ export function ChannelsView({
     selected?.id ?? null,
     workspaceId
   );
-  const { inbound, outbound, refetch: refetchConsent } = useConsentInbox(workspaceId);
+  // Poll fallback scoped to THIS page (not the sidebar badge) so a pending
+  // request appears within a few seconds even when Realtime drops the consent
+  // INSERT; pauses automatically while the tab is hidden (TanStack default).
+  const { inbound, outbound, refetch: refetchConsent } = useConsentInbox(
+    workspaceId,
+    undefined,
+    CONSENT_INBOX_POLL_MS
+  );
   const { trustedIds, refetch: refetchTrust } = useTrustRules(workspaceId);
 
   // Pending consent for the SELECTED channel (banner) + a set of every channel
