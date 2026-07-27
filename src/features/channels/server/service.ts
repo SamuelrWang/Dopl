@@ -8,6 +8,9 @@ import "server-only";
  *   - `service-shared.ts`  — context, visibility gate, management gate, resolvers
  *   - `service-reads.ts`   — list + header + roster + cursor message reads + await poll
  *   - `service-writes.ts`  — create / update / delete, post message, add / remove member
+ *   - `consent-service.ts` — inbound consent + outbound review requests (v1.2)
+ *   - `trust-service.ts`   — per-teammate standing consent rules (v1.2)
+ *   - `presence-service.ts`— desktop heartbeat upsert (v1.2)
  */
 
 export { buildChannelContext } from "./service-shared";
@@ -30,5 +33,20 @@ export {
   postMessage,
   addMember,
   removeMember,
-  updateMyNotifyScope,
+  updateMyMemberSettings,
 } from "./service-writes";
+
+export {
+  createConsentRequest,
+  listConsentRequests,
+  getConsentRequest,
+  decideConsentRequest,
+} from "./consent-service";
+
+export {
+  listTrustRules,
+  createTrustRule,
+  deleteTrustRule,
+} from "./trust-service";
+
+export { heartbeatPresence } from "./presence-service";

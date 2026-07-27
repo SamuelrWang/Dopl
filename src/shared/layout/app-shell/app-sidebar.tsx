@@ -18,6 +18,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import type { SettingsSection } from "@/shared/layout/settings-modal";
+import { useConsentInbox } from "@/features/channels/hooks/use-consent-inbox";
 import { WorkspaceSwitcher } from "./workspace-switcher";
 import styles from "./app-shell.module.css";
 
@@ -48,6 +49,7 @@ const NAV: ReadonlyArray<{ label: string; icon: LucideIcon; section: NavSection 
 
 interface Props {
   workspaceSegment: string;
+  workspaceId: string;
   workspacePublicId: string;
   workspaceName: string;
   onOpenSettings: (section: SettingsSection) => void;
@@ -65,12 +67,18 @@ export function sectionPath(segment: string, section: NavSection): string {
  */
 export function AppSidebar({
   workspaceSegment,
+  workspaceId,
   workspacePublicId,
   workspaceName,
   onOpenSettings,
   onCreateWorkspace,
 }: Props) {
   const pathname = usePathname();
+  // Workspace-level pending-consent count so an approval is visible from any
+  // page, not just the channels thread. RLS scopes the stream to the caller's
+  // own requests; the badge just surfaces "you have something to decide".
+  const { requests: consentRequests } = useConsentInbox(workspaceId);
+  const consentCount = consentRequests.length;
   // Path shape: /{wsSegment}/{section}/... — the bare workspace root
   // (which redirects to /canvas) highlights Canvas.
   const segments = pathname.split("/").filter(Boolean);
@@ -108,6 +116,16 @@ export function AppSidebar({
           >
             <Icon size={20} strokeWidth={1.8} />
             {label}
+            {section === "channels" && consentCount > 0 && (
+              <span className="ml-auto inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full border border-warning/30 bg-warning/10 px-1 text-micro font-semibold text-warning">
+                <span aria-hidden>{consentCount}</span>
+                <span className="sr-only">
+                  {consentCount === 1
+                    ? "1 pending approval"
+                    : `${consentCount} pending approvals`}
+                </span>
+              </span>
+            )}
           </Link>
         ))}
       </nav>

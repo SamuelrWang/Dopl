@@ -98,7 +98,7 @@ describe("H-3 write-gate coverage", () => {
     expect(exemptRoutes).toEqual(["user/mcp-status/route.ts"]);
   });
 
-  it("the `sessionOnly` set is exactly the destructive admin + credential-minting routes gated by H-3", () => {
+  it("the `sessionOnly` set is exactly the destructive admin + credential-minting + consent routes", () => {
     const sessionOnlyRoutes = files
       .filter((f) => /sessionOnly:\s*true/.test(readFileSync(f, "utf8")))
       .map(apiRel)
@@ -110,6 +110,15 @@ describe("H-3 write-gate coverage", () => {
         // cookie-session only (Channels v1.1 section E).
         "auth/mcp-device-token/route.ts",
         "billing/checkout/route.ts",
+        // Channels v1.2 H-1. The consent gate exists to keep a HUMAN in the
+        // loop on a spawned agent that is processing an untrusted teammate's
+        // message with Bash and a device token on disk. If that agent could
+        // reach these, it could self-approve its own outbound review
+        // (PATCH /consent/[id]) or grant itself permanent standing consent
+        // (POST /trust) and never be asked again. Cookie sessions — the web
+        // UI and the desktop app — are unaffected.
+        "channels/consent/[id]/route.ts",
+        "channels/trust/route.ts",
         "billing/portal/route.ts",
         "billing/upgrade-to-team/route.ts",
         "oauth/grants/[id]/route.ts",

@@ -296,16 +296,21 @@ export async function updateLastRead(
   if (error) throw error;
 }
 
-/** Set a member's own notify scope; returns the updated membership row. */
-export async function updateNotifyScope(
+/**
+ * Update a member's OWN per-channel preferences (notify scope and / or agent
+ * tool profile); returns the updated membership row. The workspace-guard
+ * trigger fires only on UPDATE OF workspace_id/channel_id, so this never
+ * trips it.
+ */
+export async function updateMemberPrefs(
   channelId: string,
   userId: string,
-  notifyScope: string
+  patch: { notify_scope?: string; agent_tool_profile?: string }
 ): Promise<ChannelMemberRow> {
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("channel_members")
-    .update({ notify_scope: notifyScope })
+    .update(patch)
     .eq("channel_id", channelId)
     .eq("user_id", userId)
     .select("*")

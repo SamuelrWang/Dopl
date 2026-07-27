@@ -79,7 +79,8 @@ function init(opts) {
     }
   };
   check();
-  setInterval(check, CHECK_INTERVAL_MS);
+  const timer = setInterval(check, CHECK_INTERVAL_MS);
+  if (timer.unref) timer.unref();
   diag('updater: armed (4h interval)');
 }
 

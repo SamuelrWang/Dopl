@@ -27,6 +27,49 @@ export type NotifyScope = "all" | "addressed" | "none";
 export type MessageAuthorKind = "user" | "agent" | "system";
 
 /**
+ * The tool scope a member's responding agent runs with in a channel (the
+ * operator controls their own machine). `full` = no restriction (default,
+ * preserves current behavior); `dopl_only` = only the Dopl MCP tools + safe
+ * reads; `read_only` = read / safe tools only (no writes). The desktop maps
+ * this to the spawned session's `--allowedTools`.
+ */
+export type AgentToolProfile = "full" | "dopl_only" | "read_only";
+
+/**
+ * Consent request kind. `inbound` = a teammate's agent addressed the operator
+ * and the operator must Allow / Deny before their machine spawns; `outbound` =
+ * the operator's own agent drafted a reply awaiting Send / Cancel.
+ */
+export type ConsentKind = "inbound" | "outbound";
+
+/**
+ * Consent request lifecycle. `pending` awaits a decision; `allowed` / `denied`
+ * are human decisions; `auto_allowed` was resolved by a standing trust rule;
+ * `expired` elapsed unanswered.
+ */
+export type ConsentStatus =
+  | "pending"
+  | "allowed"
+  | "denied"
+  | "expired"
+  | "auto_allowed";
+
+/**
+ * Which surface recorded a HUMAN decision, persisted into `decided_by`. The
+ * desktop's native dialog and the web card are equal peers (either may answer
+ * a request), so the audit trail has to distinguish them. `trust` is written
+ * by the server for a standing-rule auto-allow and is never caller-supplied.
+ */
+export type ConsentDecisionSurface = "web" | "desktop";
+
+/**
+ * The listener state a heartbeat reports. Closed set (schema + DB CHECK):
+ * `listening` is the desktop's steady state; the rest are reserved for
+ * richer listener states without another migration.
+ */
+export type AgentPresenceStatus = "listening" | "busy" | "paused" | "offline";
+
+/**
  * Message kind. `message` = chat; the `task_*` values are structured
  * activity events (payload in `metadata`, human-readable render in
  * `body`); `system` = joins / topic changes.
@@ -65,6 +108,10 @@ export type Channel = {
   unread: boolean;
   /** The caller's own notification scope, null when they are not a member. */
   myNotifyScope: NotifyScope | null;
+  /** The caller's own agent tool profile, null when they are not a member. */
+  myAgentToolProfile: AgentToolProfile | null;
+  /** Members whose agent is currently online (last heartbeat < 90s ago). */
+  onlineMemberCount: number;
 };
 
 export type ChannelMessage = {
@@ -92,12 +139,64 @@ export type ChannelMember = {
   /** Per-channel notification scope. Private preference: present only on the
    *  caller's own row; null for other members. */
   notifyScope: NotifyScope | null;
+  /** The member's responding-agent tool profile. Private preference: present
+   *  only on the caller's own row; null for other members. */
+  agentToolProfile: AgentToolProfile | null;
+  /** True when this member's agent last sent a heartbeat < 90s ago. */
+  agentOnline: boolean;
+  /** ISO datetime of this member's agent's last heartbeat, null if never. */
+  lastSeenAt: string | null;
   addedBy: string | null;
   joinedAt: string;
   /** Hydrated profile fields for the roster. */
   displayName: string | null;
   email: string | null;
   avatarUrl: string | null;
+};
+
+/**
+ * A human-in-the-loop consent request: `inbound` (Allow / Deny before the
+ * operator's machine spawns) or `outbound` (Send / Cancel before the operator's
+ * agent's reply leaves the machine). A server-side row so either surface (web
+ * or desktop) can answer it.
+ */
+export type ChannelConsentRequest = {
+  id: string;
+  channelId: string;
+  workspaceId: string;
+  /** Who must decide (the recipient / operator). */
+  operatorUserId: string;
+  /** Who / whose agent asked (inbound); null for outbound. */
+  requesterUserId: string | null;
+  kind: ConsentKind;
+  /** Inbound: the seq of the triggering message. */
+  messageSeq: number | null;
+  summary: string;
+  bodyPreview: string;
+  /** Outbound: the drafted reply awaiting Send. */
+  proposedReply: string | null;
+  status: ConsentStatus;
+  /** Which surface / rule resolved it: 'web' | 'desktop' | 'trust'. */
+  decidedBy: string | null;
+  decidedAt: string | null;
+  createdAt: string;
+  expiresAt: string | null;
+  /** Hydrated requester display for the card (inbound); null for outbound. */
+  requesterName: string | null;
+  requesterAvatarUrl: string | null;
+};
+
+/** A per-teammate standing-consent rule ("always allow Alice's agent"). */
+export type AgentTrustRule = {
+  id: string;
+  operatorUserId: string;
+  trustedUserId: string;
+  workspaceId: string;
+  createdAt: string;
+  /** Hydrated trusted-teammate display for the settings list. */
+  trustedName: string | null;
+  trustedEmail: string | null;
+  trustedAvatarUrl: string | null;
 };
 
 /** Channel header + its transcript (detail read). */

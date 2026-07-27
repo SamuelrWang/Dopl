@@ -10,12 +10,12 @@ import {
   buildChannelContext,
   listChannelMembers,
   removeMember,
-  updateMyNotifyScope,
+  updateMyMemberSettings,
 } from "@/features/channels/server/service";
 import {
   ChannelMemberAddSchema,
   ChannelMemberRemoveSchema,
-  ChannelNotifyScopeUpdateSchema,
+  ChannelMemberSelfUpdateSchema,
 } from "@/features/channels/schema";
 
 async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
@@ -50,17 +50,18 @@ async function handleDelete(request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
-// PATCH updates only the caller's OWN notify scope (self-service preference),
-// so any channel member — regardless of workspace role — may call it; the
-// service enforces channel membership and always targets ctx.userId's row.
+// PATCH updates only the caller's OWN per-channel preferences (notify scope
+// and / or agent tool profile), so any channel member — regardless of
+// workspace role — may call it; the service enforces channel membership and
+// always targets ctx.userId's row.
 async function handlePatch(request: NextRequest, auth: WorkspaceAuthContext) {
   try {
-    const input = await parseJson(request, ChannelNotifyScopeUpdateSchema);
+    const input = await parseJson(request, ChannelMemberSelfUpdateSchema);
     const ctx = buildChannelContext(auth);
-    const member = await updateMyNotifyScope(
+    const member = await updateMyMemberSettings(
       ctx,
       requireChannelId(auth.params),
-      input.notifyScope
+      input
     );
     return NextResponse.json({ member });
   } catch (err) {

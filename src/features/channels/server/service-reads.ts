@@ -14,6 +14,8 @@ import {
   type ChannelRow,
 } from "./dto";
 import * as repo from "./repository";
+import * as collab from "./repository-collab";
+import type { DerivedPresence } from "./repository-collab";
 import {
   loadVisibleChannel,
   profilesById,
@@ -30,6 +32,8 @@ import {
 interface ChannelExtras {
   counts: Map<string, number>;
   lasts: Map<string, string>;
+  /** channelId -> count of members whose agent is currently online. */
+  online: Map<string, number>;
 }
 
 function toChannelDto(
@@ -43,7 +47,26 @@ function toChannelDto(
     role: (membership?.role as Channel["role"]) ?? null,
     lastReadAt: membership?.last_read_at ?? null,
     notifyScope: (membership?.notify_scope as Channel["myNotifyScope"]) ?? null,
+    agentToolProfile:
+      (membership?.agent_tool_profile as Channel["myAgentToolProfile"]) ?? null,
+    onlineMemberCount: extras.online.get(row.id) ?? 0,
   });
+}
+
+/** Per-channel online-member counts from the workspace presence map. */
+function onlineCounts(
+  memberIds: Map<string, string[]>,
+  presence: Map<string, DerivedPresence>
+): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const [channelId, userIds] of memberIds) {
+    let n = 0;
+    for (const userId of userIds) {
+      if (presence.get(userId)?.online) n += 1;
+    }
+    out.set(channelId, n);
+  }
+  return out;
 }
 
 /** Every channel the caller may see, newest-active first. */
@@ -60,11 +83,17 @@ export async function listChannels(
     includeArchived,
   });
   const ids = rows.map((r) => r.id);
-  const [counts, lasts] = await Promise.all([
+  const [counts, lasts, memberIds, presence] = await Promise.all([
     repo.memberCounts(ids),
     repo.lastMessages(ids),
+    collab.channelMemberUserIds(ids),
+    collab.presenceForWorkspace(ctx.workspaceId),
   ]);
-  const extras: ChannelExtras = { counts, lasts };
+  const extras: ChannelExtras = {
+    counts,
+    lasts,
+    online: onlineCounts(memberIds, presence),
+  };
   return rows.map((row) =>
     toChannelDto(row, membershipByChannel.get(row.id) ?? null, extras)
   );
@@ -76,11 +105,17 @@ export async function getChannel(
   ref: string
 ): Promise<Channel> {
   const { channel, membership } = await loadVisibleChannel(ctx, ref);
-  const [counts, lasts] = await Promise.all([
+  const [counts, lasts, memberIds, presence] = await Promise.all([
     repo.memberCounts([channel.id]),
     repo.lastMessages([channel.id]),
+    collab.channelMemberUserIds([channel.id]),
+    collab.presenceForWorkspace(ctx.workspaceId),
   ]);
-  return toChannelDto(channel, membership, { counts, lasts });
+  return toChannelDto(channel, membership, {
+    counts,
+    lasts,
+    online: onlineCounts(memberIds, presence),
+  });
 }
 
 /** The channel's roster (visible to members + viewers of a public channel). */
@@ -90,14 +125,19 @@ export async function listChannelMembers(
 ): Promise<ChannelMember[]> {
   const { channel } = await loadVisibleChannel(ctx, ref);
   const rows = await repo.listMembers(channel.id);
-  const profiles = await profilesById(rows.map((r) => r.user_id));
-  // notify_scope is a private preference: expose it only on the caller's own
-  // row (Channel.myNotifyScope covers the self case) — other members shouldn't
-  // see who muted the channel.
-  return rows.map((row) => {
-    const member = mapMemberRow(row, profiles.get(row.user_id));
-    return row.user_id === ctx.userId ? member : { ...member, notifyScope: null };
-  });
+  const [profiles, presence] = await Promise.all([
+    profilesById(rows.map((r) => r.user_id)),
+    collab.presenceForWorkspace(ctx.workspaceId),
+  ]);
+  // The private-preference scrub (notify_scope + agent_tool_profile are shown
+  // only on the caller's own row) is enforced inside `mapMemberRow` — pass the
+  // viewer and it holds for every roster read.
+  return rows.map((row) =>
+    mapMemberRow(row, profiles.get(row.user_id), {
+      viewerUserId: ctx.userId,
+      presence: presence.get(row.user_id),
+    })
+  );
 }
 
 async function hydrateMessages(

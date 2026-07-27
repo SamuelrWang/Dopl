@@ -76,12 +76,23 @@ export type ChannelMessageCreateInput = z.infer<
 /** Per-member notification scope for a channel (self-service preference). */
 const NotifyScopeSchema = z.enum(["all", "addressed", "none"]);
 
-/** PATCH /members body: a member updating their OWN notify scope. */
-export const ChannelNotifyScopeUpdateSchema = z.object({
-  notifyScope: NotifyScopeSchema,
-});
-export type ChannelNotifyScopeUpdateInput = z.infer<
-  typeof ChannelNotifyScopeUpdateSchema
+/** Per-member responding-agent tool scope (self-service preference). */
+const AgentToolProfileSchema = z.enum(["full", "dopl_only", "read_only"]);
+
+/**
+ * PATCH /members body: a member updating their OWN per-channel preferences —
+ * notify scope and/or agent tool profile. At least one field is required (an
+ * empty patch is a no-op the route rejects). Both are self-only: the service
+ * always targets the caller's row.
+ */
+export const ChannelMemberSelfUpdateSchema = z
+  .object({
+    notifyScope: NotifyScopeSchema.optional(),
+    agentToolProfile: AgentToolProfileSchema.optional(),
+  })
+  .refine((patch) => Object.keys(patch).length > 0, { message: "Empty patch" });
+export type ChannelMemberSelfUpdateInput = z.infer<
+  typeof ChannelMemberSelfUpdateSchema
 >;
 
 export const ChannelMemberAddSchema = z.object({
@@ -120,3 +131,105 @@ export const AwaitQuerySchema = z.object({
     .optional(),
 });
 export type AwaitQuery = z.infer<typeof AwaitQuerySchema>;
+
+// ─── Consent (inbound consent + outbound review) ────────────────────────────
+
+/**
+ * The triggering message's `seq`. NOT coerced: this arrives in a JSON body,
+ * where `z.coerce.number()` would silently turn `null` / `""` / `[]` into 0
+ * and `true` into 1 — a de-dupe key must never be manufactured out of junk.
+ * (Coercion belongs on query strings, where everything is a string by
+ * definition.) `seq` is a 1-based identity column, so 0 is not a real seq.
+ */
+const ConsentMessageSeqSchema = z.number().int().positive();
+
+/** Fields every consent create carries, whatever the kind. */
+const consentCreateBase = {
+  channelId: z.string().uuid(),
+  summary: z.string().trim().max(200).optional().default(""),
+  bodyPreview: z.string().max(16000).optional().default(""),
+};
+
+/**
+ * Create a consent request. The desktop POSTs this when a trigger fires
+ * (inbound) or a reply is drafted (outbound). `operatorUserId` is NEVER in the
+ * body — it is always the authenticated caller (a caller can only raise a
+ * request addressed to themselves). `requesterUserId` is derived server-side
+ * from the triggering message. `summary` shares the message summary's cap
+ * (it renders on the card); `bodyPreview` / `proposedReply` are larger.
+ *
+ * A discriminated union on `kind` so the two shapes can't bleed into each
+ * other: only an OUTBOUND request carries a `proposedReply` (an inbound row
+ * with a drafted reply is nonsense, and accepting one let a caller pre-seed
+ * the outbound review's payload). `messageSeq` is meaningful for BOTH kinds —
+ * it is the de-dupe key (inbound: the triggering message; outbound: the
+ * message the reply answers), so a retry can't stack duplicate cards.
+ */
+export const ConsentCreateSchema = z.discriminatedUnion("kind", [
+  z.object({
+    ...consentCreateBase,
+    kind: z.literal("inbound"),
+    messageSeq: ConsentMessageSeqSchema.optional(),
+  }),
+  z.object({
+    ...consentCreateBase,
+    kind: z.literal("outbound"),
+    messageSeq: ConsentMessageSeqSchema.optional(),
+    proposedReply: z.string().max(16000).optional(),
+  }),
+]);
+export type ConsentCreateInput = z.infer<typeof ConsentCreateSchema>;
+
+/**
+ * Which human surface recorded the decision — persisted verbatim into
+ * `decided_by` for the audit trail. The desktop's native dialog sends
+ * `decidedBy: 'desktop'`; the web UI omits it and defaults to `web`.
+ * `trust` is server-generated only (a standing rule, not a human click) and
+ * is deliberately NOT accepted from a caller.
+ */
+const ConsentDecidedBySchema = z.enum(["web", "desktop"]);
+
+/** PATCH /consent/[id] body: the operator's decision + which surface made it. */
+export const ConsentDecisionSchema = z.object({
+  decision: z.enum(["allow", "deny"]),
+  decidedBy: ConsentDecidedBySchema.optional().default("web"),
+});
+export type ConsentDecisionInput = z.infer<typeof ConsentDecisionSchema>;
+
+/**
+ * Consent inbox filter. `pending` (the default, and what the web inbox
+ * renders) keeps the card list to things that still need an answer;
+ * `decided` is the audit view — it is the ONLY way to read the
+ * `auto_allowed` rows a trust rule writes, i.e. "your agent ran N times
+ * without asking"; `all` is both.
+ */
+const ConsentStatusFilterSchema = z.enum(["pending", "decided", "all"]);
+export type ConsentStatusFilter = z.infer<typeof ConsentStatusFilterSchema>;
+
+/** `?channelId=<uuid>&status=<pending|decided|all>` for the consent inbox. */
+export const ConsentListQuerySchema = z.object({
+  channelId: z.string().uuid().optional(),
+  status: ConsentStatusFilterSchema.optional().default("pending"),
+});
+export type ConsentListQuery = z.infer<typeof ConsentListQuerySchema>;
+
+// ─── Trust (per-teammate standing consent) ──────────────────────────────────
+
+/** POST / DELETE /trust body: the teammate whose agent is (un)trusted. */
+export const TrustMutateSchema = z.object({
+  trustedUserId: z.string().uuid(),
+});
+export type TrustMutateInput = z.infer<typeof TrustMutateSchema>;
+
+// ─── Presence (desktop heartbeat) ───────────────────────────────────────────
+
+/**
+ * POST /presence body: an optional status label (defaults to 'listening').
+ * A closed enum, not free text — the column is rendered as a listener state
+ * and a matching CHECK constraint backs it in the database, so an arbitrary
+ * string can't be written through the heartbeat and then surfaced in the UI.
+ */
+export const PresenceHeartbeatSchema = z.object({
+  status: z.enum(["listening", "busy", "paused", "offline"]).optional(),
+});
+export type PresenceHeartbeatInput = z.infer<typeof PresenceHeartbeatSchema>;

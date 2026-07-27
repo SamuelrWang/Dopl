@@ -14,7 +14,7 @@ import {
   ChannelMemberExistsError,
   ChannelSlugConflictError,
 } from "./errors";
-import type { NotifyScope } from "../types";
+import type { AgentToolProfile, NotifyScope } from "../types";
 import { mapMemberRow, mapMessageRow } from "./dto";
 import * as repo from "./repository";
 import { getChannel } from "./service-reads";
@@ -229,7 +229,10 @@ export async function addMember(
   }
 
   const profiles = await profilesById([userId]);
-  return mapMemberRow(row, profiles.get(userId));
+  // `viewerUserId` is the caller, not the added member: inviting someone must
+  // not echo back THEIR notify scope / tool profile (the mapper scrubs them
+  // for anyone but the viewer, exactly as the roster read does).
+  return mapMemberRow(row, profiles.get(userId), { viewerUserId: ctx.userId });
 }
 
 /**
@@ -259,21 +262,27 @@ export async function removeMember(
 }
 
 /**
- * Update the CALLER's own notification scope for a channel. Any channel
- * member may set their own scope (it's a personal preference, not a
- * management action); a non-member is refused. Returns the updated
- * membership DTO.
+ * Update the CALLER's own per-channel preferences (notification scope and /
+ * or responding-agent tool profile). Any channel member may set their own
+ * (they are personal preferences, not management actions); a non-member is
+ * refused. Always targets the caller's row. Returns the updated membership
+ * DTO.
  */
-export async function updateMyNotifyScope(
+export async function updateMyMemberSettings(
   ctx: ChannelContext,
   ref: string,
-  notifyScope: NotifyScope
+  patch: { notifyScope?: NotifyScope; agentToolProfile?: AgentToolProfile }
 ): Promise<ChannelMember> {
   const { channel, membership } = await loadVisibleChannel(ctx, ref);
   if (!membership) {
-    throw new ChannelForbiddenError("set notifications for this channel");
+    throw new ChannelForbiddenError("update settings for this channel");
   }
-  const row = await repo.updateNotifyScope(channel.id, ctx.userId, notifyScope);
+  const dbPatch: { notify_scope?: string; agent_tool_profile?: string } = {};
+  if (patch.notifyScope !== undefined) dbPatch.notify_scope = patch.notifyScope;
+  if (patch.agentToolProfile !== undefined) {
+    dbPatch.agent_tool_profile = patch.agentToolProfile;
+  }
+  const row = await repo.updateMemberPrefs(channel.id, ctx.userId, dbPatch);
   const profiles = await profilesById([ctx.userId]);
-  return mapMemberRow(row, profiles.get(ctx.userId));
+  return mapMemberRow(row, profiles.get(ctx.userId), { viewerUserId: ctx.userId });
 }

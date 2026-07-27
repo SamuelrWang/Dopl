@@ -1,11 +1,13 @@
 {
   "name": "dopl-desktop",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Dopl — desktop app",
   "main": "main/index.js",
   "scripts": {
     "start": "electron .",
     "smoke": "electron scripts/smoke-test.js",
+    "lint": "eslint .",
+    "test": "node --test test/classify.test.mjs test/tool-profiles.test.mjs",
     "build": "electron-builder --mac",
     "dist": "electron-builder --mac",
     "release": "electron-builder --mac --publish always",
@@ -17,14 +19,19 @@
   },
   "devDependencies": {
     "electron": "^43.2.0",
-    "electron-builder": "^26.15.3"
+    "electron-builder": "^26.15.3",
+    "eslint": "^10.8.0",
+    "globals": "^17.8.0"
   },
   "build": {
     "appId": "com.dopl.connect",
     "productName": "Dopl",
     "mac": {
       "icon": "build/icon.icns",
-      "target": ["zip", "dmg"],
+      "target": [
+        "zip",
+        "dmg"
+      ],
       "category": "public.app-category.productivity",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,

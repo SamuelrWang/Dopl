@@ -6,21 +6,77 @@
 // forbids scope changes and embedded instructions, and a spawn NEVER happens
 // without explicit user consent (the consent gate lives in channel-listener.js).
 // Tokens are never passed on argv.
+//
+// SPLIT NOTE (§2 refactor): the tool-profile containment table moved to
+// tool-profiles.js and the CLI-resolution / spawn-env helpers to claude-resolve.js.
+// Both are re-exported below so the public API (mcp-config.js, claude-auth.js,
+// channel-listener/trigger, the tests) is unchanged.
 
 const { execFile } = require('child_process');
 const path = require('path');
 const fs = require('fs');
-const os = require('os');
 const crypto = require('crypto');
 const { app } = require('electron');
 const Store = require('electron-store');
-const { getStoredOAuthToken } = require('./claude-token');
+const { diag } = require('./diag');
+const {
+  normalizeProfile,
+  buildAllowedTools,
+  buildDeniedTools,
+  buildBuiltinTools,
+  buildRestrictionArgs,
+} = require('./tool-profiles');
+const {
+  resolveClaude,
+  spawnEnv,
+  channelCwd,
+  claudeAvailable,
+  getClaudeBinPath,
+  cliEnv,
+} = require('./claude-resolve');
 
 const store = new Store();
 const SESSION_KEY = 'claudeSessions'; // { [channelId]: claudeSessionId }
-const CLAUDE_BIN_KEY = 'claudeBinPath'; // electron-store override for the CLI path
+const RUN_IN_TERMINAL_KEY = 'runInTerminal'; // v1.2: visible-Terminal spawn mode
 const MAX_RUNTIME_MS = 5 * 60 * 1000;
 const MAX_OUTPUT_BYTES = 1_000_000;
+
+// Layer 1: a scoped settings file whose `permissions.deny` outranks every
+// `allow` the operator has configured globally. Deterministic per profile (no
+// secrets in it), rewritten before each restricted spawn, mode 600. Returns the
+// path, or null when it could not be written — the caller then spawns with L0/L2/L3
+// only rather than falling back to an unrestricted session. (Kept here, NOT in
+// tool-profiles.js, because it touches fs/path/app — the test evaluates that
+// module in a plain Node context.)
+function scopedSettingsPath(profile) {
+  return path.join(app.getPath('userData'), `spawn-settings-${normalizeProfile(profile)}.json`);
+}
+
+function writeScopedSettings(profile) {
+  const denied = buildDeniedTools(profile);
+  if (!denied.length) return null; // full — no scoped settings
+  const file = scopedSettingsPath(profile);
+  try {
+    fs.writeFileSync(file, JSON.stringify({ permissions: { deny: denied } }), { mode: 0o600 });
+    fs.chmodSync(file, 0o600);
+    return file;
+  } catch (err) {
+    // NOT fatal: --tools / --disallowedTools / --strict-mcp-config still bound
+    // the spawn. Logged so a persistent failure is visible in the field.
+    diag('spawner: scoped settings write failed', err && err.message);
+    return null;
+  }
+}
+
+// ── Run-in-Terminal setting (v1.2 Feature 3) ─────────────────────────────────
+function getRunInTerminal() {
+  return store.get(RUN_IN_TERMINAL_KEY) === true;
+}
+function setRunInTerminal(v) {
+  const val = !!v;
+  store.set(RUN_IN_TERMINAL_KEY, val);
+  return val;
+}
 
 // Feature E: mcp-config writes this file (mode 600) with a Dopl device token; we
 // pass it via --mcp-config on every spawn so a responding agent always has Dopl
@@ -28,8 +84,6 @@ const MAX_OUTPUT_BYTES = 1_000_000;
 function spawnMcpConfigPath() {
   return path.join(app.getPath('userData'), 'mcp-spawn.json');
 }
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Channels currently running a session — the one-per-channel concurrency guard.
 const active = new Set();
@@ -55,132 +109,6 @@ function clearSessionId(channelId) {
     delete map[channelId];
     store.set(SESSION_KEY, map);
   }
-}
-
-// ── Claude CLI resolution (H1) ──────────────────────────────────────────────
-// GUI / login-item launches inherit launchd's minimal PATH (/usr/bin:/bin:…),
-// which never contains claude (it lives in ~/.local/bin, /opt/homebrew/bin, an
-// npm global bin, etc.). We resolve the absolute binary once at startup by
-// probing common install dirs + the user's login-shell PATH, cache it, and pass
-// an augmented PATH to execFile. Spawning is gated on resolution success.
-let resolvedClaude = null; // string path | false (resolved+missing) | null (unresolved)
-let resolving = null; // in-flight resolution promise (coalesces concurrent probes)
-let loginShellPath = ''; // captured login-shell PATH, for env augmentation
-
-function isExecutableFile(p) {
-  try {
-    return fs.statSync(p).isFile() && (fs.accessSync(p, fs.constants.X_OK), true);
-  } catch (_) {
-    return false;
-  }
-}
-
-function candidateDirs() {
-  const home = os.homedir();
-  return [
-    path.join(home, '.local', 'bin'),
-    '/opt/homebrew/bin',
-    '/usr/local/bin',
-    path.join(home, '.npm-global', 'bin'),
-    path.join(home, 'node_modules', '.bin'),
-  ];
-}
-
-// Fast synchronous probe: explicit override, then common install dirs.
-function probeStaticPath() {
-  const override = store.get(CLAUDE_BIN_KEY);
-  if (typeof override === 'string' && isExecutableFile(override)) return override;
-  for (const dir of candidateDirs()) {
-    const p = path.join(dir, 'claude');
-    if (isExecutableFile(p)) return p;
-  }
-  return null;
-}
-
-// Ask the user's login shell where claude is (and capture its PATH). On macOS a
-// login+interactive zsh sources the profile that actually has the real PATH.
-function probeLoginShell() {
-  return new Promise((resolve) => {
-    if (process.platform === 'win32') {
-      resolve(null);
-      return;
-    }
-    const shell = process.env.SHELL || '/bin/zsh';
-    execFile(
-      shell,
-      ['-ilc', 'command -v claude; printf "\\nPATHIS=%s" "$PATH"'],
-      { timeout: 6000 },
-      (_err, stdout) => {
-        const out = String(stdout || '');
-        const pathMatch = out.match(/PATHIS=(.*)$/m);
-        if (pathMatch && pathMatch[1]) loginShellPath = pathMatch[1].trim();
-        const firstLine = (out.split('\n')[0] || '').trim();
-        if (firstLine && path.isAbsolute(firstLine) && isExecutableFile(firstLine)) {
-          resolve(firstLine);
-          return;
-        }
-        resolve(null);
-      }
-    );
-  });
-}
-
-// Resolve (and cache) the absolute claude path. Returns the path or null.
-function resolveClaude() {
-  if (resolvedClaude !== null) return Promise.resolve(resolvedClaude || null);
-  if (resolving) return resolving;
-  resolving = (async () => {
-    const staticBin = probeStaticPath();
-    // Always run the login-shell probe so loginShellPath is captured for env
-    // augmentation, but prefer the static hit when we have one.
-    const shellBin = await probeLoginShell();
-    const bin = staticBin || shellBin;
-    resolvedClaude = bin || false;
-    return resolvedClaude || null;
-  })();
-  const p = resolving;
-  p.finally(() => {
-    resolving = null;
-  });
-  return p;
-}
-
-// PATH for the spawned CLI: the binary's dir + common install dirs + the login
-// shell's PATH + the inherited PATH (deduped, first-wins).
-function augmentedEnv(binPath) {
-  const parts = [];
-  if (binPath) parts.push(path.dirname(binPath));
-  parts.push(...candidateDirs());
-  if (loginShellPath) parts.push(...loginShellPath.split(':'));
-  parts.push(...String(process.env.PATH || '').split(':'));
-  const seen = new Set();
-  const merged = parts.filter((p) => p && !seen.has(p) && seen.add(p)).join(':');
-  return { ...process.env, PATH: merged };
-}
-
-// Env for a channel-answering spawn: PATH-augmented, plus a Feature-D
-// CLAUDE_CODE_OAUTH_TOKEN when `claude setup-token` printed one for us to hold
-// (when claude stored the credential itself, none is set and it uses its own
-// store). The token is injected via env, never argv, and never logged.
-function spawnEnv(bin) {
-  const env = augmentedEnv(bin);
-  const token = getStoredOAuthToken();
-  if (token) env.CLAUDE_CODE_OAUTH_TOKEN = token;
-  return env;
-}
-
-// Per-channel scratch dir so each session has an isolated working directory.
-// L7: channelId is interpolated into a filesystem path, so validate it is a UUID
-// before use; anything else falls back to the userData root.
-function channelCwd(channelId) {
-  if (!UUID_RE.test(String(channelId))) return app.getPath('userData');
-  const dir = path.join(app.getPath('userData'), 'channel-sessions', channelId);
-  try {
-    fs.mkdirSync(dir, { recursive: true });
-  } catch (_) {
-    /* fall back to userData root below */
-  }
-  return fs.existsSync(dir) ? dir : app.getPath('userData');
 }
 
 // Remove any line that exactly matches a delimiter so an attacker cannot forge
@@ -225,7 +153,12 @@ function buildPrompt(message, context, nonce) {
 // Runs claude for one channel message. Resolves { text, sessionId, isError }.
 // H1: spawning is gated on CLI resolution — if the binary can't be found we
 // resolve `{ skipped: 'no-cli' }` and NEVER post an error reply into the channel.
-function runForChannel({ channelId, message, context }) {
+//
+// `onStart` (optional) fires exactly once, synchronously, the moment the `active`
+// slot is claimed for a real spawn — i.e. never on a busy-skip or a no-cli return.
+// The listener uses it to emit task_started only for spawns that actually run, so
+// a skip can't leave a task_started with no matching end (D4).
+function runForChannel({ channelId, message, context, toolProfile, onStart }) {
   return new Promise((resolve) => {
     if (active.has(channelId)) {
       resolve({ text: '', sessionId: getSessionId(channelId), isError: true, skipped: 'busy' });
@@ -237,12 +170,19 @@ function runForChannel({ channelId, message, context }) {
         return;
       }
       active.add(channelId);
-      execOnce(bin, { channelId, message, context, isRetry: false }, resolve);
+      if (typeof onStart === 'function') {
+        try {
+          onStart();
+        } catch (_) {
+          /* telemetry callback must never break the spawn */
+        }
+      }
+      execOnce(bin, { channelId, message, context, toolProfile, isRetry: false }, resolve);
     });
   });
 }
 
-function execOnce(bin, { channelId, message, context, isRetry }, resolve) {
+function execOnce(bin, { channelId, message, context, toolProfile, isRetry }, resolve) {
   const nonce = crypto.randomBytes(9).toString('hex');
   const prompt = buildPrompt(message, context, nonce);
   const existing = getSessionId(channelId);
@@ -251,9 +191,14 @@ function execOnce(bin, { channelId, message, context, isRetry }, resolve) {
     ? ['--resume', existing, '-p', prompt, '--output-format', 'json']
     : ['-p', prompt, '--output-format', 'json'];
 
-  // Feature E: merge Dopl MCP in (non-strict — keeps the CLI's global servers).
+  // Feature E: merge Dopl MCP in. `full` keeps the CLI's global servers too; a
+  // restricted profile adds --strict-mcp-config below so ONLY this one loads.
   const mcpConfigFile = spawnMcpConfigPath();
   if (fs.existsSync(mcpConfigFile)) args.push('--mcp-config', mcpConfigFile);
+
+  // Feature 6 (H-1/H-2): the four containment layers for a restricted profile.
+  // `full` returns [] — no flags, v1.1 unrestricted behavior.
+  args.push(...buildRestrictionArgs(toolProfile, writeScopedSettings(toolProfile)));
 
   execFile(
     bin,
@@ -298,7 +243,7 @@ function execOnce(bin, { channelId, message, context, isRetry }, resolve) {
       // overflows, which a retry can't fix).
       if (useResume && !isRetry && (err || isError) && !(err && err.killed) && !maxBufferOverflow) {
         clearSessionId(channelId);
-        execOnce(bin, { channelId, message, context, isRetry: true }, resolve);
+        execOnce(bin, { channelId, message, context, toolProfile, isRetry: true }, resolve);
         return;
       }
 
@@ -330,30 +275,155 @@ function execOnce(bin, { channelId, message, context, isRetry }, resolve) {
   );
 }
 
-// Best-effort probe so the listener can warn if the CLI is missing AND gate
-// spawning. Resolves true only when an absolute claude binary was found.
-function claudeAvailable() {
-  return resolveClaude().then((bin) => !!bin);
+// ── Terminal mode (v1.2 Feature 3) ───────────────────────────────────────────
+// Opt-in visible-Terminal spawn: a real TTY means interactive permission prompts
+// work and the operator WATCHES the agent (the terminal window IS the approve-out
+// review). Consent still gates BEFORE this is ever called (channel-listener.js).
+function shellQuote(s) {
+  return "'" + String(s).replace(/'/g, `'\\''`) + "'";
+}
+function appleQuote(s) {
+  return '"' + String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
 }
 
-// The resolved absolute claude path (or null). Shared with mcp-config (for
-// `claude mcp …`) and claude-auth (for `claude setup-token`) so they never
-// re-probe the CLI location.
-function getClaudeBinPath() {
-  return resolveClaude();
+// Terminal prompt = the same constrained/fenced prompt as headless, plus the
+// delivery instruction (the terminal run has no stdout capture on our side).
+// The instruction depends on the profile: a restricted profile (read_only OR
+// dopl_only) has NO posting tool — read_only denies the whole Dopl server, and
+// dopl_only now denies dopl_channel by name (D1) so it can't post/exfiltrate
+// directly — so telling it to post via dopl_channel would send it at a tool that
+// is not there. It prints the reply for the operator to review and send instead.
+// Only `full` (which keeps dopl_channel) is told to post via the MCP tool.
+function buildTerminalPrompt(message, context, nonce, channelId, toolProfile) {
+  const base = buildPrompt(message, context, nonce);
+  if (normalizeProfile(toolProfile) !== 'full') {
+    return [
+      base,
+      ``,
+      `DELIVERY: this session cannot post to the channel. Print your final reply as`,
+      `the last thing you output, so your operator can review it and send it. Do not`,
+      `attempt to post it yourself.`,
+    ].join('\n');
+  }
+  return [
+    base,
+    ``,
+    `DELIVERY: after composing your reply, post it to this channel by calling the`,
+    `dopl_channel MCP tool with op "post", channel "${channelId}", and body set to`,
+    `your reply. Posting via dopl_channel is how your teammates receive the answer,`,
+    `so do not skip it. Do not take destructive actions to accomplish this.`,
+  ].join('\n');
 }
 
-// PATH-augmented env for a non-spawn CLI call (`claude mcp …`, setup-token). No
-// OAuth token injected — those operations don't need it.
-function cliEnv(bin) {
-  return augmentedEnv(bin);
+// M-2: remove prompt files this channel left behind. The normal path deletes the
+// file inside the spawned shell before claude even starts, so anything still
+// here is from a failed launch or a pre-hardening build (which used a single
+// fixed `terminal-prompt.txt` and never deleted it — an untrusted message body
+// sitting on disk indefinitely). Best-effort.
+function sweepTerminalPrompts(cwd, keepFile) {
+  try {
+    for (const name of fs.readdirSync(cwd)) {
+      if (!name.startsWith('terminal-prompt')) continue;
+      const p = path.join(cwd, name);
+      if (p === keepFile) continue;
+      try {
+        fs.unlinkSync(p);
+      } catch (_) {
+        /* best-effort */
+      }
+    }
+  } catch (_) {
+    /* cwd may be unreadable */
+  }
+}
+
+// Launches claude interactively in Terminal.app. Never passes tokens on argv:
+// the Dopl MCP token stays inside the --mcp-config file (referenced by path), and
+// claude's own credentials come from its store (the interactive TTY can sign in
+// if needed). The untrusted message body is written to a mode-600 file and read
+// via "$(cat 'file')" so it never lands on the visible command line. Resolves
+// { launched } or { skipped: <reason> } — the interactive session runs detached.
+//
+// M-2 (concurrency + residue): the prompt file carries a per-spawn nonce in its
+// NAME, and the spawned shell reads it into a variable and deletes it before
+// claude starts. The per-channel busy guard is the SAME `active` set headless
+// uses, so `isBusy()` is honest across both modes; because a detached terminal
+// gives us no exit signal, the slot is released on the same MAX_RUNTIME_MS
+// ceiling headless enforces.
+function runInTerminalForChannel({ channelId, message, context, toolProfile }) {
+  if (active.has(channelId)) {
+    return Promise.resolve({ skipped: 'busy' });
+  }
+  return resolveClaude().then((bin) => {
+    if (!bin) return { skipped: 'no-cli' };
+    if (active.has(channelId)) return { skipped: 'busy' }; // re-check after the await
+    const nonce = crypto.randomBytes(9).toString('hex');
+    const prompt = buildTerminalPrompt(message, context, nonce, channelId, toolProfile);
+    const cwd = channelCwd(channelId);
+    let promptFile;
+    try {
+      promptFile = path.join(cwd, `terminal-prompt-${nonce}.txt`);
+      fs.writeFileSync(promptFile, prompt, { mode: 0o600 });
+      fs.chmodSync(promptFile, 0o600);
+    } catch (err) {
+      return { skipped: 'prompt-write-failed', error: err && err.message };
+    }
+    sweepTerminalPrompts(cwd, promptFile); // clear residue from earlier runs
+
+    const q = shellQuote(promptFile);
+    const parts = [shellQuote(bin), '"$DOPL_PROMPT"'];
+    const mcpConfigFile = spawnMcpConfigPath();
+    if (fs.existsSync(mcpConfigFile)) parts.push('--mcp-config', shellQuote(mcpConfigFile));
+    for (const a of buildRestrictionArgs(toolProfile, writeScopedSettings(toolProfile))) {
+      parts.push(shellQuote(a));
+    }
+
+    // Read-then-delete, chained with && so claude never runs on a body we could
+    // not read or could not remove (fail closed rather than leave it on disk).
+    const shellCmd = [
+      `cd ${shellQuote(cwd)}`,
+      `DOPL_PROMPT="$(cat ${q})"`,
+      `rm -f ${q}`,
+      parts.join(' '),
+    ].join(' && ');
+    const osa = `tell application "Terminal"\nactivate\ndo script ${appleQuote(shellCmd)}\nend tell`;
+    active.add(channelId);
+    return new Promise((resolve) => {
+      execFile('osascript', ['-e', osa], (err) => {
+        if (err) {
+          active.delete(channelId);
+          try {
+            fs.unlinkSync(promptFile); // the shell never ran — don't leave the body
+          } catch (_) {
+            /* best-effort */
+          }
+          resolve({ skipped: 'terminal-launch-failed', error: err.message });
+          return;
+        }
+        // Detached session: no exit signal, so free the slot on the same ceiling
+        // headless uses rather than holding the channel until the app restarts.
+        const t = setTimeout(() => active.delete(channelId), MAX_RUNTIME_MS);
+        if (t.unref) t.unref();
+        resolve({ launched: true });
+      });
+    });
+  });
 }
 
 module.exports = {
   runForChannel,
+  runInTerminalForChannel,
   isBusy,
   getSessionId,
+  // Re-exported from claude-resolve.js (CLI resolution / env) — unchanged API.
   claudeAvailable,
   getClaudeBinPath,
   cliEnv,
+  // Re-exported from tool-profiles.js (containment table) — unchanged API.
+  buildAllowedTools,
+  buildDeniedTools,
+  buildBuiltinTools,
+  buildRestrictionArgs,
+  getRunInTerminal,
+  setRunInTerminal,
 };

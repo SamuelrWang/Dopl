@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Archive,
   ArchiveRestore,
@@ -14,10 +14,21 @@ import {
 } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { MenuItem, Popover } from "@/shared/ui/popover-menu";
+import { AvatarStack } from "@/shared/ui/avatar-stack";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
-import type { Channel, ChannelMessage, NotifyScope } from "../types";
+import type {
+  AgentToolProfile,
+  Channel,
+  ChannelConsentRequest,
+  ChannelMember,
+  ChannelMessage,
+  NotifyScope,
+} from "../types";
 import { MessageThread } from "./message-thread";
-import { MessageComposer } from "./message-composer";
+import { MessageComposer, type SendOptions } from "./message-composer";
+import { ConsentCard } from "./consent-card";
+import { ChannelSettingsPopover } from "./channel-settings-popover";
+import { PresenceDot } from "./address-picker";
 
 /** The three per-channel notification choices, shown in the bell popover. */
 const NOTIFY_OPTIONS: Array<{
@@ -35,11 +46,7 @@ const NOTIFY_OPTIONS: Array<{
     label: "Addressed to me only",
     description: "Notify only when a request names you.",
   },
-  {
-    scope: "none",
-    label: "Muted",
-    description: "No notifications from this channel.",
-  },
+  { scope: "none", label: "Muted", description: "No notifications from this channel." },
 ];
 
 interface Props {
@@ -47,9 +54,22 @@ interface Props {
   messages: ChannelMessage[];
   loading: boolean;
   notifyScope: NotifyScope;
-  onSend: (body: string) => Promise<void>;
+  members: ChannelMember[];
+  currentUserId: string;
+  /** Pending consent requests (inbound + outbound) for THIS channel. */
+  consentRequests: ChannelConsentRequest[];
+  trustedIds: ReadonlySet<string>;
+  /** Trust toggles with a write in flight (per-user, so one can't re-enable
+   *  another mid-flight). */
+  trustBusyIds: ReadonlySet<string>;
+  /** Consent decisions with a write in flight, by request id. */
+  consentBusyIds: ReadonlySet<string>;
+  onSend: (body: string, opts?: SendOptions) => Promise<void>;
   onInvite: () => void;
   onSetNotifyScope: (scope: NotifyScope) => void;
+  onSetToolProfile: (profile: AgentToolProfile) => void;
+  onToggleTrust: (userId: string, trusted: boolean) => void;
+  onDecideConsent: (id: string, decision: "allow" | "deny") => void;
   onToggleArchive: () => void;
   onToggleVisibility: () => void;
   onDelete: () => void;
@@ -58,9 +78,10 @@ interface Props {
 }
 
 /**
- * Channel detail pane: a crumb bar (name, visibility, member count, topic)
- * with the manage kebab + invite action, a scrolling transcript that
- * auto-sticks to the bottom on new messages, and the pinned composer (or a
+ * Channel detail pane: a crumb bar (name, visibility, member count, presence)
+ * with the notification / settings / invite / manage actions, a prominent
+ * pending-consent band (inbound approvals + outbound reviews), a scrolling
+ * transcript that auto-sticks to the bottom, and the pinned composer (or a
  * read-only / join affordance when the caller isn't a member).
  */
 export function ChannelThread({
@@ -68,9 +89,18 @@ export function ChannelThread({
   messages,
   loading,
   notifyScope,
+  members,
+  currentUserId,
+  consentRequests,
+  trustedIds,
+  trustBusyIds,
+  consentBusyIds,
   onSend,
   onInvite,
   onSetNotifyScope,
+  onSetToolProfile,
+  onToggleTrust,
+  onDecideConsent,
   onToggleArchive,
   onToggleVisibility,
   onDelete,
@@ -82,6 +112,20 @@ export function ChannelThread({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const canManage = channel.role === "owner";
+
+  const memberNames = useMemo(
+    () =>
+      new Map(members.map((m) => [m.userId, m.displayName || m.email || "teammate"])),
+    [members]
+  );
+  const otherMembers = useMemo(
+    () => members.filter((m) => m.userId !== currentUserId),
+    [members, currentUserId]
+  );
+  const onlineMembers = useMemo(
+    () => members.filter((m) => m.agentOnline),
+    [members]
+  );
 
   // Stick to the bottom when the transcript grows or the channel changes.
   useEffect(() => {
@@ -105,9 +149,27 @@ export function ChannelThread({
           </span>
         )}
         <span className="flex-1" />
-        <span className="shrink-0 text-caption text-text-muted">
-          {channel.memberCount} {channel.memberCount === 1 ? "member" : "members"}
+
+        {/* Presence: who's listening right now. */}
+        <span className="flex shrink-0 items-center gap-1.5">
+          <PresenceDot online={onlineMembers.length > 0} />
+          <span className="text-caption text-text-muted">
+            {onlineMembers.length > 0
+              ? `${onlineMembers.length} listening`
+              : "No agents listening"}
+          </span>
+          {onlineMembers.length > 0 && (
+            <AvatarStack
+              users={onlineMembers.map((m) => ({
+                userId: m.userId,
+                displayName: m.displayName || m.email || "teammate",
+                avatarUrl: m.avatarUrl,
+              }))}
+              max={3}
+            />
+          )}
         </span>
+
         {channel.isMember && (
           <div className="relative shrink-0">
             <button
@@ -117,11 +179,7 @@ export function ChannelThread({
               title="Notification settings"
               className="flex h-7 w-7 items-center justify-center rounded-[7px] text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary"
             >
-              {notifyScope === "none" ? (
-                <BellOff size={16} />
-              ) : (
-                <Bell size={16} />
-              )}
+              {notifyScope === "none" ? <BellOff size={16} /> : <Bell size={16} />}
             </button>
             <Popover
               open={notifyOpen}
@@ -146,6 +204,18 @@ export function ChannelThread({
             </Popover>
           </div>
         )}
+
+        {channel.isMember && (
+          <ChannelSettingsPopover
+            channel={channel}
+            otherMembers={otherMembers}
+            trustedIds={trustedIds}
+            trustBusyIds={trustBusyIds}
+            onSetToolProfile={onSetToolProfile}
+            onToggleTrust={onToggleTrust}
+          />
+        )}
+
         {channel.isMember && (
           <button
             type="button"
@@ -220,6 +290,25 @@ export function ChannelThread({
         </div>
       </div>
 
+      {consentRequests.length > 0 && (
+        // Bounded + scrollable: the cards now show the full request body, so a
+        // long one (or several at once) must not push the transcript away.
+        <div className="max-h-[45vh] shrink-0 overflow-y-auto border-b border-border-default px-14 py-3">
+          <div className="mx-auto max-w-[760px] space-y-2">
+            {consentRequests.map((request) => (
+              <ConsentCard
+                key={request.id}
+                request={request}
+                toolProfile={channel.myAgentToolProfile ?? "full"}
+                busy={consentBusyIds.has(request.id)}
+                onAllow={() => onDecideConsent(request.id, "allow")}
+                onDeny={() => onDecideConsent(request.id, "deny")}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-14 pt-6">
         <div className="mx-auto max-w-[760px]">
           {messages.length === 0 ? (
@@ -227,7 +316,7 @@ export function ChannelThread({
               {loading ? "Loading messages…" : "No messages yet."}
             </p>
           ) : (
-            <MessageThread messages={messages} />
+            <MessageThread messages={messages} memberNames={memberNames} />
           )}
         </div>
       </div>
@@ -235,11 +324,11 @@ export function ChannelThread({
       {channel.isMember ? (
         <MessageComposer
           onSend={onSend}
+          members={members}
+          currentUserId={currentUserId}
           disabled={channel.archivedAt !== null}
           placeholder={
-            channel.archivedAt
-              ? "This channel is archived"
-              : `Message #${channel.slug}`
+            channel.archivedAt ? "This channel is archived" : `Message #${channel.slug}`
           }
         />
       ) : (

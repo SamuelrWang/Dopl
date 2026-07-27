@@ -15,6 +15,7 @@ import {
   ChannelApiError,
   removeChannelMember,
 } from "../client/api";
+import { PresenceDot } from "./address-picker";
 
 interface Props {
   workspaceId: string;
@@ -192,6 +193,13 @@ export function InviteDialog({
                   />
                   <span className="min-w-0 flex-1 truncate text-body text-text-primary">
                     {m.displayName || m.email || m.userId}
+                  </span>
+                  <span
+                    className="flex shrink-0 items-center gap-1 text-micro text-text-muted"
+                    title={m.agentOnline ? "Agent listening" : "Agent offline"}
+                  >
+                    <PresenceDot online={m.agentOnline} />
+                    {m.agentOnline ? "listening" : "offline"}
                   </span>
                   <span className="shrink-0 text-micro font-medium uppercase tracking-wide text-text-muted">
                     {m.role}

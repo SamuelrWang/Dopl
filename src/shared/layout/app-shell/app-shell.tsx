@@ -103,6 +103,7 @@ export function AppShell({
         <div className={styles.surface}>
           <AppSidebar
             workspaceSegment={workspaceSegment}
+            workspaceId={workspaceId}
             workspacePublicId={workspacePublicId}
             workspaceName={workspaceName}
             onOpenSettings={openSettings}

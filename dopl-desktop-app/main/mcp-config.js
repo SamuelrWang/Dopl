@@ -49,7 +49,18 @@ function currentSpawnToken() {
 
 // Refresh the file only when the token changed (avoids needless rewrites). Mode
 // 600 on create AND an explicit chmod so a pre-existing file is tightened too.
+//
+// This file holds a 90-day dopl.read+dopl.write device token, so the chmod must
+// happen on EVERY call, not only on a rewrite: `writeFileSync`'s mode applies
+// only when the file is created, and the unchanged-token fast path below used to
+// return before any chmod ran. A file left at 644 by an older build (or by a
+// restore/copy) therefore stayed world-readable for the token's whole lifetime.
 function writeSpawnConfig(token) {
+  try {
+    fs.chmodSync(spawnConfigPath(), 0o600);
+  } catch (_) {
+    /* not created yet — the write below sets the mode */
+  }
   if (currentSpawnToken() === token) return true;
   const cfg = {
     mcpServers: {
@@ -149,9 +160,15 @@ async function obtainDeviceToken() {
   }
   const rec = { token: data.token, expiresAt: parseExpiry(data.expiresAt) };
   saveDeviceToken(rec);
+  lastMintWasFresh = true;
   diag('mcp-config: minted device token, expires', new Date(rec.expiresAt).toISOString());
   return rec.token;
 }
+
+// Set whenever obtainDeviceToken minted (server-side revoke-and-replace just
+// invalidated any prior token) — the global CLI entry must be refreshed too,
+// or manual `claude` runs keep a revoked bearer until the next mint.
+let lastMintWasFresh = false;
 
 // ── CLI entry ensure ─────────────────────────────────────────────────────────
 // Confirmed-absent only when `claude mcp get dopl` exits 1 (or says so). Any
@@ -176,6 +193,17 @@ function mcpEntryConfirmedAbsent(bin) {
         diag('mcp-config: get ambiguous —', err.code || (err && err.message));
         resolve(false); // unknown → don't add (avoid dupes)
       }
+    );
+  });
+}
+
+function removeMcpEntry(bin) {
+  return new Promise((resolve) => {
+    execFile(
+      bin,
+      ['mcp', 'remove', '--scope', 'user', 'dopl'],
+      { timeout: CLI_TIMEOUT_MS, env: spawner.cliEnv(bin), windowsHide: true },
+      (err) => resolve(!err)
     );
   });
 }
@@ -220,6 +248,7 @@ async function ensureMcpConfigInner() {
       diag('mcp-config: skip (claude cli unresolved)');
       return;
     }
+    lastMintWasFresh = false;
     const token = await obtainDeviceToken();
     if (!token) {
       diag('mcp-config: skip (no device token)');
@@ -229,7 +258,15 @@ async function ensureMcpConfigInner() {
 
     const absent = await mcpEntryConfirmedAbsent(bin);
     if (!absent) {
-      diag('mcp-config: dopl entry present/unknown — leaving alone');
+      if (lastMintWasFresh) {
+        // A fresh mint revoked the token the global entry carries — refresh it
+        // so manual `claude` runs don't 401 until the next mint cycle.
+        const removed = await removeMcpEntry(bin);
+        const readded = removed && (await addMcpEntry(bin, token));
+        diag('mcp-config: dopl entry refreshed after mint', readded ? 'ok' : 'FAILED');
+      } else {
+        diag('mcp-config: dopl entry present/unknown — leaving alone');
+      }
       return;
     }
     const added = await addMcpEntry(bin, token);

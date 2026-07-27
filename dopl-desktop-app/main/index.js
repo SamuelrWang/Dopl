@@ -9,6 +9,7 @@ const auth = require('./auth');
 const tray = require('./tray');
 const updater = require('./updater');
 const listener = require('./channel-listener');
+const spawner = require('./session-spawner');
 const mcpConfig = require('./mcp-config');
 const { diag } = require('./diag');
 
@@ -354,11 +355,18 @@ if (!gotLock) {
 
     buildMenu();
 
-    // Menu-bar tray for the background role.
+    // Menu-bar tray for the background role. The terminal-mode checkbox (v1.2
+    // Feature 3) reflects + toggles the run-in-Terminal spawn setting.
     tray.create({
       onOpen: () => showMainWindow(),
       onQuit: () => { app.isQuitting = true; app.quit(); },
       onUpdate: () => updater.quitAndInstall(),
+      terminalMode: spawner.getRunInTerminal(),
+      onToggleTerminal: () => {
+        const on = spawner.setRunInTerminal(!spawner.getRunInTerminal());
+        tray.setTerminalMode(on);
+        diag('setting: runInTerminal ->', on);
+      },
     });
 
     // Auto-update (electron-updater ↔ GitHub Releases). Silent download; the

@@ -8,6 +8,7 @@ let tray = null;
 let currentStatus = 'Listener: starting…';
 let handlers = {};
 let updateReadyVersion = null;
+let terminalMode = false; // v1.2 Feature 3: reflect the run-in-Terminal setting
 
 function iconPath() {
   // Base 16px + a trayTemplate@2x.png sibling for retina (nativeImage picks up
@@ -20,6 +21,12 @@ function buildMenu() {
     { label: 'Open Dopl', click: () => handlers.onOpen && handlers.onOpen() },
     { type: 'separator' },
     { label: currentStatus, enabled: false },
+    {
+      label: 'Run responses in Terminal',
+      type: 'checkbox',
+      checked: terminalMode,
+      click: () => handlers.onToggleTerminal && handlers.onToggleTerminal(),
+    },
   ];
   if (updateReadyVersion) {
     template.push({
@@ -38,6 +45,7 @@ function buildMenu() {
 
 function create(opts) {
   handlers = opts || {};
+  if (typeof handlers.terminalMode === 'boolean') terminalMode = handlers.terminalMode;
   const img = nativeImage.createFromPath(iconPath());
   if (!img.isEmpty()) img.setTemplateImage(true);
   tray = new Tray(img.isEmpty() ? nativeImage.createEmpty() : img);
@@ -56,8 +64,13 @@ function setUpdateReady(version) {
   if (tray) buildMenu();
 }
 
+function setTerminalMode(on) {
+  terminalMode = !!on;
+  if (tray) buildMenu();
+}
+
 function destroy() {
   if (tray) { tray.destroy(); tray = null; }
 }
 
-module.exports = { create, update, setUpdateReady, destroy };
+module.exports = { create, update, setUpdateReady, setTerminalMode, destroy };

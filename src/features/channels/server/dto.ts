@@ -1,4 +1,5 @@
 import type {
+  AgentToolProfile,
   Channel,
   ChannelMember,
   ChannelMessage,
@@ -37,6 +38,7 @@ export type ChannelMemberRow = {
   role: string;
   last_read_at: string | null;
   notify_scope: string;
+  agent_tool_profile: string;
   added_by: string | null;
   joined_at: string;
 };
@@ -70,6 +72,27 @@ export interface ChannelViewerState {
   lastReadAt: string | null;
   /** The caller's own notify scope, null when they are not a member. */
   notifyScope: NotifyScope | null;
+  /** The caller's own agent tool profile, null when they are not a member. */
+  agentToolProfile: AgentToolProfile | null;
+  /** Members whose agent is currently online. */
+  onlineMemberCount: number;
+}
+
+/** Presence layered onto a member row (derived from agent_presence). */
+export interface MemberPresence {
+  online: boolean;
+  lastSeenAt: string | null;
+}
+
+/** Everything the member mapper needs beyond the row + profile. */
+export interface MapMemberOptions {
+  /**
+   * The caller. REQUIRED (not optional) so the privacy rule can't be
+   * forgotten at a call site: `notifyScope` / `agentToolProfile` are personal
+   * preferences and render only on the viewer's OWN row.
+   */
+  viewerUserId: string;
+  presence?: MemberPresence;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -108,6 +131,8 @@ export function mapChannelRow(
     lastReadAt: state.lastReadAt,
     unread,
     myNotifyScope: state.notifyScope,
+    myAgentToolProfile: state.agentToolProfile,
+    onlineMemberCount: state.onlineMemberCount,
   };
 }
 
@@ -131,16 +156,34 @@ export function mapMessageRow(
   };
 }
 
+/**
+ * Member row -> DTO. The privacy scrub lives HERE rather than at each caller:
+ * `notify_scope` and `agent_tool_profile` are the member's own preferences
+ * (who muted the channel, how tightly their agent is scoped) and are nulled
+ * for everyone but the viewer. Doing it at the mapper makes the invariant
+ * hold for every path — the roster read, and the single-row returns from
+ * addMember / updateMyMemberSettings, which previously bypassed it.
+ * Presence IS public to the workspace: you need it to know whether the agent
+ * you are addressing is live.
+ */
 export function mapMemberRow(
   row: ChannelMemberRow,
-  profile: ProfileRef | undefined
+  profile: ProfileRef | undefined,
+  opts: MapMemberOptions
 ): ChannelMember {
+  const isSelf = row.user_id === opts.viewerUserId;
+  const presence = opts.presence;
   return {
     channelId: row.channel_id,
     userId: row.user_id,
     role: row.role as ChannelRole,
     lastReadAt: row.last_read_at,
-    notifyScope: (row.notify_scope as NotifyScope) ?? "all",
+    notifyScope: isSelf ? ((row.notify_scope as NotifyScope) ?? "all") : null,
+    agentToolProfile: isSelf
+      ? ((row.agent_tool_profile as AgentToolProfile) ?? "full")
+      : null,
+    agentOnline: presence?.online ?? false,
+    lastSeenAt: presence?.lastSeenAt ?? null,
     addedBy: row.added_by,
     joinedAt: row.joined_at,
     displayName: profile?.display_name ?? null,

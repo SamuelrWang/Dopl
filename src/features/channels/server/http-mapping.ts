@@ -9,6 +9,10 @@ import {
   ChannelMemberExistsError,
   ChannelNotFoundError,
   ChannelSlugConflictError,
+  ConsentAlreadyDecidedError,
+  ConsentNotFoundError,
+  TrustedNotMemberError,
+  TrustSelfError,
 } from "./errors";
 
 /**
@@ -37,6 +41,18 @@ export function mapChannelError(err: unknown): HttpError | null {
   }
   if (err instanceof ChannelAddresseeNotMemberError) {
     return new HttpError(400, "CHANNEL_ADDRESSEE_NOT_MEMBER", err.message);
+  }
+  if (err instanceof ConsentNotFoundError) {
+    return new HttpError(404, "CONSENT_NOT_FOUND", err.message);
+  }
+  if (err instanceof ConsentAlreadyDecidedError) {
+    return new HttpError(409, "CONSENT_ALREADY_DECIDED", err.message);
+  }
+  if (err instanceof TrustSelfError) {
+    return new HttpError(400, "TRUST_SELF", err.message);
+  }
+  if (err instanceof TrustedNotMemberError) {
+    return new HttpError(422, "TRUST_NOT_MEMBER", err.message);
   }
   return null;
 }

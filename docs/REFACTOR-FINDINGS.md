@@ -285,13 +285,14 @@ Build + `tsc --noEmit` green on every commit; `npx eslint` at 0 errors (baseline
 - Proposed resolution: defer — add a `GET …/messages?before=<seq>&limit=` descending page + load-older UI when channel history reaches real size.
 - Status: open
 
-### F-054: Desktop app — no auto-updater; deep-link `state` echo pending for full CSRF protection
-- Location: `dopl-desktop-app/**` (Electron 43; `dopl://` deep-link handler + channel listener / Claude-session spawner)
+### F-054: Desktop app — deep-link `state` echo pending for full CSRF protection (auto-updater SHIPPED)
+- Location: `dopl-desktop-app/**` (Electron 43; `dopl://` deep-link handler + channel listener / Claude-session spawner; `main/updater.js`)
 - Found during: Channels feature build (2026-07-25)
 - Severity: smell
-- Description: two follow-ups on the modernized desktop app. (1) No auto-updater (e.g. electron-updater + a release feed) is wired — each release still requires a manual DMG re-download (§18). (2) The `dopl://` deep-link auth flow ships a pending-flag + TTL gate against replay, but full CSRF protection also needs the WEB side to echo the `state` parameter back in the `dopl://` fragment so the desktop handler can verify it round-trips — not yet implemented web-side.
-- Proposed resolution: defer — (1) wire an auto-updater + signed release feed; (2) add the web-side `state` echo in the deep-link fragment and verify it in the desktop handler.
-- Status: open
+- Description: two follow-ups on the modernized desktop app. (1) ~~No auto-updater is wired — each release still requires a manual DMG re-download.~~ (2) The `dopl://` deep-link auth flow ships a pending-flag + TTL gate against replay, but full CSRF protection also needs the WEB side to echo the `state` parameter back in the `dopl://` fragment so the desktop handler can verify it round-trips — not yet implemented web-side.
+- Resolution (partial, 2026-07-26): **(1) SHIPPED** — `main/updater.js` wires electron-updater against GitHub Releases (`SamuelrWang/Dopl`), zip + dmg + `latest-mac.yml` feed, checks at startup + every 4h, installs on quit / explicit "Restart to install" tray item (never force-restarts a live session). Release via `npm run release` (`electron-builder --mac --publish always`); the release tag must be `v<version>`. Documented in ENGINEERING §18 "Desktop app v1.1". **(2) still OPEN** — the web side does not yet echo `state` in the deep-link fragment.
+- Proposed resolution: defer — remaining work is (2): add the web-side `state` echo in the deep-link fragment and verify it round-trips in the desktop handler.
+- Status: open (auto-updater half shipped 2026-07-26; web-side deep-link `state` echo remainder open)
 
 ### F-055: `dopl_channel` invite/post pre-resolve via `listChannels`; `getChannel` client method unused
 - Location: `packages/mcp-server/src/tools/channel-shared.ts` (`resolveChannelOr` → `client.listChannels({ includeArchived: true })`, used by `channel-ops-write.ts` invite/post); `packages/dopl-client/src/{channel,client}.ts` (`getChannel`, no callers)
@@ -299,4 +300,94 @@ Build + `tsc --noEmit` green on every commit; `npx eslint` at 0 errors (baseline
 - Severity: smell
 - Description: `read`/`await` are hot pass-throughs — they hand the channel ref straight to the route (which resolves slug-or-id + enforces visibility), so the poll loop takes no extra round-trip. `invite`/`post` still pre-resolve the target channel by scanning `listChannels()` (`resolveChannelOr`), an O(n) list per write, instead of addressing it by id. `@dopl/client` also carries an unused `getChannel(channelId)` method, reserved for a future `dopl_channel(op="get")`.
 - Proposed resolution: defer — give the write ops an id-addressed resolve (or land the `get` op backed by `getChannel`) so they don't scan `listChannels`.
+- Status: open
+
+### F-056: Consent dialog can dangle after a notification-Allow (Electron can't dismiss `showMessageBox`)
+- Location: `dopl-desktop-app/main/channel-listener.js` (`requestConsent` — dual consent surfaces)
+- Found during: Channels v1.1 adversarial review (2026-07-26)
+- Severity: smell (UX wart)
+- Description: consent is offered on two surfaces at once — the alert notification's **Allow** button and the in-app `showMessageBox` dialog. When the user answers via the notification, `finish()` resolves the promise and closes the notification, but Electron has **no API to programmatically dismiss an open `showMessageBox`**, so the dialog stays on screen until the user also clicks it. It is harmless — the decision already settled (`settled` guard), so the later dialog click is an idempotent no-op — but a stale dialog lingering after the request was already approved is a confusing wart.
+- Proposed resolution: defer — if it grates, replace the native `showMessageBox` with a custom `BrowserWindow` (closable via IPC, like the code-prompt window) so the winning surface can dismiss the other.
+- Status: open
+
+### F-057: Web composer has no addressing UI — 3+ member channels can't be triggered from the web (P0 product gap)
+- Location: `src/features/channels/components/message-composer.tsx` (posts plain body only); addressing is MCP-only (`packages/mcp-server/src/tools/channel-ops-write.ts` `opPost` `to`/`summary`)
+- Found during: Channels v1.1 adversarial review (2026-07-26)
+- Severity: smell (P0 product gap — a whole path is unreachable from the primary UI)
+- Description: message addressing (`to_user_id`/`summary`) ships only through the `dopl_channel(op="post")` MCP tool. The web composer posts an unaddressed message, and the desktop listener only IMPLICITLY triggers in **exactly-2-member** channels (F-054/§18 targeting) — so in a channel with 3+ members a human posting from the web has **no way to address a specific member's agent**, and the message classifies as FYI (no trigger) for everyone. Channels are therefore only human-triggerable from the web in 1:1 rooms.
+- Proposed resolution: fix next build round — add an addressee/summary control to `message-composer.tsx` that sets `toUserId`/`summary` on the POST (the server + DTO + listener already honor them end-to-end; only the compose UI is missing). Tracked as a P0 for the next Channels round.
+- Resolution: SHIPPED in Channels v1.2 (2026-07-26, in-branch) — `components/address-picker.tsx` (member popover with a presence dot) + `message-composer.tsx` now set `toUserId` and `summary` (auto-derived from the first line when left blank) on the POST. It also renders the two states a requester needs before sending: an offline/never-connected warning for the selected target (from `agentOnline` / `lastSeenAt`, §8 presence) and an "no agent will pick this up unless you address it" hint on unaddressed posts in 3+ member channels.
+- Status: resolved (in-branch; retained for one cycle per the F-042/F-043 precedent)
+
+### F-058: No unread / notification surface for Channels outside the Channels page
+- Location: `src/features/channels/**` + `src/shared/layout/app-shell/**` (no channel unread badge / global indicator; `channel_members.last_read_at` exists but isn't surfaced in chrome)
+- Found during: Channels v1.1 adversarial review (2026-07-26)
+- Severity: smell
+- Description: a member only learns about new channel activity by having the Channels page open (web) or via the desktop listener's OS notifications. There is no unread badge on the workspace sidebar/rail, no global "N new messages" indicator, and no in-app notification center — so a web-only user with the page closed misses everything. `last_read_at` is already tracked per membership; the read side just isn't wired into the app chrome.
+- Proposed resolution: defer — derive an unread count from `last_read_at` vs. the channel's latest `seq` and surface a badge in the app-shell sidebar (+ optionally an in-app toast on realtime channel events).
+- Status: open
+
+### F-059: Missing-CLI addressed requests are silently dropped after one boot warning
+- Location: `dopl-desktop-app/main/channel-listener.js` (`handleTrigger` early-returns on `!spawner.claudeAvailable()`; the one-time `cliWarned` notice fires in `start()`)
+- Found during: Channels v1.1 adversarial review (2026-07-26)
+- Severity: bug (dropped request — requester gets no signal)
+- Description: when the Claude CLI can't be resolved on PATH, the listener shows a single "CLI not found" notification at startup, then every addressed/implicit trigger is dropped in `handleTrigger` with only a `diag()` line — deliberately no error reply into the channel (avoids leaking local machine state / spamming the thread). Consequence: a teammate who addresses this operator's agent gets **no response and no indication** the operator's machine can't answer; the request just vanishes (the cursor has already advanced, so it won't re-prompt).
+- Proposed resolution: defer — decide a signal that doesn't leak local state: e.g. post a terse channel-visible "operator unavailable" once per channel per outage, or reflect an availability/presence flag on the member so requesters can see the agent is offline before addressing it.
+- Resolution (partial, Channels v1.2 2026-07-26): the **presence half shipped** — `agent_presence` + the desktop heartbeat (§8/§18) drive `agentOnline`/`lastSeenAt` on the roster, and the composer warns before you send ("their agent is offline" / "has never connected"). That covers the never-set-up and app-not-running cases. **Still open:** the specific drop this entry names — the app IS running and heartbeating (so it reads as online) but `spawner.claudeAvailable()` is false, so the trigger is dropped in `handleTrigger` with only a `diag()` line and the requester still gets nothing. Presence cannot express "listening but cannot execute".
+- Status: open (presence/offline signalling shipped 2026-07-26; the CLI-missing silent drop remains)
+
+### F-060: No post rate limit or metadata size cap on channel messages
+- Location: `src/features/channels/**` (`schema.ts` message schema, `server/service-writes.ts` `postMessage`, `app/api/channels/[channelId]/messages/route.ts`)
+- Found during: Channels v1.1 adversarial review (2026-07-26)
+- Severity: smell (abuse / scale)
+- Description: message posts are gated only by channel membership. There is **no per-user/per-channel post rate limit** (an agent in a loop, or a runaway listener, can append unboundedly — each insert takes the per-channel advisory lock, so a hot poster also serializes the channel) and **no overall cap on `metadata` size** (the `summary` field is length-capped, but the free-form `metadata` jsonb blob is not), so a large structured payload rides straight into the row. Not a live incident at current scale, but the abuse surface is open.
+- Proposed resolution: defer — add a token-bucket post limit (per `(user, channel)`) surfaced as 429, and a byte cap on the serialized `metadata` in the message schema.
+- Status: open
+
+### F-061: Workspace admins have no visibility into private channels (governance gap — deliberate v1 posture)
+- Location: `src/features/channels/server/{service-shared.ts (loadVisibleChannel), service-reads.ts (listChannels)}`; RLS member-SELECT policies in `20260725120000_channels.sql`
+- Found during: Channels v1.1 adversarial review (2026-07-26)
+- Severity: question (governance decision)
+- Description: private-channel reads are gated on channel MEMBERSHIP, not workspace role — so a workspace owner/admin who was never invited to a private channel cannot list it, read it, or moderate it (RLS + service both scope to members). This is the intentional v1 privacy posture (a private channel is private even from admins), but it means there is **no admin/governance override** for compliance, offboarding, or abuse review of private channels in a workspace they own.
+- Proposed resolution: needs-user-decision — hold as an open decision. If governance wins over privacy: add an admin read/override path (audited, role-gated) or a workspace policy that makes private channels admin-visible. Documented as an open v1 decision, not a fix.
+- Status: open (question)
+
+### F-062: `TRUNCATE` is granted to `authenticated` + `anon` on nearly every public table (repo-wide, RLS-bypassing)
+- Location: repo-wide grant surface — verified live on prod (`mrefkedvdehahjejreae`): **35 of 47** `public` base tables grant `TRUNCATE` to BOTH `authenticated` and `anon`. Includes all six channels-family tables (`channels`, `channel_members`, `channel_messages`, `channel_consent_requests`, `agent_trust_rules`, `agent_presence`) whose migrations explicitly `REVOKE INSERT, UPDATE, DELETE … FROM authenticated, anon` but never revoke `TRUNCATE`. The 12 tables without it are the ones whose grants were revoked wholesale (`mcp_tokens`, `oauth_clients`, `oauth_authorization_codes`, `system_events`, `webhook_events`, `rate_limit_events`, `mcp_events`, `conversion_events`, `knowledge_entry_chunks`, `workspace_join_links`, `workspace_join_requests`, `workspace_invitation_teams`).
+- Found during: Channels v1.2 adversarial review (2026-07-26)
+- Severity: bug (security — RLS-bypassing privilege), latent
+- Description: the grant is inherited from Supabase's stock `GRANT ALL` / `ALTER DEFAULT PRIVILEGES` on the `public` schema, and every hardening migration written since has enumerated only `INSERT/UPDATE/DELETE`, so `TRUNCATE` has ridden along untouched — including on the tables we hardened hardest. **`TRUNCATE` is not row-scoped: RLS policies do not apply to it at all**, so the privilege is a whole-table wipe that the default-deny row policies these tables rely on cannot see. **Not reachable today:** PostgREST only issues DML and RPC — it has no `TRUNCATE` verb — so exploiting it needs either a `SECURITY DEFINER`-shaped function that truncates, or a direct Postgres connection as one of those roles. It is a standing over-grant, not a live hole.
+- Proposed resolution: defer — one repo-wide migration: `REVOKE TRUNCATE ON ALL TABLES IN SCHEMA public FROM authenticated, anon` **plus** `ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE TRUNCATE ON TABLES FROM authenticated, anon` so new tables don't re-inherit it. Deliberately NOT patched channels-only in v1.2 — a six-table carve-out would leave the same hole on the other 29 and imply the rest were checked. Sequence with the F-051 grant-parity pass (same surface, same migration slot).
+- Status: open
+
+### F-063: `onlineMemberCount` costs 2 extra queries on every channel LIST read and is rendered nowhere
+- Location: `src/features/channels/server/service-reads.ts` (`listChannels` + `getChannel` → `collab.channelMemberUserIds(ids)` + `collab.presenceForWorkspace(ctx.workspaceId)` feeding `onlineCounts()`); exposed at `server/dto.ts:78,135` and `types.ts:114`; the "nothing renders it" note is already in `components/channels-view.tsx:157`
+- Found during: Channels v1.2 adversarial review (2026-07-26)
+- Severity: smell (waste / scale)
+- Description: every channel-list read fans out two extra queries — a workspace-wide presence scan plus a per-channel member fan-out — purely to compute `onlineMemberCount` per channel. **Nothing in the UI renders it:** the channel header derives its "N listening" from the ROSTER read instead, which is exactly why `channels-view.tsx` deliberately keeps presence-realtime events from refetching the channel list. So the list read pays a per-workspace scan on every fetch for a field with no consumer, and it grows with member count × channel count.
+- Proposed resolution: defer — either drop `onlineMemberCount` from the list DTO entirely (keep it on `getChannel` if a future header wants it) or make it lazy behind an explicit `?withPresence=1`. If it is ever rendered in the list, it also needs the realtime refetch path the comment currently avoids.
+- Status: open
+
+### F-064: Consent expiry is lazy-only — no cron sweep, and an expiring card emits no realtime event
+- Location: `src/features/channels/server/consent-service.ts` (`collab.expireStalePending(ctx.userId)` called at the top of create / list / get / decide); `vercel.json` `crons` has no consent entry; `CONSENT_TTL_MS = 30 min` (`features/channels/constants.ts`)
+- Found during: Channels v1.2 adversarial review (2026-07-26)
+- Severity: smell (UX / correctness-at-the-edge)
+- Description: a pending consent request past its `expires_at` only becomes `expired` when the operator's NEXT request runs the lazy sweep. Nothing flips it on a timer, so no row is written at the TTL boundary, so **no WAL change and therefore no realtime event fires** — the web consent card sits there with live Allow/Deny buttons until some other fetch happens to sweep it. Correctness is preserved (the sweep runs before every read AND before the de-dupe read, so an elapsed row is never handed back as live), but the surface lies for as long as the page is idle, and the desktop's poll backoff (up to 20s) widens the window on that side too.
+- Proposed resolution: defer — add a `/api/cron/expire-consent` sweep (`CRON_SECRET`-gated, wired in `vercel.json` like `purge-trash`) that flips elapsed pending rows workspace-wide; the resulting UPDATE rides the existing realtime publication, so the card self-clears with no client change. Keep the lazy sweep as the correctness backstop.
+- Status: open
+
+### F-065: Desktop-side orphan-pending-outbound cleanup is a client-side stopgap
+- Location: `dopl-desktop-app/main/consent.js` (`cancelStaleOutbound`, once per channel per app run, called from `channel-listener.js` first-watch + recovery paths)
+- Found during: Channels v1.2 adversarial review (2026-07-26)
+- Severity: smell
+- Description: an `outbound` consent row created just before a crash/quit stays `pending` forever, leaving a live **Send** button on the web review card that nothing can honor — the desktop holding the drafted reply is gone, and the server cannot post it. The desktop compensates by listing and DENYing its own orphan outbound rows on next boot (skipping the one seq it is about to replay, since outbound creates de-dupe at ANY status). That only works if the same machine comes back: rows are dead the moment the desktop disconnects, and **only the server knows that** (it has the presence heartbeat). A machine that never returns leaves its cards live indefinitely, and the cleanup can't run for a second operator's stale rows.
+- Proposed resolution: defer — sweep server-side instead: expire/deny `pending` outbound rows whose operator has no fresh `agent_presence` heartbeat (a natural rider on the F-064 cron), and keep the desktop sweep only as a fast-path on boot.
+- Status: open
+
+### F-066: Terminal-mode spawns pass no `--resume`, so terminal and headless runs don't share channel session continuity
+- Location: `dopl-desktop-app/main/session-spawner.js` — headless path builds `['--resume', existing, '-p', prompt, …]` from the stored per-channel session id; `runInTerminalForChannel()` builds its argv with `--mcp-config` + `buildRestrictionArgs()` only
+- Found during: Channels v1.2 adversarial review (2026-07-26)
+- Severity: smell (behavior inconsistency)
+- Description: headless spawns resume the channel's prior Claude session (with a one-shot retry that drops a stale/pruned id), so a channel accumulates continuity across requests. Terminal mode starts a **fresh session every time** and records no session id, so (1) a terminal answer has none of the channel's earlier context, and (2) toggling the tray setting silently forks history — a later headless run resumes a thread that never saw the terminal exchanges, and vice versa. The two modes otherwise share the prompt builder, the restriction args, and the busy set specifically so they can't drift; this is the one axis where they do.
+- Proposed resolution: defer — pass `--resume <id>` in terminal mode too and capture the resulting session id (an interactive run doesn't hand it back on stdout, so this likely needs `--session-id` with a desktop-generated UUID, or reading the CLI's session store) so both modes read and write one per-channel thread.
 - Status: open

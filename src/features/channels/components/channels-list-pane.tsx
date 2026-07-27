@@ -1,6 +1,6 @@
 "use client";
 
-import { Hash, Plus } from "lucide-react";
+import { Hash, Plus, ShieldQuestion } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { SearchField } from "@/shared/ui/search-field";
 import { SegmentedControl } from "@/shared/ui/segmented-control";
@@ -19,6 +19,8 @@ interface Props {
   onSelect: (id: string) => void;
   canCreate: boolean;
   onCreate: () => void;
+  /** Channels with a pending consent decision — flagged with an amber pip. */
+  consentChannelIds: Set<string>;
 }
 
 /**
@@ -36,6 +38,7 @@ export function ChannelsListPane({
   onSelect,
   canCreate,
   onCreate,
+  consentChannelIds,
 }: Props) {
   const q = query.trim().toLowerCase();
   const visible = channels.filter(
@@ -100,6 +103,7 @@ export function ChannelsListPane({
               key={c.id}
               channel={c}
               selected={c.id === selectedId}
+              hasConsent={consentChannelIds.has(c.id)}
               onSelect={() => onSelect(c.id)}
             />
           ))
@@ -112,10 +116,12 @@ export function ChannelsListPane({
 function ChannelRow({
   channel: c,
   selected,
+  hasConsent,
   onSelect,
 }: {
   channel: Channel;
   selected: boolean;
+  hasConsent: boolean;
   onSelect: () => void;
 }) {
   return (
@@ -145,6 +151,15 @@ function ChannelRow({
           </span>
           {c.unread && (
             <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-text-primary" />
+          )}
+          {hasConsent && (
+            <span
+              role="img"
+              aria-label="Pending approval"
+              className="flex shrink-0 items-center text-warning"
+            >
+              <ShieldQuestion size={13} aria-hidden />
+            </span>
           )}
           <span className="flex-1" />
           <span className="shrink-0 text-micro text-text-muted">

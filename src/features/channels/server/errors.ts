@@ -58,3 +58,35 @@ export class ChannelLastOwnerError extends ChannelError {
     super("Cannot remove the last owner of this channel");
   }
 }
+
+/**
+ * A consent request the caller can't act on — either it doesn't exist or it
+ * isn't addressed to the caller (operator). Collapsed to one not-found so a
+ * caller can't probe another operator's request ids.
+ */
+export class ConsentNotFoundError extends ChannelError {
+  constructor(public readonly ref: string) {
+    super(`Consent request not found: ${ref}`);
+  }
+}
+
+/** The consent request has already been decided (or expired) — no re-decide. */
+export class ConsentAlreadyDecidedError extends ChannelError {
+  constructor(public readonly status: string) {
+    super(`Consent request already ${status}`);
+  }
+}
+
+/** A trust rule would name the operator themselves — meaningless, refused. */
+export class TrustSelfError extends ChannelError {
+  constructor() {
+    super("You cannot add a trust rule for yourself");
+  }
+}
+
+/** The trusted target is not an active member of the workspace. */
+export class TrustedNotMemberError extends ChannelError {
+  constructor(public readonly userId: string) {
+    super(`User is not an active workspace member: ${userId}`);
+  }
+}
