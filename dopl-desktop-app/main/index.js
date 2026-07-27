@@ -10,13 +10,14 @@ const tray = require('./tray');
 const updater = require('./updater');
 const listener = require('./channel-listener');
 const spawner = require('./session-spawner');
+const channelDirs = require('./channel-dirs');
 const mcpConfig = require('./mcp-config');
-const consent = require('./consent');
 const { diag } = require('./diag');
 
 const store = new Store();
 let mainWindow = null;
 let pendingDeepLink = null; // deep link received before the window is ready
+let latestPendingSegment = null; // most-recent pending channel (tray "Pending: N" target)
 
 // In-app navigation is limited to the app's own web origin. Sign-in runs in the
 // SYSTEM BROWSER (Supabase PKCE requires it), so OAuth provider hosts are NOT
@@ -368,11 +369,32 @@ if (!gotLock) {
       onOpen: () => showMainWindow(),
       onQuit: () => { app.isQuitting = true; app.quit(); },
       onUpdate: () => updater.quitAndInstall(),
+      // Round B: clicking "Pending: N" opens the app to the most-recent pending
+      // channel (reusing the notification-click open path), else just the window.
+      onPending: () => {
+        if (latestPendingSegment) navigateToChannels(latestPendingSegment);
+        else showMainWindow();
+      },
       terminalMode: spawner.getRunInTerminal(),
       onToggleTerminal: () => {
         const on = spawner.setRunInTerminal(!spawner.getRunInTerminal());
         tray.setTerminalMode(on);
         diag('setting: runInTerminal ->', on);
+      },
+      // Round C: the "Channel folders" submenu. Accessors are read fresh on every
+      // tray rebuild; setting/clearing a folder rebuilds the menu so it reflects
+      // the change at once. The chosen path stays local (channel-dirs.js).
+      getChannels: () => listener.listWatchedChannels(),
+      getChannelDirLabel: (id) => channelDirs.liveChannelDirLabel(id),
+      onSetChannelDir: (id) => {
+        channelDirs
+          .promptAndSetChannelDir(id)
+          .catch((err) => diag('channel-dir set error', err && err.message))
+          .finally(() => tray.refresh());
+      },
+      onClearChannelDir: (id) => {
+        channelDirs.clearChannelDir(id);
+        tray.refresh();
       },
     });
 
@@ -384,8 +406,16 @@ if (!gotLock) {
     flushPendingDeepLink();
 
     // Start the Channels listener; it drives the tray status label. The
-    // openChannel handler lets a clicked notification open + navigate the window.
-    listener.start((status) => tray.update(status), { openChannel: navigateToChannels });
+    // openChannel handler lets a clicked notification open + navigate the window;
+    // onPending feeds the tray "Pending: N" count + remembers the newest pending
+    // channel so the tray item can open straight to it (Round B).
+    listener.start((status) => tray.update(status), {
+      openChannel: navigateToChannels,
+      onPending: ({ count, segment }) => {
+        if (segment) latestPendingSegment = segment;
+        tray.setPendingCount(count);
+      },
+    });
 
     // Feature E: ensure the Claude CLI has the Dopl MCP configured (best-effort;
     // no-ops when signed out or the CLI/endpoint isn't available).
@@ -424,22 +454,13 @@ if (!gotLock) {
 
   // Tear the listener down cleanly on real quit (tray Quit sets isQuitting).
   //
-  // BUT: the Channels consent dialog is an app-modal showMessageBox with no parent
-  // window (consent.js). While Dopl runs hidden in the tray — no VISIBLE window —
-  // dismissing it (Cancel/Deny) makes macOS send this app a native terminate:,
-  // firing before-quit and quitting the WHOLE app for what should only close a
-  // dialog. That terminate is NOT one of ours: tray Quit and updater.quitAndInstall
-  // set app.isQuitting BEFORE quitting; the modal-dismissal terminate does not. So
-  // veto any quit that didn't set isQuitting while a consent dialog is showing (or
-  // just closed — the terminate lands tens of ms after the dialog resolves).
-  // Sanctioned quits pass straight through; the app can always be quit from the
-  // tray. Works in every window state because it never depends on window visibility.
-  app.on('before-quit', (event) => {
-    if (!app.isQuitting && consent.isConsentModalGuardActive()) {
-      event.preventDefault();
-      diag('before-quit vetoed: consent dialog dismissal must not quit the app');
-      return;
-    }
+  // Round B removed the app-modal consent dialog, so the windowless-modal quit
+  // guard that used to live here (before-quit veto keyed on
+  // consent.isConsentModalGuardActive) is gone as dead code: with no consent
+  // dialog on screen there is no spurious AppKit terminate to veto. Consent is now
+  // a non-blocking native notification + durable server row, neither of which can
+  // take the app down on dismissal. This handler is back to a plain teardown.
+  app.on('before-quit', () => {
     app.isQuitting = true;
     try { listener.stop(); } catch (_) {}
   });

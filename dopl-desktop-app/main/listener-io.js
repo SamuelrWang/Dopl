@@ -77,26 +77,11 @@ function shouldSeed(channelId) {
   return seedModeFor(isSeeded(channelId), getCursor(channelId));
 }
 
-// ── Pending-consent records (M5b) ────────────────────────────────────────────
-// A per-channel {seq, messageId, workspaceId} written BEFORE the consent dialog
-// and cleared after the reply is posted (or the request is denied). If the app
-// crashes between consent and post, the record lets us re-prompt for that exact
-// message on next launch. Deny clears the record → Deny still means no replay.
-function getPending() {
-  return store.get('pendingConsent') || {};
-}
-function setPending(channelId, rec) {
-  const p = getPending();
-  p[channelId] = rec;
-  store.set('pendingConsent', p);
-}
-function clearPending(channelId) {
-  const p = getPending();
-  if (channelId in p) {
-    delete p[channelId];
-    store.set('pendingConsent', p);
-  }
-}
+// NOTE (Round B): the per-channel `pendingConsent` store + its getPending /
+// setPending / clearPending helpers were removed. Consent is now a DURABLE server
+// row watched by consent-watcher.js, whose own persisted `channelWatched` /
+// `channelSettled` stores are the crash-recovery + no-replay source of truth. Any
+// legacy `pendingConsent` key left in electron-store is dead and simply ignored.
 
 // ── Stale-session notification + feature-availability flag ───────────────────
 function notifyStale() {
@@ -244,9 +229,6 @@ module.exports = {
   markSeeded,
   seedModeFor,
   shouldSeed,
-  getPending,
-  setPending,
-  clearPending,
   notifyStale,
   resetStale,
   isFeatureAvailable,

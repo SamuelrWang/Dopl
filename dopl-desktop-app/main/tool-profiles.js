@@ -187,6 +187,14 @@ function buildRestrictionArgs(profile, settingsPath) {
 
 // ─── END TOOL-PROFILE TABLE ───
 
+// Plain-language profile label for operator-facing surfaces (Round C blast-radius
+// line in the consent notification). Deliberately OUTSIDE the extracted table
+// block above so it never perturbs the source-extraction test; still electron-free.
+const PROFILE_LABELS = { read_only: 'Read-only', dopl_only: 'Dopl-only', full: 'Full-access' };
+function profileLabel(profile) {
+  return PROFILE_LABELS[normalizeProfile(profile)] || 'Full-access';
+}
+
 module.exports = {
   DOPL_CHANNEL_TOOL,
   DOPL_SAFE_TOOLS,
@@ -200,4 +208,5 @@ module.exports = {
   buildDeniedTools,
   buildBuiltinTools,
   buildRestrictionArgs,
+  profileLabel,
 };

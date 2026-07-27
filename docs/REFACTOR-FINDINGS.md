@@ -308,7 +308,8 @@ Build + `tsc --noEmit` green on every commit; `npx eslint` at 0 errors (baseline
 - Severity: smell (UX wart)
 - Description: consent is offered on two surfaces at once — the alert notification's **Allow** button and the in-app `showMessageBox` dialog. When the user answers via the notification, `finish()` resolves the promise and closes the notification, but Electron has **no API to programmatically dismiss an open `showMessageBox`**, so the dialog stays on screen until the user also clicks it. It is harmless — the decision already settled (`settled` guard), so the later dialog click is an idempotent no-op — but a stale dialog lingering after the request was already approved is a confusing wart.
 - Proposed resolution: defer — if it grates, replace the native `showMessageBox` with a custom `BrowserWindow` (closable via IPC, like the code-prompt window) so the winning surface can dismiss the other.
-- Status: open
+- Resolution: RESOLVED in desktop v1.4 (2026-07-27, consent redesign Round B) — the blocking `showMessageBox` consent surface was REMOVED entirely. Consent is now a durable async `channel_consent_requests` row surfaced by a native notification (Allow/Send) + the web Pending Requests list + a tray "Pending: N" count, driven by `main/consent-watcher.js` (see ENGINEERING §18 "Desktop app v1.4"). With no `showMessageBox` there is no second surface left to dangle — a notification-Allow settles the server row and the web list reflects it, so the dual-surface dismiss race this entry describes no longer exists.
+- Status: resolved (desktop v1.4; retained one cycle then prune)
 
 ### F-057: Web composer has no addressing UI — 3+ member channels can't be triggered from the web (P0 product gap)
 - Location: `src/features/channels/components/message-composer.tsx` (posts plain body only); addressing is MCP-only (`packages/mcp-server/src/tools/channel-ops-write.ts` `opPost` `to`/`summary`)
@@ -370,10 +371,10 @@ Build + `tsc --noEmit` green on every commit; `npx eslint` at 0 errors (baseline
 - Status: open
 
 ### F-064: Consent expiry is lazy-only — no cron sweep, and an expiring card emits no realtime event
-- Location: `src/features/channels/server/consent-service.ts` (`collab.expireStalePending(ctx.userId)` called at the top of create / list / get / decide); `vercel.json` `crons` has no consent entry; `CONSENT_TTL_MS = 30 min` (`features/channels/constants.ts`)
+- Location: `src/features/channels/server/consent-service.ts` (`collab.expireStalePending(ctx.userId)` called at the top of create / list / get / decide); `vercel.json` `crons` has no consent entry; `CONSENT_TTL_MS = 24h` (raised from 30 min in desktop v1.4 so the lazy sweep can't evict a parked request; `features/channels/constants.ts`)
 - Found during: Channels v1.2 adversarial review (2026-07-26)
 - Severity: smell (UX / correctness-at-the-edge)
-- Description: a pending consent request past its `expires_at` only becomes `expired` when the operator's NEXT request runs the lazy sweep. Nothing flips it on a timer, so no row is written at the TTL boundary, so **no WAL change and therefore no realtime event fires** — the web consent card sits there with live Allow/Deny buttons until some other fetch happens to sweep it. Correctness is preserved (the sweep runs before every read AND before the de-dupe read, so an elapsed row is never handed back as live), but the surface lies for as long as the page is idle, and the desktop's poll backoff (up to 20s) widens the window on that side too.
+- Description: a pending consent request past its `expires_at` only becomes `expired` when the operator's NEXT request runs the lazy sweep. Nothing flips it on a timer, so no row is written at the TTL boundary, so **no WAL change and therefore no realtime event fires** — the web consent card sits there with live Allow/Deny buttons until some other fetch happens to sweep it. Correctness is preserved (the sweep runs before every read AND before the de-dupe read, so an elapsed row is never handed back as live), but the surface lies for as long as the page is idle, and the desktop's poll backoff (up to 20s) widens the window on that side too. Desktop v1.4 raised the TTL to 24h (parked requests), so an idle web Pending Requests card can now show live Allow/Deny for up to ~24h before some read happens to sweep it — widening this window and strengthening the case for the cron sweep.
 - Proposed resolution: defer — add a `/api/cron/expire-consent` sweep (`CRON_SECRET`-gated, wired in `vercel.json` like `purge-trash`) that flips elapsed pending rows workspace-wide; the resulting UPDATE rides the existing realtime publication, so the card self-clears with no client change. Keep the lazy sweep as the correctness backstop.
 - Status: open
 
@@ -391,4 +392,28 @@ Build + `tsc --noEmit` green on every commit; `npx eslint` at 0 errors (baseline
 - Severity: smell (behavior inconsistency)
 - Description: headless spawns resume the channel's prior Claude session (with a one-shot retry that drops a stale/pruned id), so a channel accumulates continuity across requests. Terminal mode starts a **fresh session every time** and records no session id, so (1) a terminal answer has none of the channel's earlier context, and (2) toggling the tray setting silently forks history — a later headless run resumes a thread that never saw the terminal exchanges, and vice versa. The two modes otherwise share the prompt builder, the restriction args, and the busy set specifically so they can't drift; this is the one axis where they do.
 - Proposed resolution: defer — pass `--resume <id>` in terminal mode too and capture the resulting session id (an interactive run doesn't hand it back on stdout, so this likely needs `--session-id` with a desktop-generated UUID, or reading the CLI's session store) so both modes read and write one per-channel thread.
+- Status: open
+
+### F-067: A failed consent PATCH from the notification-Allow action is silent
+- Location: `dopl-desktop-app/main/consent-watcher.js` / `consent.js` (the native-notification Allow/Send handler PATCHes `channel_consent_requests`); web backstop `src/features/channels/components/pending-requests-panel.tsx`
+- Found during: Channels consent redesign (Round B, desktop v1.4, 2026-07-27)
+- Severity: smell (silent failure — no operator signal)
+- Description: when the operator clicks **Allow/Send** on the native consent notification, the desktop PATCHes the consent row to `allowed`. If that PATCH fails (offline, 5xx, token expired, or a lost CAS race that is NOT the settled-decision 409 case), **nothing tells the operator it didn't take** — the notification has already dismissed and the request silently stays `pending`. The **web Pending Requests list is the backstop** (the row is still there, still answerable), but a notification-only operator gets no signal and may believe they approved a spawn that never started. Mirrors the silent-drop shape of F-059.
+- Proposed resolution: defer — surface a failed PATCH (re-notify "couldn't record your decision — open Pending Requests", or re-raise the request) instead of swallowing it. The web list already covers the recovery path, so this is a signalling gap, not a correctness one.
+- Status: open
+
+### F-068: Per-channel directory is context + a default, not a hard filesystem fence (sandbox-exec is a future option)
+- Location: `dopl-desktop-app/main/channel-dirs.js` (`channelDirs` map → spawn `cwd`); `session-spawner.js` (applies the cwd to headless + terminal spawns)
+- Found during: Channels directory picker (Round C, desktop v1.4, 2026-07-27)
+- Severity: smell (containment-boundary clarity)
+- Description: the per-channel working directory sets the spawn's `cwd` (and thus the agent's default read/write root), but it is **not** an enforced filesystem boundary — a spawned agent with Bash/write tools can still `cd ..` or touch absolute paths outside the chosen folder. Actual containment is the **tool profile** (§18 v1.2) + the **two consent gates**; the directory is context and a default, deliberately. Documented as the KEY PRINCIPLE in ENGINEERING §18 "Desktop app v1.4" so no future session mistakes cwd for a fence. (The terminal-mode untrusted-prompt file stays in the sandbox regardless of cwd, so the directory never widens the untrusted-input surface — only where the agent works.)
+- Proposed resolution: defer — a true per-directory fence needs an OS sandbox (`sandbox-exec`/seatbelt profile, or a container) wrapping the spawn so the process physically cannot escape the folder. Optional hardening layered on top of the tool profile, not a v1.4 requirement; revisit if operators point untrusted channels at sensitive real directories.
+- Status: open
+
+### F-069: Persisted consent-decision maps grow unbounded (no eviction)
+- Location: `dopl-desktop-app/main/consent-watcher.js` (electron-store `channelWatched` + `channelSettled` maps, key = `channelId:seq`)
+- Found during: Channels consent redesign (Round B, desktop v1.4, 2026-07-27)
+- Severity: smell (scale)
+- Description: terminal consent decisions are persisted per `channelId:seq` so a restart never re-spawns or re-prompts a settled request (this fixed the relaunch replay bug — the permanently-`allowed` server row would otherwise re-spawn on every launch). Nothing ever prunes these maps, so they grow monotonically with every message seq the operator has ever decided on, and the whole electron-store JSON is loaded into memory on boot — an old, chatty install accumulates an ever-larger settled map. Not a problem at current volumes; unbounded by design.
+- Proposed resolution: defer — evict by age, or drop any `settled`/`watched` entry whose seq is below the oldest still-`pending` (i.e. still-reachable) request for that channel, since those can never be replayed. A naive per-channel high-water-mark is unsafe (it would mask a legitimately-parked lower seq), so evict by the oldest-pending low-water-mark or by age.
 - Status: open

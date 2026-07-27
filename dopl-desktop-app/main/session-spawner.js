@@ -34,6 +34,7 @@ const {
   getClaudeBinPath,
   cliEnv,
 } = require('./claude-resolve');
+const channelDirs = require('./channel-dirs');
 
 const store = new Store();
 const SESSION_KEY = 'claudeSessions'; // { [channelId]: claudeSessionId }
@@ -204,7 +205,12 @@ function execOnce(bin, { channelId, message, context, toolProfile, isRetry }, re
     bin,
     args,
     {
-      cwd: channelCwd(channelId),
+      // Round C: run in the operator's per-channel folder when one is set and still
+      // exists, else the isolated per-channel sandbox. cwd is CONTEXT + the default
+      // working dir, NOT a fence — the tool profile above is what bounds the spawn.
+      // No --bare/context-suppressing flag is added, so a project CLAUDE.md in this
+      // dir and the global ~/.claude both still load.
+      cwd: channelDirs.spawnDirFor(channelId, channelCwd(channelId)),
       env: spawnEnv(bin), // PATH-augmented; CLAUDE_CODE_OAUTH_TOKEN only if held
       timeout: MAX_RUNTIME_MS,
       maxBuffer: MAX_OUTPUT_BYTES,
@@ -359,16 +365,23 @@ function runInTerminalForChannel({ channelId, message, context, toolProfile }) {
     if (active.has(channelId)) return { skipped: 'busy' }; // re-check after the await
     const nonce = crypto.randomBytes(9).toString('hex');
     const prompt = buildTerminalPrompt(message, context, nonce, channelId, toolProfile);
-    const cwd = channelCwd(channelId);
+    // The untrusted message body always lives in the per-channel SANDBOX (mode 600,
+    // read-then-deleted below), even when the agent RUNS elsewhere — so the body is
+    // never dropped into the operator's real project folder and the residue sweep
+    // stays scoped to our own dir. Round C: the run cwd is the operator's chosen
+    // folder when set + still present, else that same sandbox. cwd is context, not
+    // a fence — the tool profile is the bound.
+    const sandbox = channelCwd(channelId);
+    const runCwd = channelDirs.spawnDirFor(channelId, sandbox);
     let promptFile;
     try {
-      promptFile = path.join(cwd, `terminal-prompt-${nonce}.txt`);
+      promptFile = path.join(sandbox, `terminal-prompt-${nonce}.txt`);
       fs.writeFileSync(promptFile, prompt, { mode: 0o600 });
       fs.chmodSync(promptFile, 0o600);
     } catch (err) {
       return { skipped: 'prompt-write-failed', error: err && err.message };
     }
-    sweepTerminalPrompts(cwd, promptFile); // clear residue from earlier runs
+    sweepTerminalPrompts(sandbox, promptFile); // clear residue from earlier runs
 
     const q = shellQuote(promptFile);
     const parts = [shellQuote(bin), '"$DOPL_PROMPT"'];
@@ -379,9 +392,10 @@ function runInTerminalForChannel({ channelId, message, context, toolProfile }) {
     }
 
     // Read-then-delete, chained with && so claude never runs on a body we could
-    // not read or could not remove (fail closed rather than leave it on disk).
+    // not read or could not remove (fail closed rather than leave it on disk). The
+    // cat/rm target the absolute sandbox prompt file; the cd targets the run cwd.
     const shellCmd = [
-      `cd ${shellQuote(cwd)}`,
+      `cd ${shellQuote(runCwd)}`,
       `DOPL_PROMPT="$(cat ${q})"`,
       `rm -f ${q}`,
       parts.join(' '),

@@ -22,6 +22,7 @@ const presence = require('./presence');
 const io = require('./listener-io');
 const targeting = require('./targeting');
 const trigger = require('./trigger');
+const watcher = require('./consent-watcher');
 const { LISTENER } = require('./config');
 
 // Console output is invisible for a GUI-launched app, and the trigger path has
@@ -37,6 +38,7 @@ let refreshTimer = null;
 let cliWarned = false;
 let myUserId = null; // resolved operator identity (H2); null until known
 let reconciling = null; // in-flight reconcile promise (M1 re-entrancy guard)
+let onPendingCb = null; // tray pending-count callback (from index.js handlers)
 const loops = new Map(); // channelId -> loop entry
 
 // ── Per-channel long-poll loop ──────────────────────────────────────────────
@@ -176,6 +178,7 @@ async function reconcileInner() {
     myUserId = null; // force re-resolve on next sign-in
     stopLoops();
     presence.setWorkspaces([]); // stop heartbeating when signed out
+    watcher.reset(); // FIX 1: drop in-memory pending records + zero the tray count
     setStatus();
     return;
   }
@@ -263,11 +266,9 @@ async function reconcileInner() {
         // reconcile starts E3 while E2 still polls = two loops / double consent.
         if (loops.get(id) === entry) loops.delete(id);
       });
-      // M-6 then M5b: clear dead outbound cards before recovering a pending one.
-      trigger
-        .sweepStaleOutbound(entry)
-        .then(() => trigger.replayPendingFor(entry))
-        .catch((err) => diag('sweep/replay error', id.slice(0, 8), err && err.message));
+      // Crash-recovery for parked / in-flight consent is handled GLOBALLY and once
+      // by consent-watcher.resume() at start — durable server rows + the web
+      // Pending Requests list replace the old per-channel replay + orphan sweep.
     } else {
       existing.channel = d.channel;
       existing.workspaceId = d.workspaceId;
@@ -297,19 +298,42 @@ function setStatus() {
   }
 }
 
+// Round C: the channels currently being watched, for the tray "Channel folders"
+// submenu (id + name only — never cursors/tokens/workspace internals). Sorted by
+// name for a stable menu.
+function listWatchedChannels() {
+  const out = [];
+  for (const entry of loops.values()) {
+    if (!entry || !entry.channel || !entry.channel.id) continue;
+    out.push({ id: entry.channel.id, name: entry.channel.name || 'Channel' });
+  }
+  out.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+  return out;
+}
+
 // Register window-control callbacks (from index.js) used when a notification is
 // clicked: openChannel(workspaceSegment) shows the window + navigates the webview.
 // Delegates to targeting.js, which owns the handoff used by trigger.js/FYI.
+// onPending({count,segment}) drives the tray "Pending: N" item + click target.
 function setHandlers(h) {
   targeting.setHandlers(h);
+  if (h && h.onPending) {
+    onPendingCb = h.onPending;
+    watcher.start({ resolvers: trigger.resolvers, onPendingCount: onPendingCb });
+  }
 }
 
 function start(statusCb, h) {
   onStatus = statusCb || onStatus;
   if (h) targeting.setHandlers(h);
+  if (h && h.onPending) onPendingCb = h.onPending;
   if (running) { reconcile(); return; }
   running = true;
   presence.start(); // Feature 5: heartbeat (self-gates on sign-in + workspace set)
+  // Round B: the async consent watcher — decoupled from the long-poll loop. It
+  // polls each pending consent row off-loop and dispatches to trigger.resolvers
+  // (spawn / review / echo). Idempotent; resumes durable pending records once.
+  watcher.start({ resolvers: trigger.resolvers, onPendingCount: onPendingCb });
   spawner.claudeAvailable().then((ok) => {
     diag('claudeAvailable at start:', ok);
     if (!ok && !cliWarned) {
@@ -360,8 +384,9 @@ function stop() {
   running = false;
   if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
   stopLoops();
+  watcher.stop(); // Round B: stop the async consent poll loop
   presence.stop(); // Feature 5: stop heartbeating on shutdown
   setStatus();
 }
 
-module.exports = { start, stop, restart, wake, status, setHandlers };
+module.exports = { start, stop, restart, wake, status, setHandlers, listWatchedChannels };

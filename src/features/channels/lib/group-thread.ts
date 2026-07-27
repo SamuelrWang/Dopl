@@ -18,8 +18,40 @@
 
 import type { ChannelMessage, ChannelMessageKind } from "../types";
 
-/** A session's lifecycle state, derived from its task lifecycle events. */
-export type SessionStatus = "active" | "done" | "failed";
+/**
+ * A session's lifecycle state, derived from its task lifecycle events.
+ *
+ * Beyond the plain outcomes (`active`/`done`/`failed`) there is a family of
+ * CALM TERMINAL states — outcomes the operator deliberately chose, which the
+ * desktop posts as a `task_failed` carrying a boolean metadata flag (no schema
+ * change) and which must read as ordinary endings, never a scary red error:
+ * - `declined`    — the operator denied a consent request (`metadata.declined`).
+ * - `dropped`     — the operator cancelled the outbound send (`metadata.dropped`).
+ * - `interrupted` — the app died mid-spawn (`metadata.interrupted`).
+ * A bare `task_failed` with none of these flags is a genuine `failed`.
+ */
+export type SessionStatus =
+  | "active"
+  | "done"
+  | "failed"
+  | "declined"
+  | "dropped"
+  | "interrupted";
+
+/**
+ * The calm terminal states — operator-chosen endings that share the muted
+ * (never alarm-red) chip treatment. `failed` is intentionally NOT here.
+ */
+const CALM_TERMINAL_STATUSES: ReadonlySet<SessionStatus> = new Set([
+  "declined",
+  "dropped",
+  "interrupted",
+]);
+
+/** True for the operator-chosen calm terminal outcomes (declined/dropped/interrupted). */
+export function isCalmTerminalStatus(status: SessionStatus): boolean {
+  return CALM_TERMINAL_STATUSES.has(status);
+}
 
 /** One grouped agent session, ready to render as a card. */
 export interface SessionGroup {
@@ -65,6 +97,25 @@ function readSummary(metadata: Record<string, unknown>): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
+/**
+ * Map a terminal marker to the calm terminal status it announces, or null when
+ * it is a genuine failure. The desktop encodes an operator-chosen ending as a
+ * `task_failed` carrying a boolean metadata flag (no schema change): `declined`
+ * (consent denied), `dropped` (outbound send cancelled), or `interrupted` (app
+ * died mid-spawn). Each flag is read STRICTLY (`=== true`) so an
+ * attacker-influenceable truthy value (e.g. the string "yes") can never
+ * disguise a real failure as a calm outcome. A `task_failed` with none of the
+ * flags returns null and stays a genuine `failed`.
+ */
+export function calmTerminalStatus(message: ChannelMessage): SessionStatus | null {
+  if (message.kind !== "task_failed") return null;
+  const { metadata } = message;
+  if (metadata.declined === true) return "declined";
+  if (metadata.dropped === true) return "dropped";
+  if (metadata.interrupted === true) return "interrupted";
+  return null;
+}
+
 /** Collapse whitespace and cap length with an ellipsis (header previews). */
 export function truncateSummary(text: string, max = 120): string {
   const clean = text.replace(/\s+/g, " ").trim();
@@ -84,9 +135,14 @@ interface Draft {
 
 function computeStatus(draft: Draft): SessionStatus {
   // Precedence, most authoritative first:
-  // 1. An explicit terminal marker always wins.
+  // 1. An explicit terminal marker always wins. A `task_failed` is a genuine
+  //    failure UNLESS it carries an operator-chosen calm-terminal flag
+  //    (declined/dropped/interrupted), in which case it takes that calm state.
   if (draft.endEvent) {
-    return draft.endEvent.kind === "task_failed" ? "failed" : "done";
+    if (draft.endEvent.kind === "task_failed") {
+      return calmTerminalStatus(draft.endEvent) ?? "failed";
+    }
+    return "done";
   }
   // 2. A delivered agent reply implies the work completed, even with no
   //    `task_finished` — a terminal-mode session self-posts its reply and then

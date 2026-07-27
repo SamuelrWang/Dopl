@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { groupThread, truncateSummary, type ThreadItem } from "./group-thread";
+import {
+  groupThread,
+  isCalmTerminalStatus,
+  truncateSummary,
+  type ThreadItem,
+} from "./group-thread";
 import type { ChannelMessage, ChannelMessageKind, MessageAuthorKind } from "../types";
 
 let seq = 0;
@@ -82,6 +87,112 @@ describe("groupThread", () => {
     const s = sessions(items);
     if (s[0].type !== "session") throw new Error("expected session");
     expect(s[0].session.status).toBe("failed");
+  });
+
+  it("renders a decline-echo (task_failed + metadata.declined) as a distinct 'declined', not 'failed'", () => {
+    // A denied request never spawned: the desktop posts the decision-echo as a
+    // lone task_failed carrying the deterministic taskId + declined flag.
+    const t = "task-c1-28";
+    const items = groupThread([
+      msg({
+        kind: "task_failed",
+        authorKind: "agent",
+        body: "Request declined",
+        metadata: { taskId: t, declined: true },
+      }),
+    ]);
+    const s = sessions(items);
+    expect(s).toHaveLength(1);
+    if (s[0].type !== "session") throw new Error("expected session");
+    expect(s[0].session.status).toBe("declined");
+    // The lifecycle marker becomes the chip; no reply body was delivered.
+    expect(s[0].session.entries).toHaveLength(0);
+  });
+
+  it("keeps a plain task_failed with NO declined flag as 'failed' (unchanged)", () => {
+    const t = "task-c1-29";
+    const items = groupThread([
+      msg({ kind: "task_started", authorKind: "agent", metadata: { taskId: t } }),
+      msg({ kind: "task_failed", authorKind: "agent", body: "Crashed.", metadata: { taskId: t } }),
+    ]);
+    const s = sessions(items)[0];
+    if (s.type !== "session") throw new Error("expected session");
+    expect(s.session.status).toBe("failed");
+    expect(s.session.status).not.toBe("declined");
+  });
+
+  it("does NOT soften a real failure when declined is truthy-but-not-strictly-true", () => {
+    // `declined` is read strictly (=== true) so an attacker-influenceable
+    // truthy value (e.g. a string) can never disguise a genuine failure.
+    const t = "task-c1-31";
+    const items = groupThread([
+      msg({
+        kind: "task_failed",
+        authorKind: "agent",
+        body: "Crashed.",
+        metadata: { taskId: t, declined: "yes" },
+      }),
+    ]);
+    const s = sessions(items)[0];
+    if (s.type !== "session") throw new Error("expected session");
+    expect(s.session.status).toBe("failed");
+  });
+
+  it("renders a cancelled outbound send (task_failed + metadata.dropped) as a calm 'dropped', not 'failed'", () => {
+    // The operator cancelled the reply before it went out: the desktop posts a
+    // lone task_failed carrying the dropped flag. Calm terminal, not an error.
+    const t = "task-c1-32";
+    const items = groupThread([
+      msg({
+        kind: "task_failed",
+        authorKind: "agent",
+        body: "Reply not sent",
+        metadata: { taskId: t, dropped: true },
+      }),
+    ]);
+    const s = sessions(items)[0];
+    if (s.type !== "session") throw new Error("expected session");
+    expect(s.session.status).toBe("dropped");
+    expect(s.session.status).not.toBe("failed");
+    expect(isCalmTerminalStatus(s.session.status)).toBe(true);
+    expect(s.session.entries).toHaveLength(0);
+  });
+
+  it("renders a mid-spawn crash (task_failed + metadata.interrupted) as a calm 'interrupted', not 'failed'", () => {
+    // The app died mid-spawn: the desktop posts a task_failed carrying the
+    // interrupted flag. A calm terminal outcome, not a scary red failure.
+    const t = "task-c1-33";
+    const items = groupThread([
+      msg({
+        kind: "task_failed",
+        authorKind: "agent",
+        body: "Interrupted",
+        metadata: { taskId: t, interrupted: true },
+      }),
+    ]);
+    const s = sessions(items)[0];
+    if (s.type !== "session") throw new Error("expected session");
+    expect(s.session.status).toBe("interrupted");
+    expect(s.session.status).not.toBe("failed");
+    expect(isCalmTerminalStatus(s.session.status)).toBe(true);
+  });
+
+  it("does NOT soften a real failure when dropped is truthy-but-not-strictly-true", () => {
+    // Every calm flag is read strictly (=== true); a truthy string can never
+    // disguise a genuine failure as a calm 'dropped'.
+    const t = "task-c1-34";
+    const items = groupThread([
+      msg({
+        kind: "task_failed",
+        authorKind: "agent",
+        body: "Crashed.",
+        metadata: { taskId: t, dropped: "yes" },
+      }),
+    ]);
+    const s = sessions(items)[0];
+    if (s.type !== "session") throw new Error("expected session");
+    expect(s.session.status).toBe("failed");
+    expect(isCalmTerminalStatus(s.session.status)).toBe(false);
   });
 
   it("attaches an agent reply that lacks a taskId to the open session (fallback)", () => {

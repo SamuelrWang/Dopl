@@ -3,7 +3,11 @@
 import { cn } from "@/shared/lib/utils";
 import { formatRelativeTime } from "@/shared/lib/format-time";
 import { AvatarWithPresence } from "@/shared/ui/avatar-with-presence";
-import type { SessionGroup, SessionStatus } from "../lib/group-thread";
+import {
+  isCalmTerminalStatus,
+  type SessionGroup,
+  type SessionStatus,
+} from "../lib/group-thread";
 
 /**
  * One spawned-agent session as a single bordered card. The header carries the
@@ -27,6 +31,10 @@ export function SessionCard({
   const name = session.head.authorName || "Agent";
   const replies = session.entries.filter((e) => e.kind === "message");
   const showWorking = session.status === "active" && replies.length === 0;
+  // An operator-chosen calm terminal (declined/dropped/interrupted) never
+  // spawned a reply, so show a calm one-line note rather than an empty body.
+  const terminalNote =
+    replies.length === 0 ? CALM_TERMINAL_NOTE[session.status] : undefined;
 
   return (
     <article className="overflow-hidden rounded-[10px] border border-border-default bg-bg-elevated">
@@ -78,6 +86,9 @@ export function SessionCard({
         {showWorking && (
           <p className="text-caption italic text-text-muted">Working…</p>
         )}
+        {terminalNote && (
+          <p className="text-caption text-text-secondary">{terminalNote}</p>
+        )}
       </div>
     </article>
   );
@@ -87,18 +98,36 @@ const STATUS_LABEL: Record<SessionStatus, string> = {
   active: "Active",
   done: "Done",
   failed: "Failed",
+  declined: "Declined",
+  dropped: "Reply not sent",
+  interrupted: "Interrupted",
+};
+
+/** Calm one-line body note for a terminal that delivered no reply. */
+const CALM_TERMINAL_NOTE: Partial<Record<SessionStatus, string>> = {
+  declined: "This request was declined.",
+  dropped: "The reply was not sent.",
+  interrupted: "The session was interrupted.",
 };
 
 /**
  * The session status chip. `Active` carries a pulsing success ring (the live
  * affordance); `Done` a solid success dot; `Failed` a danger dot + danger ink.
+ * The calm terminal states (`Declined` / `Reply not sent` / `Interrupted`) are
+ * operator-chosen endings — deliberately calm (muted ink + a neutral dot), NOT
+ * the alarm-red of a real failure, since each is a normal outcome the requester
+ * chose, not an error.
  */
 function StatusChip({ status }: { status: SessionStatus }) {
   return (
     <span
       className={cn(
         "inline-flex shrink-0 items-center gap-1 rounded-full border border-border-strong bg-bg-inset px-1.5 py-px text-micro font-medium",
-        status === "failed" ? "text-danger" : status === "active" ? "text-success" : "text-text-secondary"
+        status === "failed"
+          ? "text-danger"
+          : status === "active"
+            ? "text-success"
+            : "text-text-secondary"
       )}
     >
       {status === "active" ? (
@@ -110,7 +139,11 @@ function StatusChip({ status }: { status: SessionStatus }) {
         <span
           className={cn(
             "h-1.5 w-1.5 rounded-full",
-            status === "failed" ? "bg-danger" : "bg-success"
+            status === "failed"
+              ? "bg-danger"
+              : isCalmTerminalStatus(status)
+                ? "bg-text-disabled"
+                : "bg-success"
           )}
         />
       )}

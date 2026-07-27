@@ -26,7 +26,7 @@ import type {
 } from "../types";
 import { MessageThread } from "./message-thread";
 import { MessageComposer, type SendOptions } from "./message-composer";
-import { ConsentCard } from "./consent-card";
+import { PendingRequestsPanel } from "./pending-requests-panel";
 import { ChannelSettingsPopover } from "./channel-settings-popover";
 import { PresenceDot } from "./address-picker";
 
@@ -79,10 +79,11 @@ interface Props {
 
 /**
  * Channel detail pane: a crumb bar (name, visibility, member count, presence)
- * with the notification / settings / invite / manage actions, a prominent
- * pending-consent band (inbound approvals + outbound reviews), a scrolling
- * transcript that auto-sticks to the bottom, and the pinned composer (or a
- * read-only / join affordance when the caller isn't a member).
+ * with the notification / settings / invite / manage actions, the first-class
+ * {@link PendingRequestsPanel} (inbound approvals + outbound reviews as a
+ * labelled list), a scrolling transcript that auto-sticks to the bottom, and
+ * the pinned composer (or a read-only / join affordance when the caller isn't a
+ * member).
  */
 export function ChannelThread({
   channel,
@@ -295,24 +296,12 @@ export function ChannelThread({
         </div>
       </div>
 
-      {consentRequests.length > 0 && (
-        // Bounded + scrollable: the cards now show the full request body, so a
-        // long one (or several at once) must not push the transcript away.
-        <div className="max-h-[45vh] shrink-0 overflow-y-auto border-b border-border-default px-14 py-3">
-          <div className="mx-auto max-w-[760px] space-y-2">
-            {consentRequests.map((request) => (
-              <ConsentCard
-                key={request.id}
-                request={request}
-                toolProfile={channel.myAgentToolProfile ?? "full"}
-                busy={consentBusyIds.has(request.id)}
-                onAllow={() => onDecideConsent(request.id, "allow")}
-                onDeny={() => onDecideConsent(request.id, "deny")}
-              />
-            ))}
-          </div>
-        </div>
-      )}
+      <PendingRequestsPanel
+        requests={consentRequests}
+        toolProfile={channel.myAgentToolProfile ?? "full"}
+        busyIds={consentBusyIds}
+        onDecide={onDecideConsent}
+      />
 
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-14 pt-6">
         <div className="mx-auto max-w-[760px]">

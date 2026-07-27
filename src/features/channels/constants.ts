@@ -45,8 +45,11 @@ export const AGENT_TOOL_PROFILE_LABELS: Record<AgentToolProfile, string> = {
   read_only: "Read only",
 };
 
-/** Pending consent requests expire this long after creation. */
-export const CONSENT_TTL_MS = 30 * 60_000;
+/** Pending consent requests expire this long after creation. Requests are now a
+ *  durable "parked" item the operator answers whenever (Round B pending-requests
+ *  model), so this must be long enough that a legitimately-parked request is not
+ *  swept out from under the desktop watcher (which parks up to 24h). */
+export const CONSENT_TTL_MS = 24 * 60 * 60_000;
 
 /** Default page size for a message read when `limit` is omitted. */
 export const DEFAULT_MESSAGE_LIMIT = 100;
