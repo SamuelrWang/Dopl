@@ -1,0 +1,22 @@
+-- Channels: make the Pending Requests inbox update live (no reload).
+--
+-- The web consent inbox subscribes to postgres_changes on
+-- channel_consent_requests, but events were not being delivered live even
+-- though the row is SELECT-able on reload. Root cause is the classic Supabase
+-- Realtime-with-RLS behavior: with the default REPLICA IDENTITY (primary key
+-- only), an UPDATE/DELETE WAL record does not carry the columns the RLS policy
+-- needs to authorize delivery for this per-operator table
+-- (operator_user_id = auth.uid()), so the change is filtered out and the
+-- operator's card only appears/disappears after a manual refetch.
+--
+-- REPLICA IDENTITY FULL puts every column into the WAL record so Realtime can
+-- evaluate the RLS policy against the changed row and deliver it live. Same fix
+-- this repo already applies to cluster_brains / canvas_panels / canvas_edges
+-- for the same reason. INSERT already carries all columns; this is chiefly for
+-- live delivery of the UPDATE (decided-on-another-surface → card disappears)
+-- and DELETE paths.
+--
+-- Pure metadata/replication change: no data touched, RLS/grants unchanged. The
+-- app-side 4s fallback poll (channels page only) stays as defense in depth.
+
+ALTER TABLE public.channel_consent_requests REPLICA IDENTITY FULL;
