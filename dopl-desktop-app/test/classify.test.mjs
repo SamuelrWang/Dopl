@@ -53,19 +53,27 @@ const ME = "me-uuid";
 const U2 = "author-uuid"; // a foreign author
 const U3 = "third-uuid"; // a distinct third party
 
-// Reference oracle re-derived from the CURRENT source's documented rules:
-//   guards (fail closed): message kind, user author, author present, known id,
-//     never my own message.
-//   addressed (to_user_id present):
+// Reference oracle re-derived from the CURRENT source's documented rules.
+// UPDATED for the ask-another-agent fix: an agent EXPLICITLY addressed to me
+// now triggers (it used to be dropped by a blanket "user author" guard), while
+// an UNADDRESSED agent stays FYI/ignore — the loop brake.
+//   guards (fail closed): message kind, author present, known id, never my own
+//     message; authorKind must be 'user' or 'agent' (else -> ignore, e.g.
+//     'system').
+//   addressed (to_user_id present) — USER *and* AGENT authors alike:
 //     - to === me            -> trigger (explicit address always prompts)
 //     - to === the author    -> ignore  (self-addressed noise)
 //     - else                 -> fyi (member) / ignore (public non-member)
-//   unaddressed:
+//   unaddressed AGENT author:
+//     - fyi (member) / ignore (public non-member) — NEVER an implicit trigger
+//       (LOOP BRAKE: the responder's reply is unaddressed so it can't re-trigger)
+//   unaddressed USER author (unchanged):
 //     - exactly 2 members + member -> trigger, UNLESS myNotifyScope === 'none'
 //       (an explicit mute wins over an IMPLICIT target) -> ignore
 //     - otherwise            -> fyi (member) / ignore (public non-member)
 function oracle(m, entry, myId) {
-  if (!m || m.kind !== "message" || m.authorKind !== "user" || !m.authorUserId) return "ignore";
+  if (!m || m.kind !== "message" || !m.authorUserId) return "ignore";
+  if (m.authorKind !== "user" && m.authorKind !== "agent") return "ignore";
   if (!myId) return "ignore";
   if (m.authorUserId === myId) return "ignore";
 
@@ -80,6 +88,8 @@ function oracle(m, entry, myId) {
     if (to === m.authorUserId) return "ignore";
     return isMember ? "fyi" : "ignore";
   }
+  // Unaddressed agent -> never an implicit trigger (loop brake); FYI/ignore only.
+  if (m.authorKind === "agent") return isMember ? "fyi" : "ignore";
   const cnt = Number(ch && ch.memberCount);
   const knownTwo = Number.isFinite(cnt) && cnt === 2;
   const scope = (ch && ch.myNotifyScope) || "all";
@@ -120,7 +130,7 @@ const TO = ["me", "author", "third", "absent"];
 const MEMBER_COUNTS = [2, 3, undefined, 0];
 const IS_MEMBERS = [true, false, "undefined"];
 const AUTHORS = ["me", "other"];
-const AUTHOR_KINDS = ["user", "agent"];
+const AUTHOR_KINDS = ["user", "agent", "system"];
 const KINDS = ["message", "task_started"];
 const SCOPES = ["all", "addressed", "none", "undefined"];
 
@@ -165,7 +175,7 @@ const plain = { ...foreign, metadata: {} };
 test("fail-closed guards -> ignore", () => {
   const entry = makeEntry({ memberCount: 2, isMember: true });
   assert.equal(classify({ ...plain, kind: "task_started" }, entry, ME), "ignore"); // non-message
-  assert.equal(classify({ ...plain, authorKind: "agent" }, entry, ME), "ignore"); // agent author
+  assert.equal(classify({ ...plain, authorKind: "system" }, entry, ME), "ignore"); // neither user nor agent
   assert.equal(classify({ ...plain, authorUserId: null }, entry, ME), "ignore"); // no author id
   assert.equal(classify(plain, entry, null), "ignore"); // unknown operator identity
 });
@@ -225,4 +235,70 @@ test("unaddressed + unknown/invalid memberCount -> fyi (degrades to multi-member
 
 test("isMember missing field degrades to member (fyi, not ignore)", () => {
   assert.equal(classify(plain, makeEntry({ memberCount: 3, isMember: "undefined" }), ME), "fyi");
+});
+
+// ── Agent-authored messages (the ask-another-agent fix) ──────────────────────
+// One user's agent posts through dopl_channel as author_kind='agent'. Before the
+// fix these were dropped by a blanket "user author" guard even when addressed to
+// the operator. Now: addressed-to-me triggers; unaddressed is the loop brake.
+
+const agent = { authorUserId: U2, authorKind: "agent", kind: "message", id: "a", seq: 2, body: "hi" };
+const agentTo = (tid) => ({ ...agent, metadata: { to_user_id: tid } });
+const agentPlain = { ...agent, metadata: {} };
+
+test("(a) agent addressed to me -> trigger (THE BUG: exercises the real MCP path)", () => {
+  assert.equal(classify(agentTo(ME), makeEntry({ memberCount: 2, isMember: true }), ME), "trigger");
+  // Count/membership don't matter for an explicit address, same as a user.
+  assert.equal(classify(agentTo(ME), makeEntry({ memberCount: 3, isMember: false }), ME), "trigger");
+  // An explicit address is never suppressed by a per-channel mute.
+  assert.equal(
+    classify(agentTo(ME), makeEntry({ memberCount: 2, isMember: true, myNotifyScope: "none" }), ME),
+    "trigger"
+  );
+});
+
+test("(b) agent addressed to a third party -> fyi (member) / ignore (non-member)", () => {
+  assert.equal(classify(agentTo(U3), makeEntry({ memberCount: 3, isMember: true }), ME), "fyi");
+  assert.equal(classify(agentTo(U3), makeEntry({ memberCount: 3, isMember: false }), ME), "ignore");
+});
+
+test("agent self-addressed (to === author) -> ignore", () => {
+  assert.equal(classify(agentTo(U2), makeEntry({ memberCount: 2, isMember: true }), ME), "ignore");
+});
+
+test("(c) agent UNADDRESSED + exactly 2 members -> fyi, NOT trigger (LOOP BRAKE)", () => {
+  // A USER here would trigger the implicit 1:1; an agent must not, or the
+  // responder's own unaddressed reply would ping-pong back into a new trigger.
+  assert.equal(classify(agentPlain, makeEntry({ memberCount: 2, isMember: true }), ME), "fyi");
+  // Unconditional: scope 'all' does not lift the brake either.
+  assert.equal(
+    classify(agentPlain, makeEntry({ memberCount: 2, isMember: true, myNotifyScope: "all" }), ME),
+    "fyi"
+  );
+  // Public non-member still ignores.
+  assert.equal(classify(agentPlain, makeEntry({ memberCount: 2, isMember: false }), ME), "ignore");
+});
+
+test("(d) agent UNADDRESSED + 3+ members -> fyi (member) / ignore (non-member)", () => {
+  assert.equal(classify(agentPlain, makeEntry({ memberCount: 3, isMember: true }), ME), "fyi");
+  assert.equal(classify(agentPlain, makeEntry({ memberCount: 3, isMember: false }), ME), "ignore");
+});
+
+test("(f) system authorKind -> ignore (neither user nor agent)", () => {
+  assert.equal(
+    classify({ ...agentPlain, authorKind: "system" }, makeEntry({ memberCount: 2, isMember: true }), ME),
+    "ignore"
+  );
+  // Even addressed-to-me: a non-user/non-agent author never triggers.
+  assert.equal(
+    classify({ ...agent, authorKind: "system", metadata: { to_user_id: ME } }, makeEntry({ memberCount: 2, isMember: true }), ME),
+    "ignore"
+  );
+});
+
+test("(g) agent + non-message kind -> ignore (kind guard still applies)", () => {
+  assert.equal(
+    classify({ ...agentPlain, kind: "task_started" }, makeEntry({ memberCount: 2, isMember: true }), ME),
+    "ignore"
+  );
 });
