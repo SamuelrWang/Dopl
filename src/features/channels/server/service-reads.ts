@@ -212,11 +212,24 @@ export async function readMessages(
     limit: query.limit,
   });
   const messages = await hydrateMessages(rows);
-  if (membership) {
-    try {
-      await repo.updateLastRead(channel.id, ctx.userId, new Date().toISOString());
-    } catch {
-      // Best-effort — a failed watermark bump must not fail the read.
+  if (membership && messages.length > 0) {
+    // Watermark = newest message SHOWN, written only when it advances.
+    // Writing now() on every read made each realtime-triggered refetch emit
+    // a channel_members UPDATE, which is itself a subscribed realtime event:
+    // every open tab re-fired every other tab in a permanent refetch loop
+    // (the 2026-07-27 CPU incident). Content-derived + monotonic = a refetch
+    // that shows nothing new writes nothing and the cycle terminates.
+    const newest = messages.reduce(
+      (max, m) => (Date.parse(m.createdAt) > Date.parse(max) ? m.createdAt : max),
+      messages[0].createdAt
+    );
+    const current = membership.last_read_at;
+    if (current === null || Date.parse(newest) > Date.parse(current)) {
+      try {
+        await repo.updateLastRead(channel.id, ctx.userId, newest);
+      } catch {
+        // Best-effort — a failed watermark bump must not fail the read.
+      }
     }
   }
   return messages;

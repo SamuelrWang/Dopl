@@ -14,9 +14,9 @@ vi.mock("./repository-collab");
 
 import * as repo from "./repository";
 import * as collab from "./repository-collab";
-import { listChannelMembers, listChannels } from "./service-reads";
+import { listChannelMembers, listChannels, readMessages } from "./service-reads";
 import type { ChannelContext } from "./service-shared";
-import type { ChannelMemberRow, ChannelRow } from "./dto";
+import type { ChannelMemberRow, ChannelMessageRow, ChannelRow } from "./dto";
 
 const WS = "ws-1";
 const USER = "user-1";
@@ -107,6 +107,76 @@ describe("listChannelMembers — notify_scope privacy", () => {
     expect(theirs?.agentOnline).toBe(true);
     expect(theirs?.lastSeenAt).toBe("2026-07-26T00:00:00Z");
     expect(mine?.agentOnline).toBe(false);
+  });
+});
+
+describe("readMessages — read-watermark loop guard (2026-07-27 CPU incident)", () => {
+  // The watermark must be content-derived and monotonic: a refetch that
+  // shows nothing new must NOT write (a write is a realtime event that
+  // re-fires every subscribed tab — the self-sustaining refetch loop).
+  function messageRow(seq: number, createdAt: string): ChannelMessageRow {
+    return {
+      id: `msg-${seq}`,
+      seq,
+      channel_id: "chan-1",
+      workspace_id: WS,
+      author_user_id: OTHER,
+      author_kind: "user",
+      kind: "message",
+      body: "hi",
+      metadata: {},
+      client_msg_id: null,
+      created_at: createdAt,
+    };
+  }
+
+  it("skips the watermark write when the thread is empty", async () => {
+    vi.mocked(repo.listMessages).mockResolvedValue([]);
+    await readMessages(ctx, "general", { limit: 50 });
+    expect(repo.updateLastRead).not.toHaveBeenCalled();
+  });
+
+  it("skips the watermark write when nothing is newer than the current watermark", async () => {
+    vi.mocked(repo.findMembership).mockResolvedValue({
+      ...memberRow(USER, "all"),
+      last_read_at: "2026-07-27T12:00:00.000Z",
+    });
+    vi.mocked(repo.listMessages).mockResolvedValue([
+      messageRow(1, "2026-07-27T11:00:00.000Z"),
+      messageRow(2, "2026-07-27T12:00:00.000Z"),
+    ]);
+    await readMessages(ctx, "general", { limit: 50 });
+    expect(repo.updateLastRead).not.toHaveBeenCalled();
+  });
+
+  it("advances the watermark to the newest message shown (not now())", async () => {
+    vi.mocked(repo.findMembership).mockResolvedValue({
+      ...memberRow(USER, "all"),
+      last_read_at: "2026-07-27T12:00:00.000Z",
+    });
+    vi.mocked(repo.listMessages).mockResolvedValue([
+      messageRow(3, "2026-07-27T12:30:00.000Z"),
+      messageRow(4, "2026-07-27T13:00:00.000Z"),
+    ]);
+    await readMessages(ctx, "general", { limit: 50 });
+    expect(repo.updateLastRead).toHaveBeenCalledTimes(1);
+    expect(repo.updateLastRead).toHaveBeenCalledWith(
+      "chan-1",
+      USER,
+      "2026-07-27T13:00:00.000Z"
+    );
+  });
+
+  it("writes on first read (null watermark) with the newest message time", async () => {
+    vi.mocked(repo.listMessages).mockResolvedValue([
+      messageRow(1, "2026-07-27T10:00:00.000Z"),
+    ]);
+    await readMessages(ctx, "general", { limit: 50 });
+    expect(repo.updateLastRead).toHaveBeenCalledWith(
+      "chan-1",
+      USER,
+      "2026-07-27T10:00:00.000Z"
+    );
   });
 });
 

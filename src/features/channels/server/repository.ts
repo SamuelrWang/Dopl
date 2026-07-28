@@ -343,7 +343,11 @@ export async function deleteMember(
   if (error) throw error;
 }
 
-/** Best-effort read-watermark bump for a member viewing the thread. */
+/** Best-effort read-watermark bump for a member viewing the thread.
+ *  Monotonic at the row level: a concurrent reader that already advanced the
+ *  watermark past `at` turns this into a no-op (no UPDATE, no WAL event, no
+ *  realtime fan-out) — the guard that keeps refetch loops from feeding
+ *  themselves. */
 export async function updateLastRead(
   channelId: string,
   userId: string,
@@ -354,7 +358,8 @@ export async function updateLastRead(
     .from("channel_members")
     .update({ last_read_at: at })
     .eq("channel_id", channelId)
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    .or(`last_read_at.is.null,last_read_at.lt.${at}`);
   if (error) throw error;
 }
 
