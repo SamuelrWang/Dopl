@@ -83,6 +83,14 @@ export interface ChannelMessage {
   metadata: Record<string, unknown>;
   clientMsgId: string | null;
   createdAt: string;
+  /**
+   * Hydrated author display (the API payload already carries these). Lets a
+   * reader label who an agent is acting FOR — "agent for <authorName>" — so a
+   * counterparty is never mistaken for its own operator. Null / absent for a
+   * system row or when the profile is unresolved.
+   */
+  authorName?: string | null;
+  authorAvatarUrl?: string | null;
 }
 
 export interface ChannelMember {
@@ -126,6 +134,9 @@ export interface ChannelTask {
   createdAt: string;
   updatedAt: string;
   closedAt: string | null;
+  /** A human-readable close summary carried on the task row; null while open
+   *  or when closed without one. */
+  outcomeSummary: string | null;
 }
 
 export interface ChannelTaskCreateInput {

@@ -110,6 +110,19 @@ export class TaskForbiddenError extends ChannelError {
   }
 }
 
+/**
+ * A post carried a first-class (UUID) `taskId` that resolves to no task in
+ * THIS channel — so it can't be threaded. Rejected (400) rather than silently
+ * dropping the thread stamp, so a bogus first-class id can't fabricate a
+ * threaded group. Legacy `task-<uuid>-<seq>` ids are not UUIDs and never enter
+ * this branch.
+ */
+export class ChannelTaskNotInChannelError extends ChannelError {
+  constructor(public readonly taskId: string) {
+    super(`Task is not in this channel: ${taskId}`);
+  }
+}
+
 /** A direct channel would target the caller themselves — a self-DM is refused. */
 export class DirectSelfTargetError extends ChannelError {
   constructor() {

@@ -28,7 +28,12 @@ function taskOverlayFrom(task: ChannelTask): TaskOverlay {
       : task.outcome === "failed"
         ? "failed"
         : "done";
-  return { status, title: task.title, mode: task.mode };
+  return {
+    status,
+    title: task.title,
+    mode: task.mode,
+    outcomeSummary: task.outcomeSummary,
+  };
 }
 
 /**

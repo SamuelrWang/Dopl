@@ -116,7 +116,11 @@ export type TaskCreateInput = z.infer<typeof TaskCreateSchema>;
  * ops can't bleed fields into each other.
  */
 export const TaskUpdateSchema = z.discriminatedUnion("op", [
-  z.object({ op: z.literal("close"), outcome: TaskOutcomeSchema }),
+  z.object({
+    op: z.literal("close"),
+    outcome: TaskOutcomeSchema,
+    summary: z.string().trim().max(2000).optional(),
+  }),
   z.object({ op: z.literal("set_mode"), mode: TaskModeSchema }),
 ]);
 export type TaskUpdateInput = z.infer<typeof TaskUpdateSchema>;

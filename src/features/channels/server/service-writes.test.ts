@@ -17,16 +17,18 @@ vi.mock("./repository-tasks");
 
 import * as repo from "./repository";
 import * as repoTasks from "./repository-tasks";
-import { postMessage } from "./service-writes";
+import { closeTask, postMessage } from "./service-writes";
 import {
   ChannelAddresseeNotMemberError,
   ChannelForbiddenError,
+  ChannelTaskNotInChannelError,
 } from "./errors";
 import type { ChannelContext } from "./service-shared";
 import type {
   ChannelMemberRow,
   ChannelMessageRow,
   ChannelRow,
+  ChannelTaskRow,
 } from "./dto";
 
 const WS = "ws-1";
@@ -226,19 +228,21 @@ describe("postMessage — task metadata stamping (v15, Q4)", () => {
     expect(repoTasks.findTaskByChannelAndId).toHaveBeenCalledWith("chan-1", TASK_ID);
   });
 
-  it("an unknown taskId (no matching task) stamps nothing but keeps the caller taskId", async () => {
+  it("SECURITY: a UUID taskId that resolves to no task in the channel is rejected (400), not silently un-threaded", async () => {
+    // v1.7 server-validated threading: a bogus first-class id can no longer
+    // fabricate a threaded group — the post is rejected outright.
     vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(null);
 
-    await postMessage(ctx, "general", {
-      body: "reply",
-      metadata: { taskId: TASK_ID, taskMode: "interactive" },
-    });
+    await expect(
+      postMessage(ctx, "general", {
+        body: "reply",
+        metadata: { taskId: TASK_ID, taskMode: "interactive" },
+      })
+    ).rejects.toBeInstanceOf(ChannelTaskNotInChannelError);
 
-    const meta = capturedMetadata();
-    expect(meta.taskId).toBe(TASK_ID);
-    expect(Object.prototype.hasOwnProperty.call(meta, "taskMode")).toBe(false);
-    expect(Object.prototype.hasOwnProperty.call(meta, "taskCreatedBy")).toBe(false);
-    expect(Object.prototype.hasOwnProperty.call(meta, "taskTitle")).toBe(false);
+    expect(repoTasks.findTaskByChannelAndId).toHaveBeenCalledWith("chan-1", TASK_ID);
+    // Rejected before insert — nothing lands.
+    expect(repo.insertMessage).not.toHaveBeenCalled();
   });
 
   it("a non-UUID taskId never hits the DB and stamps nothing (old task-<uuid>-<seq> ids)", async () => {
@@ -322,5 +326,69 @@ describe("postMessage — addressing + author derivation", () => {
     // A cookie-session desktop app posts an agent task result over a user ctx.
     await postMessage(ctx, "general", { body: "done", authorKind: "agent" });
     expect(vi.mocked(repo.insertMessage).mock.calls[0][0].author_kind).toBe("agent");
+  });
+});
+
+describe("closeTask — outcome summary (v1.7)", () => {
+  const CLOSE_TASK_ID = "660e8400-e29b-41d4-a716-446655440111";
+
+  /** A task USER (the caller) is allowed to close (creator), open + untargeted. */
+  function closableTask(overrides: Partial<ChannelTaskRow> = {}): ChannelTaskRow {
+    return {
+      id: CLOSE_TASK_ID,
+      channel_id: "chan-1",
+      workspace_id: WS,
+      title: "Ship it",
+      status: "open",
+      outcome: null,
+      mode: "interactive",
+      created_by: USER,
+      target_user_id: null,
+      created_at: "2026-07-20T00:00:00Z",
+      updated_at: "2026-07-20T00:00:00Z",
+      closed_at: null,
+      outcome_summary: null,
+      ...overrides,
+    };
+  }
+
+  beforeEach(() => {
+    // Resolves for BOTH the closeTask authz lookup and postMessage's re-stamp.
+    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(closableTask());
+    vi.mocked(repoTasks.updateTask).mockImplementation(async (_id, patch) =>
+      closableTask({ ...patch, status: "closed" })
+    );
+  });
+
+  /** The lifecycle echo `postMessage` wrote (the only insertMessage call). */
+  function echoInsert() {
+    return vi.mocked(repo.insertMessage).mock.calls[0][0];
+  }
+
+  it("persists outcome_summary and echoes the summary as the close body", async () => {
+    await closeTask(ctx, "general", CLOSE_TASK_ID, "completed", "Shipped v2 to prod");
+
+    const patch = vi.mocked(repoTasks.updateTask).mock.calls[0][1];
+    expect(patch.outcome_summary).toBe("Shipped v2 to prod");
+
+    const echo = echoInsert();
+    expect(echo.kind).toBe("task_finished");
+    expect(echo.body).toBe("Shipped v2 to prod");
+  });
+
+  it("without a summary persists null and keeps the calm default body", async () => {
+    await closeTask(ctx, "general", CLOSE_TASK_ID, "completed");
+
+    const patch = vi.mocked(repoTasks.updateTask).mock.calls[0][1];
+    expect(patch.outcome_summary).toBeNull();
+    expect(echoInsert().body).toBe("Task completed");
+  });
+
+  it("a failed close with a blank summary falls back to the default body", async () => {
+    await closeTask(ctx, "general", CLOSE_TASK_ID, "failed", "   ");
+
+    const echo = echoInsert();
+    expect(echo.kind).toBe("task_failed");
+    expect(echo.body).toBe("Task failed");
   });
 });

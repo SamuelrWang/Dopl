@@ -9,17 +9,33 @@ import { ok, isNotFound, type ToolResponse } from "./respond";
 import { channelNotFound } from "./channel-shared";
 
 /**
+ * Author label for a message line. Makes an agent's OPERATOR explicit — an
+ * `agent` row renders "agent for <name>", never a bare name — so a reader
+ * treats the counterparty as another member's agent, not its own operator.
+ *   - system → "system"
+ *   - agent  → "agent for <name>" (fallback: "agent for `<id>`" → "an agent")
+ *   - user   → "<name>" (fallback: "user `<id>`" → the kind)
+ */
+function formatAuthor(m: ChannelMessage): string {
+  if (m.authorKind === "system") return "system";
+  const name = m.authorName?.trim();
+  if (m.authorKind === "agent") {
+    return name
+      ? `agent for ${name}`
+      : m.authorUserId
+        ? `agent for \`${m.authorUserId}\``
+        : "an agent";
+  }
+  return name ? name : m.authorUserId ? `user \`${m.authorUserId}\`` : m.authorKind;
+}
+
+/**
  * One rendered message line. `task_*` events already carry a
  * human-readable render in `body` (per the data model), so the listing
  * needs no per-kind special-casing — just tag non-chat kinds.
  */
 function formatMessage(m: ChannelMessage): string {
-  const author =
-    m.authorKind === "system"
-      ? "system"
-      : m.authorUserId
-        ? `${m.authorKind} \`${m.authorUserId}\``
-        : m.authorKind;
+  const author = formatAuthor(m);
   const kindTag = m.kind !== "message" ? ` · ${m.kind}` : "";
   const head = `**#${m.seq}** ${author}${kindTag} · ${m.createdAt}`;
   const body = m.body ? `\n  ${m.body.replace(/\n/g, "\n  ")}` : "";

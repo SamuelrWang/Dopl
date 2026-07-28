@@ -182,13 +182,13 @@ export async function closeChannelTask(
   t: DoplTransport,
   channelId: string,
   taskId: string,
-  input: { outcome: TaskOutcome }
+  input: { outcome: TaskOutcome; summary?: string }
 ): Promise<ChannelTask> {
   const data = await t.request<{ task: ChannelTask }>(
     `/api/channels/${enc(channelId)}/tasks/${enc(taskId)}`,
     {
       method: "PATCH",
-      body: { op: "close", outcome: input.outcome },
+      body: { op: "close", outcome: input.outcome, summary: input.summary },
       toolName: "channel_close_task",
     }
   );

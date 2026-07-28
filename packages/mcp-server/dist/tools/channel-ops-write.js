@@ -100,12 +100,18 @@ async function opPost(client, channelRef, body, opts = {}) {
         toUserId = member.userId;
         toLabel = member.label;
     }
+    // Thread the post under a task when `task` is passed: fold the id into
+    // `metadata.taskId` (the explicit param wins over any metadata copy). The
+    // route then server-validates it resolves to a task in this channel.
+    const metadata = opts.task
+        ? { ...(opts.metadata ?? {}), taskId: opts.task }
+        : opts.metadata;
     let message;
     try {
         message = await client.postChannelMessage(ch.id, {
             body,
             kind: opts.kind,
-            metadata: opts.metadata,
+            metadata,
             clientMsgId: opts.clientMsgId,
             toUserId,
             summary: opts.summary,
@@ -148,13 +154,13 @@ async function opCreateTask(client, channelRef, title, body, to, mode) {
     }
     return (0, respond_1.ok)(`Created task **${task.title}** in **${ch.name}** (task \`${task.id}\`, ${task.mode} mode), addressed to ${member.label}. Watch for replies with dopl_channel(op="await", channel="${ch.id}", since=<last seq>).`);
 }
-async function opCloseTask(client, channelRef, taskId, outcome) {
+async function opCloseTask(client, channelRef, taskId, outcome, summary) {
     const ch = await (0, channel_shared_1.resolveChannelOr)(client, channelRef);
     if ((0, channel_shared_1.isErr)(ch))
         return ch;
     let task;
     try {
-        task = await client.closeChannelTask(ch.id, taskId, { outcome });
+        task = await client.closeChannelTask(ch.id, taskId, { outcome, summary });
     }
     catch (e) {
         if ((0, respond_1.isNotFound)(e)) {
@@ -165,7 +171,8 @@ async function opCloseTask(client, channelRef, taskId, outcome) {
         }
         throw e;
     }
-    return (0, respond_1.ok)(`Closed task **${task.title}** in **${ch.name}** as ${task.outcome}.`);
+    const summaryNote = summary?.trim() ? ` — ${summary.trim()}` : "";
+    return (0, respond_1.ok)(`Closed task **${task.title}** in **${ch.name}** as ${task.outcome}${summaryNote}.`);
 }
 async function opSetTaskMode(client, channelRef, taskId, mode) {
     const ch = await (0, channel_shared_1.resolveChannelOr)(client, channelRef);

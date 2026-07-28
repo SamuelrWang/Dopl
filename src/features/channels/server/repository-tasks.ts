@@ -64,6 +64,7 @@ type TaskPatch = Partial<{
   outcome: string | null;
   mode: string;
   closed_at: string | null;
+  outcome_summary: string | null;
 }>;
 
 /**

@@ -139,6 +139,7 @@ export declare class DoplClient {
     createChannelTask(channelId: string, input: ChannelTaskCreateInput): Promise<ChannelTask>;
     closeChannelTask(channelId: string, taskId: string, input: {
         outcome: TaskOutcome;
+        summary?: string;
     }): Promise<ChannelTask>;
     setChannelTaskMode(channelId: string, taskId: string, input: {
         mode: TaskMode;

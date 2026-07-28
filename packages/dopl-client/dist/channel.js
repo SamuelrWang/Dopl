@@ -106,7 +106,7 @@ async function createChannelTask(t, channelId, input) {
 async function closeChannelTask(t, channelId, taskId, input) {
     const data = await t.request(`/api/channels/${enc(channelId)}/tasks/${enc(taskId)}`, {
         method: "PATCH",
-        body: { op: "close", outcome: input.outcome },
+        body: { op: "close", outcome: input.outcome, summary: input.summary },
         toolName: "channel_close_task",
     });
     return data.task;

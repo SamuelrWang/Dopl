@@ -51,6 +51,7 @@ export type ChannelTaskRow = {
   created_at: string;
   updated_at: string;
   closed_at: string | null;
+  outcome_summary: string | null;
 };
 
 export type ChannelMemberRow = {
@@ -233,5 +234,6 @@ export function mapTaskRow(row: ChannelTaskRow): ChannelTask {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     closedAt: row.closed_at,
+    outcomeSummary: row.outcome_summary ?? null,
   };
 }

@@ -65,6 +65,12 @@ export interface TaskOverlay {
   status: SessionStatus;
   title: string | null;
   mode: TaskMode | null;
+  /**
+   * The task's human-readable close summary (`channel_tasks.outcome_summary`),
+   * or null. Optional so a legacy overlay literal (and any pre-v1.7 caller)
+   * stays valid; `groupThread` normalizes an absent value to null.
+   */
+  outcomeSummary?: string | null;
 }
 
 /** One grouped agent session, ready to render as a card. */
@@ -93,6 +99,12 @@ export interface SessionGroup {
   entries: ChannelMessage[];
   /** One-line header summary (see {@link computeSummary} precedence). */
   summary: string | null;
+  /**
+   * The first-class task's human-readable close summary (overlay), shown in the
+   * card footer near the status chip; null for a legacy session with no
+   * `channel_tasks` row, or a task closed without a summary.
+   */
+  outcomeSummary: string | null;
   /** Earliest event time in the session, for the header relative time. */
   createdAt: string;
 }
@@ -165,6 +177,27 @@ export function truncateSummary(text: string, max = 120): string {
   const clean = text.replace(/\s+/g, " ").trim();
   if (clean.length <= max) return clean;
   return `${clean.slice(0, max - 1).trimEnd()}…`;
+}
+
+/**
+ * Split a session's body entries into the two render lanes the card shows
+ * separately: `task_progress` milestones (the live accomplishment log) and
+ * `message` chat replies. Both preserve the input seq order. This is a pure
+ * RENDER-layer split — `groupThread` deliberately keeps `task_progress` inside
+ * {@link SessionGroup.entries} (its output is byte-for-byte unchanged), and the
+ * card separates the two lanes only at render time.
+ */
+export function splitSessionEntries(entries: ChannelMessage[]): {
+  milestones: ChannelMessage[];
+  replies: ChannelMessage[];
+} {
+  const milestones: ChannelMessage[] = [];
+  const replies: ChannelMessage[] = [];
+  for (const entry of entries) {
+    if (entry.kind === "task_progress") milestones.push(entry);
+    else if (entry.kind === "message") replies.push(entry);
+  }
+  return { milestones, replies };
 }
 
 /** Mutable accumulator; finalized into a {@link SessionGroup} at the end. */
@@ -462,6 +495,7 @@ export function groupThread(
     session.summary = computeSummary(draft);
     session.title = overlay?.title ?? null;
     session.mode = overlay?.mode ?? null;
+    session.outcomeSummary = overlay?.outcomeSummary ?? null;
   }
 
   return items;

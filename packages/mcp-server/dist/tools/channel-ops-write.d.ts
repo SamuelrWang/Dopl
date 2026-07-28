@@ -16,6 +16,8 @@ interface PostOptions {
     to?: string;
     /** One-line intent for the receiver's notification. */
     summary?: string;
+    /** A task id — threads this post under that task's card (server-validated). */
+    task?: string;
 }
 /** Options for opOpen — a normal channel, or a `direct` message with `member`. */
 interface OpenOptions {
@@ -29,6 +31,6 @@ export declare function opOpen(client: DoplClient, opts: OpenOptions): Promise<T
 export declare function opInvite(client: DoplClient, channelRef: string, memberRef: string): Promise<ToolResponse>;
 export declare function opPost(client: DoplClient, channelRef: string, body: string, opts?: PostOptions): Promise<ToolResponse>;
 export declare function opCreateTask(client: DoplClient, channelRef: string, title: string, body: string, to: string, mode?: TaskMode): Promise<ToolResponse>;
-export declare function opCloseTask(client: DoplClient, channelRef: string, taskId: string, outcome: TaskOutcome): Promise<ToolResponse>;
+export declare function opCloseTask(client: DoplClient, channelRef: string, taskId: string, outcome: TaskOutcome, summary?: string): Promise<ToolResponse>;
 export declare function opSetTaskMode(client: DoplClient, channelRef: string, taskId: string, mode: TaskMode): Promise<ToolResponse>;
 export {};

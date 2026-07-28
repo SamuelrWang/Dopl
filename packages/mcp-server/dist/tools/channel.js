@@ -26,14 +26,16 @@ const CHANNEL_DESCRIPTION = `Cross-user collaboration channels — shared in-wor
 - "list" — list the channels you can see in the active workspace (name, slug, id, visibility, member count, last activity). Start here to find a channel's slug or id.
 - "open" — create a channel, OR open a direct (1:1) message. For a channel: requires name; optional topic, visibility ("private" default = invite-only, or "public" = visible to the whole workspace); you become its owner. For a direct message: pass \`direct\`=true + \`member\` (an email or user id of an active workspace member) and no name — it opens, or reuses, a private 1:1 channel with that member.
 - "invite" — add a workspace member to a channel. Requires: channel (slug or id) + member (an email or user id — must be an ACTIVE member of this workspace; invites are in-workspace only). You must already belong to the channel.
-- "post" — post to a channel. Requires: channel + body. ALWAYS pass \`summary\`: a short one-line intent (<=200 chars) that becomes the notification the other member sees. Pass \`to\` (an email or user id of a channel member) when your message is a request aimed at one specific person's agent — that member's listener is then the only one triggered; leave it off for general chat or broadcasts. Optional: kind (default "message" = chat; "task_started" / "task_progress" / "task_finished" / "task_failed" = structured activity events — put the machine-readable payload in \`metadata\` and a human-readable one-liner in \`body\` so the thread stays readable), metadata (a JSON object, e.g. {taskId, status, durationMs, refs}), client_msg_id (idempotency key — re-posting with the same id won't duplicate).
+- "post" — post to a channel. Requires: channel + body. ALWAYS pass \`summary\`: a short one-line intent (<=200 chars) that becomes the notification the other member sees. Pass \`to\` (an email or user id of a channel member) when your message is a request aimed at one specific person's agent — that member's listener is then the only one triggered; leave it off for general chat or broadcasts. Pass \`task\` (a task id) to thread this post into that task's card; a \`kind="task_progress"\` post with \`task=<id>\` logs one concrete milestone (an accomplishment that just landed) on the task. Optional: kind (default "message" = chat; "task_started" / "task_progress" / "task_finished" / "task_failed" = structured activity events — put the machine-readable payload in \`metadata\` and a human-readable one-liner in \`body\` so the thread stays readable), metadata (a JSON object, e.g. {taskId, status, durationMs, refs}), client_msg_id (idempotency key — re-posting with the same id won't duplicate).
 - "read" — read a channel's recent messages, ascending by seq. Requires: channel. Optional: since (return only messages after this seq), limit (max 200). Note the highest seq to use as your next \`since\`.
 - "await" — LONG-POLL for new messages: blocks up to ~50s waiting for a message with seq > since, then returns the new messages (or nothing, on timeout). Requires: channel + since (the last seq you've processed). Optional: timeout_ms (<=50000, default 50000).
-- "create_task" — open a first-class task in a channel: a titled, tracked unit of work addressed to one member. Requires: channel + title + body (the request, posted as the task's first message) + to (the member the task is for). Optional: mode ("interactive" default, or "autonomous"). Returns the task id; the responder's replies stream back via "await".
-- "close_task" — close a task. Requires: channel + task (the task id) + outcome ("completed" or "failed"). Allowed for the task's creator or the member it is addressed to.
+- "create_task" — open a first-class task in a channel: a titled, tracked unit of work addressed to one member. Requires: channel + title + body (the request, posted as the task's first message) + to (the member the task is for). Optional: mode ("interactive" default, or "autonomous"). Returns the task id; the responder's replies stream back via "await". Then thread every related post with \`task=<id>\` and log each concrete accomplishment as a \`task_progress\` (kind="task_progress", task=<id>) the moment it lands; the requester closes the task with "close_task" (optionally a \`summary\`) when the GOAL is done — not per hop.
+- "close_task" — close a task. Requires: channel + task (the task id) + outcome ("completed" or "failed"). Optional: summary (a one-line outcome, <=2000 chars) shown on the task card and carried in the close echo. Allowed for the task's creator or the member it is addressed to. Close when the multi-step GOAL completes, not per hop.
 - "set_task_mode" — change a task's execution mode. Requires: channel + task + mode ("interactive" or "autonomous"). Creator only — the mode governs the creator's own machine.
 
-Watching a channel as a listener: first "read" (or "list") to learn the latest seq, then loop — call "await" with since=<last seq you saw>. If it comes back with no messages (timed out), just re-call "await" with the SAME since. When it returns messages, process them, advance your cursor to the HIGHEST seq returned, and re-call "await" with since=<that seq>. Each "await" is one bounded call; re-issue it to keep listening.`;
+Watching a channel as a listener: first "read" (or "list") to learn the latest seq, then loop — call "await" with since=<last seq you saw>. If it comes back with no messages (timed out), just re-call "await" with the SAME since. When it returns messages, process them, advance your cursor to the HIGHEST seq returned, and re-call "await" with since=<that seq>. Each "await" is one bounded call; re-issue it to keep listening.
+
+Channel counterparties are typically other members' AI agents acting for their operator. A blocker on YOUR OWN machine (a missing tool permission, folder access, or sign-in) is yours to resolve with your own operator — report it as your side being blocked; never ask the counterparty to change your machine.`;
 function registerChannelTool(register, client) {
     register("dopl_channel", CHANNEL_DESCRIPTION, {
         op: zod_1.z
@@ -84,7 +86,7 @@ function registerChannelTool(register, client) {
         summary: zod_1.z
             .string()
             .optional()
-            .describe('op="post": a short one-line intent (<=200 chars). ALWAYS set it — it becomes the notification the receiving member sees.'),
+            .describe('op="post": a short one-line intent (<=200 chars). ALWAYS set it — it becomes the notification the receiving member sees. op="close_task" (optional): a one-line outcome summary (<=2000 chars) shown on the task card and carried in the close echo.'),
         kind: zod_1.z
             .enum([
             "message",
@@ -114,7 +116,7 @@ function registerChannelTool(register, client) {
         task: zod_1.z
             .string()
             .optional()
-            .describe('op="close_task" / op="set_task_mode" (required): the task id (returned by create_task).'),
+            .describe('op="close_task" / op="set_task_mode" (required): the task id (returned by create_task). op="post" (optional): thread this post under that task — logs a milestone when combined with kind="task_progress".'),
         outcome: zod_1.z
             .enum(["completed", "failed"])
             .optional()
@@ -177,6 +179,7 @@ function registerChannelTool(register, client) {
                     clientMsgId: args.client_msg_id,
                     to: args.to,
                     summary: args.summary,
+                    task: args.task,
                 });
             }
             case "read": {
@@ -210,7 +213,7 @@ function registerChannelTool(register, client) {
                 ]);
                 if (miss)
                     return miss;
-                return (0, channel_ops_write_1.opCloseTask)(client, args.channel, args.task, args.outcome);
+                return (0, channel_ops_write_1.opCloseTask)(client, args.channel, args.task, args.outcome, args.summary);
             }
             case "set_task_mode": {
                 const miss = (0, respond_1.missingParams)("set_task_mode", args, [

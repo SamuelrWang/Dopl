@@ -22,6 +22,7 @@ import {
   ChannelLastOwnerError,
   ChannelMemberExistsError,
   ChannelSlugConflictError,
+  ChannelTaskNotInChannelError,
   DirectChannelImmutableError,
   DirectSelfTargetError,
   TaskForbiddenError,
@@ -288,14 +289,18 @@ export async function postMessage(
     typeof metadata.taskId === "string" ? metadata.taskId : undefined;
   if (taskId && isUuid(taskId)) {
     const task = await repoTasks.findTaskByChannelAndId(channel.id, taskId);
-    if (task) {
-      metadata.taskMode = task.mode;
-      metadata.taskCreatedBy = task.created_by;
-      metadata.taskTitle = task.title;
-      // Null target (an unaddressed task) stamps nothing — the desktop's
-      // predicate then can't match and falls through to the trigger rules.
-      if (task.target_user_id) metadata.taskTarget = task.target_user_id;
-    }
+    // A first-class (UUID) taskId that resolves to no task in THIS channel is
+    // rejected (400) rather than silently un-threaded: a bogus first-class id
+    // can no longer fabricate a threaded group (v1.7, server-validated
+    // threading). Legacy `task-<uuid>-<seq>` ids are not UUIDs and never reach
+    // here; the desktop's inherited first-class ids always resolve.
+    if (!task) throw new ChannelTaskNotInChannelError(taskId);
+    metadata.taskMode = task.mode;
+    metadata.taskCreatedBy = task.created_by;
+    metadata.taskTitle = task.title;
+    // Null target (an unaddressed task) stamps nothing — the desktop's
+    // predicate then can't match and falls through to the trigger rules.
+    if (task.target_user_id) metadata.taskTarget = task.target_user_id;
   }
 
   // `system` is server-reserved and rejected by the route schema, so a posted
@@ -498,7 +503,8 @@ export async function closeTask(
   ctx: ChannelContext,
   ref: string,
   taskId: string,
-  outcome: TaskOutcome
+  outcome: TaskOutcome,
+  summary?: string
 ): Promise<ChannelTask> {
   const { channel, membership } = await loadVisibleChannel(ctx, ref);
   if (!membership) {
@@ -510,14 +516,21 @@ export async function closeTask(
     throw new TaskForbiddenError("close this task");
   }
 
+  // A caller-supplied `summary` (a one-line outcome) is persisted on the task
+  // row AND becomes the lifecycle echo's body; absent (or blank), the echo
+  // keeps its calm default. The kind (task_finished/task_failed) is unchanged.
   const updated = await repoTasks.updateTask(task.id, {
     status: "closed",
     outcome,
     closed_at: new Date().toISOString(),
+    // A blank/whitespace summary stores as null, not "" (render guards on null).
+    outcome_summary: summary && summary.trim().length > 0 ? summary.trim() : null,
   });
 
   await postMessage(ctx, channel.id, {
-    body: outcome === "completed" ? "Task completed" : "Task failed",
+    body:
+      (summary && summary.trim()) ||
+      (outcome === "completed" ? "Task completed" : "Task failed"),
     kind: outcome === "completed" ? "task_finished" : "task_failed",
     summary: task.title,
     metadata: { taskId: task.id },

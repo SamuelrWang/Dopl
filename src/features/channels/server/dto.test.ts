@@ -10,9 +10,11 @@ import {
   mapChannelRow,
   mapMemberRow,
   mapMessageRow,
+  mapTaskRow,
   type ChannelMemberRow,
   type ChannelMessageRow,
   type ChannelRow,
+  type ChannelTaskRow,
   type ChannelViewerState,
   type ProfileRef,
 } from "./dto";
@@ -274,5 +276,34 @@ describe("mapMessageRow", () => {
     ).toBe("b@x.com");
 
     expect(mapMessageRow(messageRow(), undefined).authorName).toBeNull();
+  });
+});
+
+describe("mapTaskRow", () => {
+  function taskRow(overrides: Partial<ChannelTaskRow> = {}): ChannelTaskRow {
+    return {
+      id: "task-1",
+      channel_id: "chan-1",
+      workspace_id: "ws-1",
+      title: "Ship it",
+      status: "closed",
+      outcome: "completed",
+      mode: "interactive",
+      created_by: "user-1",
+      target_user_id: "user-2",
+      created_at: "2026-07-20T00:00:00Z",
+      updated_at: "2026-07-21T00:00:00Z",
+      closed_at: "2026-07-21T00:00:00Z",
+      outcome_summary: "Shipped v2 to prod",
+      ...overrides,
+    };
+  }
+
+  it("maps outcome_summary to outcomeSummary", () => {
+    expect(mapTaskRow(taskRow()).outcomeSummary).toBe("Shipped v2 to prod");
+  });
+
+  it("defaults a null outcome_summary to null", () => {
+    expect(mapTaskRow(taskRow({ outcome_summary: null })).outcomeSummary).toBeNull();
   });
 });

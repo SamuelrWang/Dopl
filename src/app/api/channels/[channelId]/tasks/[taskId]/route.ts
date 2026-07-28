@@ -27,7 +27,7 @@ async function handlePatch(request: NextRequest, auth: WorkspaceAuthContext) {
     const taskId = requireTaskId(auth.params);
     const task =
       input.op === "close"
-        ? await closeTask(ctx, channelId, taskId, input.outcome)
+        ? await closeTask(ctx, channelId, taskId, input.outcome, input.summary)
         : await setTaskMode(ctx, channelId, taskId, input.mode);
     return NextResponse.json({ task });
   } catch (err) {

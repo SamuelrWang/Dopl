@@ -9,6 +9,7 @@ import {
   ChannelMemberExistsError,
   ChannelNotFoundError,
   ChannelSlugConflictError,
+  ChannelTaskNotInChannelError,
   ConsentAlreadyDecidedError,
   ConsentNotFoundError,
   DirectChannelImmutableError,
@@ -45,6 +46,9 @@ export function mapChannelError(err: unknown): HttpError | null {
   }
   if (err instanceof ChannelAddresseeNotMemberError) {
     return new HttpError(400, "CHANNEL_ADDRESSEE_NOT_MEMBER", err.message);
+  }
+  if (err instanceof ChannelTaskNotInChannelError) {
+    return new HttpError(400, "CHANNEL_TASK_NOT_IN_CHANNEL", err.message);
   }
   if (err instanceof ConsentNotFoundError) {
     return new HttpError(404, "CONSENT_NOT_FOUND", err.message);

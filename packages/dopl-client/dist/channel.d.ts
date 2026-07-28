@@ -23,6 +23,7 @@ export declare function postMessage(t: DoplTransport, channelId: string, input: 
 export declare function createChannelTask(t: DoplTransport, channelId: string, input: ChannelTaskCreateInput): Promise<ChannelTask>;
 export declare function closeChannelTask(t: DoplTransport, channelId: string, taskId: string, input: {
     outcome: TaskOutcome;
+    summary?: string;
 }): Promise<ChannelTask>;
 export declare function setChannelTaskMode(t: DoplTransport, channelId: string, taskId: string, input: {
     mode: TaskMode;

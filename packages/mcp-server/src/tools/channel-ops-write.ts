@@ -39,6 +39,8 @@ interface PostOptions {
   to?: string;
   /** One-line intent for the receiver's notification. */
   summary?: string;
+  /** A task id — threads this post under that task's card (server-validated). */
+  task?: string;
 }
 
 /** Options for opOpen — a normal channel, or a `direct` message with `member`. */
@@ -144,12 +146,19 @@ export async function opPost(
     toLabel = member.label;
   }
 
+  // Thread the post under a task when `task` is passed: fold the id into
+  // `metadata.taskId` (the explicit param wins over any metadata copy). The
+  // route then server-validates it resolves to a task in this channel.
+  const metadata = opts.task
+    ? { ...(opts.metadata ?? {}), taskId: opts.task }
+    : opts.metadata;
+
   let message;
   try {
     message = await client.postChannelMessage(ch.id, {
       body,
       kind: opts.kind,
-      metadata: opts.metadata,
+      metadata,
       clientMsgId: opts.clientMsgId,
       toUserId,
       summary: opts.summary,
@@ -213,12 +222,13 @@ export async function opCloseTask(
   channelRef: string,
   taskId: string,
   outcome: TaskOutcome,
+  summary?: string,
 ): Promise<ToolResponse> {
   const ch = await resolveChannelOr(client, channelRef);
   if (isErr(ch)) return ch;
   let task;
   try {
-    task = await client.closeChannelTask(ch.id, taskId, { outcome });
+    task = await client.closeChannelTask(ch.id, taskId, { outcome, summary });
   } catch (e) {
     if (isNotFound(e)) {
       return err(`No task \`${taskId}\` in **${ch.name}**.`);
@@ -230,7 +240,10 @@ export async function opCloseTask(
     }
     throw e;
   }
-  return ok(`Closed task **${task.title}** in **${ch.name}** as ${task.outcome}.`);
+  const summaryNote = summary?.trim() ? ` — ${summary.trim()}` : "";
+  return ok(
+    `Closed task **${task.title}** in **${ch.name}** as ${task.outcome}${summaryNote}.`,
+  );
 }
 
 export async function opSetTaskMode(

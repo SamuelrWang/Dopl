@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   groupThread,
   isCalmTerminalStatus,
+  splitSessionEntries,
   truncateSummary,
   type TaskOverlay,
   type ThreadItem,
@@ -425,6 +426,44 @@ describe("groupThread", () => {
     expect(s.session.mode).toBe("interactive");
   });
 
+  it("surfaces the overlay's outcomeSummary and defaults a legacy group to null", () => {
+    // An overlay (a first-class channel_tasks row) carrying an outcome summary
+    // surfaces it on the session; a legacy session with no overlay stays null.
+    const withRow = "8c2d1e90-4a5b-4f3c-9e1d-7b6a5c4d3e2f";
+    const legacy = "task-c1-500";
+    const overlays = new Map<string, TaskOverlay>([
+      [
+        withRow,
+        {
+          status: "done",
+          title: "Ship it",
+          mode: "autonomous",
+          outcomeSummary: "Shipped v1.7 to prod.",
+        },
+      ],
+    ]);
+    const items = groupThread(
+      [
+        msg({ kind: "message", authorKind: "agent", body: "done", metadata: { taskId: withRow } }),
+        msg({ kind: "task_started", authorKind: "agent", metadata: { taskId: legacy } }),
+        msg({ kind: "message", authorKind: "agent", body: "legacy reply", metadata: { taskId: legacy } }),
+      ],
+      overlays
+    );
+    const s = sessions(items);
+    const overlaid = s.find(
+      (i) => i.type === "session" && i.session.taskId === withRow
+    );
+    const legacyGroup = s.find(
+      (i) => i.type === "session" && i.session.taskId === legacy
+    );
+    if (overlaid?.type !== "session" || legacyGroup?.type !== "session") {
+      throw new Error("expected both sessions");
+    }
+    expect(overlaid.session.outcomeSummary).toBe("Shipped v1.7 to prod.");
+    expect(legacyGroup.session.outcomeSummary).toBeNull();
+  });
+
   it("terminal session groups its one reply and is Done; a later agent post is not absorbed", () => {
     const t = "task-c1-27";
     const items = groupThread([
@@ -620,5 +659,46 @@ describe("truncateSummary", () => {
   });
   it("truncates with an ellipsis past the max", () => {
     expect(truncateSummary("abcdefghij", 5)).toBe("abcd…");
+  });
+});
+
+describe("splitSessionEntries", () => {
+  it("separates task_progress milestones from chat replies, preserving order", () => {
+    const entries = [
+      msg({ kind: "task_progress", authorKind: "agent", body: "step one" }),
+      msg({ kind: "message", authorKind: "agent", body: "reply one" }),
+      msg({ kind: "task_progress", authorKind: "agent", body: "step two" }),
+      msg({ kind: "message", authorKind: "user", body: "a follow-up" }),
+    ];
+    const { milestones, replies } = splitSessionEntries(entries);
+    expect(milestones.map((m) => m.body)).toEqual(["step one", "step two"]);
+    expect(replies.map((m) => m.body)).toEqual(["reply one", "a follow-up"]);
+  });
+
+  it("returns empty lanes for an empty entry list", () => {
+    const { milestones, replies } = splitSessionEntries([]);
+    expect(milestones).toHaveLength(0);
+    expect(replies).toHaveLength(0);
+  });
+
+  it("splits a grouped session's entries the same way the card renders them", () => {
+    // groupThread keeps task_progress inside entries (byte-for-byte unchanged);
+    // the render-layer split then pulls the two lanes apart.
+    const t = "task-c1-700";
+    const items = groupThread([
+      msg({ kind: "task_started", authorKind: "agent", metadata: { taskId: t } }),
+      msg({ kind: "task_progress", authorKind: "agent", body: "Reading files…", metadata: { taskId: t } }),
+      msg({ kind: "message", authorKind: "agent", body: "Done.", metadata: { taskId: t } }),
+      msg({ kind: "task_finished", authorKind: "agent", metadata: { taskId: t } }),
+    ]);
+    const s = sessions(items)[0];
+    if (s.type !== "session") throw new Error("expected session");
+    expect(s.session.entries.map((e) => e.kind)).toEqual([
+      "task_progress",
+      "message",
+    ]);
+    const { milestones, replies } = splitSessionEntries(s.session.entries);
+    expect(milestones.map((m) => m.body)).toEqual(["Reading files…"]);
+    expect(replies.map((m) => m.body)).toEqual(["Done."]);
   });
 });

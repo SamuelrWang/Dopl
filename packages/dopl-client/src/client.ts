@@ -632,7 +632,7 @@ export class DoplClient {
   closeChannelTask(
     channelId: string,
     taskId: string,
-    input: { outcome: TaskOutcome }
+    input: { outcome: TaskOutcome; summary?: string }
   ): Promise<ChannelTask> {
     return channel.closeChannelTask(this.transport, channelId, taskId, input);
   }

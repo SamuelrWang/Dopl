@@ -1,12 +1,17 @@
 "use client";
 
 import { useMemo } from "react";
-import { ArrowRight, ListTodo } from "lucide-react";
+import { ArrowRight, Check, ListTodo } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { Avatar, type AvatarPerson } from "@/shared/ui/avatar";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
-import type { ChannelMember, ChannelTask, TaskMode } from "../types";
+import type {
+  ChannelMember,
+  ChannelMessage,
+  ChannelTask,
+  TaskMode,
+} from "../types";
 
 /** The three rendered task states, mirroring `message-thread.tsx taskOverlayFrom`. */
 type TaskDisplayStatus = "active" | "done" | "failed";
@@ -32,6 +37,12 @@ interface Props {
   members: ChannelMember[];
   /** userId -> display name, for the creator / target labels. */
   memberNames: Map<string, string>;
+  /**
+   * The latest `task_progress` milestone per task id (derived from the loaded
+   * messages), shown as a one-line accomplishment under the title. Absent map
+   * or missing entry renders nothing.
+   */
+  latestMilestone?: Map<string, ChannelMessage>;
   /** Navigate to the task's grouped card (scroll + transient highlight). */
   onSelectTask: (taskId: string) => void;
 }
@@ -49,6 +60,7 @@ export function TaskPanel({
   tasksLoading,
   members,
   memberNames,
+  latestMilestone,
   onSelectTask,
 }: Props) {
   const memberById = useMemo(
@@ -96,6 +108,7 @@ export function TaskPanel({
         <div className="min-h-0 flex-1 divide-y divide-border-subtle overflow-y-auto overscroll-contain border-t border-border-subtle">
           {tasks.map((task) => {
             const status = displayStatus(task);
+            const milestone = latestMilestone?.get(task.id);
             return (
               <button
                 key={task.id}
@@ -109,6 +122,13 @@ export function TaskPanel({
                   </span>
                   <StatusChip status={status} />
                 </div>
+
+                {milestone && (
+                  <div className="flex items-center gap-1 text-micro text-text-muted">
+                    <Check size={11} className="shrink-0 text-success" />
+                    <span className="min-w-0 truncate">{milestone.body}</span>
+                  </div>
+                )}
 
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-micro text-text-muted">
                   <ModeBadge mode={task.mode} />
@@ -130,6 +150,19 @@ export function TaskPanel({
                   {task.closedAt &&
                     ` · closed ${formatChannelTimestamp(task.closedAt)}`}
                 </span>
+
+                {task.status === "closed" && task.outcomeSummary && (
+                  <span
+                    className={cn(
+                      "text-caption",
+                      task.outcome === "failed"
+                        ? "text-danger"
+                        : "text-text-secondary"
+                    )}
+                  >
+                    {task.outcomeSummary}
+                  </span>
+                )}
               </button>
             );
           })}

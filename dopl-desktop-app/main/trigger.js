@@ -107,6 +107,10 @@ async function handleTrigger(entry, m) {
   // Snapshot the tool profile at request time — the async approval may land much
   // later; the request was made under this profile's containment.
   const toolProfile = targeting.resolveToolProfile(entry.channel);
+  // v1.7: a first-class (UUID) task id on the inbound message threads the whole
+  // reply + lifecycle under the requester's task card (taskIdFor prefers it). A
+  // legacy/absent id -> '' -> undefined here -> deterministic legacy id, unchanged.
+  const inboundTaskId = targeting.firstClassTaskId(m);
   diag('consent create:', entry.channel.id.slice(0, 8), 'seq', m.seq);
 
   const created = await consent.createConsentRequest(entry.workspaceId, {
@@ -134,6 +138,7 @@ async function handleTrigger(entry, m) {
     requesterName,
     summary,
     toolProfile,
+    taskId: inboundTaskId || undefined,
     kind: 'inbound',
     rowId: created.rowId,
   });
@@ -218,7 +223,7 @@ async function runTerminalApproved(entry, m, rec, { taskId, requesterName }) {
   const r = await spawner.runInTerminalForChannel({
     channelId: entry.channel.id,
     message: m.body,
-    context: { channelName: entry.channel.name, authorName: requesterName },
+    context: { channelName: entry.channel.name, authorName: requesterName, authorKind: m.authorKind },
     toolProfile: rec.toolProfile,
   });
   if (r.skipped === 'busy') {
@@ -250,7 +255,7 @@ async function runHeadlessApproved(entry, m, rec, { taskId, startedAt, requester
   const result = await spawner.runForChannel({
     channelId: entry.channel.id,
     message: m.body,
-    context: { channelName: entry.channel.name, authorName: requesterName },
+    context: { channelName: entry.channel.name, authorName: requesterName, authorKind: m.authorKind },
     toolProfile: rec.toolProfile,
     onStart: () => postTaskEvent(entry, m, 'task_started', taskId),
   });

@@ -154,6 +154,21 @@ export function ChannelThread({
       new Map(members.map((m) => [m.userId, m.displayName || m.email || "teammate"])),
     [members]
   );
+  // The latest `task_progress` milestone per task, keyed by its `metadata.taskId`
+  // — a pure derivation over already-loaded messages (seq-ascending), so the
+  // task panel can show each task's most recent accomplishment with no extra
+  // fetch or write (F-072-safe).
+  const latestMilestone = useMemo(() => {
+    const map = new Map<string, ChannelMessage>();
+    for (const m of messages) {
+      if (m.kind !== "task_progress") continue;
+      const taskId = m.metadata.taskId;
+      if (typeof taskId !== "string" || taskId.length === 0) continue;
+      const existing = map.get(taskId);
+      if (!existing || m.seq > existing.seq) map.set(taskId, m);
+    }
+    return map;
+  }, [messages]);
   const otherMembers = useMemo(
     () => members.filter((m) => m.userId !== currentUserId),
     [members, currentUserId]
@@ -286,6 +301,7 @@ export function ChannelThread({
                 tasksLoading={tasksLoading}
                 members={members}
                 memberNames={memberNames}
+                latestMilestone={latestMilestone}
                 onSelectTask={handleSelectTask}
               />
             </Popover>

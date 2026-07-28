@@ -108,6 +108,16 @@ function classify(m, entry, myId) {
   return isMember ? 'fyi' : 'ignore';
 }
 
+// A first-class (UUID) task id off an inbound message, else '' — the desktop
+// threads its reply + lifecycle under it so a responder's turn groups into the
+// requester's task card. Legacy task-<uuid>-<seq> ids are NOT UUIDs -> '' here,
+// so the deterministic legacy id path (taskIdFor's fallback) is unchanged.
+// Mirrors the server's isUuid gate so only a real first-class task threads.
+function firstClassTaskId(m) {
+  const id = metaStr(m, 'taskId');
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id) ? id : '';
+}
+
 // Open the app window and navigate the webview to the channel's page. Wired from
 // index.js; no-op until handlers are registered.
 function openChannelForEntry(entry) {
@@ -132,6 +142,7 @@ module.exports = {
   truncate,
   metaStr,
   classify,
+  firstClassTaskId,
   openChannelForEntry,
   resolveToolProfile,
 };

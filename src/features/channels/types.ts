@@ -50,6 +50,9 @@ export type ChannelTask = {
   createdAt: string;
   updatedAt: string;
   closedAt: string | null;
+  /** A human-readable close summary carried on the task row; null while open
+   *  or when closed without one. */
+  outcomeSummary: string | null;
 };
 
 /** Channel-scoped role: the creator is `owner`, everyone added is `member`. */
