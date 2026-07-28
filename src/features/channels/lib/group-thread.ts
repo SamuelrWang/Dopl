@@ -133,7 +133,7 @@ function readToUserId(metadata: Record<string, unknown>): string | null {
  * UUID task id, etc.), which is how the legacy-only backfill/pair-join stay
  * scoped to legacy exchanges.
  */
-function parseLegacyTaskSeq(taskId: string, channelId: string): number | null {
+export function parseLegacyTaskSeq(taskId: string, channelId: string): number | null {
   const prefix = `task-${channelId}-`;
   if (!taskId.startsWith(prefix)) return null;
   const rest = taskId.slice(prefix.length);

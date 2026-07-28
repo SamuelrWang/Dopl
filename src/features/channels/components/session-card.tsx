@@ -27,12 +27,27 @@ import type { TaskMode } from "../types";
  * `px-3.5` padding); the header + footer strips reuse the
  * `bg-card-surface-subtle` section-strip recipe.
  */
-export function SessionCard({ session }: { session: SessionGroup }) {
-  // Per-entry collapse: nested messages start expanded; clicking the chevron
-  // hides just that entry's body while keeping its avatar + author + time.
-  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(
-    () => new Set()
-  );
+export function SessionCard({
+  session,
+  highlighted = false,
+}: {
+  session: SessionGroup;
+  /** Transient ring while the task panel has navigated to this card. */
+  highlighted?: boolean;
+}) {
+  // Per-entry collapse. An entry that leads with a one-line summary starts
+  // COLLAPSED (summary only, full body behind the chevron); an entry with no
+  // summary keeps today's behavior (body shown, the chevron hides it). Clicking
+  // the chevron toggles just that entry's body, keeping its avatar/author/time.
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => {
+    const initial = new Set<string>();
+    for (const entry of session.entries) {
+      if (entry.kind === "message" && readSummary(entry.metadata)) {
+        initial.add(entry.id);
+      }
+    }
+    return initial;
+  });
   const toggleEntry = (id: string) =>
     setCollapsedIds((prev) => {
       const next = new Set(prev);
@@ -52,7 +67,13 @@ export function SessionCard({ session }: { session: SessionGroup }) {
     messageEntries.length === 0 ? CALM_TERMINAL_NOTE[session.status] : undefined;
 
   return (
-    <article className="overflow-hidden rounded-[10px] border border-border-default bg-bg-elevated">
+    <article
+      id={`session:${session.taskId}`}
+      className={cn(
+        "overflow-hidden rounded-[10px] border border-border-default bg-bg-elevated",
+        highlighted && "ring-2 ring-border-highlight"
+      )}
+    >
       <header className="flex items-start gap-2 border-b border-border-subtle bg-card-surface-subtle px-3.5 py-2">
         <Avatar
           person={{
@@ -81,6 +102,7 @@ export function SessionCard({ session }: { session: SessionGroup }) {
           entry.kind === "message" ? (
             (() => {
               const collapsed = collapsedIds.has(entry.id);
+              const summary = readSummary(entry.metadata);
               return (
                 <div key={entry.id} className="flex flex-col gap-1">
                   <div className="flex items-center gap-1.5">
@@ -112,8 +134,18 @@ export function SessionCard({ session }: { session: SessionGroup }) {
                       · {formatChannelTimestamp(entry.createdAt)}
                     </span>
                   </div>
+                  {summary && (
+                    <p className="whitespace-pre-wrap break-words text-body font-medium leading-relaxed text-text-primary">
+                      {summary}
+                    </p>
+                  )}
                   {!collapsed && (
-                    <p className="whitespace-pre-wrap break-words text-body leading-relaxed text-text-primary">
+                    <p
+                      className={cn(
+                        "whitespace-pre-wrap break-words text-body leading-relaxed",
+                        summary ? "text-text-secondary" : "text-text-primary"
+                      )}
+                    >
                       {entry.body}
                     </p>
                   )}
@@ -142,6 +174,12 @@ export function SessionCard({ session }: { session: SessionGroup }) {
       </footer>
     </article>
   );
+}
+
+/** A non-empty string `metadata.summary`, promoted to the entry's headline. */
+function readSummary(metadata: Record<string, unknown>): string | null {
+  const value = metadata.summary;
+  return typeof value === "string" && value.length > 0 ? value : null;
 }
 
 const STATUS_LABEL: Record<SessionStatus, string> = {

@@ -7,6 +7,7 @@ import {
   Bell,
   BellOff,
   Hash,
+  ListTodo,
   LogOut,
   MoreHorizontal,
   Trash2,
@@ -25,6 +26,7 @@ import type {
   ChannelMessage,
   ChannelTask,
   NotifyScope,
+  TaskMode,
 } from "../types";
 import {
   channelDisplayAvatarPerson,
@@ -33,6 +35,7 @@ import {
 import { MessageThread } from "./message-thread";
 import { MessageComposer, type SendOptions } from "./message-composer";
 import { PendingRequestsPanel } from "./pending-requests-panel";
+import { TaskPanel } from "./task-panel";
 import { ChannelSettingsPopover } from "./channel-settings-popover";
 import { ChannelFolderControl } from "./channel-folder-control";
 import { PresenceDot } from "./address-picker";
@@ -56,6 +59,9 @@ const NOTIFY_OPTIONS: Array<{
   { scope: "none", label: "Muted", description: "No notifications from this channel." },
 ];
 
+/** How long a task's grouped card keeps its navigation ring after a panel click. */
+const TASK_HIGHLIGHT_MS = 2200;
+
 interface Props {
   channel: Channel;
   messages: ChannelMessage[];
@@ -77,6 +83,12 @@ interface Props {
   /** Consent decisions with a write in flight, by request id. */
   consentBusyIds: ReadonlySet<string>;
   onSend: (body: string, opts?: SendOptions) => Promise<void>;
+  onCreateTask: (input: {
+    title: string;
+    body: string;
+    toUserId: string;
+    mode: TaskMode;
+  }) => Promise<void>;
   onInvite: () => void;
   onSetNotifyScope: (scope: NotifyScope) => void;
   onSetToolProfile: (profile: AgentToolProfile) => void;
@@ -111,6 +123,7 @@ export function ChannelThread({
   trustBusyIds,
   consentBusyIds,
   onSend,
+  onCreateTask,
   onInvite,
   onSetNotifyScope,
   onSetToolProfile,
@@ -124,8 +137,11 @@ export function ChannelThread({
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [notifyOpen, setNotifyOpen] = useState(false);
+  const [taskPanelOpen, setTaskPanelOpen] = useState(false);
+  const [highlightedTaskId, setHighlightedTaskId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const canManage = channel.role === "owner";
   // Direct-channel rendering: the header + composer speak to the resolved peer
   // (name / avatar live from the roster), never the stored channel name/slug.
@@ -164,6 +180,30 @@ export function ChannelThread({
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages.length, channel.id]);
+
+  // Clear the pending highlight timer on unmount / channel switch.
+  useEffect(
+    () => () => {
+      if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+    },
+    []
+  );
+
+  // Task-panel navigation: close the panel, ring the task's grouped card, and
+  // scroll it into view. An open task with no grouped card yet has no element,
+  // so the scroll is a no-op while the highlight still arms (harmless).
+  function handleSelectTask(taskId: string) {
+    setTaskPanelOpen(false);
+    setHighlightedTaskId(taskId);
+    document
+      .getElementById(`session:${taskId}`)
+      ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+    highlightTimerRef.current = setTimeout(
+      () => setHighlightedTaskId(null),
+      TASK_HIGHLIGHT_MS
+    );
+  }
 
   return (
     <div className="flex min-w-0 flex-1 flex-col">
@@ -223,6 +263,34 @@ export function ChannelThread({
             />
           )}
         </span>
+
+        {channel.isMember && (
+          <div className="relative shrink-0">
+            <button
+              type="button"
+              onClick={() => setTaskPanelOpen((v) => !v)}
+              aria-label="Tasks"
+              title="Tasks"
+              className="flex h-7 w-7 items-center justify-center rounded-[7px] text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary"
+            >
+              <ListTodo size={16} />
+            </button>
+            <Popover
+              open={taskPanelOpen}
+              onClose={() => setTaskPanelOpen(false)}
+              align="right"
+              className="w-80"
+            >
+              <TaskPanel
+                tasks={tasks}
+                tasksLoading={tasksLoading}
+                members={members}
+                memberNames={memberNames}
+                onSelectTask={handleSelectTask}
+              />
+            </Popover>
+          </div>
+        )}
 
         {channel.isMember && (
           <div className="relative shrink-0">
@@ -371,6 +439,8 @@ export function ChannelThread({
               memberNames={memberNames}
               tasks={tasks}
               tasksLoading={tasksLoading}
+              currentUserId={currentUserId}
+              highlightedTaskId={highlightedTaskId}
             />
           )}
         </div>
@@ -379,6 +449,7 @@ export function ChannelThread({
       {channel.isMember ? (
         <MessageComposer
           onSend={onSend}
+          onCreateTask={onCreateTask}
           members={members}
           currentUserId={currentUserId}
           isDirect={channel.isDirect}

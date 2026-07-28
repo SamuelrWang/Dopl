@@ -569,6 +569,49 @@ describe("groupThread", () => {
     expect(s[1].session.taskId).toBe(t2);
     expect(s[1].session.entries.map((e) => e.body)).toEqual(["second ask", "second answer"]);
   });
+
+  it("DM (2-member): an auto-addressed request + the peer agent's addressed reply group into one done pair card", () => {
+    // Feature 4 auto-addresses a DM message to the peer. The peer's agent spawns
+    // (task_started with the legacy id) and self-posts an addressed reply with no
+    // task id of its own. The existing B1 backfill + B2 pair-join group both into
+    // one card with NO grouping-logic change — verifying the DM shape is already
+    // handled by today's heuristics.
+    const t = "task-c1-200";
+    const items = groupThread([
+      msg({ seq: 200, kind: "message", authorKind: "user", authorUserId: "u_req", body: "please review", metadata: { to_user_id: "u_resp" } }),
+      msg({ seq: 201, kind: "task_started", authorKind: "agent", authorUserId: "u_resp", metadata: { taskId: t } }),
+      msg({ seq: 202, kind: "message", authorKind: "agent", authorUserId: "u_resp", body: "reviewed", metadata: { to_user_id: "u_req" } }),
+    ]);
+    // One card, no loose bubbles: the opener backfilled and the reply pair-joined.
+    expect(items).toHaveLength(1);
+    const s = sessions(items);
+    expect(s).toHaveLength(1);
+    if (s[0].type !== "session") throw new Error("expected session");
+    expect(s[0].session.taskId).toBe(t);
+    expect(s[0].session.entries.map((e) => e.body)).toEqual(["please review", "reviewed"]);
+    // A delivered agent reply implies the exchange is Done even with no finish.
+    expect(s[0].session.status).toBe("done");
+  });
+
+  it("DM (2-member): a legacy task-{ch}-{N} start backfills its auto-addressed seq-N opener as the opening entry", () => {
+    // The DM opener (auto-addressed to the peer, no task id) spawned
+    // `task-c1-300`. B1 backfill pulls it into the card as the opening entry,
+    // ahead of the agent reply, and removes it from the loose stream — the same
+    // legacy backfill, exercised through the Feature 4 DM addressing shape.
+    const t = "task-c1-300";
+    const items = groupThread([
+      msg({ seq: 300, kind: "message", authorKind: "user", authorUserId: "u_req", body: "the DM proposal", metadata: { to_user_id: "u_resp" } }),
+      msg({ seq: 301, kind: "task_started", authorKind: "agent", authorUserId: "u_resp", metadata: { taskId: t } }),
+      msg({ seq: 302, kind: "message", authorKind: "agent", authorUserId: "u_resp", body: "done reply", metadata: { taskId: t } }),
+      msg({ seq: 303, kind: "task_finished", authorKind: "agent", authorUserId: "u_resp", metadata: { taskId: t } }),
+    ]);
+    expect(items).toHaveLength(1);
+    const s = sessions(items);
+    if (s[0].type !== "session") throw new Error("expected session");
+    expect(s[0].session.taskId).toBe(t);
+    expect(s[0].session.entries.map((e) => e.body)).toEqual(["the DM proposal", "done reply"]);
+    expect(s[0].session.status).toBe("done");
+  });
 });
 
 describe("truncateSummary", () => {
