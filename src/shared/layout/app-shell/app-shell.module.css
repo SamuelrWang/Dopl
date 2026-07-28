@@ -297,13 +297,14 @@
 /* Pro upsell card — seated in the open space right under the nav divider. */
 .wordsCard {
   margin-top: 16px;
-  background: var(--orange);
+  background: var(--bg-inset);
+  border: 1px solid var(--border-strong);
   border-radius: 8px;
   padding: 18px;
 }
 .wcTitle { font-size: 16px; font-weight: 600; margin-bottom: 9px; letter-spacing: -0.01em; }
 .wcTitle b { color: var(--ink); font-weight: 700; }
-.wcDesc { font-size: 13.5px; color: var(--ink); line-height: 1.45; margin-bottom: 16px; }
+.wcDesc { font-size: 13.5px; color: var(--ink-soft); line-height: 1.45; margin-bottom: 16px; }
 .upgradeBtn {
   display: block;
   width: 100%;
