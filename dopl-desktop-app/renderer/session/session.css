@@ -1,0 +1,387 @@
+/* Dopl session window — layout + components.
+   Built entirely on tokens.css (palette + kit). No hardcoded palette hex here;
+   surface/border/text values come from the copied design tokens. */
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: var(--text-body);
+  -webkit-font-smoothing: antialiased;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+  gap: 8px;
+}
+
+/* ── Header ──────────────────────────────────────────────────────────────── */
+.session-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+}
+.header-id { min-width: 0; }
+.header-title-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.brand-mark {
+  width: 20px; height: 20px; border-radius: 6px; flex: none;
+  background: linear-gradient(180deg, #313131 0%, #111 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+.channel-name {
+  font-size: var(--text-title);
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.task-title {
+  margin-top: 2px;
+  color: var(--text-secondary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 520px;
+}
+.badge-row { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+.badge {
+  display: inline-flex; align-items: center;
+  padding: 1px 8px;
+  border-radius: 9999px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: var(--text-micro);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+
+.header-controls { display: flex; gap: 8px; flex: none; }
+
+/* ── Control buttons (kit-based) ──────────────────────────────────────────── */
+.ctl {
+  font-family: var(--font-ui);
+  font-size: var(--text-small);
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  color: var(--text-primary);
+}
+.ctl-primary { color: var(--text-on-cta); }
+.ctl-danger { color: var(--danger); }
+.ctl-sm { padding: 5px 10px; font-size: var(--text-small); }
+
+/* ── Status strip + cost meter ────────────────────────────────────────────── */
+.status-strip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 12px;
+  border-radius: 10px;
+  background: var(--card-surface-subtle);
+  border: 1px solid var(--border-default);
+}
+.status-pill { display: inline-flex; align-items: center; gap: 6px; }
+.status-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--text-muted);
+  flex: none;
+}
+.status-dot.is-running { background: var(--agent-on); }
+.status-dot.is-awaiting_permission { background: var(--warning); }
+.status-dot.is-awaiting_inbound { background: var(--link); }
+.status-dot.is-interrupted { background: var(--warning); }
+.status-dot.is-ended { background: var(--text-disabled); }
+.status-label {
+  font-size: var(--text-label);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.status-meta { color: var(--text-muted); font-size: var(--text-caption); }
+.status-spacer { flex: 1; }
+.cost-meter {
+  display: flex; gap: 10px; align-items: baseline;
+  color: var(--text-secondary);
+  font-size: var(--text-caption);
+}
+.cost-meter b { color: var(--text-primary); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* ── Turn stream ──────────────────────────────────────────────────────────── */
+.stream-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.stream {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--bg-inset);
+  border-radius: 12px;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.06);
+}
+
+/* Turn bubbles */
+.bubble {
+  max-width: 78%;
+  padding: 9px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border-default);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+.bubble .who {
+  display: block;
+  font-size: var(--text-micro);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 3px;
+}
+.bubble.role-agent { align-self: flex-start; background: var(--card-surface-elevated); }
+.bubble.role-operator { align-self: flex-end; background: var(--bg-elevated); border-color: var(--border-strong); }
+.bubble.role-counterparty { align-self: flex-start; background: #f1efe9; border-color: var(--border-strong); }
+.bubble.is-streaming .body::after {
+  content: "▍";
+  color: var(--text-muted);
+  animation: blink 1s step-start infinite;
+}
+@keyframes blink { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .bubble.is-streaming .body::after { animation: none; } }
+
+.notice {
+  align-self: center;
+  max-width: 90%;
+  padding: 6px 12px;
+  border-radius: 9px;
+  font-size: var(--text-caption);
+  border: 1px solid var(--border-default);
+}
+.notice.level-error { color: var(--danger); background: #fbecea; border-color: rgba(200, 64, 47, 0.28); }
+
+/* ── Tool-call card (SectionBox recipe) ──────────────────────────────────── */
+.tool-card {
+  align-self: stretch;
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--card-surface);
+}
+.tool-card__head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 12px;
+  background: var(--card-surface-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.tool-card__name {
+  font-size: var(--text-label);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  color: var(--text-secondary);
+  flex: none;
+}
+.tool-card__summary {
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  color: var(--text-primary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  min-width: 0; flex: 1;
+}
+.tool-status { flex: none; font-size: var(--text-micro); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+.tool-status.is-pending { color: var(--text-muted); }
+.tool-status.is-ok { color: var(--agent-on); }
+.tool-status.is-error { color: var(--danger); }
+.tool-card__body {
+  background: var(--bg-inset);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.06);
+  padding: 8px 12px;
+}
+.tool-card__body details > summary {
+  cursor: pointer;
+  font-size: var(--text-caption);
+  color: var(--text-secondary);
+  list-style: none;
+}
+.tool-card__body details > summary::-webkit-details-marker { display: none; }
+.tool-card__body pre {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  background: var(--card-surface-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 240px;
+  overflow: auto;
+  user-select: text;
+}
+.tool-result {
+  margin-top: 6px;
+  font-size: var(--text-caption);
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ── Inbound pending (interactive release) ───────────────────────────────── */
+.inbound-pending {
+  align-self: stretch;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: var(--bg-elevated);
+}
+.inbound-pending .who {
+  font-size: var(--text-label);
+  text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600;
+  color: var(--link);
+  margin-bottom: 4px;
+  display: block;
+}
+.inbound-pending .body { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; }
+.inbound-pending .row { display: flex; justify-content: flex-end; margin-top: 8px; }
+.inbound-pending.is-released { opacity: 0.55; }
+
+/* ── Permission dock ─────────────────────────────────────────────────────── */
+.permission-dock { display: none; }
+.permission-dock.is-active { display: block; }
+.perm-card {
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--card-surface);
+}
+.perm-card__head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px;
+  background: var(--surface-cta);
+  color: var(--text-on-cta);
+}
+.perm-card__head .lbl {
+  font-size: var(--text-label);
+  text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600;
+}
+.perm-card__head .tool { font-family: var(--font-mono); font-size: var(--text-small); opacity: 0.92; }
+.perm-card__body { padding: 10px 12px; }
+.perm-summary {
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  color: var(--text-primary);
+  white-space: pre-wrap; overflow-wrap: anywhere;
+  margin-bottom: 8px;
+}
+.perm-card__body details > summary {
+  cursor: pointer; list-style: none;
+  font-size: var(--text-caption); color: var(--text-secondary);
+}
+.perm-card__body details > summary::-webkit-details-marker { display: none; }
+.perm-card__body pre {
+  margin: 8px 0 0; padding: 8px 10px;
+  background: var(--bg-inset);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  white-space: pre-wrap; overflow-wrap: anywhere;
+  max-height: 200px; overflow: auto;
+  user-select: text;
+}
+.perm-actions { display: flex; gap: 8px; margin-top: 12px; }
+.perm-queue-note { margin-top: 8px; color: var(--text-muted); font-size: var(--text-micro); }
+
+/* ── Close-task panel ────────────────────────────────────────────────────── */
+.close-panel { display: none; }
+.close-panel.is-open { display: block; }
+.close-panel__inner { padding: 12px; }
+.close-panel .row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.close-panel .seg { display: inline-flex; gap: 4px; }
+.close-panel .seg-btn {
+  padding: 5px 12px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  font-size: var(--text-small); color: var(--text-secondary);
+}
+.close-panel .seg-btn.is-sel { color: var(--text-primary); }
+.close-field { border-radius: 8px; }
+.close-summary {
+  width: 100%;
+  min-height: 62px;
+  resize: vertical;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-family: var(--font-ui);
+  font-size: var(--text-body);
+  color: var(--text-primary);
+  background: transparent;
+  border: none;
+  outline: none;
+  user-select: text;
+}
+.close-panel .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+
+/* ── Composer (steering) ─────────────────────────────────────────────────── */
+.composer { padding: 10px; }
+.composer__field { display: flex; align-items: flex-end; gap: 8px; padding: 8px; border-radius: 12px; }
+.steer-input {
+  flex: 1;
+  min-height: 22px;
+  max-height: 140px;
+  resize: none;
+  padding: 6px 8px;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-family: var(--font-ui);
+  font-size: var(--text-body);
+  color: var(--text-primary);
+  line-height: 1.5;
+  user-select: text;
+}
+.composer__controls { display: flex; align-items: center; gap: 8px; flex: none; }
+.interject-toggle {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: var(--text-caption); color: var(--text-secondary);
+  cursor: pointer; user-select: none;
+}
+.send-btn { color: var(--text-on-cta); padding: 7px 16px; border-radius: 8px; border: 1px solid transparent; font-size: var(--text-small); font-weight: 600; cursor: pointer; }
+
+/* ── Ended state ─────────────────────────────────────────────────────────── */
+.app.is-ended .composer,
+.app.is-ended .header-controls { opacity: 0.5; pointer-events: none; }
+.ended-banner { display: none; }
+.app.is-ended .ended-banner {
+  display: block;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--card-surface-subtle);
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
+  font-size: var(--text-caption);
+  text-align: center;
+}
+.ended-banner b { color: var(--text-primary); }
+
+.hidden { display: none !important; }

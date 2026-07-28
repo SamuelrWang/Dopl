@@ -111,9 +111,11 @@ export const TaskCreateSchema = z.object({
 export type TaskCreateInput = z.infer<typeof TaskCreateSchema>;
 
 /**
- * Update a task: close it (`op:"close"` — creator or target) OR change its
- * mode (`op:"set_mode"` — creator only). A discriminated union so the two
- * ops can't bleed fields into each other.
+ * Update a task: close it (`op:"close"` — creator or target), change its mode
+ * (`op:"set_mode"` — creator only), OR reopen a closed one (`op:"reopen"` —
+ * creator or target, web-only; no MCP counterpart). A discriminated union so
+ * the ops can't bleed fields into each other. `reopen` carries no payload — it
+ * clears the closed state back to open server-side.
  */
 export const TaskUpdateSchema = z.discriminatedUnion("op", [
   z.object({
@@ -122,6 +124,7 @@ export const TaskUpdateSchema = z.discriminatedUnion("op", [
     summary: z.string().trim().max(2000).optional(),
   }),
   z.object({ op: z.literal("set_mode"), mode: TaskModeSchema }),
+  z.object({ op: z.literal("reopen") }),
 ]);
 export type TaskUpdateInput = z.infer<typeof TaskUpdateSchema>;
 

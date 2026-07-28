@@ -118,6 +118,30 @@ function firstClassTaskId(m) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id) ? id : '';
 }
 
+// ── Requester auto-open detector (v1.9, Q4) ──────────────────────────────────
+// TRUE iff this message is MY OWN first-class create_task addressed to a peer, so
+// the desktop opens a REQUESTER session window that drives the task. Checked by the
+// listener SEPARATELY from classify() — it never touches classify's body, so the
+// 1536-case truth table stays intact and a self-message still classifies 'ignore'
+// for trigger/fyi. The task* keys are stamped SERVER-SIDE (metaStr reads them off
+// metadata), so they cannot be spoofed by the caller.
+//
+//   - firstClassTaskId(m) present   → a real first-class (UUID) task, not legacy.
+//   - m.authorUserId === myId       → MY message (my agent posted the create_task).
+//   - taskCreatedBy === myId        → I created the task (the requester, not a peer).
+//   - taskTarget present && !== me  → it is addressed to a PEER (a self-targeted
+//                                     task has no counterparty to drive against).
+// De-dupe (one window per taskId) + backlog suppression + the settled-set are the
+// listener's job; this helper is a pure predicate only.
+function requesterTaskOpen(m, myId) {
+  if (!m || m.kind !== 'message' || !myId) return false;
+  if (!firstClassTaskId(m)) return false;
+  if (m.authorUserId !== myId) return false;
+  if (metaStr(m, 'taskCreatedBy') !== myId) return false;
+  const target = metaStr(m, 'taskTarget');
+  return !!target && target !== myId;
+}
+
 // Open the app window and navigate the webview to the channel's page. Wired from
 // index.js; no-op until handlers are registered.
 function openChannelForEntry(entry) {
@@ -143,6 +167,7 @@ module.exports = {
   metaStr,
   classify,
   firstClassTaskId,
+  requesterTaskOpen,
   openChannelForEntry,
   resolveToolProfile,
 };

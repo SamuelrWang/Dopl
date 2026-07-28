@@ -248,7 +248,7 @@ function profileLabel(profile) {
 const PROFILE_HINTS = {
   read_only: 'Reads your local files only — no web, Dopl, shell, or file writes.',
   dopl_only: 'Reads your files, the Dopl archive/KB, and the web — no shell or writes.',
-  full: 'Limited headless (no shell/writes); use Run responses in Terminal for full access.',
+  full: 'Limited headless (no shell or writes). Run it in a session window to approve each tool live.',
 };
 function profileHint(profile) {
   return PROFILE_HINTS[normalizeProfile(profile)] || PROFILE_HINTS.full;

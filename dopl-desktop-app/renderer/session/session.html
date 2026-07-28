@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Local-only surface. No remote content, no network: default-src 'none'
+       blocks fetch/XHR/WS; scripts + styles are same-origin local files. -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'none';" />
+  <title>Dopl Session</title>
+  <link rel="stylesheet" href="tokens.css" />
+  <link rel="stylesheet" href="session.css" />
+</head>
+<body>
+  <div class="app page-float" id="app">
+
+    <!-- Header -->
+    <header class="session-header">
+      <div class="header-id">
+        <div class="header-title-row">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <span class="channel-name" id="channelName">Session</span>
+        </div>
+        <div class="task-title text-caption" id="taskTitle"></div>
+        <div class="badge-row" id="badgeRow"></div>
+      </div>
+      <div class="header-controls">
+        <button class="ctl btn-light ctl-sm" id="btnStop" type="button">Stop</button>
+        <button class="ctl btn-light ctl-sm ctl-danger" id="btnEnd" type="button">End session</button>
+        <button class="ctl auth-btn-3d ctl-primary ctl-sm" id="btnClose" type="button">Close task</button>
+      </div>
+    </header>
+
+    <!-- Status strip + cost meter -->
+    <div class="status-strip">
+      <span class="status-pill">
+        <span class="status-dot is-launching" id="statusDot"></span>
+        <span class="status-label" id="statusLabel">Launching</span>
+      </span>
+      <span class="status-meta" id="statusMeta"></span>
+      <span class="status-spacer"></span>
+      <span class="cost-meter" id="costMeter">
+        <span>Turn <b id="turnCost">$0.00</b></span>
+        <span>Total <b id="totalCost">$0.00</b></span>
+        <span><b id="turnCount">0</b> turns</span>
+      </span>
+    </div>
+
+    <!-- Close-task panel (revealed by "Close task") -->
+    <div class="close-panel bento" id="closePanel">
+      <div class="close-panel__inner">
+        <div class="row">
+          <span class="text-label ink-secondary">Close task</span>
+          <span class="seg concave-track" id="outcomeSeg" role="group" aria-label="Outcome">
+            <button class="seg-btn raised-tab is-sel" data-outcome="completed" type="button">Completed</button>
+            <button class="seg-btn" data-outcome="failed" type="button">Failed</button>
+          </span>
+        </div>
+        <div class="concave-field close-field">
+          <textarea class="close-summary" id="closeSummary" placeholder="Summary of the outcome (optional)"></textarea>
+        </div>
+        <div class="actions">
+          <button class="ctl btn-light ctl-sm" id="btnCloseCancel" type="button">Cancel</button>
+          <button class="ctl auth-btn-3d ctl-primary ctl-sm" id="btnCloseConfirm" type="button">Close task</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Turn stream -->
+    <div class="stream-wrap">
+      <div class="stream" id="stream" aria-live="polite"></div>
+    </div>
+
+    <!-- Permission dock -->
+    <div class="permission-dock" id="permissionDock">
+      <div class="perm-card bento">
+        <div class="perm-card__head">
+          <span class="lbl">Permission</span>
+          <span class="tool" id="permTool"></span>
+        </div>
+        <div class="perm-card__body">
+          <div class="perm-summary" id="permSummary"></div>
+          <details id="permDetails">
+            <summary>Show full input</summary>
+            <pre id="permInput"></pre>
+          </details>
+          <div class="perm-actions">
+            <button class="ctl btn-light ctl-sm" id="btnAllowOnce" type="button">Allow once</button>
+            <button class="ctl auth-btn-3d ctl-primary ctl-sm" id="btnAllowTask" type="button">Allow for this task</button>
+            <button class="ctl btn-light ctl-sm ctl-danger" id="btnDeny" type="button">Deny</button>
+          </div>
+          <div class="perm-queue-note hidden" id="permQueueNote"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Ended banner -->
+    <div class="ended-banner" id="endedBanner"></div>
+
+    <!-- Composer (steering) -->
+    <div class="composer">
+      <div class="composer__field concave-field">
+        <textarea class="steer-input" id="steerInput" rows="1"
+                  placeholder="Steer the agent… (Enter to send, Shift+Enter for a newline)"></textarea>
+        <div class="composer__controls">
+          <label class="interject-toggle">
+            <input type="checkbox" id="interjectToggle" />
+            Interrupt
+          </label>
+          <button class="send-btn auth-btn-3d" id="btnSend" type="button">Send</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="session-viewmodel.js"></script>
+  <script src="session.js"></script>
+</body>
+</html>

@@ -377,6 +377,17 @@ describe("TaskUpdateSchema", () => {
     expect(TaskUpdateSchema.safeParse({ op: "set_mode" }).success).toBe(false);
   });
 
+  it("reopen: bare op, no payload required (extra keys stripped)", () => {
+    expect(TaskUpdateSchema.safeParse({ op: "reopen" }).success).toBe(true);
+    // A reopen carrying another op's field still parses — the extra key is
+    // stripped by the object schema, never reaching the reopen service.
+    const parsed = TaskUpdateSchema.safeParse({ op: "reopen", outcome: "completed" });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data).toEqual({ op: "reopen" });
+    }
+  });
+
   it("discriminated union: fields can't bleed across ops", () => {
     // A close carrying a `mode` (wrong op's field) still parses (extra keys
     // stripped) but a set_mode without `mode` fails, and vice versa.

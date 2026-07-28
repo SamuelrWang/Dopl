@@ -17,11 +17,13 @@ vi.mock("./repository-tasks");
 
 import * as repo from "./repository";
 import * as repoTasks from "./repository-tasks";
-import { closeTask, postMessage } from "./service-writes";
+import { closeTask, postMessage, reopenTask } from "./service-writes";
 import {
   ChannelAddresseeNotMemberError,
   ChannelForbiddenError,
   ChannelTaskNotInChannelError,
+  TaskForbiddenError,
+  TaskNotFoundError,
 } from "./errors";
 import type { ChannelContext } from "./service-shared";
 import type {
@@ -390,5 +392,92 @@ describe("closeTask — outcome summary (v1.7)", () => {
     const echo = echoInsert();
     expect(echo.kind).toBe("task_failed");
     expect(echo.body).toBe("Task failed");
+  });
+});
+
+describe("reopenTask — authz + no-echo (v1.9, web-only)", () => {
+  const REOPEN_TASK_ID = "770e8400-e29b-41d4-a716-446655440222";
+  const OTHER = "990e8400-e29b-41d4-a716-446655440999";
+
+  /** A CLOSED task with a stored outcome + summary, ready to be reopened. */
+  function closedTask(overrides: Partial<ChannelTaskRow> = {}): ChannelTaskRow {
+    return {
+      id: REOPEN_TASK_ID,
+      channel_id: "chan-1",
+      workspace_id: WS,
+      title: "Ship it",
+      status: "closed",
+      outcome: "completed",
+      mode: "interactive",
+      created_by: USER,
+      target_user_id: null,
+      created_at: "2026-07-20T00:00:00Z",
+      updated_at: "2026-07-20T00:00:00Z",
+      closed_at: "2026-07-21T00:00:00Z",
+      outcome_summary: "Shipped v2",
+      ...overrides,
+    };
+  }
+
+  beforeEach(() => {
+    // Echo the patch back as the reopened (open) row so mapTaskRow can map it.
+    vi.mocked(repoTasks.updateTask).mockImplementation(async (_id, patch) =>
+      closedTask({ ...patch } as Partial<ChannelTaskRow>)
+    );
+  });
+
+  it("404s an unknown task (nothing updated)", async () => {
+    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(null);
+    await expect(
+      reopenTask(ctx, "general", REOPEN_TASK_ID)
+    ).rejects.toBeInstanceOf(TaskNotFoundError);
+    expect(repoTasks.updateTask).not.toHaveBeenCalled();
+  });
+
+  it("forbids a member who is neither creator nor target", async () => {
+    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
+      closedTask({ created_by: OTHER, target_user_id: OTHER })
+    );
+    await expect(
+      reopenTask(ctx, "general", REOPEN_TASK_ID)
+    ).rejects.toBeInstanceOf(TaskForbiddenError);
+    expect(repoTasks.updateTask).not.toHaveBeenCalled();
+  });
+
+  it("creator reopen clears the closed state in one CHECK-satisfying update", async () => {
+    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
+      closedTask({ created_by: USER })
+    );
+
+    const task = await reopenTask(ctx, "general", REOPEN_TASK_ID);
+
+    // status back to open with outcome / closed_at / outcome_summary nulled —
+    // keeps (status='closed') = (outcome IS NOT NULL) satisfied.
+    expect(vi.mocked(repoTasks.updateTask).mock.calls[0][1]).toEqual({
+      status: "open",
+      outcome: null,
+      closed_at: null,
+      outcome_summary: null,
+    });
+    expect(task.status).toBe("open");
+    expect(task.outcome).toBeNull();
+  });
+
+  it("the target may also reopen", async () => {
+    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
+      closedTask({ created_by: OTHER, target_user_id: USER })
+    );
+    await expect(
+      reopenTask(ctx, "general", REOPEN_TASK_ID)
+    ).resolves.toBeDefined();
+    expect(repoTasks.updateTask).toHaveBeenCalledTimes(1);
+  });
+
+  it("posts NO lifecycle echo (the card flips back on refetch, not a marker)", async () => {
+    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
+      closedTask({ created_by: USER })
+    );
+    await reopenTask(ctx, "general", REOPEN_TASK_ID);
+    expect(repo.insertMessage).not.toHaveBeenCalled();
   });
 });

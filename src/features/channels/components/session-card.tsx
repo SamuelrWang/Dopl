@@ -11,7 +11,7 @@ import {
   type SessionGroup,
   type SessionStatus,
 } from "../lib/group-thread";
-import type { TaskMode } from "../types";
+import type { ChannelTask, TaskMode, TaskOutcome } from "../types";
 
 /**
  * One task as a single bordered card. The header carries the task title (the
@@ -31,10 +31,32 @@ import type { TaskMode } from "../types";
 export function SessionCard({
   session,
   highlighted = false,
+  task,
+  currentUserId,
+  onCloseTask,
+  onReopenTask,
 }: {
   session: SessionGroup;
   /** Transient ring while the task panel has navigated to this card. */
   highlighted?: boolean;
+  /**
+   * The authoritative first-class task row for this session (from
+   * `channel_tasks`), carrying `createdBy` / `targetUserId` / `status` — it
+   * gates the Close / Reopen controls. Absent for a legacy (non first-class)
+   * session, or until the integration pass threads it through from the thread's
+   * `tasks` by `session.taskId`; in either case no task controls render.
+   */
+  task?: ChannelTask;
+  /** The viewer's user id — the controls show only for a task's creator or target. */
+  currentUserId?: string;
+  /** Close this task with an outcome + optional summary. Absent hides Close. */
+  onCloseTask?: (
+    taskId: string,
+    outcome: TaskOutcome,
+    summary: string
+  ) => Promise<void>;
+  /** Reopen this closed task. Absent hides Reopen. */
+  onReopenTask?: (taskId: string) => Promise<void>;
 }) {
   // Per-entry collapse. An entry that leads with a one-line summary starts
   // COLLAPSED (summary only, full body behind the chevron); an entry with no
@@ -56,6 +78,16 @@ export function SessionCard({
       else next.add(id);
       return next;
     });
+
+  // Close / Reopen gating: only a first-class task's creator or target may
+  // manage it, and only when the callback for the relevant direction is wired.
+  const [closing, setClosing] = useState(false);
+  const canManageTask =
+    !!task &&
+    !!currentUserId &&
+    (currentUserId === task.createdBy || currentUserId === task.targetUserId);
+  const showClose = canManageTask && task?.status === "open" && !!onCloseTask;
+  const showReopen = canManageTask && task?.status === "closed" && !!onReopenTask;
 
   const openerName = session.head.authorName || "Agent";
   const title = session.title ?? session.summary ?? "Task";
@@ -192,9 +224,120 @@ export function SessionCard({
             {session.outcomeSummary}
           </span>
         )}
+        {showReopen && task && onReopenTask && (
+          <ReopenTaskButton onReopen={() => onReopenTask(task.id)} />
+        )}
+        {showClose && !closing && (
+          <button
+            type="button"
+            onClick={() => setClosing(true)}
+            className="btn-light shrink-0 rounded-[8px] px-2.5 py-1 text-caption font-medium text-text-primary"
+          >
+            Close task
+          </button>
+        )}
         <StatusChip status={session.status} />
       </footer>
+      {showClose && closing && task && onCloseTask && (
+        <TaskCloseForm
+          onSubmit={async (outcome, summary) => {
+            await onCloseTask(task.id, outcome, summary);
+            setClosing(false);
+          }}
+          onCancel={() => setClosing(false)}
+        />
+      )}
     </article>
+  );
+}
+
+/** A compact raised button that reopens a closed task, disabled while in flight. */
+function ReopenTaskButton({ onReopen }: { onReopen: () => Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={async () => {
+        if (busy) return;
+        setBusy(true);
+        try {
+          await onReopen();
+        } finally {
+          setBusy(false);
+        }
+      }}
+      className="btn-light shrink-0 rounded-[8px] px-2.5 py-1 text-caption font-medium text-text-primary disabled:opacity-60"
+    >
+      Reopen task
+    </button>
+  );
+}
+
+/**
+ * The inline close form: an optional one-line summary well plus the two outcome
+ * actions. "Mark complete" / "Mark failed" each close the task with that outcome
+ * and the typed summary; Cancel collapses without a write. Buttons disable while
+ * a close is in flight so a double-click can't fire two writes.
+ */
+function TaskCloseForm({
+  onSubmit,
+  onCancel,
+}: {
+  onSubmit: (outcome: TaskOutcome, summary: string) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const [summary, setSummary] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function submit(outcome: TaskOutcome) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await onSubmit(outcome, summary.trim());
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2 border-t border-border-subtle bg-card-surface-subtle px-3.5 py-2.5">
+      <input
+        type="text"
+        value={summary}
+        onChange={(event) => setSummary(event.target.value)}
+        disabled={busy}
+        maxLength={2000}
+        placeholder="Add a closing summary (optional)"
+        className="concave-field w-full rounded-[8px] px-2.5 py-1.5 text-caption text-text-primary placeholder:text-text-muted"
+      />
+      <div className="flex items-center justify-end gap-1.5">
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={busy}
+          className="btn-light rounded-[8px] px-2.5 py-1 text-caption font-medium text-text-secondary disabled:opacity-60"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={() => submit("failed")}
+          disabled={busy}
+          className="btn-light rounded-[8px] px-2.5 py-1 text-caption font-medium text-danger disabled:opacity-60"
+        >
+          Mark failed
+        </button>
+        <button
+          type="button"
+          onClick={() => submit("completed")}
+          disabled={busy}
+          className="btn-light rounded-[8px] px-2.5 py-1 text-caption font-medium text-text-primary disabled:opacity-60"
+        >
+          Mark complete
+        </button>
+      </div>
+    </div>
   );
 }
 

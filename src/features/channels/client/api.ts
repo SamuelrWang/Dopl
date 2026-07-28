@@ -205,16 +205,33 @@ export async function createChannelTask(
   return data.task;
 }
 
-/** Close a task (creator or target) with an outcome. */
+/** Close a task (creator or target) with an outcome + optional close summary. */
 export async function closeChannelTask(
   channelId: string,
   taskId: string,
-  body: { outcome: TaskOutcome },
+  body: { outcome: TaskOutcome; summary?: string },
   workspaceId: string
 ): Promise<ChannelTask> {
   const data = await request<{ task: ChannelTask }>(
     channelPath(channelId, `/tasks/${encodeURIComponent(taskId)}`),
     { method: "PATCH", body: { op: "close", ...body }, workspaceId }
+  );
+  return data.task;
+}
+
+/**
+ * Reopen a closed task (creator or target). Web-only — there is no MCP
+ * counterpart (agents never reopen); the server clears the closed state and
+ * posts no lifecycle echo, so the card flips back to active on the next refetch.
+ */
+export async function reopenChannelTask(
+  channelId: string,
+  taskId: string,
+  workspaceId: string
+): Promise<ChannelTask> {
+  const data = await request<{ task: ChannelTask }>(
+    channelPath(channelId, `/tasks/${encodeURIComponent(taskId)}`),
+    { method: "PATCH", body: { op: "reopen" }, workspaceId }
   );
   return data.task;
 }

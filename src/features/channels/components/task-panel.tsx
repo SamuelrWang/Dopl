@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { ArrowRight, Check, ListTodo } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { Avatar, type AvatarPerson } from "@/shared/ui/avatar";
@@ -11,6 +11,7 @@ import type {
   ChannelMessage,
   ChannelTask,
   TaskMode,
+  TaskOutcome,
 } from "../types";
 
 /** The three rendered task states, mirroring `message-thread.tsx taskOverlayFrom`. */
@@ -45,6 +46,20 @@ interface Props {
   latestMilestone?: Map<string, ChannelMessage>;
   /** Navigate to the task's grouped card (scroll + transient highlight). */
   onSelectTask: (taskId: string) => void;
+  /**
+   * The viewer's user id — gates the per-row Close / Reopen controls to a task's
+   * creator or target. Absent (until the integration pass threads it in) hides
+   * the controls entirely.
+   */
+  currentUserId?: string;
+  /** Close a task with an outcome + optional summary. Absent hides Close. */
+  onCloseTask?: (
+    taskId: string,
+    outcome: TaskOutcome,
+    summary: string
+  ) => Promise<void>;
+  /** Reopen a closed task. Absent hides Reopen. */
+  onReopenTask?: (taskId: string) => Promise<void>;
 }
 
 /**
@@ -62,6 +77,9 @@ export function TaskPanel({
   memberNames,
   latestMilestone,
   onSelectTask,
+  currentUserId,
+  onCloseTask,
+  onReopenTask,
 }: Props) {
   const memberById = useMemo(
     () => new Map(members.map((m) => [m.userId, m])),
@@ -109,65 +127,197 @@ export function TaskPanel({
           {tasks.map((task) => {
             const status = displayStatus(task);
             const milestone = latestMilestone?.get(task.id);
+            const canManageTask =
+              !!currentUserId &&
+              (currentUserId === task.createdBy ||
+                currentUserId === task.targetUserId);
             return (
-              <button
-                key={task.id}
-                type="button"
-                onClick={() => onSelectTask(task.id)}
-                className="flex w-full flex-col gap-1.5 px-3 py-2 text-left transition-colors hover:bg-surface-raised-2"
-              >
-                <div className="flex items-center gap-1.5">
-                  <span className="min-w-0 flex-1 truncate text-small font-medium text-text-primary">
-                    {task.title}
-                  </span>
-                  <StatusChip status={status} />
-                </div>
-
-                {milestone && (
-                  <div className="flex items-center gap-1 text-micro text-text-muted">
-                    <Check size={11} className="shrink-0 text-success" />
-                    <span className="min-w-0 truncate">{milestone.body}</span>
+              <div key={task.id} className="flex flex-col">
+                <button
+                  type="button"
+                  onClick={() => onSelectTask(task.id)}
+                  className="flex w-full flex-col gap-1.5 px-3 py-2 text-left transition-colors hover:bg-surface-raised-2"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span className="min-w-0 flex-1 truncate text-small font-medium text-text-primary">
+                      {task.title}
+                    </span>
+                    <StatusChip status={status} />
                   </div>
-                )}
 
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-micro text-text-muted">
-                  <ModeBadge mode={task.mode} />
-                  <span className="flex items-center gap-1">
-                    <Avatar person={personFor(task.createdBy)} size="xs" />
-                    <span className="truncate">{nameFor(task.createdBy)}</span>
-                  </span>
-                  {task.targetUserId && (
+                  {milestone && (
+                    <div className="flex items-center gap-1 text-micro text-text-muted">
+                      <Check size={11} className="shrink-0 text-success" />
+                      <span className="min-w-0 truncate">{milestone.body}</span>
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-micro text-text-muted">
+                    <ModeBadge mode={task.mode} />
                     <span className="flex items-center gap-1">
-                      <ArrowRight size={11} className="shrink-0" />
-                      <Avatar person={personFor(task.targetUserId)} size="xs" />
-                      <span className="truncate">{nameFor(task.targetUserId)}</span>
+                      <Avatar person={personFor(task.createdBy)} size="xs" />
+                      <span className="truncate">{nameFor(task.createdBy)}</span>
+                    </span>
+                    {task.targetUserId && (
+                      <span className="flex items-center gap-1">
+                        <ArrowRight size={11} className="shrink-0" />
+                        <Avatar person={personFor(task.targetUserId)} size="xs" />
+                        <span className="truncate">
+                          {nameFor(task.targetUserId)}
+                        </span>
+                      </span>
+                    )}
+                  </div>
+
+                  <span className="text-micro text-text-muted">
+                    {formatChannelTimestamp(task.createdAt)}
+                    {task.closedAt &&
+                      ` · closed ${formatChannelTimestamp(task.closedAt)}`}
+                  </span>
+
+                  {task.status === "closed" && task.outcomeSummary && (
+                    <span
+                      className={cn(
+                        "text-caption",
+                        task.outcome === "failed"
+                          ? "text-danger"
+                          : "text-text-secondary"
+                      )}
+                    >
+                      {task.outcomeSummary}
                     </span>
                   )}
-                </div>
-
-                <span className="text-micro text-text-muted">
-                  {formatChannelTimestamp(task.createdAt)}
-                  {task.closedAt &&
-                    ` · closed ${formatChannelTimestamp(task.closedAt)}`}
-                </span>
-
-                {task.status === "closed" && task.outcomeSummary && (
-                  <span
-                    className={cn(
-                      "text-caption",
-                      task.outcome === "failed"
-                        ? "text-danger"
-                        : "text-text-secondary"
-                    )}
-                  >
-                    {task.outcomeSummary}
-                  </span>
+                </button>
+                {canManageTask && (
+                  <TaskRowActions
+                    task={task}
+                    onCloseTask={onCloseTask}
+                    onReopenTask={onReopenTask}
+                  />
                 )}
-              </button>
+              </div>
             );
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * The per-row Close / Reopen control strip, shown under a task row only for its
+ * creator or target. An open task gets a Close affordance that expands into an
+ * optional summary well plus Mark complete / Mark failed; a closed task gets a
+ * single Reopen button. Each direction renders only when its callback is wired
+ * (absent until the integration pass). Buttons disable while a write is in
+ * flight so a double-click can't fire two writes.
+ */
+function TaskRowActions({
+  task,
+  onCloseTask,
+  onReopenTask,
+}: {
+  task: ChannelTask;
+  onCloseTask?: (
+    taskId: string,
+    outcome: TaskOutcome,
+    summary: string
+  ) => Promise<void>;
+  onReopenTask?: (taskId: string) => Promise<void>;
+}) {
+  const [closing, setClosing] = useState(false);
+  const [summary, setSummary] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function run(fn: () => Promise<void>) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await fn();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (task.status === "closed") {
+    if (!onReopenTask) return null;
+    return (
+      <div className="flex justify-end px-3 pb-2">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => run(() => onReopenTask(task.id))}
+          className="btn-light rounded-[8px] px-2.5 py-1 text-caption font-medium text-text-primary disabled:opacity-60"
+        >
+          Reopen task
+        </button>
+      </div>
+    );
+  }
+
+  if (!onCloseTask) return null;
+
+  if (!closing) {
+    return (
+      <div className="flex justify-end px-3 pb-2">
+        <button
+          type="button"
+          onClick={() => setClosing(true)}
+          className="btn-light rounded-[8px] px-2.5 py-1 text-caption font-medium text-text-primary"
+        >
+          Close task
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5 px-3 pb-2">
+      <input
+        type="text"
+        value={summary}
+        onChange={(event) => setSummary(event.target.value)}
+        disabled={busy}
+        maxLength={2000}
+        placeholder="Closing summary (optional)"
+        className="concave-field w-full rounded-[8px] px-2.5 py-1.5 text-caption text-text-primary placeholder:text-text-muted"
+      />
+      <div className="flex items-center justify-end gap-1.5">
+        <button
+          type="button"
+          onClick={() => setClosing(false)}
+          disabled={busy}
+          className="btn-light rounded-[8px] px-2 py-1 text-caption font-medium text-text-secondary disabled:opacity-60"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() =>
+            run(async () => {
+              await onCloseTask(task.id, "failed", summary.trim());
+              setClosing(false);
+            })
+          }
+          className="btn-light rounded-[8px] px-2 py-1 text-caption font-medium text-danger disabled:opacity-60"
+        >
+          Mark failed
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() =>
+            run(async () => {
+              await onCloseTask(task.id, "completed", summary.trim());
+              setClosing(false);
+            })
+          }
+          className="btn-light rounded-[8px] px-2 py-1 text-caption font-medium text-text-primary disabled:opacity-60"
+        >
+          Mark complete
+        </button>
+      </div>
     </div>
   );
 }

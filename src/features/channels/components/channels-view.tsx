@@ -9,6 +9,8 @@ import {
   addTrustRule,
   ChannelApiError,
   createChannelTask,
+  closeChannelTask,
+  reopenChannelTask,
   decideConsent,
   deleteChannel as apiDeleteChannel,
   postMessage,
@@ -258,6 +260,44 @@ export function ChannelsView({
     }
   }
 
+  async function runTaskMutation(fn: () => Promise<unknown>, failTitle: string) {
+    busyRef.current += 1;
+    try {
+      await fn();
+      await refetchMessages();
+      void refetchTasks();
+      void refetchChannels();
+    } catch (err) {
+      toast({
+        title: err instanceof ChannelApiError ? err.message : failTitle,
+      });
+      throw err;
+    } finally {
+      busyRef.current -= 1;
+      coordinatorRef.current.settle(busyRef.current > 0);
+    }
+  }
+
+  async function handleCloseTask(
+    taskId: string,
+    outcome: "completed" | "failed",
+    summary?: string
+  ) {
+    if (!selected) return;
+    await runTaskMutation(
+      () => closeChannelTask(selected.id, taskId, { outcome, summary }, workspaceId),
+      "Couldn't close the task"
+    );
+  }
+
+  async function handleReopenTask(taskId: string) {
+    if (!selected) return;
+    await runTaskMutation(
+      () => reopenChannelTask(selected.id, taskId, workspaceId),
+      "Couldn't reopen the task"
+    );
+  }
+
   const handleToggleArchive = () =>
     selected &&
     void withChannelError(
@@ -454,6 +494,8 @@ export function ChannelsView({
           consentBusyIds={consentBusyIds}
           onSend={handleSend}
           onCreateTask={handleCreateTask}
+          onCloseTask={handleCloseTask}
+          onReopenTask={handleReopenTask}
           onInvite={() => setInviteOpen(true)}
           onSetNotifyScope={handleSetNotifyScope}
           onSetToolProfile={handleSetToolProfile}

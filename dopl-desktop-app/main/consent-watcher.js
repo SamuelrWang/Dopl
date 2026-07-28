@@ -87,6 +87,16 @@ function isInterruptedSpawn(phase) {
   return phase === 'spawning';
 }
 
+// v1.9: a record handed to a live SESSION window (§A.2). The session engine owns
+// its whole lifecycle from here — the reply, milestones, End/idle/cap, the
+// interrupted echo, and the opt-in resume affordance — so the watcher must NOT
+// poll it, re-spawn it, or echo for it. It is a terminal handoff, dropped as
+// settled('session') on the next resume with NO onInterrupted echo (that echo is
+// the engine's job, not ours — echoing here would double-fire against it).
+function isSessionPhase(phase) {
+  return phase === 'session';
+}
+
 // A record counts toward the tray "Pending: N" only while it is awaiting a human
 // decision (inbound consent or outbound review). Active work ('spawning') and
 // settled requests do not.
@@ -168,6 +178,20 @@ function setPhase(key, phase) {
   emitCount();
 }
 
+// v1.9: hand this request to a live session window. Mark it 'session' (a terminal
+// phase for the watcher) and stop tracking it as awaiting — the engine owns the
+// lifecycle now. Kept as a durable record (not settled outright) so a restart's
+// resume() can recognize an engine-owned handoff and drop it WITHOUT an echo. Not
+// polled while it sits (processRecord early-returns on a session phase).
+function toSession(key, { sessionId } = {}) {
+  const rec = records.get(key);
+  if (!rec) return;
+  rec.phase = 'session';
+  if (sessionId) rec.sessionId = sessionId;
+  persistRecords();
+  emitCount(); // no longer awaiting -> drops out of the tray "Pending: N" count
+}
+
 // Inbound was approved and the spawn produced a reply: move the same request to
 // its outbound-review phase, pointing at the new outbound row and carrying the
 // drafted reply so a restart can still post it on Send.
@@ -215,6 +239,8 @@ async function processRecord(key) {
   if (inFlight.has(key)) return;
   const rec = records.get(key);
   if (!rec) return;
+  // A record handed to a live session window is engine-owned — never poll it.
+  if (isSessionPhase(rec.phase)) return;
   const now = Date.now();
   if (!isDue(rec, now)) return;
 
@@ -280,6 +306,14 @@ function resume() {
   for (const [key, rec] of Object.entries(saved)) {
     if (!rec || !rec.rowId) continue;
     if (isSettled(key)) continue; // already terminal — drop
+    if (isSessionPhase(rec.phase)) {
+      // Engine-owned live session at crash time. The session engine's own store
+      // handles the interrupted echo + resume affordance (§A.8), so here we ONLY
+      // settle the consent record — NO onInterrupted echo, or it would double-fire
+      // against the engine's echo (they share a deterministic clientMsgId anyway).
+      settled[key] = { outcome: 'session', at: Date.now() };
+      continue;
+    }
     if (isInterruptedSpawn(rec.phase)) {
       // Spawn was in flight when the app died; the in-memory reply is gone and we
       // never re-spawn a handled request. Mark terminal and move on.
@@ -339,6 +373,7 @@ module.exports = {
   reset,
   register,
   setPhase,
+  toSession,
   toOutbound,
   settle: settleRequest,
   poke,

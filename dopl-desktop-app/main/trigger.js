@@ -32,6 +32,8 @@ const targeting = require('./targeting');
 const consent = require('./consent');
 const watcher = require('./consent-watcher');
 const spawner = require('./session-spawner');
+const sessionEngine = require('./session-engine');
+const settings = require('./settings');
 const channelDirs = require('./channel-dirs');
 const { profileLabel, profileHint } = require('./tool-profiles');
 const claudeAuth = require('./claude-auth');
@@ -196,55 +198,77 @@ async function refetchMessage(rec) {
   return m ? { m } : { gone: true };
 }
 
-// ── Resolver: inbound ALLOWED → spawn ────────────────────────────────────────
+// ── Resolver: inbound ALLOWED → session (default) or headless (fallback) ──────
 async function inboundApproved(rec) {
   const fetched = await refetchMessage(rec);
   if (fetched.retry) return; // transient — stays await-inbound, retried next poll
   if (fetched.gone) { watcher.settle(rec.key, 'gone'); return; }
   const m = fetched.m;
   const entry = entryFromRecord(rec);
-  // Persist the transient spawn phase BEFORE spawning: a crash mid-spawn leaves a
-  // 'spawning' record that the watcher drops on restart (never re-spawn).
+  // Persist the transient spawn phase BEFORE any side effect: a crash here leaves a
+  // 'spawning' record the watcher drops on restart (never re-spawn / re-launch).
   watcher.setPhase(rec.key, 'spawning');
   const taskId = taskIdFor(rec);
   const startedAt = Date.now();
 
-  if (spawner.getRunInTerminal()) {
-    await runTerminalApproved(entry, m, rec, { taskId, requesterName: rec.requesterName });
-    return;
+  // v1.9 DEFAULT EXECUTOR: a native session window (visible turns, live Allow/Deny
+  // buttons, steering, cost) REPLACES headless + approve-out for session runs
+  // (§G Q1). Window-mode OFF — or an engine skip (window cap / no SDK / disabled) —
+  // falls back to today's headless + approve-out path, byte-for-byte.
+  if (settings.getWindowMode() && (await launchResponderSession(entry, m, rec, { taskId }))) {
+    return; // a live session (or a busy→resend) now owns this request
   }
   await runHeadlessApproved(entry, m, rec, { taskId, startedAt, requesterName: rec.requesterName });
 }
 
-// Terminal mode: the operator WATCHES (the terminal IS the review) and the agent
-// posts/prints its own reply. task_started is the accepted echo; no outbound gate.
-async function runTerminalApproved(entry, m, rec, { taskId, requesterName }) {
-  diag('spawn mode: terminal', 'profile', rec.toolProfile);
-  const r = await spawner.runInTerminalForChannel({
+// Responder SESSION launch (§A.2): hand the framed inbound to the engine, which
+// opens a window and drives the loop. The agent posts its OWN reply + task_progress
+// milestones via the pre-approved dopl_channel tool (approve-out is gone for session
+// runs), and the channel listener feeds the peer's later replies into the SAME live
+// session as turns — no per-hop consent modal. task_started is echoed by the
+// engine's onLaunched (index.js), NOT here. Returns true when the request is handled
+// (a session launched, or a busy channel got the resend notice); false when the
+// caller should fall back to headless (window cap / no SDK / disabled).
+async function launchResponderSession(entry, m, rec, { taskId }) {
+  // Loop-continuation knob: mirror the requester task's mode when the inbound
+  // carries one (server-stamped), else autonomous — either way the session runs
+  // under the turn / idle / cost caps, so it cannot self-sustain unbounded.
+  const mode = targeting.metaStr(m, 'taskMode') || 'autonomous';
+  const res = await sessionEngine.launchResponderSession({
     channelId: entry.channel.id,
+    taskId: rec.taskId || taskId,
+    workspaceId: entry.workspaceId,
     message: m.body,
-    context: { channelName: entry.channel.name, authorName: requesterName, authorKind: m.authorKind },
+    // FIX L1: the responder's counterparty is the requester who addressed me — the
+    // inbound message's author. The listener only feeds this member's later replies.
+    counterpartyId: m.authorUserId,
+    context: { channelName: entry.channel.name, authorName: rec.requesterName, authorKind: m.authorKind },
     toolProfile: rec.toolProfile,
+    mode,
   });
-  if (r.skipped === 'busy') {
-    diag('terminal spawn: skipped=busy');
+  if (res && res.sessionId) {
+    diag('responder session launched', String(res.sessionId).slice(0, 8), 'profile', rec.toolProfile);
+    // Hand lifecycle ownership to the engine: the watcher must never re-spawn OR
+    // re-echo for this request — the engine owns interrupted echoes + resume. This
+    // is the consent-watcher 'session' settle phase.
+    watcher.toSession(rec.key, { sessionId: res.sessionId });
+    return true;
+  }
+  if (res && res.skipped === 'busy') {
+    diag('responder session: skipped=busy');
     await postResult(entry, m, RESEND);
     watcher.settle(rec.key, 'busy');
-    return;
+    return true; // handled — do NOT also run headless
   }
-  if (r.skipped) {
-    diag('terminal spawn: skipped=' + r.skipped, r.error ? `(${r.error})` : '');
-    await postTaskEvent(entry, m, 'task_failed', taskId);
+  // cap / no-sdk / disabled → today's headless fallback answers the request.
+  diag('responder session skipped:', (res && res.skipped) || 'unknown', '— headless fallback');
+  if (res && res.skipped === 'cap') {
     notifyLocal(
-      `Dopl: could not start a terminal session in "${entry.channel.name}"`,
-      'The request was approved but no session launched. Open Dopl to check the Claude CLI setup.'
+      'Dopl: session window limit reached',
+      `Answering "${entry.channel.name}" headlessly instead.`
     );
-    watcher.settle(rec.key, 'error');
-    return;
   }
-  diag('terminal spawn: launched');
-  await postTaskEvent(entry, m, 'task_started', taskId);
-  watcher.settle(rec.key, 'sent'); // detached interactive session — terminal review
+  return false;
 }
 
 // Headless mode: spawn, then (on a clean reply) open an outbound review. D4:

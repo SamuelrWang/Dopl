@@ -38,6 +38,7 @@ export {
   createTask,
   closeTask,
   setTaskMode,
+  reopenTask,
 } from "./service-writes";
 
 export {

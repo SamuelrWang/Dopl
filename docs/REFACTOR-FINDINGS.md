@@ -454,3 +454,17 @@ Build + `tsc --noEmit` green on every commit; `npx eslint` at 0 errors (baseline
 - Description: the v1.6 receipt line reports only transcript-provable states (Sent, Accepted-working via task_started, Replied, and the terminal echoes). There is NO "Received" or "Read" state because the responder's desktop never acknowledges delivery, and fabricating one would lie to the sender. A real ack needs a design that respects F-072: per-message ack writes would recreate WAL fan-out on a realtime-subscribed table, so a future ack must be low-frequency (e.g. a coarse per-channel "listener saw up to seq N" watermark, written at most once per poll cycle and monotonic like last_read_at post-fix, or piggybacked on an existing write).
 - Proposed resolution: defer — design a coarse listener-seen watermark alongside the autonomous-continuation round; until then the receipt line stays transcript-derived only.
 - Status: open
+
+### F-078: Session Window (v1.9) — residual notes + deferred hardening
+- Location: `dopl-desktop-app/main/session-engine.js`, `session-profiles.js`, `session-io.js`, `channel-listener.js`, `renderer/session/**`
+- Found during: v1.9 Session Window build + 2 security reviews + fix pass + independent verification (2026-07-28)
+- Severity: smell (feature shipped SHIP-verified; items below are deferred, not blockers)
+- Description: the SDK-driven session window shipped with all six review blockers (H1 dopl_channel blanket pre-approval, H2 full hard-denies-nothing, H3 subagent delegation, M1 fail-open decision, M2 permissionMode/env, L1 unbound feed) fixed and independently re-verified closed. Residuals:
+  - **"Allow for this task" is tool-NAME scoped, not input-scoped.** Approving `Bash` once blesses every later shell command that session; a `Write` grant for path A is honored for path B. Contract-sanctioned (§A.5) and requires an informed click on a watched window, but it widens one click's blast radius. Future: scope task-grants to a normalized command-prefix / path signature, or surface the coarseness in button copy.
+  - **Turn cap counts SDK `result` events, not tool calls.** 24 user-turns, not 24 actions; one turn can hold many tool calls (bounded per-tool only by the gate/allow-for-task). Document; consider an action budget.
+  - **BashOutput/KillShell hard-denied while Bash gated (full).** Background-shell output is unreadable when Bash is granted — more restrictive than intended, not a hole. Revisit if background shells become a real need.
+  - **Own-channel post addressed by slug gates instead of auto-allowing.** `isOwnChannelPost` compares the input `channel` to the session channel id; a slug-addressed own-channel delivery gates (safe direction, minor UX friction).
+  - **Subagent gating inheritance never empirically proven.** Mitigated by hard-denying Task/Agent in session mode, so untested-but-blocked; if delegation is ever re-enabled it MUST be proven that a subagent inherits canUseTool + settingSources + disallowedTools first.
+  - **Silent-end cards.** Operator End / idle-timeout / cost-cap post no lifecycle echo, so the requester's web card can read "active" until Closed/Reopened/resumed (intended per §A.3; note for watchers).
+- Proposed resolution: defer all; none blocks v1.9. Revisit input-scoped grants + the action budget alongside the autonomous-continuation hardening.
+- Status: open

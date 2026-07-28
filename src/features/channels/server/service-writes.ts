@@ -564,3 +564,37 @@ export async function setTaskMode(
   const updated = await repoTasks.updateTask(task.id, { mode });
   return mapTaskRow(updated);
 }
+
+/**
+ * Reopen a closed task. WEB-ONLY (no MCP op — agents do not reopen). Permitted
+ * for the task's creator OR its target (`created_by` / `target_user_id`),
+ * mirroring {@link closeTask}'s authorization. Clears the closed state in a
+ * single update — `status` back to `open`, and `outcome` / `closed_at` /
+ * `outcome_summary` all nulled — which keeps the `closed ⇔ outcome` CHECK
+ * satisfied ((status='closed') = (outcome IS NOT NULL)). Posts NO lifecycle
+ * echo: the web overlay flips the card back to `active` on the next tasks
+ * refetch, so no `task_*` marker is needed (and none would be coherent).
+ */
+export async function reopenTask(
+  ctx: ChannelContext,
+  ref: string,
+  taskId: string
+): Promise<ChannelTask> {
+  const { channel, membership } = await loadVisibleChannel(ctx, ref);
+  if (!membership) {
+    throw new ChannelForbiddenError("reopen a task in this channel");
+  }
+  const task = await repoTasks.findTaskByChannelAndId(channel.id, taskId);
+  if (!task) throw new TaskNotFoundError(taskId);
+  if (task.created_by !== ctx.userId && task.target_user_id !== ctx.userId) {
+    throw new TaskForbiddenError("reopen this task");
+  }
+
+  const updated = await repoTasks.updateTask(task.id, {
+    status: "open",
+    outcome: null,
+    closed_at: null,
+    outcome_summary: null,
+  });
+  return mapTaskRow(updated);
+}

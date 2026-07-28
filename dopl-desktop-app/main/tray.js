@@ -8,7 +8,7 @@ let tray = null;
 let currentStatus = 'Listener: starting…';
 let handlers = {};
 let updateReadyVersion = null;
-let terminalMode = false; // v1.2 Feature 3: reflect the run-in-Terminal setting
+let windowMode = true; // v1.9: reflect the "Run sessions in a window" setting (default ON)
 let pendingCount = 0; // Round B: number of pending consent requests (inbound + review)
 
 function iconPath() {
@@ -52,6 +52,24 @@ function channelFoldersSubmenu() {
   return items;
 }
 
+// v1.9: the "Sessions" submenu. Its one live control is the executor switch — ON
+// (default) opens a native Dopl session window per cross-user run (visible turns,
+// in-app Allow/Deny buttons, steering, a cost meter); OFF falls back to today's
+// headless spawn + approve-out review. This REPLACES the retired v1.2 "Run responses
+// in Terminal" toggle (terminal mode is gone, §G Q2).
+function sessionsSubmenu() {
+  return [
+    {
+      label: 'Run sessions in a window',
+      type: 'checkbox',
+      checked: windowMode,
+      click: () => handlers.onToggleWindowMode && handlers.onToggleWindowMode(),
+    },
+    { type: 'separator' },
+    { label: windowMode ? 'On: native session windows' : 'Off: headless fallback', enabled: false },
+  ];
+}
+
 function buildMenu() {
   const template = [
     { label: 'Open Dopl', click: () => handlers.onOpen && handlers.onOpen() },
@@ -67,12 +85,7 @@ function buildMenu() {
   template.push(
     { type: 'separator' },
     { label: currentStatus, enabled: false },
-    {
-      label: 'Run responses in Terminal',
-      type: 'checkbox',
-      checked: terminalMode,
-      click: () => handlers.onToggleTerminal && handlers.onToggleTerminal(),
-    },
+    { label: 'Sessions', submenu: sessionsSubmenu() },
     { label: 'Channel folders', submenu: channelFoldersSubmenu() }
   );
   if (updateReadyVersion) {
@@ -92,7 +105,7 @@ function buildMenu() {
 
 function create(opts) {
   handlers = opts || {};
-  if (typeof handlers.terminalMode === 'boolean') terminalMode = handlers.terminalMode;
+  if (typeof handlers.windowMode === 'boolean') windowMode = handlers.windowMode;
   const img = nativeImage.createFromPath(iconPath());
   if (!img.isEmpty()) img.setTemplateImage(true);
   tray = new Tray(img.isEmpty() ? nativeImage.createEmpty() : img);
@@ -111,8 +124,8 @@ function setUpdateReady(version) {
   if (tray) buildMenu();
 }
 
-function setTerminalMode(on) {
-  terminalMode = !!on;
+function setWindowMode(on) {
+  windowMode = !!on;
   if (tray) buildMenu();
 }
 
@@ -136,5 +149,5 @@ function destroy() {
 }
 
 module.exports = {
-  create, update, setUpdateReady, setTerminalMode, setPendingCount, refresh, destroy,
+  create, update, setUpdateReady, setWindowMode, setPendingCount, refresh, destroy,
 };

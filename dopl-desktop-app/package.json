@@ -1,21 +1,25 @@
 {
   "name": "dopl-desktop",
-  "version": "1.5.2",
+  "version": "1.6.0",
   "description": "Dopl — desktop app",
   "main": "main/index.js",
   "scripts": {
     "start": "electron .",
     "smoke": "electron scripts/smoke-test.js",
     "lint": "eslint .",
-    "test": "node --test test/classify.test.mjs test/task-notify.test.mjs test/tool-profiles.test.mjs test/seed-decision.test.mjs test/consent-watcher.test.mjs test/channel-dirs.test.mjs test/load-guard.test.mjs test/first-class-task-id.test.mjs test/prompt-framing.test.mjs",
+    "test": "node --test 'test/**/*.mjs'",
     "build": "electron-builder --mac",
     "dist": "electron-builder --mac",
     "release": "electron-builder --mac --publish always",
     "notarize": "bash scripts/finish-notarize.sh"
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.220",
+    "@anthropic-ai/sdk": "^0.115.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "electron-store": "^8.1.0",
-    "electron-updater": "^6.8.9"
+    "electron-updater": "^6.8.9",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "electron": "^43.2.0",
@@ -76,6 +80,10 @@
     "files": [
       "main/**/*",
       "renderer/**/*"
+    ],
+    "asarUnpack": [
+      "**/@anthropic-ai/claude-agent-sdk-*/**",
+      "**/@anthropic-ai/claude-agent-sdk/**"
     ]
   }
 }

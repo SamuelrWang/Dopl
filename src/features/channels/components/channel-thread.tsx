@@ -89,6 +89,12 @@ interface Props {
     toUserId: string;
     mode: TaskMode;
   }) => Promise<void>;
+  onCloseTask: (
+    taskId: string,
+    outcome: "completed" | "failed",
+    summary?: string
+  ) => Promise<void>;
+  onReopenTask: (taskId: string) => Promise<void>;
   onInvite: () => void;
   onSetNotifyScope: (scope: NotifyScope) => void;
   onSetToolProfile: (profile: AgentToolProfile) => void;
@@ -124,6 +130,8 @@ export function ChannelThread({
   consentBusyIds,
   onSend,
   onCreateTask,
+  onCloseTask,
+  onReopenTask,
   onInvite,
   onSetNotifyScope,
   onSetToolProfile,
@@ -303,6 +311,9 @@ export function ChannelThread({
                 memberNames={memberNames}
                 latestMilestone={latestMilestone}
                 onSelectTask={handleSelectTask}
+                currentUserId={currentUserId}
+                onCloseTask={onCloseTask}
+                onReopenTask={onReopenTask}
               />
             </Popover>
           </div>
@@ -457,6 +468,8 @@ export function ChannelThread({
               tasksLoading={tasksLoading}
               currentUserId={currentUserId}
               highlightedTaskId={highlightedTaskId}
+              onCloseTask={onCloseTask}
+              onReopenTask={onReopenTask}
             />
           )}
         </div>

@@ -9,13 +9,16 @@ const auth = require('./auth');
 const tray = require('./tray');
 const updater = require('./updater');
 const listener = require('./channel-listener');
-const spawner = require('./session-spawner');
 const channelDirs = require('./channel-dirs');
 const channelDirIpc = require('./channel-dir-ipc');
 const mcpConfig = require('./mcp-config');
 const api = require('./api');
 const { createLoadGuard } = require('./load-guard');
 const { diag } = require('./diag');
+// v1.9 Session Window: engine seam + window factory / lifecycle echoes + window-mode.
+const sessionEngine = require('./session-engine');
+const settings = require('./settings');
+const sessionWindow = require('./session-window');
 
 const store = new Store();
 let mainWindow = null;
@@ -371,8 +374,8 @@ if (!gotLock) {
 
     buildMenu();
 
-    // Menu-bar tray for the background role. The terminal-mode checkbox (v1.2
-    // Feature 3) reflects + toggles the run-in-Terminal spawn setting.
+    // Menu-bar tray for the background role. Terminal mode is RETIRED (§G Q2); the
+    // "Sessions" submenu carries the "Run sessions in a window" toggle (default ON).
     tray.create({
       onOpen: () => showMainWindow(),
       onQuit: () => { app.isQuitting = true; app.quit(); },
@@ -383,11 +386,11 @@ if (!gotLock) {
         if (latestPendingSegment) navigateToChannels(latestPendingSegment);
         else showMainWindow();
       },
-      terminalMode: spawner.getRunInTerminal(),
-      onToggleTerminal: () => {
-        const on = spawner.setRunInTerminal(!spawner.getRunInTerminal());
-        tray.setTerminalMode(on);
-        diag('setting: runInTerminal ->', on);
+      windowMode: settings.getWindowMode(),
+      onToggleWindowMode: () => {
+        const on = settings.setWindowMode(!settings.getWindowMode());
+        tray.setWindowMode(on);
+        diag('setting: sessionWindowMode ->', on);
       },
       // Round C: the "Channel folders" submenu. Accessors are read fresh on every
       // tray rebuild; setting/clearing a folder rebuilds the menu so it reflects
@@ -418,6 +421,12 @@ if (!gotLock) {
 
     createMainWindow();
     flushPendingDeepLink();
+
+    // v1.9 seam (§B.5): factory + lifecycle handlers, then init() (reload records,
+    // interrupted echoes, opt-in resume). BEFORE listener.start so inbound can route.
+    sessionEngine.setWindowFactory(sessionWindow.createSessionWindow);
+    sessionEngine.setLifecycleHandlers(sessionWindow.lifecycleHandlers);
+    try { sessionEngine.init(); } catch (err) { diag('sessionEngine.init error', err && err.message); }
 
     // Start the Channels listener; it drives the tray status label. The
     // openChannel handler lets a clicked notification open + navigate the window;

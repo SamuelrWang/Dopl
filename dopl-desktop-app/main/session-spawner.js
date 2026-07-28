@@ -35,11 +35,10 @@ const {
   cliEnv,
 } = require('./claude-resolve');
 const channelDirs = require('./channel-dirs');
-const { counterpartyFraming, milestoneGuidance, sanitizeName } = require('./prompt-framing');
+const { counterpartyFraming, sanitizeName } = require('./prompt-framing');
 
 const store = new Store();
 const SESSION_KEY = 'claudeSessions'; // { [channelId]: claudeSessionId }
-const RUN_IN_TERMINAL_KEY = 'runInTerminal'; // v1.2: visible-Terminal spawn mode
 const MAX_RUNTIME_MS = 5 * 60 * 1000;
 const MAX_OUTPUT_BYTES = 1_000_000;
 
@@ -68,16 +67,6 @@ function writeScopedSettings(profile) {
     diag('spawner: scoped settings write failed', err && err.message);
     return null;
   }
-}
-
-// ── Run-in-Terminal setting (v1.2 Feature 3) ─────────────────────────────────
-function getRunInTerminal() {
-  return store.get(RUN_IN_TERMINAL_KEY) === true;
-}
-function setRunInTerminal(v) {
-  const val = !!v;
-  store.set(RUN_IN_TERMINAL_KEY, val);
-  return val;
 }
 
 // Feature E: mcp-config writes this file (mode 600) with a Dopl device token; we
@@ -287,155 +276,16 @@ function execOnce(bin, { channelId, message, context, toolProfile, isRetry }, re
   );
 }
 
-// ── Terminal mode (v1.2 Feature 3) ───────────────────────────────────────────
-// Opt-in visible-Terminal spawn: a real TTY means interactive permission prompts
-// work and the operator WATCHES the agent (the terminal window IS the approve-out
-// review). Consent still gates BEFORE this is ever called (channel-listener.js).
-function shellQuote(s) {
-  return "'" + String(s).replace(/'/g, `'\\''`) + "'";
-}
-function appleQuote(s) {
-  return '"' + String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
-}
-
-// Terminal prompt = the same constrained/fenced prompt as headless, plus the
-// delivery instruction (the terminal run has no stdout capture on our side).
-// The instruction depends on the profile: a restricted profile (read_only OR
-// dopl_only) has NO posting tool — read_only denies the whole Dopl server, and
-// dopl_only now denies dopl_channel by name (D1) so it can't post/exfiltrate
-// directly — so telling it to post via dopl_channel would send it at a tool that
-// is not there. It prints the reply for the operator to review and send instead.
-// Only `full` (which keeps dopl_channel) is told to post via the MCP tool.
-function buildTerminalPrompt(message, context, nonce, channelId, toolProfile) {
-  const base = buildPrompt(message, context, nonce);
-  if (normalizeProfile(toolProfile) !== 'full') {
-    return [
-      base,
-      ``,
-      `DELIVERY: this session cannot post to the channel. Print your final reply as`,
-      `the last thing you output, so your operator can review it and send it. Do not`,
-      `attempt to post it yourself.`,
-    ].join('\n');
-  }
-  return [
-    base,
-    ``,
-    `DELIVERY: after composing your reply, post it to this channel by calling the`,
-    `dopl_channel MCP tool with op "post", channel "${channelId}", and body set to`,
-    `your reply. Posting via dopl_channel is how your teammates receive the answer,`,
-    `so do not skip it. Do not take destructive actions to accomplish this.`,
-    ``,
-    // Only `full` can post directly, so only it gets the milestone-logging line.
-    milestoneGuidance({ hasPostingTool: true }),
-  ].join('\n');
-}
-
-// M-2: remove prompt files this channel left behind. The normal path deletes the
-// file inside the spawned shell before claude even starts, so anything still
-// here is from a failed launch or a pre-hardening build (which used a single
-// fixed `terminal-prompt.txt` and never deleted it — an untrusted message body
-// sitting on disk indefinitely). Best-effort.
-function sweepTerminalPrompts(cwd, keepFile) {
-  try {
-    for (const name of fs.readdirSync(cwd)) {
-      if (!name.startsWith('terminal-prompt')) continue;
-      const p = path.join(cwd, name);
-      if (p === keepFile) continue;
-      try {
-        fs.unlinkSync(p);
-      } catch (_) {
-        /* best-effort */
-      }
-    }
-  } catch (_) {
-    /* cwd may be unreadable */
-  }
-}
-
-// Launches claude interactively in Terminal.app. Never passes tokens on argv:
-// the Dopl MCP token stays inside the --mcp-config file (referenced by path), and
-// claude's own credentials come from its store (the interactive TTY can sign in
-// if needed). The untrusted message body is written to a mode-600 file and read
-// via "$(cat 'file')" so it never lands on the visible command line. Resolves
-// { launched } or { skipped: <reason> } — the interactive session runs detached.
-//
-// M-2 (concurrency + residue): the prompt file carries a per-spawn nonce in its
-// NAME, and the spawned shell reads it into a variable and deletes it before
-// claude starts. The per-channel busy guard is the SAME `active` set headless
-// uses, so `isBusy()` is honest across both modes; because a detached terminal
-// gives us no exit signal, the slot is released on the same MAX_RUNTIME_MS
-// ceiling headless enforces.
-function runInTerminalForChannel({ channelId, message, context, toolProfile }) {
-  if (active.has(channelId)) {
-    return Promise.resolve({ skipped: 'busy' });
-  }
-  return resolveClaude().then((bin) => {
-    if (!bin) return { skipped: 'no-cli' };
-    if (active.has(channelId)) return { skipped: 'busy' }; // re-check after the await
-    const nonce = crypto.randomBytes(9).toString('hex');
-    const prompt = buildTerminalPrompt(message, context, nonce, channelId, toolProfile);
-    // The untrusted message body always lives in the per-channel SANDBOX (mode 600,
-    // read-then-deleted below), even when the agent RUNS elsewhere — so the body is
-    // never dropped into the operator's real project folder and the residue sweep
-    // stays scoped to our own dir. Round C: the run cwd is the operator's chosen
-    // folder when set + still present, else that same sandbox. cwd is context, not
-    // a fence — the tool profile is the bound.
-    const sandbox = channelCwd(channelId);
-    const runCwd = channelDirs.spawnDirFor(channelId, sandbox);
-    let promptFile;
-    try {
-      promptFile = path.join(sandbox, `terminal-prompt-${nonce}.txt`);
-      fs.writeFileSync(promptFile, prompt, { mode: 0o600 });
-      fs.chmodSync(promptFile, 0o600);
-    } catch (err) {
-      return { skipped: 'prompt-write-failed', error: err && err.message };
-    }
-    sweepTerminalPrompts(sandbox, promptFile); // clear residue from earlier runs
-
-    const q = shellQuote(promptFile);
-    const parts = [shellQuote(bin), '"$DOPL_PROMPT"'];
-    const mcpConfigFile = spawnMcpConfigPath();
-    if (fs.existsSync(mcpConfigFile)) parts.push('--mcp-config', shellQuote(mcpConfigFile));
-    for (const a of buildRestrictionArgs(toolProfile, writeScopedSettings(toolProfile))) {
-      parts.push(shellQuote(a));
-    }
-
-    // Read-then-delete, chained with && so claude never runs on a body we could
-    // not read or could not remove (fail closed rather than leave it on disk). The
-    // cat/rm target the absolute sandbox prompt file; the cd targets the run cwd.
-    const shellCmd = [
-      `cd ${shellQuote(runCwd)}`,
-      `DOPL_PROMPT="$(cat ${q})"`,
-      `rm -f ${q}`,
-      parts.join(' '),
-    ].join(' && ');
-    const osa = `tell application "Terminal"\nactivate\ndo script ${appleQuote(shellCmd)}\nend tell`;
-    active.add(channelId);
-    return new Promise((resolve) => {
-      execFile('osascript', ['-e', osa], (err) => {
-        if (err) {
-          active.delete(channelId);
-          try {
-            fs.unlinkSync(promptFile); // the shell never ran — don't leave the body
-          } catch (_) {
-            /* best-effort */
-          }
-          resolve({ skipped: 'terminal-launch-failed', error: err.message });
-          return;
-        }
-        // Detached session: no exit signal, so free the slot on the same ceiling
-        // headless uses rather than holding the channel until the app restarts.
-        const t = setTimeout(() => active.delete(channelId), MAX_RUNTIME_MS);
-        if (t.unref) t.unref();
-        resolve({ launched: true });
-      });
-    });
-  });
-}
+// TERMINAL MODE RETIRED (v1.9, §G Q2): the opt-in visible-Terminal spawn
+// (runInTerminalForChannel / buildTerminalPrompt / the osascript launch + the
+// per-channel prompt-file sweep) existed ONLY to give a live TTY for interactive
+// permission approval + watching. The native session window (T1/T2) does that
+// better — in-app Allow/Deny buttons, steering, a cost meter — so terminal mode,
+// the `runInTerminal` setting, and F-066 (terminal had no --resume) are gone. This
+// module is now the HEADLESS FALLBACK only (window-mode OFF, or a session skip).
 
 module.exports = {
   runForChannel,
-  runInTerminalForChannel,
   isBusy,
   getSessionId,
   // Re-exported from claude-resolve.js (CLI resolution / env) — unchanged API.
@@ -447,6 +297,4 @@ module.exports = {
   buildDeniedTools,
   buildBuiltinTools,
   buildRestrictionArgs,
-  getRunInTerminal,
-  setRunInTerminal,
 };

@@ -53,6 +53,8 @@ export function MessageThread({
   tasksLoading,
   currentUserId,
   highlightedTaskId,
+  onCloseTask,
+  onReopenTask,
 }: {
   messages: ChannelMessage[];
   /** userId -> display name, for rendering addressing targets. */
@@ -71,6 +73,13 @@ export function MessageThread({
    * transient highlight ring. Null / undefined highlights nothing.
    */
   highlightedTaskId?: string | null;
+  /** Close/Reopen mutations for the card's task controls (see SessionCard). */
+  onCloseTask?: (
+    taskId: string,
+    outcome: "completed" | "failed",
+    summary?: string
+  ) => Promise<void>;
+  onReopenTask?: (taskId: string) => Promise<void>;
 }) {
   const items = useMemo(() => {
     const overlays = new Map(tasks.map((t) => [t.id, taskOverlayFrom(t)]));
@@ -105,6 +114,10 @@ export function MessageThread({
               key={item.key}
               session={item.session}
               highlighted={highlightedTaskId === item.session.taskId}
+              task={tasks.find((t) => t.id === item.session.taskId)}
+              currentUserId={currentUserId}
+              onCloseTask={onCloseTask}
+              onReopenTask={onReopenTask}
             />
           );
         }
