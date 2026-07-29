@@ -31,7 +31,7 @@
       </div>
     </header>
 
-    <!-- Status strip + cost meter -->
+    <!-- Status strip + folder chip -->
     <div class="status-strip">
       <span class="status-pill">
         <span class="status-dot is-launching" id="statusDot"></span>
@@ -39,12 +39,17 @@
       </span>
       <span class="status-meta" id="statusMeta"></span>
       <span class="status-spacer"></span>
-      <span class="cost-meter" id="costMeter">
-        <span>Turn <b id="turnCost">$0.00</b></span>
-        <span>Total <b id="totalCost">$0.00</b></span>
-        <span><b id="turnCount">0</b> turns</span>
+      <span class="folder-chip" id="folderChip">
+        <span class="folder-chip__icon" aria-hidden="true"></span>
+        <span class="folder-chip__label" id="folderLabel">Default (sandbox)</span>
+        <button class="ctl btn-light ctl-xs" id="btnFolderChange" type="button">Change</button>
+        <button class="ctl btn-light ctl-xs" id="btnFolderDefault" type="button">Use default</button>
+        <span class="folder-note hidden" id="folderNote">Applies to the next run</span>
       </span>
     </div>
+
+    <!-- Pre-consent request card (item 8): shown BEFORE any SDK/agent work. -->
+    <div class="consent-view" id="consentView"></div>
 
     <!-- Close-task panel (revealed by "Close task") -->
     <div class="close-panel bento" id="closePanel">
@@ -115,6 +120,7 @@
   </div>
 
   <script src="session-viewmodel.js"></script>
+  <script src="session-render.js"></script>
   <script src="session.js"></script>
 </body>
 </html>

@@ -128,12 +128,15 @@
 
   function initialState() {
     return {
-      init: null, // {sessionId, side, profile, mode, model, channelName, taskTitle, cwdLabel}
-      items: [], // ordered stream: turn | tool | inbound | inbound_pending | notice
+      init: null, // {sessionId, side, profile, mode, model, channelName, taskTitle, cwdLabel, from}
+      items: [], // ordered stream: turn | tool | counterparty | outbound | inbound_pending | notice
       permissions: [], // FIFO queue of pending permission_request payloads
-      usage: null, // {turnCostUsd, totalCostUsd, turns, model}
-      phase: "launching",
-      ended: null, // {outcome, summary, totalCostUsd, reason}
+      phase: "launching", // launching | consent | running | interrupted | ended
+      activity: null, // working | idle | awaiting_peer | awaiting_permission | awaiting_inbound  (item 3)
+      folder: null, // {label}  (item 7 — LABEL only; the abs path never crosses the bridge)
+      consent: null, // {requestId, from, summary, bodyText, taskTitle, channelName, toolProfileLabel, cwdLabel}  (item 8)
+      consentResolved: null, // {decision:'accepted'|'denied'|'expired'}  (item 8)
+      ended: null, // {outcome, summary, reason}  (cost REMOVED from display — item 6)
       lastError: null,
     };
   }
@@ -206,8 +209,10 @@
             channelName: event.channelName,
             taskTitle: event.taskTitle,
             cwdLabel: event.cwdLabel,
+            from: event.from, // counterparty name (item 1)
           },
-          phase: state.phase === "launching" ? "running" : state.phase,
+          // launching OR the pre-consent state (item 8, on adoption) flips to running.
+          phase: state.phase === "launching" || state.phase === "consent" ? "running" : state.phase,
         };
 
       case "turn":
@@ -232,6 +237,16 @@
       case "tool_result":
         return reduceToolResult(state, event);
 
+      // What MY agent SENT to the peer (op=post) — a distinct outbound lane, NOT
+      // narration and NOT a generic tool card (item 2).
+      case "outbound_post":
+        return {
+          ...state,
+          items: state.items.concat([
+            { kind: "outbound", toolUseId: event.toolUseId, to: event.to, text: event.text },
+          ]),
+        };
+
       case "permission_request": {
         if (state.permissions.some((p) => p.requestId === event.requestId)) return state;
         const perm = {
@@ -251,10 +266,13 @@
           permissions: state.permissions.filter((p) => p.requestId !== event.requestId),
         };
 
+      // The peer's inbound reply — a first-class left lane (item 1). `inbound` is
+      // kept as a legacy alias for a mid-wave engine that has not yet renamed.
+      case "counterparty":
       case "inbound":
         return {
           ...state,
-          items: state.items.concat([{ kind: "inbound", from: event.from, text: event.text }]),
+          items: state.items.concat([{ kind: "counterparty", from: event.from, text: event.text }]),
         };
 
       case "inbound_pending":
@@ -265,19 +283,41 @@
           ]),
         };
 
-      case "usage":
-        return {
-          ...state,
-          usage: {
-            turnCostUsd: event.turnCostUsd,
-            totalCostUsd: event.totalCostUsd,
-            turns: event.turns,
-            model: event.model,
-          },
-        };
+      // No `usage` case — the cost/usage meter was removed (item 6). The safety
+      // caps still run in the main reducer; the window simply never shows cost.
 
       case "status":
-        return { ...state, phase: event.phase || state.phase };
+        return {
+          ...state,
+          phase: event.phase || state.phase,
+          activity: event.activity || state.activity, // item 3
+        };
+
+      // Folder LABEL only — never an absolute path (item 7 / §H-9).
+      case "folder":
+        return { ...state, folder: { label: event.label == null ? null : String(event.label) } };
+
+      // Pre-consent state (item 8): the window opened BEFORE any SDK/agent work.
+      case "consent_request":
+        return {
+          ...state,
+          phase: "consent",
+          consent: {
+            requestId: event.requestId,
+            from: event.from,
+            summary: event.summary,
+            bodyText: event.bodyText,
+            taskTitle: event.taskTitle,
+            channelName: event.channelName,
+            toolProfileLabel: event.toolProfileLabel,
+            cwdLabel: event.cwdLabel,
+          },
+          consentResolved: null,
+        };
+
+      // Decided elsewhere (web / notification) while the window is open (item 8).
+      case "consent_resolved":
+        return { ...state, consentResolved: { decision: event.decision } };
 
       case "ended":
         return {
@@ -286,7 +326,6 @@
           ended: {
             outcome: event.outcome,
             summary: event.summary,
-            totalCostUsd: event.totalCostUsd,
             reason: event.reason,
           },
         };
@@ -322,6 +361,45 @@
     return touched ? { ...state, items } : state;
   }
 
+  // ── status / folder labels (pure; item 3 + item 7) ──────────────────────────
+  const PHASE_LABEL = {
+    launching: "Launching",
+    consent: "Consent",
+    running: "Running",
+    awaiting_permission: "Awaiting permission",
+    awaiting_inbound: "Awaiting reply",
+    interrupted: "Interrupted",
+    ended: "Ended",
+  };
+  const ACTIVITY_LABEL = {
+    working: "Working",
+    idle: "Idle",
+    awaiting_peer: "Waiting for reply",
+    awaiting_permission: "Awaiting permission",
+    awaiting_inbound: "Reply ready",
+  };
+
+  // The status-pill text. When a turn is RUNNING the finer `activity` wins;
+  // otherwise the coarse phase label is shown.
+  function statusText(phase, activity) {
+    const ph = phase || "launching";
+    if (ph === "running" && activity) return ACTIVITY_LABEL[activity] || PHASE_LABEL[ph] || ph;
+    return PHASE_LABEL[ph] || (ph.charAt(0).toUpperCase() + ph.slice(1));
+  }
+
+  // The status-dot class key (colour) — `act-<activity>` while running, else `is-<phase>`.
+  function statusDotKey(phase, activity) {
+    const ph = phase || "launching";
+    if (ph === "running" && activity) return "act-" + activity;
+    return "is-" + ph;
+  }
+
+  // The folder chip text (item 7): the abbreviated label or the sandbox default.
+  function folderLabel(folder) {
+    const label = folder && folder.label;
+    return label ? String(label) : "Default (sandbox)";
+  }
+
   return {
     initialState,
     reduceEvent,
@@ -330,5 +408,8 @@
     nextPermission,
     markInboundReleased,
     oneLine,
+    statusText,
+    statusDotKey,
+    folderLabel,
   };
 });

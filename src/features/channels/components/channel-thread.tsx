@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { MenuItem, Popover } from "@/shared/ui/popover-menu";
-import { Avatar } from "@/shared/ui/avatar";
+import { Avatar, type AvatarPerson } from "@/shared/ui/avatar";
 import { AvatarStack } from "@/shared/ui/avatar-stack";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import type {
@@ -26,11 +26,10 @@ import type {
   ChannelMessage,
   ChannelTask,
   NotifyScope,
-  TaskMode,
 } from "../types";
 import {
-  channelDisplayAvatarPerson,
   channelDisplayName,
+  channelDisplayPeerPerson,
 } from "../lib/channel-display";
 import { MessageThread } from "./message-thread";
 import { MessageComposer, type SendOptions } from "./message-composer";
@@ -83,12 +82,6 @@ interface Props {
   /** Consent decisions with a write in flight, by request id. */
   consentBusyIds: ReadonlySet<string>;
   onSend: (body: string, opts?: SendOptions) => Promise<void>;
-  onCreateTask: (input: {
-    title: string;
-    body: string;
-    toUserId: string;
-    mode: TaskMode;
-  }) => Promise<void>;
   onCloseTask: (
     taskId: string,
     outcome: "completed" | "failed",
@@ -129,7 +122,6 @@ export function ChannelThread({
   trustBusyIds,
   consentBusyIds,
   onSend,
-  onCreateTask,
   onCloseTask,
   onReopenTask,
   onInvite,
@@ -153,9 +145,19 @@ export function ChannelThread({
   const canManage = channel.role === "owner";
   // Direct-channel rendering: the header + composer speak to the resolved peer
   // (name / avatar live from the roster), never the stored channel name/slug.
-  const displayName = channelDisplayName(channel);
-  const peer = channelDisplayAvatarPerson(channel);
-  const peerName = channel.directPeer?.displayName ?? "your teammate";
+  // Resolve defensively so an unresolved `directPeer` still shows a real name +
+  // avatar (from the roster) rather than a bare "Direct message" placeholder.
+  const displayName = channelDisplayName(channel, members, currentUserId);
+  const peerPerson = channelDisplayPeerPerson(channel, members, currentUserId);
+  const peerName = displayName === "Direct message" ? "your teammate" : displayName;
+  // A DM always renders an avatar; when the peer is unresolved, fall back to a
+  // display-name-seeded person so the Avatar's initials fallback covers it.
+  const dmAvatarPerson: AvatarPerson = peerPerson ?? {
+    userId: channel.id,
+    email: null,
+    displayName,
+    avatarUrl: null,
+  };
 
   const memberNames = useMemo(
     () =>
@@ -233,17 +235,7 @@ export function ChannelThread({
       <div className="flex h-[52px] shrink-0 items-center gap-2 border-b border-border-default px-3.5">
         {channel.isDirect ? (
           <>
-            {peer && (
-              <Avatar
-                person={{
-                  userId: peer.userId,
-                  email: null,
-                  displayName: peer.displayName,
-                  avatarUrl: peer.avatarUrl,
-                }}
-                size="xs"
-              />
-            )}
+            <Avatar person={dmAvatarPerson} size="xs" />
             <span className="shrink-0 truncate text-lead font-semibold text-text-primary">
               {displayName}
             </span>
@@ -478,7 +470,6 @@ export function ChannelThread({
       {channel.isMember ? (
         <MessageComposer
           onSend={onSend}
-          onCreateTask={onCreateTask}
           members={members}
           currentUserId={currentUserId}
           isDirect={channel.isDirect}

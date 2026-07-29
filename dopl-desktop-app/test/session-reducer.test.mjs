@@ -64,6 +64,9 @@ test("initialSessionState defaults: interactive/responder, documented caps, empt
   assert.deepEqual(s.pendingPermissions, []);
   assert.deepEqual(s.allowForTask, []);
   assert.equal(s.hasPendingInbound, false);
+  // Item 3: a launching session starts `working`, nothing posted yet.
+  assert.equal(s.activity, "working");
+  assert.equal(s.postedThisTurn, false);
 });
 
 test("initialSessionState honors mode/side and valid caps, rejects invalid caps", () => {
@@ -109,6 +112,28 @@ test("assistant/tool_use/tool_result just emit their payload, no state change", 
   }
 });
 
+// ── outbound_post (item 2 — the sent-to-peer lane) ────────────────────────────
+
+test("outbound_post: emits its payload, sets postedThisTurn, stays working (no dup status)", () => {
+  const s = running(); // already `working`
+  const payload = { type: "outbound_post", toolUseId: "t1", to: "Bob", text: "on it" };
+  const r = sessionReducer(s, { type: "outbound_post", payload });
+  assert.equal(r.state.postedThisTurn, true, "records the post so turn-end -> awaiting_peer");
+  assert.equal(r.state.activity, "working");
+  // Already working -> no redundant status emit, just the outbound payload.
+  assert.deepEqual(effTypes(r.effects), ["emit"]);
+  assert.deepEqual(r.effects[0].payload, payload);
+});
+
+test("outbound_post from a non-working activity flips to working AND emits a status", () => {
+  const s = { ...running(), activity: "idle" };
+  const r = sessionReducer(s, { type: "outbound_post", payload: { type: "outbound_post", to: "Bob", text: "hi" } });
+  assert.equal(r.state.activity, "working");
+  assert.deepEqual(effTypes(r.effects), ["emit", "emit"]);
+  const status = r.effects.find((e) => e.payload.type === "status");
+  assert.deepEqual(status.payload, { type: "status", phase: "running", activity: "working" });
+});
+
 // ── permissions ─────────────────────────────────────────────────────────────────
 
 test("permission_request (not granted): -> awaiting_permission, tracks requestId, emits", () => {
@@ -120,6 +145,7 @@ test("permission_request (not granted): -> awaiting_permission, tracks requestId
     payload: { type: "permission_request", requestId: "r1", name: "Bash" },
   });
   assert.equal(r.state.phase, "awaiting_permission");
+  assert.equal(r.state.activity, "awaiting_permission"); // item 3
   assert.deepEqual(r.state.pendingPermissions, ["r1"]);
   assert.deepEqual(effTypes(r.effects), ["emit"]);
 });
@@ -136,6 +162,7 @@ test("permission_decision allow-once -> running + resolvePermission(allow) + per
   const s = { ...running(), phase: "awaiting_permission", pendingPermissions: ["r1"] };
   const r = sessionReducer(s, { type: "permission_decision", requestId: "r1", decision: "allow-once", name: "Bash" });
   assert.equal(r.state.phase, "running");
+  assert.equal(r.state.activity, "working"); // last button cleared -> back to the in-flight turn
   assert.deepEqual(r.state.pendingPermissions, []);
   assert.deepEqual(r.state.allowForTask, []);
   const resolve = findEff(r.effects, "resolvePermission");
@@ -175,16 +202,33 @@ test("permission_decision leaves phase awaiting while other permissions remain p
 
 // ── result / caps ────────────────────────────────────────────────────────────────
 
-test("result: accumulates cost + turns, emits usage, reschedules idle below caps", () => {
+test("result: accumulates cost + turns for the caps, reschedules idle, emits NO usage (item 6)", () => {
   const s = running({ turnCap: 5 });
   const r = sessionReducer(s, { type: "result", turnCostUsd: 0.02, model: "m" });
   assert.equal(r.state.turns, 1);
-  assert.equal(r.state.costUsd, 0.02);
+  assert.equal(r.state.costUsd, 0.02, "cost still accumulates internally for the cost cap");
   assert.equal(r.state.phase, "running");
+  // The display-only usage emit is GONE; a status emit replaces it.
   assert.deepEqual(effTypes(r.effects), ["emit", "scheduleIdle"]);
-  assert.deepEqual(findEff(r.effects, "emit").payload, {
-    type: "usage", turnCostUsd: 0.02, totalCostUsd: 0.02, turns: 1, model: "m",
+  assert.ok(!r.effects.some((e) => e.type === "emit" && e.payload.type === "usage"), "no usage emit in v2");
+  assert.deepEqual(findEff(r.effects, "emit").payload, { type: "status", phase: "running", activity: "idle" });
+});
+
+test("result WITH a post this turn -> awaiting_peer; WITHOUT -> idle; postedThisTurn resets", () => {
+  // A turn that posted to the peer ends `awaiting_peer` (waiting for a reply).
+  const posted = sessionReducer(
+    { ...running({ turnCap: 9 }), postedThisTurn: true },
+    { type: "result", turnCostUsd: 0.01 }
+  );
+  assert.equal(posted.state.activity, "awaiting_peer");
+  assert.equal(posted.state.postedThisTurn, false, "the flag resets at turn end");
+  assert.deepEqual(findEff(posted.effects, "emit").payload, {
+    type: "status", phase: "running", activity: "awaiting_peer",
   });
+  // A turn with no post ends `idle`.
+  const idle = sessionReducer(running({ turnCap: 9 }), { type: "result", turnCostUsd: 0.01 });
+  assert.equal(idle.state.activity, "idle");
+  assert.deepEqual(findEff(idle.effects, "emit").payload, { type: "status", phase: "running", activity: "idle" });
 });
 
 test("result at the turn cap ends the session (reason turn_cap) with the end effect triple", () => {
@@ -192,7 +236,9 @@ test("result at the turn cap ends the session (reason turn_cap) with the end eff
   const r = sessionReducer(s, { type: "result", turnCostUsd: 0.01 });
   assert.equal(r.state.turns, 2);
   assert.equal(r.state.phase, "ended");
-  assert.deepEqual(effTypes(r.effects), ["emit", "abortQuery", "emit", "settle"]);
+  // No leading usage emit anymore (item 6): the cap end is just the effect triple.
+  assert.deepEqual(effTypes(r.effects), ["abortQuery", "emit", "settle"]);
+  assert.ok(!r.effects.some((e) => e.type === "emit" && e.payload.type === "usage"), "no usage emit at the cap");
   const ended = r.effects.filter((e) => e.type === "emit").find((e) => e.payload.type === "ended");
   assert.equal(ended.payload.reason, "turn_cap");
   assert.equal(findEff(r.effects, "settle").outcome, "ended");
@@ -214,19 +260,32 @@ test("cost cap of 0 is disabled — a large turn cost does not end the session",
 
 // ── inbound (interactive vs autonomous) ─────────────────────────────────────────
 
-test("inbound_arrived autonomous: shows the reply and pushes it as the next turn", () => {
+test("inbound_arrived autonomous: shows the reply as a `counterparty` and pushes the next turn", () => {
   const s = running({ mode: "autonomous" });
   const r = sessionReducer(s, { type: "inbound_arrived", pendingId: "p1", message: "hi", authorName: "Bob" });
   assert.equal(r.state.phase, "running");
+  assert.equal(r.state.activity, "working");
+  // Item 1: the autonomous emit is now `counterparty` (supersedes `inbound`). From a
+  // working state no extra status is emitted, so the effects stay [emit, pushInbound].
   assert.deepEqual(effTypes(r.effects), ["emit", "pushInbound"]);
-  assert.deepEqual(findEff(r.effects, "emit").payload, { type: "inbound", from: "Bob", text: "hi" });
+  assert.deepEqual(findEff(r.effects, "emit").payload, { type: "counterparty", from: "Bob", text: "hi" });
   assert.deepEqual(findEff(r.effects, "pushInbound"), { type: "pushInbound", message: "hi", authorName: "Bob" });
+});
+
+test("inbound_arrived autonomous from awaiting_peer clears back to working with a status emit", () => {
+  const s = { ...running({ mode: "autonomous" }), activity: "awaiting_peer" };
+  const r = sessionReducer(s, { type: "inbound_arrived", message: "reply", authorName: "Bob" });
+  assert.equal(r.state.activity, "working");
+  assert.deepEqual(effTypes(r.effects), ["emit", "pushInbound", "emit"]);
+  const status = r.effects.filter((e) => e.type === "emit").find((e) => e.payload.type === "status");
+  assert.deepEqual(status.payload, { type: "status", phase: "running", activity: "working" });
 });
 
 test("inbound_arrived interactive: holds the reply as a pending inbound for release", () => {
   const s = running({ mode: "interactive" });
   const r = sessionReducer(s, { type: "inbound_arrived", pendingId: "p1", message: "hi", authorName: "Bob" });
   assert.equal(r.state.phase, "awaiting_inbound");
+  assert.equal(r.state.activity, "awaiting_inbound"); // item 3: rides the phase
   assert.equal(r.state.hasPendingInbound, true);
   assert.deepEqual(effTypes(r.effects), ["emit"]);
   assert.deepEqual(findEff(r.effects, "emit").payload, {
@@ -252,6 +311,21 @@ test("steer priority 'now' interrupts first, then pushes; default just pushes ne
   const next = sessionReducer(s, { type: "steer", text: "later" });
   assert.deepEqual(effTypes(next.effects), ["pushTurn"]);
   assert.equal(findEff(next.effects, "pushTurn").priority, "next");
+});
+
+test("steer / inbound_released from a waiting activity clear back to working (item 3)", () => {
+  // Steering while awaiting a peer reply re-activates the turn + emits a status.
+  const steered = sessionReducer({ ...running(), activity: "awaiting_peer" }, { type: "steer", text: "nudge" });
+  assert.equal(steered.state.activity, "working");
+  assert.deepEqual(effTypes(steered.effects), ["pushTurn", "emit"]);
+  assert.deepEqual(steered.effects[1].payload, { type: "status", phase: "running", activity: "working" });
+  // inbound_released always returns to working with a status carrying the activity.
+  const released = sessionReducer(
+    { ...running({ mode: "interactive" }), phase: "awaiting_inbound", activity: "awaiting_inbound", hasPendingInbound: true },
+    { type: "inbound_released", message: "go", authorName: "Bob" }
+  );
+  assert.equal(released.state.activity, "working");
+  assert.deepEqual(findEff(released.effects, "emit").payload, { type: "status", phase: "running", activity: "working" });
 });
 
 test("interrupt (Stop): -> interrupted, interruptQuery + status emit", () => {

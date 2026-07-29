@@ -52,13 +52,13 @@ function channelFoldersSubmenu() {
   return items;
 }
 
-// v1.9: the "Sessions" submenu. Its one live control is the executor switch — ON
-// (default) opens a native Dopl session window per cross-user run (visible turns,
-// in-app Allow/Deny buttons, steering, a cost meter); OFF falls back to today's
-// headless spawn + approve-out review. This REPLACES the retired v1.2 "Run responses
-// in Terminal" toggle (terminal mode is gone, §G Q2).
+// The "Sessions" submenu. The executor switch (ON = native session windows, default;
+// OFF = headless spawn + approve-out) plus, v2.0 item 10, the live sessions: a hidden
+// window (closed but kept alive) shows "Reopen — {channel}" and reopens it; a visible
+// one shows "Show — {channel}" and brings it to front. The list is read fresh on every
+// tray rebuild via the injected getSessions accessor.
 function sessionsSubmenu() {
-  return [
+  const items = [
     {
       label: 'Run sessions in a window',
       type: 'checkbox',
@@ -66,8 +66,20 @@ function sessionsSubmenu() {
       click: () => handlers.onToggleWindowMode && handlers.onToggleWindowMode(),
     },
     { type: 'separator' },
-    { label: windowMode ? 'On: native session windows' : 'Off: headless fallback', enabled: false },
   ];
+  const live = (handlers.getSessions && handlers.getSessions()) || [];
+  if (live.length) {
+    for (const s of live) {
+      const name = s.channelName || 'Session';
+      items.push({
+        label: `${s.hidden ? 'Reopen' : 'Show'} — ${name}`,
+        click: () => handlers.onReopenSession && handlers.onReopenSession(s.sessionId),
+      });
+    }
+    items.push({ type: 'separator' });
+  }
+  items.push({ label: windowMode ? 'On: native session windows' : 'Off: headless fallback', enabled: false });
+  return items;
 }
 
 function buildMenu() {

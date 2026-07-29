@@ -8,7 +8,6 @@ import {
   addChannelMember,
   addTrustRule,
   ChannelApiError,
-  createChannelTask,
   closeChannelTask,
   reopenChannelTask,
   decideConsent,
@@ -21,7 +20,7 @@ import {
   updateMyToolProfile,
 } from "../client/api";
 import { CONSENT_INBOX_POLL_MS, PRESENCE_REFETCH_DEBOUNCE_MS } from "../constants";
-import type { AgentToolProfile, NotifyScope, TaskMode } from "../types";
+import type { AgentToolProfile, NotifyScope } from "../types";
 import { useChannels } from "../hooks/use-channels";
 import { useChannelMessages } from "../hooks/use-channel-messages";
 import { useChannelMembers } from "../hooks/use-channel-members";
@@ -219,40 +218,6 @@ export function ChannelsView({
       void refetchChannels();
     } catch (err) {
       toast({ title: err instanceof ChannelApiError ? err.message : "Couldn't send" });
-      throw err;
-    } finally {
-      busyRef.current -= 1;
-      coordinatorRef.current.settle(busyRef.current > 0);
-    }
-  }
-
-  async function handleCreateTask(input: {
-    title: string;
-    body: string;
-    toUserId: string;
-    mode: TaskMode;
-  }) {
-    if (!selected) return;
-    busyRef.current += 1;
-    try {
-      await createChannelTask(
-        selected.id,
-        {
-          title: input.title,
-          mode: input.mode,
-          body: input.body,
-          toUserId: input.toUserId,
-        },
-        workspaceId
-      );
-      await refetchMessages();
-      void refetchTasks();
-      void refetchChannels();
-    } catch (err) {
-      toast({
-        title:
-          err instanceof ChannelApiError ? err.message : "Couldn't create the task",
-      });
       throw err;
     } finally {
       busyRef.current -= 1;
@@ -493,7 +458,6 @@ export function ChannelsView({
           trustBusyIds={trustBusyIds}
           consentBusyIds={consentBusyIds}
           onSend={handleSend}
-          onCreateTask={handleCreateTask}
           onCloseTask={handleCloseTask}
           onReopenTask={handleReopenTask}
           onInvite={() => setInviteOpen(true)}

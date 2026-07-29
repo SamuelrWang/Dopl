@@ -44,9 +44,11 @@ function createSessionWindow(sessionId) {
   win.once('ready-to-show', () => win.show());
 
   // Defense in depth on top of the page CSP: this window is NEVER a general browser.
-  // Deny every window.open and block any navigation away from the local file. Closing
-  // the window (OS close) is left to default — the engine watches render-process-gone
-  // and settles the session as interrupted (§A.3 crash effect), task stays resumable.
+  // Deny every window.open and block any navigation away from the local file. v2.0
+  // item 10: the engine binds close -> HIDE (a live session's window is kept alive for
+  // a tray reopen, destroyed only on settle) and render-process-gone -> crash (the
+  // real interrupt signal, task stays resumable). A pre-consent window (session-
+  // consent.js) instead PARKS on close — the request stays answerable elsewhere.
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', (event, url) => {
     if (!String(url).startsWith('file://')) event.preventDefault();

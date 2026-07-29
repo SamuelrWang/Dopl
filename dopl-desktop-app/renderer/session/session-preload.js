@@ -15,6 +15,8 @@ const asDecision = (d) => {
   return s === 'allow-once' || s === 'allow-task' || s === 'deny' ? s : 'deny';
 };
 const asOutcome = (o) => (asStr(o) === 'failed' ? 'failed' : 'completed');
+// Consent decision is fail-closed: anything but an explicit 'accept' is a deny.
+const asConsent = (d) => (asStr(d) === 'accept' ? 'accept' : 'deny');
 
 // The session id lives in the window URL (session.html?sid=…). Read-only; the
 // main process is authoritative and re-derives it from the window — this is a
@@ -72,5 +74,23 @@ contextBridge.exposeInMainWorld('doplSession', {
   },
   closeTask(outcome, summary) {
     ipcRenderer.invoke('session:close-task', { outcome: asOutcome(outcome), summary: asStr(summary) });
+  },
+  // Pre-consent Accept/Deny (item 8). The main side re-derives the consent row
+  // from event.sender; the payload carries only the coerced decision.
+  consentDecision(decision) {
+    return ipcRenderer.invoke('session:consent-decision', { decision: asConsent(decision) });
+  },
+  // Folder display + change (item 7). LABEL only ever crosses back — the main
+  // side resolves channelId from the session; the abs path never enters here.
+  folder: {
+    get() {
+      return ipcRenderer.invoke('session:folder-get', {});
+    },
+    choose() {
+      return ipcRenderer.invoke('session:folder-choose', {});
+    },
+    clear() {
+      return ipcRenderer.invoke('session:folder-clear', {});
+    },
   },
 });

@@ -11,7 +11,8 @@
 // imperative shell) remains the only stateful, electron-bound module.
 
 const crypto = require('crypto');
-const { grantDecision } = require('./session-profiles');
+const { grantDecision, isOwnChannelPost } = require('./session-profiles');
+const { DOPL_CHANNEL_TOOL } = require('./tool-profiles');
 
 // I-LOW(a): a bounded FIFO queue of pending inbound counterparty replies lives on
 // the session object (`s.pendingInbound`, an array). In INTERACTIVE mode the
@@ -142,11 +143,27 @@ function summarizeResult(content) {
   }
 }
 
+// ─── BEGIN SESSION-IO-PURE (pure; unit-tested via source extraction) ──────────
+//
+// Item 2 classifier. A `dopl_channel` op=post into the session's OWN channel is the
+// real OUTBOUND message the agent sent to the peer — it must render as a sent
+// message, not a generic tool card. Reuses the SAME op-scope as the grant
+// (session-profiles.isOwnChannelPost); this does NOT widen the grant (§H-2), it only
+// classifies for display. Pure: references DOPL_CHANNEL_TOOL + isOwnChannelPost
+// (both imported at module top, no runtime imports of their own) and holds no state,
+// so the test slices this block and injects the real values (session-profiles idiom).
+function isOutboundPost(name, input, sessionChannelId) {
+  return name === DOPL_CHANNEL_TOOL && isOwnChannelPost(input, sessionChannelId);
+}
+// ─── END SESSION-IO-PURE ──────────────────────────────────────────────────────
+
 // Map ONE SDK message to the reducer events the renderer needs. Only assistant
-// (text turns + tool_use cards) and user (tool_result fills) produce render
-// events; system/init and result are handled directly by the engine (they mutate
-// session state — sdkSessionId capture, cost delta). Unknown types -> [].
-function sdkRenderEvents(msg) {
+// (text turns + tool_use cards + op=post outbound messages) and user (tool_result
+// fills) produce render events; system/init and result are handled directly by the
+// engine (they mutate session state — sdkSessionId capture, cost delta). Unknown
+// types -> []. `sessionChannelId` + `peerName` (item 2 / §B.4) classify an
+// own-channel post as an `outbound_post` addressed to the peer.
+function sdkRenderEvents(msg, sessionChannelId, peerName) {
   const out = [];
   const blocks = (msg && msg.message && msg.message.content) || [];
   if (msg && msg.type === 'assistant') {
@@ -154,16 +171,32 @@ function sdkRenderEvents(msg) {
       if (b && b.type === 'text' && b.text) {
         out.push({ type: 'assistant', payload: { type: 'turn', role: 'assistant', text: b.text } });
       } else if (b && b.type === 'tool_use') {
-        out.push({
-          type: 'tool_use',
-          payload: {
+        if (isOutboundPost(b.name, b.input, sessionChannelId)) {
+          // The agent SENT a message to the peer. Emit an `outbound_post` and
+          // SUPPRESS the generic tool card for this same tool_use, so a sent
+          // message never double-renders as a tool call. This event flows THROUGH
+          // the reducer (case 'outbound_post') so it can set postedThisTurn.
+          out.push({
+            type: 'outbound_post',
+            payload: {
+              type: 'outbound_post',
+              toolUseId: b.id,
+              to: peerName || null,
+              text: b.input && b.input.body != null ? String(b.input.body) : '',
+            },
+          });
+        } else {
+          out.push({
             type: 'tool_use',
-            toolUseId: b.id,
-            name: b.name,
-            inputSummary: summarizeInput(b.input),
-            inputFull: safeInput(b.input),
-          },
-        });
+            payload: {
+              type: 'tool_use',
+              toolUseId: b.id,
+              name: b.name,
+              inputSummary: summarizeInput(b.input),
+              inputFull: safeInput(b.input),
+            },
+          });
+        }
       }
     }
   } else if (msg && msg.type === 'user') {
@@ -272,13 +305,18 @@ function handleSdkMessage(s, msg, dispatch, store) {
         model: msg.model,
         channelName: (s.context && s.context.channelName) || null,
         taskTitle: (s.context && s.context.taskTitle) || null,
-        cwdLabel: msg.cwd || null,
+        from: s.counterpartyName || null,
+        // NEVER send the SDK's absolute cwd to the renderer (label-only rule).
+        // The engine's emitFolder() feeds the folder chip the abbreviated label.
+        cwdLabel: null,
       },
     });
     return;
   }
   if (msg.type === 'assistant' || msg.type === 'user') {
-    for (const ev of sdkRenderEvents(msg)) dispatch(s, ev);
+    // §B.4 seam: pass the session's OWN channelId + the counterparty display name so
+    // an op=post into this channel renders as an outbound message to the peer.
+    for (const ev of sdkRenderEvents(msg, s.channelId, s.counterpartyName)) dispatch(s, ev);
     return;
   }
   if (msg.type === 'result') {
@@ -299,6 +337,7 @@ module.exports = {
   summarizeInput,
   safeInput,
   summarizeResult,
+  isOutboundPost,
   sdkRenderEvents,
   baseRecord,
   makeCanUseTool,

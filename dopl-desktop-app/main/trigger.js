@@ -113,6 +113,10 @@ async function handleTrigger(entry, m) {
   // reply + lifecycle under the requester's task card (taskIdFor prefers it). A
   // legacy/absent id -> '' -> undefined here -> deterministic legacy id, unchanged.
   const inboundTaskId = targeting.firstClassTaskId(m);
+  // Item 8: the (channel,task) key the eventual session will run under, so the
+  // pre-consent window registers where launchResponderSession later ADOPTS it. Mirrors
+  // taskIdFor: a first-class id else the deterministic legacy `task-<channel>-<seq>`.
+  const futureTaskId = inboundTaskId || `task-${entry.channel.id}-${m.seq}`;
   diag('consent create:', entry.channel.id.slice(0, 8), 'seq', m.seq);
 
   const created = await consent.createConsentRequest(entry.workspaceId, {
@@ -149,6 +153,27 @@ async function handleTrigger(entry, m) {
   // notification; the poke below makes the watcher resolve it at once. A pending
   // row gets the Allow/Dismiss notification — Dismiss PARKS (stays pending).
   if (!created.status || created.status === 'pending') {
+    // Item 8: open the pre-consent window IMMEDIATELY (shows the request + Accept/Deny;
+    // runs NO agent work until Accept, when launchResponderSession ADOPTS it). The
+    // native notification + web panel remain valid secondary surfaces — all three route
+    // through the SAME consent row (first-answer-wins). Window-mode OFF -> no window,
+    // today's headless + approve-out path is preserved byte-for-byte.
+    if (settings.getWindowMode()) {
+      sessionEngine.openConsentWindow({
+        channelId: entry.channel.id,
+        taskId: futureTaskId,
+        workspaceId: entry.workspaceId,
+        rowId: created.rowId,
+        watcherKey: key,
+        requesterName,
+        summary,
+        bodyPreview,
+        taskTitle: targeting.metaStr(m, 'taskTitle') || null,
+        toolProfileLabel: profileLabel(toolProfile),
+        cwdLabel: channelDirs.liveChannelDirLabel(entry.channel.id),
+        channelName: entry.channel.name,
+      });
+    }
     consent.notifyInbound({
       channelName: entry.channel.name,
       requesterName,
@@ -410,12 +435,17 @@ async function inboundDenied(rec) {
   // Decision echo: the web renders task_failed + { declined: true } as a calm
   // "Declined", distinct from an error (which carries no declined flag).
   await postTaskEvent(entry, m, 'task_failed', taskIdFor(rec), { declined: true }, 'Request declined');
+  // Item 8 step 5/6: close the pre-consent window (no-op if it was never opened,
+  // adopted, or parked). NO SDK ever ran for a denied request.
+  try { sessionEngine.closeConsentWindow(rec.key, 'denied'); } catch (_) { /* best effort */ }
   watcher.settle(rec.key, 'denied');
 }
 
 // ── Resolver: inbound EXPIRED → silent drop ──────────────────────────────────
 async function inboundExpired(rec) {
   diag('inbound expired (no decision) — dropping', rec.key);
+  // Item 8: close the pre-consent window if it is still open (no-op otherwise).
+  try { sessionEngine.closeConsentWindow(rec.key, 'expired'); } catch (_) { /* best effort */ }
   watcher.settle(rec.key, 'expired');
 }
 

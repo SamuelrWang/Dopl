@@ -59,6 +59,12 @@ function initialSessionState(opts) {
     pendingPermissions: [], // requestIds awaiting a button (models a Set)
     allowForTask: [], // tool names the operator granted for the whole task (models a Set)
     hasPendingInbound: false,
+    // Item 3: the coarse activity the status pill shows (working|idle|awaiting_peer|
+    // awaiting_permission|awaiting_inbound). A launching/running session is `working`;
+    // `postedThisTurn` records whether the agent sent an op=post this turn so the
+    // turn-end transition can pick `awaiting_peer` vs `idle`.
+    activity: 'working',
+    postedThisTurn: false,
   };
 }
 
@@ -113,6 +119,19 @@ function sessionReducer(state, event) {
     return { state: state, effects: [{ type: 'emit', payload: event.payload }] };
   }
 
+  // Item 2: the agent SENT a message to the peer (dopl_channel op=post into its own
+  // channel, classified in session-io.isOutboundPost). Unlike a bare tool_use, this
+  // flows THROUGH the reducer so it can record `postedThisTurn` (item 3 feeds the
+  // turn-end `awaiting_peer` transition). The turn is still in flight -> `working`;
+  // a status is emitted only if the activity actually changed (no spam per block).
+  if (type === 'outbound_post') {
+    const effects = [{ type: 'emit', payload: event.payload }];
+    if (state.activity !== 'working') {
+      effects.push({ type: 'emit', payload: { type: 'status', phase: state.phase, activity: 'working' } });
+    }
+    return { state: clone(state, { postedThisTurn: true, activity: 'working' }), effects: effects };
+  }
+
   if (type === 'permission_request') {
     // A tool the operator already granted for the whole task short-circuits with
     // no button (checked FIRST — this Set is the correct home for a task grant;
@@ -123,6 +142,7 @@ function sessionReducer(state, event) {
     return {
       state: clone(state, {
         phase: 'awaiting_permission',
+        activity: 'awaiting_permission', // item 3: rides the awaiting_permission phase
         pendingPermissions: addUnique(state.pendingPermissions, event.requestId),
       }),
       effects: [{ type: 'emit', payload: event.payload }],
@@ -137,8 +157,11 @@ function sessionReducer(state, event) {
     const nextAllow = event.decision === 'allow-task' ? addUnique(state.allowForTask, event.name) : state.allowForTask;
     const nextPending = without(state.pendingPermissions, event.requestId);
     const phase = nextPending.length ? 'awaiting_permission' : 'running';
+    // Back to the in-flight turn once the last button clears; the renderer already
+    // learns this from permission_resolved, so no extra status emit here.
+    const activity = nextPending.length ? 'awaiting_permission' : 'working';
     return {
-      state: clone(state, { phase: phase, allowForTask: nextAllow, pendingPermissions: nextPending }),
+      state: clone(state, { phase: phase, activity: activity, allowForTask: nextAllow, pendingPermissions: nextPending }),
       effects: [
         { type: 'resolvePermission', requestId: event.requestId, decision: sdkDecision },
         { type: 'emit', payload: { type: 'permission_resolved', requestId: event.requestId, decision: event.decision } },
@@ -147,37 +170,48 @@ function sessionReducer(state, event) {
   }
 
   if (type === 'result') {
+    // Turn end. costUsd/turns accumulate for the SAFETY caps (item 6 keeps every cap;
+    // only the display-only `usage` emit is dropped — no cost meter in v2). Reset
+    // postedThisTurn now that the turn closed. `costUsd` stays internal for costCap.
     const turnCost = Number(event.turnCostUsd) || 0;
     const turns = state.turns + 1;
     const costUsd = state.costUsd + turnCost;
-    const ns = clone(state, { turns: turns, costUsd: costUsd });
-    const effects = [
-      { type: 'emit', payload: { type: 'usage', turnCostUsd: turnCost, totalCostUsd: costUsd, turns: turns, model: event.model } },
-    ];
+    const ns = clone(state, { turns: turns, costUsd: costUsd, postedThisTurn: false });
     if (turnCapReached(ns)) {
-      return { state: clone(ns, { phase: 'ended' }), effects: effects.concat(endEffects(ns, 'ended', 'turn_cap')) };
+      return { state: clone(ns, { phase: 'ended' }), effects: endEffects(ns, 'ended', 'turn_cap') };
     }
     if (costCapReached(ns)) {
-      return { state: clone(ns, { phase: 'ended' }), effects: effects.concat(endEffects(ns, 'ended', 'cost_cap')) };
+      return { state: clone(ns, { phase: 'ended' }), effects: endEffects(ns, 'ended', 'cost_cap') };
     }
-    effects.push({ type: 'scheduleIdle' });
-    return { state: ns, effects: effects };
+    // Item 3: a turn that POSTED to the peer is now waiting on a reply; otherwise the
+    // session is idle. The status emit REPLACES the old usage emit.
+    const activity = state.postedThisTurn ? 'awaiting_peer' : 'idle';
+    return {
+      state: clone(ns, { activity: activity }),
+      effects: [
+        { type: 'emit', payload: { type: 'status', phase: 'running', activity: activity } },
+        { type: 'scheduleIdle' },
+      ],
+    };
   }
 
   if (type === 'inbound_arrived') {
     if (state.mode === 'autonomous') {
-      // Auto-fed counterparty turn: show it, then push it as the next user turn.
-      return {
-        state: clone(state, { phase: 'running' }),
-        effects: [
-          { type: 'emit', payload: { type: 'inbound', from: event.authorName, text: event.message } },
-          { type: 'pushInbound', message: event.message, authorName: event.authorName },
-        ],
-      };
+      // Auto-fed counterparty turn: show it (item 1: `counterparty` supersedes the
+      // old `inbound` emit), then push it as the next user turn. A peer reply clears
+      // the activity back to `working` (item 3); status emitted only on change.
+      const effects = [
+        { type: 'emit', payload: { type: 'counterparty', from: event.authorName, text: event.message } },
+        { type: 'pushInbound', message: event.message, authorName: event.authorName },
+      ];
+      if (state.activity !== 'working') {
+        effects.push({ type: 'emit', payload: { type: 'status', phase: 'running', activity: 'working' } });
+      }
+      return { state: clone(state, { phase: 'running', activity: 'working' }), effects: effects };
     }
     // Interactive: hold the reply as a pending inbound the operator releases.
     return {
-      state: clone(state, { phase: 'awaiting_inbound', hasPendingInbound: true }),
+      state: clone(state, { phase: 'awaiting_inbound', activity: 'awaiting_inbound', hasPendingInbound: true }),
       effects: [
         { type: 'emit', payload: { type: 'inbound_pending', pendingId: event.pendingId, from: event.authorName, text: event.message } },
       ],
@@ -186,19 +220,24 @@ function sessionReducer(state, event) {
 
   if (type === 'inbound_released') {
     return {
-      state: clone(state, { phase: 'running', hasPendingInbound: false }),
+      state: clone(state, { phase: 'running', activity: 'working', hasPendingInbound: false }),
       effects: [
         { type: 'pushInbound', message: event.message, authorName: event.authorName },
-        { type: 'emit', payload: { type: 'status', phase: 'running' } },
+        { type: 'emit', payload: { type: 'status', phase: 'running', activity: 'working' } },
       ],
     };
   }
 
   if (type === 'steer') {
+    // The operator injected a turn -> back to `working` (item 3). Status emitted only
+    // when the activity actually changed (steering while already working is silent).
     const effects = [];
     if (event.priority === 'now') effects.push({ type: 'interruptQuery' });
     effects.push({ type: 'pushTurn', text: event.text, priority: event.priority || 'next' });
-    return { state: state, effects: effects };
+    if (state.activity !== 'working') {
+      effects.push({ type: 'emit', payload: { type: 'status', phase: state.phase, activity: 'working' } });
+    }
+    return { state: clone(state, { activity: 'working' }), effects: effects };
   }
 
   if (type === 'interrupt') {

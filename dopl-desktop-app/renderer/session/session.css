@@ -24,6 +24,22 @@ html, body {
   gap: 8px;
 }
 
+/* ── #1 BUG: garbled UI + no-scroll (item 4) ───────────────────────────────
+   The stream is the ONLY flexible child (flex:1 min-height:0 overflow-y:auto,
+   below). Every fixed-chrome sibling defaulted to flex:0 1 auto (shrink 1), so
+   against the basis-0 stream (shrink-weight 0) they won the shrink competition,
+   collapsed the stream toward 0, and — because .app.page-float is overflow:hidden
+   — the overflow was CLIPPED, not scrollable. Pin all chrome to its natural
+   height so the stream keeps the remaining space and scrolls. */
+.session-header,
+.status-strip,
+.composer { flex: 0 0 auto; }
+.app.is-ended .ended-banner { flex: 0 0 auto; }
+/* Docks that appear mid-run must not steal the stream's space: cap their own
+   height and scroll internally. */
+.permission-dock.is-active,
+.close-panel.is-open { flex: 0 0 auto; max-height: 45vh; overflow-y: auto; }
+
 /* ── Header ──────────────────────────────────────────────────────────────── */
 .session-header {
   display: flex;
@@ -68,6 +84,10 @@ html, body {
 .header-controls { display: flex; gap: 8px; flex: none; }
 
 /* ── Control buttons (kit-based) ──────────────────────────────────────────── */
+/* NO `border` here: the kit classes (.btn-light / .auth-btn-3d) own the border,
+   shadow, and background. session.css loads AFTER tokens.css, so a border set
+   here would clobber the kit's hairline at equal specificity (item 5). .ctl only
+   supplies the radius/padding/font/cursor the kit deliberately omits. */
 .ctl {
   font-family: var(--font-ui);
   font-size: var(--text-small);
@@ -75,12 +95,12 @@ html, body {
   padding: 6px 12px;
   border-radius: 8px;
   cursor: pointer;
-  border: 1px solid transparent;
   color: var(--text-primary);
 }
 .ctl-primary { color: var(--text-on-cta); }
 .ctl-danger { color: var(--danger); }
 .ctl-sm { padding: 5px 10px; font-size: var(--text-small); }
+.ctl-xs { padding: 3px 8px; font-size: var(--text-micro); }
 
 /* ── Status strip + cost meter ────────────────────────────────────────────── */
 .status-strip {
@@ -99,10 +119,17 @@ html, body {
   flex: none;
 }
 .status-dot.is-running { background: var(--agent-on); }
+.status-dot.is-consent { background: var(--link); }
 .status-dot.is-awaiting_permission { background: var(--warning); }
 .status-dot.is-awaiting_inbound { background: var(--link); }
 .status-dot.is-interrupted { background: var(--warning); }
 .status-dot.is-ended { background: var(--text-disabled); }
+/* activity dots (item 3): shown while phase==='running'. */
+.status-dot.act-working { background: var(--agent-on); }
+.status-dot.act-idle { background: var(--text-muted); }
+.status-dot.act-awaiting_peer { background: var(--link); }
+.status-dot.act-awaiting_inbound { background: var(--link); }
+.status-dot.act-awaiting_permission { background: var(--warning); }
 .status-label {
   font-size: var(--text-label);
   text-transform: uppercase;
@@ -112,12 +139,23 @@ html, body {
 }
 .status-meta { color: var(--text-muted); font-size: var(--text-caption); }
 .status-spacer { flex: 1; }
-.cost-meter {
-  display: flex; gap: 10px; align-items: baseline;
-  color: var(--text-secondary);
-  font-size: var(--text-caption);
+
+/* ── Folder chip (item 7): LABEL only — the abs path never reaches here. ───── */
+.folder-chip { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.folder-chip__icon {
+  width: 12px; height: 10px; flex: none;
+  background: var(--text-muted);
+  /* Simple folder-tab silhouette, token-coloured (no palette hex). */
+  clip-path: polygon(0 20%, 40% 20%, 50% 0, 100% 0, 100% 100%, 0 100%);
 }
-.cost-meter b { color: var(--text-primary); font-weight: 600; font-variant-numeric: tabular-nums; }
+.folder-chip__label {
+  font-family: var(--font-mono);
+  font-size: var(--text-caption);
+  color: var(--text-secondary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 240px;
+}
+.folder-note { color: var(--text-muted); font-size: var(--text-micro); font-style: italic; }
 
 /* ── Turn stream ──────────────────────────────────────────────────────────── */
 .stream-wrap {
@@ -140,7 +178,8 @@ html, body {
 
 /* Turn bubbles */
 .bubble {
-  max-width: 78%;
+  max-width: 78%; /* ≤ the item-4 100% upper bound — keeps the 3-lane chat width */
+  min-width: 0; /* contain within the flex column (item 4) */
   padding: 9px 12px;
   border-radius: 12px;
   border: 1px solid var(--border-default);
@@ -159,7 +198,39 @@ html, body {
 }
 .bubble.role-agent { align-self: flex-start; background: var(--card-surface-elevated); }
 .bubble.role-operator { align-self: flex-end; background: var(--bg-elevated); border-color: var(--border-strong); }
-.bubble.role-counterparty { align-self: flex-start; background: #f1efe9; border-color: var(--border-strong); }
+.bubble.role-counterparty { align-self: flex-start; background: var(--bg-inset); border-color: var(--border-strong); }
+
+/* Counterparty avatar (item 1): initials on bg-inset, mirroring the web Avatar
+   fallback (light neutral, no identity colour). */
+.cp-head { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+.cp-head .who { margin-bottom: 0; }
+.cp-avatar {
+  width: 18px; height: 18px; border-radius: 50%; flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--bg-inset-hover);
+  border: 1px solid var(--border-strong);
+  color: var(--text-secondary);
+  font-size: var(--text-micro);
+  font-weight: 600;
+}
+
+/* ── Outbound lane (item 2): what MY agent SENT to the peer (op=post). ─────── */
+.outbound {
+  align-self: flex-end;
+  max-width: 78%;
+  min-width: 0;
+  padding: 9px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border-active);
+  background: var(--card-surface-subtle);
+  line-height: 1.5;
+}
+.outbound .sent-to {
+  display: block;
+  color: var(--text-secondary);
+  margin-bottom: 3px;
+}
+.outbound .body { white-space: pre-wrap; overflow-wrap: anywhere; }
 .bubble.is-streaming .body::after {
   content: "▍";
   color: var(--text-muted);
@@ -185,6 +256,8 @@ html, body {
   border-radius: 14px;
   overflow: hidden;
   background: var(--card-surface);
+  max-width: 100%; /* contain within the flex column (item 4) */
+  min-width: 0;
 }
 .tool-card__head {
   display: flex; align-items: center; gap: 8px;
@@ -234,8 +307,12 @@ html, body {
   line-height: 1.5;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  word-break: break-word;
+  max-width: 100%;
+  min-width: 0;
   max-height: 240px;
   overflow: auto;
+  overflow-x: auto; /* wide/batch pre-formatted output scrolls, never blows out the column (item 4) */
   user-select: text;
 }
 .tool-result {
@@ -244,6 +321,8 @@ html, body {
   color: var(--text-secondary);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  max-height: 240px; /* previously unbounded (item 4) */
+  overflow: auto;
 }
 
 /* ── Inbound pending (interactive release) ───────────────────────────────── */
@@ -342,6 +421,59 @@ html, body {
 }
 .close-panel .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
 
+/* ── Pre-consent request card (item 8) ───────────────────────────────────── */
+.consent-view { display: none; }
+.app.is-consent .consent-view {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px;
+  align-items: flex-start;
+  justify-content: center;
+}
+/* While awaiting consent, NO agent surface renders (§H-1). */
+.app.is-consent .stream-wrap,
+.app.is-consent .composer,
+.app.is-consent .permission-dock,
+.app.is-consent .close-panel,
+.app.is-consent .ended-banner { display: none !important; }
+
+.consent-card { width: 100%; max-width: 560px; overflow: hidden; }
+.consent-card__head {
+  display: flex; align-items: baseline; gap: 8px;
+  padding: 10px 14px;
+  background: var(--surface-cta);
+  color: var(--text-on-cta);
+}
+.consent-card__head .lbl {
+  font-size: var(--text-label);
+  text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600;
+}
+.consent-card__head .from { font-size: var(--text-small); opacity: 0.92; }
+.consent-card__body { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.consent-task { font-weight: 600; color: var(--text-primary); }
+.consent-summary { color: var(--text-secondary); font-size: var(--text-caption); }
+.consent-body { border-radius: 10px; padding: 10px 12px; }
+.consent-body__text {
+  white-space: pre-wrap; overflow-wrap: anywhere;
+  max-height: 40vh; overflow-y: auto;
+  font-size: var(--text-body); color: var(--text-primary);
+  user-select: text;
+}
+.consent-meta { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+.consent-meta__item { display: inline-flex; flex-direction: column; gap: 1px; min-width: 0; }
+.consent-meta__item .k {
+  font-size: var(--text-micro); text-transform: uppercase; letter-spacing: 0.05em;
+  font-weight: 600; color: var(--text-muted);
+}
+.consent-meta__item .v {
+  font-size: var(--text-caption); color: var(--text-secondary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px;
+}
+.consent-note { font-size: var(--text-caption); color: var(--text-secondary); }
+.consent-actions { display: flex; gap: 8px; margin-top: 2px; }
+
 /* ── Composer (steering) ─────────────────────────────────────────────────── */
 .composer { padding: 10px; }
 .composer__field { display: flex; align-items: flex-end; gap: 8px; padding: 8px; border-radius: 12px; }
@@ -366,7 +498,8 @@ html, body {
   font-size: var(--text-caption); color: var(--text-secondary);
   cursor: pointer; user-select: none;
 }
-.send-btn { color: var(--text-on-cta); padding: 7px 16px; border-radius: 8px; border: 1px solid transparent; font-size: var(--text-small); font-weight: 600; cursor: pointer; }
+/* NO `border` here either — .auth-btn-3d owns the border+shadow (item 5). */
+.send-btn { color: var(--text-on-cta); padding: 7px 16px; border-radius: 8px; font-size: var(--text-small); font-weight: 600; cursor: pointer; }
 
 /* ── Ended state ─────────────────────────────────────────────────────────── */
 .app.is-ended .composer,

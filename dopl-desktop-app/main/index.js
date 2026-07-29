@@ -392,9 +392,11 @@ if (!gotLock) {
         tray.setWindowMode(on);
         diag('setting: sessionWindowMode ->', on);
       },
-      // Round C: the "Channel folders" submenu. Accessors are read fresh on every
-      // tray rebuild; setting/clearing a folder rebuilds the menu so it reflects
-      // the change at once. The chosen path stays local (channel-dirs.js).
+      // Item 10: the "Sessions" submenu lists live sessions; a hidden one reopens.
+      getSessions: () => sessionEngine.listLiveSessions(),
+      onReopenSession: (id) => sessionEngine.reopenWindow(id),
+      // Round C "Channel folders": accessors read fresh on every rebuild; the chosen
+      // path stays local (channel-dirs.js). A set/clear rebuilds the menu.
       getChannels: () => listener.listWatchedChannels(),
       getChannelDirLabel: (id) => channelDirs.liveChannelDirLabel(id),
       onSetChannelDir: (id) => {
@@ -422,8 +424,7 @@ if (!gotLock) {
     createMainWindow();
     flushPendingDeepLink();
 
-    // v1.9 seam (§B.5): factory + lifecycle handlers, then init() (reload records,
-    // interrupted echoes, opt-in resume). BEFORE listener.start so inbound can route.
+    // Session seam: factory + lifecycle handlers, then init() (registers session IPC + reloads records) BEFORE listener.start.
     sessionEngine.setWindowFactory(sessionWindow.createSessionWindow);
     sessionEngine.setLifecycleHandlers(sessionWindow.lifecycleHandlers);
     try { sessionEngine.init(); } catch (err) { diag('sessionEngine.init error', err && err.message); }

@@ -1,24 +1,19 @@
-// Session engine — the imperative shell (v1.9 Session Window, Track T1).
+// Session engine — the imperative shell (v2.0 Session Window, Track T3).
 //
-// Owns ONE Claude Agent SDK query() per live session (research §8): a push-based
-// AsyncIterable prompt (steering + fed inbound replies), the canUseTool permission
-// bridge, the SDK-event -> IPC stream, and the (channelId,taskId) registry with the
-// turn/idle/cost caps. ALL decisions delegate to the pure session-reducer; this
-// module only executes the reducer's side-effect-free effect descriptors.
+// Owns ONE Claude Agent SDK query() per live session and executes the pure
+// session-reducer's side-effect-free effect descriptors. v2.0 adds the CONSENT
+// REFLOW (item 8: a pre-consent window in session-consent.js that runs NO agent work
+// until Accept, then launchResponderSession ADOPTS it — one window, no flash) and
+// REOPEN (item 10: live windows hide-on-close + reopen from the tray; the real crash
+// signal is render-process-gone). Renderer->main IPC lives in session-ipc.js (§O-8).
 //
-// SEAM (contract §B.1/§B.5): this module NEVER imports electron.BrowserWindow — the
-// window is created by an injected factory (index.js owns creation, T3). It reads
-// electron ONLY for ipcMain (renderer->main) and Notification (the opt-in resume
-// affordance). Lifecycle echoes (task_started/finished/failed) are handed to T3's
-// onLaunched/onEnded handlers, which post them via channel-post.postTaskEvent — the
-// engine never builds that message itself.
-//
-// The dopl bearer stays inside the in-memory mcpServers object (sdk-loader); it is
-// never logged or placed on argv (§H-7). settingSources:[] on every session so the
-// operator's global allow-list can never shadow a gated tool (§A.5).
+// SEAM: never imports electron.BrowserWindow (an injected factory creates windows);
+// reads electron only for Notification. settingSources:[] on every session so the
+// operator's global allow-list can never shadow a gated tool; the dopl bearer stays
+// inside the in-memory mcpServers object and is never logged or placed on argv.
 
 const crypto = require('crypto');
-const { ipcMain, Notification } = require('electron');
+const { Notification } = require('electron');
 const { diag } = require('./diag');
 const io = require('./session-io');
 const store = require('./session-store');
@@ -27,39 +22,36 @@ const { apiFetch } = require('./api');
 const { initialSessionState, sessionReducer, nextIdleMs } = require('./session-reducer');
 const { buildSessionToolConfig } = require('./session-profiles');
 const { getSdk, resolveClaudeExecutable, buildMcpServers, buildScrubbedEnv } = require('./sdk-loader');
+const sessionConsent = require('./session-consent');
+const sessionIpc = require('./session-ipc');
+const channelDirs = require('./channel-dirs');
 
-// settings.js (T3) owns the window-mode switch + caps (a thin electron-store
-// module); require defensively so the engine still loads if it is momentarily
-// absent (unit/E2E harnessing), defaulting to window-mode ON.
+// settings.js owns the window-mode switch + caps; require defensively so the engine
+// still loads if it is momentarily absent (unit/E2E harnessing), defaulting to ON.
 let settings = null;
 try { settings = require('./settings'); } catch (_) { /* absent -> defaults (window-mode ON) */ }
 const MAX_WINDOWS = (settings && settings.MAX_SESSION_WINDOWS) || 6;
 
-// ── Module state ─────────────────────────────────────────────────────────────
 const sessions = new Map(); // sessionKey -> live session object (in-memory only)
 let windowFactory = null; // fn(sessionId) -> BrowserWindow (injected by index.js)
 let lifecycle = { onLaunched: null, onEnded: null };
-let ipcBound = false;
 
 function windowModeEnabled() {
   return settings ? settings.getWindowMode() : true;
 }
 function readCaps() {
   if (!settings) return {};
-  return {
-    turnCap: settings.getTurnCap(),
-    idleMs: settings.getIdleTtlMs(),
-    costCapUsd: settings.getCostCapUsd(),
-  };
+  return { turnCap: settings.getTurnCap(), idleMs: settings.getIdleTtlMs(), costCapUsd: settings.getCostCapUsd() };
 }
 
-// The durable-record projection (io.baseRecord), the canUseTool bridge
-// (io.makeCanUseTool), and the SDK-message->event mapping (io.handleSdkMessage)
-// live in session-io.js (the pre-authorized §E split); the engine calls them with
-// its own `dispatch` + the store injected.
-const baseRecord = io.baseRecord;
+// Rebuild the tray after a session is hidden / reopened / settled. Lazy-required so
+// the engine holds no top-level tray dependency (tray requires nothing back).
+function refreshTray() {
+  try { require('./tray').refresh(); } catch (_) { /* tray optional */ }
+}
 
-// ── Reducer plumbing ─────────────────────────────────────────────────────────
+const baseRecord = io.baseRecord; // durable-record projection (session-io.js)
+
 function dispatch(s, event) {
   const { state, effects } = sessionReducer(s.state, event);
   s.state = state;
@@ -87,17 +79,11 @@ function runEffect(s, eff) {
       if (s.pushIterator) s.pushIterator.push(io.userMessage(io.frameContinuation(s.nonce, eff.message, eff.authorName)));
       break;
     case 'interruptQuery':
-      try {
-        if (s.query && s.query.interrupt) s.query.interrupt().catch(() => {});
-      } catch (_) { /* best effort */ }
+      try { if (s.query && s.query.interrupt) s.query.interrupt().catch(() => {}); } catch (_) { /* best effort */ }
       break;
     case 'abortQuery':
-      try {
-        if (s.abortController) s.abortController.abort();
-      } catch (_) { /* best effort */ }
-      try {
-        if (s.pushIterator) s.pushIterator.close();
-      } catch (_) { /* best effort */ }
+      try { if (s.abortController) s.abortController.abort(); } catch (_) { /* best effort */ }
+      try { if (s.pushIterator) s.pushIterator.close(); } catch (_) { /* best effort */ }
       break;
     case 'lifecycle':
       runLifecycle(s, eff.kind, eff.extra);
@@ -113,11 +99,15 @@ function runEffect(s, eff) {
   }
 }
 
-// ── Effect executors ─────────────────────────────────────────────────────────
-// Emit to the renderer, buffering until the page has finished loading so the very
-// first `init` event is never dropped by a not-yet-attached onEvent listener.
+// Buffer emits until the page loads (first `init` never dropped). Item 10: a gated
+// permission_request must never block invisibly — reshow the window if hidden.
 function emit(s, payload) {
   if (!s.win || s.win.isDestroyed()) return;
+  if (s.windowHidden && payload && payload.type === 'permission_request') {
+    try { s.win.show(); } catch (_) { /* best effort */ }
+    s.windowHidden = false;
+    refreshTray();
+  }
   if (s.loaded) safeSend(s, payload);
   else s.emitQueue.push(payload);
 }
@@ -127,6 +117,12 @@ function safeSend(s, payload) {
   } catch (err) {
     diag('session-engine: send failed', err && err.message);
   }
+}
+
+// Item 7: push the abbreviated folder LABEL (never the absolute path, §H-9).
+function emitFolder(s) {
+  try { emit(s, { type: 'folder', label: channelDirs.liveChannelDirLabel(s.channelId) }); }
+  catch (_) { /* best effort */ }
 }
 
 function scheduleIdle(s) {
@@ -147,13 +143,7 @@ function resolvePerm(s, requestId, decision) {
 }
 
 function runLifecycle(s, kind, extra) {
-  const info = {
-    channelId: s.channelId,
-    taskId: s.taskId,
-    workspaceId: s.workspaceId,
-    side: s.side,
-    sessionId: s.sessionId,
-  };
+  const info = { channelId: s.channelId, taskId: s.taskId, workspaceId: s.workspaceId, side: s.side, sessionId: s.sessionId };
   try {
     if (kind === 'task_started') {
       if (lifecycle.onLaunched) lifecycle.onLaunched(info);
@@ -165,7 +155,7 @@ function runLifecycle(s, kind, extra) {
   }
 }
 
-// The DB status flip for a first-class task (op:"close"). The task_finished/failed
+// The DB status flip for a first-class task (op:"close"); the task_finished/failed
 // message echo is separate (runLifecycle). No-op when there is no task id.
 async function closeChannelTask(s, outcome, summary) {
   if (!s.taskId) return;
@@ -182,23 +172,20 @@ async function closeChannelTask(s, outcome, summary) {
   }
 }
 
-// Terminal: drop the live handles, mark the record ended, and free the registry
-// slot. A task that is actually DONE (close_task completed/failed) also drops the
-// resume map entry; every other end (operator End / idle / cost / crash) KEEPS the
-// sdkSessionId so the interrupted session stays resumable (§A.8).
+// Terminal: drop the live handles, mark the record ended, DESTROY the window (item 10
+// hid it until here), free the registry slot. A DONE task (close_task completed/
+// failed) drops the resume map entry; every other end KEEPS the sdkSessionId.
 function settle(s, outcome) {
   if (s.settled) return;
   s.settled = true;
-  if (s.idleTimer) {
-    clearTimeout(s.idleTimer);
-    s.idleTimer = null;
-  }
+  if (s.idleTimer) { clearTimeout(s.idleTimer); s.idleTimer = null; }
   store.setRecordPhase(s.key, 'ended');
   if (outcome === 'completed' || outcome === 'failed') store.clearSdkSessionId(s.key);
   sessions.delete(s.key);
+  if (s.win && !s.win.isDestroyed()) { try { s.win.destroy(); } catch (_) { /* best effort */ } }
+  refreshTray();
 }
 
-// ── Window binding ───────────────────────────────────────────────────────────
 function bindWindow(s) {
   const wc = s.win.webContents;
   s.emitQueue = [];
@@ -211,15 +198,20 @@ function bindWindow(s) {
   };
   wc.on('did-finish-load', flush);
   if (!wc.isLoading()) flush();
-  s.win.on('closed', () => {
-    // The window vanished (crash or operator close). If the session had not
-    // already settled, treat it as an interrupted crash (posts the same
-    // task_failed{interrupted:true} echo the reload path posts).
-    if (!s.settled) dispatch(s, { type: 'crash' });
+  // Item 10: hide-on-close keeps a closed LIVE window's renderer + transcript for a
+  // tray reopen (destroyed only on settle); render-process-gone is the crash signal.
+  s.win.on('close', (e) => {
+    // Hide for a tray Reopen, but never veto during app Quit (or it can't exit).
+    if (!s.settled && !require('electron').app.isQuitting) {
+      e.preventDefault();
+      s.win.hide();
+      s.windowHidden = true;
+      refreshTray();
+    }
   });
+  wc.on('render-process-gone', () => { if (!s.settled) dispatch(s, { type: 'crash' }); });
 }
 
-// ── SDK query start ──────────────────────────────────────────────────────────
 function buildSdkOptions(s) {
   const cfg = buildSessionToolConfig(s.profile);
   const options = {
@@ -263,39 +255,7 @@ function isAbortError(err) {
   return !!err && (err.name === 'AbortError' || /abort/i.test(String(err.message || '')));
 }
 
-// ── IPC (renderer -> main; sessionId bound from the window, never trusted) ─────
-function ensureIpc() {
-  if (ipcBound) return;
-  ipcBound = true;
-  ipcMain.handle('session:send', (e, p) => withSession(e, (s) => dispatch(s, { type: 'steer', text: String((p && p.text) || ''), priority: p && p.priority })));
-  ipcMain.handle('session:permission', (e, p) => withSession(e, (s) => dispatch(s, {
-    type: 'permission_decision',
-    requestId: p && p.requestId,
-    decision: p && p.decision,
-    name: s.pendingNames.get(p && p.requestId),
-  })));
-  ipcMain.handle('session:release-inbound', (e) => withSession(e, (s) => {
-    const pend = io.shiftInbound(s);
-    if (!pend) return;
-    dispatch(s, { type: 'inbound_released', message: pend.message, authorName: pend.authorName });
-    const next = s.pendingInbound[0]; // I-LOW(a): surface the next held reply, if any
-    if (next) dispatch(s, { type: 'inbound_arrived', pendingId: next.pendingId, message: next.message, authorName: next.authorName });
-  }));
-  ipcMain.handle('session:interrupt', (e) => withSession(e, (s) => dispatch(s, { type: 'interrupt' })));
-  ipcMain.handle('session:end', (e) => withSession(e, (s) => dispatch(s, { type: 'end' })));
-  ipcMain.handle('session:close-task', (e, p) => withSession(e, (s) => dispatch(s, { type: 'close_task', outcome: p && p.outcome, summary: p && p.summary })));
-}
-function withSession(e, fn) {
-  const s = sessionByWebContents(e && e.sender);
-  if (!s) return { ok: false };
-  try {
-    fn(s);
-  } catch (err) {
-    diag('session-engine: ipc handler error', err && err.message);
-  }
-  return { ok: true };
-}
-function sessionByWebContents(sender) {
+function getSessionBySender(sender) { // renderer->main resolution for session-ipc
   if (!sender) return null;
   for (const s of sessions.values()) {
     if (s.win && !s.win.isDestroyed() && s.win.webContents.id === sender.id) return s;
@@ -303,9 +263,9 @@ function sessionByWebContents(sender) {
   return null;
 }
 
-// ── Public API (frozen §B.5) ─────────────────────────────────────────────────
 function setWindowFactory(fn) {
   windowFactory = typeof fn === 'function' ? fn : null;
+  sessionConsent.setWindowFactory(windowFactory); // consent windows use the same factory
 }
 function setLifecycleHandlers(handlers) {
   lifecycle = {
@@ -314,12 +274,9 @@ function setLifecycleHandlers(handlers) {
   };
 }
 
-// Build the in-memory session object, open its window, and start the query. Shared
-// by launch (a fresh nonce-fenced first turn) and resume (options.resume + a
-// trusted continuation nudge). The per-session nonce is minted HERE so the first
-// turn's fence and every fed-inbound continuation share the SAME unpredictable
-// token — a placeholder nonce would let injected content in the first (untrusted)
-// turn forge the fence.
+// Build the session object, open (or ADOPT) its window, start the query (launch +
+// resume). The per-session nonce is minted HERE so the first turn's fence + every
+// fed-inbound continuation share the SAME token (else injected content forges it).
 async function startSession(spec, sdk) {
   const sessionId = crypto.randomUUID();
   const nonce = crypto.randomBytes(8).toString('hex');
@@ -338,6 +295,8 @@ async function startSession(spec, sdk) {
     profile: spec.profile,
     mode: state.mode,
     counterpartyId: spec.counterpartyId || null, // FIX L1: the task's other party
+    // O-6: the counterparty display name labels the agent's op=post ("Sent to X").
+    counterpartyName: (spec.context && (spec.context.authorName || spec.context.targetName)) || null,
     state,
     context: spec.context || {},
     nonce,
@@ -347,18 +306,18 @@ async function startSession(spec, sdk) {
     lastTotalCost: 0,
     pendingPermissions: new Map(),
     pendingNames: new Map(),
-    pendingInbound: [], // I-LOW(a): bounded FIFO of held interactive inbound replies
+    pendingInbound: [], // bounded FIFO of held interactive inbound replies
     idleTimer: null,
-    settled: false,
-    win: null,
-    query: null,
-    abortController: null,
-    pushIterator: null,
+    settled: false, windowHidden: false,
+    win: null, query: null, abortController: null, pushIterator: null,
   };
   sessions.set(s.key, s);
   store.saveRecord(baseRecord(s)); // phase 'launching' until system/init flips it
+  // Item 8 step 4: ADOPT the pre-consent window if one is open (one window, no flash
+  // — the renderer flips consent->running on `init`), else open a fresh window.
+  const adopted = sessionConsent.takeForAdopt(s.key);
   try {
-    s.win = windowFactory(sessionId);
+    s.win = (adopted && adopted.win && !adopted.win.isDestroyed()) ? adopted.win : windowFactory(sessionId);
     if (!s.win) throw new Error('window factory returned nothing');
   } catch (err) {
     sessions.delete(s.key);
@@ -366,7 +325,7 @@ async function startSession(spec, sdk) {
     return null;
   }
   bindWindow(s);
-  ensureIpc();
+  emitFolder(s);
   await startQuery(s, sdk);
   return s;
 }
@@ -375,7 +334,10 @@ async function launch(a) {
   if (!windowModeEnabled() || !windowFactory) return { skipped: 'disabled' };
   const key = store.sessionKey(a.channelId, a.taskId);
   if (hasLiveSession({ channelId: a.channelId, taskId: a.taskId })) return { skipped: 'busy' };
-  if (sessions.size >= MAX_WINDOWS) return { skipped: 'cap' };
+  // Adopting a pre-consent window is net-zero on the window budget; only a fresh
+  // window counts against the shared cap (live sessions + open consent windows).
+  const adoptable = sessionConsent.has(key);
+  if (!adoptable && sessions.size + sessionConsent.count() >= MAX_WINDOWS) return { skipped: 'cap' };
   let sdk;
   try {
     sdk = await getSdk();
@@ -399,8 +361,6 @@ async function launch(a) {
   return { sessionId: s.sessionId };
 }
 
-// The two entry points differ only in `side` + which field carries the first turn;
-// everything else (incl. FIX L1's counterpartyId) rides through on `...a`.
 function launchResponderSession(a) {
   return launch({ ...a, side: 'responder', firstMessage: a.message });
 }
@@ -413,10 +373,8 @@ function hasLiveSession(a) {
   return !!(s && !s.settled);
 }
 
-// FIX L1: the member whose channel replies this live session is allowed to consume
-// as turns (its counterparty — the task's other party). The listener checks the
-// inbound author against this before feeding, so a THIRD party posting in the same
-// channel can never inject a turn into someone else's task loop.
+// FIX L1: the counterparty whose channel replies this session may consume as turns;
+// the listener checks it before feeding so a third party can never inject a turn.
 function counterpartyFor(a) {
   const s = sessions.get(store.sessionKey(a.channelId, a.taskId));
   return s && !s.settled ? (s.counterpartyId || null) : null;
@@ -426,17 +384,56 @@ function feedInbound(a) {
   const s = sessions.get(store.sessionKey(a.channelId, a.taskId));
   if (!s || s.settled) return false;
   const item = { pendingId: crypto.randomUUID(), message: a.message, authorName: a.authorName };
-  const disp = io.queueInbound(s, item, s.state.mode === 'interactive'); // I-LOW(a): don't overwrite a held reply
+  const disp = io.queueInbound(s, item, s.state.mode === 'interactive'); // don't overwrite a held reply
   if (disp === 'dispatch') dispatch(s, { type: 'inbound_arrived', pendingId: item.pendingId, message: a.message, authorName: a.authorName });
   return disp !== 'full'; // 'full' -> not consumed, listener falls through to notify
 }
 
-// Startup: settle any session that was live/awaiting when the app died (§A.8). Post
-// the interrupted echo (so the requester's web card stops pulsing) and, when the
-// SDK session id survives, offer an opt-in "Resume session" notification. NEVER
-// auto-reopens a window or auto-continues a loop.
+// ── Consent reflow (item 8) — thin wrappers; bodies live in session-consent.js ─
+// openConsentWindow (trigger.handleTrigger, window-mode ON + pending row): open a
+// pre-consent window that runs NO agent work until Accept. Budget-gate the shared cap
+// here — session-consent cannot see the live sessions.
+function openConsentWindow(spec) {
+  if (!windowModeEnabled() || !windowFactory) return { skipped: 'disabled' };
+  if (sessions.size + sessionConsent.count() >= MAX_WINDOWS) return { skipped: 'cap' };
+  return sessionConsent.open({ ...spec, sessionId: crypto.randomUUID() });
+}
+function decideConsent(sender, decision) { // in-window Accept/Deny (session-ipc)
+  return sessionConsent.decide(sender, decision);
+}
+function closeConsentWindow(watcherKey, decision) { // inboundDenied / inboundExpired
+  return sessionConsent.close(watcherKey, decision);
+}
+function getConsentBySender(sender) {
+  return sessionConsent.getBySender(sender);
+}
+
+// ── Reopen (item 10) — tray "Sessions" submenu source + a hidden-window reopen ──
+function listLiveSessions() {
+  const out = [];
+  for (const s of sessions.values()) {
+    if (s.settled) continue;
+    out.push({ sessionId: s.sessionId, channelName: (s.context && s.context.channelName) || null, hidden: !!s.windowHidden });
+  }
+  return out;
+}
+// Reopen a hidden live window (its renderer + transcript are intact — no replay).
+function reopenWindow(sessionId) {
+  for (const s of sessions.values()) {
+    if (s.sessionId !== sessionId || !s.win || s.win.isDestroyed()) continue;
+    try { s.win.show(); s.win.focus(); } catch (_) { /* best effort */ }
+    s.windowHidden = false;
+    refreshTray();
+    return true;
+  }
+  return false;
+}
+
+// Startup: register the renderer->main IPC once (session-ipc), then settle any
+// session that was live/awaiting when the app died — post the interrupted echo and,
+// when the SDK session id survives, offer an opt-in resume. NEVER auto-reopens.
 async function init() {
-  ensureIpc();
+  sessionIpc.register({ getSessionBySender, getConsentBySender, dispatch, decideConsent });
   const records = store.loadRecords();
   for (const key of Object.keys(records)) {
     const rec = records[key];
@@ -494,4 +491,10 @@ module.exports = {
   hasLiveSession,
   counterpartyFor,
   feedInbound,
+  openConsentWindow, // consent reflow (item 8) — called by trigger.js
+  decideConsent,
+  closeConsentWindow,
+  getConsentBySender,
+  listLiveSessions, // reopen (item 10) — tray via index.js
+  reopenWindow,
 };
