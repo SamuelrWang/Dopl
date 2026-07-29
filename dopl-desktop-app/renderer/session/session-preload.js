@@ -9,6 +9,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 const asStr = (v) => String(v == null ? '' : v);
+const asBool = (v) => v === true;
 const asPriority = (p) => (asStr(p) === 'now' ? 'now' : 'normal');
 const asDecision = (d) => {
   const s = asStr(d);
@@ -79,6 +80,12 @@ contextBridge.exposeInMainWorld('doplSession', {
   // from event.sender; the payload carries only the coerced decision.
   consentDecision(decision) {
     return ipcRenderer.invoke('session:consent-decision', { decision: asConsent(decision) });
+  },
+  // Per-session auto-approve toggle (item 10). Sends only the coerced boolean;
+  // the main side re-derives the session from event.sender. This flips ONLY the
+  // gate→allow branch in makeCanUseTool — hard-deny stays immovable (§H-2).
+  setAutoApprove(enabled) {
+    ipcRenderer.invoke('session:set-auto-approve', { enabled: asBool(enabled) });
   },
   // Folder display + change (item 7). LABEL only ever crosses back — the main
   // side resolves channelId from the session; the abs path never enters here.

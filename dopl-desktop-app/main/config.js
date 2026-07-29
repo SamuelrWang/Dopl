@@ -53,6 +53,34 @@ const LISTENER = {
   FEATURE_UNAVAILABLE_MS: 5 * 60 * 1000,
 };
 
+// ── Push transport tuning (poll→push, v2.1) ───────────────────────────────────
+// The desktop subscribes to Supabase Realtime INSERTs on channel_messages (one
+// more authenticated consumer alongside the web) and, while that WS is HEALTHY,
+// replaces the held ~50s `/await` long-poll with a cheap immediate catch-up plus
+// a long interruptible idle that a realtime wake resolves early. When the WS is
+// unhealthy (breaker OPEN) or push is disabled, every value collapses to the
+// LISTENER long-poll above so the fallback is byte-for-byte today's behavior.
+const REALTIME = {
+  // Master switch: set DOPL_PUSH=0 to force the pure long-poll instantly.
+  ENABLED: process.env.DOPL_PUSH !== '0',
+  // The `/await` timeout we ask for on the cheap catch-up. The server schema
+  // requires a POSITIVE timeoutMs (0 → 400), so 1ms is the smallest value that
+  // returns after a single DB read with no held serverless function.
+  CHEAP_AWAIT_TIMEOUT_MS: 1,
+  // Our own fetch-abort for that cheap call (short — it returns immediately).
+  CHEAP_FETCH_TIMEOUT_MS: 15_000,
+  // Idle wait between cheap catch-ups once caught up: a wake interrupts it, and
+  // it also fires as a safety re-poll if a realtime INSERT were ever missed.
+  LONG_IDLE_MS: 5 * 60 * 1000,
+  // Circuit breaker (F-072 reconnect-storm guard): this many consecutive WS
+  // subscribe failures OPEN the breaker → isHealthy() false → loops revert to
+  // the held long-poll and realtime retries only on the long cooldown below.
+  BREAKER_FAIL_THRESHOLD: 4,
+  BREAKER_COOLDOWN_MS: 30_000,
+  // Coalesce a burst of INSERTs into at most one wake per channel per window.
+  WAKE_COALESCE_MS: 200,
+};
+
 module.exports = {
   APP_URL,
   APP_ORIGIN,
@@ -65,4 +93,5 @@ module.exports = {
   SUPABASE_ANON_KEY,
   SUPABASE_REF,
   LISTENER,
+  REALTIME,
 };

@@ -128,11 +128,12 @@
 
   function initialState() {
     return {
-      init: null, // {sessionId, side, profile, mode, model, channelName, taskTitle, cwdLabel, from}
+      init: null, // {sessionId, side, profile, profileLabel, mode, model, channelName, taskTitle, cwdLabel, from}
       items: [], // ordered stream: turn | tool | counterparty | outbound | inbound_pending | notice
       permissions: [], // FIFO queue of pending permission_request payloads
       phase: "launching", // launching | consent | running | interrupted | ended
       activity: null, // working | idle | awaiting_peer | awaiting_permission | awaiting_inbound  (item 3)
+      autoApprove: false, // per-session auto-approve toggle (item 10) — always starts OFF
       folder: null, // {label}  (item 7 — LABEL only; the abs path never crosses the bridge)
       consent: null, // {requestId, from, summary, bodyText, taskTitle, channelName, toolProfileLabel, cwdLabel}  (item 8)
       consentResolved: null, // {decision:'accepted'|'denied'|'expired'}  (item 8)
@@ -204,12 +205,13 @@
             sessionId: event.sessionId,
             side: event.side,
             profile: event.profile,
+            profileLabel: event.profileLabel, // human tool-profile label (item 9)
             mode: event.mode,
             model: event.model,
             channelName: event.channelName,
             taskTitle: event.taskTitle,
             cwdLabel: event.cwdLabel,
-            from: event.from, // counterparty name (item 1)
+            from: event.from, // counterparty name (item 2)
           },
           // launching OR the pre-consent state (item 8, on adoption) flips to running.
           phase: state.phase === "launching" || state.phase === "consent" ? "running" : state.phase,
@@ -296,6 +298,11 @@
       // Folder LABEL only — never an absolute path (item 7 / §H-9).
       case "folder":
         return { ...state, folder: { label: event.label == null ? null : String(event.label) } };
+
+      // Echo of the per-session auto-approve toggle (item 10). Display-only here:
+      // the actual gate→allow flip is enforced in main/session-io.makeCanUseTool.
+      case "auto_approve":
+        return { ...state, autoApprove: event.enabled === true };
 
       // Pre-consent state (item 8): the window opened BEFORE any SDK/agent work.
       case "consent_request":
@@ -394,10 +401,21 @@
     return "is-" + ph;
   }
 
-  // The folder chip text (item 7): the abbreviated label or the sandbox default.
+  // The folder-pill label (item 5): the abbreviated dir short-form. The engine
+  // now always emits a REAL resolved dir (item 6 default = ~/Downloads), so the
+  // null case is only the pre-event render — fall back to the same default.
   function folderLabel(folder) {
     const label = folder && folder.label;
-    return label ? String(label) : "Default (sandbox)";
+    return label ? String(label) : "~/Downloads";
+  }
+
+  // The permission-posture label (items 9 + 10). Off = "Asking each time",
+  // on = "Auto-approving"; the tool-profile label rides along as context. Plain
+  // sentence case, no em dash (§H-13). The middle dot separates mode · profile.
+  function permissionModeText(autoApprove, profileLabel) {
+    const mode = autoApprove ? "Auto-approving" : "Asking each time";
+    const label = profileLabel == null ? "" : String(profileLabel).trim();
+    return "Permissions: " + mode + (label ? " · " + label : "");
   }
 
   return {
@@ -411,5 +429,6 @@
     statusText,
     statusDotKey,
     folderLabel,
+    permissionModeText,
   };
 });

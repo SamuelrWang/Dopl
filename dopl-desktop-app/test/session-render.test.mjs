@@ -23,8 +23,17 @@ const vm = require(
 );
 const {
   initialState, reduceEvent, summarizeToolInput, shortToolName, nextPermission,
-  markInboundReleased, oneLine, statusText, statusDotKey, folderLabel,
+  markInboundReleased, oneLine, statusText, statusDotKey, folderLabel, permissionModeText,
 } = vm;
+
+// session-render.js is DOM-free to require (factories touch `document` only when
+// CALLED), so the pure helper `initial()` is testable here without a DOM. The
+// factory-exec tests (item 8 collapse, item 2 avatar) that DO need a DOM live in
+// the sibling session-render-dom.test.mjs (kept separate to respect the 500-line
+// cap on this file).
+const render = require(
+  fileURLToPath(new URL("../renderer/session/session-render.js", import.meta.url))
+);
 
 const last = (s) => s.items[s.items.length - 1];
 
@@ -323,14 +332,16 @@ test("statusDotKey → act-<activity> while running, else is-<phase>", () => {
 
 // ── reduceEvent: folder (item 7) ──────────────────────────────────────────────
 
-test("folder stores the LABEL; folderLabel falls back to the sandbox default", () => {
+test("folder stores the LABEL; folderLabel falls back to the ~/Downloads default (item 5/6)", () => {
   const s = reduceEvent(initialState(), { type: "folder", label: "~/Downloads/repo" });
   assert.equal(s.folder.label, "~/Downloads/repo");
   assert.equal(folderLabel(s.folder), "~/Downloads/repo");
   const cleared = reduceEvent(s, { type: "folder", label: null });
   assert.equal(cleared.folder.label, null);
-  assert.equal(folderLabel(cleared.folder), "Default (sandbox)");
-  assert.equal(folderLabel(null), "Default (sandbox)");
+  // The engine now always emits a real dir; the null case is only the pre-event
+  // render, which falls back to the same ~/Downloads default (never "sandbox").
+  assert.equal(folderLabel(cleared.folder), "~/Downloads");
+  assert.equal(folderLabel(null), "~/Downloads");
 });
 
 // ── reduceEvent: consent (item 8) ─────────────────────────────────────────────
@@ -382,5 +393,89 @@ test("session.js (controller) also never uses innerHTML", () => {
   const src = fs.readFileSync(
     fileURLToPath(new URL("../renderer/session/session.js", import.meta.url)), "utf8"
   );
+  assert.ok(!/\.innerHTML|insertAdjacentHTML|outerHTML|document\.write/.test(src));
+});
+
+test("session-preload.js (new setAutoApprove path) uses no HTML sink", () => {
+  const fs = require("node:fs");
+  const src = fs.readFileSync(
+    fileURLToPath(new URL("../renderer/session/session-preload.js", import.meta.url)), "utf8"
+  );
   assert.ok(!/\.innerHTML|insertAdjacentHTML|outerHTML/.test(src));
+  assert.ok(/setAutoApprove/.test(src), "the item-10 bridge method is exposed");
+  assert.ok(/session:set-auto-approve/.test(src), "invokes the frozen IPC channel");
+});
+
+// ── init: profileLabel + peer identity (items 9 + 2) ──────────────────────────
+
+test("init stores the profileLabel (item 9) and the peer name `from` (item 2)", () => {
+  const s = reduceEvent(initialState(), {
+    type: "init", channelName: "Direct message", from: "David", profile: "full",
+    profileLabel: "Full access", model: "claude",
+  });
+  assert.equal(s.init.profileLabel, "Full access");
+  assert.equal(s.init.from, "David");
+  assert.equal(s.init.profile, "full");
+});
+
+// ── auto-approve state (item 10) ──────────────────────────────────────────────
+
+test("a launched session starts with auto-approve OFF (item 10)", () => {
+  assert.equal(initialState().autoApprove, false);
+});
+
+test("auto_approve event flips the per-session flag both ways (item 10)", () => {
+  let s = reduceEvent(initialState(), { type: "auto_approve", enabled: true });
+  assert.equal(s.autoApprove, true);
+  s = reduceEvent(s, { type: "auto_approve", enabled: false });
+  assert.equal(s.autoApprove, false);
+  // Only an explicit boolean true enables it (fail-closed).
+  assert.equal(reduceEvent(initialState(), { type: "auto_approve" }).autoApprove, false);
+  assert.equal(reduceEvent(initialState(), { type: "auto_approve", enabled: "yes" }).autoApprove, false);
+});
+
+// ── permissionModeText (items 9 + 10) ─────────────────────────────────────────
+
+test("permissionModeText maps the auto-approve flag to the posture label", () => {
+  assert.equal(
+    permissionModeText(false, "Full access"),
+    "Permissions: Asking each time · Full access"
+  );
+  assert.equal(
+    permissionModeText(true, "Full access"),
+    "Permissions: Auto-approving · Full access"
+  );
+  // No profile → just the mode; no trailing separator.
+  assert.equal(permissionModeText(false, null), "Permissions: Asking each time");
+  assert.equal(permissionModeText(true, ""), "Permissions: Auto-approving");
+  // No em dash in our own copy (§H-13).
+  assert.ok(!permissionModeText(true, null).includes("—"));
+});
+
+// ── item 2: initials avatar ───────────────────────────────────────────────────
+
+test("initial() returns the uppercase first letter, else '?' (item 2 avatar)", () => {
+  assert.equal(render.initial("david"), "D");
+  assert.equal(render.initial("  amy"), "A");
+  assert.equal(render.initial("Örn"), "Ö");
+  assert.equal(render.initial(""), "?");
+  assert.equal(render.initial(null), "?");
+});
+
+// ── item 10: the permission dock renders all THREE actions ────────────────────
+
+test("session.html: the permission dock renders all THREE actions with exact labels (item 10)", () => {
+  const fs = require("node:fs");
+  const html = fs.readFileSync(
+    fileURLToPath(new URL("../renderer/session/session.html", import.meta.url)), "utf8"
+  );
+  assert.match(html, /id="btnAllowOnce"[^>]*>Allow once</);
+  assert.match(html, /id="btnAllowTask"[^>]*>Allow for this task</);
+  assert.match(html, /id="btnDeny"[^>]*>Deny</);
+  // The auto-approve toggle + posture label exist (items 9/10).
+  assert.match(html, /id="autoApprove"/);
+  assert.match(html, /id="permPosture"/);
+  // The folder pill replaced the old chip/change/use-default cluster (item 5).
+  assert.match(html, /id="folderPill"[^>]*>Working Directory:/);
+  assert.ok(!/btnFolderChange|btnFolderDefault|folder-chip/.test(html), "old folder chip cluster is removed");
 });

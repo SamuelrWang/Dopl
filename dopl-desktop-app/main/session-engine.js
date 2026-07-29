@@ -25,6 +25,7 @@ const { getSdk, resolveClaudeExecutable, buildMcpServers, buildScrubbedEnv } = r
 const sessionConsent = require('./session-consent');
 const sessionIpc = require('./session-ipc');
 const channelDirs = require('./channel-dirs');
+const replay = require('./session-replay');
 
 // settings.js owns the window-mode switch + caps; require defensively so the engine
 // still loads if it is momentarily absent (unit/E2E harnessing), defaulting to ON.
@@ -99,8 +100,7 @@ function runEffect(s, eff) {
   }
 }
 
-// Buffer emits until the page loads (first `init` never dropped). Item 10: a gated
-// permission_request must never block invisibly — reshow the window if hidden.
+// Item 3: emits flow through the replay (buffered pre-load, re-sent on reload). Item 10: reshow a hidden window on a gated request.
 function emit(s, payload) {
   if (!s.win || s.win.isDestroyed()) return;
   if (s.windowHidden && payload && payload.type === 'permission_request') {
@@ -108,8 +108,7 @@ function emit(s, payload) {
     s.windowHidden = false;
     refreshTray();
   }
-  if (s.loaded) safeSend(s, payload);
-  else s.emitQueue.push(payload);
+  s.replay.deliver(payload);
 }
 function safeSend(s, payload) {
   try {
@@ -119,9 +118,9 @@ function safeSend(s, payload) {
   }
 }
 
-// Item 7: push the abbreviated folder LABEL (never the absolute path, §H-9).
+// Item 5/7: push the REAL resolved folder LABEL (short-form, never the abs path §H-9).
 function emitFolder(s) {
-  try { emit(s, { type: 'folder', label: channelDirs.liveChannelDirLabel(s.channelId) }); }
+  try { emit(s, { type: 'folder', label: channelDirs.resolvedDirLabel(s.channelId) }); }
   catch (_) { /* best effort */ }
 }
 
@@ -188,16 +187,12 @@ function settle(s, outcome) {
 
 function bindWindow(s) {
   const wc = s.win.webContents;
-  s.emitQueue = [];
-  s.loaded = false;
-  const flush = () => {
-    s.loaded = true;
-    const q = s.emitQueue;
-    s.emitQueue = [];
-    for (const p of q) safeSend(s, p);
-  };
-  wc.on('did-finish-load', flush);
-  if (!wc.isLoading()) flush();
+  // Item 3: the replay owns the transcript ring + sent cursor. A reload (did-start-
+  // loading rewinds, did-finish-load re-sends) is NEITHER close nor crash below.
+  s.replay = replay.createReplay(wc, (p) => safeSend(s, p));
+  wc.on('did-start-loading', s.replay.onReload);
+  wc.on('did-finish-load', s.replay.onLoad);
+  if (!wc.isLoading()) s.replay.onLoad();
   // Item 10: hide-on-close keeps a closed LIVE window's renderer + transcript for a
   // tray reopen (destroyed only on settle); render-process-gone is the crash signal.
   s.win.on('close', (e) => {
@@ -215,6 +210,9 @@ function bindWindow(s) {
 function buildSdkOptions(s) {
   const cfg = buildSessionToolConfig(s.profile);
   const options = {
+    // Item 7: the per-channel folder (else ~/Downloads) as the SDK cwd — session
+    // windows set none before (the real bug). cwd is context (§H-9), not a fence.
+    cwd: channelDirs.sessionSpawnDir(s.channelId),
     allowedTools: cfg.preApproved, // pre-approved => SHADOWED, no button (§A.5)
     disallowedTools: cfg.disallowedTools,
     mcpServers: buildMcpServers(cfg.doplToolsPolicy),
@@ -293,6 +291,8 @@ async function startSession(spec, sdk) {
     workspaceId: spec.workspaceId,
     side: state.side,
     profile: spec.profile,
+    // Item 9: human tool-profile label for the renderer's posture line (passed on init).
+    profileLabel: require('./tool-profiles').profileLabel(spec.profile),
     mode: state.mode,
     counterpartyId: spec.counterpartyId || null, // FIX L1: the task's other party
     // O-6: the counterparty display name labels the agent's op=post ("Sent to X").

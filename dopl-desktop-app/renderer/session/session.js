@@ -12,7 +12,7 @@
 
   const vm = globalThis.DoplSessionVM;
   const render = globalThis.DoplSessionRender;
-  const { el, pretty } = render;
+  const { el, pretty, initial } = render;
 
   // Bridge (contextIsolation preload). A no-op stub lets session.html open
   // standalone for manual/mock testing; window.__sessionFeed drives a mock stream.
@@ -28,6 +28,7 @@
     end: noop,
     closeTask: noop,
     consentDecision: noop,
+    setAutoApprove: noop,
     folder: { get: resolved, choose: resolved, clear: resolved },
   };
   const folderBridge = bridge.folder || { get: resolved, choose: resolved, clear: resolved };
@@ -36,14 +37,17 @@
   const $ = (id) => document.getElementById(id);
   const app = $("app");
   const els = {
+    titleRow: $("headerTitleRow"),
+    peerAvatar: $("peerAvatar"),
     channelName: $("channelName"),
     taskTitle: $("taskTitle"),
     badgeRow: $("badgeRow"),
     statusDot: $("statusDot"),
     statusLabel: $("statusLabel"),
     statusMeta: $("statusMeta"),
+    permPosture: $("permPosture"),
+    autoApprove: $("autoApprove"),
     folderLabel: $("folderLabel"),
-    folderNote: $("folderNote"),
     stream: $("stream"),
     dock: $("permissionDock"),
     permTool: $("permTool"),
@@ -78,12 +82,26 @@
   const FACTORY = render.makeFactories(ctx);
 
   // ── header / status / folder ──────────────────────────────────────────────
+  // Item 2: for a DM the peer name (init.from) IS the identity — show the peer
+  // name + an initials-on-token avatar + the window title, and hide the black
+  // brand-mark. A group channel (no single peer) falls back to the channel name
+  // + brand-mark. Every string reaches the DOM via textContent.
   function renderInit() {
     const info = state.init;
     if (!info) return;
-    els.channelName.textContent = info.channelName || "Session";
+    const peer = info.from;
+    if (peer) {
+      els.channelName.textContent = peer;
+      els.peerAvatar.textContent = initial(peer);
+      els.titleRow.classList.add("has-peer");
+      document.title = "Dopl — " + peer;
+    } else {
+      const name = info.channelName || "Session";
+      els.channelName.textContent = name;
+      els.titleRow.classList.remove("has-peer");
+      document.title = "Dopl — " + name;
+    }
     els.taskTitle.textContent = info.taskTitle || "";
-    document.title = "Dopl — " + (info.channelName || "Session");
 
     const badges = [info.side, info.profile, info.mode].filter(Boolean);
     if (els.badgeRow.childElementCount !== badges.length) {
@@ -97,6 +115,10 @@
     els.statusLabel.textContent = vm.statusText(state.phase, state.activity);
     const info = state.init || {};
     els.statusMeta.textContent = info.model || "";
+    // Permission posture (items 9 + 10): "Asking each time" / "Auto-approving",
+    // with the profile label as context; the toggle reflects the echoed state.
+    els.permPosture.textContent = vm.permissionModeText(state.autoApprove, info.profileLabel || info.profile);
+    els.autoApprove.checked = state.autoApprove === true;
   }
 
   function renderFolder() {
@@ -201,23 +223,20 @@
     renderAll();
   }
 
-  // Apply a folder LABEL returned from the native picker / clear, and surface
-  // the "applies to the next run" note (item 7 / O-7).
+  // Apply a folder LABEL returned from the native picker (item 5). A change
+  // persists per-channel and takes effect on the NEXT session (O-5).
   function applyFolder(res) {
     if (!res || typeof res !== "object") return;
     state = vm.reduceEvent(state, { type: "folder", label: res.label });
-    els.folderNote.classList.remove("hidden");
     renderAll();
   }
 
   function wireFolder() {
-    $("btnFolderChange").addEventListener("click", () => {
+    // ONE click-to-change pill (item 5): clicking opens the native picker.
+    $("folderPill").addEventListener("click", () => {
       Promise.resolve(folderBridge.choose()).then(applyFolder).catch(noop);
     });
-    $("btnFolderDefault").addEventListener("click", () => {
-      Promise.resolve(folderBridge.clear()).then(applyFolder).catch(noop);
-    });
-    // Seed the chip from the stored dir (the engine also emits `folder` on init).
+    // Seed the pill from the stored dir (the engine also emits `folder` on init).
     Promise.resolve(folderBridge.get())
       .then((res) => {
         if (res && typeof res === "object") {
@@ -243,6 +262,13 @@
     $("btnAllowOnce").addEventListener("click", () => decide("allow-once"));
     $("btnAllowTask").addEventListener("click", () => decide("allow-task"));
     $("btnDeny").addEventListener("click", () => decide("deny"));
+
+    // Per-session auto-approve toggle (item 10). The main side echoes an
+    // `auto_approve` event → reduceEvent → renderStatus updates the posture
+    // label + reflects the checkbox. The bridge coerces the boolean.
+    els.autoApprove.addEventListener("change", () => {
+      bridge.setAutoApprove(els.autoApprove.checked === true);
+    });
 
     // Close-task panel.
     $("btnClose").addEventListener("click", () => els.closePanel.classList.toggle("is-open"));

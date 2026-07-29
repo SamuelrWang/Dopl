@@ -33,6 +33,14 @@ assert.notEqual(to, -1, "END CHANNEL-DIR-RESOLVE sentinel missing");
 assert.ok(to > from, "channel-dir sentinels out of order");
 const BLOCK = SRC.slice(from, to);
 
+// The sliced block must stay electron/fs/path/store-free (§H-7) — it is the fallback
+// (defaultSessionDir) that lives OUTSIDE it and gets passed IN, never the other way.
+// Scan CODE only (strip // comments — they legitimately say "electron-free").
+const CODE = BLOCK.split("\n").map((l) => { const i = l.indexOf("//"); return i === -1 ? l : l.slice(0, i); }).join("\n");
+for (const banned of ["require(", "electron", "fs.", "os.", "child_process", "process."]) {
+  assert.ok(!CODE.includes(banned), `CHANNEL-DIR-RESOLVE block must not reference ${banned}`);
+}
+
 const { resolveSpawnDir, abbreviateHome } = new Function(
   `${BLOCK}\n return { resolveSpawnDir, abbreviateHome };`
 )();
@@ -98,4 +106,34 @@ test("abbreviateHome respects the path boundary (no sibling false-match)", () =>
 test("abbreviateHome is safe with no home / nullish path", () => {
   assert.equal(abbreviateHome("/x", ""), "/x");
   assert.equal(abbreviateHome(null, "/Users/me"), "");
+});
+
+// ── item 6/7: sessionSpawnDir + resolvedDirLabel (composition over the pure block) ──
+// sessionSpawnDir(channelId) = resolveSpawnDir(stored, defaultSessionDir(), isDir).dir
+// and resolvedDirLabel = abbreviateHome(that, home). The fs-backed defaultSessionDir /
+// getChannelDir / isDir are the electron boundary (manually traced); here we pin the
+// COMPOSITION — "stored-if-exists else ~/Downloads", then abbreviated — using the same
+// pure primitives that ship, with ~/Downloads injected as the fallback.
+
+const HOME = "/Users/me";
+const DOWNLOADS = "/Users/me/Downloads"; // item 6 default (defaultSessionDir when it exists)
+const CHANNEL_DIR = "/Users/me/Downloads/project";
+
+// Mirror of sessionSpawnDir's delegation, with the fs bits injected.
+const spawnDir = (stored, exists) => resolveSpawnDir(stored, DOWNLOADS, exists).dir;
+const dirLabel = (stored, exists) => abbreviateHome(spawnDir(stored, exists), HOME);
+
+test("sessionSpawnDir: a stored per-channel dir that still exists is the cwd", () => {
+  assert.equal(spawnDir(CHANNEL_DIR, (p) => p === CHANNEL_DIR), CHANNEL_DIR);
+});
+
+test("sessionSpawnDir: unset OR deleted per-channel dir falls back to ~/Downloads", () => {
+  assert.equal(spawnDir(null, () => true), DOWNLOADS, "unset -> Downloads default");
+  assert.equal(spawnDir("", () => true), DOWNLOADS, "blank -> Downloads default");
+  assert.equal(spawnDir(CHANNEL_DIR, () => false), DOWNLOADS, "deleted since chosen -> Downloads default");
+});
+
+test("resolvedDirLabel: abbreviates the resolved dir, never null", () => {
+  assert.equal(dirLabel(null, () => true), "~/Downloads", "the default reads ~/Downloads");
+  assert.equal(dirLabel(CHANNEL_DIR, (p) => p === CHANNEL_DIR), "~/Downloads/project", "a set per-channel dir shows abbreviated");
 });

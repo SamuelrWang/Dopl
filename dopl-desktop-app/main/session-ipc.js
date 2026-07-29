@@ -49,6 +49,12 @@ function register(internals) {
   ipcMain.handle('session:end', (e) => withSession(e, (s) => engine.dispatch(s, { type: 'end' })));
   ipcMain.handle('session:close-task', (e, p) => withSession(e, (s) => engine.dispatch(s, { type: 'close_task', outcome: p && p.outcome, summary: p && p.summary })));
 
+  // ── Item 10: per-session auto-approve toggle. Bound from event.sender like every
+  // other handler; the enabled flag is coerced to a strict boolean. The reducer does
+  // the gate-drain + auto_approve echo — main stays authoritative on the flip.
+  ipcMain.handle('session:set-auto-approve', (e, p) => withSession(e, (s) =>
+    engine.dispatch(s, { type: 'set_auto_approve', enabled: !!(p && p.enabled) })));
+
   // ── Item 8: the pre-consent Accept / Deny — resolved from the window, not the id.
   ipcMain.handle('session:consent-decision', (e, p) => {
     const decision = p && p.decision === 'accept' ? 'accept' : 'deny';
@@ -60,16 +66,18 @@ function register(internals) {
     }
   });
 
-  // ── Item 7: the folder chip. LABEL ONLY crosses back (the abs path never enters
-  // the renderer, §H-9); channelId comes from the authoritative session/consent.
-  ipcMain.handle('session:folder-get', (e) => folderReply(e, (t) => channelDirs.liveChannelDirLabel(t.channelId)));
+  // ── Item 5: the folder pill. LABEL ONLY crosses back — the REAL resolved dir
+  // short-form (resolvedDirLabel, never null now, defaults "~/Downloads"); the abs path
+  // never enters the renderer (§H-9). channelId comes from the authoritative session/
+  // consent. folder-clear stays for compat but the UI no longer calls it (item 5).
+  ipcMain.handle('session:folder-get', (e) => folderReply(e, (t) => channelDirs.resolvedDirLabel(t.channelId)));
   ipcMain.handle('session:folder-choose', (e) => folderReply(e, async (t) => {
     await channelDirs.promptAndSetChannelDir(t.channelId); // user-driven native picker
-    return channelDirs.liveChannelDirLabel(t.channelId);
+    return channelDirs.resolvedDirLabel(t.channelId);
   }));
   ipcMain.handle('session:folder-clear', (e) => folderReply(e, (t) => {
     channelDirs.clearChannelDir(t.channelId);
-    return channelDirs.liveChannelDirLabel(t.channelId); // null after clear
+    return channelDirs.resolvedDirLabel(t.channelId); // back to the ~/Downloads default
   }));
 }
 

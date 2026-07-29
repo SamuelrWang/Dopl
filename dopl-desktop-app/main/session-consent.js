@@ -17,6 +17,8 @@
 const store = require('./session-store');
 const consent = require('./consent');
 const watcher = require('./consent-watcher');
+const channelDirs = require('./channel-dirs');
+const replay = require('./session-replay');
 const { diag } = require('./diag');
 
 // ─── BEGIN SESSION-CONSENT (pure; unit-tested via source extraction) ──────────
@@ -92,16 +94,13 @@ function getByWatcherKey(watcherKey) {
   return null;
 }
 
-// Buffer session:event until the page finishes loading so the very first
-// consent_request is never dropped by a not-yet-attached listener (same discipline
-// as the engine's emit()).
+// Item 3: every session:event flows through the shared transcript replay (session-
+// replay.js) — it buffers before first load (the very first consent_request is never
+// dropped) AND re-sends the whole [consent_request, folder, consent_resolved?] log on a
+// Cmd-R reload, so a reloaded pre-consent window rebuilds instead of going blank.
 function sendToEntry(e, payload) {
   if (!e.win || e.win.isDestroyed()) return;
-  if (e.loaded) {
-    try { e.win.webContents.send('session:event', payload); } catch (err) { diag('session-consent: send failed', err && err.message); }
-  } else {
-    e.queue.push(payload);
-  }
+  e.replay.deliver(payload);
 }
 
 // Open the pre-consent window. The engine gates the shared window budget first, so
@@ -127,8 +126,7 @@ function open(spec) {
     rowId: spec.rowId,
     win,
     cstate: initialConsentState(),
-    loaded: false,
-    queue: [],
+    replay: null, // item 3: set in bind() — the transcript ring + reload re-send
     decided: false,
     detach: null,
   };
@@ -145,18 +143,18 @@ function open(spec) {
     toolProfileLabel: spec.toolProfileLabel || null,
     cwdLabel: spec.cwdLabel || null,
   });
-  sendToEntry(e, { type: 'folder', label: spec.cwdLabel || null });
+  // Item 5: the folder pill shows the REAL resolved dir, computed from spec.channelId
+  // here (never null; "~/Downloads" default) so trigger.js stays untouched (§H-6).
+  sendToEntry(e, { type: 'folder', label: channelDirs.resolvedDirLabel(spec.channelId) });
   return { ok: true };
 }
 
 function bind(e) {
   const wc = e.win.webContents;
-  const flush = () => {
-    e.loaded = true;
-    const q = e.queue;
-    e.queue = [];
-    for (const p of q) { try { wc.send('session:event', p); } catch (_) { /* window gone */ } }
-  };
+  // Item 3: the shared replay owns the transcript ring + sent cursor. did-start-loading
+  // (a reload) rewinds it; did-finish-load flushes everything unseen. Same discipline
+  // as the engine — a reloaded consent window re-shows its request instead of blanking.
+  e.replay = replay.createReplay(wc, (p) => { try { wc.send('session:event', p); } catch (err) { diag('session-consent: send failed', err && err.message); } });
   // OS close WITHOUT a decision is a PARK (item 8 step 7, mirrors the web "Dismiss
   // parks"): leave the row pending + the watcher record await-inbound so the request
   // stays answerable from web/notification until the 24h TTL. A DECIDED / adopted
@@ -165,11 +163,13 @@ function bind(e) {
     if (!e.decided) e.cstate = consentTransition(e.cstate, { type: 'park' }).state;
     registry.delete(e.key);
   };
-  wc.on('did-finish-load', flush);
-  if (!wc.isLoading()) flush();
+  wc.on('did-start-loading', e.replay.onReload);
+  wc.on('did-finish-load', e.replay.onLoad);
+  if (!wc.isLoading()) e.replay.onLoad();
   e.win.on('close', onClose);
   e.detach = () => {
-    try { wc.removeListener('did-finish-load', flush); } catch (_) { /* best effort */ }
+    try { wc.removeListener('did-start-loading', e.replay.onReload); } catch (_) { /* best effort */ }
+    try { wc.removeListener('did-finish-load', e.replay.onLoad); } catch (_) { /* best effort */ }
     try { e.win.removeListener('close', onClose); } catch (_) { /* best effort */ }
   };
 }

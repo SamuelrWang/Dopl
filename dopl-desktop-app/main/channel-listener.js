@@ -26,8 +26,9 @@ const taskNotify = require('./task-notify');
 const watcher = require('./consent-watcher');
 const sessionEngine = require('./session-engine');
 const settings = require('./settings');
+const realtime = require('./realtime');
 const { notifyLocal } = require('./channel-post');
-const { LISTENER } = require('./config');
+const { LISTENER, REALTIME } = require('./config');
 
 // Console output is invisible for a GUI-launched app, and the trigger path has
 // several deliberate silent skips (fail-closed identity, missing CLI, targeting
@@ -115,21 +116,18 @@ async function maybeOpenRequesterSession(entry, m) {
 async function channelLoop(entry) {
   while (running && !entry.stop) {
     const since = io.getCursor(entry.channel.id);
-    // Per-iteration controller so wake() can abort a healthy in-flight long-poll
-    // and force an immediate re-await from the persisted cursor (fast catch-up
-    // after sleep / network change). Cleared as soon as the fetch settles.
+    // Push transport (v2.1): when realtime is HEALTHY, awaitOrCheap does a cheap
+    // immediate catch-up + a wake-interruptible long idle; when UNHEALTHY or
+    // disabled it collapses to today's held long-poll — byte-for-byte.
+    const healthy = REALTIME.ENABLED && realtime.isHealthy();
+    entry.dirty = false;
+    // Per-iteration controller so a wake (powerMonitor OR a realtime INSERT) can
+    // abort an in-flight poll and force an immediate re-await from the cursor.
     const awaitCtrl = new AbortController();
     entry.awaitCtrl = awaitCtrl;
     let res;
     try {
-      res = await io.apiFetch(
-        `/api/channels/${entry.channel.id}/await?since=${since}&timeoutMs=${LISTENER.AWAIT_TIMEOUT_MS}`,
-        {
-          workspaceId: entry.workspaceId,
-          timeoutMs: LISTENER.AWAIT_FETCH_TIMEOUT_MS,
-          signal: awaitCtrl.signal,
-        }
-      );
+      res = await io.awaitOrCheap(entry, since, healthy, awaitCtrl.signal);
     } catch (err) {
       entry.awaitCtrl = null;
       // AbortError is either our own fetch timeout (normal long-poll turnover) or
@@ -159,6 +157,7 @@ async function channelLoop(entry) {
       try {
         const s = await auth.ensureFresh();
         if (s) await auth.writeSessionCookies(s);
+        if (REALTIME.ENABLED) realtime.refreshAuth(); // keep the WS JWT fresh too
       } catch (err) {
         diag('channelLoop 401 refresh error', err && err.message);
       }
@@ -184,6 +183,8 @@ async function channelLoop(entry) {
       .slice()
       .sort((a, b) => (a.seq || 0) - (b.seq || 0));
     const maxSeq = msgs.reduce((mx, m) => Math.max(mx, m.seq || 0), since);
+    // healthy + drained keeps paging fast; healthy + caught up → the long idle.
+    const drained = msgs.length > 0;
 
     if (entry.seedMode) {
       // Drain history quietly until caught up to the tip, then go live. Avoids
@@ -226,7 +227,7 @@ async function channelLoop(entry) {
       }
       if (msgs.length === 0 && maxSeq > since) io.setCursor(entry.channel.id, maxSeq);
     }
-    await io.sleep(LISTENER.IDLE_GAP_MS);
+    await io.idleAfterAwait(entry, healthy, drained);
   }
 }
 
@@ -259,6 +260,7 @@ async function reconcileInner() {
     myUserId = null; // force re-resolve on next sign-in
     stopLoops();
     presence.setWorkspaces([]); // stop heartbeating when signed out
+    if (REALTIME.ENABLED) realtime.setWorkspaces([]); // drop the WS subscriptions
     watcher.reset(); // FIX 1: drop in-memory pending records + zero the tray count
     setStatus();
     return;
@@ -300,6 +302,8 @@ async function reconcileInner() {
   // Feature 5: presence heartbeats target every member workspace (not just ones
   // with channels) so the web shows this operator's agent as listening.
   presence.setWorkspaces(workspaces.map((w) => w && w.id).filter(Boolean));
+  // Push: refresh the WS JWT (else ~1h expiry silently kills push) + resubscribe.
+  if (REALTIME.ENABLED) { realtime.refreshAuth(); realtime.setWorkspaces(workspaces.map((w) => w && w.id).filter(Boolean)); }
 
   // H2: resolve the operator identity before any loop can evaluate classify().
   if (!myUserId) {
@@ -411,6 +415,15 @@ function start(statusCb, h) {
   if (running) { reconcile(); return; }
   running = true;
   presence.start(); // Feature 5: heartbeat (self-gates on sign-in + workspace set)
+  // Push transport (v2.1): open the Realtime WS — onInsert wakes the one changed
+  // channel; onHealthChange nudges loops when push flips on/off.
+  if (REALTIME.ENABLED) {
+    realtime.start({
+      getAccessToken: auth.getAccessToken,
+      onInsert: wakeChannel,
+      onHealthChange: onRealtimeHealth,
+    });
+  }
   // Round B: the async consent watcher — decoupled from the long-poll loop. It
   // polls each pending consent row off-loop and dispatches to trigger.resolvers
   // (spawn / review / echo). Idempotent; resumes durable pending records once.
@@ -461,12 +474,26 @@ function wake() {
   reconcile();
 }
 
+// A realtime channel_messages INSERT: wake ONLY that channel's loop (abort its
+// cheap await + resolve its idle) so it catches up now. Coalesced in realtime.js
+// (one wake/channel/burst); io.wakeEntry no-ops on a channel with no loop.
+function wakeChannel(channelId) {
+  io.wakeEntry(loops.get(channelId));
+}
+
+// Push health flipped: nudge every loop to re-evaluate now, so a drop to the
+// long-poll doesn't wait out a caught-up loop's 5-min idle before held-polling.
+function onRealtimeHealth(_healthy) {
+  for (const entry of loops.values()) io.wakeEntry(entry);
+}
+
 function stop() {
   running = false;
   if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
   stopLoops();
   watcher.stop(); // Round B: stop the async consent poll loop
   presence.stop(); // Feature 5: stop heartbeating on shutdown
+  realtime.stop(); // Push transport: close the Realtime WS
   setStatus();
 }
 

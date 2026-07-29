@@ -260,6 +260,11 @@ function makeCanUseTool(s, dispatch) {
     });
     if (decision === 'preapproved' || decision === 'allow') return Promise.resolve({ behavior: 'allow' });
     if (decision === 'deny') return Promise.resolve({ behavior: 'deny', message: 'Blocked for this session' });
+    // Item 10: per-session auto-approve flips ONLY a live GATE to allow, with NO prompt
+    // and NO dispatch. 'deny' (above, the SESSION_HARD_DENY belt) is decided FIRST and
+    // is immovable; 'preapproved' is unchanged; permissionMode stays 'default'. Reads
+    // s.state.autoApprove exactly as the reducer reads allowForTask — default OFF.
+    if (decision === 'gate' && s.state && s.state.autoApprove) return Promise.resolve({ behavior: 'allow' });
     return new Promise((resolve) => {
       const requestId = (opts && opts.requestId) || crypto.randomUUID();
       s.pendingPermissions.set(requestId, resolve);
@@ -303,6 +308,7 @@ function handleSdkMessage(s, msg, dispatch, store) {
         profile: s.profile,
         mode: s.mode,
         model: msg.model,
+        profileLabel: s.profileLabel || null, // item 9: human posture label (§B.2)
         channelName: (s.context && s.context.channelName) || null,
         taskTitle: (s.context && s.context.taskTitle) || null,
         from: s.counterpartyName || null,

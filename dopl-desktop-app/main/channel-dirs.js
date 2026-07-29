@@ -123,6 +123,30 @@ function spawnDirFor(channelId, sandboxDir) {
   return dir;
 }
 
+// ── Session-window cwd (item 6/7) — hardcoded ~/Downloads default, no setting/tray ──
+// Item 6: the default session dir is ~/Downloads when it exists, else the homedir
+// (never a non-existent path). Computed OUTSIDE the pure block (uses fs/os) and passed
+// INTO resolveSpawnDir as the fallback (§H-7), so the pure block stays electron-free.
+function defaultSessionDir() {
+  const downloads = path.join(os.homedir(), 'Downloads');
+  return isDir(downloads) ? downloads : os.homedir();
+}
+
+// Item 7: the SDK cwd for a channel's session window — the stored per-channel dir when
+// it still exists, else ~/Downloads. This is what session-engine.buildSdkOptions reads
+// at launch so per-channel persistence is finally honored. No self-heal here (a pure
+// read path used by resolvedDirLabel too); spawnDirFor still owns the deleted-dir sweep.
+function sessionSpawnDir(channelId) {
+  return resolveSpawnDir(getChannelDir(channelId), defaultSessionDir(), isDir).dir;
+}
+
+// Item 5: the abbreviated LABEL for the folder pill — ALWAYS a real dir short-form
+// ("~/Downloads" unset, "~/Downloads/repo" when a per-channel dir is set), never null.
+// Label-only crosses the bridge; the abs path never does (§H-9).
+function resolvedDirLabel(channelId) {
+  return abbreviateHome(sessionSpawnDir(channelId), os.homedir());
+}
+
 // ── Native directory picker ──────────────────────────────────────────────────
 // Resolves the chosen absolute dir (validated to exist) or null (cancelled /
 // invalid). `createDirectory` lets the operator make a new folder in the panel.
@@ -163,6 +187,9 @@ module.exports = {
   clearChannelDir,
   liveChannelDirLabel,
   spawnDirFor,
+  defaultSessionDir,
+  sessionSpawnDir,
+  resolvedDirLabel,
   pickDirectory,
   promptAndSetChannelDir,
 };

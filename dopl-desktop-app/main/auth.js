@@ -164,36 +164,59 @@ function cookieChunkIndex(name) {
   return m ? Number(m[1]) : -1; // the unsuffixed base cookie sorts first
 }
 
-// H2: derive the operator id from the Supabase auth COOKIE the web sign-in set,
-// covering cookie-only sessions where getUserId() (stored blob) is null. The
-// cookie value is @supabase/ssr's `base64-` + base64url(JSON session), possibly
-// chunked across `<base>.0`, `.1`, …; we reassemble, decode, and read the access
-// token's `sub`. No signature check needed — it came from our own cookie jar.
+// Reassemble the Supabase auth COOKIE the web sign-in set and return the raw
+// access_token JWT string (or null). The cookie value is @supabase/ssr's
+// `base64-` + base64url(JSON session), possibly chunked across `<base>.0`,
+// `.1`, …; we reassemble, decode, and pull the access token. No signature check
+// needed — it came from our own cookie jar. Shared by getUserIdFromCookies
+// (reads the token's `sub`) and getAccessToken (returns the token for Realtime).
+async function readCookieAccessToken() {
+  const jar = await session.defaultSession.cookies.get({ url: APP_ORIGIN });
+  const authCookies = jar
+    .filter((c) => c.name === COOKIE_BASE || c.name.startsWith(COOKIE_BASE + '.'))
+    .sort((a, b) => cookieChunkIndex(a.name) - cookieChunkIndex(b.name));
+  if (authCookies.length === 0) return null;
+
+  let raw = authCookies.map((c) => c.value).join('');
+  if (raw.startsWith(BASE64_PREFIX)) raw = raw.slice(BASE64_PREFIX.length);
+  let json;
+  try {
+    json = Buffer.from(raw, 'base64url').toString('utf8');
+  } catch (_) {
+    json = Buffer.from(raw, 'base64').toString('utf8');
+  }
+  const parsed = JSON.parse(json);
+  return (
+    (parsed && parsed.access_token) ||
+    (Array.isArray(parsed) && parsed[0]) ||
+    null
+  );
+}
+
+// H2: derive the operator id from the auth cookie, covering cookie-only sessions
+// where getUserId() (stored blob) is null.
 async function getUserIdFromCookies() {
   try {
-    const jar = await session.defaultSession.cookies.get({ url: APP_ORIGIN });
-    const authCookies = jar
-      .filter((c) => c.name === COOKIE_BASE || c.name.startsWith(COOKIE_BASE + '.'))
-      .sort((a, b) => cookieChunkIndex(a.name) - cookieChunkIndex(b.name));
-    if (authCookies.length === 0) return null;
-
-    let raw = authCookies.map((c) => c.value).join('');
-    if (raw.startsWith(BASE64_PREFIX)) raw = raw.slice(BASE64_PREFIX.length);
-    let json;
-    try {
-      json = Buffer.from(raw, 'base64url').toString('utf8');
-    } catch (_) {
-      json = Buffer.from(raw, 'base64').toString('utf8');
-    }
-    const parsed = JSON.parse(json);
-    const token =
-      (parsed && parsed.access_token) ||
-      (Array.isArray(parsed) && parsed[0]) ||
-      null;
+    const token = await readCookieAccessToken();
     const claims = token ? decodeJwt(token) : null;
     return claims && claims.sub ? claims.sub : null;
   } catch (err) {
     console.error('[auth] cookie identity decode failed:', err && err.message);
+    return null;
+  }
+}
+
+// The Supabase user access_token JWT for Realtime auth (setAuth). Prefer the
+// stored deep-link blob; else the token embedded in the auth cookie (the same
+// reassembly as getUserIdFromCookies, returning the TOKEN not the `sub`). Never
+// logged. Returns null when signed out / no token available.
+async function getAccessToken() {
+  const s = loadSession();
+  if (s && s.access_token) return s.access_token;
+  try {
+    return await readCookieAccessToken();
+  } catch (err) {
+    console.error('[auth] access-token read failed:', err && err.message);
     return null;
   }
 }
@@ -340,6 +363,7 @@ module.exports = {
   hasValidPendingAuth,
   getUserId,
   getUserIdFromCookies,
+  getAccessToken,
   isAccessExpired,
   refresh,
   ensureFresh,

@@ -14,7 +14,7 @@
 const { Notification } = require('electron');
 const Store = require('electron-store');
 const auth = require('./auth');
-const { API_BASE } = require('./config');
+const { API_BASE, LISTENER, REALTIME } = require('./config');
 const { diag } = require('./diag');
 
 const store = new Store();
@@ -71,6 +71,58 @@ function seedModeFor(seeded /* , cursor */) {
   return !seeded;
 }
 // ─── END SEED-DECISION ───────────────────────────────────────────────────────
+
+// ─── BEGIN CHEAP-AWAIT (pure; unit-tested via source extraction) ─────────────
+// Push-transport loop helpers. When realtime is HEALTHY the loop does a cheap
+// immediate catch-up (a tiny `/await` timeout → the server returns after one DB
+// read, no held function) then a long interruptible idle a wake resolves early.
+// When UNHEALTHY every value collapses to the held long-poll so the fallback
+// path is BYTE-FOR-BYTE today's behavior (see awaitOrCheap / idleAfterAwait).
+// Pure: no electron / store / fetch refs; timers are Node globals (injectable).
+
+// The `/await?timeoutMs=` value: cheap when healthy, else today's held timeout.
+function awaitTimeoutFor(healthy, cheapMs, heldMs) {
+  return healthy ? cheapMs : heldMs;
+}
+// Our own fetch-abort timeout: short when healthy, else today's held value.
+function fetchTimeoutFor(healthy, cheapMs, heldMs) {
+  return healthy ? cheapMs : heldMs;
+}
+// The idle wait AFTER a cycle. Unhealthy → today's short gap between held polls
+// (byte-for-byte). Healthy + still draining a batch → the same short gap (keep
+// paging fast). Healthy + caught up → the LONG idle, which a wake interrupts.
+function idleWaitFor(healthy, drained, idleGapMs, longIdleMs) {
+  if (!healthy) return idleGapMs;
+  return drained ? idleGapMs : longIdleMs;
+}
+// Interruptible sleep: resolves after `ms`, OR early when wakeEntry(entry) is
+// called (a realtime INSERT wake). Stores the resolver on the entry so a wake
+// settles it; clears the timer on either path. `timers` injectable for tests.
+function sleepOrWake(entry, ms, timers) {
+  const T = timers || { setTimeout, clearTimeout };
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      T.clearTimeout(timer);
+      entry.sleepWaker = null;
+      resolve();
+    };
+    const timer = T.setTimeout(finish, ms);
+    entry.sleepWaker = finish;
+  });
+}
+// Wake a channel: coalesce a burst to one catch-up (dirty flag), resolve any
+// in-flight idle sleep, and abort any in-flight cheap await so it re-awaits from
+// the cursor immediately. Safe to call whatever the entry is mid-doing.
+function wakeEntry(entry) {
+  if (!entry) return;
+  entry.dirty = true;
+  if (entry.sleepWaker) entry.sleepWaker();
+  try { if (entry.awaitCtrl) entry.awaitCtrl.abort(); } catch (_) { /* already gone */ }
+}
+// ─── END CHEAP-AWAIT ─────────────────────────────────────────────────────────
 
 // Whether a channel loop should start in seed mode, from persisted state.
 function shouldSeed(channelId) {
@@ -133,6 +185,26 @@ async function apiFetch(pathname, opts = {}) {
   } finally {
     if (timer) clearTimeout(timer);
   }
+}
+
+// Health-gated await. Healthy → a cheap immediate catch-up (tiny timeoutMs, no
+// held function); unhealthy → today's EXACT held long-poll (same URL + same
+// fetch options, so the fallback is byte-for-byte). See the CHEAP-AWAIT block.
+function awaitOrCheap(entry, since, healthy, signal) {
+  const timeoutMs = awaitTimeoutFor(healthy, REALTIME.CHEAP_AWAIT_TIMEOUT_MS, LISTENER.AWAIT_TIMEOUT_MS);
+  const fetchMs = fetchTimeoutFor(healthy, REALTIME.CHEAP_FETCH_TIMEOUT_MS, LISTENER.AWAIT_FETCH_TIMEOUT_MS);
+  return apiFetch(
+    `/api/channels/${entry.channel.id}/await?since=${since}&timeoutMs=${timeoutMs}`,
+    { workspaceId: entry.workspaceId, timeoutMs: fetchMs, signal }
+  );
+}
+
+// The idle wait after a cycle. Healthy + caught up → an interruptible long sleep
+// (a realtime wake resolves it early); otherwise today's plain IDLE_GAP sleep.
+function idleAfterAwait(entry, healthy, drained) {
+  const ms = idleWaitFor(healthy, drained, LISTENER.IDLE_GAP_MS, REALTIME.LONG_IDLE_MS);
+  if (healthy && !drained) return sleepOrWake(entry, ms);
+  return sleep(ms);
 }
 
 function normalizeList(data, key) {
@@ -233,6 +305,10 @@ module.exports = {
   resetStale,
   isFeatureAvailable,
   apiFetch,
+  awaitOrCheap,
+  idleAfterAwait,
+  sleepOrWake,
+  wakeEntry,
   normalizeList,
   listWorkspaces,
   listChannels,

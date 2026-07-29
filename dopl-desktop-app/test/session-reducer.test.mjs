@@ -63,6 +63,8 @@ test("initialSessionState defaults: interactive/responder, documented caps, empt
   assert.equal(s.costCapUsd, DEFAULT_COST_CAP_USD);
   assert.deepEqual(s.pendingPermissions, []);
   assert.deepEqual(s.allowForTask, []);
+  // Item 10: per-session auto-approve starts OFF (fail-closed, ask each time).
+  assert.equal(s.autoApprove, false);
   assert.equal(s.hasPendingInbound, false);
   // Item 3: a launching session starts `working`, nothing posted yet.
   assert.equal(s.activity, "working");
@@ -198,6 +200,68 @@ test("permission_decision leaves phase awaiting while other permissions remain p
   const r = sessionReducer(s, { type: "permission_decision", requestId: "r1", decision: "allow", name: "Bash" });
   assert.equal(r.state.phase, "awaiting_permission", "still awaiting the second permission");
   assert.deepEqual(r.state.pendingPermissions, ["r2"]);
+});
+
+// ── set_auto_approve (item 10 — the per-session auto-approve toggle) ─────────────
+
+test("a launched session starts auto-approve OFF (per-session, never persisted)", () => {
+  assert.equal(running().autoApprove, false);
+  assert.equal(running({ mode: "autonomous" }).autoApprove, false);
+});
+
+test("set_auto_approve enable (no pending): flag ON, running/working, emits auto_approve:true", () => {
+  const s = running();
+  const r = sessionReducer(s, { type: "set_auto_approve", enabled: true });
+  assert.equal(r.state.autoApprove, true);
+  assert.equal(r.state.phase, "running");
+  assert.equal(r.state.activity, "working");
+  assert.deepEqual(effTypes(r.effects), ["emit"]);
+  assert.deepEqual(r.effects[0].payload, { type: "auto_approve", enabled: true });
+});
+
+test("set_auto_approve enable DRAINS the pending gate queue -> allow each + clears the dock", () => {
+  const s = { ...running(), phase: "awaiting_permission", activity: "awaiting_permission", pendingPermissions: ["r1", "r2"] };
+  const r = sessionReducer(s, { type: "set_auto_approve", enabled: true });
+  assert.equal(r.state.autoApprove, true);
+  assert.deepEqual(r.state.pendingPermissions, [], "the dock is cleared");
+  assert.equal(r.state.phase, "running");
+  assert.equal(r.state.activity, "working");
+  // Each parked request: resolvePermission allow + a permission_resolved echo; then the
+  // single auto_approve echo last.
+  assert.deepEqual(effTypes(r.effects), [
+    "resolvePermission", "emit",
+    "resolvePermission", "emit",
+    "emit",
+  ]);
+  const resolves = r.effects.filter((e) => e.type === "resolvePermission");
+  assert.deepEqual(resolves, [
+    { type: "resolvePermission", requestId: "r1", decision: "allow" },
+    { type: "resolvePermission", requestId: "r2", decision: "allow" },
+  ]);
+  const resolvedEchos = r.effects.filter((e) => e.type === "emit" && e.payload.type === "permission_resolved");
+  assert.deepEqual(resolvedEchos.map((e) => e.payload), [
+    { type: "permission_resolved", requestId: "r1", decision: "allow-once" },
+    { type: "permission_resolved", requestId: "r2", decision: "allow-once" },
+  ]);
+  const auto = r.effects.filter((e) => e.type === "emit" && e.payload.type === "auto_approve");
+  assert.deepEqual(auto.map((e) => e.payload), [{ type: "auto_approve", enabled: true }]);
+});
+
+test("set_auto_approve disable: flag OFF, emits auto_approve:false only (future gates prompt again)", () => {
+  const s = { ...running(), autoApprove: true };
+  const r = sessionReducer(s, { type: "set_auto_approve", enabled: false });
+  assert.equal(r.state.autoApprove, false);
+  assert.deepEqual(effTypes(r.effects), ["emit"]);
+  assert.deepEqual(r.effects[0].payload, { type: "auto_approve", enabled: false });
+  // Disable does NOT drain/allow anything — no resolvePermission effects.
+  assert.ok(!r.effects.some((e) => e.type === "resolvePermission"));
+});
+
+test("set_auto_approve is ignored by a settled session (terminal idempotency)", () => {
+  const ended = sessionReducer(running(), { type: "end" }).state;
+  const r = sessionReducer(ended, { type: "set_auto_approve", enabled: true });
+  assert.equal(r.state, ended);
+  assert.deepEqual(r.effects, []);
 });
 
 // ── result / caps ────────────────────────────────────────────────────────────────

@@ -58,6 +58,10 @@ function initialSessionState(opts) {
     idleMs: idleMs,
     pendingPermissions: [], // requestIds awaiting a button (models a Set)
     allowForTask: [], // tool names the operator granted for the whole task (models a Set)
+    // Item 10: per-session auto-approve. Default OFF (fail-closed, ask each time); a
+    // launch ALWAYS starts false (never persisted). When ON, session-io.makeCanUseTool
+    // flips a live GATE to allow; hard-deny stays immovable.
+    autoApprove: false,
     hasPendingInbound: false,
     // Item 3: the coarse activity the status pill shows (working|idle|awaiting_peer|
     // awaiting_permission|awaiting_inbound). A launching/running session is `working`;
@@ -166,6 +170,31 @@ function sessionReducer(state, event) {
         { type: 'resolvePermission', requestId: event.requestId, decision: sdkDecision },
         { type: 'emit', payload: { type: 'permission_resolved', requestId: event.requestId, decision: event.decision } },
       ],
+    };
+  }
+
+  if (type === 'set_auto_approve') {
+    // Item 10 — the per-session auto-approve toggle. ENABLE: flip the flag AND drain
+    // the pending gate queue so the dock clears — resolve each parked request `allow`
+    // and echo a `permission_resolved: allow-once` for it, then re-enter running/
+    // working; emit `auto_approve` so the posture label updates live. DISABLE: flip the
+    // flag; future gate calls prompt again. This ONLY affects the live-gate path — the
+    // hard-deny belt (grantDecision 'deny') is decided in canUseTool and never here.
+    if (event.enabled) {
+      const effects = [];
+      for (const id of state.pendingPermissions) {
+        effects.push({ type: 'resolvePermission', requestId: id, decision: 'allow' });
+        effects.push({ type: 'emit', payload: { type: 'permission_resolved', requestId: id, decision: 'allow-once' } });
+      }
+      effects.push({ type: 'emit', payload: { type: 'auto_approve', enabled: true } });
+      return {
+        state: clone(state, { autoApprove: true, pendingPermissions: [], phase: 'running', activity: 'working' }),
+        effects: effects,
+      };
+    }
+    return {
+      state: clone(state, { autoApprove: false }),
+      effects: [{ type: 'emit', payload: { type: 'auto_approve', enabled: false } }],
     };
   }
 

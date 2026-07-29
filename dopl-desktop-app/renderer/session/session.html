@@ -17,8 +17,9 @@
     <!-- Header -->
     <header class="session-header">
       <div class="header-id">
-        <div class="header-title-row">
+        <div class="header-title-row" id="headerTitleRow">
           <span class="brand-mark" aria-hidden="true"></span>
+          <span class="peer-avatar" id="peerAvatar" aria-hidden="true"></span>
           <span class="channel-name" id="channelName">Session</span>
         </div>
         <div class="task-title text-caption" id="taskTitle"></div>
@@ -31,21 +32,21 @@
       </div>
     </header>
 
-    <!-- Status strip + folder chip -->
+    <!-- Status strip: status pill · permission posture (item 9) · auto-approve
+         toggle (item 10) · working-directory pill (item 5) -->
     <div class="status-strip">
       <span class="status-pill">
         <span class="status-dot is-launching" id="statusDot"></span>
         <span class="status-label" id="statusLabel">Launching</span>
       </span>
       <span class="status-meta" id="statusMeta"></span>
+      <span class="perm-posture text-caption" id="permPosture"></span>
+      <label class="auto-toggle">
+        <input type="checkbox" id="autoApprove" />
+        Auto-approve
+      </label>
       <span class="status-spacer"></span>
-      <span class="folder-chip" id="folderChip">
-        <span class="folder-chip__icon" aria-hidden="true"></span>
-        <span class="folder-chip__label" id="folderLabel">Default (sandbox)</span>
-        <button class="ctl btn-light ctl-xs" id="btnFolderChange" type="button">Change</button>
-        <button class="ctl btn-light ctl-xs" id="btnFolderDefault" type="button">Use default</button>
-        <span class="folder-note hidden" id="folderNote">Applies to the next run</span>
-      </span>
+      <button class="folder-pill" id="folderPill" type="button">Working Directory: <span class="folder-pill__label" id="folderLabel">~/Downloads</span></button>
     </div>
 
     <!-- Pre-consent request card (item 8): shown BEFORE any SDK/agent work. -->

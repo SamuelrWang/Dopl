@@ -55,6 +55,21 @@ html, body {
   background: linear-gradient(180deg, #313131 0%, #111 100%);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 1px 2px rgba(0, 0, 0, 0.25);
 }
+/* ── Peer identity (item 2): an initials-on-token avatar for a DM peer, the
+   SAME recipe as the counterparty avatar. NEVER a black box, NEVER a remote
+   <img> (CSP img-src 'self' data: blocks remote URLs). When a peer is shown
+   the brand-mark is hidden. */
+.peer-avatar {
+  width: 20px; height: 20px; border-radius: 50%; flex: none;
+  display: none; align-items: center; justify-content: center;
+  background: var(--bg-inset-hover);
+  border: 1px solid var(--border-strong);
+  color: var(--text-secondary);
+  font-size: var(--text-micro);
+  font-weight: 600;
+}
+.header-title-row.has-peer .peer-avatar { display: inline-flex; }
+.header-title-row.has-peer .brand-mark { display: none; }
 .channel-name {
   font-size: var(--text-title);
   font-weight: 600;
@@ -140,22 +155,38 @@ html, body {
 .status-meta { color: var(--text-muted); font-size: var(--text-caption); }
 .status-spacer { flex: 1; }
 
-/* ── Folder chip (item 7): LABEL only — the abs path never reaches here. ───── */
-.folder-chip { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
-.folder-chip__icon {
-  width: 12px; height: 10px; flex: none;
-  background: var(--text-muted);
-  /* Simple folder-tab silhouette, token-coloured (no palette hex). */
-  clip-path: polygon(0 20%, 40% 20%, 50% 0, 100% 0, 100% 100%, 0 100%);
+/* ── Permission posture (item 9): a muted caption chip in the status strip. ── */
+.perm-posture { color: var(--text-secondary); font-size: var(--text-caption); }
+
+/* ── Per-session auto-approve toggle (item 10): a plain token switch — NOT a
+   bypass control; mirrors the .interject-toggle recipe. ────────────────────── */
+.auto-toggle {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: var(--text-caption); color: var(--text-secondary);
+  cursor: pointer; user-select: none; flex: none;
 }
-.folder-chip__label {
-  font-family: var(--font-mono);
+
+/* ── Folder pill (item 5): ONE click-to-change control reading "Working
+   Directory: <label>". LABEL only — the abs path never reaches here. ───────── */
+.folder-pill {
+  display: inline-flex; align-items: center; gap: 4px; flex: none;
+  max-width: 260px; min-width: 0;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-family: var(--font-ui);
   font-size: var(--text-caption);
+  cursor: pointer;
+}
+.folder-pill:hover { background: var(--bg-inset-hover); }
+.folder-pill__label {
+  font-family: var(--font-mono);
   color: var(--text-secondary);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  max-width: 240px;
+  min-width: 0;
 }
-.folder-note { color: var(--text-muted); font-size: var(--text-micro); font-style: italic; }
 
 /* ── Turn stream ──────────────────────────────────────────────────────────── */
 .stream-wrap {
@@ -175,6 +206,13 @@ html, body {
   border-radius: 12px;
   box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.06);
 }
+/* ── item 1 BUG: tool-card clipped ─────────────────────────────────────────
+   The stream is a flex column; its children default to flex-shrink:1. A
+   .tool-card has overflow:hidden, so its flex min-height:auto resolves to 0 —
+   the flex algorithm SHRINKS the card toward 0 instead of overflowing, and
+   overflow:hidden then CLIPS the body to a dead sliver. Pin every stream item
+   to its natural height; the stream itself (overflow-y:auto) scrolls. */
+.stream > * { flex: 0 0 auto; }
 
 /* Turn bubbles */
 .bubble {
@@ -284,18 +322,42 @@ html, body {
 .tool-status.is-pending { color: var(--text-muted); }
 .tool-status.is-ok { color: var(--agent-on); }
 .tool-status.is-error { color: var(--danger); }
+/* ── item 8: the tool body is ONE native <details>, default CLOSED. The head
+   (name + op summary + status) stays outside → always visible; the input +
+   result live inside and are hidden until the user expands. The EXPANDED
+   pre/.tool-result keep max-height:240px;overflow:auto so long output SCROLLS,
+   never clips (composes with item 1's .stream>*{flex:0 0 auto}). */
 .tool-card__body {
   background: var(--bg-inset);
   box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.06);
   padding: 8px 12px;
 }
-.tool-card__body details > summary {
+.tool-card__body > summary {
   cursor: pointer;
   font-size: var(--text-caption);
   color: var(--text-secondary);
   list-style: none;
 }
-.tool-card__body details > summary::-webkit-details-marker { display: none; }
+.tool-card__body > summary::-webkit-details-marker { display: none; }
+.tool-card__body > summary::after {
+  content: "›";
+  display: inline-block;
+  margin-left: 6px;
+  color: var(--text-muted);
+  transition: transform 0.15s ease;
+}
+.tool-card__body[open] > summary::after { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) {
+  .tool-card__body > summary::after { transition: none; }
+}
+.tool-io-label {
+  margin-top: 8px;
+  font-size: var(--text-micro);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+  color: var(--text-muted);
+}
 .tool-card__body pre {
   margin: 8px 0 0;
   padding: 8px 10px;
@@ -388,7 +450,11 @@ html, body {
   max-height: 200px; overflow: auto;
   user-select: text;
 }
-.perm-actions { display: flex; gap: 8px; margin-top: 12px; }
+/* item 10: wrap instead of shrink-clipping the 3rd button ("Allow for this
+   task") on a narrow dock inside .perm-card{overflow:hidden} — the same
+   shrink-clip family as item 1. Each button holds its natural width. */
+.perm-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.perm-actions .ctl { flex: 0 0 auto; }
 .perm-queue-note { margin-top: 8px; color: var(--text-muted); font-size: var(--text-micro); }
 
 /* ── Close-task panel ────────────────────────────────────────────────────── */

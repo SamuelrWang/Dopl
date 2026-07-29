@@ -100,6 +100,10 @@
     return { el: el("div", "notice level-" + (item.level || "error"), item.text || ""), update: noop };
   }
 
+  // Item 8: the head (name + op summary + status) is ALWAYS visible; the input
+  // and result live inside ONE native <details>, default CLOSED — so long/scary
+  // tool output never blasts into the window until the user expands. Expanded
+  // output SCROLLS (session.css caps the pre/.tool-result at 240px;overflow:auto).
   function makeTool(item, ctx) {
     const shortName = (ctx && ctx.vm && ctx.vm.shortToolName) || ((n) => n);
     const root = el("div", "tool-card");
@@ -110,14 +114,14 @@
     head.appendChild(status);
     root.appendChild(head);
 
-    const bodyWrap = el("div", "tool-card__body");
-    const details = el("details");
-    details.appendChild(el("summary", null, "Show input"));
+    // The body is the <details> itself (default closed — no `open` attribute).
+    const details = el("details", "tool-card__body");
+    details.appendChild(el("summary", null, "Show details"));
+    details.appendChild(el("div", "tool-io-label", "Input"));
     details.appendChild(el("pre", null, pretty(item.inputFull)));
-    bodyWrap.appendChild(details);
     const result = el("div", "tool-result hidden");
-    bodyWrap.appendChild(result);
-    root.appendChild(bodyWrap);
+    details.appendChild(result);
+    root.appendChild(details);
 
     const update = (it) => {
       const st = it.status || "pending";
