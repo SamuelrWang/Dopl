@@ -330,6 +330,8 @@ test("statusDotKey → act-<activity> while running, else is-<phase>", () => {
   assert.equal(statusDotKey("ended", "idle"), "is-ended");
 });
 
+// NOTE: P1/P2 parked-pill + paused-note + reopen-notice viewmodel cases live in the
+// sibling test/session-render-park.test.mjs (split to respect the 500-line §2 cap).
 // ── reduceEvent: folder (item 7) ──────────────────────────────────────────────
 
 test("folder stores the LABEL; folderLabel falls back to the ~/Downloads default (item 5/6)", () => {

@@ -318,6 +318,23 @@
           activity: event.activity || state.activity, // item 3
         };
 
+      // P1: idle-park inline note. Fixed copy owned here (renderer copy). No em dash.
+      case "paused":
+        return {
+          ...state,
+          items: state.items.concat([{ kind: "notice", level: "info", text: PAUSED_NOTE }]),
+        };
+
+      // P2: a reopened parked shell (or any main-emitted system note) — a calm,
+      // caller-supplied notice line. Rendered via textContent by makeNotice.
+      case "notice":
+        return {
+          ...state,
+          items: state.items.concat([
+            { kind: "notice", level: event.level || "info", text: event.text == null ? "" : String(event.text) },
+          ]),
+        };
+
       // Folder LABEL only — never an absolute path (item 7 / §H-9).
       case "folder":
         return { ...state, folder: { label: event.label == null ? null : String(event.label) } };
@@ -391,11 +408,16 @@
     return touched ? { ...state, items } : state;
   }
 
+  // P1: the inline note dropped when an idle session parks. Plain voice, NO em dash.
+  const PAUSED_NOTE = "Paused after inactivity. Send a message or wait for a reply to continue.";
+
   // ── status / folder labels (pure; item 3 + item 7) ──────────────────────────
   const PHASE_LABEL = {
     launching: "Launching",
     consent: "Consent",
     running: "Running",
+    // P1: a parked (idle-paused) session — resumable, NOT ended. Composer stays enabled.
+    parked: "Paused",
     awaiting_permission: "Awaiting permission",
     awaiting_inbound: "Awaiting reply",
     interrupted: "Interrupted",

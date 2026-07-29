@@ -38,9 +38,14 @@ function isTerminalPhase(phase) {
 
 // What init() does with a record found on disk at startup:
 //   'ignore'  — already terminal (settled); drop it.
+//   'dormant' — P1 (v1.7.4): PARKED when the app died. It is NOT interrupted — it was
+//               intentionally paused and stays resumable, so init() posts NO
+//               task_failed{interrupted:true} echo and leaves the record + resume map
+//               intact for a later reopen (P2). Neither 'ignore' nor 'resume'.
 //   'resume'  — was live/awaiting when the app died; post the interrupted echo and
 //               offer an opt-in resume (never auto-reopen).
 function reloadDisposition(phase) {
+  if (phase === 'parked') return 'dormant';
   return isTerminalPhase(phase) ? 'ignore' : 'resume';
 }
 
@@ -64,6 +69,11 @@ function durableSessionRecord(rec) {
     // requester -> the target I addressed). Persisted so a resumed session stays
     // counterparty-bound and only feeds on that member's replies.
     counterpartyId: r.counterpartyId || null,
+    // FIX #9: the running cap counters, whitelisted so a P2 recreate rehydrates the
+    // budget (a turn/cost-capped session must not reopen with a fresh cap). Coerced to a
+    // finite number so a hand-edited store can never inject NaN into the reducer.
+    turns: Number(r.turns) || 0,
+    costUsd: Number(r.costUsd) || 0,
   };
 }
 

@@ -53,8 +53,14 @@ test("only 'ended' is terminal; every live/awaiting/interrupted phase is non-ter
   }
 });
 
-test("reloadDisposition: terminal -> ignore; anything live/crashed -> resume", () => {
+test("reloadDisposition: terminal -> ignore; parked -> dormant; else -> resume", () => {
   assert.equal(reloadDisposition("ended"), "ignore");
+  // P1 (v1.7.4): a parked record is EXEMPT from the interrupted echo — the init scan
+  // must NOT treat it as 'resume' (which would post task_failed{interrupted:true}); it
+  // stays dormant + resumable via P2.
+  assert.equal(reloadDisposition("parked"), "dormant");
+  assert.notEqual(reloadDisposition("parked"), "resume", "parked never echoes interrupted");
+  assert.equal(isTerminalPhase("parked"), false, "parked is not terminal (it is resumable)");
   for (const p of ["launching", "running", "awaiting_permission", "awaiting_inbound", "interrupted"]) {
     assert.equal(reloadDisposition(p), "resume", `${p} on restart -> resume affordance`);
   }
@@ -76,12 +82,27 @@ test("durableSessionRecord whitelists exactly the durable fields", () => {
     phase: "running",
     startedAt: 123,
     counterpartyId: "u2", // FIX L1: the task's other party, persisted for resume
+    turns: 7, // FIX #9: the running cap counters, persisted for a P2 rehydrate
+    costUsd: 0.42,
   });
   assert.deepEqual(Object.keys(rec).sort(), [
-    "channelId", "counterpartyId", "key", "mode", "phase", "profile", "sdkSessionId",
-    "sessionId", "side", "startedAt", "taskId", "workspaceId",
+    "channelId", "costUsd", "counterpartyId", "key", "mode", "phase", "profile",
+    "sdkSessionId", "sessionId", "side", "startedAt", "taskId", "turns", "workspaceId",
   ]);
   assert.equal(rec.counterpartyId, "u2");
+});
+
+test("durableSessionRecord persists the cap counters (FIX #9) and coerces bad values to 0", () => {
+  const rec = durableSessionRecord({ key: "c1:t1", channelId: "c1", phase: "parked", turns: 24, costUsd: 1.5 });
+  assert.equal(rec.turns, 24, "the running turn count survives so a P2 recreate does not reset the budget");
+  assert.equal(rec.costUsd, 1.5, "the running cost survives for the cost cap");
+  // A hand-edited store (or a legacy record missing the fields) can never inject NaN.
+  const legacy = durableSessionRecord({ key: "c1:", channelId: "c1", phase: "launching" });
+  assert.equal(legacy.turns, 0);
+  assert.equal(legacy.costUsd, 0);
+  const bad = durableSessionRecord({ key: "c1:", channelId: "c1", phase: "parked", turns: "x", costUsd: NaN });
+  assert.equal(bad.turns, 0);
+  assert.equal(bad.costUsd, 0);
 });
 
 test("durableSessionRecord defaults counterpartyId -> null when absent", () => {

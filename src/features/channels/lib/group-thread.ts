@@ -28,6 +28,10 @@ import type { ChannelMessage, ChannelMessageKind, TaskMode } from "../types";
  * - `declined`    — the operator denied a consent request (`metadata.declined`).
  * - `dropped`     — the operator cancelled the outbound send (`metadata.dropped`).
  * - `interrupted` — the app died mid-spawn (`metadata.interrupted`).
+ * - `capped`      — a turn/cost cap was reached (`metadata.capped`); the task
+ *                   stays open, reopen the window to continue.
+ * - `ended`       — the operator ended the session on the desktop
+ *                   (`metadata.ended`); the task stays open.
  * A bare `task_failed` with none of these flags is a genuine `failed`.
  */
 export type SessionStatus =
@@ -36,7 +40,9 @@ export type SessionStatus =
   | "failed"
   | "declined"
   | "dropped"
-  | "interrupted";
+  | "interrupted"
+  | "capped"
+  | "ended";
 
 /**
  * The calm terminal states — operator-chosen endings that share the muted
@@ -46,6 +52,20 @@ const CALM_TERMINAL_STATUSES: ReadonlySet<SessionStatus> = new Set([
   "declined",
   "dropped",
   "interrupted",
+  "capped",
+  "ended",
+]);
+
+/**
+ * The calm SESSION-END states — a running session that stopped without a reply
+ * (app died, cap hit, operator ended it). A strict SUBSET of the calm terminals:
+ * `declined`/`dropped` are request-level decisions (work never ran), excluded so
+ * only these three replace a lying "Working…" line on an open-task card.
+ */
+const CALM_SESSION_END_STATUSES: ReadonlySet<SessionStatus> = new Set([
+  "interrupted",
+  "capped",
+  "ended",
 ]);
 
 /** True for the operator-chosen calm terminal outcomes (declined/dropped/interrupted). */
@@ -105,6 +125,13 @@ export interface SessionGroup {
    * `channel_tasks` row, or a task closed without a summary.
    */
   outcomeSummary: string | null;
+  /**
+   * The calm session-end status (interrupted / capped / ended) when the session
+   * stopped WITHOUT a restart (`task_started`) after its terminal marker; null
+   * otherwise. Lets the card show the honest end note in place of "Working…"
+   * even when an open-task overlay pins {@link SessionGroup.status} to "active".
+   */
+  calmEndStatus: SessionStatus | null;
   /** Earliest event time in the session, for the header relative time. */
   createdAt: string;
 }
@@ -157,9 +184,10 @@ export function parseLegacyTaskSeq(taskId: string, channelId: string): number | 
  * Map a terminal marker to the calm terminal status it announces, or null when
  * it is a genuine failure. The desktop encodes an operator-chosen ending as a
  * `task_failed` carrying a boolean metadata flag (no schema change): `declined`
- * (consent denied), `dropped` (outbound send cancelled), or `interrupted` (app
- * died mid-spawn). Each flag is read STRICTLY (`=== true`) so an
- * attacker-influenceable truthy value (e.g. the string "yes") can never
+ * (consent denied), `dropped` (outbound send cancelled), `interrupted` (app died
+ * mid-spawn), `capped` (a turn/cost cap was reached), or `ended` (the operator
+ * ended the session on the desktop). Each flag is read STRICTLY (`=== true`) so
+ * an attacker-influenceable truthy value (e.g. the string "yes") can never
  * disguise a real failure as a calm outcome. A `task_failed` with none of the
  * flags returns null and stays a genuine `failed`.
  */
@@ -169,7 +197,20 @@ export function calmTerminalStatus(message: ChannelMessage): SessionStatus | nul
   if (metadata.declined === true) return "declined";
   if (metadata.dropped === true) return "dropped";
   if (metadata.interrupted === true) return "interrupted";
+  if (metadata.capped === true) return "capped";
+  if (metadata.ended === true) return "ended";
   return null;
+}
+
+/**
+ * The calm SESSION-END status a terminal marker announces (interrupted/capped/
+ * ended), or null — a strict subset of {@link calmTerminalStatus} that excludes
+ * the request-level `declined`/`dropped`. Drives the honest "Working…"
+ * replacement so a session that stopped mid-work stops claiming it is working.
+ */
+export function calmSessionEndStatus(message: ChannelMessage): SessionStatus | null {
+  const status = calmTerminalStatus(message);
+  return status !== null && CALM_SESSION_END_STATUSES.has(status) ? status : null;
 }
 
 /** Collapse whitespace and cap length with an ellipsis (header previews). */
@@ -496,6 +537,17 @@ export function groupThread(
     session.title = overlay?.title ?? null;
     session.mode = overlay?.mode ?? null;
     session.outcomeSummary = overlay?.outcomeSummary ?? null;
+    // Honest end signal: a calm session-end marker (interrupted/capped/ended)
+    // with NO restart after it means the session stopped, not that it is still
+    // working. A later `task_started` (a resume that re-opened work) clears it.
+    // Kept independent of `status` so an "active" overlay can't hide the end.
+    const endEvent = draft.endEvent;
+    const endStatus = endEvent ? calmSessionEndStatus(endEvent) : null;
+    const restarted =
+      endEvent !== null &&
+      draft.startedEvent !== null &&
+      draft.startedEvent.seq > endEvent.seq;
+    session.calmEndStatus = endStatus !== null && !restarted ? endStatus : null;
   }
 
   return items;

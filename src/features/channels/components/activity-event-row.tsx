@@ -26,9 +26,9 @@ function statusOf(metadata: Record<string, unknown>): string | null {
  * human-readable render sits in `body`, and an optional status pill +
  * relative timestamp trail it.
  *
- * A `task_failed` carrying an operator-chosen calm-terminal flag
- * (`declined`/`dropped`/`interrupted`) is not a real failure — it gets a
- * neutral dot (not the danger red) so it reads calm even when it lands
+ * A `task_failed` carrying a calm-terminal flag
+ * (`declined`/`dropped`/`interrupted`/`capped`/`ended`) is not a real failure —
+ * it gets a neutral dot (not the danger red) so it reads calm even when it lands
  * ungrouped (no `taskId`, so it never folded into a session card).
  */
 export function ActivityEventRow({ message }: { message: ChannelMessage }) {

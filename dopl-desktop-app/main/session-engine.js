@@ -19,6 +19,7 @@ const io = require('./session-io');
 const store = require('./session-store');
 const avatarCache = require('./avatar-cache');
 const sessionReopen = require('./session-reopen');
+const sessionPark = require('./session-park');
 const framing = require('./prompt-framing');
 const { apiFetch } = require('./api');
 const { initialSessionState, sessionReducer, nextIdleMs } = require('./session-reducer');
@@ -55,8 +56,18 @@ function refreshTray() {
   try { require('./tray').refresh(); } catch (_) { /* tray optional */ }
 }
 
-// Reopen helpers (session-reopen.js) need the live registry + tray refresh; bind once.
-sessionReopen.bind({ sessions, refreshTray });
+// Park + resume machinery (session-park.js) is fed the engine handles it can't require:
+// registry, SDK loader, buildSdkOptions (the v1.9 security path, NEVER duplicated), the
+// consumer loop, dispatch, startSession — hoisted declarations (stable values).
+sessionPark.bind({
+  sessions, getSdk, buildSdkOptions, consume, dispatch, startSession, hasLiveSession,
+  emit, windowFactoryReady: () => !!windowFactory,
+  atWindowCap: () => sessions.size + sessionConsent.count() >= MAX_WINDOWS, // FIX #4: shared window budget for recreateParkedShell
+});
+
+// Reopen helpers (session-reopen.js): live registry + tray refresh, plus the P2 fallback
+// that recreates a parked shell when no live session survives (item 2).
+sessionReopen.bind({ sessions, refreshTray, recreateParkedShell: sessionPark.recreateParkedShell });
 
 const baseRecord = io.baseRecord; // durable-record projection (session-io.js)
 
@@ -71,8 +82,8 @@ function runEffect(s, eff) {
     case 'emit':
       emit(s, eff.payload);
       break;
-    case 'persist':
-      store.setRecordPhase(s.key, eff.phase);
+    case 'persist': // FIX #9: a park saves the FULL record (cap counters); other flips just set the phase
+      if (eff.phase === 'parked') store.saveRecord(baseRecord(s)); else store.setRecordPhase(s.key, eff.phase);
       break;
     case 'scheduleIdle':
       scheduleIdle(s);
@@ -93,8 +104,23 @@ function runEffect(s, eff) {
       try { if (s.abortController) s.abortController.abort(); } catch (_) { /* best effort */ }
       try { if (s.pushIterator) s.pushIterator.close(); } catch (_) { /* best effort */ }
       break;
+    case 'denyPending':
+      // P1: resolve every awaited canUseTool promise DENY (fail closed) before a park's
+      // abort — no live resolver dangles on a session object that survives to resume.
+      for (const resolve of s.pendingPermissions.values()) {
+        try { resolve({ behavior: 'deny', message: 'Session paused' }); } catch (_) { /* best effort */ }
+      }
+      s.pendingPermissions.clear();
+      s.pendingNames.clear();
+      break;
+    case 'clearIdle':
+      if (s.idleTimer) { clearTimeout(s.idleTimer); s.idleTimer = null; }
+      break;
+    case 'resumeQuery':
+      sessionPark.resumeParked(s); // P1 lazy resume: rebuild the query on the SAME object
+      break;
     case 'lifecycle':
-      runLifecycle(s, eff.kind, eff.extra);
+      runLifecycle(s, eff.kind, eff.extra, eff.body);
       break;
     case 'closeTask':
       closeChannelTask(s, eff.outcome, eff.summary);
@@ -150,13 +176,15 @@ function resolvePerm(s, requestId, decision) {
   resolve(decision === 'allow' ? { behavior: 'allow' } : { behavior: 'deny', message: 'Denied by operator' });
 }
 
-function runLifecycle(s, kind, extra) {
-  const info = { channelId: s.channelId, taskId: s.taskId, workspaceId: s.workspaceId, side: s.side, sessionId: s.sessionId };
+function runLifecycle(s, kind, extra, body) {
+  const info = { channelId: s.channelId, taskId: s.taskId, workspaceId: s.workspaceId, side: s.side, sessionId: s.sessionId, key: s.key, sdkSessionId: s.sdkSessionId }; // FIX #2: key+sdkSessionId (cycle) -> echoTargets dedup
   try {
     if (kind === 'task_started') {
       if (lifecycle.onLaunched) lifecycle.onLaunched(info);
     } else if (lifecycle.onEnded) {
-      lifecycle.onEnded(info, kind, extra || {});
+      // P3: `body` is the calm one-liner a capped/ended lifecycle carries (undefined ->
+      // the handler derives a generic body from the metadata flags).
+      lifecycle.onEnded(info, kind, extra || {}, body);
     }
   } catch (err) {
     diag('session-engine: lifecycle handler error', err && err.message);
@@ -187,7 +215,7 @@ function settle(s, outcome) {
   if (s.settled) return;
   s.settled = true;
   if (s.idleTimer) { clearTimeout(s.idleTimer); s.idleTimer = null; }
-  store.setRecordPhase(s.key, 'ended');
+  store.saveRecord(baseRecord(s)); // FIX #9: full record (phase 'ended') persists cap counters for a P2 rehydrate
   if (outcome === 'completed' || outcome === 'failed') store.clearSdkSessionId(s.key);
   sessions.delete(s.key);
   if (s.win && !s.win.isDestroyed()) { try { s.win.destroy(); } catch (_) { /* best effort */ } }
@@ -250,8 +278,10 @@ async function startQuery(s, sdk) {
 
 async function consume(s, q) {
   try {
-    for await (const msg of q) io.handleSdkMessage(s, msg, dispatch, store);
+    // FIX #1b: `q` tags this loop; a park->resume swaps s.query, so s.query !== q => SUPERSEDED (ignore its tail + late rejection).
+    for await (const msg of q) { if (s.query !== q) return; io.handleSdkMessage(s, msg, dispatch, store); }
   } catch (err) {
+    if (s.query !== q) return;
     if (!isAbortError(err)) {
       diag('session-engine: query error', err && err.message);
       if (!s.settled) dispatch(s, { type: 'crash' });
@@ -288,9 +318,13 @@ async function startSession(spec, sdk) {
   const sessionId = crypto.randomUUID();
   const nonce = crypto.randomBytes(8).toString('hex');
   const state = initialSessionState({ mode: spec.mode, side: spec.side, ...readCaps() });
-  const firstTurn = spec.rawFirstTurn
-    ? spec.rawFirstTurn
-    : framing.buildFencedTurn({ side: spec.side, message: spec.firstMessage, context: spec.context, nonce });
+  // P2: a reopen fallback opens a PARKED SHELL — a live window, NO SDK query yet. It
+  // boots into the parked state so a lazy wake (P1) resumes it; baseRecord persists
+  // s.state.phase = 'parked'.
+  if (spec.parkedShell) { state.phase = 'parked'; state.parked = true; state.activity = 'parked'; state.turns = Number(spec.turns) || 0; state.costUsd = Number(spec.costUsd) || 0; } // FIX #9: P2 shell rehydrates the cap budget
+  const firstTurn = spec.parkedShell ? ''
+    : spec.rawFirstTurn ? spec.rawFirstTurn
+      : framing.buildFencedTurn({ side: spec.side, message: spec.firstMessage, context: spec.context, nonce });
   const s = {
     key: spec.key,
     sessionId,
@@ -339,6 +373,9 @@ async function startSession(spec, sdk) {
   s.selfAvatar = avatarCache.cachedForUser(selfUserId);
   s.peerAvatar = avatarCache.cachedForUser(s.counterpartyId);
   avatarCache.resolveForSession(s, { selfUserId, peerUserId: s.counterpartyId }, (p) => emit(s, p));
+  // P2: a parked shell starts NO query — session-park paints the header/note and it
+  // waits for a lazy wake. Everything else launches (or resumes) its SDK query now.
+  if (spec.parkedShell) { sessionPark.emitParkedShell(s); return s; }
   await startQuery(s, sdk);
   return s;
 }
@@ -358,6 +395,7 @@ async function launch(a) {
     diag('session-engine: SDK unavailable', err && err.message);
     return { skipped: 'no-sdk' };
   }
+  if (hasLiveSession({ channelId: a.channelId, taskId: a.taskId })) return { skipped: 'busy' }; // FIX #7: re-check after await — do not overwrite a racing creator's session
   const s = await startSession({
     key,
     channelId: a.channelId,
@@ -429,54 +467,17 @@ async function init() {
   const records = store.loadRecords();
   for (const key of Object.keys(records)) {
     const rec = records[key];
-    if (!rec || store.reloadDisposition(rec.phase) === 'ignore') continue;
+    // P1: a 'dormant' (parked) record is EXEMPT from the interrupted echo — it was paused
+    // on purpose, stays resumable via P2. Only a live/awaiting record that died echoes.
+    if (!rec || store.reloadDisposition(rec.phase) !== 'resume') continue;
     store.setRecordPhase(key, 'ended');
-    runLifecycle({ channelId: rec.channelId, taskId: rec.taskId, workspaceId: rec.workspaceId, side: rec.side, sessionId: rec.sessionId }, 'task_failed', { interrupted: true });
+    runLifecycle({ channelId: rec.channelId, taskId: rec.taskId, workspaceId: rec.workspaceId, side: rec.side, sessionId: rec.sessionId, key, sdkSessionId: store.getSdkSessionId(key) }, 'task_failed', { interrupted: true }); // FIX #2: same key+sdk id dedupes with a same-cycle crash echo
     const sdkId = store.getSdkSessionId(key);
-    if (sdkId) offerResume(rec, sdkId);
+    if (sdkId) sessionPark.offerResume(rec, sdkId);
   }
 }
 
-function offerResume(rec, sdkSessionId) {
-  try {
-    if (!Notification || (Notification.isSupported && !Notification.isSupported())) return;
-    const n = new Notification({ title: 'Resume session', body: 'A Dopl session was interrupted. Click to resume it.' });
-    n.on('click', () => {
-      resume(rec, sdkSessionId).catch((err) => diag('session-engine: resume failed', err && err.message));
-    });
-    n.show();
-  } catch (err) {
-    diag('session-engine: offerResume failed', err && err.message);
-  }
-}
-
-// Shared resume: reopen a settled task resuming its SDK session with a given first turn.
-async function startResume(rec, sdkSessionId, rawFirstTurn) {
-  if (!windowFactory || hasLiveSession({ channelId: rec.channelId, taskId: rec.taskId })) return false;
-  let sdk;
-  try { sdk = await getSdk(); } catch (_) { return false; }
-  const s = await startSession({
-    key: store.sessionKey(rec.channelId, rec.taskId),
-    channelId: rec.channelId, taskId: rec.taskId, workspaceId: rec.workspaceId,
-    side: rec.side, profile: rec.profile, mode: rec.mode,
-    counterpartyId: rec.counterpartyId || null, // FIX L1: restore the counterparty binding
-    context: {}, rawFirstTurn, resumeSdkId: sdkSessionId,
-  }, sdk);
-  return !!s;
-}
-
-async function resume(rec, sdkSessionId) { // opt-in resume from the interrupted notice
-  const nudge = 'The session was resumed after an interruption. Continue where you left off and await the next channel reply.';
-  return startResume(rec, sdkSessionId, nudge);
-}
-
-// Item 3 secondary: reopen a SETTLED requester (its sdkSessionId survived an idle/
-// interrupt end), resuming with the peer's reply FRAMED — fresh nonce, words stay DATA,
-// gated tools still gate on reopen (§H-4).
-async function resumeRequesterForReply(rec, sdkSessionId, reply) {
-  const firstTurn = io.frameContinuation(crypto.randomBytes(8).toString('hex'), reply && reply.message, reply && reply.authorName);
-  return startResume(rec, sdkSessionId, firstTurn);
-}
+// Resume machinery (offerResume/startResume/resume/resumeRequesterForReply) lives in session-park.js (P1/P2 add parked resume).
 
 module.exports = {
   init,
@@ -488,7 +489,7 @@ module.exports = {
   hasLiveSession,
   counterpartyFor,
   feedInbound,
-  resumeRequesterForReply, // item 3 secondary — bounded requester continuation
+  resumeRequesterForReply: sessionPark.resumeRequesterForReply, // item 3 secondary — bounded requester continuation
   openConsentWindow, // consent reflow (item 8) — called by trigger.js
   decideConsent,
   closeConsentWindow,

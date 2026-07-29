@@ -142,6 +142,8 @@ html, body {
 .status-dot.is-awaiting_inbound { background: var(--link); }
 .status-dot.is-interrupted { background: var(--warning); }
 .status-dot.is-ended { background: var(--text-disabled); }
+/* P1: parked (idle-paused) — a calm, muted dot; the session is resumable, not ended. */
+.status-dot.is-parked { background: var(--text-muted); }
 /* activity dots (item 3): shown while phase==='running'. */
 .status-dot.act-working { background: var(--agent-on); }
 .status-dot.act-idle { background: var(--text-muted); }
@@ -320,6 +322,8 @@ html, body {
   border: 1px solid var(--border-default);
 }
 .notice.level-error { color: var(--danger); background: #fbecea; border-color: rgba(200, 64, 47, 0.28); }
+/* P1/P2: calm info notice (idle-park + reopen-shell system lines). */
+.notice.level-info { color: var(--text-muted); background: var(--surface-sunken, transparent); }
 
 /* ── Tool-call card (SectionBox recipe) ──────────────────────────────────── */
 .tool-card {

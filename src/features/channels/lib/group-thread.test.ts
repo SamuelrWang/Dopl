@@ -197,6 +197,139 @@ describe("groupThread", () => {
     expect(isCalmTerminalStatus(s.session.status)).toBe(false);
   });
 
+  it("renders a turn/cost cap (task_failed + metadata.capped) as a calm 'capped'", () => {
+    // A cap was hit: the desktop posts task_failed{capped}; the task stays OPEN.
+    const t = "task-c1-40";
+    const items = groupThread([
+      msg({ kind: "task_started", authorKind: "agent", metadata: { taskId: t } }),
+      msg({
+        kind: "task_failed",
+        authorKind: "agent",
+        body: "Turn limit reached",
+        metadata: { taskId: t, capped: true },
+      }),
+    ]);
+    const s = sessions(items)[0];
+    if (s.type !== "session") throw new Error("expected session");
+    expect(s.session.status).toBe("capped");
+    expect(s.session.status).not.toBe("failed");
+    expect(isCalmTerminalStatus(s.session.status)).toBe(true);
+    // A calm session-end with no restart surfaces the honest-Working signal.
+    expect(s.session.calmEndStatus).toBe("capped");
+  });
+
+  it("renders an operator End (task_failed + metadata.ended) as a calm 'ended'", () => {
+    const t = "task-c1-41";
+    const items = groupThread([
+      msg({ kind: "task_started", authorKind: "agent", metadata: { taskId: t } }),
+      msg({
+        kind: "task_failed",
+        authorKind: "agent",
+        body: "Session ended",
+        metadata: { taskId: t, ended: true },
+      }),
+    ]);
+    const s = sessions(items)[0];
+    if (s.type !== "session") throw new Error("expected session");
+    expect(s.session.status).toBe("ended");
+    expect(isCalmTerminalStatus(s.session.status)).toBe(true);
+    expect(s.session.calmEndStatus).toBe("ended");
+  });
+
+  it("does NOT soften a real failure when capped/ended are truthy-but-not-strictly-true", () => {
+    // Same strict === true anti-spoof discipline as the other calm flags.
+    for (const spoof of [{ capped: "true" }, { capped: 1 }, { ended: "true" }, { ended: 1 }]) {
+      const items = groupThread([
+        msg({
+          kind: "task_failed",
+          authorKind: "agent",
+          body: "Crashed.",
+          metadata: { taskId: "task-c1-42", ...spoof },
+        }),
+      ]);
+      const s = sessions(items)[0];
+      if (s.type !== "session") throw new Error("expected session");
+      expect(s.session.status).toBe("failed");
+      expect(s.session.calmEndStatus).toBeNull();
+    }
+  });
+
+  it("clears calmEndStatus when a task_started restarts the session AFTER the calm end", () => {
+    // A resume that re-opened work (later task_started) means the session is not
+    // stopped — the honest-Working signal must clear so the card can say Working.
+    const t = "task-c1-43";
+    const items = groupThread([
+      msg({ kind: "task_started", authorKind: "agent", seq: 1, metadata: { taskId: t } }),
+      msg({
+        kind: "task_failed",
+        authorKind: "agent",
+        seq: 2,
+        body: "Turn limit reached",
+        metadata: { taskId: t, capped: true },
+      }),
+      msg({ kind: "task_started", authorKind: "agent", seq: 3, metadata: { taskId: t } }),
+    ]);
+    const s = sessions(items)[0];
+    if (s.type !== "session") throw new Error("expected session");
+    expect(s.session.calmEndStatus).toBeNull();
+  });
+
+  it("leaves calmEndStatus null for request-level calm ends (declined/dropped) and real failures", () => {
+    // declined/dropped are decisions where work never ran; a bare failure is a
+    // genuine error. None replace the "Working…" line.
+    for (const meta of [{ declined: true }, { dropped: true }, {}]) {
+      const items = groupThread([
+        msg({
+          kind: "task_failed",
+          authorKind: "agent",
+          body: "…",
+          metadata: { taskId: "task-c1-44", ...meta },
+        }),
+      ]);
+      const s = sessions(items)[0];
+      if (s.type !== "session") throw new Error("expected session");
+      expect(s.session.calmEndStatus).toBeNull();
+    }
+  });
+
+  it("keeps calmEndStatus for a calm session-end even when the overlay pins status active", () => {
+    // The task row is still OPEN (capped/ended never close it) -> overlay status
+    // "active", but calmEndStatus stays "capped" so the card stops saying Working.
+    const t = "11111111-1111-4111-8111-111111111111";
+    const overlays = new Map<string, TaskOverlay>([
+      [t, { status: "active", title: "Do the thing", mode: null, outcomeSummary: null }],
+    ]);
+    const items = groupThread(
+      [
+        msg({ kind: "task_started", authorKind: "agent", metadata: { taskId: t } }),
+        msg({
+          kind: "task_failed",
+          authorKind: "agent",
+          body: "Turn limit reached",
+          metadata: { taskId: t, capped: true },
+        }),
+      ],
+      overlays
+    );
+    const s = sessions(items)[0];
+    if (s.type !== "session") throw new Error("expected session");
+    expect(s.session.status).toBe("active");
+    expect(s.session.calmEndStatus).toBe("capped");
+  });
+
+  it("leaves calmEndStatus null for an ordinary done session (no calm end)", () => {
+    const t = "task-c1-45";
+    const items = groupThread([
+      msg({ kind: "task_started", authorKind: "agent", metadata: { taskId: t } }),
+      msg({ kind: "message", authorKind: "agent", body: "Done.", metadata: { taskId: t } }),
+      msg({ kind: "task_finished", authorKind: "agent", metadata: { taskId: t } }),
+    ]);
+    const s = sessions(items)[0];
+    if (s.type !== "session") throw new Error("expected session");
+    expect(s.session.status).toBe("done");
+    expect(s.session.calmEndStatus).toBeNull();
+  });
+
   it("attaches an agent reply that lacks a taskId to the open session (fallback)", () => {
     const t = "task-c1-9";
     const items = groupThread([

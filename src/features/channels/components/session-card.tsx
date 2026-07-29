@@ -102,8 +102,18 @@ export function SessionCard({
   const { milestones, replies } = splitSessionEntries(session.entries);
   const agentReplies = replies.filter((e) => e.authorKind === "agent");
   const showWorking = session.status === "active" && agentReplies.length === 0;
-  // An operator-chosen calm terminal (declined/dropped/interrupted) never
-  // delivered a reply, so show a calm one-line note rather than an empty body.
+  // The honest "Working…" line: a calm session-end (interrupted/capped/ended)
+  // with no restart means the session stopped, even when an open-task overlay
+  // still pins the status to "active". Show that end's calm note in place of
+  // "Working…" rather than lie. An agent reply already suppressed the line via
+  // `showWorking`, so this only fires when the card would otherwise say Working.
+  const calmEndNote = session.calmEndStatus
+    ? CALM_TERMINAL_NOTE[session.calmEndStatus]
+    : undefined;
+  // An operator-chosen calm terminal (declined/dropped/interrupted/capped/ended)
+  // never delivered a reply, so show a calm one-line note rather than an empty
+  // body. (When an overlay pins "active", `status` is not a terminal, so this is
+  // undefined and the `calmEndNote` path above carries the note instead.)
   const terminalNote =
     replies.length === 0 ? CALM_TERMINAL_NOTE[session.status] : undefined;
 
@@ -191,9 +201,12 @@ export function SessionCard({
             </div>
           );
         })}
-        {showWorking && (
-          <p className="text-caption italic text-text-muted">Working…</p>
-        )}
+        {showWorking &&
+          (calmEndNote ? (
+            <p className="text-caption text-text-secondary">{calmEndNote}</p>
+          ) : (
+            <p className="text-caption italic text-text-muted">Working…</p>
+          ))}
         {terminalNote && (
           <p className="text-caption text-text-secondary">{terminalNote}</p>
         )}
@@ -437,6 +450,8 @@ const STATUS_LABEL: Record<SessionStatus, string> = {
   declined: "Declined",
   dropped: "Reply not sent",
   interrupted: "Interrupted",
+  capped: "Limit reached",
+  ended: "Session ended",
 };
 
 /** Calm one-line body note for a terminal that delivered no reply. */
@@ -444,6 +459,8 @@ const CALM_TERMINAL_NOTE: Partial<Record<SessionStatus, string>> = {
   declined: "This request was declined.",
   dropped: "The reply was not sent.",
   interrupted: "The session was interrupted.",
+  capped: "The session hit its turn limit. Reopen the window to continue.",
+  ended: "The session was ended on the desktop. The task stays open.",
 };
 
 /** The task's execution mode, shown as a quiet pill on a first-class task. */
@@ -459,9 +476,9 @@ function ModeBadge({ mode }: { mode: TaskMode }) {
  * The task status chip. `Task active` carries a pulsing success ring (the live
  * affordance); `Task complete` a solid success dot; `Task failed` a danger dot +
  * danger ink. The calm terminal states (`Declined` / `Reply not sent` /
- * `Interrupted`) are operator-chosen endings — deliberately calm (muted ink + a
- * neutral dot), NOT the alarm-red of a real failure, since each is a normal
- * outcome the requester chose, not an error.
+ * `Interrupted` / `Limit reached` / `Session ended`) are operator-chosen or
+ * benign endings — deliberately calm (muted ink + a neutral dot), NOT the
+ * alarm-red of a real failure, since each is a normal outcome, not an error.
  */
 function StatusChip({ status }: { status: SessionStatus }) {
   return (

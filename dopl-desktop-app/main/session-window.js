@@ -60,24 +60,40 @@ function createSessionWindow(sessionId) {
 }
 
 // ── Lifecycle echoes (engine → channel) ──────────────────────────────────────
-// The engine's runLifecycle hands a flat info object { channelId, taskId,
-// workspaceId, side, sessionId }. postTaskEvent needs only channel.id, workspaceId,
-// and a stable seq for the idempotent clientMsgId (it does NOT read channel.name),
-// so the coupling is tiny: the taskId doubles as the seq component, giving a
-// deterministic per-session id the server dedupes on a crash replay.
+// The engine's runLifecycle hands a flat info object { channelId, taskId, workspaceId,
+// side, sessionId, key, sdkSessionId }. postTaskEvent needs only channel.id, workspaceId,
+// and a `seq` for the idempotent clientMsgId `${kind}-${channelId}-${seq}` (it does NOT
+// read channel.name), so the coupling is tiny.
 //
-// I-LOW(b): this cross-user lifecycle dedupe is DELIBERATE — a crash echo, the
-// reload interrupted-echo, and a double-end all collapse to ONE server row per
-// (kind, channel, taskId) so the requester's card settles exactly once. Kept as-is.
+// ─── BEGIN SESSION-WINDOW-PURE (echo-id derivation; unit-tested via source extraction) ──
+//
+// FIX #2: `seq` folds a per-resume-CYCLE discriminator into a STABLE base, so a NEW cycle
+// (a park->resume or a P2 recreate) posts a NEW server row while a RETRY within one cycle
+// still collapses to one (the server dedupes on the identical clientMsgId).
+//   base  = the first-class taskId, else the STABLE sessionKey (channelId:taskId) — never
+//           the per-launch ephemeral sessionId, so a P2 recreate (fresh sessionId, same
+//           key) can't post under a different id.
+//   cycle = the SDK session id (a resumed query mints a fresh one at its own system/init),
+//           falling back to the per-object sessionId for a PRE-INIT crash so two distinct
+//           cycles that both die before init still get distinct rows.
+// The DELIBERATE same-cycle dedupe (I-LOW(b)) is preserved: a crash echo and the reload
+// interrupted-echo share one cycle's sdk id, so they still collapse to ONE server row.
+function echoSeq(info) {
+  const i = info || {};
+  if (i.seq != null) return i.seq;
+  const base = i.taskId || i.key || i.sessionId || 'session';
+  const cycle = i.sdkSessionId || i.sessionId || 'init';
+  return base + '#' + cycle;
+}
 function echoTargets(info) {
   const i = info || {};
-  const seq = i.seq != null ? i.seq : (i.taskId || i.sessionId || 'session');
   return {
     entry: { channel: { id: i.channelId }, workspaceId: i.workspaceId },
-    m: { seq },
+    m: { seq: echoSeq(i) },
     taskId: i.taskId || undefined,
   };
 }
+// ─── END SESSION-WINDOW-PURE ──────────────────────────────────────────────────────────
 
 // task_started the instant the session's SDK system/init lands (§A.3 launched).
 function onLaunched(info) {
@@ -87,18 +103,24 @@ function onLaunched(info) {
     .catch((err) => diag('session onLaunched echo error', err && err.message));
 }
 
-// task_finished / task_failed when the session ends (End / close_task / crash). The
-// engine is authoritative: it passes the resolved `kind` and the `extra` metadata
-// (e.g. { interrupted:true }); idle/cost-cap ends leave the task open and never
-// call this. We pass `kind`+`extra` straight through and derive the SAME generic
-// body the headless echoes use for the matching flags (onInterrupted / inboundDenied)
-// so the web renders the identical calm "Interrupted"/"Declined" state.
-function onEnded(info, kind, extra) {
+// task_finished / task_failed when the session ends (End / cap / close_task / crash).
+// The engine is authoritative: it passes the resolved `kind`, the `extra` metadata (e.g.
+// { interrupted:true }), and — for P3 (v1.7.4) — an explicit calm `bodyOverride`. IDLE
+// no longer calls this at all (it parks). The turn/cost caps ride { capped:true } and
+// the operator End rides { ended:true }, so the web renders a calm terminal state
+// (P4) exactly like the interrupted/declined echoes; the task stays OPEN (no closeTask).
+// `bodyOverride` wins; else we derive a generic body from the metadata flags.
+function onEnded(info, kind, extra, bodyOverride) {
   const { entry, m, taskId } = echoTargets(info);
   if (!entry.channel.id) return;
   const meta = extra || {};
   const k = kind === 'task_failed' || kind === 'task_finished' ? kind : 'task_finished';
-  const body = meta.interrupted ? 'Request interrupted' : meta.declined ? 'Request declined' : undefined;
+  const body = bodyOverride
+    || (meta.interrupted ? 'Request interrupted'
+      : meta.declined ? 'Request declined'
+        : meta.capped ? 'Limit reached'
+          : meta.ended ? 'Session ended'
+            : undefined);
   Promise.resolve(postTaskEvent(entry, m, k, taskId, meta, body))
     .catch((err) => diag('session onEnded echo error', err && err.message));
 }

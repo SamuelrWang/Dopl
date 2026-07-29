@@ -234,6 +234,10 @@ function baseRecord(s) {
     phase: s.state.phase,
     startedAt: s.startedAt,
     counterpartyId: s.counterpartyId || null, // FIX L1: the task's other party
+    // FIX #9: the running cap counters, so a P2 recreate rehydrates the budget of a
+    // turn/cost-capped (or parked) session instead of resetting it to a fresh one.
+    turns: s.state.turns,
+    costUsd: s.state.costUsd,
   };
 }
 

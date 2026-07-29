@@ -66,6 +66,8 @@ test("initialSessionState defaults: interactive/responder, documented caps, empt
   // Item 10: per-session auto-approve starts OFF (fail-closed, ask each time).
   assert.equal(s.autoApprove, false);
   assert.equal(s.hasPendingInbound, false);
+  // P1: a fresh launch is never parked.
+  assert.equal(s.parked, false);
   // Item 3: a launching session starts `working`, nothing posted yet.
   assert.equal(s.activity, "working");
   assert.equal(s.postedThisTurn, false);
@@ -295,23 +297,31 @@ test("result WITH a post this turn -> awaiting_peer; WITHOUT -> idle; postedThis
   assert.deepEqual(findEff(idle.effects, "emit").payload, { type: "status", phase: "running", activity: "idle" });
 });
 
-test("result at the turn cap ends the session (reason turn_cap) with the end effect triple", () => {
+test("result at the turn cap ends the session (turn_cap) + P3 calm capped lifecycle", () => {
   const s = { ...running({ turnCap: 2 }), turns: 1 };
   const r = sessionReducer(s, { type: "result", turnCostUsd: 0.01 });
   assert.equal(r.state.turns, 2);
   assert.equal(r.state.phase, "ended");
-  // No leading usage emit anymore (item 6): the cap end is just the effect triple.
-  assert.deepEqual(effTypes(r.effects), ["abortQuery", "emit", "settle"]);
+  // P3: a real cap end now posts a calm lifecycle BEFORE settling. No usage emit (item 6).
+  assert.deepEqual(effTypes(r.effects), ["abortQuery", "lifecycle", "emit", "settle"]);
   assert.ok(!r.effects.some((e) => e.type === "emit" && e.payload.type === "usage"), "no usage emit at the cap");
+  const lc = findEff(r.effects, "lifecycle");
+  assert.equal(lc.kind, "task_failed");
+  assert.deepEqual(lc.extra, { capped: true }, "turn cap rides extra:{capped:true}");
+  assert.equal(lc.body, "Turn limit reached");
   const ended = r.effects.filter((e) => e.type === "emit").find((e) => e.payload.type === "ended");
   assert.equal(ended.payload.reason, "turn_cap");
   assert.equal(findEff(r.effects, "settle").outcome, "ended");
 });
 
-test("result crossing the cost cap ends the session (reason cost_cap)", () => {
+test("result crossing the cost cap ends (cost_cap) + P3 calm capped lifecycle", () => {
   const s = running({ turnCap: 99, costCapUsd: 0.05 });
   const r = sessionReducer(s, { type: "result", turnCostUsd: 0.06 });
   assert.equal(r.state.phase, "ended");
+  assert.deepEqual(effTypes(r.effects), ["abortQuery", "lifecycle", "emit", "settle"]);
+  const lc = findEff(r.effects, "lifecycle");
+  assert.deepEqual(lc.extra, { capped: true });
+  assert.equal(lc.body, "Cost limit reached");
   const ended = r.effects.find((e) => e.type === "emit" && e.payload.type === "ended");
   assert.equal(ended.payload.reason, "cost_cap");
 });
@@ -402,12 +412,18 @@ test("interrupt (Stop): -> interrupted, interruptQuery + status emit", () => {
 
 // ── ends ───────────────────────────────────────────────────────────────────────
 
-test("end (operator End): -> ended with abortQuery/ended-emit/settle, task stays open", () => {
+test("end (operator End): -> ended + P3 calm ended lifecycle, task stays open", () => {
   const s = running();
   const r = sessionReducer(s, { type: "end" });
   assert.equal(r.state.phase, "ended");
-  assert.deepEqual(effTypes(r.effects), ["abortQuery", "emit", "settle"]);
-  assert.equal(findEff(r.effects, "emit").payload.reason, "operator");
+  // P3: the operator End now posts a calm lifecycle (extra:{ended:true}) BEFORE settle.
+  assert.deepEqual(effTypes(r.effects), ["abortQuery", "lifecycle", "emit", "settle"]);
+  const lc = findEff(r.effects, "lifecycle");
+  assert.equal(lc.kind, "task_failed");
+  assert.deepEqual(lc.extra, { ended: true });
+  assert.equal(lc.body, "Session ended");
+  const ended = r.effects.find((e) => e.type === "emit" && e.payload.type === "ended");
+  assert.equal(ended.payload.reason, "operator");
   assert.equal(findEff(r.effects, "settle").outcome, "ended");
 });
 
@@ -431,23 +447,17 @@ test("close_task failed maps to lifecycle(task_failed) + settle(failed)", () => 
   assert.equal(findEff(r.effects, "settle").outcome, "failed");
 });
 
-test("idle_timeout ends the session (reason idle, outcome idle) — task stays open", () => {
-  const s = running();
-  const r = sessionReducer(s, { type: "idle_timeout" });
-  assert.equal(r.state.phase, "ended");
-  const ended = r.effects.find((e) => e.type === "emit" && e.payload.type === "ended");
-  assert.equal(ended.payload.reason, "idle");
-  assert.equal(ended.payload.outcome, "idle");
-});
-
-test("cost_cap event ends the session directly (reason cost_cap)", () => {
+test("cost_cap event ends the session directly (reason cost_cap) + capped lifecycle", () => {
   const s = running();
   const r = sessionReducer(s, { type: "cost_cap" });
   assert.equal(r.state.phase, "ended");
+  assert.deepEqual(findEff(r.effects, "lifecycle").extra, { capped: true });
   const ended = r.effects.find((e) => e.type === "emit" && e.payload.type === "ended");
   assert.equal(ended.payload.reason, "cost_cap");
 });
 
+// NOTE: P1 idle-park + lazy-resume reducer transitions live in the sibling
+// test/session-reducer-park.test.mjs (split to respect the 500-line §2 cap).
 test("crash: settle(interrupted) + lifecycle(task_failed interrupted:true) + error emit", () => {
   const s = running();
   const r = sessionReducer(s, { type: "crash" });

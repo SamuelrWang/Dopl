@@ -63,6 +63,13 @@ function initialSessionState(opts) {
     // flips a live GATE to allow; hard-deny stays immovable.
     autoApprove: false,
     hasPendingInbound: false,
+    // P1 (v1.7.4): true while the session is PARKED — the live SDK query is torn
+    // down but the session object + window survive, so an inbound counterparty turn
+    // or operator input can lazily resume it (options.resume). Never persisted; a
+    // fresh launch always starts live. Distinct from `phase` because an interactive
+    // parked session that holds a reply sits at phase 'awaiting_inbound' yet still
+    // needs a resume when the operator releases it.
+    parked: false,
     // Item 3: the coarse activity the status pill shows (working|idle|awaiting_peer|
     // awaiting_permission|awaiting_inbound). A launching/running session is `working`;
     // `postedThisTurn` records whether the agent sent an op=post this turn so the
@@ -84,20 +91,70 @@ function costCapReached(state) {
   return state.costCapUsd > 0 && state.costUsd >= state.costCapUsd;
 }
 
-// The effect triple shared by every non-close_task end (operator End, turn/idle/
-// cost cap): abort the query, tell the renderer, settle the session record. These
-// ends leave the channel TASK open (resumable) — no task_finished/failed echo.
+// The effect set shared by every non-close_task end (operator End, turn/cost cap):
+// abort the query, tell the renderer, settle the session record. These ends leave the
+// channel TASK open (resumable) — no task_finished. P3 (v1.7.4): a real end now ALSO
+// posts a CALM lifecycle event (endLifecycle) so the web card stops pulsing "Working…"
+// forever. Idle no longer reaches endEffects at all — it PARKS (parkEffects) instead.
 function endedEmit(state, outcome, reason, summary) {
   const payload = { type: 'ended', outcome: outcome, totalCostUsd: state.costUsd, reason: reason };
   if (summary !== undefined) payload.summary = summary;
   return { type: 'emit', payload: payload };
 }
+
+// P3: the calm lifecycle a real end posts. turn/cost caps ride extra:{capped:true}
+// (the web renders "Limit reached", task stays open); the operator End button rides
+// extra:{ended:true} ("Session ended"). `capped`/`ended` ride metadata exactly like
+// `interrupted` does today — no server-stamped reserved keys, no closeTask. Any other
+// reason posts nothing (returns null), preserving today's silent behavior for it.
+function endLifecycle(reason) {
+  if (reason === 'turn_cap') return { type: 'lifecycle', kind: 'task_failed', extra: { capped: true }, body: 'Turn limit reached' };
+  if (reason === 'cost_cap') return { type: 'lifecycle', kind: 'task_failed', extra: { capped: true }, body: 'Cost limit reached' };
+  if (reason === 'operator') return { type: 'lifecycle', kind: 'task_failed', extra: { ended: true }, body: 'Session ended' };
+  return null;
+}
 function endEffects(state, outcome, reason, summary) {
-  return [
+  const effects = [{ type: 'abortQuery' }];
+  const lc = endLifecycle(reason);
+  if (lc) effects.push(lc);
+  effects.push(endedEmit(state, outcome, reason, summary));
+  effects.push({ type: 'settle', outcome: outcome });
+  return effects;
+}
+
+// P1: idle no longer ENDS the session — it PARKS it. Deny any awaited canUseTool
+// promise fail-closed, tear down the live query, clear (never re-arm) the idle timer,
+// persist phase 'parked', and tell the renderer. NOT settled: no `settle`, no
+// `win.destroy`, no registry removal — the session object + window survive so an
+// inbound turn or operator input can lazily resume it. sdkSessionId is retained.
+function parkEffects(state) {
+  const effects = [
+    { type: 'denyPending' },
     { type: 'abortQuery' },
-    endedEmit(state, outcome, reason, summary),
-    { type: 'settle', outcome: outcome },
+    { type: 'clearIdle' },
+    { type: 'persist', phase: 'parked' },
+    { type: 'emit', payload: { type: 'status', phase: 'parked' } },
+    // `paused` drops the one-line inline note (renderer owns the copy). It is distinct
+    // from the P2 reopen shell's own `notice`, so an idle-park and a reopen never
+    // cross-render each other's note.
+    { type: 'emit', payload: { type: 'paused' } },
   ];
+  // FIX #6: clear the renderer's permission dock for anything that was awaiting a button.
+  // Main denies each fail-closed (denyPending) before the abort, so the dock must not keep
+  // showing a live-looking prompt on a parked, query-less session (a click would otherwise
+  // read as "running" with nothing behind it). The renderer drops each on permission_resolved.
+  for (const id of (state && state.pendingPermissions) || []) {
+    effects.push({ type: 'emit', payload: { type: 'permission_resolved', requestId: id, decision: 'deny' } });
+  }
+  return effects;
+}
+
+// P1 LAZY RESUME: effects to wake a PARKED session before a turn is pushed. resumeQuery
+// rebuilds the SDK query on the SAME session object through the SAME buildSdkOptions
+// path (options.resume = sdkSessionId), so the security model is byte-identical. A
+// session that is not parked is already live, so this is a no-op.
+function wakeEffects(state) {
+  return state.parked ? [{ type: 'resumeQuery' }] : [];
 }
 
 function sessionReducer(state, event) {
@@ -105,6 +162,17 @@ function sessionReducer(state, event) {
   // then a crash, or a double End, must not re-emit or re-post).
   if (state.phase === 'ended') return { state: state, effects: [] };
   const type = event && event.type;
+
+  // FIX #5: a PARKED session must stay INERT to the SDK messages its torn-down query
+  // buffered and drains after the abort — a stray assistant / tool / result / outbound /
+  // permission_request must NOT re-arm the idle timer, run the cap endEffects, or stash a
+  // resolver on a session with no live query. Only the wake triggers (inbound_arrived /
+  // inbound_released / steer), idle_timeout (idempotent), and the operator / terminal
+  // controls act on a parked session; every pass-through render/result event is dropped.
+  if (state.parked === true && (type === 'assistant' || type === 'tool_use' || type === 'tool_result'
+      || type === 'outbound_post' || type === 'result' || type === 'permission_request')) {
+    return { state: state, effects: [] };
+  }
 
   if (type === 'launched') {
     return {
@@ -160,10 +228,13 @@ function sessionReducer(state, event) {
     const sdkDecision = event.decision === 'allow-once' || event.decision === 'allow-task' ? 'allow' : 'deny';
     const nextAllow = event.decision === 'allow-task' ? addUnique(state.allowForTask, event.name) : state.allowForTask;
     const nextPending = without(state.pendingPermissions, event.requestId);
-    const phase = nextPending.length ? 'awaiting_permission' : 'running';
+    // FIX #6: a stale dock click on a PARKED session must NOT flip it to running — only a
+    // steer or an inbound turn resumes a parked session. Keep phase parked; the resolve +
+    // permission_resolved echo below are harmless no-ops (park already cleared both docks).
+    const phase = state.parked ? 'parked' : (nextPending.length ? 'awaiting_permission' : 'running');
     // Back to the in-flight turn once the last button clears; the renderer already
     // learns this from permission_resolved, so no extra status emit here.
-    const activity = nextPending.length ? 'awaiting_permission' : 'working';
+    const activity = state.parked ? 'parked' : (nextPending.length ? 'awaiting_permission' : 'working');
     return {
       state: clone(state, { phase: phase, activity: activity, allowForTask: nextAllow, pendingPermissions: nextPending }),
       effects: [
@@ -228,17 +299,19 @@ function sessionReducer(state, event) {
     if (state.mode === 'autonomous') {
       // Auto-fed counterparty turn: show it (item 1: `counterparty` supersedes the
       // old `inbound` emit), then push it as the next user turn. A peer reply clears
-      // the activity back to `working` (item 3); status emitted only on change.
-      const effects = [
-        { type: 'emit', payload: { type: 'counterparty', from: event.authorName, text: event.message } },
-        { type: 'pushInbound', message: event.message, authorName: event.authorName },
-      ];
+      // the activity back to `working` (item 3); status emitted only on change. P1:
+      // an inbound turn is a LAZY-RESUME trigger — wake first if the session parked.
+      const effects = wakeEffects(state);
+      effects.push({ type: 'emit', payload: { type: 'counterparty', from: event.authorName, text: event.message } });
+      effects.push({ type: 'pushInbound', message: event.message, authorName: event.authorName });
       if (state.activity !== 'working') {
         effects.push({ type: 'emit', payload: { type: 'status', phase: 'running', activity: 'working' } });
       }
-      return { state: clone(state, { phase: 'running', activity: 'working' }), effects: effects };
+      return { state: clone(state, { phase: 'running', activity: 'working', parked: false }), effects: effects };
     }
-    // Interactive: hold the reply as a pending inbound the operator releases.
+    // Interactive: hold the reply as a pending inbound the operator releases. If the
+    // session was PARKED, KEEP the parked flag (do not wake yet) — a parked query
+    // must not run just to hold a reply; the RELEASE lazily resumes it (below).
     return {
       state: clone(state, { phase: 'awaiting_inbound', activity: 'awaiting_inbound', hasPendingInbound: true }),
       effects: [
@@ -248,25 +321,29 @@ function sessionReducer(state, event) {
   }
 
   if (type === 'inbound_released') {
-    return {
-      state: clone(state, { phase: 'running', activity: 'working', hasPendingInbound: false }),
-      effects: [
-        { type: 'pushInbound', message: event.message, authorName: event.authorName },
-        { type: 'emit', payload: { type: 'status', phase: 'running', activity: 'working' } },
-      ],
-    };
+    // Releasing a held reply pushes it as the next turn. P1: if the session parked
+    // while the reply was held (interactive), the release is the wake trigger.
+    const effects = wakeEffects(state);
+    effects.push({ type: 'pushInbound', message: event.message, authorName: event.authorName });
+    effects.push({ type: 'emit', payload: { type: 'status', phase: 'running', activity: 'working' } });
+    return { state: clone(state, { phase: 'running', activity: 'working', hasPendingInbound: false, parked: false }), effects: effects };
   }
 
   if (type === 'steer') {
     // The operator injected a turn -> back to `working` (item 3). Status emitted only
     // when the activity actually changed (steering while already working is silent).
-    const effects = [];
-    if (event.priority === 'now') effects.push({ type: 'interruptQuery' });
+    // P1: operator input is the second LAZY-RESUME trigger — wake a parked session and
+    // move it back to `running`. A parked query has nothing live to interrupt, so a
+    // priority:'now' steer skips interruptQuery while waking.
+    const waking = state.parked === true;
+    const effects = waking ? [{ type: 'resumeQuery' }] : [];
+    if (event.priority === 'now' && !waking) effects.push({ type: 'interruptQuery' });
     effects.push({ type: 'pushTurn', text: event.text, priority: event.priority || 'next' });
+    const nextPhase = waking ? 'running' : state.phase;
     if (state.activity !== 'working') {
-      effects.push({ type: 'emit', payload: { type: 'status', phase: state.phase, activity: 'working' } });
+      effects.push({ type: 'emit', payload: { type: 'status', phase: nextPhase, activity: 'working' } });
     }
-    return { state: clone(state, { activity: 'working' }), effects: effects };
+    return { state: clone(state, { phase: nextPhase, activity: 'working', parked: false }), effects: effects };
   }
 
   if (type === 'interrupt') {
@@ -295,7 +372,15 @@ function sessionReducer(state, event) {
   }
 
   if (type === 'idle_timeout') {
-    return { state: clone(state, { phase: 'ended' }), effects: endEffects(state, 'idle', 'idle') };
+    // P1: PARK, do not end. Already parked (a stale timer that survived the clear) is a
+    // no-op. NOT a terminal transition — the session stays resumable via a lazy wake.
+    // FIX #3: reset autoApprove OFF so a counterparty-driven lazy resume cannot run with
+    // auto-approve still armed while the operator is away (a recreated shell also starts OFF).
+    if (state.phase === 'parked') return { state: state, effects: [] };
+    return {
+      state: clone(state, { phase: 'parked', parked: true, activity: 'parked', autoApprove: false, pendingPermissions: [] }),
+      effects: parkEffects(state),
+    };
   }
 
   if (type === 'cost_cap') {
@@ -303,6 +388,11 @@ function sessionReducer(state, event) {
   }
 
   if (type === 'crash') {
+    // FIX #1a: PARK is the only path that aborts the query WITHOUT settling, so the
+    // torn-down query's consume loop can surface a non-AbortError rejection (e.g.
+    // "process exited with code 143"). On a parked session that must NOT settle+destroy
+    // it (spurious task_failed{interrupted}); a parked crash is inert — it stays resumable.
+    if (state.parked === true) return { state: state, effects: [] };
     // Query threw / render window gone: settle interrupted and post the SAME
     // task_failed{interrupted:true} echo the reload path posts, so the requester's
     // web card settles to "Interrupted" rather than pulsing forever.
