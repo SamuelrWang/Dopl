@@ -164,11 +164,22 @@ export async function opPost(
       summary: opts.summary,
     });
   } catch (e) {
-    // The route rejects an addressee who isn't a channel member (400).
-    if (toUserId && isBadRequest(e)) {
-      return err(
-        `Couldn't address the message to ${toLabel} — they aren't a member of **${ch.name}**. Invite them first (op="invite"), or post without \`to\`.`,
-      );
+    // Map the route's 400s to actionable messages. Two independent causes:
+    // a non-member addressee (only when `to` is set) and an unresolvable
+    // first-class `task` id (CHANNEL_TASK_NOT_IN_CHANNEL) — the latter fires
+    // even with NO `to`, so catch isBadRequest regardless of `to` instead of
+    // rethrowing the raw 400 uncaught (the bug this closes).
+    if (isBadRequest(e)) {
+      if (toUserId) {
+        return err(
+          `Couldn't address the message to ${toLabel} — they aren't a member of **${ch.name}**. Invite them first (op="invite"), or post without \`to\`.`,
+        );
+      }
+      if (opts.task) {
+        return err(
+          `That task is not in this channel — check the task id, or post without \`task\`.`,
+        );
+      }
     }
     throw e;
   }
@@ -189,6 +200,7 @@ export async function opCreateTask(
   body: string,
   to: string,
   mode?: TaskMode,
+  clientMsgId?: string,
 ): Promise<ToolResponse> {
   const ch = await resolveChannelOr(client, channelRef);
   if (isErr(ch)) return ch;
@@ -202,6 +214,7 @@ export async function opCreateTask(
       body,
       toUserId: member.userId,
       mode,
+      clientMsgId,
     });
   } catch (e) {
     // The route rejects an addressee who isn't a channel member (400).

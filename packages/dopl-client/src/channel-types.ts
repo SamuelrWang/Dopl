@@ -144,6 +144,12 @@ export interface ChannelTaskCreateInput {
   mode?: TaskMode;
   body: string;
   toUserId: string;
+  /**
+   * Idempotency key — a re-sent create_task with the same id returns the
+   * already-created task instead of double-creating it (and double-spawning
+   * the responder's window). Mirrors `ChannelMessageInput.clientMsgId`.
+   */
+  clientMsgId?: string;
 }
 
 export interface ChannelMessageInput {

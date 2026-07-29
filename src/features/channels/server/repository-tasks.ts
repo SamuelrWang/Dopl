@@ -16,6 +16,8 @@ type TaskInsert = {
   mode: string;
   created_by: string;
   target_user_id: string | null;
+  /** Idempotency key — a partial unique index dedups (channel_id, client_msg_id). */
+  client_msg_id?: string | null;
 };
 
 export async function insertTask(row: TaskInsert): Promise<ChannelTaskRow> {
@@ -27,6 +29,26 @@ export async function insertTask(row: TaskInsert): Promise<ChannelTaskRow> {
     .single();
   if (error) throw error;
   return data as ChannelTaskRow;
+}
+
+/**
+ * One task in a channel by idempotency key, or null. Backs create_task dedup:
+ * a re-sent client_msg_id returns the already-created task instead of inserting
+ * a second (mirrors `findMessageByClientId` for messages).
+ */
+export async function findTaskByClientId(
+  channelId: string,
+  clientMsgId: string
+): Promise<ChannelTaskRow | null> {
+  const db = supabaseAdmin();
+  const { data, error } = await db
+    .from("channel_tasks")
+    .select("*")
+    .eq("channel_id", channelId)
+    .eq("client_msg_id", clientMsgId)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as ChannelTaskRow | null) ?? null;
 }
 
 /** One task, scoped to its channel (used for authz-scoped loads + stamping). */

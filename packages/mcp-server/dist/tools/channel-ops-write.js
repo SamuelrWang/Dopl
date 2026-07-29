@@ -118,9 +118,18 @@ async function opPost(client, channelRef, body, opts = {}) {
         });
     }
     catch (e) {
-        // The route rejects an addressee who isn't a channel member (400).
-        if (toUserId && isBadRequest(e)) {
-            return (0, respond_1.err)(`Couldn't address the message to ${toLabel} — they aren't a member of **${ch.name}**. Invite them first (op="invite"), or post without \`to\`.`);
+        // Map the route's 400s to actionable messages. Two independent causes:
+        // a non-member addressee (only when `to` is set) and an unresolvable
+        // first-class `task` id (CHANNEL_TASK_NOT_IN_CHANNEL) — the latter fires
+        // even with NO `to`, so catch isBadRequest regardless of `to` instead of
+        // rethrowing the raw 400 uncaught (the bug this closes).
+        if (isBadRequest(e)) {
+            if (toUserId) {
+                return (0, respond_1.err)(`Couldn't address the message to ${toLabel} — they aren't a member of **${ch.name}**. Invite them first (op="invite"), or post without \`to\`.`);
+            }
+            if (opts.task) {
+                return (0, respond_1.err)(`That task is not in this channel — check the task id, or post without \`task\`.`);
+            }
         }
         throw e;
     }
@@ -129,7 +138,7 @@ async function opPost(client, channelRef, body, opts = {}) {
     return (0, respond_1.ok)(`Posted to **${ch.name}** (message \`${message.id}\`, seq ${message.seq}${kindNote}${toNote}). Readers watching with op="await" will pick it up.`);
 }
 // ─── Tasks ──────────────────────────────────────────────────────────
-async function opCreateTask(client, channelRef, title, body, to, mode) {
+async function opCreateTask(client, channelRef, title, body, to, mode, clientMsgId) {
     const ch = await (0, channel_shared_1.resolveChannelOr)(client, channelRef);
     if ((0, channel_shared_1.isErr)(ch))
         return ch;
@@ -143,6 +152,7 @@ async function opCreateTask(client, channelRef, title, body, to, mode) {
             body,
             toUserId: member.userId,
             mode,
+            clientMsgId,
         });
     }
     catch (e) {

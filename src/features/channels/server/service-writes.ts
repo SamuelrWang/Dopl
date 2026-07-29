@@ -473,14 +473,41 @@ export async function createTask(
     throw new ChannelAddresseeNotMemberError(input.toUserId);
   }
 
-  const task = await repoTasks.insertTask({
-    channel_id: channel.id,
-    workspace_id: ctx.workspaceId,
-    title: input.title,
-    mode: input.mode ?? "interactive",
-    created_by: ctx.userId,
-    target_user_id: input.toUserId,
-  });
+  // Idempotency: a re-sent client_msg_id returns the already-created task
+  // WITHOUT inserting a second row or re-posting the initial request (which
+  // would double-spawn the responder's session window). Mirrors the message
+  // post's idempotency (findMessageByClientId → return the stored row).
+  if (input.clientMsgId) {
+    const existing = await repoTasks.findTaskByClientId(
+      channel.id,
+      input.clientMsgId
+    );
+    if (existing) return mapTaskRow(existing);
+  }
+
+  let task;
+  try {
+    task = await repoTasks.insertTask({
+      channel_id: channel.id,
+      workspace_id: ctx.workspaceId,
+      title: input.title,
+      mode: input.mode ?? "interactive",
+      created_by: ctx.userId,
+      target_user_id: input.toUserId,
+      client_msg_id: input.clientMsgId ?? null,
+    });
+  } catch (err) {
+    // Lost an idempotency race — converge on the stored winner (again, no
+    // re-post: the winning insert's own call posts the initial request).
+    if (repo.pgErrorCode(err) === UNIQUE_VIOLATION && input.clientMsgId) {
+      const raced = await repoTasks.findTaskByClientId(
+        channel.id,
+        input.clientMsgId
+      );
+      if (raced) return mapTaskRow(raced);
+    }
+    throw err;
+  }
 
   await postMessage(ctx, channel.id, {
     body: input.body,

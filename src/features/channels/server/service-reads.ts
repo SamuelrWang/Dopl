@@ -7,7 +7,7 @@ import type {
   ChannelTask,
 } from "../types";
 import type { MessageReadQuery } from "../schema";
-import { ChannelNotFoundError } from "./errors";
+import { ChannelNotFoundError, TaskNotFoundError } from "./errors";
 import {
   mapChannelRow,
   mapMemberRow,
@@ -298,4 +298,21 @@ export async function listChannelTasks(
   const { channel } = await loadVisibleChannel(ctx, ref);
   const rows = await repoTasks.listTasksByChannel(channel.id);
   return rows.map(mapTaskRow);
+}
+
+/**
+ * One task by id, scoped to a channel the caller may read. Read access is the
+ * same visibility rule as the transcript (public channel, or the caller is a
+ * member). A task id that does not resolve to a task IN THIS channel is a
+ * `TaskNotFoundError` (→ 404) — the id can't be probed across channels.
+ */
+export async function getChannelTask(
+  ctx: ChannelContext,
+  ref: string,
+  taskId: string
+): Promise<ChannelTask> {
+  const { channel } = await loadVisibleChannel(ctx, ref);
+  const row = await repoTasks.findTaskByChannelAndId(channel.id, taskId);
+  if (!row) throw new TaskNotFoundError(taskId);
+  return mapTaskRow(row);
 }

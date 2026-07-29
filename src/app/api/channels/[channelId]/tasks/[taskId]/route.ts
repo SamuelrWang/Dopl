@@ -12,11 +12,29 @@ import {
 import {
   buildChannelContext,
   closeTask,
+  getChannelTask,
   reopenTask,
   setTaskMode,
 } from "@/features/channels/server/service";
 import type { ChannelTask } from "@/features/channels/types";
 import { TaskUpdateSchema } from "@/features/channels/schema";
+
+// GET one task by id (get_task, read). Same visibility rule as the transcript;
+// a task not in this channel collapses to 404 so the id can't be probed. NOT
+// sessionOnly — reachable over the MCP device token like the other task reads.
+async function handleGet(_request: NextRequest, auth: WorkspaceAuthContext) {
+  try {
+    const ctx = buildChannelContext(auth);
+    const task = await getChannelTask(
+      ctx,
+      requireChannelId(auth.params),
+      requireTaskId(auth.params)
+    );
+    return NextResponse.json({ task });
+  } catch (err) {
+    return toChannelErrorResponse(err);
+  }
+}
 
 // PATCH a task: close it (creator or target), set its mode (creator only), or
 // reopen a closed one (creator or target — web-only, no MCP op). NOT
@@ -46,4 +64,5 @@ async function handlePatch(request: NextRequest, auth: WorkspaceAuthContext) {
   }
 }
 
+export const GET = withWorkspaceAuth(handleGet);
 export const PATCH = withWorkspaceAuth(handlePatch, { minRole: "member" });

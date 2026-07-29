@@ -340,6 +340,12 @@ class DoplClient {
     awaitChannelMessages(channelId, opts) {
         return channel.awaitMessages(this.transport, channelId, opts);
     }
+    listChannelTasks(channelId) {
+        return channel.listChannelTasks(this.transport, channelId);
+    }
+    getChannelTask(channelId, taskId) {
+        return channel.getChannelTask(this.transport, channelId, taskId);
+    }
     createChannelTask(channelId, input) {
         return channel.createChannelTask(this.transport, channelId, input);
     }

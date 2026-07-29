@@ -100,13 +100,17 @@ const TaskOutcomeSchema = z.enum(["completed", "failed"]);
  * Create a task in a channel. `title` is the queryable header; `body` is the
  * requester's initial request (posted as the task's first message, addressed
  * to `toUserId`); `mode` defaults to interactive. `toUserId` must be an active
- * member of the channel (validated in the service).
+ * member of the channel (validated in the service). `clientMsgId` is an
+ * optional idempotency key — a re-sent create_task with the same key returns
+ * the already-created task instead of double-creating it (and double-spawning
+ * the responder's window), mirroring the message post's idempotency.
  */
 export const TaskCreateSchema = z.object({
   title: z.string().trim().min(1).max(200),
   mode: TaskModeSchema.optional(),
   body: z.string().min(1).max(16000),
   toUserId: z.string().uuid(),
+  clientMsgId: z.string().min(1).max(200).optional(),
 });
 export type TaskCreateInput = z.infer<typeof TaskCreateSchema>;
 

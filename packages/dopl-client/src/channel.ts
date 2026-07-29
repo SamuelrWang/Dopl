@@ -162,6 +162,29 @@ export async function postMessage(
 
 // ─── Tasks ──────────────────────────────────────────────────────────
 
+export async function listChannelTasks(
+  t: DoplTransport,
+  channelId: string
+): Promise<ChannelTask[]> {
+  const data = await t.request<{ tasks: ChannelTask[] }>(
+    `/api/channels/${enc(channelId)}/tasks`,
+    { toolName: "channel_list_tasks" }
+  );
+  return data.tasks;
+}
+
+export async function getChannelTask(
+  t: DoplTransport,
+  channelId: string,
+  taskId: string
+): Promise<ChannelTask> {
+  const data = await t.request<{ task: ChannelTask }>(
+    `/api/channels/${enc(channelId)}/tasks/${enc(taskId)}`,
+    { toolName: "channel_get_task" }
+  );
+  return data.task;
+}
+
 export async function createChannelTask(
   t: DoplTransport,
   channelId: string,

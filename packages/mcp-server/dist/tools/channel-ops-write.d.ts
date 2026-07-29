@@ -30,7 +30,7 @@ interface OpenOptions {
 export declare function opOpen(client: DoplClient, opts: OpenOptions): Promise<ToolResponse>;
 export declare function opInvite(client: DoplClient, channelRef: string, memberRef: string): Promise<ToolResponse>;
 export declare function opPost(client: DoplClient, channelRef: string, body: string, opts?: PostOptions): Promise<ToolResponse>;
-export declare function opCreateTask(client: DoplClient, channelRef: string, title: string, body: string, to: string, mode?: TaskMode): Promise<ToolResponse>;
+export declare function opCreateTask(client: DoplClient, channelRef: string, title: string, body: string, to: string, mode?: TaskMode, clientMsgId?: string): Promise<ToolResponse>;
 export declare function opCloseTask(client: DoplClient, channelRef: string, taskId: string, outcome: TaskOutcome, summary?: string): Promise<ToolResponse>;
 export declare function opSetTaskMode(client: DoplClient, channelRef: string, taskId: string, mode: TaskMode): Promise<ToolResponse>;
 export {};

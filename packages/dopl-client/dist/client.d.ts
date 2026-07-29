@@ -136,6 +136,8 @@ export declare class DoplClient {
     readChannelMessages(channelId: string, opts?: ReadMessagesOptions): Promise<ChannelMessage[]>;
     postChannelMessage(channelId: string, input: ChannelMessageInput): Promise<ChannelMessage>;
     awaitChannelMessages(channelId: string, opts: AwaitMessagesOptions): Promise<AwaitResult>;
+    listChannelTasks(channelId: string): Promise<ChannelTask[]>;
+    getChannelTask(channelId: string, taskId: string): Promise<ChannelTask>;
     createChannelTask(channelId: string, input: ChannelTaskCreateInput): Promise<ChannelTask>;
     closeChannelTask(channelId: string, taskId: string, input: {
         outcome: TaskOutcome;

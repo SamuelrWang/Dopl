@@ -20,6 +20,8 @@ export declare function awaitMessages(t: DoplTransport, channelId: string, opts:
 export declare function createChannel(t: DoplTransport, input: ChannelCreateInput): Promise<Channel>;
 export declare function inviteToChannel(t: DoplTransport, channelId: string, userId: string): Promise<ChannelMember>;
 export declare function postMessage(t: DoplTransport, channelId: string, input: ChannelMessageInput): Promise<ChannelMessage>;
+export declare function listChannelTasks(t: DoplTransport, channelId: string): Promise<ChannelTask[]>;
+export declare function getChannelTask(t: DoplTransport, channelId: string, taskId: string): Promise<ChannelTask>;
 export declare function createChannelTask(t: DoplTransport, channelId: string, input: ChannelTaskCreateInput): Promise<ChannelTask>;
 export declare function closeChannelTask(t: DoplTransport, channelId: string, taskId: string, input: {
     outcome: TaskOutcome;

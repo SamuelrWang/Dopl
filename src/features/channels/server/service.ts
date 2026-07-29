@@ -21,6 +21,7 @@ export {
   getChannel,
   listChannelMembers,
   listChannelTasks,
+  getChannelTask,
   readMessages,
   resolveReadableChannelId,
   revalidateAwaitAccess,

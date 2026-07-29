@@ -8,6 +8,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.opList = opList;
 exports.opRead = opRead;
 exports.opAwait = opAwait;
+exports.opListTasks = opListTasks;
+exports.opGetTask = opGetTask;
 const respond_1 = require("./respond");
 const channel_shared_1 = require("./channel-shared");
 /**
@@ -42,6 +44,39 @@ function formatMessage(m) {
     const head = `**#${m.seq}** ${author}${kindTag} · ${m.createdAt}`;
     const body = m.body ? `\n  ${m.body.replace(/\n/g, "\n  ")}` : "";
     return `- ${head}${body}`;
+}
+/**
+ * One rendered task line for `list_tasks`. A task is the authoritative
+ * status/mode store; its transcript rides on the channel's messages, so this
+ * summarizes the row and points the reader at `read`/`get_task` for detail.
+ */
+function formatTaskLine(t) {
+    const bits = [`\`${t.id}\``, t.status, `${t.mode} mode`];
+    if (t.outcome)
+        bits.push(`outcome ${t.outcome}`);
+    if (t.targetUserId)
+        bits.push(`for \`${t.targetUserId}\``);
+    const summary = t.outcomeSummary ? ` — ${t.outcomeSummary}` : "";
+    return `- **${t.title}** (${bits.join(" · ")})${summary}`;
+}
+/** Multi-line detail block for a single task (`get_task`). */
+function formatTaskDetail(t) {
+    const lines = [
+        `## Task ${t.title}`,
+        ``,
+        `- id: \`${t.id}\``,
+        `- status: ${t.status}${t.outcome ? ` (${t.outcome})` : ""}`,
+        `- mode: ${t.mode}`,
+        `- created by: \`${t.createdBy}\``,
+        `- addressed to: ${t.targetUserId ? `\`${t.targetUserId}\`` : "(unaddressed)"}`,
+        `- created: ${t.createdAt}`,
+        `- updated: ${t.updatedAt}`,
+    ];
+    if (t.closedAt)
+        lines.push(`- closed: ${t.closedAt}`);
+    if (t.outcomeSummary)
+        lines.push(`- outcome summary: ${t.outcomeSummary}`);
+    return lines.join("\n");
 }
 async function opList(client) {
     const channels = await client.listChannels();
@@ -114,4 +149,43 @@ async function opAwait(client, ref, since, timeoutMs) {
     const lastSeq = result.messages[result.messages.length - 1].seq;
     lines.push(`\nAdvance your cursor to seq ${lastSeq}, then re-call dopl_channel(op="await", channel="${ref}", since=${lastSeq}) to keep watching.`);
     return (0, respond_1.ok)(lines.join("\n"));
+}
+async function opListTasks(client, ref) {
+    // Hot-path parity with read/await: hand the ref straight to the route
+    // (slug-or-id + visibility enforced there) and map a 404 to a clean
+    // not-found, rather than pre-resolving via listChannels.
+    let tasks;
+    try {
+        tasks = await client.listChannelTasks(ref);
+    }
+    catch (e) {
+        if ((0, respond_1.isNotFound)(e))
+            return (0, channel_shared_1.channelNotFound)(ref);
+        throw e;
+    }
+    if (tasks.length === 0) {
+        return (0, respond_1.ok)(`No tasks in **${ref}**. Open one with dopl_channel(op="create_task", channel="${ref}", title="...", body="...", to="...").`);
+    }
+    const lines = [
+        `## ${ref} — ${tasks.length} task${tasks.length === 1 ? "" : "s"}\n`,
+    ];
+    for (const t of tasks)
+        lines.push(formatTaskLine(t));
+    lines.push(`\nInspect one with dopl_channel(op="get_task", channel="${ref}", task=<id>); read its thread with op="read".`);
+    return (0, respond_1.ok)(lines.join("\n"));
+}
+async function opGetTask(client, ref, taskId) {
+    let task;
+    try {
+        task = await client.getChannelTask(ref, taskId);
+    }
+    catch (e) {
+        // The route 404s both an unknown channel ref and a task not in this
+        // channel; surface a task-oriented not-found either way.
+        if ((0, respond_1.isNotFound)(e)) {
+            return (0, respond_1.err)(`No task \`${taskId}\` in **${ref}**. List a channel's tasks with dopl_channel(op="list_tasks", channel="${ref}").`);
+        }
+        throw e;
+    }
+    return (0, respond_1.ok)(formatTaskDetail(task));
 }

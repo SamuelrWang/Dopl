@@ -82,6 +82,90 @@ function stubClient(overrides) {
         (0, vitest_1.expect)(res.content[0].text).toBe("Closed task **Ship it** in **General** as failed.");
     });
 });
+(0, vitest_1.describe)("opPost — bad task mapping (Gap 4)", () => {
+    (0, vitest_1.it)("maps a 400 on an unresolvable `task` (no `to`) to a clear message", async () => {
+        const postChannelMessage = vitest_1.vi.fn(async () => {
+            throw { status: 400 };
+        });
+        const client = stubClient({ postChannelMessage });
+        const res = await (0, channel_ops_write_1.opPost)(client, "general", "progress", {
+            task: "not-in-this-channel",
+            kind: "task_progress",
+        });
+        (0, vitest_1.expect)(res.isError).toBe(true);
+        (0, vitest_1.expect)(res.content[0].text).toContain("not in this channel");
+        (0, vitest_1.expect)(res.content[0].text).toContain("post without `task`");
+    });
+    (0, vitest_1.it)("still maps a 400 addressee error when `to` is set", async () => {
+        // `to` resolves to a member, then the route rejects them as a non-member.
+        const client = stubClient({
+            listWorkspaceMembers: vitest_1.vi.fn(async () => [
+                { userId: "u-p", email: "p@x.com", displayName: "Pat", status: "active" },
+            ]),
+            postChannelMessage: vitest_1.vi.fn(async () => {
+                throw { status: 400 };
+            }),
+        });
+        const res = await (0, channel_ops_write_1.opPost)(client, "general", "hi", { to: "p@x.com" });
+        (0, vitest_1.expect)(res.isError).toBe(true);
+        (0, vitest_1.expect)(res.content[0].text).toContain("aren't a member");
+    });
+});
+(0, vitest_1.describe)("opListTasks / opGetTask — task reads (Gap 1)", () => {
+    const TASK = {
+        id: "task-1",
+        channelId: "chan-1",
+        workspaceId: "ws-1",
+        title: "Ship it",
+        status: "open",
+        outcome: null,
+        mode: "interactive",
+        createdBy: "u-a",
+        targetUserId: "u-b",
+        createdAt: "2026-07-28T00:00:00Z",
+        updatedAt: "2026-07-28T00:00:00Z",
+        closedAt: null,
+        outcomeSummary: null,
+    };
+    (0, vitest_1.it)("renders a task list readably", async () => {
+        const client = stubClient({
+            listChannelTasks: vitest_1.vi.fn(async () => [
+                TASK,
+                { ...TASK, id: "task-2", title: "Done one", status: "closed", outcome: "completed", outcomeSummary: "shipped" },
+            ]),
+        });
+        const res = await (0, channel_ops_read_1.opListTasks)(client, "general");
+        const text = res.content[0].text;
+        (0, vitest_1.expect)(res.isError).toBeFalsy();
+        (0, vitest_1.expect)(text).toContain("2 tasks");
+        (0, vitest_1.expect)(text).toContain("Ship it");
+        (0, vitest_1.expect)(text).toContain("`task-1`");
+        (0, vitest_1.expect)(text).toContain("shipped");
+        (0, vitest_1.expect)(text).toContain('op="get_task"');
+    });
+    (0, vitest_1.it)("get_task renders one task's detail", async () => {
+        const client = stubClient({
+            getChannelTask: vitest_1.vi.fn(async () => ({ ...TASK, outcomeSummary: "all good" })),
+        });
+        const res = await (0, channel_ops_read_1.opGetTask)(client, "general", "task-1");
+        const text = res.content[0].text;
+        (0, vitest_1.expect)(res.isError).toBeFalsy();
+        (0, vitest_1.expect)(text).toContain("Ship it");
+        (0, vitest_1.expect)(text).toContain("all good");
+        (0, vitest_1.expect)(text).toContain("`u-b`");
+    });
+    (0, vitest_1.it)("get_task maps a 404 (task not in channel) to a task-oriented not-found", async () => {
+        const client = stubClient({
+            getChannelTask: vitest_1.vi.fn(async () => {
+                throw { status: 404 };
+            }),
+        });
+        const res = await (0, channel_ops_read_1.opGetTask)(client, "general", "ghost");
+        (0, vitest_1.expect)(res.isError).toBe(true);
+        (0, vitest_1.expect)(res.content[0].text).toContain("No task `ghost`");
+        (0, vitest_1.expect)(res.content[0].text).toContain('op="list_tasks"');
+    });
+});
 (0, vitest_1.describe)("read render — counterparty identity (Feature 1b)", () => {
     function msg(overrides) {
         return {

@@ -12,7 +12,7 @@
 import { describe, it, expect, vi } from "vitest";
 import type { DoplClient } from "@dopl/client";
 import { opPost, opCloseTask } from "./channel-ops-write";
-import { opRead } from "./channel-ops-read";
+import { opRead, opListTasks, opGetTask } from "./channel-ops-read";
 
 const CHANNEL = {
   id: "chan-1",
@@ -110,6 +110,103 @@ describe("opCloseTask — summary (Feature 3c)", () => {
     const [, , input] = closeChannelTask.mock.calls[0];
     expect(input).toEqual({ outcome: "failed", summary: undefined });
     expect(res.content[0].text).toBe("Closed task **Ship it** in **General** as failed.");
+  });
+});
+
+describe("opPost — bad task mapping (Gap 4)", () => {
+  it("maps a 400 on an unresolvable `task` (no `to`) to a clear message", async () => {
+    const postChannelMessage = vi.fn(async () => {
+      throw { status: 400 };
+    });
+    const client = stubClient({ postChannelMessage });
+
+    const res = await opPost(client, "general", "progress", {
+      task: "not-in-this-channel",
+      kind: "task_progress",
+    });
+
+    expect(res.isError).toBe(true);
+    expect(res.content[0].text).toContain("not in this channel");
+    expect(res.content[0].text).toContain("post without `task`");
+  });
+
+  it("still maps a 400 addressee error when `to` is set", async () => {
+    // `to` resolves to a member, then the route rejects them as a non-member.
+    const client = stubClient({
+      listWorkspaceMembers: vi.fn(async () => [
+        { userId: "u-p", email: "p@x.com", displayName: "Pat", status: "active" },
+      ]),
+      postChannelMessage: vi.fn(async () => {
+        throw { status: 400 };
+      }),
+    });
+
+    const res = await opPost(client, "general", "hi", { to: "p@x.com" });
+
+    expect(res.isError).toBe(true);
+    expect(res.content[0].text).toContain("aren't a member");
+  });
+});
+
+describe("opListTasks / opGetTask — task reads (Gap 1)", () => {
+  const TASK = {
+    id: "task-1",
+    channelId: "chan-1",
+    workspaceId: "ws-1",
+    title: "Ship it",
+    status: "open",
+    outcome: null,
+    mode: "interactive",
+    createdBy: "u-a",
+    targetUserId: "u-b",
+    createdAt: "2026-07-28T00:00:00Z",
+    updatedAt: "2026-07-28T00:00:00Z",
+    closedAt: null,
+    outcomeSummary: null,
+  };
+
+  it("renders a task list readably", async () => {
+    const client = stubClient({
+      listChannelTasks: vi.fn(async () => [
+        TASK,
+        { ...TASK, id: "task-2", title: "Done one", status: "closed", outcome: "completed", outcomeSummary: "shipped" },
+      ]),
+    });
+
+    const res = await opListTasks(client, "general");
+    const text = res.content[0].text;
+    expect(res.isError).toBeFalsy();
+    expect(text).toContain("2 tasks");
+    expect(text).toContain("Ship it");
+    expect(text).toContain("`task-1`");
+    expect(text).toContain("shipped");
+    expect(text).toContain('op="get_task"');
+  });
+
+  it("get_task renders one task's detail", async () => {
+    const client = stubClient({
+      getChannelTask: vi.fn(async () => ({ ...TASK, outcomeSummary: "all good" })),
+    });
+
+    const res = await opGetTask(client, "general", "task-1");
+    const text = res.content[0].text;
+    expect(res.isError).toBeFalsy();
+    expect(text).toContain("Ship it");
+    expect(text).toContain("all good");
+    expect(text).toContain("`u-b`");
+  });
+
+  it("get_task maps a 404 (task not in channel) to a task-oriented not-found", async () => {
+    const client = stubClient({
+      getChannelTask: vi.fn(async () => {
+        throw { status: 404 };
+      }),
+    });
+
+    const res = await opGetTask(client, "general", "ghost");
+    expect(res.isError).toBe(true);
+    expect(res.content[0].text).toContain("No task `ghost`");
+    expect(res.content[0].text).toContain('op="list_tasks"');
   });
 });
 

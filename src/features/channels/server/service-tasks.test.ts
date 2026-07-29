@@ -296,6 +296,77 @@ describe("createTask — authorization", () => {
   });
 });
 
+describe("createTask — idempotency (client_msg_id)", () => {
+  beforeEach(() => {
+    // PEER is a channel member so the addressee check passes.
+    vi.mocked(repo.findMembership).mockImplementation(async (_c, uid) =>
+      uid === USER ? memberRow(USER, "owner") : memberRow(uid)
+    );
+  });
+
+  it("returns the already-created task and does NOT re-insert or re-post", async () => {
+    vi.mocked(repoTasks.findTaskByClientId).mockResolvedValue(
+      taskRow({ created_by: USER, target_user_id: PEER })
+    );
+
+    const task = await createTask(ctx, "general", {
+      title: "Ship it",
+      body: "please do X",
+      toUserId: PEER,
+      clientMsgId: "dedupe-1",
+    });
+
+    expect(repoTasks.findTaskByClientId).toHaveBeenCalledWith("chan-1", "dedupe-1");
+    expect(task.id).toBe(TASK_ID);
+    // No second task row and no second initial message (→ no double spawn).
+    expect(repoTasks.insertTask).not.toHaveBeenCalled();
+    expect(repo.insertMessage).not.toHaveBeenCalled();
+  });
+
+  it("inserts (threading client_msg_id) + posts once on the first send", async () => {
+    vi.mocked(repoTasks.findTaskByClientId).mockResolvedValue(null);
+    vi.mocked(repoTasks.insertTask).mockImplementation(async (row) =>
+      taskRow({
+        created_by: row.created_by,
+        target_user_id: row.target_user_id,
+        title: row.title,
+      })
+    );
+
+    await createTask(ctx, "general", {
+      title: "Ship it",
+      body: "please do X",
+      toUserId: PEER,
+      clientMsgId: "dedupe-2",
+    });
+
+    expect(vi.mocked(repoTasks.insertTask).mock.calls[0][0]).toMatchObject({
+      client_msg_id: "dedupe-2",
+    });
+    // The initial request is posted exactly once.
+    expect(repo.insertMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it("converges on the winner when the insert loses the unique race", async () => {
+    vi.mocked(repoTasks.findTaskByClientId)
+      .mockResolvedValueOnce(null) // pre-insert lookup misses
+      .mockResolvedValueOnce(taskRow({ created_by: USER, target_user_id: PEER })); // post-race winner
+    vi.mocked(repoTasks.insertTask).mockRejectedValue({ code: "23505" });
+    vi.mocked(repo.pgErrorCode).mockReturnValue("23505");
+
+    const task = await createTask(ctx, "general", {
+      title: "Ship it",
+      body: "please do X",
+      toUserId: PEER,
+      clientMsgId: "dedupe-3",
+    });
+
+    expect(task.id).toBe(TASK_ID);
+    // The losing insert never posts — the winner's own call did.
+    expect(repo.insertMessage).not.toHaveBeenCalled();
+  });
+});
+
 describe("closeTask — authorization", () => {
   it("404s an unknown task", async () => {
     vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(null);

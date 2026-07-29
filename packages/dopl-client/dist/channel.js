@@ -18,6 +18,8 @@ exports.awaitMessages = awaitMessages;
 exports.createChannel = createChannel;
 exports.inviteToChannel = inviteToChannel;
 exports.postMessage = postMessage;
+exports.listChannelTasks = listChannelTasks;
+exports.getChannelTask = getChannelTask;
 exports.createChannelTask = createChannelTask;
 exports.closeChannelTask = closeChannelTask;
 exports.setChannelTaskMode = setChannelTaskMode;
@@ -95,6 +97,14 @@ async function postMessage(t, channelId, input) {
     return data.message;
 }
 // ─── Tasks ──────────────────────────────────────────────────────────
+async function listChannelTasks(t, channelId) {
+    const data = await t.request(`/api/channels/${enc(channelId)}/tasks`, { toolName: "channel_list_tasks" });
+    return data.tasks;
+}
+async function getChannelTask(t, channelId, taskId) {
+    const data = await t.request(`/api/channels/${enc(channelId)}/tasks/${enc(taskId)}`, { toolName: "channel_get_task" });
+    return data.task;
+}
 async function createChannelTask(t, channelId, input) {
     const data = await t.request(`/api/channels/${enc(channelId)}/tasks`, {
         method: "POST",

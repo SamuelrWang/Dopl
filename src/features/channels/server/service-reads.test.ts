@@ -11,12 +11,26 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("./repository");
 vi.mock("./repository-collab");
+vi.mock("./repository-tasks");
 
 import * as repo from "./repository";
 import * as collab from "./repository-collab";
-import { listChannelMembers, listChannels, readMessages } from "./service-reads";
+import * as repoTasks from "./repository-tasks";
+import {
+  getChannelTask,
+  listChannelMembers,
+  listChannelTasks,
+  listChannels,
+  readMessages,
+} from "./service-reads";
+import { TaskNotFoundError } from "./errors";
 import type { ChannelContext } from "./service-shared";
-import type { ChannelMemberRow, ChannelMessageRow, ChannelRow } from "./dto";
+import type {
+  ChannelMemberRow,
+  ChannelMessageRow,
+  ChannelRow,
+  ChannelTaskRow,
+} from "./dto";
 
 const WS = "ws-1";
 const USER = "user-1";
@@ -177,6 +191,61 @@ describe("readMessages — read-watermark loop guard (2026-07-27 CPU incident)",
       USER,
       "2026-07-27T10:00:00.000Z"
     );
+  });
+});
+
+describe("listChannelTasks / getChannelTask — reads", () => {
+  const TASK_ID = "660e8400-e29b-41d4-a716-446655440111";
+
+  function taskRow(overrides: Partial<ChannelTaskRow> = {}): ChannelTaskRow {
+    return {
+      id: TASK_ID,
+      channel_id: "chan-1",
+      workspace_id: WS,
+      title: "Ship it",
+      status: "open",
+      outcome: null,
+      mode: "interactive",
+      created_by: USER,
+      target_user_id: OTHER,
+      created_at: "2026-07-27T00:00:00Z",
+      updated_at: "2026-07-27T00:00:00Z",
+      closed_at: null,
+      outcome_summary: null,
+      ...overrides,
+    };
+  }
+
+  it("lists the channel's tasks (visibility-gated) as DTOs", async () => {
+    vi.mocked(repoTasks.listTasksByChannel).mockResolvedValue([
+      taskRow({ id: TASK_ID, title: "A" }),
+      taskRow({ id: "other", title: "B", status: "closed", outcome: "completed" }),
+    ]);
+
+    const tasks = await listChannelTasks(ctx, "general");
+
+    expect(repoTasks.listTasksByChannel).toHaveBeenCalledWith("chan-1");
+    expect(tasks.map((t) => t.title)).toEqual(["A", "B"]);
+    expect(tasks[1].outcome).toBe("completed");
+  });
+
+  it("returns one task by id, scoped to the channel", async () => {
+    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(
+      taskRow({ outcome_summary: "done" })
+    );
+
+    const task = await getChannelTask(ctx, "general", TASK_ID);
+
+    expect(repoTasks.findTaskByChannelAndId).toHaveBeenCalledWith("chan-1", TASK_ID);
+    expect(task.id).toBe(TASK_ID);
+    expect(task.outcomeSummary).toBe("done");
+  });
+
+  it("404s a task id that is not in this channel (id can't be probed)", async () => {
+    vi.mocked(repoTasks.findTaskByChannelAndId).mockResolvedValue(null);
+    await expect(
+      getChannelTask(ctx, "general", TASK_ID)
+    ).rejects.toBeInstanceOf(TaskNotFoundError);
   });
 });
 

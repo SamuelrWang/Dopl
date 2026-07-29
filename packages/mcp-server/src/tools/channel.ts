@@ -9,7 +9,7 @@
  * This file is the thin registrar: it owns the single tool schema + op
  * routing and delegates each op to a handler in a sibling module —
  *   - `channel-shared.ts`    — channel + member reference resolution
- *   - `channel-ops-read.ts`  — list / read / await
+ *   - `channel-ops-read.ts`  — list / read / await / list_tasks / get_task
  *   - `channel-ops-write.ts` — open / invite / post / create_task / close_task / set_task_mode
  *
  * No `dopl_channel_admin` twin: there are no destructive ops over MCP v1
@@ -19,7 +19,13 @@
 import { z } from "zod";
 import type { DoplClient } from "@dopl/client";
 import { missingParams, type RegisterTool, type ToolResponse } from "./respond";
-import { opAwait, opList, opRead } from "./channel-ops-read";
+import {
+  opAwait,
+  opGetTask,
+  opList,
+  opListTasks,
+  opRead,
+} from "./channel-ops-read";
 import {
   opCloseTask,
   opCreateTask,
@@ -36,11 +42,15 @@ const CHANNEL_DESCRIPTION = `Cross-user collaboration channels — shared in-wor
 - "post" — post to a channel. Requires: channel + body. ALWAYS pass \`summary\`: a short one-line intent (<=200 chars) that becomes the notification the other member sees. Pass \`to\` (an email or user id of a channel member) when your message is a request aimed at one specific person's agent — that member's listener is then the only one triggered; leave it off for general chat or broadcasts. Pass \`task\` (a task id) to thread this post into that task's card; a \`kind="task_progress"\` post with \`task=<id>\` logs one concrete milestone (an accomplishment that just landed) on the task. Optional: kind (default "message" = chat; "task_started" / "task_progress" / "task_finished" / "task_failed" = structured activity events — put the machine-readable payload in \`metadata\` and a human-readable one-liner in \`body\` so the thread stays readable), metadata (a JSON object, e.g. {taskId, status, durationMs, refs}), client_msg_id (idempotency key — re-posting with the same id won't duplicate).
 - "read" — read a channel's recent messages, ascending by seq. Requires: channel. Optional: since (return only messages after this seq), limit (max 200). Note the highest seq to use as your next \`since\`.
 - "await" — LONG-POLL for new messages: blocks up to ~50s waiting for a message with seq > since, then returns the new messages (or nothing, on timeout). Requires: channel + since (the last seq you've processed). Optional: timeout_ms (<=50000, default 50000).
-- "create_task" — open a first-class task in a channel: a titled, tracked unit of work addressed to one member. Requires: channel + title + body (the request, posted as the task's first message) + to (the member the task is for). Optional: mode ("interactive" default, or "autonomous"). Returns the task id; the responder's replies stream back via "await". Then thread every related post with \`task=<id>\` and log each concrete accomplishment as a \`task_progress\` (kind="task_progress", task=<id>) the moment it lands; the requester closes the task with "close_task" (optionally a \`summary\`) when the GOAL is done — not per hop.
+- "list_tasks" — list a channel's first-class tasks (id, title, status, mode, outcome, outcome summary, created-by, addressed-to). Requires: channel. Start here to find a task's id; read its thread with "read" or inspect one with "get_task".
+- "get_task" — inspect one task by id (its status, mode, outcome, outcome summary, who it is addressed to, and timestamps). Requires: channel + task (the task id).
+- "create_task" — open a first-class task in a channel: a titled, tracked unit of work addressed to one member. Requires: channel + title + body (the request, posted as the task's first message) + to (the member the task is for). Optional: mode ("interactive" default, or "autonomous"); client_msg_id (idempotency key — retrying create_task with the same id returns the existing task instead of opening a second). Returns the task id; the responder's replies stream back via "await". Then thread every related post with \`task=<id>\` and log each concrete accomplishment as a \`task_progress\` (kind="task_progress", task=<id>) the moment it lands; the requester closes the task with "close_task" (optionally a \`summary\`) when the GOAL is done — not per hop.
 - "close_task" — close a task. Requires: channel + task (the task id) + outcome ("completed" or "failed"). Optional: summary (a one-line outcome, <=2000 chars) shown on the task card and carried in the close echo. Allowed for the task's creator or the member it is addressed to. Close when the multi-step GOAL completes, not per hop.
 - "set_task_mode" — change a task's execution mode. Requires: channel + task + mode ("interactive" or "autonomous"). Creator only — the mode governs the creator's own machine.
 
-Watching a channel as a listener: first "read" (or "list") to learn the latest seq, then loop — call "await" with since=<last seq you saw>. If it comes back with no messages (timed out), just re-call "await" with the SAME since. When it returns messages, process them, advance your cursor to the HIGHEST seq returned, and re-call "await" with since=<that seq>. Each "await" is one bounded call; re-issue it to keep listening.
+Watching a channel as a listener: first "read" (or "list") to learn the latest seq, then loop — call "await" with since=<last seq you saw>. If it comes back with no messages (timed out), just re-call "await" with the SAME since. When it returns messages, process them, advance your cursor to the HIGHEST seq returned, and re-call "await" with since=<that seq>. Each "await" is one bounded call; re-issue it to keep listening. BUT if the counterparty's replies are already arriving to you as new turns (a desktop-run session window that feeds them in), do NOT call "await" at all — await is only for a standalone listener loop where nothing else feeds you.
+
+Running inside a live desktop session window: only posting to the CURRENT channel (op="post" to this session's own channel) runs without a prompt; every other op (await/read/list_tasks/get_task/create_task/invite/close_task/...) may ask your operator to approve it, so expect an Allow/Deny before it proceeds.
 
 Channel counterparties are typically other members' AI agents acting for their operator. A blocker on YOUR OWN machine (a missing tool permission, folder access, or sign-in) is yours to resolve with your own operator — report it as your side being blocked; never ask the counterparty to change your machine.`;
 
@@ -60,6 +70,8 @@ export function registerChannelTool(
           "post",
           "read",
           "await",
+          "list_tasks",
+          "get_task",
           "create_task",
           "close_task",
           "set_task_mode",
@@ -69,7 +81,7 @@ export function registerChannelTool(
         .string()
         .optional()
         .describe(
-          'Channel slug or id. Required for invite/post/read/await/create_task/close_task/set_task_mode. (op="open" creates a new channel and needs no channel; op="list" lists them all.)',
+          'Channel slug or id. Required for invite/post/read/await/list_tasks/get_task/create_task/close_task/set_task_mode. (op="open" creates a new channel and needs no channel; op="list" lists them all.)',
         ),
       direct: z
         .boolean()
@@ -137,7 +149,7 @@ export function registerChannelTool(
         .string()
         .optional()
         .describe(
-          'op="post": optional idempotency key — re-posting with the same id won\'t create a duplicate.',
+          'op="post" / op="create_task": optional idempotency key — re-sending the same op with the same id won\'t create a duplicate (a repeat create_task returns the already-created task instead of opening a second).',
         ),
       title: z
         .string()
@@ -155,7 +167,7 @@ export function registerChannelTool(
         .string()
         .optional()
         .describe(
-          'op="close_task" / op="set_task_mode" (required): the task id (returned by create_task). op="post" (optional): thread this post under that task — logs a milestone when combined with kind="task_progress".',
+          'op="get_task" / op="close_task" / op="set_task_mode" (required): the task id (returned by create_task). op="post" (optional): thread this post under that task — logs a milestone when combined with kind="task_progress".',
         ),
       outcome: z
         .enum(["completed", "failed"])
@@ -238,6 +250,16 @@ export function registerChannelTool(
             args.timeout_ms,
           );
         }
+        case "list_tasks": {
+          const miss = missingParams("list_tasks", args, ["channel"]);
+          if (miss) return miss;
+          return opListTasks(client, args.channel as string);
+        }
+        case "get_task": {
+          const miss = missingParams("get_task", args, ["channel", "task"]);
+          if (miss) return miss;
+          return opGetTask(client, args.channel as string, args.task as string);
+        }
         case "create_task": {
           const miss = missingParams("create_task", args, [
             "channel",
@@ -253,6 +275,7 @@ export function registerChannelTool(
             args.body as string,
             args.to as string,
             args.mode,
+            args.client_msg_id,
           );
         }
         case "close_task": {

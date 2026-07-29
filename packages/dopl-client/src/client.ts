@@ -622,6 +622,14 @@ export class DoplClient {
     return channel.awaitMessages(this.transport, channelId, opts);
   }
 
+  listChannelTasks(channelId: string): Promise<ChannelTask[]> {
+    return channel.listChannelTasks(this.transport, channelId);
+  }
+
+  getChannelTask(channelId: string, taskId: string): Promise<ChannelTask> {
+    return channel.getChannelTask(this.transport, channelId, taskId);
+  }
+
   createChannelTask(
     channelId: string,
     input: ChannelTaskCreateInput

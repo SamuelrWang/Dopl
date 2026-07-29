@@ -9,7 +9,7 @@
  * This file is the thin registrar: it owns the single tool schema + op
  * routing and delegates each op to a handler in a sibling module —
  *   - `channel-shared.ts`    — channel + member reference resolution
- *   - `channel-ops-read.ts`  — list / read / await
+ *   - `channel-ops-read.ts`  — list / read / await / list_tasks / get_task
  *   - `channel-ops-write.ts` — open / invite / post / create_task / close_task / set_task_mode
  *
  * No `dopl_channel_admin` twin: there are no destructive ops over MCP v1
