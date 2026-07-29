@@ -130,6 +130,12 @@
     return {
       init: null, // {sessionId, side, profile, profileLabel, mode, model, channelName, taskTitle, cwdLabel, from}
       items: [], // ordered stream: turn | tool | counterparty | outbound | inbound_pending | notice
+      // Per-author avatars (item 1/5/6): bounded `data:` URIs (never a remote URL)
+      // supplied by main via the init payload + a later `avatars` event.
+      //   selfAvatar = MY photo (agent/operator turns + outbound bubbles);
+      //   peerAvatar = the PEER's photo (counterparty bubbles + header identity).
+      selfAvatar: null,
+      peerAvatar: null,
       permissions: [], // FIFO queue of pending permission_request payloads
       phase: "launching", // launching | consent | running | interrupted | ended
       activity: null, // working | idle | awaiting_peer | awaiting_permission | awaiting_inbound  (item 3)
@@ -158,12 +164,14 @@
     const text = ev.text == null ? "" : String(ev.text);
     const last = state.items[state.items.length - 1];
 
+    // avatarKey:'self' — an agent/assistant OR operator turn is ALWAYS ME, so
+    // both render MY photo (item 1/5/6).
     if (ev.streaming === true) {
       if (isOpenStream(last, role)) {
         const merged = { ...last, text: last.text + text };
         return { ...state, items: replaceLast(state.items, merged) };
       }
-      const started = { kind: "turn", role, text, streaming: true };
+      const started = { kind: "turn", role, text, streaming: true, avatarKey: "self" };
       return { ...state, items: state.items.concat([started]) };
     }
 
@@ -173,7 +181,7 @@
       const closed = { ...last, text: finalText, streaming: false };
       return { ...state, items: replaceLast(state.items, closed) };
     }
-    const complete = { kind: "turn", role, text, streaming: false };
+    const complete = { kind: "turn", role, text, streaming: false, avatarKey: "self" };
     return { ...state, items: state.items.concat([complete]) };
   }
 
@@ -213,8 +221,21 @@
             cwdLabel: event.cwdLabel,
             from: event.from, // counterparty name (item 2)
           },
+          // Warm-cache avatar data URIs ride the init payload (item 1/5/6). null
+          // ⇒ keep what we have; a later `avatars` event fills the cold-cache case.
+          selfAvatar: event.selfAvatar == null ? state.selfAvatar : event.selfAvatar,
+          peerAvatar: event.fromAvatar == null ? state.peerAvatar : event.fromAvatar,
           // launching OR the pre-consent state (item 8, on adoption) flips to running.
           phase: state.phase === "launching" || state.phase === "consent" ? "running" : state.phase,
+        };
+
+      // Cold-cache avatar fill (item 1/5/6): main finished the bounded fetch+encode.
+      // OR-merge — a null field means "keep what init/prior set" (§B.1).
+      case "avatars":
+        return {
+          ...state,
+          selfAvatar: event.self == null ? state.selfAvatar : event.self,
+          peerAvatar: event.from == null ? state.peerAvatar : event.from,
         };
 
       case "turn":
@@ -245,7 +266,8 @@
         return {
           ...state,
           items: state.items.concat([
-            { kind: "outbound", toolUseId: event.toolUseId, to: event.to, text: event.text },
+            // avatarKey:'self' — an outbound post is MY agent sending (item 1/5/6).
+            { kind: "outbound", toolUseId: event.toolUseId, to: event.to, text: event.text, avatarKey: "self" },
           ]),
         };
 
@@ -274,7 +296,8 @@
       case "inbound":
         return {
           ...state,
-          items: state.items.concat([{ kind: "counterparty", from: event.from, text: event.text }]),
+          // avatarKey:'peer' — the counterparty's reply renders the PEER photo.
+          items: state.items.concat([{ kind: "counterparty", from: event.from, text: event.text, avatarKey: "peer" }]),
         };
 
       case "inbound_pending":

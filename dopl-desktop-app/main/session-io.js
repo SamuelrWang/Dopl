@@ -312,6 +312,12 @@ function handleSdkMessage(s, msg, dispatch, store) {
         channelName: (s.context && s.context.channelName) || null,
         taskTitle: (s.context && s.context.taskTitle) || null,
         from: s.counterpartyName || null,
+        // Item 1/5/6 (§B.1): bounded data: URIs (or null) — the operator's photo for
+        // my-agent/operator/outbound bubbles, the peer's for counterparty bubbles +
+        // the header. Warm here when the cache is hot; else null + a follow-up
+        // `avatars` event from avatar-cache.resolveForSession. NEVER a remote URL.
+        selfAvatar: s.selfAvatar || null,
+        fromAvatar: s.peerAvatar || null,
         // NEVER send the SDK's absolute cwd to the renderer (label-only rule).
         // The engine's emitFolder() feeds the folder chip the abbreviated label.
         cwdLabel: null,

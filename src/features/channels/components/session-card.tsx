@@ -1,9 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, ChevronDown, ChevronRight } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
+import {
+  getDesktopSessions,
+  type DoplSessionsBridge,
+} from "@/shared/lib/desktop";
 import { Avatar } from "@/shared/ui/avatar";
 import {
   isCalmTerminalStatus,
@@ -236,6 +240,10 @@ export function SessionCard({
             Close task
           </button>
         )}
+        <ReopenWindowButton
+          channelId={session.head.channelId}
+          taskId={session.taskId}
+        />
         <StatusChip status={session.status} />
       </footer>
       {showClose && closing && task && onCloseTask && (
@@ -271,6 +279,81 @@ function ReopenTaskButton({ onReopen }: { onReopen: () => Promise<void> }) {
     >
       Reopen task
     </button>
+  );
+}
+
+/**
+ * Reveal this task's LIVE session window from the web card, via the main-window
+ * bridge. Resolves whether a live window was found: `false` (no live session
+ * for the pair, e.g. a settled task whose window is destroyed) maps to the
+ * "No live session to reopen" note. Exported for unit testing the click action.
+ */
+export async function reopenSessionWindow(
+  bridge: DoplSessionsBridge,
+  channelId: string,
+  taskId: string
+): Promise<boolean> {
+  const result = await bridge.reopen(channelId, taskId);
+  return !!result?.ok;
+}
+
+/**
+ * Desktop-only footer control that reopens (reveals a hidden, or fronts a
+ * visible) live session window for this task. Renders NOTHING in a plain browser
+ * or an older desktop build — the bridge is feature-detected after mount so SSR
+ * and first client render agree (hydration-safe). A live session surfaces its
+ * window in-process (no server/realtime state, F-072); a settled task has no
+ * window to reopen, so the bridge returns `{ ok: false }` and a one-line note
+ * shows. The reopen only `show()`s a window the operator already owns — it never
+ * starts a query, and gated tools still gate on reshow.
+ */
+export function ReopenWindowButton({
+  channelId,
+  taskId,
+}: {
+  channelId: string;
+  taskId: string;
+}) {
+  const [bridge, setBridge] = useState<DoplSessionsBridge | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [noSession, setNoSession] = useState(false);
+
+  // Feature-detect after mount (window-only) so SSR and first client render agree.
+  useEffect(() => {
+    setBridge(getDesktopSessions());
+  }, []);
+
+  // Plain browser (or an older desktop build without the sessions API): nothing.
+  if (!bridge) return null;
+
+  return (
+    <>
+      {noSession && (
+        <span className="shrink-0 truncate text-caption text-text-muted">
+          No live session to reopen
+        </span>
+      )}
+      <button
+        type="button"
+        disabled={busy}
+        onClick={async () => {
+          if (busy) return;
+          setBusy(true);
+          setNoSession(false);
+          try {
+            const ok = await reopenSessionWindow(bridge, channelId, taskId);
+            if (!ok) setNoSession(true);
+          } catch {
+            setNoSession(true);
+          } finally {
+            setBusy(false);
+          }
+        }}
+        className="btn-light shrink-0 rounded-[8px] px-2.5 py-1 text-caption font-medium text-text-primary disabled:opacity-60"
+      >
+        Reopen window
+      </button>
+    </>
   );
 }
 

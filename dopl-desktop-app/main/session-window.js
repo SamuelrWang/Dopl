@@ -22,8 +22,10 @@ const { diag } = require('./diag');
 // forged id can never target another session. Light-only background (no theme logic).
 function createSessionWindow(sessionId) {
   const win = new BrowserWindow({
-    width: 760,
-    height: 900,
+    // Item 7 (v2.2): default window size = the MIN size, so the window opens at its
+    // most compact footprint and the operator grows it only when they want to.
+    width: 520,
+    height: 600,
     minWidth: 520,
     minHeight: 600,
     title: 'Dopl Session',

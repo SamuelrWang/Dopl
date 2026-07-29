@@ -70,6 +70,9 @@ html, body {
 }
 .header-title-row.has-peer .peer-avatar { display: inline-flex; }
 .header-title-row.has-peer .brand-mark { display: none; }
+/* When a real peer photo (bounded data: URI) is present, the token span drops
+   its border/fill and clips the round <img> that fills it (item 1/5/6). */
+.peer-avatar.has-img { border: none; background: none; padding: 0; overflow: hidden; }
 .channel-name {
   font-size: var(--text-title);
   font-weight: 600;
@@ -252,23 +255,54 @@ html, body {
   font-weight: 600;
 }
 
-/* ── Outbound lane (item 2): what MY agent SENT to the peer (op=post). ─────── */
+/* Real per-author avatar (item 1/5/6): a round frame clipping the bounded data:
+   <img>. Same 18px footprint as the .cp-avatar initials fallback so a late
+   `avatars` swap does not shift the layout. */
+.av {
+  width: 18px; height: 18px; border-radius: 50%; flex: none;
+  display: inline-flex; overflow: hidden;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-inset-hover);
+}
+.av-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.peer-avatar .av { width: 100%; height: 100%; border: none; }
+
+/* ── Outbound component (item 4): what MY agent SENT to the peer (op=post) — a
+   distinct SENT banner (self avatar + uppercase label band) over the posted
+   body, clearly differentiated from the .bubble narration surface. ─────────── */
 .outbound {
   align-self: flex-end;
   max-width: 78%;
   min-width: 0;
-  padding: 9px 12px;
   border-radius: 12px;
   border: 1px solid var(--border-active);
   background: var(--card-surface-subtle);
+  overflow: hidden;
   line-height: 1.5;
 }
-.outbound .sent-to {
-  display: block;
-  color: var(--text-secondary);
-  margin-bottom: 3px;
+/* The banner: a dark CTA band that reads as a header, not a chat bubble. */
+.outbound__banner {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 10px;
+  background: var(--surface-cta);
 }
-.outbound .body { white-space: pre-wrap; overflow-wrap: anywhere; }
+.outbound__banner .av,
+.outbound__banner .cp-avatar { border-color: var(--border-active); }
+.outbound__label {
+  min-width: 0;
+  color: var(--text-on-cta);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.outbound__tag {
+  margin-left: auto; flex: none;
+  color: var(--text-on-cta);
+  font-size: var(--text-micro);
+  opacity: 0.75;
+}
+.outbound__body {
+  padding: 9px 12px;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
 .bubble.is-streaming .body::after {
   content: "▍";
   color: var(--text-muted);

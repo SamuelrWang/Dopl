@@ -462,6 +462,22 @@ test("initial() returns the uppercase first letter, else '?' (item 2 avatar)", (
   assert.equal(render.initial(null), "?");
 });
 
+// ── item 1/5/6 security: img.src is a data: URI ONLY, never a remote URL ───────
+// (The per-author avatar STATE reducer tests — init copy, `avatars` OR-merge,
+// avatarKey stamping — live in the sibling session-render-dom.test.mjs alongside
+// the DOM-exec avatar tests, to keep this file under the HARD 500-line cap.)
+
+test("session-render.js only sets img.src behind a data: guard (no remote URL sink)", () => {
+  const fs = require("node:fs");
+  const src = fs.readFileSync(
+    fileURLToPath(new URL("../renderer/session/session-render.js", import.meta.url)), "utf8"
+  );
+  // The ONLY src assignment lives in avatarNode, gated by a data: prefix check.
+  assert.match(src, /slice\(0, 5\) === "data:"/, "avatarNode guards on a data: prefix");
+  assert.ok(!/setAttribute\("src",\s*"https?:/.test(src), "no literal remote URL is ever assigned to src");
+  assert.ok(!/\.src\s*=/.test(src), "src is set via setAttribute inside the guarded branch, not a bare .src=");
+});
+
 // ── item 10: the permission dock renders all THREE actions ────────────────────
 
 test("session.html: the permission dock renders all THREE actions with exact labels (item 10)", () => {

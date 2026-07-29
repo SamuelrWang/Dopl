@@ -19,6 +19,7 @@ const { diag } = require('./diag');
 
 const store = new Store();
 const nameCache = new Map(); // userId -> displayName, refreshed once per reconcile
+const avatarUrlCache = new Map(); // userId -> avatarUrl (item 1/5/6), refreshed with the name cache
 
 let featureAvailable = true; // false once /api/channels 404s (feature not deployed)
 let staleNotified = false; // one-shot guard for the "session expired" notification
@@ -267,6 +268,13 @@ function displayNameFor(userId) {
   return (userId && nameCache.get(userId)) || 'A teammate';
 }
 
+// The member's remote avatar URL (Google photo etc.), cached from the members DTO
+// for the session window's main-fetched data: URI pipeline (avatar-cache.js). Null
+// when unknown. NEVER handed to the renderer as a URL — only as a bounded data: URI.
+function avatarUrlFor(userId) {
+  return (userId && avatarUrlCache.get(userId)) || null;
+}
+
 async function refreshNameCache(ws) {
   // Canonical `{slug}-{publicId}` segment resolves by publicId (no legacy-slug
   // redirect event). Cookie-authed (withUserAuth); X-Workspace-Id is harmless.
@@ -285,6 +293,9 @@ async function refreshNameCache(ws) {
       if (mem && mem.userId) {
         const dn = mem.displayName || mem.email || null;
         if (dn) nameCache.set(mem.userId, dn);
+        // Cache the avatar URL alongside the name (covers the operator AND every peer,
+        // since the members list includes the operator). Consumed only by avatar-cache.
+        if (mem.avatarUrl) avatarUrlCache.set(mem.userId, mem.avatarUrl);
       }
     }
     diag('namecache loaded', members.length, 'ws', ws.slug);
@@ -314,5 +325,6 @@ module.exports = {
   listChannels,
   resolveIdentity,
   displayNameFor,
+  avatarUrlFor,
   refreshNameCache,
 };

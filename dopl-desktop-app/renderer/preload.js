@@ -3,14 +3,17 @@
 // marker the web app can use to detect it's running in the desktop shell, plus
 // an EXTREMELY NARROW, allowlisted channel-folder bridge.
 //
-// SECURITY — the remote page gets exactly three folder operations and nothing
+// SECURITY — the remote page gets a small, fixed set of operations and nothing
 // else. Each is a fixed-name `ipcRenderer.invoke` (no dynamic channel, no event
-// emitter, no Node/fs access). What the page can do is bounded to: read the
+// emitter, no Node/fs access). The channel-folder ops are bounded to: read the
 // ABBREVIATED display label for a channel, TRIGGER the native folder picker
 // (which the USER interacts with — the page cannot choose a path itself), and
 // reset a channel to the sandbox default. The main handlers return a `~/…`
 // label only — never the raw absolute path — so a local filesystem path is
-// never handed to the web page or its server. See main/channel-dir-ipc.js.
+// never handed to the web page or its server. The single `sessions.reopen` op
+// only asks the main process to SHOW an existing live session window for a
+// (channel, task) the operator owns; it starts no query and returns `{ ok }`
+// only. See main/channel-dir-ipc.js.
 const { contextBridge, ipcRenderer } = require('electron');
 
 // Coerce whatever the page passes to a string so the main side always validates
@@ -33,5 +36,16 @@ contextBridge.exposeInMainWorld('dopl', {
     chooseFolder: (channelId) => ipcRenderer.invoke('channels:chooseFolder', asId(channelId)),
     // Resets to the sandbox default → null.
     clearFolder: (channelId) => ipcRenderer.invoke('channels:clearFolder', asId(channelId)),
+  },
+  // Reopen (reveal a hidden / front a visible) LIVE session window for a
+  // (channel, task) from the MAIN window. One fixed-name invoke; ids coerced to
+  // strings (main re-validates). Resolves { ok } — ok:false when no live session
+  // exists for that pair (a settled task's window is destroyed on settle).
+  sessions: {
+    reopen: (channelId, taskId) =>
+      ipcRenderer.invoke('sessions:reopen', {
+        channelId: asId(channelId),
+        taskId: asId(taskId),
+      }),
   },
 });

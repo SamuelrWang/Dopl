@@ -17,6 +17,13 @@
 //     trigger a picker the user then drives (or cancels).
 //   • No filesystem handle, no absolute path, no listing — nothing beyond these
 //     three label-scoped operations is exposed.
+//
+// The one additional handler here, `sessions:reopen`, is the main-window bridge
+// for the web session-card's "Reopen window" button: it asks the session engine
+// to SHOW an existing LIVE session window for a (channel, task) the operator
+// owns. It starts no query and creates no server/realtime state (F-072) — a
+// window `show()` only — and returns `{ ok }` (ok:false when no live session
+// exists for the pair). channelId is UUID-validated like the folder ops.
 
 const { ipcMain } = require('electron');
 const channelDirs = require('./channel-dirs');
@@ -59,6 +66,25 @@ function register(opts = {}) {
     channelDirs.clearChannelDir(channelId);
     onChanged();
     return null;
+  });
+
+  // Reveal a LIVE session window for a (channel, task) from the MAIN window.
+  // channelId is UUID-validated (the same anti-probe guard as the folder ops);
+  // taskId is an opaque string (a legacy `task-{channel}-{seq}` id or a
+  // first-class UUID), coerced and handed to the engine, which resolves the
+  // session by `store.sessionKey(channelId, taskId)`. `reopenByTask` is a
+  // T2-added export; if it is not wired yet (mid-wave), fail closed with
+  // { ok: false } rather than throwing. Lazy-require to avoid any load-time
+  // cycle — the engine is only touched when a reopen is actually requested.
+  ipcMain.handle('sessions:reopen', (_event, payload) => {
+    const p = payload || {};
+    if (!isUuid(p.channelId)) return { ok: false };
+    const engine = require('./session-engine');
+    if (typeof engine.reopenByTask !== 'function') return { ok: false };
+    return engine.reopenByTask({
+      channelId: p.channelId,
+      taskId: String(p.taskId || ''),
+    });
   });
 }
 

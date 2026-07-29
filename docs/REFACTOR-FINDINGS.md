@@ -468,3 +468,11 @@ Build + `tsc --noEmit` green on every commit; `npx eslint` at 0 errors (baseline
   - **Silent-end cards.** Operator End / idle-timeout / cost-cap post no lifecycle echo, so the requester's web card can read "active" until Closed/Reopened/resumed (intended per §A.3; note for watchers).
 - Proposed resolution: defer all; none blocks v1.9. Revisit input-scoped grants + the action budget alongside the autonomous-continuation hardening.
 - Status: open
+
+### F-09x: Avatar-cache SSRF — DNS-rebind residual
+- Location: dopl-desktop-app/main/avatar-cache.js (isSafeAvatarHost / getDataUri)
+- Found during: Session Window v2.2 review (2026-07-29)
+- Severity: smell (low residual; primary vectors closed)
+- Description: getDataUri fetches a member's profiles.avatar_url as the only new remote-fetch surface. Guards enforced: https-only, redirect:'error', raster image/* content-type, declared+actual <=256KB, 4s timeout, bounded pos/neg cache, and now isSafeAvatarHost blocking IP-literal + localhost/.local/.internal internal targets (169.254.169.254 metadata, 127./10./172.16-31./192.168./100.64-127., ::1, fc00::/7, fe80::/10, mapped-v4). RESIDUAL: a PUBLIC hostname that DNS-rebinds to an internal IP is not caught (the guard is on the URL host string, not the resolved IP). Bounded because avatar_url is NOT user-settable (the profile PATCH allowlist excludes it; it comes from Google OAuth), redirect:'error' blocks the 302-to-internal bypass, and the fetch is an image-only, no-exfil GET rendered only in the operator's own window as a data: URI.
+- Proposed resolution: defer — if avatar sourcing ever becomes user-influenced, add a resolve-then-check (dns.lookup the host, reject a private resolved IP) or a host allowlist (googleusercontent.com + the Supabase storage host). Until then the sync literal guard is proportional.
+- Status: open

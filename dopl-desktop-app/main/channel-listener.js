@@ -25,9 +25,7 @@ const trigger = require('./trigger');
 const taskNotify = require('./task-notify');
 const watcher = require('./consent-watcher');
 const sessionEngine = require('./session-engine');
-const settings = require('./settings');
 const realtime = require('./realtime');
-const { notifyLocal } = require('./channel-post');
 const { LISTENER, REALTIME } = require('./config');
 
 // Console output is invisible for a GUI-launched app, and the trigger path has
@@ -46,71 +44,12 @@ let reconciling = null; // in-flight reconcile promise (M1 re-entrancy guard)
 let onPendingCb = null; // tray pending-count callback (from index.js handlers)
 const loops = new Map(); // channelId -> loop entry
 
-// ── v1.9 session-window dispatch (checked BEFORE classify → consent, §A.2) ────
-// Both helpers SHORT-CIRCUIT when window-mode is OFF so the classify path below is
-// byte-for-byte today's behavior — no engine call happens at all in legacy mode.
-//
-// (1) A LIVE session for this (channel, task) consumes an inbound COUNTERPARTY reply
-// as its NEXT TURN — the loop continuation, no new consent modal. My OWN posts (the
-// agent's dopl_channel replies + my create_task) are skipped by the myUserId guard so
-// a session can never feed on its own output. Non-message kinds (lifecycle echoes)
-// never feed. taskId is the message's first-class (UUID) task, the session key.
-function feedLiveSession(entry, m) {
-  if (!settings.getWindowMode()) return false;
-  if (!m || m.kind !== 'message') return false;
-  if (!myUserId || m.authorUserId === myUserId) return false;
-  const taskId = targeting.firstClassTaskId(m);
-  if (!sessionEngine.hasLiveSession({ channelId: entry.channel.id, taskId })) return false;
-  // FIX L1: feed ONLY the session's actual counterparty (the task's other party).
-  // A THIRD member posting in the same channel must NOT be able to inject a turn
-  // into this task's loop — it falls through to classify like any other message.
-  const counterparty = sessionEngine.counterpartyFor({ channelId: entry.channel.id, taskId });
-  if (!counterparty || m.authorUserId !== counterparty) return false;
-  return sessionEngine.feedInbound({
-    channelId: entry.channel.id,
-    taskId,
-    message: m.body,
-    authorName: io.displayNameFor(m.authorUserId),
-  });
-}
-
-// (2) MY OWN first-class create_task addressed to a peer auto-opens a REQUESTER
-// window that drives the task (requesterTaskOpen is a SEPARATE pure predicate — it
-// never perturbs classify's 1536-case table). One window per (channel, task): an
-// already-live session (backlog replay / double delivery) is consumed, not relaunched.
-// A skip (cap / no-sdk / disabled) returns false so the message falls through to
-// classify, which 'ignore's my own message — exactly today's behavior; on a window
-// cap we add a passive local notice (§A.7).
-async function maybeOpenRequesterSession(entry, m) {
-  if (!settings.getWindowMode()) return false;
-  if (!targeting.requesterTaskOpen(m, myUserId)) return false;
-  const taskId = targeting.firstClassTaskId(m);
-  if (sessionEngine.hasLiveSession({ channelId: entry.channel.id, taskId })) return true;
-  const res = await sessionEngine.launchRequesterSession({
-    channelId: entry.channel.id,
-    taskId,
-    workspaceId: entry.workspaceId,
-    goal: m.body,
-    // FIX L1: the requester's counterparty is the member the task is addressed to.
-    counterpartyId: targeting.metaStr(m, 'taskTarget'),
-    context: {
-      channelName: entry.channel.name,
-      targetName: io.displayNameFor(targeting.metaStr(m, 'taskTarget')),
-      taskTitle: targeting.metaStr(m, 'taskTitle'),
-    },
-    toolProfile: targeting.resolveToolProfile(entry.channel),
-    mode: targeting.metaStr(m, 'taskMode') || 'autonomous',
-  });
-  if (res && res.sessionId) {
-    diag('requester session opened', String(res.sessionId).slice(0, 8), 'task', taskId.slice(0, 8));
-    return true;
-  }
-  diag('requester session not opened:', (res && res.skipped) || 'unknown');
-  if (res && res.skipped === 'cap') {
-    notifyLocal('Dopl: session window limit reached', `"${entry.channel.name}" will notify you of replies instead.`);
-  }
-  return false; // fall through — classify 'ignore's my own create_task
-}
+// ── v2.2 session-window dispatch (checked BEFORE classify → consent, §A.2) ────
+// The three pre-classify routes (feedLiveSession, maybeOpenRequesterSession,
+// maybeSurfaceRequesterReply) live in session-dispatch.js — extracted to keep this
+// file ≤500 and to make room for item 3's secondary path. All SHORT-CIRCUIT when
+// window-mode is OFF, so the classify path below stays byte-for-byte legacy behavior.
+const sessionDispatch = require('./session-dispatch');
 
 // ── Per-channel long-poll loop ──────────────────────────────────────────────
 async function channelLoop(entry) {
@@ -202,14 +141,13 @@ async function channelLoop(entry) {
     } else {
       for (const m of msgs) {
         if ((m.seq || 0) > io.getCursor(entry.channel.id)) io.setCursor(entry.channel.id, m.seq);
-        // v1.9 session-window dispatch, checked BEFORE classify → consent (§A.2):
-        //   1. a LIVE session for this (channel, task) consumes an inbound peer
-        //      reply as its NEXT TURN — the loop continuation, no new consent modal.
-        //   2. MY OWN first-class create_task auto-opens a REQUESTER window that
-        //      drives the task. Both are no-ops when window-mode is OFF, so the
-        //      classify path below is byte-for-byte today's behavior in that case.
-        if (feedLiveSession(entry, m)) continue;
-        if (await maybeOpenRequesterSession(entry, m)) continue;
+        // v2.2 session-window dispatch, checked BEFORE classify → consent (§A.2):
+        //   1. feed a LIVE session's next turn; 2. auto-open a REQUESTER window on my
+        //   own create_task; 3. reopen a SETTLED-yet-resumable requester on a peer reply.
+        //   All no-op when window-mode is OFF (byte-for-byte legacy classify below).
+        if (sessionDispatch.feedLiveSession(entry, m, myUserId)) continue;
+        if (await sessionDispatch.maybeOpenRequesterSession(entry, m, myUserId)) continue;
+        if (await sessionDispatch.maybeSurfaceRequesterReply(entry, m, myUserId)) continue;
         const verdict = targeting.classify(m, entry, myUserId);
         diag(
           'msg', entry.channel.id.slice(0, 8), 'seq', m.seq, 'kind', m.kind,
@@ -309,6 +247,8 @@ async function reconcileInner() {
   if (!myUserId) {
     const firstWs = desired.size ? desired.values().next().value.workspaceId : undefined;
     myUserId = await io.resolveIdentity(firstWs);
+    // Item 1: hand the operator identity to the engine so the self avatar resolves.
+    sessionEngine.setSelfIdentity(myUserId);
   }
 
   // Stop loops for channels no longer desired.

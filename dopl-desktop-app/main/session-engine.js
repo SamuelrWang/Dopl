@@ -17,6 +17,8 @@ const { Notification } = require('electron');
 const { diag } = require('./diag');
 const io = require('./session-io');
 const store = require('./session-store');
+const avatarCache = require('./avatar-cache');
+const sessionReopen = require('./session-reopen');
 const framing = require('./prompt-framing');
 const { apiFetch } = require('./api');
 const { initialSessionState, sessionReducer, nextIdleMs } = require('./session-reducer');
@@ -36,6 +38,8 @@ const MAX_WINDOWS = (settings && settings.MAX_SESSION_WINDOWS) || 6;
 const sessions = new Map(); // sessionKey -> live session object (in-memory only)
 let windowFactory = null; // fn(sessionId) -> BrowserWindow (injected by index.js)
 let lifecycle = { onLaunched: null, onEnded: null };
+let selfUserId = null; // operator's own user id (item 1: the self avatar); set by channel-listener
+function setSelfIdentity(id) { selfUserId = id || null; }
 
 function windowModeEnabled() {
   return settings ? settings.getWindowMode() : true;
@@ -50,6 +54,9 @@ function readCaps() {
 function refreshTray() {
   try { require('./tray').refresh(); } catch (_) { /* tray optional */ }
 }
+
+// Reopen helpers (session-reopen.js) need the live registry + tray refresh; bind once.
+sessionReopen.bind({ sessions, refreshTray });
 
 const baseRecord = io.baseRecord; // durable-record projection (session-io.js)
 
@@ -100,10 +107,12 @@ function runEffect(s, eff) {
   }
 }
 
-// Item 3: emits flow through the replay (buffered pre-load, re-sent on reload). Item 10: reshow a hidden window on a gated request.
+// Emits flow through the replay (buffered pre-load, re-sent on reload). Reshow a hidden
+// window on a gated request (item 10) OR a `counterparty` reply (v2.2 item 3 primary),
+// surfacing the operator's OWN window — which still runs NO gated tool on its own.
 function emit(s, payload) {
   if (!s.win || s.win.isDestroyed()) return;
-  if (s.windowHidden && payload && payload.type === 'permission_request') {
+  if (s.windowHidden && payload && (payload.type === 'permission_request' || payload.type === 'counterparty')) {
     try { s.win.show(); } catch (_) { /* best effort */ }
     s.windowHidden = false;
     refreshTray();
@@ -326,6 +335,10 @@ async function startSession(spec, sdk) {
   }
   bindWindow(s);
   emitFolder(s);
+  // Item 1/5/6: warm avatars ride init; a cold cache follows with an `avatars` event.
+  s.selfAvatar = avatarCache.cachedForUser(selfUserId);
+  s.peerAvatar = avatarCache.cachedForUser(s.counterpartyId);
+  avatarCache.resolveForSession(s, { selfUserId, peerUserId: s.counterpartyId }, (p) => emit(s, p));
   await startQuery(s, sdk);
   return s;
 }
@@ -408,27 +421,6 @@ function getConsentBySender(sender) {
   return sessionConsent.getBySender(sender);
 }
 
-// ── Reopen (item 10) — tray "Sessions" submenu source + a hidden-window reopen ──
-function listLiveSessions() {
-  const out = [];
-  for (const s of sessions.values()) {
-    if (s.settled) continue;
-    out.push({ sessionId: s.sessionId, channelName: (s.context && s.context.channelName) || null, hidden: !!s.windowHidden });
-  }
-  return out;
-}
-// Reopen a hidden live window (its renderer + transcript are intact — no replay).
-function reopenWindow(sessionId) {
-  for (const s of sessions.values()) {
-    if (s.sessionId !== sessionId || !s.win || s.win.isDestroyed()) continue;
-    try { s.win.show(); s.win.focus(); } catch (_) { /* best effort */ }
-    s.windowHidden = false;
-    refreshTray();
-    return true;
-  }
-  return false;
-}
-
 // Startup: register the renderer->main IPC once (session-ipc), then settle any
 // session that was live/awaiting when the app died — post the interrupted echo and,
 // when the SDK session id survives, offer an opt-in resume. NEVER auto-reopens.
@@ -458,43 +450,50 @@ function offerResume(rec, sdkSessionId) {
   }
 }
 
-async function resume(rec, sdkSessionId) {
-  if (!windowFactory || hasLiveSession({ channelId: rec.channelId, taskId: rec.taskId })) return;
+// Shared resume: reopen a settled task resuming its SDK session with a given first turn.
+async function startResume(rec, sdkSessionId, rawFirstTurn) {
+  if (!windowFactory || hasLiveSession({ channelId: rec.channelId, taskId: rec.taskId })) return false;
   let sdk;
-  try {
-    sdk = await getSdk();
-  } catch (_) {
-    return;
-  }
-  const nudge = 'The session was resumed after an interruption. Continue where you left off and await the next channel reply.';
-  await startSession({
+  try { sdk = await getSdk(); } catch (_) { return false; }
+  const s = await startSession({
     key: store.sessionKey(rec.channelId, rec.taskId),
-    channelId: rec.channelId,
-    taskId: rec.taskId,
-    workspaceId: rec.workspaceId,
-    side: rec.side,
-    profile: rec.profile,
-    mode: rec.mode,
+    channelId: rec.channelId, taskId: rec.taskId, workspaceId: rec.workspaceId,
+    side: rec.side, profile: rec.profile, mode: rec.mode,
     counterpartyId: rec.counterpartyId || null, // FIX L1: restore the counterparty binding
-    context: {},
-    rawFirstTurn: nudge,
-    resumeSdkId: sdkSessionId,
+    context: {}, rawFirstTurn, resumeSdkId: sdkSessionId,
   }, sdk);
+  return !!s;
+}
+
+async function resume(rec, sdkSessionId) { // opt-in resume from the interrupted notice
+  const nudge = 'The session was resumed after an interruption. Continue where you left off and await the next channel reply.';
+  return startResume(rec, sdkSessionId, nudge);
+}
+
+// Item 3 secondary: reopen a SETTLED requester (its sdkSessionId survived an idle/
+// interrupt end), resuming with the peer's reply FRAMED — fresh nonce, words stay DATA,
+// gated tools still gate on reopen (§H-4).
+async function resumeRequesterForReply(rec, sdkSessionId, reply) {
+  const firstTurn = io.frameContinuation(crypto.randomBytes(8).toString('hex'), reply && reply.message, reply && reply.authorName);
+  return startResume(rec, sdkSessionId, firstTurn);
 }
 
 module.exports = {
   init,
   setWindowFactory,
   setLifecycleHandlers,
+  setSelfIdentity, // item 1: the operator's user id for the self avatar (channel-listener)
   launchResponderSession,
   launchRequesterSession,
   hasLiveSession,
   counterpartyFor,
   feedInbound,
+  resumeRequesterForReply, // item 3 secondary — bounded requester continuation
   openConsentWindow, // consent reflow (item 8) — called by trigger.js
   decideConsent,
   closeConsentWindow,
   getConsentBySender,
-  listLiveSessions, // reopen (item 10) — tray via index.js
-  reopenWindow,
+  listLiveSessions: sessionReopen.listLiveSessions, // reopen (item 10) — tray via index.js
+  reopenWindow: sessionReopen.reopenWindow,
+  reopenByTask: sessionReopen.reopenByTask, // item 2 — MAIN-window bridge (channel-dir-ipc)
 };

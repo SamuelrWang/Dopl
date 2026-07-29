@@ -52,6 +52,31 @@
     return s ? s.charAt(0).toUpperCase() : "?";
   }
 
+  // The live per-author avatar for a role key ('self' | 'peer'), read from the
+  // controller-supplied ctx. Returns a bounded `data:` URI or null. ctx-optional
+  // so a factory called without a ctx (e.g. a mock/test) degrades to initials.
+  function avatarForKey(ctx, key) {
+    return ctx && typeof ctx.avatarFor === "function" ? ctx.avatarFor(key) : null;
+  }
+
+  // The avatar node for a bubble (item 1/5/6). SECURITY: `img.src` is set to the
+  // passed value ONLY when it is a `data:` URI — a remote/http string can NEVER
+  // reach `img.src` (it falls through to the initials span), so the CSP
+  // `img-src 'self' data:` is never challenged and no URL from untrusted content
+  // is ever loaded. NEVER innerHTML. Falls back to the `.cp-avatar` initials
+  // recipe when no data URI is available yet (cold cache) or none exists.
+  function avatarNode(dataUri, initialsText) {
+    if (typeof dataUri === "string" && dataUri.slice(0, 5) === "data:") {
+      const wrap = el("span", "av");
+      const img = el("img", "av-img");
+      img.setAttribute("alt", "");
+      img.setAttribute("src", dataUri); // data: URI ONLY (never a remote URL)
+      wrap.appendChild(img);
+      return wrap;
+    }
+    return el("span", "cp-avatar", initialsText == null ? "" : String(initialsText));
+  }
+
   const ROLE = {
     assistant: { who: "Agent", cls: "role-agent" },
     agent: { who: "Agent", cls: "role-agent" },
@@ -59,41 +84,69 @@
   };
 
   // ── stream item factories: each returns { el, update(item) } ───────────────
-  function makeTurn(item) {
+  // Every avatar-bearing factory holds a reference to its avatar node so update()
+  // can RE-APPLY it in place — a late `avatars` event repaints already-rendered
+  // bubbles (initials → the real photo) without rebuilding the whole item.
+  function makeTurn(item, ctx) {
     const role = ROLE[item.role] || { who: cap(item.role), cls: "role-agent" };
     const root = el("div", "bubble " + role.cls);
-    root.appendChild(el("span", "who", role.who));
+    const head = el("div", "cp-head");
+    // agent/operator turns are both ME → the SELF photo (item 1/5/6).
+    let av = avatarNode(avatarForKey(ctx, item.avatarKey), initial(role.who));
+    head.appendChild(av);
+    head.appendChild(el("span", "who", role.who));
+    root.appendChild(head);
     const body = el("span", "body", item.text || "");
     root.appendChild(body);
     const update = (it) => {
       body.textContent = it.text || "";
       root.classList.toggle("is-streaming", it.streaming === true);
+      const next = avatarNode(avatarForKey(ctx, it.avatarKey), initial(role.who));
+      head.replaceChild(next, av);
+      av = next;
     };
     update(item);
     return { el: root, update };
   }
 
-  // The peer's inbound reply — a distinct left lane with an initials avatar
-  // styled like the web Avatar fallback (item 1).
-  function makeCounterparty(item) {
+  // The peer's inbound reply — a distinct left lane. The avatar is the PEER photo
+  // (item 1/5/6), falling back to the initials-on-token recipe (item 1).
+  function makeCounterparty(item, ctx) {
     const root = el("div", "bubble role-counterparty");
     const head = el("div", "cp-head");
-    head.appendChild(el("span", "cp-avatar", initial(item.from)));
+    let av = avatarNode(avatarForKey(ctx, "peer"), initial(item.from));
+    head.appendChild(av);
     head.appendChild(el("span", "who", item.from || "Counterparty"));
     root.appendChild(head);
     root.appendChild(el("span", "body", item.text || ""));
-    return { el: root, update: noop };
+    const update = () => {
+      const next = avatarNode(avatarForKey(ctx, "peer"), initial(item.from));
+      head.replaceChild(next, av);
+      av = next;
+    };
+    return { el: root, update };
   }
 
-  // What MY agent sent to the peer (op=post) — reads as an outgoing message,
-  // clearly NOT narration and NOT a tool card (item 2). `to` absent → the
-  // "Posted to channel" label (resolved O-6).
-  function makeOutbound(item) {
+  // What MY agent SENT to the peer (op=post) — a distinct styled COMPONENT (item
+  // 4): a banner band (self avatar + an uppercase "SENT TO {peer}" label) over the
+  // posted body, clearly differentiated from narration. `to` absent → the
+  // "Posted to channel" label (resolved O-6). textContent-only; the avatar is a
+  // `data:` <img>.
+  function makeOutbound(item, ctx) {
     const root = el("div", "outbound role-outbound");
-    const head = item.to ? "Sent to " + item.to : "Posted to channel";
-    root.appendChild(el("span", "sent-to text-label", head));
-    root.appendChild(el("span", "body", item.text || ""));
-    return { el: root, update: noop };
+    const banner = el("div", "outbound__banner");
+    let av = avatarNode(avatarForKey(ctx, "self"), "Y");
+    banner.appendChild(av);
+    const label = item.to ? "Sent to " + item.to : "Posted to channel";
+    banner.appendChild(el("span", "outbound__label text-label", label));
+    root.appendChild(banner);
+    root.appendChild(el("div", "outbound__body", item.text || ""));
+    const update = () => {
+      const next = avatarNode(avatarForKey(ctx, "self"), "Y");
+      banner.replaceChild(next, av);
+      av = next;
+    };
+    return { el: root, update };
   }
 
   function makeNotice(item) {
@@ -240,10 +293,10 @@
   function makeFactories(ctx) {
     const bind = (fn) => (item) => fn(item, ctx);
     return {
-      turn: makeTurn,
+      turn: bind(makeTurn),
       tool: bind(makeTool),
-      counterparty: makeCounterparty,
-      outbound: makeOutbound,
+      counterparty: bind(makeCounterparty),
+      outbound: bind(makeOutbound),
       inbound_pending: bind(makeInboundPending),
       notice: makeNotice,
     };
@@ -254,6 +307,7 @@
     cap,
     pretty,
     initial,
+    avatarNode,
     makeTurn,
     makeTool,
     makeCounterparty,

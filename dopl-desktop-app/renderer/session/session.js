@@ -12,7 +12,7 @@
 
   const vm = globalThis.DoplSessionVM;
   const render = globalThis.DoplSessionRender;
-  const { el, pretty, initial } = render;
+  const { el, pretty, initial, avatarNode } = render;
 
   // Bridge (contextIsolation preload). A no-op stub lets session.html open
   // standalone for manual/mock testing; window.__sessionFeed drives a mock stream.
@@ -70,6 +70,14 @@
   // factory needs to reach the bridge (release + consent decision).
   const ctx = {
     vm,
+    // The live per-author avatar for a bubble (item 1/5/6). Reads the CURRENT
+    // `state` (reassigned per event) so a factory's update() always sees the
+    // latest avatar — a late `avatars` event repaints existing bubbles.
+    avatarFor(key) {
+      if (key === "self") return state.selfAvatar || null;
+      if (key === "peer") return state.peerAvatar || null;
+      return null;
+    },
     onRelease(pendingId) {
       bridge.releaseInbound(pendingId);
       state = vm.markInboundReleased(state, pendingId);
@@ -92,7 +100,16 @@
     const peer = info.from;
     if (peer) {
       els.channelName.textContent = peer;
-      els.peerAvatar.textContent = initial(peer);
+      // Header peer identity (item 1/5/6): the PEER photo as a data: <img> when
+      // one has arrived, else the initials-on-token fallback. `has-img` lets the
+      // token span drop its padding/border so the photo fills the round frame.
+      if (state.peerAvatar) {
+        els.peerAvatar.replaceChildren(avatarNode(state.peerAvatar, initial(peer)));
+        els.peerAvatar.classList.add("has-img");
+      } else {
+        els.peerAvatar.classList.remove("has-img");
+        els.peerAvatar.textContent = initial(peer);
+      }
       els.titleRow.classList.add("has-peer");
       document.title = "Dopl — " + peer;
     } else {
