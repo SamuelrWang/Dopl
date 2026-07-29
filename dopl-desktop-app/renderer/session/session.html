@@ -17,13 +17,11 @@
     <!-- Header -->
     <header class="session-header">
       <div class="header-id">
-        <div class="header-title-row" id="headerTitleRow">
-          <span class="brand-mark" aria-hidden="true"></span>
+        <div class="header-title-row">
           <span class="peer-avatar" id="peerAvatar" aria-hidden="true"></span>
           <span class="channel-name" id="channelName">Session</span>
         </div>
         <div class="task-title text-caption" id="taskTitle"></div>
-        <div class="badge-row" id="badgeRow"></div>
       </div>
       <div class="header-controls">
         <button class="ctl btn-light ctl-sm" id="btnStop" type="button">Stop</button>
@@ -103,17 +101,23 @@
     <!-- Ended banner -->
     <div class="ended-banner" id="endedBanner"></div>
 
-    <!-- Composer (steering) -->
+    <!-- Composer (steering). The send button MORPHS: an up-arrow while the agent is
+         idle (click = send the steer), a pause glyph while a turn is running (click =
+         interrupt). Both glyphs are INLINE SVG — the CSP allows no external asset. -->
     <div class="composer">
       <div class="composer__field concave-field">
-        <textarea class="steer-input" id="steerInput" rows="1"
-                  placeholder="Steer the agent… (Enter to send, Shift+Enter for a newline)"></textarea>
+        <textarea class="steer-input" id="steerInput" rows="1"></textarea>
         <div class="composer__controls">
-          <label class="interject-toggle">
-            <input type="checkbox" id="interjectToggle" />
-            Interrupt
-          </label>
-          <button class="send-btn auth-btn-3d" id="btnSend" type="button">Send</button>
+          <button class="send-btn auth-btn-3d" id="btnSend" type="button" aria-label="Send">
+            <svg class="send-btn__glyph send-btn__glyph--send" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+              <path d="M8 13V3.6M8 3.2 3.9 7.3M8 3.2l4.1 4.1" fill="none" stroke="currentColor"
+                    stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            <svg class="send-btn__glyph send-btn__glyph--pause" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+              <rect x="4.4" y="3.6" width="2.6" height="8.8" rx="1.1" fill="currentColor" />
+              <rect x="9" y="3.6" width="2.6" height="8.8" rx="1.1" fill="currentColor" />
+            </svg>
+          </button>
         </div>
       </div>
     </div>
@@ -121,6 +125,7 @@
   </div>
 
   <script src="session-viewmodel.js"></script>
+  <script src="session-chrome.js"></script>
   <script src="session-render.js"></script>
   <script src="session.js"></script>
 </body>

@@ -49,6 +49,16 @@ function reloadDisposition(phase) {
   return isTerminalPhase(phase) ? 'ignore' : 'resume';
 }
 
+// A durable DISPLAY string: one line, whitespace collapsed, capped at 80 chars, or
+// null when there is nothing usable. Same LENGTH/newline bound sanitizeName applies
+// (not its fence-token strip; these strings never enter a framed prompt, and every
+// framing path re-sanitizes on its own), so an identity field can never grow into a blob.
+function durableName(value) {
+  if (typeof value !== 'string') return null;
+  const s = value.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80).trim();
+  return s || null;
+}
+
 // Whitelist the durable fields so a live handle can never leak into electron-store
 // even if the caller passes an enriched record (mirrors consent-watcher's durable()).
 function durableSessionRecord(rec) {
@@ -69,6 +79,14 @@ function durableSessionRecord(rec) {
     // requester -> the target I addressed). Persisted so a resumed session stays
     // counterparty-bound and only feeds on that member's replies.
     counterpartyId: r.counterpartyId || null,
+    // v1.7.5 D1: the header identity (peer display name, channel name, task title).
+    // Whitelisted as PLAIN STRINGS so a recreated/resumed shell can rebuild the header
+    // instead of falling back to a bare "Session". Coerced + bounded the same way the
+    // framing bounds a counterparty-controlled display name (80 chars, one line), so a
+    // hand-edited store can never push an unbounded blob back into the renderer.
+    counterpartyName: durableName(r.counterpartyName),
+    channelName: durableName(r.channelName),
+    taskTitle: durableName(r.taskTitle),
     // FIX #9: the running cap counters, whitelisted so a P2 recreate rehydrates the
     // budget (a turn/cost-capped session must not reopen with a fresh cap). Coerced to a
     // finite number so a hand-edited store can never inject NaN into the reducer.
@@ -140,6 +158,7 @@ module.exports = {
   sessionKey,
   isTerminalPhase,
   reloadDisposition,
+  durableName,
   durableSessionRecord,
   // records
   loadRecords,

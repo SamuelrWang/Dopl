@@ -1,18 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  Archive,
-  ArchiveRestore,
-  Bell,
-  BellOff,
-  Hash,
-  ListTodo,
-  LogOut,
-  MoreHorizontal,
-  Trash2,
-  UserPlus,
-} from "lucide-react";
+import { Bell, BellOff, Hash, ListTodo, UserPlus } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { MenuItem, Popover } from "@/shared/ui/popover-menu";
 import { Avatar, type AvatarPerson } from "@/shared/ui/avatar";
@@ -33,7 +22,8 @@ import {
 } from "../lib/channel-display";
 import { MessageThread } from "./message-thread";
 import { MessageComposer, type SendOptions } from "./message-composer";
-import { PendingRequestsPanel } from "./pending-requests-panel";
+import { ConsentCard } from "./consent-card";
+import { ChannelActionsMenu } from "./channel-actions-menu";
 import { TaskPanel } from "./task-panel";
 import { ChannelSettingsPopover } from "./channel-settings-popover";
 import { ChannelFolderControl } from "./channel-folder-control";
@@ -102,11 +92,14 @@ interface Props {
 
 /**
  * Channel detail pane: a crumb bar (name, visibility, member count, presence)
- * with the notification / settings / invite / manage actions, the first-class
- * {@link PendingRequestsPanel} (inbound approvals + outbound reviews as a
- * labelled list), a scrolling transcript that auto-sticks to the bottom, and
- * the pinned composer (or a read-only / join affordance when the caller isn't a
- * member).
+ * with the notification / settings / invite / manage actions, a scrolling
+ * transcript that auto-sticks to the bottom, and the pinned composer (or a
+ * read-only / join affordance when the caller isn't a member).
+ *
+ * Pending consent decisions for this channel (inbound approvals + outbound
+ * reviews) ride at the END of that transcript, after the last message, so a new
+ * request reads as the newest thing in the chain and scrolls with the history
+ * instead of pinning a band above it.
  */
 export function ChannelThread({
   channel,
@@ -135,7 +128,6 @@ export function ChannelThread({
   onJoin,
   onLeave,
 }: Props) {
-  const [menuOpen, setMenuOpen] = useState(false);
   const [notifyOpen, setNotifyOpen] = useState(false);
   const [taskPanelOpen, setTaskPanelOpen] = useState(false);
   const [highlightedTaskId, setHighlightedTaskId] = useState<string | null>(null);
@@ -200,11 +192,13 @@ export function ChannelThread({
     [members]
   );
 
-  // Stick to the bottom when the transcript grows or the channel changes.
+  // Stick to the bottom when the transcript grows or the channel changes. A
+  // newly arrived pending request is the transcript's new last row, so its
+  // count is a dependency too — an inbound ask scrolls itself into view.
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages.length, channel.id]);
+  }, [messages.length, consentRequests.length, channel.id]);
 
   // Clear the pending highlight timer on unmount / channel switch.
   useEffect(
@@ -373,85 +367,24 @@ export function ChannelThread({
             <UserPlus size={16} />
           </button>
         )}
-        <div className="relative shrink-0">
-          <button
-            type="button"
-            onClick={() => setMenuOpen((v) => !v)}
-            aria-label="Channel actions"
-            className="flex h-7 w-7 items-center justify-center rounded-[7px] text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary"
-          >
-            <MoreHorizontal size={16} />
-          </button>
-          <Popover open={menuOpen} onClose={() => setMenuOpen(false)} align="right">
-            {canManage && (
-              <>
-                {/* A DM is always private (immutable) — no visibility toggle. */}
-                {!channel.isDirect && (
-                  <MenuItem
-                    icon={<Hash size={14} />}
-                    onSelect={() => {
-                      setMenuOpen(false);
-                      onToggleVisibility();
-                    }}
-                  >
-                    Make {channel.visibility === "public" ? "private" : "public"}
-                  </MenuItem>
-                )}
-                <MenuItem
-                  icon={
-                    channel.archivedAt ? (
-                      <ArchiveRestore size={14} />
-                    ) : (
-                      <Archive size={14} />
-                    )
-                  }
-                  onSelect={() => {
-                    setMenuOpen(false);
-                    onToggleArchive();
-                  }}
-                >
-                  {channel.archivedAt ? "Unarchive" : "Archive"}
-                </MenuItem>
-                <MenuItem
-                  icon={<Trash2 size={14} />}
-                  destructive
-                  onSelect={() => {
-                    setMenuOpen(false);
-                    setConfirmDelete(true);
-                  }}
-                >
-                  Delete {channel.isDirect ? "conversation" : "channel"}
-                </MenuItem>
-              </>
-            )}
-            {channel.isMember && !canManage && (
-              <MenuItem
-                icon={<LogOut size={14} />}
-                onSelect={() => {
-                  setMenuOpen(false);
-                  onLeave();
-                }}
-              >
-                Leave channel
-              </MenuItem>
-            )}
-          </Popover>
-        </div>
+        <ChannelActionsMenu
+          channel={channel}
+          canManage={canManage}
+          onToggleVisibility={onToggleVisibility}
+          onToggleArchive={onToggleArchive}
+          onRequestDelete={() => setConfirmDelete(true)}
+          onLeave={onLeave}
+        />
       </div>
 
-      <PendingRequestsPanel
-        requests={consentRequests}
-        toolProfile={channel.myAgentToolProfile ?? "full"}
-        busyIds={consentBusyIds}
-        onDecide={onDecideConsent}
-      />
-
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-14 pt-6">
-        <div className="mx-auto max-w-[760px]">
+        <div className="mx-auto flex max-w-[760px] flex-col gap-2.5 pb-2">
           {messages.length === 0 ? (
-            <p className="py-10 text-center text-caption text-text-muted">
-              {loading ? "Loading messages…" : "No messages yet."}
-            </p>
+            loading || consentRequests.length === 0 ? (
+              <p className="py-10 text-center text-caption text-text-muted">
+                {loading ? "Loading messages…" : "No messages yet."}
+              </p>
+            ) : null
           ) : (
             <MessageThread
               messages={messages}
@@ -463,6 +396,27 @@ export function ChannelThread({
               onCloseTask={onCloseTask}
               onReopenTask={onReopenTask}
             />
+          )}
+
+          {/* Pending decisions live at the bottom of the chain, in the scroller,
+              so an inbound ask reads as the newest row. A decided or expired
+              request drops out of `consentRequests` upstream and leaves here. */}
+          {consentRequests.length > 0 && (
+            <section
+              aria-label="Pending requests"
+              className="flex flex-col gap-2.5"
+            >
+              {consentRequests.map((request) => (
+                <ConsentCard
+                  key={request.id}
+                  request={request}
+                  toolProfile={channel.myAgentToolProfile ?? "full"}
+                  busy={consentBusyIds.has(request.id)}
+                  onAllow={() => onDecideConsent(request.id, "allow")}
+                  onDeny={() => onDecideConsent(request.id, "deny")}
+                />
+              ))}
+            </section>
           )}
         </div>
       </div>

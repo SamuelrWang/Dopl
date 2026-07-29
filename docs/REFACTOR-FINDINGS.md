@@ -395,7 +395,7 @@ Build + `tsc --noEmit` green on every commit; `npx eslint` at 0 errors (baseline
 - Status: open
 
 ### F-067: A failed consent PATCH from the notification-Allow action is silent
-- Location: `dopl-desktop-app/main/consent-watcher.js` / `consent.js` (the native-notification Allow/Send handler PATCHes `channel_consent_requests`); web backstop `src/features/channels/components/pending-requests-panel.tsx`
+- Location: `dopl-desktop-app/main/consent-watcher.js` / `consent.js` (the native-notification Allow/Send handler PATCHes `channel_consent_requests`); web backstop = the pending consent cards at the bottom of the channel transcript (`src/features/channels/components/channel-thread.tsx` + `consent-card.tsx`; the old `pending-requests-panel.tsx` band was deleted in v2.4)
 - Found during: Channels consent redesign (Round B, desktop v1.4, 2026-07-27)
 - Severity: smell (silent failure — no operator signal)
 - Description: when the operator clicks **Allow/Send** on the native consent notification, the desktop PATCHes the consent row to `allowed`. If that PATCH fails (offline, 5xx, token expired, or a lost CAS race that is NOT the settled-decision 409 case), **nothing tells the operator it didn't take** — the notification has already dismissed and the request silently stays `pending`. The **web Pending Requests list is the backstop** (the row is still there, still answerable), but a notification-only operator gets no signal and may believe they approved a spawn that never started. Mirrors the silent-drop shape of F-059.

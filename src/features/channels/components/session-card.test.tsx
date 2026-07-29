@@ -192,3 +192,69 @@ describe("SessionCard render", () => {
     expect(markup).toContain("bg-text-disabled");
   });
 });
+
+/**
+ * The card container is the thread's "agent is working" signal: green while
+ * active, neutral once the task settles (done / failed / any calm terminal).
+ * Amber belongs to the consent card (waiting on a human), so the two never mix.
+ */
+describe("SessionCard container treatment", () => {
+  it("gives an active session the success-tinted container", () => {
+    const markup = renderToStaticMarkup(
+      <SessionCard session={session({ status: "active" })} />
+    );
+    expect(markup).toContain("border-success/25");
+    expect(markup).toContain("bg-success/10");
+  });
+
+  it("keeps the neutral container when an open-task overlay pins active over a calm end", () => {
+    const markup = renderToStaticMarkup(
+      <SessionCard
+        session={session({ status: "active", calmEndStatus: "capped" })}
+      />
+    );
+    expect(markup).toContain("border-border-default");
+    expect(markup).not.toContain("bg-success/10");
+  });
+
+  it("keeps the neutral container for a completed task", () => {
+    const markup = renderToStaticMarkup(
+      <SessionCard session={session({ status: "done" })} />
+    );
+    expect(markup).toContain("border-border-default");
+    expect(markup).toContain("bg-bg-elevated");
+    expect(markup).not.toContain("bg-success/10");
+    expect(markup).not.toContain("border-success/25");
+  });
+
+  it("keeps the neutral container for a failed task (danger stays the chip's job)", () => {
+    const markup = renderToStaticMarkup(
+      <SessionCard session={session({ status: "failed" })} />
+    );
+    expect(markup).toContain("bg-bg-elevated");
+    expect(markup).not.toContain("bg-success/10");
+  });
+
+  it("keeps the neutral container for the calm terminals", () => {
+    for (const status of ["declined", "dropped", "interrupted", "capped", "ended"] as const) {
+      const markup = renderToStaticMarkup(<SessionCard session={session({ status })} />);
+      expect(markup).toContain("bg-bg-elevated");
+      expect(markup).not.toContain("bg-success/10");
+    }
+  });
+
+  it("never paints the container amber (that is the consent card's color)", () => {
+    const markup = renderToStaticMarkup(
+      <SessionCard session={session({ status: "active" })} />
+    );
+    expect(markup).not.toContain("bg-warning/10");
+  });
+
+  it("still composes the transient nav highlight ring over the green container", () => {
+    const markup = renderToStaticMarkup(
+      <SessionCard session={session({ status: "active" })} highlighted />
+    );
+    expect(markup).toContain("bg-success/10");
+    expect(markup).toContain("ring-border-highlight");
+  });
+});

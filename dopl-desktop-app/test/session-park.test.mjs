@@ -35,7 +35,7 @@ const flush = () => new Promise((r) => setImmediate(r));
 
 function harness(over = {}) {
   const cfg = { record: null, sdkId: null, windowReady: true, atCap: false, gateSdk: null, ...over };
-  const calls = { buildSdkOptions: [], consume: [], dispatch: [], startSession: [], query: [] };
+  const calls = { buildSdkOptions: [], consume: [], dispatch: [], startSession: [], query: [], emit: [] };
 
   const io = {
     makePushIterator: () => ({ __iter: true, pushed: [], push(m) { this.pushed.push(m); }, close() { this.closed = true; } }),
@@ -63,7 +63,7 @@ function harness(over = {}) {
     // fake mirrors that so a re-check (FIX #7) sees a session created during a getSdk await.
     startSession: async (spec) => { calls.startSession.push(spec); const sess = { key: spec.key, settled: false, ...spec }; sessions.set(spec.key, sess); return sess; },
     hasLiveSession: (a) => { const s = sessions.get(store.sessionKey(a.channelId, a.taskId)); return !!(s && !s.settled); },
-    emit: () => {},
+    emit: (s, payload) => calls.emit.push(payload),
     windowFactoryReady: () => cfg.windowReady,
     atWindowCap: () => !!cfg.atCap, // FIX #4
   };
@@ -201,6 +201,59 @@ test("FIX #9: recreateParkedShell threads the persisted turns/costUsd into the s
   const spec = h.calls.startSession[0];
   assert.equal(spec.turns, 24, "the capped turn count rides into the shell so it does not reset");
   assert.equal(spec.costUsd, 1.5);
+});
+
+// ── D1 (v1.7.5): the HEADER IDENTITY is restored from the durable record ──────────
+// Both resume paths used to pass context:{}, so a reopened window lost the peer name,
+// the channel, and the task title and its header fell back to a bare "Session".
+
+const IDENTITY_REC = {
+  channelId: "c1", taskId: "t1", workspaceId: "w1", side: "responder", profile: "full",
+  mode: "autonomous", counterpartyId: "peer-1",
+  counterpartyName: "David", channelName: "Ops", taskTitle: "Ship the invoice import",
+};
+
+test("D1: recreateParkedShell restores channelName / taskTitle / peer name into the context", async () => {
+  const h = harness({ record: IDENTITY_REC, sdkId: "sdk-1" });
+  await h.recreateParkedShell({ channelId: "c1", taskId: "t1" });
+  const ctx = h.calls.startSession[0].context;
+  assert.equal(ctx.channelName, "Ops");
+  assert.equal(ctx.taskTitle, "Ship the invoice import");
+  // `authorName` is the field startSession derives counterpartyName from, so the peer
+  // name (and therefore the header avatar + "Sent to X" label) survives a reopen.
+  assert.equal(ctx.authorName, "David");
+});
+
+test("D1: startResume restores the same identity context (opt-in resume path)", async () => {
+  const h = harness({ record: IDENTITY_REC, sdkId: "sdk-1" });
+  assert.equal(await h.startResume(IDENTITY_REC, "sdk-1", "nudge"), true);
+  const spec = h.calls.startSession[0];
+  assert.deepEqual(spec.context, { channelName: "Ops", taskTitle: "Ship the invoice import", authorName: "David" });
+  assert.equal(spec.rawFirstTurn, "nudge", "the resume turn is unchanged by the context restore");
+  assert.equal(spec.resumeSdkId, "sdk-1");
+});
+
+test("D1: a legacy record with no identity fields restores nulls (never undefined)", async () => {
+  const h = harness({ record: { channelId: "c1", taskId: "t1", profile: "full" }, sdkId: "sdk-1" });
+  await h.recreateParkedShell({ channelId: "c1", taskId: "t1" });
+  assert.deepEqual(h.calls.startSession[0].context, { channelName: null, taskTitle: null, authorName: null });
+});
+
+test("D1: emitParkedShell synthesizes an init carrying the restored identity", () => {
+  const h = harness();
+  h.emitParkedShell({
+    sessionId: "s1", side: "responder", profile: "full", mode: "autonomous", profileLabel: "Full access",
+    counterpartyName: "David", context: { channelName: "Ops", taskTitle: "Ship the invoice import" },
+  });
+  const init = h.calls.emit.find((p) => p.type === "init");
+  assert.ok(init, "the shell paints a synthesized init (no SDK system/init ever lands)");
+  assert.equal(init.taskTitle, "Ship the invoice import", "the task title is no longer hardcoded null");
+  assert.equal(init.channelName, "Ops");
+  assert.equal(init.from, "David");
+  assert.equal(init.model, null, "no model — nothing is running yet");
+  // The calm reopen note + the Paused pill still follow, byte-for-byte as in v1.7.4.
+  assert.equal(h.calls.emit[1].text, "Reopened. The earlier transcript is in the channel thread.");
+  assert.deepEqual(h.calls.emit[2], { type: "status", phase: "parked" });
 });
 
 // ── FIX #7: the check-then-act creator race (interleave with a fake async getSdk) ──

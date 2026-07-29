@@ -11,8 +11,9 @@
   "use strict";
 
   const vm = globalThis.DoplSessionVM;
+  const chromeVm = globalThis.DoplSessionChrome;
   const render = globalThis.DoplSessionRender;
-  const { el, pretty, initial, avatarNode } = render;
+  const { pretty, initial, avatarNode } = render;
 
   // Bridge (contextIsolation preload). A no-op stub lets session.html open
   // standalone for manual/mock testing; window.__sessionFeed drives a mock stream.
@@ -37,11 +38,9 @@
   const $ = (id) => document.getElementById(id);
   const app = $("app");
   const els = {
-    titleRow: $("headerTitleRow"),
     peerAvatar: $("peerAvatar"),
     channelName: $("channelName"),
     taskTitle: $("taskTitle"),
-    badgeRow: $("badgeRow"),
     statusDot: $("statusDot"),
     statusLabel: $("statusLabel"),
     statusMeta: $("statusMeta"),
@@ -57,7 +56,7 @@
     consentView: $("consentView"),
     endedBanner: $("endedBanner"),
     steerInput: $("steerInput"),
-    interject: $("interjectToggle"),
+    send: $("btnSend"),
     closePanel: $("closePanel"),
     closeSummary: $("closeSummary"),
     outcomeSeg: $("outcomeSeg"),
@@ -90,41 +89,31 @@
   const FACTORY = render.makeFactories(ctx);
 
   // ── header / status / folder ──────────────────────────────────────────────
-  // Item 2: for a DM the peer name (init.from) IS the identity — show the peer
-  // name + an initials-on-token avatar + the window title, and hide the black
-  // brand-mark. A group channel (no single peer) falls back to the channel name
-  // + brand-mark. Every string reaches the DOM via textContent.
+  // D1: ONE identity priority (chromeVm.headerIdentity) drives the header title,
+  // the subtitle, the avatar initials, and the native window title:
+  //     taskTitle -> peer name (init.from) -> channelName -> "Session".
+  // The avatar node is ALWAYS painted: the peer photo when one has arrived, else
+  // initials on a token (the peer's, or the title's when there is no peer at all).
+  // There is no black brand-mark fallback any more. Every string reaches the DOM
+  // via textContent; the identity fields are one-lined + capped by the chrome
+  // helper, so a counterparty-controlled name is bounded display data.
   function renderInit() {
     const info = state.init;
     if (!info) return;
-    const peer = info.from;
-    if (peer) {
-      els.channelName.textContent = peer;
-      // Header peer identity (item 1/5/6): the PEER photo as a data: <img> when
-      // one has arrived, else the initials-on-token fallback. `has-img` lets the
-      // token span drop its padding/border so the photo fills the round frame.
-      if (state.peerAvatar) {
-        els.peerAvatar.replaceChildren(avatarNode(state.peerAvatar, initial(peer)));
-        els.peerAvatar.classList.add("has-img");
-      } else {
-        els.peerAvatar.classList.remove("has-img");
-        els.peerAvatar.textContent = initial(peer);
-      }
-      els.titleRow.classList.add("has-peer");
-      document.title = "Dopl — " + peer;
+    const id = chromeVm.headerIdentity(info);
+    els.channelName.textContent = id.title;
+    els.taskTitle.textContent = id.subtitle;
+    // `has-img` lets the token span drop its padding/border so the photo fills
+    // the round frame (item 1/5/6); initials otherwise.
+    if (state.peerAvatar) {
+      els.peerAvatar.replaceChildren(avatarNode(state.peerAvatar, initial(id.avatarName)));
+      els.peerAvatar.classList.add("has-img");
     } else {
-      const name = info.channelName || "Session";
-      els.channelName.textContent = name;
-      els.titleRow.classList.remove("has-peer");
-      document.title = "Dopl — " + name;
+      els.peerAvatar.classList.remove("has-img");
+      els.peerAvatar.textContent = initial(id.avatarName);
     }
-    els.taskTitle.textContent = info.taskTitle || "";
-
-    const badges = [info.side, info.profile, info.mode].filter(Boolean);
-    if (els.badgeRow.childElementCount !== badges.length) {
-      els.badgeRow.replaceChildren();
-      for (const b of badges) els.badgeRow.appendChild(el("span", "badge", b));
-    }
+    // The native title bar carries the same name (prefixed with the product).
+    document.title = chromeVm.windowTitle(info);
   }
 
   function renderStatus() {
@@ -218,6 +207,17 @@
     els.endedBanner.textContent = parts.join(" ");
   }
 
+  // ── D5: the send button morphs into a pause control mid-turn ──────────────
+  // One button, two states (chromeVm.sendButtonMode): idle shows the up-arrow glyph
+  // and sends the steer; a running turn shows the pause glyph and interrupts the
+  // agent. The glyphs are static inline SVG in session.html — CSS swaps which one
+  // is visible, so nothing is ever built from a string here.
+  function renderSend() {
+    const mode = chromeVm.sendButtonMode(state);
+    els.send.classList.toggle("is-running", mode === "pause");
+    els.send.setAttribute("aria-label", chromeVm.sendButtonLabel(mode));
+  }
+
   function renderAll() {
     renderInit();
     renderStatus();
@@ -225,19 +225,48 @@
     renderStream();
     renderConsent();
     renderPermission();
+    renderSend();
     renderEnded();
   }
 
   // ── composer / controls wiring ───────────────────────────────────────────
+  // The Interrupt checkbox is gone: a steer is ALWAYS 'normal' priority now (it
+  // queues as the next turn), and interrupting is the pause button's job.
   function sendSteer() {
     const text = els.steerInput.value.trim();
     if (!text || state.ended) return;
-    const priority = els.interject.checked ? "now" : "normal";
-    bridge.send(text, priority);
+    bridge.send(text);
     state = vm.reduceEvent(state, { type: "turn", role: "operator", text, streaming: false });
     els.steerInput.value = "";
-    els.interject.checked = false;
+    autoGrow(); // D7: back to a single line after send
     renderAll();
+  }
+
+  // Click = pause while the agent is mid-turn, send otherwise.
+  function onSendClick() {
+    if (chromeVm.sendButtonMode(state) === "pause") {
+      bridge.interrupt();
+      return;
+    }
+    sendSteer();
+  }
+
+  // ── D7: composer auto-grow (up to 3 line-heights, then scroll) ────────────
+  // The cap math is pure (chromeVm.growHeight); this only measures the real
+  // computed line-height + vertical padding and applies the returned px height.
+  const MAX_COMPOSER_LINES = 3;
+  function composerMetrics() {
+    const cs = window.getComputedStyle(els.steerInput);
+    const lh = parseFloat(cs.lineHeight);
+    const pad = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+    return { lineHeight: Number.isFinite(lh) ? lh : 0, padding: pad };
+  }
+
+  function autoGrow() {
+    const node = els.steerInput;
+    const m = composerMetrics();
+    node.style.height = "auto"; // let scrollHeight shrink back when text is deleted
+    node.style.height = chromeVm.growHeight(node.scrollHeight, m.lineHeight, MAX_COMPOSER_LINES, m.padding) + "px";
   }
 
   // Apply a folder LABEL returned from the native picker (item 5). A change
@@ -265,13 +294,17 @@
   }
 
   function wire() {
-    $("btnSend").addEventListener("click", sendSteer);
+    els.send.addEventListener("click", onSendClick);
+    // Enter still SENDS (the steer queues while a turn runs — unchanged main
+    // behavior); Shift+Enter is a newline and grows the field.
     els.steerInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         sendSteer();
       }
     });
+    els.steerInput.addEventListener("input", autoGrow);
+    autoGrow();
 
     $("btnStop").addEventListener("click", () => bridge.interrupt());
     $("btnEnd").addEventListener("click", () => bridge.end());

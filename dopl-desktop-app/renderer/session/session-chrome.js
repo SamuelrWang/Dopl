@@ -1,0 +1,110 @@
+// Pure CHROME helpers for the Dopl session window (v1.7.5 D1/D5/D7):
+//
+//   - headerIdentity(init)   -> {title, subtitle, avatarName, hasPeer}
+//   - windowTitle(init)      -> the native title-bar string
+//   - sendButtonMode(state)  -> 'send' | 'pause'
+//   - sendButtonLabel(mode)  -> the aria-label for that mode
+//   - growHeight(...)        -> the composer's next height in px
+//
+// Split out of session-viewmodel.js purely to respect the HARD 500-line-per-file
+// cap (§2) — same discipline as the session-render.js split. Like the view-model
+// this module is DOM / electron / fs free and UMD-wrapped: a plain <script> in the
+// sandboxed renderer (attaching `globalThis.DoplSessionChrome`), a require() under
+// node --test. It produces STRINGS and NUMBERS only, never markup; session.js
+// prints every one of them via textContent.
+
+(function (global, factory) {
+  const api = factory();
+  if (typeof module === "object" && typeof module.exports === "object") {
+    module.exports = api; // node / CommonJS (tests)
+  } else {
+    global.DoplSessionChrome = api; // sandboxed renderer global
+  }
+})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+  "use strict";
+
+  // The view-model owns the shared string discipline (collapse to one line + cap).
+  // It is reached the same way this file is: a require() under node, the renderer
+  // global in the sandbox (session.html loads session-viewmodel.js first).
+  const vm =
+    typeof module === "object" && typeof require === "function"
+      ? require("./session-viewmodel.js")
+      : (typeof globalThis !== "undefined" && globalThis.DoplSessionVM) || null;
+
+  // Bound every identity string the same way prompt-framing.sanitizeName bounds a
+  // counterparty-controlled display name: one line, 80 chars. The value is then
+  // printed via textContent only, so a hostile name stays display data.
+  const NAME_CAP = 80;
+  function identityName(value) {
+    if (vm && typeof vm.oneLine === "function") return vm.oneLine(value, NAME_CAP);
+    const s = (value == null ? "" : String(value)).replace(/\s+/g, " ").trim();
+    return s.length > NAME_CAP ? s.slice(0, NAME_CAP - 1).trimEnd() + "…" : s;
+  }
+
+  // ── D1: header + window identity ────────────────────────────────────────────
+  // ONE priority order drives the header title, the header subtitle, the avatar
+  // initials, and the native window title:
+  //     taskTitle -> peer name (init.from) -> channelName -> "Session".
+  // The subtitle carries the next identity down, and only when the title is the
+  // task title, so the peer / channel name is never printed twice.
+  function headerIdentity(init) {
+    const info = init || {};
+    const taskTitle = identityName(info.taskTitle);
+    const peer = identityName(info.from);
+    const channel = identityName(info.channelName);
+    const title = taskTitle || peer || channel || "Session";
+    // The avatar is ALWAYS drawn: the peer when we know one, else the title — a
+    // group channel or a bare shell still gets a token, never a black box.
+    return {
+      title,
+      subtitle: taskTitle ? peer || channel || "" : "",
+      avatarName: peer || title,
+    };
+  }
+
+  // The native title-bar string: the same priority, prefixed with the product name.
+  function windowTitle(init) {
+    return "Dopl · " + headerIdentity(init).title;
+  }
+
+  // ── D5: the send button morphs into a pause control while a turn runs ───────
+  // RUNNING means the agent is mid-turn: phase 'running' AND activity 'working'.
+  // Anything else (idle, awaiting a reply, awaiting a permission, parked, ended)
+  // keeps the send affordance, so a queued steer is always one click away.
+  function sendButtonMode(state) {
+    const s = state || {};
+    return s.phase === "running" && s.activity === "working" ? "pause" : "send";
+  }
+
+  const SEND_LABEL = { send: "Send", pause: "Pause the agent" };
+  function sendButtonLabel(mode) {
+    return SEND_LABEL[mode] || SEND_LABEL.send;
+  }
+
+  // ── D7: composer auto-grow ──────────────────────────────────────────────────
+  // Grow with the content up to exactly `maxLines` line-heights, then stay fixed
+  // and scroll. `padding` is the textarea's vertical padding, which is part of both
+  // scrollHeight and the border-box height, so it rides inside the clamp. Returns a
+  // px number; a degenerate line-height falls back to the raw scrollHeight.
+  function growHeight(scrollHeight, lineHeight, maxLines, padding) {
+    const lh = num(lineHeight);
+    const sh = Math.max(0, num(scrollHeight));
+    if (lh <= 0) return sh;
+    const pad = Math.max(0, num(padding));
+    const lines = Math.max(1, Math.floor(num(maxLines) || 3));
+    return Math.max(lh + pad, Math.min(sh, lh * lines + pad));
+  }
+
+  function num(value) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  return {
+    headerIdentity,
+    windowTitle,
+    sendButtonMode,
+    sendButtonLabel,
+    growHeight,
+  };
+});

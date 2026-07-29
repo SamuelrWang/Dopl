@@ -26,9 +26,9 @@ assert.notEqual(to, -1, "END SESSION-STORE-PURE sentinel missing");
 assert.ok(to > from, "session-store sentinels out of order");
 const BLOCK = SRC.slice(from, to);
 
-const { sessionKey, isTerminalPhase, reloadDisposition, durableSessionRecord } = new Function(
+const { sessionKey, isTerminalPhase, reloadDisposition, durableName, durableSessionRecord } = new Function(
   `${BLOCK}
-   return { sessionKey, isTerminalPhase, reloadDisposition, durableSessionRecord };`
+   return { sessionKey, isTerminalPhase, reloadDisposition, durableName, durableSessionRecord };`
 )();
 
 // ── sessionKey ───────────────────────────────────────────────────────────────
@@ -82,14 +82,45 @@ test("durableSessionRecord whitelists exactly the durable fields", () => {
     phase: "running",
     startedAt: 123,
     counterpartyId: "u2", // FIX L1: the task's other party, persisted for resume
+    counterpartyName: "David", // D1: the header identity, persisted for a reopen
+    channelName: "Ops",
+    taskTitle: "Ship the invoice import",
     turns: 7, // FIX #9: the running cap counters, persisted for a P2 rehydrate
     costUsd: 0.42,
   });
   assert.deepEqual(Object.keys(rec).sort(), [
-    "channelId", "costUsd", "counterpartyId", "key", "mode", "phase", "profile",
-    "sdkSessionId", "sessionId", "side", "startedAt", "taskId", "turns", "workspaceId",
+    "channelId", "channelName", "costUsd", "counterpartyId", "counterpartyName", "key",
+    "mode", "phase", "profile", "sdkSessionId", "sessionId", "side", "startedAt",
+    "taskId", "taskTitle", "turns", "workspaceId",
   ]);
   assert.equal(rec.counterpartyId, "u2");
+});
+
+// ── D1: the header identity survives to a reopen ────────────────────────────────
+
+test("durableSessionRecord persists the header identity (D1) so a reopen can rebuild it", () => {
+  const rec = durableSessionRecord({
+    key: "c1:t1", channelId: "c1", phase: "parked",
+    counterpartyName: "David", channelName: "Ops", taskTitle: "Ship the invoice import",
+  });
+  assert.equal(rec.counterpartyName, "David", "the peer display name survives");
+  assert.equal(rec.channelName, "Ops");
+  assert.equal(rec.taskTitle, "Ship the invoice import");
+  // A legacy record written before v1.7.5 has none of them — null, never undefined.
+  const legacy = durableSessionRecord({ key: "c1:", channelId: "c1", phase: "launching" });
+  assert.equal(legacy.counterpartyName, null);
+  assert.equal(legacy.channelName, null);
+  assert.equal(legacy.taskTitle, null);
+});
+
+test("durableName bounds an identity string exactly like prompt-framing.sanitizeName", () => {
+  assert.equal(durableName("  David  "), "David");
+  assert.equal(durableName("David\nSmith\tJr"), "David Smith Jr", "collapsed to ONE line");
+  assert.equal(durableName("A".repeat(200)).length, 80, "capped at 80 chars");
+  // Nothing usable -> null, so the renderer falls through to the next identity down.
+  for (const empty of ["", "   ", "\n\t", null, undefined, 42, {}, []]) {
+    assert.equal(durableName(empty), null, `${JSON.stringify(empty)} -> null`);
+  }
 });
 
 test("durableSessionRecord persists the cap counters (FIX #9) and coerces bad values to 0", () => {

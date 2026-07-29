@@ -42,6 +42,22 @@ function knownProfile(p) {
   return KNOWN_PROFILES.has(p) ? p : 'read_only';
 }
 
+// v1.7.5 D1: rebuild the session CONTEXT from a durable record. A recreate/resume used
+// to pass context:{}, so the reopened window lost its identity (no peer name, no channel,
+// no task title) and the header fell back to a bare "Session". The record now persists
+// those three fields (session-io.baseRecord + the store whitelist), so the shape the
+// engine reads is restored verbatim: `authorName` is the field startSession derives
+// counterpartyName from, so the peer name survives a reopen too. Display-only strings —
+// they never re-enter the prompt (a resume passes its own rawFirstTurn).
+function contextFromRecord(rec) {
+  const r = rec || {};
+  return {
+    channelName: r.channelName || null,
+    taskTitle: r.taskTitle || null,
+    authorName: r.counterpartyName || null,
+  };
+}
+
 // P1 — resume a PARKED session IN PLACE. The session object survived park (still in
 // the registry, window alive); only its live SDK query was torn down. Rebuild the
 // abort controller + push iterator SYNCHRONOUSLY here so the pushInbound / pushTurn
@@ -124,7 +140,7 @@ async function recreateParkedShell(a) {
     // `full` that normalizeProfile would pick (its global fallback is unchanged).
     side: rec.side, profile: knownProfile(rec.profile), mode: rec.mode,
     counterpartyId: rec.counterpartyId || null, // FIX L1: keep the feed counterparty-bound
-    context: {}, resumeSdkId: sdkId,
+    context: contextFromRecord(rec), resumeSdkId: sdkId, // D1: restore the header identity
     // FIX #9: rehydrate the running cap budget so a turn/cost-capped session reopened via
     // P2 continues from where it capped instead of getting a fresh budget.
     turns: rec.turns, costUsd: rec.costUsd,
@@ -140,7 +156,10 @@ function emitParkedShell(s) {
   deps.emit(s, {
     type: 'init', sessionId: s.sessionId, side: s.side, profile: s.profile, mode: s.mode,
     profileLabel: s.profileLabel || null, model: null, channelName: (s.context && s.context.channelName) || null,
-    taskTitle: null, from: s.counterpartyName || null, selfAvatar: s.selfAvatar || null,
+    // D1: the synthesized init carries the SAME identity a live system/init would (the
+    // context was restored from the durable record by contextFromRecord).
+    taskTitle: (s.context && s.context.taskTitle) || null,
+    from: s.counterpartyName || null, selfAvatar: s.selfAvatar || null,
     fromAvatar: s.peerAvatar || null, cwdLabel: null,
   });
   deps.emit(s, { type: 'notice', level: 'info', text: 'Reopened. The earlier transcript is in the channel thread.' });
@@ -178,7 +197,7 @@ async function startResume(rec, sdkSessionId, rawFirstTurn) {
     channelId: rec.channelId, taskId: rec.taskId, workspaceId: rec.workspaceId,
     side: rec.side, profile: rec.profile, mode: rec.mode,
     counterpartyId: rec.counterpartyId || null, // FIX L1: restore the counterparty binding
-    context: {}, rawFirstTurn, resumeSdkId: sdkSessionId,
+    context: contextFromRecord(rec), rawFirstTurn, resumeSdkId: sdkSessionId, // D1: restore the header identity
   }, sdk);
   return !!s;
 }

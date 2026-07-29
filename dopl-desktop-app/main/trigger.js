@@ -267,7 +267,13 @@ async function launchResponderSession(entry, m, rec, { taskId }) {
     // FIX L1: the responder's counterparty is the requester who addressed me — the
     // inbound message's author. The listener only feeds this member's later replies.
     counterpartyId: m.authorUserId,
-    context: { channelName: entry.channel.name, authorName: rec.requesterName, authorKind: m.authorKind },
+    // D1: taskTitle rides the responder context too (the SAME server-stamped meta the
+    // consent payload above already reads), so the session header names the TASK
+    // instead of falling back to the channel or a bare "Session".
+    context: {
+      channelName: entry.channel.name, authorName: rec.requesterName,
+      authorKind: m.authorKind, taskTitle: targeting.metaStr(m, 'taskTitle') || null,
+    },
     toolProfile: rec.toolProfile,
     mode,
   });

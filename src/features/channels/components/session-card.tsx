@@ -9,13 +9,13 @@ import {
   type DoplSessionsBridge,
 } from "@/shared/lib/desktop";
 import { Avatar } from "@/shared/ui/avatar";
+import { splitSessionEntries, type SessionGroup } from "../lib/group-thread";
+import type { ChannelTask, TaskOutcome } from "../types";
 import {
-  isCalmTerminalStatus,
-  splitSessionEntries,
-  type SessionGroup,
-  type SessionStatus,
-} from "../lib/group-thread";
-import type { ChannelTask, TaskMode, TaskOutcome } from "../types";
+  CALM_TERMINAL_NOTE,
+  ModeBadge,
+  StatusChip,
+} from "./session-card-status";
 
 /**
  * One task as a single bordered card. The header carries the task title (the
@@ -30,7 +30,11 @@ import type { ChannelTask, TaskMode, TaskOutcome } from "../types";
  *
  * Card geometry follows the message-bubble family (`rounded-[10px]` border,
  * `px-3.5` padding); the header + footer strips reuse the
- * `bg-card-surface-subtle` section-strip recipe.
+ * `bg-card-surface-subtle` section-strip recipe. The container is
+ * status-driven: an `active` task carries the success-tinted surface (the
+ * agent is working), every settled ending stays neutral. That pairs with the
+ * warning-tinted consent card at the thread bottom, so the thread reads on one
+ * color rule: amber is waiting on a human, green is an agent at work.
  */
 export function SessionCard({
   session,
@@ -121,7 +125,16 @@ export function SessionCard({
     <article
       id={`session:${session.taskId}`}
       className={cn(
-        "overflow-hidden rounded-[10px] border border-border-default bg-bg-elevated",
+        "overflow-hidden rounded-[10px] border",
+        // Status-driven container: green while the agent is actively working,
+        // neutral for every settled ending (done / failed / calm terminal).
+        // Pairs with the amber consent card, which means "waiting on a human".
+        // calmEndStatus guard: an open-task overlay pins status "active" even
+        // after a calm session end, and a green card must not contradict its
+        // own "session ended" body note.
+        session.status === "active" && !session.calmEndStatus
+          ? "border-success/25 bg-success/10"
+          : "border-border-default bg-bg-elevated",
         highlighted && "ring-2 ring-border-highlight"
       )}
     >
@@ -441,75 +454,4 @@ function TaskCloseForm({
 function readSummary(metadata: Record<string, unknown>): string | null {
   const value = metadata.summary;
   return typeof value === "string" && value.length > 0 ? value : null;
-}
-
-const STATUS_LABEL: Record<SessionStatus, string> = {
-  active: "Task active",
-  done: "Task complete",
-  failed: "Task failed",
-  declined: "Declined",
-  dropped: "Reply not sent",
-  interrupted: "Interrupted",
-  capped: "Limit reached",
-  ended: "Session ended",
-};
-
-/** Calm one-line body note for a terminal that delivered no reply. */
-const CALM_TERMINAL_NOTE: Partial<Record<SessionStatus, string>> = {
-  declined: "This request was declined.",
-  dropped: "The reply was not sent.",
-  interrupted: "The session was interrupted.",
-  capped: "The session hit its turn limit. Reopen the window to continue.",
-  ended: "The session was ended on the desktop. The task stays open.",
-};
-
-/** The task's execution mode, shown as a quiet pill on a first-class task. */
-function ModeBadge({ mode }: { mode: TaskMode }) {
-  return (
-    <span className="shrink-0 rounded-full border border-border-strong bg-bg-inset px-1.5 py-px text-micro font-medium uppercase tracking-wide text-text-secondary">
-      {mode === "interactive" ? "Interactive" : "Autonomous"}
-    </span>
-  );
-}
-
-/**
- * The task status chip. `Task active` carries a pulsing success ring (the live
- * affordance); `Task complete` a solid success dot; `Task failed` a danger dot +
- * danger ink. The calm terminal states (`Declined` / `Reply not sent` /
- * `Interrupted` / `Limit reached` / `Session ended`) are operator-chosen or
- * benign endings — deliberately calm (muted ink + a neutral dot), NOT the
- * alarm-red of a real failure, since each is a normal outcome, not an error.
- */
-function StatusChip({ status }: { status: SessionStatus }) {
-  return (
-    <span
-      className={cn(
-        "inline-flex shrink-0 items-center gap-1 rounded-full border border-border-strong bg-bg-inset px-1.5 py-px text-micro font-medium",
-        status === "failed"
-          ? "text-danger"
-          : status === "active"
-            ? "text-success"
-            : "text-text-secondary"
-      )}
-    >
-      {status === "active" ? (
-        <span className="relative flex h-1.5 w-1.5">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-60" />
-          <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-success" />
-        </span>
-      ) : (
-        <span
-          className={cn(
-            "h-1.5 w-1.5 rounded-full",
-            status === "failed"
-              ? "bg-danger"
-              : isCalmTerminalStatus(status)
-                ? "bg-text-disabled"
-                : "bg-success"
-          )}
-        />
-      )}
-      {STATUS_LABEL[status]}
-    </span>
-  );
 }

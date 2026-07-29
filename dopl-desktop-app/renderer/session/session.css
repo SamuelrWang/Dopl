@@ -20,8 +20,18 @@ html, body {
   height: 100%;
   display: flex;
   flex-direction: column;
-  padding: 8px;
+  /* D3: NO top gap — the card sits FLUSH to the native title bar. Sides + bottom
+     keep the 8px inset. */
+  padding: 0 8px 8px;
   gap: 8px;
+}
+/* D3: session-scoped override of the SHARED .page-float recipe (tokens.css) — the
+   top corners square off against the title bar while the sides and the bottom keep
+   the 14px radius. Scoped to `.app.page-float` (two classes) so the shared recipe
+   itself is never edited and every other view keeps its full radius. */
+.app.page-float {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
 }
 
 /* ── #1 BUG: garbled UI + no-scroll (item 4) ───────────────────────────────
@@ -50,29 +60,26 @@ html, body {
 }
 .header-id { min-width: 0; }
 .header-title-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.brand-mark {
-  width: 20px; height: 20px; border-radius: 6px; flex: none;
-  background: linear-gradient(180deg, #313131 0%, #111 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 1px 2px rgba(0, 0, 0, 0.25);
-}
-/* ── Peer identity (item 2): an initials-on-token avatar for a DM peer, the
-   SAME recipe as the counterparty avatar. NEVER a black box, NEVER a remote
-   <img> (CSP img-src 'self' data: blocks remote URLs). When a peer is shown
-   the brand-mark is hidden. */
+/* ── Header identity (D1): ALWAYS an avatar token, the SAME recipe as the
+   counterparty avatar — the peer's photo when one has arrived, else initials (the
+   peer's, or the header title's when there is no peer at all). The old black
+   .brand-mark fallback is GONE. NEVER a remote <img> (CSP img-src 'self' data:
+   blocks remote URLs). */
 .peer-avatar {
   width: 20px; height: 20px; border-radius: 50%; flex: none;
-  display: none; align-items: center; justify-content: center;
+  display: inline-flex; align-items: center; justify-content: center;
   background: var(--bg-inset-hover);
   border: 1px solid var(--border-strong);
   color: var(--text-secondary);
   font-size: var(--text-micro);
   font-weight: 600;
 }
-.header-title-row.has-peer .peer-avatar { display: inline-flex; }
-.header-title-row.has-peer .brand-mark { display: none; }
 /* When a real peer photo (bounded data: URI) is present, the token span drops
    its border/fill and clips the round <img> that fills it (item 1/5/6). */
 .peer-avatar.has-img { border: none; background: none; padding: 0; overflow: hidden; }
+/* Pre-consent windows never receive an init, so the avatar node has no content
+   yet. An empty bordered circle reads as a glitch; hide it until identity lands. */
+.peer-avatar:empty { display: none; }
 .channel-name {
   font-size: var(--text-title);
   font-weight: 600;
@@ -85,19 +92,9 @@ html, body {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   max-width: 520px;
 }
-.badge-row { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
-.badge {
-  display: inline-flex; align-items: center;
-  padding: 1px 8px;
-  border-radius: 9999px;
-  border: 1px solid var(--border-strong);
-  background: var(--bg-elevated);
-  color: var(--text-secondary);
-  font-size: var(--text-micro);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  font-weight: 600;
-}
+/* D2: the RESPONDER / FULL / AUTONOMOUS chip row is gone. The side, profile, and
+   mode still ride the init payload (the posture line already names the profile in
+   plain words), the header just stops printing them as badges. */
 
 .header-controls { display: flex; gap: 8px; flex: none; }
 
@@ -164,7 +161,7 @@ html, body {
 .perm-posture { color: var(--text-secondary); font-size: var(--text-caption); }
 
 /* ── Per-session auto-approve toggle (item 10): a plain token switch — NOT a
-   bypass control; mirrors the .interject-toggle recipe. ────────────────────── */
+   bypass control. ─────────────────────────────────────────────────────────── */
 .auto-toggle {
   display: inline-flex; align-items: center; gap: 5px;
   font-size: var(--text-caption); color: var(--text-secondary);
@@ -579,12 +576,20 @@ html, body {
 .consent-actions { display: flex; gap: 8px; margin-top: 2px; }
 
 /* ── Composer (steering) ─────────────────────────────────────────────────── */
-.composer { padding: 10px; }
+/* D4: NO horizontal padding. The 10px/side it used to carry (against .app's 8px)
+   made the field 20px narrower than the stream box above it; zeroing it lines the
+   field's outer edges up with the stream exactly. Vertical padding is unchanged. */
+.composer { padding: 10px 0; }
 .composer__field { display: flex; align-items: flex-end; gap: 8px; padding: 8px; border-radius: 12px; }
+/* D7: the field auto-grows to at most 3 line-heights, then scrolls. The cap is
+   derived from the REAL line-height (1.5em per line) + the 12px vertical padding,
+   so CSS and the growHeight() math agree. `rows="1"` + the min-height keep it one
+   line at rest; session.js sets an inline height on input. */
 .steer-input {
   flex: 1;
-  min-height: 22px;
-  max-height: 140px;
+  min-height: calc(1.5em + 12px);
+  max-height: calc(4.5em + 12px);
+  overflow-y: auto;
   resize: none;
   padding: 6px 8px;
   border: none;
@@ -597,13 +602,20 @@ html, body {
   user-select: text;
 }
 .composer__controls { display: flex; align-items: center; gap: 8px; flex: none; }
-.interject-toggle {
-  display: inline-flex; align-items: center; gap: 5px;
-  font-size: var(--text-caption); color: var(--text-secondary);
-  cursor: pointer; user-select: none;
+/* D5: ONE compact black icon button. It keeps the .auth-btn-3d black face (which
+   owns the border + shadow — NO `border` here, item 5) and swaps which inline SVG
+   glyph is visible: the up-arrow at rest, the pause bars while the agent works. */
+.send-btn {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 30px; height: 30px; padding: 0;
+  border-radius: 8px;
+  color: var(--text-on-cta);
+  cursor: pointer;
 }
-/* NO `border` here either — .auth-btn-3d owns the border+shadow (item 5). */
-.send-btn { color: var(--text-on-cta); padding: 7px 16px; border-radius: 8px; font-size: var(--text-small); font-weight: 600; cursor: pointer; }
+.send-btn__glyph { width: 16px; height: 16px; display: block; }
+.send-btn__glyph--pause { display: none; }
+.send-btn.is-running .send-btn__glyph--send { display: none; }
+.send-btn.is-running .send-btn__glyph--pause { display: block; }
 
 /* ── Ended state ─────────────────────────────────────────────────────────── */
 .app.is-ended .composer,

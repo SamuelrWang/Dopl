@@ -234,6 +234,13 @@ function baseRecord(s) {
     phase: s.state.phase,
     startedAt: s.startedAt,
     counterpartyId: s.counterpartyId || null, // FIX L1: the task's other party
+    // v1.7.5 D1: the HEADER IDENTITY, sourced from s.context/spec at startSession.
+    // A parked record is the only thing a P2 recreate (or a post-restart resume) has
+    // to rebuild the window from, so without these the reopened header lost the peer
+    // name, the channel, and the task title and fell back to a bare "Session".
+    counterpartyName: s.counterpartyName || null,
+    channelName: (s.context && s.context.channelName) || null,
+    taskTitle: (s.context && s.context.taskTitle) || null,
     // FIX #9: the running cap counters, so a P2 recreate rehydrates the budget of a
     // turn/cost-capped (or parked) session instead of resetting it to a fresh one.
     turns: s.state.turns,
