@@ -58,7 +58,11 @@ async function channelLoop(entry) {
     // Push transport (v2.1): when realtime is HEALTHY, awaitOrCheap does a cheap
     // immediate catch-up + a wake-interruptible long idle; when UNHEALTHY or
     // disabled it collapses to today's held long-poll — byte-for-byte.
-    const healthy = REALTIME.ENABLED && realtime.isHealthy();
+    // PER-WORKSPACE (v2.2): trust push only when THIS entry's own workspace sub is
+    // subscribed — not a global >=1-sub flag. A loop whose ws errored while another
+    // ws stayed up would otherwise think push is healthy and wait on wakes that
+    // never come (green globally, silent for the ws that matters).
+    const healthy = REALTIME.ENABLED && realtime.isWorkspaceHealthy(entry.workspaceId);
     entry.dirty = false;
     // Per-iteration controller so a wake (powerMonitor OR a realtime INSERT) can
     // abort an in-flight poll and force an immediate re-await from the cursor.
@@ -418,7 +422,11 @@ function wake() {
 // cheap await + resolve its idle) so it catches up now. Coalesced in realtime.js
 // (one wake/channel/burst); io.wakeEntry no-ops on a channel with no loop.
 function wakeChannel(channelId) {
-  io.wakeEntry(loops.get(channelId));
+  const entry = loops.get(channelId);
+  // DIAG: every wake the transport fires, and whether a live loop caught it
+  // (hit) or the channel has no loop yet (miss) — closes the trace INSERT→wake.
+  diag('realtime wake', String(channelId).slice(0, 8), `(loop=${entry ? 'hit' : 'miss'})`);
+  io.wakeEntry(entry);
 }
 
 // Push health flipped: nudge every loop to re-evaluate now, so a drop to the

@@ -41,6 +41,9 @@ const { createBreaker } = new Function(
 const { createWakeCoalescer } = new Function(
   `${slice("// ─── BEGIN WAKE-COALESCE", "// ─── END WAKE-COALESCE")}\n return { createWakeCoalescer };`
 )();
+const { wsHealthy } = new Function(
+  `${slice("// ─── BEGIN WS-HEALTH", "// ─── END WS-HEALTH")}\n return { wsHealthy };`
+)();
 
 // ── Breaker: fail → open → cooldown → half-open → close ──────────────────────
 
@@ -185,4 +188,37 @@ test("a throwing onFlush does not drop the rest of the batch", () => {
   c.mark("ok");
   T.run();
   assert.deepEqual(woke, ["ok"], "the good id still fired");
+});
+
+// ── Per-workspace health (the ~3-min-to-consent root cause) ───────────────────
+// isWorkspaceHealthy(ws) wires module state (started, breaker.isClosed(), the
+// sub for that ws) into this pure predicate. These lock the behavior that fixes
+// the bug: a loop trusts push for its ws ONLY when its OWN sub is subscribed.
+
+test("a SUBSCRIBED ws is healthy", () => {
+  assert.equal(wsHealthy(true, true, { subscribed: true }), true);
+});
+
+test("an ERRORED ws is UNhealthy even though another ws is subscribed", () => {
+  // The live bug: ws A up (global health green) while ws B (the DM's) errored.
+  // A per-ws Map: B must read UNhealthy so B's loops fall back to the long-poll.
+  const subs = new Map([
+    ["wsA", { subscribed: true }],
+    ["wsB", { subscribed: false }], // CHANNEL_ERROR / TIMED_OUT / CLOSED
+  ]);
+  const isWsHealthy = (id) => wsHealthy(true, true, subs.get(id));
+  assert.equal(isWsHealthy("wsA"), true, "the up ws stays healthy");
+  assert.equal(isWsHealthy("wsB"), false, "the errored ws is NOT masked green by wsA");
+});
+
+test("an unknown ws (no sub in the map) is UNhealthy", () => {
+  assert.equal(wsHealthy(true, true, undefined), false);
+});
+
+test("not started → UNhealthy regardless of the sub", () => {
+  assert.equal(wsHealthy(false, true, { subscribed: true }), false);
+});
+
+test("breaker OPEN → UNhealthy regardless of the sub", () => {
+  assert.equal(wsHealthy(true, false, { subscribed: true }), false);
 });

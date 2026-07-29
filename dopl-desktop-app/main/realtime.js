@@ -108,7 +108,7 @@ const breaker = createBreaker({
   threshold: REALTIME.BREAKER_FAIL_THRESHOLD,
   cooldownMs: REALTIME.BREAKER_COOLDOWN_MS,
 });
-const subs = new Map(); // wsId -> { channel, subscribed }
+const subs = new Map(); // wsId -> { channel, subscribed, resubTimer }
 
 function subscribedCount() {
   let n = 0;
@@ -117,9 +117,28 @@ function subscribedCount() {
 }
 
 // The loop trusts pushes only when the WS is up (>=1 channel SUBSCRIBED) AND the
-// breaker is closed. Any other state → the loop uses the held long-poll.
+// breaker is closed. Any other state → the loop uses the held long-poll. This is
+// the GLOBAL view (used only for the health diagnostic + the on-flip nudge).
 function isHealthy() {
   return started && breaker.isClosed() && subscribedCount() > 0;
+}
+
+// ─── BEGIN WS-HEALTH (pure; unit-tested via source extraction) ───────────────
+// THE per-workspace health predicate. A channel loop must trust push for ITS
+// workspace ONLY when the transport is started, the breaker is closed, and THAT
+// ws's own sub is actually SUBSCRIBED — never merely because SOME OTHER ws is up.
+// Global isHealthy() (>=1 sub) would otherwise leave a loop whose own ws errored
+// stuck waiting on wakes that can never arrive (the ~3-min-to-consent bug): green
+// globally, silent for the ws that matters. Pure over its inputs so the test can
+// lock the "one ws errored while another is subscribed" case with no ws/electron.
+function wsHealthy(started_, breakerClosed, sub) {
+  return !!(started_ && breakerClosed && sub && sub.subscribed);
+}
+// ─── END WS-HEALTH ───────────────────────────────────────────────────────────
+
+// Per-workspace health the channel loop consults: only this ws's own sub counts.
+function isWorkspaceHealthy(wsId) {
+  return wsHealthy(started, breaker.isClosed(), subs.get(wsId));
 }
 
 function emitHealth() {
@@ -130,20 +149,29 @@ function emitHealth() {
   try { if (onHealthCb) onHealthCb(h); } catch (_) { /* callback must not throw up */ }
 }
 
-async function ensureClient() {
-  if (client) return;
-  client = new RealtimeClient(`${SUPABASE_URL}/realtime/v1`, {
-    params: { apikey: SUPABASE_ANON_KEY },
-    transport: WebSocket,
-    // Bounded backoff; while the breaker is OPEN, hold the long cooldown so a WS
-    // flap cannot storm-reconnect (F-072). A clean SUBSCRIBED closes the breaker
-    // and the short ladder resumes.
-    reconnectAfterMs: (tries) => {
-      if (!breaker.isClosed()) { breaker.maybeHalfOpen(); return REALTIME.BREAKER_COOLDOWN_MS; }
-      return [1000, 2000, 5000, 10000][Math.min(tries - 1, 3)] || 10000;
-    },
-  });
-  await applyAuth();
+// Memoized init: creates the client AND applies the JWT. Returns a single shared
+// promise that resolves ONLY AFTER applyAuth() completes, so a concurrent caller
+// (setWorkspaces racing start()'s fire-and-forget) can await auth-before-subscribe
+// instead of seeing a half-initialized `client` whose setAuth has not landed yet.
+let clientReady = null;
+function ensureClient() {
+  if (clientReady) return clientReady;
+  clientReady = (async () => {
+    client = new RealtimeClient(`${SUPABASE_URL}/realtime/v1`, {
+      params: { apikey: SUPABASE_ANON_KEY },
+      transport: WebSocket,
+      // Bounded backoff; while the breaker is OPEN, hold the long cooldown so a WS
+      // flap cannot storm-reconnect (F-072). A clean SUBSCRIBED closes the breaker
+      // and the short ladder resumes.
+      reconnectAfterMs: (tries) => {
+        if (!breaker.isClosed()) { breaker.maybeHalfOpen(); return REALTIME.BREAKER_COOLDOWN_MS; }
+        return [1000, 2000, 5000, 10000][Math.min(tries - 1, 3)] || 10000;
+      },
+    });
+    await applyAuth();
+    return client;
+  })().catch((err) => { clientReady = null; throw err; }); // don't poison future inits
+  return clientReady;
 }
 
 async function applyAuth() {
@@ -156,20 +184,29 @@ async function applyAuth() {
   }
 }
 
-function onInsert(payload) {
+function onInsert(wsId, payload) {
   const chId = payload && payload.new && payload.new.channel_id;
+  // DIAG: every INSERT that actually reaches us, BEFORE coalesce — the ground
+  // truth that push is delivering for this ws. Silence here + a healthy sub =
+  // the break is upstream (RLS/filter), not in the wake wiring.
+  diag('realtime insert', String(wsId).slice(0, 8), 'ch', chId ? String(chId).slice(0, 8) : '-');
   if (chId && coalescer) coalescer.mark(chId);
 }
 
 function onStatus(wsId, status) {
   const s = subs.get(wsId);
   if (!s) return;
+  // DIAG: the per-ws subscribe outcome (SUBSCRIBED / CHANNEL_ERROR / TIMED_OUT /
+  // CLOSED) — the first thing to check when global health is green but one ws
+  // is not delivering.
+  diag('realtime sub', String(wsId).slice(0, 8), status);
   if (status === 'SUBSCRIBED') {
     s.subscribed = true;
     breaker.onSuccess();
   } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
     s.subscribed = false;
     breaker.onFailure();
+    scheduleResubscribe(wsId); // don't leave an errored sub silently dead
   }
   emitHealth();
 }
@@ -181,17 +218,35 @@ function addChannel(wsId) {
     .on(
       'postgres_changes',
       { event: 'INSERT', schema: 'public', table: 'channel_messages', filter: `workspace_id=eq.${wsId}` },
-      onInsert
+      (payload) => onInsert(wsId, payload)
     )
     .subscribe((status) => onStatus(wsId, status));
-  subs.set(wsId, { channel, subscribed: false });
+  subs.set(wsId, { channel, subscribed: false, resubTimer: null });
 }
 
 function removeChannel(wsId) {
   const s = subs.get(wsId);
   if (!s) return;
+  if (s.resubTimer) { clearTimeout(s.resubTimer); s.resubTimer = null; }
   try { if (client) client.removeChannel(s.channel); } catch (_) { /* already gone */ }
   subs.delete(wsId);
+}
+
+// Bounded re-subscribe for an errored/closed ws sub: re-apply the JWT then rejoin
+// just that one channel. Guarded so it can never storm (F-072): at most ONE
+// pending retry per ws, and only while the breaker is CLOSED — an OPEN breaker
+// owns recovery via the long reconnect cooldown.
+function scheduleResubscribe(wsId) {
+  const s = subs.get(wsId);
+  if (!s || s.resubTimer || !breaker.isClosed()) return;
+  s.resubTimer = setTimeout(() => {
+    const cur = subs.get(wsId);
+    if (cur) cur.resubTimer = null;
+    if (!started || !client || (cur && cur.subscribed)) return; // recovered on its own
+    applyAuth()
+      .then(() => { removeChannel(wsId); addChannel(wsId); })
+      .catch((err) => diag('realtime resubscribe error', err && err.message));
+  }, REALTIME.RESUBSCRIBE_MS);
 }
 
 // ── Public API ───────────────────────────────────────────────────────────────
@@ -209,18 +264,29 @@ function start({ getAccessToken, onInsert: onInsertHandler, onHealthChange } = {
 
 // setWorkspaces(ids): subscribe a channel for each workspace id, drop channels
 // for ids no longer present. Called from the listener's reconcile — mirrors the
-// web's per-workspace subscription set.
-function setWorkspaces(ids) {
-  if (!started || !client) return;
+// web's per-workspace subscription set. AWAITs ensureClient() first: it resolves
+// only after setAuth has landed, so a postgres_changes subscribe never authorizes
+// before the JWT is set (an unauthenticated RLS-gated subscribe just errors and
+// delivers nothing — a prime cause of a green-but-silent ws sub).
+async function setWorkspaces(ids) {
+  if (!started) return;
+  try { await ensureClient(); } catch (err) { diag('realtime setWorkspaces client error', err && err.message); return; }
+  if (!started || !client) return; // stop() may have run while we awaited
   const desired = new Set((ids || []).filter(Boolean));
   for (const wsId of subs.keys()) if (!desired.has(wsId)) removeChannel(wsId);
   for (const wsId of desired) addChannel(wsId);
 }
 
-// Re-apply the latest access token (called after the listener refreshes on 401)
-// so the WS keeps a valid JWT without a full reconnect.
+// Re-apply the latest access token (called after the listener refreshes on 401,
+// and once per reconcile) so the WS keeps a valid JWT. A fresh token is pushed to
+// every still-joined channel by setAuth; any sub that had ERRORED (e.g. its JWT
+// expired mid-flight) is rejoined now that auth is fresh, so it never stays
+// silently dead while another ws keeps global health green.
 function refreshAuth() {
-  if (started) applyAuth();
+  if (!started || !client) return;
+  applyAuth()
+    .then(() => { for (const [wsId, s] of subs) if (!s.subscribed) scheduleResubscribe(wsId); })
+    .catch((err) => diag('realtime refreshAuth error', err && err.message));
 }
 
 function stop() {
@@ -228,8 +294,9 @@ function stop() {
   for (const wsId of Array.from(subs.keys())) removeChannel(wsId);
   try { if (client) client.disconnect(); } catch (_) { /* best-effort */ }
   client = null;
+  clientReady = null;
   coalescer = null;
   emitHealth();
 }
 
-module.exports = { start, stop, setWorkspaces, refreshAuth, isHealthy };
+module.exports = { start, stop, setWorkspaces, refreshAuth, isHealthy, isWorkspaceHealthy };

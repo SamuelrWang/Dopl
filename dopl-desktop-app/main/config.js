@@ -69,14 +69,23 @@ const REALTIME = {
   CHEAP_AWAIT_TIMEOUT_MS: 1,
   // Our own fetch-abort for that cheap call (short — it returns immediately).
   CHEAP_FETCH_TIMEOUT_MS: 15_000,
-  // Idle wait between cheap catch-ups once caught up: a wake interrupts it, and
-  // it also fires as a safety re-poll if a realtime INSERT were ever missed.
-  LONG_IDLE_MS: 5 * 60 * 1000,
+  // Idle wait between cheap catch-ups once caught up: a wake interrupts it
+  // instantly, and it also fires as a safety re-poll if a realtime INSERT were
+  // ever missed. This is the belt-and-suspenders BACKSTOP that bounds worst-case
+  // latency when push connects but silently fails to deliver a wake: at 45s a
+  // missed INSERT surfaces in <=45s via this caught-up re-poll, not ~5min.
+  // (Kept short deliberately — a wake still resolves it the instant push works.)
+  LONG_IDLE_MS: 45 * 1000,
   // Circuit breaker (F-072 reconnect-storm guard): this many consecutive WS
   // subscribe failures OPEN the breaker → isHealthy() false → loops revert to
   // the held long-poll and realtime retries only on the long cooldown below.
   BREAKER_FAIL_THRESHOLD: 4,
   BREAKER_COOLDOWN_MS: 30_000,
+  // Bounded re-subscribe delay: after a ws sub CHANNEL_ERRORs/CLOSES we re-apply
+  // the JWT and rejoin that one channel this soon (single pending retry per ws,
+  // and only while the breaker is CLOSED, so an errored sub is never left
+  // silently dead while another ws keeps global health green — no storm, F-072).
+  RESUBSCRIBE_MS: 5_000,
   // Coalesce a burst of INSERTs into at most one wake per channel per window.
   WAKE_COALESCE_MS: 200,
 };

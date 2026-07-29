@@ -98,6 +98,21 @@ test("cheap await timeout is POSITIVE (the server schema rejects timeoutMs=0)", 
   assert.ok(REALTIME.CHEAP_AWAIT_TIMEOUT_MS < LISTENER.AWAIT_TIMEOUT_MS);
 });
 
+// ── Backstop: the caught-up idle is the SHORT one that bounds missed-wake latency
+// The v2.2 fix shortened LONG_IDLE_MS from 5min to <=45s so a push that connects
+// but silently drops a wake still surfaces via this caught-up re-poll in <=45s.
+// The healthy+caught-up path must select exactly this constant (wake-interruptible).
+
+test("caught-up-healthy idle uses the SHORT backstop constant (<=45s), not ~5min", () => {
+  assert.ok(REALTIME.LONG_IDLE_MS <= 45_000, "worst-case missed-wake latency is bounded to <=45s");
+  assert.ok(REALTIME.LONG_IDLE_MS < 5 * 60 * 1000, "shortened from the old 5-min idle");
+  // The caught-up-healthy branch (drained=false) selects LONG_IDLE_MS verbatim.
+  assert.equal(
+    idleWaitFor(true, false, LISTENER.IDLE_GAP_MS, REALTIME.LONG_IDLE_MS),
+    REALTIME.LONG_IDLE_MS
+  );
+});
+
 // ── Interruptible sleep ──────────────────────────────────────────────────────
 
 function fakeTimers() {
