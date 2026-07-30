@@ -287,8 +287,38 @@ test("L2: the tool card drops the box (border / radius / fill / card padding)", 
   // The head no longer paints its own band, and the body is not an inset well.
   const head = CSS.slice(CSS.indexOf(".tool-card__head {"), CSS.indexOf(".tool-card__name"));
   assert.ok(!/background|border-bottom/.test(head), "the head band is gone");
-  const body = CSS.slice(CSS.indexOf(".tool-card__body {"), CSS.indexOf(".tool-card__body > summary"));
+  // RE-PINNED (v2.x FIX 4): `.tool-card__body > summary` is gone — the body is now a plain
+  // disclosed wrapper, so slice to the next selector (.tool-io-label) instead.
+  const body = CSS.slice(CSS.indexOf(".tool-card__body {"), CSS.indexOf(".tool-io-label"));
   assert.ok(!/background|box-shadow/.test(body), "the inset well is gone");
+});
+
+// ── v2.x FIX 2/3/4: aligned width, lowercase name, LEFT arrow, no "Show details" ──────
+
+test("FIX 2: the laned tool card fills the lane (width:100%) so command lines share a left edge", () => {
+  const tool = CSS.slice(CSS.indexOf("\n.tool-card {"), CSS.indexOf(".tool-card__head"));
+  assert.match(tool, /width: 100%/, "the card no longer shrinks to fit its content");
+  // The 66% number stays in ONE place — the lane recipe caps it; the card only fills to it.
+  assert.match(CSS, /\.lane-me \{ align-self: flex-end; max-width: 66%; \}/);
+});
+
+test("FIX 3: the tool name is LOWERCASE, never re-uppercased", () => {
+  const name = CSS.slice(CSS.indexOf(".tool-card__name {"), CSS.indexOf(".tool-card__summary"));
+  assert.match(name, /text-transform: lowercase/, "bash / list_calendars / dopl_channel, not shouted");
+  assert.ok(!/text-transform: uppercase/.test(name), "the name is not uppercased anywhere in its recipe");
+});
+
+test("FIX 4: the disclosure is a LEFT ::before arrow on the head; the right chevron + row are gone", () => {
+  // The head is the <details> summary now: it toggles, hides the native marker, and carries
+  // the LEFT arrow that rotates open. The reduced-motion guard survives.
+  assert.match(CSS, /\.tool-card__head \{[\s\S]*?cursor: pointer;[\s\S]*?list-style: none;/);
+  assert.match(CSS, /\.tool-card__head::-webkit-details-marker \{ display: none; \}/);
+  assert.match(CSS, /\.tool-card__head::before \{\n\s*content: "›";[\s\S]*?transition: transform/);
+  assert.match(CSS, /\.tool-card\[open\] > \.tool-card__head::before \{ transform: rotate\(90deg\); \}/);
+  assert.match(CSS, /@media \(prefers-reduced-motion: reduce\) \{\n\s*\.tool-card__head::before \{ transition: none; \}/);
+  // The OLD right-side chevron on the body summary is fully removed.
+  assert.ok(!/\.tool-card__body > summary/.test(CSS), "no body>summary rule survives");
+  assert.ok(!/\.tool-card__body\[open\]/.test(CSS), "no body[open] chevron rule survives");
 });
 
 test("L2: the type ramp steps DOWN and the overflow guards are intact", () => {
@@ -299,7 +329,11 @@ test("L2: the type ramp steps DOWN and the overflow guards are intact", () => {
   // v2.0 garble fixes (the reason this card was boxed in the first place) must survive.
   assert.match(card, /\.tool-card__summary \{[\s\S]*?text-overflow: ellipsis;\n\s*min-width: 0; flex: 1;/);
   assert.match(card, /white-space: pre-wrap;\n\s*overflow-wrap: anywhere;/, "the pre still wraps");
-  assert.match(card, /max-height: 240px;\n\s*overflow: auto;/, "and still scrolls");
+  // SCROLL FIX: the pre's cap is deliberately re-pinned from 240px to 60vh — small enough
+  // that a megabyte Write input cannot out-stand the scrollback, large enough that the box
+  // is almost never the thing scrolling (and session.js forwards the wheel when it is).
+  assert.match(card, /max-height: 60vh;\n\s*overflow: auto;/, "a LARGE cap, not a 240px wheel trap");
+  assert.ok(!/max-height: 240px/.test(CSS), "no 240px scroller survives anywhere in the stream");
   assert.match(CSS, /\.stream > \* \{ flex: 0 0 auto; \}/, "stream children keep their natural height");
   // The status word stays legible at the smaller size (its own weight + colour keys).
   assert.match(CSS, /\.tool-status \{ flex: none; font-size: var\(--text-micro\); font-weight: 600/);

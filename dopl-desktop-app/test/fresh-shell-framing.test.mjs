@@ -34,10 +34,19 @@ const NONCE = "n0nce";
 
 // A shell shaped exactly like the one session-engine.startSession builds for a reopen with
 // nothing to resume (see the `freshRun` / `freshFraming` fields).
+// v2.x: the ids are part of the restored context (session-park.contextFromRecord reads
+// them off the durable record), because THIS is the path that builds its framing at
+// first-turn time — a reopened shell used to be told the channel's display name only.
+const CH = "aaaaaaaa-1111-4bbb-8ccc-dddddddddddd";
+const WS = "bbbbbbbb-2222-4ccc-8ddd-eeeeeeeeeeee";
+
 function freshShell(over = {}) {
   return {
-    side: "responder", nonce: NONCE, channelId: "c1", taskId: "t1",
-    context: { channelName: "Ops", taskTitle: "Ship the invoice import", authorName: "David" },
+    side: "responder", nonce: NONCE, channelId: CH, taskId: "t1",
+    context: {
+      channelName: "Ops", taskTitle: "Ship the invoice import", authorName: "David",
+      channelId: CH, workspaceId: WS,
+    },
     resumeSdkId: null, sdkSessionId: null,
     freshRun: true, freshFraming: true,
     ...over,
@@ -58,6 +67,26 @@ test("FIX F2: a fresh shell's FIRST typed turn carries the DELIVERY instruction"
   assert.match(turn, /post your reply into this channel with the dopl_channel MCP tool/);
   assert.match(turn, /there is no other capture/);
   assert.ok(turn.endsWith("what did they end up sending?"), "the operator's words come last");
+});
+
+test("v2.x: that first turn also carries the CONCRETE channel + workspace ids", () => {
+  // The recreated-shell path is the one that frames LAZILY, so it is the easiest one to
+  // leave id-less: session-park rebuilds the context, io.takeFraming reads it.
+  const turn = io.withSeed(freshShell({ pendingHistory: THREAD() }), "what next?");
+  assert.ok(turn.includes(`op "post", channel "${CH}", workspace "${WS}"`), "the exact call to make");
+  assert.match(turn, /discovery call\nlike op "list" is unnecessary here/, "and no id hunting");
+  assert.match(turn, /IS this session's own channel/);
+  // A REQUESTER-side shell addresses the same channel the same way.
+  const req = io.withSeed(freshShell({ side: "requester" }), "keep going");
+  assert.ok(req.includes(`op "post", channel "${CH}", workspace "${WS}"`));
+});
+
+test("v2.x: a record with NO ids still frames (an older durable record)", () => {
+  const s = freshShell({ context: { channelName: "Ops", authorName: "David" } });
+  const turn = io.withSeed(s, "hello");
+  assert.match(turn, /post your reply into this channel with the dopl_channel MCP tool \(op "post",/);
+  assert.ok(!/undefined/.test(turn), "no placeholder reaches the agent");
+  assert.match(turn, /SECURITY RULES/);
 });
 
 test("FIX F2: it carries the ROLE, the counterparty framing, and the SECURITY RULES", () => {

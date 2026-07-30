@@ -131,6 +131,21 @@ test("openRequester: my own create_task launches a requester window", async () =
   assert.equal(h.calls.launch[0].taskId, TASK);
 });
 
+test("openRequester: v2.x — the launch context carries the channel + workspace ids", async () => {
+  // prompt-framing's delivery section reads ONLY the context, so a requester spawned with
+  // the channel's display name alone could not fill dopl_channel's required `channel=`
+  // (nor the workspace a multi-workspace token demands) and hunted with op "list".
+  const h = harness({ requesterOpen: true, live: false, launchReturn: { sessionId: "s9" } });
+  await h.maybeOpenRequesterSession(entry, peerMsg({ authorUserId: ME }), ME);
+  const ctx = h.calls.launch[0].context;
+  assert.equal(ctx.channelId, "c1", "the concrete channel id");
+  assert.equal(ctx.workspaceId, "w1", "and the workspace it lives in");
+  assert.equal(ctx.channelName, "General", "the display identity still rides");
+  // The spec-level ids the engine also needs are unchanged.
+  assert.equal(h.calls.launch[0].workspaceId, "w1");
+  assert.equal(h.calls.launch[0].channelId, "c1");
+});
+
 test("openRequester: an already-live task is deduped (true, no relaunch)", async () => {
   const h = harness({ requesterOpen: true, live: true });
   assert.equal(await h.maybeOpenRequesterSession(entry, peerMsg({ authorUserId: ME }), ME), true);

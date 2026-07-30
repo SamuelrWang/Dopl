@@ -187,12 +187,62 @@
     els.folderLabel.textContent = vm.folderLabel(state.folder);
   }
 
+  // ─── BEGIN SESSION-SCROLL-PURE (pure; unit-tested via source extraction) ────
+  // SCROLL FIX (stuck/sticky stream). Two decisions, number-in / number-out, so the truth
+  // tables live in test/session-scroll.test.mjs.
+  //   1. THE PIN. renderStream re-pinned from within 48px of the bottom on EVERY renderAll —
+  //      which also fires for folder labels, avatar fills, status pills and dock repaints —
+  //      so a reader parked just above the bottom was yanked down by events that changed
+  //      nothing they were looking at. Now: an 8px band (the ACTUAL bottom) AND real growth.
+  //   2. THE WHEEL. A capped block inside the transcript (the tool card's input pre, a
+  //      pending outbound draft) takes the wheel under the pointer and Chromium LATCHES the
+  //      gesture to it — the stream freezes. forwardedWheelDelta hands it back to the stream
+  //      once that box cannot travel further that way (or cannot scroll at all).
+  const PIN_BAND_PX = 8; // was 48 — a band wide enough to read in is a band that fights you
+  const EDGE_SLACK_PX = 1; // fractional device pixels never quite reach the exact edge
+  const WHEEL_LINE_PX = 16; // deltaMode 1 (lines) → px; deltaMode 2 (pages) is left alone
+
+  // The whole pin decision. A non-finite gap (an unmeasured stream) reads as "at the bottom".
+  function shouldPinStream(bottomGap, tailChanged) {
+    return tailChanged === true && !(bottomGap >= PIN_BAND_PX);
+  }
+
+  // A cheap fingerprint of what the stream ENDS with: count, the last item's kind +
+  // identity, its text length (a streaming turn taking more text IS growth). Everything a
+  // non-stream renderAll touches leaves this identical.
+  function streamTail(items) {
+    const list = Array.isArray(items) ? items : [];
+    if (!list.length) return "0";
+    const last = list[list.length - 1] || {};
+    const id = last.toolUseId || last.pendingId || last.requestId || "";
+    const len = typeof last.text === "string" ? last.text.length : 0;
+    return list.length + "|" + (last.kind || "") + "|" + id + "|" + len;
+  }
+
+  function forwardedWheelDelta(scrollTop, scrollHeight, clientHeight, deltaY, deltaMode) {
+    const px = deltaMode === 1 ? deltaY * WHEEL_LINE_PX : deltaMode ? 0 : deltaY;
+    if (!Number.isFinite(px) || px === 0) return 0; // no vertical intent (or a page-mode wheel)
+    const travel = scrollHeight - clientHeight;
+    if (Number.isFinite(travel) && travel > 0) {
+      if (px < 0 && scrollTop > EDGE_SLACK_PX) return 0; // the inner box can still go up
+      if (px > 0 && scrollTop < travel - EDGE_SLACK_PX) return 0; // ...or down
+    }
+    return px; // the inner box is done (or never scrolled): the stream takes the gesture
+  }
+  // ─── END SESSION-SCROLL-PURE ────────────────────────────────────────────────
+
   // ── stream ─────────────────────────────────────────────────────────────────
   // Reconcile the stream by index: create missing nodes, update existing ones.
   const rendered = [];
+  // The gap is measured on the USER's own scroll, never re-measured after a paint: a card
+  // that grows (a result revealed in an open card) must not silently un-pin a reader sitting
+  // at the bottom — only a scroll says "I moved away". 0 ⇒ initial open lands at the bottom.
+  let bottomGap = 0;
+  let lastTail = streamTail([]);
   function renderStream() {
-    const pinned =
-      els.stream.scrollHeight - els.stream.scrollTop - els.stream.clientHeight < 48;
+    const tail = streamTail(state.items);
+    const tailChanged = tail !== lastTail;
+    lastTail = tail;
     for (let i = 0; i < state.items.length; i++) {
       const item = state.items[i];
       if (!rendered[i]) {
@@ -204,7 +254,23 @@
         rendered[i].update(item);
       }
     }
-    if (pinned) els.stream.scrollTop = els.stream.scrollHeight;
+    if (shouldPinStream(bottomGap, tailChanged)) els.stream.scrollTop = els.stream.scrollHeight;
+  }
+
+  // The nested scrollers that live INSIDE the transcript. The dock / consent / composer
+  // caps are chrome outside .stream, so this listener never sees them.
+  const INNER_SCROLLERS = ".tool-card__body pre, .outbound-pending .outbound__body";
+  function wireStreamScroll() {
+    const s = els.stream;
+    s.addEventListener("scroll", () => { bottomGap = s.scrollHeight - s.scrollTop - s.clientHeight; });
+    s.addEventListener("wheel", (e) => {
+      const box = e.target && typeof e.target.closest === "function" ? e.target.closest(INNER_SCROLLERS) : null;
+      if (!box) return;
+      const px = forwardedWheelDelta(box.scrollTop, box.scrollHeight, box.clientHeight, e.deltaY, e.deltaMode);
+      if (!px) return;
+      s.scrollTop += px;
+      e.preventDefault(); // the inner box must not also consume (and latch) this gesture
+    }, { passive: false });
   }
 
   // ── consent (pre-SDK request card) ─────────────────────────────────────────
@@ -412,6 +478,7 @@
     });
 
     wireFolder();
+    wireStreamScroll();
   }
 
   // Manual/mock hook: window.__sessionFeed({type:'turn', ...}) drives the UI

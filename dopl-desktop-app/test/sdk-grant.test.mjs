@@ -137,3 +137,75 @@ test("grantDecision tolerates missing args and unknown profiles (normalize to fu
   assert.equal(grantDecision({ profile: "nonsense", toolName: DOPL_CHANNEL_TOOL, channelId: "c1", input: ownPost("c1") }), "gate");
   assert.equal(grantDecision(), "gate", "no args -> full -> unknown tool gates");
 });
+
+// ── v2.x WORKSPACE PIN: the dopl MCP server entry the session actually runs with ──
+//
+// The other half of "the spawned agent does not know where it lives". The device
+// credential can span several workspaces, and a multi-workspace connection has NO
+// default, so every dopl call that omitted `workspace=` was refused ("This connection
+// has no default workspace ... pass workspace=<slug_or_id>"). buildMcpServers now pins
+// the SESSION's workspace UUID as the `X-Workspace-Id` request header — the pin the MCP
+// endpoint resolves against the caller's own memberships — so an unqualified call
+// auto-targets instead of failing. The pin GRANTS nothing (it must match a membership
+// the credential already has) and a per-call `workspace=` still wins server-side.
+//
+// sdk-loader.js is electron-bound (app.getPath), so the function is source-extracted and
+// driven with fakes — the same idiom the rest of this directory uses.
+
+const LOADER = readFileSync(join(HERE, "..", "main", "sdk-loader.js"), "utf8");
+const MCP_BLOCK = LOADER.slice(
+  LOADER.indexOf("function buildMcpServers("),
+  LOADER.indexOf("// FIX M2 — a scrubbed copy")
+);
+assert.ok(MCP_BLOCK.includes("return { dopl: server };"), "buildMcpServers slice missing/incomplete");
+
+const SPAWN_FILE = { mcpServers: { dopl: { url: "https://dopl.test/api/mcp", headers: { Authorization: "Bearer secret-token" } } } };
+
+function buildServers(policy, workspaceId, spawnFile = SPAWN_FILE) {
+  const fs = { readFileSync: () => (spawnFile === null ? (() => { throw new Error("ENOENT"); })() : JSON.stringify(spawnFile)) };
+  const path = { join: (...p) => p.join("/") };
+  const app = { getPath: () => "/userData" };
+  return new Function(
+    "fs", "path", "app", "MCP_URL", "policy", "workspaceId",
+    `${MCP_BLOCK}\n return buildMcpServers(policy, workspaceId);`
+  )(fs, path, app, "https://fallback.test/api/mcp", policy, workspaceId);
+}
+
+const WS_UUID = "9a1b2c3d-2222-4ccc-8ddd-eeeeeeeeeeee";
+
+test("the session's workspace UUID rides as the X-Workspace-Id header, beside the bearer", () => {
+  const servers = buildServers(null, WS_UUID);
+  assert.deepEqual(servers.dopl.headers, {
+    Authorization: "Bearer secret-token",
+    "X-Workspace-Id": WS_UUID,
+  }, "the header the MCP endpoint reads as its per-request pin");
+  assert.equal(servers.dopl.type, "http");
+  assert.equal(servers.dopl.url, "https://dopl.test/api/mcp");
+});
+
+test("no session workspace -> NO pin header at all (today's behavior, unchanged)", () => {
+  for (const missing of [undefined, null, "", "   ", 42, {}]) {
+    const headers = buildServers(null, missing).dopl.headers;
+    assert.deepEqual(Object.keys(headers), ["Authorization"], JSON.stringify(missing));
+  }
+});
+
+test("the pin does not disturb the per-profile dopl tools allowlist (or the bearer)", () => {
+  const scoped = buildServers(["dopl_channel"], WS_UUID);
+  assert.deepEqual(scoped.dopl.tools, ["dopl_channel"], "a restricted profile still only sees its scoped tools");
+  assert.equal(scoped.dopl.headers.Authorization, "Bearer secret-token");
+  const open = buildServers(null, WS_UUID);
+  assert.ok(!("tools" in open.dopl), "null policy still means no per-server bound");
+  // A missing spawn file still returns {} — a pin can never manufacture a server entry.
+  assert.deepEqual(buildServers(null, WS_UUID, null), {});
+  assert.deepEqual(buildServers(null, WS_UUID, { mcpServers: { dopl: { url: "u" } } }), {}, "no bearer -> no server");
+});
+
+test("buildSdkOptions passes the SESSION's workspace, so every session query is pinned", () => {
+  const ENGINE = readFileSync(join(HERE, "..", "main", "session-engine.js"), "utf8");
+  const opts = ENGINE.slice(ENGINE.indexOf("function buildSdkOptions(s) {"), ENGINE.indexOf("async function startQuery("));
+  assert.match(opts, /mcpServers: buildMcpServers\(cfg\.doplToolsPolicy, s\.workspaceId\),/);
+  // A parked resume and a recreated shell assemble options through this SAME function
+  // (session-park calls deps.buildSdkOptions), so they are pinned by construction.
+  assert.match(ENGINE, /sessionPark\.bind\(\{\n?\s*sessions, getSdk, buildSdkOptions/);
+});

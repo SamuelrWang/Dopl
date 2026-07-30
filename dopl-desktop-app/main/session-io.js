@@ -228,6 +228,27 @@ function sdkRenderEvents(msg, sessionChannelId, peerName, willGatePost) {
   return out;
 }
 
+// FIX (v2.x): the INITIATING request as a DISPLAY-ONLY stream item for the TOP of the
+// transcript. main feeds the raw request body to the agent as its fenced first turn
+// (framing.buildFencedTurn), but never emitted it for the operator to SEE — so the window
+// showed a reply and tool activity with no visible question. Returns the render payload the
+// engine emits once at session start, or null when there is nothing fresh to show: a resumed
+// or parked shell has no firstMessage and its D3 channel history already carries the ask.
+// DISPLAY ONLY — the caller emits it, never pushes it to the SDK iterator, so the agent input
+// is byte-identical. `from` is the BOUND counterparty name for a responder (never a third
+// party); a requester shows its own goal, so it needs no peer name (the renderer shows "You").
+// The text is the RAW UNFENCED body — never the nonce fences or OUR framing lines.
+function initialRequestPayload(side, firstMessage, counterpartyName) {
+  if (typeof firstMessage !== 'string' || !firstMessage.trim()) return null;
+  const responder = side === 'responder';
+  return {
+    type: 'request',
+    side: responder ? 'responder' : 'requester',
+    from: responder ? (counterpartyName || null) : null,
+    text: firstMessage,
+  };
+}
+
 // The whitelisted durable projection of a live session (mirrors the store shape).
 // Live handles (query / window / iterator) are NEVER copied — only the fields the
 // interrupted-echo + resume path need. `phase` is read from the reducer state.
@@ -412,6 +433,7 @@ module.exports = {
   summarizeInput,
   safeInput,
   summarizeResult,
+  initialRequestPayload, // FIX (v2.x): the initiating request as a display-only stream item
   isOutboundPost,
   sdkRenderEvents,
   baseRecord,

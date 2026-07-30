@@ -35,17 +35,12 @@
   "use strict";
 
   // ── helpers ──────────────────────────────────────────────────────────────
-  // The pure string formatters live in session-format.js (the §2 500-line split) and are
-  // reached the same way this module reaches session-labels.js: a require() under node,
-  // the renderer global in the sandbox (session.html loads session-format.js first). They
-  // are RE-EXPORTED below, so vm.summarizeToolInput / vm.shortToolName / vm.oneLine are
-  // unchanged for every caller (session-chrome.js reads vm.oneLine, session-render.js
-  // reads ctx.vm.shortToolName).
+  // The pure string formatters live in session-format.js (the §2 500-line split); this module
+  // reaches them like session-labels.js (require under node, the renderer global in the sandbox)
+  // and RE-EXPORTS them, so vm.summarizeToolInput / vm.shortToolName / vm.oneLine are unchanged.
   //
-  // NIT (v2.7): a MISSING formatter THROWS here, at load, instead of degrading to a local
-  // fallback. The old `fmt.oneLine || (…)` shims silently replaced the capped one-liner with
-  // an UNCAPPED String(v) if the script ever failed to load — an unbounded, untrusted name
-  // reaching the header is worse than a window that fails loudly on boot.
+  // NIT (v2.7): a MISSING formatter THROWS here at load rather than degrading to a silent
+  // fallback that could let an UNCAPPED, untrusted name reach the header.
   const fmt =
     typeof module === "object" && typeof require === "function"
       ? require("./session-format.js")
@@ -139,11 +134,8 @@
     return touched ? { ...state, items } : state;
   }
 
-  // FIX F9 (v2.7): markOutboundNotSent is DELETED. It existed for the dock's Deny path, and
-  // an own-channel post no longer reaches the dock at all (main sends `outbound_gate`, so the
-  // card answers for itself and markOutboundDecided resolves it by requestId). A CROSS-channel
-  // post does still use the dock, but it is not classified as an outbound_post, so it has no
-  // outbound item to mark — the helper could only ever no-op from there.
+  // FIX F9 (v2.7): markOutboundNotSent is DELETED — an own-channel post decides on its own
+  // inline card (main's `outbound_gate` + markOutboundDecided by requestId), never in the dock.
 
   // ── reduceEvent ────────────────────────────────────────────────────────────
   function reduceEvent(state, event) {
@@ -183,6 +175,20 @@
 
       case "turn":
         return reduceTurn(state, event);
+
+      // FIX (v2.x): the INITIATING request, pinned at the TOP (display only; main emits it
+      // once at session start and never feeds it to the agent). A responder shows the peer's
+      // ask on the LEFT; a requester its own goal on the RIGHT (rendered as "You").
+      case "request":
+        return {
+          ...state,
+          items: state.items.concat([{
+            kind: "request",
+            lane: event.side === "responder" ? "them" : "me",
+            from: event.from,
+            text: event.text == null ? "" : String(event.text),
+          }]),
+        };
 
       case "tool_use":
         return {

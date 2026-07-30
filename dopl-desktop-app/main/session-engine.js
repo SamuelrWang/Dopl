@@ -3,12 +3,11 @@
 // Owns ONE Claude Agent SDK query() per live session and executes the pure session-reducer's
 // side-effect-free effect descriptors. v2.0 added the CONSENT REFLOW (item 8: a pre-consent
 // window that runs NO agent work until Accept, then launchResponderSession ADOPTS it) and
-// REOPEN (item 10: live windows hide-on-close + reopen from the tray; render-process-gone is
-// the crash signal). Renderer->main IPC lives in session-ipc.js (§O-8). SEAM: never imports
+// REOPEN (item 10: live windows hide-on-close + reopen from the tray; render-process-gone is the
+// crash signal). Renderer->main IPC lives in session-ipc.js (§O-8). SEAM: never imports
 // electron.BrowserWindow (an injected factory creates windows); reads electron only for
-// Notification. settingSources:[] on every session so the operator's global allow-list can
-// never shadow a gated tool, and the dopl bearer stays inside the in-memory mcpServers
-// object (never logged, never on argv).
+// Notification. settingSources:[] always, so the global allow-list can never shadow a gated tool;
+// the dopl bearer stays inside the in-memory mcpServers object (never logged, never on argv).
 
 const crypto = require('crypto');
 const { Notification } = require('electron');
@@ -54,9 +53,9 @@ function refreshTray() {
   try { require('./tray').refresh(); } catch (_) { /* tray optional */ }
 }
 
-// Park + resume machinery (session-park.js) is fed the engine handles it can't require
-// (registry, SDK loader, buildSdkOptions — the v1.9 security path, NEVER duplicated — plus
-// consume/dispatch/startSession/settle); hoisted, so bind order does not matter.
+// Park + resume machinery (session-park.js) is fed the engine handles it can't require: the
+// registry, SDK loader, buildSdkOptions (the v1.9 security path, NEVER duplicated), plus
+// consume/dispatch/startSession/settle. Hoisted, so bind order does not matter.
 sessionPark.bind({
   sessions, getSdk, buildSdkOptions, consume, dispatch, startSession, hasLiveSession,
   emit, windowFactoryReady: () => !!windowFactory,
@@ -65,22 +64,19 @@ sessionPark.bind({
   settleSession: settle, // FIX #7: LRU eviction of an untouched parked shell at the cap
 });
 
-// v2.5 D1/D3: same for the inbound gate + history loader (session-gate reaches
-// session-park directly, so neither imports back into the engine).
+// v2.5 D1/D3: same for the inbound gate + history loader (neither imports back into the engine).
 sessionGate.bind({ sessions, dispatch });
 sessionHistory.bind({ emit });
 
-// Reopen helpers (session-reopen.js): live registry + tray refresh, plus the P2 fallback
-// recreating a parked shell when no live session survives (item 2).
+// Reopen helpers (session-reopen.js): live registry + tray refresh + the P2 parked-shell fallback
+// for a task with no live session (item 2).
 sessionReopen.bind({ sessions, refreshTray, recreateParkedShell: sessionPark.recreateParkedShell });
 
 const baseRecord = io.baseRecord; // durable-record projection (session-io.js)
 
-// FIX F1 (v2.7): dispatch REPORTS whether an effect resolved a LIVE canUseTool promise —
-// resolvePerm is the only thing that knows (a park's denyPending may already have
-// fail-closed this requestId, in which case there is nothing left to decide). session-ipc
-// turns that verdict into the {ok} the renderer's optimistic stamp is gated on, exactly
-// like the inbound gate's decideInbound; every other caller ignores the return.
+// FIX F1 (v2.7): dispatch REPORTS whether an effect resolved a LIVE canUseTool promise (only
+// resolvePerm knows; a park's denyPending may have fail-closed the requestId already). session-ipc
+// turns that verdict into the {ok} the renderer's optimistic stamp is gated on; others ignore it.
 function dispatch(s, event) {
   const { state, effects } = sessionReducer(s.state, event);
   s.state = state;
@@ -93,8 +89,8 @@ function runEffect(s, eff) {
   switch (eff.type) {
     case 'emit': emit(s, eff.payload); break;
     // FIX #9: a park saves the FULL record (cap counters); other flips set the phase only. The
-    // EFFECT's phase is authoritative: s.state.phase can be 'awaiting_inbound' when a park
-    // lands with a message still held (FIX #6), which would look LIVE on the next boot.
+    // EFFECT's phase is authoritative — s.state.phase can be 'awaiting_inbound' when a park lands
+    // with a message still held (FIX #6), which would look LIVE on the next boot.
     case 'persist':
       if (eff.phase === 'parked') store.saveRecord({ ...baseRecord(s), phase: eff.phase });
       else store.setRecordPhase(s.key, eff.phase);
@@ -103,8 +99,8 @@ function runEffect(s, eff) {
     // FIX F1: the ONLY effect with a return value — did a live resolver really take it?
     case 'resolvePermission':
       return resolvePerm(s, eff.requestId, eff.decision);
-    // io.withSeed gives the FIRST turn of a fresh (nothing-to-resume) shell its full framing
-    // + the D3 history seed, exactly once; a normal turn passes straight through.
+    // io.withSeed gives the FIRST turn of a fresh (nothing-to-resume) shell its full framing plus
+    // the D3 history seed, exactly once; a normal turn passes straight through.
     case 'pushTurn':
       if (s.pushIterator) s.pushIterator.push(io.userMessage(io.withSeed(s, eff.text), eff.priority === 'now' ? 'now' : undefined));
       break;
@@ -135,10 +131,9 @@ function runEffect(s, eff) {
   }
 }
 
-// A hidden window RESHOWS on anything that needs the operator: a gated tool request (item
-// 10), a `counterparty` reply (v2.2 item 3), a HELD inbound message (v2.5 D1), or an
-// outbound post awaiting Send / Deny on its inline card (v2.7 L3). Surfacing a window runs
-// NO gated tool. Emits ride the replay.
+// A hidden window RESHOWS on anything that needs the operator: a gated tool request (item 10), a
+// `counterparty` reply (v2.2 item 3), a HELD inbound message (v2.5 D1), or an outbound post
+// awaiting Send / Deny on its card (v2.7 L3). Surfacing runs NO gated tool; emits ride the replay.
 const RESHOW_TYPES = new Set(['permission_request', 'counterparty', 'inbound_pending', 'outbound_gate']);
 function emit(s, payload) {
   if (!s.win || s.win.isDestroyed()) return;
@@ -170,16 +165,16 @@ function scheduleIdle(s) {
   }, nextIdleMs(s.state));
 }
 
-// Returns TRUE only when a live awaited resolver was actually taken (FIX F1): no resolver
-// means the request is already decided (a park deny-closed it) and the caller must NOT
-// report success — a renderer that believed a blanket {ok:true} stamped a denied post 'sent'.
+// Returns TRUE only when a live awaited resolver was actually taken (FIX F1): no resolver means
+// the request is already decided (a park deny-closed it) and the caller must NOT report success
+// (a renderer believing a blanket {ok:true} stamped a denied post 'sent').
 function resolvePerm(s, requestId, decision) {
   const resolve = s.pendingPermissions.get(requestId);
   if (!resolve) return false;
   s.pendingPermissions.delete(requestId);
   s.pendingNames.delete(requestId);
-  // FIX M1: FAIL CLOSED — ALLOW only on an explicit 'allow' (the reducer maps
-  // allow-once/allow-task -> 'allow'); anything else, unknown included, denies.
+  // FIX M1: FAIL CLOSED. ALLOW only on an explicit 'allow' (the reducer maps allow-once/allow-task
+  // -> 'allow'); anything else, unknown included, denies.
   resolve(decision === 'allow' ? { behavior: 'allow' } : { behavior: 'deny', message: 'Denied by operator' });
   return true;
 }
@@ -190,8 +185,7 @@ function runLifecycle(s, kind, extra, body) {
     if (kind === 'task_started') {
       if (lifecycle.onLaunched) lifecycle.onLaunched(info);
     } else if (lifecycle.onEnded) {
-      // P3: `body` is the calm one-liner a capped/ended lifecycle carries (undefined ->
-      // the handler derives one from the metadata flags).
+      // P3: `body` is the calm one-liner a capped/ended lifecycle carries (undefined -> the handler derives one).
       lifecycle.onEnded(info, kind, extra || {}, body);
     }
   } catch (err) {
@@ -199,8 +193,8 @@ function runLifecycle(s, kind, extra, body) {
   }
 }
 
-// The DB status flip for a first-class task (op:"close"); the task_finished/failed message
-// echo is separate (runLifecycle). No-op when there is no task id.
+// The DB status flip for a first-class task (op:"close"); the task_finished/failed echo is
+// separate (runLifecycle). No-op when there is no task id.
 async function closeChannelTask(s, outcome, summary) {
   if (!s.taskId) return;
   try {
@@ -216,9 +210,8 @@ async function closeChannelTask(s, outcome, summary) {
   }
 }
 
-// Terminal: drop the live handles, mark the record ended, DESTROY the window (item 10 hid it
-// until here), free the registry slot. A DONE task drops the resume map entry; every other
-// end KEEPS the sdkSessionId — what makes FIX #7's shell eviction lossless.
+// Terminal: drop the live handles, mark the record ended, DESTROY the window (item 10 hid it),
+// free the slot. A DONE task drops the resume entry; every other end KEEPS the sdkSessionId (FIX #7).
 function settle(s, outcome) {
   if (s.settled) return;
   s.settled = true;
@@ -232,8 +225,8 @@ function settle(s, outcome) {
 
 function bindWindow(s) {
   const wc = s.win.webContents;
-  // Item 3: the replay owns the transcript ring + sent cursor. A reload (did-start-loading
-  // rewinds, did-finish-load re-sends) is NEITHER close nor crash below.
+  // Item 3: the replay owns the transcript ring + sent cursor. A reload (did-start-loading rewinds,
+  // did-finish-load re-sends) is NEITHER close nor crash below.
   s.replay = replay.createReplay(wc, (p) => safeSend(s, p));
   wc.on('did-start-loading', s.replay.onReload);
   wc.on('did-finish-load', s.replay.onLoad);
@@ -259,18 +252,19 @@ function buildSdkOptions(s) {
     cwd: channelDirs.sessionSpawnDir(s.channelId),
     allowedTools: cfg.preApproved, // pre-approved => SHADOWED, no button (§A.5)
     disallowedTools: cfg.disallowedTools,
-    mcpServers: buildMcpServers(cfg.doplToolsPolicy),
+    // v2.x: buildMcpServers PINS this session's workspace on the dopl server headers
+    // (X-Workspace-Id), so a call that omits `workspace=` auto-targets instead of being refused
+    // by a multi-workspace token; a per-call `workspace=` still wins server-side.
+    mcpServers: buildMcpServers(cfg.doplToolsPolicy, s.workspaceId),
     settingSources: [], // ALWAYS — the global allow-list can never shadow a gate
     permissionMode: 'default', // FIX M2: pin — bypass/acceptEdits/dontAsk short-circuit canUseTool
     env: buildScrubbedEnv(), // FIX M2: strip permission-mode env knobs, keep auth (sdk-loader)
     canUseTool: io.makeCanUseTool(s, dispatch),
     abortController: s.abortController,
-    // LOAD-BEARING for v2.7 L3 (FIX F4): the outbound card shows the operator the bytes a
-    // post is about to send, so the streamed tool_use input must be the WHOLE, FINAL input.
-    // `includePartialMessages: false` keeps fragments off the card, and NO `hooks` option is
-    // ever set (a PreToolUse hook could rewrite the input after the card painted it, so the
-    // approved surface would stop matching what runs). The card re-asserts its body from the
-    // canUseTool input as a belt; these two keep the stream-time paint honest as well.
+    // LOAD-BEARING for v2.7 L3 (FIX F4): the outbound card shows the operator the bytes a post
+    // will send, so the streamed tool_use input must be the WHOLE, FINAL input. No fragments
+    // (below) and NO `hooks` option is ever set — a PreToolUse hook could rewrite the input
+    // after the card painted it, so the approved surface would stop matching what runs.
     includePartialMessages: false,
   };
   if (cfg.builtinTools.length) options.tools = cfg.builtinTools; // positive bound; [] => full offers all, gated
@@ -321,9 +315,11 @@ function setLifecycleHandlers(h) {
   lifecycle = { onLaunched: h && h.onLaunched, onEnded: h && h.onEnded };
 }
 
-// Build the session object, open (or ADOPT) its window, start the query (launch + resume).
-// The per-session nonce is minted HERE so the first turn's fence + every fed-inbound
-// continuation share the SAME token (else injected content forges it).
+// Build the session object, open (or ADOPT) its window, start the query (launch + resume). The
+// per-session nonce is minted HERE so the first turn's fence + every fed-inbound continuation share
+// the SAME token (else injected content forges it). v2.x: the CONCRETE channel + workspace UUIDs are
+// merged into the context here, because the framing reads only the context while EVERY spawn shape
+// carries the ids on its spec (fresh responder/requester, parked resume, recreated shell).
 async function startSession(spec, sdk) {
   const sessionId = crypto.randomUUID();
   const nonce = crypto.randomBytes(8).toString('hex');
@@ -331,9 +327,10 @@ async function startSession(spec, sdk) {
   // P2: a reopen fallback opens a PARKED SHELL — a live window, NO SDK query yet. It boots
   // parked so a lazy wake (P1) resumes it; baseRecord persists s.state.phase = 'parked'.
   if (spec.parkedShell) { state.phase = 'parked'; state.parked = true; state.activity = 'parked'; state.turns = Number(spec.turns) || 0; state.costUsd = Number(spec.costUsd) || 0; } // FIX #9: P2 shell rehydrates the cap budget
+  const context = { ...(spec.context || {}), channelId: spec.channelId, workspaceId: spec.workspaceId };
   const firstTurn = spec.parkedShell ? ''
     : spec.rawFirstTurn ? spec.rawFirstTurn
-      : framing.buildFencedTurn({ side: spec.side, message: spec.firstMessage, context: spec.context, nonce });
+      : framing.buildFencedTurn({ side: spec.side, message: spec.firstMessage, context, nonce });
   const s = {
     key: spec.key,
     sessionId,
@@ -350,7 +347,7 @@ async function startSession(spec, sdk) {
     // O-6: the counterparty display name labels the agent's op=post ("Sent to X").
     counterpartyName: (spec.context && (spec.context.authorName || spec.context.targetName)) || null,
     state,
-    context: spec.context || {},
+    context, // display identity + the channel/workspace ids the framing addresses
     nonce,
     firstTurn,
     resumeSdkId: spec.resumeSdkId || null,
@@ -362,8 +359,8 @@ async function startSession(spec, sdk) {
     // FIX F2/F3: a parked shell with NOTHING to resume starts a BRAND-NEW sdk session and
     // buildSdkOptions sets no system prompt, so its first turn must carry the full v1.9 framing
     // (role, SECURITY RULES, delivery instruction; without it the agent answers in the window and
-    // the peer gets nothing). `freshFraming` is the ONE-SHOT marker io.withSeed consumes,
-    // `freshRun` the stable twin session-history reads.
+    // the peer gets nothing). `freshFraming` is the ONE-SHOT marker io.withSeed consumes, `freshRun`
+    // the stable twin session-history reads.
     freshRun: spec.parkedShell === true && !spec.resumeSdkId,
     freshFraming: spec.parkedShell === true && !spec.resumeSdkId,
     idleTimer: null,
@@ -372,8 +369,8 @@ async function startSession(spec, sdk) {
   };
   sessions.set(s.key, s);
   store.saveRecord(baseRecord(s)); // phase 'launching' until system/init flips it
-  // Item 8 step 4: ADOPT the pre-consent window if one is open (one window, no flash
-  // — the renderer flips consent->running on `init`), else open a fresh window.
+  // Item 8 step 4: ADOPT an open pre-consent window (one window, no flash: the renderer flips
+  // consent->running on `init`), else open a fresh one.
   const adopted = sessionConsent.takeForAdopt(s.key);
   try {
     s.win = (adopted && adopted.win && !adopted.win.isDestroyed()) ? adopted.win : windowFactory(sessionId);
@@ -389,8 +386,12 @@ async function startSession(spec, sdk) {
   s.selfAvatar = avatarCache.cachedForUser(selfUserId);
   s.peerAvatar = avatarCache.cachedForUser(s.counterpartyId);
   avatarCache.resolveForSession(s, { selfUserId, peerUserId: s.counterpartyId }, (p) => emit(s, p));
-  // P2: a parked shell starts NO query — session-park paints the header/note and it waits
-  // for a lazy wake. Everything else launches (or resumes) its SDK query now.
+  // FIX (v2.x): pin the INITIATING ask at the TOP (display only; io returns null for a
+  // parked/resumed shell). Emitted, NEVER pushed to the iterator; rides the replay ring.
+  const reqItem = io.initialRequestPayload(s.side, spec.firstMessage, s.counterpartyName);
+  if (reqItem) emit(s, reqItem);
+  // P2: a parked shell starts NO query (session-park paints the header/note and it waits for a
+  // lazy wake). Everything else launches (or resumes) its SDK query now.
   if (spec.parkedShell) { sessionPark.emitParkedShell(s); return s; }
   await startQuery(s, sdk);
   return s;
@@ -448,12 +449,11 @@ function counterpartyFor(a) {
 }
 
 // The inbound gate lives in session-gate.js (v2.5 D1): feedInbound (live or parked) and
-// feedInboundForTask (recreate the shell first) both HOLD the turn for an operator Accept
-// unless auto-approve / the standing task grant is on. Re-exported below.
-// ── Consent reflow (item 8) — thin wrappers; bodies live in session-consent.js. This one
-// opens a pre-consent window (trigger.handleTrigger, window-mode ON + a pending row) that
-// runs NO agent work until Accept; the shared cap is gated HERE because session-consent
-// cannot see the live sessions.
+// feedInboundForTask (recreate the shell first) both HOLD the turn for an operator Accept unless
+// auto-approve / the standing task grant is on. Re-exported below.
+// ── Consent reflow (item 8) — thin wrappers; bodies live in session-consent.js. This one opens a
+// pre-consent window (trigger.handleTrigger, window-mode ON + a pending row) that runs NO agent
+// work until Accept; the cap is gated HERE because session-consent cannot see the live sessions.
 function openConsentWindow(spec) {
   if (!windowModeEnabled() || !windowFactory) return { skipped: 'disabled' };
   if (sessions.size + sessionConsent.count() >= MAX_WINDOWS) return { skipped: 'cap' };
@@ -462,8 +462,8 @@ function openConsentWindow(spec) {
 // decideConsent / closeConsentWindow / getConsentBySender are pass-throughs (re-exported
 // verbatim below); resume machinery (offerResume/startResume/resume) lives in session-park.
 // init(): register the renderer->main IPC once (session-ipc), then settle any session that was
-// live/awaiting when the app died — post the interrupted echo and, when the SDK session id
-// survives, offer an opt-in resume. NEVER auto-reopens.
+// live/awaiting when the app died: post the interrupted echo and, when the SDK session id
+// survives, offer an opt-in resume (NEVER an auto-reopen).
 async function init() {
   sessionIpc.register({ getSessionBySender, getConsentBySender: sessionConsent.getBySender, dispatch, decideConsent: sessionConsent.decide });
   const records = store.loadRecords();

@@ -261,31 +261,30 @@
     return { el: el("div", "notice level-" + (item.level || "error"), item.text || ""), update: noop };
   }
 
-  // Item 8: the head (name + op summary + status) is ALWAYS visible; the input
-  // and result live inside ONE native <details>, default CLOSED — so long/scary
-  // tool output never blasts into the window until the user expands. Expanded
-  // output SCROLLS (session.css caps the pre/.tool-result at 240px;overflow:auto).
-  // v2.7 L1: a tool card is MY agent's own activity, so it takes the RIGHT lane like the
-  // rest of this machine's output — hence the lane() path here (session.css drops the
-  // `align-self` the recipe used to declare, so the single-class lane can win).
+  // Item 8 (v2.x reshape): the tool card ITSELF is the native <details>, default CLOSED, and
+  // its <summary> IS the head line (name + op summary + status) — always visible AND the whole
+  // disclosure control, with a LEFT ::before arrow (session.css) instead of a separate "Show
+  // details" row + right chevron. The input + result live in the body wrapper after the summary,
+  // so long/scary output never blasts into the window until the user expands (and then SCROLLS:
+  // session.css caps the pre/.tool-result at 240px;overflow:auto). v2.7 L1: a tool card is MY
+  // agent's own activity, so it takes the RIGHT lane like the rest of this machine's output.
   function makeTool(item, ctx) {
     const shortName = (ctx && ctx.vm && ctx.vm.shortToolName) || ((n) => n);
-    const root = el("div", lane("tool-card", { kind: "tool" }));
-    const head = el("div", "tool-card__head");
+    const root = el("details", lane("tool-card", { kind: "tool" })); // <details>, default closed
+    const head = el("summary", "tool-card__head"); // the summary IS the head line
     head.appendChild(el("span", "tool-card__name", shortName(item.name)));
     head.appendChild(el("span", "tool-card__summary", item.inputSummary || ""));
     const status = el("span", "tool-status is-pending", "Running");
     head.appendChild(status);
     root.appendChild(head);
 
-    // The body is the <details> itself (default closed — no `open` attribute).
-    const details = el("details", "tool-card__body");
-    details.appendChild(el("summary", null, "Show details"));
-    details.appendChild(el("div", "tool-io-label", "Input"));
-    details.appendChild(el("pre", null, pretty(item.inputFull)));
+    // The disclosed body: input + result, revealed only when the operator expands the summary.
+    const body = el("div", "tool-card__body");
+    body.appendChild(el("div", "tool-io-label", "Input"));
+    body.appendChild(el("pre", null, pretty(item.inputFull)));
     const result = el("div", "tool-result hidden");
-    details.appendChild(result);
-    root.appendChild(details);
+    body.appendChild(result);
+    root.appendChild(body);
 
     const update = (it) => {
       const st = it.status || "pending";
@@ -298,6 +297,21 @@
     };
     update(item);
     return { el: root, update };
+  }
+
+  // FIX (v2.x): the INITIATING request, pinned at the TOP of the transcript so the operator
+  // sees the ask this session is answering — not just the reply + tool activity. DISPLAY ONLY:
+  // main emits it once at session start and never feeds this item to the agent. A responder
+  // shows the PEER's ask on the LEFT (counterparty recipe, peer avatar + name); a requester its
+  // OWN opening goal on the RIGHT ("You"). It reuses the live bubble factories, so avatars, lanes
+  // and the late-`avatars` repaint all behave identically; `is-request` marks it as the opener.
+  function makeRequest(item, ctx) {
+    const rec =
+      item.lane === "them"
+        ? makeCounterparty({ from: item.from, text: item.text }, ctx)
+        : makeTurn({ role: "operator", text: item.text, avatarKey: "self" }, ctx);
+    rec.el.classList.add("is-request");
+    return rec;
   }
 
   // v2.5 D1: the INBOUND GATE card. A counterparty message that has NOT reached the
@@ -443,6 +457,7 @@
     return {
       turn: bind(makeTurn),
       tool: bind(makeTool),
+      request: bind(makeRequest), // FIX (v2.x): the initiating ask, pinned at the top
       counterparty: bind(makeCounterparty),
       outbound: bind(makeOutbound),
       inbound_pending: bind(makeInboundPending),
@@ -460,6 +475,7 @@
     avatarNode,
     makeTurn,
     makeTool,
+    makeRequest, // FIX (v2.x): the initiating request item
     makeCounterparty,
     makeOutbound,
     outboundLabel, // FIX F3

@@ -293,7 +293,7 @@ test("boot L3: a gating post paints ONE inline card, and the dock stays closed",
   const node = outbounds().at(-1);
   assert.ok(node.classList.contains("outbound-pending"));
   assert.equal(bannerLabel(node).textContent, "Sending to David", "it does not claim delivery yet");
-  assert.equal(cardParts(node).dest.textContent, "To: this channel");
+  assert.equal(cardParts(node).dest.textContent, "To: David's agent", "v2.x: the own-channel line names the peer");
   assert.ok(!$("permissionDock").classList.contains("is-active"), "a post never uses the dock");
   // Not answerable until main mints the requestId (fail closed).
   assert.deepEqual(cardParts(node).row.children.map((b) => b.disabled), [true, true, true]);
@@ -395,7 +395,7 @@ test("boot F3: an unanswerable pending card shows NO button row (and the result 
   const row = cardParts(node).row;
   assert.ok(row.classList.contains("hidden"), "no dead controls while main is not awaiting");
   assert.ok(node.classList.contains("outbound-pending"), "it is still visibly a draft, not a delivery");
-  assert.equal(cardParts(node).dest.textContent, "To: this channel", "the destination line still reads");
+  assert.equal(cardParts(node).dest.textContent, "To: David's agent", "the destination line still reads");
   // The requestId arriving makes it answerable and the row appears.
   feed({ type: "outbound_gate", requestId: "r26", toolUseId: "t26", text: "auto-allowed draft", to: "David" });
   assert.ok(!cardParts(node).row.classList.contains("hidden"));

@@ -342,7 +342,10 @@ html, body {
 }
 /* The drafted body is the thing being approved: always visible, never a disclosure, and
    it scrolls past ~200px so a long draft cannot push the buttons out of reach. The cap
-   lifts with the pending class, so a DELIVERED record reads in full as it always has. */
+   lifts with the pending class, so a DELIVERED record reads in full as it always has.
+   SCROLL FIX: this cap STAYS (it is what keeps Send/Deny reachable), but because the card
+   lives IN the stream, session.js forwards the wheel out of it at its edges — same helper
+   as the tool card's pre, so a decision card cannot latch the transcript either. */
 .outbound-pending .outbound__body {
   max-height: 200px; overflow: auto;
   user-select: text;
@@ -386,16 +389,34 @@ html, body {
 .tool-card {
   border-left: 1px solid var(--border-strong);
   padding-left: 8px;
+  width: 100%; /* v2.x FIX 2: fill the lane (capped to 66% by .lane-me) so EVERY command line
+                  shares one left edge instead of each card sizing to its own content */
   max-width: 100%; /* contain within the flex column (item 4) */
   min-width: 0;
 }
+/* v2.x FIX 4: the card IS a native <details> and this head IS its <summary>, so the whole
+   command line toggles the disclosure — the arrow is a LEFT ::before here (see below), and
+   the separate "Show details" row + its right-side chevron are gone. */
 .tool-card__head {
   display: flex; align-items: center; gap: 6px;
   min-width: 0;
+  cursor: pointer;
+  list-style: none;
+}
+.tool-card__head::-webkit-details-marker { display: none; }
+.tool-card__head::before {
+  content: "›";
+  flex: none;
+  color: var(--text-muted);
+  transition: transform 0.15s ease;
+}
+.tool-card[open] > .tool-card__head::before { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) {
+  .tool-card__head::before { transition: none; }
 }
 .tool-card__name {
   font-size: var(--text-micro);
-  text-transform: uppercase;
+  text-transform: lowercase; /* v2.x FIX 3: bash / list_calendars / dopl_channel, not SHOUTED */
   letter-spacing: 0.06em;
   font-weight: 600;
   color: var(--text-muted);
@@ -412,33 +433,27 @@ html, body {
 .tool-status.is-pending { color: var(--text-muted); }
 .tool-status.is-ok { color: var(--agent-on); }
 .tool-status.is-error { color: var(--danger); }
-/* ── item 8: the tool body is ONE native <details>, default CLOSED. The head (name
-   + op summary + status) stays outside → always visible; the input + result live
-   inside, hidden until the user expands. The EXPANDED pre/.tool-result keep
-   max-height:240px;overflow:auto so long output SCROLLS (composes with item 1).
-   v2.7 L2: the inset well (fill + inner shadow + card padding) is gone with the box —
-   the disclosure is a plain small line now. The DISCLOSURE ITSELF is unchanged: still a
-   native <details>, still default closed, still the only way to the full output. */
+/* ── item 8 (v2.x reshape): the tool card ITSELF is the native <details>, default CLOSED,
+   and .tool-card__head is its <summary> (name + op summary + status) — always visible and
+   the whole disclosure control (arrow + summary rules live up by the head). This body is now
+   just the DISCLOSED wrapper: input + result, revealed on expand.
+
+   SCROLL FIX (stuck/sticky stream): THE STREAM OWNS THE SCROLL. The body's two blocks used
+   to be 240px;overflow:auto boxes, so a wheel gesture that happened to land on an expanded
+   card scrolled that little box instead of the transcript, and Chromium LATCHES a continuous
+   gesture to the scroller it started on — the stream simply stopped moving until the pointer
+   left the card. Fixes, one per block:
+     • .tool-result — cap GONE. Its text is main-capped at 240 chars (session-io
+       summarizeResult), so it can never be long enough to need a scroller of its own.
+     • .tool-card__body pre — this one holds `pretty(inputFull)`, i.e. an arbitrarily large
+       tool input (a Write/Edit file body), so an uncapped item could stand taller than the
+       whole scrollback. It keeps a cap, but a LARGE one (60vh, not 240px), and session.js
+       forwards the wheel to the stream whenever it cannot travel further in that direction,
+       so it never latches the gesture.
+   overscroll-behavior is deliberately NOT used here: it BLOCKS chaining, which is the
+   opposite of what a nested scroller inside a scrolling transcript wants. */
 .tool-card__body {
-  margin-top: 1px;
-}
-.tool-card__body > summary {
-  cursor: pointer;
-  font-size: var(--text-micro);
-  color: var(--text-muted);
-  list-style: none;
-}
-.tool-card__body > summary::-webkit-details-marker { display: none; }
-.tool-card__body > summary::after {
-  content: "›";
-  display: inline-block;
-  margin-left: 6px;
-  color: var(--text-muted);
-  transition: transform 0.15s ease;
-}
-.tool-card__body[open] > summary::after { transform: rotate(90deg); }
-@media (prefers-reduced-motion: reduce) {
-  .tool-card__body > summary::after { transition: none; }
+  margin-top: 6px;
 }
 .tool-io-label {
   margin-top: 8px;
@@ -462,8 +477,11 @@ html, body {
   word-break: break-word;
   max-width: 100%;
   min-width: 0;
-  max-height: 240px;
-  overflow: auto; /* wide/batch pre-formatted output scrolls, never blows out the column (item 4) */
+  /* A LARGE cap (not 240px) on the one genuinely unbounded block in the card, paired with
+     the wheel forwarding in session.js so it hands the gesture back to the stream at its
+     edges. Nothing here scrolls HORIZONTALLY — pre-wrap + overflow-wrap own that. */
+  max-height: 60vh;
+  overflow: auto;
   user-select: text;
 }
 .tool-result {
@@ -472,8 +490,8 @@ html, body {
   color: var(--text-secondary);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  max-height: 240px; /* previously unbounded (item 4) */
-  overflow: auto;
+  /* No max-height / overflow: main caps this string at 240 chars, so a scroller here only
+     ever stole the wheel from the stream. */
 }
 
 /* ── Chat lanes: the stream reads like text messages ──────────────────────────

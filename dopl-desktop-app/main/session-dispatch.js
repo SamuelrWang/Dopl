@@ -67,10 +67,16 @@ async function maybeOpenRequesterSession(entry, m, myUserId) {
     workspaceId: entry.workspaceId,
     goal: m.body,
     counterpartyId: targeting.metaStr(m, 'taskTarget'), // FIX L1: the member the task addresses
+    // v2.x: the CONCRETE ids ride the context as well — prompt-framing's delivery section
+    // reads only the context, and a requester told just the channel's display name could
+    // not fill dopl_channel's required `channel=` (nor the workspace a multi-workspace
+    // token demands), so it hunted with op "list" instead of posting.
     context: {
       channelName: entry.channel.name,
       targetName: io.displayNameFor(targeting.metaStr(m, 'taskTarget')),
       taskTitle: targeting.metaStr(m, 'taskTitle'),
+      channelId: entry.channel.id,
+      workspaceId: entry.workspaceId,
     },
     toolProfile: targeting.resolveToolProfile(entry.channel),
     mode: targeting.metaStr(m, 'taskMode') || 'autonomous',

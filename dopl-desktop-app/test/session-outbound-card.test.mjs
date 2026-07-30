@@ -317,13 +317,15 @@ test("DOM: the pending card shows the destination, the drafted body, and Send / 
   assert.ok(rec.el.classList.contains("outbound-pending"), "plus the pending accent");
   const p = parts(rec);
   assert.equal(p.label.textContent, "Sending to David", "not a delivery claim");
-  assert.equal(p.dest.textContent, "To: this channel");
+  // v2.x: an own-channel destination NAMES the peer, so a legitimate delivery no longer
+  // reads like the cross-channel warning it shares this slot with.
+  assert.equal(p.dest.textContent, "To: David's agent");
   assert.ok(!p.dest.classList.contains("hidden"));
   assert.ok(!p.dest.classList.contains("is-cross"));
   assert.equal(p.body.textContent, "the draft", "the operator approves WHAT is being said");
   assert.deepEqual(p.row.children.map((b) => b.textContent), ["Send", "Send for this task", "Deny"]);
   assert.ok(!p.row.classList.contains("hidden"));
-  for (const s of ["Sending to David", "To: this channel", "Send", "Send for this task", "Deny"]) {
+  for (const s of ["Sending to David", "To: David's agent", "Send", "Send for this task", "Deny"]) {
     assert.ok(!s.includes("—"), "no em dash in copy");
   }
 });

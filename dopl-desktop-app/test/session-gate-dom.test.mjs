@@ -92,13 +92,37 @@ test("permissionPostBody is EMPTY for every other tool, op, and malformed input"
 // on the permission payload (session-io, from session-profiles.isOwnChannelPost).
 
 test("FIX #9: the destination line names this channel vs another one", () => {
-  assert.equal(vm.postDestinationText({ ownChannel: true }), "To: this channel");
-  assert.equal(vm.postDestinationText({ ownChannel: false }), "To: another channel");
-  assert.equal(vm.isCrossChannelPost({ ownChannel: true }), false);
+  // v2.x: an own-channel post NAMES the recipient. "To: this channel" sat in the same slot
+  // as the cross-channel warning, so a legitimate reply read as suspicious as an exfil
+  // attempt; a screenshot of a real reply showed the red "To: another channel" treatment.
+  assert.equal(vm.postDestinationText({ ownChannel: true, to: "David" }), "To: David's agent");
+  assert.equal(vm.postDestinationText({ ownChannel: false, to: "David" }), "To: another channel");
+  assert.equal(vm.isCrossChannelPost({ ownChannel: true, to: "David" }), false);
   assert.equal(vm.isCrossChannelPost({ ownChannel: false }), true);
-  for (const s of [vm.postDestinationText({ ownChannel: true }), vm.postDestinationText({})]) {
+  for (const s of [vm.postDestinationText({ ownChannel: true, to: "David" }), vm.postDestinationText({})]) {
     assert.ok(!s.includes("—"), "no em dash in copy");
   }
+});
+
+test("v2.x: an own-channel post with NO peer name falls back to 'To: this channel'", () => {
+  for (const perm of [{ ownChannel: true }, { ownChannel: true, to: null }, { ownChannel: true, to: "" },
+    { ownChannel: true, to: "   " }, { ownChannel: true, to: 7 }]) {
+    const out = vm.postDestinationText(perm);
+    const expected = typeof perm.to === "number" ? "To: 7's agent" : "To: this channel";
+    assert.equal(out, expected, JSON.stringify(perm));
+    assert.ok(!/undefined|null/.test(out), "never a placeholder");
+    // Naming the peer NEVER re-classifies the destination — that stays main's verdict.
+    assert.equal(vm.isCrossChannelPost(perm), false);
+  }
+});
+
+test("v2.x: the peer name is collapsed and capped (it is a label, not prose)", () => {
+  assert.equal(vm.postDestinationText({ ownChannel: true, to: " David   Kim\n" }), "To: David Kim's agent");
+  const long = "D".repeat(200);
+  const out = vm.postDestinationText({ ownChannel: true, to: long });
+  assert.ok(out.length < 80, `capped, got ${out.length}`);
+  assert.ok(out.startsWith("To: DDD") && out.endsWith("'s agent"));
+  assert.ok(!out.includes("\n"), "no newline can break the label out of its line");
 });
 
 test("FIX #9: an ABSENT ownChannel marker fails SUSPICIOUS (never 'this channel')", () => {
@@ -114,6 +138,8 @@ test("FIX #9: main stamps ownChannel and the reducer carries it onto the dock it
     inputFull: { op: "post", body: "on it" }, ownChannel: true,
   });
   assert.equal(vm.nextPermission(own).ownChannel, true);
+  // The DOCK payload carries no peer name (main routes own-channel posts to the inline card,
+  // which does carry `to`), so the dock keeps the id-free fallback.
   assert.equal(vm.postDestinationText(vm.nextPermission(own)), "To: this channel");
   const cross = vm.reduceEvent(vm.initialState(), {
     type: "permission_request", requestId: "r2", name: "mcp__dopl__dopl_channel",

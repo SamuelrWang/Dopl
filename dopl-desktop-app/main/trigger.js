@@ -270,9 +270,13 @@ async function launchResponderSession(entry, m, rec, { taskId }) {
     // D1: taskTitle rides the responder context too (the SAME server-stamped meta the
     // consent payload above already reads), so the session header names the TASK
     // instead of falling back to the channel or a bare "Session".
+    // v2.x: the CONCRETE ids ride the context too, because prompt-framing's delivery
+    // section reads only the context — a spawn told just the channel's display name could
+    // not fill dopl_channel's required `channel=` and hunted with op "list".
     context: {
       channelName: entry.channel.name, authorName: rec.requesterName,
       authorKind: m.authorKind, taskTitle: targeting.metaStr(m, 'taskTitle') || null,
+      channelId: entry.channel.id, workspaceId: entry.workspaceId,
     },
     toolProfile: rec.toolProfile,
     mode,

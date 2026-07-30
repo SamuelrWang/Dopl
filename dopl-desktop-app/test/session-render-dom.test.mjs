@@ -58,47 +58,58 @@ test("makeCounterparty renders an initials avatar from the peer name (item 2)", 
 
 // ── item 8: tool cards default COLLAPSED ──────────────────────────────────────
 
-test("makeTool: head is always visible; body is a CLOSED <details> with the result hidden (item 8)", () => {
+// RE-PINNED (v2.x FIX 4): the card ITSELF is the <details> and its <summary> IS the head line
+// (name + args summary + status), so the whole command line is the disclosure — a LEFT arrow
+// (::before in session.css), no separate "Show details" row. Default CLOSED; the input + result
+// live in the body wrapper AFTER the summary. children[0] = SUMMARY.tool-card__head, children[1]
+// = DIV.tool-card__body with the result hidden inside it.
+test("makeTool: the card is a CLOSED <details> whose <summary> is the head; result hidden (item 8)", () => {
   const rec = render.makeTool(
     { name: "Bash", inputSummary: "$ ls", inputFull: { command: "ls" } },
     { vm }
   );
   const root = rec.el;
+  // The root IS the native <details>, default CLOSED (no `open`) — the disclosure control.
+  assert.equal(root.tagName, "DETAILS");
   assert.ok(root.classList.contains("tool-card"));
+  assert.ok(!root._attrs.open && !root.open, "the card must start CLOSED");
 
-  // Head (name + summary + status) is OUTSIDE the details → always visible.
+  // Head IS the <summary> (name + summary + status) → always visible AND the whole toggle.
   const head = root.children[0];
+  assert.equal(head.tagName, "SUMMARY", "the head is the details' summary, not a plain div");
   assert.ok(head.classList.contains("tool-card__head"));
   const status = head.children.find((c) => c.classList.contains("tool-status"));
-  assert.ok(status, "the run status lives in the always-visible head");
+  assert.ok(status, "the run status lives in the always-visible summary head");
   const summary = head.children.find((c) => c.classList.contains("tool-card__summary"));
   assert.equal(summary.textContent, "$ ls");
+  // No separate "Show details" row survives anywhere in the card.
+  const showDetails = root.children.some((c) => c.textContent === "Show details");
+  assert.ok(!showDetails, "the 'Show details' row is gone; the head itself is the disclosure");
 
-  // Body is the <details> itself, default CLOSED (no `open`).
+  // Body is a plain DISCLOSED wrapper after the summary — the result lives INSIDE it, hidden.
   const body = root.children[1];
-  assert.equal(body.tagName, "DETAILS");
+  assert.equal(body.tagName, "DIV");
   assert.ok(body.classList.contains("tool-card__body"));
-  assert.ok(!body._attrs.open && !body.open, "the details must start CLOSED");
-
-  // The result lives INSIDE the details and starts hidden.
   const result = body.children.find((c) => c.classList.contains("tool-result"));
-  assert.ok(result, "the result is inside the details (not dumped into the stream)");
+  assert.ok(result, "the result is inside the body wrapper (not dumped into the stream)");
   assert.ok(result.classList.contains("hidden"), "the result is hidden until the user expands");
 });
 
-test("makeTool.update fills the result + status but keeps the result inside the closed details (item 8)", () => {
+test("makeTool.update fills the result + status but keeps the card closed + result inside (item 8)", () => {
   const rec = render.makeTool({ name: "Bash", inputFull: { command: "ls" } }, { vm });
   rec.update({ status: "ok", resultSummary: "2 files" });
 
-  const body = rec.el.children[1];
-  assert.equal(body.tagName, "DETAILS");
-  assert.ok(!body._attrs.open && !body.open, "still collapsed after a result arrives");
+  const root = rec.el;
+  assert.equal(root.tagName, "DETAILS");
+  assert.ok(!root._attrs.open && !root.open, "still collapsed after a result arrives");
 
+  const body = root.children[1];
+  assert.ok(body.classList.contains("tool-card__body"));
   const result = body.children.find((c) => c.classList.contains("tool-result"));
   assert.equal(result.textContent, "2 files");
-  assert.ok(!result.classList.contains("hidden"), "the result is revealed but stays inside the details");
+  assert.ok(!result.classList.contains("hidden"), "the result is revealed but stays inside the body");
 
-  const status = rec.el.children[0].children.find((c) => c.classList.contains("tool-status"));
+  const status = root.children[0].children.find((c) => c.classList.contains("tool-status"));
   assert.equal(status.textContent, "Done");
   assert.ok(status.classList.contains("is-ok"));
 });
@@ -267,4 +278,54 @@ test("lanes: a streaming update never drops the lane class", () => {
   const rec = render.makeTurn({ role: "operator", text: "go", streaming: true }, ctxBoth);
   rec.update({ role: "operator", text: "go on", streaming: false });
   assert.deepEqual(laneOf(rec.el), { me: true, them: false }, "update() only touches is-streaming");
+});
+
+// ── FIX 1: the INITIATING request, pinned at the TOP (display only) ───────────
+// The pure reduce (a fold, so replay-after-reload rebuilds the SAME item) and the DOM
+// factory. A responder shows the PEER's ask on the LEFT; a requester its OWN goal on the RIGHT.
+
+test("reduce: a responder `request` event is the FIRST item, left lane, from the peer", () => {
+  const s = vm.reduceEvent(vm.initialState(), { type: "request", side: "responder", from: "David", text: "book a room" });
+  assert.equal(s.items.length, 1, "it is the only/top item at session start");
+  const it = s.items[0];
+  assert.equal(it.kind, "request");
+  assert.equal(it.lane, "them", "the peer's ask sits on the left");
+  assert.equal(it.from, "David");
+  assert.equal(it.text, "book a room", "the RAW body, verbatim");
+});
+
+test("reduce: a requester `request` event is right-laned (its own opening goal)", () => {
+  const s = vm.reduceEvent(vm.initialState(), { type: "request", side: "requester", from: null, text: "find me a slot" });
+  assert.equal(s.items[0].kind, "request");
+  assert.equal(s.items[0].lane, "me", "the operator's own ask sits on the right");
+  assert.equal(s.items[0].text, "find me a slot");
+});
+
+test("reduce: `request` reduce is a pure fold — replaying rebuilds an identical top item", () => {
+  const ev = { type: "request", side: "responder", from: "David", text: "book a room" };
+  const a = vm.reduceEvent(vm.initialState(), ev).items[0];
+  const b = vm.reduceEvent(vm.initialState(), ev).items[0]; // a reload re-sends the same event
+  assert.deepEqual(a, b, "reload-safe: the same event folds to the same item");
+});
+
+test("makeRequest (responder): LEFT lane, counterparty recipe, peer name + avatar, real text", () => {
+  const rec = render.makeRequest({ kind: "request", lane: "them", from: "David", text: "book a room" }, ctxBoth);
+  assert.deepEqual(laneOf(rec.el), { me: false, them: true }, "the peer's ask is left-laned");
+  assert.ok(rec.el.classList.contains("role-counterparty"), "reuses the counterparty surface");
+  assert.ok(rec.el.classList.contains("is-request"), "marked as the opener");
+  const head = rec.el.children[0];
+  assert.equal(head.children.find((c) => c.classList.contains("who")).textContent, "David");
+  assert.equal(imgIn(head.children[0]).getAttribute("src"), DATA_PEER, "the PEER photo");
+  const body = rec.el.children.find((c) => c.classList.contains("body"));
+  assert.equal(body.textContent, "book a room", "the request text reaches the DOM via textContent");
+});
+
+test("makeRequest (requester): RIGHT lane, operator recipe, 'You' + self avatar", () => {
+  const rec = render.makeRequest({ kind: "request", lane: "me", from: null, text: "find me a slot" }, ctxBoth);
+  assert.deepEqual(laneOf(rec.el), { me: true, them: false }, "the operator's own ask is right-laned");
+  assert.ok(rec.el.classList.contains("role-operator"));
+  assert.ok(rec.el.classList.contains("is-request"));
+  const head = rec.el.children[0];
+  assert.equal(head.children.find((c) => c.classList.contains("who")).textContent, "You");
+  assert.equal(imgIn(head.children[0]).getAttribute("src"), DATA_SELF, "the SELF photo");
 });

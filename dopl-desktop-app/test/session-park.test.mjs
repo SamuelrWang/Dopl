@@ -352,13 +352,22 @@ test("D1: recreateParkedShell restores channelName / taskTitle / peer name into 
   // `authorName` is the field startSession derives counterpartyName from, so the peer
   // name (and therefore the header avatar + "Sent to X" label) survives a reopen.
   assert.equal(ctx.authorName, "David");
+  // v2.x: and the ids the delivery framing addresses, so a reopened shell that starts a
+  // FRESH run still knows which channel (and workspace) to post into.
+  assert.equal(ctx.channelId, "c1");
+  assert.equal(ctx.workspaceId, "w1");
 });
 
 test("D1: startResume restores the same identity context (opt-in resume path)", async () => {
   const h = harness({ record: IDENTITY_REC, sdkId: "sdk-1" });
   assert.equal(await h.startResume(IDENTITY_REC, "sdk-1", "nudge"), true);
   const spec = h.calls.startSession[0];
-  assert.deepEqual(spec.context, { channelName: "Ops", taskTitle: "Ship the invoice import", authorName: "David" });
+  assert.deepEqual(spec.context, {
+    channelName: "Ops", taskTitle: "Ship the invoice import", authorName: "David",
+    // v2.x: the two ids ride the restored context too — a recreated shell frames its
+    // first turn from it (io.takeFraming), and the framing needs the concrete address.
+    channelId: "c1", workspaceId: "w1",
+  });
   assert.equal(spec.rawFirstTurn, "nudge", "the resume turn is unchanged by the context restore");
   assert.equal(spec.resumeSdkId, "sdk-1");
 });
@@ -366,7 +375,12 @@ test("D1: startResume restores the same identity context (opt-in resume path)", 
 test("D1: a legacy record with no identity fields restores nulls (never undefined)", async () => {
   const h = harness({ record: { channelId: "c1", taskId: "t1", profile: "full" }, sdkId: "sdk-1" });
   await h.recreateParkedShell({ channelId: "c1", taskId: "t1" });
-  assert.deepEqual(h.calls.startSession[0].context, { channelName: null, taskTitle: null, authorName: null });
+  assert.deepEqual(h.calls.startSession[0].context, {
+    channelName: null, taskTitle: null, authorName: null,
+    // The ids come from the record's OWN fields (present on every record), so only a
+    // missing workspaceId nulls out; the framing degrades to its id-free wording.
+    channelId: "c1", workspaceId: null,
+  });
 });
 
 test("D1: emitParkedShell synthesizes an init carrying the restored identity", () => {

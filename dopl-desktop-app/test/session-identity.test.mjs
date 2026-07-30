@@ -110,6 +110,25 @@ test("trigger.js: the responder session context carries taskTitle", () => {
     "the responder context now carries the SAME server-stamped taskTitle the consent payload reads");
 });
 
+// ── v2.x: the spawn context also carries the ids the framing addresses ─────────
+
+test("trigger.js: the responder session context carries the channel + workspace ids", () => {
+  const src = readFileSync(M("trigger.js"), "utf8");
+  const call = src.slice(src.indexOf("sessionEngine.launchResponderSession({"), src.indexOf("toolProfile: rec.toolProfile"));
+  assert.match(call, /channelId: entry\.channel\.id/, "the concrete channel id, not just its name");
+  assert.match(call, /workspaceId: entry\.workspaceId/, "and the workspace a multi-workspace token needs");
+});
+
+test("session-engine: startSession merges the spec ids into the context for EVERY spawn shape", () => {
+  const src = readFileSync(M("session-engine.js"), "utf8");
+  // One merge, read by BOTH the eager first turn (fresh responder / requester) and the
+  // session object the lazy fresh-shell framing later reads (io.takeFraming -> s.context).
+  assert.match(src, /const context = \{ \.\.\.\(spec\.context \|\| \{\}\), channelId: spec\.channelId, workspaceId: spec\.workspaceId \};/);
+  assert.match(src, /framing\.buildFencedTurn\(\{ side: spec\.side, message: spec\.firstMessage, context, nonce \}\)/);
+  assert.match(src, /\n {4}context, \/\//, "the SAME merged object is what the session carries");
+  assert.ok(!/context: spec\.context/.test(src), "no path keeps the un-merged context");
+});
+
 test("prompt-framing: a responder prompt is NOT changed by the new context field", () => {
   // Only the REQUESTER branch reads ctx.taskTitle, so threading it into the responder
   // context is display-only — the fenced first turn stays byte-for-byte identical.

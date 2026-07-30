@@ -49,12 +49,20 @@ function knownProfile(p) {
 // engine reads is restored verbatim: `authorName` is the field startSession derives
 // counterpartyName from, so the peer name survives a reopen too. Display-only strings —
 // they never re-enter the prompt (a resume passes its own rawFirstTurn).
+//
+// v2.x: the two ID fields are the exception — channelId / workspaceId (already on the
+// durable record at the record level) ARE prompt input, because a recreated shell with
+// nothing to resume builds its first turn from this context (io.takeFraming ->
+// prompt-framing.deliverySection), and without them the reopened session was told the
+// channel's display name only and could not address dopl_channel.
 function contextFromRecord(rec) {
   const r = rec || {};
   return {
     channelName: r.channelName || null,
     taskTitle: r.taskTitle || null,
     authorName: r.counterpartyName || null,
+    channelId: r.channelId || null,
+    workspaceId: r.workspaceId || null,
   };
 }
 

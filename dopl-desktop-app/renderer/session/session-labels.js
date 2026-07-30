@@ -5,7 +5,7 @@
 //   - folderLabel(folder)                      -> the working-directory pill label
 //   - permissionModeText(autoApprove, profile) -> the permission-posture line
 //   - permissionPostBody(perm)                 -> the drafted body of a gated post (D2)
-//   - postDestinationText(perm)                -> WHERE that post is going (FIX #9)
+//   - postDestinationText(perm)                -> WHERE that post is going (FIX #9; v2.x names the peer)
 //
 // Split out of session-viewmodel.js purely to respect the HARD 500-line-per-file cap
 // (§2) while v2.5 added the inbound-gate + history reducer cases — the same discipline
@@ -103,8 +103,22 @@
   // `ownChannel` on the permission payload (session-io, from isOwnChannelPost against the
   // session's own channelId). FAIL-SUSPICIOUS: anything other than an explicit true reads
   // as another channel, so a missing marker can never make an exfil post look routine.
+  //
+  // v2.x: an OWN-channel post now NAMES the recipient ("To: David's agent"). "To: this
+  // channel" read like a warning next to the cross-channel line it shares a slot with, so a
+  // legitimate reply looked as suspicious as an exfil attempt. The name is the peer display
+  // name main already puts on the payload (`to` on the outbound gate / the post item, the
+  // bound counterparty and never a third party); with no name it stays "To: this channel".
+  // Whitespace-collapsed and capped: it is a label, not prose.
+  const PEER_CAP = 60;
+  function peerName(perm) {
+    const raw = perm && perm.to != null ? String(perm.to).replace(/\s+/g, " ").trim() : "";
+    return raw.length > PEER_CAP ? raw.slice(0, PEER_CAP - 1).trimEnd() + "…" : raw;
+  }
   function postDestinationText(perm) {
-    return perm && perm.ownChannel === true ? "To: this channel" : "To: another channel";
+    if (!perm || perm.ownChannel !== true) return "To: another channel";
+    const who = peerName(perm);
+    return who ? "To: " + who + "'s agent" : "To: this channel";
   }
 
   // Is this post leaving the session's own channel? Drives the dock's warning styling.

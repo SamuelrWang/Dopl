@@ -4,7 +4,8 @@
 // packaged-binary path math live in exactly one place (contract §D).
 //   getSdk()                  cached dynamic import() of the ESM SDK
 //   resolveClaudeExecutable() the asar-unpacked path for options.pathToClaudeCodeExecutable
-//   buildMcpServers(cfg)      the in-memory mcpServers object (dopl bearer from mcp-spawn.json)
+//   buildMcpServers(cfg, wsId) the in-memory mcpServers object (dopl bearer from
+//                              mcp-spawn.json + the session's X-Workspace-Id pin)
 //
 // WHY dynamic import (research §0 / §D): the SDK ships `sdk.mjs` (ESM only) but the
 // Electron main process is CJS. A static `require` throws ERR_REQUIRE_ESM; a dynamic
@@ -67,7 +68,22 @@ function resolveClaudeExecutable() {
 // mcp-config.js). `doplToolsPolicy` (a non-null array) becomes the per-server
 // `tools` allowlist so a restricted profile only sees its scoped dopl tools. When
 // the file is absent (rare — pre-sign-in) returns {} so the session still runs.
-function buildMcpServers(doplToolsPolicy) {
+//
+// v2.x WORKSPACE PIN. `workspaceId` (the SESSION's workspace UUID) rides as the
+// `X-Workspace-Id` request header. The device credential can span several
+// workspaces, and a multi-workspace connection has NO default: every dopl call
+// that omitted `workspace=` came back refused ("This connection has no default
+// workspace ... pass workspace=<slug_or_id>"), which is half of why a spawned
+// agent could not deliver. The MCP endpoint reads that header as a per-request
+// pin and resolves it against the caller's own memberships
+// (src/app/api/mcp/route.ts -> packages/mcp-server factory), so pinning it here
+// auto-targets every call the session makes even when the model forgets the arg.
+// It GRANTS nothing new: the pin must match a membership the credential already
+// has, and a per-call `workspace=` still wins (the server resolves the arg first
+// and runs that handler in its own scope). UUID only, never a slug — two prod
+// workspaces can share a slug. Omitted entirely when there is no session
+// workspace, which leaves today's behavior untouched.
+function buildMcpServers(doplToolsPolicy, workspaceId) {
   const file = path.join(app.getPath('userData'), 'mcp-spawn.json');
   let dopl;
   try {
@@ -82,6 +98,8 @@ function buildMcpServers(doplToolsPolicy) {
     url: dopl.url || MCP_URL,
     headers: { Authorization: dopl.headers.Authorization },
   };
+  const pin = typeof workspaceId === 'string' ? workspaceId.trim() : '';
+  if (pin) server.headers['X-Workspace-Id'] = pin;
   if (Array.isArray(doplToolsPolicy)) server.tools = doplToolsPolicy;
   return { dopl: server };
 }
