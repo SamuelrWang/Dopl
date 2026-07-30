@@ -1,20 +1,22 @@
 // v2.9 THE TWO PERMISSION AXES — the truth tables, the scoped grant keys, and THE INVARIANT.
 //
-// One "Auto-approve" checkbox used to control two unrelated things, because an outbound
-// message is technically a tool call (`dopl_channel op=post`) and rides the same canUseTool
-// plumbing as Bash. That fusion is HIGH-4: turning on hands-off messaging silently granted
-// arbitrary Bash / Write / Edit AND `dopl_channel op=open direct:true` to any workspace
-// member (the exfil path v1.9 FIX H1 closed). This file pins the split:
+// One "Auto-approve" checkbox used to control two unrelated things, because an outbound message
+// is technically a tool call (`dopl_channel op=post`) and rides the same canUseTool plumbing as
+// Bash. That fusion is HIGH-4: turning on hands-off messaging silently granted arbitrary Bash /
+// Write / Edit AND `dopl_channel op=open direct:true` to any workspace member (the exfil path
+// v1.9 FIX H1 closed). This file pins the split:
 //
 //   AXIS A  toolMode     manual | accept_edits | auto | bypass   (what MY agent may do here)
 //   AXIS B  messageMode  ask | auto_inbound | auto_outbound | auto_both  (what crosses)
 //
 // THE INVARIANT, proven in BOTH directions below: Axis A can never auto-approve a message
-// operation, and Axis B can never auto-approve a work tool.
+// operation, and Axis B can never auto-approve a work tool. The v2.9 adversarial-review fixes
+// F1-F9 are pinned in session-permission-hardening.test.mjs, except F1 (park clears the standing
+// grants), which lives with the other park resets below because that is the test that missed it.
 //
-// Layers: source extraction with injection for the electron-free-but-constant-fed
-// session-profiles block (the established idiom), a direct require for the reducer + the
-// renderer's pure modules, and regex pins for the preload / IPC / HTML surfaces.
+// Layers: source extraction with injection for the electron-free-but-constant-fed session-
+// profiles block (the established idiom), a direct require for the reducer + the renderer's pure
+// modules, and regex pins for the preload / IPC / HTML surfaces.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -44,23 +46,24 @@ const REDUCER_SRC = readFileSync(M("session-reducer.js"), "utf8");
 const ENGINE = readFileSync(M("session-engine.js"), "utf8");
 
 const { grantDecision, grantKeyFor, TOOL_MODES, MESSAGE_MODES } = profiles;
-// Source pins run against CODE, not the prose above it: a comment may name the thing it
-// replaced (and these ones deliberately do).
-// Drops whole-line comments AND trailing ` // ...` ones. (A url's `://` never matches the
-// space-slash-slash-space form, so this cannot eat code.)
+// Source pins run against CODE, not the prose above it: a comment may name the thing it replaced
+// (these ones deliberately do). Drops whole-line comments AND trailing ` // ...` ones. (A url's
+// `://` never matches the space-slash-slash-space form, so this cannot eat code.)
 const stripComments = (src) => src
   .split("\n")
   .filter((l) => !/^\s*\/\//.test(l))
   .map((l) => l.replace(/\s\/\/\s.*$/, ""))
   .join("\n");
 const CH = "ch1";
-const sha12 = (v) => createHash("sha256").update(String(v)).digest("hex").slice(0, 12);
+// FIX F4: the FULL digest. 48 bits is seconds of search for a counterparty who supplies the text.
+const shaKey = (v) => createHash("sha256").update(String(v)).digest("hex");
 const decide = (over) => grantDecision({ profile: "full", channelId: CH, ...over });
+const keyOf = (input) => grantKeyFor(DOPL_CHANNEL_TOOL, input, CH);
 
 // ── A. THE TOOL TRUTH TABLE (Axis A) ──────────────────────────────────────────────
-// Every tool class x every mode. `full` is used throughout because it is the only profile
-// that live-gates work tools at all; the restricted profiles are covered by the deny/
-// preapproved rows in session-profiles.test.mjs.
+// Every tool class x every mode. `full` is used throughout because it is the only profile that
+// live-gates work tools at all; the restricted profiles are covered by the deny/preapproved rows
+// in session-profiles.test.mjs.
 
 const INPUTS = {
   Bash: { command: "ls -la" },
@@ -71,6 +74,7 @@ const INPUTS = {
   WebFetch: { url: "https://api.example.com/x" },
   WebSearch: { query: "how to ship" },
   mcp__dopl__dopl_kb: { op: "list" },
+  mcp__dopl__dopl_search: { query: "x" },
   Read: { file_path: "/w/a.txt" },
   Task: { description: "spawn a subagent" },
 };
@@ -85,7 +89,10 @@ const TOOL_TRUTH = {
   Edit: /*         */["gate", "allow", "allow", "allow"], // A2 edit set
   NotebookEdit: /* */["gate", "allow", "allow", "allow"], // A2 edit set
   MultiEdit: /*    */["gate", "gate", "allow", "allow"], // A2 names three tools, not four
-  mcp__dopl__dopl_kb: ["gate", "gate", "allow", "allow"], // an ordinary gated work tool
+  // FIX F2: dopl_kb WRITES to the shared workspace (write_file / create_base / create_folder),
+  // i.e. off THIS machine into rows every workspace member can read. `auto` gates it now.
+  mcp__dopl__dopl_kb: ["gate", "gate", "gate", "allow"],
+  mcp__dopl__dopl_search: ["gate", "gate", "allow", "allow"], // a read-only dopl lookup
   Read: /*         */["preapproved", "preapproved", "preapproved", "preapproved"], // shadowed
   Task: /*         */["deny", "deny", "deny", "deny"], // SESSION_HARD_DENY, immovable
 };
@@ -93,8 +100,7 @@ const TOOL_TRUTH = {
 test("AXIS A truth table: every tool class x every tool mode", () => {
   for (const [tool, row] of Object.entries(TOOL_TRUTH)) {
     TOOL_MODES.forEach((toolMode, i) => {
-      assert.equal(decide({ toolName: tool, input: INPUTS[tool], toolMode }), row[i],
-        `${tool} @ toolMode=${toolMode}`);
+      assert.equal(decide({ toolName: tool, input: INPUTS[tool], toolMode }), row[i], `${tool} @ toolMode=${toolMode}`);
     });
   }
 });
@@ -103,8 +109,7 @@ test("AXIS A: hard-deny is immovable in EVERY mode, task grant or not (contract 
   for (const tool of ["Task", "Agent", "CronCreate", "SendMessage", "mcp__dopl__dopl_kb_admin"]) {
     for (const toolMode of TOOL_MODES) {
       assert.equal(decide({ toolName: tool, toolMode }), "deny", `${tool} @ ${toolMode}`);
-      assert.equal(decide({ toolName: tool, toolMode, allowForTask: [grantKeyFor(tool, {}, CH)] }), "deny",
-        `${tool} @ ${toolMode} + a task grant`);
+      assert.equal(decide({ toolName: tool, toolMode, allowForTask: [grantKeyFor(tool, {}, CH)] }), "deny", `${tool} @ ${toolMode} + a task grant`);
     }
     // ...and no MESSAGE posture reaches it either.
     for (const messageMode of MESSAGE_MODES) {
@@ -130,8 +135,8 @@ const DM_OPEN = { op: "open", direct: true, member: "evil@x" };
 test("AXIS B truth table: only an OWN-channel post is ever auto-sent", () => {
   const rows = [
     ["own post", OWN_POST, { ask: "gate", auto_inbound: "gate", auto_outbound: "allow", auto_both: "allow" }],
-    // Everything else on this tool is the cross-user exfil surface FIX H1 closed. "Send my
-    // replies for me" is not consent to open a DM with another workspace member.
+    // Everything else here is the cross-user exfil surface FIX H1 closed: "send my replies for
+    // me" is not consent to open a DM with another workspace member.
     ["cross-channel post", CROSS_POST, { ask: "gate", auto_inbound: "gate", auto_outbound: "gate", auto_both: "gate" }],
     ["DM open", DM_OPEN, { ask: "gate", auto_inbound: "gate", auto_outbound: "gate", auto_both: "gate" }],
     ["read", { op: "read" }, { ask: "gate", auto_inbound: "gate", auto_outbound: "gate", auto_both: "gate" }],
@@ -150,8 +155,7 @@ test("AXIS B truth table: only an OWN-channel post is ever auto-sent", () => {
 test("INVARIANT (1): AXIS A can NEVER auto-approve a dopl_channel op, bypass included", () => {
   for (const toolMode of TOOL_MODES) {
     for (const input of [OWN_POST, CROSS_POST, DM_OPEN, { op: "read" }, { op: "invite" }, undefined]) {
-      assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input, toolMode }), "gate",
-        `toolMode=${toolMode} must not decide ${JSON.stringify(input)}`);
+      assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input, toolMode }), "gate", `toolMode=${toolMode} must not decide ${JSON.stringify(input)}`);
     }
   }
 });
@@ -159,8 +163,7 @@ test("INVARIANT (1): AXIS A can NEVER auto-approve a dopl_channel op, bypass inc
 test("INVARIANT (2): AXIS B can NEVER auto-approve a work tool, auto_both included", () => {
   for (const messageMode of MESSAGE_MODES) {
     for (const tool of ["Bash", "Write", "Edit", "NotebookEdit", "MultiEdit", "WebFetch", "WebSearch", "mcp__dopl__dopl_kb"]) {
-      assert.equal(decide({ toolName: tool, input: INPUTS[tool], messageMode }), "gate",
-        `messageMode=${messageMode} must not decide ${tool}`);
+      assert.equal(decide({ toolName: tool, input: INPUTS[tool], messageMode }), "gate", `messageMode=${messageMode} must not decide ${tool}`);
     }
   }
 });
@@ -168,7 +171,7 @@ test("INVARIANT (2): AXIS B can NEVER auto-approve a work tool, auto_both includ
 test("INVARIANT: the channel branch returns BEFORE Axis A is consulted (source pin)", () => {
   const src = readFileSync(M("session-profiles.js"), "utf8");
   const fn = src.slice(src.indexOf("function grantDecision(args) {"), src.indexOf("// ─── END SESSION-PROFILE TABLE"));
-  const channelBranch = fn.indexOf("a.toolName === DOPL_CHANNEL_TOOL");
+  const channelBranch = fn.indexOf("isChannelTool(a.toolName)");
   const axisA = fn.indexOf("toolModeAllows(a.toolMode");
   const hardDeny = fn.indexOf("cfg.disallowedTools.indexOf(a.toolName)");
   assert.ok(hardDeny !== -1 && hardDeny < channelBranch, "hard-deny is decided FIRST of all");
@@ -179,7 +182,7 @@ test("INVARIANT: the channel branch returns BEFORE Axis A is consulted (source p
 // ── C. THE SCOPED GRANT KEYS (HIGH-1 + MEDIUM-2) ──────────────────────────────────
 
 test("HIGH-1: Bash keys on argv0 + a digest of the exact command", () => {
-  assert.equal(grantKeyFor("Bash", { command: "ls -la" }), "Bash#ls#" + sha12("ls -la"));
+  assert.equal(grantKeyFor("Bash", { command: "ls -la" }), "Bash#ls#" + shaKey("ls -la"));
   // The whole point: one approved command does not authorize the next one.
   const granted = [grantKeyFor("Bash", { command: "ls -la" })];
   assert.equal(decide({ toolName: "Bash", input: { command: "ls -la" }, allowForTask: granted }), "allow");
@@ -200,7 +203,7 @@ test("HIGH-1: WebFetch / WebSearch key on ORIGIN (path and query do not widen it
   assert.equal(decide({ toolName: "WebFetch", input: { url: "https://evil.test/z" }, allowForTask: granted }), "gate");
   // A url-less call (a plain WebSearch) has no origin to scope by, so it falls back to the
   // INPUT hash — stricter than granting every later search at once.
-  assert.equal(grantKeyFor("WebSearch", { query: "a" }), "WebSearch#" + sha12('{"query":"a"}'));
+  assert.equal(grantKeyFor("WebSearch", { query: "a" }), "WebSearch#" + shaKey('{"query":"a"}'));
   assert.notEqual(grantKeyFor("WebSearch", { query: "a" }), grantKeyFor("WebSearch", { query: "b" }));
 });
 
@@ -209,8 +212,7 @@ test("HIGH-1: Write / Edit / NotebookEdit key on the RESOLVED DIRECTORY", () => 
   assert.equal(a, grantKeyFor("Write", { file_path: "/repo/src/b.js" }), "same dir, same key");
   assert.notEqual(a, grantKeyFor("Write", { file_path: "/repo/secrets/b.js" }), "another dir needs its own");
   assert.notEqual(a, grantKeyFor("Edit", { file_path: "/repo/src/a.js" }), "and another TOOL its own again");
-  assert.equal(grantKeyFor("NotebookEdit", { notebook_path: "/repo/nb/x.ipynb" }),
-    grantKeyFor("NotebookEdit", { notebook_path: "/repo/nb/y.ipynb" }));
+  assert.equal(grantKeyFor("NotebookEdit", { notebook_path: "/repo/nb/x.ipynb" }), grantKeyFor("NotebookEdit", { notebook_path: "/repo/nb/y.ipynb" }));
   const granted = [a];
   assert.equal(decide({ toolName: "Write", input: { file_path: "/repo/src/c.js" }, allowForTask: granted }), "allow");
   assert.equal(decide({ toolName: "Write", input: { file_path: "/repo/.ssh/id_rsa" }, allowForTask: granted }), "gate");
@@ -218,38 +220,38 @@ test("HIGH-1: Write / Edit / NotebookEdit key on the RESOLVED DIRECTORY", () => 
 
 test("HIGH-1: everything else keys on a STABLE hash of the whole input", () => {
   // Property order must not change the key, or a grant would evaporate at random.
-  assert.equal(grantKeyFor("mcp__dopl__dopl_kb", { op: "get", id: "k1" }),
-    grantKeyFor("mcp__dopl__dopl_kb", { id: "k1", op: "get" }));
-  assert.notEqual(grantKeyFor("mcp__dopl__dopl_kb", { op: "get", id: "k1" }),
-    grantKeyFor("mcp__dopl__dopl_kb", { op: "get", id: "k2" }));
-  // Bounded: a hostile input can never grow the key into a blob.
+  assert.equal(grantKeyFor("mcp__dopl__dopl_kb", { op: "get", id: "k1" }), grantKeyFor("mcp__dopl__dopl_kb", { id: "k1", op: "get" }));
+  assert.notEqual(grantKeyFor("mcp__dopl__dopl_kb", { op: "get", id: "k1" }), grantKeyFor("mcp__dopl__dopl_kb", { op: "get", id: "k2" }));
+  // Bounded: a hostile input can never grow the key into a blob (tool name + one digest).
+  const KEY_MAX = "mcp__dopl__dopl_kb".length + 1 + 64;
   const huge = grantKeyFor("mcp__dopl__dopl_kb", { op: "x".repeat(9000) });
-  assert.ok(huge.length < 60, "the key stays short whatever the input");
+  assert.equal(huge.length, KEY_MAX, "the key stays fixed-width whatever the input");
   // Deeply nested / self-referential input terminates (depth bound) instead of hanging.
   const deep = {}; let cur = deep;
-  for (let i = 0; i < 50; i++) { cur.next = {}; cur = cur.next; }
-  assert.ok(grantKeyFor("mcp__dopl__dopl_kb", deep).length < 60);
+  for (let i = 0; i < 500; i++) { cur.next = {}; cur = cur.next; }
+  assert.equal(grantKeyFor("mcp__dopl__dopl_kb", deep).length, KEY_MAX);
+  const cyclic = { op: "x" }; cyclic.self = cyclic;
+  assert.equal(grantKeyFor("mcp__dopl__dopl_kb", cyclic).length, KEY_MAX);
 });
 
 test("MEDIUM-2: `to` and `kind` are folded into the post key", () => {
-  const plain = grantKeyFor(DOPL_CHANNEL_TOOL, { op: "post", body: "hi" }, CH);
-  assert.equal(plain, profiles.POST_GRANT, "a plain reply keeps the byte-identical v2.5 key");
-  assert.equal(grantKeyFor(DOPL_CHANNEL_TOOL, { op: "post", body: "hi", kind: "message" }, CH), plain,
+  const plain = keyOf({ op: "post", body: "hi" });
+  assert.ok(plain.startsWith(profiles.POST_GRANT + "#body:"), "still the v2.5 own-post namespace");
+  assert.equal(keyOf({ op: "post", body: "hi", kind: "message" }), plain,
     "`message` is the default kind, so it adds no segment");
   // An ADDRESSED post and a LIFECYCLE post each earn their own key.
-  const addressed = grantKeyFor(DOPL_CHANNEL_TOOL, { op: "post", to: "evil@x.com" }, CH);
-  const finished = grantKeyFor(DOPL_CHANNEL_TOOL, { op: "post", kind: "task_finished" }, CH);
+  const addressed = keyOf({ op: "post", body: "hi", to: "evil@x.com" });
+  const finished = keyOf({ op: "post", body: "hi", kind: "task_finished" });
   assert.notEqual(addressed, plain);
   assert.notEqual(finished, plain);
-  assert.notEqual(addressed, grantKeyFor(DOPL_CHANNEL_TOOL, { op: "post", to: "someone@else.com" }, CH));
+  assert.notEqual(addressed, keyOf({ op: "post", body: "hi", to: "someone@else.com" }));
   // So one approved reply cannot post to a different member, or forge a completion.
   const granted = [plain];
-  assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: { op: "post", body: "ok" }, allowForTask: granted }), "allow");
-  assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: { op: "post", to: "evil@x.com" }, allowForTask: granted }), "gate");
-  assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: { op: "post", kind: "task_finished" }, allowForTask: granted }), "gate");
+  assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: { op: "post", body: "hi" }, allowForTask: granted }), "allow");
+  assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: { op: "post", body: "hi", to: "evil@x.com" }, allowForTask: granted }), "gate");
+  assert.equal(decide({ toolName: DOPL_CHANNEL_TOOL, input: { op: "post", body: "hi", kind: "task_finished" }, allowForTask: granted }), "gate");
   // The cross-channel key carries them too, on top of its target.
-  assert.notEqual(grantKeyFor(DOPL_CHANNEL_TOOL, { op: "post", channel: "other", kind: "task_failed" }, CH),
-    grantKeyFor(DOPL_CHANNEL_TOOL, { op: "post", channel: "other" }, CH));
+  assert.notEqual(keyOf({ op: "post", channel: "other", kind: "task_failed" }), keyOf({ op: "post", channel: "other" }));
 });
 
 test("MEDIUM-2: the card is painted with the call's REAL to/kind, not the session peer", () => {
@@ -271,13 +273,10 @@ test("MEDIUM-2: the card is painted with the call's REAL to/kind, not the sessio
   for (const id of ["r1", "r2"]) s.pendingPermissions.get(id)({ behavior: "deny" });
   // ...and the renderer says both out loud on the decision surface.
   assert.equal(labels.postDestinationText({ ownChannel: true, to: "David" }), "To: David's agent");
-  assert.equal(labels.postDestinationText({ ownChannel: true, to: "evil@x.com", addressed: true, postKind: "task_finished" }),
-    "To: evil@x.com, marked task_finished");
-  assert.equal(labels.postDestinationText({ ownChannel: false, postKind: "task_finished" }),
-    "To: another channel, marked task_finished");
+  assert.equal(labels.postDestinationText({ ownChannel: true, to: "evil@x.com", addressed: true, postKind: "task_finished" }), "To: evil@x.com, marked task_finished");
+  assert.equal(labels.postDestinationText({ ownChannel: false, postKind: "task_finished" }), "To: another channel, marked task_finished");
   // The item carries them through the view-model to that surface.
-  const item = vm.reduceEvent(vm.initialState(), { type: "outbound_post", toolUseId: "t2", to: "evil@x.com",
-    text: "done", addressed: true, postKind: "task_finished" }).items[0];
+  const item = vm.reduceEvent(vm.initialState(), { type: "outbound_post", toolUseId: "t2", to: "evil@x.com", text: "done", addressed: true, postKind: "task_finished" }).items[0];
   assert.equal(item.addressed, true);
   assert.equal(item.postKind, "task_finished");
   // An ordinary post's item is untouched (no stray fields on the common path).
@@ -295,21 +294,32 @@ test("B3: grants are in-memory only — nothing about a key is ever persisted", 
 
 // ── D. PARK RESETS BOTH AXES AND inboundForTask (A4 / A5 / C9) ────────────────────
 
-test("A4/A5/C9: park resets toolMode, messageMode AND inboundForTask, and says so", () => {
+// FIX F1 (v2.9 review): this test USED to arm only the two modes and leave allowForTask empty,
+// which is exactly why it missed that standing grants survived a park. The armed state now
+// carries REAL grants because that is what an operator who walked away leaves behind.
+test("A4/A5/C9/F1: park resets both axes, inboundForTask AND every standing grant", () => {
+  const postGrant = keyOf(OWN_POST);
+  const bashGrant = grantKeyFor("Bash", { command: "ls -la" });
   const armed = {
     ...reducer.initialSessionState(), phase: "running",
     toolMode: "bypass", messageMode: "auto_both", inboundForTask: true,
+    allowForTask: [postGrant, bashGrant],
   };
   const r = reducer.sessionReducer(armed, { type: "idle_timeout" });
   assert.equal(r.state.toolMode, "manual");
   assert.equal(r.state.messageMode, "ask");
   assert.equal(r.state.inboundForTask, false);
+  assert.deepEqual(r.state.allowForTask, [], "FIX F1: the grants die with the posture that framed them");
   const modes = r.effects.find((e) => e.type === "emit" && e.payload.type === "modes");
   assert.deepEqual(modes.payload, { type: "modes", tool: "manual", message: "ask" },
     "the header is told, so it cannot advertise a posture the woken session will not honor");
-  // And the woken session really is back to asking — for tools AND for messages.
+  // And the woken session really is back to asking — for tools AND for messages. THE EXPLOIT: the
+  // header honestly read "Asking before messages in and out" while a surviving post grant let the
+  // woken agent post arbitrary content with no card. grantDecision is asked with the WOKEN state.
   const s = { profile: "full", channelId: CH, state: r.state };
-  assert.equal(grantDecision({ ...s, toolName: "Bash", input: { command: "ls" }, allowForTask: [], toolMode: r.state.toolMode }), "gate");
+  const woken = { ...s, allowForTask: r.state.allowForTask, toolMode: r.state.toolMode, messageMode: r.state.messageMode };
+  assert.equal(grantDecision({ ...woken, toolName: "Bash", input: { command: "ls -la" } }), "gate");
+  assert.equal(grantDecision({ ...woken, toolName: DOPL_CHANNEL_TOOL, input: OWN_POST }), "gate");
   assert.equal(io.postWillGate({ ...s, state: r.state }, OWN_POST), true);
 });
 
@@ -459,9 +469,12 @@ test("permissionPostureText states BOTH axes, in the contract's exact words", ()
     labels.permissionPostureText("accept_edits", "auto_inbound", null),
     "Tools: Auto approving file edits · Messages: Auto accepting incoming messages"
   );
+  // FIX F2: the `auto` line names the workspace writes it now gates. It used to say only "asking
+  // for shell and web" while auto-approving the Dopl write tools, i.e. data off this machine.
   assert.equal(
     labels.permissionPostureText("auto", "auto_outbound", ""),
-    "Tools: Auto approving commands, asking for shell and web · Messages: Auto sending outgoing messages"
+    "Tools: Auto approving local edits and lookups, asking for shell, web and workspace writes" +
+    " · Messages: Auto sending outgoing messages"
   );
   assert.equal(
     labels.permissionPostureText("bypass", "auto_both", null),

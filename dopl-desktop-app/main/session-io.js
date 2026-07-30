@@ -12,7 +12,7 @@
 // imperative shell) remains the only stateful, electron-bound module.
 
 const crypto = require('crypto');
-const { grantDecision, grantKeyFor, isOwnChannelPost } = require('./session-profiles');
+const { grantDecision, grantKeyFor, isOwnChannelPost, isChannelTool } = require('./session-profiles');
 const { DOPL_CHANNEL_TOOL } = require('./tool-profiles');
 // The turn-TEXT assembly (fences, the channel-history seed, the gate-exclusion
 // bookkeeping, the one-shot fresh-shell framing) lives in session-seed.js — the §2
@@ -126,15 +126,16 @@ function summarizeResult(content) {
 
 // ─── BEGIN SESSION-IO-PURE (pure; unit-tested via source extraction) ──────────
 //
-// Item 2 classifier. A `dopl_channel` op=post into the session's OWN channel is the
-// real OUTBOUND message the agent sent to the peer — it must render as a sent
-// message, not a generic tool card. Reuses the SAME op-scope as the grant
-// (session-profiles.isOwnChannelPost); this does NOT widen the grant (§H-2), it only
-// classifies for display. Pure: references DOPL_CHANNEL_TOOL + isOwnChannelPost
-// (both imported at module top, no runtime imports of their own) and holds no state,
-// so the test slices this block and injects the real values (session-profiles idiom).
+// Item 2 classifier. A `dopl_channel` op=post into the session's OWN channel is the real
+// OUTBOUND message the agent sent to the peer — it must render as a sent message, not a
+// generic tool card. Reuses the SAME op-scope as the grant (session-profiles.isOwnChannelPost);
+// this does NOT widen the grant (§H-2), it only classifies for display. FIX F3: the tool-name
+// half is `isChannelTool` (server prefix + short name), the SAME predicate the Axis-B branch
+// uses, so a renamed/versioned channel tool cannot be gated as a message but painted as a
+// generic tool card. Pure: references isChannelTool + isOwnChannelPost (both imported at module
+// top) and holds no state, so the test slices this block and injects the real values.
 function isOutboundPost(name, input, sessionChannelId) {
-  return name === DOPL_CHANNEL_TOOL && isOwnChannelPost(input, sessionChannelId);
+  return isChannelTool(name) && isOwnChannelPost(input, sessionChannelId);
 }
 // ─── END SESSION-IO-PURE ──────────────────────────────────────────────────────
 
@@ -156,14 +157,16 @@ function grantArgs(s, toolName, input) {
 }
 
 // v2.7 L3 — WILL this own-channel post stop on an operator decision? It asks the SAME
-// grantDecision makeCanUseTool asks, with the SAME arguments, so the stream-time artifact
-// and the gate agree about the SAME post: one that gates is painted as the inline decision
-// card (`pending`), one that is auto-approved (a scoped task grant, or Axis B set to
-// auto_outbound / auto_both) is painted as the delivered record, exactly as before. This
-// does NOT decide anything — makeCanUseTool remains the only decision point; it only
-// chooses which single artifact the stream shows.
-function postWillGate(s, input) {
-  return grantDecision(grantArgs(s, DOPL_CHANNEL_TOOL, input)) === 'gate';
+// grantDecision makeCanUseTool asks, with the SAME arguments, so the stream-time artifact and
+// the gate agree about the SAME post: one that gates is painted as the inline decision card
+// (`pending`), one that is auto-approved (a scoped task grant, or Axis B set to auto_outbound /
+// auto_both) is painted as the delivered record. This does NOT decide anything — makeCanUseTool
+// remains the only decision point; it only chooses which artifact the stream shows. FIX F3: the
+// real tool NAME is threaded through (defaulting to the canonical one) because grant keys are
+// per tool name — asking about `dopl_channel` for a call the SDK made as `dopl_channel_v2` would
+// predict against a key the decision never consults, and claim "sent" over a held post.
+function postWillGate(s, input, toolName) {
+  return grantDecision(grantArgs(s, toolName || DOPL_CHANNEL_TOOL, input)) === 'gate';
 }
 
 // ─── BEGIN SESSION-IO-POST-SURFACE (pure; unit-tested via source extraction) ───
@@ -174,17 +177,28 @@ function postWillGate(s, input) {
 // (session-labels.postDestinationText), and both are folded into the grant key
 // (session-profiles.postScope), so approving one reply cannot authorize either.
 const TO_CAP = 60;
-// The lifecycle kinds. 'message' (the default, and absent) is a plain chat post and adds
-// nothing to the surface — anything else is a structured event and is named on the card.
-const POST_EVENT_KINDS = ['task_started', 'task_progress', 'task_finished', 'task_failed'];
+const KIND_CAP = 40;
+// FIX F9 (v2.9 review) — THE KEY AND THE CARD MUST NAME THE SAME THING. postScope keys ANY
+// non-'message' kind, but this named only the four-value enum, so `kind:'Task_Finished'` (or any
+// other invented kind the peer's UI might act on) earned its OWN grant key while the card showed
+// NOTHING and the operator approved what read as a plain reply. Every non-empty kind is rendered
+// now. And a NON-STRING `to`/`kind` is never rendered as a value it is not: String({a:1}) is
+// '[object Object]' and String(['alice']) is 'alice', so a malformed field says so in plain
+// words — and grantDecision refuses to auto-allow those calls at all (postFieldsOk), so this
+// label is always shown before anything is sent.
+function oneLineField(value, cap) {
+  const raw = String(value).replace(/\s+/g, ' ').trim();
+  return raw.length > cap ? raw.slice(0, cap - 1).trimEnd() + '…' : raw;
+}
 function postAddress(input) {
-  const raw = input && input.to != null ? String(input.to).replace(/\s+/g, ' ').trim() : '';
-  if (!raw) return null; // unaddressed -> the caller falls back to the bound counterparty
-  return raw.length > TO_CAP ? raw.slice(0, TO_CAP - 1).trimEnd() + '…' : raw;
+  const to = input ? input.to : null;
+  if (to == null || to === '') return null; // unaddressed -> the bound counterparty
+  return typeof to === 'string' ? (oneLineField(to, TO_CAP) || null) : 'an invalid recipient';
 }
 function postKindOf(input) {
-  const k = input && input.kind != null ? String(input.kind) : '';
-  return POST_EVENT_KINDS.indexOf(k) === -1 ? null : k;
+  const k = input ? input.kind : null;
+  if (k == null || k === '' || k === 'message') return null; // the plain-chat default
+  return typeof k === 'string' ? (oneLineField(k, KIND_CAP) || null) : 'an invalid kind';
 }
 // Stamp the two fields on a post payload, ONLY when they are really set: an absent field
 // must leave the payload byte-identical to the one every existing surface already renders.
@@ -234,7 +248,7 @@ function sdkRenderEvents(msg, sessionChannelId, peerName, willGatePost) {
           // then resolves in place. `ownChannel` feeds the card's destination line (the
           // renderer is fail-suspicious: anything but an explicit true reads as another
           // channel), and it is a boolean — never another channel's id (§H-9).
-          if (typeof willGatePost === 'function' && willGatePost(b.input) === true) {
+          if (typeof willGatePost === 'function' && willGatePost(b.input, b.name) === true) {
             payload.pending = true;
             payload.ownChannel = true;
           }
@@ -444,7 +458,7 @@ function handleSdkMessage(s, msg, dispatch, store) {
     // an op=post into this channel renders as an outbound message to the peer. v2.7 L3
     // adds the gate PREDICTION so that one artifact starts as the decision card when the
     // post is going to stop on an operator button.
-    const willGate = (input) => postWillGate(s, input);
+    const willGate = (input, toolName) => postWillGate(s, input, toolName);
     for (const ev of sdkRenderEvents(msg, s.channelId, s.counterpartyName, willGate)) dispatch(s, ev);
     return;
   }

@@ -22,6 +22,19 @@
 // and collapses newlines — a display name can NEVER forge a fence line even
 // though the framing already sits outside the (random-nonce) fence.
 
+// FIX F8 (v2.9 review) — the fence-token strip must run TO A FIXED POINT. One pass is not a
+// strip, it is a single substitution: 'BEGINBEGIN-REQUEST-REQUEST' removes the inner match and
+// LEAVES 'BEGIN-REQUEST' behind, reconstructing the very token the pass exists to remove. Loop
+// until the string stops changing (it shrinks every iteration, so it always terminates).
+function stripFenceTokens(value) {
+  let out = String(value);
+  for (;;) {
+    const next = out.replace(/BEGIN-REQUEST|END-REQUEST/gi, '');
+    if (next === out) return out;
+    out = next;
+  }
+}
+
 // Neutralize a caller-supplied display name: collapse newlines/tabs/runs of
 // whitespace to a single space and strip the fence tokens BEGIN-REQUEST /
 // END-REQUEST (any case). Returns a trimmed string ('' when there is nothing
@@ -31,10 +44,15 @@ function sanitizeName(name) {
   // Length cap: display_name is unbounded attacker-controlled text; a name is
   // not a paragraph, and capping bounds how much prose an injected "name" can
   // smuggle into the trusted framing lines.
-  return raw
-    .replace(/BEGIN-REQUEST|END-REQUEST/gi, '')
+  //
+  // FIX F8: U+0085 (NEL) is added to the collapse class explicitly. JS `\s` covers U+2028 /
+  // U+2029 but NOT U+0085, so a NEL survived every pass and reached the TRUSTED preamble above
+  // the fence (session-seed.frameContinuation interpolates this name there) — where terminals
+  // and any consumer that treats NEL as a line break see a NEW LINE that reads as ours, not as
+  // fenced data. Everything that can start a line has to die here.
+  return stripFenceTokens(raw)
     .replace(/[\r\n\t]+/g, ' ')
-    .replace(/\s+/g, ' ')
+    .replace(/[\s\u0085]+/g, ' ')
     .trim()
     .slice(0, 80)
     .trim();
@@ -76,10 +94,10 @@ function counterpartyFraming({ authorName, authorKind, channelName } = {}) {
 // the "@" and RECONSTRUCTED "BEGIN-REQUEST" for the framing to print. Unreachable today (both
 // ids come from our own server rows) but the belt has to be the last thing that runs to be a
 // belt at all.
+// FIX F8: the belt loops too (stripFenceTokens). Its single pass had the same reconstruction
+// hole sanitizeName had — 'BEGINBEGIN-REQUEST-REQUEST' came back OUT as 'BEGIN-REQUEST'.
 function idToken(value) {
-  return String(value == null ? '' : value)
-    .replace(/[^A-Za-z0-9_-]/g, '')
-    .replace(/BEGIN-REQUEST|END-REQUEST/gi, '') // belt: a real id can never contain these
+  return stripFenceTokens(String(value == null ? '' : value).replace(/[^A-Za-z0-9_-]/g, ''))
     .slice(0, 64);
 }
 

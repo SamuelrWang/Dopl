@@ -40,6 +40,7 @@ const {
   DENIED_BUILTINS,
   DOPL_ADMIN_TOOLS,
   DOPL_CHANNEL_TOOL,
+  DOPL_SERVER_PREFIX,
   normalizeProfile,
 } = require(join(HERE, "..", "main", "tool-profiles.js"));
 
@@ -52,17 +53,20 @@ assert.notEqual(to, -1, "END SESSION-PROFILE TABLE sentinel missing");
 assert.ok(to > from, "session-profile sentinels out of order");
 const BLOCK = SRC.slice(from, to);
 
-// v2.9: the block also digests a grant key, so `sha12` is injected exactly like
-// normalizeProfile — the REAL implementation, sliced from the module head.
-const sha12 = (value) =>
-  createHash("sha256").update(String(value == null ? "" : value)).digest("hex").slice(0, 12);
+// v2.9: the block also digests a grant key, so `shaKey` is injected exactly like
+// normalizeProfile — the REAL implementation, sliced from the module head. FIX F4: the FULL
+// SHA-256, not a 12-hex (48-bit) prefix. The counterparty supplies the exact command / body
+// text, so a 48-bit birthday collision is seconds of work on this machine: a benign/malicious
+// pair sharing argv0 + digest gets the benign one approved and the twin auto-allowed.
+const shaKey = (value) =>
+  createHash("sha256").update(String(value == null ? "" : value)).digest("hex");
 
 const { shortDoplName, buildSessionToolConfig, grantDecision, grantKeyFor, POST_GRANT, isOwnChannelPost } = new Function(
   "READ_BUILTINS", "WEB_TOOLS", "DOPL_SAFE_TOOLS", "DENIED_BUILTINS",
-  "DOPL_ADMIN_TOOLS", "DOPL_CHANNEL_TOOL", "normalizeProfile", "sha12",
+  "DOPL_ADMIN_TOOLS", "DOPL_CHANNEL_TOOL", "DOPL_SERVER_PREFIX", "normalizeProfile", "shaKey",
   `${BLOCK}
    return { shortDoplName, buildSessionToolConfig, grantDecision, grantKeyFor, POST_GRANT, isOwnChannelPost };`
-)(READ_BUILTINS, WEB_TOOLS, DOPL_SAFE_TOOLS, DENIED_BUILTINS, DOPL_ADMIN_TOOLS, DOPL_CHANNEL_TOOL, normalizeProfile, sha12);
+)(READ_BUILTINS, WEB_TOOLS, DOPL_SAFE_TOOLS, DENIED_BUILTINS, DOPL_ADMIN_TOOLS, DOPL_CHANNEL_TOOL, DOPL_SERVER_PREFIX, normalizeProfile, shaKey);
 
 const CHANNEL_SHORT = "dopl_channel";
 // The work tools kept live-gated under `full` (everything else in DENIED_BUILTINS is
@@ -105,15 +109,33 @@ test("read_only: local reads pre-approved (NOT the channel); web + dopl reads/ad
 
 // ── dopl_only ────────────────────────────────────────────────────────────────
 
-test("dopl_only: reads + web + non-admin dopl pre-approved (NOT the channel); admins denied", () => {
+// FIX F2 (v2.9 review): the WORKSPACE-WRITE dopl tools. "Non-admin" is not "read-only" —
+// dopl_kb alone registers write_file / create_base / create_folder / move_file, and the other
+// five carry the same create+update shape. A write lands OFF this machine in rows every
+// workspace member can read, which is the same class of move as an outbound post.
+const DOPL_WRITE = ["mcp__dopl__dopl_kb", "mcp__dopl__dopl_skill", "mcp__dopl__dopl_ontology",
+  "mcp__dopl__dopl_workflow", "mcp__dopl__dopl_chats", "mcp__dopl__dopl_cluster"];
+const DOPL_READ = DOPL_SAFE_TOOLS.filter((t) => !DOPL_WRITE.includes(t));
+
+test("dopl_only: reads + web + READ-ONLY dopl pre-approved; writes GATE; admins denied", () => {
   const cfg = buildSessionToolConfig("dopl_only");
   assert.deepEqual(cfg.builtinTools, READ_BUILTINS.concat(WEB_TOOLS));
-  assert.deepEqual(cfg.preApproved, READ_BUILTINS.concat(WEB_TOOLS, DOPL_SAFE_TOOLS)); // FIX H1: no dopl_channel
+  // FIX H1: no dopl_channel. FIX F2: no dopl WRITE tool either — a shadowed write tool never
+  // reaches canUseTool at all, which is the v1.9 half of the `auto` auto-approval hole.
+  assert.deepEqual(cfg.preApproved, READ_BUILTINS.concat(WEB_TOOLS, DOPL_READ));
+  for (const t of DOPL_WRITE) {
+    assert.ok(!cfg.preApproved.includes(t), `dopl_only must NOT shadow ${t}`);
+    assert.ok(!cfg.disallowedTools.includes(t), `${t} must REACH the gate, not be denied`);
+  }
   for (const t of DENIED_BUILTINS.concat(DOPL_ADMIN_TOOLS)) {
     assert.ok(cfg.disallowedTools.includes(t), `dopl_only must deny ${t}`);
   }
   for (const t of WEB_TOOLS) assert.ok(!cfg.disallowedTools.includes(t), `dopl_only must not deny ${t}`);
   assert.deepEqual(cfg.doplToolsPolicy, DOPL_SAFE_TOOLS.map(shortDoplName).concat([CHANNEL_SHORT]));
+  // ...and under dopl_only they really do stop on a button now.
+  for (const t of DOPL_WRITE) {
+    assert.equal(grantDecision({ profile: "dopl_only", toolName: t, input: { op: "write_file" } }), "gate", t);
+  }
 });
 
 // ── full (FIX H2: dangerous subset HARD-DENIED, only work tools live-gated) ─────
@@ -187,26 +209,33 @@ test("FIX H1: allow-for-task lets the operator grant a gated dopl_channel op for
 
 // ── FIX F2: EVERY channel grant is op-scoped, and the bare name is worthless ──────
 
+// The own-channel post key. v2.9 review FIX F7: POST_GRANT is the BASE and every real key
+// extends it with the body digest, so the constant alone matches nothing.
+const ownPostKey = (input) => grantKeyFor(DOPL_CHANNEL_TOOL, input, "c1");
+
 test("FIX F2: grantKeyFor op-scopes every dopl_channel shape (own post, cross post, each op)", () => {
-  assert.equal(grantKeyFor(DOPL_CHANNEL_TOOL, post("c1"), "c1"), POST_GRANT);
-  assert.equal(grantKeyFor(DOPL_CHANNEL_TOOL, { op: "post" }, "c1"), POST_GRANT, "no explicit channel -> own channel");
+  assert.ok(ownPostKey(post("c1")).startsWith(POST_GRANT + "#body:"));
+  assert.equal(ownPostKey({ op: "post" }), ownPostKey(post("c1")), "no explicit channel -> own channel");
   assert.equal(grantKeyFor(DOPL_CHANNEL_TOOL, { op: "open", direct: true }, "c1"), DOPL_CHANNEL_TOOL + "#op:open");
   assert.equal(grantKeyFor(DOPL_CHANNEL_TOOL, { op: "read" }, "c1"), DOPL_CHANNEL_TOOL + "#op:read");
   assert.equal(grantKeyFor(DOPL_CHANNEL_TOOL, { op: "list_tasks" }, "c1"), DOPL_CHANNEL_TOOL + "#op:list_tasks");
   assert.equal(grantKeyFor(DOPL_CHANNEL_TOOL, {}, "c1"), DOPL_CHANNEL_TOOL + "#op:unknown", "a missing op is its own key");
   // A CROSS-channel post carries its target, so a grant to post into one other channel
-  // cannot post into a different one (and never collides with the own-channel key).
-  assert.equal(grantKeyFor(DOPL_CHANNEL_TOOL, post("OTHER"), "c1"), DOPL_CHANNEL_TOOL + "#op:post:other");
-  assert.notEqual(grantKeyFor(DOPL_CHANNEL_TOOL, post("OTHER"), "c1"), grantKeyFor(DOPL_CHANNEL_TOOL, post("SECOND"), "c1"));
+  // cannot post into a different one (and never collides with the own-channel key). FIX F6:
+  // the readable token is followed by a digest of the RAW target.
+  assert.ok(ownPostKey(post("OTHER")).startsWith(DOPL_CHANNEL_TOOL + "#op:post:other#" + shaKey("OTHER")));
+  assert.notEqual(ownPostKey(post("OTHER")), ownPostKey(post("SECOND")));
   // Sanitizing must not let a junk op collapse onto the own-channel post key.
-  assert.notEqual(grantKeyFor(DOPL_CHANNEL_TOOL, { op: "post ", channel: "OTHER" }, "c1"), POST_GRANT);
-  assert.notEqual(grantKeyFor(DOPL_CHANNEL_TOOL, { op: "p!o!s!t", channel: "OTHER" }, "c1"), POST_GRANT);
-  // Every key is bounded, even with a hostile op / channel string.
+  for (const junk of [{ op: "post ", channel: "OTHER" }, { op: "p!o!s!t", channel: "OTHER" }]) {
+    assert.ok(!ownPostKey(junk).startsWith(POST_GRANT + "#"), JSON.stringify(junk));
+  }
+  // Every key is bounded, even with a hostile op / channel string: the readable half is
+  // capped and everything else is a fixed-width digest.
   const huge = grantKeyFor(DOPL_CHANNEL_TOOL, { op: "x".repeat(400), channel: "y".repeat(400) }, "c1");
   assert.ok(huge.length <= DOPL_CHANNEL_TOOL.length + 40, "the key can never grow into a blob");
   // v2.9 HIGH-1: a non-channel tool no longer records the BARE NAME — see the per-class
   // scoping table in session-permission-axes.test.mjs.
-  assert.equal(grantKeyFor("Bash", { command: "ls" }, "c1"), "Bash#ls#" + sha12("ls"));
+  assert.equal(grantKeyFor("Bash", { command: "ls" }, "c1"), "Bash#ls#" + shaKey("ls"));
 });
 
 test("FIX F2: a grant on op=read does NOT allow a later op=post or op=open (each op its own)", () => {
@@ -231,7 +260,7 @@ test("FIX F2: the BARE tool name in allowForTask allows NOTHING on the channel t
 });
 
 test("D2: an 'Allow for this task' taken on a POST authorizes posts only, never op=open", () => {
-  const granted = [POST_GRANT];
+  const granted = [ownPostKey(post("c1"))];
   assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: "c1", input: post("c1"), allowForTask: granted }), "allow");
   assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: "c1", input: { op: "post" }, allowForTask: granted }), "allow");
   // The exfil ops stay gated under a post-only grant — this is the whole point of the key.

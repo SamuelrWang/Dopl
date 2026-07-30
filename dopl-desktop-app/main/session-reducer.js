@@ -27,9 +27,7 @@ function addUnique(arr, v) {
   return arr.indexOf(v) === -1 ? arr.concat([v]) : arr;
 }
 function without(arr, v) {
-  return arr.filter(function (x) {
-    return x !== v;
-  });
+  return arr.filter(function (x) { return x !== v; });
 }
 
 // Fresh state for a launching session. `mode` is the task's declared engagement mode (display +
@@ -51,7 +49,7 @@ function initialSessionState(opts) {
     costCapUsd: costCapUsd,
     idleMs: idleMs,
     pendingPermissions: [], // requestIds awaiting a button (models a Set)
-    allowForTask: [], // scoped grant KEYS the operator granted for the task (models a Set)
+    allowForTask: [], // scoped grant KEYS granted for the task (models a Set); cleared on park
     // v2.9 THE TWO AXES (session-profiles owns the tables + the resolution). toolMode = AXIS A
     // (manual|accept_edits|auto|bypass): what MY agent may do on THIS machine, and it NEVER
     // auto-approves a message op. messageMode = AXIS B (ask|auto_inbound|auto_outbound|auto_both):
@@ -120,12 +118,9 @@ function endLifecycle(reason) {
   return null;
 }
 function endEffects(state, outcome, reason, summary) {
-  const effects = [{ type: 'abortQuery' }];
   const lc = endLifecycle(reason);
-  if (lc) effects.push(lc);
-  effects.push(endedEmit(state, outcome, reason, summary));
-  effects.push({ type: 'settle', outcome: outcome });
-  return effects;
+  return [{ type: 'abortQuery' }].concat(lc ? [lc] : [],
+    [endedEmit(state, outcome, reason, summary), { type: 'settle', outcome: outcome }]);
 }
 
 // v2.9 — the header posture echo: ONE shape for BOTH axes, so the renderer never sees half a one.
@@ -437,19 +432,24 @@ function sessionReducer(state, event) {
   }
 
   if (type === 'idle_timeout') {
-    // P1: PARK, do not end. Already parked (a stale timer that survived the clear) is a no-op. NOT
-    // terminal — the session stays resumable via a lazy wake. FIX #3 (v2.9): reset BOTH axes to
-    // their most restrictive value so a counterparty-driven lazy resume cannot run pre-authorized
-    // while the operator is away. MEDIUM-3 (C9): `inboundForTask` goes with them — it used to
-    // survive a park, which let a peer restart a parked query and drive turns with nobody
-    // watching. FIX #17: the guard reads `parked`, not `phase` — a parked session HOLDING a
-    // message sits at phase 'awaiting_inbound' with parked===true, and the old phase check let a
-    // stale timer re-run the whole park on it. FIX F6: the per-turn post counters go too, or the
-    // next turn ends "Waiting for reply" beside a post the park deny-closed.
+    // P1: PARK, do not end. Already parked (a stale timer that survived the clear) is a no-op; NOT
+    // terminal, the session stays resumable via a lazy wake. FIX #17: the guard reads `parked`, not
+    // `phase` — a parked session HOLDING a message sits at 'awaiting_inbound' with parked===true,
+    // so the old phase check let a stale timer re-run the whole park on it.
+    // WHAT RESETS, AND WHY EACH ONE: FIX #3 (v2.9) both axes, so a counterparty-driven lazy resume
+    // cannot run pre-authorized while the operator is away; MEDIUM-3 (C9) `inboundForTask`, which
+    // survived a park and let a peer restart a parked query and drive turns with nobody watching;
+    // FIX F6 the per-turn post counters, or the next turn reads "Waiting for reply" beside a post
+    // the park deny-closed; FIX F1 (v2.9 review) `allowForTask` — contract §B3 and the comment in
+    // session-profiles both DOCUMENTED it as cleared on park and nothing cleared it, so one benign
+    // reply approved for-task before the operator walked away let the woken agent post arbitrary
+    // content with NO card, under a header honestly reading "Asking before messages in and out".
+    // A standing grant is consent given to a WATCHED window; the park is the moment that window
+    // stopped being watched, so grants die with the posture that framed them.
     if (state.parked === true) return { state: state, effects: [] };
     return {
       state: clone(state, { phase: gatePhase(state, 'parked'), parked: true, activity: 'parked',
-        toolMode: 'manual', messageMode: 'ask', inboundForTask: false,
+        toolMode: 'manual', messageMode: 'ask', inboundForTask: false, allowForTask: [],
         pendingPermissions: [], postedThisTurn: false, postedToolUseIds: [] }),
       effects: parkEffects(state),
     };

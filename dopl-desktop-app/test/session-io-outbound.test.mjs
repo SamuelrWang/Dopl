@@ -26,7 +26,7 @@ const SRC = readFileSync(join(HERE, "..", "main", "session-io.js"), "utf8");
 
 // The REAL exports the block depends on — pins the classifier to what ships.
 const { DOPL_CHANNEL_TOOL } = require(join(HERE, "..", "main", "tool-profiles.js"));
-const { isOwnChannelPost } = require(join(HERE, "..", "main", "session-profiles.js"));
+const { isOwnChannelPost, isChannelTool } = require(join(HERE, "..", "main", "session-profiles.js"));
 
 const BEGIN = "// ─── BEGIN SESSION-IO-PURE";
 const END = "// ─── END SESSION-IO-PURE";
@@ -43,10 +43,10 @@ for (const banned of ["require(", "electron", "fs.", "path.", "child_process", "
 }
 
 const { isOutboundPost } = new Function(
-  "DOPL_CHANNEL_TOOL",
+  "isChannelTool",
   "isOwnChannelPost",
   `${BLOCK}\n return { isOutboundPost };`
-)(DOPL_CHANNEL_TOOL, isOwnChannelPost);
+)(isChannelTool, isOwnChannelPost);
 
 // ── isOutboundPost truth table ────────────────────────────────────────────────
 

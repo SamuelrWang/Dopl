@@ -82,10 +82,13 @@
   // ("commands", "shell and web", "every command on this machine"). Fixed copy, sentence
   // case, NO em dash (§H-13). Unknown values fall back to the most restrictive line, so a
   // garbled mode can never read as more permissive than it is.
+  // FIX F2 (v2.9 review): the `auto` line used to say "asking for shell and web" while the mode
+  // ALSO auto-approved the workspace-write Dopl tools, which put data off this machine where
+  // every workspace member can read it. `auto` now gates those too, and the line names them.
   const TOOL_POSTURE = {
     manual: "Asking before each command",
     accept_edits: "Auto approving file edits",
-    auto: "Auto approving commands, asking for shell and web",
+    auto: "Auto approving local edits and lookups, asking for shell, web and workspace writes",
     bypass: "Auto approving every command on this machine",
   };
   const MESSAGE_POSTURE = {

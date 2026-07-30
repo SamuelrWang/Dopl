@@ -25,22 +25,24 @@ const require = createRequire(import.meta.url);
 const SRC = readFileSync(join(HERE, "..", "main", "session-profiles.js"), "utf8");
 
 const tp = require(join(HERE, "..", "main", "tool-profiles.js"));
-const { READ_BUILTINS, WEB_TOOLS, DOPL_SAFE_TOOLS, DENIED_BUILTINS, DOPL_ADMIN_TOOLS, DOPL_CHANNEL_TOOL, normalizeProfile } = tp;
+const { READ_BUILTINS, WEB_TOOLS, DOPL_SAFE_TOOLS, DENIED_BUILTINS, DOPL_ADMIN_TOOLS, DOPL_CHANNEL_TOOL, DOPL_SERVER_PREFIX, normalizeProfile } = tp;
 
 const from = SRC.indexOf("// ─── BEGIN SESSION-PROFILE TABLE");
 const to = SRC.indexOf("// ─── END SESSION-PROFILE TABLE");
 assert.ok(from !== -1 && to > from, "SESSION-PROFILE TABLE sentinels missing/out of order");
 const BLOCK = SRC.slice(from, to);
 
-// v2.9: the block digests grant keys, so `sha12` is injected like normalizeProfile.
-const sha12 = (v) => createHash("sha256").update(String(v == null ? "" : v)).digest("hex").slice(0, 12);
+// v2.9: the block digests grant keys, so `shaKey` is injected like normalizeProfile. FIX F4:
+// the FULL digest, not a 12-hex prefix — 48 bits is minutes of search for a counterparty who
+// supplies the exact command/body text, and a grant key is a Set member, never a display string.
+const shaKey = (v) => createHash("sha256").update(String(v == null ? "" : v)).digest("hex");
 
 const { buildSessionToolConfig, grantDecision, grantKeyFor } = new Function(
   "READ_BUILTINS", "WEB_TOOLS", "DOPL_SAFE_TOOLS", "DENIED_BUILTINS",
-  "DOPL_ADMIN_TOOLS", "DOPL_CHANNEL_TOOL", "normalizeProfile", "sha12",
+  "DOPL_ADMIN_TOOLS", "DOPL_CHANNEL_TOOL", "DOPL_SERVER_PREFIX", "normalizeProfile", "shaKey",
   `${BLOCK}
    return { buildSessionToolConfig, grantDecision, grantKeyFor };`
-)(READ_BUILTINS, WEB_TOOLS, DOPL_SAFE_TOOLS, DENIED_BUILTINS, DOPL_ADMIN_TOOLS, DOPL_CHANNEL_TOOL, normalizeProfile, sha12);
+)(READ_BUILTINS, WEB_TOOLS, DOPL_SAFE_TOOLS, DENIED_BUILTINS, DOPL_ADMIN_TOOLS, DOPL_CHANNEL_TOOL, DOPL_SERVER_PREFIX, normalizeProfile, shaKey);
 
 const PROFILES = ["read_only", "dopl_only", "full"];
 const ownPost = (channel) => ({ op: "post", channel });

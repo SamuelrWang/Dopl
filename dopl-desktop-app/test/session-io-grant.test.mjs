@@ -48,7 +48,7 @@ test("manual: a GATE tool dispatches a permission_request and parks (no resoluti
   assert.equal(rec.events.length, 1, "exactly one dispatch");
   assert.equal(rec.events[0].type, "permission_request");
   // v2.9 HIGH-1: the recorded GRANT KEY is scoped to this exact command, not the bare tool.
-  assert.match(rec.events[0].name, /^Bash#ls#[0-9a-f]{12}$/);
+  assert.match(rec.events[0].name, /^Bash#ls#[0-9a-f]{64}$/); // FIX F4: the FULL digest
   assert.equal(s.pendingPermissions.size, 1, "the resolver is parked for the operator button");
   // Resolve it so the promise settles (deny) and nothing dangles.
   s.pendingPermissions.get("r1")({ behavior: "deny" });
@@ -148,7 +148,9 @@ test("D2: the allow-for-task grant recorded for a post is the SCOPED post key", 
   const rec = recorder();
   io.makeCanUseTool(s, rec.dispatch)(CHANNEL_TOOL, POST, { requestId: "r11" });
   const grantName = rec.events[0].name; // what the reducer puts in allowForTask
-  assert.equal(grantName, CHANNEL_TOOL + "#post", "not the bare tool name");
+  // FIX F7: the key carries a digest of the EXACT body the operator read, so "for this task"
+  // means the same for a post as for Bash: THIS shape, again.
+  assert.ok(grantName.startsWith(CHANNEL_TOOL + "#post#body:"), "not the bare tool name");
   assert.equal(s.pendingNames.get("r11"), grantName, "session-ipc reads the same key back");
   // With that grant in hand, a later post allows with no button — but op=open still gates.
   s.state.allowForTask = [grantName];
@@ -190,7 +192,8 @@ test("FIX F2: a grant taken on op=read does NOT let a later post or DM open thro
   canUse2(CHANNEL_TOOL, POST, { requestId: "r21" });
   canUse2(CHANNEL_TOOL, { op: "open", direct: true, member: "evil@x" }, { requestId: "r22" });
   assert.equal(rec2.events.length, 2, "the post AND the DM open each still need their own decision");
-  assert.deepEqual(rec2.events.map((e) => e.name), [CHANNEL_TOOL + "#post", CHANNEL_TOOL + "#op:open"]);
+  assert.ok(rec2.events[0].name.startsWith(CHANNEL_TOOL + "#post#body:"));
+  assert.equal(rec2.events[1].name, CHANNEL_TOOL + "#op:open");
   // A second op=read rides the grant it was actually given.
   assert.deepEqual(await canUse2(CHANNEL_TOOL, { op: "read" }, { requestId: "r23" }), { behavior: "allow" });
   assert.equal(rec2.events.length, 2, "no new prompt for the granted op");

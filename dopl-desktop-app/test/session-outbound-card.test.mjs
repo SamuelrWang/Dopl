@@ -32,6 +32,7 @@ const R = (p) => fileURLToPath(new URL("../renderer/session/" + p, import.meta.u
 const vm = require(R("session-viewmodel.js"));
 const chrome = require(R("session-chrome.js"));
 const io = require(join(HERE, "..", "main", "session-io.js"));
+const profiles = require(join(HERE, "..", "main", "session-profiles.js"));
 const CSS = readFileSync(R("session.css"), "utf8");
 const JS = readFileSync(R("session.js"), "utf8");
 const PRELOAD = readFileSync(R("session-preload.js"), "utf8");
@@ -241,8 +242,13 @@ test("io: postWillGate mirrors canUseTool — gate by default, NOT under a grant
   // v2.9: the outbound half of the MESSAGE axis replaced the auto-approve toggle here.
   assert.equal(io.postWillGate(mkSession({ state: { allowForTask: [], messageMode: "auto_outbound" } }), POST), false,
     "auto send outgoing -> no card, the post just goes");
-  assert.equal(io.postWillGate(mkSession({ state: { allowForTask: [CHANNEL_TOOL + "#post"], messageMode: "ask" } }), POST), false,
-    "the v2.5 scoped task grant -> no card either");
+  // FIX F7: the post grant is scoped to the EXACT body, so the key is built from the same
+  // call, not hand-written — a body-blind constant no longer suppresses anything.
+  const postGrant = profiles.grantKeyFor(CHANNEL_TOOL, POST, "ch1");
+  assert.equal(io.postWillGate(mkSession({ state: { allowForTask: [postGrant], messageMode: "ask" } }), POST), false,
+    "the scoped task grant for THIS body -> no card either");
+  assert.equal(io.postWillGate(mkSession({ state: { allowForTask: [postGrant], messageMode: "ask" } }),
+    { ...POST, body: "ssh key: AAAA" }), true, "...but a DIFFERENT body is a different decision");
   // A grant taken on another op does NOT suppress the card (FIX F2 scoping).
   assert.equal(io.postWillGate(mkSession({ state: { allowForTask: [CHANNEL_TOOL + "#op:read"], messageMode: "ask" } }), POST), true);
   // And the TOOL axis can never send a message, not even at `bypass` (THE INVARIANT).
