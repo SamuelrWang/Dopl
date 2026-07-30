@@ -5,10 +5,12 @@
 // load-bearing SHADOW INVARIANT: a pre-approved tool must resolve to 'preapproved'
 // and can therefore NEVER reach the gate (§A.5 / research §3).
 //
-// SECURITY (adversarial review): grantDecision now also OP-SCOPES `dopl_channel`
-// (FIX H1 — it is no longer blanket pre-approved; only an own-channel post auto-
-// allows) and reflects `full`'s HARD-DENY subset (FIX H2/H3). Those cases live in
-// session-profiles.test.mjs; this file pins the invariants + the profile universe.
+// SECURITY (adversarial review): grantDecision OP-SCOPES `dopl_channel` (FIX H1 — no
+// blanket pre-approval) and reflects `full`'s HARD-DENY subset (FIX H2/H3). v2.5 D2
+// went further: NO dopl_channel op auto-allows any more, own-channel posts included,
+// and the shadow check below proves the tool stays out of allowedTools so that gate can
+// actually fire. The op/grant-key cases live in session-profiles.test.mjs; this file
+// pins the invariants + the profile universe.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -83,17 +85,27 @@ test("under 'full', an ungranted work tool GATES; granting it for the task -> 'a
   }
 });
 
-test("FIX H1: read_only / dopl_only gate NOTHING in their profile universe; ONLY dopl_channel op-scopes", () => {
+test("FIX H1 + D2: read_only / dopl_only gate NOTHING in their profile universe; dopl_channel ALWAYS gates", () => {
   // The profile's static universe (preApproved + disallowed) never gates — but
-  // dopl_channel, which is in NEITHER set now, gates for any non-own-channel op.
+  // dopl_channel, which is in NEITHER set, gates for EVERY op as of v2.5 D2.
   for (const profile of ["read_only", "dopl_only"]) {
     const cfg = buildSessionToolConfig(profile);
     for (const tool of cfg.preApproved.concat(cfg.disallowedTools)) {
       assert.notEqual(grantDecision({ profile, toolName: tool }), "gate", `${profile}: ${tool} must not gate`);
     }
-    // dopl_channel: own-channel post auto-allows; op=open (DM exfil) gates.
-    assert.equal(grantDecision({ profile, toolName: DOPL_CHANNEL_TOOL, channelId: "c1", input: ownPost("c1") }), "preapproved");
+    // D2: the own-channel post (the delivery message) gates too — it used to auto-allow.
+    assert.equal(grantDecision({ profile, toolName: DOPL_CHANNEL_TOOL, channelId: "c1", input: ownPost("c1") }), "gate");
     assert.equal(grantDecision({ profile, toolName: DOPL_CHANNEL_TOOL, channelId: "c1", input: { op: "open", direct: true } }), "gate");
+  }
+});
+
+test("D2 SHADOW CHECK: dopl_channel is in NO profile's allowedTools, so the gate can actually fire", () => {
+  // The shadow rule (§A.5): anything named in allowedTools auto-approves BEFORE
+  // canUseTool runs. A gated post is only real if the tool stays out of that list.
+  for (const profile of PROFILES) {
+    const cfg = buildSessionToolConfig(profile);
+    assert.ok(!cfg.preApproved.includes(DOPL_CHANNEL_TOOL), `${profile}: dopl_channel must not be shadowed`);
+    assert.ok(!cfg.disallowedTools.includes(DOPL_CHANNEL_TOOL), `${profile}: it must still be offered`);
   }
 });
 
@@ -119,8 +131,9 @@ test("FIX H2: full hard-denies the persistence/exfil/delegation subset (deny, no
 
 test("grantDecision tolerates missing args and unknown profiles (normalize to full)", () => {
   assert.equal(grantDecision({ toolName: "Bash" }), "gate", "no profile -> full -> Bash gates");
-  // FIX H1: dopl_channel with no input can't be an own-channel post -> gate.
+  // FIX H1 + D2: dopl_channel gates whatever the input is — no input, and an
+  // own-channel post, both land on the operator's dock.
   assert.equal(grantDecision({ profile: "nonsense", toolName: DOPL_CHANNEL_TOOL }), "gate");
-  assert.equal(grantDecision({ profile: "nonsense", toolName: DOPL_CHANNEL_TOOL, channelId: "c1", input: ownPost("c1") }), "preapproved");
+  assert.equal(grantDecision({ profile: "nonsense", toolName: DOPL_CHANNEL_TOOL, channelId: "c1", input: ownPost("c1") }), "gate");
   assert.equal(grantDecision(), "gate", "no args -> full -> unknown tool gates");
 });

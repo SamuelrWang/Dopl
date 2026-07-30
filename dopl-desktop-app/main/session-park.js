@@ -2,7 +2,7 @@
 //
 // Extracted from session-engine.js to hold that AT-CAP file (§O-7 / F-09c) under the
 // 500-line cap while P1 (idle parks) + P2 (reopen fallback) add resume paths. Leaf
-// deps (io / store / diag / crypto / Notification) are required at the top exactly like
+// deps (io / store / diag / Notification) are required at the top exactly like
 // session-dispatch.js; the ENGINE-specific handles (the live registry, the SDK loader,
 // the shared option assembly, the consumer loop, dispatch, startSession) are injected
 // via bind(). The BEGIN/END PURE block references those as free vars, so
@@ -19,7 +19,6 @@
 
 const io = require('./session-io');
 const store = require('./session-store');
-const crypto = require('crypto');
 const { Notification } = require('electron');
 const { diag } = require('./diag');
 
@@ -28,8 +27,9 @@ const { diag } = require('./diag');
 let deps = null;
 
 // The engine binds its internals here at load (sessions, getSdk, buildSdkOptions,
-// consume, dispatch, startSession, hasLiveSession, windowFactoryReady). The functions
-// below read them at CALL time, so bind order at module load does not matter.
+// consume, dispatch, startSession, hasLiveSession, windowFactoryReady, atWindowCap,
+// loadHistory, settleSession). The functions below read them at CALL time, so bind order
+// at module load does not matter.
 function bind(d) {
   deps = d || null;
 }
@@ -116,12 +116,17 @@ async function startResumedConsumer(s) {
 }
 
 // P2 — the reopenByTask fallback: no live session exists for (channel,task), so
-// recreate a PARKED SHELL in the registry if a durable record AND a retained
-// sdkSessionId survive. startSession opens a fresh window, shows a one-line note, and
-// leaves the session dormant until a lazy wake (P1). One shell per key: a Map hit (a
-// shell from a prior click) returns ok:true WITHOUT a second window — startSession sets
-// the Map entry synchronously before its first await, so a rapid second call sees it.
-// Returns {ok:false} when nothing resumable survives (a truly-closed task).
+// recreate a PARKED SHELL in the registry from the durable record. startSession opens a
+// fresh window, shows a one-line note, and leaves the session dormant until a lazy wake
+// (P1). One shell per key: a Map hit (a shell from a prior click) returns ok:true
+// WITHOUT a second window — startSession sets the Map entry synchronously before its
+// first await, so a rapid second call sees it.
+//
+// v2.5 D3 (ALWAYS-OPEN WINDOW): a retained sdkSessionId is NO LONGER required. A record
+// with no resumable sdk session still opens — it shows the channel history (deps.
+// loadHistory) and, when the operator types, starts a FRESH session for the task seeded
+// with that history as fenced context (session-history + io.withSeed). Only a task with
+// NO durable record at all returns {ok:false}: nothing about it lives on this machine.
 async function recreateParkedShell(a) {
   if (!deps || !deps.windowFactoryReady()) return { ok: false };
   const key = store.sessionKey(String((a && a.channelId) || ''), String((a && a.taskId) || ''));
@@ -129,10 +134,20 @@ async function recreateParkedShell(a) {
   if (existing && !existing.settled) return { ok: true };
   const rec = store.getRecord(key);
   const sdkId = store.getSdkSessionId(key);
-  if (!rec || !sdkId) return { ok: false };
+  if (!rec) return { ok: false };
   // FIX #4: apply the SAME shared window budget launch()/openConsentWindow() enforce
   // (sessions + open consent windows vs MAX_WINDOWS) — a reopen must not blow the cap.
-  if (deps.atWindowCap && deps.atWindowCap()) return { ok: false };
+  // FIX #7: at the cap, try to FREE one slot first. A recreated shell never leaves the
+  // registry on its own (only settle / a window-factory failure delete it) and the gate
+  // now creates shells from an inbound message alone, so six peer replies to six old
+  // tasks used to own the whole budget permanently — after which launches and consent
+  // windows degraded to cap-skips. evictIdleShell settles the oldest dormant shell the
+  // operator never touched (LRU by creation, never one holding a card). FAIL RESTRICTIVE:
+  // if nothing is evictable, or the cap still holds after it, the reopen is refused.
+  if (deps.atWindowCap && deps.atWindowCap()) {
+    if (!evictIdleShell()) return { ok: false };
+    if (deps.atWindowCap()) return { ok: false };
+  }
   const s = await deps.startSession({
     key, channelId: rec.channelId, taskId: rec.taskId, workspaceId: rec.workspaceId,
     // FIX #8: a shell recreated purely from a persisted record must FAIL RESTRICTIVE —
@@ -140,13 +155,57 @@ async function recreateParkedShell(a) {
     // `full` that normalizeProfile would pick (its global fallback is unchanged).
     side: rec.side, profile: knownProfile(rec.profile), mode: rec.mode,
     counterpartyId: rec.counterpartyId || null, // FIX L1: keep the feed counterparty-bound
-    context: contextFromRecord(rec), resumeSdkId: sdkId, // D1: restore the header identity
+    context: contextFromRecord(rec), resumeSdkId: sdkId || null, // D1: restore the header identity
     // FIX #9: rehydrate the running cap budget so a turn/cost-capped session reopened via
     // P2 continues from where it capped instead of getting a fresh budget.
     turns: rec.turns, costUsd: rec.costUsd,
     parkedShell: true, // startSession opens the window but starts NO query (lazy resume)
   }, null);
-  return s ? { ok: true } : { ok: false };
+  if (!s) return { ok: false };
+  // FIX F4: record the body that POPPED this gate on the shell BEFORE the read. The
+  // listener advanced its cursor to that message's seq before dispatching it, so the
+  // fetch window always contains it — recording it here keeps it out of BOTH the rendered
+  // history (session-history filters the entries) and the fresh run's seed (io.withSeed),
+  // so it appears exactly once: as the actionable Accept / Decline card. Idempotent with
+  // session-gate.enqueue's own noteGatedBody.
+  if (a && a.holdBody) io.noteGatedBody(s, a.holdBody);
+  // D3: paint the channel history into the empty replay ring. FIX F3: this is AWAITED, not
+  // fire-and-forget. Unawaited, an operator who typed first got a cold fresh run and saw
+  // the thread arrive as turn 2 BELOW their own bubble, and a fetch that resolved after a
+  // racing system/init dropped the seed on the floor. A failed fetch still just shows one
+  // calm notice. Guarded so a mid-wave engine that has not wired it opens the shell as before.
+  if (deps.loadHistory) {
+    try { await deps.loadHistory(s); } catch (_) { /* calm: the shell carries on */ }
+  }
+  return { ok: true };
+}
+
+// FIX #7 — free ONE window slot by settling the least-recently-created PARKED shell the
+// operator never interacted with. A settled parked record keeps its phase ('parked' via
+// the persist effect) and its sdkSessionId, so the evicted task stays fully reopenable —
+// this drops a dormant window, never a conversation. NEVER takes a shell that is live, is
+// holding an inbound card, or that the operator has touched (session-ipc stamps
+// operatorTouched on every renderer-driven handler). Returns false when nothing qualifies.
+function evictIdleShell() {
+  if (!deps || !deps.sessions || !deps.settleSession) return false;
+  let victim = null;
+  for (const s of deps.sessions.values()) {
+    if (!s || s.settled || !s.state) continue;
+    if (s.state.parked !== true) continue; // only a dormant shell is evictable
+    if (s.operatorTouched === true) continue; // never close a window the operator used
+    // Nor one with ANY unanswered message on it: the head's card (hasPendingInbound) or a
+    // reply queued behind it. The queue is memory-only, so evicting would lose them.
+    if (s.state.hasPendingInbound === true) continue;
+    if (s.pendingInbound && s.pendingInbound.length) continue;
+    if (!victim || (s.startedAt || 0) < (victim.startedAt || 0)) victim = s;
+  }
+  if (!victim) return false;
+  diag('session-park: evicting an untouched parked shell for the window budget');
+  try { deps.settleSession(victim, 'interrupted'); } catch (err) {
+    diag('session-park: evict failed', err && err.message);
+    return false;
+  }
+  return true;
 }
 
 // P2: paint a recreated parked shell. No SDK system/init lands (no query runs), so we
@@ -162,7 +221,12 @@ function emitParkedShell(s) {
     from: s.counterpartyName || null, selfAvatar: s.selfAvatar || null,
     fromAvatar: s.peerAvatar || null, cwdLabel: null,
   });
-  deps.emit(s, { type: 'notice', level: 'info', text: 'Reopened. The earlier transcript is in the channel thread.' });
+  // FIX #14: the old copy ("The earlier transcript is in the channel thread.") now
+  // contradicts the window itself — D3 PAINTS that transcript a moment later, so it read
+  // as "look elsewhere" directly above the thread. This line states the shell's actual
+  // state instead; session-history owns the two cases where no history lands (no bound
+  // counterparty / a failed fetch) and says where to read it there.
+  deps.emit(s, { type: 'notice', level: 'info', text: 'Reopened. Nothing is running yet, so send a message to continue.' });
   deps.emit(s, { type: 'status', phase: 'parked' });
 }
 
@@ -207,13 +271,11 @@ async function resume(rec, sdkSessionId) { // opt-in resume from the interrupted
   return startResume(rec, sdkSessionId, nudge);
 }
 
-// Item 3 secondary: reopen a SETTLED requester (its sdkSessionId survived an idle /
-// interrupt end), resuming with the peer's reply FRAMED — fresh nonce, words stay DATA,
-// gated tools still gate on reopen (§H-4).
-async function resumeRequesterForReply(rec, sdkSessionId, reply) {
-  const nonce = crypto.randomBytes(8).toString('hex');
-  return startResume(rec, sdkSessionId, io.frameContinuation(nonce, reply && reply.message, reply && reply.authorName));
-}
+// v2.5 D1: `resumeRequesterForReply` (the v2.2 item-3 bounded auto-continuation — reopen
+// a settled requester and feed the peer's reply as its first turn) is GONE. A peer reply
+// no longer resumes anything on its own: session-dispatch routes it to the engine's
+// inbound gate, which recreates this same parked shell and HOLDS the reply for the
+// operator's Accept. The accept then takes the ordinary lazy-resume path above.
 
 // ─── END SESSION-PARK-PURE ────────────────────────────────────────────────────────
 
@@ -221,9 +283,9 @@ module.exports = {
   bind,
   resumeParked,
   recreateParkedShell,
+  evictIdleShell, // FIX #7: LRU relief for the shared window budget
   emitParkedShell,
   offerResume,
   startResume,
   resume,
-  resumeRequesterForReply,
 };

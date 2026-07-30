@@ -35,11 +35,13 @@ const flush = () => new Promise((r) => setImmediate(r));
 
 function harness(over = {}) {
   const cfg = { record: null, sdkId: null, windowReady: true, atCap: false, gateSdk: null, ...over };
-  const calls = { buildSdkOptions: [], consume: [], dispatch: [], startSession: [], query: [], emit: [] };
+  const calls = { buildSdkOptions: [], consume: [], dispatch: [], startSession: [], query: [], emit: [], settled: [] };
 
   const io = {
     makePushIterator: () => ({ __iter: true, pushed: [], push(m) { this.pushed.push(m); }, close() { this.closed = true; } }),
     frameContinuation: (nonce, msg, who) => `FRAMED:${nonce}:${who}:${msg}`,
+    // FIX F4: the real recorder's shape — the shell must know the held body BEFORE the read.
+    noteGatedBody: (s, body) => { (s.gatedBodies = s.gatedBodies || []).push(body); },
   };
   const sessions = new Map();
   const store = {
@@ -65,12 +67,14 @@ function harness(over = {}) {
     hasLiveSession: (a) => { const s = sessions.get(store.sessionKey(a.channelId, a.taskId)); return !!(s && !s.settled); },
     emit: (s, payload) => calls.emit.push(payload),
     windowFactoryReady: () => cfg.windowReady,
-    atWindowCap: () => !!cfg.atCap, // FIX #4
+    atWindowCap: () => cfg.atCap === true || (cfg.capAt != null && sessions.size >= cfg.capAt), // FIX #4
+    // FIX #7: the engine's own settle(), which deletes the registry entry + destroys the window.
+    settleSession: (s, outcome) => { calls.settled.push({ key: s.key, outcome }); s.settled = true; sessions.delete(s.key); },
   };
 
   const api = new Function(
     "io", "store", "crypto", "Notification", "diag",
-    `${BLOCK}\n return { bind, resumeParked, recreateParkedShell, emitParkedShell, startResume };`
+    `${BLOCK}\n return { bind, resumeParked, recreateParkedShell, emitParkedShell, startResume, evictIdleShell };`
   )(io, store, crypto, Notification, diag);
   api.bind(deps);
   return { ...api, deps, sessions, calls, cfg, store };
@@ -139,10 +143,134 @@ test("recreateParkedShell: NO record -> {ok:false}, no window created", async ()
   assert.equal(h.calls.startSession.length, 0);
 });
 
-test("recreateParkedShell: record but NO retained sdkSessionId -> {ok:false}", async () => {
-  const h = harness({ record: { channelId: "c1", taskId: "t1" }, sdkId: null });
+// v2.5 D3 (ALWAYS-OPEN WINDOW): this used to return {ok:false} — a record with no
+// resumable sdk session was a dead end. It now opens the shell anyway: the window shows
+// the channel history and the first typed turn starts a FRESH session for the task.
+test("D3: a record with NO retained sdkSessionId still recreates the shell (resume null)", async () => {
+  const h = harness({ record: { channelId: "c1", taskId: "t1", profile: "full", side: "responder", mode: "interactive" }, sdkId: null });
+  assert.deepEqual(await h.recreateParkedShell({ channelId: "c1", taskId: "t1" }), { ok: true });
+  assert.equal(h.calls.startSession.length, 1, "the operator gets a window, not a dead end");
+  const spec = h.calls.startSession[0];
+  assert.equal(spec.parkedShell, true);
+  assert.equal(spec.resumeSdkId, null, "nothing to resume -> a fresh session on the first turn");
+});
+
+test("D3: the recreated shell loads the channel history", async () => {
+  const loaded = [];
+  const h = harness({ record: { channelId: "c1", taskId: "t1", profile: "full" }, sdkId: null });
+  h.deps.loadHistory = (s) => { loaded.push(s); return Promise.resolve(true); };
+  await h.recreateParkedShell({ channelId: "c1", taskId: "t1" });
+  assert.equal(loaded.length, 1, "the empty replay ring is filled from the channel");
+  assert.equal(loaded[0].key, "c1:t1");
+});
+
+// ── FIX F3: the history load is AWAITED, not fire-and-forget ───────────────────────
+// Unawaited, three things went wrong: an operator who typed first got a cold FRESH run with
+// no context, the entries then arrived as turn 2 (painted BELOW their own bubble), and a
+// fetch that resolved after a racing system/init dropped the seed entirely.
+
+test("FIX F3: recreateParkedShell does not resolve until the history load settles", async () => {
+  let release;
+  const pending = new Promise((r) => { release = r; });
+  const h = harness({ record: { channelId: "c1", taskId: "t1", profile: "full" }, sdkId: null });
+  let done = false;
+  h.deps.loadHistory = () => pending;
+  const p = h.recreateParkedShell({ channelId: "c1", taskId: "t1" }).then((r) => { done = true; return r; });
+  await flush();
+  assert.equal(done, false, "the reopen is still waiting on the thread");
+  release(true);
+  assert.deepEqual(await p, { ok: true });
+  assert.equal(done, true);
+});
+
+test("FIX F3: a REJECTED history load still resolves the reopen (calm, not a dead window)", async () => {
+  const h = harness({ record: { channelId: "c1", taskId: "t1", profile: "full" }, sdkId: null });
+  h.deps.loadHistory = () => Promise.reject(new Error("offline"));
+  assert.deepEqual(await h.recreateParkedShell({ channelId: "c1", taskId: "t1" }), { ok: true });
+});
+
+// ── FIX F4: the message that popped the gate is recorded BEFORE the read ───────────
+
+test("FIX F4: `holdBody` is recorded on the shell BEFORE the history load runs", async () => {
+  const seen = [];
+  const h = harness({ record: { channelId: "c1", taskId: "t1", profile: "full" }, sdkId: null });
+  h.deps.loadHistory = (s) => { seen.push((s.gatedBodies || []).slice()); return Promise.resolve(true); };
+  await h.recreateParkedShell({ channelId: "c1", taskId: "t1", holdBody: "the held reply" });
+  assert.deepEqual(seen, [["the held reply"]], "session-history can filter it out of the entries");
+});
+
+test("FIX F4: no holdBody records nothing (an ordinary tray reopen is unchanged)", async () => {
+  const seen = [];
+  const h = harness({ record: { channelId: "c1", taskId: "t1", profile: "full" }, sdkId: null });
+  h.deps.loadHistory = (s) => { seen.push(s.gatedBodies); return Promise.resolve(true); };
+  await h.recreateParkedShell({ channelId: "c1", taskId: "t1" });
+  assert.deepEqual(seen, [undefined]);
+});
+
+// ── FIX #7: LRU relief for the shared window budget ────────────────────────────────
+// A recreated shell never leaves the registry on its own, MAX_WINDOWS is shared with
+// consent windows, and the gate now creates shells from an inbound message alone — so six
+// peer replies to six old tasks used to own the whole budget forever, after which launches
+// and consent windows degraded to cap-skips.
+
+function shell(over = {}) {
+  return {
+    key: over.key || "c9:t9", settled: false, startedAt: over.startedAt || 1,
+    state: { parked: true, hasPendingInbound: false, ...(over.state || {}) },
+    ...over,
+  };
+}
+
+test("FIX #7: at the cap, the OLDEST untouched parked shell is settled to free a slot", async () => {
+  const h = harness({ record: { channelId: "c1", taskId: "t1", profile: "full" }, sdkId: "sdk-1", capAt: 2 });
+  h.sessions.set("old:a", shell({ key: "old:a", startedAt: 10 }));
+  h.sessions.set("new:b", shell({ key: "new:b", startedAt: 99 }));
+  assert.deepEqual(await h.recreateParkedShell({ channelId: "c1", taskId: "t1" }), { ok: true });
+  assert.deepEqual(h.calls.settled, [{ key: "old:a", outcome: "interrupted" }], "LRU by creation");
+  assert.equal(h.calls.startSession.length, 1, "and the reopen goes through");
+});
+
+test("FIX #7: a shell the OPERATOR touched, a LIVE session, and a HELD card are all spared", async () => {
+  const spared = [
+    { operatorTouched: true },
+    { state: { parked: false } },
+    { state: { parked: true, hasPendingInbound: true } },
+    // The queue is memory-only, so a reply waiting BEHIND the head must not be evicted away.
+    { pendingInbound: [{ pendingId: "p2", message: "queued" }] },
+  ];
+  for (const over of spared) {
+    const h = harness({ record: { channelId: "c1", taskId: "t1", profile: "full" }, sdkId: "sdk-1", capAt: 1 });
+    h.sessions.set("keep:me", shell({ key: "keep:me", ...over }));
+    // FAIL RESTRICTIVE: nothing evictable -> the reopen is refused, exactly as before.
+    assert.deepEqual(await h.recreateParkedShell({ channelId: "c1", taskId: "t1" }), { ok: false }, JSON.stringify(over));
+    assert.deepEqual(h.calls.settled, [], "no window is taken from the operator");
+    assert.equal(h.calls.startSession.length, 0);
+  }
+});
+
+test("FIX #7: eviction that does not clear the cap still refuses (never over-budget)", async () => {
+  const h = harness({ record: { channelId: "c1", taskId: "t1", profile: "full" }, sdkId: "sdk-1", atCap: true });
+  h.sessions.set("old:a", shell({ key: "old:a" }));
   assert.deepEqual(await h.recreateParkedShell({ channelId: "c1", taskId: "t1" }), { ok: false });
-  assert.equal(h.calls.startSession.length, 0);
+  assert.deepEqual(h.calls.settled, [{ key: "old:a", outcome: "interrupted" }], "one was freed");
+  assert.equal(h.calls.startSession.length, 0, "but the cap still holds, so no window opens");
+});
+
+test("FIX #7: evictIdleShell settles 'interrupted', which KEEPS the record + sdk id reopenable", () => {
+  const h = harness();
+  const victim = shell({ key: "old:a" });
+  h.sessions.set("old:a", victim);
+  assert.equal(h.evictIdleShell(), true);
+  assert.equal(h.calls.settled[0].outcome, "interrupted", "never completed/failed (that clears the sdk id)");
+  assert.equal(victim.settled, true);
+  assert.equal(h.evictIdleShell(), false, "and a settled shell is not evictable twice");
+});
+
+test("FIX #7: no eviction is attempted when the engine wired no settle (mid-wave safety)", () => {
+  const h = harness();
+  h.sessions.set("old:a", shell({ key: "old:a" }));
+  delete h.deps.settleSession;
+  assert.equal(h.evictIdleShell(), false, "fail restrictive rather than half-settling a session");
 });
 
 test("recreateParkedShell: one shell per key — an existing live entry short-circuits (no dupe)", async () => {
@@ -163,8 +291,10 @@ test("recreateParkedShell: window-mode off (no factory) -> {ok:false}", async ()
 
 test("FIX #4: recreateParkedShell is refused at the MAX_WINDOWS cap (no window created)", async () => {
   const h = harness({ record: { channelId: "c1", taskId: "t1" }, sdkId: "sdk-1", atCap: true });
+  // Nothing evictable in the registry, so FIX #7 changes nothing here: still fail-restrictive.
   assert.deepEqual(await h.recreateParkedShell({ channelId: "c1", taskId: "t1" }), { ok: false });
   assert.equal(h.calls.startSession.length, 0, "a capped reopen never opens a window");
+  assert.deepEqual(h.calls.settled, [], "and nothing is closed to make room out of nowhere");
 });
 
 // ── FIX #8: a missing/unknown persisted profile recreates FAIL-RESTRICTIVE ──
@@ -251,8 +381,13 @@ test("D1: emitParkedShell synthesizes an init carrying the restored identity", (
   assert.equal(init.channelName, "Ops");
   assert.equal(init.from, "David");
   assert.equal(init.model, null, "no model — nothing is running yet");
-  // The calm reopen note + the Paused pill still follow, byte-for-byte as in v1.7.4.
-  assert.equal(h.calls.emit[1].text, "Reopened. The earlier transcript is in the channel thread.");
+  // The calm reopen note + the Paused pill still follow. FIX #14: the note no longer says
+  // "the earlier transcript is in the channel thread" — D3 PAINTS that transcript a moment
+  // later, so the old copy sat directly above the thread telling the operator to look
+  // elsewhere. session-history owns the two no-history cases and says where to read there.
+  assert.equal(h.calls.emit[1].text, "Reopened. Nothing is running yet, so send a message to continue.");
+  assert.ok(!h.calls.emit[1].text.includes("transcript"), "it no longer points away from the window");
+  assert.ok(!h.calls.emit[1].text.includes("—"), "no em dash in copy");
   assert.deepEqual(h.calls.emit[2], { type: "status", phase: "parked" });
 });
 

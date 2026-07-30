@@ -5,14 +5,20 @@
 // as parameters — the test evaluates exactly what ships and is pinned to the real
 // profile lists (same idiom as tool-profiles, but parameterized).
 //
-// What matters after the adversarial-review security fixes (§ FIX H1/H2/H3):
+// What matters after the adversarial-review security fixes (§ FIX H1/H2/H3) and the
+// v2.5 D2 outbound gate:
 //   H1 — `dopl_channel` is NOT pre-approved on ANY profile and NOT denied either; it
-//        reaches the gate and is OP-SCOPED in grantDecision (own-channel post only).
+//        reaches the gate.
+//   D2 — and it NEVER auto-allows there any more: even an own-channel op=post gates,
+//        so no message leaves the machine without a click. The task grant a post can
+//        earn is the narrow POST_GRANT key, which cannot open a DM.
 //   H2 — under `full` the dangerous subset (Task/Agent/Cron*/SendMessage/… + dopl
 //        admins) is HARD-DENIED, not merely gated; only the visible+reversible work
 //        tools (Bash/Write/Edit/NotebookEdit/…) stay live-gated.
 //   H3 — Task/Agent are hard-denied under EVERY profile (subagents don't inherit the
 //        canUseTool bound).
+//   F2 — EVERY dopl_channel grant is op-scoped and the bare tool name allows nothing:
+//        a click taken on op=read can no longer authorize op=post or op=open for the task.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -45,11 +51,11 @@ assert.notEqual(to, -1, "END SESSION-PROFILE TABLE sentinel missing");
 assert.ok(to > from, "session-profile sentinels out of order");
 const BLOCK = SRC.slice(from, to);
 
-const { shortDoplName, buildSessionToolConfig, grantDecision, isOwnChannelPost } = new Function(
+const { shortDoplName, buildSessionToolConfig, grantDecision, grantKeyFor, POST_GRANT, isOwnChannelPost } = new Function(
   "READ_BUILTINS", "WEB_TOOLS", "DOPL_SAFE_TOOLS", "DENIED_BUILTINS",
   "DOPL_ADMIN_TOOLS", "DOPL_CHANNEL_TOOL", "normalizeProfile",
   `${BLOCK}
-   return { shortDoplName, buildSessionToolConfig, grantDecision, isOwnChannelPost };`
+   return { shortDoplName, buildSessionToolConfig, grantDecision, grantKeyFor, POST_GRANT, isOwnChannelPost };`
 )(READ_BUILTINS, WEB_TOOLS, DOPL_SAFE_TOOLS, DENIED_BUILTINS, DOPL_ADMIN_TOOLS, DOPL_CHANNEL_TOOL, normalizeProfile);
 
 const CHANNEL_SHORT = "dopl_channel";
@@ -147,11 +153,13 @@ test("isOwnChannelPost: only op=post into the session's own channel (or no expli
   assert.equal(isOwnChannelPost(undefined, "c1"), false);
 });
 
-test("FIX H1: dopl_channel own-channel post -> 'preapproved'; any other op/channel -> 'gate'", () => {
+test("v2.5 D2: EVERY dopl_channel op gates, own-channel post included (no 'preapproved')", () => {
   const chan = "c-abc";
-  // Auto-allowed: a plain delivery post into this session's channel.
-  assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: chan, input: post(chan) }), "preapproved");
-  assert.equal(grantDecision({ profile: "read_only", toolName: DOPL_CHANNEL_TOOL, channelId: chan, input: post() }), "preapproved");
+  // THE OUTBOUND GATE: a plain delivery post into this session's own channel used to
+  // resolve 'preapproved' (no click). It now gates like every other write, so no
+  // message leaves this machine without the operator seeing the drafted body.
+  assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: chan, input: post(chan) }), "gate");
+  assert.equal(grantDecision({ profile: "read_only", toolName: DOPL_CHANNEL_TOOL, channelId: chan, input: post() }), "gate");
   // Gated: the exfiltration surface the blanket pre-approval used to hand out free.
   assert.equal(grantDecision({ profile: "read_only", toolName: DOPL_CHANNEL_TOOL, channelId: chan, input: { op: "open", direct: true, member: "evil@x" } }), "gate", "op=open (DM) must gate");
   assert.equal(grantDecision({ profile: "read_only", toolName: DOPL_CHANNEL_TOOL, channelId: chan, input: post("OTHER") }), "gate", "cross-channel post must gate");
@@ -166,7 +174,69 @@ test("FIX H1: allow-for-task lets the operator grant a gated dopl_channel op for
   const chan = "c1";
   const openInput = { op: "open", direct: true, member: "peer@x" };
   assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: chan, input: openInput }), "gate");
-  assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: chan, input: openInput, allowForTask: [DOPL_CHANNEL_TOOL] }), "allow");
+  // FIX F2: the grant is the OP-SCOPED key for the shape that was actually shown.
+  const openGrant = grantKeyFor(DOPL_CHANNEL_TOOL, openInput, chan);
+  assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: chan, input: openInput, allowForTask: [openGrant] }), "allow");
+});
+
+// ── FIX F2: EVERY channel grant is op-scoped, and the bare name is worthless ──────
+
+test("FIX F2: grantKeyFor op-scopes every dopl_channel shape (own post, cross post, each op)", () => {
+  assert.equal(grantKeyFor(DOPL_CHANNEL_TOOL, post("c1"), "c1"), POST_GRANT);
+  assert.equal(grantKeyFor(DOPL_CHANNEL_TOOL, { op: "post" }, "c1"), POST_GRANT, "no explicit channel -> own channel");
+  assert.equal(grantKeyFor(DOPL_CHANNEL_TOOL, { op: "open", direct: true }, "c1"), DOPL_CHANNEL_TOOL + "#op:open");
+  assert.equal(grantKeyFor(DOPL_CHANNEL_TOOL, { op: "read" }, "c1"), DOPL_CHANNEL_TOOL + "#op:read");
+  assert.equal(grantKeyFor(DOPL_CHANNEL_TOOL, { op: "list_tasks" }, "c1"), DOPL_CHANNEL_TOOL + "#op:list_tasks");
+  assert.equal(grantKeyFor(DOPL_CHANNEL_TOOL, {}, "c1"), DOPL_CHANNEL_TOOL + "#op:unknown", "a missing op is its own key");
+  // A CROSS-channel post carries its target, so a grant to post into one other channel
+  // cannot post into a different one (and never collides with the own-channel key).
+  assert.equal(grantKeyFor(DOPL_CHANNEL_TOOL, post("OTHER"), "c1"), DOPL_CHANNEL_TOOL + "#op:post:other");
+  assert.notEqual(grantKeyFor(DOPL_CHANNEL_TOOL, post("OTHER"), "c1"), grantKeyFor(DOPL_CHANNEL_TOOL, post("SECOND"), "c1"));
+  // Sanitizing must not let a junk op collapse onto the own-channel post key.
+  assert.notEqual(grantKeyFor(DOPL_CHANNEL_TOOL, { op: "post ", channel: "OTHER" }, "c1"), POST_GRANT);
+  assert.notEqual(grantKeyFor(DOPL_CHANNEL_TOOL, { op: "p!o!s!t", channel: "OTHER" }, "c1"), POST_GRANT);
+  // Every key is bounded, even with a hostile op / channel string.
+  const huge = grantKeyFor(DOPL_CHANNEL_TOOL, { op: "x".repeat(400), channel: "y".repeat(400) }, "c1");
+  assert.ok(huge.length <= DOPL_CHANNEL_TOOL.length + 40, "the key can never grow into a blob");
+  assert.equal(grantKeyFor("Bash", { command: "ls" }, "c1"), "Bash", "non-channel tools keep their name");
+});
+
+test("FIX F2: a grant on op=read does NOT allow a later op=post or op=open (each op its own)", () => {
+  const chan = "c1";
+  const readGrant = grantKeyFor(DOPL_CHANNEL_TOOL, { op: "read" }, chan);
+  const granted = [readGrant];
+  assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: chan, input: { op: "read" }, allowForTask: granted }), "allow");
+  assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: chan, input: post(chan), allowForTask: granted }), "gate", "a post needs its own grant");
+  assert.equal(grantDecision({ profile: "read_only", toolName: DOPL_CHANNEL_TOOL, channelId: chan, input: { op: "open", direct: true, member: "evil@x" }, allowForTask: granted }), "gate", "op=open is the exfil path FIX H1 closed");
+  assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: chan, input: { op: "list_tasks" }, allowForTask: granted }), "gate");
+});
+
+test("FIX F2: the BARE tool name in allowForTask allows NOTHING on the channel tool", () => {
+  const chan = "c1";
+  for (const input of [post(chan), { op: "post" }, { op: "open", direct: true }, { op: "read" }, { op: "create_task" }, undefined]) {
+    assert.equal(
+      grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: chan, input, allowForTask: [DOPL_CHANNEL_TOOL] }),
+      "gate",
+      `bare-name grant must not cover ${JSON.stringify(input)}`
+    );
+  }
+});
+
+test("D2: an 'Allow for this task' taken on a POST authorizes posts only, never op=open", () => {
+  const granted = [POST_GRANT];
+  assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: "c1", input: post("c1"), allowForTask: granted }), "allow");
+  assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: "c1", input: { op: "post" }, allowForTask: granted }), "allow");
+  // The exfil ops stay gated under a post-only grant — this is the whole point of the key.
+  assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: "c1", input: { op: "open", direct: true, member: "evil@x" }, allowForTask: granted }), "gate");
+  assert.equal(grantDecision({ profile: "read_only", toolName: DOPL_CHANNEL_TOOL, channelId: "c1", input: post("OTHER"), allowForTask: granted }), "gate", "cross-channel post is not covered");
+  assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: "c1", input: { op: "create_task" }, allowForTask: granted }), "gate");
+});
+
+test("D2/F2: every channel grant key is unrepresentable as a real SDK tool name", () => {
+  assert.equal(POST_GRANT, DOPL_CHANNEL_TOOL + "#post");
+  for (const input of [post("c1"), { op: "open" }, { op: "read" }, post("OTHER"), {}]) {
+    assert.ok(grantKeyFor(DOPL_CHANNEL_TOOL, input, "c1").includes("#"), "the '#' keeps it out of tool-name space");
+  }
 });
 
 // ── grantDecision for the non-channel tools ───────────────────────────────────

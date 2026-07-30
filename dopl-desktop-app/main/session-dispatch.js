@@ -15,25 +15,27 @@
 //       auto-opens a REQUESTER window that drives the task. One window per (channel,
 //       task); a cap/no-sdk/disabled skip returns false → classify 'ignore's my own
 //       message (today's behavior), with a passive local notice on a window cap.
-//   (3) maybeSurfaceRequesterReply — item 3 secondary. A peer reply in a task I
-//       REQUESTED whose live window has already SETTLED, reopened as a bounded
-//       continuation ONLY when a resumable sdkSessionId survived (an idle/interrupt
-//       end KEEPS it; a close/completed/failed CLEARS it → today's passive notify).
+//   (3) maybeSurfaceRequesterReply — a peer reply in a task I REQUESTED whose live
+//       window has already SETTLED. v2.5 D1 REPLACES the v2.2 bounded auto-resume:
+//       the same trigger and the same window surfacing, but the reply is HELD at the
+//       inbound gate instead of being fed as a continuation turn, and a retained
+//       sdkSessionId is no longer required (feedInboundForTask recreates the shell from
+//       the durable record; a shell with nothing to resume shows the channel history).
 //       Deduped by hasLiveSession; the reopened window is the operator's OWN task and
 //       gated tools still gate (§H-4). Reuses the classify task-reply pairing
 //       predicate (taskCreatedBy === me && author === the task's target) WITHOUT
-//       perturbing classify's 1536-case table.
+//       perturbing classify's 1536-case table. `false` (no record at all) falls through
+//       to classify, where the 'task-reply' verdict still fires the passive notice.
 
 const settings = require('./settings');
 const targeting = require('./targeting');
 const io = require('./listener-io');
 const sessionEngine = require('./session-engine');
-const store = require('./session-store');
 const { notifyLocal } = require('./channel-post');
 const { diag } = require('./diag');
 
 // ─── BEGIN SESSION-DISPATCH-PURE (routing; unit-tested via source extraction) ──
-// Node-only routing — every dependency (settings, targeting, sessionEngine, io, store,
+// Node-only routing — every dependency (settings, targeting, sessionEngine, io,
 // notifyLocal, diag) is a module-scope binding the test injects, so the routing truth
 // table is pinned without any host-bound module import.
 
@@ -93,16 +95,15 @@ async function maybeSurfaceRequesterReply(entry, m, myUserId) {
   if (targeting.metaStr(m, 'taskCreatedBy') !== myUserId) return false;
   if (targeting.metaStr(m, 'taskTarget') !== m.authorUserId) return false;
   if (sessionEngine.hasLiveSession({ channelId: entry.channel.id, taskId })) return false;
-  const key = store.sessionKey(entry.channel.id, taskId);
-  const sdkId = store.getSdkSessionId(key);
-  if (!sdkId) return false; // no resumable session → today's passive task-reply notify
-  const rec = store.getRecord(key);
-  if (!rec) return false;
-  const ok = await sessionEngine.resumeRequesterForReply(rec, sdkId, {
+  // v2.5 D1: recreate the shell (if a durable record survives) and HOLD the reply for
+  // the operator's Accept. The engine owns the record / window-budget / profile checks.
+  const ok = await sessionEngine.feedInboundForTask({
+    channelId: entry.channel.id,
+    taskId,
     message: m.body,
     authorName: io.displayNameFor(m.authorUserId),
   });
-  if (ok) diag('requester continuation reopened', 'task', taskId.slice(0, 8));
+  if (ok) diag('requester reply gated', 'task', taskId.slice(0, 8));
   return ok;
 }
 // ─── END SESSION-DISPATCH-PURE ─────────────────────────────────────────────────

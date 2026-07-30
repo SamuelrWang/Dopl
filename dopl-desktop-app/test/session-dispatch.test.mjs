@@ -38,7 +38,7 @@ const TASK = "11111111-2222-3333-4444-555555555555";
 
 // A fresh harness per test: configurable fakes + recorded calls.
 function harness(over = {}) {
-  const calls = { feedInbound: [], launch: [], resume: [], notify: [] };
+  const calls = { feedInbound: [], launch: [], resume: [], notify: [], gate: [], storeReads: 0 };
   const cfg = {
     windowMode: true,
     live: false,
@@ -46,6 +46,7 @@ function harness(over = {}) {
     feedInboundReturn: true,
     requesterOpen: false,
     launchReturn: { sessionId: "sess-1" },
+    gateReturn: true,
     sdkId: null,
     rec: null,
     ...over,
@@ -63,12 +64,15 @@ function harness(over = {}) {
     feedInbound: (a) => { calls.feedInbound.push(a); return cfg.feedInboundReturn; },
     launchRequesterSession: async (a) => { calls.launch.push(a); return cfg.launchReturn; },
     resumeRequesterForReply: async (rec, sdkId, reply) => { calls.resume.push({ rec, sdkId, reply }); return true; },
+    // v2.5 D1: the gate entry the route uses now (recreate the shell + hold the reply).
+    feedInboundForTask: async (a) => { calls.gate.push(a); return cfg.gateReturn; },
   };
   const io = { displayNameFor: (id) => `name:${id}` };
+  // Kept injectable to prove the routing layer no longer READS the resume map itself.
   const store = {
-    sessionKey: (c, t) => `${c}:${t}`,
-    getSdkSessionId: () => cfg.sdkId,
-    getRecord: () => cfg.rec,
+    sessionKey: (c, t) => { calls.storeReads++; return `${c}:${t}`; },
+    getSdkSessionId: () => { calls.storeReads++; return cfg.sdkId; },
+    getRecord: () => { calls.storeReads++; return cfg.rec; },
   };
   const notifyLocal = (title, body) => calls.notify.push({ title, body });
   const diag = () => {};
@@ -145,24 +149,35 @@ test("openRequester: not my create_task -> false", async () => {
   assert.equal(h.calls.launch.length, 0);
 });
 
-// ── (3) maybeSurfaceRequesterReply ──────────────────────────────────────────────
+// ── (3) maybeSurfaceRequesterReply — v2.5 D1: the inbound GATE, not a continuation ──
+// This route used to call resumeRequesterForReply, which reopened the window AND fed
+// the peer's reply as its first turn (the v2.2 bounded auto-continuation) and required a
+// retained sdkSessionId. The contract replaces that: same trigger, same window, but the
+// reply is HELD for the operator's Accept and the engine owns the record/budget checks.
 
 const settledReply = (over = {}) =>
   peerMsg({ meta: { taskCreatedBy: ME, taskTarget: PEER }, ...over });
 
-test("surface: a settled requester reply with a retained sdkId reopens a continuation", async () => {
-  const rec = { channelId: "c1", taskId: TASK, side: "requester" };
-  const h = harness({ live: false, sdkId: "sdk-123", rec });
+test("surface: a settled requester reply is routed to the inbound GATE (no auto-resume)", async () => {
+  const h = harness({ live: false, gateReturn: true });
   assert.equal(await h.maybeSurfaceRequesterReply(entry, settledReply(), ME), true);
-  assert.equal(h.calls.resume.length, 1);
-  assert.equal(h.calls.resume[0].sdkId, "sdk-123");
-  assert.deepEqual(h.calls.resume[0].reply, { message: "reply body", authorName: `name:${PEER}` });
+  assert.equal(h.calls.resume.length, 0, "the v2.2 auto-continuation is gone");
+  assert.equal(h.calls.gate.length, 1);
+  assert.deepEqual(h.calls.gate[0], {
+    channelId: "c1", taskId: TASK, message: "reply body", authorName: `name:${PEER}`,
+  });
 });
 
-test("surface: NO retained sdkId -> false (today's passive task-reply notify)", async () => {
-  const h = harness({ live: false, sdkId: null, rec: { channelId: "c1", taskId: TASK } });
+test("surface: the gate refusing (no record on this machine) -> false, passive notify path", async () => {
+  const h = harness({ live: false, gateReturn: false });
   assert.equal(await h.maybeSurfaceRequesterReply(entry, settledReply(), ME), false);
-  assert.equal(h.calls.resume.length, 0);
+  assert.equal(h.calls.gate.length, 1, "the engine was asked; it found nothing to reopen");
+});
+
+test("surface: the route no longer reads the resume map itself (the engine decides)", async () => {
+  const h = harness({ live: false, gateReturn: true });
+  await h.maybeSurfaceRequesterReply(entry, settledReply(), ME);
+  assert.equal(h.calls.storeReads, 0, "no sdkSessionId / record lookup in the routing layer");
 });
 
 test("surface: a still-LIVE session is left to the live path -> false", async () => {

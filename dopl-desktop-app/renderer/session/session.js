@@ -24,7 +24,7 @@
     onEvent: noop,
     send: noop,
     permission: noop,
-    releaseInbound: noop,
+    inboundDecision: noop,
     interrupt: noop,
     end: noop,
     closeTask: noop,
@@ -51,6 +51,9 @@
     dock: $("permissionDock"),
     permTool: $("permTool"),
     permSummary: $("permSummary"),
+    permPostLabel: $("permPostLabel"),
+    permPostTo: $("permPostTo"),
+    permPost: $("permPost"),
     permInput: $("permInput"),
     permQueueNote: $("permQueueNote"),
     consentView: $("consentView"),
@@ -66,7 +69,7 @@
   let closeOutcome = "completed";
 
   // Context handed to the DOM factories: pure vm helpers + the two callbacks a
-  // factory needs to reach the bridge (release + consent decision).
+  // factory needs to reach the bridge (the gate decision + the consent decision).
   const ctx = {
     vm,
     // The live per-author avatar for a bubble (item 1/5/6). Reads the CURRENT
@@ -77,10 +80,35 @@
       if (key === "peer") return state.peerAvatar || null;
       return null;
     },
-    onRelease(pendingId) {
-      bridge.releaseInbound(pendingId);
-      state = vm.markInboundReleased(state, pendingId);
-      renderAll();
+    // v2.5 D1: the inbound gate decision. Main is authoritative (it re-validates and
+    // fails closed); the stamp here only locks the card so a second click cannot
+    // double-answer it. `decline` is LOCAL: nothing is sent to the peer.
+    //
+    // FIX F10: the stamp waits for the invoke to RESOLVE. Stamping first locked the card
+    // (and disabled all three buttons) even when the call never reached main — an older
+    // preload with no `inboundDecision` fell through to a noop and left the operator with
+    // a dead card for a message main was still holding. No bridge method, no lock; a
+    // rejected invoke or an {ok:false} keeps the card live so the click can be retried.
+    //
+    // FOLLOW-UP F12 (verified, round 2): the optimistic stamp is now correct enough to keep.
+    // It only lands after main RESOLVES the invoke, and main re-validates fail-closed
+    // (gate.decideInbound checks the head id), so the card can no longer lock on a decision
+    // main refused. Main's own `inbound_resolved` echo applies the same stamp a moment later
+    // and markInboundDecided is idempotent, so the two never disagree. What is left is
+    // cosmetic: the buttons stay live for one IPC round trip, so a very fast double-click
+    // sends two decisions (the second is refused by the head check, but nothing greys out in
+    // between). A pending/disabled state on the clicked button would close that window.
+    onInboundDecide(pendingId, decision) {
+      const send = bridge.inboundDecision;
+      if (typeof send !== "function") return;
+      const stamped = decision === "accept" ? "accepted" : decision === "accept-task" ? "accepted-task" : "declined";
+      Promise.resolve(send(pendingId, decision))
+        .then((res) => {
+          if (res && res.ok === false) return; // main did not accept the decision
+          state = vm.markInboundDecided(state, pendingId, stamped);
+          renderAll();
+        })
+        .catch(noop);
     },
     onConsentDecide(decision) {
       bridge.consentDecision(decision);
@@ -175,6 +203,19 @@
     els.permTool.textContent = p.name || "";
     els.permSummary.textContent = p.inputSummary || "";
     els.permInput.textContent = pretty(p.inputFull);
+    // v2.5 D2: an outbound post is gated now, so the dock shows the MESSAGE the agent
+    // is about to send, in full, before the operator allows it. Any other tool hides
+    // the block and keeps the existing summary + collapsible input only.
+    const postBody = vm.permissionPostBody(p);
+    els.permPost.textContent = postBody;
+    els.permPost.classList.toggle("hidden", !postBody);
+    els.permPostLabel.classList.toggle("hidden", !postBody);
+    // FIX #9: the body alone made a CROSS-CHANNEL post (the exfil shape the outbound gate
+    // exists to catch) read exactly like a normal reply to the peer, and the 140-char
+    // inputSummary usually truncated the channel field away. State the destination.
+    els.permPostTo.textContent = postBody ? vm.postDestinationText(p) : "";
+    els.permPostTo.classList.toggle("hidden", !postBody);
+    els.permPostTo.classList.toggle("is-cross", !!postBody && vm.isCrossChannelPost(p));
     const extra = state.permissions.length - 1;
     if (extra > 0) {
       els.permQueueNote.textContent = "+" + extra + " more waiting";
@@ -189,6 +230,10 @@
     if (!p) return;
     bridge.permission(p.requestId, decision);
     state = vm.reduceEvent(state, { type: "permission_resolved", requestId: p.requestId, decision });
+    // FIX F3: a DENIED post never leaves this machine, so the outbound bubble painted
+    // while the tool_use streamed must stop reading "Sent to …". Main corrects the same
+    // bubble when the failing tool_result lands; this is the immediate echo of the click.
+    if (decision === "deny") state = vm.markOutboundNotSent(state, p.toolUseId);
     renderAll();
   }
 

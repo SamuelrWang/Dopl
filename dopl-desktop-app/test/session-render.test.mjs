@@ -1,14 +1,12 @@
 // Tests for the PURE session-window view-model (renderer/session/session-viewmodel.js).
 //
-// The module is DOM/electron-free and UMD-wrapped, so — like main/load-guard.js's
-// pure core — it is loaded directly (via createRequire, since the module is CJS in
-// Node). session.js (the imperative DOM shell) is NOT unit-tested here; its logic
-// is entirely delegated to these pure functions.
-//
-// What matters:
+// The module is DOM/electron-free and UMD-wrapped, so — like main/load-guard.js's pure
+// core — it is loaded directly (via createRequire, since the module is CJS in Node).
+// session.js (the imperative DOM shell) is NOT unit-tested here; its logic is entirely
+// delegated to these pure functions. What matters:
 //   - summarizeToolInput: single-line, robust to junk, tool-aware one-liners.
-//   - reduceEvent: correct stream/permission/usage/phase transitions AND
-//     immutability (never mutates the input state — the renderer relies on this).
+//   - reduceEvent: correct stream/permission/phase transitions AND immutability (never
+//     mutates the input state — the renderer relies on this).
 //   - streaming deltas accumulate into one open turn, then finalize.
 //   - permission queue is FIFO + dedup; resolved requests leave it.
 
@@ -18,9 +16,7 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const vm = require(
-  fileURLToPath(new URL("../renderer/session/session-viewmodel.js", import.meta.url))
-);
+const vm = require(fileURLToPath(new URL("../renderer/session/session-viewmodel.js", import.meta.url)));
 const {
   initialState, reduceEvent, summarizeToolInput, shortToolName, nextPermission,
   markInboundReleased, oneLine, statusText, statusDotKey, folderLabel, permissionModeText,
@@ -317,7 +313,8 @@ test("statusText keys on activity while running, else on the phase", () => {
   assert.equal(statusText("running", "idle"), "Idle");
   assert.equal(statusText("running", "awaiting_peer"), "Waiting for reply");
   assert.equal(statusText("running", "awaiting_permission"), "Awaiting permission");
-  assert.equal(statusText("running", "awaiting_inbound"), "Reply ready");
+  // v2.5 D1: `awaiting_inbound` now means HELD at the inbound gate awaiting Accept.
+  assert.equal(statusText("running", "awaiting_inbound"), "Message waiting");
   assert.equal(statusText("consent", null), "Consent");
   assert.equal(statusText("launching", null), "Launching");
   assert.equal(statusText("ended", "working"), "Ended"); // phase wins when not running
@@ -330,8 +327,8 @@ test("statusDotKey → act-<activity> while running, else is-<phase>", () => {
   assert.equal(statusDotKey("ended", "idle"), "is-ended");
 });
 
-// NOTE: P1/P2 parked-pill + paused-note + reopen-notice viewmodel cases live in the
-// sibling test/session-render-park.test.mjs (split to respect the 500-line §2 cap).
+// NOTE: P1/P2 parked-pill + paused-note + reopen-notice cases live in the sibling
+// test/session-render-park.test.mjs (split to respect the 500-line §2 cap).
 // ── reduceEvent: folder (item 7) ──────────────────────────────────────────────
 
 test("folder stores the LABEL; folderLabel falls back to the ~/Downloads default (item 5/6)", () => {

@@ -15,9 +15,15 @@
 // SECURITY (adversarial review):
 //   FIX H1 — `dopl_channel` is NO LONGER blanket pre-approved. Blanket approval let
 //     a read_only session Read a file then dopl_channel op=open a DM to any member +
-//     op=post the contents with ZERO clicks (silent cross-user exfiltration). It now
-//     reaches the gate and is OP-SCOPED in grantDecision: auto-allowed ONLY for a
-//     plain post into the session's OWN channel; every other op gates on a button.
+//     op=post the contents with ZERO clicks (silent cross-user exfiltration). It
+//     reaches the gate instead, and grantDecision is op-scoped there.
+//   v2.5 D2 — the last silent case is gone: an own-channel op=post no longer resolves
+//     'preapproved' either. EVERY dopl_channel call now gates, so no message leaves
+//     this machine without an operator click (or the explicit per-session auto-approve
+//     toggle). The task grant a post can earn is narrowed to POST_GRANT below.
+//   FIX F2 — and EVERY dopl_channel grant is now op-scoped, with no bare-tool-name
+//     fallback: a grant taken on op=read / op=list can no longer authorize op=post or
+//     op=open for the rest of the task (see grantKeyFor / grantDecision).
 //   FIX H2 — under `full`, the delegation / persistence / exfil / escalation subset
 //     is HARD-DENIED (SESSION_HARD_DENY), not merely gated, so a one-click
 //     "Allow for this task" can never grant a tool that outlives the watched window.
@@ -115,12 +121,13 @@ function buildSessionToolConfig(profile) {
 }
 
 // FIX H1 — is this dopl_channel call a plain delivery post into the session's OWN
-// channel? Only that is auto-allowed without a button. `op==='post'` AND the target
-// channel is either unset or exactly the session's channelId. Any other op — open,
-// invite, a cross-channel post, create_task, close_task, set_task_mode — is NOT an
-// own-channel post and therefore gates. (`channel` may be a slug or id; we compare
-// against the id only, so a slug-addressed post safely gates rather than silently
-// auto-allowing — gating is the safe failure.)
+// channel? `op==='post'` AND the target channel is either unset or exactly the
+// session's channelId. Any other op — open, invite, a cross-channel post,
+// create_task, close_task, set_task_mode — is NOT an own-channel post. (`channel`
+// may be a slug or id; we compare against the id only, so a slug-addressed post is
+// classified as cross-channel rather than as an own-channel post — the safe failure.)
+// v2.5 D2: this no longer AUTO-ALLOWS. It now only decides which grant KEY a post
+// belongs to (below); every post still reaches the operator's dock.
 function isOwnChannelPost(input, sessionChannelId) {
   const i = input || {};
   if (i.op !== 'post') return false;
@@ -129,10 +136,50 @@ function isOwnChannelPost(input, sessionChannelId) {
   return String(target) === String(sessionChannelId == null ? '' : sessionChannelId);
 }
 
+// v2.5 D2 — THE OUTBOUND GATE (a deliberate reversal of the v1.9 shadow rule for
+// posts). An own-channel op=post used to resolve 'preapproved' — the agent's message
+// left this machine with no operator click. It is the most consequential thing a
+// session does, so it now GATES like every other write: the dock shows the drafted
+// body and the operator picks Allow once / Allow for this task / Deny.
+//
+// EVERY dopl_channel grant is OP-SCOPED (FIX F2). The narrow POST_GRANT existed, but a
+// grant taken on any other op recorded the BARE tool name and grantDecision honored the
+// bare name for ANY op — so an agent whose first channel call was op=read (or a
+// slug-addressed post, classified cross-channel) produced a dock entry with no drafted
+// body, and one "Allow for this task" click silently authorized every channel op for the
+// rest of the task, op=open direct:true included. That is exactly the cross-user exfil
+// path FIX H1 closed. Now each op earns its own key and nothing honors the bare name.
+const POST_GRANT = DOPL_CHANNEL_TOOL + '#post'; // op=post into the session's OWN channel
+const OP_PREFIX = '#op:'; // every other shape lives in a DISJOINT namespace
+const OP_CAP = 32;
+const TARGET_CAP = 40;
+
+// A bounded, collision-free token for a model-supplied string. Sanitizing alone would let
+// 'post ' collapse onto POST_GRANT, which is why non-own-post keys carry OP_PREFIX.
+function keyToken(value, cap) {
+  const t = String(value == null ? '' : value).trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
+  return t.slice(0, cap) || 'unknown';
+}
+
+// The allowForTask KEY a call belongs to. Own-channel posts get POST_GRANT; every other
+// dopl_channel call gets `#op:<op>`, and a CROSS-channel post additionally carries its
+// target, so a grant to post into one other channel cannot post into a different one.
+// Anything that is not the channel tool keeps its own tool name (unchanged). The engine
+// stores exactly this string when the operator picks "Allow for this task"
+// (session-io -> the reducer's allowForTask).
+function grantKeyFor(toolName, input, channelId) {
+  if (toolName !== DOPL_CHANNEL_TOOL) return toolName;
+  if (isOwnChannelPost(input, channelId)) return POST_GRANT;
+  const i = input || {};
+  const op = keyToken(i.op, OP_CAP);
+  if (op === 'post') return DOPL_CHANNEL_TOOL + OP_PREFIX + 'post:' + keyToken(i.channel, TARGET_CAP);
+  return DOPL_CHANNEL_TOOL + OP_PREFIX + op;
+}
+
 // The per-call decision the engine's canUseTool bridge makes. Returns one of:
 //   'preapproved' — auto-allow with NO button (a profile pre-approved tool that is
-//                   ALSO shadowed via allowedTools, OR an own-channel dopl_channel
-//                   post that is op-scoped here, FIX H1).
+//                   ALSO shadowed via allowedTools). NEVER dopl_channel (FIX H1 kept
+//                   it out of allowedTools; D2 removed its own-channel post case).
 //   'deny'        — hard-denied by the profile (checked FIRST so a denied tool can
 //                   never be opened, not even via allowForTask).
 //   'allow'       — the operator granted this tool for the whole task (engine Set).
@@ -144,9 +191,11 @@ function grantDecision(args) {
   const cfg = buildSessionToolConfig(a.profile);
   if (cfg.disallowedTools.indexOf(a.toolName) !== -1) return 'deny';
   if (a.toolName === DOPL_CHANNEL_TOOL) {
-    if (isOwnChannelPost(a.input, a.channelId)) return 'preapproved';
-    if (allowForTask.indexOf(a.toolName) !== -1) return 'allow';
-    return 'gate';
+    // ONLY a standing grant for THIS EXACT shape allows without a button. FIX F2 deleted
+    // the bare-tool-name fallback that used to sit here: it turned any one channel grant
+    // (even one taken on op=read) into a grant for every op, op=open included. Grants are
+    // never persisted, so there is nothing to migrate.
+    return allowForTask.indexOf(grantKeyFor(a.toolName, a.input, a.channelId)) !== -1 ? 'allow' : 'gate';
   }
   if (cfg.preApproved.indexOf(a.toolName) !== -1) return 'preapproved';
   if (allowForTask.indexOf(a.toolName) !== -1) return 'allow';
@@ -158,6 +207,8 @@ function grantDecision(args) {
 module.exports = {
   buildSessionToolConfig,
   grantDecision,
+  grantKeyFor, // v2.5 D2: the scoped allowForTask key (own-channel posts vs the tool)
+  POST_GRANT,
   isOwnChannelPost,
   shortDoplName,
 };

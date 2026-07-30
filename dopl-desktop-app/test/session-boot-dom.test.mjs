@@ -64,7 +64,9 @@ globalThis.doplSession = {
   sessionId: "s1",
   onEvent() {},
   send: (...a) => sent.push(["send", ...a]),
-  permission() {}, releaseInbound() {},
+  // No `inboundDecision` yet ON PURPOSE: it models an OLDER preload, which is the case
+  // FIX F10 is about (the tests below add it, then assert the stamp waits for it).
+  permission: (...a) => sent.push(["permission", ...a]),
   interrupt: () => sent.push(["interrupt"]),
   end() {}, closeTask() {}, consentDecision() {}, setAutoApprove() {},
   folder: {
@@ -222,6 +224,107 @@ test("boot: the permission dock is chrome, not a lane — it never takes an alig
   assert.ok(!dock.classList.contains("lane-me") && !dock.classList.contains("lane-them"));
   feed({ type: "permission_resolved", requestId: "r1", decision: "allow-once" });
   assert.ok(!dock.classList.contains("is-active"));
+});
+
+// ── FIX F3: a DENIED post stops claiming it was sent ──────────────────────────
+// The outbound bubble is painted while the tool_use streams, i.e. BEFORE the dock is
+// answered, so the Deny click (and main's failing tool_result) must correct it.
+
+const outbounds = () => $("stream").children.filter((n) => n.classList.contains("outbound"));
+const bannerLabel = (node) => {
+  const banner = node.children.find((c) => c.classList.contains("outbound__banner"));
+  return banner.children.find((c) => c.className.includes("outbound__label"));
+};
+
+test("boot: FIX F3 — clicking Deny on a gated post flips its bubble to 'Not sent'", () => {
+  feed({ type: "outbound_post", toolUseId: "t9", to: "David", text: "the draft" });
+  const node = outbounds().at(-1);
+  assert.equal(bannerLabel(node).textContent, "Sent to David", "optimistic while streaming");
+  feed({
+    type: "permission_request", requestId: "r9", toolUseId: "t9",
+    name: "mcp__dopl__dopl_channel", inputSummary: "dopl_channel · post", inputFull: { op: "post", body: "the draft" },
+  });
+  $("btnDeny").fire("click");
+  assert.deepEqual(sent.at(-1), ["permission", "r9", "deny"], "the deny crossed the bridge");
+  assert.equal(bannerLabel(node).textContent, "Not sent", "the record stops claiming delivery");
+  assert.ok(node.classList.contains("is-not-sent"));
+});
+
+test("boot: FIX F3 — main's failing tool_result corrects the bubble too (no click needed)", () => {
+  feed({ type: "outbound_post", toolUseId: "t10", to: "David", text: "second draft" });
+  const node = outbounds().at(-1);
+  feed({ type: "tool_result", toolUseId: "t10", ok: false, resultSummary: "Denied by operator" });
+  assert.equal(bannerLabel(node).textContent, "Not sent");
+  assert.ok(node.classList.contains("is-not-sent"));
+});
+
+test("boot: FIX F3 — an ALLOWED post keeps reading 'Sent to David'", () => {
+  feed({ type: "outbound_post", toolUseId: "t11", to: "David", text: "third draft" });
+  const node = outbounds().at(-1);
+  feed({ type: "tool_result", toolUseId: "t11", ok: true, resultSummary: "posted" });
+  assert.equal(bannerLabel(node).textContent, "Sent to David");
+  assert.ok(!node.classList.contains("is-not-sent"));
+});
+
+// ── FIX F10: the gate card locks only once main has taken the decision ────────
+// Stamping first (and disabling all three buttons) locked the card even when the call
+// never reached main — an older preload with no `inboundDecision` left the operator with
+// a dead card for a message main was still holding.
+
+const gateCards = () => $("stream").children.filter((n) => n.classList.contains("inbound-pending"));
+const gateParts = (card) => ({
+  buttons: card.children.find((c) => c.className === "row").children,
+  note: card.children.find((c) => c.className && c.className.includes("inbound-pending__note")),
+});
+
+test("boot: FIX F10 — an OLDER preload (no inboundDecision) leaves the card LIVE", () => {
+  feed({ type: "inbound_pending", pendingId: "p2", from: "David", text: "ping" });
+  const { buttons, note } = gateParts(gateCards().at(-1));
+  buttons[0].fire("click"); // Accept
+  assert.deepEqual(buttons.map((b) => b.disabled), [false, false, false], "nothing was locked");
+  assert.ok(note.classList.contains("hidden"), "and no outcome was claimed");
+});
+
+test("boot: FIX F10 — the card locks only AFTER the invoke resolves", async () => {
+  let settle = null;
+  globalThis.doplSession.inboundDecision = (...a) => {
+    sent.push(["inbound", ...a]);
+    return new Promise((resolve) => { settle = resolve; });
+  };
+  feed({ type: "inbound_pending", pendingId: "p3", from: "David", text: "ping" });
+  const { buttons, note } = gateParts(gateCards().at(-1));
+  buttons[2].fire("click"); // Decline
+  assert.deepEqual(sent.at(-1), ["inbound", "p3", "decline"]);
+  assert.deepEqual(buttons.map((b) => b.disabled), [false, false, false], "still live while main decides");
+  settle({ ok: true });
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(buttons.map((b) => b.disabled), [true, true, true], "locked once main took it");
+  assert.equal(note.textContent, "Declined");
+});
+
+test("boot: FIX F10 — an {ok:false} (or a rejected invoke) keeps the card answerable", async () => {
+  globalThis.doplSession.inboundDecision = () => Promise.resolve({ ok: false });
+  feed({ type: "inbound_pending", pendingId: "p4", from: "David", text: "ping" });
+  const first = gateParts(gateCards().at(-1));
+  first.buttons[0].fire("click");
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(first.buttons.map((b) => b.disabled), [false, false, false], "main never heard it");
+
+  globalThis.doplSession.inboundDecision = () => Promise.reject(new Error("bridge gone"));
+  feed({ type: "inbound_pending", pendingId: "p5", from: "David", text: "ping" });
+  const second = gateParts(gateCards().at(-1));
+  second.buttons[0].fire("click");
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(second.buttons.map((b) => b.disabled), [false, false, false], "a throw never locks it either");
+});
+
+test("boot: FIX F10 — main's own inbound_resolved echo still stamps the card", async () => {
+  globalThis.doplSession.inboundDecision = () => Promise.resolve({ ok: true });
+  feed({ type: "inbound_pending", pendingId: "p6", from: "David", text: "ping" });
+  const { buttons, note } = gateParts(gateCards().at(-1));
+  feed({ type: "inbound_resolved", pendingId: "p6", decision: "accepted-task" });
+  assert.deepEqual(buttons.map((b) => b.disabled), [true, true, true]);
+  assert.equal(note.textContent, "Accepted for this task");
 });
 
 // ── the ended session still locks the composer ────────────────────────────────

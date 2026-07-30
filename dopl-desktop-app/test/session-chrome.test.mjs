@@ -124,6 +124,38 @@ test("sendButtonMode tracks the REAL viewmodel status events", () => {
   assert.equal(sendButtonMode(s), "send", "a parked session offers Send, not Pause");
 });
 
+// ── FIX #6: the gate phase must not make the button lie ───────────────────────────
+// The inbound gate rides on `phase` (a pending card pins it to awaiting_inbound so the pill
+// keeps reading "Message waiting"), while `activity` still says what the agent is doing. If
+// the predicate keyed on phase==='running' alone, a turn that is genuinely mid-flight showed
+// Send and the operator had no way to pause it for as long as a card sat unanswered.
+
+test("FIX #6: a mid-flight turn is still pausable while a message waits at the gate", () => {
+  assert.equal(sendButtonMode({ phase: "awaiting_inbound", activity: "working" }), "pause");
+  // Everything else under the gate phase keeps Send — nothing to pause.
+  for (const activity of ["idle", "awaiting_peer", "awaiting_permission", "awaiting_inbound", "parked", null]) {
+    assert.equal(sendButtonMode({ phase: "awaiting_inbound", activity }), "send", `activity ${activity}`);
+  }
+});
+
+test("FIX #6: the pill and the button stay truthful across a real gate sequence", () => {
+  let s = vm.reduceEvent(vm.initialState(), { type: "status", phase: "running", activity: "working" });
+  assert.equal(sendButtonMode(s), "pause");
+  // The gate holds a message mid-turn: the pill names the card, the button keeps Send
+  // because the reducer's hold reports the session as awaiting the operator.
+  s = vm.reduceEvent(s, { type: "status", phase: "awaiting_inbound", activity: "awaiting_inbound" });
+  assert.equal(vm.statusText(s.phase, s.activity), "Message waiting");
+  assert.equal(sendButtonMode(s), "send");
+  // The operator types instead of answering: the agent is working again, the card remains.
+  s = vm.reduceEvent(s, { type: "status", phase: "awaiting_inbound", activity: "working" });
+  assert.equal(vm.statusText(s.phase, s.activity), "Message waiting", "the card is still the headline");
+  assert.equal(sendButtonMode(s), "pause", "but the live turn can be paused");
+  // Answering it releases the phase.
+  s = vm.reduceEvent(s, { type: "status", phase: "running", activity: "working" });
+  assert.equal(vm.statusText(s.phase, s.activity), "Working");
+  assert.equal(sendButtonMode(s), "pause");
+});
+
 test("sendButtonLabel gives the exact aria-labels, with no em dash", () => {
   assert.equal(sendButtonLabel("send"), "Send");
   assert.equal(sendButtonLabel("pause"), "Pause the agent");

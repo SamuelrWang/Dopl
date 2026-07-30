@@ -42,7 +42,6 @@ export function SessionCard({
   task,
   currentUserId,
   onCloseTask,
-  onReopenTask,
 }: {
   session: SessionGroup;
   /** Transient ring while the task panel has navigated to this card. */
@@ -50,9 +49,9 @@ export function SessionCard({
   /**
    * The authoritative first-class task row for this session (from
    * `channel_tasks`), carrying `createdBy` / `targetUserId` / `status` — it
-   * gates the Close / Reopen controls. Absent for a legacy (non first-class)
-   * session, or until the integration pass threads it through from the thread's
-   * `tasks` by `session.taskId`; in either case no task controls render.
+   * gates the Close control. Absent for a legacy (non first-class) session, or
+   * until the integration pass threads it through from the thread's `tasks` by
+   * `session.taskId`; in either case no task controls render.
    */
   task?: ChannelTask;
   /** The viewer's user id — the controls show only for a task's creator or target. */
@@ -63,8 +62,6 @@ export function SessionCard({
     outcome: TaskOutcome,
     summary: string
   ) => Promise<void>;
-  /** Reopen this closed task. Absent hides Reopen. */
-  onReopenTask?: (taskId: string) => Promise<void>;
 }) {
   // Per-entry collapse. An entry that leads with a one-line summary starts
   // COLLAPSED (summary only, full body behind the chevron); an entry with no
@@ -87,15 +84,15 @@ export function SessionCard({
       return next;
     });
 
-  // Close / Reopen gating: only a first-class task's creator or target may
-  // manage it, and only when the callback for the relevant direction is wired.
+  // Close gating: only a first-class task's creator or target may close it, and
+  // only when the close callback is wired. Reopening a closed task lives in the
+  // task panel (the header's task list), never on the card.
   const [closing, setClosing] = useState(false);
   const canManageTask =
     !!task &&
     !!currentUserId &&
     (currentUserId === task.createdBy || currentUserId === task.targetUserId);
   const showClose = canManageTask && task?.status === "open" && !!onCloseTask;
-  const showReopen = canManageTask && task?.status === "closed" && !!onReopenTask;
 
   const openerName = session.head.authorName || "Agent";
   const title = session.title ?? session.summary ?? "Task";
@@ -245,9 +242,6 @@ export function SessionCard({
             {session.outcomeSummary}
           </span>
         )}
-        {showReopen && task && onReopenTask && (
-          <ReopenTaskButton onReopen={() => onReopenTask(task.id)} />
-        )}
         {showClose && !closing && (
           <button
             type="button"
@@ -276,34 +270,21 @@ export function SessionCard({
   );
 }
 
-/** A compact raised button that reopens a closed task, disabled while in flight. */
-function ReopenTaskButton({ onReopen }: { onReopen: () => Promise<void> }) {
-  const [busy, setBusy] = useState(false);
-  return (
-    <button
-      type="button"
-      disabled={busy}
-      onClick={async () => {
-        if (busy) return;
-        setBusy(true);
-        try {
-          await onReopen();
-        } finally {
-          setBusy(false);
-        }
-      }}
-      className="btn-light shrink-0 rounded-[8px] px-2.5 py-1 text-caption font-medium text-text-primary disabled:opacity-60"
-    >
-      Reopen task
-    </button>
-  );
-}
+/**
+ * The one note the window control can show: the desktop found NO durable record
+ * of this task on this machine, so there is nothing to open. Every other case
+ * opens a window (a task whose session is parked, settled, or gone still gets a
+ * shell seeded with the channel's history), so this copy is deliberately about
+ * the machine, not about a session being live.
+ */
+export const NO_LOCAL_SESSION_NOTE = "This task has no session on this machine.";
 
 /**
- * Reveal this task's LIVE session window from the web card, via the main-window
- * bridge. Resolves whether a live window was found: `false` (no live session
- * for the pair, e.g. a settled task whose window is destroyed) maps to the
- * "No live session to reopen" note. Exported for unit testing the click action.
+ * Open this task's session window from the web card, via the main-window bridge.
+ * Resolves the bridge's verdict: `false` means no record of the task exists on
+ * this machine (the {@link NO_LOCAL_SESSION_NOTE} case) — NOT merely that no
+ * session is live, since the desktop recreates a shell for a parked or settled
+ * task. Exported for unit testing the click action.
  */
 export async function reopenSessionWindow(
   bridge: DoplSessionsBridge,
@@ -315,14 +296,17 @@ export async function reopenSessionWindow(
 }
 
 /**
- * Desktop-only footer control that reopens (reveals a hidden, or fronts a
- * visible) live session window for this task. Renders NOTHING in a plain browser
- * or an older desktop build — the bridge is feature-detected after mount so SSR
- * and first client render agree (hydration-safe). A live session surfaces its
- * window in-process (no server/realtime state, F-072); a settled task has no
- * window to reopen, so the bridge returns `{ ok: false }` and a one-line note
- * shows. The reopen only `show()`s a window the operator already owns — it never
- * starts a query, and gated tools still gate on reshow.
+ * Desktop-only footer control that opens this task's session window. It renders
+ * whenever the bridge exists and is ALWAYS clickable: status never gates it, and
+ * it takes no session/task status at all, because the desktop can open a window
+ * for any task it has a record of — live, parked, or long settled (a recreated
+ * shell shows the channel's history and typing starts a fresh session).
+ *
+ * Renders NOTHING in a plain browser or an older desktop build — the bridge is
+ * feature-detected after mount so SSR and first client render agree
+ * (hydration-safe). Opening happens in-process (no server/realtime state,
+ * F-072); it never starts a query, and gated tools still gate on reshow. Only a
+ * genuine `{ ok: false }` (no record on this machine) shows the note.
  */
 export function ReopenWindowButton({
   channelId,
@@ -333,7 +317,7 @@ export function ReopenWindowButton({
 }) {
   const [bridge, setBridge] = useState<DoplSessionsBridge | null>(null);
   const [busy, setBusy] = useState(false);
-  const [noSession, setNoSession] = useState(false);
+  const [noLocalSession, setNoLocalSession] = useState(false);
 
   // Feature-detect after mount (window-only) so SSR and first client render agree.
   useEffect(() => {
@@ -344,28 +328,58 @@ export function ReopenWindowButton({
   if (!bridge) return null;
 
   return (
+    <OpenWindowControls
+      busy={busy}
+      noLocalSession={noLocalSession}
+      onOpen={async () => {
+        if (busy) return;
+        setBusy(true);
+        setNoLocalSession(false);
+        try {
+          const ok = await reopenSessionWindow(bridge, channelId, taskId);
+          // Only the bridge's definitive "no record here" answer notes anything.
+          setNoLocalSession(!ok);
+        } catch {
+          // A thrown invoke is a transport failure, not a verdict about the
+          // task, so it stays quiet: the operator can click again.
+          setNoLocalSession(false);
+        } finally {
+          setBusy(false);
+        }
+      }}
+    />
+  );
+}
+
+/**
+ * The window control's markup: the optional one-line note plus the button. The
+ * button carries NO status gate — the only thing that ever disables it is an
+ * open call already in flight, so a double-click can't fire two invokes.
+ * Exported so its always-enabled shape can be asserted without the post-mount
+ * bridge detection.
+ */
+export function OpenWindowControls({
+  busy,
+  noLocalSession,
+  onOpen,
+}: {
+  /** True only while an open call is in flight. */
+  busy: boolean;
+  /** True after a genuine `{ ok: false }` — shows the note. */
+  noLocalSession: boolean;
+  onOpen: () => void;
+}) {
+  return (
     <>
-      {noSession && (
+      {noLocalSession && (
         <span className="shrink-0 truncate text-caption text-text-muted">
-          No live session to reopen
+          {NO_LOCAL_SESSION_NOTE}
         </span>
       )}
       <button
         type="button"
         disabled={busy}
-        onClick={async () => {
-          if (busy) return;
-          setBusy(true);
-          setNoSession(false);
-          try {
-            const ok = await reopenSessionWindow(bridge, channelId, taskId);
-            if (!ok) setNoSession(true);
-          } catch {
-            setNoSession(true);
-          } finally {
-            setBusy(false);
-          }
-        }}
+        onClick={onOpen}
         className="btn-light shrink-0 rounded-[8px] px-2.5 py-1 text-caption font-medium text-text-primary disabled:opacity-60"
       >
         Open window

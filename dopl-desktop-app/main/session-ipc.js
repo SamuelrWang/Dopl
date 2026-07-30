@@ -14,8 +14,8 @@
 // renderer, never the absolute path (§H-9).
 
 const { ipcMain } = require('electron');
-const io = require('./session-io');
 const channelDirs = require('./channel-dirs');
+const gate = require('./session-gate'); // v2.5 D1: the inbound gate owns the decision
 const { diag } = require('./diag');
 
 let engine = null; // { getSessionBySender, getConsentBySender, dispatch, decideConsent }
@@ -37,13 +37,26 @@ function register(internals) {
     name: s.pendingNames.get(p && p.requestId),
   })));
 
-  ipcMain.handle('session:release-inbound', (e) => withSession(e, (s) => {
-    const pend = io.shiftInbound(s);
-    if (!pend) return;
-    engine.dispatch(s, { type: 'inbound_released', message: pend.message, authorName: pend.authorName });
-    const next = s.pendingInbound[0]; // surface the next held reply, if any
-    if (next) engine.dispatch(s, { type: 'inbound_arrived', pendingId: next.pendingId, message: next.message, authorName: next.authorName });
-  }));
+  // ── v2.5 D1: the inbound gate decision (Accept / Accept for this task / Decline).
+  // Bound from event.sender like every other handler; the decision string is coerced
+  // in the preload and re-validated FAIL-CLOSED in gate.decideInbound (anything that
+  // is not an explicit accept declines). FIX F10: the old accept-only channel alias is
+  // DELETED — nothing called it, and it invited a decision carrying no pendingId (which
+  // used to skip the head check in gate.decideInbound entirely, see FIX F9).
+  // This one does NOT go through withSession: it reports the gate's OWN verdict, so the
+  // renderer can stamp the card only when main really took the decision (no session, or a
+  // pendingId that does not name the head -> {ok:false} and the card stays answerable).
+  ipcMain.handle('session:inbound-decision', (e, p) => {
+    const s = engine.getSessionBySender && engine.getSessionBySender(e && e.sender);
+    if (!s) return { ok: false };
+    touch(s);
+    try {
+      return { ok: gate.decideInbound(s, p && p.pendingId, p && p.decision) === true };
+    } catch (err) {
+      diag('session-ipc: inbound-decision error', err && err.message);
+      return { ok: false };
+    }
+  });
 
   ipcMain.handle('session:interrupt', (e) => withSession(e, (s) => engine.dispatch(s, { type: 'interrupt' })));
   ipcMain.handle('session:end', (e) => withSession(e, (s) => engine.dispatch(s, { type: 'end' })));
@@ -51,9 +64,14 @@ function register(internals) {
 
   // ── Item 10: per-session auto-approve toggle. Bound from event.sender like every
   // other handler; the enabled flag is coerced to a strict boolean. The reducer does
-  // the gate-drain + auto_approve echo — main stays authoritative on the flip.
-  ipcMain.handle('session:set-auto-approve', (e, p) => withSession(e, (s) =>
-    engine.dispatch(s, { type: 'set_auto_approve', enabled: !!(p && p.enabled) })));
+  // the permission-gate drain + auto_approve echo — main stays authoritative on the
+  // flip. v2.5 D4: the toggle now covers INBOUND too, so anything already held at the
+  // gate is fed right away instead of sitting behind a switch that says otherwise
+  // (drainInbound no-ops when the toggle went OFF, or when nothing is held).
+  ipcMain.handle('session:set-auto-approve', (e, p) => withSession(e, (s) => {
+    engine.dispatch(s, { type: 'set_auto_approve', enabled: !!(p && p.enabled) });
+    gate.drainInbound(s);
+  }));
 
   // ── Item 8: the pre-consent Accept / Deny — resolved from the window, not the id.
   ipcMain.handle('session:consent-decision', (e, p) => {
@@ -81,9 +99,19 @@ function register(internals) {
   }));
 }
 
+// FIX #7: mark a session as one the OPERATOR has actually used. Every handler here is
+// driven by a click or a keystroke in that window (the folder chip is the one exception and
+// does not route through withSession), so this is the honest signal for "not just a shell
+// something opened on their behalf". session-park's LRU eviction refuses to close a touched
+// window when it needs to free a slot in the shared window budget. Memory only.
+function touch(s) {
+  if (s) s.operatorTouched = true;
+}
+
 function withSession(e, fn) {
   const s = engine.getSessionBySender && engine.getSessionBySender(e && e.sender);
   if (!s) return { ok: false };
+  touch(s);
   try {
     fn(s);
   } catch (err) {

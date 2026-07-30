@@ -84,6 +84,15 @@
         </div>
         <div class="perm-card__body">
           <div class="perm-summary" id="permSummary"></div>
+          <!-- v2.5 D2: the drafted message body of a gated dopl_channel post, shown in
+               full so the operator approves WHAT is being sent. Hidden for every other
+               tool. Filled via textContent only. -->
+          <div class="perm-post-label text-label hidden" id="permPostLabel">Message</div>
+          <!-- FIX #9: WHERE the post is going. A cross-channel post used to look exactly
+               like a normal reply, which is the exfil case the outbound gate exists to
+               catch. Filled via textContent; the cross class carries the warning tint. -->
+          <div class="perm-post-to text-caption hidden" id="permPostTo"></div>
+          <div class="perm-post concave-field hidden" id="permPost"></div>
           <details id="permDetails">
             <summary>Show full input</summary>
             <pre id="permInput"></pre>
@@ -124,6 +133,7 @@
 
   </div>
 
+  <script src="session-labels.js"></script>
   <script src="session-viewmodel.js"></script>
   <script src="session-chrome.js"></script>
   <script src="session-render.js"></script>

@@ -1,12 +1,11 @@
-// Tests for the v1.9 Session Window pure state machine (main/session-reducer.js,
-// Track T1). SOURCE EXTRACTION: the reducer's BEGIN/END sentinel block contains no
-// electron / SDK / fs references, so we slice it from the real source and evaluate
-// it verbatim in a plain Node context — the test can never drift from what ships
-// (same idiom as classify / tool-profiles / the consent-watcher WATCHER-PURE block).
-//
-// What matters: every phase transition and its effects; the turn / idle / cost caps;
-// the interactive-vs-autonomous inbound split; the allow-for-task permission
-// short-circuit; and terminal idempotency (a settled session ignores later events).
+// Tests for the v1.9 Session Window pure state machine (main/session-reducer.js, Track T1).
+// SOURCE EXTRACTION: the reducer's BEGIN/END sentinel block contains no electron / SDK / fs
+// references, so we slice it from the real source and evaluate it verbatim in a plain Node
+// context — the test can never drift from what ships (same idiom as classify /
+// tool-profiles / the consent-watcher WATCHER-PURE block). Covers every phase transition
+// and its effects, the turn / idle / cost caps, the universal inbound gate + its
+// auto-accept bypasses (v2.5 D1; accept / decline live in inbound-gate.test.mjs), the
+// allow-for-task short-circuit, terminal idempotency. FIX F3: session-reducer-outbound.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -332,22 +331,21 @@ test("cost cap of 0 is disabled — a large turn cost does not end the session",
   assert.equal(r.state.phase, "running");
 });
 
-// ── inbound (interactive vs autonomous) ─────────────────────────────────────────
+// ── inbound: the universal gate + its two auto-accept bypasses (v2.5 D1/D4) ──────
 
-test("inbound_arrived autonomous: shows the reply as a `counterparty` and pushes the next turn", () => {
-  const s = running({ mode: "autonomous" });
+test("inbound_arrived with AUTO-APPROVE on: feeds the reply (counterparty + pushInbound)", () => {
+  // v2.5 D1: the opt-in decides, not `autonomous`; the fed effects stay byte-equivalent.
+  const s = { ...running({ mode: "autonomous" }), autoApprove: true };
   const r = sessionReducer(s, { type: "inbound_arrived", pendingId: "p1", message: "hi", authorName: "Bob" });
   assert.equal(r.state.phase, "running");
   assert.equal(r.state.activity, "working");
-  // Item 1: the autonomous emit is now `counterparty` (supersedes `inbound`). From a
-  // working state no extra status is emitted, so the effects stay [emit, pushInbound].
   assert.deepEqual(effTypes(r.effects), ["emit", "pushInbound"]);
   assert.deepEqual(findEff(r.effects, "emit").payload, { type: "counterparty", from: "Bob", text: "hi" });
   assert.deepEqual(findEff(r.effects, "pushInbound"), { type: "pushInbound", message: "hi", authorName: "Bob" });
 });
 
-test("inbound_arrived autonomous from awaiting_peer clears back to working with a status emit", () => {
-  const s = { ...running({ mode: "autonomous" }), activity: "awaiting_peer" };
+test("inbound_arrived under the STANDING task grant from awaiting_peer clears back to working", () => {
+  const s = { ...running({ mode: "autonomous" }), inboundForTask: true, activity: "awaiting_peer" };
   const r = sessionReducer(s, { type: "inbound_arrived", message: "reply", authorName: "Bob" });
   assert.equal(r.state.activity, "working");
   assert.deepEqual(effTypes(r.effects), ["emit", "pushInbound", "emit"]);
@@ -355,16 +353,16 @@ test("inbound_arrived autonomous from awaiting_peer clears back to working with 
   assert.deepEqual(status.payload, { type: "status", phase: "running", activity: "working" });
 });
 
-test("inbound_arrived interactive: holds the reply as a pending inbound for release", () => {
+test("inbound_arrived with no opt-in: HOLDS the reply at the gate (every mode)", () => {
   const s = running({ mode: "interactive" });
   const r = sessionReducer(s, { type: "inbound_arrived", pendingId: "p1", message: "hi", authorName: "Bob" });
   assert.equal(r.state.phase, "awaiting_inbound");
   assert.equal(r.state.activity, "awaiting_inbound"); // item 3: rides the phase
   assert.equal(r.state.hasPendingInbound, true);
-  assert.deepEqual(effTypes(r.effects), ["emit"]);
-  assert.deepEqual(findEff(r.effects, "emit").payload, {
-    type: "inbound_pending", pendingId: "p1", from: "Bob", text: "hi",
-  });
+  // FIX #1: the card AND a status (the pill only ever moves on a `status`).
+  assert.deepEqual(effTypes(r.effects), ["emit", "emit"]);
+  assert.deepEqual(r.effects[0].payload, { type: "inbound_pending", pendingId: "p1", from: "Bob", text: "hi" });
+  assert.deepEqual(r.effects[1].payload, { type: "status", phase: "awaiting_inbound", activity: "awaiting_inbound" });
 });
 
 test("inbound_released: -> running, pushes the framed reply, clears the pending flag", () => {

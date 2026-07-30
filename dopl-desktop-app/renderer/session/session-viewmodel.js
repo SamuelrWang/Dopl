@@ -11,7 +11,12 @@
 //   - reduceEvent(state, event)           -> next view-model (immutable; never mutates `state`)
 //   - summarizeToolInput(name, input)     -> a single-line tool-call summary
 //   - nextPermission(state)               -> the head of the permission queue or null
-//   - markInboundReleased(state, id)      -> flips a pending-inbound item to released
+//   - markInboundDecided(state, id, d)    -> stamps a gate card accepted / declined (v2.5 D1)
+//   - markOutboundNotSent(state, id)      -> a denied post's bubble stops reading "Sent" (F3)
+//   - markInboundReleased(state, id)      -> the accept-once alias of the above
+// The status / posture / folder label strings — plus the gated-post body + destination
+// helpers (permissionPostBody / postDestinationText / isCrossChannelPost) — live in
+// session-labels.js and are re-exported from here unchanged (the §2 500-line split).
 //
 // The renderer (session.js) owns ALL DOM and renders every string via
 // textContent — this module never produces markup.
@@ -185,21 +190,32 @@
     return { ...state, items: state.items.concat([complete]) };
   }
 
+  // The item kinds a tool_result may patch: the generic tool card, and (FIX F3) the
+  // OUTBOUND bubble — a post's bubble is painted while the tool_use streams, BEFORE the
+  // dock is answered, so it used to keep reading "Sent to {peer}" even after a Deny.
+  const PATCHABLE_BY_RESULT = { tool: 1, outbound: 1 };
   function reduceToolResult(state, ev) {
     const id = ev.toolUseId;
     let touched = false;
     const items = state.items.map((it) => {
-      if (!touched && it.kind === "tool" && it.toolUseId === id) {
-        touched = true;
-        return {
-          ...it,
-          status: ev.ok ? "ok" : "error",
-          resultSummary: ev.resultSummary == null ? "" : String(ev.resultSummary),
-        };
-      }
-      return it;
+      if (touched || it.toolUseId !== id || !PATCHABLE_BY_RESULT[it.kind]) return it;
+      touched = true;
+      if (it.kind === "outbound") return { ...it, status: ev.ok ? "sent" : "not_sent" };
+      return {
+        ...it,
+        status: ev.ok ? "ok" : "error",
+        resultSummary: ev.resultSummary == null ? "" : String(ev.resultSummary),
+      };
     });
     return touched ? { ...state, items } : state;
+  }
+
+  // FIX F3: the operator clicked Deny — mark that post's bubble not-sent at once, without
+  // waiting for the SDK's error result. Only an `outbound` item is ever touched.
+  function markOutboundNotSent(state, id) {
+    const hit = (it) => it.kind === "outbound" && it.toolUseId === id;
+    if (!id || !state.items.some(hit)) return state;
+    return { ...state, items: state.items.map((it) => (hit(it) ? { ...it, status: "not_sent" } : it)) };
   }
 
   // ── reduceEvent ────────────────────────────────────────────────────────────
@@ -280,6 +296,9 @@
           inputSummary: event.inputSummary || summarizeToolInput(event.name, event.inputFull),
           inputFull: event.inputFull,
           title: event.title,
+          // FIX #9: main's own-channel verdict for an op=post (never the target id).
+          // Absent (an older main) reads as cross-channel — fail suspicious.
+          ownChannel: event.ownChannel === true,
         };
         return { ...state, permissions: state.permissions.concat([perm]) };
       }
@@ -300,13 +319,37 @@
           items: state.items.concat([{ kind: "counterparty", from: event.from, text: event.text, avatarKey: "peer" }]),
         };
 
+      // v2.5 D1: the INBOUND GATE card. `decision` is null while it awaits the
+      // operator (Accept / Accept for this task / Decline); `released` is kept as the
+      // legacy accepted flag the older release-only card used.
       case "inbound_pending":
         return {
           ...state,
           items: state.items.concat([
-            { kind: "inbound_pending", pendingId: event.pendingId, from: event.from, text: event.text, released: false },
+            { kind: "inbound_pending", pendingId: event.pendingId, from: event.from, text: event.text, released: false, decision: null },
           ]),
         };
+
+      // Main echoes the decision (from this window or an auto-accept) — mark the card.
+      case "inbound_resolved":
+        return markInboundDecided(state, event.pendingId, event.decision);
+
+      // v2.5 D3: read-only channel history for a reopened shell. One divider note
+      // (copy owned here) followed by the entries in stream order. Display only —
+      // these items carry no pendingId and no controls.
+      case "history": {
+        const entries = Array.isArray(event.entries) ? event.entries : [];
+        if (!entries.length) return state;
+        const items = [{ kind: "history_divider", text: HISTORY_NOTE }].concat(
+          entries.map((e) => ({
+            kind: "history",
+            from: e && e.from ? String(e.from) : "",
+            text: e && e.text == null ? "" : String(e.text),
+            lane: e && e.lane === "them" ? "them" : "me",
+          }))
+        );
+        return { ...state, items: state.items.concat(items) };
+      }
 
       // No `usage` case — the cost/usage meter was removed (item 6). The safety
       // caps still run in the main reducer; the window simply never shows cost.
@@ -319,10 +362,13 @@
         };
 
       // P1: idle-park inline note. Fixed copy owned here (renderer copy). No em dash.
+      // FIX #17: main sets `gated` when the park happened with a message still held.
       case "paused":
         return {
           ...state,
-          items: state.items.concat([{ kind: "notice", level: "info", text: PAUSED_NOTE }]),
+          items: state.items.concat([
+            { kind: "notice", level: "info", text: event.gated === true ? PAUSED_GATED_NOTE : PAUSED_NOTE },
+          ]),
         };
 
       // P2: a reopened parked shell (or any main-emitted system note) — a calm,
@@ -394,86 +440,61 @@
     return state && state.permissions && state.permissions.length ? state.permissions[0] : null;
   }
 
-  // Optimistically flag a pending-inbound item as released (before the engine
-  // feeds it back as a turn). Immutable.
-  function markInboundReleased(state, pendingId) {
+  // v2.5 D1: stamp the operator's decision on a gate card (optimistically, before main
+  // echoes it back). 'accepted' | 'accepted-task' | 'declined'; anything else is
+  // treated as a decline, so a card can never look accepted on a junk value. Immutable.
+  function markInboundDecided(state, pendingId, decision) {
+    const d = decision === "accepted" || decision === "accepted-task" ? decision : "declined";
     let touched = false;
     const items = state.items.map((it) => {
       if (!touched && it.kind === "inbound_pending" && it.pendingId === pendingId) {
         touched = true;
-        return { ...it, released: true };
+        return { ...it, decision: d, released: d !== "declined" };
       }
       return it;
     });
     return touched ? { ...state, items } : state;
   }
 
+  // The accept-once alias (the pre-gate name), kept so a mid-wave caller keeps working.
+  function markInboundReleased(state, pendingId) {
+    return markInboundDecided(state, pendingId, "accepted");
+  }
+
+  // v2.5 D2 / FIX #9: permissionPostBody + postDestinationText now live in
+  // session-labels.js (the §2 500-line split) and are re-exported below with the rest of
+  // the label strings, so vm.permissionPostBody(...) keeps working unchanged.
+
   // P1: the inline note dropped when an idle session parks. Plain voice, NO em dash.
   const PAUSED_NOTE = "Paused after inactivity. Send a message or wait for a reply to continue.";
+  // FIX #17: the same park while a message is HELD at the gate. "Wait for a reply" is
+  // wrong there — the reply already arrived and is waiting on the operator.
+  const PAUSED_GATED_NOTE = "Paused after inactivity. Accept the waiting message or send one to continue.";
+  // D3: the one divider that introduces the read-only channel history of a reopened
+  // window. Renderer-owned copy (main sends data only). No em dash.
+  const HISTORY_NOTE = "History from the channel";
 
-  // ── status / folder labels (pure; item 3 + item 7) ──────────────────────────
-  const PHASE_LABEL = {
-    launching: "Launching",
-    consent: "Consent",
-    running: "Running",
-    // P1: a parked (idle-paused) session — resumable, NOT ended. Composer stays enabled.
-    parked: "Paused",
-    awaiting_permission: "Awaiting permission",
-    awaiting_inbound: "Awaiting reply",
-    interrupted: "Interrupted",
-    ended: "Ended",
-  };
-  const ACTIVITY_LABEL = {
-    working: "Working",
-    idle: "Idle",
-    awaiting_peer: "Waiting for reply",
-    awaiting_permission: "Awaiting permission",
-    awaiting_inbound: "Reply ready",
-  };
-
-  // The status-pill text. When a turn is RUNNING the finer `activity` wins;
-  // otherwise the coarse phase label is shown.
-  function statusText(phase, activity) {
-    const ph = phase || "launching";
-    if (ph === "running" && activity) return ACTIVITY_LABEL[activity] || PHASE_LABEL[ph] || ph;
-    return PHASE_LABEL[ph] || (ph.charAt(0).toUpperCase() + ph.slice(1));
-  }
-
-  // The status-dot class key (colour) — `act-<activity>` while running, else `is-<phase>`.
-  function statusDotKey(phase, activity) {
-    const ph = phase || "launching";
-    if (ph === "running" && activity) return "act-" + activity;
-    return "is-" + ph;
-  }
-
-  // The folder-pill label (item 5): the abbreviated dir short-form. The engine
-  // now always emits a REAL resolved dir (item 6 default = ~/Downloads), so the
-  // null case is only the pre-event render — fall back to the same default.
-  function folderLabel(folder) {
-    const label = folder && folder.label;
-    return label ? String(label) : "~/Downloads";
-  }
-
-  // The permission-posture label (items 9 + 10). Off = "Asking each time",
-  // on = "Auto-approving"; the tool-profile label rides along as context. Plain
-  // sentence case, no em dash (§H-13). The middle dot separates mode · profile.
-  function permissionModeText(autoApprove, profileLabel) {
-    const mode = autoApprove ? "Auto-approving" : "Asking each time";
-    const label = profileLabel == null ? "" : String(profileLabel).trim();
-    return "Permissions: " + mode + (label ? " · " + label : "");
-  }
+  // The status / posture / folder label strings live in session-labels.js (the §2
+  // 500-line split) and are RE-EXPORTED here verbatim, so every existing caller and
+  // test keeps reaching them as vm.statusText / vm.statusDotKey / vm.folderLabel /
+  // vm.permissionModeText. Reached the same way session-chrome.js reaches this module:
+  // a require() under node, the renderer global in the sandbox (session.html loads
+  // session-labels.js first).
+  const labels =
+    typeof module === "object" && typeof require === "function"
+      ? require("./session-labels.js")
+      : (typeof globalThis !== "undefined" && globalThis.DoplSessionLabels) || {};
 
   return {
+    ...labels,
     initialState,
     reduceEvent,
     summarizeToolInput,
     shortToolName,
     nextPermission,
     markInboundReleased,
+    markInboundDecided, // v2.5 D1
+    markOutboundNotSent, // FIX F3
     oneLine,
-    statusText,
-    statusDotKey,
-    folderLabel,
-    permissionModeText,
   };
 });

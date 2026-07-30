@@ -2,6 +2,9 @@
 // note + reopen-shell notice) in renderer/session/session-viewmodel.js. Split out of
 // session-render.test.mjs to keep both files under the §2 500-line cap. Same discipline:
 // the module is DOM/electron-free and UMD-wrapped, so it loads directly via createRequire.
+//
+// v2.5 round 2 also homes the STATUS-PILL truth cases here: FIX #1 (the inbound-gate phase
+// label) and FIX #17 (the gated variant of the paused note).
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -35,6 +38,43 @@ test("a `paused` event drops the one-line inline note (info level, no em dash)",
   assert.ok(!last(s).text.includes("—"), "renderer copy has no em dash");
 });
 
+// ── FIX #1: the inbound-gate phase label ──────────────────────────────────────────
+// PHASE_LABEL.awaiting_inbound read "Awaiting reply", which says the INVERSE of what is
+// true: nobody is waiting on the peer, the peer's message is already here waiting on the
+// operator. The gate now rides on `phase` (FIX #6 pins it while a card is pending), so this
+// label is what the pill shows whenever the operator has a message to answer.
+
+test("FIX #1: the awaiting_inbound PHASE reads 'Message waiting', never 'Awaiting reply'", () => {
+  for (const activity of [null, "working", "idle", "awaiting_peer", "awaiting_permission", "awaiting_inbound"]) {
+    assert.equal(statusText("awaiting_inbound", activity), "Message waiting", `activity ${activity}`);
+  }
+  assert.equal(statusDotKey("awaiting_inbound", "working"), "is-awaiting_inbound");
+  assert.ok(!statusText("awaiting_inbound", null).includes("—"), "no em dash in copy");
+});
+
+test("FIX #1: a `status` carrying the gate moves the pill (it only ever moves on a status)", () => {
+  let s = reduceEvent(initialState(), { type: "status", phase: "running", activity: "working" });
+  assert.equal(statusText(s.phase, s.activity), "Working");
+  s = reduceEvent(s, { type: "status", phase: "awaiting_inbound", activity: "awaiting_inbound" });
+  assert.equal(statusText(s.phase, s.activity), "Message waiting", "the held card is visible in the chrome");
+});
+
+// ── FIX #17: the paused note when the park lands on a HELD message ────────────────
+
+test("FIX #17: a gated `paused` note stops telling the operator to wait for a reply", () => {
+  const plain = reduceEvent(initialState(), { type: "paused" });
+  const gated = reduceEvent(initialState(), { type: "paused", gated: true });
+  assert.match(last(plain).text, /wait for a reply/, "the ungated copy is unchanged");
+  assert.ok(!last(gated).text.includes("wait for a reply"), "the reply already arrived");
+  assert.match(last(gated).text, /^Paused after inactivity\. Accept the waiting message/);
+  assert.equal(last(gated).level, "info");
+  for (const t of [last(plain).text, last(gated).text]) assert.ok(!t.includes("—"), "no em dash");
+  // Anything other than an explicit true keeps the ordinary copy.
+  for (const g of [false, null, undefined, "yes", 1]) {
+    assert.equal(last(reduceEvent(initialState(), { type: "paused", gated: g })).text, last(plain).text, String(g));
+  }
+});
+
 test("FIX #6: the park-emitted permission_resolved clears the renderer's permission dock", () => {
   // A pending gate is showing in the dock; park (main) emits permission_resolved{deny} for
   // it, and the renderer drops it so the parked, query-less window shows no live prompt.
@@ -49,10 +89,12 @@ test("FIX #6: the park-emitted permission_resolved clears the renderer's permiss
 });
 
 test("a `notice` event appends a caller-supplied calm line (P2 reopen shell)", () => {
-  const s = reduceEvent(initialState(), { type: "notice", level: "info", text: "Reopened. The earlier transcript is in the channel thread." });
+  // FIX #14: main's reopen copy changed (it no longer points away from a window that is
+  // about to PAINT the thread); the view-model just passes whatever main sends through.
+  const s = reduceEvent(initialState(), { type: "notice", level: "info", text: "Reopened. Nothing is running yet, so send a message to continue." });
   assert.equal(last(s).kind, "notice");
   assert.equal(last(s).level, "info");
-  assert.equal(last(s).text, "Reopened. The earlier transcript is in the channel thread.");
+  assert.equal(last(s).text, "Reopened. Nothing is running yet, so send a message to continue.");
   // Level defaults to info; text coerces safely.
   const d = reduceEvent(initialState(), { type: "notice", text: null });
   assert.equal(last(d).level, "info");

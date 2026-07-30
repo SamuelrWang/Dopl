@@ -138,10 +138,17 @@ test("a parked session ignores a stale idle_timeout (idempotent, no double-park)
 
 // ── the two lazy-resume triggers ──────────────────────────────────────────────────
 
-test("LAZY RESUME (a): an inbound turn wakes a parked AUTONOMOUS session (resumeQuery FIRST)", () => {
+// v2.5 D1: an inbound turn only wakes a parked session when it is AUTO-ACCEPTED (the
+// per-session toggle or the standing task grant). Without that opt-in the reply is held
+// and the session stays parked — the two cases below. NOTE: `idle_timeout` resets
+// autoApprove OFF (FIX #3), so the standing task grant (which survives a park) is what
+// keeps a counterparty-driven lazy resume possible while the operator is away.
+test("LAZY RESUME (a): an AUTO-ACCEPTED inbound turn wakes a parked session (resumeQuery FIRST)", () => {
   const parked = sessionReducer(running({ mode: "autonomous" }), { type: "idle_timeout" }).state;
   assert.equal(parked.parked, true);
-  const r = sessionReducer(parked, { type: "inbound_arrived", message: "back", authorName: "Bob" });
+  assert.equal(parked.autoApprove, false, "FIX #3: the toggle is disarmed by the park");
+  const granted = { ...parked, inboundForTask: true }; // "Accept for this task" survives a park
+  const r = sessionReducer(granted, { type: "inbound_arrived", message: "back", authorName: "Bob" });
   assert.equal(r.state.phase, "running");
   assert.equal(r.state.parked, false, "the wake clears the parked flag");
   // resumeQuery MUST precede pushInbound so the fresh push iterator exists first.

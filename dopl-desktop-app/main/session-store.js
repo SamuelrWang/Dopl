@@ -98,6 +98,9 @@ function durableSessionRecord(rec) {
 // ─── END SESSION-STORE-PURE ──────────────────────────────────────────────────
 
 // ── Records ──────────────────────────────────────────────────────────────────
+// FOLLOW-UP F8: records are never pruned, so ANY task that ever ran on this machine stays
+// peer-resurrectable through the inbound gate (recreateParkedShell reads them forever).
+// Wants a pruning policy (age / count bound, or drop on a completed close_task).
 function loadRecords() {
   return store.get(RECORDS_KEY) || {};
 }

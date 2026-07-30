@@ -16,6 +16,12 @@ const asDecision = (d) => {
   return s === 'allow-once' || s === 'allow-task' || s === 'deny' ? s : 'deny';
 };
 const asOutcome = (o) => (asStr(o) === 'failed' ? 'failed' : 'completed');
+// v2.5 D1: the inbound gate decision is fail-closed — anything but an explicit accept
+// (once, or for the task) is a decline, so a forged/garbled value never feeds the agent.
+const asInbound = (d) => {
+  const s = asStr(d);
+  return s === 'accept' || s === 'accept-task' ? s : 'decline';
+};
 // Consent decision is fail-closed: anything but an explicit 'accept' is a deny.
 const asConsent = (d) => (asStr(d) === 'accept' ? 'accept' : 'deny');
 
@@ -64,8 +70,12 @@ contextBridge.exposeInMainWorld('doplSession', {
   permission(requestId, decision) {
     ipcRenderer.invoke('session:permission', { requestId: asStr(requestId), decision: asDecision(decision) });
   },
-  releaseInbound(pendingId) {
-    ipcRenderer.invoke('session:release-inbound', { pendingId: asStr(pendingId) });
+  // v2.5 D1: the inbound gate. FIX F10: the invoke PROMISE is returned, so the renderer
+  // can stamp the card only once main has actually taken the decision. The dead
+  // accept-only alias that used to sit here (and its main handler) is deleted: nothing
+  // called it, and it invited a decision carrying no pendingId.
+  inboundDecision(pendingId, decision) {
+    return ipcRenderer.invoke('session:inbound-decision', { pendingId: asStr(pendingId), decision: asInbound(decision) });
   },
   interrupt() {
     ipcRenderer.invoke('session:interrupt', {});

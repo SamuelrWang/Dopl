@@ -1,13 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
+  NO_LOCAL_SESSION_NOTE,
+  OpenWindowControls,
   ReopenWindowButton,
   SessionCard,
   reopenSessionWindow,
 } from "./session-card";
 import { getDesktopSessions } from "@/shared/lib/desktop";
 import type { SessionGroup } from "../lib/group-thread";
-import type { ChannelMessage } from "../types";
+import type { ChannelMessage, ChannelTask } from "../types";
 
 const CHANNEL_ID = "11111111-1111-4111-8111-111111111111";
 const TASK_ID = "task-11111111-1111-4111-8111-111111111111-7";
@@ -41,6 +43,28 @@ function session(over: Partial<SessionGroup> = {}): SessionGroup {
     outcomeSummary: null,
     calmEndStatus: null,
     createdAt: "2026-07-28T00:00:00.000Z",
+    ...over,
+  };
+}
+
+const ME = "u-me";
+
+/** The authoritative task row for this session, owned by the viewer. */
+function task(over: Partial<ChannelTask> = {}): ChannelTask {
+  return {
+    id: TASK_ID,
+    channelId: CHANNEL_ID,
+    workspaceId: "w1",
+    title: "Ship the fix",
+    status: "open",
+    outcome: null,
+    mode: "interactive",
+    createdBy: ME,
+    targetUserId: null,
+    createdAt: "2026-07-28T00:00:00.000Z",
+    updatedAt: "2026-07-28T00:00:00.000Z",
+    closedAt: null,
+    outcomeSummary: null,
     ...over,
   };
 }
@@ -100,7 +124,7 @@ describe("reopenSessionWindow (the click action)", () => {
     expect(ok).toBe(true);
   });
 
-  it("maps a settled session's {ok:false} to the 'no live session' path", async () => {
+  it("maps a genuine {ok:false} (no record on this machine) to the note path", async () => {
     const reopen = vi.fn().mockResolvedValue({ ok: false });
     const ok = await reopenSessionWindow({ reopen }, CHANNEL_ID, TASK_ID);
     expect(ok).toBe(false);
@@ -113,6 +137,45 @@ describe("ReopenWindowButton render gating", () => {
       <ReopenWindowButton channelId={CHANNEL_ID} taskId={TASK_ID} />
     );
     expect(markup).toBe("");
+  });
+});
+
+/**
+ * The window control is always available once the bridge exists: it takes no
+ * session or task status, so nothing but an in-flight open can disable it.
+ */
+describe("OpenWindowControls", () => {
+  const noop = () => {};
+
+  it("renders an ENABLED button with no note at rest", () => {
+    const markup = renderToStaticMarkup(
+      <OpenWindowControls busy={false} noLocalSession={false} onOpen={noop} />
+    );
+    expect(markup).toContain("Open window");
+    expect(markup).not.toContain('disabled=""');
+    expect(markup).not.toContain(NO_LOCAL_SESSION_NOTE);
+  });
+
+  it("disables ONLY while an open call is in flight", () => {
+    const markup = renderToStaticMarkup(
+      <OpenWindowControls busy noLocalSession={false} onOpen={noop} />
+    );
+    expect(markup).toContain('disabled=""');
+  });
+
+  it("shows the machine-scoped note after a genuine {ok:false}", () => {
+    const markup = renderToStaticMarkup(
+      <OpenWindowControls busy={false} noLocalSession onOpen={noop} />
+    );
+    expect(markup).toContain("This task has no session on this machine.");
+    // The button stays clickable so the operator can retry.
+    expect(markup).toContain("Open window");
+    expect(markup).not.toContain('disabled=""');
+  });
+
+  it("retires the old live-session-only copy", () => {
+    expect(NO_LOCAL_SESSION_NOTE).toBe("This task has no session on this machine.");
+    expect(NO_LOCAL_SESSION_NOTE).not.toContain("No live session");
   });
 });
 
@@ -190,6 +253,44 @@ describe("SessionCard render", () => {
     );
     expect(markup).toContain("Session ended");
     expect(markup).toContain("bg-text-disabled");
+  });
+});
+
+/**
+ * Task controls on the card: Close only. Reopen was removed from the card in
+ * v2.5 (it lives in the task panel), so a closed task's footer carries no task
+ * mutation at all.
+ */
+describe("SessionCard task controls", () => {
+  const closeTask = async () => {};
+
+  it("keeps the Close affordance for an open task the viewer manages", () => {
+    const markup = renderToStaticMarkup(
+      <SessionCard
+        session={session()}
+        task={task()}
+        currentUserId={ME}
+        onCloseTask={closeTask}
+      />
+    );
+    expect(markup).toContain("Close task");
+  });
+
+  it("offers NO reopen control for a closed task the viewer manages", () => {
+    const markup = renderToStaticMarkup(
+      <SessionCard
+        session={session({ status: "done" })}
+        task={task({
+          status: "closed",
+          outcome: "completed",
+          closedAt: "2026-07-28T00:05:00.000Z",
+        })}
+        currentUserId={ME}
+        onCloseTask={closeTask}
+      />
+    );
+    expect(markup).not.toContain("Reopen task");
+    expect(markup).not.toContain("Close task");
   });
 });
 

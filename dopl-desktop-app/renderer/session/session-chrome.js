@@ -70,12 +70,18 @@
   }
 
   // ── D5: the send button morphs into a pause control while a turn runs ───────
-  // RUNNING means the agent is mid-turn: phase 'running' AND activity 'working'.
-  // Anything else (idle, awaiting a reply, awaiting a permission, parked, ended)
-  // keeps the send affordance, so a queued steer is always one click away.
+  // RUNNING means the agent is mid-turn: activity 'working'. Anything else (idle,
+  // awaiting a reply, awaiting a permission, parked, ended) keeps the send affordance,
+  // so a queued steer is always one click away.
+  //
+  // FIX #6: 'awaiting_inbound' counts as a work phase here. The gate carries on `phase`
+  // (a pending card pins it, so the pill keeps reading "Message waiting") while `activity`
+  // still says what the agent is doing — so a turn that is genuinely mid-flight can be
+  // paused even though a message is waiting. Pinning on phase alone made the button lie.
+  const WORK_PHASES = { running: true, awaiting_inbound: true };
   function sendButtonMode(state) {
     const s = state || {};
-    return s.phase === "running" && s.activity === "working" ? "pause" : "send";
+    return WORK_PHASES[s.phase] === true && s.activity === "working" ? "pause" : "send";
   }
 
   const SEND_LABEL = { send: "Send", pause: "Pause the agent" };
@@ -110,10 +116,13 @@
   //   turn + role operator/user           -> 'me'    (typed in the composer)
   //   turn + any other role (assistant)   -> 'them'  (the agent's own text)
   //   counterparty                        -> 'them'  (the peer's inbound reply)
-  //   tool | outbound | inbound_pending | notice | anything else -> null
+  //   history (v2.5 D3)                   -> its OWN stamped lane ('me' | 'them'),
+  //                                          computed in main from the message author
+  //                                          so a replayed thread aligns like live turns
+  //   tool | outbound | inbound_pending | history_divider | notice | anything else -> null
   //
-  // null means "no lane": tool cards, the outbound-post banner, pending-inbound
-  // cards, notices, and the permission dock keep their existing full-width recipe.
+  // null means "no lane": tool cards, the outbound-post banner, inbound gate cards,
+  // the history divider, notices, and the permission dock keep their full-width recipe.
   const ME_ROLES = { operator: true, user: true };
   const LANE_CLASS = { me: "lane-me", them: "lane-them" };
 
@@ -121,6 +130,7 @@
     const it = item || {};
     if (it.kind === "turn") return ME_ROLES[it.role] === true ? "me" : "them";
     if (it.kind === "counterparty") return "them";
+    if (it.kind === "history") return it.lane === "them" ? "them" : "me";
     return null;
   }
 

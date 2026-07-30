@@ -152,20 +152,33 @@
   // posted body, clearly differentiated from narration. `to` absent → the
   // "Posted to channel" label (resolved O-6). textContent-only; the avatar is a
   // `data:` <img>.
+  // FIX F3: the bubble is painted while the tool_use streams, which is BEFORE the operator
+  // answers the permission dock, so its label is not final. A denied or failed post flips
+  // to "Not sent" (plus the muted `is-not-sent` surface) instead of standing there
+  // claiming the peer received something that never left this machine.
+  function outboundLabel(item) {
+    if (item && item.status === "not_sent") return "Not sent";
+    return item && item.to ? "Sent to " + item.to : "Posted to channel";
+  }
+
   function makeOutbound(item, ctx) {
     const root = el("div", "outbound role-outbound");
     const banner = el("div", "outbound__banner");
     let av = avatarNode(avatarForKey(ctx, "self"), "Y");
     banner.appendChild(av);
-    const label = item.to ? "Sent to " + item.to : "Posted to channel";
-    banner.appendChild(el("span", "outbound__label text-label", label));
+    const label = el("span", "outbound__label text-label", outboundLabel(item));
+    banner.appendChild(label);
     root.appendChild(banner);
     root.appendChild(el("div", "outbound__body", item.text || ""));
-    const update = () => {
+    const update = (it) => {
       const next = avatarNode(avatarForKey(ctx, "self"), "Y");
       banner.replaceChild(next, av);
       av = next;
+      const cur = it || item;
+      label.textContent = outboundLabel(cur);
+      root.classList.toggle("is-not-sent", cur.status === "not_sent");
     };
+    update(item); // a bubble created ALREADY not-sent paints that way on its first render
     return { el: root, update };
   }
 
@@ -209,24 +222,61 @@
     return { el: root, update };
   }
 
+  // v2.5 D1: the INBOUND GATE card. A counterparty message that has NOT reached the
+  // agent, shown with the three decisions the operator has: Accept (feed it once),
+  // Accept for this task (feed it and every later reply on this session), Decline
+  // (drop it locally — nothing is posted back to the peer). The card locks and states
+  // the outcome once a decision lands, here or from an auto-accept echo. Same visual
+  // language as the old release card + the permission dock. textContent only.
+  const GATE_DONE = { accepted: "Accepted", "accepted-task": "Accepted for this task", declined: "Declined" };
+
   function makeInboundPending(item, ctx) {
-    const onRelease = (ctx && ctx.onRelease) || noop;
+    const onDecide = (ctx && ctx.onInboundDecide) || noop; // FIX F10: no dead alias path
     const root = el("div", "inbound-pending");
-    root.appendChild(el("span", "who", (item.from || "Counterparty") + " — awaiting release"));
+    root.appendChild(el("span", "who", (item.from || "Counterparty") + " sent a message"));
     root.appendChild(el("span", "body", item.text || ""));
+    const note = el("div", "inbound-pending__note hidden");
     const row = el("div", "row");
-    const btn = el("button", "ctl btn-light ctl-sm", "Release into session");
-    btn.type = "button";
-    btn.addEventListener("click", () => onRelease(item.pendingId));
-    row.appendChild(btn);
+    const buttons = [
+      { label: "Accept", decision: "accept", cls: "ctl auth-btn-3d ctl-primary ctl-sm" },
+      { label: "Accept for this task", decision: "accept-task", cls: "ctl btn-light ctl-sm" },
+      { label: "Decline", decision: "decline", cls: "ctl btn-light ctl-sm ctl-danger" },
+    ].map((spec) => {
+      const btn = el("button", spec.cls, spec.label);
+      btn.type = "button";
+      btn.addEventListener("click", () => onDecide(item.pendingId, spec.decision));
+      row.appendChild(btn);
+      return btn;
+    });
     root.appendChild(row);
+    root.appendChild(note);
     const update = (it) => {
+      const done = it.decision ? GATE_DONE[it.decision] || GATE_DONE.declined : null;
       root.classList.toggle("is-released", it.released === true);
-      btn.disabled = it.released === true;
-      if (it.released) btn.textContent = "Released";
+      root.classList.toggle("is-declined", it.decision === "declined");
+      for (const btn of buttons) btn.disabled = !!done;
+      if (done) {
+        note.textContent = done;
+        note.classList.remove("hidden");
+      }
     };
     update(item);
     return { el: root, update };
+  }
+
+  // v2.5 D3: a READ-ONLY history entry replayed from the channel thread. Deliberately
+  // the muted twin of a live bubble (the lane class still aligns it) so it reads as
+  // "earlier" at a glance and carries no controls at all.
+  function makeHistory(item) {
+    const root = el("div", lane("bubble history-entry", { kind: "history", lane: item.lane }));
+    root.appendChild(el("span", "who", item.from || (item.lane === "them" ? "Counterparty" : "You")));
+    root.appendChild(el("span", "body", item.text || ""));
+    return { el: root, update: noop };
+  }
+
+  // The single divider that introduces the replayed history (copy from the view-model).
+  function makeHistoryDivider(item) {
+    return { el: el("div", "history-divider", item.text || ""), update: noop };
   }
 
   // The pre-consent request card (item 8). Renders ONLY the request text +
@@ -318,6 +368,8 @@
       counterparty: bind(makeCounterparty),
       outbound: bind(makeOutbound),
       inbound_pending: bind(makeInboundPending),
+      history: makeHistory, // v2.5 D3 (read-only; needs no ctx)
+      history_divider: makeHistoryDivider,
       notice: makeNotice,
     };
   }
@@ -332,7 +384,10 @@
     makeTool,
     makeCounterparty,
     makeOutbound,
+    outboundLabel, // FIX F3
     makeInboundPending,
+    makeHistory,
+    makeHistoryDivider,
     makeConsent,
     makeNotice,
     makeFactories,

@@ -77,6 +77,7 @@ interface Props {
     outcome: "completed" | "failed",
     summary?: string
   ) => Promise<void>;
+  /** Reopen a closed task — the task panel's control; session cards never reopen. */
   onReopenTask: (taskId: string) => Promise<void>;
   onInvite: () => void;
   onSetNotifyScope: (scope: NotifyScope) => void;
@@ -394,7 +395,6 @@ export function ChannelThread({
               currentUserId={currentUserId}
               highlightedTaskId={highlightedTaskId}
               onCloseTask={onCloseTask}
-              onReopenTask={onReopenTask}
             />
           )}
 
