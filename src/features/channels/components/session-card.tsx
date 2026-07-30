@@ -125,16 +125,7 @@ export function SessionCard({
     <article
       id={`session:${session.taskId}`}
       className={cn(
-        "overflow-hidden rounded-[10px] border",
-        // Status-driven container: green while the agent is actively working,
-        // neutral for every settled ending (done / failed / calm terminal).
-        // Pairs with the amber consent card, which means "waiting on a human".
-        // calmEndStatus guard: an open-task overlay pins status "active" even
-        // after a calm session end, and a green card must not contradict its
-        // own "session ended" body note.
-        session.status === "active" && !session.calmEndStatus
-          ? "border-success/25 bg-success/10"
-          : "border-border-default bg-bg-elevated",
+        "overflow-hidden rounded-[10px] border border-border-default bg-bg-elevated",
         highlighted && "ring-2 ring-border-highlight"
       )}
     >
