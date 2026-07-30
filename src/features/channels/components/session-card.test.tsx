@@ -217,11 +217,11 @@ describe("SessionCard container treatment", () => {
     expect(markup).not.toContain("bg-warning/10");
   });
 
-  it("still composes the transient nav highlight ring over the green container", () => {
+  it("still composes the transient nav highlight ring over the neutral container", () => {
     const markup = renderToStaticMarkup(
       <SessionCard session={session({ status: "active" })} highlighted />
     );
-    expect(markup).toContain("bg-success/10");
+    expect(markup).toContain("bg-bg-elevated");
     expect(markup).toContain("ring-border-highlight");
   });
 });
