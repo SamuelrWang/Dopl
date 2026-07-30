@@ -6,7 +6,7 @@ import type { ResolvedSkill, Skill, SkillFile, SkillWriteFileResult } from "./sk
 import type { OntologyCluster, OntologyClusterCreateInput, OntologyClusterPatch, OntologyObject, OntologyObjectCreateInput, OntologyObjectPatch, OntologySnapshot } from "./ontology-types.js";
 import type { Chat, ChatDetail, ChatExportInput, ChatFolder, ChatFolderUpdateInput, ChatList, ChatMessageInput, ChatUpdateInput, TrashedChat } from "./chat-types.js";
 import type { AccessMatrix, EffectiveAccessRow, MyAccess, MyMembership, WorkspaceMember, WorkspaceTeam } from "./member-types.js";
-import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelCreateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ChannelTask, ChannelTaskCreateInput, ReadMessagesOptions, TaskMode, TaskOutcome } from "./channel-types.js";
+import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelCreateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ChannelThread, ChannelThreadCreateInput, ReadMessagesOptions, ThreadMode, ThreadOutcome } from "./channel-types.js";
 export type { DoplTransportOptions as DoplClientOptions } from "./transport.js";
 export { parseRetryAfter } from "./retry.js";
 export declare class DoplClient {
@@ -136,16 +136,16 @@ export declare class DoplClient {
     readChannelMessages(channelId: string, opts?: ReadMessagesOptions): Promise<ChannelMessage[]>;
     postChannelMessage(channelId: string, input: ChannelMessageInput): Promise<ChannelMessage>;
     awaitChannelMessages(channelId: string, opts: AwaitMessagesOptions): Promise<AwaitResult>;
-    listChannelTasks(channelId: string): Promise<ChannelTask[]>;
-    getChannelTask(channelId: string, taskId: string): Promise<ChannelTask>;
-    createChannelTask(channelId: string, input: ChannelTaskCreateInput): Promise<ChannelTask>;
-    closeChannelTask(channelId: string, taskId: string, input: {
-        outcome: TaskOutcome;
+    listChannelThreads(channelId: string): Promise<ChannelThread[]>;
+    getChannelThread(channelId: string, threadId: string): Promise<ChannelThread>;
+    createChannelThread(channelId: string, input: ChannelThreadCreateInput): Promise<ChannelThread>;
+    closeChannelThread(channelId: string, threadId: string, input: {
+        outcome: ThreadOutcome;
         summary?: string;
-    }): Promise<ChannelTask>;
-    setChannelTaskMode(channelId: string, taskId: string, input: {
-        mode: TaskMode;
-    }): Promise<ChannelTask>;
+    }): Promise<ChannelThread>;
+    setChannelThreadMode(channelId: string, threadId: string, input: {
+        mode: ThreadMode;
+    }): Promise<ChannelThread>;
     listSkills(): Promise<Skill[]>;
     getSkill(slug: string): Promise<ResolvedSkill>;
     createSkill(input: CreateSkillInput): Promise<{

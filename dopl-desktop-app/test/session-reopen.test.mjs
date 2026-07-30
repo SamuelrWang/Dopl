@@ -1,5 +1,6 @@
 // Tests for the session-reopen helpers (main/session-reopen.js) — the MAIN-window
-// "Reopen window" bridge (item 2) and its v1.7.4 P2 fallback.
+// "Open session" bridge (item 2) and its v1.7.4 P2 fallback. The behaviour that this
+// bridge starts NOTHING is pinned separately in test/open-session-no-query.test.mjs.
 //
 // SOURCE EXTRACTION with INJECTION (the session-dispatch idiom): the BEGIN/END
 // SESSION-REOPEN-PURE block references `store` (a module require) as a free var and

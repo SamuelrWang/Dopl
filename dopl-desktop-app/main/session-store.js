@@ -23,8 +23,13 @@ const SDK_IDS_KEY = 'sessionIds'; // { [sessionKey]: sdkSessionId } — resume m
 
 // ─── BEGIN SESSION-STORE-PURE (pure; unit-tested via source extraction) ──────
 
+// v3.0 VOCABULARY BOUNDARY (durable record + resume map): wire/storage name `task` ==
+// domain name `thread`. Every `taskId` / `taskTitle` here is the server's `channel_tasks`
+// spelling and is deliberately unchanged; a SESSION is this machine's run on that thread,
+// keyed below. Renaming the storage is a migration, not a copy change.
+//
 // Stable identity of a session = (channel, task). One session per pair (the
-// registry de-dupe). A responder with no first-class task collapses taskId to ''.
+// registry de-dupe). A responder with no first-class thread collapses taskId to ''.
 function sessionKey(channelId, taskId) {
   return String(channelId || '') + ':' + String(taskId || '');
 }

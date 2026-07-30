@@ -180,7 +180,7 @@ test("historyEntries bounds a huge body and one-lines the author name", () => {
 });
 
 // ── FIX F17: the pair-scoped fallback for an UNTAGGED exchange ────────────────────
-// The reported bug: a session ended, the window closed, "Open window" reopened it, and the
+// The reported bug: a session ended, the window closed, "Open session" reopened it, and the
 // stream was EMPTY. A real DM exchange carries no task id on its MESSAGES — request and reply
 // are plain `message` rows with no metadata.taskId, and the only tagged row is the
 // `task_started` event, which the `message` filter rightly skips, so the task-scoped pass

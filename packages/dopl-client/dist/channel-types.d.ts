@@ -1,19 +1,29 @@
 /**
- * Channel types — cross-user, agent-to-agent collaboration threads.
+ * Channel types — cross-user, agent-to-agent collaboration.
  *
- * A channel is a shared in-workspace thread that agents (and users) post
- * to. Every message carries a monotonic `seq` cursor, so a listener can
- * long-poll for "everything after seq N" via `awaitMessages`. These mirror
- * the API DTO shapes (camelCase) in the app's `src/features/channels`.
+ * A CHANNEL (or DM) holds many THREADS. A THREAD is ONE exchange between two
+ * members about one thing — it may be a single message or a long piece of
+ * work — and it is SHARED: both members see the same thread, its title, and
+ * its status. A SESSION is ONE member's agent run working a thread, on THAT
+ * member's machine; each side has its own, and neither sees the other's.
+ *
+ * Every message carries a monotonic `seq` cursor, so a listener can long-poll
+ * for "everything after seq N" via `awaitMessages`. These mirror the API DTO
+ * shapes (camelCase) in the app's `src/features/channels`.
+ *
+ * BOUNDARY: the wire/storage name `task` == the domain name `thread`. The
+ * route paths (`/api/channels/[channelId]/tasks/**`) and the response field
+ * names (`tasks`, `task`) are storage names and are deliberately unchanged;
+ * the mapping happens here, in `channel.ts`.
  */
 export type ChannelVisibility = "public" | "private";
 export type ChannelMemberRole = "owner" | "member";
-/** How a task runs. */
-export type TaskMode = "interactive" | "autonomous";
-/** Task lifecycle status. */
-export type TaskStatus = "open" | "closed";
-/** How a closed task ended. */
-export type TaskOutcome = "completed" | "failed";
+/** How a thread runs. */
+export type ThreadMode = "interactive" | "autonomous";
+/** Thread lifecycle status. */
+export type ThreadStatus = "open" | "closed";
+/** How a closed thread ended. */
+export type ThreadOutcome = "completed" | "failed";
 /**
  * Per-member notification scope for a channel (how loudly it notifies the
  * member's listener): `all` = addressed prompts + silent FYIs; `addressed` =
@@ -99,34 +109,35 @@ export interface ChannelCreateInput {
     memberUserId?: string;
 }
 /**
- * A first-class channel task: a titled, mode-tagged unit of work whose
- * transcript rides on `channel_messages` (metadata.taskId = ChannelTask.id).
+ * A first-class channel thread: one titled, mode-tagged exchange whose
+ * transcript rides on `channel_messages` (metadata.taskId = ChannelThread.id
+ * — the wire key keeps the storage name).
  */
-export interface ChannelTask {
+export interface ChannelThread {
     id: string;
     channelId: string;
     workspaceId: string;
     title: string;
-    status: TaskStatus;
-    outcome: TaskOutcome | null;
-    mode: TaskMode;
+    status: ThreadStatus;
+    outcome: ThreadOutcome | null;
+    mode: ThreadMode;
     createdBy: string;
     targetUserId: string | null;
     createdAt: string;
     updatedAt: string;
     closedAt: string | null;
-    /** A human-readable close summary carried on the task row; null while open
+    /** A human-readable close summary carried on the thread row; null while open
      *  or when closed without one. */
     outcomeSummary: string | null;
 }
-export interface ChannelTaskCreateInput {
+export interface ChannelThreadCreateInput {
     title: string;
-    mode?: TaskMode;
+    mode?: ThreadMode;
     body: string;
     toUserId: string;
     /**
-     * Idempotency key — a re-sent create_task with the same id returns the
-     * already-created task instead of double-creating it (and double-spawning
+     * Idempotency key — a re-sent create_thread with the same id returns the
+     * already-created thread instead of double-creating it (and double-spawning
      * the responder's window). Mirrors `ChannelMessageInput.clientMsgId`.
      */
     clientMsgId?: string;

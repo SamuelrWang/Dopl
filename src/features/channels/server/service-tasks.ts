@@ -1,5 +1,5 @@
 import "server-only";
-import type { ChannelTask, TaskMode, TaskOutcome } from "../types";
+import type { ChannelThread, ThreadMode, ThreadOutcome } from "../types";
 import type { TaskCreateInput } from "../schema";
 import {
   ChannelAddresseeNotMemberError,
@@ -19,10 +19,17 @@ import {
 } from "./service-shared";
 
 /**
- * First-class channel tasks (v15): create / close / set mode / reopen. Split
- * out of `service-writes.ts` (§2 cap) — a task is its own lifecycle with its
+ * First-class channel threads (v15): create / close / set mode / reopen. Split
+ * out of `service-writes.ts` (§2 cap) — a thread is its own lifecycle with its
  * own authorization rules (creator vs. target), and its transcript rides on
  * `postMessage` from the message lane.
+ *
+ * THE SERVER BOUNDARY: wire/storage name `task` == domain name `thread`. This
+ * lane sits on the STORAGE side, so it deliberately keeps the `task` spelling
+ * throughout — the `channel_tasks` table and its columns, `metadata.taskId`,
+ * the request schemas, the error codes, and the `/tasks` route paths. It
+ * returns {@link ChannelThread} values, and everything a human or an agent
+ * reads (the web UI, the `dopl_channel` MCP ops) says `thread`.
  */
 
 /**
@@ -36,7 +43,7 @@ export async function createTask(
   ctx: ChannelContext,
   ref: string,
   rawInput: TaskCreateInput
-): Promise<ChannelTask> {
+): Promise<ChannelThread> {
   const input = stripNulDeep(rawInput);
   const { channel, membership } = await loadVisibleChannel(ctx, ref);
   if (!membership) {
@@ -103,9 +110,9 @@ export async function closeTask(
   ctx: ChannelContext,
   ref: string,
   taskId: string,
-  outcome: TaskOutcome,
+  outcome: ThreadOutcome,
   summary?: string
-): Promise<ChannelTask> {
+): Promise<ChannelThread> {
   const { channel, membership } = await loadVisibleChannel(ctx, ref);
   if (!membership) {
     throw new ChannelForbiddenError("close a task in this channel");
@@ -149,8 +156,8 @@ export async function setTaskMode(
   ctx: ChannelContext,
   ref: string,
   taskId: string,
-  mode: TaskMode
-): Promise<ChannelTask> {
+  mode: ThreadMode
+): Promise<ChannelThread> {
   const { channel, membership } = await loadVisibleChannel(ctx, ref);
   if (!membership) {
     throw new ChannelForbiddenError("change a task's mode in this channel");
@@ -179,7 +186,7 @@ export async function reopenTask(
   ctx: ChannelContext,
   ref: string,
   taskId: string
-): Promise<ChannelTask> {
+): Promise<ChannelThread> {
   const { channel, membership } = await loadVisibleChannel(ctx, ref);
   if (!membership) {
     throw new ChannelForbiddenError("reopen a task in this channel");

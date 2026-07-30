@@ -4,7 +4,7 @@ import type {
   ChannelDirectPeer,
   ChannelMember,
   ChannelMessage,
-  ChannelTask,
+  ChannelThread,
 } from "../types";
 import type { MessageReadQuery } from "../schema";
 import { ChannelNotFoundError, TaskNotFoundError } from "./errors";
@@ -294,7 +294,7 @@ export async function pollChannelMessages(
 export async function listChannelTasks(
   ctx: ChannelContext,
   ref: string
-): Promise<ChannelTask[]> {
+): Promise<ChannelThread[]> {
   const { channel } = await loadVisibleChannel(ctx, ref);
   const rows = await repoTasks.listTasksByChannel(channel.id);
   return rows.map(mapTaskRow);
@@ -310,7 +310,7 @@ export async function getChannelTask(
   ctx: ChannelContext,
   ref: string,
   taskId: string
-): Promise<ChannelTask> {
+): Promise<ChannelThread> {
   const { channel } = await loadVisibleChannel(ctx, ref);
   const row = await repoTasks.findTaskByChannelAndId(channel.id, taskId);
   if (!row) throw new TaskNotFoundError(taskId);

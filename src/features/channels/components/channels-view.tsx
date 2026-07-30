@@ -8,8 +8,8 @@ import {
   addChannelMember,
   addTrustRule,
   ChannelApiError,
-  closeChannelTask,
-  reopenChannelTask,
+  closeChannelThread,
+  reopenChannelThread,
   decideConsent,
   deleteChannel as apiDeleteChannel,
   postMessage,
@@ -24,12 +24,12 @@ import type { AgentToolProfile, NotifyScope } from "../types";
 import { useChannels } from "../hooks/use-channels";
 import { useChannelMessages } from "../hooks/use-channel-messages";
 import { useChannelMembers } from "../hooks/use-channel-members";
-import { useChannelTasks } from "../hooks/use-channel-tasks";
+import { useChannelThreads } from "../hooks/use-channel-threads";
 import { useConsentInbox } from "../hooks/use-consent-inbox";
 import { useTrustRules } from "../hooks/use-trust-rules";
 import { useChannelsRealtime, usePresenceRealtime } from "../client/realtime";
 import { ChannelsListPane, type ChannelTab } from "./channels-list-pane";
-import { ChannelThread } from "./channel-thread";
+import { ChannelPane } from "./channel-pane";
 import { ChannelsSkeleton } from "./channels-skeleton";
 import { ChannelsOnboarding } from "./channels-onboarding";
 import { CreateChannelDialog } from "./create-channel-dialog";
@@ -124,10 +124,10 @@ export function ChannelsView({
     workspaceId
   );
   const {
-    tasks,
-    loading: tasksLoading,
-    refetch: refetchTasks,
-  } = useChannelTasks(selected?.id ?? null, workspaceId);
+    threads,
+    loading: threadsLoading,
+    refetch: refetchThreads,
+  } = useChannelThreads(selected?.id ?? null, workspaceId);
   // Poll fallback scoped to THIS page (not the sidebar badge) so a pending
   // request appears within a few seconds even when Realtime drops the consent
   // INSERT; pauses automatically while the tab is hidden (TanStack default).
@@ -162,10 +162,11 @@ export function ChannelsView({
     void refetchChannels();
     void refetchMessages();
     void refetchMembers();
-    // A `create_task` / `close_task` posts a message, so the same realtime
-    // signal that refreshes messages also refreshes the authoritative task
-    // status/title overlay (`set_task_mode` posts none — eventually consistent).
-    void refetchTasks();
+    // A `create_thread` / `close_thread` posts a message, so the same realtime
+    // signal that refreshes messages also refreshes the authoritative thread
+    // status/title overlay (`set_thread_mode` posts none, so it is eventually
+    // consistent).
+    void refetchThreads();
   };
   const coordinatorRef = useRef(createRefetchCoordinator(() => refetchRef.current()));
   useChannelsRealtime(workspaceId, () =>
@@ -225,12 +226,12 @@ export function ChannelsView({
     }
   }
 
-  async function runTaskMutation(fn: () => Promise<unknown>, failTitle: string) {
+  async function runThreadMutation(fn: () => Promise<unknown>, failTitle: string) {
     busyRef.current += 1;
     try {
       await fn();
       await refetchMessages();
-      void refetchTasks();
+      void refetchThreads();
       void refetchChannels();
     } catch (err) {
       toast({
@@ -243,23 +244,29 @@ export function ChannelsView({
     }
   }
 
-  async function handleCloseTask(
-    taskId: string,
+  async function handleCloseThread(
+    threadId: string,
     outcome: "completed" | "failed",
     summary?: string
   ) {
     if (!selected) return;
-    await runTaskMutation(
-      () => closeChannelTask(selected.id, taskId, { outcome, summary }, workspaceId),
-      "Couldn't close the task"
+    await runThreadMutation(
+      () =>
+        closeChannelThread(
+          selected.id,
+          threadId,
+          { outcome, summary },
+          workspaceId
+        ),
+      "Couldn't close the thread"
     );
   }
 
-  async function handleReopenTask(taskId: string) {
+  async function handleReopenThread(threadId: string) {
     if (!selected) return;
-    await runTaskMutation(
-      () => reopenChannelTask(selected.id, taskId, workspaceId),
-      "Couldn't reopen the task"
+    await runThreadMutation(
+      () => reopenChannelThread(selected.id, threadId, workspaceId),
+      "Couldn't reopen the thread"
     );
   }
 
@@ -443,12 +450,12 @@ export function ChannelsView({
       />
 
       {channelForThread ? (
-        <ChannelThread
+        <ChannelPane
           key={channelForThread.id}
           channel={channelForThread}
           messages={messages}
-          tasks={tasks}
-          tasksLoading={tasksLoading}
+          threads={threads}
+          threadsLoading={threadsLoading}
           loading={messagesLoading}
           notifyScope={effectiveNotifyScope}
           members={members}
@@ -458,8 +465,8 @@ export function ChannelsView({
           trustBusyIds={trustBusyIds}
           consentBusyIds={consentBusyIds}
           onSend={handleSend}
-          onCloseTask={handleCloseTask}
-          onReopenTask={handleReopenTask}
+          onCloseThread={handleCloseThread}
+          onReopenThread={handleReopenThread}
           onInvite={() => setInviteOpen(true)}
           onSetNotifyScope={handleSetNotifyScope}
           onSetToolProfile={handleSetToolProfile}

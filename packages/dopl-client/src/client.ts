@@ -76,11 +76,11 @@ import type {
   ChannelMember,
   ChannelMessage,
   ChannelMessageInput,
-  ChannelTask,
-  ChannelTaskCreateInput,
+  ChannelThread,
+  ChannelThreadCreateInput,
   ReadMessagesOptions,
-  TaskMode,
-  TaskOutcome,
+  ThreadMode,
+  ThreadOutcome,
 } from "./channel-types.js";
 
 export type { DoplTransportOptions as DoplClientOptions } from "./transport.js";
@@ -622,35 +622,35 @@ export class DoplClient {
     return channel.awaitMessages(this.transport, channelId, opts);
   }
 
-  listChannelTasks(channelId: string): Promise<ChannelTask[]> {
-    return channel.listChannelTasks(this.transport, channelId);
+  listChannelThreads(channelId: string): Promise<ChannelThread[]> {
+    return channel.listChannelThreads(this.transport, channelId);
   }
 
-  getChannelTask(channelId: string, taskId: string): Promise<ChannelTask> {
-    return channel.getChannelTask(this.transport, channelId, taskId);
+  getChannelThread(channelId: string, threadId: string): Promise<ChannelThread> {
+    return channel.getChannelThread(this.transport, channelId, threadId);
   }
 
-  createChannelTask(
+  createChannelThread(
     channelId: string,
-    input: ChannelTaskCreateInput
-  ): Promise<ChannelTask> {
-    return channel.createChannelTask(this.transport, channelId, input);
+    input: ChannelThreadCreateInput
+  ): Promise<ChannelThread> {
+    return channel.createChannelThread(this.transport, channelId, input);
   }
 
-  closeChannelTask(
+  closeChannelThread(
     channelId: string,
-    taskId: string,
-    input: { outcome: TaskOutcome; summary?: string }
-  ): Promise<ChannelTask> {
-    return channel.closeChannelTask(this.transport, channelId, taskId, input);
+    threadId: string,
+    input: { outcome: ThreadOutcome; summary?: string }
+  ): Promise<ChannelThread> {
+    return channel.closeChannelThread(this.transport, channelId, threadId, input);
   }
 
-  setChannelTaskMode(
+  setChannelThreadMode(
     channelId: string,
-    taskId: string,
-    input: { mode: TaskMode }
-  ): Promise<ChannelTask> {
-    return channel.setChannelTaskMode(this.transport, channelId, taskId, input);
+    threadId: string,
+    input: { mode: ThreadMode }
+  ): Promise<ChannelThread> {
+    return channel.setChannelThreadMode(this.transport, channelId, threadId, input);
   }
 
   // ─── Skills ─────────────────────────────────────────────────────────

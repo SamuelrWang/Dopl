@@ -16,7 +16,7 @@
  * transcript in `seq` order (the repository returns messages ascending).
  */
 
-import type { ChannelMessage, ChannelMessageKind, TaskMode } from "../types";
+import type { ChannelMessage, ChannelMessageKind, ThreadMode } from "../types";
 
 /**
  * A session's lifecycle state, derived from its task lifecycle events.
@@ -84,7 +84,7 @@ export function isCalmTerminalStatus(status: SessionStatus): boolean {
 export interface TaskOverlay {
   status: SessionStatus;
   title: string | null;
-  mode: TaskMode | null;
+  mode: ThreadMode | null;
   /**
    * The task's human-readable close summary (`channel_tasks.outcome_summary`),
    * or null. Optional so a legacy overlay literal (and any pre-v1.7 caller)
@@ -105,7 +105,7 @@ export interface SessionGroup {
    */
   title: string | null;
   /** The first-class task mode (overlay), or null for a legacy session. */
-  mode: TaskMode | null;
+  mode: ThreadMode | null;
   /**
    * Identity + time source for the header: the agent-authored message that
    * opened the session (the `task_started`, or the first event we saw).

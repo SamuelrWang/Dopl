@@ -7,13 +7,17 @@ import { MenuItem, Popover } from "@/shared/ui/popover-menu";
 import { Avatar, type AvatarPerson } from "@/shared/ui/avatar";
 import { AvatarStack } from "@/shared/ui/avatar-stack";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
+// v3.0 vocabulary: `ChannelThread` (imported below) is the TYPE for one exchange
+// inside a channel. This file's component is the whole channel detail pane, so it
+// is named ChannelPane — it was called ChannelThread before the vocabulary round,
+// which made one name mean two different things.
 import type {
   AgentToolProfile,
   Channel,
   ChannelConsentRequest,
   ChannelMember,
   ChannelMessage,
-  ChannelTask,
+  ChannelThread,
   NotifyScope,
 } from "../types";
 import {
@@ -24,7 +28,7 @@ import { MessageThread } from "./message-thread";
 import { MessageComposer, type SendOptions } from "./message-composer";
 import { ConsentCard } from "./consent-card";
 import { ChannelActionsMenu } from "./channel-actions-menu";
-import { TaskPanel } from "./task-panel";
+import { ThreadPanel } from "./thread-panel";
 import { ChannelSettingsPopover } from "./channel-settings-popover";
 import { ChannelFolderControl } from "./channel-folder-control";
 import { PresenceDot } from "./address-picker";
@@ -48,17 +52,17 @@ const NOTIFY_OPTIONS: Array<{
   { scope: "none", label: "Muted", description: "No notifications from this channel." },
 ];
 
-/** How long a task's grouped card keeps its navigation ring after a panel click. */
-const TASK_HIGHLIGHT_MS = 2200;
+/** How long a thread's grouped card keeps its navigation ring after a panel click. */
+const THREAD_HIGHLIGHT_MS = 2200;
 
 interface Props {
   channel: Channel;
   messages: ChannelMessage[];
-  /** The channel's first-class tasks — the thread's status / title overlay. */
-  tasks: ChannelTask[];
-  /** True while the task overlay is still loading — suppresses the status
-   *  flicker (a UUID task without its overlay yet holds at neutral "active"). */
-  tasksLoading: boolean;
+  /** The channel's threads — the transcript's status / title overlay. */
+  threads: ChannelThread[];
+  /** True while the thread overlay is still loading — suppresses the status
+   *  flicker (a UUID thread without its overlay yet holds at neutral "active"). */
+  threadsLoading: boolean;
   loading: boolean;
   notifyScope: NotifyScope;
   members: ChannelMember[];
@@ -72,13 +76,13 @@ interface Props {
   /** Consent decisions with a write in flight, by request id. */
   consentBusyIds: ReadonlySet<string>;
   onSend: (body: string, opts?: SendOptions) => Promise<void>;
-  onCloseTask: (
-    taskId: string,
+  onCloseThread: (
+    threadId: string,
     outcome: "completed" | "failed",
     summary?: string
   ) => Promise<void>;
-  /** Reopen a closed task — the task panel's control; session cards never reopen. */
-  onReopenTask: (taskId: string) => Promise<void>;
+  /** Reopen a closed thread — the thread panel's control; session cards never reopen. */
+  onReopenThread: (threadId: string) => Promise<void>;
   onInvite: () => void;
   onSetNotifyScope: (scope: NotifyScope) => void;
   onSetToolProfile: (profile: AgentToolProfile) => void;
@@ -92,7 +96,7 @@ interface Props {
 }
 
 /**
- * Channel detail pane: a crumb bar (name, visibility, member count, presence)
+ * Channel detail pane (ChannelPane): a crumb bar (name, visibility, member count, presence)
  * with the notification / settings / invite / manage actions, a scrolling
  * transcript that auto-sticks to the bottom, and the pinned composer (or a
  * read-only / join affordance when the caller isn't a member).
@@ -102,11 +106,11 @@ interface Props {
  * request reads as the newest thing in the chain and scrolls with the history
  * instead of pinning a band above it.
  */
-export function ChannelThread({
+export function ChannelPane({
   channel,
   messages,
-  tasks,
-  tasksLoading,
+  threads,
+  threadsLoading,
   loading,
   notifyScope,
   members,
@@ -116,8 +120,8 @@ export function ChannelThread({
   trustBusyIds,
   consentBusyIds,
   onSend,
-  onCloseTask,
-  onReopenTask,
+  onCloseThread,
+  onReopenThread,
   onInvite,
   onSetNotifyScope,
   onSetToolProfile,
@@ -130,8 +134,8 @@ export function ChannelThread({
   onLeave,
 }: Props) {
   const [notifyOpen, setNotifyOpen] = useState(false);
-  const [taskPanelOpen, setTaskPanelOpen] = useState(false);
-  const [highlightedTaskId, setHighlightedTaskId] = useState<string | null>(null);
+  const [threadPanelOpen, setThreadPanelOpen] = useState(false);
+  const [highlightedThreadId, setHighlightedThreadId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -157,9 +161,9 @@ export function ChannelThread({
       new Map(members.map((m) => [m.userId, m.displayName || m.email || "teammate"])),
     [members]
   );
-  // The latest `task_progress` milestone per task, keyed by its `metadata.taskId`
+  // The latest `task_progress` milestone per thread, keyed by its `metadata.taskId`
   // — a pure derivation over already-loaded messages (seq-ascending), so the
-  // task panel can show each task's most recent accomplishment with no extra
+  // thread panel can show each thread's most recent accomplishment with no extra
   // fetch or write (F-072-safe).
   const latestMilestone = useMemo(() => {
     const map = new Map<string, ChannelMessage>();
@@ -209,19 +213,19 @@ export function ChannelThread({
     []
   );
 
-  // Task-panel navigation: close the panel, ring the task's grouped card, and
-  // scroll it into view. An open task with no grouped card yet has no element,
+  // Thread-panel navigation: close the panel, ring the thread's grouped card,
+  // and scroll it into view. An open thread with no grouped card has no element,
   // so the scroll is a no-op while the highlight still arms (harmless).
-  function handleSelectTask(taskId: string) {
-    setTaskPanelOpen(false);
-    setHighlightedTaskId(taskId);
+  function handleSelectThread(threadId: string) {
+    setThreadPanelOpen(false);
+    setHighlightedThreadId(threadId);
     document
-      .getElementById(`session:${taskId}`)
+      .getElementById(`session:${threadId}`)
       ?.scrollIntoView({ behavior: "smooth", block: "center" });
     if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
     highlightTimerRef.current = setTimeout(
-      () => setHighlightedTaskId(null),
-      TASK_HIGHLIGHT_MS
+      () => setHighlightedThreadId(null),
+      THREAD_HIGHLIGHT_MS
     );
   }
 
@@ -278,29 +282,29 @@ export function ChannelThread({
           <div className="relative shrink-0">
             <button
               type="button"
-              onClick={() => setTaskPanelOpen((v) => !v)}
-              aria-label="Tasks"
-              title="Tasks"
+              onClick={() => setThreadPanelOpen((v) => !v)}
+              aria-label="Threads"
+              title="Threads"
               className="flex h-7 w-7 items-center justify-center rounded-[7px] text-text-secondary transition-colors hover:bg-surface-raised-1 hover:text-text-primary"
             >
               <ListTodo size={16} />
             </button>
             <Popover
-              open={taskPanelOpen}
-              onClose={() => setTaskPanelOpen(false)}
+              open={threadPanelOpen}
+              onClose={() => setThreadPanelOpen(false)}
               align="right"
               className="w-80"
             >
-              <TaskPanel
-                tasks={tasks}
-                tasksLoading={tasksLoading}
+              <ThreadPanel
+                threads={threads}
+                threadsLoading={threadsLoading}
                 members={members}
                 memberNames={memberNames}
                 latestMilestone={latestMilestone}
-                onSelectTask={handleSelectTask}
+                onSelectThread={handleSelectThread}
                 currentUserId={currentUserId}
-                onCloseTask={onCloseTask}
-                onReopenTask={onReopenTask}
+                onCloseThread={onCloseThread}
+                onReopenThread={onReopenThread}
               />
             </Popover>
           </div>
@@ -390,11 +394,11 @@ export function ChannelThread({
             <MessageThread
               messages={messages}
               memberNames={memberNames}
-              tasks={tasks}
-              tasksLoading={tasksLoading}
+              threads={threads}
+              threadsLoading={threadsLoading}
               currentUserId={currentUserId}
-              highlightedTaskId={highlightedTaskId}
-              onCloseTask={onCloseTask}
+              highlightedThreadId={highlightedThreadId}
+              onCloseThread={onCloseThread}
             />
           )}
 

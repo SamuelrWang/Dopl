@@ -38,9 +38,12 @@ contextBridge.exposeInMainWorld('dopl', {
     clearFolder: (channelId) => ipcRenderer.invoke('channels:clearFolder', asId(channelId)),
   },
   // Reopen (reveal a hidden / front a visible) LIVE session window for a
-  // (channel, task) from the MAIN window. One fixed-name invoke; ids coerced to
-  // strings (main re-validates). Resolves { ok } — ok:false when no live session
-  // exists for that pair (a settled task's window is destroyed on settle).
+  // (channel, task) from the MAIN window — the web "Open session" button. One
+  // fixed-name invoke; ids coerced to strings (main re-validates). Resolves { ok }
+  // — ok:false when no live session exists for that pair (a settled thread's window
+  // is destroyed on settle). Wire name `task` == domain name `thread`.
+  // v3.0 A5: this OPENS THE WINDOW ONLY. It starts no query and wakes no agent; a
+  // parked shell stays parked until a steer or an accepted inbound resumes it.
   sessions: {
     reopen: (channelId, taskId) =>
       ipcRenderer.invoke('sessions:reopen', {

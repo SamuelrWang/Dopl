@@ -16,7 +16,7 @@ import {
   reopenTask,
   setTaskMode,
 } from "@/features/channels/server/service";
-import type { ChannelTask } from "@/features/channels/types";
+import type { ChannelThread } from "@/features/channels/types";
 import { TaskUpdateSchema } from "@/features/channels/schema";
 
 // GET one task by id (get_task, read). Same visibility rule as the transcript;
@@ -46,7 +46,7 @@ async function handlePatch(request: NextRequest, auth: WorkspaceAuthContext) {
     const ctx = buildChannelContext(auth);
     const channelId = requireChannelId(auth.params);
     const taskId = requireTaskId(auth.params);
-    let task: ChannelTask;
+    let task: ChannelThread;
     switch (input.op) {
       case "close":
         task = await closeTask(ctx, channelId, taskId, input.outcome, input.summary);

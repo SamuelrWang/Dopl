@@ -3,7 +3,7 @@
 // `io.postWillGate` PREDICTS, while the tool_use streams, whether an own-channel post will
 // stop on an operator button, and the renderer paints the pending decision card from that
 // prediction. `canUseTool` decides for real a moment later. When the two disagree — the post
-// was pre-approved, carried a standing "allow for this task" grant, or the session's mode
+// was pre-approved, carried a standing "allow for this session" grant, or the session's mode
 // auto-allowed it, none of which dispatch anything — main never resolved the card, so a
 // message that had ALREADY BEEN DELIVERED sat in the transcript reading "awaiting your
 // approval" forever (and the operator could not answer it: the card has no requestId, so its

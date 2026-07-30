@@ -3,7 +3,7 @@
 // THE BUG. `io.postWillGate` predicts, while the tool_use streams, whether an own-channel
 // post will stop on an operator button, and the renderer paints the inline decision card from
 // that prediction. `canUseTool` decides for real a moment later. Three of its four verdicts
-// dispatch NOTHING — 'preapproved', a standing "allow for this task" grant, and the
+// dispatch NOTHING — 'preapproved', a standing "allow for this session" grant, and the
 // per-session auto-approve / mode bypass all return {allow} immediately — so when the
 // prediction and the verdict disagree (the grant landed in between, the operator flipped the
 // toggle, a replay lost the artifact) the card stayed `pending` with NO requestId: a message

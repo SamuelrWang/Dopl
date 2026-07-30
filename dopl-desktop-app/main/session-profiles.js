@@ -205,7 +205,7 @@ function isOwnChannelPost(input, sessionChannelId) {
 // grant taken on any other op recorded the BARE tool name and grantDecision honored the
 // bare name for ANY op — so an agent whose first channel call was op=read (or a
 // slug-addressed post, classified cross-channel) produced a dock entry with no drafted
-// body, and one "Allow for this task" click silently authorized every channel op for the
+// body, and one "Allow for this session" click silently authorized every channel op for the
 // rest of the task, op=open direct:true included. That is exactly the cross-user exfil
 // path FIX H1 closed. Now each op earns its own key and nothing honors the bare name.
 // v2.9 review: POST_GRANT is the own-channel post BASE. A real key always extends it with
@@ -245,9 +245,9 @@ function fieldSegment(prefix, value, foldCase) {
 // FIX F7 — THE BODY IS THE SHAPE THE OPERATOR SAW. A post grant used to cover ANY body:
 // grantKeyFor(ch,{op:'post',body:'hi'}) === grantKeyFor(ch,{op:'post',body:'ssh key: AAAA…'}),
 // so HIGH-1's rationale ("ls -la must not authorize rm -rf") was applied to every tool class
-// EXCEPT the one that moves data off the machine: one "Send for this task" on a benign reply
+// EXCEPT the one that moves data off the machine: one "Send for this session" on a benign reply
 // authorized every later body the counterparty's text steered the agent into drafting. The
-// body is digested into the key exactly as Bash digests its command line, so "for this task"
+// body is digested into the key exactly as Bash digests its command line, so "for this session"
 // means the same thing for a post as for every other tool: THIS shape, again. Hands-off
 // replying is not lost — it is AXIS B (`auto_outbound`), stated in the header posture line and
 // reset on park, rather than an invisible second path to the same power. Length-prefixed so no
@@ -278,7 +278,7 @@ function targetSegment(channel) {
 
 // ── HIGH-1: EVERY tool is scoped, not just the channel ────────────────────────────
 // `grantKeyFor` used to op-scope ONLY dopl_channel and record the BARE NAME for everything
-// else, so one "Allow for this task" on `Bash("ls -la")` silently authorized every later Bash
+// else, so one "Allow for this session" on `Bash("ls -la")` silently authorized every later Bash
 // for the rest of the task, including one the counterparty's message text steered the agent
 // into proposing. Each class now earns a key for the SHAPE the operator saw. Keys are
 // in-memory, per-session, cleared on park (FIX F1 made that true), never persisted.

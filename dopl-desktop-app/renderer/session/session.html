@@ -21,12 +21,15 @@
           <span class="peer-avatar" id="peerAvatar" aria-hidden="true"></span>
           <span class="channel-name" id="channelName">Session</span>
         </div>
+        <!-- v3.0 VOCABULARY: the wire name `task` == the domain name `thread`. The element
+             id + class stay `taskTitle` / `task-title` because they mirror the `init.taskTitle`
+             wire field (from `metadata.taskTitle`); only the COPY moves to "thread". -->
         <div class="task-title text-caption" id="taskTitle"></div>
       </div>
       <div class="header-controls">
         <button class="ctl btn-light ctl-sm" id="btnStop" type="button">Stop</button>
         <button class="ctl btn-light ctl-sm ctl-danger" id="btnEnd" type="button">End session</button>
-        <button class="ctl auth-btn-3d ctl-primary ctl-sm" id="btnClose" type="button">Close task</button>
+        <button class="ctl auth-btn-3d ctl-primary ctl-sm" id="btnClose" type="button">Close thread</button>
       </div>
     </header>
 
@@ -75,11 +78,13 @@
     <!-- Pre-consent request card (item 8): shown BEFORE any SDK/agent work. -->
     <div class="consent-view" id="consentView"></div>
 
-    <!-- Close-task panel (revealed by "Close task") -->
+    <!-- Close-thread panel (revealed by "Close thread"). Closing settles the SHARED
+         thread for both members; it is not the same act as ending this member's own
+         session, which is the "End session" control above. -->
     <div class="close-panel bento" id="closePanel">
       <div class="close-panel__inner">
         <div class="row">
-          <span class="text-label ink-secondary">Close task</span>
+          <span class="text-label ink-secondary">Close thread</span>
           <span class="seg concave-track" id="outcomeSeg" role="group" aria-label="Outcome">
             <button class="seg-btn raised-tab is-sel" data-outcome="completed" type="button">Completed</button>
             <button class="seg-btn" data-outcome="failed" type="button">Failed</button>
@@ -90,7 +95,7 @@
         </div>
         <div class="actions">
           <button class="ctl btn-light ctl-sm" id="btnCloseCancel" type="button">Cancel</button>
-          <button class="ctl auth-btn-3d ctl-primary ctl-sm" id="btnCloseConfirm" type="button">Close task</button>
+          <button class="ctl auth-btn-3d ctl-primary ctl-sm" id="btnCloseConfirm" type="button">Close thread</button>
         </div>
       </div>
     </div>
@@ -122,9 +127,14 @@
             <summary>Show full input</summary>
             <pre id="permInput"></pre>
           </details>
+          <!-- v3.0 VOCABULARY + CORRECTNESS: the standing grant is per SESSION and is cleared
+               on park (v2.9 FIX F1), so "for this task" overstated its lifetime — a thread
+               outlives every session that works it. The button id and the `allow-task`
+               decision string are the IPC wire vocabulary and are unchanged (wire name
+               `task` == domain name `thread`); only the words the operator reads move. -->
           <div class="perm-actions">
             <button class="ctl btn-light ctl-sm" id="btnAllowOnce" type="button">Allow once</button>
-            <button class="ctl auth-btn-3d ctl-primary ctl-sm" id="btnAllowTask" type="button">Allow for this task</button>
+            <button class="ctl auth-btn-3d ctl-primary ctl-sm" id="btnAllowTask" type="button">Allow for this session</button>
             <button class="ctl btn-light ctl-sm ctl-danger" id="btnDeny" type="button">Deny</button>
           </div>
           <div class="perm-queue-note hidden" id="permQueueNote"></div>

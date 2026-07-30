@@ -161,7 +161,7 @@ test("a FULL queue returns false so the listener can fall through to its passive
 
 test("AUTO (AXIS B or the standing grant): fed straight through, never queued, no notification", () => {
   // v2.9: the opt-ins are the MESSAGE axis (auto_inbound / auto_both) and the standing
-  // "Accept for this task" grant. The TOOL axis is not one of them, at any value.
+  // "Accept for this session" grant. The TOOL axis is not one of them, at any value.
   for (const opt of [{ messageMode: "auto_inbound" }, { messageMode: "auto_both" }, { inboundForTask: true }]) {
     const h = harness();
     const s = fakeSession({ state: { messageMode: "ask", inboundForTask: false, ...opt } });

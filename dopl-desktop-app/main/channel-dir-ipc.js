@@ -19,15 +19,20 @@
 //     three label-scoped operations is exposed.
 //
 // The one additional handler here, `sessions:reopen`, is the main-window bridge
-// for the web session-card's "Reopen window" button. It asks the session engine to
+// for the web session-card's "Open session" button. It asks the session engine to
 // SHOW an existing LIVE session window for a (channel, task) the operator owns; when
 // none survives, the engine's P2 fallback (recreateParkedShell) recreates a DORMANT,
 // parked window from the durable record + retained sdkSessionId (subject to the shared
 // window cap). Either way it starts NO query and runs NO gated tool — a window show()
 // or a query-less parked shell (F-072: no read-triggered server/realtime writes) — and
-// returns `{ ok }` (ok:false only for a truly-closed task). channelId is UUID-validated
+// returns `{ ok }` (ok:false only for a truly-closed thread). channelId is UUID-validated
 // like the folder ops; reopenByTask may return a Promise (the fallback is async), which
 // ipcMain.handle awaits before replying.
+//
+// v3.0 VOCABULARY: "Open session" opens the operator's OWN window on a shared THREAD.
+// It never starts the agent — only a steer or an accepted inbound resumes a parked
+// shell. Wire name `task` == domain name `thread` (the ids stay `taskId`).
+// Pinned by test/open-session-no-query.test.mjs.
 
 const { ipcMain } = require('electron');
 const channelDirs = require('./channel-dirs');

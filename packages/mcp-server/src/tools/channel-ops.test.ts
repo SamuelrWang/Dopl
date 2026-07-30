@@ -1,7 +1,8 @@
 /**
- * Focused unit tests for the v1.7 dopl_channel op deltas:
- *   - opPost folds `task` into metadata.taskId (explicit param wins);
- *   - opCloseTask forwards `summary` and surfaces it in the confirmation;
+ * Focused unit tests for the dopl_channel op deltas:
+ *   - opPost folds `thread` into the storage key metadata.taskId (explicit
+ *     param wins);
+ *   - opCloseThread forwards `summary` and surfaces it in the confirmation;
  *   - the read render labels an agent author "agent for <name>" (never a bare
  *     name), so a counterparty is not mistaken for its own operator.
  *
@@ -11,8 +12,8 @@
 
 import { describe, it, expect, vi } from "vitest";
 import type { DoplClient } from "@dopl/client";
-import { opPost, opCloseTask } from "./channel-ops-write";
-import { opRead, opListTasks, opGetTask } from "./channel-ops-read";
+import { opPost, opCloseThread } from "./channel-ops-write";
+import { opRead, opListThreads, opGetThread } from "./channel-ops-read";
 
 const CHANNEL = {
   id: "chan-1",
@@ -38,42 +39,42 @@ type PostSpy = (
 /** A typed close spy — the generic types `.mock.calls` for arg assertions. */
 type CloseSpy = (
   channelId: string,
-  taskId: string,
+  threadId: string,
   input: Record<string, unknown>,
 ) => Promise<{ title: string; outcome: string }>;
 
-describe("opPost — task threading (Feature 2a)", () => {
-  it("folds `task` into metadata.taskId", async () => {
+describe("opPost — thread threading (Feature 2a)", () => {
+  it("folds `thread` into metadata.taskId", async () => {
     const postChannelMessage = vi.fn<PostSpy>();
     postChannelMessage.mockResolvedValue({ id: "m1", seq: 5, kind: "task_progress" });
     const client = stubClient({ postChannelMessage });
 
     const res = await opPost(client, "general", "did the thing", {
-      task: "task-uuid",
+      thread: "thread-uuid",
       kind: "task_progress",
     });
 
     expect(res.isError).toBeFalsy();
     const [channelId, input] = postChannelMessage.mock.calls[0];
     expect(channelId).toBe("chan-1");
-    expect(input.metadata).toEqual({ taskId: "task-uuid" });
+    expect(input.metadata).toEqual({ taskId: "thread-uuid" });
   });
 
-  it("merges `task` over caller metadata (explicit param wins)", async () => {
+  it("merges `thread` over caller metadata (explicit param wins)", async () => {
     const postChannelMessage = vi.fn<PostSpy>();
     postChannelMessage.mockResolvedValue({ id: "m1", seq: 6, kind: "message" });
     const client = stubClient({ postChannelMessage });
 
     await opPost(client, "general", "reply", {
-      task: "task-uuid",
+      thread: "thread-uuid",
       metadata: { taskId: "spoofed", keep: 1 },
     });
 
     const [, input] = postChannelMessage.mock.calls[0];
-    expect(input.metadata).toEqual({ taskId: "task-uuid", keep: 1 });
+    expect(input.metadata).toEqual({ taskId: "thread-uuid", keep: 1 });
   });
 
-  it("leaves metadata untouched when no `task` is passed", async () => {
+  it("leaves metadata untouched when no `thread` is passed", async () => {
     const postChannelMessage = vi.fn<PostSpy>();
     postChannelMessage.mockResolvedValue({ id: "m1", seq: 7, kind: "message" });
     const client = stubClient({ postChannelMessage });
@@ -85,49 +86,51 @@ describe("opPost — task threading (Feature 2a)", () => {
   });
 });
 
-describe("opCloseTask — summary (Feature 3c)", () => {
+describe("opCloseThread — summary (Feature 3c)", () => {
   it("forwards `summary` to the client and surfaces it in the confirmation", async () => {
-    const closeChannelTask = vi.fn<CloseSpy>();
-    closeChannelTask.mockResolvedValue({ title: "Ship it", outcome: "completed" });
-    const client = stubClient({ closeChannelTask });
+    const closeChannelThread = vi.fn<CloseSpy>();
+    closeChannelThread.mockResolvedValue({ title: "Ship it", outcome: "completed" });
+    const client = stubClient({ closeChannelThread });
 
-    const res = await opCloseTask(client, "general", "task-uuid", "completed", "Shipped v2 to prod");
+    const res = await opCloseThread(client, "general", "thread-uuid", "completed", "Shipped v2 to prod");
 
-    const [channelId, taskId, input] = closeChannelTask.mock.calls[0];
+    const [channelId, threadId, input] = closeChannelThread.mock.calls[0];
     expect(channelId).toBe("chan-1");
-    expect(taskId).toBe("task-uuid");
+    expect(threadId).toBe("thread-uuid");
     expect(input).toEqual({ outcome: "completed", summary: "Shipped v2 to prod" });
     expect(res.content[0].text).toContain("Shipped v2 to prod");
   });
 
   it("omits the summary note when none is given", async () => {
-    const closeChannelTask = vi.fn<CloseSpy>();
-    closeChannelTask.mockResolvedValue({ title: "Ship it", outcome: "failed" });
-    const client = stubClient({ closeChannelTask });
+    const closeChannelThread = vi.fn<CloseSpy>();
+    closeChannelThread.mockResolvedValue({ title: "Ship it", outcome: "failed" });
+    const client = stubClient({ closeChannelThread });
 
-    const res = await opCloseTask(client, "general", "task-uuid", "failed");
+    const res = await opCloseThread(client, "general", "thread-uuid", "failed");
 
-    const [, , input] = closeChannelTask.mock.calls[0];
+    const [, , input] = closeChannelThread.mock.calls[0];
     expect(input).toEqual({ outcome: "failed", summary: undefined });
-    expect(res.content[0].text).toBe("Closed task **Ship it** in **General** as failed.");
+    expect(res.content[0].text).toBe(
+      "Closed thread **Ship it** in **General** as failed."
+    );
   });
 });
 
-describe("opPost — bad task mapping (Gap 4)", () => {
-  it("maps a 400 on an unresolvable `task` (no `to`) to a clear message", async () => {
+describe("opPost — bad thread mapping (Gap 4)", () => {
+  it("maps a 400 on an unresolvable `thread` (no `to`) to a clear message", async () => {
     const postChannelMessage = vi.fn(async () => {
       throw { status: 400 };
     });
     const client = stubClient({ postChannelMessage });
 
     const res = await opPost(client, "general", "progress", {
-      task: "not-in-this-channel",
+      thread: "not-in-this-channel",
       kind: "task_progress",
     });
 
     expect(res.isError).toBe(true);
     expect(res.content[0].text).toContain("not in this channel");
-    expect(res.content[0].text).toContain("post without `task`");
+    expect(res.content[0].text).toContain("post without `thread`");
   });
 
   it("still maps a 400 addressee error when `to` is set", async () => {
@@ -148,9 +151,9 @@ describe("opPost — bad task mapping (Gap 4)", () => {
   });
 });
 
-describe("opListTasks / opGetTask — task reads (Gap 1)", () => {
-  const TASK = {
-    id: "task-1",
+describe("opListThreads / opGetThread — thread reads (Gap 1)", () => {
+  const THREAD = {
+    id: "thread-1",
     channelId: "chan-1",
     workspaceId: "ws-1",
     title: "Ship it",
@@ -165,30 +168,30 @@ describe("opListTasks / opGetTask — task reads (Gap 1)", () => {
     outcomeSummary: null,
   };
 
-  it("renders a task list readably", async () => {
+  it("renders a thread list readably", async () => {
     const client = stubClient({
-      listChannelTasks: vi.fn(async () => [
-        TASK,
-        { ...TASK, id: "task-2", title: "Done one", status: "closed", outcome: "completed", outcomeSummary: "shipped" },
+      listChannelThreads: vi.fn(async () => [
+        THREAD,
+        { ...THREAD, id: "thread-2", title: "Done one", status: "closed", outcome: "completed", outcomeSummary: "shipped" },
       ]),
     });
 
-    const res = await opListTasks(client, "general");
+    const res = await opListThreads(client, "general");
     const text = res.content[0].text;
     expect(res.isError).toBeFalsy();
-    expect(text).toContain("2 tasks");
+    expect(text).toContain("2 threads");
     expect(text).toContain("Ship it");
-    expect(text).toContain("`task-1`");
+    expect(text).toContain("`thread-1`");
     expect(text).toContain("shipped");
-    expect(text).toContain('op="get_task"');
+    expect(text).toContain('op="get_thread"');
   });
 
-  it("get_task renders one task's detail", async () => {
+  it("get_thread renders one thread's detail", async () => {
     const client = stubClient({
-      getChannelTask: vi.fn(async () => ({ ...TASK, outcomeSummary: "all good" })),
+      getChannelThread: vi.fn(async () => ({ ...THREAD, outcomeSummary: "all good" })),
     });
 
-    const res = await opGetTask(client, "general", "task-1");
+    const res = await opGetThread(client, "general", "thread-1");
     const text = res.content[0].text;
     expect(res.isError).toBeFalsy();
     expect(text).toContain("Ship it");
@@ -196,17 +199,17 @@ describe("opListTasks / opGetTask — task reads (Gap 1)", () => {
     expect(text).toContain("`u-b`");
   });
 
-  it("get_task maps a 404 (task not in channel) to a task-oriented not-found", async () => {
+  it("get_thread maps a 404 (thread not in channel) to a thread-oriented not-found", async () => {
     const client = stubClient({
-      getChannelTask: vi.fn(async () => {
+      getChannelThread: vi.fn(async () => {
         throw { status: 404 };
       }),
     });
 
-    const res = await opGetTask(client, "general", "ghost");
+    const res = await opGetThread(client, "general", "ghost");
     expect(res.isError).toBe(true);
-    expect(res.content[0].text).toContain("No task `ghost`");
-    expect(res.content[0].text).toContain('op="list_tasks"');
+    expect(res.content[0].text).toContain("No thread `ghost`");
+    expect(res.content[0].text).toContain('op="list_threads"');
   });
 });
 

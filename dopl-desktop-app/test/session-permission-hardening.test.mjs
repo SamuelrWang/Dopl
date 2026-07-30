@@ -187,7 +187,7 @@ test("F3: a VERSIONED channel tool is answered by AXIS B, never by a tool postur
 // EXPLOIT: 12 hex chars is 48 bits. The counterparty supplies the exact command / body text
 // that gets hashed, and the review benchmarked ~400k SHA-256/179ms on this machine — seconds
 // to a birthday collision. Precompute a benign/malicious pair sharing argv0 + digest, get the
-// benign one approved "for this task", and the twin is auto-allowed with no card. A grant key
+// benign one approved "for this session", and the twin is auto-allowed with no card. A grant key
 // is a Set member, never a rendered string, so the width was never a real constraint.
 
 test("F4: every digest in a grant key is the FULL 64-hex SHA-256", () => {
@@ -271,10 +271,10 @@ test("F6: a grant to post into one other channel does NOT post into its near-twi
 // ── F7: a post grant covers the BODY the operator read, not every later body ───────
 // EXPLOIT: grantKeyFor(ch,{op:'post',body:'hi'}) === grantKeyFor(ch,{op:'post',body:'ssh key:
 // AAAA…'}). HIGH-1's rationale ("ls -la must not authorize rm -rf") was applied to every tool
-// class EXCEPT the one that moves data off the machine, so one "Send for this task" on a
+// class EXCEPT the one that moves data off the machine, so one "Send for this session" on a
 // benign reply authorized every later body the counterparty's text steered the agent into
 // drafting. DECISION: option (a), scope by a digest of the exact body — consistent with what
-// "for this task" already means everywhere else (Bash by command, WebFetch by origin, Write by
+// "for this session" already means everywhere else (Bash by command, WebFetch by origin, Write by
 // directory). Hands-off replying stays available as AXIS B `auto_outbound`, which is stated in
 // the header posture line and reset on park, rather than as an invisible second path to it.
 

@@ -326,9 +326,28 @@ describe("postMessage — addressing + author derivation", () => {
   });
 
   it("an explicit authorKind wins over the ctx-derived default", async () => {
-    // A cookie-session desktop app posts an agent task result over a user ctx.
+    // A cookie-session desktop app posts an agent thread result over a user ctx.
     await postMessage(ctx, "general", { body: "done", authorKind: "agent" });
     expect(vi.mocked(repo.insertMessage).mock.calls[0][0].author_kind).toBe("agent");
+  });
+
+  it("an explicit authorKind wins in BOTH directions (it is a claim, not a derivation)", async () => {
+    // The mirror of the case above. ENGINEERING.md §8 documented `authorKind` as
+    // DERIVED from the credential until 2026-07-30; it never was, and the
+    // desktop peer-post path depends on the caller's value winning. Pinning both
+    // directions stops a future "harden this" edit from turning the `??` into a
+    // hard derive and silently breaking that path (F-082).
+    await postMessage(agentCtx, "general", { body: "hi", authorKind: "user" });
+    expect(vi.mocked(repo.insertMessage).mock.calls[0][0].author_kind).toBe("user");
+  });
+
+  it("never lets the caller move authorship off ctx.userId", async () => {
+    // Only the KIND label is assertable. The identity is not: `author_user_id`
+    // is always the acting user, so an `agent` claim can never impersonate a
+    // different member.
+    await postMessage(ctx, "general", { body: "hi", authorKind: "agent" });
+    const row = vi.mocked(repo.insertMessage).mock.calls[0][0];
+    expect(row.author_user_id).toBe(ctx.userId);
   });
 });
 

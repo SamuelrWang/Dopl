@@ -48,7 +48,12 @@
   // initials, and the native window title:
   //     taskTitle -> peer name (init.from) -> channelName -> "Session".
   // The subtitle carries the next identity down, and only when the title is the
-  // task title, so the peer / channel name is never printed twice.
+  // thread title, so the peer / channel name is never printed twice.
+  //
+  // v3.0 VOCABULARY BOUNDARY: wire name `task` == domain name `thread`. `init.taskTitle`
+  // is the server-stamped `metadata.taskTitle` and keeps its wire spelling here (and in
+  // session.html's `#taskTitle`); everything the operator READS says "thread", and the
+  // window this identity titles is the operator's own SESSION on this machine.
   function headerIdentity(init) {
     const info = init || {};
     const taskTitle = identityName(info.taskTitle);

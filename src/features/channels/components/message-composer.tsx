@@ -70,9 +70,9 @@ export function resolveSendOptions(params: {
  * intent (`summary`); in a DM the peer is implicit, so only the optional
  * one-liner shows.
  *
- * A human send ALWAYS posts a message. Task creation is no longer a human
- * toggle — it is agent-driven (an agent calls `create_task` over MCP), and the
- * web still renders any resulting tasks with their cards / milestones /
+ * A human send ALWAYS posts a message. Opening a thread is no longer a human
+ * toggle — it is agent-driven (an agent calls `create_thread` over MCP), and the
+ * web still renders any resulting threads with their cards / milestones /
  * receipts.
  *
  * In a DM every human send auto-addresses the peer. In a channel of three or

@@ -16,7 +16,9 @@ const asDecision = (d) => {
 };
 const asOutcome = (o) => (asStr(o) === 'failed' ? 'failed' : 'completed');
 // v2.5 D1: the inbound gate decision is fail-closed — anything but an explicit accept
-// (once, or for the task) is a decline, so a forged/garbled value never feeds the agent.
+// (once, or for this session) is a decline, so a forged/garbled value never feeds the agent.
+// v3.0: `accept-task` stays the wire value (wire name `task` == domain name `thread`); the
+// grant it arms lives on the session object and a park clears it, which the copy now says.
 const asInbound = (d) => {
   const s = asStr(d);
   return s === 'accept' || s === 'accept-task' ? s : 'decline';

@@ -81,7 +81,7 @@ function register(internals) {
     }
   });
 
-  // ── v2.5 D1: the inbound gate decision (Accept / Accept for this task / Decline).
+  // ── v2.5 D1: the inbound gate decision (Accept / Accept for this session / Decline).
   // Bound from event.sender like every other handler; the decision string is coerced
   // in the preload and re-validated FAIL-CLOSED in gate.decideInbound (anything that
   // is not an explicit accept declines). FIX F10: the old accept-only channel alias is

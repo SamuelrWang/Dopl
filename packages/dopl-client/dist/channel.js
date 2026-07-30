@@ -18,11 +18,11 @@ exports.awaitMessages = awaitMessages;
 exports.createChannel = createChannel;
 exports.inviteToChannel = inviteToChannel;
 exports.postMessage = postMessage;
-exports.listChannelTasks = listChannelTasks;
-exports.getChannelTask = getChannelTask;
-exports.createChannelTask = createChannelTask;
-exports.closeChannelTask = closeChannelTask;
-exports.setChannelTaskMode = setChannelTaskMode;
+exports.listChannelThreads = listChannelThreads;
+exports.getChannelThread = getChannelThread;
+exports.createChannelThread = createChannelThread;
+exports.closeChannelThread = closeChannelThread;
+exports.setChannelThreadMode = setChannelThreadMode;
 const enc = encodeURIComponent;
 /** Network read-timeout for the long-poll — safely above the server cap. */
 const AWAIT_TIMEOUT_MS = 55_000;
@@ -96,36 +96,41 @@ async function postMessage(t, channelId, input) {
     });
     return data.message;
 }
-// ─── Tasks ──────────────────────────────────────────────────────────
-async function listChannelTasks(t, channelId) {
-    const data = await t.request(`/api/channels/${enc(channelId)}/tasks`, { toolName: "channel_list_tasks" });
+// ─── Threads ────────────────────────────────────────────────────────
+//
+// BOUNDARY: wire/storage name `task` == domain name `thread`. The route
+// segment (`/tasks`) and the response envelope keys (`tasks` / `task`) are
+// STORAGE names and stay put — renaming them means a migration plus every
+// read and write path. Everything above this line speaks `thread`.
+async function listChannelThreads(t, channelId) {
+    const data = await t.request(`/api/channels/${enc(channelId)}/tasks`, { toolName: "channel_list_threads" });
     return data.tasks;
 }
-async function getChannelTask(t, channelId, taskId) {
-    const data = await t.request(`/api/channels/${enc(channelId)}/tasks/${enc(taskId)}`, { toolName: "channel_get_task" });
+async function getChannelThread(t, channelId, threadId) {
+    const data = await t.request(`/api/channels/${enc(channelId)}/tasks/${enc(threadId)}`, { toolName: "channel_get_thread" });
     return data.task;
 }
-async function createChannelTask(t, channelId, input) {
+async function createChannelThread(t, channelId, input) {
     const data = await t.request(`/api/channels/${enc(channelId)}/tasks`, {
         method: "POST",
         body: input,
-        toolName: "channel_create_task",
+        toolName: "channel_create_thread",
     });
     return data.task;
 }
-async function closeChannelTask(t, channelId, taskId, input) {
-    const data = await t.request(`/api/channels/${enc(channelId)}/tasks/${enc(taskId)}`, {
+async function closeChannelThread(t, channelId, threadId, input) {
+    const data = await t.request(`/api/channels/${enc(channelId)}/tasks/${enc(threadId)}`, {
         method: "PATCH",
         body: { op: "close", outcome: input.outcome, summary: input.summary },
-        toolName: "channel_close_task",
+        toolName: "channel_close_thread",
     });
     return data.task;
 }
-async function setChannelTaskMode(t, channelId, taskId, input) {
-    const data = await t.request(`/api/channels/${enc(channelId)}/tasks/${enc(taskId)}`, {
+async function setChannelThreadMode(t, channelId, threadId, input) {
+    const data = await t.request(`/api/channels/${enc(channelId)}/tasks/${enc(threadId)}`, {
         method: "PATCH",
         body: { op: "set_mode", mode: input.mode },
-        toolName: "channel_set_task_mode",
+        toolName: "channel_set_thread_mode",
     });
     return data.task;
 }

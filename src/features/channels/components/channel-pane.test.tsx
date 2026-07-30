@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ChannelThread } from "./channel-thread";
+import { ChannelPane } from "./channel-pane";
 import type {
   Channel,
   ChannelConsentRequest,
@@ -106,11 +106,11 @@ function render(
   messages: ChannelMessage[] = [message()]
 ) {
   return renderToStaticMarkup(
-    <ChannelThread
+    <ChannelPane
       channel={channel(over)}
       messages={messages}
-      tasks={[]}
-      tasksLoading={false}
+      threads={[]}
+      threadsLoading={false}
       loading={false}
       notifyScope="all"
       members={[member({ userId: ME, displayName: "Me" })]}
@@ -120,8 +120,8 @@ function render(
       trustBusyIds={new Set()}
       consentBusyIds={new Set()}
       onSend={noopAsync}
-      onCloseTask={noopAsync}
-      onReopenTask={noopAsync}
+      onCloseThread={noopAsync}
+      onReopenThread={noopAsync}
       onInvite={noop}
       onSetNotifyScope={noop}
       onSetToolProfile={noop}
@@ -136,7 +136,7 @@ function render(
   );
 }
 
-describe("ChannelThread pending requests placement", () => {
+describe("ChannelPane pending requests placement", () => {
   it("renders a pending request AFTER the last message, not above the transcript", () => {
     const markup = render([consent()]);
     const lastMessage = markup.indexOf("THE-LAST-MESSAGE");

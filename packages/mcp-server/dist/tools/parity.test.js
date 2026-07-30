@@ -138,7 +138,7 @@ const READ_OPS = {
     dopl_chats: ["list", "get", "folders", "guide", "list_trash"],
     dopl_members: ["whoami", "list", "get", "teams", "get_team", "access_matrix", "my_access"],
     dopl_ontology: ["map", "anchor", "resolve", "get"],
-    dopl_channel: ["list", "read", "await", "list_tasks", "get_task"],
+    dopl_channel: ["list", "read", "await", "list_threads", "get_thread"],
 };
 // ── KNOWN DRIFT ledger ────────────────────────────────────────────────
 // Write ops absent from server.ts WRITE_OPS (read-only-token write holes)

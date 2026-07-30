@@ -466,7 +466,7 @@ test("boot: FIX F10 — main's own inbound_resolved echo still stamps the card",
   const { buttons, note } = gateParts(gateCards().at(-1));
   feed({ type: "inbound_resolved", pendingId: "p6", decision: "accepted-task" });
   assert.deepEqual(buttons.map((b) => b.disabled), [true, true, true]);
-  assert.equal(note.textContent, "Accepted for this task");
+  assert.equal(note.textContent, "Accepted for this session");
 });
 
 // ── the ended session still locks the composer ────────────────────────────────

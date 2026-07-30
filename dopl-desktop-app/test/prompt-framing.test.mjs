@@ -132,8 +132,8 @@ test("buildFencedTurn requester: frames the GOAL as data and tells the agent to 
   });
   assert.ok(out.includes("BEGIN-REQUEST-abc123") && out.includes("END-REQUEST-abc123"));
   assert.ok(out.includes("Ship the Q3 report"), "the goal body is included");
-  assert.ok(/DRIVING a task/i.test(out), "requester drives the task");
-  assert.ok(/close the task/i.test(out), "requester closes the task when the goal is met");
+  assert.ok(/DRIVING a thread/i.test(out), "requester drives the thread");
+  assert.ok(/close the THREAD/.test(out), "requester closes the thread when the goal is met");
   assert.ok(out.includes("Q3 report"), "task title appears when provided");
   assert.ok(/dopl_channel/.test(out), "delivery is via the dopl_channel tool");
 });

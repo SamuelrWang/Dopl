@@ -6,7 +6,7 @@ import { cn } from "@/shared/lib/utils";
 import { Avatar } from "@/shared/ui/avatar";
 import { formatChannelTimestamp } from "@/shared/lib/format-time";
 import { isUuid } from "@/shared/lib/id/uuid";
-import type { ChannelMessage, ChannelTask } from "../types";
+import type { ChannelMessage, ChannelThread } from "../types";
 import { groupThread, type TaskOverlay } from "../lib/group-thread";
 import {
   deriveMessageReceipt,
@@ -17,29 +17,30 @@ import { ActivityEventRow } from "./activity-event-row";
 import { SessionCard } from "./session-card";
 
 /**
- * Turn a first-class {@link ChannelTask} row into the authoritative render
- * overlay: an open task is `active`, a closed one is `done` (completed) or
- * `failed` — status the lifecycle-only heuristic can't derive on its own.
+ * Turn a {@link ChannelThread} row into the authoritative render overlay: an
+ * open thread is `active`, a closed one is `done` (completed) or `failed` —
+ * status the lifecycle-only heuristic can't derive on its own.
  */
-function taskOverlayFrom(task: ChannelTask): TaskOverlay {
+function threadOverlayFrom(thread: ChannelThread): TaskOverlay {
   const status =
-    task.status === "open"
+    thread.status === "open"
       ? "active"
-      : task.outcome === "failed"
+      : thread.outcome === "failed"
         ? "failed"
         : "done";
   return {
     status,
-    title: task.title,
-    mode: task.mode,
-    outcomeSummary: task.outcomeSummary,
+    title: thread.title,
+    mode: thread.mode,
+    outcomeSummary: thread.outcomeSummary,
   };
 }
 
 /**
- * The channel transcript. One TASK (the messages/events sharing a
- * `metadata.taskId`) collapses into a single {@link SessionCard}, its status +
- * title overlaid from the authoritative `channel_tasks` rows; standalone human
+ * The channel transcript. One THREAD (the messages/events sharing a
+ * `metadata.taskId` — the storage name for a thread id) collapses into a single
+ * {@link SessionCard}, its status + title overlaid from the authoritative
+ * `channel_tasks` rows; standalone human
  * messages and plain agent chat render as bordered bubbles (agent = elevated
  * surface, human = subtle card surface), and `system` rows as flat centered
  * activity lines via `ActivityEventRow`. A message carrying addressing metadata
@@ -56,52 +57,52 @@ function taskOverlayFrom(task: ChannelTask): TaskOverlay {
 export function MessageThread({
   messages,
   memberNames,
-  tasks,
-  tasksLoading,
+  threads,
+  threadsLoading,
   currentUserId,
-  highlightedTaskId,
-  onCloseTask,
+  highlightedThreadId,
+  onCloseThread,
 }: {
   messages: ChannelMessage[];
   /** userId -> display name, for rendering addressing targets. */
   memberNames: Map<string, string>;
-  /** The channel's first-class tasks — the status / title / mode overlay. */
-  tasks: ChannelTask[];
-  /** True while the task overlay is still loading (see the flicker note below). */
-  tasksLoading: boolean;
+  /** The channel's first-class threads — the status / title / mode overlay. */
+  threads: ChannelThread[];
+  /** True while the thread overlay is still loading (see the flicker note below). */
+  threadsLoading: boolean;
   /**
    * The viewer's user id — gates the outgoing-message receipt line to the
    * current user's own standalone bubbles.
    */
   currentUserId: string;
   /**
-   * The task the task panel navigated to; its {@link SessionCard} shows a
+   * The thread the thread panel navigated to; its {@link SessionCard} shows a
    * transient highlight ring. Null / undefined highlights nothing.
    */
-  highlightedTaskId?: string | null;
+  highlightedThreadId?: string | null;
   /**
-   * Close mutation for the card's task control (see SessionCard). Reopening a
-   * closed task is the task panel's job, so no reopen callback comes through
-   * the transcript.
+   * Close mutation for the card's thread control (see SessionCard). Reopening a
+   * closed thread is the thread panel's job, so no reopen callback comes
+   * through the transcript.
    */
-  onCloseTask?: (
-    taskId: string,
+  onCloseThread?: (
+    threadId: string,
     outcome: "completed" | "failed",
     summary?: string
   ) => Promise<void>;
 }) {
   const items = useMemo(() => {
-    const overlays = new Map(tasks.map((t) => [t.id, taskOverlayFrom(t)]));
+    const overlays = new Map(threads.map((t) => [t.id, threadOverlayFrom(t)]));
     const grouped = groupThread(messages, overlays);
-    // Flicker suppression: an OPEN first-class task whose id is UUID-shaped has
-    // an authoritative overlay, but before that overlay loads `groupThread`
+    // Flicker suppression: an OPEN thread whose id is UUID-shaped has an
+    // authoritative overlay, but before that overlay loads `groupThread`
     // falls back to the message-derived status — a delivered reply reads "done"
-    // ("Task complete"), then snaps to its real status once tasks arrive. While
+    // ("Thread complete"), then snaps to its real status once threads arrive. While
     // the overlay is loading, hold any UUID-id group with no overlay yet at the
     // neutral "active" state; legacy (non-UUID) ids never get an overlay, so
     // they keep their derived status as today. The overlay is authoritative the
     // moment it loads.
-    if (tasksLoading) {
+    if (threadsLoading) {
       for (const item of grouped) {
         if (
           item.type === "session" &&
@@ -113,7 +114,7 @@ export function MessageThread({
       }
     }
     return grouped;
-  }, [messages, tasks, tasksLoading]);
+  }, [messages, threads, threadsLoading]);
   return (
     <div className="flex flex-col gap-2.5">
       {items.map((item) => {
@@ -122,10 +123,10 @@ export function MessageThread({
             <SessionCard
               key={item.key}
               session={item.session}
-              highlighted={highlightedTaskId === item.session.taskId}
-              task={tasks.find((t) => t.id === item.session.taskId)}
+              highlighted={highlightedThreadId === item.session.taskId}
+              thread={threads.find((t) => t.id === item.session.taskId)}
               currentUserId={currentUserId}
-              onCloseTask={onCloseTask}
+              onCloseThread={onCloseThread}
             />
           );
         }

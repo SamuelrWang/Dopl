@@ -113,7 +113,7 @@ test("FIX F2: the history rides INSIDE the per-session nonce fence, as DATA", ()
 
 test("FIX F2: a REQUESTER-side shell gets the requester framing (side comes from the record)", () => {
   const turn = io.withSeed(freshShell({ side: "requester", pendingHistory: THREAD() }), "keep going");
-  assert.match(turn, /^You are a Dopl agent DRIVING a task you created/);
+  assert.match(turn, /^You are a Dopl agent DRIVING a thread you opened/);
   assert.match(turn, /Deliver every message to the peer by posting into this channel/);
   assert.match(turn, /BEGIN-REQUEST-n0nce/);
 });
@@ -145,7 +145,7 @@ test("FIX F2: a RESUMED session is completely unchanged (the sdk session has its
   const resumed = freshShell({ resumeSdkId: "sdk-1", freshRun: false, freshFraming: false, pendingHistory: THREAD() });
   const turn = io.withSeed(resumed, "continue");
   assert.ok(!turn.includes("SECURITY RULES"), "no duplicate framing on a resumed sdk session");
-  assert.match(turn, /^Earlier messages from this task/, "just the D3 history seed");
+  assert.match(turn, /^Earlier messages from this thread/, "just the D3 history seed");
   assert.match(turn, new RegExp(`BEGIN-HISTORY-${NONCE}`));
   const live = freshShell({ sdkSessionId: "sdk-live", freshRun: false, freshFraming: false });
   assert.equal(io.withSeed(live, "go"), "go", "a live session's turn is untouched");
@@ -155,7 +155,7 @@ test("FIX F2: an absent marker behaves like the pre-fix history seed (mid-wave s
   const s = { nonce: NONCE, side: "responder", context: {}, pendingHistory: THREAD() };
   const turn = io.withSeed(s, "go");
   assert.ok(!turn.includes("SECURITY RULES"));
-  assert.match(turn, /^Earlier messages from this task/);
+  assert.match(turn, /^Earlier messages from this thread/);
 });
 
 // ── composes with the security pass's gate filtering ──────────────────────────────

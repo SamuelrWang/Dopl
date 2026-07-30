@@ -6,13 +6,13 @@ import type {
   ChannelMessage,
   ChannelMessageKind,
   ChannelRole,
-  ChannelTask,
+  ChannelThread,
   ChannelVisibility,
   MessageAuthorKind,
   NotifyScope,
-  TaskMode,
-  TaskOutcome,
-  TaskStatus,
+  ThreadMode,
+  ThreadOutcome,
+  ThreadStatus,
 } from "../types";
 
 /**
@@ -220,15 +220,15 @@ export function mapMemberRow(
 }
 
 /** Task row -> DTO. Pure — the task is the authoritative status/mode store. */
-export function mapTaskRow(row: ChannelTaskRow): ChannelTask {
+export function mapTaskRow(row: ChannelTaskRow): ChannelThread {
   return {
     id: row.id,
     channelId: row.channel_id,
     workspaceId: row.workspace_id,
     title: row.title,
-    status: row.status as TaskStatus,
-    outcome: (row.outcome as TaskOutcome | null) ?? null,
-    mode: row.mode as TaskMode,
+    status: row.status as ThreadStatus,
+    outcome: (row.outcome as ThreadOutcome | null) ?? null,
+    mode: row.mode as ThreadMode,
     createdBy: row.created_by,
     targetUserId: row.target_user_id,
     createdAt: row.created_at,

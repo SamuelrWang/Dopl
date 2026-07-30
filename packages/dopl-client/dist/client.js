@@ -340,20 +340,20 @@ class DoplClient {
     awaitChannelMessages(channelId, opts) {
         return channel.awaitMessages(this.transport, channelId, opts);
     }
-    listChannelTasks(channelId) {
-        return channel.listChannelTasks(this.transport, channelId);
+    listChannelThreads(channelId) {
+        return channel.listChannelThreads(this.transport, channelId);
     }
-    getChannelTask(channelId, taskId) {
-        return channel.getChannelTask(this.transport, channelId, taskId);
+    getChannelThread(channelId, threadId) {
+        return channel.getChannelThread(this.transport, channelId, threadId);
     }
-    createChannelTask(channelId, input) {
-        return channel.createChannelTask(this.transport, channelId, input);
+    createChannelThread(channelId, input) {
+        return channel.createChannelThread(this.transport, channelId, input);
     }
-    closeChannelTask(channelId, taskId, input) {
-        return channel.closeChannelTask(this.transport, channelId, taskId, input);
+    closeChannelThread(channelId, threadId, input) {
+        return channel.closeChannelThread(this.transport, channelId, threadId, input);
     }
-    setChannelTaskMode(channelId, taskId, input) {
-        return channel.setChannelTaskMode(this.transport, channelId, taskId, input);
+    setChannelThreadMode(channelId, threadId, input) {
+        return channel.setChannelThreadMode(this.transport, channelId, threadId, input);
     }
     // ─── Skills ─────────────────────────────────────────────────────────
     // Read paths are unrestricted; write paths are gated server-side by

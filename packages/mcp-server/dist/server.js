@@ -272,9 +272,9 @@ function createServer(client, options = {}) {
             "open",
             "invite",
             "post",
-            "create_task",
-            "close_task",
-            "set_task_mode",
+            "create_thread",
+            "close_thread",
+            "set_thread_mode",
         ]),
     };
     // Session default workspace — resolved once at boot (factory.ts), never

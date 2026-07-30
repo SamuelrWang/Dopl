@@ -418,10 +418,10 @@ test("D5: the Interrupt checkbox is gone and the renderer sends no priority", ()
   assert.match(JS, /bridge\.interrupt\(\)/, "the pause click uses the existing interrupt IPC");
 });
 
-test("D5: the header Stop / End session / Close task buttons are unchanged", () => {
+test("D5: the header Stop / End session / Close thread buttons are unchanged", () => {
   assert.match(HTML, /id="btnStop"[^>]*>Stop</);
   assert.match(HTML, /id="btnEnd"[^>]*>End session</);
-  assert.match(HTML, /id="btnClose"[^>]*>Close task</);
+  assert.match(HTML, /id="btnClose"[^>]*>Close thread</);
 });
 
 test("D6: the steer placeholder is deleted with no replacement text", () => {

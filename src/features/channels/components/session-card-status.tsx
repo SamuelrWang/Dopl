@@ -2,13 +2,13 @@
 
 import { cn } from "@/shared/lib/utils";
 import { isCalmTerminalStatus, type SessionStatus } from "../lib/group-thread";
-import type { TaskMode } from "../types";
+import type { ThreadMode } from "../types";
 
 /** The footer chip's label per session status. */
 export const STATUS_LABEL: Record<SessionStatus, string> = {
-  active: "Task active",
-  done: "Task complete",
-  failed: "Task failed",
+  active: "Thread active",
+  done: "Thread complete",
+  failed: "Thread failed",
   declined: "Declined",
   dropped: "Reply not sent",
   interrupted: "Interrupted",
@@ -21,12 +21,12 @@ export const CALM_TERMINAL_NOTE: Partial<Record<SessionStatus, string>> = {
   declined: "This request was declined.",
   dropped: "The reply was not sent.",
   interrupted: "The session was interrupted.",
-  capped: "The session hit its turn limit. Reopen the window to continue.",
-  ended: "The session was ended on the desktop. The task stays open.",
+  capped: "The session hit its turn limit. Open the session to continue.",
+  ended: "The session was ended on the desktop. The thread stays open.",
 };
 
-/** The task's execution mode, shown as a quiet pill on a first-class task. */
-export function ModeBadge({ mode }: { mode: TaskMode }) {
+/** The thread's mode, shown as a quiet pill on a first-class thread. */
+export function ModeBadge({ mode }: { mode: ThreadMode }) {
   return (
     <span className="shrink-0 rounded-full border border-border-strong bg-bg-inset px-1.5 py-px text-micro font-medium uppercase tracking-wide text-text-secondary">
       {mode === "interactive" ? "Interactive" : "Autonomous"}
@@ -35,9 +35,9 @@ export function ModeBadge({ mode }: { mode: TaskMode }) {
 }
 
 /**
- * The task status chip. `Task active` carries a pulsing success ring (the live
- * affordance); `Task complete` a solid success dot; `Task failed` a danger dot +
- * danger ink. The calm terminal states (`Declined` / `Reply not sent` /
+ * The thread status chip. `Thread active` carries a pulsing success ring (the
+ * live affordance); `Thread complete` a solid success dot; `Thread failed` a
+ * danger dot + danger ink. The calm terminal states (`Declined` / `Reply not sent` /
  * `Interrupted` / `Limit reached` / `Session ended`) are operator-chosen or
  * benign endings — deliberately calm (muted ink + a neutral dot), NOT the
  * alarm-red of a real failure, since each is a normal outcome, not an error.

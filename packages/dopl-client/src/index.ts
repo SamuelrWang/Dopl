@@ -108,13 +108,13 @@ export type {
   ChannelMessage,
   ChannelMessageInput,
   ChannelMessageKind,
-  ChannelTask,
-  ChannelTaskCreateInput,
+  ChannelThread,
+  ChannelThreadCreateInput,
   ChannelVisibility,
   ReadMessagesOptions,
-  TaskMode,
-  TaskOutcome,
-  TaskStatus,
+  ThreadMode,
+  ThreadOutcome,
+  ThreadStatus,
 } from "./channel-types.js";
 export type {
   OntologyAttribute,

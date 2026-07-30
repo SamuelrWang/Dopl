@@ -6,11 +6,11 @@ import type {
   ChannelConsentRequest,
   ChannelMember,
   ChannelMessage,
-  ChannelTask,
+  ChannelThread,
   ChannelVisibility,
   NotifyScope,
-  TaskMode,
-  TaskOutcome,
+  ThreadMode,
+  ThreadOutcome,
 } from "../types";
 
 /** Domain error wrapper so components can branch on `code`. */
@@ -178,73 +178,79 @@ export async function updateMyToolProfile(
   return data.member;
 }
 
-// ─── Tasks ──────────────────────────────────────────────────────────
+// ─── Threads ────────────────────────────────────────────────────────
+//
+// THE CLIENT BOUNDARY: wire/storage name `task` == domain name `thread`. The
+// route segment (`/tasks`) and the response envelope keys (`tasks` / `task`)
+// are STORAGE names and stay put — renaming them means a migration plus every
+// read and write path. Every function below hands the rest of the web a
+// `thread`.
 
-/** Every task in a channel (feeds the thread's status overlay). */
-export async function listChannelTasks(
+/** Every thread in a channel (feeds the transcript's status overlay). */
+export async function listChannelThreads(
   channelId: string,
   workspaceId: string
-): Promise<ChannelTask[]> {
-  const data = await request<{ tasks: ChannelTask[] }>(
+): Promise<ChannelThread[]> {
+  const data = await request<{ tasks: ChannelThread[] }>(
     channelPath(channelId, "/tasks"),
     { workspaceId }
   );
   return data.tasks ?? [];
 }
 
-/** Create a task addressed to a channel member. */
-export async function createChannelTask(
+/** Open a thread addressed to a channel member. */
+export async function createChannelThread(
   channelId: string,
-  body: { title: string; mode?: TaskMode; body: string; toUserId: string },
+  body: { title: string; mode?: ThreadMode; body: string; toUserId: string },
   workspaceId: string
-): Promise<ChannelTask> {
-  const data = await request<{ task: ChannelTask }>(
+): Promise<ChannelThread> {
+  const data = await request<{ task: ChannelThread }>(
     channelPath(channelId, "/tasks"),
     { method: "POST", body, workspaceId }
   );
   return data.task;
 }
 
-/** Close a task (creator or target) with an outcome + optional close summary. */
-export async function closeChannelTask(
+/** Close a thread (creator or target) with an outcome + optional close summary. */
+export async function closeChannelThread(
   channelId: string,
-  taskId: string,
-  body: { outcome: TaskOutcome; summary?: string },
+  threadId: string,
+  body: { outcome: ThreadOutcome; summary?: string },
   workspaceId: string
-): Promise<ChannelTask> {
-  const data = await request<{ task: ChannelTask }>(
-    channelPath(channelId, `/tasks/${encodeURIComponent(taskId)}`),
+): Promise<ChannelThread> {
+  const data = await request<{ task: ChannelThread }>(
+    channelPath(channelId, `/tasks/${encodeURIComponent(threadId)}`),
     { method: "PATCH", body: { op: "close", ...body }, workspaceId }
   );
   return data.task;
 }
 
 /**
- * Reopen a closed task (creator or target). Web-only — there is no MCP
+ * Reopen a closed thread (creator or target). Web-only — there is no MCP
  * counterpart (agents never reopen); the server clears the closed state and
  * posts no lifecycle echo, so the card flips back to active on the next refetch.
  */
-export async function reopenChannelTask(
+export async function reopenChannelThread(
   channelId: string,
-  taskId: string,
+  threadId: string,
   workspaceId: string
-): Promise<ChannelTask> {
-  const data = await request<{ task: ChannelTask }>(
-    channelPath(channelId, `/tasks/${encodeURIComponent(taskId)}`),
+): Promise<ChannelThread> {
+  const data = await request<{ task: ChannelThread }>(
+    channelPath(channelId, `/tasks/${encodeURIComponent(threadId)}`),
     { method: "PATCH", body: { op: "reopen" }, workspaceId }
   );
   return data.task;
 }
 
-/** Set a task's mode (creator only). */
-export async function setChannelTaskMode(
+/** Set a thread's mode (creator only). */
+export async function setChannelThreadMode(
   channelId: string,
-  taskId: string,
-  body: { mode: TaskMode },
+  threadId: string,
+  body: { mode: ThreadMode },
   workspaceId: string
-): Promise<ChannelTask> {
-  const data = await request<{ task: ChannelTask }>(
-    channelPath(channelId, `/tasks/${encodeURIComponent(taskId)}`),
+): Promise<ChannelThread> {
+  const data = await request<{ task: ChannelThread }>(
+    channelPath(channelId, `/tasks/${encodeURIComponent(threadId)}`),
     { method: "PATCH", body: { op: "set_mode", ...body }, workspaceId }
   );
   return data.task;

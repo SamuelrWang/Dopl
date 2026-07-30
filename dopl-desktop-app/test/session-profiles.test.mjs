@@ -259,7 +259,7 @@ test("FIX F2: the BARE tool name in allowForTask allows NOTHING on the channel t
   }
 });
 
-test("D2: an 'Allow for this task' taken on a POST authorizes posts only, never op=open", () => {
+test("D2: an 'Allow for this session' taken on a POST authorizes posts only, never op=open", () => {
   const granted = [ownPostKey(post("c1"))];
   assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: "c1", input: post("c1"), allowForTask: granted }), "allow");
   assert.equal(grantDecision({ profile: "full", toolName: DOPL_CHANNEL_TOOL, channelId: "c1", input: { op: "post" }, allowForTask: granted }), "allow");

@@ -1,17 +1,21 @@
 /**
  * `dopl_channel` WRITE op handlers: open (create a channel or direct message),
- * invite (add a workspace member), post (send a message or task-activity
- * event), and the first-class task ops (create_task / close_task /
- * set_task_mode). Maps @dopl/client 4xx collisions to actionable messages.
+ * invite (add a workspace member), post (send a message or activity event),
+ * and the first-class thread ops (create_thread / close_thread /
+ * set_thread_mode). Maps @dopl/client 4xx collisions to actionable messages.
  * Routed from the registrar in channel.ts.
+ *
+ * BOUNDARY: the wire/storage name `task` == the domain name `thread`. The
+ * `thread` op param folds into `metadata.taskId` and the `task_*` message
+ * kinds keep their stored names; only the agent-facing surface says `thread`.
  */
 
 import type {
   ChannelMessageInput,
   ChannelVisibility,
   DoplClient,
-  TaskMode,
-  TaskOutcome,
+  ThreadMode,
+  ThreadOutcome,
 } from "@dopl/client";
 import { ok, err, isAlreadyExists, isNotFound, type ToolResponse } from "./respond";
 import { isErr, resolveChannelOr, resolveMemberOr } from "./channel-shared";
@@ -23,7 +27,7 @@ function isBadRequest(e: unknown): boolean {
   );
 }
 
-/** Duck-typed HTTP 403 from the Dopl API (task authorization refusals). */
+/** Duck-typed HTTP 403 from the Dopl API (thread authorization refusals). */
 function isForbidden(e: unknown): boolean {
   return (
     typeof e === "object" && e !== null && (e as { status?: number }).status === 403
@@ -39,8 +43,8 @@ interface PostOptions {
   to?: string;
   /** One-line intent for the receiver's notification. */
   summary?: string;
-  /** A task id — threads this post under that task's card (server-validated). */
-  task?: string;
+  /** A thread id — threads this post under that thread's card (server-validated). */
+  thread?: string;
 }
 
 /** Options for opOpen — a normal channel, or a `direct` message with `member`. */
@@ -146,11 +150,12 @@ export async function opPost(
     toLabel = member.label;
   }
 
-  // Thread the post under a task when `task` is passed: fold the id into
-  // `metadata.taskId` (the explicit param wins over any metadata copy). The
-  // route then server-validates it resolves to a task in this channel.
-  const metadata = opts.task
-    ? { ...(opts.metadata ?? {}), taskId: opts.task }
+  // Thread the post under a thread when `thread` is passed: fold the id into
+  // the STORAGE key `metadata.taskId` (the explicit param wins over any
+  // metadata copy). The route then server-validates it resolves to a thread
+  // in this channel.
+  const metadata = opts.thread
+    ? { ...(opts.metadata ?? {}), taskId: opts.thread }
     : opts.metadata;
 
   let message;
@@ -166,7 +171,7 @@ export async function opPost(
   } catch (e) {
     // Map the route's 400s to actionable messages. Two independent causes:
     // a non-member addressee (only when `to` is set) and an unresolvable
-    // first-class `task` id (CHANNEL_TASK_NOT_IN_CHANNEL) — the latter fires
+    // first-class `thread` id (CHANNEL_TASK_NOT_IN_CHANNEL) — the latter fires
     // even with NO `to`, so catch isBadRequest regardless of `to` instead of
     // rethrowing the raw 400 uncaught (the bug this closes).
     if (isBadRequest(e)) {
@@ -175,9 +180,9 @@ export async function opPost(
           `Couldn't address the message to ${toLabel} — they aren't a member of **${ch.name}**. Invite them first (op="invite"), or post without \`to\`.`,
         );
       }
-      if (opts.task) {
+      if (opts.thread) {
         return err(
-          `That task is not in this channel — check the task id, or post without \`task\`.`,
+          `That thread is not in this channel — check the thread id, or post without \`thread\`.`,
         );
       }
     }
@@ -191,15 +196,15 @@ export async function opPost(
   );
 }
 
-// ─── Tasks ──────────────────────────────────────────────────────────
+// ─── Threads ────────────────────────────────────────────────────────
 
-export async function opCreateTask(
+export async function opCreateThread(
   client: DoplClient,
   channelRef: string,
   title: string,
   body: string,
   to: string,
-  mode?: TaskMode,
+  mode?: ThreadMode,
   clientMsgId?: string,
 ): Promise<ToolResponse> {
   const ch = await resolveChannelOr(client, channelRef);
@@ -207,9 +212,9 @@ export async function opCreateTask(
   const member = await resolveMemberOr(client, to);
   if (isErr(member)) return member;
 
-  let task;
+  let thread;
   try {
-    task = await client.createChannelTask(ch.id, {
+    thread = await client.createChannelThread(ch.id, {
       title,
       body,
       toUserId: member.userId,
@@ -220,66 +225,68 @@ export async function opCreateTask(
     // The route rejects an addressee who isn't a channel member (400).
     if (isBadRequest(e)) {
       return err(
-        `Couldn't address the task to ${member.label} — they aren't a member of **${ch.name}**. Invite them first (op="invite"), then create the task.`,
+        `Couldn't address the thread to ${member.label} — they aren't a member of **${ch.name}**. Invite them first (op="invite"), then open the thread.`,
       );
     }
     throw e;
   }
   return ok(
-    `Created task **${task.title}** in **${ch.name}** (task \`${task.id}\`, ${task.mode} mode), addressed to ${member.label}. Watch for replies with dopl_channel(op="await", channel="${ch.id}", since=<last seq>).`,
+    `Opened thread **${thread.title}** in **${ch.name}** (thread \`${thread.id}\`, ${thread.mode} mode), addressed to ${member.label}. Watch for replies with dopl_channel(op="await", channel="${ch.id}", since=<last seq>).`,
   );
 }
 
-export async function opCloseTask(
+export async function opCloseThread(
   client: DoplClient,
   channelRef: string,
-  taskId: string,
-  outcome: TaskOutcome,
+  threadId: string,
+  outcome: ThreadOutcome,
   summary?: string,
 ): Promise<ToolResponse> {
   const ch = await resolveChannelOr(client, channelRef);
   if (isErr(ch)) return ch;
-  let task;
+  let thread;
   try {
-    task = await client.closeChannelTask(ch.id, taskId, { outcome, summary });
+    thread = await client.closeChannelThread(ch.id, threadId, { outcome, summary });
   } catch (e) {
     if (isNotFound(e)) {
-      return err(`No task \`${taskId}\` in **${ch.name}**.`);
+      return err(`No thread \`${threadId}\` in **${ch.name}**.`);
     }
     if (isForbidden(e)) {
       return err(
-        `You can't close task \`${taskId}\` — only its creator or the member it's addressed to may close it.`,
+        `You can't close thread \`${threadId}\` — only its creator or the member it's addressed to may close it.`,
       );
     }
     throw e;
   }
   const summaryNote = summary?.trim() ? ` — ${summary.trim()}` : "";
   return ok(
-    `Closed task **${task.title}** in **${ch.name}** as ${task.outcome}${summaryNote}.`,
+    `Closed thread **${thread.title}** in **${ch.name}** as ${thread.outcome}${summaryNote}.`,
   );
 }
 
-export async function opSetTaskMode(
+export async function opSetThreadMode(
   client: DoplClient,
   channelRef: string,
-  taskId: string,
-  mode: TaskMode,
+  threadId: string,
+  mode: ThreadMode,
 ): Promise<ToolResponse> {
   const ch = await resolveChannelOr(client, channelRef);
   if (isErr(ch)) return ch;
-  let task;
+  let thread;
   try {
-    task = await client.setChannelTaskMode(ch.id, taskId, { mode });
+    thread = await client.setChannelThreadMode(ch.id, threadId, { mode });
   } catch (e) {
     if (isNotFound(e)) {
-      return err(`No task \`${taskId}\` in **${ch.name}**.`);
+      return err(`No thread \`${threadId}\` in **${ch.name}**.`);
     }
     if (isForbidden(e)) {
       return err(
-        `You can't change the mode of task \`${taskId}\` — only its creator can.`,
+        `You can't change the mode of thread \`${threadId}\` — only its creator can.`,
       );
     }
     throw e;
   }
-  return ok(`Set task **${task.title}** in **${ch.name}** to ${task.mode} mode.`);
+  return ok(
+    `Set thread **${thread.title}** in **${ch.name}** to ${thread.mode} mode.`,
+  );
 }

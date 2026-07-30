@@ -1,11 +1,27 @@
 /**
  * Channels feature — camelCase domain types.
  *
- * A channel is a shared workspace thread where humans and their agents
- * post messages and structured activity events. Distinct from chats (a
- * private per-owner archive), a channel has an explicit membership set:
- * PUBLIC channels are visible to any workspace member, PRIVATE ones only
- * to their members.
+ * A CHANNEL (or DM) holds many THREADS.
+ * A THREAD is ONE exchange between two members about one thing. It may be a
+ * single message or a long piece of work. It is SHARED: both members see the
+ * same thread, its title, and its status.
+ * A SESSION is ONE member's agent run working a thread, on THAT member's
+ * machine. Each side has its own session. A session pauses and resumes; a
+ * thread does not. You never see the other member's session, only the
+ * messages it sends.
+ *
+ * Distinct from chats (a private per-owner archive), a channel has an
+ * explicit membership set: PUBLIC channels are visible to any workspace
+ * member, PRIVATE ones only to their members.
+ *
+ * BOUNDARY — wire/storage name `task` == domain name `thread`. The
+ * `channel_tasks` table and its columns, the `metadata.taskId` / `taskMode` /
+ * `taskCreatedBy` / `taskTitle` / `taskTarget` wire keys, the `task_*` message
+ * kinds, and the `/api/channels/[channelId]/tasks/**` route paths all keep the
+ * storage name deliberately (renaming them means a migration plus every read
+ * and write path). Everything a human or an agent reads says `thread`; the
+ * mapping happens at the client boundary (`client/api.ts`) and in the server
+ * DTO mappers (`server/dto.ts`).
  */
 
 /** Private = members only. Public = any workspace member can read/join. */
@@ -22,35 +38,36 @@ export type ChannelDirectPeer = {
   avatarUrl: string | null;
 };
 
-/** How a task is executed: interactive (multi-turn) or autonomous. */
-export type TaskMode = "interactive" | "autonomous";
+/** How a thread is worked: interactive (multi-turn) or autonomous. */
+export type ThreadMode = "interactive" | "autonomous";
 
-/** Task lifecycle status: open until an explicit close. */
-export type TaskStatus = "open" | "closed";
+/** Thread lifecycle status: open until an explicit close. */
+export type ThreadStatus = "open" | "closed";
 
-/** How a closed task ended. Null while the task is still open. */
-export type TaskOutcome = "completed" | "failed";
+/** How a closed thread ended. Null while the thread is still open. */
+export type ThreadOutcome = "completed" | "failed";
 
 /**
- * A first-class task inside a channel: a titled, mode-tagged, queryable unit
- * of work whose transcript rides on `channel_messages`
- * (`metadata.taskId = ChannelTask.id`). This table is the authoritative
- * status / mode / title store.
+ * A first-class thread inside a channel: one titled, mode-tagged, queryable
+ * exchange whose transcript rides on `channel_messages`
+ * (`metadata.taskId = ChannelThread.id` — the wire key keeps the storage
+ * name). The `channel_tasks` row is the authoritative status / mode / title
+ * store, and both members see the same one.
  */
-export type ChannelTask = {
+export type ChannelThread = {
   id: string;
   channelId: string;
   workspaceId: string;
   title: string;
-  status: TaskStatus;
-  outcome: TaskOutcome | null;
-  mode: TaskMode;
+  status: ThreadStatus;
+  outcome: ThreadOutcome | null;
+  mode: ThreadMode;
   createdBy: string;
   targetUserId: string | null;
   createdAt: string;
   updatedAt: string;
   closedAt: string | null;
-  /** A human-readable close summary carried on the task row; null while open
+  /** A human-readable close summary carried on the thread row; null while open
    *  or when closed without one. */
   outcomeSummary: string | null;
 };

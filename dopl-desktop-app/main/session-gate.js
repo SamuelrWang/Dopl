@@ -6,7 +6,7 @@
 // gate: the reply is enqueued on the session object, the window surfaces (a recreated
 // parked shell when no live session survives), an OS notification fires, and the turn
 // waits. The two opt-outs are explicit: AXIS B (the MESSAGE axis) set to auto_inbound /
-// auto_both, and the standing "Accept for this task" grant — either one feeds immediately,
+// auto_both, and the standing "Accept for this session" grant — either one feeds immediately,
 // byte-equivalent to the pre-gate path (the reducer's feedInboundEffects).
 //
 // Extracted from session-engine.js because that file sits AT the 500-line §2 cap. The
@@ -61,7 +61,7 @@ function inboundNotice(item) {
 }
 
 // PURE: may this session feed an inbound turn with NO prompt? v2.9 reads AXIS B (the MESSAGE
-// axis) — auto_inbound / auto_both — or the standing "Accept for this task" grant. The TOOL
+// axis) — auto_inbound / auto_both — or the standing "Accept for this session" grant. The TOOL
 // axis is deliberately not consulted: `bypass` grants Bash, never an incoming message.
 // Default state answers no on every count, so the gate holds until the operator opts in.
 // The reducer's inboundAutoAccepted answers the same question for the reducer path and MUST
@@ -164,7 +164,7 @@ function feedInbound(a) {
 // (session-park FIX #9), so the Accept this gate offers can only re-hit the cap: the reducer
 // ends the session on the first `result`, and the operator's click buys one dead turn. The
 // card wants to know the budget is spent — either it says so and offers no Accept, or the
-// reopen offers a budget top-up. Needs a product call on what "reopen a capped task" means.
+// reopen offers a budget top-up. Needs a product call on what "reopen a capped thread" means.
 //
 // FOLLOW-UP F13: the held queue lives ONLY on the in-memory session object, so a shell
 // recreate (or an app restart) loses every card the operator had not answered. They are not
@@ -231,12 +231,12 @@ function drainQueue(s) {
 }
 
 // Feed every reply still held, in arrival order, once an opt-in is armed — an
-// "Accept for this task" grant, or AXIS B moving to auto_inbound / auto_both while a
+// "Accept for this session" grant, or AXIS B moving to auto_inbound / auto_both while a
 // card was already waiting (D4: nothing is left stranded behind a control that says it flows).
 // Items LEAVE the queue as they are fed, so none can be double-consumed later.
 // Returns false when no opt-in is armed, so the caller can surface a card instead.
 //
-// FOLLOW-UP F6: one "Accept for this task" click can drain up to MAX_PENDING_INBOUND - 1
+// FOLLOW-UP F6: one "Accept for this session" click can drain up to MAX_PENDING_INBOUND - 1
 // messages the operator never read; the gate card wants to state the backlog depth first.
 function drainInbound(s) {
   if (!deps || !s || s.settled || !autoInbound(s)) return false;

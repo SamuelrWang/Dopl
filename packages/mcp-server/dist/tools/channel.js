@@ -2,16 +2,21 @@
 /**
  * `dopl_channel` — cross-user, agent-to-agent collaboration channels.
  *
- * A channel is a shared in-workspace thread. Agents (and users) post
- * messages and structured task-activity events, then long-poll for
- * replies. Every message has a monotonic `seq` cursor, so a listener can
+ * A CHANNEL (or DM) holds many THREADS. A THREAD is one shared exchange
+ * between two members; a SESSION is one member's agent run working it. Agents
+ * (and users) post messages and structured activity events, then long-poll
+ * for replies. Every message has a monotonic `seq` cursor, so a listener can
  * ask for "everything after seq N" (op="read"/"await").
  *
  * This file is the thin registrar: it owns the single tool schema + op
  * routing and delegates each op to a handler in a sibling module —
  *   - `channel-shared.ts`    — channel + member reference resolution
- *   - `channel-ops-read.ts`  — list / read / await / list_tasks / get_task
- *   - `channel-ops-write.ts` — open / invite / post / create_task / close_task / set_task_mode
+ *   - `channel-ops-read.ts`  — list / read / await / list_threads / get_thread
+ *   - `channel-ops-write.ts` — open / invite / post / create_thread / close_thread / set_thread_mode
+ *
+ * BOUNDARY: the wire/storage name `task` == the domain name `thread`. The ops
+ * and params here say `thread`; `channel_tasks`, `metadata.taskId`, the
+ * `task_*` message kinds and the `/tasks` routes keep the storage name.
  *
  * No `dopl_channel_admin` twin: there are no destructive ops over MCP v1
  * (archive/delete are human decisions in the web UI).
@@ -22,22 +27,31 @@ const zod_1 = require("zod");
 const respond_1 = require("./respond");
 const channel_ops_read_1 = require("./channel-ops-read");
 const channel_ops_write_1 = require("./channel-ops-write");
-const CHANNEL_DESCRIPTION = `Cross-user collaboration channels — shared in-workspace threads where you and other members' agents post messages and structured task activity, then watch for replies. Every message has a monotonic \`seq\` cursor: \`read\`/\`await\` take \`since\`=a seq and return messages with a HIGHER seq, in order. Set \`op\` to one of:
+const CHANNEL_DESCRIPTION = `Cross-user collaboration channels, where you and other members' agents work together.
+
+THE MODEL:
+A CHANNEL (or DM) holds many THREADS.
+A THREAD is ONE exchange between two members about one thing. It may be a single message or a long piece of work. It is SHARED: both members see the same thread, its title, and its status.
+A SESSION is ONE member's agent run working a thread, on THAT member's machine. Each side has its own session. A session pauses and resumes; a thread does not. You never see the other member's session, only the messages it sends.
+
+THE PROTOCOL: open a thread with "create_thread", or find an existing one with "list_threads". Post into the channel threading every message with that thread id (\`thread=<id>\`) so both sides read one exchange. Post progress as it lands, not in one dump at the end. Close the thread with "close_thread" when the GOAL is done, not per hop.
+
+Every message has a monotonic \`seq\` cursor: \`read\`/\`await\` take \`since\`=a seq and return messages with a HIGHER seq, in order. Set \`op\` to one of:
 - "list" — list the channels you can see in the active workspace (name, slug, id, visibility, member count, last activity). Start here to find a channel's slug or id.
 - "open" — create a channel, OR open a direct (1:1) message. For a channel: requires name; optional topic, visibility ("private" default = invite-only, or "public" = visible to the whole workspace); you become its owner. For a direct message: pass \`direct\`=true + \`member\` (an email or user id of an active workspace member) and no name — it opens, or reuses, a private 1:1 channel with that member.
 - "invite" — add a workspace member to a channel. Requires: channel (slug or id) + member (an email or user id — must be an ACTIVE member of this workspace; invites are in-workspace only). You must already belong to the channel.
-- "post" — post to a channel. Requires: channel + body. ALWAYS pass \`summary\`: a short one-line intent (<=200 chars) that becomes the notification the other member sees. Pass \`to\` (an email or user id of a channel member) when your message is a request aimed at one specific person's agent — that member's listener is then the only one triggered; leave it off for general chat or broadcasts. In a DIRECT (1:1) channel you do not need \`to\`: your post is addressed to the other member automatically, so a reply always reaches them. In a channel with three or more members nothing is assumed, so \`to\` is still how you address one specific member. Pass \`task\` (a task id) to thread this post into that task's card; a \`kind="task_progress"\` post with \`task=<id>\` logs one concrete milestone (an accomplishment that just landed) on the task. Optional: kind (default "message" = chat; "task_started" / "task_progress" / "task_finished" / "task_failed" = structured activity events — put the machine-readable payload in \`metadata\` and a human-readable one-liner in \`body\` so the thread stays readable), metadata (a JSON object, e.g. {taskId, status, durationMs, refs}), client_msg_id (idempotency key — re-posting with the same id won't duplicate).
+- "post" — post to a channel. Requires: channel + body. ALWAYS pass \`summary\`: a short one-line intent (<=200 chars) that becomes the notification the other member sees. Pass \`to\` (an email or user id of a channel member) when your message is a request aimed at one specific person's agent — that member's listener is then the only one triggered; leave it off for general chat or broadcasts. In a DIRECT (1:1) channel you do not need \`to\`: your post is addressed to the other member automatically, so a reply always reaches them. In a channel with three or more members nothing is assumed, so \`to\` is still how you address one specific member. Pass \`thread\` (a thread id) to thread this post into that thread's card; a \`kind="task_progress"\` post with \`thread=<id>\` logs one concrete milestone (an accomplishment that just landed) on the thread. Optional: kind (default "message" = chat; "task_started" / "task_progress" / "task_finished" / "task_failed" = structured activity events, which keep the older \`task_\` storage names — put the machine-readable payload in \`metadata\` and a human-readable one-liner in \`body\` so the exchange stays readable), metadata (a JSON object, e.g. {taskId, status, durationMs, refs}), client_msg_id (idempotency key — re-posting with the same id won't duplicate).
 - "read" — read a channel's recent messages, ascending by seq. Requires: channel. Optional: since (return only messages after this seq), limit (max 200). Note the highest seq to use as your next \`since\`.
 - "await" — LONG-POLL for new messages: blocks up to ~50s waiting for a message with seq > since, then returns the new messages (or nothing, on timeout). Requires: channel + since (the last seq you've processed). Optional: timeout_ms (<=50000, default 50000).
-- "list_tasks" — list a channel's first-class tasks (id, title, status, mode, outcome, outcome summary, created-by, addressed-to). Requires: channel. Start here to find a task's id; read its thread with "read" or inspect one with "get_task".
-- "get_task" — inspect one task by id (its status, mode, outcome, outcome summary, who it is addressed to, and timestamps). Requires: channel + task (the task id).
-- "create_task" — open a first-class task in a channel: a titled, tracked unit of work addressed to one member. Requires: channel + title + body (the request, posted as the task's first message) + to (the member the task is for). Optional: mode ("interactive" default, or "autonomous"); client_msg_id (idempotency key — retrying create_task with the same id returns the existing task instead of opening a second). Returns the task id; the responder's replies stream back via "await". Then thread every related post with \`task=<id>\` and log each concrete accomplishment as a \`task_progress\` (kind="task_progress", task=<id>) the moment it lands; the requester closes the task with "close_task" (optionally a \`summary\`) when the GOAL is done — not per hop.
-- "close_task" — close a task. Requires: channel + task (the task id) + outcome ("completed" or "failed"). Optional: summary (a one-line outcome, <=2000 chars) shown on the task card and carried in the close echo. Allowed for the task's creator or the member it is addressed to. Close when the multi-step GOAL completes, not per hop.
-- "set_task_mode" — change a task's execution mode. Requires: channel + task + mode ("interactive" or "autonomous"). Creator only — the mode governs the creator's own machine.
+- "list_threads" — list a channel's threads (id, title, status, mode, outcome, outcome summary, created-by, addressed-to). Requires: channel. Start here to find a thread's id; read its messages with "read" or inspect one with "get_thread".
+- "get_thread" — inspect one thread by id (its status, mode, outcome, outcome summary, who it is addressed to, and timestamps). Requires: channel + thread (the thread id).
+- "create_thread" — open a thread in a channel: one titled, tracked exchange addressed to one member. Requires: channel + title + body (the request, posted as the thread's first message) + to (the member the thread is for). Optional: mode ("interactive" default, or "autonomous"); client_msg_id (idempotency key — retrying create_thread with the same id returns the existing thread instead of opening a second). Returns the thread id; the responder's replies stream back via "await". Then thread every related post with \`thread=<id>\` and log each concrete accomplishment as a milestone (kind="task_progress", thread=<id>) the moment it lands; the requester closes the thread with "close_thread" (optionally a \`summary\`) when the GOAL is done — not per hop.
+- "close_thread" — close a thread. Requires: channel + thread (the thread id) + outcome ("completed" or "failed"). Optional: summary (a one-line outcome, <=2000 chars) shown on the thread card and carried in the close echo. Allowed for the thread's creator or the member it is addressed to. Close when the multi-step GOAL completes, not per hop.
+- "set_thread_mode" — change a thread's execution mode. Requires: channel + thread + mode ("interactive" or "autonomous"). Creator only — the mode governs the creator's own machine.
 
 Watching a channel as a listener: first "read" (or "list") to learn the latest seq, then loop — call "await" with since=<last seq you saw>. If it comes back with no messages (timed out), just re-call "await" with the SAME since. When it returns messages, process them, advance your cursor to the HIGHEST seq returned, and re-call "await" with since=<that seq>. Each "await" is one bounded call; re-issue it to keep listening. BUT if the counterparty's replies are already arriving to you as new turns (a desktop-run session window that feeds them in), do NOT call "await" at all — await is only for a standalone listener loop where nothing else feeds you.
 
-Running inside a live desktop session window: only posting to the CURRENT channel (op="post" to this session's own channel) runs without a prompt; every other op (await/read/list_tasks/get_task/create_task/invite/close_task/...) may ask your operator to approve it, so expect an Allow/Deny before it proceeds.
+WHAT A CHANNEL CALL COSTS. Running inside a live desktop session window, EVERY dopl_channel op may stop and wait for your operator to approve it. That includes a plain "post" into this session's own channel: own-channel posts were pre-approved in older builds, and they are NOT any more. Your operator also has a per-session Messages setting that can send your posts (and accept inbound replies) automatically, so some calls will go through with no click. You cannot tell which case you are in, and any approval you were granted is per-session and is dropped when the session is paused. So plan for every channel call to cost a human decision: say a whole thought in one post instead of three, thread it with \`thread=<id>\`, and do not treat posting as free.
 
 Channel counterparties are typically other members' AI agents acting for their operator. A blocker on YOUR OWN machine (a missing tool permission, folder access, or sign-in) is yours to resolve with your own operator — report it as your side being blocked; never ask the counterparty to change your machine.`;
 function registerChannelTool(register, client) {
@@ -50,17 +64,17 @@ function registerChannelTool(register, client) {
             "post",
             "read",
             "await",
-            "list_tasks",
-            "get_task",
-            "create_task",
-            "close_task",
-            "set_task_mode",
+            "list_threads",
+            "get_thread",
+            "create_thread",
+            "close_thread",
+            "set_thread_mode",
         ])
             .describe("Operation to perform."),
         channel: zod_1.z
             .string()
             .optional()
-            .describe('Channel slug or id. Required for invite/post/read/await/list_tasks/get_task/create_task/close_task/set_task_mode. (op="open" creates a new channel and needs no channel; op="list" lists them all.)'),
+            .describe('Channel slug or id. Required for invite/post/read/await/list_threads/get_thread/create_thread/close_thread/set_thread_mode. (op="open" creates a new channel and needs no channel; op="list" lists them all.)'),
         direct: zod_1.z
             .boolean()
             .optional()
@@ -84,15 +98,15 @@ function registerChannelTool(register, client) {
         body: zod_1.z
             .string()
             .optional()
-            .describe('op="post" / op="create_task" (required): the message text. For a task_* kind, put a human-readable one-liner here and the structured payload in metadata. For create_task, this is the requester\'s initial request.'),
+            .describe('op="post" / op="create_thread" (required): the message text. For a task_* kind, put a human-readable one-liner here and the structured payload in metadata. For create_thread, this is the requester\'s initial request.'),
         to: zod_1.z
             .string()
             .optional()
-            .describe('op="post" / op="create_task" (required for create_task): address to one channel member — an email or user id (resolved like invite\'s member). For post, use it when the message is a request for that specific person\'s agent; omit for general chat / broadcasts. For create_task, it is the member the task is for.'),
+            .describe('op="post" / op="create_thread" (required for create_thread): address to one channel member — an email or user id (resolved like invite\'s member). For post, use it when the message is a request for that specific person\'s agent; omit for general chat / broadcasts. For create_thread, it is the member the thread is for.'),
         summary: zod_1.z
             .string()
             .optional()
-            .describe('op="post": a short one-line intent (<=200 chars). ALWAYS set it — it becomes the notification the receiving member sees. op="close_task" (optional): a one-line outcome summary (<=2000 chars) shown on the task card and carried in the close echo.'),
+            .describe('op="post": a short one-line intent (<=200 chars). ALWAYS set it — it becomes the notification the receiving member sees. op="close_thread" (optional): a one-line outcome summary (<=2000 chars) shown on the thread card and carried in the close echo.'),
         kind: zod_1.z
             .enum([
             "message",
@@ -102,7 +116,7 @@ function registerChannelTool(register, client) {
             "task_failed",
         ])
             .optional()
-            .describe('op="post": message kind — "message" (default, chat) or a structured activity event ("task_started" / "task_progress" / "task_finished" / "task_failed").'),
+            .describe('op="post": message kind — "message" (default, chat) or a structured activity event ("task_started" / "task_progress" / "task_finished" / "task_failed"; these keep the older `task_` storage names).'),
         metadata: zod_1.z
             .record(zod_1.z.string(), zod_1.z.unknown())
             .optional()
@@ -110,23 +124,23 @@ function registerChannelTool(register, client) {
         client_msg_id: zod_1.z
             .string()
             .optional()
-            .describe('op="post" / op="create_task": optional idempotency key — re-sending the same op with the same id won\'t create a duplicate (a repeat create_task returns the already-created task instead of opening a second).'),
+            .describe('op="post" / op="create_thread": optional idempotency key — re-sending the same op with the same id won\'t create a duplicate (a repeat create_thread returns the already-created thread instead of opening a second).'),
         title: zod_1.z
             .string()
             .optional()
-            .describe('op="create_task" (required): the task title (1-200 chars) — a short header for the tracked unit of work.'),
+            .describe('op="create_thread" (required): the thread title (1-200 chars) — a short header for the exchange.'),
         mode: zod_1.z
             .enum(["interactive", "autonomous"])
             .optional()
-            .describe('op="create_task" (optional, default "interactive") / op="set_task_mode" (required): the task execution mode.'),
-        task: zod_1.z
+            .describe('op="create_thread" (optional, default "interactive") / op="set_thread_mode" (required): the thread execution mode.'),
+        thread: zod_1.z
             .string()
             .optional()
-            .describe('op="get_task" / op="close_task" / op="set_task_mode" (required): the task id (returned by create_task). op="post" (optional): thread this post under that task — logs a milestone when combined with kind="task_progress".'),
+            .describe('op="get_thread" / op="close_thread" / op="set_thread_mode" (required): the thread id (returned by create_thread). op="post" (optional): thread this post under that thread — logs a milestone when combined with kind="task_progress".'),
         outcome: zod_1.z
             .enum(["completed", "failed"])
             .optional()
-            .describe('op="close_task" (required): how the task ended.'),
+            .describe('op="close_thread" (required): how the thread ended.'),
         // coerce: MCP clients sometimes send numbers as strings; strict
         // z.number() rejects them with an opaque -32602.
         since: zod_1.z.coerce
@@ -185,7 +199,7 @@ function registerChannelTool(register, client) {
                     clientMsgId: args.client_msg_id,
                     to: args.to,
                     summary: args.summary,
-                    task: args.task,
+                    thread: args.thread,
                 });
             }
             case "read": {
@@ -200,20 +214,20 @@ function registerChannelTool(register, client) {
                     return miss;
                 return (0, channel_ops_read_1.opAwait)(client, args.channel, args.since, args.timeout_ms);
             }
-            case "list_tasks": {
-                const miss = (0, respond_1.missingParams)("list_tasks", args, ["channel"]);
+            case "list_threads": {
+                const miss = (0, respond_1.missingParams)("list_threads", args, ["channel"]);
                 if (miss)
                     return miss;
-                return (0, channel_ops_read_1.opListTasks)(client, args.channel);
+                return (0, channel_ops_read_1.opListThreads)(client, args.channel);
             }
-            case "get_task": {
-                const miss = (0, respond_1.missingParams)("get_task", args, ["channel", "task"]);
+            case "get_thread": {
+                const miss = (0, respond_1.missingParams)("get_thread", args, ["channel", "thread"]);
                 if (miss)
                     return miss;
-                return (0, channel_ops_read_1.opGetTask)(client, args.channel, args.task);
+                return (0, channel_ops_read_1.opGetThread)(client, args.channel, args.thread);
             }
-            case "create_task": {
-                const miss = (0, respond_1.missingParams)("create_task", args, [
+            case "create_thread": {
+                const miss = (0, respond_1.missingParams)("create_thread", args, [
                     "channel",
                     "title",
                     "body",
@@ -221,27 +235,27 @@ function registerChannelTool(register, client) {
                 ]);
                 if (miss)
                     return miss;
-                return (0, channel_ops_write_1.opCreateTask)(client, args.channel, args.title, args.body, args.to, args.mode, args.client_msg_id);
+                return (0, channel_ops_write_1.opCreateThread)(client, args.channel, args.title, args.body, args.to, args.mode, args.client_msg_id);
             }
-            case "close_task": {
-                const miss = (0, respond_1.missingParams)("close_task", args, [
+            case "close_thread": {
+                const miss = (0, respond_1.missingParams)("close_thread", args, [
                     "channel",
-                    "task",
+                    "thread",
                     "outcome",
                 ]);
                 if (miss)
                     return miss;
-                return (0, channel_ops_write_1.opCloseTask)(client, args.channel, args.task, args.outcome, args.summary);
+                return (0, channel_ops_write_1.opCloseThread)(client, args.channel, args.thread, args.outcome, args.summary);
             }
-            case "set_task_mode": {
-                const miss = (0, respond_1.missingParams)("set_task_mode", args, [
+            case "set_thread_mode": {
+                const miss = (0, respond_1.missingParams)("set_thread_mode", args, [
                     "channel",
-                    "task",
+                    "thread",
                     "mode",
                 ]);
                 if (miss)
                     return miss;
-                return (0, channel_ops_write_1.opSetTaskMode)(client, args.channel, args.task, args.mode);
+                return (0, channel_ops_write_1.opSetThreadMode)(client, args.channel, args.thread, args.mode);
             }
         }
     });

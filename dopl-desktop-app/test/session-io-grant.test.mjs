@@ -148,7 +148,7 @@ test("D2: the allow-for-task grant recorded for a post is the SCOPED post key", 
   const rec = recorder();
   io.makeCanUseTool(s, rec.dispatch)(CHANNEL_TOOL, POST, { requestId: "r11" });
   const grantName = rec.events[0].name; // what the reducer puts in allowForTask
-  // FIX F7: the key carries a digest of the EXACT body the operator read, so "for this task"
+  // FIX F7: the key carries a digest of the EXACT body the operator read, so "for this session"
   // means the same for a post as for Bash: THIS shape, again.
   assert.ok(grantName.startsWith(CHANNEL_TOOL + "#post#body:"), "not the bare tool name");
   assert.equal(s.pendingNames.get("r11"), grantName, "session-ipc reads the same key back");
@@ -185,7 +185,7 @@ test("FIX F2: a grant taken on op=read does NOT let a later post or DM open thro
   const readGrant = rec.events[0].name;
   assert.equal(readGrant, CHANNEL_TOOL + "#op:read");
   s.pendingPermissions.get("r20")({ behavior: "allow" });
-  // The operator picked "Allow for this task" on that READ — the reducer stores this key.
+  // The operator picked "Allow for this session" on that READ — the reducer stores this key.
   s.state.allowForTask = [readGrant];
   const rec2 = recorder();
   const canUse2 = io.makeCanUseTool(s, rec2.dispatch);

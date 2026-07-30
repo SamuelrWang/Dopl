@@ -1,5 +1,5 @@
 // Tests for the v2.7 L3 OUTBOUND DECISION CARD: the message the agent wants to send to
-// the peer stops on an INLINE card in the stream (Send / Send for this task / Deny)
+// the peer stops on an INLINE card in the stream (Send / Send for this session / Deny)
 // instead of in the bottom permission dock, and that ONE card becomes the delivered
 // record in place.
 //
@@ -115,7 +115,7 @@ test("L3 RACE: auto-approve turned OFF mid-post turns the DELIVERED bubble back 
 
 const gated = () => vm.reduceEvent(pendingCard(), { type: "outbound_gate", requestId: "r1", toolUseId: "t1" });
 
-test("L3: Send / Send for this task DELIVER the card; Deny marks it not sent", () => {
+test("L3: Send / Send for this session DELIVER the card; Deny marks it not sent", () => {
   for (const decision of ["allow-once", "allow-task"]) {
     const s = vm.reduceEvent(gated(), { type: "permission_resolved", requestId: "r1", decision });
     assert.equal(last(s).status, "sent", decision);
@@ -333,9 +333,9 @@ test("DOM: the pending card shows the destination, the drafted body, and Send / 
   assert.ok(!p.dest.classList.contains("hidden"));
   assert.ok(!p.dest.classList.contains("is-cross"));
   assert.equal(p.body.textContent, "the draft", "the operator approves WHAT is being said");
-  assert.deepEqual(p.row.children.map((b) => b.textContent), ["Send", "Send for this task", "Deny"]);
+  assert.deepEqual(p.row.children.map((b) => b.textContent), ["Send", "Send for this session", "Deny"]);
   assert.ok(!p.row.classList.contains("hidden"));
-  for (const s of ["Sending to David", "To: David's agent", "Send", "Send for this task", "Deny"]) {
+  for (const s of ["Sending to David", "To: David's agent", "Send", "Send for this session", "Deny"]) {
     assert.ok(!s.includes("—"), "no em dash in copy");
   }
 });

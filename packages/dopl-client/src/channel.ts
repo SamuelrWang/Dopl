@@ -18,11 +18,11 @@ import type {
   ChannelMember,
   ChannelMessage,
   ChannelMessageInput,
-  ChannelTask,
-  ChannelTaskCreateInput,
+  ChannelThread,
+  ChannelThreadCreateInput,
   ReadMessagesOptions,
-  TaskMode,
-  TaskOutcome,
+  ThreadMode,
+  ThreadOutcome,
 } from "./channel-types.js";
 
 const enc = encodeURIComponent;
@@ -160,76 +160,81 @@ export async function postMessage(
   return data.message;
 }
 
-// ─── Tasks ──────────────────────────────────────────────────────────
+// ─── Threads ────────────────────────────────────────────────────────
+//
+// BOUNDARY: wire/storage name `task` == domain name `thread`. The route
+// segment (`/tasks`) and the response envelope keys (`tasks` / `task`) are
+// STORAGE names and stay put — renaming them means a migration plus every
+// read and write path. Everything above this line speaks `thread`.
 
-export async function listChannelTasks(
+export async function listChannelThreads(
   t: DoplTransport,
   channelId: string
-): Promise<ChannelTask[]> {
-  const data = await t.request<{ tasks: ChannelTask[] }>(
+): Promise<ChannelThread[]> {
+  const data = await t.request<{ tasks: ChannelThread[] }>(
     `/api/channels/${enc(channelId)}/tasks`,
-    { toolName: "channel_list_tasks" }
+    { toolName: "channel_list_threads" }
   );
   return data.tasks;
 }
 
-export async function getChannelTask(
+export async function getChannelThread(
   t: DoplTransport,
   channelId: string,
-  taskId: string
-): Promise<ChannelTask> {
-  const data = await t.request<{ task: ChannelTask }>(
-    `/api/channels/${enc(channelId)}/tasks/${enc(taskId)}`,
-    { toolName: "channel_get_task" }
+  threadId: string
+): Promise<ChannelThread> {
+  const data = await t.request<{ task: ChannelThread }>(
+    `/api/channels/${enc(channelId)}/tasks/${enc(threadId)}`,
+    { toolName: "channel_get_thread" }
   );
   return data.task;
 }
 
-export async function createChannelTask(
+export async function createChannelThread(
   t: DoplTransport,
   channelId: string,
-  input: ChannelTaskCreateInput
-): Promise<ChannelTask> {
-  const data = await t.request<{ task: ChannelTask }>(
+  input: ChannelThreadCreateInput
+): Promise<ChannelThread> {
+  const data = await t.request<{ task: ChannelThread }>(
     `/api/channels/${enc(channelId)}/tasks`,
     {
       method: "POST",
       body: input,
-      toolName: "channel_create_task",
+      toolName: "channel_create_thread",
     }
   );
   return data.task;
 }
 
-export async function closeChannelTask(
+export async function closeChannelThread(
   t: DoplTransport,
   channelId: string,
-  taskId: string,
-  input: { outcome: TaskOutcome; summary?: string }
-): Promise<ChannelTask> {
-  const data = await t.request<{ task: ChannelTask }>(
-    `/api/channels/${enc(channelId)}/tasks/${enc(taskId)}`,
+  threadId: string,
+  input: { outcome: ThreadOutcome; summary?: string }
+): Promise<ChannelThread> {
+  const data = await t.request<{ task: ChannelThread }>(
+    `/api/channels/${enc(channelId)}/tasks/${enc(threadId)}`,
     {
       method: "PATCH",
       body: { op: "close", outcome: input.outcome, summary: input.summary },
-      toolName: "channel_close_task",
+      toolName: "channel_close_thread",
     }
   );
   return data.task;
 }
 
-export async function setChannelTaskMode(
+export async function setChannelThreadMode(
   t: DoplTransport,
   channelId: string,
-  taskId: string,
-  input: { mode: TaskMode }
-): Promise<ChannelTask> {
-  const data = await t.request<{ task: ChannelTask }>(
-    `/api/channels/${enc(channelId)}/tasks/${enc(taskId)}`,
+  threadId: string,
+  input: { mode: ThreadMode }
+): Promise<ChannelThread> {
+  const data = await t.request<{ task: ChannelThread }>(
+    `/api/channels/${enc(channelId)}/tasks/${enc(threadId)}`,
     {
       method: "PATCH",
       body: { op: "set_mode", mode: input.mode },
-      toolName: "channel_set_task_mode",
+      toolName: "channel_set_thread_mode",
     }
   );
   return data.task;

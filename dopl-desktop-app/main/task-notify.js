@@ -3,7 +3,7 @@
 // When the REQUESTER receives an inbound reply that belongs to an INTERACTIVE
 // task they created, classify() (targeting.js) returns the 'task-reply' verdict.
 // Such a reply is not a new request: it needs NO consent row, NO watcher record,
-// NO spawn. It is simply news — "a reply arrived in your task". This module fires
+// NO spawn. It is simply news — "a reply arrived in your thread". This module fires
 // a single silent OS notification for that and, on click, opens the channel via
 // the SAME injected-handler seam trigger.sendFyi uses (targeting.openChannelForEntry,
 // wired from index.js through targeting.setHandlers). No token use, no API write.
@@ -23,10 +23,12 @@ const targeting = require('./targeting');
 const { metaStr, truncate } = targeting;
 const { diag } = require('./diag');
 
-// Pure: build the passive { title, body } for a task reply from the message +
-// pre-resolved channel/responder names. Prefers the server-stamped task title for
+// Pure: build the passive { title, body } for a thread reply from the message +
+// pre-resolved channel/responder names. Prefers the server-stamped thread title for
 // the headline (falling back to the channel name), and the server-stamped summary
 // for the body (falling back to a truncated body excerpt).
+// The `taskTitle` metadata key is the wire spelling (wire name `task` == domain name
+// `thread`); the words the operator READS carry no "task" at all.
 function taskReplyNotice(m, channelName, responderName) {
   const taskTitle = metaStr(m, 'taskTitle');
   const where = taskTitle || channelName || 'a channel';

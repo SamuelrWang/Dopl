@@ -478,7 +478,7 @@ test("session.html: the permission dock renders all THREE actions with exact lab
     fileURLToPath(new URL("../renderer/session/session.html", import.meta.url)), "utf8"
   );
   assert.match(html, /id="btnAllowOnce"[^>]*>Allow once</);
-  assert.match(html, /id="btnAllowTask"[^>]*>Allow for this task</);
+  assert.match(html, /id="btnAllowTask"[^>]*>Allow for this session</);
   assert.match(html, /id="btnDeny"[^>]*>Deny</);
   // v2.9: the TWO axis selects + the posture line + the bypass warning exist; the fused
   // checkbox is gone, not hidden.

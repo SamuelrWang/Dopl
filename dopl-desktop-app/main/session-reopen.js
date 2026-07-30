@@ -9,11 +9,17 @@
 //
 //   listLiveSessions()          — the tray "Sessions" submenu source (item 10).
 //   reopenWindow(sessionId)     — reopen a hidden live window by internal id (tray).
-//   reopenByTask({channelId,taskId}) — the MAIN-window bridge target (item 2): the web
-//     passes (channelId, taskId), NEVER the internal sessionId; we resolve the live
-//     session by key and show()+focus() its window. P2 (v1.7.4): when NO live session
-//     survives, fall back to recreateParkedShell — a durable record + a retained
-//     sdkSessionId recreates a dormant, resumable window instead of the old dead end.
+//   reopenByTask({channelId,taskId}) — the MAIN-window bridge target (item 2), behind the
+//     web "Open session" button: the web passes (channelId, taskId), NEVER the internal
+//     sessionId; we resolve the live session by key and show()+focus() its window. P2
+//     (v1.7.4): when NO live session survives, fall back to recreateParkedShell — a durable
+//     record recreates a dormant, resumable window instead of the old dead end.
+//
+// v3.0 VOCABULARY: this opens a SESSION (this member's own window) on a shared THREAD, and
+// it starts NOTHING. Both branches are window-only: show()+focus(), or a PARKED shell with
+// no query. The agent wakes on a steer or an accepted inbound, never on this call. The
+// `Task` in the name and the `taskId` argument are the wire spelling of `thread`.
+// Pinned by test/open-session-no-query.test.mjs.
 
 const store = require('./session-store');
 

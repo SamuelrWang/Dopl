@@ -9,77 +9,77 @@ import { formatChannelTimestamp } from "@/shared/lib/format-time";
 import type {
   ChannelMember,
   ChannelMessage,
-  ChannelTask,
-  TaskMode,
-  TaskOutcome,
+  ChannelThread,
+  ThreadMode,
+  ThreadOutcome,
 } from "../types";
 
-/** The three rendered task states, mirroring `message-thread.tsx taskOverlayFrom`. */
-type TaskDisplayStatus = "active" | "done" | "failed";
+/** The three rendered thread states, mirroring `message-thread.tsx threadOverlayFrom`. */
+type ThreadDisplayStatus = "active" | "done" | "failed";
 
-const STATUS_LABEL: Record<TaskDisplayStatus, string> = {
-  active: "Task active",
-  done: "Task complete",
-  failed: "Task failed",
+const STATUS_LABEL: Record<ThreadDisplayStatus, string> = {
+  active: "Thread active",
+  done: "Thread complete",
+  failed: "Thread failed",
 };
 
-/** Open task = active; a closed one is failed (outcome) or complete. */
-function displayStatus(task: ChannelTask): TaskDisplayStatus {
-  if (task.status === "open") return "active";
-  return task.outcome === "failed" ? "failed" : "done";
+/** Open thread = active; a closed one is failed (outcome) or complete. */
+function displayStatus(thread: ChannelThread): ThreadDisplayStatus {
+  if (thread.status === "open") return "active";
+  return thread.outcome === "failed" ? "failed" : "done";
 }
 
 interface Props {
-  /** The channel's tasks, newest-first (server `created_at DESC`; no re-sort). */
-  tasks: ChannelTask[];
-  /** True while the first tasks read is still resolving. */
-  tasksLoading: boolean;
+  /** The channel's threads, newest-first (server `created_at DESC`; no re-sort). */
+  threads: ChannelThread[];
+  /** True while the first threads read is still resolving. */
+  threadsLoading: boolean;
   /** Channel roster, for resolving creator / target avatars. */
   members: ChannelMember[];
   /** userId -> display name, for the creator / target labels. */
   memberNames: Map<string, string>;
   /**
-   * The latest `task_progress` milestone per task id (derived from the loaded
+   * The latest `task_progress` milestone per thread id (derived from the loaded
    * messages), shown as a one-line accomplishment under the title. Absent map
    * or missing entry renders nothing.
    */
   latestMilestone?: Map<string, ChannelMessage>;
-  /** Navigate to the task's grouped card (scroll + transient highlight). */
-  onSelectTask: (taskId: string) => void;
+  /** Navigate to the thread's grouped card (scroll + transient highlight). */
+  onSelectThread: (threadId: string) => void;
   /**
-   * The viewer's user id — gates the per-row Close / Reopen controls to a task's
-   * creator or target. Absent (until the integration pass threads it in) hides
-   * the controls entirely.
+   * The viewer's user id — gates the per-row Close / Reopen controls to a
+   * thread's creator or target. Absent (until the integration pass threads it
+   * in) hides the controls entirely.
    */
   currentUserId?: string;
-  /** Close a task with an outcome + optional summary. Absent hides Close. */
-  onCloseTask?: (
-    taskId: string,
-    outcome: TaskOutcome,
+  /** Close a thread with an outcome + optional summary. Absent hides Close. */
+  onCloseThread?: (
+    threadId: string,
+    outcome: ThreadOutcome,
     summary: string
   ) => Promise<void>;
-  /** Reopen a closed task. Absent hides Reopen. */
-  onReopenTask?: (taskId: string) => Promise<void>;
+  /** Reopen a closed thread. Absent hides Reopen. */
+  onReopenThread?: (threadId: string) => Promise<void>;
 }
 
 /**
- * The channel's task list, shown in a header popover (the Bell-popover sibling).
- * Each row carries the task title, its status chip (Task active / complete /
- * failed), a mode badge, the creator and target as small avatars, and the
- * created (plus closed) time. Clicking a row scrolls its grouped card into view
- * and briefly rings it. Renders the shared {@link EmptyState} when the channel
- * has no tasks yet.
+ * The channel's thread list, shown in a header popover (the Bell-popover
+ * sibling). Each row carries the thread title, its status chip (Thread active /
+ * complete / failed), a mode badge, the creator and target as small avatars,
+ * and the created (plus closed) time. Clicking a row scrolls its grouped card
+ * into view and briefly rings it. Renders the shared {@link EmptyState} when
+ * the channel has no threads yet.
  */
-export function TaskPanel({
-  tasks,
-  tasksLoading,
+export function ThreadPanel({
+  threads,
+  threadsLoading,
   members,
   memberNames,
   latestMilestone,
-  onSelectTask,
+  onSelectThread,
   currentUserId,
-  onCloseTask,
-  onReopenTask,
+  onCloseThread,
+  onReopenThread,
 }: Props) {
   const memberById = useMemo(
     () => new Map(members.map((m) => [m.userId, m])),
@@ -103,44 +103,44 @@ export function TaskPanel({
       <div className="flex items-center gap-2 px-3 pb-1.5 pt-1">
         <ListTodo size={13} className="shrink-0 text-text-secondary" />
         <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
-          Tasks
+          Threads
         </span>
-        {tasks.length > 0 && (
+        {threads.length > 0 && (
           <span className="rounded-full border border-border-strong bg-bg-inset px-1.5 py-px text-micro font-medium text-text-secondary">
-            {tasks.length}
+            {threads.length}
           </span>
         )}
       </div>
 
-      {tasks.length === 0 ? (
+      {threads.length === 0 ? (
         <div className="px-3 py-6">
-          {tasksLoading ? (
+          {threadsLoading ? (
             <p className="text-center text-caption text-text-muted">
-              Loading tasks…
+              Loading threads…
             </p>
           ) : (
-            <EmptyState icon={ListTodo} title="No tasks yet." />
+            <EmptyState icon={ListTodo} title="No threads yet." />
           )}
         </div>
       ) : (
         <div className="min-h-0 flex-1 divide-y divide-border-subtle overflow-y-auto overscroll-contain border-t border-border-subtle">
-          {tasks.map((task) => {
-            const status = displayStatus(task);
-            const milestone = latestMilestone?.get(task.id);
-            const canManageTask =
+          {threads.map((thread) => {
+            const status = displayStatus(thread);
+            const milestone = latestMilestone?.get(thread.id);
+            const canManageThread =
               !!currentUserId &&
-              (currentUserId === task.createdBy ||
-                currentUserId === task.targetUserId);
+              (currentUserId === thread.createdBy ||
+                currentUserId === thread.targetUserId);
             return (
-              <div key={task.id} className="flex flex-col">
+              <div key={thread.id} className="flex flex-col">
                 <button
                   type="button"
-                  onClick={() => onSelectTask(task.id)}
+                  onClick={() => onSelectThread(thread.id)}
                   className="flex w-full flex-col gap-1.5 px-3 py-2 text-left transition-colors hover:bg-surface-raised-2"
                 >
                   <div className="flex items-center gap-1.5">
                     <span className="min-w-0 flex-1 truncate text-small font-medium text-text-primary">
-                      {task.title}
+                      {thread.title}
                     </span>
                     <StatusChip status={status} />
                   </div>
@@ -153,46 +153,51 @@ export function TaskPanel({
                   )}
 
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-micro text-text-muted">
-                    <ModeBadge mode={task.mode} />
+                    <ModeBadge mode={thread.mode} />
                     <span className="flex items-center gap-1">
-                      <Avatar person={personFor(task.createdBy)} size="xs" />
-                      <span className="truncate">{nameFor(task.createdBy)}</span>
+                      <Avatar person={personFor(thread.createdBy)} size="xs" />
+                      <span className="truncate">
+                        {nameFor(thread.createdBy)}
+                      </span>
                     </span>
-                    {task.targetUserId && (
+                    {thread.targetUserId && (
                       <span className="flex items-center gap-1">
                         <ArrowRight size={11} className="shrink-0" />
-                        <Avatar person={personFor(task.targetUserId)} size="xs" />
+                        <Avatar
+                          person={personFor(thread.targetUserId)}
+                          size="xs"
+                        />
                         <span className="truncate">
-                          {nameFor(task.targetUserId)}
+                          {nameFor(thread.targetUserId)}
                         </span>
                       </span>
                     )}
                   </div>
 
                   <span className="text-micro text-text-muted">
-                    {formatChannelTimestamp(task.createdAt)}
-                    {task.closedAt &&
-                      ` · closed ${formatChannelTimestamp(task.closedAt)}`}
+                    {formatChannelTimestamp(thread.createdAt)}
+                    {thread.closedAt &&
+                      ` · closed ${formatChannelTimestamp(thread.closedAt)}`}
                   </span>
 
-                  {task.status === "closed" && task.outcomeSummary && (
+                  {thread.status === "closed" && thread.outcomeSummary && (
                     <span
                       className={cn(
                         "text-caption",
-                        task.outcome === "failed"
+                        thread.outcome === "failed"
                           ? "text-danger"
                           : "text-text-secondary"
                       )}
                     >
-                      {task.outcomeSummary}
+                      {thread.outcomeSummary}
                     </span>
                   )}
                 </button>
-                {canManageTask && (
-                  <TaskRowActions
-                    task={task}
-                    onCloseTask={onCloseTask}
-                    onReopenTask={onReopenTask}
+                {canManageThread && (
+                  <ThreadRowActions
+                    thread={thread}
+                    onCloseThread={onCloseThread}
+                    onReopenThread={onReopenThread}
                   />
                 )}
               </div>
@@ -205,25 +210,25 @@ export function TaskPanel({
 }
 
 /**
- * The per-row Close / Reopen control strip, shown under a task row only for its
- * creator or target. An open task gets a Close affordance that expands into an
- * optional summary well plus Mark complete / Mark failed; a closed task gets a
- * single Reopen button. Each direction renders only when its callback is wired
- * (absent until the integration pass). Buttons disable while a write is in
- * flight so a double-click can't fire two writes.
+ * The per-row Close / Reopen control strip, shown under a thread row only for
+ * its creator or target. An open thread gets a Close affordance that expands
+ * into an optional summary well plus Mark complete / Mark failed; a closed
+ * thread gets a single Reopen button. Each direction renders only when its
+ * callback is wired (absent until the integration pass). Buttons disable while
+ * a write is in flight so a double-click can't fire two writes.
  */
-function TaskRowActions({
-  task,
-  onCloseTask,
-  onReopenTask,
+function ThreadRowActions({
+  thread,
+  onCloseThread,
+  onReopenThread,
 }: {
-  task: ChannelTask;
-  onCloseTask?: (
-    taskId: string,
-    outcome: TaskOutcome,
+  thread: ChannelThread;
+  onCloseThread?: (
+    threadId: string,
+    outcome: ThreadOutcome,
     summary: string
   ) => Promise<void>;
-  onReopenTask?: (taskId: string) => Promise<void>;
+  onReopenThread?: (threadId: string) => Promise<void>;
 }) {
   const [closing, setClosing] = useState(false);
   const [summary, setSummary] = useState("");
@@ -239,23 +244,23 @@ function TaskRowActions({
     }
   }
 
-  if (task.status === "closed") {
-    if (!onReopenTask) return null;
+  if (thread.status === "closed") {
+    if (!onReopenThread) return null;
     return (
       <div className="flex justify-end px-3 pb-2">
         <button
           type="button"
           disabled={busy}
-          onClick={() => run(() => onReopenTask(task.id))}
+          onClick={() => run(() => onReopenThread(thread.id))}
           className="btn-light rounded-[8px] px-2.5 py-1 text-caption font-medium text-text-primary disabled:opacity-60"
         >
-          Reopen task
+          Reopen thread
         </button>
       </div>
     );
   }
 
-  if (!onCloseTask) return null;
+  if (!onCloseThread) return null;
 
   if (!closing) {
     return (
@@ -265,7 +270,7 @@ function TaskRowActions({
           onClick={() => setClosing(true)}
           className="btn-light rounded-[8px] px-2.5 py-1 text-caption font-medium text-text-primary"
         >
-          Close task
+          Close thread
         </button>
       </div>
     );
@@ -296,7 +301,7 @@ function TaskRowActions({
           disabled={busy}
           onClick={() =>
             run(async () => {
-              await onCloseTask(task.id, "failed", summary.trim());
+              await onCloseThread(thread.id, "failed", summary.trim());
               setClosing(false);
             })
           }
@@ -309,7 +314,7 @@ function TaskRowActions({
           disabled={busy}
           onClick={() =>
             run(async () => {
-              await onCloseTask(task.id, "completed", summary.trim());
+              await onCloseThread(thread.id, "completed", summary.trim());
               setClosing(false);
             })
           }
@@ -322,8 +327,8 @@ function TaskRowActions({
   );
 }
 
-/** The task's execution mode as a quiet pill (mirrors the session-card badge). */
-function ModeBadge({ mode }: { mode: TaskMode }) {
+/** The thread's mode as a quiet pill (mirrors the session-card badge). */
+function ModeBadge({ mode }: { mode: ThreadMode }) {
   return (
     <span className="shrink-0 rounded-full border border-border-strong bg-bg-inset px-1.5 py-px text-micro font-medium uppercase tracking-wide text-text-secondary">
       {mode === "interactive" ? "Interactive" : "Autonomous"}
@@ -332,7 +337,7 @@ function ModeBadge({ mode }: { mode: TaskMode }) {
 }
 
 /** Compact status chip: danger ink for a failure, success for active/complete. */
-function StatusChip({ status }: { status: TaskDisplayStatus }) {
+function StatusChip({ status }: { status: ThreadDisplayStatus }) {
   return (
     <span
       className={cn(

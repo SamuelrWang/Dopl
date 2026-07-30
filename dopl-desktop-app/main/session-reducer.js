@@ -57,7 +57,7 @@ function initialSessionState(opts) {
     // never persisted, start MOST RESTRICTIVE, and RESET on park (v2.3 FIX #3, extended to both).
     toolMode: 'manual',
     messageMode: 'ask',
-    // v2.5 D1/D4: the standing INBOUND grant ("Accept for this task") — when true an inbound turn
+    // v2.5 D1/D4: the standing INBOUND grant ("Accept for this session") — when true an inbound turn
     // is fed with no Accept. Like allowForTask it lives for the life of the in-memory session
     // object and is NEVER persisted. MEDIUM-3 (C9): it is now reset on park with the two axes, so
     // a peer cannot restart a parked query and drive turns with the operator away.
@@ -174,7 +174,7 @@ function coerceMode(list, value) {
 }
 
 // v2.5 D1 / v2.9 AXIS B — is an inbound turn allowed to reach the agent WITHOUT an Accept? Only
-// two ways: AXIS B set to auto_inbound / auto_both, or the standing "Accept for this task" grant.
+// two ways: AXIS B set to auto_inbound / auto_both, or the standing "Accept for this session" grant.
 // Default state is neither, so the gate holds. session-gate.autoInbound answers the same question
 // for the live queue and MUST agree (pinned by test).
 function inboundAutoAccepted(state) {

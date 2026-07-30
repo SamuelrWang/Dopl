@@ -53,8 +53,8 @@ function render(messages: ChannelMessage[]): string {
     <MessageThread
       messages={messages}
       memberNames={MEMBER_NAMES}
-      tasks={[]}
-      tasksLoading={false}
+      threads={[]}
+      threadsLoading={false}
       currentUserId={ME}
     />
   );

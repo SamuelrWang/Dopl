@@ -1,13 +1,17 @@
 /**
  * `dopl_channel` READ op handlers: list (channels), read (messages), await
- * (long-poll for new messages). All non-mutating. Routed from the
- * registrar in channel.ts.
+ * (long-poll for new messages), list_threads / get_thread. All non-mutating.
+ * Routed from the registrar in channel.ts.
+ *
+ * BOUNDARY: the wire/storage name `task` == the domain name `thread` — the
+ * `thread` op param still resolves against `channel_tasks` rows and the
+ * `/tasks` routes underneath `@dopl/client`.
  */
 
 import type {
   AwaitResult,
   ChannelMessage,
-  ChannelTask,
+  ChannelThread,
   DoplClient,
 } from "@dopl/client";
 import { ok, err, isNotFound, type ToolResponse } from "./respond";
@@ -48,11 +52,11 @@ function formatMessage(m: ChannelMessage): string {
 }
 
 /**
- * One rendered task line for `list_tasks`. A task is the authoritative
+ * One rendered thread line for `list_threads`. A thread is the authoritative
  * status/mode store; its transcript rides on the channel's messages, so this
- * summarizes the row and points the reader at `read`/`get_task` for detail.
+ * summarizes the row and points the reader at `read`/`get_thread` for detail.
  */
-function formatTaskLine(t: ChannelTask): string {
+function formatThreadLine(t: ChannelThread): string {
   const bits = [`\`${t.id}\``, t.status, `${t.mode} mode`];
   if (t.outcome) bits.push(`outcome ${t.outcome}`);
   if (t.targetUserId) bits.push(`for \`${t.targetUserId}\``);
@@ -60,10 +64,10 @@ function formatTaskLine(t: ChannelTask): string {
   return `- **${t.title}** (${bits.join(" · ")})${summary}`;
 }
 
-/** Multi-line detail block for a single task (`get_task`). */
-function formatTaskDetail(t: ChannelTask): string {
+/** Multi-line detail block for a single thread (`get_thread`). */
+function formatThreadDetail(t: ChannelThread): string {
   const lines = [
-    `## Task ${t.title}`,
+    `## Thread ${t.title}`,
     ``,
     `- id: \`${t.id}\``,
     `- status: ${t.status}${t.outcome ? ` (${t.outcome})` : ""}`,
@@ -168,52 +172,52 @@ export async function opAwait(
   return ok(lines.join("\n"));
 }
 
-export async function opListTasks(
+export async function opListThreads(
   client: DoplClient,
   ref: string,
 ): Promise<ToolResponse> {
   // Hot-path parity with read/await: hand the ref straight to the route
   // (slug-or-id + visibility enforced there) and map a 404 to a clean
   // not-found, rather than pre-resolving via listChannels.
-  let tasks: ChannelTask[];
+  let threads: ChannelThread[];
   try {
-    tasks = await client.listChannelTasks(ref);
+    threads = await client.listChannelThreads(ref);
   } catch (e) {
     if (isNotFound(e)) return channelNotFound(ref);
     throw e;
   }
-  if (tasks.length === 0) {
+  if (threads.length === 0) {
     return ok(
-      `No tasks in **${ref}**. Open one with dopl_channel(op="create_task", channel="${ref}", title="...", body="...", to="...").`,
+      `No threads in **${ref}**. Open one with dopl_channel(op="create_thread", channel="${ref}", title="...", body="...", to="...").`,
     );
   }
   const lines = [
-    `## ${ref} — ${tasks.length} task${tasks.length === 1 ? "" : "s"}\n`,
+    `## ${ref} — ${threads.length} thread${threads.length === 1 ? "" : "s"}\n`,
   ];
-  for (const t of tasks) lines.push(formatTaskLine(t));
+  for (const t of threads) lines.push(formatThreadLine(t));
   lines.push(
-    `\nInspect one with dopl_channel(op="get_task", channel="${ref}", task=<id>); read its thread with op="read".`,
+    `\nInspect one with dopl_channel(op="get_thread", channel="${ref}", thread=<id>); read its messages with op="read".`,
   );
   return ok(lines.join("\n"));
 }
 
-export async function opGetTask(
+export async function opGetThread(
   client: DoplClient,
   ref: string,
-  taskId: string,
+  threadId: string,
 ): Promise<ToolResponse> {
-  let task: ChannelTask;
+  let thread: ChannelThread;
   try {
-    task = await client.getChannelTask(ref, taskId);
+    thread = await client.getChannelThread(ref, threadId);
   } catch (e) {
-    // The route 404s both an unknown channel ref and a task not in this
-    // channel; surface a task-oriented not-found either way.
+    // The route 404s both an unknown channel ref and a thread not in this
+    // channel; surface a thread-oriented not-found either way.
     if (isNotFound(e)) {
       return err(
-        `No task \`${taskId}\` in **${ref}**. List a channel's tasks with dopl_channel(op="list_tasks", channel="${ref}").`,
+        `No thread \`${threadId}\` in **${ref}**. List a channel's threads with dopl_channel(op="list_threads", channel="${ref}").`,
       );
     }
     throw e;
   }
-  return ok(formatTaskDetail(task));
+  return ok(formatThreadDetail(thread));
 }

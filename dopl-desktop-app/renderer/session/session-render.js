@@ -185,15 +185,19 @@
   // v2.7 L3 — the OUTBOUND DECISION CARD *is* the delivered record: ONE node, ONE stream
   // item per post attempt. While the post waits on canUseTool the root also carries
   // `outbound-pending` (its own accent band, the v2.5 destination line, and Send / Send for
-  // this task / Deny); the decision RESOLVES IT IN PLACE — update() drops that class and
+  // this session / Deny); the decision RESOLVES IT IN PLACE — update() drops that class and
   // hides the row, so the node becomes exactly the delivered "Sent to X" bubble (or the
   // muted "Not sent" one). Nothing is rebuilt and nothing is removed, which is what makes
   // this safe under session.js's index-keyed renderStream (it only ever calls update()).
   // The three decisions map to the EXISTING dock verbs, so main's fail-closed
   // permission_decision mapping and the v2.5 scoped POST_GRANT are untouched.
+  // v3.0 VOCABULARY: the middle verb reads "for this SESSION", which is what the grant has
+  // always been — it lives on this session object and a park clears it (v2.9 FIX F1), while
+  // the thread outlives every session that works it. `allow-task` is the IPC wire value and
+  // is deliberately unchanged (wire name `task` == domain name `thread`).
   const OUT_BUTTONS = [
     { label: "Send", decision: "allow-once", cls: "ctl auth-btn-3d ctl-primary ctl-sm" },
-    { label: "Send for this task", decision: "allow-task", cls: "ctl btn-light ctl-sm" },
+    { label: "Send for this session", decision: "allow-task", cls: "ctl btn-light ctl-sm" },
     { label: "Deny", decision: "deny", cls: "ctl btn-light ctl-sm ctl-danger" },
   ];
 
@@ -318,11 +322,13 @@
 
   // v2.5 D1: the INBOUND GATE card. A counterparty message that has NOT reached the
   // agent, shown with the three decisions the operator has: Accept (feed it once),
-  // Accept for this task (feed it and every later reply on this session), Decline
-  // (drop it locally — nothing is posted back to the peer). The card locks and states
-  // the outcome once a decision lands, here or from an auto-accept echo. Same visual
-  // language as the old release card + the permission dock. textContent only.
-  const GATE_DONE = { accepted: "Accepted", "accepted-task": "Accepted for this task", declined: "Declined" };
+  // Accept for this session (feed it and every later reply until this session parks or
+  // ends), Decline (drop it locally — nothing is posted back to the peer). The card locks
+  // and states the outcome once a decision lands, here or from an auto-accept echo. Same
+  // visual language as the old release card + the permission dock. textContent only.
+  // v3.0: the verb says SESSION because a park clears the grant (v2.9 FIX F1) while the
+  // thread carries on; `accept-task` / `accepted-task` stay as the IPC wire values.
+  const GATE_DONE = { accepted: "Accepted", "accepted-task": "Accepted for this session", declined: "Declined" };
 
   function makeInboundPending(item, ctx) {
     const onDecide = (ctx && ctx.onInboundDecide) || noop; // FIX F10: no dead alias path
@@ -333,7 +339,7 @@
     const row = el("div", "row");
     const buttons = [
       { label: "Accept", decision: "accept", cls: "ctl auth-btn-3d ctl-primary ctl-sm" },
-      { label: "Accept for this task", decision: "accept-task", cls: "ctl btn-light ctl-sm" },
+      { label: "Accept for this session", decision: "accept-task", cls: "ctl btn-light ctl-sm" },
       { label: "Decline", decision: "decline", cls: "ctl btn-light ctl-sm ctl-danger" },
     ].map((spec) => {
       const btn = el("button", spec.cls, spec.label);

@@ -10,7 +10,7 @@ import {
 } from "@/shared/lib/desktop";
 import { Avatar } from "@/shared/ui/avatar";
 import { splitSessionEntries, type SessionGroup } from "../lib/group-thread";
-import type { ChannelTask, TaskOutcome } from "../types";
+import type { ChannelThread, ThreadOutcome } from "../types";
 import {
   CALM_TERMINAL_NOTE,
   ModeBadge,
@@ -18,48 +18,48 @@ import {
 } from "./session-card-status";
 
 /**
- * One task as a single bordered card. The header carries the task title (the
- * first-class overlay title, falling back to the derived summary), the opener's
- * identity + absolute time, and — for a first-class task — a mode badge. The
- * body nests EVERY message of the exchange attributed (the requester's request
- * and each agent reply, author + avatar + time per entry); `task_progress`
- * lines stay as subtle progress rows. The `task_started/finished/failed`
- * lifecycle markers never appear in the body — they become the status chip in
- * the footer (Task active / Task complete / Task failed, or a calm terminal
- * label for an operator-chosen ending).
+ * One THREAD as a single bordered card, rendering the session that worked it.
+ * The header carries the thread title (the authoritative overlay title, falling
+ * back to the derived summary), the opener's identity + absolute time, and — for
+ * a first-class thread — a mode badge. The body nests EVERY message of the
+ * exchange attributed (the requester's request and each agent reply, author +
+ * avatar + time per entry); `task_progress` lines stay as subtle progress rows.
+ * The `task_started/finished/failed` lifecycle markers never appear in the body
+ * — they become the status chip in the footer (Thread active / Thread complete
+ * / Thread failed, or a calm terminal label for an operator-chosen ending).
  *
  * Card geometry follows the message-bubble family (`rounded-[10px]` border,
  * `px-3.5` padding); the header + footer strips reuse the
  * `bg-card-surface-subtle` section-strip recipe. The container is
- * status-driven: an `active` task carries the success-tinted surface (the
+ * status-driven: an `active` thread carries the success-tinted surface (the
  * agent is working), every settled ending stays neutral. That pairs with the
- * warning-tinted consent card at the thread bottom, so the thread reads on one
- * color rule: amber is waiting on a human, green is an agent at work.
+ * warning-tinted consent card at the transcript bottom, so the channel reads on
+ * one color rule: amber is waiting on a human, green is an agent at work.
  */
 export function SessionCard({
   session,
   highlighted = false,
-  task,
+  thread,
   currentUserId,
-  onCloseTask,
+  onCloseThread,
 }: {
   session: SessionGroup;
-  /** Transient ring while the task panel has navigated to this card. */
+  /** Transient ring while the thread panel has navigated to this card. */
   highlighted?: boolean;
   /**
-   * The authoritative first-class task row for this session (from
-   * `channel_tasks`), carrying `createdBy` / `targetUserId` / `status` — it
-   * gates the Close control. Absent for a legacy (non first-class) session, or
-   * until the integration pass threads it through from the thread's `tasks` by
-   * `session.taskId`; in either case no task controls render.
+   * The authoritative thread row for this session (from `channel_tasks` — the
+   * storage name), carrying `createdBy` / `targetUserId` / `status`; it gates
+   * the Close control. Absent for a legacy (non first-class) session, or until
+   * the integration pass threads it through from the channel's `threads` by
+   * `session.taskId`; in either case no thread controls render.
    */
-  task?: ChannelTask;
-  /** The viewer's user id — the controls show only for a task's creator or target. */
+  thread?: ChannelThread;
+  /** The viewer's user id — the controls show only for a thread's creator or target. */
   currentUserId?: string;
-  /** Close this task with an outcome + optional summary. Absent hides Close. */
-  onCloseTask?: (
-    taskId: string,
-    outcome: TaskOutcome,
+  /** Close this thread with an outcome + optional summary. Absent hides Close. */
+  onCloseThread?: (
+    threadId: string,
+    outcome: ThreadOutcome,
     summary: string
   ) => Promise<void>;
 }) {
@@ -84,18 +84,20 @@ export function SessionCard({
       return next;
     });
 
-  // Close gating: only a first-class task's creator or target may close it, and
-  // only when the close callback is wired. Reopening a closed task lives in the
-  // task panel (the header's task list), never on the card.
+  // Close gating: only a thread's creator or target may close it, and only when
+  // the close callback is wired. Reopening a closed thread lives in the thread
+  // panel (the header's thread list), never on the card.
   const [closing, setClosing] = useState(false);
-  const canManageTask =
-    !!task &&
+  const canManageThread =
+    !!thread &&
     !!currentUserId &&
-    (currentUserId === task.createdBy || currentUserId === task.targetUserId);
-  const showClose = canManageTask && task?.status === "open" && !!onCloseTask;
+    (currentUserId === thread.createdBy ||
+      currentUserId === thread.targetUserId);
+  const showClose =
+    canManageThread && thread?.status === "open" && !!onCloseThread;
 
   const openerName = session.head.authorName || "Agent";
-  const title = session.title ?? session.summary ?? "Task";
+  const title = session.title ?? session.summary ?? "Thread";
   // Separate the two body lanes at render time: chat replies keep the nested
   // attributed-message rendering; `task_progress` milestones render as a
   // distinct check-marked accomplishment list. `groupThread`'s output is
@@ -104,7 +106,7 @@ export function SessionCard({
   const agentReplies = replies.filter((e) => e.authorKind === "agent");
   const showWorking = session.status === "active" && agentReplies.length === 0;
   // The honest "Working…" line: a calm session-end (interrupted/capped/ended)
-  // with no restart means the session stopped, even when an open-task overlay
+  // with no restart means the session stopped, even when an open-thread overlay
   // still pins the status to "active". Show that end's calm note in place of
   // "Working…" rather than lie. An agent reply already suppressed the line via
   // `showWorking`, so this only fires when the card would otherwise say Working.
@@ -248,19 +250,19 @@ export function SessionCard({
             onClick={() => setClosing(true)}
             className="btn-light shrink-0 rounded-[8px] px-2.5 py-1 text-caption font-medium text-text-primary"
           >
-            Close task
+            Close thread
           </button>
         )}
         <ReopenWindowButton
           channelId={session.head.channelId}
-          taskId={session.taskId}
+          threadId={session.taskId}
         />
         <StatusChip status={session.status} />
       </footer>
-      {showClose && closing && task && onCloseTask && (
-        <TaskCloseForm
+      {showClose && closing && thread && onCloseThread && (
+        <ThreadCloseForm
           onSubmit={async (outcome, summary) => {
-            await onCloseTask(task.id, outcome, summary);
+            await onCloseThread(thread.id, outcome, summary);
             setClosing(false);
           }}
           onCancel={() => setClosing(false)}
@@ -271,36 +273,38 @@ export function SessionCard({
 }
 
 /**
- * The one note the window control can show: the desktop found NO durable record
- * of this task on this machine, so there is nothing to open. Every other case
- * opens a window (a task whose session is parked, settled, or gone still gets a
- * shell seeded with the channel's history), so this copy is deliberately about
+ * The one note the session control can show: the desktop found NO durable record
+ * of this thread on this machine, so there is nothing to open. Every other case
+ * opens a session (a thread whose session is parked, settled, or gone still gets
+ * a shell seeded with the channel's history), so this copy is deliberately about
  * the machine, not about a session being live.
  */
-export const NO_LOCAL_SESSION_NOTE = "This task has no session on this machine.";
+export const NO_LOCAL_SESSION_NOTE =
+  "This thread has no session on this machine.";
 
 /**
- * Open this task's session window from the web card, via the main-window bridge.
- * Resolves the bridge's verdict: `false` means no record of the task exists on
+ * Open this thread's session from the web card, via the main-window bridge.
+ * Resolves the bridge's verdict: `false` means no record of the thread exists on
  * this machine (the {@link NO_LOCAL_SESSION_NOTE} case) — NOT merely that no
  * session is live, since the desktop recreates a shell for a parked or settled
- * task. Exported for unit testing the click action.
+ * thread. Exported for unit testing the click action.
  */
 export async function reopenSessionWindow(
   bridge: DoplSessionsBridge,
   channelId: string,
-  taskId: string
+  threadId: string
 ): Promise<boolean> {
-  const result = await bridge.reopen(channelId, taskId);
+  const result = await bridge.reopen(channelId, threadId);
   return !!result?.ok;
 }
 
 /**
- * Desktop-only footer control that opens this task's session window. It renders
+ * Desktop-only footer control that opens this thread's session. It renders
  * whenever the bridge exists and is ALWAYS clickable: status never gates it, and
- * it takes no session/task status at all, because the desktop can open a window
- * for any task it has a record of — live, parked, or long settled (a recreated
- * shell shows the channel's history and typing starts a fresh session).
+ * it takes no session/thread status at all, because the desktop can open a
+ * session for any thread it has a record of — live, parked, or long settled (a
+ * recreated shell shows the channel's history and typing starts a fresh
+ * session).
  *
  * Renders NOTHING in a plain browser or an older desktop build — the bridge is
  * feature-detected after mount so SSR and first client render agree
@@ -310,10 +314,10 @@ export async function reopenSessionWindow(
  */
 export function ReopenWindowButton({
   channelId,
-  taskId,
+  threadId,
 }: {
   channelId: string;
-  taskId: string;
+  threadId: string;
 }) {
   const [bridge, setBridge] = useState<DoplSessionsBridge | null>(null);
   const [busy, setBusy] = useState(false);
@@ -336,12 +340,12 @@ export function ReopenWindowButton({
         setBusy(true);
         setNoLocalSession(false);
         try {
-          const ok = await reopenSessionWindow(bridge, channelId, taskId);
+          const ok = await reopenSessionWindow(bridge, channelId, threadId);
           // Only the bridge's definitive "no record here" answer notes anything.
           setNoLocalSession(!ok);
         } catch {
           // A thrown invoke is a transport failure, not a verdict about the
-          // task, so it stays quiet: the operator can click again.
+          // thread, so it stays quiet: the operator can click again.
           setNoLocalSession(false);
         } finally {
           setBusy(false);
@@ -352,7 +356,7 @@ export function ReopenWindowButton({
 }
 
 /**
- * The window control's markup: the optional one-line note plus the button. The
+ * The session control's markup: the optional one-line note plus the button. The
  * button carries NO status gate — the only thing that ever disables it is an
  * open call already in flight, so a double-click can't fire two invokes.
  * Exported so its always-enabled shape can be asserted without the post-mount
@@ -382,7 +386,7 @@ export function OpenWindowControls({
         onClick={onOpen}
         className="btn-light shrink-0 rounded-[8px] px-2.5 py-1 text-caption font-medium text-text-primary disabled:opacity-60"
       >
-        Open window
+        Open session
       </button>
     </>
   );
@@ -390,21 +394,21 @@ export function OpenWindowControls({
 
 /**
  * The inline close form: an optional one-line summary well plus the two outcome
- * actions. "Mark complete" / "Mark failed" each close the task with that outcome
- * and the typed summary; Cancel collapses without a write. Buttons disable while
- * a close is in flight so a double-click can't fire two writes.
+ * actions. "Mark complete" / "Mark failed" each close the thread with that
+ * outcome and the typed summary; Cancel collapses without a write. Buttons
+ * disable while a close is in flight so a double-click can't fire two writes.
  */
-function TaskCloseForm({
+function ThreadCloseForm({
   onSubmit,
   onCancel,
 }: {
-  onSubmit: (outcome: TaskOutcome, summary: string) => Promise<void>;
+  onSubmit: (outcome: ThreadOutcome, summary: string) => Promise<void>;
   onCancel: () => void;
 }) {
   const [summary, setSummary] = useState("");
   const [busy, setBusy] = useState(false);
 
-  async function submit(outcome: TaskOutcome) {
+  async function submit(outcome: ThreadOutcome) {
     if (busy) return;
     setBusy(true);
     try {

@@ -276,10 +276,10 @@ const buttonsOf = (rec) => {
   return row ? row.children : [];
 };
 
-test("DOM: the gate card renders Accept / Accept for this task / Decline", () => {
+test("DOM: the gate card renders Accept / Accept for this session / Decline", () => {
   const rec = render.makeInboundPending({ pendingId: "p1", from: "David", text: "ping" }, {});
   assert.ok(rec.el.classList.contains("inbound-pending"));
-  assert.deepEqual(buttonsOf(rec).map((b) => b.textContent), ["Accept", "Accept for this task", "Decline"]);
+  assert.deepEqual(buttonsOf(rec).map((b) => b.textContent), ["Accept", "Accept for this session", "Decline"]);
   const who = rec.el.children[0];
   assert.equal(who.textContent, "David sent a message");
   assert.equal(rec.el.children[1].textContent, "ping", "the message body is shown before the decision");
@@ -296,7 +296,7 @@ test("DOM: each button sends its own decision with the card's pendingId", () => 
 });
 
 test("DOM: a decided card LOCKS every button and states the outcome", () => {
-  for (const [decision, note] of [["accepted", "Accepted"], ["accepted-task", "Accepted for this task"], ["declined", "Declined"]]) {
+  for (const [decision, note] of [["accepted", "Accepted"], ["accepted-task", "Accepted for this session"], ["declined", "Declined"]]) {
     const rec = render.makeInboundPending({ pendingId: "p1", from: "D", text: "x" }, {});
     assert.deepEqual(buttonsOf(rec).map((b) => b.disabled), [false, false, false]);
     rec.update({ pendingId: "p1", from: "D", text: "x", decision, released: decision !== "declined" });

@@ -1,25 +1,29 @@
 "use strict";
 /**
  * `dopl_channel` WRITE op handlers: open (create a channel or direct message),
- * invite (add a workspace member), post (send a message or task-activity
- * event), and the first-class task ops (create_task / close_task /
- * set_task_mode). Maps @dopl/client 4xx collisions to actionable messages.
+ * invite (add a workspace member), post (send a message or activity event),
+ * and the first-class thread ops (create_thread / close_thread /
+ * set_thread_mode). Maps @dopl/client 4xx collisions to actionable messages.
  * Routed from the registrar in channel.ts.
+ *
+ * BOUNDARY: the wire/storage name `task` == the domain name `thread`. The
+ * `thread` op param folds into `metadata.taskId` and the `task_*` message
+ * kinds keep their stored names; only the agent-facing surface says `thread`.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.opOpen = opOpen;
 exports.opInvite = opInvite;
 exports.opPost = opPost;
-exports.opCreateTask = opCreateTask;
-exports.opCloseTask = opCloseTask;
-exports.opSetTaskMode = opSetTaskMode;
+exports.opCreateThread = opCreateThread;
+exports.opCloseThread = opCloseThread;
+exports.opSetThreadMode = opSetThreadMode;
 const respond_1 = require("./respond");
 const channel_shared_1 = require("./channel-shared");
 /** Duck-typed HTTP 400 from the Dopl API (across the @dopl/client boundary). */
 function isBadRequest(e) {
     return (typeof e === "object" && e !== null && e.status === 400);
 }
-/** Duck-typed HTTP 403 from the Dopl API (task authorization refusals). */
+/** Duck-typed HTTP 403 from the Dopl API (thread authorization refusals). */
 function isForbidden(e) {
     return (typeof e === "object" && e !== null && e.status === 403);
 }
@@ -100,11 +104,12 @@ async function opPost(client, channelRef, body, opts = {}) {
         toUserId = member.userId;
         toLabel = member.label;
     }
-    // Thread the post under a task when `task` is passed: fold the id into
-    // `metadata.taskId` (the explicit param wins over any metadata copy). The
-    // route then server-validates it resolves to a task in this channel.
-    const metadata = opts.task
-        ? { ...(opts.metadata ?? {}), taskId: opts.task }
+    // Thread the post under a thread when `thread` is passed: fold the id into
+    // the STORAGE key `metadata.taskId` (the explicit param wins over any
+    // metadata copy). The route then server-validates it resolves to a thread
+    // in this channel.
+    const metadata = opts.thread
+        ? { ...(opts.metadata ?? {}), taskId: opts.thread }
         : opts.metadata;
     let message;
     try {
@@ -120,15 +125,15 @@ async function opPost(client, channelRef, body, opts = {}) {
     catch (e) {
         // Map the route's 400s to actionable messages. Two independent causes:
         // a non-member addressee (only when `to` is set) and an unresolvable
-        // first-class `task` id (CHANNEL_TASK_NOT_IN_CHANNEL) — the latter fires
+        // first-class `thread` id (CHANNEL_TASK_NOT_IN_CHANNEL) — the latter fires
         // even with NO `to`, so catch isBadRequest regardless of `to` instead of
         // rethrowing the raw 400 uncaught (the bug this closes).
         if (isBadRequest(e)) {
             if (toUserId) {
                 return (0, respond_1.err)(`Couldn't address the message to ${toLabel} — they aren't a member of **${ch.name}**. Invite them first (op="invite"), or post without \`to\`.`);
             }
-            if (opts.task) {
-                return (0, respond_1.err)(`That task is not in this channel — check the task id, or post without \`task\`.`);
+            if (opts.thread) {
+                return (0, respond_1.err)(`That thread is not in this channel — check the thread id, or post without \`thread\`.`);
             }
         }
         throw e;
@@ -137,17 +142,17 @@ async function opPost(client, channelRef, body, opts = {}) {
     const toNote = toLabel ? `, addressed to ${toLabel}` : "";
     return (0, respond_1.ok)(`Posted to **${ch.name}** (message \`${message.id}\`, seq ${message.seq}${kindNote}${toNote}). Readers watching with op="await" will pick it up.`);
 }
-// ─── Tasks ──────────────────────────────────────────────────────────
-async function opCreateTask(client, channelRef, title, body, to, mode, clientMsgId) {
+// ─── Threads ────────────────────────────────────────────────────────
+async function opCreateThread(client, channelRef, title, body, to, mode, clientMsgId) {
     const ch = await (0, channel_shared_1.resolveChannelOr)(client, channelRef);
     if ((0, channel_shared_1.isErr)(ch))
         return ch;
     const member = await (0, channel_shared_1.resolveMemberOr)(client, to);
     if ((0, channel_shared_1.isErr)(member))
         return member;
-    let task;
+    let thread;
     try {
-        task = await client.createChannelTask(ch.id, {
+        thread = await client.createChannelThread(ch.id, {
             title,
             body,
             toUserId: member.userId,
@@ -158,48 +163,48 @@ async function opCreateTask(client, channelRef, title, body, to, mode, clientMsg
     catch (e) {
         // The route rejects an addressee who isn't a channel member (400).
         if (isBadRequest(e)) {
-            return (0, respond_1.err)(`Couldn't address the task to ${member.label} — they aren't a member of **${ch.name}**. Invite them first (op="invite"), then create the task.`);
+            return (0, respond_1.err)(`Couldn't address the thread to ${member.label} — they aren't a member of **${ch.name}**. Invite them first (op="invite"), then open the thread.`);
         }
         throw e;
     }
-    return (0, respond_1.ok)(`Created task **${task.title}** in **${ch.name}** (task \`${task.id}\`, ${task.mode} mode), addressed to ${member.label}. Watch for replies with dopl_channel(op="await", channel="${ch.id}", since=<last seq>).`);
+    return (0, respond_1.ok)(`Opened thread **${thread.title}** in **${ch.name}** (thread \`${thread.id}\`, ${thread.mode} mode), addressed to ${member.label}. Watch for replies with dopl_channel(op="await", channel="${ch.id}", since=<last seq>).`);
 }
-async function opCloseTask(client, channelRef, taskId, outcome, summary) {
+async function opCloseThread(client, channelRef, threadId, outcome, summary) {
     const ch = await (0, channel_shared_1.resolveChannelOr)(client, channelRef);
     if ((0, channel_shared_1.isErr)(ch))
         return ch;
-    let task;
+    let thread;
     try {
-        task = await client.closeChannelTask(ch.id, taskId, { outcome, summary });
+        thread = await client.closeChannelThread(ch.id, threadId, { outcome, summary });
     }
     catch (e) {
         if ((0, respond_1.isNotFound)(e)) {
-            return (0, respond_1.err)(`No task \`${taskId}\` in **${ch.name}**.`);
+            return (0, respond_1.err)(`No thread \`${threadId}\` in **${ch.name}**.`);
         }
         if (isForbidden(e)) {
-            return (0, respond_1.err)(`You can't close task \`${taskId}\` — only its creator or the member it's addressed to may close it.`);
+            return (0, respond_1.err)(`You can't close thread \`${threadId}\` — only its creator or the member it's addressed to may close it.`);
         }
         throw e;
     }
     const summaryNote = summary?.trim() ? ` — ${summary.trim()}` : "";
-    return (0, respond_1.ok)(`Closed task **${task.title}** in **${ch.name}** as ${task.outcome}${summaryNote}.`);
+    return (0, respond_1.ok)(`Closed thread **${thread.title}** in **${ch.name}** as ${thread.outcome}${summaryNote}.`);
 }
-async function opSetTaskMode(client, channelRef, taskId, mode) {
+async function opSetThreadMode(client, channelRef, threadId, mode) {
     const ch = await (0, channel_shared_1.resolveChannelOr)(client, channelRef);
     if ((0, channel_shared_1.isErr)(ch))
         return ch;
-    let task;
+    let thread;
     try {
-        task = await client.setChannelTaskMode(ch.id, taskId, { mode });
+        thread = await client.setChannelThreadMode(ch.id, threadId, { mode });
     }
     catch (e) {
         if ((0, respond_1.isNotFound)(e)) {
-            return (0, respond_1.err)(`No task \`${taskId}\` in **${ch.name}**.`);
+            return (0, respond_1.err)(`No thread \`${threadId}\` in **${ch.name}**.`);
         }
         if (isForbidden(e)) {
-            return (0, respond_1.err)(`You can't change the mode of task \`${taskId}\` — only its creator can.`);
+            return (0, respond_1.err)(`You can't change the mode of thread \`${threadId}\` — only its creator can.`);
         }
         throw e;
     }
-    return (0, respond_1.ok)(`Set task **${task.title}** in **${ch.name}** to ${task.mode} mode.`);
+    return (0, respond_1.ok)(`Set thread **${thread.title}** in **${ch.name}** to ${thread.mode} mode.`);
 }

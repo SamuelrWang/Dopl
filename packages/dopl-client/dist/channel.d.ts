@@ -9,7 +9,7 @@
  * would open a second poll and could double-count arrivals.
  */
 import type { DoplTransport } from "./transport.js";
-import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelCreateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ChannelTask, ChannelTaskCreateInput, ReadMessagesOptions, TaskMode, TaskOutcome } from "./channel-types.js";
+import type { AwaitMessagesOptions, AwaitResult, Channel, ChannelCreateInput, ChannelMember, ChannelMessage, ChannelMessageInput, ChannelThread, ChannelThreadCreateInput, ReadMessagesOptions, ThreadMode, ThreadOutcome } from "./channel-types.js";
 export declare function listChannels(t: DoplTransport, opts?: {
     includeArchived?: boolean;
 }): Promise<Channel[]>;
@@ -20,13 +20,13 @@ export declare function awaitMessages(t: DoplTransport, channelId: string, opts:
 export declare function createChannel(t: DoplTransport, input: ChannelCreateInput): Promise<Channel>;
 export declare function inviteToChannel(t: DoplTransport, channelId: string, userId: string): Promise<ChannelMember>;
 export declare function postMessage(t: DoplTransport, channelId: string, input: ChannelMessageInput): Promise<ChannelMessage>;
-export declare function listChannelTasks(t: DoplTransport, channelId: string): Promise<ChannelTask[]>;
-export declare function getChannelTask(t: DoplTransport, channelId: string, taskId: string): Promise<ChannelTask>;
-export declare function createChannelTask(t: DoplTransport, channelId: string, input: ChannelTaskCreateInput): Promise<ChannelTask>;
-export declare function closeChannelTask(t: DoplTransport, channelId: string, taskId: string, input: {
-    outcome: TaskOutcome;
+export declare function listChannelThreads(t: DoplTransport, channelId: string): Promise<ChannelThread[]>;
+export declare function getChannelThread(t: DoplTransport, channelId: string, threadId: string): Promise<ChannelThread>;
+export declare function createChannelThread(t: DoplTransport, channelId: string, input: ChannelThreadCreateInput): Promise<ChannelThread>;
+export declare function closeChannelThread(t: DoplTransport, channelId: string, threadId: string, input: {
+    outcome: ThreadOutcome;
     summary?: string;
-}): Promise<ChannelTask>;
-export declare function setChannelTaskMode(t: DoplTransport, channelId: string, taskId: string, input: {
-    mode: TaskMode;
-}): Promise<ChannelTask>;
+}): Promise<ChannelThread>;
+export declare function setChannelThreadMode(t: DoplTransport, channelId: string, threadId: string, input: {
+    mode: ThreadMode;
+}): Promise<ChannelThread>;

@@ -461,7 +461,7 @@
       if (typeof bridge.setMessageMode === "function") bridge.setMessageMode(els.messageMode.value);
     });
 
-    // Close-task panel.
+    // Close-thread panel (`closeTask` is the wire name for it).
     $("btnClose").addEventListener("click", () => els.closePanel.classList.toggle("is-open"));
     $("btnCloseCancel").addEventListener("click", () => els.closePanel.classList.remove("is-open"));
     $("btnCloseConfirm").addEventListener("click", () => {
