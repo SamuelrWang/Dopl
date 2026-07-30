@@ -32,7 +32,7 @@
   const bridge = window.doplSession || {
     sessionId: "", onEvent: noop, send: noop, permission: noop,
     inboundDecision: noop, interrupt: noop, end: noop, closeTask: noop,
-    consentDecision: noop, setAutoApprove: noop,
+    consentDecision: noop, setToolMode: noop, setMessageMode: noop,
     folder: { get: resolved, choose: resolved, clear: resolved },
   };
   const folderBridge = bridge.folder || { get: resolved, choose: resolved, clear: resolved };
@@ -43,7 +43,8 @@
   const els = {
     peerAvatar: $("peerAvatar"), channelName: $("channelName"), taskTitle: $("taskTitle"),
     statusDot: $("statusDot"), statusLabel: $("statusLabel"), statusMeta: $("statusMeta"),
-    permPosture: $("permPosture"), autoApprove: $("autoApprove"), folderLabel: $("folderLabel"),
+    permPosture: $("permPosture"), permWarn: $("permWarn"), folderLabel: $("folderLabel"),
+    toolMode: $("toolMode"), messageMode: $("messageMode"),
     stream: $("stream"), dock: $("permissionDock"), permTool: $("permTool"),
     permSummary: $("permSummary"), permPostLabel: $("permPostLabel"), permPostTo: $("permPostTo"),
     permPost: $("permPost"), permInput: $("permInput"), permQueueNote: $("permQueueNote"),
@@ -69,12 +70,12 @@
     // closed); the stamp here only locks the card so a second click cannot double-answer it.
     // `decline` is LOCAL: nothing is sent to the peer.
     //
-    // FIX F10 / FOLLOW-UP F12 (verified): the stamp WAITS for the invoke to resolve, so no
+    // FIX F10 / FOLLOW-UP F12 (verified): the stamp WAITS for the invoke to resolve, so a missing
     // bridge method (an older preload), a rejected invoke or an {ok:false} all leave the card
     // ANSWERABLE instead of dead. Main's own `inbound_resolved` echo applies the same stamp a
-    // moment later and markInboundDecided is idempotent, so the two never disagree. Known
-    // cosmetic gap: the buttons stay live for one IPC round trip, so a very fast double-click
-    // sends two decisions (the second is refused by main's head check).
+    // moment later and markInboundDecided is idempotent, so the two never disagree. Known gap: the
+    // buttons stay live for one IPC round trip, so a very fast double-click sends two decisions
+    // (the second is refused by main's head check).
     onInboundDecide(pendingId, decision) {
       const send = bridge.inboundDecision;
       if (typeof send !== "function") return;
@@ -87,16 +88,14 @@
         })
         .catch(noop);
     },
-    // v2.7 L3: the OUTBOUND decision card. The surface moved off the dock, the POLICY path did
-    // not: the same session:permission IPC, the same three verbs, so main's fail-closed
+    // v2.7 L3: the OUTBOUND decision card. The surface moved off the dock, the POLICY path did not:
+    // the same session:permission IPC, the same three verbs, so main's fail-closed
     // permission_decision mapping and the v2.5 scoped POST_GRANT are byte-identical. The card
-    // decides by its OWN requestId (never the queue head), which leaves the dock free for a
-    // Bash request queued behind the post. Like the inbound gate the stamp WAITS for main, and
-    // FIX F1 made {ok:false} mean what it says: main/session-ipc reports whether a LIVE
-    // canUseTool resolver took the decision, so a Send that raced a park cannot stamp that post
-    // "sent" forever (the park's own permission_resolved{deny} echo resolves it to "Not sent").
-    // FIX F7: a refusal, or a rejected invoke, re-renders to hand the buttons back while the
-    // card is still answerable.
+    // decides by its OWN requestId (never the queue head), leaving the dock free for a Bash request
+    // queued behind the post. Like the inbound gate the stamp WAITS for main, and FIX F1 made
+    // {ok:false} mean what it says: main reports whether a LIVE canUseTool resolver took the
+    // decision, so a Send that raced a park cannot stamp that post "sent" forever. FIX F7: a
+    // refusal, or a rejected invoke, re-renders to hand the buttons back on a live card.
     onOutboundDecide(requestId, decision) {
       if (!requestId || typeof bridge.permission !== "function") return;
       Promise.resolve(bridge.permission(requestId, decision))
@@ -119,12 +118,11 @@
   if (mentionUi) FACTORY.peer_message = (item) => mentionUi.makePeerMessage(item, ctx);
 
   // ── header / status / folder ──────────────────────────────────────────────
-  // D1: ONE identity priority (chromeVm.headerIdentity) drives the header title, the subtitle,
-  // the avatar initials and the native window title: taskTitle -> peer name (init.from) ->
-  // channelName -> "Session". The avatar node is ALWAYS painted: the peer photo when one has
-  // arrived, else initials on a token (no black brand-mark fallback any more). Every string
-  // reaches the DOM via textContent, and the identity fields are one-lined + capped by the
-  // chrome helper, so a counterparty-controlled name is bounded display data.
+  // D1: ONE identity priority (chromeVm.headerIdentity) drives the header title, the subtitle, the
+  // avatar initials and the native window title: taskTitle -> peer name (init.from) -> channelName
+  // -> "Session". The avatar node is ALWAYS painted: the peer photo when one has arrived, else
+  // initials on a token. Every string reaches the DOM via textContent, and the identity fields are
+  // one-lined + capped by the chrome helper, so a peer-controlled name is bounded display data.
   function renderInit() {
     const info = state.init;
     if (!info) return;
@@ -149,10 +147,18 @@
     els.statusLabel.textContent = vm.statusText(state.phase, state.activity);
     const info = state.init || {};
     els.statusMeta.textContent = info.model || "";
-    // Permission posture (items 9 + 10): "Asking each time" / "Auto-approving",
-    // with the profile label as context; the toggle reflects the echoed state.
-    els.permPosture.textContent = vm.permissionModeText(state.autoApprove, info.profileLabel || info.profile);
-    els.autoApprove.checked = state.autoApprove === true;
+    // v2.9 THE TWO AXES. The posture line always states BOTH (contract D) and the selects
+    // reflect MAIN's echoed state, never the click: a park resets both axes, and the `modes`
+    // echo is what drags the controls back to Manual / Ask so they cannot lie about what the
+    // gate will do. `bypass` additionally lights the danger chip that says it is per session.
+    els.permPosture.textContent = vm.permissionPostureText(state.toolMode, state.messageMode,
+      info.profileLabel || info.profile);
+    els.toolMode.value = state.toolMode;
+    els.messageMode.value = state.messageMode;
+    const warn = vm.bypassNoticeText(state.toolMode);
+    els.permWarn.textContent = warn;
+    els.permWarn.classList.toggle("hidden", !warn);
+    els.toolMode.classList.toggle("is-bypass", state.toolMode === "bypass");
   }
 
   function renderFolder() {
@@ -348,12 +354,11 @@
         onAccept: () => { autoGrow(); renderSend(); } }) // accepting a tag NEVER sends
     : { handleKey: () => false, isOpen: () => false, address: (raw) => ({ to: "self", text: raw }), peerTagged: () => false };
 
-  // The Interrupt checkbox is gone: a steer is ALWAYS 'normal' priority now (it queues as the
-  // next turn), and interrupting is the pause button's job. v2.8: ONE composer, TWO addressees.
-  // A leading `@my-agent` (or no tag) is today's steer; a leading `@their-agent` posts the
-  // operator's OWN words into the channel addressed to the peer — never a steer (no
-  // session:send, no turn, no permission, no grant). The tag is stripped either way, so the
-  // delivered text is byte-identical to typing it untagged.
+  // The Interrupt checkbox is gone: a steer is ALWAYS 'normal' priority (it queues as the next
+  // turn), and interrupting is the pause button's job. v2.8: ONE composer, TWO addressees. A
+  // leading `@my-agent` (or no tag) is today's steer; a leading `@their-agent` posts the operator's
+  // OWN words into the channel addressed to the peer — never a steer (no session:send, no turn, no
+  // permission, no grant). The tag is stripped either way, so the delivered text is unchanged.
   // FIX F8: a preload with no sendToPeer (a version-skewed install) returned SILENTLY here. The
   // draft survived, but the glyph already read Send and the click did nothing, so the operator
   // had no way to know the message was still in their hands. Say it in the stream.
@@ -444,11 +449,16 @@
     $("btnAllowTask").addEventListener("click", () => decide("allow-task"));
     $("btnDeny").addEventListener("click", () => decide("deny"));
 
-    // Per-session auto-approve toggle (item 10). The main side echoes an
-    // `auto_approve` event → reduceEvent → renderStatus updates the posture
-    // label + reflects the checkbox. The bridge coerces the boolean.
-    els.autoApprove.addEventListener("change", () => {
-      bridge.setAutoApprove(els.autoApprove.checked === true);
+    // v2.9 THE TWO AXES. Each select tells main about ITS OWN axis and nothing else; main
+    // coerces fail-closed, applies it, and echoes `modes` back, which is what actually repaints
+    // the controls (renderStatus). A preload without the method (version skew) leaves the select
+    // where the operator put it and main enforcing the restrictive default, which is the safe
+    // failure — never the reverse.
+    els.toolMode.addEventListener("change", () => {
+      if (typeof bridge.setToolMode === "function") bridge.setToolMode(els.toolMode.value);
+    });
+    els.messageMode.addEventListener("change", () => {
+      if (typeof bridge.setMessageMode === "function") bridge.setMessageMode(els.messageMode.value);
     });
 
     // Close-task panel.

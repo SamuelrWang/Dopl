@@ -11,7 +11,7 @@
 // send is the opposite shape: human-typed, human-addressed, into a channel the human is
 // already a member of, so a card would ask the operator to approve themselves to
 // themselves. It is the identical posture to the web composer. Nothing on this path touches
-// grantDecision / allowForTask / autoApprove, it never becomes a steer (no session:send, no
+// grantDecision / allowForTask / the two permission axes, it never becomes a steer (no session:send, no
 // pushTurn, no canUseTool), and the PEER's side gates it like any other inbound message.
 //
 // DOM / electron / fs free and UMD-wrapped like session-chrome.js: a plain <script> in the

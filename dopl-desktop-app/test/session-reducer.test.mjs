@@ -62,8 +62,9 @@ test("initialSessionState defaults: interactive/responder, documented caps, empt
   assert.equal(s.costCapUsd, DEFAULT_COST_CAP_USD);
   assert.deepEqual(s.pendingPermissions, []);
   assert.deepEqual(s.allowForTask, []);
-  // Item 10: per-session auto-approve starts OFF (fail-closed, ask each time).
-  assert.equal(s.autoApprove, false);
+  // v2.9 THE TWO AXES both start at their MOST RESTRICTIVE value (fail-closed).
+  assert.equal(s.toolMode, "manual");
+  assert.equal(s.messageMode, "ask");
   assert.equal(s.hasPendingInbound, false);
   // P1: a fresh launch is never parked.
   assert.equal(s.parked, false);
@@ -203,66 +204,58 @@ test("permission_decision leaves phase awaiting while other permissions remain p
   assert.deepEqual(r.state.pendingPermissions, ["r2"]);
 });
 
-// ── set_auto_approve (item 10 — the per-session auto-approve toggle) ─────────────
+// ── v2.9 set_tool_mode / set_message_mode (the two axes) ─────────────────────────
 
-test("a launched session starts auto-approve OFF (per-session, never persisted)", () => {
-  assert.equal(running().autoApprove, false);
-  assert.equal(running({ mode: "autonomous" }).autoApprove, false);
+test("a launched session starts BOTH axes at their most restrictive value (never persisted)", () => {
+  for (const s of [running(), running({ mode: "autonomous" })]) {
+    assert.equal(s.toolMode, "manual");
+    assert.equal(s.messageMode, "ask");
+  }
 });
 
-test("set_auto_approve enable (no pending): flag ON, running/working, emits auto_approve:true", () => {
-  const s = running();
-  const r = sessionReducer(s, { type: "set_auto_approve", enabled: true });
-  assert.equal(r.state.autoApprove, true);
-  assert.equal(r.state.phase, "running");
-  assert.equal(r.state.activity, "working");
-  assert.deepEqual(effTypes(r.effects), ["emit"]);
-  assert.deepEqual(r.effects[0].payload, { type: "auto_approve", enabled: true });
+test("set_tool_mode / set_message_mode set ONE axis and echo BOTH in a single `modes` event", () => {
+  const a = sessionReducer(running(), { type: "set_tool_mode", mode: "auto" });
+  assert.equal(a.state.toolMode, "auto");
+  assert.equal(a.state.messageMode, "ask", "the other axis is untouched");
+  assert.deepEqual(effTypes(a.effects), ["emit"]);
+  assert.deepEqual(a.effects[0].payload, { type: "modes", tool: "auto", message: "ask" });
+
+  const b = sessionReducer(a.state, { type: "set_message_mode", mode: "auto_both" });
+  assert.equal(b.state.toolMode, "auto", "and stays untouched from the other side too");
+  assert.equal(b.state.messageMode, "auto_both");
+  assert.deepEqual(b.effects[0].payload, { type: "modes", tool: "auto", message: "auto_both" });
 });
 
-test("set_auto_approve enable DRAINS the pending gate queue -> allow each + clears the dock", () => {
+test("both setters coerce FAIL-CLOSED: an unknown value lands on the most restrictive member", () => {
+  for (const junk of ["bypassPermissions", "AUTO", "", null, undefined, 1, {}, "auto_inbound "]) {
+    assert.equal(sessionReducer({ ...running(), toolMode: "bypass" }, { type: "set_tool_mode", mode: junk }).state.toolMode,
+      "manual", `tool mode ${String(junk)}`);
+    assert.equal(sessionReducer({ ...running(), messageMode: "auto_both" }, { type: "set_message_mode", mode: junk }).state.messageMode,
+      "ask", `message mode ${String(junk)}`);
+  }
+  // ...and an axis event can never set the OTHER axis, whatever it carries.
+  const r = sessionReducer(running(), { type: "set_tool_mode", mode: "bypass", messageMode: "auto_both" });
+  assert.equal(r.state.messageMode, "ask");
+});
+
+test("an axis change NEVER drains the pending dock (a mode governs the NEXT call only)", () => {
   const s = { ...running(), phase: "awaiting_permission", activity: "awaiting_permission", pendingPermissions: ["r1", "r2"] };
-  const r = sessionReducer(s, { type: "set_auto_approve", enabled: true });
-  assert.equal(r.state.autoApprove, true);
-  assert.deepEqual(r.state.pendingPermissions, [], "the dock is cleared");
-  assert.equal(r.state.phase, "running");
-  assert.equal(r.state.activity, "working");
-  // Each parked request: resolvePermission allow + a permission_resolved echo; then the
-  // single auto_approve echo last.
-  assert.deepEqual(effTypes(r.effects), [
-    "resolvePermission", "emit",
-    "resolvePermission", "emit",
-    "emit",
-  ]);
-  const resolves = r.effects.filter((e) => e.type === "resolvePermission");
-  assert.deepEqual(resolves, [
-    { type: "resolvePermission", requestId: "r1", decision: "allow" },
-    { type: "resolvePermission", requestId: "r2", decision: "allow" },
-  ]);
-  const resolvedEchos = r.effects.filter((e) => e.type === "emit" && e.payload.type === "permission_resolved");
-  assert.deepEqual(resolvedEchos.map((e) => e.payload), [
-    { type: "permission_resolved", requestId: "r1", decision: "allow-once" },
-    { type: "permission_resolved", requestId: "r2", decision: "allow-once" },
-  ]);
-  const auto = r.effects.filter((e) => e.type === "emit" && e.payload.type === "auto_approve");
-  assert.deepEqual(auto.map((e) => e.payload), [{ type: "auto_approve", enabled: true }]);
+  for (const ev of [{ type: "set_tool_mode", mode: "bypass" }, { type: "set_message_mode", mode: "auto_both" }]) {
+    const r = sessionReducer(s, ev);
+    assert.deepEqual(r.state.pendingPermissions, ["r1", "r2"], "anything waiting keeps its buttons");
+    assert.deepEqual(effTypes(r.effects), ["emit"], "the echo, and nothing else");
+    assert.ok(!r.effects.some((e) => e.type === "resolvePermission"), "nothing is auto-answered");
+    assert.equal(r.state.phase, "awaiting_permission", "and the gate still owns the phase");
+  }
 });
 
-test("set_auto_approve disable: flag OFF, emits auto_approve:false only (future gates prompt again)", () => {
-  const s = { ...running(), autoApprove: true };
-  const r = sessionReducer(s, { type: "set_auto_approve", enabled: false });
-  assert.equal(r.state.autoApprove, false);
-  assert.deepEqual(effTypes(r.effects), ["emit"]);
-  assert.deepEqual(r.effects[0].payload, { type: "auto_approve", enabled: false });
-  // Disable does NOT drain/allow anything — no resolvePermission effects.
-  assert.ok(!r.effects.some((e) => e.type === "resolvePermission"));
-});
-
-test("set_auto_approve is ignored by a settled session (terminal idempotency)", () => {
+test("the axis setters are ignored by a settled session (terminal idempotency)", () => {
   const ended = sessionReducer(running(), { type: "end" }).state;
-  const r = sessionReducer(ended, { type: "set_auto_approve", enabled: true });
-  assert.equal(r.state, ended);
-  assert.deepEqual(r.effects, []);
+  for (const ev of [{ type: "set_tool_mode", mode: "bypass" }, { type: "set_message_mode", mode: "auto_both" }]) {
+    const r = sessionReducer(ended, ev);
+    assert.equal(r.state, ended);
+    assert.deepEqual(r.effects, []);
+  }
 });
 
 // ── result / caps ────────────────────────────────────────────────────────────────
@@ -333,9 +326,9 @@ test("cost cap of 0 is disabled — a large turn cost does not end the session",
 
 // ── inbound: the universal gate + its two auto-accept bypasses (v2.5 D1/D4) ──────
 
-test("inbound_arrived with AUTO-APPROVE on: feeds the reply (counterparty + pushInbound)", () => {
+test("inbound_arrived with AXIS B auto-accepting: feeds the reply (counterparty + pushInbound)", () => {
   // v2.5 D1: the opt-in decides, not `autonomous`; the fed effects stay byte-equivalent.
-  const s = { ...running({ mode: "autonomous" }), autoApprove: true };
+  const s = { ...running({ mode: "autonomous" }), messageMode: "auto_inbound" };
   const r = sessionReducer(s, { type: "inbound_arrived", pendingId: "p1", message: "hi", authorName: "Bob" });
   assert.equal(r.state.phase, "running");
   assert.equal(r.state.activity, "working");
@@ -456,11 +449,15 @@ test("cost_cap event ends the session directly (reason cost_cap) + capped lifecy
 
 // NOTE: P1 idle-park + lazy-resume reducer transitions live in the sibling
 // test/session-reducer-park.test.mjs (split to respect the 500-line §2 cap).
-test("crash: settle(interrupted) + lifecycle(task_failed interrupted:true) + error emit", () => {
+test("crash: abortQuery FIRST, then settle(interrupted) + lifecycle + error emit", () => {
   const s = running();
   const r = sessionReducer(s, { type: "crash" });
   assert.equal(r.state.phase, "ended");
-  assert.deepEqual(effTypes(r.effects), ["settle", "lifecycle", "emit"]);
+  // C3 (CRITICAL), RE-PINNED DELIBERATELY: the old list started at "settle", which pinned the
+  // bug — a crash settled the session while its SDK query was still live, orphaning a process
+  // that could keep posting behind a window that already said "ended". Every other terminal
+  // path aborts first; this one does now too.
+  assert.deepEqual(effTypes(r.effects), ["abortQuery", "settle", "lifecycle", "emit"]);
   assert.equal(findEff(r.effects, "settle").outcome, "interrupted");
   const lc = findEff(r.effects, "lifecycle");
   assert.equal(lc.kind, "task_failed");

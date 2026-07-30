@@ -59,7 +59,8 @@ test("GATE: a fresh session holds an inbound reply — no push, no counterparty 
 
 test("GATE: a launched session starts with NEITHER opt-in armed (fail closed)", () => {
   const s = running();
-  assert.equal(s.autoApprove, false);
+  assert.equal(s.messageMode, "ask", "v2.9: AXIS B starts at its most restrictive value");
+  assert.equal(s.toolMode, "manual", "and so does AXIS A");
   assert.equal(s.inboundForTask, false);
 });
 
@@ -144,28 +145,38 @@ test("PARKED: an auto-accepted reply wakes it exactly like the pre-gate path did
   assert.deepEqual(emitted(r.effects, "counterparty"), { type: "counterparty", from: "David", text: "can you ship it?" });
 });
 
-// ── the standing grant vs. the auto-approve toggle (D4) ──────────────────────────
+// ── the standing grant vs. AXIS B (D4, re-cut for v2.9) ──────────────────────────
 
-test("D4: the auto-approve toggle also auto-accepts inbound (one switch, three surfaces)", () => {
-  const s = sessionReducer(running(), { type: "set_auto_approve", enabled: true }).state;
-  assert.equal(s.autoApprove, true);
-  const r = sessionReducer(s, arrive);
-  assert.ok(r.effects.some((e) => e.type === "pushInbound"), "fed without a card");
-  // Turning it back OFF re-arms the gate (unless a standing grant was taken).
-  const off = sessionReducer(r.state, { type: "set_auto_approve", enabled: false }).state;
+test("D4/v2.9: the MESSAGE axis auto-accepts inbound; the TOOL axis never does", () => {
+  for (const mode of ["auto_inbound", "auto_both"]) {
+    const s = sessionReducer(running(), { type: "set_message_mode", mode }).state;
+    assert.equal(s.messageMode, mode);
+    assert.ok(sessionReducer(s, arrive).effects.some((e) => e.type === "pushInbound"), `${mode}: fed without a card`);
+  }
+  // Back to `ask` re-arms the gate (unless a standing grant was taken).
+  const off = sessionReducer(running(), { type: "set_message_mode", mode: "ask" }).state;
   assert.equal(sessionReducer(off, arrive).state.phase, "awaiting_inbound");
+  // THE INVARIANT: no tool posture, and not the outbound half either, feeds an inbound turn.
+  for (const state of [{ toolMode: "bypass" }, { toolMode: "auto" }, { messageMode: "auto_outbound" }]) {
+    assert.equal(sessionReducer({ ...running(), ...state }, arrive).state.phase, "awaiting_inbound",
+      `${JSON.stringify(state)} must not open the inbound gate`);
+  }
 });
 
-test("D4/FIX #3: a park disarms the TOGGLE but keeps the standing task grant", () => {
-  const armed = { ...running(), autoApprove: true, inboundForTask: true };
+test("FIX #3 + C9: a park disarms BOTH axes AND the standing task grant", () => {
+  const armed = { ...running(), toolMode: "bypass", messageMode: "auto_both", inboundForTask: true };
   const parked = sessionReducer(armed, { type: "idle_timeout" }).state;
-  assert.equal(parked.autoApprove, false, "the toggle never survives a park (v2.3 FIX #3)");
-  assert.equal(parked.inboundForTask, true, "an explicit task grant lives for the session object");
+  assert.equal(parked.toolMode, "manual", "AXIS A never survives a park (v2.3 FIX #3)");
+  assert.equal(parked.messageMode, "ask", "and neither does AXIS B");
+  // MEDIUM-3 (C9): the standing inbound grant used to survive, which let a peer restart a
+  // parked query and drive turns with the operator away. It goes with the axes now.
+  assert.equal(parked.inboundForTask, false, "C9: the standing inbound grant is cleared too");
+  assert.equal(sessionReducer(parked, arrive).state.phase, "awaiting_inbound", "so the reply HOLDS");
 });
 
 // ── FIX #6: nothing clobbers the gate state while a card is still pending ─────────
 //
-// result / permission_request / permission_decision / steer / set_auto_approve all wrote a
+// result / permission_request / permission_decision / steer / the axis setters all wrote a
 // phase without consulting hasPendingInbound, so the pill fell back to "Idle" / "Working" /
 // "Waiting for reply" seconds after the card appeared and the operator lost the only signal
 // that a message needed answering. The DESIGN: `phase` carries the gate (a pending card
@@ -226,27 +237,30 @@ test("FIX #6: ANSWERING the card releases the phase (the pill goes back to the w
 
 // ── FIX #10 / #17: park + toggle on a PARKED session ──────────────────────────────
 
-test("FIX #10: set_auto_approve on a PARKED session does not claim it is running", () => {
+test("FIX #10 (v2.9): an axis change on a PARKED session does not claim it is running", () => {
   const parked = sessionReducer(running(), { type: "idle_timeout" }).state;
-  const r = sessionReducer(parked, { type: "set_auto_approve", enabled: true });
-  assert.equal(r.state.autoApprove, true, "the flag still flips");
+  const r = sessionReducer(parked, { type: "set_message_mode", mode: "auto_both" });
+  assert.equal(r.state.messageMode, "auto_both", "the value still lands");
   assert.equal(r.state.phase, "parked", "a query-less session is not running");
   assert.equal(r.state.activity, "parked");
-  assert.ok(!r.effects.some((e) => e.type === "resumeQuery"), "and nothing is resumed by a toggle");
+  assert.ok(!r.effects.some((e) => e.type === "resumeQuery"), "and nothing is resumed by a select");
   assert.deepEqual(r.effects.map((e) => e.type), ["emit"]);
-  assert.deepEqual(r.effects[0].payload, { type: "auto_approve", enabled: true });
-  // A LIVE session is unchanged: still running/working.
-  const live = sessionReducer(running(), { type: "set_auto_approve", enabled: true });
+  assert.deepEqual(r.effects[0].payload, { type: "modes", tool: "manual", message: "auto_both" });
+  // A LIVE session keeps whatever phase it had — an axis change is not a lifecycle event.
+  const live = sessionReducer(running(), { type: "set_tool_mode", mode: "auto" });
   assert.equal(live.state.phase, "running");
-  assert.equal(live.state.activity, "working");
 });
 
-test("FIX #10: a parked toggle still drains the pending permission dock (fail-closed unchanged)", () => {
-  const parked = { ...sessionReducer(running(), { type: "idle_timeout" }).state, pendingPermissions: ["r1"] };
-  const r = sessionReducer(parked, { type: "set_auto_approve", enabled: true });
-  assert.deepEqual(r.state.pendingPermissions, []);
-  assert.ok(r.effects.some((e) => e.type === "resolvePermission" && e.decision === "allow"));
-  assert.equal(r.state.phase, "parked");
+test("v2.9: an axis change NEVER drains the pending permission dock (THE INVARIANT)", () => {
+  // The old set_auto_approve(true) resolved every parked request. It cannot survive the
+  // split: pendingPermissions holds requestIds only, so a blanket drain would let the TOOL
+  // axis answer a queued `op=open direct:true`. Anything already waiting keeps its buttons.
+  const live = { ...running(), pendingPermissions: ["r1"] };
+  for (const ev of [{ type: "set_tool_mode", mode: "bypass" }, { type: "set_message_mode", mode: "auto_both" }]) {
+    const r = sessionReducer(live, ev);
+    assert.deepEqual(r.state.pendingPermissions, ["r1"], "the queued request is untouched");
+    assert.ok(!r.effects.some((e) => e.type === "resolvePermission"), "and nothing is auto-answered");
+  }
 });
 
 test("FIX #17: a park that lands on a HELD message says so, and re-parking is idempotent", () => {
@@ -273,9 +287,10 @@ test("no gate grant is ever persisted: the durable record carries neither flag",
   const rec = io.baseRecord({
     key: "c1:t1", sessionId: "s1", channelId: "c1", taskId: "t1", workspaceId: "w1",
     side: "responder", profile: "full", mode: "interactive", startedAt: 1,
-    state: { ...running(), autoApprove: true, inboundForTask: true, turns: 2, costUsd: 0.1 },
+    state: { ...running(), toolMode: "bypass", messageMode: "auto_both", inboundForTask: true, turns: 2, costUsd: 0.1 },
   });
-  assert.equal(rec.autoApprove, undefined, "the toggle is memory-only");
+  assert.equal(rec.toolMode, undefined, "AXIS A is memory-only, never persisted");
+  assert.equal(rec.messageMode, undefined, "and so is AXIS B");
   assert.equal(rec.inboundForTask, undefined, "the standing accept grant is memory-only");
   assert.equal(rec.allowForTask, undefined, "so is the tool grant set");
   // A shell recreated from this record therefore re-gates from scratch.

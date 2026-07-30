@@ -40,7 +40,11 @@ test("idle_timeout PARKS the session — no settle/destroy/delete, sdkSessionId 
   assert.equal(r.state.phase, "parked");
   assert.equal(r.state.parked, true);
   assert.equal(r.state.turns, s.turns, "turn count is preserved across a park");
-  assert.deepEqual(effTypes(r.effects), ["denyPending", "abortQuery", "clearIdle", "persist", "emit", "emit"]);
+  // v2.9: the park also ECHOES the reset postures, so the header cannot go on advertising a
+  // mode the woken session will not honor (the old reset was silent).
+  assert.deepEqual(effTypes(r.effects), ["denyPending", "abortQuery", "clearIdle", "persist", "emit", "emit", "emit"]);
+  const modes = r.effects.find((e) => e.type === "emit" && e.payload.type === "modes");
+  assert.deepEqual(modes.payload, { type: "modes", tool: "manual", message: "ask" });
   assert.ok(!r.effects.some((e) => e.type === "settle"), "park NEVER settles (no destroy/delete)");
   assert.ok(!r.effects.some((e) => e.type === "scheduleIdle"), "park NEVER re-arms the idle timer");
   assert.equal(findEff(r.effects, "persist").phase, "parked");
@@ -84,8 +88,8 @@ test("FIX F6: parking clears postedThisTurn + postedToolUseIds (no 'Waiting for 
   // The park still deny-closes the card itself, which is what makes the counters wrong to keep.
   const echo = r.effects.find((e) => e.type === "emit" && e.payload.type === "permission_resolved");
   assert.deepEqual(echo.payload, { type: "permission_resolved", requestId: "r1", decision: "deny" });
-  // And the effect SET is unchanged by this fix (state-only change).
-  assert.deepEqual(effTypes(r.effects), ["denyPending", "abortQuery", "clearIdle", "persist", "emit", "emit", "emit"]);
+  // And the effect SET is unchanged by this fix (state-only change) — plus v2.9's `modes` echo.
+  assert.deepEqual(effTypes(r.effects), ["denyPending", "abortQuery", "clearIdle", "persist", "emit", "emit", "emit", "emit"]);
 });
 
 test("FIX F6: a woken session still counts a NEW post normally", () => {
@@ -99,13 +103,15 @@ test("FIX F6: a woken session still counts a NEW post normally", () => {
   assert.deepEqual(again.postedToolUseIds, ["t2"]);
 });
 
-// ── FIX #3: autoApprove must not survive an idle park ───────────────────────────────
+// ── FIX #3 + C9: no pre-authorization survives an idle park ─────────────────────────
 
-test("FIX #3: parking resets autoApprove OFF so a lazy resume never runs auto-armed", () => {
-  const s = { ...running(), autoApprove: true };
+test("FIX #3 (v2.9): parking resets BOTH axes AND inboundForTask (C9) — nothing resumes armed", () => {
+  const s = { ...running(), toolMode: "bypass", messageMode: "auto_both", inboundForTask: true };
   const r = sessionReducer(s, { type: "idle_timeout" });
   assert.equal(r.state.parked, true);
-  assert.equal(r.state.autoApprove, false, "auto-approve is disarmed while the operator is away");
+  assert.equal(r.state.toolMode, "manual", "AXIS A is disarmed while the operator is away");
+  assert.equal(r.state.messageMode, "ask", "and so is AXIS B");
+  assert.equal(r.state.inboundForTask, false, "MEDIUM-3 (C9): the standing inbound grant too");
 });
 
 // ── FIX #5: a parked session is INERT to buffered SDK messages ──────────────────────
@@ -173,16 +179,17 @@ test("a parked session ignores a stale idle_timeout (idempotent, no double-park)
 
 // ── the two lazy-resume triggers ──────────────────────────────────────────────────
 
-// v2.5 D1: an inbound turn only wakes a parked session when it is AUTO-ACCEPTED (the
-// per-session toggle or the standing task grant). Without that opt-in the reply is held
-// and the session stays parked — the two cases below. NOTE: `idle_timeout` resets
-// autoApprove OFF (FIX #3), so the standing task grant (which survives a park) is what
-// keeps a counterparty-driven lazy resume possible while the operator is away.
+// v2.5 D1: an inbound turn only wakes a parked session when it is AUTO-ACCEPTED (AXIS B, or
+// the standing task grant). Without that opt-in the reply is held and the session stays
+// parked — the two cases below. NOTE: as of v2.9 a park resets AXIS B *and* inboundForTask
+// (FIX #3 + C9), so this wake models an opt-in re-armed AFTER the park, which is the only way
+// a counterparty-driven resume can happen at all now.
 test("LAZY RESUME (a): an AUTO-ACCEPTED inbound turn wakes a parked session (resumeQuery FIRST)", () => {
   const parked = sessionReducer(running({ mode: "autonomous" }), { type: "idle_timeout" }).state;
   assert.equal(parked.parked, true);
-  assert.equal(parked.autoApprove, false, "FIX #3: the toggle is disarmed by the park");
-  const granted = { ...parked, inboundForTask: true }; // "Accept for this task" survives a park
+  assert.equal(parked.messageMode, "ask", "FIX #3: the axis is disarmed by the park");
+  assert.equal(parked.inboundForTask, false, "C9: and so is the standing grant");
+  const granted = { ...parked, inboundForTask: true }; // re-armed by the operator after the park
   const r = sessionReducer(granted, { type: "inbound_arrived", message: "back", authorName: "Bob" });
   assert.equal(r.state.phase, "running");
   assert.equal(r.state.parked, false, "the wake clears the parked flag");

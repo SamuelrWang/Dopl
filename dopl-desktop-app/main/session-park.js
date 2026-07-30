@@ -267,7 +267,11 @@ async function startResume(rec, sdkSessionId, rawFirstTurn) {
   const s = await deps.startSession({
     key: store.sessionKey(rec.channelId, rec.taskId),
     channelId: rec.channelId, taskId: rec.taskId, workspaceId: rec.workspaceId,
-    side: rec.side, profile: rec.profile, mode: rec.mode,
+    // C7 (MEDIUM-4): FAIL RESTRICTIVE, matching recreateParkedShell. This path passed the
+    // stored profile RAW, so a missing / corrupt / future-version value fell through
+    // normalizeProfile's global fallback and resumed the session at FULL access — the most
+    // permissive profile, from the least trustworthy input (a durable record on disk).
+    side: rec.side, profile: knownProfile(rec.profile), mode: rec.mode,
     counterpartyId: rec.counterpartyId || null, // FIX L1: restore the counterparty binding
     context: contextFromRecord(rec), rawFirstTurn, resumeSdkId: sdkSessionId, // D1: restore the header identity
   }, sdk);

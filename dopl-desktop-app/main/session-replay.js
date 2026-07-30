@@ -46,18 +46,42 @@ function createRing(maxEntries, maxBytes) {
   };
 }
 
-// Append a payload; drop-oldest on overflow. When a dropped entry was already sent
-// (sentIdx > 0) the cursor decrements so it still points at the sent/unsent boundary;
-// dropping an UNSENT entry (sentIdx === 0) is the bounded data loss (F-08a).
+// C5 (renderer H1) — `init` IS THE WINDOW'S IDENTITY and must never be evicted. It carries
+// the peer name, channel, task title and side; the renderer's fold has no other source for
+// them, and the composer's @-tag addresses `state.init.from`. Drop-oldest evicted it FIRST
+// (it is always entry 0), so after a reload the window came back identity-less and a tag
+// went to the operator's own agent instead of the peer. It is pinned as a STICKY HEAD here:
+// eviction starts at the entry after it. Returns the index eviction may start from.
+function stickyHead(ring) {
+  const first = ring.entries.length ? ring.entries[0] : null;
+  return first && first.type === 'init' ? 1 : 0;
+}
+
+// Append a payload; drop-oldest on overflow, never touching the sticky head. When a dropped
+// entry was already sent (sentIdx past it) the cursor decrements so it still points at the
+// sent/unsent boundary; dropping an UNSENT entry is the bounded data loss (F-08a).
 function ringRecord(ring, payload) {
   ring.entries.push(payload);
   ring.bytes += entryBytes(payload);
-  while (ring.entries.length > ring.maxEntries || (ring.bytes > ring.maxBytes && ring.entries.length > 1)) {
-    const dropped = ring.entries.shift();
+  for (;;) {
+    const head = stickyHead(ring);
+    const over = ring.entries.length > ring.maxEntries || ring.bytes > ring.maxBytes;
+    if (!over || ring.entries.length <= head + 1) break; // only the head + newest remain
+    const dropped = ring.entries.splice(head, 1)[0];
     ring.bytes -= entryBytes(dropped);
-    if (ring.sentIdx > 0) ring.sentIdx -= 1;
+    if (ring.sentIdx > head) ring.sentIdx -= 1;
   }
   return ring;
+}
+
+// C5, the other half — the two avatar `data:` URIs (up to ~350KB each) NEVER ride `init`.
+// One cold-cache fill used to blow the 1MB bound on its own and evict the sticky head, so
+// pinning alone is not enough: an init that carries them is split into a small init plus the
+// `avatars` event the view-model already OR-merges. Everything else passes straight through.
+function splitInitAvatars(payload) {
+  if (!payload || payload.type !== 'init' || !(payload.selfAvatar || payload.fromAvatar)) return [payload];
+  const avatars = { type: 'avatars', self: payload.selfAvatar || null, from: payload.fromAvatar || null };
+  return [{ ...payload, selfAvatar: null, fromAvatar: null }, avatars];
 }
 
 // The payloads this renderer has not yet seen, advancing the cursor to the end.
@@ -93,16 +117,19 @@ function createReplay(webContents, sendFn) {
   return {
     // Record every emit, and send immediately once a page is loaded (advancing the
     // cursor). Before first load it only buffers, so the first `init` is never dropped.
+    // C5: an init carrying avatars enters the ring as TWO entries (init + `avatars`).
     deliver(payload) {
-      ringRecord(ring, payload);
-      if (ring.loaded) {
-        send(payload);
-        ring.sentIdx = ring.entries.length;
+      for (const p of splitInitAvatars(payload)) {
+        ringRecord(ring, p);
+        if (ring.loaded) {
+          send(p);
+          ring.sentIdx = ring.entries.length;
+        }
       }
     },
     // Buffer without sending (exposed for completeness/tests; the shells use deliver).
     record(payload) {
-      ringRecord(ring, payload);
+      for (const p of splitInitAvatars(payload)) ringRecord(ring, p);
     },
     onLoad() {
       for (const p of ringOnLoad(ring)) send(p);

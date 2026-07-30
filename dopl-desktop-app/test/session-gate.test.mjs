@@ -92,7 +92,7 @@ function harness(over = {}) {
 
 // A session object shaped like the engine's: reducer state + the pending FIFO + a window.
 function fakeSession(over = {}) {
-  const state = { autoApprove: false, inboundForTask: false, mode: "interactive", ...(over.state || {}) };
+  const state = { messageMode: "ask", inboundForTask: false, mode: "interactive", ...(over.state || {}) };
   const focused = over.focused === true;
   return {
     key: KEY, settled: false, pendingInbound: [], state, windowHidden: false,
@@ -121,7 +121,7 @@ test("feedInbound HOLDS the reply on the session queue and dispatches inbound_ar
 
 test("feedInbound gates a PARKED session the same way (the gate is mode/park agnostic)", () => {
   const h = harness();
-  const s = fakeSession({ state: { autoApprove: false, inboundForTask: false, mode: "autonomous", parked: true } });
+  const s = fakeSession({ state: { messageMode: "ask", inboundForTask: false, mode: "autonomous", parked: true } });
   h.sessions.set(KEY, s);
   assert.equal(h.feedInbound(reply()), true);
   assert.equal(s.pendingInbound.length, 1);
@@ -159,23 +159,31 @@ test("a FULL queue returns false so the listener can fall through to its passive
 
 // ── the auto path (D4) ───────────────────────────────────────────────────────────
 
-test("AUTO (toggle or standing grant): fed straight through, never queued, no notification", () => {
-  for (const flag of ["autoApprove", "inboundForTask"]) {
+test("AUTO (AXIS B or the standing grant): fed straight through, never queued, no notification", () => {
+  // v2.9: the opt-ins are the MESSAGE axis (auto_inbound / auto_both) and the standing
+  // "Accept for this task" grant. The TOOL axis is not one of them, at any value.
+  for (const opt of [{ messageMode: "auto_inbound" }, { messageMode: "auto_both" }, { inboundForTask: true }]) {
     const h = harness();
-    const s = fakeSession({ state: { autoApprove: false, inboundForTask: false, [flag]: true } });
+    const s = fakeSession({ state: { messageMode: "ask", inboundForTask: false, ...opt } });
     h.sessions.set(KEY, s);
     assert.equal(h.feedInbound(reply()), true);
-    assert.equal(s.pendingInbound.length, 0, `${flag}: nothing is held`);
+    assert.equal(s.pendingInbound.length, 0, `${JSON.stringify(opt)}: nothing is held`);
     assert.deepEqual(evTypes(h.calls), ["inbound_arrived"]);
-    assert.equal(h.calls.notices.length, 0, `${flag}: no gate notification for an auto-accept`);
+    assert.equal(h.calls.notices.length, 0, `${JSON.stringify(opt)}: no gate notification`);
   }
 });
 
-test("autoInbound reads the LIVE state (default off; either flag opts in)", () => {
+test("autoInbound reads the LIVE state, and ONLY the message axis opts in", () => {
   const h = harness();
   assert.equal(h.autoInbound(fakeSession()), false);
-  assert.equal(h.autoInbound(fakeSession({ state: { autoApprove: true } })), true);
+  assert.equal(h.autoInbound(fakeSession({ state: { messageMode: "auto_inbound" } })), true);
+  assert.equal(h.autoInbound(fakeSession({ state: { messageMode: "auto_both" } })), true);
   assert.equal(h.autoInbound(fakeSession({ state: { inboundForTask: true } })), true);
+  // THE INVARIANT: outbound-only, and EVERY tool posture, leave the inbound gate holding.
+  assert.equal(h.autoInbound(fakeSession({ state: { messageMode: "auto_outbound" } })), false);
+  for (const toolMode of ["manual", "accept_edits", "auto", "bypass"]) {
+    assert.equal(h.autoInbound(fakeSession({ state: { toolMode } })), false, `${toolMode} is not a message opt-in`);
+  }
   assert.equal(h.autoInbound(null), false, "a junk session never auto-accepts");
 });
 
@@ -281,14 +289,14 @@ test("accept-for-task DRAINS every remaining held reply (none is stranded in the
 
 // ── D4: flipping the toggle ON feeds what is already held ────────────────────────
 
-test("drainInbound feeds the whole backlog once an opt-in is armed (the toggle case)", () => {
+test("drainInbound feeds the whole backlog once an opt-in is armed (the AXIS B case)", () => {
   const h = harness();
   const s = fakeSession();
   h.sessions.set(KEY, s);
   h.feedInbound(reply({ message: "a" }));
   h.feedInbound(reply({ message: "b" }));
   h.calls.dispatch.length = 0;
-  s.state.autoApprove = true; // the reducer's set_auto_approve landed
+  s.state.messageMode = "auto_inbound"; // the reducer's set_message_mode landed
   assert.equal(h.drainInbound(s), true);
   assert.deepEqual(evTypes(h.calls), ["inbound_accept", "inbound_accept"]);
   assert.deepEqual(h.calls.dispatch.map((e) => e.message), ["a", "b"], "arrival order preserved");
@@ -304,7 +312,7 @@ test("drainInbound is a NO-OP with no opt-in armed (it must never bypass the gat
   assert.equal(h.drainInbound(s), false, "the toggle going OFF changes nothing");
   assert.deepEqual(evTypes(h.calls), [], "and it never re-emits a duplicate gate card");
   assert.equal(s.pendingInbound.length, 1, "the held reply keeps waiting for a decision");
-  assert.equal(h.drainInbound({ settled: true, state: { autoApprove: true }, pendingInbound: [] }), false);
+  assert.equal(h.drainInbound({ settled: true, state: { messageMode: "auto_both" }, pendingInbound: [] }), false);
   assert.equal(h.drainInbound(null), false);
 });
 
@@ -401,7 +409,7 @@ test("FIX F1: a message still HELD at the gate is excluded when the operator typ
 test("FIX F1: an AUTO-accepted message is excluded too (it rides its own continuation)", () => {
   const h = harness();
   const s = reopenedShell(THREAD());
-  s.state.autoApprove = true;
+  s.state.messageMode = "auto_both";
   h.sessions.set(KEY, s);
   h.feedInbound(reply({ message: "secret plan" }));
   assert.equal(s.pendingInbound.length, 0, "auto never holds");

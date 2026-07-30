@@ -13,6 +13,11 @@
 // The token value NEVER hits logs/diag. It is stored safeStorage-encrypted and
 // is written into the spawn-config file (600) and passed as a `claude mcp add`
 // header argv (the CLI's only interface for it — not logged).
+//
+// C1 (HIGH-2): the safeStorage cache is now also the ONLY source the SESSION path
+// uses. `deviceTokenForSpawn()` hands sdk-loader.buildMcpServers the bearer in
+// memory, so an SDK session never needs the file; steps 2/3 above remain for the
+// CLI path alone (headless spawns + manual `claude` runs).
 
 const fs = require('fs');
 const path = require('path');
@@ -37,17 +42,25 @@ function spawnConfigPath() {
   return path.join(app.getPath('userData'), 'mcp-spawn.json');
 }
 
-function currentSpawnToken() {
+// The EXACT bytes this file must contain for a given token. Serialized once and
+// compared whole (C2), so every field is repaired, not just the bearer.
+function spawnConfigBody(token) {
+  return JSON.stringify({
+    mcpServers: {
+      dopl: { type: 'http', url: MCP_URL, headers: { Authorization: `Bearer ${token}` } },
+    },
+  });
+}
+
+function currentSpawnBody() {
   try {
-    const raw = fs.readFileSync(spawnConfigPath(), 'utf8');
-    const authHeader = JSON.parse(raw)?.mcpServers?.dopl?.headers?.Authorization || '';
-    return authHeader.startsWith('Bearer ') ? authHeader.slice('Bearer '.length) : '';
+    return fs.readFileSync(spawnConfigPath(), 'utf8');
   } catch (_) {
     return '';
   }
 }
 
-// Refresh the file only when the token changed (avoids needless rewrites). Mode
+// Refresh the file whenever its CONTENT differs (avoids needless rewrites). Mode
 // 600 on create AND an explicit chmod so a pre-existing file is tightened too.
 //
 // This file holds a 90-day dopl.read+dopl.write device token, so the chmod must
@@ -55,20 +68,22 @@ function currentSpawnToken() {
 // only when the file is created, and the unchanged-token fast path below used to
 // return before any chmod ran. A file left at 644 by an older build (or by a
 // restore/copy) therefore stayed world-readable for the token's whole lifetime.
+//
+// C2 (HIGH-3): the fast path compares the WHOLE serialized config, not the token
+// alone. The old check read only headers.Authorization, so a local process could
+// rewrite `url` to its own endpoint and we would keep declaring the file correct
+// forever — the CLI path would then hand the bearer (and every tool call) to that
+// endpoint. Anything but the exact expected bytes is now rewritten.
 function writeSpawnConfig(token) {
   try {
     fs.chmodSync(spawnConfigPath(), 0o600);
   } catch (_) {
     /* not created yet — the write below sets the mode */
   }
-  if (currentSpawnToken() === token) return true;
-  const cfg = {
-    mcpServers: {
-      dopl: { type: 'http', url: MCP_URL, headers: { Authorization: `Bearer ${token}` } },
-    },
-  };
+  const body = spawnConfigBody(token);
+  if (currentSpawnBody() === body) return true;
   try {
-    fs.writeFileSync(spawnConfigPath(), JSON.stringify(cfg), { mode: 0o600 });
+    fs.writeFileSync(spawnConfigPath(), body, { mode: 0o600 });
     fs.chmodSync(spawnConfigPath(), 0o600);
     diag('mcp-config: wrote spawn config (600)');
     return true;
@@ -81,6 +96,9 @@ function writeSpawnConfig(token) {
 // ── Device-token cache (safeStorage) ─────────────────────────────────────────
 function saveDeviceToken(obj) {
   try {
+    // C1: a fresh mint is live for the NEXT session spawn without a restart (the
+    // in-memory copy is what buildMcpServers injects).
+    if (obj && obj.token) spawnToken = String(obj.token);
     const json = JSON.stringify(obj);
     if (safeStorage.isEncryptionAvailable()) {
       store.set(DT_KEY, safeStorage.encryptString(json).toString('base64'));
@@ -106,6 +124,23 @@ function loadDeviceToken() {
     /* fall through */
   }
   return null;
+}
+
+// C1 (HIGH-2) — THE SDK PATH'S BEARER, never a file read. sdk-loader.buildMcpServers used
+// to parse the token out of mcp-spawn.json on every session spawn, which meant a 90-day
+// dopl.read+dopl.write credential sat in plaintext under a path that every profile's
+// PRE-APPROVED (therefore gate-bypassing) Read tool could open. The token is already
+// cached safeStorage-encrypted for the CLI path, so the session path reads THAT instead:
+// decrypted on demand, memoized in memory for the life of the process, never logged.
+// Returns '' when there is nothing usable (pre-sign-in) — buildMcpServers then hands the
+// session an empty mcpServers object exactly as a missing file used to.
+let spawnToken = '';
+function deviceTokenForSpawn() {
+  if (spawnToken) return spawnToken;
+  const rec = loadDeviceToken();
+  const token = rec && rec.token ? String(rec.token) : '';
+  if (token) spawnToken = token;
+  return token;
 }
 
 function parseExpiry(v) {
@@ -276,4 +311,9 @@ async function ensureMcpConfigInner() {
   }
 }
 
-module.exports = { ensureMcpConfig, spawnConfigPath };
+module.exports = {
+  ensureMcpConfig,
+  spawnConfigPath,
+  deviceTokenForSpawn, // C1: the SDK path's bearer, from safeStorage — never off disk
+  spawnConfigBody, // C2: the exact bytes writeSpawnConfig compares against
+};

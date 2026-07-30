@@ -16,6 +16,8 @@
 const { ipcMain } = require('electron');
 const channelDirs = require('./channel-dirs');
 const gate = require('./session-gate'); // v2.5 D1: the inbound gate owns the decision
+// v2.9: the canonical mode tables live with the gate that resolves them (session-profiles).
+const { normalizeToolMode, normalizeMessageMode } = require('./session-profiles');
 const peerPost = require('./session-peer-post'); // v2.8: the operator's own peer-addressed post
 const { diag } = require('./diag');
 
@@ -104,14 +106,24 @@ function register(internals) {
   ipcMain.handle('session:end', (e) => withSession(e, (s) => engine.dispatch(s, { type: 'end' })));
   ipcMain.handle('session:close-task', (e, p) => withSession(e, (s) => engine.dispatch(s, { type: 'close_task', outcome: p && p.outcome, summary: p && p.summary })));
 
-  // ── Item 10: per-session auto-approve toggle. Bound from event.sender like every
-  // other handler; the enabled flag is coerced to a strict boolean. The reducer does
-  // the permission-gate drain + auto_approve echo — main stays authoritative on the
-  // flip. v2.5 D4: the toggle now covers INBOUND too, so anything already held at the
-  // gate is fed right away instead of sitting behind a switch that says otherwise
-  // (drainInbound no-ops when the toggle went OFF, or when nothing is held).
-  ipcMain.handle('session:set-auto-approve', (e, p) => withSession(e, (s) => {
-    engine.dispatch(s, { type: 'set_auto_approve', enabled: !!(p && p.enabled) });
+  // ── v2.9 THE TWO AXES, replacing the single `session:set-auto-approve` channel (which is
+  // DELETED, not aliased — the renderer ships in the same bundle, so there is no version to
+  // stay compatible with). Both are bound from event.sender like every other handler, and both
+  // coerce FAIL-CLOSED twice: once in the preload, once here against session-profiles' own
+  // tables, so an unknown value can only ever land on the MOST RESTRICTIVE member of its axis.
+  //
+  // AXIS A — tool permissions. It touches NOTHING about message flow: no drainInbound, no
+  // outbound resolution. That separation is the invariant, enforced again in grantDecision.
+  ipcMain.handle('session:set-tool-mode', (e, p) => withSession(e, (s) => {
+    engine.dispatch(s, { type: 'set_tool_mode', mode: normalizeToolMode(p && p.mode) });
+  }));
+
+  // AXIS B — message flow. This is where v2.5 D4's drain moved: switching INCOMING to
+  // automatic must not strand a message already held at the gate behind a control that says
+  // it flows (drainInbound self-guards — it no-ops unless an inbound opt-in is armed, and
+  // when nothing is held). Nothing here can approve a work tool.
+  ipcMain.handle('session:set-message-mode', (e, p) => withSession(e, (s) => {
+    engine.dispatch(s, { type: 'set_message_mode', mode: normalizeMessageMode(p && p.mode) });
     gate.drainInbound(s);
   }));
 

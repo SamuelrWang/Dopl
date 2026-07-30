@@ -5,7 +5,8 @@
 //   getSdk()                  cached dynamic import() of the ESM SDK
 //   resolveClaudeExecutable() the asar-unpacked path for options.pathToClaudeCodeExecutable
 //   buildMcpServers(cfg, wsId) the in-memory mcpServers object (dopl bearer from
-//                              mcp-spawn.json + the session's X-Workspace-Id pin)
+//                              safeStorage + the session's X-Workspace-Id pin)
+//   buildSecretPathDenyRules() the credential-path deny rules every session runs with
 //
 // WHY dynamic import (research §0 / §D): the SDK ships `sdk.mjs` (ESM only) but the
 // Electron main process is CJS. A static `require` throws ERR_REQUIRE_ESM; a dynamic
@@ -19,9 +20,8 @@
 // dev / an unpackaged tree there is no `app.asar` segment and the path is unchanged.
 //
 // The dopl bearer NEVER hits logs/argv: it stays inside the returned in-memory
-// mcpServers object, read straight from mcp-spawn.json (§H-7).
+// mcpServers object, held by safeStorage and never read back off disk (§H-7, C1).
 
-const fs = require('fs');
 const path = require('path');
 const { app } = require('electron');
 const { MCP_URL } = require('./config');
@@ -63,11 +63,58 @@ function resolveClaudeExecutable() {
   }
 }
 
+// C1 (HIGH-2) — THE DEVICE TOKEN IS OFF DISK FOR THE SDK PATH. buildMcpServers used to
+// read userData/mcp-spawn.json, a mode-600 file carrying a 90-day dopl.read+dopl.write
+// bearer. `Read` is PRE-APPROVED on all three session profiles, which means the SDK
+// SHADOWS it and the call never reaches canUseTool at all: an injected agent could lift
+// that token with ZERO operator clicks and then act as this device against the Dopl API,
+// bypassing every control the session window offers. The bearer now comes from
+// mcp-config's safeStorage-held cache and is injected straight into this in-memory
+// object, so a session spawn needs no plaintext credential on disk. The file survives
+// ONLY for the CLI path (session-spawner's --mcp-config, manual `claude` runs), and
+// buildSecretPathDenyRules below keeps the pre-approved read tools out of it.
+function doplBearer() {
+  // Lazily required: mcp-config pulls in auth/session-spawner, and an unwired harness
+  // (or a pre-sign-in launch) must read as "no token", never throw into a launch.
+  try {
+    return require('./mcp-config').deviceTokenForSpawn() || '';
+  } catch (_) {
+    return '';
+  }
+}
+
+// C1 — the tool-BOUND half of the same fix. A pre-approved tool never reaches our gate,
+// so this deny has to ride options.disallowedTools (the SDK's rule layer), not
+// grantDecision. It fences the two directories that hold credentials on this machine:
+// userData (mcp-spawn.json + the safeStorage-encrypted electron-store) and ~/.claude*
+// (the CLI's own config + its keychain-adjacent state). Rules are gitignore-style, so an
+// absolute path takes the `//` (filesystem-root) prefix and `~/` is the home dir. Applied
+// to EVERY profile, because every profile pre-approves the local reads. `Read` is the
+// load-bearing entry; the Grep/Glob twins are belt (an unrecognized rule is a harmless
+// no-op on this CLI, which is why naming them costs nothing).
+const SECRET_TOOLS = ['Read', 'Grep', 'Glob'];
+const SECRET_HOME_PATHS = ['~/.claude*', '~/.claude/**'];
+function buildSecretPathDenyRules() {
+  const paths = SECRET_HOME_PATHS.slice();
+  try {
+    const userData = app.getPath('userData');
+    if (userData) paths.unshift('//' + String(userData).replace(/^\/+/, '') + '/**');
+  } catch (_) { /* no app yet (harness) — the home rules still apply */ }
+  const rules = [];
+  for (const tool of SECRET_TOOLS) {
+    for (const p of paths) rules.push(`${tool}(${p})`);
+  }
+  return rules;
+}
+
 // The in-memory mcpServers object (research §4 — replaces the --mcp-config file).
-// Reads the dopl bearer + URL straight out of mcp-spawn.json (written mode-600 by
-// mcp-config.js). `doplToolsPolicy` (a non-null array) becomes the per-server
-// `tools` allowlist so a restricted profile only sees its scoped dopl tools. When
-// the file is absent (rare — pre-sign-in) returns {} so the session still runs.
+// `doplToolsPolicy` (a non-null array) becomes the per-server `tools` allowlist so a
+// restricted profile only sees its scoped dopl tools. With no token (pre-sign-in)
+// returns {} so the session still runs, exactly as the missing-file case used to.
+//
+// C2 (HIGH-3): the url is ALWAYS the compiled-in MCP_URL. The old `dopl.url || MCP_URL`
+// trusted a value read back off disk, so any local process that rewrote that file could
+// point the session's whole MCP surface — bearer included — at its own endpoint.
 //
 // v2.x WORKSPACE PIN. `workspaceId` (the SESSION's workspace UUID) rides as the
 // `X-Workspace-Id` request header. The device credential can span several
@@ -84,19 +131,12 @@ function resolveClaudeExecutable() {
 // workspaces can share a slug. Omitted entirely when there is no session
 // workspace, which leaves today's behavior untouched.
 function buildMcpServers(doplToolsPolicy, workspaceId) {
-  const file = path.join(app.getPath('userData'), 'mcp-spawn.json');
-  let dopl;
-  try {
-    const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
-    dopl = parsed && parsed.mcpServers && parsed.mcpServers.dopl;
-  } catch (_) {
-    return {};
-  }
-  if (!dopl || !dopl.headers || !dopl.headers.Authorization) return {};
+  const token = doplBearer();
+  if (!token) return {};
   const server = {
     type: 'http',
-    url: dopl.url || MCP_URL,
-    headers: { Authorization: dopl.headers.Authorization },
+    url: MCP_URL,
+    headers: { Authorization: `Bearer ${token}` },
   };
   const pin = typeof workspaceId === 'string' ? workspaceId.trim() : '';
   if (pin) server.headers['X-Workspace-Id'] = pin;
@@ -132,5 +172,6 @@ module.exports = {
   resolveClaudeExecutable,
   rewriteAsarUnpacked,
   buildMcpServers,
+  buildSecretPathDenyRules, // C1: the credential-path deny every session runs with
   buildScrubbedEnv,
 };

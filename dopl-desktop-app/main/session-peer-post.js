@@ -11,7 +11,7 @@
 // SECURITY: the outbound approval card gates an AGENT-authored post. This one is
 // human-typed, human-addressed, into a channel the human is already a member of, so a card
 // would ask the operator to approve themselves to themselves (the identical posture to the
-// web composer). grantDecision / allowForTask / autoApprove are untouched. The HTTP path is
+// web composer). grantDecision / allowForTask / the two axes are untouched. The HTTP path is
 // fail-closed: a 4xx is never retried and any failure paints "Not sent" in the window. The
 // PEER's side gates it exactly like any other inbound message. channelId / workspaceId are
 // read off the LIVE session at post time, so a session that gains its channel binding later

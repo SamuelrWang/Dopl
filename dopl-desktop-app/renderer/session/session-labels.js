@@ -3,7 +3,8 @@
 //   - statusText(phase, activity)              -> the status-pill text
 //   - statusDotKey(phase, activity)            -> the status-dot class key (colour)
 //   - folderLabel(folder)                      -> the working-directory pill label
-//   - permissionModeText(autoApprove, profile) -> the permission-posture line
+//   - permissionPostureText(toolMode, messageMode, profile) -> the two-axis posture line
+//   - bypassNoticeText(toolMode)               -> the per-session bypass danger line
 //   - permissionPostBody(perm)                 -> the drafted body of a gated post (D2)
 //   - postDestinationText(perm)                -> WHERE that post is going (FIX #9; v2.x names the peer)
 //
@@ -74,13 +75,47 @@
     return label ? String(label) : "~/Downloads";
   }
 
-  // The permission-posture label (items 9 + 10). Off = "Asking each time",
-  // on = "Auto-approving"; the tool-profile label rides along as context. Plain
-  // sentence case, no em dash (§H-13). The middle dot separates mode · profile.
-  function permissionModeText(autoApprove, profileLabel) {
-    const mode = autoApprove ? "Auto-approving" : "Asking each time";
+  // ── v2.9: the TWO-AXIS posture line (contract D) ────────────────────────────
+  // The old single line said "Auto-approving" for a switch that governed BOTH the shell and
+  // outbound messages, and never named the blast radius (HIGH-4). Each axis now states, in
+  // plain words, what it actually does — and the permissive tool modes name the reach
+  // ("commands", "shell and web", "every command on this machine"). Fixed copy, sentence
+  // case, NO em dash (§H-13). Unknown values fall back to the most restrictive line, so a
+  // garbled mode can never read as more permissive than it is.
+  const TOOL_POSTURE = {
+    manual: "Asking before each command",
+    accept_edits: "Auto approving file edits",
+    auto: "Auto approving commands, asking for shell and web",
+    bypass: "Auto approving every command on this machine",
+  };
+  const MESSAGE_POSTURE = {
+    ask: "Asking before messages in and out",
+    auto_inbound: "Auto accepting incoming messages",
+    auto_outbound: "Auto sending outgoing messages",
+    auto_both: "Messages flow automatically",
+  };
+  function toolPostureText(mode) {
+    return TOOL_POSTURE[mode] || TOOL_POSTURE.manual;
+  }
+  function messagePostureText(mode) {
+    return MESSAGE_POSTURE[mode] || MESSAGE_POSTURE.ask;
+  }
+
+  // The whole status-strip line: BOTH axes, always, with the tool-profile label as trailing
+  // context (item 9). One axis is never shown without the other — a half-stated posture is
+  // how the operator came to believe one switch meant one thing.
+  function permissionPostureText(toolMode, messageMode, profileLabel) {
     const label = profileLabel == null ? "" : String(profileLabel).trim();
-    return "Permissions: " + mode + (label ? " · " + label : "");
+    return "Tools: " + toolPostureText(toolMode) +
+      " · Messages: " + messagePostureText(messageMode) +
+      (label ? " · " + label : "");
+  }
+
+  // The danger callout for the one mode that hands over the whole machine. It is per SESSION
+  // and dies with it (and with a park), which the operator must be told at the moment they
+  // pick it, not in a tooltip. "" for every other mode, which hides the chip.
+  function bypassNoticeText(toolMode) {
+    return toolMode === "bypass" ? "Bypass is on for this session only" : "";
   }
 
   // ── v2.5 D2: what a gated dopl_channel post is about to send ────────────────
@@ -115,10 +150,23 @@
     const raw = perm && perm.to != null ? String(perm.to).replace(/\s+/g, " ").trim() : "";
     return raw.length > PEER_CAP ? raw.slice(0, PEER_CAP - 1).trimEnd() + "…" : raw;
   }
+  // MEDIUM-2 — the kind suffix. A post can claim to be a structured lifecycle EVENT
+  // (`kind: task_finished`), which the peer's UI renders as an outcome rather than as chat.
+  // The card used to show a forged one as an ordinary reply; main stamps the real value
+  // (`postKind`, absent for a plain message) and it is named here, verbatim, so a forged
+  // completion is visible before it is approved.
+  function postKindSuffix(perm) {
+    const kind = perm && perm.postKind != null ? String(perm.postKind).trim() : "";
+    return kind ? ", marked " + kind : "";
+  }
+  // MEDIUM-2 — `addressed` means the CALL named a recipient (`to:`), which may be a different
+  // channel member from this session's counterparty. Main puts the real value on `to` and
+  // flags it, so the card names who the message is really for instead of the peer it assumes.
   function postDestinationText(perm) {
-    if (!perm || perm.ownChannel !== true) return "To: another channel";
+    if (!perm || perm.ownChannel !== true) return "To: another channel" + postKindSuffix(perm);
     const who = peerName(perm);
-    return who ? "To: " + who + "'s agent" : "To: this channel";
+    if (perm.addressed === true && who) return "To: " + who + postKindSuffix(perm);
+    return (who ? "To: " + who + "'s agent" : "To: this channel") + postKindSuffix(perm);
   }
 
   // Is this post leaving the session's own channel? Drives the dock's warning styling.
@@ -128,7 +176,10 @@
   }
 
   return {
-    statusText, statusDotKey, folderLabel, permissionModeText,
+    statusText, statusDotKey, folderLabel,
+    // v2.9 (contract D): the two-axis posture + the bypass danger line. `permissionModeText`
+    // is GONE, not aliased — one string can no longer describe two independent postures.
+    toolPostureText, messagePostureText, permissionPostureText, bypassNoticeText,
     permissionPostBody, postDestinationText, isCrossChannelPost,
   };
 });

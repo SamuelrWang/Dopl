@@ -13,7 +13,8 @@
 //   (d) the card resolves IN PLACE (its own update() morphs the DOM), because
 //       session.js's renderStream creates a node once per index and never rebuilds it.
 // Plus: park survival (a parked pending post must fail closed, not read "Sent" forever)
-// and the auto-approve bypass (no card at all, the delivered bubble exactly as before).
+// and the AXIS B bypass (v2.9: messageMode auto_outbound / auto_both — no card at all,
+// the delivered bubble exactly as before; it was `autoApprove` before the two axes).
 //
 // Four layers: the pure view-model, the pure reducer (source extraction), main/session-io
 // (required directly — it is electron-free), and the real DOM factories against a stub.
@@ -200,8 +201,8 @@ test("L3 PARK: the reducer really does emit that echo for the post's own request
   assert.equal(sessionReducer(awaiting.state, { type: "result", turnCostUsd: 0 }).state.activity, "awaiting_peer");
 });
 
-test("L3: the auto-approve DRAIN resolves a pending card to delivered", () => {
-  // set_auto_approve(true) resolves each parked request `allow` and echoes allow-once.
+test("L3: an allow-once echo resolves a pending card to delivered", () => {
+  // Whatever produced the allow (this window's Send, or main's own echo) lands the same way.
   const s = vm.reduceEvent(gated(), { type: "permission_resolved", requestId: "r1", decision: "allow-once" });
   assert.equal(last(s).status, "sent", "the operator opted out of being asked mid-post");
 });
@@ -233,16 +234,19 @@ test("L3: a tool_result still resolves the card as a belt (ok -> sent, error -> 
 
 const assistantMsg = (blocks) => ({ type: "assistant", message: { content: blocks } });
 const toolUse = (id, name, input) => ({ type: "tool_use", id, name, input });
-const mkSession = (over) => ({ profile: "full", channelId: "ch1", state: { allowForTask: [], autoApprove: false }, ...over });
+const mkSession = (over) => ({ profile: "full", channelId: "ch1", state: { allowForTask: [], messageMode: "ask" }, ...over });
 
-test("io: postWillGate mirrors canUseTool — gate by default, NOT under a grant or auto", () => {
+test("io: postWillGate mirrors canUseTool — gate by default, NOT under a grant or AXIS B", () => {
   assert.equal(io.postWillGate(mkSession(), POST), true, "nothing granted -> the card appears");
-  assert.equal(io.postWillGate(mkSession({ state: { allowForTask: [], autoApprove: true } }), POST), false,
-    "auto-approve ON -> no card, the post just goes");
-  assert.equal(io.postWillGate(mkSession({ state: { allowForTask: [CHANNEL_TOOL + "#post"], autoApprove: false } }), POST), false,
+  // v2.9: the outbound half of the MESSAGE axis replaced the auto-approve toggle here.
+  assert.equal(io.postWillGate(mkSession({ state: { allowForTask: [], messageMode: "auto_outbound" } }), POST), false,
+    "auto send outgoing -> no card, the post just goes");
+  assert.equal(io.postWillGate(mkSession({ state: { allowForTask: [CHANNEL_TOOL + "#post"], messageMode: "ask" } }), POST), false,
     "the v2.5 scoped task grant -> no card either");
   // A grant taken on another op does NOT suppress the card (FIX F2 scoping).
-  assert.equal(io.postWillGate(mkSession({ state: { allowForTask: [CHANNEL_TOOL + "#op:read"], autoApprove: false } }), POST), true);
+  assert.equal(io.postWillGate(mkSession({ state: { allowForTask: [CHANNEL_TOOL + "#op:read"], messageMode: "ask" } }), POST), true);
+  // And the TOOL axis can never send a message, not even at `bypass` (THE INVARIANT).
+  assert.equal(io.postWillGate(mkSession({ state: { allowForTask: [], toolMode: "bypass" } }), POST), true);
 });
 
 test("io: sdkRenderEvents marks a gating post PENDING — still ONE event, still no tool card", () => {
@@ -264,8 +268,8 @@ test("io: an auto-approved post carries NO pending marker (the v2.6 payload, exa
   }
 });
 
-test("io: the AUTO-APPROVE bypass still dispatches NOTHING (no card, no dock)", async () => {
-  const s = { profile: "full", channelId: "ch1", state: { allowForTask: [], autoApprove: true }, pendingPermissions: new Map(), pendingNames: new Map() };
+test("io: the AXIS B auto-send bypass still dispatches NOTHING (no card, no dock)", async () => {
+  const s = { profile: "full", channelId: "ch1", state: { allowForTask: [], messageMode: "auto_outbound" }, pendingPermissions: new Map(), pendingNames: new Map() };
   const events = [];
   const res = await io.makeCanUseTool(s, (_s, ev) => events.push(ev))(CHANNEL_TOOL, POST, { requestId: "rA", toolUseID: "tA" });
   assert.deepEqual(res, { behavior: "allow" });

@@ -250,7 +250,7 @@ globalThis.window = globalThis;
 globalThis.getComputedStyle = () => ({ lineHeight: "21px", paddingTop: "6px", paddingBottom: "6px" });
 globalThis.doplSession = {
   sessionId: "s1", onEvent() {}, send() {}, permission() {}, interrupt() {}, end() {},
-  closeTask() {}, consentDecision() {}, setAutoApprove() {},
+  closeTask() {}, consentDecision() {}, setToolMode() {}, setMessageMode() {},
   folder: { get: () => Promise.resolve({ label: null }), choose: () => Promise.resolve({ label: null }), clear: () => Promise.resolve({ label: null }) },
 };
 

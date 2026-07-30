@@ -18,6 +18,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
+import { createHash } from "node:crypto";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -31,12 +32,15 @@ const to = SRC.indexOf("// ─── END SESSION-PROFILE TABLE");
 assert.ok(from !== -1 && to > from, "SESSION-PROFILE TABLE sentinels missing/out of order");
 const BLOCK = SRC.slice(from, to);
 
-const { buildSessionToolConfig, grantDecision } = new Function(
+// v2.9: the block digests grant keys, so `sha12` is injected like normalizeProfile.
+const sha12 = (v) => createHash("sha256").update(String(v == null ? "" : v)).digest("hex").slice(0, 12);
+
+const { buildSessionToolConfig, grantDecision, grantKeyFor } = new Function(
   "READ_BUILTINS", "WEB_TOOLS", "DOPL_SAFE_TOOLS", "DENIED_BUILTINS",
-  "DOPL_ADMIN_TOOLS", "DOPL_CHANNEL_TOOL", "normalizeProfile",
+  "DOPL_ADMIN_TOOLS", "DOPL_CHANNEL_TOOL", "normalizeProfile", "sha12",
   `${BLOCK}
-   return { buildSessionToolConfig, grantDecision };`
-)(READ_BUILTINS, WEB_TOOLS, DOPL_SAFE_TOOLS, DENIED_BUILTINS, DOPL_ADMIN_TOOLS, DOPL_CHANNEL_TOOL, normalizeProfile);
+   return { buildSessionToolConfig, grantDecision, grantKeyFor };`
+)(READ_BUILTINS, WEB_TOOLS, DOPL_SAFE_TOOLS, DENIED_BUILTINS, DOPL_ADMIN_TOOLS, DOPL_CHANNEL_TOOL, normalizeProfile, sha12);
 
 const PROFILES = ["read_only", "dopl_only", "full"];
 const ownPost = (channel) => ({ op: "post", channel });
@@ -78,10 +82,13 @@ test("a hard-denied tool denies even when the operator tries to allow it for the
 
 // ── Gate truth table ───────────────────────────────────────────────────────────
 
-test("under 'full', an ungranted work tool GATES; granting it for the task -> 'allow'", () => {
+test("under 'full', an ungranted work tool GATES; granting THAT SHAPE for the task -> 'allow'", () => {
+  // v2.9 HIGH-1: the key is the call's shape (grantKeyFor), never the bare tool name.
   for (const tool of ["Bash", "Write", "Edit", "NotebookEdit", "WebFetch"]) {
-    assert.equal(grantDecision({ profile: "full", toolName: tool }), "gate", `${tool} should gate under full`);
-    assert.equal(grantDecision({ profile: "full", toolName: tool, allowForTask: [tool] }), "allow", `${tool} allowed-for-task`);
+    const input = { command: "ls", file_path: "/w/a.txt", notebook_path: "/w/n.ipynb", url: "https://x.test" };
+    assert.equal(grantDecision({ profile: "full", toolName: tool, input }), "gate", `${tool} should gate under full`);
+    const key = grantKeyFor(tool, input, "c1");
+    assert.equal(grantDecision({ profile: "full", toolName: tool, input, allowForTask: [key] }), "allow", `${tool} allowed-for-task`);
   }
 });
 
@@ -150,7 +157,10 @@ test("grantDecision tolerates missing args and unknown profiles (normalize to fu
 // the credential already has) and a per-call `workspace=` still wins server-side.
 //
 // sdk-loader.js is electron-bound (app.getPath), so the function is source-extracted and
-// driven with fakes — the same idiom the rest of this directory uses.
+// driven with fakes — the same idiom the rest of this directory uses. C1/C2 changed what it
+// is injected with: the bearer now comes from mcp-config's safeStorage cache (`doplBearer`)
+// instead of a readFileSync of mcp-spawn.json, and the url is always the compiled-in
+// MCP_URL. The credential-path story itself is pinned in test/sdk-mcp-token.test.mjs.
 
 const LOADER = readFileSync(join(HERE, "..", "main", "sdk-loader.js"), "utf8");
 const MCP_BLOCK = LOADER.slice(
@@ -159,16 +169,13 @@ const MCP_BLOCK = LOADER.slice(
 );
 assert.ok(MCP_BLOCK.includes("return { dopl: server };"), "buildMcpServers slice missing/incomplete");
 
-const SPAWN_FILE = { mcpServers: { dopl: { url: "https://dopl.test/api/mcp", headers: { Authorization: "Bearer secret-token" } } } };
+const MCP_URL = "https://dopl.test/api/mcp";
 
-function buildServers(policy, workspaceId, spawnFile = SPAWN_FILE) {
-  const fs = { readFileSync: () => (spawnFile === null ? (() => { throw new Error("ENOENT"); })() : JSON.stringify(spawnFile)) };
-  const path = { join: (...p) => p.join("/") };
-  const app = { getPath: () => "/userData" };
+function buildServers(policy, workspaceId, token = "secret-token") {
   return new Function(
-    "fs", "path", "app", "MCP_URL", "policy", "workspaceId",
+    "doplBearer", "MCP_URL", "policy", "workspaceId",
     `${MCP_BLOCK}\n return buildMcpServers(policy, workspaceId);`
-  )(fs, path, app, "https://fallback.test/api/mcp", policy, workspaceId);
+  )(() => token, MCP_URL, policy, workspaceId);
 }
 
 const WS_UUID = "9a1b2c3d-2222-4ccc-8ddd-eeeeeeeeeeee";
@@ -180,7 +187,7 @@ test("the session's workspace UUID rides as the X-Workspace-Id header, beside th
     "X-Workspace-Id": WS_UUID,
   }, "the header the MCP endpoint reads as its per-request pin");
   assert.equal(servers.dopl.type, "http");
-  assert.equal(servers.dopl.url, "https://dopl.test/api/mcp");
+  assert.equal(servers.dopl.url, MCP_URL, "C2: always the compiled-in url");
 });
 
 test("no session workspace -> NO pin header at all (today's behavior, unchanged)", () => {
@@ -196,9 +203,8 @@ test("the pin does not disturb the per-profile dopl tools allowlist (or the bear
   assert.equal(scoped.dopl.headers.Authorization, "Bearer secret-token");
   const open = buildServers(null, WS_UUID);
   assert.ok(!("tools" in open.dopl), "null policy still means no per-server bound");
-  // A missing spawn file still returns {} — a pin can never manufacture a server entry.
-  assert.deepEqual(buildServers(null, WS_UUID, null), {});
-  assert.deepEqual(buildServers(null, WS_UUID, { mcpServers: { dopl: { url: "u" } } }), {}, "no bearer -> no server");
+  // No token (pre-sign-in) still returns {} — a pin can never manufacture a server entry.
+  assert.deepEqual(buildServers(null, WS_UUID, ""), {}, "no bearer -> no server");
 });
 
 test("buildSdkOptions passes the SESSION's workspace, so every session query is pinned", () => {

@@ -157,16 +157,40 @@ html, body {
 .status-meta { color: var(--text-muted); font-size: var(--text-caption); }
 .status-spacer { flex: 1; }
 
-/* ── Permission posture (item 9): a muted caption chip in the status strip. ── */
-.perm-posture { color: var(--text-secondary); font-size: var(--text-caption); }
+/* ── Permission posture (item 9 / v2.9): a muted caption chip in the status strip,
+   stating BOTH axes. It can wrap and shrink; the two selects never do. ─────── */
+.perm-posture { color: var(--text-secondary); font-size: var(--text-caption); min-width: 0; }
 
-/* ── Per-session auto-approve toggle (item 10): a plain token switch — NOT a
-   bypass control. ─────────────────────────────────────────────────────────── */
-.auto-toggle {
+/* ── v2.9 THE TWO AXES: the Tools / Messages selects. Token colours + the existing
+   concave-field border recipe, no new hex, no `content` strings (every word is in
+   session.html or arrives via textContent). ───────────────────────────────── */
+.mode-select {
   display: inline-flex; align-items: center; gap: 5px;
-  font-size: var(--text-caption); color: var(--text-secondary);
-  cursor: pointer; user-select: none; flex: none;
+  color: var(--text-secondary); flex: none;
+  cursor: pointer; user-select: none;
 }
+/* `.text-label` (tokens.css) already owns the 11px uppercase recipe; only the ink here. */
+.mode-select__lbl { color: var(--text-muted); }
+.mode-select__input {
+  font-family: var(--font-ui);
+  font-size: var(--text-caption);
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+.mode-select__input:hover { background: var(--bg-inset-hover); }
+/* BYPASS is the one mode that hands over the whole machine, so it never looks like the
+   other three: the control itself carries the danger token while it is selected. */
+.mode-select__input.is-bypass {
+  color: var(--danger);
+  border-color: var(--danger);
+  font-weight: 600;
+}
+/* The per-session bypass callout beside it (copy owned by session-labels.js). */
+.perm-warn { color: var(--danger); font-weight: 600; flex: none; }
 
 /* ── Folder pill (item 5): ONE click-to-change control reading "Working
    Directory: <label>". LABEL only — the abs path never reaches here. ───────── */

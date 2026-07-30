@@ -9,7 +9,6 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 const asStr = (v) => String(v == null ? '' : v);
-const asBool = (v) => v === true;
 const asPriority = (p) => (asStr(p) === 'now' ? 'now' : 'normal');
 const asDecision = (d) => {
   const s = asStr(d);
@@ -24,6 +23,20 @@ const asInbound = (d) => {
 };
 // Consent decision is fail-closed: anything but an explicit 'accept' is a deny.
 const asConsent = (d) => (asStr(d) === 'accept' ? 'accept' : 'deny');
+// v2.9 THE TWO AXES. A sandboxed preload cannot require() main, so these lists are the
+// renderer-side copy of session-profiles' canonical tables (pinned against it, the reducer
+// and session.html by test/session-permission-axes). Both coerce FAIL-CLOSED: anything that
+// is not an exact member lands on the MOST RESTRICTIVE value of that axis, so a compromised
+// page cannot reach `bypass` or `auto_both` by sending a near-miss string. Main re-coerces
+// against the same tables, so this is the first of two identical gates, never the only one.
+const asToolMode = (v) => {
+  const s = asStr(v);
+  return s === 'accept_edits' || s === 'auto' || s === 'bypass' ? s : 'manual';
+};
+const asMessageMode = (v) => {
+  const s = asStr(v);
+  return s === 'auto_inbound' || s === 'auto_outbound' || s === 'auto_both' ? s : 'ask';
+};
 
 // The session id lives in the window URL (session.html?sid=…). Read-only; the
 // main process is authoritative and re-derives it from the window — this is a
@@ -102,11 +115,17 @@ contextBridge.exposeInMainWorld('doplSession', {
   consentDecision(decision) {
     return ipcRenderer.invoke('session:consent-decision', { decision: asConsent(decision) });
   },
-  // Per-session auto-approve toggle (item 10). Sends only the coerced boolean;
-  // the main side re-derives the session from event.sender. This flips ONLY the
-  // gate→allow branch in makeCanUseTool — hard-deny stays immovable (§H-2).
-  setAutoApprove(enabled) {
-    ipcRenderer.invoke('session:set-auto-approve', { enabled: asBool(enabled) });
+  // v2.9 AXIS A — per-session TOOL permissions (manual | accept_edits | auto | bypass).
+  // What MY agent may do on THIS machine. It can never approve an outbound message or an
+  // incoming one; hard-deny stays immovable in every mode, `bypass` included (§H-2).
+  setToolMode(mode) {
+    ipcRenderer.invoke('session:set-tool-mode', { mode: asToolMode(mode) });
+  },
+  // v2.9 AXIS B — per-session MESSAGE flow (ask | auto_inbound | auto_outbound | auto_both).
+  // What crosses between machines. It can never approve a work tool, and even auto_outbound
+  // only covers a post into this session's OWN channel: opening a DM stays a click.
+  setMessageMode(mode) {
+    ipcRenderer.invoke('session:set-message-mode', { mode: asMessageMode(mode) });
   },
   // Folder display + change (item 7). LABEL only ever crosses back — the main
   // side resolves channelId from the session; the abs path never enters here.

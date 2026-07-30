@@ -5,8 +5,8 @@
 // it. This generalizes the v2.3 interactive `pendingInbound` hold into the universal
 // gate: the reply is enqueued on the session object, the window surfaces (a recreated
 // parked shell when no live session survives), an OS notification fires, and the turn
-// waits. The two opt-outs are explicit: the per-session auto-approve toggle (item 10 /
-// D4) and the standing "Accept for this task" grant — either one feeds immediately,
+// waits. The two opt-outs are explicit: AXIS B (the MESSAGE axis) set to auto_inbound /
+// auto_both, and the standing "Accept for this task" grant — either one feeds immediately,
 // byte-equivalent to the pre-gate path (the reducer's feedInboundEffects).
 //
 // Extracted from session-engine.js because that file sits AT the 500-line §2 cap. The
@@ -60,11 +60,16 @@ function inboundNotice(item) {
   };
 }
 
-// PURE: may this session feed an inbound turn with NO prompt? Default state answers
-// no on both counts, so the gate holds until the operator opts in.
+// PURE: may this session feed an inbound turn with NO prompt? v2.9 reads AXIS B (the MESSAGE
+// axis) — auto_inbound / auto_both — or the standing "Accept for this task" grant. The TOOL
+// axis is deliberately not consulted: `bypass` grants Bash, never an incoming message.
+// Default state answers no on every count, so the gate holds until the operator opts in.
+// The reducer's inboundAutoAccepted answers the same question for the reducer path and MUST
+// agree with this (test/session-permission-axes pins the two against each other).
 function autoInbound(s) {
   const st = (s && s.state) || {};
-  return st.autoApprove === true || st.inboundForTask === true;
+  const m = st.messageMode;
+  return m === 'auto_inbound' || m === 'auto_both' || st.inboundForTask === true;
 }
 
 // PURE-ish: did the operator already have this window in front of them? Read BEFORE the
@@ -226,8 +231,8 @@ function drainQueue(s) {
 }
 
 // Feed every reply still held, in arrival order, once an opt-in is armed — an
-// "Accept for this task" grant, or the auto-approve toggle being switched ON while a
-// card was already waiting (D4: one switch, and nothing is left stranded behind it).
+// "Accept for this task" grant, or AXIS B moving to auto_inbound / auto_both while a
+// card was already waiting (D4: nothing is left stranded behind a control that says it flows).
 // Items LEAVE the queue as they are fed, so none can be double-consumed later.
 // Returns false when no opt-in is armed, so the caller can surface a card instead.
 //
@@ -252,5 +257,5 @@ module.exports = {
   feedInbound,
   feedInboundForTask,
   decideInbound,
-  drainInbound, // D4: called after the auto-approve toggle flips ON (session-ipc)
+  drainInbound, // v2.9: called after AXIS B changes (session-ipc)
 };

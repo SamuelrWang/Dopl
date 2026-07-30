@@ -29,11 +29,29 @@
 //     "Allow for this task" can never grant a tool that outlives the watched window.
 //   FIX H3 — Task/Agent are hard-denied under EVERY profile (see SESSION_HARD_DENY).
 //
-// PURE module: requires ONLY the (pure) tool-profiles constants. The extracted
-// block references those constants + normalizeProfile, which test/session-profiles
-// and test/sdk-grant inject as parameters when they evaluate the sliced block (the
-// same source-extraction idiom as tool-profiles, kept electron/fs/path/SDK-free).
+// v2.9 — TWO AXES. One "Auto-approve" switch used to control two unrelated things,
+// because an outbound message is technically a tool call (`dopl_channel op=post`) and
+// rides the same canUseTool plumbing as Bash (HIGH-4). They are split now:
+//   AXIS A (toolMode)    manual | accept_edits | auto | bypass — what MY agent may do
+//                        on THIS machine.
+//   AXIS B (messageMode) ask | auto_inbound | auto_outbound | auto_both — what crosses
+//                        between machines.
+// THE INVARIANT: Axis A can NEVER auto-approve a message operation and Axis B can NEVER
+// auto-approve a work tool. `dopl_channel` branches to Axis B in grantDecision BEFORE any
+// Axis A mode is consulted, and no other tool ever reads messageMode.
+//
+// The modes are resolved HERE, never via the SDK's `permissionMode`: bypassPermissions
+// stops the SDK calling canUseTool at all, which would silently kill the outbound message
+// card (the same fusion, a new mechanism) and drop the hard-deny enforcement path.
+// buildSdkOptions keeps `permissionMode: 'default'` + `settingSources: []` pinned.
+//
+// PURE module: requires the (pure) tool-profiles constants + node's `crypto`, used ONLY
+// to digest a grant key (no key material, no randomness). The extracted block references
+// those constants + normalizeProfile + sha12, which test/session-profiles and
+// test/sdk-grant inject as parameters when they evaluate the sliced block (the same
+// source-extraction idiom as tool-profiles, kept electron/fs/path/SDK-free).
 
+const crypto = require('crypto');
 const {
   READ_BUILTINS,
   WEB_TOOLS,
@@ -43,6 +61,13 @@ const {
   DOPL_CHANNEL_TOOL,
   normalizeProfile,
 } = require('./tool-profiles');
+
+// The 12-hex-char SHA-256 prefix every scoped grant key carries (48 bits). A model
+// cannot search for a collision at that width, and the key stays short enough to read
+// in a diag line. Defined OUTSIDE the extracted block, like the tool-profiles constants.
+function sha12(value) {
+  return crypto.createHash('sha256').update(String(value == null ? '' : value)).digest('hex').slice(0, 12);
+}
 
 // ─── BEGIN SESSION-PROFILE TABLE (extracted by session-profiles/sdk-grant tests) ───
 
@@ -153,6 +178,8 @@ const POST_GRANT = DOPL_CHANNEL_TOOL + '#post'; // op=post into the session's OW
 const OP_PREFIX = '#op:'; // every other shape lives in a DISJOINT namespace
 const OP_CAP = 32;
 const TARGET_CAP = 40;
+const ARGV_CAP = 24;
+const SCOPE_CAP = 60;
 
 // A bounded, collision-free token for a model-supplied string. Sanitizing alone would let
 // 'post ' collapse onto POST_GRANT, which is why non-own-post keys carry OP_PREFIX.
@@ -161,19 +188,139 @@ function keyToken(value, cap) {
   return t.slice(0, cap) || 'unknown';
 }
 
-// The allowForTask KEY a call belongs to. Own-channel posts get POST_GRANT; every other
-// dopl_channel call gets `#op:<op>`, and a CROSS-channel post additionally carries its
-// target, so a grant to post into one other channel cannot post into a different one.
-// Anything that is not the channel tool keeps its own tool name (unchanged). The engine
-// stores exactly this string when the operator picks "Allow for this task"
-// (session-io -> the reducer's allowForTask).
+// A key segment that VANISHES when the field is absent. This is what keeps the plain
+// reply's key byte-identical to POST_GRANT while an addressed / lifecycle-kinded post
+// gets its own (MEDIUM-2 below).
+function optSegment(prefix, value, cap) {
+  return value == null || value === '' ? '' : prefix + keyToken(value, cap);
+}
+
+// MEDIUM-2 — fold `to` and `kind` into the post key. `to` addresses ONE channel member
+// and `kind` turns a chat message into a structured lifecycle event, so one approved
+// reply must not also authorize a post aimed at a different member or a forged
+// `task_finished`. `to` is digested (an email sanitizes down to a colliding token);
+// `kind` is a closed enum, and its DEFAULT ('message', or absent) adds no segment at all,
+// so today's plain reply keeps the exact POST_GRANT key.
+function postScope(base, i) {
+  const to = i.to == null || i.to === '' ? '' : '#to:' + sha12(String(i.to).trim().toLowerCase());
+  const kind = i.kind == null || i.kind === '' || i.kind === 'message' ? '' : optSegment('#kind:', i.kind, OP_CAP);
+  return base + to + kind;
+}
+
+// ── HIGH-1: EVERY tool is scoped, not just the channel ────────────────────────────
+// `grantKeyFor` used to op-scope ONLY dopl_channel and record the BARE NAME for
+// everything else, so one "Allow for this task" on `Bash("ls -la")` silently authorized
+// every later Bash for the rest of the task — including one the counterparty's message
+// text steered the agent into proposing. Each class now earns a key for the SHAPE the
+// operator actually saw. Keys are in-memory, per-session, cleared on park, never persisted.
+const WEB_SCOPED = WEB_TOOLS.slice(); // WebFetch / WebSearch -> scoped by ORIGIN
+const EDIT_TOOLS = ['Write', 'Edit', 'NotebookEdit']; // the accept_edits set (contract A2)
+
+// `Bash#<argv0>#<sha12(command)>`: argv0 is the readable half (which program), the digest
+// pins the exact command line, so `ls -la` never authorizes `rm -rf`.
+function bashKey(name, i) {
+  const cmd = i.command == null ? '' : String(i.command);
+  return name + '#' + keyToken(cmd.trim().split(/\s+/)[0], ARGV_CAP) + '#' + sha12(cmd);
+}
+
+// scheme://host, lowercased. No url (a WebSearch, or a malformed one) -> '' and the caller
+// falls back to the input hash, which is STRICTER than granting every search at once.
+function originOf(url) {
+  const m = /^([a-z][a-z0-9+.-]*):\/\/([^/?#]*)/i.exec(String(url == null ? '' : url).trim());
+  return m ? (m[1] + '://' + m[2]).toLowerCase() : '';
+}
+
+// The resolved directory of a write. Both tools take an ABSOLUTE path (the SDK's own
+// contract), so the parent of the last '/' is the resolved dir; a relative or bare path
+// yields '' and falls back to the input hash.
+function dirOf(p) {
+  const s = String(p == null ? '' : p).trim().replace(/\/+$/, '');
+  const cut = s.lastIndexOf('/');
+  if (cut < 0) return '';
+  return cut === 0 ? '/' : s.slice(0, cut);
+}
+
+// A stable stringify (sorted keys, depth-bounded) so the same input always digests to the
+// same key regardless of property order, and a pathological input cannot recurse forever.
+function stableStringify(value, depth) {
+  const d = depth || 0;
+  if (d > 6 || value === undefined || typeof value === 'function') return 'null';
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return '[' + value.map(function (v) { return stableStringify(v, d + 1); }).join(',') + ']';
+  const keys = Object.keys(value).sort();
+  return '{' + keys.map(function (k) { return JSON.stringify(k) + ':' + stableStringify(value[k], d + 1); }).join(',') + '}';
+}
+
+// The allowForTask KEY a call belongs to. Own-channel posts get POST_GRANT (+ the MEDIUM-2
+// to/kind segments); every other dopl_channel call gets `#op:<op>`, and a CROSS-channel post
+// additionally carries its target, so a grant to post into one other channel cannot post
+// into a different one. Every OTHER tool is scoped by the shape that was shown: Bash by
+// argv0 + command digest, WebFetch/WebSearch by origin, Write/Edit/NotebookEdit by resolved
+// directory, anything else by a digest of its whole input. The engine stores exactly this
+// string when the operator picks "Allow for this task" (session-io -> reducer allowForTask).
 function grantKeyFor(toolName, input, channelId) {
-  if (toolName !== DOPL_CHANNEL_TOOL) return toolName;
-  if (isOwnChannelPost(input, channelId)) return POST_GRANT;
   const i = input || {};
-  const op = keyToken(i.op, OP_CAP);
-  if (op === 'post') return DOPL_CHANNEL_TOOL + OP_PREFIX + 'post:' + keyToken(i.channel, TARGET_CAP);
-  return DOPL_CHANNEL_TOOL + OP_PREFIX + op;
+  if (toolName === DOPL_CHANNEL_TOOL) {
+    if (isOwnChannelPost(input, channelId)) return postScope(POST_GRANT, i);
+    const op = keyToken(i.op, OP_CAP);
+    if (op === 'post') return postScope(DOPL_CHANNEL_TOOL + OP_PREFIX + 'post:' + keyToken(i.channel, TARGET_CAP), i);
+    return DOPL_CHANNEL_TOOL + OP_PREFIX + op;
+  }
+  if (toolName === 'Bash') return bashKey(toolName, i);
+  if (WEB_SCOPED.indexOf(toolName) !== -1) {
+    const origin = originOf(i.url);
+    if (origin) return toolName + '#' + keyToken(origin, SCOPE_CAP) + '#' + sha12(origin);
+  }
+  if (EDIT_TOOLS.indexOf(toolName) !== -1) {
+    const dir = dirOf(i.file_path != null ? i.file_path : i.notebook_path);
+    if (dir) return toolName + '#' + keyToken(dir.split('/').slice(-2).join('/'), SCOPE_CAP) + '#' + sha12(dir);
+  }
+  return String(toolName) + '#' + sha12(stableStringify(input));
+}
+
+// ── AXIS A: TOOL PERMISSIONS (what MY agent may do on THIS machine) ───────────────
+// Per-session, never persisted, always starts `manual`, RESET to `manual` on park (the
+// v2.3 FIX #3 rule extended: an abandoned session must never resume pre-authorized).
+const TOOL_MODES = ['manual', 'accept_edits', 'auto', 'bypass'];
+// ESCALATION-SHAPED ops that `auto` still asks about, and the reason `auto` is not
+// `bypass`: these reach the SHELL or the NETWORK, and the counterparty's message text
+// steers what the agent proposes, so a hands-off tool posture must still stop here.
+// `bypass` covers them; NOTHING covers the hard-deny set.
+const ESCALATION_TOOLS = ['Bash', 'WebFetch', 'WebSearch'];
+
+function normalizeToolMode(mode) {
+  return TOOL_MODES.indexOf(mode) === -1 ? 'manual' : mode; // fail-closed
+}
+
+// Does Axis A auto-allow this tool? MultiEdit is deliberately NOT in the accept_edits set
+// (contract A2 names exactly Write / Edit / NotebookEdit) — the restrictive reading.
+function toolModeAllows(mode, toolName) {
+  const m = normalizeToolMode(mode);
+  if (m === 'manual') return false;
+  if (m === 'accept_edits') return EDIT_TOOLS.indexOf(toolName) !== -1;
+  if (m === 'auto') return ESCALATION_TOOLS.indexOf(toolName) === -1;
+  return true; // bypass — every work tool, but never the hard-deny set (checked first)
+}
+
+// ── AXIS B: MESSAGE FLOW (what crosses between machines) ──────────────────────────
+// Per-session, starts `ask`, resets to `ask` on park. The INBOUND half is enforced at the
+// inbound gate (session-gate.autoInbound / the reducer's inboundAutoAccepted); the OUTBOUND
+// half is enforced here, and ONLY for a post into the session's OWN channel. A
+// cross-channel post, `op=open direct:true`, invite, create_task and friends always gate:
+// they are the cross-user exfil surface v1.9 FIX H1 closed, and "send my replies for me"
+// is not consent to open a DM with another workspace member.
+const MESSAGE_MODES = ['ask', 'auto_inbound', 'auto_outbound', 'auto_both'];
+
+function normalizeMessageMode(mode) {
+  return MESSAGE_MODES.indexOf(mode) === -1 ? 'ask' : mode; // fail-closed
+}
+function autoInboundMode(mode) {
+  const m = normalizeMessageMode(mode);
+  return m === 'auto_inbound' || m === 'auto_both';
+}
+function autoOutboundMode(mode) {
+  const m = normalizeMessageMode(mode);
+  return m === 'auto_outbound' || m === 'auto_both';
 }
 
 // The per-call decision the engine's canUseTool bridge makes. Returns one of:
@@ -184,21 +331,39 @@ function grantKeyFor(toolName, input, channelId) {
 //                   never be opened, not even via allowForTask).
 //   'allow'       — the operator granted this tool for the whole task (engine Set).
 //   'gate'        — surface Allow-once / Allow-for-task / Deny buttons and await.
-// `input` + `channelId` are threaded in so the channel tool can be op-scoped.
+// `input` + `channelId` are threaded in so the channel tool can be op-scoped; `toolMode`
+// (Axis A) and `messageMode` (Axis B) are the per-session postures, absent => the most
+// restrictive member of each axis.
+//
+// ORDER (v2.9, unchanged at the top): hard-deny FIRST and immovable in EVERY mode,
+// bypass included -> the Axis-B branch for the channel tool -> preapproved -> the scoped
+// standing grant -> the Axis-A mode -> gate.
 function grantDecision(args) {
   const a = args || {};
   const allowForTask = a.allowForTask || [];
   const cfg = buildSessionToolConfig(a.profile);
+  // 1. HARD DENY. Checked first so a denied tool can never be opened — not by a task
+  //    grant, and not by `bypass` (which is why `bypass` is not permissionMode:bypass).
   if (cfg.disallowedTools.indexOf(a.toolName) !== -1) return 'deny';
+  // 2. THE INVARIANT — a message operation branches to AXIS B here and NEVER reaches the
+  //    Axis A mode below. No tool posture, `bypass` included, can send a message.
   if (a.toolName === DOPL_CHANNEL_TOOL) {
     // ONLY a standing grant for THIS EXACT shape allows without a button. FIX F2 deleted
     // the bare-tool-name fallback that used to sit here: it turned any one channel grant
     // (even one taken on op=read) into a grant for every op, op=open included. Grants are
     // never persisted, so there is nothing to migrate.
-    return allowForTask.indexOf(grantKeyFor(a.toolName, a.input, a.channelId)) !== -1 ? 'allow' : 'gate';
+    if (allowForTask.indexOf(grantKeyFor(a.toolName, a.input, a.channelId)) !== -1) return 'allow';
+    // auto_outbound / auto_both send the agent's own replies with no click. ONLY an
+    // own-channel post: everything else on this tool is the exfil surface, so it gates.
+    if (autoOutboundMode(a.messageMode) && isOwnChannelPost(a.input, a.channelId)) return 'allow';
+    return 'gate';
   }
   if (cfg.preApproved.indexOf(a.toolName) !== -1) return 'preapproved';
-  if (allowForTask.indexOf(a.toolName) !== -1) return 'allow';
+  // 3. THE SCOPED standing grant (HIGH-1): the key covers the SHAPE the operator saw.
+  if (allowForTask.indexOf(grantKeyFor(a.toolName, a.input, a.channelId)) !== -1) return 'allow';
+  // 4. AXIS A. Message flow is never consulted here, so no message posture can run a
+  //    work tool — the other half of the invariant.
+  if (toolModeAllows(a.toolMode, a.toolName)) return 'allow';
   return 'gate';
 }
 
@@ -207,8 +372,20 @@ function grantDecision(args) {
 module.exports = {
   buildSessionToolConfig,
   grantDecision,
-  grantKeyFor, // v2.5 D2: the scoped allowForTask key (own-channel posts vs the tool)
+  grantKeyFor, // v2.9 HIGH-1: the scoped allowForTask key for EVERY tool class
   POST_GRANT,
   isOwnChannelPost,
   shortDoplName,
+  // v2.9 the two axes (the renderer/preload hold their own copies of these lists —
+  // a sandboxed renderer cannot require main — and test/session-permission-axes pins
+  // all four surfaces against each other).
+  TOOL_MODES,
+  MESSAGE_MODES,
+  EDIT_TOOLS,
+  ESCALATION_TOOLS,
+  normalizeToolMode,
+  normalizeMessageMode,
+  toolModeAllows,
+  autoInboundMode,
+  autoOutboundMode,
 };

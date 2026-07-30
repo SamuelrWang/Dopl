@@ -59,7 +59,7 @@ globalThis.doplSession = {
   sendToPeer: (...a) => sent.push(["sendToPeer", ...a]),
   permission: (...a) => sent.push(["permission", ...a]),
   interrupt: () => sent.push(["interrupt"]),
-  end() {}, closeTask() {}, consentDecision() {}, setAutoApprove() {}, inboundDecision() {},
+  end() {}, closeTask() {}, consentDecision() {}, setToolMode() {}, setMessageMode() {}, inboundDecision() {},
   folder: {
     get: () => Promise.resolve({ label: "~/Downloads" }),
     choose: () => Promise.resolve({ label: null }),

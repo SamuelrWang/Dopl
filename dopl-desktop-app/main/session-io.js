@@ -138,23 +138,65 @@ function isOutboundPost(name, input, sessionChannelId) {
 }
 // ─── END SESSION-IO-PURE ──────────────────────────────────────────────────────
 
-// v2.7 L3 — WILL this own-channel post stop on an operator decision? It mirrors
-// makeCanUseTool's branch order below EXACTLY (grantDecision first, then the item-10
-// auto-approve bypass), so the stream-time artifact and the gate agree about the SAME
-// post: one that gates is painted as the inline decision card (`pending`), one that is
-// auto-approved (task grant or the toggle) is painted as the delivered record, exactly
-// as it was before v2.7. This does NOT decide anything — makeCanUseTool remains the only
-// decision point; it only chooses which single artifact the stream shows.
-function postWillGate(s, input) {
-  const decision = grantDecision({
+// v2.9 — the per-call grant arguments read off the live session. ONE place builds them, so
+// postWillGate's prediction and makeCanUseTool's decision can never drift apart. Both axes
+// are read LIVE (like allowForTask): a mode the operator changes mid-turn applies to the
+// very next call. Absent state => grantDecision's own fail-closed defaults (manual / ask).
+function grantArgs(s, toolName, input) {
+  const st = (s && s.state) || {};
+  return {
     profile: s.profile,
-    toolName: DOPL_CHANNEL_TOOL,
-    input,
+    toolName: toolName,
+    input: input,
     channelId: s.channelId,
-    allowForTask: (s.state && s.state.allowForTask) || [],
-  });
-  return decision === 'gate' && !(s.state && s.state.autoApprove);
+    allowForTask: st.allowForTask || [],
+    toolMode: st.toolMode, // AXIS A — never consulted for a dopl_channel call
+    messageMode: st.messageMode, // AXIS B — never consulted for anything else
+  };
 }
+
+// v2.7 L3 — WILL this own-channel post stop on an operator decision? It asks the SAME
+// grantDecision makeCanUseTool asks, with the SAME arguments, so the stream-time artifact
+// and the gate agree about the SAME post: one that gates is painted as the inline decision
+// card (`pending`), one that is auto-approved (a scoped task grant, or Axis B set to
+// auto_outbound / auto_both) is painted as the delivered record, exactly as before. This
+// does NOT decide anything — makeCanUseTool remains the only decision point; it only
+// chooses which single artifact the stream shows.
+function postWillGate(s, input) {
+  return grantDecision(grantArgs(s, DOPL_CHANNEL_TOOL, input)) === 'gate';
+}
+
+// ─── BEGIN SESSION-IO-POST-SURFACE (pure; unit-tested via source extraction) ───
+// MEDIUM-2 — WHO this post is really addressed to, and WHAT kind it claims to be. The card
+// used to print the session's bound counterparty for every post, so a post addressed to a
+// DIFFERENT channel member (`to:`) or forged as a lifecycle event (`kind:task_finished`)
+// looked exactly like a plain reply to the peer. Both now ride the payload and are painted
+// (session-labels.postDestinationText), and both are folded into the grant key
+// (session-profiles.postScope), so approving one reply cannot authorize either.
+const TO_CAP = 60;
+// The lifecycle kinds. 'message' (the default, and absent) is a plain chat post and adds
+// nothing to the surface — anything else is a structured event and is named on the card.
+const POST_EVENT_KINDS = ['task_started', 'task_progress', 'task_finished', 'task_failed'];
+function postAddress(input) {
+  const raw = input && input.to != null ? String(input.to).replace(/\s+/g, ' ').trim() : '';
+  if (!raw) return null; // unaddressed -> the caller falls back to the bound counterparty
+  return raw.length > TO_CAP ? raw.slice(0, TO_CAP - 1).trimEnd() + '…' : raw;
+}
+function postKindOf(input) {
+  const k = input && input.kind != null ? String(input.kind) : '';
+  return POST_EVENT_KINDS.indexOf(k) === -1 ? null : k;
+}
+// Stamp the two fields on a post payload, ONLY when they are really set: an absent field
+// must leave the payload byte-identical to the one every existing surface already renders.
+function withPostSurface(payload, input, fallbackTo) {
+  const addressed = postAddress(input);
+  const kind = postKindOf(input);
+  payload.to = addressed || fallbackTo || null;
+  if (addressed) payload.addressed = true;
+  if (kind) payload.postKind = kind;
+  return payload;
+}
+// ─── END SESSION-IO-POST-SURFACE ──────────────────────────────────────────────
 
 // Map ONE SDK message to the reducer events the renderer needs. Only assistant
 // (text turns + tool_use cards + op=post outbound messages) and user (tool_result
@@ -181,12 +223,13 @@ function sdkRenderEvents(msg, sessionChannelId, peerName, willGatePost) {
           // is un-counted on the two paths that can retract the post — a failing
           // tool_result (FIX F3) and a park, which clears the per-turn counters with the
           // card it deny-closes (FIX F6, reducer idle_timeout).
-          const payload = {
+          // MEDIUM-2: `to` is the call's REAL addressee when it set one, the bound
+          // counterparty otherwise; `postKind` rides along for a lifecycle-kinded post.
+          const payload = withPostSurface({
             type: 'outbound_post',
             toolUseId: b.id,
-            to: peerName || null,
             text: b.input && b.input.body != null ? String(b.input.body) : '',
-          };
+          }, b.input, peerName);
           // v2.7 L3: the SAME item becomes the inline Send / Deny card while it waits,
           // then resolves in place. `ownChannel` feeds the card's destination line (the
           // renderer is fail-suspicious: anything but an explicit true reads as another
@@ -295,20 +338,13 @@ function baseRecord(s) {
 // Only the gate branch stashes a resolver on the session for resolvePermission.
 function makeCanUseTool(s, dispatch) {
   return function canUseTool(name, input, opts) {
-    const decision = grantDecision({
-      profile: s.profile,
-      toolName: name,
-      input,
-      channelId: s.channelId,
-      allowForTask: (s.state && s.state.allowForTask) || [],
-    });
+    // v2.9: BOTH axes resolve inside grantDecision — there is no post-decision override
+    // here any more. The old item-10 `gate && autoApprove -> allow` line is gone: it was a
+    // second decision point that knew nothing about which axis a call belonged to, which
+    // is exactly how one switch came to authorize both Bash and outbound messages.
+    const decision = grantDecision(grantArgs(s, name, input));
     if (decision === 'preapproved' || decision === 'allow') return Promise.resolve({ behavior: 'allow' });
     if (decision === 'deny') return Promise.resolve({ behavior: 'deny', message: 'Blocked for this session' });
-    // Item 10: per-session auto-approve flips ONLY a live GATE to allow, with NO prompt
-    // and NO dispatch. 'deny' (above, the SESSION_HARD_DENY belt) is decided FIRST and
-    // is immovable; 'preapproved' is unchanged; permissionMode stays 'default'. Reads
-    // s.state.autoApprove exactly as the reducer reads allowForTask — default OFF.
-    if (decision === 'gate' && s.state && s.state.autoApprove) return Promise.resolve({ behavior: 'allow' });
     return new Promise((resolve) => {
       const requestId = (opts && opts.requestId) || crypto.randomUUID();
       // v2.5 D2: the GRANT KEY (not always the bare tool name) is what an "Allow for
@@ -334,14 +370,13 @@ function makeCanUseTool(s, dispatch) {
       // artifact never landed still paints a card, so a post can never gate invisibly. `to`
       // is a display NAME and ownChannel a boolean — never another channel's id (§H-9).
       const payload = isOutboundPost(name, input, s.channelId)
-        ? {
+        ? withPostSurface({
           type: 'outbound_gate',
           requestId,
           toolUseId: opts && opts.toolUseID,
           ownChannel: true,
           text: input && input.body != null ? String(input.body) : '',
-          to: s.counterpartyName || null,
-        }
+        }, input, s.counterpartyName)
         : {
           type: 'permission_request',
           requestId,
@@ -355,7 +390,12 @@ function makeCanUseTool(s, dispatch) {
           inputSummary: summarizeInput(input),
           inputFull: safeInput(input),
           title: opts && opts.title,
+          // MEDIUM-2 belt for the DOCK path (a CROSS-channel post): name a forged
+          // lifecycle kind here too. `to` is deliberately left off — this card's
+          // destination line already reads "another channel", the louder warning.
+          postKind: postKindOf(input),
         };
+      if (payload.postKind == null) delete payload.postKind; // absent stays absent
       dispatch(s, { type: 'permission_request', requestId, name: grantName, payload });
     });
   };
@@ -430,6 +470,10 @@ module.exports = {
   isGatedEntry: seed.isGatedEntry, // FIX F4: session-history drops those rows from the ENTRIES too
   withSeed: seed.withSeed,
   postWillGate, // v2.7 L3: does an own-channel post stop on an operator decision?
+  grantArgs, // v2.9: the ONE argument builder both the prediction and the gate use
+  postAddress, // MEDIUM-2: the call's REAL addressee (null when unaddressed)
+  postKindOf, // MEDIUM-2: the lifecycle kind it claims (null for a plain message)
+  withPostSurface,
   summarizeInput,
   safeInput,
   summarizeResult,

@@ -70,7 +70,7 @@ function harness(over = {}) {
 
 // A session object shaped like the engine's: reducer state + the pending FIFO + a window.
 function fakeSession(over = {}) {
-  const state = { autoApprove: false, inboundForTask: false, mode: "interactive", ...(over.state || {}) };
+  const state = { messageMode: "ask", inboundForTask: false, mode: "interactive", ...(over.state || {}) };
   const focused = over.focused === true;
   return {
     key: KEY, settled: false, pendingInbound: [], state, windowHidden: false,

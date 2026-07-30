@@ -240,9 +240,9 @@
       const pending = cur.status === "pending";
       // FAIL CLOSED: a card main is not awaiting (no requestId) cannot be answered.
       // FIX F3: and it does not show three DEAD buttons either. A post whose gate prediction
-      // said "will stop" but which canUseTool then auto-allowed never gets an `outbound_gate`,
-      // so it sits pending with no requestId until the tool_result self-heals it to sent — the
-      // row is HIDDEN for that whole window instead of rendering a broken-looking control set.
+      // said "will stop" but which canUseTool then auto-allowed has no requestId while it waits
+      // for main to resolve it (C6 now emits that resolution immediately; the tool_result is the
+      // backstop), so the row is HIDDEN meanwhile instead of rendering a broken control set.
       const answerable = pending && !!cur.requestId;
       label.textContent = outboundLabel(cur);
       root.classList.toggle("outbound-pending", pending);

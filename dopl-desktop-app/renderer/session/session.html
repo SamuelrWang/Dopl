@@ -30,19 +30,44 @@
       </div>
     </header>
 
-    <!-- Status strip: status pill · permission posture (item 9) · auto-approve
-         toggle (item 10) · working-directory pill (item 5) -->
+    <!-- Status strip: status pill · the TWO permission axes (v2.9) · posture line ·
+         working-directory pill (item 5).
+
+         AXIS A (Tools) is what MY agent may do on THIS machine; AXIS B (Messages) is what
+         crosses between machines. They are separate controls because they are separate
+         risks: the single "Auto-approve" checkbox they replace meant that turning on
+         hands-off messaging also granted arbitrary Bash / Write / Edit. Neither select can
+         reach the other's decisions, and neither can reach the hard-deny set.
+         Option labels are STATIC markup (never built from a string); the posture line and
+         the bypass warning are filled by session.js via textContent. -->
     <div class="status-strip">
       <span class="status-pill">
         <span class="status-dot is-launching" id="statusDot"></span>
         <span class="status-label" id="statusLabel">Launching</span>
       </span>
       <span class="status-meta" id="statusMeta"></span>
-      <span class="perm-posture text-caption" id="permPosture"></span>
-      <label class="auto-toggle">
-        <input type="checkbox" id="autoApprove" />
-        Auto-approve
+      <label class="mode-select">
+        <span class="mode-select__lbl text-label">Tools</span>
+        <select class="mode-select__input" id="toolMode">
+          <option value="manual">Manual</option>
+          <option value="accept_edits">Accept edits</option>
+          <option value="auto">Auto</option>
+          <option value="bypass">Bypass</option>
+        </select>
       </label>
+      <label class="mode-select">
+        <span class="mode-select__lbl text-label">Messages</span>
+        <select class="mode-select__input" id="messageMode">
+          <option value="ask">Ask every time</option>
+          <option value="auto_inbound">Auto accept incoming</option>
+          <option value="auto_outbound">Auto send outgoing</option>
+          <option value="auto_both">Both automatic</option>
+        </select>
+      </label>
+      <span class="perm-posture text-caption" id="permPosture"></span>
+      <!-- The danger-token callout for `bypass`, and the only place that says it is per
+           session. Empty + hidden in every other mode. -->
+      <span class="perm-warn text-caption hidden" id="permWarn"></span>
       <span class="status-spacer"></span>
       <button class="folder-pill" id="folderPill" type="button">Working Directory: <span class="folder-pill__label" id="folderLabel">~/Downloads</span></button>
     </div>

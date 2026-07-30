@@ -19,7 +19,7 @@ const require = createRequire(import.meta.url);
 const vm = require(fileURLToPath(new URL("../renderer/session/session-viewmodel.js", import.meta.url)));
 const {
   initialState, reduceEvent, summarizeToolInput, shortToolName, nextPermission,
-  markInboundReleased, oneLine, statusText, statusDotKey, folderLabel, permissionModeText,
+  markInboundReleased, oneLine, statusText, statusDotKey, folderLabel,
 } = vm;
 
 // session-render.js is DOM-free to require (factories touch `document` only when
@@ -395,14 +395,16 @@ test("session.js (controller) also never uses innerHTML", () => {
   assert.ok(!/\.innerHTML|insertAdjacentHTML|outerHTML|document\.write/.test(src));
 });
 
-test("session-preload.js (new setAutoApprove path) uses no HTML sink", () => {
+test("session-preload.js (the v2.9 two-axis path) uses no HTML sink", () => {
   const fs = require("node:fs");
   const src = fs.readFileSync(
     fileURLToPath(new URL("../renderer/session/session-preload.js", import.meta.url)), "utf8"
   );
   assert.ok(!/\.innerHTML|insertAdjacentHTML|outerHTML/.test(src));
-  assert.ok(/setAutoApprove/.test(src), "the item-10 bridge method is exposed");
-  assert.ok(/session:set-auto-approve/.test(src), "invokes the frozen IPC channel");
+  assert.ok(/setToolMode/.test(src) && /setMessageMode/.test(src), "both axis methods are exposed");
+  assert.ok(/session:set-tool-mode/.test(src) && /session:set-message-mode/.test(src), "the two IPC channels");
+  // The fused channel is REMOVED, not aliased (same-version bundled renderer).
+  assert.ok(!/setAutoApprove|set-auto-approve/.test(src), "no compat shim for the old switch");
 });
 
 // ── init: profileLabel + peer identity (items 9 + 2) ──────────────────────────
@@ -417,38 +419,29 @@ test("init stores the profileLabel (item 9) and the peer name `from` (item 2)", 
   assert.equal(s.init.profile, "full");
 });
 
-// ── auto-approve state (item 10) ──────────────────────────────────────────────
+// ── v2.9 the two axes in the view-model ───────────────────────────────────────
 
-test("a launched session starts with auto-approve OFF (item 10)", () => {
-  assert.equal(initialState().autoApprove, false);
+test("a launched window starts BOTH axes at their most restrictive value", () => {
+  assert.equal(initialState().toolMode, "manual");
+  assert.equal(initialState().messageMode, "ask");
 });
 
-test("auto_approve event flips the per-session flag both ways (item 10)", () => {
-  let s = reduceEvent(initialState(), { type: "auto_approve", enabled: true });
-  assert.equal(s.autoApprove, true);
-  s = reduceEvent(s, { type: "auto_approve", enabled: false });
-  assert.equal(s.autoApprove, false);
-  // Only an explicit boolean true enables it (fail-closed).
-  assert.equal(reduceEvent(initialState(), { type: "auto_approve" }).autoApprove, false);
-  assert.equal(reduceEvent(initialState(), { type: "auto_approve", enabled: "yes" }).autoApprove, false);
-});
-
-// ── permissionModeText (items 9 + 10) ─────────────────────────────────────────
-
-test("permissionModeText maps the auto-approve flag to the posture label", () => {
-  assert.equal(
-    permissionModeText(false, "Full access"),
-    "Permissions: Asking each time · Full access"
-  );
-  assert.equal(
-    permissionModeText(true, "Full access"),
-    "Permissions: Auto-approving · Full access"
-  );
-  // No profile → just the mode; no trailing separator.
-  assert.equal(permissionModeText(false, null), "Permissions: Asking each time");
-  assert.equal(permissionModeText(true, ""), "Permissions: Auto-approving");
-  // No em dash in our own copy (§H-13).
-  assert.ok(!permissionModeText(true, null).includes("—"));
+test("the `modes` event sets both axes, fail-closed on junk", () => {
+  let s = reduceEvent(initialState(), { type: "modes", tool: "bypass", message: "auto_both" });
+  assert.equal(s.toolMode, "bypass");
+  assert.equal(s.messageMode, "auto_both");
+  // The park's reset echo drags the header back.
+  s = reduceEvent(s, { type: "modes", tool: "manual", message: "ask" });
+  assert.equal(s.toolMode, "manual");
+  assert.equal(s.messageMode, "ask");
+  // Anything that is not an exact member reads as the most restrictive value, so the header
+  // can never advertise a posture main is not enforcing.
+  for (const junk of [undefined, null, "", "AUTO", "bypassPermissions", 1, {}]) {
+    const j = reduceEvent({ ...initialState(), toolMode: "bypass", messageMode: "auto_both" },
+      { type: "modes", tool: junk, message: junk });
+    assert.equal(j.toolMode, "manual", `tool ${String(junk)}`);
+    assert.equal(j.messageMode, "ask", `message ${String(junk)}`);
+  }
 });
 
 // ── item 2: initials avatar ───────────────────────────────────────────────────
@@ -487,9 +480,13 @@ test("session.html: the permission dock renders all THREE actions with exact lab
   assert.match(html, /id="btnAllowOnce"[^>]*>Allow once</);
   assert.match(html, /id="btnAllowTask"[^>]*>Allow for this task</);
   assert.match(html, /id="btnDeny"[^>]*>Deny</);
-  // The auto-approve toggle + posture label exist (items 9/10).
-  assert.match(html, /id="autoApprove"/);
+  // v2.9: the TWO axis selects + the posture line + the bypass warning exist; the fused
+  // checkbox is gone, not hidden.
+  assert.match(html, /id="toolMode"/);
+  assert.match(html, /id="messageMode"/);
   assert.match(html, /id="permPosture"/);
+  assert.match(html, /id="permWarn"/);
+  assert.ok(!/id="autoApprove"/.test(html), "the single Auto-approve checkbox is removed");
   // The folder pill replaced the old chip/change/use-default cluster (item 5).
   assert.match(html, /id="folderPill"[^>]*>Working Directory:/);
   assert.ok(!/btnFolderChange|btnFolderDefault|folder-chip/.test(html), "old folder chip cluster is removed");

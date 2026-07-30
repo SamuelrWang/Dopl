@@ -26,6 +26,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
+import { createHash } from "node:crypto";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -51,12 +52,17 @@ assert.notEqual(to, -1, "END SESSION-PROFILE TABLE sentinel missing");
 assert.ok(to > from, "session-profile sentinels out of order");
 const BLOCK = SRC.slice(from, to);
 
+// v2.9: the block also digests a grant key, so `sha12` is injected exactly like
+// normalizeProfile — the REAL implementation, sliced from the module head.
+const sha12 = (value) =>
+  createHash("sha256").update(String(value == null ? "" : value)).digest("hex").slice(0, 12);
+
 const { shortDoplName, buildSessionToolConfig, grantDecision, grantKeyFor, POST_GRANT, isOwnChannelPost } = new Function(
   "READ_BUILTINS", "WEB_TOOLS", "DOPL_SAFE_TOOLS", "DENIED_BUILTINS",
-  "DOPL_ADMIN_TOOLS", "DOPL_CHANNEL_TOOL", "normalizeProfile",
+  "DOPL_ADMIN_TOOLS", "DOPL_CHANNEL_TOOL", "normalizeProfile", "sha12",
   `${BLOCK}
    return { shortDoplName, buildSessionToolConfig, grantDecision, grantKeyFor, POST_GRANT, isOwnChannelPost };`
-)(READ_BUILTINS, WEB_TOOLS, DOPL_SAFE_TOOLS, DENIED_BUILTINS, DOPL_ADMIN_TOOLS, DOPL_CHANNEL_TOOL, normalizeProfile);
+)(READ_BUILTINS, WEB_TOOLS, DOPL_SAFE_TOOLS, DENIED_BUILTINS, DOPL_ADMIN_TOOLS, DOPL_CHANNEL_TOOL, normalizeProfile, sha12);
 
 const CHANNEL_SHORT = "dopl_channel";
 // The work tools kept live-gated under `full` (everything else in DENIED_BUILTINS is
@@ -198,7 +204,9 @@ test("FIX F2: grantKeyFor op-scopes every dopl_channel shape (own post, cross po
   // Every key is bounded, even with a hostile op / channel string.
   const huge = grantKeyFor(DOPL_CHANNEL_TOOL, { op: "x".repeat(400), channel: "y".repeat(400) }, "c1");
   assert.ok(huge.length <= DOPL_CHANNEL_TOOL.length + 40, "the key can never grow into a blob");
-  assert.equal(grantKeyFor("Bash", { command: "ls" }, "c1"), "Bash", "non-channel tools keep their name");
+  // v2.9 HIGH-1: a non-channel tool no longer records the BARE NAME — see the per-class
+  // scoping table in session-permission-axes.test.mjs.
+  assert.equal(grantKeyFor("Bash", { command: "ls" }, "c1"), "Bash#ls#" + sha12("ls"));
 });
 
 test("FIX F2: a grant on op=read does NOT allow a later op=post or op=open (each op its own)", () => {
@@ -246,10 +254,15 @@ test("grantDecision: a profile pre-approved read tool -> 'preapproved'", () => {
   assert.equal(grantDecision({ profile: "dopl_only", toolName: "WebFetch" }), "preapproved");
 });
 
-test("grantDecision: an ungranted work tool GATES under full; granting it for the task -> 'allow'", () => {
+test("grantDecision: an ungranted work tool GATES under full; granting THAT SHAPE -> 'allow'", () => {
+  // v2.9 HIGH-1: the grant is keyed on the call's shape, so the key has to come from
+  // grantKeyFor — the bare tool name authorizes nothing any more.
   for (const t of GATED_WORK.concat(["WebFetch"])) {
-    assert.equal(grantDecision({ profile: "full", toolName: t }), "gate", `${t} gates under full`);
-    assert.equal(grantDecision({ profile: "full", toolName: t, allowForTask: [t] }), "allow", `${t} allowed-for-task`);
+    const input = { command: "ls -la", file_path: "/tmp/a.txt", notebook_path: "/tmp/n.ipynb", url: "https://x.test/a" };
+    assert.equal(grantDecision({ profile: "full", toolName: t, input }), "gate", `${t} gates under full`);
+    const key = grantKeyFor(t, input, "c1");
+    assert.equal(grantDecision({ profile: "full", toolName: t, input, allowForTask: [key] }), "allow", `${t} allowed-for-task`);
+    assert.equal(grantDecision({ profile: "full", toolName: t, input, allowForTask: [t] }), "gate", `${t}: the bare name grants nothing`);
   }
 });
 
@@ -257,6 +270,9 @@ test("grantDecision: a hard-denied tool -> 'deny', even when allowed-for-task (d
   assert.equal(grantDecision({ profile: "read_only", toolName: "Bash" }), "deny");
   assert.equal(grantDecision({ profile: "read_only", toolName: "WebFetch" }), "deny");
   assert.equal(grantDecision({ profile: "read_only", toolName: "Bash", allowForTask: ["Bash"] }), "deny");
+  // v2.9: and not via the scoped key either, nor under `bypass` (see session-permission-axes).
+  const key = grantKeyFor("Bash", { command: "ls" }, "c1");
+  assert.equal(grantDecision({ profile: "read_only", toolName: "Bash", input: { command: "ls" }, allowForTask: [key], toolMode: "bypass" }), "deny");
 });
 
 // ── FIX H2 / H3: the dangerous subset hard-denies (never gates) ──────────────────
