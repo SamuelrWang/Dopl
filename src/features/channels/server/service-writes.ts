@@ -1,19 +1,10 @@
 import "server-only";
-import { isUuid } from "@/shared/lib/id/uuid";
 import { slugify } from "@/shared/lib/slug/slugify";
-import type {
-  Channel,
-  ChannelMember,
-  ChannelMessage,
-  ChannelTask,
-  TaskMode,
-  TaskOutcome,
-} from "../types";
+import type { Channel, ChannelMember, ChannelMessage } from "../types";
 import type {
   ChannelCreateInput,
   ChannelMessageCreateInput,
   ChannelUpdateInput,
-  TaskCreateInput,
 } from "../schema";
 import {
   ChannelAddresseeNotMemberError,
@@ -22,17 +13,14 @@ import {
   ChannelLastOwnerError,
   ChannelMemberExistsError,
   ChannelSlugConflictError,
-  ChannelTaskNotInChannelError,
   DirectChannelImmutableError,
   DirectSelfTargetError,
-  TaskForbiddenError,
-  TaskNotFoundError,
 } from "./errors";
 import type { AgentToolProfile, NotifyScope } from "../types";
-import { mapMemberRow, mapMessageRow, mapTaskRow } from "./dto";
+import { mapMemberRow, mapMessageRow } from "./dto";
 import * as repo from "./repository";
-import * as repoTasks from "./repository-tasks";
 import { getChannel } from "./service-reads";
+import { resolvePostMetadata } from "./service-writes-metadata";
 import {
   canManageChannel,
   loadVisibleChannel,
@@ -47,7 +35,8 @@ import {
  * soft-delete, post message / activity event, and membership add / remove.
  * Every mutation re-checks the channel-scoped gate (member to post, owner
  * or workspace admin to manage) — the route-level `minRole` is only the
- * workspace floor.
+ * workspace floor. The task lifecycle lives in `service-tasks.ts`; the
+ * metadata folds a post goes through live in `service-writes-metadata.ts`.
  */
 
 // ─── Channel lifecycle ──────────────────────────────────────────────
@@ -260,48 +249,11 @@ export async function postMessage(
     if (existing) return hydrateOne(existing);
   }
 
-  // Fold addressing into metadata as `{to_user_id, summary}` (jsonb — no
-  // schema change), preserving any caller-supplied structured payload.
-  const metadata: Record<string, unknown> = { ...(input.metadata ?? {}) };
-  // Reserved keys are settable ONLY via the validated top-level fields: raw
-  // metadata copies would bypass the addressee-membership check above and the
-  // schema's summary length cap (consent-prompt spoofing on non-members).
-  delete metadata.to_user_id;
-  delete metadata.summary;
-  if (input.toUserId) metadata.to_user_id = input.toUserId;
-  if (input.summary) metadata.summary = input.summary;
-
-  // Reserved task keys (v15) are server-controlled — strip any caller copy,
-  // then stamp fresh from the resolved task row so `taskMode` reflects the
-  // latest set_task_mode and can't be spoofed (Q4). `taskId` itself stays
-  // caller-settable (a responder legitimately replies within a task); spoofing
-  // it alone can't fabricate a mode because we only stamp when it resolves to a
-  // real task IN THIS CHANNEL. An old `task-<uuid>-<seq>` id is not a UUID, so
-  // it never resolves and stamps nothing (old sessions unchanged). `taskTarget`
-  // (the task's responder) binds the desktop's task-reply suppression to the
-  // real responder: only a reply whose author IS the target is passive news, so
-  // a third member posting into the task still triggers on the requester's box.
-  delete metadata.taskMode;
-  delete metadata.taskCreatedBy;
-  delete metadata.taskTitle;
-  delete metadata.taskTarget;
-  const taskId =
-    typeof metadata.taskId === "string" ? metadata.taskId : undefined;
-  if (taskId && isUuid(taskId)) {
-    const task = await repoTasks.findTaskByChannelAndId(channel.id, taskId);
-    // A first-class (UUID) taskId that resolves to no task in THIS channel is
-    // rejected (400) rather than silently un-threaded: a bogus first-class id
-    // can no longer fabricate a threaded group (v1.7, server-validated
-    // threading). Legacy `task-<uuid>-<seq>` ids are not UUIDs and never reach
-    // here; the desktop's inherited first-class ids always resolve.
-    if (!task) throw new ChannelTaskNotInChannelError(taskId);
-    metadata.taskMode = task.mode;
-    metadata.taskCreatedBy = task.created_by;
-    metadata.taskTitle = task.title;
-    // Null target (an unaddressed task) stamps nothing — the desktop's
-    // predicate then can't match and falls through to the trigger rules.
-    if (task.target_user_id) metadata.taskTarget = task.target_user_id;
-  }
+  // Addressing (incl. the DM auto-address), the reserved-key anti-spoof fold
+  // and the task-key stamping all live in `service-writes-metadata.ts` — one
+  // place decides what a caller may put in `metadata` and what the server
+  // stamps itself (jsonb, no schema change).
+  const metadata = await resolvePostMetadata(ctx, channel, input);
 
   // `system` is server-reserved and rejected by the route schema, so a posted
   // message always ties to the acting user (agent posts included — the agent
@@ -448,180 +400,4 @@ export async function updateMyMemberSettings(
   const row = await repo.updateMemberPrefs(channel.id, ctx.userId, dbPatch);
   const profiles = await profilesById([ctx.userId]);
   return mapMemberRow(row, profiles.get(ctx.userId), { viewerUserId: ctx.userId });
-}
-
-// ─── Tasks (v15) ────────────────────────────────────────────────────
-
-/**
- * Create a first-class task in a channel. The caller must be a channel member
- * and `toUserId` (the responder the task is addressed to) must be an active
- * member of THAT channel. The requester's initial request (`body`) is posted
- * as the task's first message, tagged `metadata.taskId` so it groups into the
- * task card and the server stamps the reserved task keys onto it.
- */
-export async function createTask(
-  ctx: ChannelContext,
-  ref: string,
-  rawInput: TaskCreateInput
-): Promise<ChannelTask> {
-  const input = stripNulDeep(rawInput);
-  const { channel, membership } = await loadVisibleChannel(ctx, ref);
-  if (!membership) {
-    throw new ChannelForbiddenError("create a task in this channel");
-  }
-  if (!(await repo.findMembership(channel.id, input.toUserId))) {
-    throw new ChannelAddresseeNotMemberError(input.toUserId);
-  }
-
-  // Idempotency: a re-sent client_msg_id returns the already-created task
-  // WITHOUT inserting a second row or re-posting the initial request (which
-  // would double-spawn the responder's session window). Mirrors the message
-  // post's idempotency (findMessageByClientId → return the stored row).
-  if (input.clientMsgId) {
-    const existing = await repoTasks.findTaskByClientId(
-      channel.id,
-      input.clientMsgId
-    );
-    if (existing) return mapTaskRow(existing);
-  }
-
-  let task;
-  try {
-    task = await repoTasks.insertTask({
-      channel_id: channel.id,
-      workspace_id: ctx.workspaceId,
-      title: input.title,
-      mode: input.mode ?? "interactive",
-      created_by: ctx.userId,
-      target_user_id: input.toUserId,
-      client_msg_id: input.clientMsgId ?? null,
-    });
-  } catch (err) {
-    // Lost an idempotency race — converge on the stored winner (again, no
-    // re-post: the winning insert's own call posts the initial request).
-    if (repo.pgErrorCode(err) === UNIQUE_VIOLATION && input.clientMsgId) {
-      const raced = await repoTasks.findTaskByClientId(
-        channel.id,
-        input.clientMsgId
-      );
-      if (raced) return mapTaskRow(raced);
-    }
-    throw err;
-  }
-
-  await postMessage(ctx, channel.id, {
-    body: input.body,
-    kind: "message",
-    toUserId: input.toUserId,
-    summary: input.title,
-    metadata: { taskId: task.id },
-  });
-
-  return mapTaskRow(task);
-}
-
-/**
- * Close a task with an outcome. Permitted for the task's creator OR its target
- * (`created_by` / `target_user_id`). Posts a lifecycle marker so the other
- * member's thread updates live: completed -> `task_finished` (calm "done");
- * failed -> `task_failed` (a close with outcome=failed IS a genuine failure).
- */
-export async function closeTask(
-  ctx: ChannelContext,
-  ref: string,
-  taskId: string,
-  outcome: TaskOutcome,
-  summary?: string
-): Promise<ChannelTask> {
-  const { channel, membership } = await loadVisibleChannel(ctx, ref);
-  if (!membership) {
-    throw new ChannelForbiddenError("close a task in this channel");
-  }
-  const task = await repoTasks.findTaskByChannelAndId(channel.id, taskId);
-  if (!task) throw new TaskNotFoundError(taskId);
-  if (task.created_by !== ctx.userId && task.target_user_id !== ctx.userId) {
-    throw new TaskForbiddenError("close this task");
-  }
-
-  // A caller-supplied `summary` (a one-line outcome) is persisted on the task
-  // row AND becomes the lifecycle echo's body; absent (or blank), the echo
-  // keeps its calm default. The kind (task_finished/task_failed) is unchanged.
-  const updated = await repoTasks.updateTask(task.id, {
-    status: "closed",
-    outcome,
-    closed_at: new Date().toISOString(),
-    // A blank/whitespace summary stores as null, not "" (render guards on null).
-    outcome_summary: summary && summary.trim().length > 0 ? summary.trim() : null,
-  });
-
-  await postMessage(ctx, channel.id, {
-    body:
-      (summary && summary.trim()) ||
-      (outcome === "completed" ? "Task completed" : "Task failed"),
-    kind: outcome === "completed" ? "task_finished" : "task_failed",
-    summary: task.title,
-    metadata: { taskId: task.id },
-  });
-
-  return mapTaskRow(updated);
-}
-
-/**
- * Change a task's mode. CREATOR ONLY — the mode governs the creator's own
- * machine (interactive vs autonomous continuation). Posts NO message: the
- * change is intentionally realtime-invisible and the badge is eventually
- * consistent on the next tasks refetch.
- */
-export async function setTaskMode(
-  ctx: ChannelContext,
-  ref: string,
-  taskId: string,
-  mode: TaskMode
-): Promise<ChannelTask> {
-  const { channel, membership } = await loadVisibleChannel(ctx, ref);
-  if (!membership) {
-    throw new ChannelForbiddenError("change a task's mode in this channel");
-  }
-  const task = await repoTasks.findTaskByChannelAndId(channel.id, taskId);
-  if (!task) throw new TaskNotFoundError(taskId);
-  if (task.created_by !== ctx.userId) {
-    throw new TaskForbiddenError("set the mode of this task");
-  }
-
-  const updated = await repoTasks.updateTask(task.id, { mode });
-  return mapTaskRow(updated);
-}
-
-/**
- * Reopen a closed task. WEB-ONLY (no MCP op — agents do not reopen). Permitted
- * for the task's creator OR its target (`created_by` / `target_user_id`),
- * mirroring {@link closeTask}'s authorization. Clears the closed state in a
- * single update — `status` back to `open`, and `outcome` / `closed_at` /
- * `outcome_summary` all nulled — which keeps the `closed ⇔ outcome` CHECK
- * satisfied ((status='closed') = (outcome IS NOT NULL)). Posts NO lifecycle
- * echo: the web overlay flips the card back to `active` on the next tasks
- * refetch, so no `task_*` marker is needed (and none would be coherent).
- */
-export async function reopenTask(
-  ctx: ChannelContext,
-  ref: string,
-  taskId: string
-): Promise<ChannelTask> {
-  const { channel, membership } = await loadVisibleChannel(ctx, ref);
-  if (!membership) {
-    throw new ChannelForbiddenError("reopen a task in this channel");
-  }
-  const task = await repoTasks.findTaskByChannelAndId(channel.id, taskId);
-  if (!task) throw new TaskNotFoundError(taskId);
-  if (task.created_by !== ctx.userId && task.target_user_id !== ctx.userId) {
-    throw new TaskForbiddenError("reopen this task");
-  }
-
-  const updated = await repoTasks.updateTask(task.id, {
-    status: "open",
-    outcome: null,
-    closed_at: null,
-    outcome_summary: null,
-  });
-  return mapTaskRow(updated);
 }

@@ -44,6 +44,12 @@ const { createWakeCoalescer } = new Function(
 const { wsHealthy } = new Function(
   `${slice("// ─── BEGIN WS-HEALTH", "// ─── END WS-HEALTH")}\n return { wsHealthy };`
 )();
+const { describeSubscribeError, isAuthFailure, redactSecrets } = new Function(
+  `${slice("// ─── BEGIN SUB-ERROR", "// ─── END SUB-ERROR")}\n return { describeSubscribeError, isAuthFailure, redactSecrets };`
+)();
+const { joinableSet } = new Function(
+  `${slice("// ─── BEGIN JOIN-GATE", "// ─── END JOIN-GATE")}\n return { joinableSet };`
+)();
 
 // ── Breaker: fail → open → cooldown → half-open → close ──────────────────────
 
@@ -221,4 +227,109 @@ test("not started → UNhealthy regardless of the sub", () => {
 
 test("breaker OPEN → UNhealthy regardless of the sub", () => {
   assert.equal(wsHealthy(true, false, { subscribed: true }), false);
+});
+
+// ── Subscribe-failure reasons (the 1.7.6 "1700 bare CHANNEL_ERRORs" blind spot) ─
+// realtime-js passes the join-error payload as subscribe()'s SECOND argument; we
+// used to drop it, so a permanent failure logged no cause at all. These lock that
+// every payload shape realtime-js can hand over yields a usable one-line reason,
+// that credential refusals are classified as such (they are the ones a token
+// rotation fixes), and that nothing token-shaped can reach the plaintext log.
+
+test("an Error payload reports its message", () => {
+  assert.equal(describeSubscribeError(new Error("Unauthorized")), "Unauthorized");
+});
+
+test("a {reason} payload reports the reason", () => {
+  assert.equal(describeSubscribeError({ reason: "token has expired" }), "token has expired");
+});
+
+test("message and reason are BOTH kept when they differ", () => {
+  const out = describeSubscribeError({ message: "join failed", reason: "InvalidJWTToken" });
+  assert.match(out, /join failed/);
+  assert.match(out, /InvalidJWTToken/);
+});
+
+test("a duplicated reason is not printed twice", () => {
+  assert.equal(describeSubscribeError({ message: "same", reason: "same" }), "same");
+});
+
+test("a nested cause is surfaced (realtime-js wraps server errors)", () => {
+  const err = new Error("subscribe error", { cause: { reason: "permission denied for function" } });
+  const out = describeSubscribeError(err);
+  assert.match(out, /subscribe error/);
+  assert.match(out, /cause=permission denied for function/);
+});
+
+test("a string payload passes through; missing / opaque payloads still say something", () => {
+  assert.equal(describeSubscribeError("CHANNEL_ERROR"), "CHANNEL_ERROR");
+  assert.equal(describeSubscribeError(null), "no-payload");
+  assert.equal(describeSubscribeError(undefined), "no-payload");
+  // No message/reason/cause at all: fall back to the serialized shape, never "".
+  assert.equal(describeSubscribeError({ code: 403 }), '{"code":403}');
+});
+
+test("reasons are length-capped so one server payload cannot flood the log", () => {
+  assert.ok(describeSubscribeError({ message: "x".repeat(5000) }).length <= 200);
+});
+
+test("credential refusals are classified as auth failures", () => {
+  for (const r of [
+    "InvalidJWTToken: Token has expired",
+    "Unauthorized",
+    "permission denied for function is_current_workspace_member",
+    "403 Forbidden",
+    "jwt malformed",
+  ]) {
+    assert.equal(isAuthFailure(r), true, `${r} must be an auth failure`);
+  }
+});
+
+test("non-credential failures are NOT classified as auth failures", () => {
+  // A rotation cannot fix these, so they must not trigger one.
+  for (const r of ["no-payload", "mismatch between server and client bindings for postgres changes"]) {
+    assert.equal(isAuthFailure(r), false, `${r} must not be an auth failure`);
+  }
+});
+
+test("a token-shaped substring is REDACTED out of the logged reason", () => {
+  const jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhYmMiLCJleHAiOjF9.c2lnbmF0dXJlX2hlcmU";
+  const out = describeSubscribeError({ reason: `bad token ${jwt} rejected` });
+  assert.match(out, /<jwt>/);
+  assert.ok(!out.includes("eyJ"), "no JWT fragment may survive into the log");
+});
+
+test("a publishable apikey is REDACTED out of the logged reason", () => {
+  const out = redactSecrets("apikey sb_publishable_HblQWxgsywspHu73EmBQXw_Mu4rBrlw invalid");
+  assert.match(out, /<apikey>/);
+  assert.ok(!out.includes("sb_publishable_"));
+});
+
+// ── Join gate: never subscribe without a user JWT ─────────────────────────────
+// The prod hazard this locks: with no JWT realtime-js joins on the URL apikey as
+// `anon`, and an anon postgres_changes subscriber cannot evaluate the published
+// tables' RLS (42501 on is_current_workspace_member), which crashes the project's
+// whole CDC pipeline — push dies for EVERY client, web included. So a join may
+// only ever follow a credential.
+
+test("with a credential, every desired workspace is joinable", () => {
+  const want = new Set(["wsA", "wsB", "wsC"]);
+  assert.deepEqual([...joinableSet(true, want)].sort(), ["wsA", "wsB", "wsC"]);
+});
+
+test("with NO credential, NOTHING is joinable (fail closed, not anon)", () => {
+  const want = new Set(["wsA", "wsB", "wsC"]);
+  assert.equal(joinableSet(false, want).size, 0);
+});
+
+test("the gate returns a COPY, so reconciling cannot mutate the desired set", () => {
+  const want = new Set(["wsA"]);
+  const got = joinableSet(true, want);
+  got.delete("wsA");
+  assert.equal(want.has("wsA"), true, "the caller's desired set is untouched");
+});
+
+test("an empty or missing desired set is handled without a credential check crash", () => {
+  assert.equal(joinableSet(true, undefined).size, 0);
+  assert.equal(joinableSet(true, new Set()).size, 0);
 });

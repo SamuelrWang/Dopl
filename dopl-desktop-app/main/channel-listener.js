@@ -363,6 +363,9 @@ function start(statusCb, h) {
   // channel; onHealthChange nudges loops when push flips on/off.
   if (REALTIME.ENABLED) {
     realtime.start({
+      // getAccessTokenInfo also reports WHICH source the JWT came from and how
+      // much life it has left, so a failed subscribe can name its cause.
+      getAccessTokenInfo: auth.getAccessTokenInfo,
       getAccessToken: auth.getAccessToken,
       onInsert: wakeChannel,
       onHealthChange: onRealtimeHealth,

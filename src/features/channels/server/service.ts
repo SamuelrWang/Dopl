@@ -7,7 +7,10 @@ import "server-only";
  * `service-shared.ts`.
  *   - `service-shared.ts`  — context, visibility gate, management gate, resolvers
  *   - `service-reads.ts`   — list + header + roster + tasks + cursor reads + await poll
- *   - `service-writes.ts`  — create (incl. direct) / update / delete, post message, members, tasks
+ *   - `service-writes.ts`  — create (incl. direct) / update / delete, post message, members
+ *   - `service-writes-metadata.ts` — what a post may put in `metadata` vs. what
+ *                            the server stamps (addressing, DM auto-address, task keys)
+ *   - `service-tasks.ts`   — first-class task lifecycle (create / close / mode / reopen)
  *   - `consent-service.ts` — inbound consent + outbound review requests (v1.2)
  *   - `trust-service.ts`   — per-teammate standing consent rules (v1.2)
  *   - `presence-service.ts`— desktop heartbeat upsert (v1.2)
@@ -36,11 +39,14 @@ export {
   addMember,
   removeMember,
   updateMyMemberSettings,
+} from "./service-writes";
+
+export {
   createTask,
   closeTask,
   setTaskMode,
   reopenTask,
-} from "./service-writes";
+} from "./service-tasks";
 
 export {
   createConsentRequest,

@@ -17,7 +17,8 @@ vi.mock("./repository-tasks");
 
 import * as repo from "./repository";
 import * as repoTasks from "./repository-tasks";
-import { closeTask, postMessage, reopenTask } from "./service-writes";
+import { postMessage } from "./service-writes";
+import { closeTask, reopenTask } from "./service-tasks";
 import {
   ChannelAddresseeNotMemberError,
   ChannelForbiddenError,

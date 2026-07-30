@@ -20,13 +20,8 @@ vi.mock("./service-reads");
 import * as repo from "./repository";
 import * as repoTasks from "./repository-tasks";
 import * as reads from "./service-reads";
-import {
-  addMember,
-  createChannel,
-  createTask,
-  closeTask,
-  setTaskMode,
-} from "./service-writes";
+import { addMember, createChannel } from "./service-writes";
+import { createTask, closeTask, setTaskMode } from "./service-tasks";
 import {
   ChannelAddresseeNotMemberError,
   ChannelForbiddenError,

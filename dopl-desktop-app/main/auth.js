@@ -206,19 +206,102 @@ async function getUserIdFromCookies() {
   }
 }
 
-// The Supabase user access_token JWT for Realtime auth (setAuth). Prefer the
-// stored deep-link blob; else the token embedded in the auth cookie (the same
-// reassembly as getUserIdFromCookies, returning the TOKEN not the `sub`). Never
-// logged. Returns null when signed out / no token available.
-async function getAccessToken() {
-  const s = loadSession();
-  if (s && s.access_token) return s.access_token;
+// ── Realtime credential selection ─────────────────────────────────────────
+// Realtime is the ONLY consumer that needs a raw user JWT (setAuth); every HTTP
+// caller uses the cookie jar instead. Treat a token as dead this many seconds
+// before its real `exp` so we never hand Realtime one that dies mid-join.
+const ACCESS_SKEW_SEC = 60;
+// Rotate the stored blob at most this often when both sources are stale
+// (F-072: a read must never trigger a write storm).
+const REFRESH_COOLDOWN_MS = 30_000;
+let lastRefreshAttemptMs = 0;
+
+// The `exp` claim (unix seconds) of a JWT, or null when it cannot be read (e.g. a
+// Dopl `dopl_at_` device token, which is not a JWT at all).
+function jwtExp(token) {
+  const claims = token ? decodeJwt(token) : null;
+  const exp = claims && claims.exp;
+  return typeof exp === 'number' && Number.isFinite(exp) ? exp : null;
+}
+
+// ─── BEGIN TOKEN-CHOICE (pure; unit-tested via source extraction) ──────────
+// WHICH credential Realtime gets. Two sources exist and they DRIFT APART:
+//   'stored' — the deep-link session blob. Rewritten only by captureFromFragment()
+//              or refresh(), and refresh() is reachable only from getAuthCookie()'s
+//              repair branch, which never runs while the renderer keeps the cookie
+//              jar fresh. So the blob's JWT dies ~1h after sign-in and STAYS dead.
+//   'cookie' — the jar the live web session auto-refreshes; normally the fresh one.
+// The old rule was "stored first, cookie only if the blob is missing", which pins
+// Realtime to the one source that rots: it then sends an expired JWT, Realtime
+// answers CHANNEL_ERROR, and every rejoin re-reads the SAME dead token, so push
+// never recovers (zero SUBSCRIBED) while the cookie-authed HTTP calls stay fine.
+// Worse, when NO token is passed at all, realtime-js falls back to the URL apikey
+// and joins as `anon` — whose RLS evaluation of the published tables raises 42501
+// (`permission denied for function is_current_workspace_member`) and crashes the
+// project's whole postgres_changes pipeline, for every client.
+// So: pick the candidate with the most life left, and report WHY, so the caller
+// can log the reason and the source without ever logging the token value.
+// Pure over its inputs (`nowSec` injected) so the truth table is unit-testable.
+function chooseAccessToken(candidates, nowSec, skewSec) {
+  const usable = (candidates || []).filter((c) => c && c.token);
+  if (usable.length === 0) {
+    return { kind: 'none', token: null, exp: null, secondsLeft: null, fresh: false, reason: 'no-credential' };
+  }
+  const scored = usable.map((c) => ({
+    kind: c.kind,
+    token: c.token,
+    exp: c.exp == null ? null : c.exp,
+    secondsLeft: c.exp == null ? null : c.exp - nowSec,
+  }));
+  const alive = scored.filter((c) => c.exp != null && c.exp > nowSec + skewSec);
+  const pool = alive.length ? alive : scored;
+  // Furthest-future exp wins. A token whose exp we cannot read sorts LAST: it is
+  // probably not a Supabase JWT, and Realtime would reject it anyway.
+  const rank = (c) => (c.exp == null ? -Infinity : c.exp);
+  const best = pool.reduce((a, b) => (rank(b) > rank(a) ? b : a));
+  return {
+    kind: best.kind,
+    token: best.token,
+    exp: best.exp,
+    secondsLeft: best.secondsLeft,
+    fresh: alive.length > 0,
+    reason: alive.length ? 'fresh' : best.exp == null ? 'exp-unreadable' : 'all-expired',
+  };
+}
+// ─── END TOKEN-CHOICE ──────────────────────────────────────────────────────
+
+// The Supabase user access_token JWT for Realtime auth (setAuth) PLUS the
+// metadata the caller logs: which source it came from, how much life it has left,
+// and why it was chosen. The token value lives only in `.token` and is never
+// logged. When both sources are stale we rotate the stored blob once per cooldown
+// and re-pick, so a long-lived background listener repairs itself instead of
+// re-sending a token the server has already rejected.
+async function getAccessTokenInfo() {
+  const stored = loadSession();
+  let cookieToken = null;
   try {
-    return await readCookieAccessToken();
+    cookieToken = await readCookieAccessToken();
   } catch (err) {
     console.error('[auth] access-token read failed:', err && err.message);
-    return null;
   }
+  const candidates = [
+    { kind: 'stored', token: (stored && stored.access_token) || null },
+    { kind: 'cookie', token: cookieToken },
+  ].map((c) => ({ ...c, exp: jwtExp(c.token) }));
+
+  const pick = chooseAccessToken(candidates, Math.floor(Date.now() / 1000), ACCESS_SKEW_SEC);
+  if (pick.fresh) return pick;
+  if (Date.now() - lastRefreshAttemptMs < REFRESH_COOLDOWN_MS) return pick;
+  lastRefreshAttemptMs = Date.now();
+  const next = await refresh();
+  if (!next || !next.access_token) return pick;
+  candidates.push({ kind: 'refreshed', token: next.access_token, exp: jwtExp(next.access_token) });
+  return chooseAccessToken(candidates, Math.floor(Date.now() / 1000), ACCESS_SKEW_SEC);
+}
+
+// Back-compat shape for callers that only want the token string.
+async function getAccessToken() {
+  return (await getAccessTokenInfo()).token;
 }
 
 function isAccessExpired(skewSec = 60) {
@@ -364,6 +447,7 @@ module.exports = {
   getUserId,
   getUserIdFromCookies,
   getAccessToken,
+  getAccessTokenInfo,
   isAccessExpired,
   refresh,
   ensureFresh,

@@ -3,11 +3,15 @@
 // A recreated parked shell (session-park.recreateParkedShell) has an EMPTY local
 // replay ring: the window is real but the earlier turns lived in the process that
 // died. Instead of the old bare "the transcript is in the channel thread" note, main
-// fetches the task's own channel messages and paints them as READ-ONLY history
+// fetches this conversation's own channel messages and paints them as READ-ONLY history
 // entries, lane-aligned like live turns, behind one "History from the channel"
-// divider. When the shell has nothing to resume (no retained sdkSessionId, the D3
-// always-open case) the same entries also seed the FRESH run's first turn as fenced
-// context, so typing into a reopened window is not a cold start.
+// divider. ONE divider serves BOTH reads (the task's tagged thread and the FIX F17 pair
+// fallback): the copy already names the channel, which is true either way, and a second
+// wording would only expose which internal filter matched. That string is renderer-owned
+// (session-viewmodel.HISTORY_NOTE) — main sends data. When the shell has nothing to
+// resume (no retained sdkSessionId, the D3 always-open case) the same entries also seed
+// the FRESH run's first turn as fenced context, so typing into a reopened window is not
+// a cold start.
 //
 // MAIN-PROCESS ONLY. The fetch uses api.js (the Electron session's Supabase cookies —
 // see auth.js for why not a bearer); the renderer gets display strings only. Nothing
@@ -25,6 +29,15 @@
 // seed — one step around the FIX L1 counterparty binding. Rows are therefore kept only
 // when their authorUserId is the operator or the session's bound counterparty, and the
 // 'me' lane is reserved for rows the operator actually wrote.
+//
+// FIX F17: filtering on the task id was also too NARROW to show anything for a real DM
+// exchange. Most of those rows carry no `metadata.taskId` at all (the request and the
+// agent's reply are plain `message` rows; the only tagged row is the `task_started`
+// lifecycle event, which the entry filter rightly skips), and a responder shell with no
+// first-class task has no task id to match on either — so a reopened window painted an
+// EMPTY stream for a conversation that plainly had messages. The task-scoped read is now
+// the PREFERRED pass, with a PAIR-SCOPED fallback behind it: same two-party author rule,
+// minus the taskId condition. The fallback widens WHICH rows count, never WHOSE.
 
 const { apiFetch } = require('./api');
 const listenerIo = require('./listener-io');
@@ -62,38 +75,60 @@ function oneLine(value, cap) {
   return s.length > cap ? s.slice(0, cap - 1).trimEnd() + '…' : s;
 }
 
-// PURE: the read-only render entries for a task, newest LAST (stream order).
+// PURE: the two-party rows of one pass, newest LAST (stream order), uncapped.
 //   - only real `message` rows (lifecycle events are the web card's story, not turns)
-//   - only rows whose server-stamped metadata.taskId IS this task
-//   - FIX F4: only rows written by one of the TWO parties of this task. `metadata.taskId`
+//   - `taskId` '' means ANY task (the FIX F17 pair-scoped pass); a non-empty taskId keeps
+//     only rows whose server-stamped metadata.taskId IS that task.
+//   - FIX F4: only rows written by one of the TWO parties of this session. `metadata.taskId`
 //     is caller-settable, so a third channel member could otherwise land their own text
-//     in this window (and in the seed) by stamping the task id on a post.
+//     in this window (and in the seed) by stamping the task id on a post — and the
+//     pair-scoped pass must not become a channel-wide read either. This rule is shared by
+//     BOTH passes on purpose: the fallback drops the taskId test and NOTHING else.
 //   - lane 'me' ONLY when the author IS the operator; the bound counterparty is 'them'.
 //     Neither id known -> that side contributes nothing, so counterparty text can never
-//     be painted as the operator's own words.
-//   - the last `cap` survive, so a long thread shows its most recent stretch.
+//     be painted as the operator's own words (and a shell with no bound counterparty at
+//     all contributes nothing on either pass).
+function pairRows(rows, taskId, selfId, peerId) {
+  const out = [];
+  for (const r of rows || []) {
+    if (!r || r.kind !== 'message') continue;
+    const meta = r.metadata || {};
+    if (taskId && String(meta.taskId == null ? '' : meta.taskId) !== taskId) continue;
+    const author = String(r.authorUserId == null ? '' : r.authorUserId);
+    if (!author) continue; // unattributable: never guess a lane for it
+    const isSelf = !!selfId && author === selfId;
+    const isPeer = !!peerId && author === peerId;
+    if (!isSelf && !isPeer) continue; // a third member is not part of this conversation
+    const text = clamp(r.body, TEXT_CAP);
+    if (!text) continue;
+    out.push({ from: oneLine(r.authorName, NAME_CAP), text: text, lane: isSelf ? 'me' : 'them' });
+  }
+  return out;
+}
+
+// PURE: the read-only render entries for a session, newest LAST (stream order).
+//
+// TWO PASSES, in preference order:
+//   1. TASK-SCOPED (preferred) — a first-class task whose messages ARE tagged still shows
+//      exactly its own thread, nothing else.
+//   2. PAIR-SCOPED (FIX F17) — the recent conversation between the two parties in this
+//      channel, whatever taskId the rows carry. Taken when this session has NO task id, or
+//      when pass 1 found ZERO entries: the untagged/legacy exchange that used to paint an
+//      empty window.
+//
+// The last `cap` of the winning pass survive, so a long thread shows its most recent
+// stretch. Order and cap are identical on both paths.
 function historyEntries(rows, opts) {
   const o = opts || {};
   const taskId = String(o.taskId == null ? '' : o.taskId);
   const selfId = String(o.selfUserId == null ? '' : o.selfUserId);
   const peerId = String(o.peerUserId == null ? '' : o.peerUserId);
   const cap = Number.isFinite(o.cap) && o.cap > 0 ? o.cap : ENTRY_CAP;
-  const out = [];
-  if (!taskId) return out;
-  for (const r of rows || []) {
-    if (!r || r.kind !== 'message') continue;
-    const meta = r.metadata || {};
-    if (String(meta.taskId == null ? '' : meta.taskId) !== taskId) continue;
-    const author = String(r.authorUserId == null ? '' : r.authorUserId);
-    if (!author) continue; // unattributable: never guess a lane for it
-    const isSelf = !!selfId && author === selfId;
-    const isPeer = !!peerId && author === peerId;
-    if (!isSelf && !isPeer) continue; // a third member is not part of this task
-    const text = clamp(r.body, TEXT_CAP);
-    if (!text) continue;
-    out.push({ from: oneLine(r.authorName, NAME_CAP), text: text, lane: isSelf ? 'me' : 'them' });
+  if (taskId) {
+    const scoped = pairRows(rows, taskId, selfId, peerId);
+    if (scoped.length) return scoped.slice(-cap);
   }
-  return out.slice(-cap);
+  return pairRows(rows, '', selfId, peerId).slice(-cap);
 }
 
 // The authenticated read: the NEWEST `FETCH_LIMIT` rows of the channel, ascending.
@@ -146,7 +181,11 @@ function seedsFreshRun(s) {
 // Load + paint. Awaited by the recreate path (FIX F3: the entries must be painted and
 // stashed BEFORE the window can take a turn); never throws into it.
 async function load(s) {
-  if (!deps || !s || !s.channelId || !s.taskId) return false; // no task -> nothing to filter on
+  // FIX F17: a missing task id is NO LONGER disqualifying. It used to return here, which is
+  // how a responder shell with no first-class task (taskId collapsed to '') opened with an
+  // empty stream; the channel plus the bound counterparty are enough to read the pair's own
+  // conversation. A channel id is still required — there is nothing to read without it.
+  if (!deps || !s || !s.channelId) return false;
   // FIX F4: no bound counterparty means no row can be laned honestly, so nothing is
   // painted (and nothing is read) — one calm pointer at the channel thread instead of a
   // window full of the peer's words wearing the operator's lane. No divider either: it
@@ -169,6 +208,8 @@ async function load(s) {
   // gate (session-park records it on the shell before this read), so the held reply used
   // to render TWICE — once as the actionable Accept / Decline card and again as a muted
   // history bubble a few lines above it. Same predicate the seed uses, so the two agree.
+  // FIX F17: this filter sits OUTSIDE historyEntries, so it covers the pair-scoped pass as
+  // well — a held or declined body cannot walk back in through the widened taskId condition.
   const entries = historyEntries(rows, {
     taskId: s.taskId, peerUserId: s.counterpartyId, selfUserId: selfId, cap: ENTRY_CAP,
   }).filter((e) => !io.isGatedEntry(e, (s && s.gatedBodies) || []));
