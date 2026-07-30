@@ -162,6 +162,17 @@ describe("ChannelThread pending requests placement", () => {
     expect(markup).toContain("bg-warning/10");
   });
 
+  it("keeps the request card full width (chat sides are for plain messages only)", () => {
+    const markup = render([consent()]);
+    // The bubble alignment recipe belongs to plain chat rows; a pending decision
+    // is shared state and spans the column.
+    const ask = markup.indexOf("THE-PENDING-ASK");
+    const tail = markup.slice(ask);
+    expect(tail).not.toContain("max-w-[66%]");
+    expect(tail).not.toContain("self-end");
+    expect(tail).not.toContain("self-start");
+  });
+
   it("passes the channel's own tool profile to the inbound card", () => {
     const markup = render([consent()]);
     expect(markup).toContain("Read only");

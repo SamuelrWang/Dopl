@@ -191,34 +191,34 @@ html, body {
 }
 
 /* ── Turn stream ──────────────────────────────────────────────────────────── */
-.stream-wrap {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-}
+.stream-wrap { flex: 1; min-height: 0; display: flex; }
 .stream {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
+  flex: 1; min-height: 0; overflow-y: auto;
   padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  display: flex; flex-direction: column; gap: 10px;
   background: var(--bg-inset);
   border-radius: 12px;
   box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.06);
 }
 /* ── item 1 BUG: tool-card clipped ─────────────────────────────────────────
-   The stream is a flex column; its children default to flex-shrink:1. A
-   .tool-card has overflow:hidden, so its flex min-height:auto resolves to 0 —
-   the flex algorithm SHRINKS the card toward 0 instead of overflowing, and
-   overflow:hidden then CLIPS the body to a dead sliver. Pin every stream item
-   to its natural height; the stream itself (overflow-y:auto) scrolls. */
+   Stream children default to flex-shrink:1, and a .tool-card is overflow:hidden
+   (flex min-height:auto → 0), so the flex algorithm SHRANK the card toward 0 and
+   the hidden overflow CLIPPED its body to a sliver. Pin every stream item to its
+   natural height; the stream itself (overflow-y:auto) scrolls. */
 .stream > * { flex: 0 0 auto; }
+
+/* ── Chat lanes: the stream reads like text messages ──────────────────────────
+   `.lane-me` (operator turns) and `.lane-them` (agent text + counterparty
+   replies) are stamped by the DOM factories from the pure item-KIND mapping in
+   session-chrome.js, never by matching text. Every non-conversational item (tool
+   cards, the outbound banner, pending-inbound cards, notices) carries NO lane
+   class and keeps its own full-width recipe. */
+.lane-me { align-self: flex-end; max-width: 66%; }
+.lane-them { align-self: flex-start; max-width: 66%; }
 
 /* Turn bubbles */
 .bubble {
-  max-width: 78%; /* ≤ the item-4 100% upper bound — keeps the 3-lane chat width */
+  max-width: 100%; /* the lane class owns the 66% cap; this is the item-4 upper bound */
   min-width: 0; /* contain within the flex column (item 4) */
   padding: 9px 12px;
   border-radius: 12px;
@@ -229,16 +229,14 @@ html, body {
 }
 .bubble .who {
   display: block;
-  font-size: var(--text-micro);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  font-weight: 600;
-  color: var(--text-muted);
+  font-size: var(--text-micro); text-transform: uppercase; letter-spacing: 0.06em;
+  font-weight: 600; color: var(--text-muted);
   margin-bottom: 3px;
 }
-.bubble.role-agent { align-self: flex-start; background: var(--card-surface-elevated); }
-.bubble.role-operator { align-self: flex-end; background: var(--bg-elevated); border-color: var(--border-strong); }
-.bubble.role-counterparty { align-self: flex-start; background: var(--bg-inset); border-color: var(--border-strong); }
+/* SURFACE only: the lane owns align-self + width (a 2-class selector would outrank it). */
+.bubble.role-agent { background: var(--card-surface-elevated); }
+.bubble.role-operator { background: var(--bg-elevated); border-color: var(--border-strong); }
+.bubble.role-counterparty { background: var(--bg-inset); border-color: var(--border-strong); }
 
 /* Counterparty avatar (item 1): initials on bg-inset, mirroring the web Avatar
    fallback (light neutral, no identity colour). */
@@ -255,8 +253,8 @@ html, body {
 }
 
 /* Real per-author avatar (item 1/5/6): a round frame clipping the bounded data:
-   <img>. Same 18px footprint as the .cp-avatar initials fallback so a late
-   `avatars` swap does not shift the layout. */
+   <img>. Same 18px footprint as the .cp-avatar fallback so a late `avatars` swap
+   does not shift the layout. */
 .av {
   width: 18px; height: 18px; border-radius: 50%; flex: none;
   display: inline-flex; overflow: hidden;
@@ -267,11 +265,12 @@ html, body {
 .peer-avatar .av { width: 100%; height: 100%; border: none; }
 
 /* ── Outbound component (item 4): what MY agent SENT to the peer (op=post) — a
-   distinct SENT banner (self avatar + uppercase label band) over the posted
-   body, clearly differentiated from the .bubble narration surface. ─────────── */
+   distinct SENT banner (self avatar + uppercase label band) over the posted body,
+   differentiated from the .bubble narration surface. It is a delivery RECORD, not
+   a conversational turn, so it spans the full stream width like a tool card. ── */
 .outbound {
-  align-self: flex-end;
-  max-width: 78%;
+  align-self: stretch;
+  max-width: 100%;
   min-width: 0;
   border-radius: 12px;
   border: 1px solid var(--border-active);
@@ -357,11 +356,10 @@ html, body {
 .tool-status.is-pending { color: var(--text-muted); }
 .tool-status.is-ok { color: var(--agent-on); }
 .tool-status.is-error { color: var(--danger); }
-/* ── item 8: the tool body is ONE native <details>, default CLOSED. The head
-   (name + op summary + status) stays outside → always visible; the input +
-   result live inside and are hidden until the user expands. The EXPANDED
-   pre/.tool-result keep max-height:240px;overflow:auto so long output SCROLLS,
-   never clips (composes with item 1's .stream>*{flex:0 0 auto}). */
+/* ── item 8: the tool body is ONE native <details>, default CLOSED. The head (name
+   + op summary + status) stays outside → always visible; the input + result live
+   inside, hidden until the user expands. The EXPANDED pre/.tool-result keep
+   max-height:240px;overflow:auto so long output SCROLLS (composes with item 1). */
 .tool-card__body {
   background: var(--bg-inset);
   box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.06);
@@ -408,8 +406,7 @@ html, body {
   max-width: 100%;
   min-width: 0;
   max-height: 240px;
-  overflow: auto;
-  overflow-x: auto; /* wide/batch pre-formatted output scrolls, never blows out the column (item 4) */
+  overflow: auto; /* wide/batch pre-formatted output scrolls, never blows out the column (item 4) */
   user-select: text;
 }
 .tool-result {

@@ -120,9 +120,9 @@ describe("SessionCard render", () => {
   it("renders the card, and the desktop-only reopen button is absent on the server", () => {
     const markup = renderToStaticMarkup(<SessionCard session={session()} />);
     expect(markup).toContain("Ship the fix");
-    // The reopen button is feature-detected after mount, so it never appears in
+    // The window button is feature-detected after mount, so it never appears in
     // the server / first-paint markup — proving the hydration-safe gating.
-    expect(markup).not.toContain("Reopen window");
+    expect(markup).not.toContain("Open window");
   });
 
   it("shows the plain 'Working…' line for an active session with no reply and no calm end", () => {

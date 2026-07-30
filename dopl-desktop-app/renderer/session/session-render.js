@@ -24,6 +24,14 @@
 
   const noop = function () {};
 
+  // The pure chrome layer owns the item-kind → chat-lane mapping. It is reached the
+  // same way session-chrome.js reaches the view-model: a require() under node, the
+  // renderer global in the sandbox (session.html loads session-chrome.js first).
+  const chrome =
+    typeof module === "object" && typeof require === "function"
+      ? require("./session-chrome.js")
+      : (typeof globalThis !== "undefined" && globalThis.DoplSessionChrome) || null;
+
   // ── shared DOM/format helpers ──────────────────────────────────────────────
   function el(tag, className, text) {
     const node = document.createElement(tag);
@@ -34,6 +42,16 @@
 
   function cap(s) {
     return s ? String(s).charAt(0).toUpperCase() + String(s).slice(1) : "";
+  }
+
+  // The chat lane for a stream item: `base` plus the lane class from the pure
+  // kind→lane mapping (chrome.laneClass), or `base` alone when the item is not
+  // conversational. Each factory passes the KIND it renders (the reducer stamps
+  // the same one on every real item) so alignment can never key off item text.
+  // A missing chrome module degrades to the un-laned, full-width class list.
+  function lane(base, kindItem) {
+    const cls = chrome && typeof chrome.laneClass === "function" ? chrome.laneClass(kindItem) : "";
+    return cls ? base + " " + cls : base;
   }
 
   function pretty(v) {
@@ -89,7 +107,9 @@
   // bubbles (initials → the real photo) without rebuilding the whole item.
   function makeTurn(item, ctx) {
     const role = ROLE[item.role] || { who: cap(item.role), cls: "role-agent" };
-    const root = el("div", "bubble " + role.cls);
+    // An OPERATOR turn takes the right lane (it was typed in the composer); every
+    // other turn role is the agent's own text and takes the left lane.
+    const root = el("div", lane("bubble " + role.cls, { kind: "turn", role: item.role }));
     const head = el("div", "cp-head");
     // agent/operator turns are both ME → the SELF photo (item 1/5/6).
     let av = avatarNode(avatarForKey(ctx, item.avatarKey), initial(role.who));
@@ -112,7 +132,7 @@
   // The peer's inbound reply — a distinct left lane. The avatar is the PEER photo
   // (item 1/5/6), falling back to the initials-on-token recipe (item 1).
   function makeCounterparty(item, ctx) {
-    const root = el("div", "bubble role-counterparty");
+    const root = el("div", lane("bubble role-counterparty", { kind: "counterparty" }));
     const head = el("div", "cp-head");
     let av = avatarNode(avatarForKey(ctx, "peer"), initial(item.from));
     head.appendChild(av);

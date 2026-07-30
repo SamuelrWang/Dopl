@@ -20,6 +20,7 @@ const R = (p) => fileURLToPath(new URL("../renderer/session/" + p, import.meta.u
 const chrome = require(R("session-chrome.js"));
 const vm = require(R("session-viewmodel.js"));
 const { headerIdentity, windowTitle, sendButtonMode, sendButtonLabel, growHeight } = chrome;
+const { streamLane, laneClass } = chrome;
 
 const HTML = readFileSync(R("session.html"), "utf8");
 const CSS = readFileSync(R("session.css"), "utf8");
@@ -160,6 +161,64 @@ test("growHeight degrades safely on a non-numeric or missing line-height", () =>
   assert.equal(growHeight(200, "21", 3, "12"), 75, "numeric strings (getComputedStyle) parse");
   assert.equal(growHeight(200, 21, 0, 12), 75, "a bogus maxLines falls back to 3");
   assert.equal(growHeight(200, 21, 1, 12), 33, "maxLines 1 pins it to one line");
+});
+
+// ── chat lanes: the item-KIND → alignment mapping ─────────────────────────────
+
+test("streamLane: an operator turn takes the right ('me') lane, an agent turn the left", () => {
+  assert.equal(streamLane({ kind: "turn", role: "operator" }), "me");
+  assert.equal(streamLane({ kind: "turn", role: "assistant" }), "them");
+  assert.equal(streamLane({ kind: "turn", role: "agent" }), "them");
+  // An unknown / missing role is still the agent's own text -> the left lane.
+  assert.equal(streamLane({ kind: "turn" }), "them");
+  assert.equal(streamLane({ kind: "turn", role: "weird" }), "them");
+});
+
+test("streamLane: the counterparty's inbound reply takes the left ('them') lane", () => {
+  assert.equal(streamLane({ kind: "counterparty", from: "David" }), "them");
+});
+
+test("streamLane: every NON-conversational kind gets NO lane (full stream width)", () => {
+  for (const kind of ["tool", "outbound", "inbound_pending", "notice", "milestone", "thinking"]) {
+    assert.equal(streamLane({ kind }), null, `${kind} must stay full width`);
+    assert.equal(laneClass({ kind }), "", `${kind} carries no lane class`);
+  }
+  assert.equal(streamLane(null), null, "a junk item is never laned");
+  assert.equal(streamLane({}), null);
+  assert.equal(laneClass(undefined), "");
+});
+
+test("laneClass returns the exact CSS class names the stylesheet defines", () => {
+  assert.equal(laneClass({ kind: "turn", role: "operator" }), "lane-me");
+  assert.equal(laneClass({ kind: "turn", role: "assistant" }), "lane-them");
+  assert.equal(laneClass({ kind: "counterparty" }), "lane-them");
+});
+
+test("streamLane reads REAL view-model items (kind stamped by reduceEvent)", () => {
+  let s = vm.reduceEvent(vm.initialState(), { type: "turn", role: "operator", text: "go" });
+  s = vm.reduceEvent(s, { type: "turn", role: "assistant", text: "on it" });
+  s = vm.reduceEvent(s, { type: "counterparty", from: "David", text: "thanks" });
+  s = vm.reduceEvent(s, { type: "tool_use", toolUseId: "t1", name: "Bash", inputFull: {} });
+  s = vm.reduceEvent(s, { type: "outbound_post", to: "David", text: "sent" });
+  s = vm.reduceEvent(s, { type: "inbound_pending", pendingId: "p1", from: "David", text: "wait" });
+  s = vm.reduceEvent(s, { type: "paused" }); // the v2.3 park notice
+  assert.deepEqual(
+    s.items.map((it) => streamLane(it)),
+    ["me", "them", "them", null, null, null, null]
+  );
+});
+
+test("the lane recipes live in the stylesheet and own align-self + the 66% cap", () => {
+  assert.match(CSS, /\.lane-me \{ align-self: flex-end; max-width: 66%; \}/);
+  assert.match(CSS, /\.lane-them \{ align-self: flex-start; max-width: 66%; \}/);
+  // The role recipes must NOT re-declare alignment: `.bubble.role-x` is two
+  // classes and would outrank the single-class lane selector.
+  const roles = CSS.slice(CSS.indexOf(".bubble.role-agent"), CSS.indexOf(".cp-head"));
+  assert.ok(!/align-self/.test(roles), "role recipes carry the surface only");
+  // Non-conversational stream items keep the full width.
+  assert.match(CSS, /\.outbound \{\n\s*align-self: stretch;\n\s*max-width: 100%;/);
+  assert.match(CSS, /\.tool-card \{\n\s*align-self: stretch;/);
+  assert.match(CSS, /\.inbound-pending \{\n\s*align-self: stretch;/);
 });
 
 // ── D2: the RESPONDER / FULL / AUTONOMOUS chip row is gone ───────────────────

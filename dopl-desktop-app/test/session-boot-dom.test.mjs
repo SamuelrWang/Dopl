@@ -184,6 +184,46 @@ test("boot: auto-grow tracks the content and caps at 3 line-heights", () => {
   assert.equal(steer.style.height, "33px", "it shrinks back to one line");
 });
 
+// ── chat lanes: the booted controller stamps them on the real stream ──────────
+// The two turns already in the stream came from the composer (the D5 tests above),
+// so they prove the OPERATOR path end to end: composer -> reduceEvent -> lane-me.
+
+test("boot: the composer's own turns land in the stream right-aligned (lane-me)", () => {
+  const kids = $("stream").children;
+  assert.equal(kids.length, 2, "the two steers sent above are the only stream items so far");
+  for (const node of kids) {
+    assert.ok(node.classList.contains("lane-me"), "a typed steer is right-aligned");
+    assert.ok(!node.classList.contains("lane-them"));
+  }
+});
+
+test("boot: agent text + the peer reply go LEFT; tool / outbound / pending / notice get NO lane", () => {
+  feed({ type: "turn", role: "assistant", text: "on it", streaming: false });
+  feed({ type: "counterparty", from: "David", text: "thanks" });
+  feed({ type: "tool_use", toolUseId: "t1", name: "Bash", inputFull: { command: "ls" } });
+  feed({ type: "outbound_post", toolUseId: "t2", to: "David", text: "sent" });
+  feed({ type: "inbound_pending", pendingId: "p1", from: "David", text: "wait" });
+  feed({ type: "paused" }); // the v2.3 park notice
+
+  const lanes = $("stream").children.map((n) => (
+    n.classList.contains("lane-me") ? "me" : n.classList.contains("lane-them") ? "them" : null
+  ));
+  assert.deepEqual(lanes, ["me", "me", "them", "them", null, null, null, null]);
+  // The park notice still renders as the calm info line (v2.3 rendering intact).
+  const notice = $("stream").children.at(-1);
+  assert.ok(notice.classList.contains("notice") && notice.classList.contains("level-info"));
+  assert.match(notice.textContent, /^Paused after inactivity\./);
+});
+
+test("boot: the permission dock is chrome, not a lane — it never takes an alignment class", () => {
+  feed({ type: "permission_request", requestId: "r1", name: "Bash", inputSummary: "$ ls", inputFull: {} });
+  const dock = $("permissionDock");
+  assert.ok(dock.classList.contains("is-active"), "the dock surfaced the gate");
+  assert.ok(!dock.classList.contains("lane-me") && !dock.classList.contains("lane-them"));
+  feed({ type: "permission_resolved", requestId: "r1", decision: "allow-once" });
+  assert.ok(!dock.classList.contains("is-active"));
+});
+
 // ── the ended session still locks the composer ────────────────────────────────
 
 test("boot: an ended session refuses to send", () => {

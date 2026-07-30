@@ -368,7 +368,7 @@ export function ReopenWindowButton({
         }}
         className="btn-light shrink-0 rounded-[8px] px-2.5 py-1 text-caption font-medium text-text-primary disabled:opacity-60"
       >
-        Reopen window
+        Open window
       </button>
     </>
   );

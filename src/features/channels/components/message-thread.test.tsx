@@ -1,0 +1,188 @@
+import { describe, expect, it } from "vitest";
+import { renderToStaticMarkup } from "react-dom/server";
+import { MessageThread } from "./message-thread";
+import type { ChannelMessage } from "../types";
+
+const CHANNEL_ID = "33333333-3333-4333-8333-333333333333";
+const ME = "u-me";
+const PEER = "u-ada";
+const TASK_ID = `task-${CHANNEL_ID}-7`;
+const AVATAR = "https://avatars.test/face.png";
+const MEMBER_NAMES = new Map([
+  [ME, "Me"],
+  [PEER, "Ada"],
+]);
+
+function message(over: Partial<ChannelMessage> = {}): ChannelMessage {
+  return {
+    id: "m1",
+    seq: 1,
+    channelId: CHANNEL_ID,
+    authorUserId: ME,
+    authorKind: "user",
+    kind: "message",
+    body: "hello there",
+    metadata: {},
+    clientMsgId: null,
+    createdAt: "2026-07-28T00:05:00.000Z",
+    authorName: "Me",
+    authorAvatarUrl: null,
+    ...over,
+  };
+}
+
+/** My own plain message — the right-hand side. */
+function mine(over: Partial<ChannelMessage> = {}): ChannelMessage {
+  return message({ id: "mine", body: "MY-TEXT", ...over });
+}
+
+/** A teammate's plain message — the left-hand side. */
+function theirs(over: Partial<ChannelMessage> = {}): ChannelMessage {
+  return message({
+    id: "theirs",
+    seq: 2,
+    authorUserId: PEER,
+    authorName: "Ada",
+    body: "THEIR-TEXT",
+    ...over,
+  });
+}
+
+function render(messages: ChannelMessage[]): string {
+  return renderToStaticMarkup(
+    <MessageThread
+      messages={messages}
+      memberNames={MEMBER_NAMES}
+      tasks={[]}
+      tasksLoading={false}
+      currentUserId={ME}
+    />
+  );
+}
+
+/** Every chat bubble's class list, in render order (session cards carry an
+ *  `id` before their class, so this matches plain bubbles only). */
+function bubbleClasses(markup: string): string[] {
+  return [...markup.matchAll(/<article class="([^"]*)"/g)].map((m) => m[1]);
+}
+
+/** The class list of the first element inside the bubble — its meta (author +
+ *  time) row. */
+function metaRowClass(markup: string): string {
+  const divAt = markup.indexOf("<div", markup.indexOf("<article"));
+  return /class="([^"]*)"/.exec(markup.slice(divAt, divAt + 240))?.[1] ?? "";
+}
+
+/** The class list of the div that directly encloses `text` (the receipt line). */
+function enclosingDivClass(markup: string, text: string): string {
+  const at = markup.indexOf(text);
+  expect(at).toBeGreaterThan(-1);
+  const openedAt = markup.lastIndexOf("<div", at);
+  return /class="([^"]*)"/.exec(markup.slice(openedAt, at))?.[1] ?? "";
+}
+
+describe("MessageThread chat-style alignment", () => {
+  it("right-aligns my own message at the ~2/3 cap", () => {
+    const [bubble] = bubbleClasses(render([mine()]));
+    expect(bubble).toContain("self-end");
+    expect(bubble).toContain("max-w-[66%]");
+    expect(bubble).not.toContain("self-start");
+  });
+
+  it("left-aligns a teammate's message at the same cap", () => {
+    const [bubble] = bubbleClasses(render([theirs()]));
+    expect(bubble).toContain("self-start");
+    expect(bubble).toContain("max-w-[66%]");
+    expect(bubble).not.toContain("self-end");
+  });
+
+  it("left-aligns an agent message even when it carries my own user id", () => {
+    // My agent speaks for itself, not for me: an agent row is never "mine".
+    const [bubble] = bubbleClasses(
+      render([mine({ authorKind: "agent", authorName: "Ada's agent" })])
+    );
+    expect(bubble).toContain("self-start");
+    expect(bubble).not.toContain("self-end");
+  });
+
+  it("puts the two sides on opposite edges in one thread, same cap", () => {
+    const classes = bubbleClasses(render([mine(), theirs()]));
+    expect(classes).toHaveLength(2);
+    expect(classes[0]).toContain("self-end");
+    expect(classes[1]).toContain("self-start");
+    for (const cls of classes) expect(cls).toContain("max-w-[66%]");
+  });
+
+  it("drops the redundant avatar on my own bubble", () => {
+    const markup = render([mine({ authorAvatarUrl: AVATAR })]);
+    expect(markup).not.toContain(AVATAR);
+    expect(markup).not.toContain("<img");
+    // The author line itself survives — only the second identity marker goes.
+    expect(markup).toContain("Me");
+  });
+
+  it("keeps the avatar on a message from someone else", () => {
+    const markup = render([theirs({ authorAvatarUrl: AVATAR })]);
+    expect(markup).toContain(AVATAR);
+  });
+
+  it("flushes my own author line to the right, and theirs to the left", () => {
+    expect(metaRowClass(render([mine()]))).toContain("justify-end");
+    expect(metaRowClass(render([theirs()]))).not.toContain("justify-end");
+  });
+
+  it("aligns the receipt line with the message it belongs to", () => {
+    // An addressed own message earns a receipt ("Sent" with nothing linked yet).
+    const markup = render([mine({ metadata: { to_user_id: PEER } })]);
+    expect(markup).toContain("Sent");
+    expect(enclosingDivClass(markup, "Sent")).toContain("justify-end");
+  });
+});
+
+describe("MessageThread full-width rows (not chat bubbles)", () => {
+  it("keeps a session card full width", () => {
+    const markup = render([
+      message({
+        id: "s1",
+        seq: 7,
+        authorUserId: PEER,
+        authorKind: "agent",
+        authorName: "Ada",
+        kind: "task_started",
+        body: "Started working",
+        metadata: { taskId: TASK_ID },
+      }),
+      message({
+        id: "s2",
+        seq: 8,
+        authorUserId: PEER,
+        authorKind: "agent",
+        authorName: "Ada",
+        body: "Here is the answer.",
+        metadata: { taskId: TASK_ID },
+      }),
+    ]);
+    expect(markup).toContain("Here is the answer.");
+    expect(markup).not.toContain("max-w-[66%]");
+    expect(markup).not.toContain("self-end");
+    expect(markup).not.toContain("self-start");
+  });
+
+  it("keeps an activity / lifecycle event row full width", () => {
+    const markup = render([
+      message({
+        id: "e1",
+        kind: "system",
+        authorKind: "system",
+        authorUserId: null,
+        authorName: null,
+        body: "Ada joined the channel",
+      }),
+    ]);
+    expect(markup).toContain("Ada joined the channel");
+    expect(markup).not.toContain("<article");
+    expect(markup).not.toContain("max-w-[66%]");
+    expect(markup).not.toContain("self-end");
+    expect(markup).not.toContain("self-start");
+  });
+});

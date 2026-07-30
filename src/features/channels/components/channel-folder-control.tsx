@@ -1,12 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { Folder, FolderOpen } from "lucide-react";
 import { MenuItem, Popover } from "@/shared/ui/popover-menu";
-import {
-  getDesktopChannelFolders,
-  type DoplChannelsBridge,
-} from "@/shared/lib/desktop";
+import { useChannelFolder } from "../hooks/use-channel-folder";
 
 interface Props {
   /** The channel's DB UUID — passed to the desktop bridge as-is. */
@@ -21,66 +18,15 @@ interface Props {
  * "Use default".
  *
  * It renders NOTHING in a plain browser — the folder is a local machine concept,
- * and the native picker only exists in the desktop shell. Presence is
- * feature-detected on `window.dopl.channels.chooseFolder` (set after mount to stay
- * hydration-safe). The bridge only ever returns an abbreviated label
- * ("~/Downloads/repo"); the absolute path never reaches this web page.
+ * and the native picker only exists in the desktop shell. Detection, the current
+ * label, and the picker call all come from {@link useChannelFolder} (shared with
+ * the pending-request card's "Runs in" row). The bridge only ever returns an
+ * abbreviated label ("~/Downloads/repo"); the absolute path never reaches this
+ * web page.
  */
 export function ChannelFolderControl({ channelId }: Props) {
-  const [bridge, setBridge] = useState<DoplChannelsBridge | null>(null);
-  const [label, setLabel] = useState<string | null>(null);
+  const { bridge, label, busy, choose, clear } = useChannelFolder(channelId);
   const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
-
-  // Feature-detect after mount (window-only) so SSR and first client render agree.
-  useEffect(() => {
-    setBridge(getDesktopChannelFolders());
-  }, []);
-
-  // Load the current label on mount and whenever the channel changes.
-  useEffect(() => {
-    if (!bridge) return;
-    let alive = true;
-    bridge
-      .getFolderLabel(channelId)
-      .then((next) => {
-        if (alive) setLabel(next);
-      })
-      .catch(() => {
-        if (alive) setLabel(null);
-      });
-    return () => {
-      alive = false;
-    };
-  }, [bridge, channelId]);
-
-  const handleChange = useCallback(async () => {
-    if (!bridge || busy) return;
-    setOpen(false);
-    setBusy(true);
-    try {
-      const next = await bridge.chooseFolder(channelId);
-      setLabel(next);
-    } catch {
-      // Cancelled / failed picker — leave the shown label as-is.
-    } finally {
-      setBusy(false);
-    }
-  }, [bridge, busy, channelId]);
-
-  const handleUseDefault = useCallback(async () => {
-    if (!bridge || busy) return;
-    setOpen(false);
-    setBusy(true);
-    try {
-      await bridge.clearFolder(channelId);
-      setLabel(null);
-    } catch {
-      // No-op: keep the current label if the reset failed.
-    } finally {
-      setBusy(false);
-    }
-  }, [bridge, busy, channelId]);
 
   // Plain browser (or an older desktop build without the folder API): render nothing.
   if (!bridge) return null;
@@ -116,12 +62,21 @@ export function ChannelFolderControl({ channelId }: Props) {
         <MenuItem
           icon={<FolderOpen size={14} />}
           description={busy ? "Opening picker…" : undefined}
-          onSelect={handleChange}
+          onSelect={() => {
+            setOpen(false);
+            void choose();
+          }}
         >
           Change folder…
         </MenuItem>
         {hasCustom && (
-          <MenuItem icon={<Folder size={14} />} onSelect={handleUseDefault}>
+          <MenuItem
+            icon={<Folder size={14} />}
+            onSelect={() => {
+              setOpen(false);
+              void clear();
+            }}
+          >
             Use default
           </MenuItem>
         )}

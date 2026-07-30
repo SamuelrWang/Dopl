@@ -45,6 +45,13 @@ function taskOverlayFrom(task: ChannelTask): TaskOverlay {
  * activity lines via `ActivityEventRow`. A message carrying addressing metadata
  * shows who it was directed at + why, so a human can tell why only one agent
  * answered.
+ *
+ * Plain chat bubbles are SIDED like a messaging app: the viewer's own human
+ * message hugs the right, everyone else's (teammate or agent) hugs the left, both
+ * capped at ~2/3 of the column so a bubble never spans the full width and the
+ * side stays legible. Only those bubbles are sided — session cards, activity
+ * lines, and the pending-request cards below the transcript stay full width,
+ * because they are shared state rather than someone's turn in the conversation.
  */
 export function MessageThread({
   messages,
@@ -155,6 +162,10 @@ function MessageBubble({
   currentUserId: string;
 }) {
   const isHuman = message.authorKind === "user";
+  // Chat-style side: only MY OWN human message goes right. Everything else goes
+  // left, including an AGENT row carrying my user id (my agent speaks for itself,
+  // not for me), which is why this is gated on `authorKind === "user"` too.
+  const isOwn = isHuman && message.authorUserId === currentUserId;
   const name = message.authorName || (isHuman ? "Member" : "Agent");
   const toUserId = readString(message.metadata.to_user_id);
   const summary = readString(message.metadata.summary);
@@ -179,22 +190,32 @@ function MessageBubble({
   return (
     <article
       className={cn(
-        "rounded-[10px] border px-3.5 py-2.5",
+        "max-w-[66%] rounded-[10px] border px-3.5 py-2.5",
+        isOwn ? "self-end" : "self-start",
         isHuman
           ? "border-border-default bg-card-surface-subtle"
           : "border-border-subtle bg-bg-elevated"
       )}
     >
-      <div className="mb-1 flex items-center gap-1.5">
-        <Avatar
-          person={{
-            userId: message.authorUserId ?? name,
-            email: null,
-            displayName: message.authorName,
-            avatarUrl: message.authorAvatarUrl,
-          }}
-          size="xs"
-        />
+      <div
+        className={cn(
+          "mb-1 flex items-center gap-1.5",
+          isOwn && "justify-end"
+        )}
+      >
+        {/* My own bubble drops the avatar: the right-hand side already says who
+            wrote it, and a second identity marker only crowds the line. */}
+        {!isOwn && (
+          <Avatar
+            person={{
+              userId: message.authorUserId ?? name,
+              email: null,
+              displayName: message.authorName,
+              avatarUrl: message.authorAvatarUrl,
+            }}
+            size="xs"
+          />
+        )}
         <span className="text-micro font-medium uppercase tracking-wide text-text-muted">
           {name} · {formatChannelTimestamp(message.createdAt)}
         </span>
@@ -205,7 +226,12 @@ function MessageBubble({
         )}
       </div>
       {toName && (
-        <div className="mb-1 flex items-center gap-1 text-micro font-medium text-text-secondary">
+        <div
+          className={cn(
+            "mb-1 flex items-center gap-1 text-micro font-medium text-text-secondary",
+            isOwn && "justify-end"
+          )}
+        >
           <ArrowRight size={11} className="shrink-0" />
           <span className="text-text-primary">{toName}</span>
         </div>
@@ -241,7 +267,7 @@ function MessageBubble({
           {message.body}
         </p>
       )}
-      {receipt && <ReceiptLine status={receipt} />}
+      {receipt && <ReceiptLine status={receipt} own={isOwn} />}
     </article>
   );
 }
@@ -253,13 +279,24 @@ function MessageBubble({
  * muted (mirrors the SessionCard StatusChip). There is deliberately no
  * "Received"/"Read": the desktop does not ack, so the transcript is the only
  * source of truth.
+ *
+ * The line follows its bubble's side, so a receipt under a right-hand own
+ * message reads flush to the same edge as the message it belongs to.
  */
-function ReceiptLine({ status }: { status: ReceiptStatus }) {
+function ReceiptLine({
+  status,
+  own = false,
+}: {
+  status: ReceiptStatus;
+  /** True when the receipt sits under a right-aligned own bubble. */
+  own?: boolean;
+}) {
   const danger = status === "failed";
   return (
     <div
       className={cn(
         "mt-1.5 flex items-center gap-1 text-micro font-medium",
+        own && "justify-end",
         danger ? "text-danger" : "text-text-muted"
       )}
     >

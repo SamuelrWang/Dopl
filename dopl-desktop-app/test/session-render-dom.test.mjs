@@ -212,3 +212,49 @@ test("makeOutbound with no `to` labels 'Posted to channel' (resolved O-6)", () =
   const label = banner.children.find((c) => c.classList.contains("outbound__label"));
   assert.equal(label.textContent, "Posted to channel");
 });
+
+// ── chat lanes: which factories stamp a lane class on their root ──────────────
+// The mapping itself is pinned in session-chrome.test.mjs; here we prove the DOM
+// factories actually apply it (and that the full-width kinds apply nothing).
+
+const laneOf = (node) => ({
+  me: node.classList.contains("lane-me"),
+  them: node.classList.contains("lane-them"),
+});
+
+test("lanes: an OPERATOR turn is right-aligned (lane-me), never lane-them", () => {
+  const rec = render.makeTurn({ role: "operator", text: "go", avatarKey: "self" }, ctxBoth);
+  assert.deepEqual(laneOf(rec.el), { me: true, them: false });
+  assert.ok(rec.el.classList.contains("role-operator"), "the surface recipe is unchanged");
+});
+
+test("lanes: the agent's own text is left-aligned (lane-them)", () => {
+  for (const role of ["assistant", "agent", undefined, "weird"]) {
+    const rec = render.makeTurn({ role, text: "on it", avatarKey: "self" }, ctxBoth);
+    assert.deepEqual(laneOf(rec.el), { me: false, them: true }, `role=${role} sits left`);
+  }
+});
+
+test("lanes: a counterparty reply is left-aligned (lane-them)", () => {
+  const rec = render.makeCounterparty({ from: "David", text: "thanks", avatarKey: "peer" }, ctxBoth);
+  assert.deepEqual(laneOf(rec.el), { me: false, them: true });
+  assert.ok(rec.el.classList.contains("role-counterparty"));
+});
+
+test("lanes: tool / outbound / inbound_pending / notice carry NEITHER lane class", () => {
+  const items = [
+    render.makeTool({ name: "Bash", inputFull: { command: "ls" } }, { vm }),
+    render.makeOutbound({ to: "David", text: "sent", avatarKey: "self" }, ctxBoth),
+    render.makeInboundPending({ pendingId: "p1", from: "David", text: "wait" }, {}),
+    render.makeNotice({ level: "info", text: "Paused after inactivity." }),
+  ];
+  for (const rec of items) {
+    assert.deepEqual(laneOf(rec.el), { me: false, them: false }, rec.el.className + " stays full width");
+  }
+});
+
+test("lanes: a streaming update never drops the lane class", () => {
+  const rec = render.makeTurn({ role: "operator", text: "go", streaming: true }, ctxBoth);
+  rec.update({ role: "operator", text: "go on", streaming: false });
+  assert.deepEqual(laneOf(rec.el), { me: true, them: false }, "update() only touches is-streaming");
+});

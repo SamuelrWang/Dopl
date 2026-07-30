@@ -5,6 +5,8 @@
 //   - sendButtonMode(state)  -> 'send' | 'pause'
 //   - sendButtonLabel(mode)  -> the aria-label for that mode
 //   - growHeight(...)        -> the composer's next height in px
+//   - streamLane(item)       -> 'me' | 'them' | null   (chat-style alignment)
+//   - laneClass(item)        -> the lane CSS class, or "" for a full-width item
 //
 // Split out of session-viewmodel.js purely to respect the HARD 500-line-per-file
 // cap (§2) — same discipline as the session-render.js split. Like the view-model
@@ -100,11 +102,41 @@
     return Number.isFinite(n) ? n : 0;
   }
 
+  // ── chat-style stream lanes ─────────────────────────────────────────────────
+  // Text messages, not a log: the two CONVERSATIONAL sides sit in opposing lanes
+  // and everything else keeps the full stream width. The decision is keyed on the
+  // view-model item KIND (plus the turn's role) — NEVER on the item text:
+  //
+  //   turn + role operator/user           -> 'me'    (typed in the composer)
+  //   turn + any other role (assistant)   -> 'them'  (the agent's own text)
+  //   counterparty                        -> 'them'  (the peer's inbound reply)
+  //   tool | outbound | inbound_pending | notice | anything else -> null
+  //
+  // null means "no lane": tool cards, the outbound-post banner, pending-inbound
+  // cards, notices, and the permission dock keep their existing full-width recipe.
+  const ME_ROLES = { operator: true, user: true };
+  const LANE_CLASS = { me: "lane-me", them: "lane-them" };
+
+  function streamLane(item) {
+    const it = item || {};
+    if (it.kind === "turn") return ME_ROLES[it.role] === true ? "me" : "them";
+    if (it.kind === "counterparty") return "them";
+    return null;
+  }
+
+  // The lane CSS class for an item, or "" when the item is not conversational.
+  function laneClass(item) {
+    const lane = streamLane(item);
+    return lane ? LANE_CLASS[lane] : "";
+  }
+
   return {
     headerIdentity,
     windowTitle,
     sendButtonMode,
     sendButtonLabel,
     growHeight,
+    streamLane,
+    laneClass,
   };
 });
