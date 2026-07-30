@@ -88,18 +88,56 @@ test("auto ON: a preapproved read is allowed exactly as before (auto-approve doe
 const CHANNEL_TOOL = "mcp__dopl__dopl_channel";
 const POST = { op: "post", body: "Shipping the invoice import tonight." };
 
-test("D2: an own-channel post DISPATCHES a permission_request (it no longer auto-allows)", async () => {
+// RE-PINNED for v2.7 L3: the post's DECISION SURFACE moved from the bottom dock to its own
+// inline stream card, so the renderer payload is now `outbound_gate` (requestId +
+// toolUseId — the card already holds the drafted body from the stream-time artifact, so the
+// input no longer needs to cross twice). The POLICY path is unchanged and still asserted
+// here: the same `permission_request` reducer event, the same parked SDK resolver, the same
+// scoped grant name, the same fail-closed deny.
+test("D2/L3: an own-channel post DISPATCHES a permission_request, rendered as its own card", async () => {
   const s = mkSession(false);
   const rec = recorder();
-  const p = io.makeCanUseTool(s, rec.dispatch)(CHANNEL_TOOL, POST, { requestId: "r10" });
+  const p = io.makeCanUseTool(s, rec.dispatch)(CHANNEL_TOOL, POST, { requestId: "r10", toolUseID: "t10" });
   assert.equal(rec.events.length, 1, "the post reaches the gate");
-  assert.equal(rec.events[0].type, "permission_request");
+  assert.equal(rec.events[0].type, "permission_request", "the same reducer event as any gated tool");
+  assert.equal(rec.events[0].requestId, "r10");
   assert.equal(s.pendingPermissions.size, 1, "the SDK call is parked on an operator button");
-  // The payload carries the real tool name + the full input, so the dock can show the body.
-  assert.equal(rec.events[0].payload.name, CHANNEL_TOOL);
-  assert.deepEqual(rec.events[0].payload.inputFull, POST);
+  // v2.7 L3: the payload routes to the INLINE card, keyed by the requestId it must answer
+  // with, so the dock stays free for the next NON-post request. RE-PINNED for FIX F4: it also
+  // carries the AUTHORIZED BYTES (the body this canUseTool call is holding) plus the peer name,
+  // so the card's surface comes from the input under decision, not the streamed copy.
+  assert.deepEqual(rec.events[0].payload, {
+    type: "outbound_gate", requestId: "r10", toolUseId: "t10", ownChannel: true,
+    text: POST.body, to: null,
+  });
+  assert.ok(!("channel" in rec.events[0].payload), "still a boolean destination, never a channel id");
   s.pendingPermissions.get("r10")({ behavior: "deny", message: "Denied by operator" });
   assert.equal((await p).behavior, "deny", "a DENY on a post stops the message leaving the machine");
+});
+
+test("D2/L3: a CROSS-channel post still uses the DOCK payload (the exfil shape FIX #9 marks)", async () => {
+  const s = mkSession(false);
+  const rec = recorder();
+  const cross = { op: "post", channel: "other-channel", body: "the file contents" };
+  const p = io.makeCanUseTool(s, rec.dispatch)(CHANNEL_TOOL, cross, { requestId: "r16", toolUseID: "t16" });
+  assert.equal(rec.events[0].payload.type, "permission_request", "not an inline outbound card");
+  assert.equal(rec.events[0].payload.name, CHANNEL_TOOL, "the dock shows the real tool name");
+  assert.deepEqual(rec.events[0].payload.inputFull, cross, "and the full input, so the body renders");
+  assert.equal(rec.events[0].payload.ownChannel, false, "marked cross-channel, fail-suspicious");
+  s.pendingPermissions.get("r16")({ behavior: "deny" });
+  assert.equal((await p).behavior, "deny");
+});
+
+// Every OTHER gated tool keeps the dock payload untouched — the surface moved for posts
+// only, so a Bash request looks exactly as it did in v2.6.
+test("L3: a plain work tool still gets the DOCK payload, unchanged", () => {
+  const s = mkSession(false);
+  const rec = recorder();
+  io.makeCanUseTool(s, rec.dispatch)("Bash", { command: "ls" }, { requestId: "r17", toolUseID: "t17" });
+  assert.equal(rec.events[0].payload.type, "permission_request");
+  assert.equal(rec.events[0].payload.name, "Bash");
+  assert.deepEqual(rec.events[0].payload.inputFull, { command: "ls" });
+  s.pendingPermissions.get("r17")({ behavior: "deny" });
 });
 
 test("D2: the allow-for-task grant recorded for a post is the SCOPED post key", async () => {

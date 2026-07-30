@@ -108,27 +108,35 @@
     return Number.isFinite(n) ? n : 0;
   }
 
-  // ── chat-style stream lanes ─────────────────────────────────────────────────
-  // Text messages, not a log: the two CONVERSATIONAL sides sit in opposing lanes
-  // and everything else keeps the full stream width. The decision is keyed on the
-  // view-model item KIND (plus the turn's role) — NEVER on the item text:
+  // ── chat-style stream lanes (v2.7 L1) ───────────────────────────────────────
+  // The window is a two-sided conversation between THIS MACHINE and the PEER, not a
+  // log. The RIGHT lane is everything that originates here — the operator's typed
+  // turns, HIS agent's spoken text, AND the agent's command/tool activity. The LEFT
+  // lane is only what the peer actually sends back. Everything that is a DECISION or a
+  // system line keeps the full stream width. The decision is keyed on the view-model
+  // item KIND — NEVER on the item text:
   //
-  //   turn + role operator/user           -> 'me'    (typed in the composer)
-  //   turn + any other role (assistant)   -> 'them'  (the agent's own text)
-  //   counterparty                        -> 'them'  (the peer's inbound reply)
-  //   history (v2.5 D3)                   -> its OWN stamped lane ('me' | 'them'),
-  //                                          computed in main from the message author
-  //                                          so a replayed thread aligns like live turns
-  //   tool | outbound | inbound_pending | history_divider | notice | anything else -> null
+  //   turn (ANY role: operator/user AND assistant/agent) -> 'me'   (this machine)
+  //   tool                                               -> 'me'   (the agent's own work)
+  //   counterparty                                       -> 'them' (the peer's reply)
+  //   history (v2.5 D3)                                  -> its OWN stamped lane
+  //                                          ('me' | 'them'), computed in main from the
+  //                                          message author so a replayed thread aligns
+  //                                          like live turns
+  //   outbound | outbound_pending | inbound_pending | notice | history_divider |
+  //   anything else                                      -> null
   //
-  // null means "no lane": tool cards, the outbound-post banner, inbound gate cards,
-  // the history divider, notices, and the permission dock keep their full-width recipe.
-  const ME_ROLES = { operator: true, user: true };
+  // v2.7 CHANGED two of these: an assistant/agent turn moved from 'them' to 'me' (it is
+  // HIS agent speaking, not the peer), and a tool card moved from un-laned to 'me'. null
+  // still means "no lane": the outbound decision card + delivered record, inbound gate
+  // cards, the history divider, notices, and the permission dock keep full width — a
+  // decision is neither side of the conversation.
+  const ME_KINDS = { turn: true, tool: true };
   const LANE_CLASS = { me: "lane-me", them: "lane-them" };
 
   function streamLane(item) {
     const it = item || {};
-    if (it.kind === "turn") return ME_ROLES[it.role] === true ? "me" : "them";
+    if (ME_KINDS[it.kind] === true) return "me";
     if (it.kind === "counterparty") return "them";
     if (it.kind === "history") return it.lane === "them" ? "them" : "me";
     return null;

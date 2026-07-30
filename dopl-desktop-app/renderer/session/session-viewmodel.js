@@ -9,14 +9,17 @@
 // Everything here is a PURE function over plain data:
 //   - initialState()                      -> the empty view-model
 //   - reduceEvent(state, event)           -> next view-model (immutable; never mutates `state`)
-//   - summarizeToolInput(name, input)     -> a single-line tool-call summary
 //   - nextPermission(state)               -> the head of the permission queue or null
 //   - markInboundDecided(state, id, d)    -> stamps a gate card accepted / declined (v2.5 D1)
-//   - markOutboundNotSent(state, id)      -> a denied post's bubble stops reading "Sent" (F3)
 //   - markInboundReleased(state, id)      -> the accept-once alias of the above
+//   - markOutboundGated(state, gateEvent) -> hands a post card its requestId + the authorized
+//                                            bytes, creating the card if none landed (F4/F5)
+//   - markOutboundDecided(state, rid, d)  -> Send / Deny resolves that card in place (v2.7 L3)
 // The status / posture / folder label strings — plus the gated-post body + destination
 // helpers (permissionPostBody / postDestinationText / isCrossChannelPost) — live in
-// session-labels.js and are re-exported from here unchanged (the §2 500-line split).
+// session-labels.js, and the string formatters (oneLine / shortToolName /
+// summarizeToolInput) in session-format.js; both are re-exported from here unchanged (the
+// §2 500-line split).
 //
 // The renderer (session.js) owns ALL DOM and renders every string via
 // textContent — this module never produces markup.
@@ -32,102 +35,27 @@
   "use strict";
 
   // ── helpers ──────────────────────────────────────────────────────────────
-
-  // Collapse to a single trimmed line and cap length. Non-strings coerce.
-  function oneLine(value, max) {
-    const cap = typeof max === "number" && max > 0 ? max : 140;
-    let s = value == null ? "" : String(value);
-    s = s.replace(/\s+/g, " ").trim();
-    if (s.length > cap) s = s.slice(0, cap - 1).trimEnd() + "…";
-    return s;
+  // The pure string formatters live in session-format.js (the §2 500-line split) and are
+  // reached the same way this module reaches session-labels.js: a require() under node,
+  // the renderer global in the sandbox (session.html loads session-format.js first). They
+  // are RE-EXPORTED below, so vm.summarizeToolInput / vm.shortToolName / vm.oneLine are
+  // unchanged for every caller (session-chrome.js reads vm.oneLine, session-render.js
+  // reads ctx.vm.shortToolName).
+  //
+  // NIT (v2.7): a MISSING formatter THROWS here, at load, instead of degrading to a local
+  // fallback. The old `fmt.oneLine || (…)` shims silently replaced the capped one-liner with
+  // an UNCAPPED String(v) if the script ever failed to load — an unbounded, untrusted name
+  // reaching the header is worse than a window that fails loudly on boot.
+  const fmt =
+    typeof module === "object" && typeof require === "function"
+      ? require("./session-format.js")
+      : (typeof globalThis !== "undefined" && globalThis.DoplSessionFormat) || {};
+  for (const fn of ["oneLine", "shortToolName", "summarizeToolInput"]) {
+    if (typeof fmt[fn] !== "function") throw new Error("session-format.js did not load: " + fn);
   }
-
-  // The short display name for a tool: the last mcp segment, else the raw name.
-  function shortToolName(name) {
-    const n = name == null ? "" : String(name);
-    if (n.startsWith("mcp__")) {
-      const parts = n.split("__").filter(Boolean);
-      return parts.length ? parts[parts.length - 1] : n;
-    }
-    return n;
-  }
-
-  // First present string field among `keys` on `input`.
-  function pick(input, keys) {
-    if (!input || typeof input !== "object") return "";
-    for (const k of keys) {
-      const v = input[k];
-      if (typeof v === "string" && v) return v;
-      if (typeof v === "number") return String(v);
-    }
-    return "";
-  }
-
-  // ── summarizeToolInput ─────────────────────────────────────────────────────
-  // One-line, human-scannable summary of a tool call. Robust to null/odd input.
-  // NEVER returns a multi-line string (the card summary must stay one line).
-  function summarizeToolInput(name, input) {
-    const raw = name == null ? "" : String(name);
-
-    switch (raw) {
-      case "Bash": {
-        const cmd = pick(input, ["command"]);
-        return cmd ? oneLine("$ " + cmd, 160) : "Run a shell command";
-      }
-      case "Read": {
-        const p = pick(input, ["file_path", "path"]);
-        return p ? oneLine("Read " + p) : "Read a file";
-      }
-      case "Write": {
-        const p = pick(input, ["file_path", "path"]);
-        return p ? oneLine("Write " + p) : "Write a file";
-      }
-      case "Edit":
-      case "MultiEdit": {
-        const p = pick(input, ["file_path", "path"]);
-        return p ? oneLine("Edit " + p) : "Edit a file";
-      }
-      case "NotebookEdit": {
-        const p = pick(input, ["notebook_path", "file_path", "path"]);
-        return p ? oneLine("Edit notebook " + p) : "Edit a notebook";
-      }
-      case "Glob": {
-        const g = pick(input, ["pattern", "glob"]);
-        return g ? oneLine("Glob " + g) : "Match files by glob";
-      }
-      case "Grep": {
-        const pat = pick(input, ["pattern"]);
-        const where = pick(input, ["path", "glob"]);
-        if (pat) return oneLine("Grep /" + pat + "/" + (where ? " in " + where : ""));
-        return "Search file contents";
-      }
-      case "WebFetch": {
-        const u = pick(input, ["url"]);
-        return u ? oneLine("Fetch " + u) : "Fetch a web page";
-      }
-      case "WebSearch": {
-        const q = pick(input, ["query"]);
-        return q ? oneLine('Search "' + q + '"') : "Search the web";
-      }
-      default:
-        break;
-    }
-
-    // MCP tools and anything else: prefer intent-y fields, else compact JSON.
-    const label = shortToolName(raw);
-    const hint = pick(input, ["op", "action", "kind", "operation", "query", "title", "message", "text", "name"]);
-    if (hint) return oneLine(label + " · " + hint);
-    if (input && typeof input === "object") {
-      let json = "";
-      try {
-        json = JSON.stringify(input);
-      } catch (_err) {
-        json = "";
-      }
-      if (json && json !== "{}") return oneLine(label + " " + json);
-    }
-    return label || "Tool call";
-  }
+  const oneLine = fmt.oneLine;
+  const shortToolName = fmt.shortToolName;
+  const summarizeToolInput = fmt.summarizeToolInput;
 
   // ── state ──────────────────────────────────────────────────────────────────
 
@@ -190,9 +118,10 @@
     return { ...state, items: state.items.concat([complete]) };
   }
 
-  // The item kinds a tool_result may patch: the generic tool card, and (FIX F3) the
-  // OUTBOUND bubble — a post's bubble is painted while the tool_use streams, BEFORE the
-  // dock is answered, so it used to keep reading "Sent to {peer}" even after a Deny.
+  // The item kinds a tool_result may patch: the generic tool card, and (FIX F3) the OUTBOUND
+  // bubble — a post's artifact is painted while the tool_use streams, BEFORE any decision
+  // lands, so it used to keep reading "Sent to {peer}" even after a Deny. v2.7: this is also
+  // the SELF-HEAL for a card that never got a requestId (the gate auto-allowed instead).
   const PATCHABLE_BY_RESULT = { tool: 1, outbound: 1 };
   function reduceToolResult(state, ev) {
     const id = ev.toolUseId;
@@ -210,13 +139,11 @@
     return touched ? { ...state, items } : state;
   }
 
-  // FIX F3: the operator clicked Deny — mark that post's bubble not-sent at once, without
-  // waiting for the SDK's error result. Only an `outbound` item is ever touched.
-  function markOutboundNotSent(state, id) {
-    const hit = (it) => it.kind === "outbound" && it.toolUseId === id;
-    if (!id || !state.items.some(hit)) return state;
-    return { ...state, items: state.items.map((it) => (hit(it) ? { ...it, status: "not_sent" } : it)) };
-  }
+  // FIX F9 (v2.7): markOutboundNotSent is DELETED. It existed for the dock's Deny path, and
+  // an own-channel post no longer reaches the dock at all (main sends `outbound_gate`, so the
+  // card answers for itself and markOutboundDecided resolves it by requestId). A CROSS-channel
+  // post does still use the dock, but it is not classified as an outbound_post, so it has no
+  // outbound item to mark — the helper could only ever no-op from there.
 
   // ── reduceEvent ────────────────────────────────────────────────────────────
   function reduceEvent(state, event) {
@@ -278,14 +205,28 @@
 
       // What MY agent SENT to the peer (op=post) — a distinct outbound lane, NOT
       // narration and NOT a generic tool card (item 2).
-      case "outbound_post":
-        return {
-          ...state,
-          items: state.items.concat([
-            // avatarKey:'self' — an outbound post is MY agent sending (item 1/5/6).
-            { kind: "outbound", toolUseId: event.toolUseId, to: event.to, text: event.text, avatarKey: "self" },
-          ]),
-        };
+      //
+      // v2.7 L3: main marks the post `pending` when it is going to stop on an operator
+      // Send / Deny. That is the SAME single item — it renders as the inline decision card
+      // while it waits and resolves IN PLACE — so a post never leaves two artifacts in the
+      // stream. A post that does NOT gate (auto-approve, or the scoped task grant) carries
+      // no status at all, byte-identical to v2.6's delivered bubble.
+      case "outbound_post": {
+        // avatarKey:'self' — an outbound post is MY agent sending (item 1/5/6).
+        const post = { kind: "outbound", toolUseId: event.toolUseId, to: event.to, text: event.text, avatarKey: "self" };
+        if (event.pending === true) {
+          post.status = "pending";
+          post.requestId = null; // main hands it over in `outbound_gate` (below)
+          post.ownChannel = event.ownChannel === true; // fail-suspicious destination line
+        }
+        return { ...state, items: state.items.concat([post]) };
+      }
+
+      // v2.7 L3: main minted the permission requestId for a pending post. Hand it to the
+      // card so its own buttons can decide it — the dock never sees a post at all, which
+      // is what keeps a Bash request queued behind one visible in the dock.
+      case "outbound_gate":
+        return markOutboundGated(state, event);
 
       case "permission_request": {
         if (state.permissions.some((p) => p.requestId === event.requestId)) return state;
@@ -303,11 +244,16 @@
         return { ...state, permissions: state.permissions.concat([perm]) };
       }
 
+      // A decision landed for `requestId` — from this window, from the auto-approve drain,
+      // or from a PARK (which deny-closes every awaited request fail-closed). Drop it from
+      // the dock queue AND, when it belongs to a pending outbound post, resolve that card:
+      // v2.7 L3 is what stops a parked post's record from reading "Sent to peer" forever.
       case "permission_resolved":
-        return {
-          ...state,
-          permissions: state.permissions.filter((p) => p.requestId !== event.requestId),
-        };
+        return markOutboundDecided(
+          { ...state, permissions: state.permissions.filter((p) => p.requestId !== event.requestId) },
+          event.requestId,
+          event.decision
+        );
 
       // The peer's inbound reply — a first-class left lane (item 1). `inbound` is
       // kept as a legacy alias for a mid-wave engine that has not yet renamed.
@@ -461,6 +407,52 @@
     return markInboundDecided(state, pendingId, "accepted");
   }
 
+  // v2.7 L3 — hand a post's artifact the requestId main minted for it in canUseTool, matched on
+  // the tool_use id both carry. It stamps an UNDECIDED artifact: a card already painted pending,
+  // and also one painted as a DELIVERY because auto-approve was on when the tool_use streamed and
+  // the operator turned it off before canUseTool ran. Main is genuinely awaiting a decision in
+  // that race, so the record must ask for one rather than claim the peer already has it. A
+  // RESOLVED artifact (sent / not_sent) is never reopened.
+  //
+  // FIX F4: the gate carries the AUTHORIZED BYTES (`ev.text`, the body canUseTool is holding),
+  // and they WIN over the separately streamed copy the tool_use painted — the operator approves
+  // the surface the decision actually covers. FIX F5: when NO artifact for this tool_use exists
+  // at all (a replay that dropped it), those same bytes CREATE the card, so a post can never
+  // gate invisibly with three buttons nowhere to be found.
+  function markOutboundGated(state, ev) {
+    const toolUseId = ev && ev.toolUseId;
+    const requestId = ev && ev.requestId;
+    if (!toolUseId || !requestId) return state;
+    const mine = (it) => it.kind === "outbound" && it.toolUseId === toolUseId;
+    const open = (it) => mine(it) && (it.status === "pending" || it.status == null);
+    const ownChannel = ev.ownChannel === true; // fail-suspicious: only an explicit true
+    if (!state.items.some(mine)) {
+      if (ev.text == null) return state; // nothing to show; a bodiless gate creates nothing
+      const to = ev.to == null ? null : String(ev.to);
+      const created = { kind: "outbound", toolUseId, to, text: String(ev.text), avatarKey: "self", status: "pending", requestId, ownChannel };
+      return { ...state, items: state.items.concat([created]) };
+    }
+    if (!state.items.some(open)) return state;
+    const gate = (it) => {
+      const next = { ...it, status: "pending", requestId, ownChannel: it.ownChannel === true || ownChannel };
+      if (ev.text != null) next.text = String(ev.text); // the bytes under decision, not the stream copy
+      if (ev.to != null && !next.to) next.to = String(ev.to);
+      return next;
+    };
+    return { ...state, items: state.items.map((it) => (open(it) ? gate(it) : it)) };
+  }
+
+  // v2.7 L3 — the decision for a pending post: the two explicit allows DELIVER it, and
+  // EVERYTHING else (deny, a park's fail-closed deny echo, an unrecognized/forged string)
+  // marks it not sent. Matched by requestId, so a card only ever answers for itself.
+  const OUTBOUND_SENT = { "allow-once": true, "allow-task": true };
+  function markOutboundDecided(state, requestId, decision) {
+    const hit = (it) => it.kind === "outbound" && it.status === "pending" && it.requestId === requestId;
+    if (!requestId || !state.items.some(hit)) return state;
+    const status = OUTBOUND_SENT[decision] === true ? "sent" : "not_sent";
+    return { ...state, items: state.items.map((it) => (hit(it) ? { ...it, status } : it)) };
+  }
+
   // v2.5 D2 / FIX #9: permissionPostBody + postDestinationText now live in
   // session-labels.js (the §2 500-line split) and are re-exported below with the rest of
   // the label strings, so vm.permissionPostBody(...) keeps working unchanged.
@@ -494,7 +486,8 @@
     nextPermission,
     markInboundReleased,
     markInboundDecided, // v2.5 D1
-    markOutboundNotSent, // FIX F3
+    markOutboundGated, // v2.7 L3 (+ FIX F4/F5: the authorized bytes, and the create path)
+    markOutboundDecided, // v2.7 L3
     oneLine,
   };
 });

@@ -134,9 +134,12 @@ test("FIX #9: main derives ownChannel from the SAME rule the grant key uses", ()
 });
 
 // ── FIX F3 (pure): a denied post's bubble stops claiming it was sent ───────────────
-// The outbound bubble is appended while the tool_use STREAMS, before the operator
-// answers the dock, so a Deny has to correct it. Two paths do: the failing tool_result
-// main forwards, and the immediate markOutboundNotSent on the Deny click.
+// The outbound bubble is appended while the tool_use STREAMS, before any decision lands, so
+// a Deny has to correct it. RE-PINNED for v2.7 FIX F9: there used to be two paths — the
+// failing tool_result main forwards, and an immediate markOutboundNotSent on the DOCK's Deny
+// click. That second one is deleted: an own-channel post decides on its own inline card
+// (markOutboundDecided, by requestId), and the only post left in the dock is a CROSS-channel
+// one, which never renders as an outbound item at all, so there was no bubble to correct.
 
 test("FIX F3: a FAILING tool_result flips the outbound bubble to not_sent", () => {
   let s = vm.reduceEvent(vm.initialState(), { type: "outbound_post", toolUseId: "t1", to: "David", text: "draft" });
@@ -152,13 +155,18 @@ test("FIX F3: a SUCCESSFUL tool_result confirms the same bubble", () => {
   assert.equal(last(s).status, "sent");
 });
 
-test("FIX F3: markOutboundNotSent marks only the matching bubble, immutably", () => {
-  const s0 = vm.reduceEvent(vm.initialState(), { type: "outbound_post", toolUseId: "t1", to: "David", text: "draft" });
-  const s = vm.markOutboundNotSent(s0, "t1");
-  assert.equal(last(s).status, "not_sent");
-  assert.equal(last(s0).status, undefined, "the original state is never mutated");
-  assert.equal(vm.markOutboundNotSent(s0, "other"), s0, "an unknown id is a no-op");
-  assert.equal(vm.markOutboundNotSent(s0, undefined), s0, "a missing toolUseId is a no-op");
+// RE-PINNED for FIX F9: the by-toolUseId helper is GONE from the view-model, and with it the
+// only way a dock click could reach into the outbound lane. What replaces it is the card's own
+// by-requestId resolution (markOutboundDecided), pinned in session-outbound-card.test.mjs.
+test("FIX F9: markOutboundNotSent is deleted — nothing exports or calls it any more", () => {
+  assert.equal(vm.markOutboundNotSent, undefined, "no dead export left on the view-model");
+  const VMSRC = readFileSync(R("session-viewmodel.js"), "utf8");
+  assert.ok(!/function markOutboundNotSent/.test(VMSRC), "and no dead function body");
+  assert.ok(!/markOutboundNotSent\(/.test(JS), "the controller's dock path no longer calls it");
+  // And the surviving path is unreachable from the dock by construction: a cross-channel post
+  // (the only post the dock still shows) renders as a TOOL card, never an outbound item.
+  const cross = vm.reduceEvent(vm.initialState(), { type: "tool_use", toolUseId: "t9", name: "mcp__dopl__dopl_channel", inputFull: { op: "post" } });
+  assert.equal(last(cross).kind, "tool", "nothing in the outbound lane for the dock to correct");
 });
 
 test("FIX F3: a tool_result still fills the ordinary TOOL card it belongs to", () => {
@@ -381,11 +389,15 @@ test("the preload coerces the gate decision FAIL-CLOSED before it crosses the br
   assert.match(IPC, /ok: gate\.decideInbound\(s, p && p\.pendingId, p && p\.decision\) === true/);
 });
 
+// RE-PINNED for FIX F9: the third assertion used to be /markOutboundNotSent\(state, p\.toolUseId\)/
+// on the dock's Deny path. That call is deliberately gone (see above), so what is pinned now is
+// the path that replaced it: the card's own by-requestId resolution.
 test("FIX F3/F10: the CSS carries the not-sent recipe and the gate stamp waits on main", () => {
   assert.match(CSS, /\.outbound\.is-not-sent \{/);
   assert.match(JS, /if \(typeof send !== "function"\) return;/, "an older preload leaves the card live");
   assert.match(JS, /res && res\.ok === false/, "a rejected decision does not lock the card");
-  assert.match(JS, /markOutboundNotSent\(state, p\.toolUseId\)/, "a Deny corrects the outbound bubble");
+  assert.match(JS, /vm\.markOutboundDecided\(state, requestId, decision\)/, "the card resolves itself");
+  assert.ok(!/markOutboundNotSent\(/.test(JS), "and the dock never reaches into the outbound lane");
 });
 
 test("no absolute path or id leaks into the history surface (label-only rule, §H-9)", () => {

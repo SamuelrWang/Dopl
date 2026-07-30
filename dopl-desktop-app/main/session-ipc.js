@@ -30,12 +30,33 @@ function register(internals) {
   ipcMain.handle('session:send', (e, p) => withSession(e, (s) =>
     engine.dispatch(s, { type: 'steer', text: String((p && p.text) || ''), priority: p && p.priority })));
 
-  ipcMain.handle('session:permission', (e, p) => withSession(e, (s) => engine.dispatch(s, {
-    type: 'permission_decision',
-    requestId: p && p.requestId,
-    decision: p && p.decision,
-    name: s.pendingNames.get(p && p.requestId),
-  })));
+  // FIX F1 (v2.7): report the TRUTH, not "the session exists". withSession answered
+  // {ok:true} whenever a live session was found, even when NO live resolver was awaiting
+  // this requestId (a park's denyPending already fail-closed it), so a Send click racing a
+  // park stamped a denied post 'sent' forever — the park's permission_resolved{deny} echo
+  // no-ops, because markOutboundDecided only touches a card still 'pending'. engine.dispatch
+  // now returns whether a live canUseTool promise was really resolved, exactly like the
+  // inbound gate's decideInbound verdict below, and the renderer's res.ok===false path leaves
+  // the card answerable. FIX F7 belt: a requestId this session is not tracking is never
+  // dispatched at all, so an undefined grant name can never reach allowForTask.
+  ipcMain.handle('session:permission', (e, p) => {
+    const s = engine.getSessionBySender && engine.getSessionBySender(e && e.sender);
+    if (!s) return { ok: false };
+    touch(s);
+    const requestId = p && p.requestId;
+    if (!requestId || !s.pendingNames.has(requestId)) return { ok: false };
+    try {
+      return { ok: engine.dispatch(s, {
+        type: 'permission_decision',
+        requestId,
+        decision: p && p.decision,
+        name: s.pendingNames.get(requestId),
+      }) === true };
+    } catch (err) {
+      diag('session-ipc: permission error', err && err.message);
+      return { ok: false };
+    }
+  });
 
   // ── v2.5 D1: the inbound gate decision (Accept / Accept for this task / Decline).
   // Bound from event.sender like every other handler; the decision string is coerced

@@ -64,6 +64,41 @@ test("idle_timeout clears any awaited permission (denyPending) and empties pendi
   ]);
 });
 
+// ── FIX F6 (v2.7): the per-turn POST counters must not survive a park either ─────────
+// A park deny-closes every awaited card, so a gated post reads "Not sent" — but
+// postedThisTurn / postedToolUseIds stayed set, and the pill's turn-end transition would then
+// pick `awaiting_peer` ("Waiting for reply") right beside that stopped draft.
+
+test("FIX F6: parking clears postedThisTurn + postedToolUseIds (no 'Waiting for reply' on a stopped post)", () => {
+  const posted = sessionReducer(running(), {
+    type: "outbound_post",
+    payload: { type: "outbound_post", toolUseId: "t1", to: "David", text: "draft", pending: true, ownChannel: true },
+  }).state;
+  assert.equal(posted.postedThisTurn, true, "set at stream time, as before");
+  assert.deepEqual(posted.postedToolUseIds, ["t1"]);
+
+  const r = sessionReducer({ ...posted, pendingPermissions: ["r1"] }, { type: "idle_timeout" });
+  assert.equal(r.state.parked, true);
+  assert.equal(r.state.postedThisTurn, false, "nothing is awaiting a reply — the post was denied");
+  assert.deepEqual(r.state.postedToolUseIds, []);
+  // The park still deny-closes the card itself, which is what makes the counters wrong to keep.
+  const echo = r.effects.find((e) => e.type === "emit" && e.payload.type === "permission_resolved");
+  assert.deepEqual(echo.payload, { type: "permission_resolved", requestId: "r1", decision: "deny" });
+  // And the effect SET is unchanged by this fix (state-only change).
+  assert.deepEqual(effTypes(r.effects), ["denyPending", "abortQuery", "clearIdle", "persist", "emit", "emit", "emit"]);
+});
+
+test("FIX F6: a woken session still counts a NEW post normally", () => {
+  const parked = sessionReducer(running(), { type: "idle_timeout" }).state;
+  const woken = sessionReducer(parked, { type: "steer", text: "carry on" }).state;
+  assert.equal(woken.parked, false);
+  const again = sessionReducer(woken, {
+    type: "outbound_post", payload: { type: "outbound_post", toolUseId: "t2", to: "David", text: "next" },
+  }).state;
+  assert.equal(again.postedThisTurn, true, "the park reset the counters, it did not disable them");
+  assert.deepEqual(again.postedToolUseIds, ["t2"]);
+});
+
 // ── FIX #3: autoApprove must not survive an idle park ───────────────────────────────
 
 test("FIX #3: parking resets autoApprove OFF so a lazy resume never runs auto-armed", () => {

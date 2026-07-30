@@ -107,8 +107,9 @@
   // bubbles (initials → the real photo) without rebuilding the whole item.
   function makeTurn(item, ctx) {
     const role = ROLE[item.role] || { who: cap(item.role), cls: "role-agent" };
-    // An OPERATOR turn takes the right lane (it was typed in the composer); every
-    // other turn role is the agent's own text and takes the left lane.
+    // v2.7 L1: BOTH turn roles take the RIGHT lane — the operator's typed steer and the agent's
+    // own text are this machine's output; only the peer's reply sits on the left. The lane class
+    // comes from chrome.laneClass; the surface recipes (F2) are what tell the two roles apart.
     const root = el("div", lane("bubble " + role.cls, { kind: "turn", role: item.role }));
     const head = el("div", "cp-head");
     // agent/operator turns are both ME → the SELF photo (item 1/5/6).
@@ -158,10 +159,53 @@
   // claiming the peer received something that never left this machine.
   function outboundLabel(item) {
     if (item && item.status === "not_sent") return "Not sent";
+    // v2.7 L3: a post still waiting on the operator has NOT been delivered, so it says so.
+    if (item && item.status === "pending") return item.to ? "Sending to " + item.to : "Sending to the channel";
     return item && item.to ? "Sent to " + item.to : "Posted to channel";
   }
 
+  // v2.7 L3 — the destination of the drafted post ("To: this channel" / "To: another
+  // channel"), from the SAME pure v2.5 helpers the dock uses. Reached through ctx.vm like
+  // shortToolName; a factory called without a ctx degrades to no destination line at all
+  // (and therefore to no cross-channel marking, since there is nothing being claimed).
+  function destOf(ctx, item) {
+    const fn = ctx && ctx.vm && ctx.vm.postDestinationText;
+    return typeof fn === "function" ? fn(item) : "";
+  }
+  // FAIL SUSPICIOUS, and note WHICH WAY this one fails: with no ctx.vm the destination line is
+  // not rendered at all (destOf returns ""), so returning false here marks nothing rather than
+  // marking a line that is not on screen. The suspicious default lives in the pure helper
+  // (vm.isCrossChannelPost treats anything but an explicit ownChannel===true as another
+  // channel), so a card that DOES show a destination can never under-claim the exfil shape.
+  function crossOf(ctx, item) {
+    const fn = ctx && ctx.vm && ctx.vm.isCrossChannelPost;
+    return typeof fn === "function" && fn(item) === true;
+  }
+
+  // v2.7 L3 — the OUTBOUND DECISION CARD *is* the delivered record: ONE node, ONE stream
+  // item per post attempt. While the post waits on canUseTool the root also carries
+  // `outbound-pending` (its own accent band, the v2.5 destination line, and Send / Send for
+  // this task / Deny); the decision RESOLVES IT IN PLACE — update() drops that class and
+  // hides the row, so the node becomes exactly the delivered "Sent to X" bubble (or the
+  // muted "Not sent" one). Nothing is rebuilt and nothing is removed, which is what makes
+  // this safe under session.js's index-keyed renderStream (it only ever calls update()).
+  // The three decisions map to the EXISTING dock verbs, so main's fail-closed
+  // permission_decision mapping and the v2.5 scoped POST_GRANT are untouched.
+  const OUT_BUTTONS = [
+    { label: "Send", decision: "allow-once", cls: "ctl auth-btn-3d ctl-primary ctl-sm" },
+    { label: "Send for this task", decision: "allow-task", cls: "ctl btn-light ctl-sm" },
+    { label: "Deny", decision: "deny", cls: "ctl btn-light ctl-sm ctl-danger" },
+  ];
+
   function makeOutbound(item, ctx) {
+    const onDecide = (ctx && ctx.onOutboundDecide) || noop;
+    let cur = item; // the LIVE item, so a click always decides the current requestId
+    // FIX F7: a click DISABLES all three buttons immediately, before the invoke resolves, so a
+    // fast double-click cannot send a second decision for the same requestId (main already
+    // refuses one — it only dispatches a requestId it is still tracking — this closes the
+    // window where nothing greys out). The next update() clears the flag, so the controller's
+    // renderAll() on an {ok:false} refusal hands the buttons back on a card still answerable.
+    let clicked = false;
     const root = el("div", "outbound role-outbound");
     const banner = el("div", "outbound__banner");
     let av = avatarNode(avatarForKey(ctx, "self"), "Y");
@@ -169,16 +213,47 @@
     const label = el("span", "outbound__label text-label", outboundLabel(item));
     banner.appendChild(label);
     root.appendChild(banner);
+    // FIX #9 (v2.5) carried onto the card: WHERE this is going, read BEFORE the body.
+    const dest = el("div", "outbound-pending__to text-caption hidden");
+    root.appendChild(dest);
     root.appendChild(el("div", "outbound__body", item.text || ""));
+    const row = el("div", "row");
+    const buttons = OUT_BUTTONS.map((spec) => {
+      const btn = el("button", spec.cls, spec.label);
+      btn.type = "button";
+      btn.addEventListener("click", () => {
+        if (clicked) return;
+        clicked = true;
+        for (const b of buttons) b.disabled = true;
+        onDecide(cur.requestId, spec.decision);
+      });
+      row.appendChild(btn);
+      return btn;
+    });
+    root.appendChild(row);
     const update = (it) => {
       const next = avatarNode(avatarForKey(ctx, "self"), "Y");
       banner.replaceChild(next, av);
       av = next;
-      const cur = it || item;
+      cur = it || item;
+      clicked = false;
+      const pending = cur.status === "pending";
+      // FAIL CLOSED: a card main is not awaiting (no requestId) cannot be answered.
+      // FIX F3: and it does not show three DEAD buttons either. A post whose gate prediction
+      // said "will stop" but which canUseTool then auto-allowed never gets an `outbound_gate`,
+      // so it sits pending with no requestId until the tool_result self-heals it to sent — the
+      // row is HIDDEN for that whole window instead of rendering a broken-looking control set.
+      const answerable = pending && !!cur.requestId;
       label.textContent = outboundLabel(cur);
+      root.classList.toggle("outbound-pending", pending);
       root.classList.toggle("is-not-sent", cur.status === "not_sent");
+      dest.textContent = pending ? destOf(ctx, cur) : "";
+      dest.classList.toggle("hidden", !pending);
+      dest.classList.toggle("is-cross", pending && crossOf(ctx, cur));
+      row.classList.toggle("hidden", !answerable);
+      for (const btn of buttons) btn.disabled = !answerable;
     };
-    update(item); // a bubble created ALREADY not-sent paints that way on its first render
+    update(item); // a record created ALREADY pending / not-sent paints that way at once
     return { el: root, update };
   }
 
@@ -190,9 +265,12 @@
   // and result live inside ONE native <details>, default CLOSED — so long/scary
   // tool output never blasts into the window until the user expands. Expanded
   // output SCROLLS (session.css caps the pre/.tool-result at 240px;overflow:auto).
+  // v2.7 L1: a tool card is MY agent's own activity, so it takes the RIGHT lane like the
+  // rest of this machine's output — hence the lane() path here (session.css drops the
+  // `align-self` the recipe used to declare, so the single-class lane can win).
   function makeTool(item, ctx) {
     const shortName = (ctx && ctx.vm && ctx.vm.shortToolName) || ((n) => n);
-    const root = el("div", "tool-card");
+    const root = el("div", lane("tool-card", { kind: "tool" }));
     const head = el("div", "tool-card__head");
     head.appendChild(el("span", "tool-card__name", shortName(item.name)));
     head.appendChild(el("span", "tool-card__summary", item.inputSummary || ""));

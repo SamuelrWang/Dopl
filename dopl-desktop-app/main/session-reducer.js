@@ -58,12 +58,11 @@ function initialSessionState(opts) {
     // launch ALWAYS starts false (never persisted). When ON, session-io.makeCanUseTool
     // flips a live GATE to allow; hard-deny stays immovable.
     autoApprove: false,
-    // v2.5 D1/D4: the standing INBOUND grant ("Accept for this task"). Like allowForTask it
-    // lives for the life of the in-memory session object — it survives a park (unlike
-    // autoApprove, FIX #3) and is NEVER persisted, so a recreated shell re-gates. When
-    // true, an inbound turn is fed immediately instead of waiting on an Accept.
-    // FOLLOW-UP F5: surviving a park means a parked session can still auto-feed peer
-    // messages with the operator away; whether park should drop it too is a product call.
+    // v2.5 D1/D4: the standing INBOUND grant ("Accept for this task") — when true an inbound turn
+    // is fed with no Accept. Like allowForTask it lives for the life of the in-memory session
+    // object: it survives a park (unlike autoApprove, FIX #3) and is NEVER persisted, so a
+    // recreated shell re-gates. FOLLOW-UP F5: a parked session can therefore still auto-feed peer
+    // replies with the operator away; whether park should drop it too is a product call.
     inboundForTask: false,
     hasPendingInbound: false,
     // P1 (v1.7.4): true while the session is PARKED — the live SDK query is torn down but
@@ -98,10 +97,9 @@ function costCapReached(state) {
   return state.costCapUsd > 0 && state.costUsd >= state.costCapUsd;
 }
 
-// FIX #6 — a PENDING inbound card WINS the displayed status. `phase` carries the gate
-// (nothing below clobbers it while a card waits, so the pill keeps reading "Message
-// waiting"); `activity` keeps telling the truth about what the agent is doing, so the send
-// button still morphs to Pause on a turn that is genuinely mid-flight.
+// FIX #6 — a PENDING inbound card WINS the displayed status: `phase` carries the gate (nothing
+// below clobbers it while a card waits, so the pill keeps reading "Message waiting") while
+// `activity` still tells the truth, so the send button morphs to Pause on a mid-flight turn.
 function gatePhase(state, phase) {
   return state && state.hasPendingInbound === true ? 'awaiting_inbound' : phase;
 }
@@ -136,9 +134,9 @@ function endEffects(state, outcome, reason, summary) {
 }
 
 // P1: idle no longer ENDS the session — it PARKS it. Deny any awaited canUseTool promise
-// fail-closed, tear down the live query, clear (never re-arm) the idle timer, persist
-// phase 'parked', tell the renderer. NOT settled: no `settle`, no `win.destroy`, no
-// registry removal, sdkSessionId retained — so a lazy wake can resume it.
+// fail-closed, tear down the live query, clear (never re-arm) the idle timer, persist phase
+// 'parked', tell the renderer. NOT settled: no `settle`, no `win.destroy`, no registry
+// removal, sdkSessionId retained — so a lazy wake can resume it.
 function parkEffects(state) {
   const effects = [
     { type: 'denyPending' },
@@ -222,10 +220,9 @@ function sessionReducer(state, event) {
     return { state: state, effects: [{ type: 'emit', payload: event.payload }] };
   }
 
-  // FIX F3 — a tool_result is a pass-through, EXCEPT when it is the FAILING result of an
-  // own-channel post. That bubble was emitted while the tool_use streamed (before
-  // canUseTool resolved), so a Deny (or any error) is corrected here: drop the id, and with
-  // it postedThisTurn when nothing else went out. The renderer flips it to "Not sent".
+  // FIX F3 — a tool_result is a pass-through, EXCEPT the FAILING result of an own-channel post.
+  // That bubble was emitted while the tool_use streamed (before canUseTool resolved), so a Deny
+  // (or any error) drops the id here, and postedThisTurn with it when nothing else went out.
   if (type === 'tool_result') {
     const p = event.payload || {};
     const id = p.toolUseId;
@@ -239,10 +236,9 @@ function sessionReducer(state, event) {
     return { state: state, effects: [{ type: 'emit', payload: event.payload }] };
   }
 
-  // Item 2: the agent SENT a message to the peer (dopl_channel op=post into its own
-  // channel, classified in session-io.isOutboundPost). Unlike a bare tool_use this flows
-  // THROUGH the reducer so it can record `postedThisTurn` (item 3 feeds the turn-end
-  // `awaiting_peer` transition). Still in flight -> `working`, statused only on a change.
+  // Item 2: the agent SENT a message to the peer (dopl_channel op=post into its own channel,
+  // classified in session-io.isOutboundPost). Unlike a bare tool_use it flows THROUGH the reducer
+  // so it can record `postedThisTurn` (item 3's turn-end `awaiting_peer`). In flight -> `working`.
   if (type === 'outbound_post') {
     const effects = [{ type: 'emit', payload: event.payload }];
     if (state.activity !== 'working') {
@@ -453,9 +449,13 @@ function sessionReducer(state, event) {
     // FIX #17: the guard reads `parked`, not `phase` — a parked session HOLDING a message
     // sits at phase 'awaiting_inbound' with parked===true, and the old phase check let a
     // stale timer re-run the whole park (a second deny/abort/persist) on it.
+    // FIX F6: the per-turn post counters go too. The park deny-closes every awaited card, so a
+    // gated post is "Not sent" — leaving postedThisTurn set let the next turn end
+    // 'awaiting_peer' ("Waiting for reply") beside it.
     if (state.parked === true) return { state: state, effects: [] };
     return {
-      state: clone(state, { phase: gatePhase(state, 'parked'), parked: true, activity: 'parked', autoApprove: false, pendingPermissions: [] }),
+      state: clone(state, { phase: gatePhase(state, 'parked'), parked: true, activity: 'parked', autoApprove: false,
+        pendingPermissions: [], postedThisTurn: false, postedToolUseIds: [] }),
       effects: parkEffects(state),
     };
   }

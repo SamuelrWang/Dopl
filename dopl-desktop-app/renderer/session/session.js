@@ -110,6 +110,34 @@
         })
         .catch(noop);
     },
+    // v2.7 L3: the OUTBOUND decision card. The surface moved off the dock, the POLICY path
+    // did not: the same session:permission IPC, the same three verbs, so main's fail-closed
+    // permission_decision mapping and the v2.5 scoped POST_GRANT are byte-identical. The
+    // card decides by its OWN requestId (never the queue head), which is what leaves the
+    // dock free for a Bash request queued behind the post. Like the inbound gate (FIX F10)
+    // the optimistic stamp WAITS for main: no requestId, no bridge method, or an {ok:false}
+    // leaves the card answerable. Main's own permission_resolved echo applies the same stamp a
+    // moment later, and markOutboundDecided is idempotent.
+    //
+    // FIX F1: {ok:false} now means what it says. main/session-ipc reports whether a LIVE
+    // canUseTool resolver actually took the decision, so a Send that raced a park (which
+    // deny-closed the request already) can no longer stamp that post "sent" forever — the
+    // park's own permission_resolved{deny} echo is what resolves the card, to "Not sent".
+    // FIX F7: the card disabled its buttons at click time, so a refusal (and a rejected
+    // invoke) re-renders to hand them back while the card is still answerable.
+    onOutboundDecide(requestId, decision) {
+      if (!requestId || typeof bridge.permission !== "function") return;
+      Promise.resolve(bridge.permission(requestId, decision))
+        .then((res) => {
+          if (res && res.ok === false) {
+            renderAll(); // main did not take the decision — the card stays live
+            return;
+          }
+          state = vm.markOutboundDecided(state, requestId, decision);
+          renderAll();
+        })
+        .catch(() => renderAll());
+    },
     onConsentDecide(decision) {
       bridge.consentDecision(decision);
     },
@@ -225,15 +253,15 @@
     }
   }
 
+  // The DOCK decision (Bash / Write / a CROSS-channel post). FIX F9: the old
+  // markOutboundNotSent call is GONE — an own-channel post decides on its own inline card
+  // (onOutboundDecide) and never enters this queue, and a cross-channel post is not rendered
+  // as an outbound item at all, so there was never a bubble here to correct.
   function decide(decision) {
     const p = vm.nextPermission(state);
     if (!p) return;
     bridge.permission(p.requestId, decision);
     state = vm.reduceEvent(state, { type: "permission_resolved", requestId: p.requestId, decision });
-    // FIX F3: a DENIED post never leaves this machine, so the outbound bubble painted
-    // while the tool_use streamed must stop reading "Sent to …". Main corrects the same
-    // bubble when the failing tool_result lands; this is the immediate echo of the click.
-    if (decision === "deny") state = vm.markOutboundNotSent(state, p.toolUseId);
     renderAll();
   }
 

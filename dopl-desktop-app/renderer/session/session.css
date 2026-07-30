@@ -207,15 +207,6 @@ html, body {
    natural height; the stream itself (overflow-y:auto) scrolls. */
 .stream > * { flex: 0 0 auto; }
 
-/* ── Chat lanes: the stream reads like text messages ──────────────────────────
-   `.lane-me` (operator turns) and `.lane-them` (agent text + counterparty
-   replies) are stamped by the DOM factories from the pure item-KIND mapping in
-   session-chrome.js, never by matching text. Every non-conversational item (tool
-   cards, the outbound banner, pending-inbound cards, notices) carries NO lane
-   class and keeps its own full-width recipe. */
-.lane-me { align-self: flex-end; max-width: 66%; }
-.lane-them { align-self: flex-start; max-width: 66%; }
-
 /* Turn bubbles */
 .bubble {
   max-width: 100%; /* the lane class owns the 66% cap; this is the item-4 upper bound */
@@ -233,9 +224,15 @@ html, body {
   font-weight: 600; color: var(--text-muted);
   margin-bottom: 3px;
 }
-/* SURFACE only: the lane owns align-self + width (a 2-class selector would outrank it). */
+/* SURFACE only: the lane owns align-self + width (a 2-class selector would outrank it).
+   FIX F2 (v2.7): the operator's turns and the agent's turns now SHARE the right lane, so the
+   surface is the only thing that tells them apart — and --bg-elevated was too close to the
+   agent's --card-surface-elevated to read as a different speaker at a glance. The operator
+   drops to the recessed --bg-inset (what you typed sits IN the window; what the agent said
+   sits ON it). The counterparty uses the same inset surface on the LEFT lane, and that is
+   fine: the side disambiguates, and no bubble is ever ambiguous about both at once. */
 .bubble.role-agent { background: var(--card-surface-elevated); }
-.bubble.role-operator { background: var(--bg-elevated); border-color: var(--border-strong); }
+.bubble.role-operator { background: var(--bg-inset); border-color: var(--border-strong); }
 .bubble.role-counterparty { background: var(--bg-inset); border-color: var(--border-strong); }
 
 /* Counterparty avatar (item 1): initials on bg-inset, mirroring the web Avatar
@@ -308,6 +305,55 @@ html, body {
 .outbound.is-not-sent .outbound__banner { background: var(--card-surface-subtle); }
 .outbound.is-not-sent .outbound__label,
 .outbound.is-not-sent .outbound__body { color: var(--text-muted); }
+
+/* ── Outbound DECISION card (v2.7 L3) ────────────────────────────────────────
+   The message the agent wants to SEND is neither side of the conversation — it is a
+   decision — so it gets its own full-width card, a sibling of the inbound gate card
+   (.inbound-pending) in spacing and in button language, with its OWN accent so outbound
+   and inbound read differently at a glance: the delivered record's dark CTA band only
+   appears once the post has actually LEFT, and a card that is still waiting wears a
+   warning-tinted header instead.
+   It is the SAME node as the delivered record: `.outbound-pending` is additive, so the
+   decision simply drops this class and the node IS the "Sent to X" bubble (or, with
+   `.is-not-sent`, the muted stopped draft). Every descendant rule below is 2-class, so
+   it wins over the single-class .outbound recipe regardless of order. */
+.outbound-pending { border-color: var(--warning); }
+.outbound-pending .outbound__banner {
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.outbound-pending .outbound__label { color: var(--warning); }
+.outbound-pending .outbound__banner .av,
+.outbound-pending .outbound__banner .cp-avatar { border-color: var(--border-strong); }
+/* FIX #9 carried onto the card: the DESTINATION, read before the body. Own channel is
+   calm secondary text; anything else is the exfil shape the outbound gate exists to
+   catch, so it takes the danger tint + a rule (the same treatment as the dock's). */
+.outbound-pending__to {
+  display: block;
+  padding: 8px 12px 0;
+  color: var(--text-secondary);
+}
+.outbound-pending__to.is-cross {
+  color: var(--danger);
+  font-weight: 600;
+  margin: 8px 12px 0;
+  padding: 0 0 0 6px;
+  border-left: 2px solid var(--danger);
+}
+/* The drafted body is the thing being approved: always visible, never a disclosure, and
+   it scrolls past ~200px so a long draft cannot push the buttons out of reach. The cap
+   lifts with the pending class, so a DELIVERED record reads in full as it always has. */
+.outbound-pending .outbound__body {
+  max-height: 200px; overflow: auto;
+  user-select: text;
+}
+/* Same family as .inbound-pending .row / .perm-actions: the buttons WRAP rather than
+   shrink-clip inside .outbound{overflow:hidden} on a narrow window. */
+.outbound-pending .row {
+  display: flex; justify-content: flex-end; gap: 8px;
+  padding: 0 12px 10px; flex-wrap: wrap;
+}
+.outbound-pending .row .ctl { flex: 0 0 auto; }
 .bubble.is-streaming .body::after {
   content: "▍";
   color: var(--text-muted);
@@ -328,34 +374,37 @@ html, body {
 /* P1/P2: calm info notice (idle-park + reopen-shell system lines). */
 .notice.level-info { color: var(--text-muted); background: var(--surface-sunken, transparent); }
 
-/* ── Tool-call card (SectionBox recipe) ──────────────────────────────────── */
+/* ── Command / tool line (v2.7 L2 — was the boxed SectionBox card) ─────────
+   A tool call is the agent's own housekeeping, not a message, so the BOX is gone: no
+   border, no radius, no fill, no card padding — just a hairline left rule and a tighter
+   type ramp, so commands recede behind the conversation instead of dominating it. It is
+   MY agent's activity, so it rides the RIGHT lane (v2.7 L1); the `align-self: stretch`
+   this recipe used to declare is therefore GONE — at single-class specificity it beat the
+   lane class and pinned every card full width (the same invariant .bubble.role-* keeps).
+   The v2.0 overflow guards STAY: min-width:0 + max-width:100% here, the ellipsised
+   summary below, and the scrolling pre / .tool-result further down. */
 .tool-card {
-  align-self: stretch;
-  border: 1px solid var(--border-strong);
-  border-radius: 14px;
-  overflow: hidden;
-  background: var(--card-surface);
+  border-left: 1px solid var(--border-strong);
+  padding-left: 8px;
   max-width: 100%; /* contain within the flex column (item 4) */
   min-width: 0;
 }
 .tool-card__head {
-  display: flex; align-items: center; gap: 8px;
-  padding: 6px 12px;
-  background: var(--card-surface-subtle);
-  border-bottom: 1px solid var(--border-subtle);
+  display: flex; align-items: center; gap: 6px;
+  min-width: 0;
 }
 .tool-card__name {
-  font-size: var(--text-label);
+  font-size: var(--text-micro);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--text-muted);
   flex: none;
 }
 .tool-card__summary {
   font-family: var(--font-mono);
-  font-size: var(--text-small);
-  color: var(--text-primary);
+  font-size: var(--text-caption);
+  color: var(--text-secondary);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   min-width: 0; flex: 1;
 }
@@ -366,16 +415,17 @@ html, body {
 /* ── item 8: the tool body is ONE native <details>, default CLOSED. The head (name
    + op summary + status) stays outside → always visible; the input + result live
    inside, hidden until the user expands. The EXPANDED pre/.tool-result keep
-   max-height:240px;overflow:auto so long output SCROLLS (composes with item 1). */
+   max-height:240px;overflow:auto so long output SCROLLS (composes with item 1).
+   v2.7 L2: the inset well (fill + inner shadow + card padding) is gone with the box —
+   the disclosure is a plain small line now. The DISCLOSURE ITSELF is unchanged: still a
+   native <details>, still default closed, still the only way to the full output. */
 .tool-card__body {
-  background: var(--bg-inset);
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.06);
-  padding: 8px 12px;
+  margin-top: 1px;
 }
 .tool-card__body > summary {
   cursor: pointer;
-  font-size: var(--text-caption);
-  color: var(--text-secondary);
+  font-size: var(--text-micro);
+  color: var(--text-muted);
   list-style: none;
 }
 .tool-card__body > summary::-webkit-details-marker { display: none; }
@@ -399,13 +449,13 @@ html, body {
   color: var(--text-muted);
 }
 .tool-card__body pre {
-  margin: 8px 0 0;
-  padding: 8px 10px;
+  margin: 6px 0 0;
+  padding: 6px 8px;
   background: var(--card-surface-elevated);
   border: 1px solid var(--border-default);
   border-radius: 8px;
   font-family: var(--font-mono);
-  font-size: var(--text-small);
+  font-size: var(--text-caption);
   line-height: 1.5;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -425,6 +475,24 @@ html, body {
   max-height: 240px; /* previously unbounded (item 4) */
   overflow: auto;
 }
+
+/* ── Chat lanes: the stream reads like text messages ──────────────────────────
+   `.lane-me` (this machine: the operator's typed turns, HIS agent's text, and the
+   agent's tool cards) and `.lane-them` (only what the peer actually sent) are stamped
+   by the DOM factories from the pure item-KIND mapping in session-chrome.js, never by
+   matching text. Every DECISION or system item (the outbound card + delivered record,
+   pending-inbound cards, notices, the history divider) carries NO lane class and keeps
+   its own full-width recipe.
+
+   CASCADE (v2.7): these two rules deliberately sit AFTER every laned item's surface
+   recipe. .bubble and .tool-card both declare `max-width: 100%` as their item-4 garble
+   bound at the SAME single-class specificity, so while the lanes were declared first
+   that bound won and NOTHING was ever actually capped at 66% — with both sides now on
+   the right, an uncapped lane would make the two indistinguishable. Declaring the lanes
+   last lets the cap apply without touching (or !important-ing) the surface recipes.
+   Alignment is unopposed by design: no surface recipe may declare `align-self`. */
+.lane-me { align-self: flex-end; max-width: 66%; }
+.lane-them { align-self: flex-start; max-width: 66%; }
 
 /* ── Inbound gate card (v2.5 D1): a counterparty message the agent has NOT seen
    yet, with Accept / Accept for this task / Decline. Full stream width like the

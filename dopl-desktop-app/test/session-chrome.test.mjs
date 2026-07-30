@@ -196,22 +196,35 @@ test("growHeight degrades safely on a non-numeric or missing line-height", () =>
 });
 
 // ── chat lanes: the item-KIND → alignment mapping ─────────────────────────────
+// RE-PINNED for v2.7 L1. The window is now two-SIDED, not two-SPEAKER: the right lane is
+// everything that originates on THIS machine (the operator's typed turns, HIS agent's
+// text, and the agent's tool activity) and the left lane is only what the peer sent back.
+// So an assistant/agent turn moved 'them' -> 'me' and a tool card moved null -> 'me'.
 
-test("streamLane: an operator turn takes the right ('me') lane, an agent turn the left", () => {
+test("streamLane: EVERY turn takes the right ('me') lane — typed or spoken by my agent", () => {
   assert.equal(streamLane({ kind: "turn", role: "operator" }), "me");
-  assert.equal(streamLane({ kind: "turn", role: "assistant" }), "them");
-  assert.equal(streamLane({ kind: "turn", role: "agent" }), "them");
-  // An unknown / missing role is still the agent's own text -> the left lane.
-  assert.equal(streamLane({ kind: "turn" }), "them");
-  assert.equal(streamLane({ kind: "turn", role: "weird" }), "them");
+  assert.equal(streamLane({ kind: "turn", role: "user" }), "me");
+  // v2.7 L1: the agent's own text is MINE, not the peer's — it moved to the right lane.
+  assert.equal(streamLane({ kind: "turn", role: "assistant" }), "me");
+  assert.equal(streamLane({ kind: "turn", role: "agent" }), "me");
+  // An unknown / missing role is still this machine's output -> still the right lane.
+  assert.equal(streamLane({ kind: "turn" }), "me");
+  assert.equal(streamLane({ kind: "turn", role: "weird" }), "me");
 });
 
-test("streamLane: the counterparty's inbound reply takes the left ('them') lane", () => {
+test("streamLane: a tool card is my agent's own work, so it takes the right lane too", () => {
+  assert.equal(streamLane({ kind: "tool" }), "me", "v2.7 L1: commands sit with my side");
+  assert.equal(laneClass({ kind: "tool" }), "lane-me");
+});
+
+test("streamLane: the counterparty's inbound reply is the ONLY left ('them') lane", () => {
   assert.equal(streamLane({ kind: "counterparty", from: "David" }), "them");
 });
 
-test("streamLane: every NON-conversational kind gets NO lane (full stream width)", () => {
-  for (const kind of ["tool", "outbound", "inbound_pending", "notice", "milestone", "thinking"]) {
+test("streamLane: decisions and system lines get NO lane (full stream width)", () => {
+  // A DECISION is neither side of the conversation, so the outbound card, the inbound
+  // gate card and every system line keep the full width.
+  for (const kind of ["outbound", "outbound_pending", "inbound_pending", "notice", "history_divider", "milestone", "thinking"]) {
     assert.equal(streamLane({ kind }), null, `${kind} must stay full width`);
     assert.equal(laneClass({ kind }), "", `${kind} carries no lane class`);
   }
@@ -222,7 +235,7 @@ test("streamLane: every NON-conversational kind gets NO lane (full stream width)
 
 test("laneClass returns the exact CSS class names the stylesheet defines", () => {
   assert.equal(laneClass({ kind: "turn", role: "operator" }), "lane-me");
-  assert.equal(laneClass({ kind: "turn", role: "assistant" }), "lane-them");
+  assert.equal(laneClass({ kind: "turn", role: "assistant" }), "lane-me");
   assert.equal(laneClass({ kind: "counterparty" }), "lane-them");
 });
 
@@ -236,21 +249,62 @@ test("streamLane reads REAL view-model items (kind stamped by reduceEvent)", () 
   s = vm.reduceEvent(s, { type: "paused" }); // the v2.3 park notice
   assert.deepEqual(
     s.items.map((it) => streamLane(it)),
-    ["me", "them", "them", null, null, null, null]
+    ["me", "me", "them", "me", null, null, null]
   );
+  // A PENDING post (v2.7 L3) is the same `outbound` kind, and still un-laned.
+  const gated = vm.reduceEvent(vm.initialState(), { type: "outbound_post", toolUseId: "t2", to: "David", text: "draft", pending: true });
+  assert.equal(streamLane(gated.items[0]), null, "the decision card is full width too");
 });
 
 test("the lane recipes live in the stylesheet and own align-self + the 66% cap", () => {
   assert.match(CSS, /\.lane-me \{ align-self: flex-end; max-width: 66%; \}/);
   assert.match(CSS, /\.lane-them \{ align-self: flex-start; max-width: 66%; \}/);
-  // The role recipes must NOT re-declare alignment: `.bubble.role-x` is two
+  // No laned item's SURFACE recipe may re-declare alignment: `.bubble.role-x` is two
   // classes and would outrank the single-class lane selector.
   const roles = CSS.slice(CSS.indexOf(".bubble.role-agent"), CSS.indexOf(".cp-head"));
   assert.ok(!/align-self/.test(roles), "role recipes carry the surface only");
-  // Non-conversational stream items keep the full width.
+  // v2.7 L1/L2: the tool card is LANED now, so its recipe must not pin itself either.
+  const tool = CSS.slice(CSS.indexOf("\n.tool-card {"), CSS.indexOf(".tool-card__head"));
+  assert.ok(!/align-self/.test(tool), "the laned tool card lets the lane class align it");
+  assert.match(tool, /min-width: 0/, "the item-4 overflow guards stay");
+  assert.match(tool, /max-width: 100%/);
+  // v2.7 CASCADE: the lanes are declared AFTER the surfaces they must beat, because
+  // .bubble / .tool-card carry `max-width: 100%` at the same single-class specificity.
+  assert.ok(CSS.indexOf(".lane-me {") > CSS.indexOf("\n.bubble {"), "lanes come after .bubble");
+  assert.ok(CSS.indexOf(".lane-me {") > CSS.indexOf("\n.tool-card {"), "and after .tool-card");
+  // Decisions + system lines keep the full width via their own recipes.
   assert.match(CSS, /\.outbound \{\n\s*align-self: stretch;\n\s*max-width: 100%;/);
-  assert.match(CSS, /\.tool-card \{\n\s*align-self: stretch;/);
   assert.match(CSS, /\.inbound-pending \{\n\s*align-self: stretch;/);
+});
+
+// ── v2.7 L2: the command line is markedly smaller and the box is gone ─────────
+
+test("L2: the tool card drops the box (border / radius / fill / card padding)", () => {
+  const tool = CSS.slice(CSS.indexOf("\n.tool-card {"), CSS.indexOf(".tool-card__name"));
+  assert.ok(!/border-radius|overflow: hidden/.test(tool), "no boxy card frame");
+  assert.ok(!/^\s*background:/m.test(tool), "no card fill");
+  assert.match(tool, /border-left: 1px solid var\(--border-strong\)/, "at most a hairline left rule");
+  // The head no longer paints its own band, and the body is not an inset well.
+  const head = CSS.slice(CSS.indexOf(".tool-card__head {"), CSS.indexOf(".tool-card__name"));
+  assert.ok(!/background|border-bottom/.test(head), "the head band is gone");
+  const body = CSS.slice(CSS.indexOf(".tool-card__body {"), CSS.indexOf(".tool-card__body > summary"));
+  assert.ok(!/background|box-shadow/.test(body), "the inset well is gone");
+});
+
+test("L2: the type ramp steps DOWN and the overflow guards are intact", () => {
+  const card = CSS.slice(CSS.indexOf("\n.tool-card {"), CSS.indexOf(".tool-result {"));
+  assert.ok(!/var\(--text-small\)/.test(card), "nothing in the card is 12px any more");
+  assert.match(card, /\.tool-card__summary \{[\s\S]*?font-size: var\(--text-caption\)/, "the args preview steps to 11.5px");
+  assert.match(card, /\.tool-card__name \{[\s\S]*?font-size: var\(--text-micro\)/);
+  // v2.0 garble fixes (the reason this card was boxed in the first place) must survive.
+  assert.match(card, /\.tool-card__summary \{[\s\S]*?text-overflow: ellipsis;\n\s*min-width: 0; flex: 1;/);
+  assert.match(card, /white-space: pre-wrap;\n\s*overflow-wrap: anywhere;/, "the pre still wraps");
+  assert.match(card, /max-height: 240px;\n\s*overflow: auto;/, "and still scrolls");
+  assert.match(CSS, /\.stream > \* \{ flex: 0 0 auto; \}/, "stream children keep their natural height");
+  // The status word stays legible at the smaller size (its own weight + colour keys).
+  assert.match(CSS, /\.tool-status \{ flex: none; font-size: var\(--text-micro\); font-weight: 600/);
+  assert.match(CSS, /\.tool-status\.is-ok \{ color: var\(--agent-on\); \}/);
+  assert.match(CSS, /\.tool-status\.is-error \{ color: var\(--danger\); \}/);
 });
 
 // ── D2: the RESPONDER / FULL / AUTONOMOUS chip row is gone ───────────────────
@@ -365,4 +419,12 @@ test("the renderer stays textContent-only and the CSP is untouched", () => {
     "session-chrome.js is a pure string/number module (no DOM, no electron)");
   assert.match(HTML, /default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:/);
   assert.match(HTML, /<script src="session-chrome\.js"><\/script>/, "the chrome module is loaded as a local script");
+  // The §2 formatter split (v2.7) is a local script too, loaded BEFORE the view-model that
+  // re-exports it — load order is what makes the re-export work in the sandbox.
+  assert.match(HTML, /<script src="session-format\.js"><\/script>/);
+  assert.ok(HTML.indexOf("session-format.js") < HTML.indexOf("session-viewmodel.js"), "load order matters");
+  const formatSrc = readFileSync(R("session-format.js"), "utf8");
+  assert.ok(!/document|innerHTML|electron|require\("electron"\)/.test(formatSrc.replace(/\/\/.*$/gm, "")),
+    "session-format.js is a pure string module (no DOM, no electron)");
+  assert.equal(vm.summarizeToolInput("Bash", { command: "ls" }), "$ ls", "and the view-model re-exports it");
 });

@@ -67,8 +67,12 @@ contextBridge.exposeInMainWorld('doplSession', {
   send(text, priority) {
     ipcRenderer.invoke('session:send', { text: asStr(text), priority: asPriority(priority) });
   },
+  // v2.7 L3: the invoke PROMISE is RETURNED (it always resolved main's {ok} — the dock
+  // simply ignored it), so the inline outbound decision card can stamp itself only once
+  // main has actually taken the decision, exactly like the inbound gate. The decision
+  // string stays fail-closed: anything but allow-once / allow-task coerces to 'deny'.
   permission(requestId, decision) {
-    ipcRenderer.invoke('session:permission', { requestId: asStr(requestId), decision: asDecision(decision) });
+    return ipcRenderer.invoke('session:permission', { requestId: asStr(requestId), decision: asDecision(decision) });
   },
   // v2.5 D1: the inbound gate. FIX F10: the invoke PROMISE is returned, so the renderer
   // can stamp the card only once main has actually taken the decision. The dead

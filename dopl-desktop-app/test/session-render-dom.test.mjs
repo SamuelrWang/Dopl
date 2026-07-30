@@ -228,10 +228,13 @@ test("lanes: an OPERATOR turn is right-aligned (lane-me), never lane-them", () =
   assert.ok(rec.el.classList.contains("role-operator"), "the surface recipe is unchanged");
 });
 
-test("lanes: the agent's own text is left-aligned (lane-them)", () => {
+// RE-PINNED for v2.7 L1: the agent's own text is MY side, so it moved to the right lane,
+// and the tool card joined it there. Only the peer's reply stays on the left.
+test("lanes: the agent's own text is right-aligned too (lane-me) — v2.7 L1", () => {
   for (const role of ["assistant", "agent", undefined, "weird"]) {
     const rec = render.makeTurn({ role, text: "on it", avatarKey: "self" }, ctxBoth);
-    assert.deepEqual(laneOf(rec.el), { me: false, them: true }, `role=${role} sits left`);
+    assert.deepEqual(laneOf(rec.el), { me: true, them: false }, `role=${role} sits right`);
+    assert.ok(rec.el.classList.contains("role-agent"), "the surface recipe is unchanged");
   }
 });
 
@@ -241,10 +244,17 @@ test("lanes: a counterparty reply is left-aligned (lane-them)", () => {
   assert.ok(rec.el.classList.contains("role-counterparty"));
 });
 
-test("lanes: tool / outbound / inbound_pending / notice carry NEITHER lane class", () => {
+test("lanes: a TOOL card is right-aligned (lane-me) — v2.7 L1", () => {
+  const rec = render.makeTool({ name: "Bash", inputFull: { command: "ls" } }, { vm });
+  assert.deepEqual(laneOf(rec.el), { me: true, them: false });
+  assert.ok(rec.el.classList.contains("tool-card"), "the surface recipe is unchanged");
+});
+
+test("lanes: outbound / inbound_pending / notice carry NEITHER lane class", () => {
   const items = [
-    render.makeTool({ name: "Bash", inputFull: { command: "ls" } }, { vm }),
     render.makeOutbound({ to: "David", text: "sent", avatarKey: "self" }, ctxBoth),
+    // v2.7 L3: the same factory in its PENDING (decision card) state is also un-laned.
+    render.makeOutbound({ to: "David", text: "draft", status: "pending", requestId: "r1" }, ctxBoth),
     render.makeInboundPending({ pendingId: "p1", from: "David", text: "wait" }, {}),
     render.makeNotice({ level: "info", text: "Paused after inactivity." }),
   ];
