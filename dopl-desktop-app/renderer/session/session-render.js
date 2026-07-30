@@ -304,7 +304,9 @@
   // main emits it once at session start and never feeds this item to the agent. A responder
   // shows the PEER's ask on the LEFT (counterparty recipe, peer avatar + name); a requester its
   // OWN opening goal on the RIGHT ("You"). It reuses the live bubble factories, so avatars, lanes
-  // and the late-`avatars` repaint all behave identically; `is-request` marks it as the opener.
+  // and the late-`avatars` repaint all behave identically; `is-request` marks it as the opener
+  // (FIX F3: that class now HAS a rule in session.css — an unfilled surface + a hairline — so
+  // the opener is visually distinguishable from a turn instead of being a dead marker).
   function makeRequest(item, ctx) {
     const rec =
       item.lane === "them"

@@ -779,4 +779,61 @@ html, body {
 }
 .ended-banner b { color: var(--text-primary); }
 
+/* ── v2.8 composer @-addressing: the tag popup + the peer_message bubble ──── */
+/* ONE appended block. The `.composer` / `.steer-input` / `.composer__controls`
+   declarations above are pinned verbatim by test/session-chrome.test.mjs (D4/D6/D7) and are
+   NOT edited in place; the only thing the composer itself needs is a positioning context,
+   added here as its own rule. The popup is position:absolute, so it is out of flow: it
+   cannot enter the composer's flex-shrink competition, and it is not inside .stream, so the
+   scroll pin / wheel forwarding never see it either. */
+.composer { position: relative; }
+.mention-pop {
+  position: absolute; left: 0; bottom: calc(100% - 6px); z-index: 5;
+  min-width: 200px; max-width: 100%;
+  display: flex; flex-direction: column; gap: 1px;
+  padding: 5px;
+  border-radius: 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.1);
+}
+.mention-pop__label {
+  font-size: var(--text-micro); text-transform: uppercase; letter-spacing: 0.05em;
+  font-weight: 600; color: var(--text-muted);
+  padding: 2px 6px 4px;
+}
+.mention-opt {
+  display: flex; align-items: baseline; gap: 8px; min-width: 0;
+  padding: 5px 6px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.mention-opt.is-sel { background: var(--bg-inset); }
+.mention-opt__slug { font-size: var(--text-caption); font-weight: 600; color: var(--text-primary); flex: none; }
+.mention-opt__hint {
+  font-size: var(--text-caption); color: var(--text-secondary);
+  min-width: 0; flex: 1;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* SURFACE ONLY (like .bubble.role-operator): a 2-class selector would outrank .lane-me, so
+   this recipe must never declare align-self or a width. The dashed border is what separates
+   "I said this to the peer" from "I steered my agent" at a glance. */
+.bubble.role-peer-msg { background: var(--bg-inset); border-style: dashed; border-color: var(--border-highlight); }
+.peer-msg__status {
+  margin-top: 4px;
+  font-size: var(--text-micro); text-transform: uppercase; letter-spacing: 0.05em;
+  font-weight: 600; color: var(--text-muted);
+}
+.bubble.role-peer-msg.is-failed { border-color: var(--danger); }
+.bubble.role-peer-msg.is-failed .peer-msg__status { color: var(--danger); }
+
+/* FIX F3: `is-request` (session-render.js makeRequest) had no rule ANYWHERE, so the opening
+   ask this session exists to answer looked exactly like an ordinary turn inside it. ONE quiet
+   distinction, tokens only: the opener loses its fill and keeps a hairline, so it reads as the
+   context above the conversation rather than as another speaker in it. SURFACE ONLY, like
+   .bubble.role-operator: a 2-class selector outranks .lane-me, so this recipe must never
+   declare align-self or a width. It comes AFTER the role recipes on purpose (same
+   specificity, so source order is what makes it win on the request item). */
+.bubble.is-request { background: transparent; border-color: var(--border-highlight); }
+
 .hidden { display: none !important; }

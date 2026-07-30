@@ -67,6 +67,13 @@ contextBridge.exposeInMainWorld('doplSession', {
   send(text, priority) {
     ipcRenderer.invoke('session:send', { text: asStr(text), priority: asPriority(priority) });
   },
+  // v2.8: the operator's OWN words, addressed to the PEER's agent (an `@their-agent` tag in
+  // the composer). NOT a steer: it never reaches the SDK, so there is no priority and no
+  // turn. Fire-and-forget on purpose — the outcome comes back over the session:event stream
+  // (operator_post / operator_post_result), which is also what survives a slow POST.
+  sendToPeer(text) {
+    ipcRenderer.invoke('session:send-peer', { text: asStr(text) });
+  },
   // v2.7 L3: the invoke PROMISE is RETURNED (it always resolved main's {ok} — the dock
   // simply ignored it), so the inline outbound decision card can stamp itself only once
   // main has actually taken the decision, exactly like the inbound gate. The decision

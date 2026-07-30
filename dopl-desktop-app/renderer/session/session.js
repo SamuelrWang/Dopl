@@ -1,11 +1,10 @@
-// Dopl session window — renderer controller (imperative DOM over the pure
-// view-model + the DOM factories in session-render.js).
+// Dopl session window — renderer controller (imperative DOM over the pure view-model + the
+// DOM factories in session-render.js).
 //
-// SECURITY: every agent / counterparty / tool / consent string reaches the DOM
-// via textContent (or as a value on a form control). There is NO innerHTML, no
-// template interpolation, no HTML parsing of untrusted text anywhere in this
-// file or session-render.js. All decision logic lives in session-viewmodel.js
-// (pure, tested); the DOM factories live in session-render.js.
+// SECURITY: every agent / counterparty / tool / consent string reaches the DOM via textContent
+// (or as a value on a form control). There is NO innerHTML, no template interpolation, no HTML
+// parsing of untrusted text anywhere in this file or session-render.js. All decision logic
+// lives in session-viewmodel.js (pure, tested); the DOM factories live in session-render.js.
 
 (function () {
   "use strict";
@@ -15,21 +14,25 @@
   const render = globalThis.DoplSessionRender;
   const { pretty, initial, avatarNode } = render;
 
+  // v2.8 composer @-addressing. BOTH modules are OPTIONAL at boot: session.html always loads
+  // them, but a harness that stubs only VM / chrome / render degrades to today's composer.
+  const mention = globalThis.DoplSessionMention || null;
+  const mentionUi = globalThis.DoplSessionMentionUI || null;
+  // The COMPOSED stream reducer: the two peer_message cases (operator_post / _result) live in
+  // session-mention.js (the view-model is at its 500-line cap) and run over its output.
+  const reduce = mention ? (st, evt) => mention.reducePeerMessage(vm.reduceEvent(st, evt), evt) : vm.reduceEvent;
+
   // Bridge (contextIsolation preload). A no-op stub lets session.html open
   // standalone for manual/mock testing; window.__sessionFeed drives a mock stream.
   const noop = function () {};
   const resolved = () => Promise.resolve({ label: null });
+  // FIX F8: the stub deliberately has NO sendToPeer. It used to be a noop, so a standalone
+  // open cleared the field and painted nothing at all; now it takes the same version-skew
+  // path as an older preload (a notice, and the draft left in the field).
   const bridge = window.doplSession || {
-    sessionId: "",
-    onEvent: noop,
-    send: noop,
-    permission: noop,
-    inboundDecision: noop,
-    interrupt: noop,
-    end: noop,
-    closeTask: noop,
-    consentDecision: noop,
-    setAutoApprove: noop,
+    sessionId: "", onEvent: noop, send: noop, permission: noop,
+    inboundDecision: noop, interrupt: noop, end: noop, closeTask: noop,
+    consentDecision: noop, setAutoApprove: noop,
     folder: { get: resolved, choose: resolved, clear: resolved },
   };
   const folderBridge = bridge.folder || { get: resolved, choose: resolved, clear: resolved };
@@ -38,66 +41,40 @@
   const $ = (id) => document.getElementById(id);
   const app = $("app");
   const els = {
-    peerAvatar: $("peerAvatar"),
-    channelName: $("channelName"),
-    taskTitle: $("taskTitle"),
-    statusDot: $("statusDot"),
-    statusLabel: $("statusLabel"),
-    statusMeta: $("statusMeta"),
-    permPosture: $("permPosture"),
-    autoApprove: $("autoApprove"),
-    folderLabel: $("folderLabel"),
-    stream: $("stream"),
-    dock: $("permissionDock"),
-    permTool: $("permTool"),
-    permSummary: $("permSummary"),
-    permPostLabel: $("permPostLabel"),
-    permPostTo: $("permPostTo"),
-    permPost: $("permPost"),
-    permInput: $("permInput"),
-    permQueueNote: $("permQueueNote"),
-    consentView: $("consentView"),
-    endedBanner: $("endedBanner"),
-    steerInput: $("steerInput"),
-    send: $("btnSend"),
-    closePanel: $("closePanel"),
-    closeSummary: $("closeSummary"),
-    outcomeSeg: $("outcomeSeg"),
+    peerAvatar: $("peerAvatar"), channelName: $("channelName"), taskTitle: $("taskTitle"),
+    statusDot: $("statusDot"), statusLabel: $("statusLabel"), statusMeta: $("statusMeta"),
+    permPosture: $("permPosture"), autoApprove: $("autoApprove"), folderLabel: $("folderLabel"),
+    stream: $("stream"), dock: $("permissionDock"), permTool: $("permTool"),
+    permSummary: $("permSummary"), permPostLabel: $("permPostLabel"), permPostTo: $("permPostTo"),
+    permPost: $("permPost"), permInput: $("permInput"), permQueueNote: $("permQueueNote"),
+    consentView: $("consentView"), endedBanner: $("endedBanner"),
+    steerInput: $("steerInput"), mentionPop: $("mentionPop"), send: $("btnSend"),
+    closePanel: $("closePanel"), closeSummary: $("closeSummary"), outcomeSeg: $("outcomeSeg"),
   };
 
   let state = vm.initialState();
   let closeOutcome = "completed";
 
-  // Context handed to the DOM factories: pure vm helpers + the two callbacks a
-  // factory needs to reach the bridge (the gate decision + the consent decision).
+  // Context handed to the DOM factories: pure vm helpers + the callbacks a factory needs to reach the bridge.
   const ctx = {
     vm,
-    // The live per-author avatar for a bubble (item 1/5/6). Reads the CURRENT
-    // `state` (reassigned per event) so a factory's update() always sees the
-    // latest avatar — a late `avatars` event repaints existing bubbles.
+    // The live per-author avatar for a bubble (item 1/5/6). Reads the CURRENT `state` (reassigned per
+    // event) so a factory's update() always sees the latest avatar (a late `avatars` repaints bubbles).
     avatarFor(key) {
       if (key === "self") return state.selfAvatar || null;
       if (key === "peer") return state.peerAvatar || null;
       return null;
     },
-    // v2.5 D1: the inbound gate decision. Main is authoritative (it re-validates and
-    // fails closed); the stamp here only locks the card so a second click cannot
-    // double-answer it. `decline` is LOCAL: nothing is sent to the peer.
+    // v2.5 D1: the inbound gate decision. Main is authoritative (it re-validates and fails
+    // closed); the stamp here only locks the card so a second click cannot double-answer it.
+    // `decline` is LOCAL: nothing is sent to the peer.
     //
-    // FIX F10: the stamp waits for the invoke to RESOLVE. Stamping first locked the card
-    // (and disabled all three buttons) even when the call never reached main — an older
-    // preload with no `inboundDecision` fell through to a noop and left the operator with
-    // a dead card for a message main was still holding. No bridge method, no lock; a
-    // rejected invoke or an {ok:false} keeps the card live so the click can be retried.
-    //
-    // FOLLOW-UP F12 (verified, round 2): the optimistic stamp is now correct enough to keep.
-    // It only lands after main RESOLVES the invoke, and main re-validates fail-closed
-    // (gate.decideInbound checks the head id), so the card can no longer lock on a decision
-    // main refused. Main's own `inbound_resolved` echo applies the same stamp a moment later
-    // and markInboundDecided is idempotent, so the two never disagree. What is left is
-    // cosmetic: the buttons stay live for one IPC round trip, so a very fast double-click
-    // sends two decisions (the second is refused by the head check, but nothing greys out in
-    // between). A pending/disabled state on the clicked button would close that window.
+    // FIX F10 / FOLLOW-UP F12 (verified): the stamp WAITS for the invoke to resolve, so no
+    // bridge method (an older preload), a rejected invoke or an {ok:false} all leave the card
+    // ANSWERABLE instead of dead. Main's own `inbound_resolved` echo applies the same stamp a
+    // moment later and markInboundDecided is idempotent, so the two never disagree. Known
+    // cosmetic gap: the buttons stay live for one IPC round trip, so a very fast double-click
+    // sends two decisions (the second is refused by main's head check).
     onInboundDecide(pendingId, decision) {
       const send = bridge.inboundDecision;
       if (typeof send !== "function") return;
@@ -110,21 +87,16 @@
         })
         .catch(noop);
     },
-    // v2.7 L3: the OUTBOUND decision card. The surface moved off the dock, the POLICY path
-    // did not: the same session:permission IPC, the same three verbs, so main's fail-closed
-    // permission_decision mapping and the v2.5 scoped POST_GRANT are byte-identical. The
-    // card decides by its OWN requestId (never the queue head), which is what leaves the
-    // dock free for a Bash request queued behind the post. Like the inbound gate (FIX F10)
-    // the optimistic stamp WAITS for main: no requestId, no bridge method, or an {ok:false}
-    // leaves the card answerable. Main's own permission_resolved echo applies the same stamp a
-    // moment later, and markOutboundDecided is idempotent.
-    //
-    // FIX F1: {ok:false} now means what it says. main/session-ipc reports whether a LIVE
-    // canUseTool resolver actually took the decision, so a Send that raced a park (which
-    // deny-closed the request already) can no longer stamp that post "sent" forever — the
-    // park's own permission_resolved{deny} echo is what resolves the card, to "Not sent".
-    // FIX F7: the card disabled its buttons at click time, so a refusal (and a rejected
-    // invoke) re-renders to hand them back while the card is still answerable.
+    // v2.7 L3: the OUTBOUND decision card. The surface moved off the dock, the POLICY path did
+    // not: the same session:permission IPC, the same three verbs, so main's fail-closed
+    // permission_decision mapping and the v2.5 scoped POST_GRANT are byte-identical. The card
+    // decides by its OWN requestId (never the queue head), which leaves the dock free for a
+    // Bash request queued behind the post. Like the inbound gate the stamp WAITS for main, and
+    // FIX F1 made {ok:false} mean what it says: main/session-ipc reports whether a LIVE
+    // canUseTool resolver took the decision, so a Send that raced a park cannot stamp that post
+    // "sent" forever (the park's own permission_resolved{deny} echo resolves it to "Not sent").
+    // FIX F7: a refusal, or a rejected invoke, re-renders to hand the buttons back while the
+    // card is still answerable.
     onOutboundDecide(requestId, decision) {
       if (!requestId || typeof bridge.permission !== "function") return;
       Promise.resolve(bridge.permission(requestId, decision))
@@ -143,16 +115,16 @@
     },
   };
   const FACTORY = render.makeFactories(ctx);
+  // v2.8: GRAFTED on, not added to render.makeFactories (that file is at its cap too).
+  if (mentionUi) FACTORY.peer_message = (item) => mentionUi.makePeerMessage(item, ctx);
 
   // ── header / status / folder ──────────────────────────────────────────────
-  // D1: ONE identity priority (chromeVm.headerIdentity) drives the header title,
-  // the subtitle, the avatar initials, and the native window title:
-  //     taskTitle -> peer name (init.from) -> channelName -> "Session".
-  // The avatar node is ALWAYS painted: the peer photo when one has arrived, else
-  // initials on a token (the peer's, or the title's when there is no peer at all).
-  // There is no black brand-mark fallback any more. Every string reaches the DOM
-  // via textContent; the identity fields are one-lined + capped by the chrome
-  // helper, so a counterparty-controlled name is bounded display data.
+  // D1: ONE identity priority (chromeVm.headerIdentity) drives the header title, the subtitle,
+  // the avatar initials and the native window title: taskTitle -> peer name (init.from) ->
+  // channelName -> "Session". The avatar node is ALWAYS painted: the peer photo when one has
+  // arrived, else initials on a token (no black brand-mark fallback any more). Every string
+  // reaches the DOM via textContent, and the identity fields are one-lined + capped by the
+  // chrome helper, so a counterparty-controlled name is bounded display data.
   function renderInit() {
     const info = state.init;
     if (!info) return;
@@ -234,9 +206,9 @@
   // ── stream ─────────────────────────────────────────────────────────────────
   // Reconcile the stream by index: create missing nodes, update existing ones.
   const rendered = [];
-  // The gap is measured on the USER's own scroll, never re-measured after a paint: a card
-  // that grows (a result revealed in an open card) must not silently un-pin a reader sitting
-  // at the bottom — only a scroll says "I moved away". 0 ⇒ initial open lands at the bottom.
+  // The gap is measured on the USER's own scroll, never re-measured after a paint: a card that
+  // grows (a result revealed in an open card) must not silently un-pin a reader sitting at the
+  // bottom — only a scroll says "I moved away". 0 ⇒ initial open lands at the bottom.
   let bottomGap = 0;
   let lastTail = streamTail([]);
   function renderStream() {
@@ -297,9 +269,9 @@
     els.permTool.textContent = p.name || "";
     els.permSummary.textContent = p.inputSummary || "";
     els.permInput.textContent = pretty(p.inputFull);
-    // v2.5 D2: an outbound post is gated now, so the dock shows the MESSAGE the agent
-    // is about to send, in full, before the operator allows it. Any other tool hides
-    // the block and keeps the existing summary + collapsible input only.
+    // v2.5 D2: an outbound post is gated now, so the dock shows the MESSAGE the agent is about
+    // to send, in full, before the operator allows it. Any other tool hides the block and keeps
+    // the existing summary + collapsible input only.
     const postBody = vm.permissionPostBody(p);
     els.permPost.textContent = postBody;
     els.permPost.classList.toggle("hidden", !postBody);
@@ -319,15 +291,15 @@
     }
   }
 
-  // The DOCK decision (Bash / Write / a CROSS-channel post). FIX F9: the old
+  // The DOCK decision (Bash / Write / a CROSS-channel post). FIX F9 (v2.7): the old
   // markOutboundNotSent call is GONE — an own-channel post decides on its own inline card
-  // (onOutboundDecide) and never enters this queue, and a cross-channel post is not rendered
-  // as an outbound item at all, so there was never a bubble here to correct.
+  // (onOutboundDecide) and never enters this queue, and a cross-channel post is not an
+  // outbound item at all, so there was never a bubble here to correct.
   function decide(decision) {
     const p = vm.nextPermission(state);
     if (!p) return;
     bridge.permission(p.requestId, decision);
-    state = vm.reduceEvent(state, { type: "permission_resolved", requestId: p.requestId, decision });
+    state = reduce(state, { type: "permission_resolved", requestId: p.requestId, decision });
     renderAll();
   }
 
@@ -347,12 +319,12 @@
   }
 
   // ── D5: the send button morphs into a pause control mid-turn ──────────────
-  // One button, two states (chromeVm.sendButtonMode): idle shows the up-arrow glyph
-  // and sends the steer; a running turn shows the pause glyph and interrupts the
-  // agent. The glyphs are static inline SVG in session.html — CSS swaps which one
-  // is visible, so nothing is ever built from a string here.
+  // One button, two states (chromeVm.sendButtonMode): idle shows the up-arrow glyph and sends
+  // the steer; a running turn shows the pause glyph and interrupts the agent. The glyphs are
+  // static inline SVG in session.html — CSS swaps which one is visible, so nothing is ever
+  // built from a string here. v2.8: a PEER-addressed draft always shows the send glyph.
   function renderSend() {
-    const mode = chromeVm.sendButtonMode(state);
+    const mode = composer.peerTagged() ? "send" : chromeVm.sendButtonMode(state);
     els.send.classList.toggle("is-running", mode === "pause");
     els.send.setAttribute("aria-label", chromeVm.sendButtonLabel(mode));
   }
@@ -369,21 +341,45 @@
   }
 
   // ── composer / controls wiring ───────────────────────────────────────────
-  // The Interrupt checkbox is gone: a steer is ALWAYS 'normal' priority now (it
-  // queues as the next turn), and interrupting is the pause button's job.
+  // The @-tag popup + the address parse live in session-mention-ui.js / session-mention.js
+  // (this file is at the hard §2 cap). Either module absent -> the stub: everything is a steer.
+  const composer = mention && mentionUi
+    ? mentionUi.createComposer({ input: els.steerInput, host: els.mentionPop, getPeerName: () => (state.init && state.init.from) || "",
+        onAccept: () => { autoGrow(); renderSend(); } }) // accepting a tag NEVER sends
+    : { handleKey: () => false, isOpen: () => false, address: (raw) => ({ to: "self", text: raw }), peerTagged: () => false };
+
+  // The Interrupt checkbox is gone: a steer is ALWAYS 'normal' priority now (it queues as the
+  // next turn), and interrupting is the pause button's job. v2.8: ONE composer, TWO addressees.
+  // A leading `@my-agent` (or no tag) is today's steer; a leading `@their-agent` posts the
+  // operator's OWN words into the channel addressed to the peer — never a steer (no
+  // session:send, no turn, no permission, no grant). The tag is stripped either way, so the
+  // delivered text is byte-identical to typing it untagged.
+  // FIX F8: a preload with no sendToPeer (a version-skewed install) returned SILENTLY here. The
+  // draft survived, but the glyph already read Send and the click did nothing, so the operator
+  // had no way to know the message was still in their hands. Say it in the stream.
+  const NO_PEER_BRIDGE = "Could not send that message to the peer. Restart Dopl and try again.";
   function sendSteer() {
-    const text = els.steerInput.value.trim();
+    const { to, text } = composer.address(els.steerInput.value.trim());
     if (!text || state.ended) return;
-    bridge.send(text);
-    state = vm.reduceEvent(state, { type: "turn", role: "operator", text, streaming: false });
+    if (to === "peer") {
+      if (typeof bridge.sendToPeer !== "function") {
+        state = reduce(state, { type: "notice", level: "error", text: NO_PEER_BRIDGE });
+        renderAll(); // the draft stays in the field: nothing was delivered
+        return;
+      }
+      bridge.sendToPeer(text);
+    } else {
+      bridge.send(text);
+      state = reduce(state, { type: "turn", role: "operator", text, streaming: false });
+    }
     els.steerInput.value = "";
     autoGrow(); // D7: back to a single line after send
     renderAll();
   }
 
-  // Click = pause while the agent is mid-turn, send otherwise.
+  // Click = pause mid-turn, send otherwise; a peer-addressed draft always SENDS.
   function onSendClick() {
-    if (chromeVm.sendButtonMode(state) === "pause") {
+    if (chromeVm.sendButtonMode(state) === "pause" && !composer.peerTagged()) {
       bridge.interrupt();
       return;
     }
@@ -394,25 +390,19 @@
   // The cap math is pure (chromeVm.growHeight); this only measures the real
   // computed line-height + vertical padding and applies the returned px height.
   const MAX_COMPOSER_LINES = 3;
-  function composerMetrics() {
-    const cs = window.getComputedStyle(els.steerInput);
-    const lh = parseFloat(cs.lineHeight);
-    const pad = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
-    return { lineHeight: Number.isFinite(lh) ? lh : 0, padding: pad };
-  }
-
   function autoGrow() {
     const node = els.steerInput;
-    const m = composerMetrics();
+    const cs = window.getComputedStyle(node);
+    const pad = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
     node.style.height = "auto"; // let scrollHeight shrink back when text is deleted
-    node.style.height = chromeVm.growHeight(node.scrollHeight, m.lineHeight, MAX_COMPOSER_LINES, m.padding) + "px";
+    node.style.height = chromeVm.growHeight(node.scrollHeight, parseFloat(cs.lineHeight), MAX_COMPOSER_LINES, pad) + "px";
   }
 
   // Apply a folder LABEL returned from the native picker (item 5). A change
   // persists per-channel and takes effect on the NEXT session (O-5).
   function applyFolder(res) {
     if (!res || typeof res !== "object") return;
-    state = vm.reduceEvent(state, { type: "folder", label: res.label });
+    state = reduce(state, { type: "folder", label: res.label });
     renderAll();
   }
 
@@ -425,7 +415,7 @@
     Promise.resolve(folderBridge.get())
       .then((res) => {
         if (res && typeof res === "object") {
-          state = vm.reduceEvent(state, { type: "folder", label: res.label });
+          state = reduce(state, { type: "folder", label: res.label });
           renderAll();
         }
       })
@@ -437,12 +427,14 @@
     // Enter still SENDS (the steer queues while a turn runs — unchanged main
     // behavior); Shift+Enter is a newline and grows the field.
     els.steerInput.addEventListener("keydown", (e) => {
+      if (composer.handleKey(e)) return; // the @-popup takes Arrow / Tab / Enter-accept first
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         sendSteer();
       }
     });
     els.steerInput.addEventListener("input", autoGrow);
+    els.steerInput.addEventListener("input", renderSend); // a peer tag flips the glyph to Send
     autoGrow();
 
     $("btnStop").addEventListener("click", () => bridge.interrupt());
@@ -484,12 +476,12 @@
   // Manual/mock hook: window.__sessionFeed({type:'turn', ...}) drives the UI
   // without the engine — used by the standalone-open verification.
   window.__sessionFeed = function (evt) {
-    state = vm.reduceEvent(state, evt);
+    state = reduce(state, evt);
     renderAll();
   };
 
   bridge.onEvent((evt) => {
-    state = vm.reduceEvent(state, evt);
+    state = reduce(state, evt);
     renderAll();
   });
 

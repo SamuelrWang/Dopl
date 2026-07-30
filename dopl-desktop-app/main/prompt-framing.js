@@ -71,10 +71,15 @@ function counterpartyFraming({ authorName, authorKind, channelName } = {}) {
 // skip sanitizeName — a UUID is not a display name. They are still stripped to id
 // characters and capped, so a malformed or truncated value can never open a line of its
 // own inside the framing. Returns '' when there is nothing usable.
+// FIX F4: the id-character strip runs FIRST and the fence belt runs LAST. In the old order
+// "BEG@IN-REQUEST" survived the belt (it is not a fence token yet), then sanitization removed
+// the "@" and RECONSTRUCTED "BEGIN-REQUEST" for the framing to print. Unreachable today (both
+// ids come from our own server rows) but the belt has to be the last thing that runs to be a
+// belt at all.
 function idToken(value) {
   return String(value == null ? '' : value)
-    .replace(/BEGIN-REQUEST|END-REQUEST/gi, '') // belt: a real id can never contain these
     .replace(/[^A-Za-z0-9_-]/g, '')
+    .replace(/BEGIN-REQUEST|END-REQUEST/gi, '') // belt: a real id can never contain these
     .slice(0, 64);
 }
 

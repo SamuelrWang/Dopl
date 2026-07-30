@@ -465,7 +465,7 @@ function openConsentWindow(spec) {
 // live/awaiting when the app died: post the interrupted echo and, when the SDK session id
 // survives, offer an opt-in resume (NEVER an auto-reopen).
 async function init() {
-  sessionIpc.register({ getSessionBySender, getConsentBySender: sessionConsent.getBySender, dispatch, decideConsent: sessionConsent.decide });
+  sessionIpc.register({ getSessionBySender, getConsentBySender: sessionConsent.getBySender, dispatch, decideConsent: sessionConsent.decide, emitToSession: emit });
   const records = store.loadRecords();
   for (const key of Object.keys(records)) {
     const rec = records[key];

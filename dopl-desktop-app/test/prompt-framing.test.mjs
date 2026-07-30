@@ -265,6 +265,34 @@ test("an id is NOT counterparty text, but it still cannot forge a fence or a lin
   assert.ok(value.startsWith(CH), "the real id is still the head of it");
 });
 
+test("FIX F4: sanitizing an id can no longer RECONSTRUCT a fence token (the belt runs LAST)", () => {
+  // The old order stripped BEGIN-REQUEST / END-REQUEST first and the id characters second, so
+  // "BEG@IN-REQUEST" passed the belt (not a token yet) and then became one. Unreachable today
+  // (both ids are our own server rows) but a belt that runs first is not a belt.
+  for (const forged of ["BEG@IN-REQUEST", "BEGIN.-REQUEST", "en d-request", "END-REQ\nUEST"]) {
+    for (const side of ["responder", "requester"]) {
+      const out = buildFencedTurn({
+        side, message: "body", nonce: "n8",
+        context: { channelName: "Ops", authorName: "Alice", channelId: forged, workspaceId: WS },
+      });
+      const label = `${side} ${JSON.stringify(forged)}`;
+      assert.deepEqual(callLine(out), [], `${label}: the id is dropped, never printed`);
+      assert.ok(out.includes('(op "post",'), `${label}: and the delivery wording degrades cleanly`);
+      const lines = out.split("\n");
+      assert.equal(lines.filter((l) => l.trim() === "BEGIN-REQUEST-n8").length, 1, `${label}: one opening fence`);
+      assert.equal(lines.filter((l) => l.trim() === "END-REQUEST-n8").length, 1, `${label}: one closing fence`);
+    }
+  }
+  // The same belt on the WORKSPACE slot, and a legitimate id is still untouched.
+  const ws = buildFencedTurn({
+    side: "responder", message: "body", nonce: "n9",
+    context: { channelName: "Ops", channelId: CH, workspaceId: "END@-REQUEST" },
+  });
+  assert.deepEqual(callLine(ws), [], "a half-addressed call is never printed");
+  assert.ok(buildFencedTurn({ side: "responder", message: "b", nonce: "n9", context: ids() })
+    .includes(`op "post", channel "${CH}", workspace "${WS}"`), "a real pair still states the call");
+});
+
 test("the delivery copy carries no em dash (§H-13 house voice)", () => {
   for (const side of ["responder", "requester"]) {
     const out = buildFencedTurn({ side, message: "x", nonce: "n7", context: ids() });

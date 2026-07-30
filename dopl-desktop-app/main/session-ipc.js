@@ -16,6 +16,7 @@
 const { ipcMain } = require('electron');
 const channelDirs = require('./channel-dirs');
 const gate = require('./session-gate'); // v2.5 D1: the inbound gate owns the decision
+const peerPost = require('./session-peer-post'); // v2.8: the operator's own peer-addressed post
 const { diag } = require('./diag');
 
 let engine = null; // { getSessionBySender, getConsentBySender, dispatch, decideConsent }
@@ -29,6 +30,26 @@ function register(internals) {
   // ── Live-session handlers (unchanged §B.3 shapes) ──────────────────────────
   ipcMain.handle('session:send', (e, p) => withSession(e, (s) =>
     engine.dispatch(s, { type: 'steer', text: String((p && p.text) || ''), priority: p && p.priority })));
+
+  // ── v2.8: the OPERATOR's own words, addressed to the peer's agent (an `@their-agent`
+  // tag in the composer). This is NOT a steer: it never calls engine.dispatch, so it cannot
+  // resume a parked session, re-arm the idle timer, open a permission request or touch a
+  // grant. The session is resolved from event.sender like every other handler; the post
+  // itself is fire-and-forget (the renderer learns the outcome from the operator_post /
+  // operator_post_result events the module emits over the SAME session:event stream).
+  ipcMain.handle('session:send-peer', (e, p) => {
+    const s = engine.getSessionBySender && engine.getSessionBySender(e && e.sender);
+    if (!s) return { ok: false };
+    // DO NOT FIX F11 (contract, with the tradeoff named): touch() only bumps the LRU stamp, so
+    // a peer post from a PARKED shell delays that shell's eviction without resuming it. That is
+    // the documented contract and arguably the right call (the operator just used this window,
+    // so it is the last one they want reclaimed) — the cost is that a parked shell kept alive by
+    // posts alone holds its LRU slot against a fresh session. No lifecycle state changes here.
+    touch(s);
+    peerPost.send(s, String((p && p.text) || ''), engine.emitToSession)
+      .catch((err) => diag('session-ipc: send-peer error', err && err.message));
+    return { ok: true };
+  });
 
   // FIX F1 (v2.7): report the TRUTH, not "the session exists". withSession answered
   // {ok:true} whenever a live session was found, even when NO live resolver was awaiting

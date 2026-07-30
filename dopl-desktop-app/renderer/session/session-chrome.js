@@ -131,7 +131,10 @@
   // still means "no lane": the outbound decision card + delivered record, inbound gate
   // cards, the history divider, notices, and the permission dock keep full width — a
   // decision is neither side of the conversation.
-  const ME_KINDS = { turn: true, tool: true };
+  // v2.8: `peer_message` (the operator's OWN words, addressed to the peer's agent) is this
+  // machine's output too, so it joins the right lane. It is NOT a turn (my agent never saw
+  // it) and NOT an outbound (my agent did not draft it).
+  const ME_KINDS = { turn: true, tool: true, peer_message: true };
   const LANE_CLASS = { me: "lane-me", them: "lane-them" };
 
   function streamLane(item) {
